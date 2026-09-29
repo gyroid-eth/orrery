@@ -1,0 +1,196 @@
+/* Light corrections for the embedded telemetry dashboard.
+ *
+ * Injected alongside telemetry_light.js, and inert until that script sets
+ * data-color-theme="light" on the dashboard document — so dark is untouched
+ * whether or not this file is present.
+ *
+ * Everything the dashboard draws from its custom properties already follows the
+ * cockpit's palette, because the receiver writes those properties onto :root.
+ * What is left is where it spells a colour out by hand, and those literals turn
+ * out to be two colours repeated: rgba(17,20,25,α), which is --panel written
+ * out, and rgba(11,13,17,.46), which is --bg written out.
+ *
+ * The first translates mechanically — --panel is the chrome surface in either
+ * theme, so the same alpha over the same variable reproduces the intent.
+ *
+ * The second does not, and the difference matters.  Those rows are recessed
+ * inside a card, and "recessed" is not a colour, it is a direction along the
+ * surface ladder — which inverts between the themes.  In dark, deeper means
+ * darker, so it heads toward --bg; in light, --bg is the lightest surface and
+ * heading there would raise the row instead.  Deeper in light is --elev.
+ *
+ * The alphas here were not solved against dark's contrast, as they were for the
+ * planetarium.  That method degenerates near black: darkening a #111419 panel
+ * by .46 moves the luminance ratio to 1.03, so matching the number would mean
+ * an alpha of .012 — arithmetically faithful and visually nothing.
+ */
+
+/* --panel, written out by hand. */
+html[data-color-theme="light"] body>header{
+  background:linear-gradient(180deg,var(--panel),color-mix(in srgb,var(--panel) 76%,transparent));
+}
+html[data-color-theme="light"] .mail-health,
+html[data-color-theme="light"] .sesschip{
+  background:color-mix(in srgb,var(--panel) 62%,transparent);
+}
+html[data-color-theme="light"] .viewtog{
+  background:color-mix(in srgb,var(--panel) 74%,transparent);
+}
+html[data-color-theme="light"] input[type=search]{
+  background:color-mix(in srgb,var(--panel) 76%,transparent);
+}
+html[data-color-theme="light"] .win,
+html[data-color-theme="light"] .netinfo,
+html[data-color-theme="light"] .nctl{
+  background:color-mix(in srgb,var(--panel) 90%,transparent);
+}
+html[data-color-theme="light"] .sel-toggle,
+html[data-color-theme="light"] .win-all{
+  background:color-mix(in srgb,var(--panel) 80%,transparent);
+}
+html[data-color-theme="light"] #selbar,
+html[data-color-theme="light"] #toast,
+html[data-color-theme="light"] #gtip{
+  background:color-mix(in srgb,var(--panel) 96%,transparent);
+}
+html[data-color-theme="light"] #replayBar{
+  --rb-bg:color-mix(in srgb,var(--panel) 97%,transparent);
+}
+
+/* The graph overlays spell the same colour one channel off, as rgba(17,19,25). */
+html[data-color-theme="light"] .nettool,
+html[data-color-theme="light"] #replayBar,
+html[data-color-theme="light"] #edrawer{
+  background:color-mix(in srgb,var(--panel) 66%,transparent);
+}
+
+/* --bg, written out by hand, but meaning "recessed" — see the note above. */
+html[data-color-theme="light"] .live,
+html[data-color-theme="light"] .kv{
+  background:color-mix(in srgb,var(--elev) 48%,transparent);
+}
+/* The replay bar scopes its own rules under #replayBar, so an attribute plus a
+   class loses to it.  Matching its id is what makes these apply at all. */
+html[data-color-theme="light"] #replayBar .rb-speed,
+html[data-color-theme="light"] #replayBar .rb-spd-track,
+html[data-color-theme="light"] #replayBar .rb-hold,
+html[data-color-theme="light"] #replayBar .rb-track{
+  background:color-mix(in srgb,var(--elev) 54%,transparent);
+}
+
+/* The graph canvas lifts its centre with a wash of rgba(28,33,42,.68), which is
+   --elev written out — the third place the ladder inversion bites.  Elev is
+   above the ground in dark and below it in light, so the lift landed as a grey
+   smudge across the middle of the graph.  Lifting off paper means heading for
+   white, which is past the top of the ladder and so has to be said outright. */
+html[data-color-theme="light"] #net{
+  background:
+    linear-gradient(var(--hair-2) 1px,transparent 1px),
+    linear-gradient(90deg,var(--hair-2) 1px,transparent 1px),
+    radial-gradient(ellipse 68% 62% at 50% 42%,rgb(255 255 255/.55),transparent 72%),
+    radial-gradient(ellipse 44% 38% at 54% 48%,rgb(var(--theme-accent-rgb)/.03),transparent 76%),
+    var(--bg);
+  background-size:48px 48px,48px 48px,auto,auto,auto;
+  background-position:center;
+}
+
+/* The agent panel (#term), opened by clicking a card on the deck.  Same two
+   families again: a scrim, two chrome surfaces, and eight recessed ones. */
+html[data-color-theme="light"] #term{
+  background:rgb(var(--theme-ink-rgb)/.3); /* a scrim, as .overlay is in the cockpit */
+}
+html[data-color-theme="light"] #term .tm-box{
+  background:color-mix(in srgb,var(--panel) 66%,transparent);
+}
+html[data-color-theme="light"] #term #sp-tip{
+  background:color-mix(in srgb,var(--panel) 94%,transparent);
+}
+html[data-color-theme="light"] #term #tm-tabs,
+html[data-color-theme="light"] #term #tm-spark,
+html[data-color-theme="light"] #term #tm-annot,
+html[data-color-theme="light"] #term .sp-frame,
+html[data-color-theme="light"] #term .an-chip,
+html[data-color-theme="light"] #term #an-role,
+html[data-color-theme="light"] #term #tm-hist,
+html[data-color-theme="light"] #term .bub.tool{
+  background:color-mix(in srgb,var(--elev) 40%,transparent);
+}
+
+/* Provider logos are <img> of SVGs already recoloured to bone for a dark deck,
+   so on paper they are a light glyph on light ground and simply absent.  They
+   cannot be restyled through fill — the colour is inside the file — but
+   brightness(0) collapses any opaque pixel to black regardless of what it was,
+   which is what makes this work without shipping a second set of assets.
+   That also discards the running state's amber glow, so the live cue moves to
+   opacity, which reads on paper where a glow does not. */
+html[data-color-theme="light"] .idrow .prov-logo{
+  filter:brightness(0);opacity:.5;
+}
+html[data-color-theme="light"] .idrow .prov-logo.on{
+  filter:brightness(0);animation:provPulseLight 2.8s ease-in-out infinite;
+}
+@keyframes provPulseLight{0%,100%{opacity:1}50%{opacity:.68}}
+
+/* Colour as area — the deck's half of the same treatment applied to the roster
+   in theme_light.css.  The accent-bearing chips get a fill rather than only an
+   edge, at the same .14 that keeps their text above 4.5:1 on their own tint. */
+html[data-color-theme="light"] .chip.att,
+html[data-color-theme="light"] .chip.cat,
+html[data-color-theme="light"] .chip.dv,
+html[data-color-theme="light"] .chip.win{
+  background:rgb(var(--theme-accent-rgb)/.14);
+  border-color:rgb(var(--theme-accent-rgb)/.34);
+  text-shadow:none;
+}
+html[data-color-theme="light"] .chip.imp{
+  background:rgb(var(--theme-alert-rgb)/.14);
+  border-color:rgb(var(--theme-alert-rgb)/.34);
+  color:var(--theme-status-alert);
+  text-shadow:none;
+}
+
+/* Foregrounds that were pinned to the dark palette.  .kv span in particular is
+   the body of every task and message line on the deck: left alone it stays a
+   pale bone on paper and the deck reads as empty rows. */
+html[data-color-theme="light"] .kv span{color:var(--ink)}
+html[data-color-theme="light"] .port{background:var(--elev)}
+html[data-color-theme="light"] .tog input{background:rgb(var(--theme-ink-rgb)/.28)}
+/* DECK history range (live / 7d / 30d / all): the dark deck sinks the group
+   into a black well and lifts the chosen range with a translucent amber; on
+   paper both read as ink stains, so the well is a faint ink tint and the
+   chosen range takes the same accent wash as the other pills. */
+html[data-color-theme="light"] .seg{background:rgb(var(--theme-ink-rgb)/.05)}
+html[data-color-theme="light"] .seg button[aria-checked="true"]{background:rgb(var(--theme-accent-rgb)/.14)}
+/* The selection pair was dark-on-dark by construction: an amber ground with a
+   near-black ink.  On paper the amber is itself dark, so the ink has to flip. */
+html[data-color-theme="light"] ::selection{background:var(--amber);color:var(--bg)}
+
+/* ── The network canvas ──
+   Everything above dresses the chrome around the graph.  The graph's own
+   furniture was never covered, because it is drawn as SVG and as fixed-position
+   cards rather than through the panel variables, so it kept the dark deck's
+   ground while the paper went light underneath it.
+
+   The role pills were the worse of the two.  Their ink follows the palette and
+   had already flipped to near-black, but the pill behind it is a literal, so
+   twenty-two of them were rendering dark ink on a dark ground: measured 1.52:1,
+   which is not a legibility problem so much as an absence of text.  Giving the
+   pill the paper back restores the pair without touching the label. */
+html[data-color-theme="light"] .node .annot-pill{
+  fill:color-mix(in srgb,var(--theme-surface-terminal) 92%,transparent);
+}
+html[data-color-theme="light"] .node.finished .annot-pill,
+html[data-color-theme="light"] .node.gone .annot-pill{
+  fill:color-mix(in srgb,var(--theme-surface-terminal) 78%,transparent);
+}
+
+/* The card that opens on an edge.  It floats over the graph, so it wants to
+   read as a sheet laid on top rather than a hole cut through — the same
+   treatment the split identity pills get in the cockpit.  The importance
+   accent stays in the left border, which is where it already lived. */
+html[data-color-theme="light"] .mail-card{
+  background:color-mix(in srgb,var(--theme-surface-terminal) 94%,transparent);
+  border-color:var(--hair);
+  box-shadow:0 6px 22px var(--theme-shadow-low),
+             inset 0 0 0 1px rgb(var(--theme-accent-rgb)/.06);
+}

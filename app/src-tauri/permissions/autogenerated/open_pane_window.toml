@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-pane-window"
+description = "Enables the open_pane_window command without any pre-configured scope."
+commands.allow = ["open_pane_window"]
+
+[[permission]]
+identifier = "deny-open-pane-window"
+description = "Denies the open_pane_window command without any pre-configured scope."
+commands.deny = ["open_pane_window"]

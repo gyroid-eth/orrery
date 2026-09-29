@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ORRERY — backend offline</title>
+    <script type="module" src="/main.js" defer></script>
+  </head>
+
+  <body>
+    <main class="offline-shell">
+      <section class="offline-card" aria-live="polite">
+        <div class="orbit" aria-hidden="true">
+          <span class="orbit__core"></span>
+          <span class="orbit__satellite"></span>
+        </div>
+        <p class="eyebrow">ORRERY SYSTEM STATUS</p>
+        <h1>backend offline</h1>
+        <p class="instruction">
+          <code>python bridge/orrery_backend.py</code> を起動してください
+        </p>
+        <div class="status">
+          <span class="status__light" aria-hidden="true"></span>
+          <span id="status-text">127.0.0.1:8791 を確認しています</span>
+        </div>
+        <button id="retry-button" type="button">今すぐ再試行</button>
+        <p class="retry-copy">
+          自動再試行まで <span id="retry-seconds">3</span> 秒
+        </p>
+        <p class="hotkey-hint">
+          <kbd id="hotkey-label">検出中…</kbd>
+          でウィンドウを表示・非表示
+        </p>
+      </section>
+      <div class="scanline" aria-hidden="true"></div>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,4 @@
+websockets>=12,<16
+aiohttp>=3.9,<4
+Pillow>=10,<12
+pyte>=0.8.2,<1

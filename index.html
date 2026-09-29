@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ORRERY · agent cockpit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0d11;
+    --panel:#111419;
+    --panel-2:#161a21;
+    --elev:#1c212a;
+    --ink:#ece5d6;
+    --ink-dim:#9a9384;
+    --ink-faint:#5f5c52;
+    --hair:rgba(236,229,214,.085);
+    --hair-2:rgba(236,229,214,.045);
+    --amber:#f2b65a;        /* attention / phosphor accent — used sparingly */
+    --amber-glow:rgba(242,182,90,.22);
+    /* lineage hues — reserved for spawn lineage only */
+    --ln-local:#5fb3a3;
+    --ln-remote:#b58be0;
+    --ln-delegate:#83b06a;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --serif:'Fraunces',Georgia,serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--mono);
+    font-size:13px;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* atmospheric backdrop: faint orbital glow + grain */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:
+      radial-gradient(ellipse 60% 50% at 78% 8%, rgba(242,182,90,.05), transparent 60%),
+      radial-gradient(ellipse 80% 60% at 12% 100%, rgba(95,179,163,.045), transparent 55%);
+  }
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:999;opacity:.04;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .app{position:relative;z-index:1;height:100vh;display:grid;
+    grid-template-rows:auto 1fr;}
+
+  /* ── top bar ───────────────────────────── */
+  header{
+    display:flex;align-items:center;gap:24px;
+    padding:0 22px;height:54px;
+    border-bottom:1px solid var(--hair);
+    background:linear-gradient(180deg,var(--panel),rgba(17,20,25,.6));
+    backdrop-filter:blur(6px);
+  }
+  .brand{display:flex;align-items:baseline;gap:11px}
+  .brand .mark{
+    font-family:var(--serif);font-weight:600;font-size:22px;letter-spacing:.14em;
+    color:var(--ink);
+  }
+  .brand .mark b{color:var(--amber);font-weight:600}
+  .brand .sub{font-size:10.5px;letter-spacing:.34em;text-transform:uppercase;color:var(--ink-faint)}
+  .topgap{flex:1}
+  .topstat{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-dim);letter-spacing:.04em}
+  .topstat .num{color:var(--ink);font-weight:600}
+  .topstat .dot{width:6px;height:6px;border-radius:50%;background:var(--amber);box-shadow:0 0 8px var(--amber-glow)}
+  .topstat .dot.live{animation:breathe 2.4s ease-in-out infinite}
+  .sesschip{font-size:11px;color:var(--ink-dim);padding:5px 11px;border:1px solid var(--hair);border-radius:6px;letter-spacing:.05em}
+  .sesschip b{color:var(--ln-local)}
+  .clock{font-variant-numeric:tabular-nums;color:var(--ink);letter-spacing:.08em;font-size:12px}
+
+  /* ── body grid ─────────────────────────── */
+  .grid{display:grid;grid-template-columns:288px 1fr 318px;height:100%;min-height:0}
+  .col{min-height:0;display:flex;flex-direction:column;overflow:hidden}
+  .col.roster{border-right:1px solid var(--hair)}
+  .col.mail{border-left:1px solid var(--hair)}
+
+  .colhead{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:13px 16px 11px;
+    font-size:10px;letter-spacing:.32em;text-transform:uppercase;color:var(--ink-faint);
+    border-bottom:1px solid var(--hair-2);
+  }
+  .colhead .tag{color:var(--ink-dim);letter-spacing:.04em;text-transform:none;font-size:11px}
+
+  /* ── crew tiles ────────────────────────── */
+  .roster .scroll{overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:9px}
+  .crew{
+    position:relative;display:grid;grid-template-columns:46px 1fr;gap:13px;
+    padding:13px 13px 12px;border-radius:11px;
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    border:1px solid var(--hair-2);
+    cursor:pointer;transition:border-color .25s,transform .25s,background .25s;
+    opacity:0;transform:translateY(9px);
+    animation:rise .6s cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  .crew:hover{border-color:var(--hair);transform:translateY(-1px)}
+  .crew.sel{border-color:rgba(242,182,90,.4);background:linear-gradient(180deg,var(--elev),var(--panel-2))}
+  .crew.sel::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:2px;border-radius:2px;background:var(--amber);box-shadow:0 0 10px var(--amber-glow)}
+
+  /* portrait medallion */
+  .medal{position:relative;width:46px;height:46px}
+  .medal .ring{position:absolute;inset:-3px;border-radius:50%;border:1.5px solid var(--hair);}
+  .medal .face{
+    position:absolute;inset:0;border-radius:50%;overflow:hidden;
+    display:grid;place-items:center;
+    font-family:var(--serif);font-size:18px;font-weight:500;color:#0b0d11;
+  }
+  .medal .face .ini{position:relative;z-index:1}
+  .medal .face img{position:absolute;inset:0;z-index:2;width:100%;height:100%;object-fit:cover;
+    filter:grayscale(.22) sepia(.12) contrast(1.04)}
+  .medal .face::after{content:"";position:absolute;inset:0;z-index:3;background:
+    radial-gradient(circle at 30% 25%, rgba(255,255,255,.35), transparent 45%),
+    radial-gradient(circle at 70% 85%, rgba(0,0,0,.3), transparent 50%);mix-blend-mode:soft-light}
+  /* state ring: animated only when working */
+  .crew.working .medal .ring{
+    border-color:transparent;
+    background:conic-gradient(from 0deg,var(--amber),transparent 32%,transparent);
+    -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 2px));
+            mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 2px));
+    animation:spin 1.5s linear infinite;
+  }
+  .crew.ask .medal .ring{border-color:var(--amber);animation:blinkring 1s steps(1) infinite}
+
+  .cbody{min-width:0;display:flex;flex-direction:column;gap:6px}
+  .crow1{display:flex;align-items:baseline;gap:8px}
+  .cname{font-family:var(--serif);font-size:16px;font-weight:500;letter-spacing:.01em;line-height:1;color:var(--ink)}
+  .cmeta{display:flex;gap:6px;flex-wrap:wrap;margin-top:1px}
+  .pill{font-size:9.5px;letter-spacing:.07em;padding:2px 6px;border-radius:4px;border:1px solid var(--hair);color:var(--ink-dim);text-transform:uppercase;white-space:nowrap}
+  .pill.mac-local{color:var(--ln-local);border-color:rgba(95,179,163,.3)}
+  .pill.mac-remote{color:var(--ln-remote);border-color:rgba(181,139,224,.3)}
+  /* ctx telemetry bar */
+  .ctx{display:flex;align-items:center;gap:7px;margin-top:1px}
+  .ctx .lab{font-size:9px;letter-spacing:.18em;color:var(--ink-faint)}
+  .ctx .track{flex:1;height:3px;border-radius:2px;background:rgba(236,229,214,.08);overflow:hidden}
+  .ctx .fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--ink-dim),var(--ink));width:0;animation:fill 1.1s .4s cubic-bezier(.2,.7,.2,1) forwards}
+  .ctx .fill.hot{background:linear-gradient(90deg,#caa24f,var(--amber))}
+  .ctx .pct{font-size:10px;color:var(--ink-dim);font-variant-numeric:tabular-nums;min-width:30px;text-align:right}
+  /* state line + bubble */
+  .cstate{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-dim);min-height:15px}
+  .glyph{width:12px;text-align:center;color:var(--ink-faint)}
+  .crew.working .glyph{color:var(--amber)}
+  .statetext{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bubble{
+    position:relative;margin-top:2px;align-self:flex-start;max-width:100%;
+    background:var(--elev);border:1px solid var(--hair);border-radius:9px 9px 9px 2px;
+    padding:7px 10px;font-size:11px;line-height:1.45;color:var(--ink);
+    animation:pop .4s cubic-bezier(.2,.9,.3,1.2) both;
+  }
+  .bubble .cursor{display:inline-block;width:6px;height:12px;background:var(--amber);margin-left:2px;vertical-align:-1px;animation:blink 1s steps(1) infinite}
+
+  /* ── terminal cockpit ──────────────────── */
+  .term{display:flex;flex-direction:column;min-height:0;background:
+    radial-gradient(ellipse 100% 70% at 50% 0%, rgba(28,33,42,.55), transparent 70%),var(--bg)}
+  .tabs{display:flex;align-items:stretch;gap:2px;padding:8px 12px 0;border-bottom:1px solid var(--hair);overflow-x:auto}
+  .tab{
+    display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px 8px 0 0;
+    font-size:11.5px;color:var(--ink-dim);cursor:pointer;white-space:nowrap;
+    border:1px solid transparent;border-bottom:none;transition:.2s;
+  }
+  .tab:hover{color:var(--ink)}
+  .tab.on{color:var(--ink);background:var(--panel);border-color:var(--hair);box-shadow:0 -1px 0 var(--amber)}
+  .tab .led{width:6px;height:6px;border-radius:50%;background:var(--ink-faint)}
+  .tab.on .led{background:var(--amber);box-shadow:0 0 6px var(--amber-glow);animation:breathe 2.4s ease-in-out infinite}
+  .tab .x{color:var(--ink-faint);font-size:13px;margin-left:2px}
+
+  .screen{flex:1;min-height:0;position:relative;margin:14px;border-radius:12px;overflow:hidden;
+    background:#0a0c10;border:1px solid var(--hair);
+    box-shadow:inset 0 0 60px rgba(0,0,0,.6), 0 24px 60px -30px #000;}
+  /* CRT scanline atmosphere — terminal only */
+  .screen::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    background:repeating-linear-gradient(180deg,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.12) 3px);opacity:.5}
+  .screen .glassglow{position:absolute;inset:0;pointer-events:none;z-index:2;
+    background:radial-gradient(ellipse 70% 50% at 50% 0%, rgba(242,182,90,.04), transparent 60%)}
+  .scr-head{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--hair-2);position:relative;z-index:4}
+  .scr-head .name{font-family:var(--serif);font-size:14px;color:var(--ink)}
+  .scr-head .path{color:var(--ink-faint);font-size:11px}
+  .scr-head .badge{margin-left:auto;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);
+    border:1px solid rgba(242,182,90,.3);padding:3px 8px;border-radius:5px;animation:breathe 2.4s ease-in-out infinite}
+  .cli{position:relative;z-index:4;padding:16px 18px;font-size:12.5px;line-height:1.7;overflow-y:auto;height:calc(100% - 40px)}
+  .cli .ln{white-space:pre-wrap;word-break:break-word}
+  .cli .u{color:#74c2b3}      /* user */
+  .cli .a{color:var(--ink)}   /* assistant */
+  .cli .dim{color:var(--ink-faint)}
+  .cli .tool{color:var(--amber)}
+  .cli .ok{color:#83b06a}
+  .cli .prompt{color:#74c2b3}
+  .cli .blk{display:inline-block;width:8px;height:15px;background:var(--ink);vertical-align:-2px;animation:blink 1.05s steps(1) infinite}
+
+  /* ── mail / telemetry rail ─────────────── */
+  .mail .scroll{overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+  .miniorrery{margin:4px 6px 10px;height:120px;position:relative}
+  .msg{padding:11px 12px;border-radius:10px;background:var(--panel-2);border:1px solid var(--hair-2);
+    opacity:0;transform:translateY(8px);animation:rise .6s cubic-bezier(.2,.7,.2,1) forwards}
+  .msg .mtop{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+  .msg .from{font-family:var(--serif);font-size:12.5px;color:var(--ink)}
+  .msg .arrow{color:var(--ink-faint);font-size:11px}
+  .msg .to{font-size:11px;color:var(--ink-dim)}
+  .msg .imp{margin-left:auto;font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:1px 5px;border-radius:3px;border:1px solid var(--hair);color:var(--ink-faint)}
+  .msg .imp.hi{color:var(--amber);border-color:rgba(242,182,90,.35)}
+  .msg .body{font-size:11.5px;line-height:1.5;color:var(--ink-dim)}
+  .msg .time{font-size:9.5px;color:var(--ink-faint);margin-top:6px;letter-spacing:.05em}
+
+  .legend{padding:11px 16px;border-top:1px solid var(--hair-2);display:flex;flex-wrap:wrap;gap:10px 16px;font-size:10px;color:var(--ink-faint)}
+  .legend .it{display:flex;align-items:center;gap:6px;letter-spacing:.04em}
+  .legend .sw{width:9px;height:9px;border-radius:3px}
+
+  /* scrollbars */
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(236,229,214,.1);border-radius:6px;border:2px solid transparent;background-clip:padding-box}
+  ::-webkit-scrollbar-thumb:hover{background:rgba(236,229,214,.2);background-clip:padding-box}
+
+  @keyframes rise{to{opacity:1;transform:none}}
+  @keyframes fill{to{width:var(--w)}}
+  @keyframes pop{from{opacity:0;transform:translateY(4px) scale(.97)}to{opacity:1;transform:none}}
+  @keyframes blink{50%{opacity:0}}
+  @keyframes blinkring{50%{border-color:transparent}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes breathe{0%,100%{opacity:1}50%{opacity:.4}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <span class="mark">ORR<b>E</b>RY</span>
+      <span class="sub">agent cockpit</span>
+    </div>
+    <div class="topgap"></div>
+    <div class="topstat"><span class="dot live"></span><span class="num">4</span> active</div>
+    <div class="topstat"><span class="num">6</span> crew</div>
+    <div class="sesschip">tmux · <b>orrery</b></div>
+    <div class="clock" id="clock">––:––:––</div>
+  </header>
+
+  <div class="grid">
+    <!-- ─── ROSTER (telemetry) ─── -->
+    <div class="col roster">
+      <div class="colhead"><span>Crew</span><span class="tag">local · remote</span></div>
+      <div class="scroll" id="roster"></div>
+    </div>
+
+    <!-- ─── TERMINAL ─── -->
+    <div class="col term">
+      <div class="tabs" id="tabs"></div>
+      <div class="screen">
+        <div class="glassglow"></div>
+        <div class="scr-head">
+          <span class="name" id="scrName">SwiftPascal</span>
+          <span class="path">~/projects/orrery</span>
+          <span class="badge">working</span>
+        </div>
+        <div class="cli" id="cli"></div>
+      </div>
+    </div>
+
+    <!-- ─── MAIL / TELEMETRY ─── -->
+    <div class="col mail">
+      <div class="colhead"><span>Agent&nbsp;Mail</span><span class="tag">live</span></div>
+      <svg class="miniorrery" viewBox="0 0 280 120" id="orrery"></svg>
+      <div class="scroll" id="mail"></div>
+      <div class="legend">
+        <div class="it"><span class="sw" style="background:var(--ln-local)"></span>local lineage</div>
+        <div class="it"><span class="sw" style="background:var(--ln-remote)"></span>remote lineage</div>
+        <div class="it"><span class="sw" style="background:var(--ln-delegate)"></span>delegate</div>
+        <div class="it"><span class="glyph" style="color:var(--amber)">◇</span>working · motion</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const W="https://upload.wikimedia.org/wikipedia/commons/thumb/";
+// Demo crew — neutral scientist-named agents. Chrome EN.
+// In the real app these are read live from tmux + agent-mail; portraits are
+// served by the backend /portrait endpoint (here: public-domain Wikimedia thumbs).
+const crew = [
+  {name:"SwiftPascal", init:"P", host:"local", model:"opus 4.8 · 1M", ctx:38, lin:"local",
+   state:"working", glyph:"◇", line:"wiring the tmux control-mode bridge",
+   bubble:"Routing every pane through one WebSocket. Hooking xterm.js resize back into control mode next…", sel:true,
+   img:W+"9/98/Blaise_Pascal_Versailles.JPG/330px-Blaise_Pascal_Versailles.JPG"},
+  {name:"CalmKepler", init:"K", host:"local", model:"sonnet 4.6", ctx:61, lin:"local",
+   state:"working", glyph:"◇", line:"laying out the crew rail", bubble:"",
+   img:W+"7/74/JKepler.jpg/330px-JKepler.jpg"},
+  {name:"BrightMaxwell", init:"M", host:"remote", model:"opus 4.8 · 1M", ctx:22, lin:"remote",
+   state:"ask", glyph:"⏎", line:"awaiting approval — write server.py", bubble:"",
+   img:W+"b/b0/James-Clerk-Maxwell-1831-1879.jpg/330px-James-Clerk-Maxwell-1831-1879.jpg"},
+  {name:"QuietCurie", init:"C", host:"remote", model:"sonnet 4.6", ctx:47, lin:"remote",
+   state:"idle", glyph:"·", line:"standing by", bubble:"",
+   img:W+"c/c8/Marie_Curie_c._1920s.jpg/330px-Marie_Curie_c._1920s.jpg"},
+  {name:"BoldTuring", init:"T", host:"local", model:"sonnet · delegate", ctx:73, lin:"delegate",
+   state:"working", glyph:"◇", line:"verifying the parser suite", bubble:"",
+   img:W+"c/ce/Alan_turing_header.jpg/330px-Alan_turing_header.jpg"},
+  {name:"WarmFaraday", init:"F", host:"remote", model:"opus 4.8", ctx:18, lin:"remote",
+   state:"idle", glyph:"·", line:"ambient — context only", bubble:"",
+   img:W+"7/7e/Michael_Faraday_sitting_crop.jpg/330px-Michael_Faraday_sitting_crop.jpg"},
+];
+const LIN={local:'#5fb3a3',remote:'#b58be0',delegate:'#83b06a'};
+
+const medalBg = h => `linear-gradient(150deg, ${h}, ${shade(h,-34)})`;
+function shade(hex,amt){
+  const n=parseInt(hex.slice(1),16);let r=(n>>16)+amt,g=((n>>8)&255)+amt,b=(n&255)+amt;
+  r=Math.max(0,Math.min(255,r));g=Math.max(0,Math.min(255,g));b=Math.max(0,Math.min(255,b));
+  return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+
+const roster = document.getElementById('roster');
+crew.forEach((c,i)=>{
+  const hue=LIN[c.lin];
+  const el=document.createElement('div');
+  el.className='crew '+c.state+(c.sel?' sel':'');
+  el.style.animationDelay=(.05+i*.07)+'s';
+  el.innerHTML=`
+    <div class="medal">
+      <div class="ring"></div>
+      <div class="face" style="background:${medalBg(hue)}">
+        <span class="ini">${c.init}</span>
+        ${c.img?`<img src="${c.img}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`:''}
+      </div>
+    </div>
+    <div class="cbody">
+      <div class="crow1"><span class="cname">${c.name}</span></div>
+      <div class="cmeta">
+        <span class="pill mac-${c.host}">${c.host}</span>
+        <span class="pill">${c.model}</span>
+      </div>
+      <div class="ctx">
+        <span class="lab">CTX</span>
+        <div class="track"><div class="fill ${c.ctx>65?'hot':''}" style="--w:${c.ctx}%"></div></div>
+        <span class="pct">${c.ctx}%</span>
+      </div>
+      <div class="cstate"><span class="glyph">${c.glyph}</span><span class="statetext">${c.line}</span></div>
+      ${c.bubble?`<div class="bubble">${c.bubble}<span class="cursor"></span></div>`:''}
+    </div>`;
+  el.onclick=()=>{document.querySelectorAll('.crew').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');
+    document.getElementById('scrName').textContent=c.name;};
+  roster.appendChild(el);
+});
+
+// ── tabs ──
+const tabsData=[{n:"SwiftPascal",on:true},{n:"CalmKepler"},{n:"BoldTuring"},{n:"BrightMaxwell"}];
+const tabs=document.getElementById('tabs');
+tabsData.forEach(t=>{
+  const el=document.createElement('div');el.className='tab'+(t.on?' on':'');
+  el.innerHTML=`<span class="led"></span>${t.n}<span class="x">×</span>`;
+  tabs.appendChild(el);
+});
+
+// ── mock terminal transcript (the real pane attaches via tmux control mode) ──
+const cli=document.getElementById('cli');
+const lines=[
+  ['dim','● SwiftPascal · opus-4.8 ─────────────────────────────────'],
+  ['u','> Add a PTY bridge so xterm.js can attach to tmux panes. Use control mode.'],
+  ['a','With tmux control mode (tmux -CC attach) each pane streams as structured'],
+  ['a','events, so a single WebSocket can multiplex every pane. Implementing now.'],
+  ['tool','⏺ Read  server.py (1–80)'],
+  ['ok','  ⎿  done · located the existing capture-pane loop'],
+  ['tool','⏺ Edit  server.py'],
+  ['ok','  ⎿  +64 −3 · added a WebSocket /pty endpoint'],
+  ['a','Bridge is in. Next: forward xterm resize back into control mode.'],
+  ['prompt','> ']
+];
+lines.forEach((l,i)=>{
+  const d=document.createElement('div');d.className='ln '+l[0];
+  d.textContent=l[1];d.style.opacity=0;
+  cli.appendChild(d);
+  setTimeout(()=>{d.style.transition='opacity .4s';d.style.opacity=1;
+    if(i===lines.length-1){const c=document.createElement('span');c.className='blk';d.appendChild(c);}
+    cli.scrollTop=cli.scrollHeight;},300+i*220);
+});
+
+// ── mail feed ──
+const mail=[
+  {from:"SwiftPascal",to:"BoldTuring",imp:"high",body:"Close your own verify loop (validator → render) before reporting done.",time:"13:58 · 2m"},
+  {from:"BoldTuring",to:"SwiftPascal",imp:"",body:"Understood. I'll eyeball the close-up render after the suite passes.",time:"13:59 · 1m"},
+  {from:"BrightMaxwell",to:"SwiftPascal",imp:"",body:"Role annotations now sync on the remote host too.",time:"14:01 · now"},
+];
+const mailEl=document.getElementById('mail');
+mail.forEach((m,i)=>{
+  const el=document.createElement('div');el.className='msg';el.style.animationDelay=(.3+i*.12)+'s';
+  el.innerHTML=`<div class="mtop"><span class="from">${m.from}</span><span class="arrow">→</span>
+    <span class="to">${m.to}</span><span class="imp ${m.imp==='high'?'hi':''}">${m.imp||'normal'}</span></div>
+    <div class="body">${m.body}</div><div class="time">${m.time}</div>`;
+  mailEl.appendChild(el);
+});
+
+// ── mini orrery (lineage graph) ──
+const svg=document.getElementById('orrery');
+const ns="http://www.w3.org/2000/svg";
+const cx=140,cy=60;
+[[46,'rgba(95,179,163,.25)'],[70,'rgba(181,139,224,.18)']].forEach(([r,col])=>{
+  const c=document.createElementNS(ns,'circle');
+  c.setAttribute('cx',cx);c.setAttribute('cy',cy);c.setAttribute('r',r);
+  c.setAttribute('fill','none');c.setAttribute('stroke',col);c.setAttribute('stroke-dasharray','2 5');
+  svg.appendChild(c);
+});
+const nodes=[
+  {x:cx,y:cy,r:7,c:'#f2b65a'},
+  {x:cx+46,y:cy,r:4.5,c:'#5fb3a3'},
+  {x:cx-32,y:cy-33,r:4.5,c:'#5fb3a3'},
+  {x:cx-70,y:cy,r:4,c:'#b58be0'},
+  {x:cx+38,y:cy+45,r:4,c:'#83b06a'},
+  {x:cx-30,y:cy+40,r:3.5,c:'#b58be0'},
+];
+nodes.slice(1).forEach(n=>{
+  const l=document.createElementNS(ns,'line');
+  l.setAttribute('x1',cx);l.setAttribute('y1',cy);l.setAttribute('x2',n.x);l.setAttribute('y2',n.y);
+  l.setAttribute('stroke','rgba(236,229,214,.12)');l.setAttribute('stroke-width','.8');
+  svg.appendChild(l);
+});
+nodes.forEach((n,i)=>{
+  const c=document.createElementNS(ns,'circle');
+  c.setAttribute('cx',n.x);c.setAttribute('cy',n.y);c.setAttribute('r',n.r);
+  c.setAttribute('fill',n.c);
+  if(i===0)c.style.filter='drop-shadow(0 0 6px rgba(242,182,90,.6))';
+  svg.appendChild(c);
+});
+
+// clock
+function tick(){const d=new Date();
+  document.getElementById('clock').textContent=
+    [d.getHours(),d.getMinutes(),d.getSeconds()].map(x=>String(x).padStart(2,'0')).join(':');}
+tick();setInterval(tick,1000);
+</script>
+</body>
+</html>

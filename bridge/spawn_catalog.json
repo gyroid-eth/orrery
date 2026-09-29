@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "providers": [
+    {
+      "id": "codex",
+      "label": "Codex · GPT",
+      "program": "codex-cli",
+      "models": [
+        {
+          "id": "gpt-5.6-sol",
+          "label": "GPT-5.6 Sol",
+          "hint": "DEEP REASONING · HARD PROBLEMS",
+          "title": "数理・根本原因・重要判断",
+          "default": true
+        },
+        {
+          "id": "gpt-6-astra",
+          "label": "GPT-6 Astra",
+          "hint": "MOST CAPABLE · DEMANDING WORK",
+          "title": "最難関・長い自律作業（max / ultra 可）"
+        },
+        {
+          "id": "gpt-5.6-terra",
+          "label": "GPT-5.6 Terra",
+          "hint": "EVERYDAY IMPLEMENTATION",
+          "title": "通常の実装"
+        },
+        {
+          "id": "gpt-5.6-luna",
+          "label": "GPT-5.6 Luna",
+          "hint": "FAST & LIGHT",
+          "title": "定型・可逆な軽作業"
+        }
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "effort_default": "xhigh",
+      "effort_hints": {
+        "low": "定型",
+        "medium": "通常",
+        "high": "複雑",
+        "xhigh": "最難関・研究判断",
+        "max": "astra のみ・xhigh 超",
+        "ultra": "astra のみ・最大"
+      }
+    }
+  ]
+}

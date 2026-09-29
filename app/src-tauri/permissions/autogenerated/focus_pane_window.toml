@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-focus-pane-window"
+description = "Enables the focus_pane_window command without any pre-configured scope."
+commands.allow = ["focus_pane_window"]
+
+[[permission]]
+identifier = "deny-focus-pane-window"
+description = "Denies the focus_pane_window command without any pre-configured scope."
+commands.deny = ["focus_pane_window"]

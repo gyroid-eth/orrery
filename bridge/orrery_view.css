@@ -1,0 +1,207 @@
+/* ── real spawn + communication graph (right rail + planetarium) ──
+   Owned by orrery_view.js. Loaded from cockpit.html. */
+.miniorrery{
+  position:relative;display:block;flex:0 0 200px;
+  width:calc(100% - 12px);height:200px;margin:4px 6px 10px;
+  overflow:hidden;
+}
+.miniorrery.telemetry-network{
+  background:radial-gradient(ellipse at center,rgb(var(--theme-accent-rgb) / .055),transparent 62%);
+}
+.miniorrery.telemetry-network .mini-agent.is-network-focus .mini-lineage-ring{
+  stroke:var(--amber,#f2b65a);stroke-width:2.8;filter:drop-shadow(0 0 3px rgb(var(--theme-accent-rgb) / .3));
+}
+.miniorrery.telemetry-network .orrery-spawn-edge{stroke:rgb(var(--theme-accent-rgb) / .43)}
+.orrery-spawn-edge{
+  stroke:rgb(var(--theme-ink-rgb) / .42);stroke-width:1.15;
+  vector-effect:non-scaling-stroke;
+  transition:stroke .4s,stroke-width .4s;
+}
+/* Mail between a parent and its child tells us nothing the spawn line does
+   not already tell us — spawning always sends the task message, so the pair
+   is connected by definition. What the mail adds is that it is happening
+   now, and one line can carry that by brightening instead of being drawn
+   twice. Pairs with no spawn edge still get their own curve: there, the
+   curve is the only thing saying the two are related at all. */
+.orrery-spawn-edge.mail-live{
+  stroke:rgb(var(--theme-accent-rgb) / .92);stroke-width:1.7;
+}
+.orrery-comm-edge{
+  /* solid hairline — recency is told by opacity fade, not dashes */
+  stroke:var(--ink);stroke-width:.8;
+  vector-effect:non-scaling-stroke;pointer-events:none;
+}
+.orrery-agent,.orrery-expand{cursor:pointer;outline:none}
+.orrery-hit{fill:transparent;stroke:none}
+.mini-portrait-fallback{fill:#24282f}
+.mini-initial{
+  fill:var(--ink);font-family:var(--serif);font-size:8px;font-weight:500;
+  pointer-events:none;
+}
+.mini-portrait{
+  /* Hue is the lineage language; a portrait must never speak it. The bundled
+     faces are monochrome sources, so the missing filter looked correct until an
+     operator dropped a colour photograph into AGENTSTACK_PORTRAITS_DIR. Burn it
+     here so the rule holds whatever the source is — .planet-portrait already does. */
+  filter:grayscale(1) contrast(1.07);pointer-events:none;
+}
+.mini-portrait.failed{display:none}
+.mini-lineage-ring{
+  fill:none;stroke-width:2;pointer-events:none;
+  transition:stroke-width .16s ease,filter .16s ease;
+}
+.mini-agent:hover .mini-lineage-ring,
+.mini-agent:focus-visible .mini-lineage-ring{
+  stroke-width:3;filter:brightness(1.24);
+}
+.orrery-motion-ring{
+  /* same working indicator as the crew card medal: a spinning amber arc.
+     pathLength=100 on the circle lets one dasharray cover every radius. */
+  fill:none;stroke:var(--amber,#f2b65a);stroke-width:1.6;stroke-linecap:round;
+  stroke-dasharray:30 70;opacity:0;
+  transform-box:fill-box;transform-origin:center;
+}
+.orrery-agent.is-working .orrery-motion-ring{
+  opacity:.9;animation:orrery-spin 1.5s linear infinite;
+}
+.orrery-hover-label{
+  opacity:0;pointer-events:none;
+  fill:var(--ink);stroke:var(--bg);stroke-width:3px;paint-order:stroke;
+  font-family:var(--mono);font-size:7.5px;letter-spacing:.015em;
+  transition:opacity .14s ease;
+}
+.orrery-agent:hover .orrery-hover-label,
+.orrery-agent:focus-visible .orrery-hover-label{opacity:1}
+.orrery-expand rect{
+  fill:rgba(17,20,25,.82);stroke:rgb(var(--theme-ink-rgb) / .14);stroke-width:1;
+  transition:fill .16s ease,stroke .16s ease;
+}
+.orrery-expand text{
+  fill:var(--ink-faint);font-family:var(--mono);font-size:11px;
+  pointer-events:none;transition:fill .16s ease;
+}
+.orrery-expand:hover rect,.orrery-expand:focus-visible rect{
+  fill:var(--panel-2);stroke:rgb(var(--theme-ink-rgb) / .38);
+}
+.orrery-expand:hover text,.orrery-expand:focus-visible text{fill:var(--ink)}
+.orrery-comet-flight{fill:var(--ink);pointer-events:none}
+.orrery-comet-flight.important{fill:var(--amber)}
+.orrery-comet-tail{fill:var(--amber);opacity:.45}
+.orrery-comet-halo{fill:var(--ink);opacity:.24}
+/* 承認待ち(!)と質問待ち(?)は色で区別する。literal color で書くのは、暖色テーマが
+   --cyan を --amber に alias しており、変数だとまさに区別が要る場面で区別が消えるため。
+   dashboard 側 (.askbub/.qbub) と同じ意味・同じ2色。 */
+.orrery-state-glyph{pointer-events:none}
+/* 跳ねるのは文字だけ・原点は文字自身の中心。グループごと scale すると原点が
+   「軌道環を含む bbox の中心」＝ノード中心になり、縮む位相で文字が肖像の上に
+   吸い寄せられて読めなくなる（2026-08-06 実測） */
+.orrery-state-glyph text{animation:orrery-glyph-bounce 1.25s cubic-bezier(.3,1.5,.5,1) infinite;transform-box:fill-box;transform-origin:center}
+.orrery-state-glyph.question text{animation-duration:1.6s}
+/* 閉じた円。24 76 の破線は円周の 24% しか描かず、離れて見ると「欠けた環」に
+   見えて状態の合図として読めなかった（2026-08-06 maintainer 判断で全周へ）。
+   系統環・CTX 環と同じ閉じた円が3重になるので、区別は色が担う。 */
+.orrery-state-orbit{fill:none;stroke:var(--amber);stroke-width:1.6;opacity:.72;transform-box:fill-box;transform-origin:center}
+.orrery-state-glyph.attention .orrery-state-orbit{stroke:#ff6a5d;opacity:1}
+.orrery-state-glyph.question .orrery-state-orbit{stroke:#36e8ff;opacity:.95}
+/* paint-order:stroke の濃い縁取りで、肖像の明るい部分の上でも輪郭が残る */
+.orrery-state-glyph text{fill:var(--ink);font:italic 600 11px var(--serif);letter-spacing:-.04em;paint-order:stroke;stroke:rgba(8,6,5,.9);stroke-width:2.6px;stroke-linejoin:round}
+.orrery-state-glyph.attention text{fill:#ff8a7d;filter:drop-shadow(0 0 5px rgba(255,106,93,.7))}
+.orrery-state-glyph.question text{fill:#7ceeff;filter:drop-shadow(0 0 5px rgba(54,232,255,.65))}
+.planetarium-svg .orrery-state-orbit{stroke-width:1.55}
+.planetarium-svg .orrery-state-glyph text{font-size:19px}
+/* 遠くからでも気づける跳ね。ゆっくりした opacity の明滅では気づけない */
+@keyframes orrery-glyph-bounce{
+  0%{transform:scale(.45) translateY(4px);opacity:.35}
+  35%{transform:scale(1.22) translateY(-3px);opacity:1}
+  52%{transform:scale(.92) translateY(0)}
+  66%{transform:scale(1.08)}
+  80%{transform:scale(.98)}
+  100%{transform:scale(1);opacity:1}}
+/* 動きを止めても「消えかけ」に見せない＝静止時は不透明 */
+@media (prefers-reduced-motion:reduce){.orrery-state-glyph,.orrery-state-glyph text{animation:none;opacity:1;transform:none}}
+.orrery-comet-label{
+  fill:var(--ink);stroke:var(--bg);stroke-width:4px;paint-order:stroke;
+  font-family:var(--mono);font-size:10px;letter-spacing:.02em;
+}
+.orrery-comet-flight.important .orrery-comet-label{fill:var(--amber)}
+
+/* Reuses cockpit's .overlay display/backdrop contract. */
+.orrery-planetarium.overlay{
+  align-items:stretch;padding:70px 34px 30px;
+}
+.planetarium-panel{
+  position:relative;display:flex;flex-direction:column;
+  width:min(1180px,100%);min-height:0;overflow:hidden;
+  border:1px solid var(--hair);border-radius:14px;
+  background:linear-gradient(180deg,rgba(22,26,33,.97),rgba(11,13,17,.98));
+  box-shadow:0 30px 90px rgba(0,0,0,.58);
+}
+.planetarium-head{
+  position:relative;z-index:1;display:flex;align-items:baseline;gap:16px;
+  height:auto;padding:15px 19px 13px;
+  border-bottom:1px solid var(--hair);
+  background:transparent;backdrop-filter:none;
+}
+.planetarium-title{
+  font-family:var(--serif);font-size:21px;letter-spacing:.04em;color:var(--ink);
+}
+.planetarium-note{
+  font-family:var(--mono);font-size:9px;letter-spacing:.18em;color:var(--ink-faint);
+}
+.planetarium-telemetry{
+  margin-left:auto;padding:6px 9px;border:1px solid rgb(var(--theme-accent-rgb) / .36);border-radius:999px;
+  background:rgb(var(--theme-accent-rgb) / .06);color:var(--amber);font:700 8px var(--mono);letter-spacing:.1em;cursor:pointer;
+}
+.planetarium-telemetry:hover,.planetarium-telemetry:focus-visible{background:rgb(var(--theme-accent-rgb) / .14);border-color:var(--amber);outline:none}
+.planetarium-svg{
+  display:block;width:100%;height:100%;min-height:0;flex:1;
+}
+.planetarium-svg .orrery-spawn-edge{stroke-width:1.5}
+.planetarium-svg .orrery-comm-edge{stroke-width:1.05}
+.planetarium-svg .orrery-expand text{font-size:21px}
+.planet-portrait-fallback{fill:#24282f}
+.planet-initials{
+  fill:var(--ink);font-family:var(--serif);font-size:17px;font-weight:500;
+  pointer-events:none;
+}
+.planet-portrait{
+  filter:grayscale(1) contrast(1.07);pointer-events:none;
+}
+.planet-portrait.failed{display:none}
+.planet-lineage-ring{
+  /* medallion language: neutral hairline ring (lineage lives in the edges) */
+  fill:none;stroke:rgb(var(--theme-ink-rgb) / .30);stroke-width:1.6;pointer-events:none;
+  transition:stroke-width .16s ease,stroke .16s ease;
+}
+.planet-agent:hover .planet-lineage-ring,
+.planet-agent:focus-visible .planet-lineage-ring{
+  stroke:rgb(var(--theme-ink-rgb) / .55);stroke-width:2.4}
+.planet-motion-ring{stroke-width:2}
+.planet-agent-name{
+  fill:var(--ink);stroke:var(--bg);stroke-width:4px;paint-order:stroke;
+  font-family:var(--serif);font-size:16px;font-weight:500;pointer-events:none;
+}
+.planet-agent-role{
+  fill:var(--ink-dim);stroke:var(--bg);stroke-width:3px;paint-order:stroke;
+  font-family:var(--mono);font-size:8px;letter-spacing:.06em;pointer-events:none;
+}
+.planet-agent-model{
+  fill:var(--ink-dim);stroke:var(--bg);stroke-width:3px;paint-order:stroke;
+  font-family:var(--mono);font-size:8px;letter-spacing:.12em;pointer-events:none;
+}
+.planet-agent-state{
+  /* shown only for ask — it is an attention signal now */
+  fill:var(--amber,#f2b65a);stroke:var(--bg);stroke-width:3px;paint-order:stroke;
+  font-family:var(--mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;
+  pointer-events:none;
+}
+
+@keyframes orrery-spin{to{transform:rotate(360deg)}}
+@media(max-width:760px){
+  .orrery-planetarium.overlay{padding:62px 12px 12px}
+  .planetarium-head{padding:12px 14px}
+  .planetarium-note{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+  .orrery-agent.is-working .orrery-motion-ring{animation:none;stroke-dasharray:2 3}
+}

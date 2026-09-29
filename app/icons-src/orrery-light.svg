@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">ORRERY warm-paper light app icon</title>
+  <desc id="desc">A restrained solar-system instrument on a warm paper field.</desc>
+  <defs>
+    <linearGradient id="panel" x1="174" y1="126" x2="850" y2="898" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fdf7ea"/>
+      <stop offset="0.52" stop-color="#f5efe1"/>
+      <stop offset="1" stop-color="#e8dfcd"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.38" cy="0.32" r="0.72">
+      <stop offset="0" stop-color="#dca441"/>
+      <stop offset="0.48" stop-color="#9a6811"/>
+      <stop offset="1" stop-color="#704a00"/>
+    </radialGradient>
+    <radialGradient id="planet" cx="0.34" cy="0.3" r="0.74">
+      <stop offset="0" stop-color="#fffdf7"/>
+      <stop offset="0.56" stop-color="#ddd2bc"/>
+      <stop offset="1" stop-color="#8d8575"/>
+    </radialGradient>
+    <clipPath id="panel-clip">
+      <rect x="72" y="72" width="880" height="880" rx="208"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#panel-clip)">
+    <rect x="72" y="72" width="880" height="880" fill="url(#panel)"/>
+    <circle cx="802" cy="176" r="238" fill="#704a00" opacity="0.035"/>
+    <circle cx="210" cy="856" r="268" fill="#010100" opacity="0.018"/>
+
+    <g transform="rotate(-17 512 512)" fill="none" stroke="#3a3528">
+      <ellipse cx="512" cy="512" rx="142" ry="84" stroke-width="13" opacity="0.9"/>
+      <ellipse cx="512" cy="512" rx="260" ry="154" stroke-width="10" opacity="0.72"/>
+      <ellipse cx="512" cy="512" rx="376" ry="224" stroke-width="8" opacity="0.52"/>
+      <path d="M136 512h752" stroke-width="5" opacity="0.25"/>
+    </g>
+
+    <g fill="#3a3528" opacity="0.38">
+      <circle cx="180" cy="348" r="5"/>
+      <circle cx="264" cy="234" r="4"/>
+      <circle cx="765" cy="746" r="5"/>
+      <circle cx="846" cy="626" r="4"/>
+    </g>
+
+    <circle cx="512" cy="512" r="72" fill="#f5efe1" stroke="#3a3528" stroke-width="9"/>
+    <circle cx="512" cy="512" r="52" fill="url(#sun)"/>
+    <circle cx="494" cy="494" r="13" fill="#fffdf7" opacity="0.42"/>
+
+    <g stroke="#f5efe1" stroke-width="8">
+      <circle cx="638" cy="423" r="29" fill="url(#planet)"/>
+      <circle cx="289" cy="567" r="37" fill="#704a00"/>
+      <circle cx="791" cy="356" r="25" fill="url(#planet)"/>
+      <circle cx="749" cy="708" r="18" fill="#704a00"/>
+    </g>
+    <circle cx="278" cy="554" r="8" fill="#fffdf7" opacity="0.45"/>
+    <circle cx="783" cy="348" r="6" fill="#ffffff" opacity="0.52"/>
+
+    <g fill="#3a3528" opacity="0.74">
+      <circle cx="381" cy="386" r="8"/>
+      <circle cx="589" cy="638" r="7"/>
+    </g>
+  </g>
+
+  <rect x="72" y="72" width="880" height="880" rx="208" fill="none" stroke="#3a3528" stroke-width="6" opacity="0.28"/>
+</svg>

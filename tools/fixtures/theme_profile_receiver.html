@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>theme profile receiver fixture</title></head>
+<body><div id="small">small text receiver</div><div id="tracking">wide tracking receiver</div>
+<script>
+const AXES=['dim-contrast','small-text','tracking','glow','background'];
+const UNITS={
+  'dim-contrast':{source:'token-write',mutation:'token-write',effect:'computed-target'},
+  'small-text':{source:'declaration',mutation:'element',effect:'computed-target'},
+  tracking:{source:'declaration',mutation:'element',effect:'computed-target'},
+  glow:{source:'declaration',mutation:'effect-component',effect:'effect-component'},
+  background:{source:'token-write',mutation:'token-write',effect:'computed-target'},
+};
+const empty=()=>Object.fromEntries(AXES.map(axis=>[axis,null]));
+const clone=value=>JSON.parse(JSON.stringify(value));
+let state=JSON.parse(sessionStorage.getItem('theme-profile-fixture-state')||'null')||empty();
+let dropReplies=Number(sessionStorage.getItem('theme-profile-fixture-drop')||0);
+let mismatchNext=sessionStorage.getItem('theme-profile-fixture-unit-mismatch')==='1';
+let suppressProfileReady=Number(sessionStorage.getItem('theme-profile-fixture-suppress-ready')||0);
+function persist(){sessionStorage.setItem('theme-profile-fixture-state',JSON.stringify(state));
+  sessionStorage.setItem('theme-profile-fixture-drop',String(dropReplies));
+  sessionStorage.setItem('theme-profile-fixture-unit-mismatch',mismatchNext?'1':'0');
+  sessionStorage.setItem('theme-profile-fixture-suppress-ready',String(suppressProfileReady));}
+function apply(values){state=clone(values);persist();
+  document.documentElement.dataset.small=String(values['small-text']);
+  document.documentElement.dataset.tracking=String(values.tracking);
+  small.style.fontSize=`${10+2*(values['small-text']||0)}px`;
+  tracking.style.letterSpacing=`${1-.2*(values.tracking||0)}px`;}
+function axisReport(axis){const units=UNITS[axis],unit=mismatchNext&&axis==='small-text'
+    ?'source-declaration':units.source;
+  return {status:'applied',source:{unit,expected:1,matched:1},
+    mutation:{unit:units.mutation,expected:1,applied:1},
+    effect:{unit:units.effect,evaluated:1,changed:1,rendered:1,inViewport:1,
+      visibleExpected:1,visibleReached:1,visibleChanged:1,deferred:0}};}
+function reply(event,message){
+  const axes=Object.fromEntries(AXES.filter(axis=>message.values[axis]!==null)
+    .map(axis=>[axis,axisReport(axis)]));
+  mismatchNext=false;persist();
+  event.source.postMessage({type:'agentstack-theme-profile-result',version:1,
+    requestId:message.requestId,surface:'telemetry',requested:clone(message.values),
+    applied:clone(state),status:'applied',axes},event.origin);
+}
+addEventListener('message',event=>{
+  if(event.origin!==location.origin||event.source!==parent)return;
+  const message=event.data;
+  if(message&&message.type==='theme-profile-fixture-control'){
+    if(Number.isInteger(message.dropReplies))dropReplies=message.dropReplies;
+    if(message.unitMismatchNext===true)mismatchNext=true;
+    if(Number.isInteger(message.suppressProfileReady))suppressProfileReady=message.suppressProfileReady;
+    persist();return;
+  }
+  if(!message||message.type!=='agentstack-theme-profile'||message.version!==1)return;
+  apply(message.values);
+  if(dropReplies>0){dropReplies-=1;persist();return;}
+  reply(event,message);
+});
+window.__themeProfileReceiverFixture={get state(){return clone(state);},get dropReplies(){return dropReplies;}};
+apply(state);
+queueMicrotask(()=>{
+  parent.postMessage({type:'agentstack-theme-axis-ready',version:1,surface:'telemetry'},location.origin);
+  if(suppressProfileReady>0){suppressProfileReady-=1;persist();}
+  else parent.postMessage({type:'agentstack-theme-profile-ready',version:1,surface:'telemetry'},location.origin);
+});
+</script></body></html>

@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "local",
+  "description": "Capability for the bundled fallback page (tauri://localhost) shown while the backend is offline. Once build.rs declares the app commands, commands not granted here are refused even from the local page.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "allow-retry-backend",
+    "allow-active-hotkey",
+    "allow-set-native-color-theme"
+  ]
+}

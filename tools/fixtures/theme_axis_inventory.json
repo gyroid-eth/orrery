@@ -1,0 +1,4631 @@
+{
+  "axes": {
+    "background": {
+      "effect": {
+        "digest": "cb344191ed21190c8fe505e9cc4de001619b720690b8f1dc381f5d671ecac9b5",
+        "expected": 362,
+        "records": [
+          {
+            "property": "background",
+            "selector": "body",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "color",
+            "selector": "body",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": "header",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": "header",
+            "value": "linear-gradient(180deg,var(--panel),var(--oc-theme-header-fade,rgba(31,34,39,.6)))"
+          },
+          {
+            "property": "color",
+            "selector": ".brand .mark",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".brand .sub",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".topstat",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".topstat .num",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".topstat .of",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "background",
+            "selector": ".topstat .dot",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".topstat .sep",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".need-chip",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".sesschip",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".sesschip",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".clock",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-right",
+            "selector": ".col.roster",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "border-left",
+            "selector": ".col.mail",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".colhead",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".colhead",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".colhead .tag",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-head .colhead-title",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".header-utility",
+            "value": "var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".header-utility",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".header-utility:hover,.header-utility:focus-visible",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
+            "selector": ".roster-select",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-select",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-select.on",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "border",
+            "selector": ".roster-filter input",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-filter input",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-filter input::placeholder",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-filter-status",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "background",
+            "selector": ".agent",
+            "value": "linear-gradient(180deg,var(--panel-2),var(--panel))"
+          },
+          {
+            "property": "border",
+            "selector": ".agent",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".agent:hover",
+            "value": "var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".agent.sel",
+            "value": "linear-gradient(180deg,var(--elev),var(--panel-2))"
+          },
+          {
+            "property": "color",
+            "selector": ".pin-toggle",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent:hover .pin-toggle,.pin-toggle:focus-visible",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent.pinned .pin-toggle",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".agent.pinned-boundary::after",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".name-copy",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".name-copy:hover,.name-copy:focus-visible",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
+            "selector": ".bulk-check",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "border-right",
+            "selector": ".bulk-check::after",
+            "value": "2px solid var(--bg)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".bulk-check::after",
+            "value": "2px solid var(--bg)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".roster.select-mode .agent.sel:not(.bulk-selected)",
+            "value": "var(--hair-2)"
+          },
+          {
+            "property": "background",
+            "selector": ".roster.select-mode .agent.sel:not(.bulk-selected)",
+            "value": "linear-gradient(180deg,var(--panel-2),var(--panel))"
+          },
+          {
+            "property": "background",
+            "selector": ".roster.select-mode .agent.bulk-selected",
+            "value": "linear-gradient(180deg,var(--elev),var(--panel-2))"
+          },
+          {
+            "property": "border",
+            "selector": ".agent.offline-hint::after",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent.offline-hint::after",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "background",
+            "selector": ".agent.offline-hint::after",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "color",
+            "selector": ".bulk-count",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".bulk-exit.arm",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "border",
+            "selector": ".medal .ring",
+            "value": "1.5px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".medal .face",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "box-shadow",
+            "selector": ".medal .face",
+            "value": "0 0 0 2px var(--lineage-ring,var(--hair))"
+          },
+          {
+            "property": "color",
+            "selector": ".cname",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
+            "selector": ".pill",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".pill",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".pill.eng-grok",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".pill.role",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".ctx .lab",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "background",
+            "selector": ".ctx .fill",
+            "value": "linear-gradient(90deg,var(--ink-dim),var(--ink))"
+          },
+          {
+            "property": "color",
+            "selector": ".ctx .pct",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-pill .up-k",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".up-logo",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-pill .up-p.none b",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".usage-popover .up-prov+.up-prov",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover .up-name",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover .up-reset",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "fill",
+            "selector": ".usage-popover .dial .n",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "fill",
+            "selector": ".usage-popover .dial .u",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover .dial .lab",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover .dial .rs",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover .up-sub",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover .up-sub .up-subname",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover .up-untouched",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover .up-empty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover .up-foot",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".cstate",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".glyph",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".descriptor-updated",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".agent-detail-grid",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail-label",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail-value",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "background",
+            "selector": ".term",
+            "value": "radial-gradient(ellipse 100% 70% at 50% 0%, rgba(28,33,42,.55), transparent 70%),var(--bg)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".tabstrip",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "border",
+            "selector": ".split-chip",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".split-chip",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".split-chip:hover",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".layout-chip",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".layout-picker-title",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".layout-option",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".layout-option:hover,.layout-option:focus-visible",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
+            "selector": ".layout-preview",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".tab-fade.left",
+            "value": "linear-gradient(90deg,var(--bg),transparent)"
+          },
+          {
+            "property": "background",
+            "selector": ".tab-fade.right",
+            "value": "linear-gradient(270deg,var(--bg),transparent)"
+          },
+          {
+            "property": "border",
+            "selector": ".tab-overflow",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".tab-overflow",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".tab-overflow",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border-right",
+            "selector": ".session-group",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".session-label",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".session-label:hover,.session-group.live .session-label",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".session-label.split-member",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".session-label .detach",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".session-label.active-session",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".tab",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".tab:hover",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".tab.on",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".tab.on",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".tab.on",
+            "value": "var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".tab .led",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".tab .x",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".tabs .empty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".screen",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".scr-head",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".scr-head .name",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".scr-head .path",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".scr-head .badge.off",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".scr-head .badge.off",
+            "value": "var(--hair)"
+          },
+          {
+            "property": "border",
+            "selector": ".claim-toggle,.ghostty-action",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".claim-toggle,.ghostty-action",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".claim-toggle:hover,.claim-toggle:focus-visible,.ghostty-action:hover,.ghostty-action:focus-visible",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".promptbar",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".promptbar",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "color",
+            "selector": ".promptmeta .plab",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".promptmeta .prompt-ava",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".promptmeta .ptarget",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".promptmeta .phint",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": "#promptInput",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": "#promptInput",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "color",
+            "selector": "#promptInput",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": "#promptStop",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "background",
+            "selector": ".slashmenu",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "border",
+            "selector": ".slashmenu",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".slashmenu .sm-it+.sm-it",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".slashmenu .sm-name",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".slashmenu .sm-kind",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".slashmenu .sm-desc",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".sendguard .sg-msg",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".network-panel",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "border",
+            "selector": ".network-panel",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".network-head",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".network-title",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".network-note",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "background",
+            "selector": ".termstage.split-grid",
+            "value": "var(--hair-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".split-cell-label",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-left",
+            "selector": ".split-cell-label .scl-role",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".split-cell-label .scl-role",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".split-cell-label img",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "border",
+            "selector": ".scl-close",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".scl-close",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".split-cell-empty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "background",
+            "selector": ".split-divider::after",
+            "value": "var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-bottom-jump",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".stage-empty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".rosterempty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".legend",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".legend",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".palette",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".palette",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".palette-search",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".palette-search input",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
+            "selector": ".keycap",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".keycap",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "background",
+            "selector": ".palette-row:hover,.palette-row.sel",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".palette-row:hover,.palette-row.sel",
+            "value": "var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".palette-kind",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".palette-name",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".palette-meta",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".palette-empty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".modal",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".modal",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".modal-head",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".modal-sub",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".modal-close",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".field label,.field .field-label",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".field input[type=\"text\"],.field select,.field textarea",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".field input[type=\"text\"],.field select,.field textarea",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "color",
+            "selector": ".field input[type=\"text\"],.field select,.field textarea",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".spawn-advanced",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".spawn-advanced summary",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".spawn-advanced summary small",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".namecard",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".namecard",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "border",
+            "selector": ".nc-dice-face",
+            "value": "2px dashed var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".nc-name",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".nc-hint",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".nc-adj input",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".nc-adj input",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "color",
+            "selector": ".nc-adj input",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
+            "selector": ".nc-dice",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "border",
+            "selector": ".dir-chip",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".dir-chip",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".dir-chip:hover",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
+            "selector": ".dir-crumbs",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".dir-crumbs",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "color",
+            "selector": ".crumb",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".crumb.here",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".crumb-sep",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".dir-list",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".dir-list",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "color",
+            "selector": ".dir-row",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".dir-row:hover",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".dir-row .dr-arrow",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".dir-err",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".agent-pick .cp-auto",
+            "value": "2px dashed var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-pick .cp-auto",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-pick .cp-lab",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".provider-tabs",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".provider-tabs button",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border-left",
+            "selector": ".provider-tabs button+button",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".effort-lab",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".model-badge",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".model-choices label",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".model-choices label",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".model-choices label:has(input:checked)",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".model-choice-name",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".model-choice-note",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".model-overflow>summary",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".model-overflow>summary:hover,.model-overflow>summary:focus-visible",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".effort-caption",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".worktree-line",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".modal-foot",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".spawn-status",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".modal-btn",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".modal-btn",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".settings-popover",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".settings-head",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".settings-title",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".settings-kicker",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".settings-body>section+section",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".settings-section-title",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".settings-row+.settings-row",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".settings-row-name",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".settings-help",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "background",
+            "selector": ".settings-range::-webkit-slider-thumb",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "background",
+            "selector": ".settings-range::-moz-range-thumb",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "border",
+            "selector": ".settings-switch input",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".settings-switch input",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "background",
+            "selector": ".settings-switch input::after",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".settings-choice",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".settings-choice",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".settings-choice:has(input:checked)",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
+            "selector": ".settings-select",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".settings-select",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".settings-select",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
+            "selector": ".theme-ab-summary",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".theme-ab-summary",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-ab-current",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-ab-since",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".theme-axis-choice",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-axis-choice",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-axis-choice[aria-pressed=\"true\"]",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-axis-note",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-axis-count",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".theme-profile-axis",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "border",
+            "selector": ".theme-axis-level",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-axis-level",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-axis-level:hover,.theme-axis-level:focus-visible",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".theme-axis-legacy",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-axis-legacy summary",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".theme-ab-log",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-ab-log summary",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-ab-log-list li",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-ab-log-list time",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".settings-foot",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".toast",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
+            "selector": ".pane-return,.pane-popout",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-return,.pane-popout",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-return:hover,.pane-return:focus-visible,.pane-popout:hover,.pane-popout:focus-visible",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "background",
+            "selector": ".pane-drag-ghost",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-drag-ghost",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".pane-float",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "background",
+            "selector": ".pane-float-bar",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".pane-float-bar",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-float-bar",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-float-bar .hint",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-float-bar button",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "background",
+            "selector": ".pane-float-bar button:hover,.pane-float-bar button:focus-visible",
+            "value": "var(--hair)"
+          },
+          {
+            "property": "border-right",
+            "selector": ".pane-out-chip",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-out-chip",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-out-chip:hover",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-out-chip .back",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-comm-edge",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "fill",
+            "selector": ".mini-initial",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "fill",
+            "selector": ".orrery-hover-label",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-hover-label",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "fill",
+            "selector": ".orrery-expand text",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "fill",
+            "selector": ".orrery-expand:hover rect,.orrery-expand:focus-visible rect",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "fill",
+            "selector": ".orrery-expand:hover text,.orrery-expand:focus-visible text",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "fill",
+            "selector": ".orrery-comet-flight",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "fill",
+            "selector": ".orrery-comet-halo",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "fill",
+            "selector": ".orrery-state-glyph text",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "fill",
+            "selector": ".orrery-comet-label",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-comet-label",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "border",
+            "selector": ".planetarium-panel",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".planetarium-head",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".planetarium-title",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".planetarium-note",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "fill",
+            "selector": ".planet-initials",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "fill",
+            "selector": ".planet-agent-name",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".planet-agent-name",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "fill",
+            "selector": ".planet-agent-role",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".planet-agent-role",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "fill",
+            "selector": ".planet-agent-model",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".planet-agent-model",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".planet-agent-state",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "background",
+            "selector": ".mailfilters",
+            "value": "linear-gradient(180deg,var(--panel) 76%,rgba(17,20,25,.86))"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".mailfilters",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "border",
+            "selector": ".mailchip",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".mailchip",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".mailchip:hover,.mailchip:focus-visible",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".mailchip.on",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".mailchip.on",
+            "value": "var(--elev)"
+          },
+          {
+            "property": "background",
+            "selector": ".msg",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "border",
+            "selector": ".msg",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".msg:hover,.msg:focus-visible",
+            "value": "var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".msg:hover,.msg:focus-visible",
+            "value": "var(--elev)"
+          },
+          {
+            "property": "color",
+            "selector": ".msg .from",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".msg .arrow",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".msg .to",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".mailview-host .imp",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".mailview-host .imp",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".msg .body",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".msg .time",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".mailempty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "background",
+            "selector": ".maildrawer",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "border-left",
+            "selector": ".maildrawer",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".drawer-head",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "border",
+            "selector": ".drawer-back,.drawer-mode",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".drawer-back,.drawer-mode",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".drawer-back:hover,.drawer-back:focus-visible,.drawer-mode:hover,.drawer-mode:focus-visible",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".drawer-label",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".drawer-sender",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".drawer-arrow",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".drawer-recipients",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".recipient-kind",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".drawer-meta",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".maildrawer h2",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-md",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-md h1,.mail-md h2,.mail-md h3,.mail-md h4",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-md strong",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
+            "selector": ".mail-md code",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-md code",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
+            "selector": ".mail-md pre",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-md pre code",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".md-marker",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".md-empty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".drawer-empty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".thread-item",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "background",
+            "selector": ".thread-item",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".thread-item:hover,.thread-item:focus-visible",
+            "value": "var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".thread-item:hover,.thread-item:focus-visible",
+            "value": "var(--elev)"
+          },
+          {
+            "property": "box-shadow",
+            "selector": ".thread-item.current",
+            "value": "inset 2px 0 0 var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".thread-from",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".thread-time",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".thread-excerpt",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "background",
+            "selector": ".screen,html[data-theme-axis=\"background\"] .mail-md pre",
+            "value": "var(--bg)"
+          },
+          {
+            "property": "background",
+            "selector": ".scr-head",
+            "value": "var(--oc-theme-screen-head,rgba(24,26,31,.7))"
+          },
+          {
+            "property": "background",
+            "selector": "#networkFrame",
+            "value": "var(--bg)"
+          }
+        ],
+        "unit": "computed-target"
+      },
+      "mutation": {
+        "digest": "7e5073b60f537ee41c3132be8cecfd4119025a8a9cac8d1d06882c13f38ae99e",
+        "expected": 9,
+        "records": [
+          {
+            "line": 64,
+            "property": "--bg",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-bg,#181a1f)"
+          },
+          {
+            "line": 65,
+            "property": "--panel",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-panel,#1f2227)"
+          },
+          {
+            "line": 66,
+            "property": "--panel-2",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-panel-2,#242830)"
+          },
+          {
+            "line": 67,
+            "property": "--elev",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-elev,#2a3039)"
+          },
+          {
+            "line": 68,
+            "property": "--ink",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-ink,#fffced)"
+          },
+          {
+            "line": 69,
+            "property": "--ink-dim",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-ink-dim,#aba394)"
+          },
+          {
+            "line": 70,
+            "property": "--ink-faint",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-ink-faint,#6c695e)"
+          },
+          {
+            "line": 71,
+            "property": "--hair",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-hair,rgba(255,252,237,.085))"
+          },
+          {
+            "line": 72,
+            "property": "--hair-2",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-hair-2,rgba(255,252,237,.045))"
+          }
+        ],
+        "unit": "token-write"
+      },
+      "source": {
+        "digest": "7e5073b60f537ee41c3132be8cecfd4119025a8a9cac8d1d06882c13f38ae99e",
+        "expected": 9,
+        "records": [
+          {
+            "line": 64,
+            "property": "--bg",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-bg,#181a1f)"
+          },
+          {
+            "line": 65,
+            "property": "--panel",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-panel,#1f2227)"
+          },
+          {
+            "line": 66,
+            "property": "--panel-2",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-panel-2,#242830)"
+          },
+          {
+            "line": 67,
+            "property": "--elev",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-elev,#2a3039)"
+          },
+          {
+            "line": 68,
+            "property": "--ink",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-ink,#fffced)"
+          },
+          {
+            "line": 69,
+            "property": "--ink-dim",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-ink-dim,#aba394)"
+          },
+          {
+            "line": 70,
+            "property": "--ink-faint",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-ink-faint,#6c695e)"
+          },
+          {
+            "line": 71,
+            "property": "--hair",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-hair,rgba(255,252,237,.085))"
+          },
+          {
+            "line": 72,
+            "property": "--hair-2",
+            "selector": ":root[data-theme-axis=\"background\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-hair-2,rgba(255,252,237,.045))"
+          }
+        ],
+        "unit": "token-write"
+      }
+    },
+    "dim-contrast": {
+      "effect": {
+        "digest": "9ed1b78263e779f82486632e6b55ceb7fdceefbda62059e8a9ebe62b17faf698",
+        "expected": 140,
+        "records": [
+          {
+            "property": "color",
+            "selector": ".brand .sub",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".topstat",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".topstat .of",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "background",
+            "selector": ".topstat .dot",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".topstat .sep",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".sesschip",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".colhead",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".colhead .tag",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-head .colhead-title",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".header-utility",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-select",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-filter input::placeholder",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-filter-status",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".pin-toggle",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".name-copy",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent.offline-hint::after",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".bulk-count",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".pill",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".pill.role",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".ctx .lab",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "background",
+            "selector": ".ctx .fill",
+            "value": "linear-gradient(90deg,var(--ink-dim),var(--ink))"
+          },
+          {
+            "property": "color",
+            "selector": ".ctx .pct",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-pill .up-k",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".up-logo",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-pill .up-p.none b",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover .up-reset",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "fill",
+            "selector": ".usage-popover .dial .u",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover .dial .rs",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover .up-sub",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover .up-untouched",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover .up-empty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".usage-popover .up-foot",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".cstate",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".glyph",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".descriptor-updated",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail-label",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail-value",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".layout-chip",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".layout-picker-title",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".layout-option",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".tab-overflow",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".session-label",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".session-label:hover,.session-group.live .session-label",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".session-label .detach",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".tab",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "background",
+            "selector": ".tab .led",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".tab .x",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".tabs .empty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".scr-head .path",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".scr-head .badge.off",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".claim-toggle,.ghostty-action",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".claim-toggle:hover,.claim-toggle:focus-visible,.ghostty-action:hover,.ghostty-action:focus-visible",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".promptmeta .plab",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".promptmeta .phint",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": "#promptStop",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".slashmenu .sm-kind",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".slashmenu .sm-desc",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".network-note",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".split-cell-label .scl-role",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".scl-close",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".split-cell-empty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-bottom-jump",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".stage-empty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".rosterempty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".legend",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".keycap",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".palette-kind",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".palette-meta",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".palette-empty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".modal-sub",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".modal-close",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".field label,.field .field-label",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".spawn-advanced summary",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".spawn-advanced summary small",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".nc-hint",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".dir-chip",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".crumb",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".crumb-sep",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".dir-row",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".dir-row .dr-arrow",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".dir-err",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-pick .cp-auto",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-pick .cp-lab",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".provider-tabs button",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".effort-lab",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".model-badge",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".model-choices label",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".model-choice-note",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".model-overflow>summary",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".model-overflow>summary:hover,.model-overflow>summary:focus-visible",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".effort-caption",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".worktree-line",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".spawn-status",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".modal-btn",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".settings-kicker",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".settings-section-title",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".settings-row-name",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".settings-help",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "background",
+            "selector": ".settings-switch input::after",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".settings-choice",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-ab-since",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-axis-choice",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-axis-note",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-axis-count",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-axis-level",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-axis-legacy summary",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-ab-log summary",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-ab-log-list li",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".theme-ab-log-list time",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-return,.pane-popout",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-return:hover,.pane-return:focus-visible,.pane-popout:hover,.pane-popout:focus-visible",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-float-bar .hint",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-float-bar button",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-out-chip",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-out-chip .back",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "fill",
+            "selector": ".orrery-expand text",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".planetarium-note",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "fill",
+            "selector": ".planet-agent-role",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "fill",
+            "selector": ".planet-agent-model",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mailchip",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".msg .arrow",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".msg .to",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mailview-host .imp",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".msg .body",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".msg .time",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".mailempty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".drawer-back,.drawer-mode",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".drawer-label",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".drawer-arrow",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".drawer-recipients",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".recipient-kind",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".drawer-meta",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-md",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-md pre code",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".md-marker",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".md-empty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".drawer-empty",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "box-shadow",
+            "selector": ".thread-item.current",
+            "value": "inset 2px 0 0 var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".thread-time",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".thread-excerpt",
+            "value": "var(--ink-dim)"
+          }
+        ],
+        "unit": "computed-target"
+      },
+      "mutation": {
+        "digest": "0c4d1a0ff90cbeb03459679ccfc39ff3933afe94f2443911da91ee3f644ff435",
+        "expected": 2,
+        "records": [
+          {
+            "line": 58,
+            "property": "--ink-dim",
+            "selector": ":root[data-theme-axis=\"dim-contrast\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-ink-dim,#b2aa9b)"
+          },
+          {
+            "line": 59,
+            "property": "--ink-faint",
+            "selector": ":root[data-theme-axis=\"dim-contrast\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-ink-faint,#8b877d)"
+          }
+        ],
+        "unit": "token-write"
+      },
+      "source": {
+        "digest": "0c4d1a0ff90cbeb03459679ccfc39ff3933afe94f2443911da91ee3f644ff435",
+        "expected": 2,
+        "records": [
+          {
+            "line": 58,
+            "property": "--ink-dim",
+            "selector": ":root[data-theme-axis=\"dim-contrast\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-ink-dim,#b2aa9b)"
+          },
+          {
+            "line": 59,
+            "property": "--ink-faint",
+            "selector": ":root[data-theme-axis=\"dim-contrast\"]",
+            "source": "bridge/cockpit.html",
+            "value": "var(--oc-theme-ink-faint,#8b877d)"
+          }
+        ],
+        "unit": "token-write"
+      }
+    },
+    "glow": {
+      "effect": {
+        "digest": "a49909a5a8260d21455d1132ec3717132e1b88dcbaf2cd4867cdd814f53c39b0",
+        "expected": 16,
+        "records": [
+          {
+            "property": "background",
+            "selector": ".miniorrery.telemetry-network",
+            "value": ""
+          },
+          {
+            "property": "filter",
+            "selector": ".miniorrery.telemetry-network .mini-agent.is-network-focus .mini-lineage-ring",
+            "value": ""
+          },
+          {
+            "property": "background",
+            "selector": "body::before",
+            "value": ""
+          },
+          {
+            "property": "box-shadow",
+            "selector": ".topstat .dot.open",
+            "value": ""
+          },
+          {
+            "property": "box-shadow",
+            "selector": ".agent.sel::before",
+            "value": ""
+          },
+          {
+            "property": "box-shadow",
+            "selector": ".roster.select-mode .agent.bulk-selected",
+            "value": ""
+          },
+          {
+            "property": "box-shadow",
+            "selector": ".layout-picker",
+            "value": ""
+          },
+          {
+            "property": "box-shadow",
+            "selector": ".tab.on .led",
+            "value": ""
+          },
+          {
+            "property": "box-shadow",
+            "selector": ".tab.active-pane .led",
+            "value": ""
+          },
+          {
+            "property": "background",
+            "selector": ".screen .glassglow",
+            "value": ""
+          },
+          {
+            "property": "box-shadow",
+            "selector": ".split-cell.drop-target",
+            "value": ""
+          },
+          {
+            "property": "box-shadow",
+            "selector": ".split-drag-ghost",
+            "value": ""
+          },
+          {
+            "property": "box-shadow",
+            "selector": ".split-divider:hover::after,.split-divider.dragging::after",
+            "value": ""
+          },
+          {
+            "property": "box-shadow",
+            "selector": ".agent-pick.sel img",
+            "value": ""
+          },
+          {
+            "property": "box-shadow",
+            "selector": ".msg.landing",
+            "value": ""
+          },
+          {
+            "property": "box-shadow",
+            "selector": ".bulk-exit.arm",
+            "value": ""
+          }
+        ],
+        "unit": "computed-target"
+      },
+      "mutation": {
+        "digest": "b54aa530c7bd16b60c6fe517e4f27064b0ff143723d91666d589615736cb19d5",
+        "expected": 19,
+        "records": [
+          {
+            "component": 0,
+            "occurrence": 0,
+            "property": "--amber-glow",
+            "selector": ":root"
+          },
+          {
+            "component": 0,
+            "occurrence": 0,
+            "property": "background",
+            "selector": ".miniorrery.telemetry-network"
+          },
+          {
+            "component": 0,
+            "occurrence": 0,
+            "property": "filter",
+            "selector": ".miniorrery.telemetry-network .mini-agent.is-network-focus .mini-lineage-ring"
+          },
+          {
+            "component": 0,
+            "occurrence": 0,
+            "property": "background",
+            "selector": "body::before"
+          },
+          {
+            "component": 1,
+            "occurrence": 0,
+            "property": "background",
+            "selector": "body::before"
+          },
+          {
+            "component": 0,
+            "occurrence": 0,
+            "property": "box-shadow",
+            "selector": ".topstat .dot.open"
+          },
+          {
+            "component": 0,
+            "occurrence": 0,
+            "property": "box-shadow",
+            "selector": ".agent.sel::before"
+          },
+          {
+            "component": 1,
+            "occurrence": 0,
+            "property": "box-shadow",
+            "selector": ".roster.select-mode .agent.bulk-selected"
+          },
+          {
+            "component": 1,
+            "occurrence": 0,
+            "property": "box-shadow",
+            "selector": ".layout-picker"
+          },
+          {
+            "component": 0,
+            "occurrence": 0,
+            "property": "box-shadow",
+            "selector": ".tab.on .led"
+          },
+          {
+            "component": 0,
+            "occurrence": 0,
+            "property": "box-shadow",
+            "selector": ".tab.active-pane .led"
+          },
+          {
+            "component": 0,
+            "occurrence": 0,
+            "property": "background",
+            "selector": ".screen .glassglow"
+          },
+          {
+            "component": 1,
+            "occurrence": 0,
+            "property": "box-shadow",
+            "selector": ".split-cell.drop-target"
+          },
+          {
+            "component": 1,
+            "occurrence": 0,
+            "property": "box-shadow",
+            "selector": ".split-drag-ghost"
+          },
+          {
+            "component": 0,
+            "occurrence": 0,
+            "property": "box-shadow",
+            "selector": ".split-divider:hover::after,.split-divider.dragging::after"
+          },
+          {
+            "component": 0,
+            "occurrence": 0,
+            "property": "box-shadow",
+            "selector": ".agent-pick.sel img"
+          },
+          {
+            "component": 0,
+            "occurrence": 0,
+            "property": "box-shadow",
+            "selector": "@keyframes mail-ember"
+          },
+          {
+            "component": 0,
+            "occurrence": 0,
+            "property": "box-shadow",
+            "selector": "@keyframes bulkarm"
+          },
+          {
+            "component": 0,
+            "occurrence": 1,
+            "property": "box-shadow",
+            "selector": "@keyframes bulkarm"
+          }
+        ],
+        "unit": "effect-component"
+      },
+      "source": {
+        "digest": "d23d31764c892a874dc5f7fc2f7c162d5ffbbf3d8504a166e0d7d12fef958ca1",
+        "expected": 46,
+        "records": [
+          {
+            "categories": [
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "html[data-theme-axis=\"glow\"]",
+            "property": "--amber-glow",
+            "selector": ":root"
+          },
+          {
+            "categories": [
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "html[data-theme-axis=\"glow\"] .miniorrery.telemetry-network",
+            "property": "background",
+            "selector": ".miniorrery.telemetry-network"
+          },
+          {
+            "categories": [
+              "state",
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "html[data-theme-axis=\"glow\"] .miniorrery.telemetry-network .mini-agent.is-network-focus .mini-lineage-ring",
+            "property": "filter",
+            "selector": ".miniorrery.telemetry-network .mini-agent.is-network-focus .mini-lineage-ring"
+          },
+          {
+            "categories": [
+              "state"
+            ],
+            "mode": "preserve",
+            "property": "filter",
+            "selector": ".orrery-state-glyph.attention text"
+          },
+          {
+            "categories": [
+              "state"
+            ],
+            "mode": "preserve",
+            "property": "filter",
+            "selector": ".orrery-state-glyph.question text"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".planetarium-panel"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".maildrawer"
+          },
+          {
+            "categories": [
+              "state"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".thread-item.current"
+          },
+          {
+            "categories": [
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "html[data-theme-axis=\"glow\"] body::before",
+            "property": "background",
+            "selector": "body::before"
+          },
+          {
+            "categories": [
+              "state",
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "html[data-theme-axis=\"glow\"] .topstat .dot.open",
+            "property": "box-shadow",
+            "selector": ".topstat .dot.open"
+          },
+          {
+            "categories": [
+              "focus"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".roster-filter input:focus"
+          },
+          {
+            "categories": [
+              "state",
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "html[data-theme-axis=\"glow\"] .agent.sel::before",
+            "property": "box-shadow",
+            "selector": ".agent.sel::before"
+          },
+          {
+            "categories": [
+              "state",
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "html[data-theme-axis=\"glow\"] .roster.select-mode .agent.bulk-selected",
+            "property": "box-shadow",
+            "selector": ".roster.select-mode .agent.bulk-selected"
+          },
+          {
+            "categories": [
+              "state"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".medal .face"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "background",
+            "selector": ".medal .face::after"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".agent-detail"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "background",
+            "selector": ".term"
+          },
+          {
+            "categories": [
+              "elevation",
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "html[data-theme-axis=\"glow\"] .layout-picker",
+            "property": "box-shadow",
+            "selector": ".layout-picker"
+          },
+          {
+            "categories": [
+              "state"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".session-label.active-session .session-name"
+          },
+          {
+            "categories": [
+              "state"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".tab.on"
+          },
+          {
+            "categories": [
+              "state",
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "html[data-theme-axis=\"glow\"] .tab.on .led",
+            "property": "box-shadow",
+            "selector": ".tab.on .led"
+          },
+          {
+            "categories": [
+              "state",
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "html[data-theme-axis=\"glow\"] .tab.active-pane .led",
+            "property": "box-shadow",
+            "selector": ".tab.active-pane .led"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".screen"
+          },
+          {
+            "categories": [
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "html[data-theme-axis=\"glow\"] .screen .glassglow",
+            "property": "background",
+            "selector": ".screen .glassglow"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".slashmenu"
+          },
+          {
+            "categories": [
+              "state",
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".sendguard"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".network-panel"
+          },
+          {
+            "categories": [
+              "focus"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".split-cell.focused"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".split-cell-label"
+          },
+          {
+            "categories": [
+              "state",
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "html[data-theme-axis=\"glow\"] .split-cell.drop-target",
+            "property": "box-shadow",
+            "selector": ".split-cell.drop-target"
+          },
+          {
+            "categories": [
+              "elevation",
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "html[data-theme-axis=\"glow\"] .split-drag-ghost",
+            "property": "box-shadow",
+            "selector": ".split-drag-ghost"
+          },
+          {
+            "categories": [
+              "state",
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "html[data-theme-axis=\"glow\"] .split-divider:hover::after,html[data-theme-axis=\"glow\"] .split-divider.dragging::after",
+            "property": "box-shadow",
+            "selector": ".split-divider:hover::after,.split-divider.dragging::after"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".pane-bottom-jump"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".pane-drag-ghost"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".pane-float"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".palette"
+          },
+          {
+            "categories": [
+              "state"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".palette-row.sel"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".modal"
+          },
+          {
+            "categories": [
+              "state",
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "html[data-theme-axis=\"glow\"] .agent-pick.sel img",
+            "property": "box-shadow",
+            "selector": ".agent-pick.sel img"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".settings-popover"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".usage-popover"
+          },
+          {
+            "categories": [
+              "state"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".settings-range::-webkit-slider-thumb"
+          },
+          {
+            "categories": [
+              "focus"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".settings-switch input:focus-visible"
+          },
+          {
+            "categories": [
+              "elevation"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".toast"
+          },
+          {
+            "activation_property": "animation",
+            "activation_selector": ".msg.landing",
+            "categories": [
+              "state",
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "@keyframes theme-axis-mail-ember",
+            "property": "box-shadow",
+            "selector": "@keyframes mail-ember"
+          },
+          {
+            "activation_property": "animation-name",
+            "activation_selector": ".bulk-exit.arm",
+            "categories": [
+              "state",
+              "emissive"
+            ],
+            "mode": "scale",
+            "override_selector": "@keyframes theme-axis-bulkarm",
+            "property": "box-shadow",
+            "selector": "@keyframes bulkarm"
+          }
+        ],
+        "unit": "declaration"
+      }
+    },
+    "small-text": {
+      "effect": {
+        "expected_rule": "small-text immutable eligible-element snapshot",
+        "unit": "computed-target"
+      },
+      "mutation": {
+        "expected_rule": "eligible computed font-size < 12px pre-apply snapshot",
+        "unit": "element"
+      },
+      "source": {
+        "digest": "6973b4392a32a667e3f52b945874fc8bd4bc1a625e74a24a1c035c1c19d25e02",
+        "expected": 137,
+        "records": [
+          {
+            "line": 185,
+            "property": "font-size",
+            "selector": ".topstat",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 196,
+            "property": "font-size",
+            "selector": ".need-chip",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 204,
+            "property": "font-size",
+            "selector": ".sesschip",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 215,
+            "property": "font-size",
+            "selector": ".colhead",
+            "source": "bridge/cockpit.html",
+            "value": "10px"
+          },
+          {
+            "line": 220,
+            "property": "font-size",
+            "selector": ".colhead .tag",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 232,
+            "property": "font-size",
+            "selector": ".new-agent",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 240,
+            "property": "font-size",
+            "selector": ".roster-select",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 251,
+            "property": "font-size",
+            "selector": ".roster-filter input",
+            "source": "bridge/cockpit.html",
+            "value": "10.5px"
+          },
+          {
+            "line": 255,
+            "property": "font-size",
+            "selector": ".roster-filter-status",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 320,
+            "property": "font-size",
+            "selector": ".agent.offline-hint::after",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 329,
+            "property": "font-size",
+            "selector": ".bulk-count",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 332,
+            "property": "font-size",
+            "selector": ".bulk-exit",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 375,
+            "property": "font-size",
+            "selector": ".pill",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 384,
+            "property": "font-size",
+            "selector": ".ctx .lab",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 389,
+            "property": "font-size",
+            "selector": ".ctx .pct",
+            "source": "bridge/cockpit.html",
+            "value": "10px"
+          },
+          {
+            "line": 390,
+            "property": "font-size",
+            "selector": ".usage-pill .up-k",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 395,
+            "property": "font-size",
+            "selector": ".up-logo",
+            "source": "bridge/cockpit.html",
+            "value": "10px"
+          },
+          {
+            "line": 398,
+            "property": "font-size",
+            "selector": ".usage-pill .up-p b",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 416,
+            "property": "font-size",
+            "selector": ".usage-popover .up-reset",
+            "source": "bridge/cockpit.html",
+            "value": "10px"
+          },
+          {
+            "line": 426,
+            "property": "font-size",
+            "selector": ".usage-popover .dial .u",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 429,
+            "property": "font-size",
+            "selector": ".usage-popover .dial .lab",
+            "source": "bridge/cockpit.html",
+            "value": "10px"
+          },
+          {
+            "line": 430,
+            "property": "font-size",
+            "selector": ".usage-popover .dial .rs",
+            "source": "bridge/cockpit.html",
+            "value": "10px"
+          },
+          {
+            "line": 431,
+            "property": "font-size",
+            "selector": ".usage-popover .up-sub",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 435,
+            "property": "font-size",
+            "selector": ".usage-popover .up-untouched",
+            "source": "bridge/cockpit.html",
+            "value": "10px"
+          },
+          {
+            "line": 436,
+            "property": "font-size",
+            "selector": ".usage-popover .up-empty",
+            "source": "bridge/cockpit.html",
+            "value": "10px"
+          },
+          {
+            "line": 437,
+            "property": "font-size",
+            "selector": ".usage-popover .up-foot",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 438,
+            "property": "font-size",
+            "selector": ".cstate",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 443,
+            "property": "font-size",
+            "selector": ".descriptor-updated",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 456,
+            "property": "font-size",
+            "selector": ".agent-detail-primary",
+            "source": "bridge/cockpit.html",
+            "value": "11.5px"
+          },
+          {
+            "line": 458,
+            "property": "font-size",
+            "selector": ".agent-detail-label",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 459,
+            "property": "font-size",
+            "selector": ".agent-detail-value",
+            "source": "bridge/cockpit.html",
+            "value": "10px"
+          },
+          {
+            "line": 472,
+            "property": "font-size",
+            "selector": ".split-chip",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 489,
+            "property": "font-size",
+            "selector": ".layout-picker-title",
+            "source": "bridge/cockpit.html",
+            "value": "8px"
+          },
+          {
+            "line": 492,
+            "property": "font-size",
+            "selector": ".layout-option",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 498,
+            "property": "font-size",
+            "selector": ".layout-option-mark",
+            "source": "bridge/cockpit.html",
+            "value": "8px"
+          },
+          {
+            "line": 518,
+            "property": "font-size",
+            "selector": ".tab-overflow",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 525,
+            "property": "font-size",
+            "selector": ".session-label",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 529,
+            "property": "font-size",
+            "selector": ".session-label .session-state",
+            "source": "bridge/cockpit.html",
+            "value": "8px"
+          },
+          {
+            "line": 530,
+            "property": "font-size",
+            "selector": ".split-mark",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 544,
+            "property": "font-size",
+            "selector": ".tab",
+            "source": "bridge/cockpit.html",
+            "value": "11.5px"
+          },
+          {
+            "line": 556,
+            "property": "font-size",
+            "selector": ".tabs .empty",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 569,
+            "property": "font-size",
+            "selector": ".scr-head .path",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 570,
+            "property": "font-size",
+            "selector": ".scr-head .badge",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 576,
+            "property": "font-size",
+            "selector": ".claim-toggle,.ghostty-action",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 597,
+            "property": "font-size",
+            "selector": ".promptmeta .plab",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 603,
+            "property": "font-size",
+            "selector": ".promptmeta .phint",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 620,
+            "property": "font-size",
+            "selector": ".slashmenu .sm-kind",
+            "source": "bridge/cockpit.html",
+            "value": "8px"
+          },
+          {
+            "line": 621,
+            "property": "font-size",
+            "selector": ".slashmenu .sm-desc",
+            "source": "bridge/cockpit.html",
+            "value": "10.5px"
+          },
+          {
+            "line": 632,
+            "property": "font-size",
+            "selector": ".sendguard .sg-msg",
+            "source": "bridge/cockpit.html",
+            "value": "11.5px"
+          },
+          {
+            "line": 644,
+            "property": "font-size",
+            "selector": ".network-note",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 668,
+            "property": "font-size",
+            "selector": ".split-cell-label",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 678,
+            "property": "font-size",
+            "selector": ".split-cell-label .scl-role",
+            "source": "bridge/cockpit.html",
+            "value": "8px"
+          },
+          {
+            "line": 702,
+            "property": "font-size",
+            "selector": ".split-drag-ghost",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 709,
+            "property": "font-size",
+            "selector": ".split-cell-empty",
+            "source": "bridge/cockpit.html",
+            "value": "10px"
+          },
+          {
+            "line": 760,
+            "property": "font-size",
+            "selector": ".rosterempty",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 761,
+            "property": "font-size",
+            "selector": ".legend",
+            "source": "bridge/cockpit.html",
+            "value": "10px"
+          },
+          {
+            "line": 793,
+            "property": "font-size",
+            "selector": ".keycap",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 802,
+            "property": "font-size",
+            "selector": ".palette-kind",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 804,
+            "property": "font-size",
+            "selector": ".palette-meta",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 805,
+            "property": "font-size",
+            "selector": ".palette-empty",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 812,
+            "property": "font-size",
+            "selector": ".modal-sub",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 818,
+            "property": "font-size",
+            "selector": ".field label,.field .field-label",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 825,
+            "property": "font-size",
+            "selector": ".spawn-advanced summary",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 829,
+            "property": "font-size",
+            "selector": ".spawn-advanced summary small",
+            "source": "bridge/cockpit.html",
+            "value": "8px"
+          },
+          {
+            "line": 845,
+            "property": "font-size",
+            "selector": ".nc-hint",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 849,
+            "property": "font-size",
+            "selector": ".nc-adj input",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 861,
+            "property": "font-size",
+            "selector": ".dir-chip",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 867,
+            "property": "font-size",
+            "selector": ".dir-crumbs",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 869,
+            "property": "font-size",
+            "selector": ".crumb",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 878,
+            "property": "font-size",
+            "selector": ".dir-row",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 880,
+            "property": "font-size",
+            "selector": ".dir-row .dr-arrow",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 881,
+            "property": "font-size",
+            "selector": ".dir-err",
+            "source": "bridge/cockpit.html",
+            "value": "10px"
+          },
+          {
+            "line": 890,
+            "property": "font-size",
+            "selector": ".agent-pick .cp-lab",
+            "source": "bridge/cockpit.html",
+            "value": "7px"
+          },
+          {
+            "line": 895,
+            "property": "font-size",
+            "selector": ".provider-tabs button",
+            "source": "bridge/cockpit.html",
+            "value": "10px"
+          },
+          {
+            "line": 902,
+            "property": "font-size",
+            "selector": ".effort-lab",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 903,
+            "property": "font-size",
+            "selector": ".model-badge",
+            "source": "bridge/cockpit.html",
+            "value": "8px"
+          },
+          {
+            "line": 914,
+            "property": "font-size",
+            "selector": ".model-choice-name",
+            "source": "bridge/cockpit.html",
+            "value": "10.5px"
+          },
+          {
+            "line": 915,
+            "property": "font-size",
+            "selector": ".model-choice-note",
+            "source": "bridge/cockpit.html",
+            "value": "8px"
+          },
+          {
+            "line": 919,
+            "property": "font-size",
+            "selector": ".model-overflow>summary",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 921,
+            "property": "font-size",
+            "selector": ".model-overflow>summary::before",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 926,
+            "property": "font-size",
+            "selector": ".model-error",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 927,
+            "property": "font-size",
+            "selector": ".model-choices .effort-choice",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 928,
+            "property": "font-size",
+            "selector": ".effort-caption",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 930,
+            "property": "font-size",
+            "selector": ".worktree-line",
+            "source": "bridge/cockpit.html",
+            "value": "10.5px"
+          },
+          {
+            "line": 935,
+            "property": "font-size",
+            "selector": ".spawn-status",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 938,
+            "property": "font-size",
+            "selector": ".modal-btn",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 956,
+            "property": "font-size",
+            "selector": ".settings-kicker",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 959,
+            "property": "font-size",
+            "selector": ".settings-section-title",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 963,
+            "property": "font-size",
+            "selector": ".settings-row-name",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 964,
+            "property": "font-size",
+            "selector": ".settings-value",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 965,
+            "property": "font-size",
+            "selector": ".settings-help",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 998,
+            "property": "font-size",
+            "selector": ".settings-choice",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 1001,
+            "property": "font-size",
+            "selector": ".settings-select",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 1006,
+            "property": "font-size",
+            "selector": ".theme-ab-current",
+            "source": "bridge/cockpit.html",
+            "value": "10px"
+          },
+          {
+            "line": 1007,
+            "property": "font-size",
+            "selector": ".theme-ab-since",
+            "source": "bridge/cockpit.html",
+            "value": "8px"
+          },
+          {
+            "line": 1017,
+            "property": "font-size",
+            "selector": ".theme-axis-badge",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 1019,
+            "property": "font-size",
+            "selector": ".theme-axis-name",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 1020,
+            "property": "font-size",
+            "selector": ".theme-axis-note",
+            "source": "bridge/cockpit.html",
+            "value": "8px"
+          },
+          {
+            "line": 1021,
+            "property": "font-size",
+            "selector": ".theme-axis-count",
+            "source": "bridge/cockpit.html",
+            "value": "7.5px"
+          },
+          {
+            "line": 1031,
+            "property": "font-size",
+            "selector": ".theme-axis-level",
+            "source": "bridge/cockpit.html",
+            "value": "8px"
+          },
+          {
+            "line": 1037,
+            "property": "font-size",
+            "selector": ".theme-axis-legacy summary",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 1041,
+            "property": "font-size",
+            "selector": ".theme-ab-log summary",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 1043,
+            "property": "font-size",
+            "selector": ".theme-ab-log-list li",
+            "source": "bridge/cockpit.html",
+            "value": "8px"
+          },
+          {
+            "line": 1050,
+            "property": "font-size",
+            "selector": ".toast",
+            "source": "bridge/cockpit.html",
+            "value": "10.5px"
+          },
+          {
+            "line": 1079,
+            "property": "font-size",
+            "selector": ".pane-return,.pane-popout",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 1092,
+            "property": "font-size",
+            "selector": ".pane-drag-ghost small",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 1103,
+            "property": "font-size",
+            "selector": ".pane-float-bar .hint",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 1104,
+            "property": "font-size",
+            "selector": ".pane-float-bar button",
+            "source": "bridge/cockpit.html",
+            "value": "10px"
+          },
+          {
+            "line": 1113,
+            "property": "font-size",
+            "selector": ".pane-out-chip",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 1118,
+            "property": "font-size",
+            "selector": ".pane-out-chip .where",
+            "source": "bridge/cockpit.html",
+            "value": "8px"
+          },
+          {
+            "line": 1119,
+            "property": "font-size",
+            "selector": ".pane-out-chip .back",
+            "source": "bridge/cockpit.html",
+            "value": "11px"
+          },
+          {
+            "line": 37,
+            "property": "font-size",
+            "selector": ".mini-initial",
+            "source": "bridge/orrery_view.css",
+            "value": "8px"
+          },
+          {
+            "line": 69,
+            "property": "font-size",
+            "selector": ".orrery-hover-label",
+            "source": "bridge/orrery_view.css",
+            "value": "7.5px"
+          },
+          {
+            "line": 79,
+            "property": "font-size",
+            "selector": ".orrery-expand text",
+            "source": "bridge/orrery_view.css",
+            "value": "11px"
+          },
+          {
+            "line": 123,
+            "property": "font-size",
+            "selector": ".orrery-comet-label",
+            "source": "bridge/orrery_view.css",
+            "value": "10px"
+          },
+          {
+            "line": 148,
+            "property": "font-size",
+            "selector": ".planetarium-note",
+            "source": "bridge/orrery_view.css",
+            "value": "9px"
+          },
+          {
+            "line": 185,
+            "property": "font-size",
+            "selector": ".planet-agent-role",
+            "source": "bridge/orrery_view.css",
+            "value": "8px"
+          },
+          {
+            "line": 189,
+            "property": "font-size",
+            "selector": ".planet-agent-model",
+            "source": "bridge/orrery_view.css",
+            "value": "8px"
+          },
+          {
+            "line": 194,
+            "property": "font-size",
+            "selector": ".planet-agent-state",
+            "source": "bridge/orrery_view.css",
+            "value": "8px"
+          },
+          {
+            "line": 18,
+            "property": "font-size",
+            "selector": ".mailchip",
+            "source": "bridge/mail_view.css",
+            "value": "8.5px"
+          },
+          {
+            "line": 53,
+            "property": "font-size",
+            "selector": ".msg .arrow",
+            "source": "bridge/mail_view.css",
+            "value": "11px"
+          },
+          {
+            "line": 55,
+            "property": "font-size",
+            "selector": ".msg .to",
+            "source": "bridge/mail_view.css",
+            "value": "10.5px"
+          },
+          {
+            "line": 59,
+            "property": "font-size",
+            "selector": ".mailview-host .imp",
+            "source": "bridge/mail_view.css",
+            "value": "8.5px"
+          },
+          {
+            "line": 64,
+            "property": "font-size",
+            "selector": ".msg .body",
+            "source": "bridge/mail_view.css",
+            "value": "11.5px"
+          },
+          {
+            "line": 67,
+            "property": "font-size",
+            "selector": ".msg .time",
+            "source": "bridge/mail_view.css",
+            "value": "9.5px"
+          },
+          {
+            "line": 68,
+            "property": "font-size",
+            "selector": ".mailempty",
+            "source": "bridge/mail_view.css",
+            "value": "11px"
+          },
+          {
+            "line": 92,
+            "property": "font-size",
+            "selector": ".drawer-mode",
+            "source": "bridge/mail_view.css",
+            "value": "8.5px"
+          },
+          {
+            "line": 98,
+            "property": "font-size",
+            "selector": ".drawer-label",
+            "source": "bridge/mail_view.css",
+            "value": "8.5px"
+          },
+          {
+            "line": 102,
+            "property": "font-size",
+            "selector": ".drawer-arrow",
+            "source": "bridge/mail_view.css",
+            "value": "11px"
+          },
+          {
+            "line": 104,
+            "property": "font-size",
+            "selector": ".drawer-recipient",
+            "source": "bridge/mail_view.css",
+            "value": "10.5px"
+          },
+          {
+            "line": 106,
+            "property": "font-size",
+            "selector": ".recipient-kind",
+            "source": "bridge/mail_view.css",
+            "value": "7.5px"
+          },
+          {
+            "line": 108,
+            "property": "font-size",
+            "selector": ".drawer-meta",
+            "source": "bridge/mail_view.css",
+            "value": "8.5px"
+          },
+          {
+            "line": 114,
+            "property": "font-size",
+            "selector": ".mail-md",
+            "source": "bridge/mail_view.css",
+            "value": "10.75px"
+          },
+          {
+            "line": 119,
+            "property": "font-size",
+            "selector": ".mail-md h4",
+            "source": "bridge/mail_view.css",
+            "value": "11.5px"
+          },
+          {
+            "line": 134,
+            "property": "font-size",
+            "selector": ".drawer-empty",
+            "source": "bridge/mail_view.css",
+            "value": "10.5px"
+          },
+          {
+            "line": 149,
+            "property": "font-size",
+            "selector": ".thread-time",
+            "source": "bridge/mail_view.css",
+            "value": "8.5px"
+          },
+          {
+            "line": 151,
+            "property": "font-size",
+            "selector": ".thread-excerpt",
+            "source": "bridge/mail_view.css",
+            "value": "10px"
+          }
+        ],
+        "unit": "declaration"
+      }
+    },
+    "tracking": {
+      "effect": {
+        "expected_rule": "tracking immutable eligible-element snapshot",
+        "unit": "computed-target"
+      },
+      "mutation": {
+        "expected_rule": "eligible computed letter-spacing/font-size > 0.08 pre-apply snapshot",
+        "unit": "element"
+      },
+      "source": {
+        "digest": "fabb865d4fb632fd3440b951604045cad22f8d3c7d194df77f9bb3799db31f63",
+        "expected": 40,
+        "records": [
+          {
+            "line": 216,
+            "property": "letter-spacing",
+            "selector": ".colhead",
+            "source": "bridge/cockpit.html",
+            "value": ".32em"
+          },
+          {
+            "line": 223,
+            "property": "letter-spacing",
+            "selector": ".roster-head .colhead-title",
+            "source": "bridge/cockpit.html",
+            "value": ".28em"
+          },
+          {
+            "line": 232,
+            "property": "letter-spacing",
+            "selector": ".new-agent",
+            "source": "bridge/cockpit.html",
+            "value": ".13em"
+          },
+          {
+            "line": 240,
+            "property": "letter-spacing",
+            "selector": ".roster-select",
+            "source": "bridge/cockpit.html",
+            "value": ".14em"
+          },
+          {
+            "line": 320,
+            "property": "letter-spacing",
+            "selector": ".agent.offline-hint::after",
+            "source": "bridge/cockpit.html",
+            "value": ".12em"
+          },
+          {
+            "line": 332,
+            "property": "letter-spacing",
+            "selector": ".bulk-exit",
+            "source": "bridge/cockpit.html",
+            "value": ".12em"
+          },
+          {
+            "line": 384,
+            "property": "letter-spacing",
+            "selector": ".ctx .lab",
+            "source": "bridge/cockpit.html",
+            "value": ".18em"
+          },
+          {
+            "line": 390,
+            "property": "letter-spacing",
+            "selector": ".usage-pill .up-k",
+            "source": "bridge/cockpit.html",
+            "value": ".18em"
+          },
+          {
+            "line": 429,
+            "property": "letter-spacing",
+            "selector": ".usage-popover .dial .lab",
+            "source": "bridge/cockpit.html",
+            "value": ".18em"
+          },
+          {
+            "line": 431,
+            "property": "letter-spacing",
+            "selector": ".usage-popover .up-sub",
+            "source": "bridge/cockpit.html",
+            "value": ".18em"
+          },
+          {
+            "line": 458,
+            "property": "letter-spacing",
+            "selector": ".agent-detail-label",
+            "source": "bridge/cockpit.html",
+            "value": ".1em"
+          },
+          {
+            "line": 489,
+            "property": "letter-spacing",
+            "selector": ".layout-picker-title",
+            "source": "bridge/cockpit.html",
+            "value": ".18em"
+          },
+          {
+            "line": 493,
+            "property": "letter-spacing",
+            "selector": ".layout-option",
+            "source": "bridge/cockpit.html",
+            "value": ".1em"
+          },
+          {
+            "line": 570,
+            "property": "letter-spacing",
+            "selector": ".scr-head .badge",
+            "source": "bridge/cockpit.html",
+            "value": ".14em"
+          },
+          {
+            "line": 597,
+            "property": "letter-spacing",
+            "selector": ".promptmeta .plab",
+            "source": "bridge/cockpit.html",
+            "value": ".22em"
+          },
+          {
+            "line": 620,
+            "property": "letter-spacing",
+            "selector": ".slashmenu .sm-kind",
+            "source": "bridge/cockpit.html",
+            "value": ".18em"
+          },
+          {
+            "line": 644,
+            "property": "letter-spacing",
+            "selector": ".network-note",
+            "source": "bridge/cockpit.html",
+            "value": ".2em"
+          },
+          {
+            "line": 738,
+            "property": "letter-spacing",
+            "selector": ".pane-bottom-jump",
+            "source": "bridge/cockpit.html",
+            "value": ".12em"
+          },
+          {
+            "line": 802,
+            "property": "letter-spacing",
+            "selector": ".palette-kind",
+            "source": "bridge/cockpit.html",
+            "value": ".15em"
+          },
+          {
+            "line": 812,
+            "property": "letter-spacing",
+            "selector": ".modal-sub",
+            "source": "bridge/cockpit.html",
+            "value": ".12em"
+          },
+          {
+            "line": 818,
+            "property": "letter-spacing",
+            "selector": ".field label,.field .field-label",
+            "source": "bridge/cockpit.html",
+            "value": ".14em"
+          },
+          {
+            "line": 825,
+            "property": "letter-spacing",
+            "selector": ".spawn-advanced summary",
+            "source": "bridge/cockpit.html",
+            "value": ".16em"
+          },
+          {
+            "line": 896,
+            "property": "letter-spacing",
+            "selector": ".provider-tabs button",
+            "source": "bridge/cockpit.html",
+            "value": ".14em"
+          },
+          {
+            "line": 902,
+            "property": "letter-spacing",
+            "selector": ".effort-lab",
+            "source": "bridge/cockpit.html",
+            "value": ".2em"
+          },
+          {
+            "line": 915,
+            "property": "letter-spacing",
+            "selector": ".model-choice-note",
+            "source": "bridge/cockpit.html",
+            "value": ".09em"
+          },
+          {
+            "line": 919,
+            "property": "letter-spacing",
+            "selector": ".model-overflow>summary",
+            "source": "bridge/cockpit.html",
+            "value": ".16em"
+          },
+          {
+            "line": 929,
+            "property": "letter-spacing",
+            "selector": ".effort-caption b",
+            "source": "bridge/cockpit.html",
+            "value": ".1em"
+          },
+          {
+            "line": 938,
+            "property": "letter-spacing",
+            "selector": ".modal-btn",
+            "source": "bridge/cockpit.html",
+            "value": ".1em"
+          },
+          {
+            "line": 956,
+            "property": "letter-spacing",
+            "selector": ".settings-kicker",
+            "source": "bridge/cockpit.html",
+            "value": ".18em"
+          },
+          {
+            "line": 959,
+            "property": "letter-spacing",
+            "selector": ".settings-section-title",
+            "source": "bridge/cockpit.html",
+            "value": ".24em"
+          },
+          {
+            "line": 963,
+            "property": "letter-spacing",
+            "selector": ".settings-row-name",
+            "source": "bridge/cockpit.html",
+            "value": ".13em"
+          },
+          {
+            "line": 1092,
+            "property": "letter-spacing",
+            "selector": ".pane-drag-ghost small",
+            "source": "bridge/cockpit.html",
+            "value": ".1em"
+          },
+          {
+            "line": 1118,
+            "property": "letter-spacing",
+            "selector": ".pane-out-chip .where",
+            "source": "bridge/cockpit.html",
+            "value": ".1em"
+          },
+          {
+            "line": 148,
+            "property": "letter-spacing",
+            "selector": ".planetarium-note",
+            "source": "bridge/orrery_view.css",
+            "value": ".18em"
+          },
+          {
+            "line": 152,
+            "property": "letter-spacing",
+            "selector": ".planetarium-telemetry",
+            "source": "bridge/orrery_view.css",
+            "value": ".1em"
+          },
+          {
+            "line": 189,
+            "property": "letter-spacing",
+            "selector": ".planet-agent-model",
+            "source": "bridge/orrery_view.css",
+            "value": ".12em"
+          },
+          {
+            "line": 194,
+            "property": "letter-spacing",
+            "selector": ".planet-agent-state",
+            "source": "bridge/orrery_view.css",
+            "value": ".12em"
+          },
+          {
+            "line": 59,
+            "property": "letter-spacing",
+            "selector": ".mailview-host .imp",
+            "source": "bridge/mail_view.css",
+            "value": ".1em"
+          },
+          {
+            "line": 98,
+            "property": "letter-spacing",
+            "selector": ".drawer-label",
+            "source": "bridge/mail_view.css",
+            "value": ".22em"
+          },
+          {
+            "line": 106,
+            "property": "letter-spacing",
+            "selector": ".recipient-kind",
+            "source": "bridge/mail_view.css",
+            "value": ".1em"
+          }
+        ],
+        "unit": "declaration"
+      }
+    }
+  },
+  "inventory_digest": "7042f3c15fa376d3f4a3897bb410eb4c4cbe97a4bb44c0cda72ca01cb827f98a",
+  "rules": {
+    "dynamic": "immutable pre-apply eligible-element snapshot",
+    "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
+    "small_text": "font-size px <12; exclude .brand/.xterm",
+    "success": "visibleExpected > 0; visibleReached === visibleExpected; visibleChanged > 0; changed > 0",
+    "tokens": "custom properties authored in the axis override selector",
+    "tracking": "letter-spacing >.08em; exclude .brand/.xterm/code/pre",
+    "version": 1,
+    "visibility": "pre-apply rendered nonzero box intersecting viewport"
+  },
+  "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
+  "source_digest": "6f8169d0794a96574324e6fb7fec4ccd363c57af48d2db123b9402b6abbdb920",
+  "source_files": {
+    "bridge/cockpit.html": "ad37cadd136aa051712a80a355cbf8fdc1c4e58b3c3ae0be6f9978ecec7c3a44",
+    "bridge/mail_view.css": "4c65a93dd1b338a3f4304651173a53a7ed489860ecec2bc86014d253bbcde898",
+    "bridge/orrery_view.css": "38d2f9c82d92ddc026bfa0da5da23c9b69e9a7da1cde7feaf999641b02c06a4e"
+  },
+  "surface": "cockpit",
+  "validation": {
+    "missing_manifest_records": [],
+    "uncovered_effect_declarations": []
+  },
+  "version": 1
+}

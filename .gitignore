@@ -1,0 +1,16 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+dist/
+target/
+*.log
+.env
+.env.local
+annotations.json
+runtime/
+
+# portrait source originals (large; refetch via scripts/build_portraits.py docs)
+assets/portraits_src/*
+!assets/portraits_src/manifest.json
