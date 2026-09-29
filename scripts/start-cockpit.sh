@@ -448,8 +448,10 @@ say ""
 say "    ${backend_url}/cockpit.html"
 say ""
 if [ "$is_wsl" = true ]; then
-  say "  Keep this window open: closing it stops the cockpit, and"
-  say "  closing every Ubuntu window stops WSL2 (and the dashboard)."
+  say "  Keep this window open: closing it stops the cockpit."
+  say "  Agents, the dashboard, and Mail keep running after you close"
+  say "  the Ubuntu windows. To stop WSL2 and give its memory back to"
+  say "  Windows, run wsl --shutdown in PowerShell (stops every distro)."
 else
   say "  Keep this window open: closing it stops the cockpit."
 fi
