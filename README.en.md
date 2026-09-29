@@ -10,7 +10,7 @@ ORRERY is a cockpit for people who run several Claude Code / Codex agents as a t
 
 Pick an agent in the roster on the left, give instructions in the terminal in the center, and follow parent–child relationships and messages in the mini-orrery and Mail on the right. The terminals work even when ORRERY Telemetry is not running; features that depend on it show their status and degrade gracefully.
 
-**Introduction video**: You can see several agents actually running in the introduction video "Orrery".
+**Introduction video**: "Orrery" explains the concept behind ORRERY (it does not show the actual screens).
 
 [![Introduction video "Orrery" (YouTube)](https://i.ytimg.com/vi/JXoa93TQolU/hqdefault.jpg)](https://youtu.be/JXoa93TQolU)
 
