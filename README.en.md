@@ -10,6 +10,10 @@ ORRERY is a cockpit for people who run several Claude Code / Codex agents as a t
 
 Pick an agent in the roster on the left, give instructions in the terminal in the center, and follow parent–child relationships and messages in the mini-orrery and Mail on the right. The terminals work even when ORRERY Telemetry is not running; features that depend on it show their status and degrade gracefully.
 
+**Introduction video**: You can see several agents actually running in the introduction video "Orrery".
+
+[![Introduction video "Orrery" (YouTube)](https://i.ytimg.com/vi/JXoa93TQolU/hqdefault.jpg)](https://youtu.be/JXoa93TQolU)
+
 ## What you can do
 
 ### Your half-typed message is not swept away
@@ -117,6 +121,14 @@ Hover over a roster tile to show a copy icon. A copied name can be pasted straig
 ![Selecting 7 agents in NETWORK and pressing Replay starts with only the parent CoralCurie; children appear one by one through spawn, and Mail subjects flow by as speech bubbles. Raising the speed and jumping to the later part of the time axis shows everyone connected](docs/images/cockpit_replay.gif)
 
 → [Usage: TELEMETRY](docs/en/usage.md#telemetry)
+
+### Use it together with Obsidian
+
+When you run agents inside an Obsidian vault, work logs, paper notes, and tasks become Markdown notes as they are, and all a person has to do is look at them in Obsidian's Daily Note and Kanban. A note path that an agent prints in the terminal opens when you click it in the cockpit. ORRERY works without Obsidian; this is just one convenient way to use it.
+
+![Typing /adddone review the paper note to Claude on WSL makes that task disappear from "Tasks" and appear under "Done today" in the Obsidian Daily Note on the right](docs/images/cockpit_obsidian.gif)
+
+→ [Use it together with Obsidian](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/obsidian.en.md) (an ORRERY Telemetry document) · a template you can try right away, [orrery-demo-vault](https://github.com/gyroid-eth/orrery-demo-vault)
 
 ### The same screen on Windows (WSL2)
 

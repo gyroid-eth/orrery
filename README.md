@@ -10,6 +10,10 @@ ORRERY は、複数の Claude Code / Codex の agent をチームとして動か
 
 左の roster で agent を選び、中央の端末で指示し、右の mini-orrery と Mail で親子関係とやり取りを追います。端末だけなら ORRERY Telemetry が止まっていても使え、連携する機能は状態を表示して縮退します。
 
+**紹介動画**: 実際に複数の agent を動かしている様子は、紹介動画「Orrery」で見られます。
+
+[![紹介動画「Orrery」（YouTube）](https://i.ytimg.com/vi/JXoa93TQolU/hqdefault.jpg)](https://youtu.be/JXoa93TQolU)
+
 ## できること
 
 ### 打っている途中で流されない
@@ -117,6 +121,14 @@ header の `TELEMETRY` で、ORRERY Telemetry の dashboard を cockpit の中�
 ![NETWORK で7体を選んで Replay を押すと、親の CoralCurie だけから始まり、spawn で子が1体ずつ現れ、Mail の件名が吹き出しで流れる。速さを上げ、時間軸の後半に飛ぶと、全員がつながった状態になる](docs/images/cockpit_replay.gif)
 
 → [使い方: TELEMETRY](docs/usage.md#telemetry)
+
+### Obsidian と一緒に使う
+
+Obsidian の vault の中で agent を動かすと、作業ログ・論文ノート・タスクがそのまま Markdown のノートになり、人は Obsidian の Daily Note と Kanban で見るだけで済みます。agent が端末に出したノートのパスは、cockpit でクリックすれば開けます。ORRERY は Obsidian が無くても使えます。これは便利な使い方の 1 つです。
+
+![WSL の Claude に /adddone 論文ノートを見直す と打つと、右の Obsidian の Daily Note で、そのタスクが「タスク」から消え「今日完了した」に出る](docs/images/cockpit_obsidian.gif)
+
+→ [Obsidian と一緒に使う](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/obsidian.md)（ORRERY Telemetry の文書）・すぐ試せるひな形 [orrery-demo-vault](https://github.com/gyroid-eth/orrery-demo-vault)
 
 ### Windows（WSL2）でも同じ画面で
 

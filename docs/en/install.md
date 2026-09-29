@@ -78,7 +78,7 @@ If no agents appear in the list on the left, start one from the cockpit's NEW AG
 
 - To stop, press `Ctrl-C` in the window where the script is running. Closing that window also stops it
 - **Leave the window you started it in open.** The cockpit runs inside that window (it does not stay resident)
-- On Windows, **closing all Ubuntu windows stops WSL2 itself**, and the orrery-telemetry dashboard and Mail stop with it. The next time you use it, open Ubuntu and check the state with `~/.agentstack/bin/agentstack-doctor`. If something has stopped, start it with `~/.agentstack/dashboard/agentctl.sh start` and `~/.agentstack/bin/agentstack-mailctl start`, and then run `./scripts/start-cockpit.sh` again
+- On Windows, agents, the dashboard, and Mail started from Windows Terminal keep running in the background after you close the Ubuntu windows. When you are done and want WSL to give its memory back to Windows, run `wsl --shutdown` in PowerShell. After that, or after restarting the PC, open Ubuntu and check the state with `~/.agentstack/bin/agentstack-doctor`. If something has stopped, start it with `~/.agentstack/dashboard/agentctl.sh start` and `~/.agentstack/bin/agentstack-mailctl start`, and then run `./scripts/start-cockpit.sh` again
 - To update, run `git pull` and then the same script. If `bridge/requirements.txt` has changed, the packages are installed again
 
 ### When something is missing

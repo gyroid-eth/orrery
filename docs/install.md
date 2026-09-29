@@ -78,7 +78,7 @@ script は 1 回で次を行います。
 
 - 止めるときは、script を動かしている窓で `Ctrl-C` を押します。窓を閉じても止まります
 - **起動した窓は開いたままにします。** cockpit はその窓の中で動いています（常駐はしません）
-- Windows では、**Ubuntu の窓をすべて閉じると WSL2 ごと止まり**、orrery-telemetry の dashboard と Mail も止まります。次に使うときは Ubuntu を開き、`~/.agentstack/bin/agentstack-doctor` で状態を見て、止まっていれば `~/.agentstack/dashboard/agentctl.sh start` と `~/.agentstack/bin/agentstack-mailctl start` で起動してから、もう一度 `./scripts/start-cockpit.sh` を実行します
+- Windows では、Windows Terminal から起動した agent・dashboard・Mail は、Ubuntu の窓を閉じても裏で動き続けます。使い終わって WSL のメモリを Windows に返したいときは、PowerShell で `wsl --shutdown` を打ちます。その後や PC の再起動の後に使うときは、Ubuntu を開き、`~/.agentstack/bin/agentstack-doctor` で状態を見て、止まっていれば `~/.agentstack/dashboard/agentctl.sh start` と `~/.agentstack/bin/agentstack-mailctl start` で起動してから、もう一度 `./scripts/start-cockpit.sh` を実行します
 - 更新するときは `git pull` のあと同じ script を実行します。`bridge/requirements.txt` が変わっていれば package を入れ直します
 
 ### 足りないものがあるとき
