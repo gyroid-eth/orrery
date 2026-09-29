@@ -10,7 +10,7 @@ ORRERY は、複数の Claude Code / Codex の agent をチームとして動か
 
 左の roster で agent を選び、中央の端末で指示し、右の mini-orrery と Mail で親子関係とやり取りを追います。端末だけなら ORRERY Telemetry が止まっていても使え、連携する機能は状態を表示して縮退します。
 
-**紹介動画**: ORRERY のコンセプトを説明する紹介動画「Orrery」です（実際の画面ではありません）。
+**紹介動画**: 「Orrery」（約 90 秒・日本語）は、agent どうしが直接話すことで AI の間の仲介が要らなくなる、という ORRERY の考え方を図解で説明する動画です（実際の画面ではありません）。
 
 [![紹介動画「Orrery」（YouTube）](https://i.ytimg.com/vi/JXoa93TQolU/hqdefault.jpg)](https://youtu.be/JXoa93TQolU)
 
