@@ -162,6 +162,8 @@ WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同
 
 **はじめて入れる人は、[インストールの「はじめて入れる人へ」](docs/install.md#はじめて入れる人へブラウザで使うmac--windows-wsl2)の手順だけで進められます。** ORRERY Telemetry を入れたあと `./scripts/start-cockpit.sh` を実行し、表示された URL をブラウザで開きます（Mac と Windows の WSL2）。以下は手作業で組む場合の手順です。
 
+**更新するとき**は、cockpit の folder で `./scripts/update.sh` を実行します。orrery-telemetry と cockpit が 1 回で最新になります。終わったら `./scripts/start-cockpit.sh` を起動し直します。詳しくは[インストールの「5. 更新する」](docs/install.md#5-更新する)を見てください。
+
 ```bash
 git clone https://github.com/gyroid-eth/orrery.git
 cd orrery

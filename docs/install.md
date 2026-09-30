@@ -90,21 +90,28 @@ script は 1 回で次を行います。
 
 ### 5. 更新する
 
-cockpit の folder で次を実行すると、orrery-telemetry と cockpit を 1 回で最新にできます。
+cockpit の folder で次を実行します。orrery-telemetry と cockpit が 1 回で最新になります。
 
 ```bash
 ./scripts/update.sh
 ```
 
-1. orrery-telemetry を入れた場所（`~/.agentstack/install-state.json` に記録されている）で `git pull --ff-only` のあと `./scripts/install.sh` を実行する。`~/.agentstack/env.sh` に保存されている前回の設定（project key・dashboard の port・Mail の URL など）を渡すので、設定は引き継がれ（いまの shell で明示している値はそちらが優先）、動いている dashboard は新しい版に置き換わる。Codex の plugin を入れていれば、その refresh も行う
-2. そのあと cockpit で `git pull --ff-only`
-3. 最後に、orrery-telemetry の版と API の世代、cockpit の commit を表示する
+終わったら、cockpit を動かしている窓で `Ctrl-C` を押し、`./scripts/start-cockpit.sh` をもう一度実行します。
 
-どちらかの folder に commit していない変更があるとき、更新で上書きされる未追跡のファイルがあるとき、fast-forward できないとき、remote に届かないときは、理由を表示して**何も変えずに**止まります。orrery-telemetry の `install.sh` が失敗したときは、cockpit は更新しません。何をするかだけ見るには `./scripts/update.sh --dry-run`（`git fetch` もしないので、fast-forward できるかは本当の実行が変更の前に確かめます）。
+#### 詳しく
 
-終わったら、cockpit を動かしている窓で `Ctrl-C` を押し、`./scripts/start-cockpit.sh` をもう一度実行します。`bridge/requirements.txt` が変わっていれば、この script が package を入れ直します。dashboard が応答しないときは `~/.agentstack/bin/agentstack-doctor` で状態を見て、`~/.agentstack/dashboard/agentctl.sh start` で起動します。
-
-手で更新する場合は、先に orrery-telemetry の repository で `git pull` のあと `./scripts/install.sh`（Codex の plugin を入れていれば、orrery-telemetry の [docs/codex-app.md](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/codex-app.md) の refresh も）、そのあと cockpit で `git pull` をします。
+- 先に orrery-telemetry を更新します。入れた場所で `git pull --ff-only` と `./scripts/install.sh` を実行します。
+- 次に cockpit で `git pull --ff-only` を実行します。
+- 前回の設定はそのまま使います。project key、dashboard の port、Mail の URL などは `~/.agentstack/env.sh` から読みます。
+- いまの shell で設定している値があれば、そちらを使います。
+- Codex の plugin を入れていれば、その更新もします。
+- 最後に、orrery-telemetry の版と cockpit の commit を表示します。
+- 次のどれかにあたると、理由を表示して何も変えずに止まります。commit していない変更がある、更新で上書きされる未追跡のファイルがある、fast-forward できない、remote に届かない。
+- orrery-telemetry の `install.sh` が失敗したときは、cockpit は更新しません。
+- `./scripts/update.sh --dry-run` は、何をするかを表示するだけで、何も変えません。
+- `bridge/requirements.txt` が変わっていれば、次に起動したときに `start-cockpit.sh` が package を入れ直します。
+- dashboard が応答しないときは、`~/.agentstack/bin/agentstack-doctor` で状態を見て、`~/.agentstack/dashboard/agentctl.sh start` で起動します。
+- 手で更新するときは、orrery-telemetry で `git pull` と `./scripts/install.sh` を実行してから、cockpit で `git pull` を実行します。Codex の plugin の更新は、orrery-telemetry の [docs/codex-app.md](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/codex-app.md) にあります。
 
 ### 足りないものがあるとき
 

@@ -363,6 +363,7 @@ PY
 # checkout. The line is only the command, quoted for the shell, so it can be
 # pasted as shown.
 update_hint="  $(printf '%q' "${SCRIPT_DIR}/update.sh")"
+update_docs="More: step 5 of docs/install.md (docs/en/install.md in English)."
 
 telemetry_update_check() {
   case "${ORRERY_NO_UPDATE_CHECK:-}" in
@@ -379,6 +380,7 @@ telemetry_update_check() {
       note "a newer orrery-telemetry is available: ${latest} (this one is ${1})."
       note "Update it, then this cockpit, with:"
       note "$update_hint"
+      note "$update_docs"
     fi
   fi
 }
@@ -405,7 +407,8 @@ telemetry_version_check() {
       "Some parts may not work, e.g. resuming a Codex agent that has exited." \
       "Update it, then this cockpit, with this command (the cockpit starts anyway):" \
       "$update_hint" \
-      "then run this script again."
+      "then run this script again." \
+      "$update_docs"
     api_warned=true
   else
     ok "orrery-telemetry version: ${telemetry_version:-unknown} (API ${telemetry_api})"

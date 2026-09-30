@@ -162,6 +162,8 @@ See [Installation](docs/en/install.md) for details and requirements by role.
 
 **If this is your first install, the steps in [Installation, "For first-time installers"](docs/en/install.md#for-first-time-installers-browser-mac--windows-wsl2) are all you need.** After installing ORRERY Telemetry, run `./scripts/start-cockpit.sh` and open the URL it prints in a browser (Mac and Windows WSL2). What follows is the procedure for setting things up by hand.
 
+**To update**, run `./scripts/update.sh` in the cockpit folder. It brings orrery-telemetry and the cockpit up to date in one go. When it is done, start `./scripts/start-cockpit.sh` again. See [Installation, "5. Update"](docs/en/install.md#5-update) for details.
+
 ```bash
 git clone https://github.com/gyroid-eth/orrery.git
 cd orrery

@@ -243,6 +243,7 @@ def test_negative_an_old_or_unknown_api_is_a_warning(tmp_path, body, found):
     assert "resuming a Codex agent that has exited" in out
     assert "with this command (the cockpit starts anyway):" in out
     assert f"          {SCRIPT.parent}/update.sh\n" in out
+    assert "        More: step 5 of docs/install.md (docs/en/install.md in English).\n" in out
     dash.shutdown()
 
 
@@ -260,6 +261,7 @@ def test_negative_a_newer_release_is_a_two_line_note(tmp_path, local, latest):
         f"  note  a newer orrery-telemetry is available: {latest} (this one is {local}).",
         "  note  Update it, then this cockpit, with:",
         f"  note    {SCRIPT.parent}/update.sh",
+        "  note  More: step 5 of docs/install.md (docs/en/install.md in English).",
     ]
     assert "WARN" not in out  # the API is new enough; being behind is only news
     dash.shutdown(), gh.shutdown()
@@ -272,6 +274,7 @@ def test_negative_an_old_api_and_a_newer_release_show_the_steps_once(tmp_path):
     assert "WARN  This cockpit needs orrery-telemetry API" in out
     assert f"  note  a newer orrery-telemetry is available: {CURRENT} (this one is 2026.09.29.1)." in out
     assert out.count("/update.sh\n") == 1
+    assert out.count("More: step 5 of docs/install.md") == 1
     dash.shutdown(), gh.shutdown()
 
 
@@ -319,3 +322,12 @@ def test_the_update_command_it_shows_can_be_pasted_even_from_a_folder_with_a_spa
     words = subprocess.run([BASH, "-c", 'set -- ' + hint + '; printf "%s\\n" "$#" "$1"'],
                            capture_output=True, text=True, check=True).stdout.splitlines()
     assert words == ["1", str(checkout / "scripts" / "update.sh")]
+
+
+def test_the_docs_the_hint_names_have_a_step_5_about_update_sh():
+    """The WARN and the note send people to step 5; it must be there."""
+    root = SCRIPT.parents[1]
+    for rel, heading in (("docs/install.md", "### 5. 更新する"), ("docs/en/install.md", "### 5. Update")):
+        text = (root / rel).read_text(encoding="utf-8")
+        section = text.split(heading, 1)[1].split("\n### ", 1)[0]
+        assert "./scripts/update.sh" in section and "./scripts/start-cockpit.sh" in section, rel

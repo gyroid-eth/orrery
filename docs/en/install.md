@@ -90,21 +90,28 @@ If no agents appear in the list on the left, start one from the cockpit's NEW AG
 
 ### 5. Update
 
-Run this in the cockpit folder to bring orrery-telemetry and the cockpit up to date in one go.
+Run this in the cockpit folder. It brings orrery-telemetry and the cockpit up to date in one go.
 
 ```bash
 ./scripts/update.sh
 ```
 
-1. Where orrery-telemetry was installed from (recorded in `~/.agentstack/install-state.json`), it runs `git pull --ff-only` and then `./scripts/install.sh` with the previous settings saved in `~/.agentstack/env.sh` (project key, dashboard port, Mail URL and so on; a value set explicitly in your shell wins), so they are kept, and the running dashboard is replaced with the new version. If you installed the Codex plugin, it is refreshed too
-2. Then `git pull --ff-only` in the cockpit
-3. Finally, it shows the orrery-telemetry version and API generation, and the cockpit commit
+When it is done, press `Ctrl-C` in the window running the cockpit, and run `./scripts/start-cockpit.sh` again.
 
-When either folder has uncommitted changes or untracked files the update would overwrite, cannot be fast-forwarded, or cannot reach its remote, it says why and stops **without changing anything**. When orrery-telemetry's `install.sh` fails, the cockpit is not updated. To see what it would do, run `./scripts/update.sh --dry-run` (it does not even `git fetch`, so whether the new commits apply is checked by the real run, before it changes anything).
+#### Details
 
-When it is done, press `Ctrl-C` in the window running the cockpit and run `./scripts/start-cockpit.sh` again. If `bridge/requirements.txt` has changed, that script installs the packages again. If the dashboard does not answer, check it with `~/.agentstack/bin/agentstack-doctor` and start it with `~/.agentstack/dashboard/agentctl.sh start`.
-
-To update by hand, first run `git pull` and then `./scripts/install.sh` in the orrery-telemetry repository (and, if you installed the Codex plugin, its refresh in orrery-telemetry's [docs/codex-app.en.md](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/codex-app.en.md)), then `git pull` in the cockpit.
+- orrery-telemetry is updated first: `git pull --ff-only` and `./scripts/install.sh` where it was installed from.
+- Then the cockpit: `git pull --ff-only`.
+- Your previous settings are kept. The project key, dashboard port, Mail URL and so on are read from `~/.agentstack/env.sh`.
+- A value you have set in your current shell is used instead.
+- If you installed the Codex plugin, it is refreshed too.
+- At the end, it shows the orrery-telemetry version and the cockpit commit.
+- It stops with the reason, changing nothing, in any of these cases: uncommitted changes, untracked files the update would overwrite, a branch that cannot be fast-forwarded, or a remote it cannot reach.
+- If orrery-telemetry's `install.sh` fails, the cockpit is not updated.
+- `./scripts/update.sh --dry-run` only shows what it would do and changes nothing.
+- If `bridge/requirements.txt` has changed, `start-cockpit.sh` installs the packages again the next time you start it.
+- If the dashboard does not answer, check it with `~/.agentstack/bin/agentstack-doctor` and start it with `~/.agentstack/dashboard/agentctl.sh start`.
+- To update by hand, run `git pull` and `./scripts/install.sh` in orrery-telemetry, then `git pull` in the cockpit. The Codex plugin refresh is in orrery-telemetry's [docs/codex-app.en.md](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/codex-app.en.md).
 
 ### When something is missing
 
