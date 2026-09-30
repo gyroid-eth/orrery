@@ -359,7 +359,10 @@ print(version(tag))
 PY
 }
 
-update_hint="  cd /path/to/orrery-telemetry && git pull && ./scripts/install.sh"
+# scripts/update.sh updates orrery-telemetry (pull + install.sh), then this
+# checkout. The line is only the command, quoted for the shell, so it can be
+# pasted as shown.
+update_hint="  $(printf '%q' "${SCRIPT_DIR}/update.sh")"
 
 telemetry_update_check() {
   case "${ORRERY_NO_UPDATE_CHECK:-}" in
@@ -373,7 +376,8 @@ telemetry_update_check() {
     if [ "$api_warned" = true ]; then
       note "a newer orrery-telemetry is available: ${latest} (this one is ${1})."
     else
-      note "a newer orrery-telemetry is available: ${latest} (this one is ${1}). Update it:"
+      note "a newer orrery-telemetry is available: ${latest} (this one is ${1})."
+      note "Update it, then this cockpit, with:"
       note "$update_hint"
     fi
   fi
@@ -399,7 +403,7 @@ telemetry_version_check() {
     fi
     warn "This cockpit needs orrery-telemetry API ${MIN_TELEMETRY_API} or later; ${found}." \
       "Some parts may not work, e.g. resuming a Codex agent that has exited." \
-      "Update it (the cockpit starts anyway):" \
+      "Update it, then this cockpit, with this command (the cockpit starts anyway):" \
       "$update_hint" \
       "then run this script again."
     api_warned=true

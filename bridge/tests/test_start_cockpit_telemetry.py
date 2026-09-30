@@ -126,7 +126,8 @@ def version(v: str | None, api=MIN_API) -> bytes:
     return json.dumps(data).encode()
 
 
-def start(tmp_path, dash_url: str, releases_url: str | None = None, **env_extra) -> str:
+def start(tmp_path, dash_url: str, releases_url: str | None = None, script: Path = SCRIPT,
+          **env_extra) -> str:
     home = tmp_path / "home"
     agentstack = home / ".agentstack"
     agentstack.mkdir(parents=True, exist_ok=True)
@@ -142,7 +143,7 @@ def start(tmp_path, dash_url: str, releases_url: str | None = None, **env_extra)
         "TMUX_BIN": str(tmp_path / "no-tmux"),
         **env_extra,
     }
-    result = subprocess.run([BASH, str(SCRIPT), "--check"], env=env, capture_output=True,
+    result = subprocess.run([BASH, str(script), "--check"], env=env, capture_output=True,
                             text=True, timeout=60, check=False)
     # Stopped by the missing tmux alone, as intended: the warnings are not
     # counted as missing prerequisites, and no venv was created.
@@ -240,7 +241,8 @@ def test_negative_an_old_or_unknown_api_is_a_warning(tmp_path, body, found):
     assert f"WARN  This cockpit needs orrery-telemetry API {MIN_API} or later; " in out
     assert found in out
     assert "resuming a Codex agent that has exited" in out
-    assert "git pull && ./scripts/install.sh" in out
+    assert "with this command (the cockpit starts anyway):" in out
+    assert f"          {SCRIPT.parent}/update.sh\n" in out
     dash.shutdown()
 
 
@@ -255,8 +257,9 @@ def test_negative_a_newer_release_is_a_two_line_note(tmp_path, local, latest):
     out = start(tmp_path, dash_url, gh_url + "/releases/latest")
     notes = [line for line in out.splitlines() if line.startswith("  note")]
     assert notes == [
-        f"  note  a newer orrery-telemetry is available: {latest} (this one is {local}). Update it:",
-        "  note    cd /path/to/orrery-telemetry && git pull && ./scripts/install.sh",
+        f"  note  a newer orrery-telemetry is available: {latest} (this one is {local}).",
+        "  note  Update it, then this cockpit, with:",
+        f"  note    {SCRIPT.parent}/update.sh",
     ]
     assert "WARN" not in out  # the API is new enough; being behind is only news
     dash.shutdown(), gh.shutdown()
@@ -268,7 +271,7 @@ def test_negative_an_old_api_and_a_newer_release_show_the_steps_once(tmp_path):
     out = start(tmp_path, dash_url, gh_url + "/releases/latest")
     assert "WARN  This cockpit needs orrery-telemetry API" in out
     assert f"  note  a newer orrery-telemetry is available: {CURRENT} (this one is 2026.09.29.1)." in out
-    assert out.count("git pull && ./scripts/install.sh") == 1
+    assert out.count("/update.sh\n") == 1
     dash.shutdown(), gh.shutdown()
 
 
@@ -299,3 +302,20 @@ def test_the_cache_is_written_in_the_venv_folder_and_nowhere_else(tmp_path):
     assert everything == ["home", "home/.agentstack", "home/.agentstack/env.sh",
                           "venv", "venv/.orrery-telemetry-latest.json"]
     dash.shutdown(), gh.shutdown()
+
+
+def test_the_update_command_it_shows_can_be_pasted_even_from_a_folder_with_a_space(tmp_path):
+    """VioletBohr 2026-09-30: the hint ended in "(orrery-telemetry first, ...)",
+    which is a syntax error when pasted, and the path was not quoted."""
+    checkout = tmp_path / "my cockpit"
+    (checkout / "scripts").mkdir(parents=True)
+    shutil.copy2(SCRIPT, checkout / "scripts" / "start-cockpit.sh")
+    dash, dash_url, _ = dashboard(version(CURRENT, api=MIN_API - 1))
+    out = start(tmp_path, dash_url, script=checkout / "scripts" / "start-cockpit.sh")
+    dash.shutdown()
+    lines = out.splitlines()
+    hint = lines[lines.index(next(line for line in lines if "with this command" in line)) + 1].strip()
+    assert subprocess.run([BASH, "-n", "-c", hint], check=False).returncode == 0
+    words = subprocess.run([BASH, "-c", 'set -- ' + hint + '; printf "%s\\n" "$#" "$1"'],
+                           capture_output=True, text=True, check=True).stdout.splitlines()
+    assert words == ["1", str(checkout / "scripts" / "update.sh")]

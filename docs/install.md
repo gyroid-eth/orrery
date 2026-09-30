@@ -12,11 +12,11 @@
 
 ORRERY cockpit は、エージェント一覧・NEW AGENT（spawn）・Mail・利用枠を [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry)（repository は orrery-telemetry。旧名 AgentStack で、環境変数 `AGENTSTACK_*` と `~/.agentstack` にその名残がある）から読みます。**orrery-telemetry の [インストール手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/install.md) を最後まで済ませてから**、この先に進んでください。Windows の人は、その文書の「Windows（WSL2）で入れる」節に従い、WSL2 の Ubuntu の中に入れます。
 
-cockpit は orrery-telemetry の最新の release に合わせて作っています。**すでに入れている人も、先に orrery-telemetry を最新にしてください**（orrery-telemetry の repository で `git pull` のあと `./scripts/install.sh`）。古い版のままだと、終了した Codex の agent の再開ができないなど、cockpit の一部が動きません。
+cockpit は orrery-telemetry の最新の release に合わせて作っています。**すでに入れている人も、先に orrery-telemetry を最新にしてください**（orrery-telemetry の repository で `git pull` のあと `./scripts/install.sh`。cockpit を入れた後は、手順 5 の `./scripts/update.sh` で両方をまとめて更新できます）。古い版のままだと、終了した Codex の agent の再開ができないなど、cockpit の一部が動きません。
 
 手順 2 の `scripts/start-cockpit.sh` は、起動のたびに次の 2 つを確かめます。どちらも起動は止めません。
 
-- **必要な世代か**: dashboard の `/api/version` の `api`（cockpit が頼る API の世代）が cockpit の必要とする値より小さい・無い・読めないときは、`WARN` と更新の手順を出す
+- **必要な世代か**: dashboard の `/api/version` の `api`（cockpit が頼る API の世代）が cockpit の必要とする値より小さい・無い・読めないときは、`WARN` と更新のコマンド（手順 5 の `scripts/update.sh`）を出す
 - **新しい版が出ているか**: GitHub で orrery-telemetry の最新の release を調べ、手元より新しければ `note` で知らせる。結果は 1 日、venv の folder（`bridge/.venv`）に覚えておく。ネットにつながらない・遅いときは何も出さない。調べないようにするには `ORRERY_NO_UPDATE_CHECK=1` を付けて起動する
 
 次の 4 つがそろっていれば準備完了です。
@@ -87,7 +87,24 @@ script は 1 回で次を行います。
 - 止めるときは、script を動かしている窓で `Ctrl-C` を押します。窓を閉じても止まります
 - **起動した窓は開いたままにします。** cockpit はその窓の中で動いています（常駐はしません）
 - Windows では、Windows Terminal から起動した agent・dashboard・Mail は、Ubuntu の窓を閉じても裏で動き続けます。使い終わって WSL のメモリを Windows に返したいときは、PowerShell で `wsl --shutdown` を打ちます。その後や PC の再起動の後に使うときは、Ubuntu を開き、`~/.agentstack/bin/agentstack-doctor` で状態を見て、止まっていれば `~/.agentstack/dashboard/agentctl.sh start` と `~/.agentstack/bin/agentstack-mailctl start` で起動してから、もう一度 `./scripts/start-cockpit.sh` を実行します
-- 更新するときは、先に orrery-telemetry を更新し（その repository で `git pull` のあと `./scripts/install.sh`）、そのあと cockpit で `git pull` をして同じ script を実行します。`bridge/requirements.txt` が変わっていれば package を入れ直します
+
+### 5. 更新する
+
+cockpit の folder で次を実行すると、orrery-telemetry と cockpit を 1 回で最新にできます。
+
+```bash
+./scripts/update.sh
+```
+
+1. orrery-telemetry を入れた場所（`~/.agentstack/install-state.json` に記録されている）で `git pull --ff-only` のあと `./scripts/install.sh` を実行する。`~/.agentstack/env.sh` に保存されている前回の設定（project key・dashboard の port・Mail の URL など）を渡すので、設定は引き継がれ（いまの shell で明示している値はそちらが優先）、動いている dashboard は新しい版に置き換わる。Codex の plugin を入れていれば、その refresh も行う
+2. そのあと cockpit で `git pull --ff-only`
+3. 最後に、orrery-telemetry の版と API の世代、cockpit の commit を表示する
+
+どちらかの folder に commit していない変更があるとき、更新で上書きされる未追跡のファイルがあるとき、fast-forward できないとき、remote に届かないときは、理由を表示して**何も変えずに**止まります。orrery-telemetry の `install.sh` が失敗したときは、cockpit は更新しません。何をするかだけ見るには `./scripts/update.sh --dry-run`（`git fetch` もしないので、fast-forward できるかは本当の実行が変更の前に確かめます）。
+
+終わったら、cockpit を動かしている窓で `Ctrl-C` を押し、`./scripts/start-cockpit.sh` をもう一度実行します。`bridge/requirements.txt` が変わっていれば、この script が package を入れ直します。dashboard が応答しないときは `~/.agentstack/bin/agentstack-doctor` で状態を見て、`~/.agentstack/dashboard/agentctl.sh start` で起動します。
+
+手で更新する場合は、先に orrery-telemetry の repository で `git pull` のあと `./scripts/install.sh`（Codex の plugin を入れていれば、orrery-telemetry の [docs/codex-app.md](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/codex-app.md) の refresh も）、そのあと cockpit で `git pull` をします。
 
 ### 足りないものがあるとき
 

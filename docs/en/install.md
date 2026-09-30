@@ -12,11 +12,11 @@ This section alone takes you from nothing to ORRERY cockpit installed on your ow
 
 ORRERY cockpit reads the agent list, NEW AGENT (spawn), Mail, and usage quota from [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) (the repository is named orrery-telemetry; it was formerly called AgentStack, and the `AGENTSTACK_*` environment variables and `~/.agentstack` are remnants of that name). **Finish the orrery-telemetry [installation steps](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/install.md) all the way through before you continue.** On Windows, follow the "Install on Windows (WSL2)" section of that document and install inside the WSL2 Ubuntu.
 
-The cockpit is built against the latest orrery-telemetry release. **If you already have orrery-telemetry, update it first** (in the orrery-telemetry repository, run `git pull` and then `./scripts/install.sh`). With an older version, parts of the cockpit do not work; for example, a finished Codex agent cannot be resumed.
+The cockpit is built against the latest orrery-telemetry release. **If you already have orrery-telemetry, update it first** (in the orrery-telemetry repository, run `git pull` and then `./scripts/install.sh`; once the cockpit is installed, `./scripts/update.sh` in step 5 updates both at once). With an older version, parts of the cockpit do not work; for example, a finished Codex agent cannot be resumed.
 
 `scripts/start-cockpit.sh` (step 2) checks two things at every start. Neither stops the start.
 
-- **The API generation**: when the `api` in the dashboard's `/api/version` (the generation of the API the cockpit relies on) is lower than the cockpit needs, missing, or unreadable, it prints a `WARN` with the update steps
+- **The API generation**: when the `api` in the dashboard's `/api/version` (the generation of the API the cockpit relies on) is lower than the cockpit needs, missing, or unreadable, it prints a `WARN` with the update command (`scripts/update.sh`, step 5)
 - **A newer release**: it looks up the latest orrery-telemetry release on GitHub and prints a `note` when it is newer than yours. The answer is kept for a day in the venv folder (`bridge/.venv`). Without a network, or when GitHub is slow, it prints nothing. To skip this lookup, start with `ORRERY_NO_UPDATE_CHECK=1`
 
 You are ready when all four of these are true:
@@ -87,7 +87,24 @@ If no agents appear in the list on the left, start one from the cockpit's NEW AG
 - To stop, press `Ctrl-C` in the window where the script is running. Closing that window also stops it
 - **Leave the window you started it in open.** The cockpit runs inside that window (it does not stay resident)
 - On Windows, agents, the dashboard, and Mail started from Windows Terminal keep running in the background after you close the Ubuntu windows. When you are done and want WSL to give its memory back to Windows, run `wsl --shutdown` in PowerShell. After that, or after restarting the PC, open Ubuntu and check the state with `~/.agentstack/bin/agentstack-doctor`. If something has stopped, start it with `~/.agentstack/dashboard/agentctl.sh start` and `~/.agentstack/bin/agentstack-mailctl start`, and then run `./scripts/start-cockpit.sh` again
-- To update, first update orrery-telemetry (in its repository, `git pull` and then `./scripts/install.sh`), then run `git pull` in the cockpit and the same script. If `bridge/requirements.txt` has changed, the packages are installed again
+
+### 5. Update
+
+Run this in the cockpit folder to bring orrery-telemetry and the cockpit up to date in one go.
+
+```bash
+./scripts/update.sh
+```
+
+1. Where orrery-telemetry was installed from (recorded in `~/.agentstack/install-state.json`), it runs `git pull --ff-only` and then `./scripts/install.sh` with the previous settings saved in `~/.agentstack/env.sh` (project key, dashboard port, Mail URL and so on; a value set explicitly in your shell wins), so they are kept, and the running dashboard is replaced with the new version. If you installed the Codex plugin, it is refreshed too
+2. Then `git pull --ff-only` in the cockpit
+3. Finally, it shows the orrery-telemetry version and API generation, and the cockpit commit
+
+When either folder has uncommitted changes or untracked files the update would overwrite, cannot be fast-forwarded, or cannot reach its remote, it says why and stops **without changing anything**. When orrery-telemetry's `install.sh` fails, the cockpit is not updated. To see what it would do, run `./scripts/update.sh --dry-run` (it does not even `git fetch`, so whether the new commits apply is checked by the real run, before it changes anything).
+
+When it is done, press `Ctrl-C` in the window running the cockpit and run `./scripts/start-cockpit.sh` again. If `bridge/requirements.txt` has changed, that script installs the packages again. If the dashboard does not answer, check it with `~/.agentstack/bin/agentstack-doctor` and start it with `~/.agentstack/dashboard/agentctl.sh start`.
+
+To update by hand, first run `git pull` and then `./scripts/install.sh` in the orrery-telemetry repository (and, if you installed the Codex plugin, its refresh in orrery-telemetry's [docs/codex-app.en.md](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/codex-app.en.md)), then `git pull` in the cockpit.
 
 ### When something is missing
 
