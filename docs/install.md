@@ -12,10 +12,13 @@
 
 ORRERY cockpit は、エージェント一覧・NEW AGENT（spawn）・Mail・利用枠を [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry)（repository は orrery-telemetry。旧名 AgentStack で、環境変数 `AGENTSTACK_*` と `~/.agentstack` にその名残がある）から読みます。**orrery-telemetry の [インストール手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/install.md) を最後まで済ませてから**、この先に進んでください。Windows の人は、その文書の「Windows（WSL2）で入れる」節に従い、WSL2 の Ubuntu の中に入れます。
 
-次の 3 つがそろっていれば準備完了です。
+cockpit は orrery-telemetry の最新の release に合わせて作っています（この文書の時点で 2026.09.30.1 以降）。**すでに入れている人も、先に orrery-telemetry を最新にしてください**（orrery-telemetry の repository で `git pull` のあと `./scripts/install.sh`）。古い版のままだと、終了した Codex の agent の再開ができないなど、cockpit の一部が動きません。
+
+次の 4 つがそろっていれば準備完了です。
 
 - `~/.agentstack/bin/agentstack-doctor` が問題を報告しない
 - ブラウザで `http://127.0.0.1:8770/` を開くと orrery-telemetry の dashboard が表示される
+- `curl -s http://127.0.0.1:8770/api/version` の `version` が 2026.09.30.1 以降
 - Claude Code か Codex CLI にログイン済み（`claude` を起動して `/login`、または `codex login`）。Windows では **Ubuntu の中に入れたもの**にログインします。Windows 側に入れたものは使われません
 
 ### 守ること: 同じマシン・同じユーザー・同じ tmux
@@ -79,7 +82,7 @@ script は 1 回で次を行います。
 - 止めるときは、script を動かしている窓で `Ctrl-C` を押します。窓を閉じても止まります
 - **起動した窓は開いたままにします。** cockpit はその窓の中で動いています（常駐はしません）
 - Windows では、Windows Terminal から起動した agent・dashboard・Mail は、Ubuntu の窓を閉じても裏で動き続けます。使い終わって WSL のメモリを Windows に返したいときは、PowerShell で `wsl --shutdown` を打ちます。その後や PC の再起動の後に使うときは、Ubuntu を開き、`~/.agentstack/bin/agentstack-doctor` で状態を見て、止まっていれば `~/.agentstack/dashboard/agentctl.sh start` と `~/.agentstack/bin/agentstack-mailctl start` で起動してから、もう一度 `./scripts/start-cockpit.sh` を実行します
-- 更新するときは `git pull` のあと同じ script を実行します。`bridge/requirements.txt` が変わっていれば package を入れ直します
+- 更新するときは、先に orrery-telemetry を更新し（その repository で `git pull` のあと `./scripts/install.sh`）、そのあと cockpit で `git pull` をして同じ script を実行します。`bridge/requirements.txt` が変わっていれば package を入れ直します
 
 ### 足りないものがあるとき
 

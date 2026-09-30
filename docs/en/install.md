@@ -12,10 +12,13 @@ This section alone takes you from nothing to ORRERY cockpit installed on your ow
 
 ORRERY cockpit reads the agent list, NEW AGENT (spawn), Mail, and usage quota from [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) (the repository is named orrery-telemetry; it was formerly called AgentStack, and the `AGENTSTACK_*` environment variables and `~/.agentstack` are remnants of that name). **Finish the orrery-telemetry [installation steps](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/install.md) all the way through before you continue.** On Windows, follow the "Install on Windows (WSL2)" section of that document and install inside the WSL2 Ubuntu.
 
-You are ready when all three of these are true:
+The cockpit is built against the latest orrery-telemetry release (2026.09.30.1 or later as of this document). **If you already have orrery-telemetry, update it first** (in the orrery-telemetry repository, run `git pull` and then `./scripts/install.sh`). With an older version, parts of the cockpit do not work; for example, a finished Codex agent cannot be resumed.
+
+You are ready when all four of these are true:
 
 - `~/.agentstack/bin/agentstack-doctor` reports no problems
 - Opening `http://127.0.0.1:8770/` in a browser shows the orrery-telemetry dashboard
+- `curl -s http://127.0.0.1:8770/api/version` reports a `version` of 2026.09.30.1 or later
 - You are logged in to Claude Code or Codex CLI (start `claude` and run `/login`, or run `codex login`). On Windows, log in to the copy **installed inside Ubuntu**. A copy installed on the Windows side is not used
 
 ### What to keep the same: same machine, same user, same tmux
@@ -79,7 +82,7 @@ If no agents appear in the list on the left, start one from the cockpit's NEW AG
 - To stop, press `Ctrl-C` in the window where the script is running. Closing that window also stops it
 - **Leave the window you started it in open.** The cockpit runs inside that window (it does not stay resident)
 - On Windows, agents, the dashboard, and Mail started from Windows Terminal keep running in the background after you close the Ubuntu windows. When you are done and want WSL to give its memory back to Windows, run `wsl --shutdown` in PowerShell. After that, or after restarting the PC, open Ubuntu and check the state with `~/.agentstack/bin/agentstack-doctor`. If something has stopped, start it with `~/.agentstack/dashboard/agentctl.sh start` and `~/.agentstack/bin/agentstack-mailctl start`, and then run `./scripts/start-cockpit.sh` again
-- To update, run `git pull` and then the same script. If `bridge/requirements.txt` has changed, the packages are installed again
+- To update, first update orrery-telemetry (in its repository, `git pull` and then `./scripts/install.sh`), then run `git pull` in the cockpit and the same script. If `bridge/requirements.txt` has changed, the packages are installed again
 
 ### When something is missing
 
