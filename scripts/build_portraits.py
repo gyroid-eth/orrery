@@ -40,6 +40,10 @@ CROP_OVERRIDES: dict[str, tuple[int, int, int, int]] = {
     "Guericke": (492, 744, 1476, 1728),
     # Los Alamos ID badge: stop above the badge number printed under the photo.
     "Feynman": (28, 12, 468, 452),
+    # Book frontispiece: stop above the printed signature under the photograph.
+    "Bose": (60, 24, 1160, 1124),
+    # Group photograph of the Ratio Club: Turing, seated at the front left.
+    "Turing": (680, 1660, 1280, 2260),
 }
 
 

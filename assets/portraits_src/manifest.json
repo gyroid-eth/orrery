@@ -59,6 +59,18 @@
     "downloaded_at": "2026-07-30",
     "source_file": "Boltzmann.jpg"
   },
+  "Bose": {
+    "url": "https://upload.wikimedia.org/wikipedia/commons/e/e8/Sir_Jagadis_C._Bose.png",
+    "sha1": "7c15083072cf715fa25496287d96c05853ebd058",
+    "upstream_sha1": "7c15083072cf715fa25496287d96c05853ebd058",
+    "revision_id": 1212779003,
+    "license": "Public domain (PD-old-70-1923: frontispiece of Patrick Geddes, The Life and Work of Sir Jagadis C. Bose, published 1920 by Longmans, Green, and Co., London and New York)",
+    "license_url": null,
+    "artist": "Unnamed photographer; published by Patrick Geddes (1854-1932)",
+    "credit": "https://archive.org/details/cu31924012222778",
+    "downloaded_at": "2026-09-30",
+    "source_file": "Bose.png"
+  },
   "Copernicus": {
     "url": "https://upload.wikimedia.org/wikipedia/commons/e/e2/Nikolaus_Kopernikus_MOT.jpg",
     "sha1": "872ee30a590542c0117c1c18a243024651020d3b",
@@ -312,6 +324,18 @@
     "downloaded_at": "2026-07-30",
     "source_file": "Koch.jpg"
   },
+  "Lamarr": {
+    "url": "https://upload.wikimedia.org/wikipedia/commons/8/83/Hedy_Lamarr_Publicity_Photo_for_The_Heavenly_Body_1944.jpg",
+    "sha1": "04da3898138f9a375088cffd57c36f720d7e7e63",
+    "upstream_sha1": "04da3898138f9a375088cffd57c36f720d7e7e63",
+    "revision_id": 1091844639,
+    "license": "Public domain (PD-US-no notice: publicity photo for The Heavenly Body, published in the United States in 1944 without a copyright notice)",
+    "license_url": null,
+    "artist": "Unknown author",
+    "credit": "eBay",
+    "downloaded_at": "2026-09-30",
+    "source_file": "Lamarr.jpg"
+  },
   "Langmuir": {
     "url": "https://upload.wikimedia.org/wikipedia/commons/f/f0/Irving_Langmuir.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
     "sha1": "7561bd9eae7c4dfdd296bc5e1f74d33b6e855560",
@@ -528,6 +552,18 @@
     "credit": "postcard Tesla Museum, document no. MNT, VI/V 10, via RadioGraphics",
     "downloaded_at": "2026-07-30",
     "source_file": "Tesla.jpeg"
+  },
+  "Turing": {
+    "url": "https://upload.wikimedia.org/wikipedia/commons/e/e8/Bates%2C_John_AV_%26_the_Ratio_Club._Wellcome_L0030978.jpg",
+    "sha1": "35a39ed464673d33a4cb4e06d5fbd76428d8188a",
+    "upstream_sha1": "35a39ed464673d33a4cb4e06d5fbd76428d8188a",
+    "revision_id": 1131054810,
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "artist": "Unnamed photographer (Ratio Club members and guests, 2 or 3 May 1952; Turing seated front left)",
+    "credit": "Wellcome Library, London. Wellcome Images L0030978 (https://wellcomeimages.org/indexplus/image/L0030978.html; the licence and credit are also in the file's IPTC metadata)",
+    "downloaded_at": "2026-09-30",
+    "source_file": "Turing.jpg"
   },
   "Vesalius": {
     "url": "https://upload.wikimedia.org/wikipedia/commons/f/f7/Man_dressed_in_Black_by_Calcar_%28Hermitage%29.jpg",

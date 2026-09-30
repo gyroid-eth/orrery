@@ -53,6 +53,16 @@ Each listed output is cropped, grayscale-converted, auto-contrasted, and resized
 - Credit: A version is at Uni Frankfurt. The new source is not linked, but note I did clean up some water damage at the edges.
 - Changes: crop; grayscale; autocontrast; resize to 256 px and 64 px PNG.
 
+## Bose
+
+- Source: https://upload.wikimedia.org/wikipedia/commons/e/e8/Sir_Jagadis_C._Bose.png
+- Source revision: 1212779003
+- Source SHA-1: `7c15083072cf715fa25496287d96c05853ebd058`
+- License: Public domain (PD-old-70-1923: frontispiece of Patrick Geddes, The Life and Work of Sir Jagadis C. Bose, published 1920 by Longmans, Green, and Co., London and New York)
+- Artist: Unnamed photographer; published by Patrick Geddes (1854-1932)
+- Credit: https://archive.org/details/cu31924012222778
+- Changes: crop; grayscale; autocontrast; resize to 256 px and 64 px PNG.
+
 ## Copernicus
 
 - Source: https://upload.wikimedia.org/wikipedia/commons/e/e2/Nikolaus_Kopernikus_MOT.jpg
@@ -263,6 +273,16 @@ Each listed output is cropped, grayscale-converted, auto-contrasted, and resized
 - Credit: https://ihm.nlm.nih.gov/images/B16691
 - Changes: crop; grayscale; autocontrast; resize to 256 px and 64 px PNG.
 
+## Lamarr
+
+- Source: https://upload.wikimedia.org/wikipedia/commons/8/83/Hedy_Lamarr_Publicity_Photo_for_The_Heavenly_Body_1944.jpg
+- Source revision: 1091844639
+- Source SHA-1: `04da3898138f9a375088cffd57c36f720d7e7e63`
+- License: Public domain (PD-US-no notice: publicity photo for The Heavenly Body, published in the United States in 1944 without a copyright notice)
+- Artist: Unknown author
+- Credit: eBay
+- Changes: crop; grayscale; autocontrast; resize to 256 px and 64 px PNG.
+
 ## Langmuir
 
 - Source: https://upload.wikimedia.org/wikipedia/commons/f/f0/Irving_Langmuir.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled
@@ -441,6 +461,16 @@ Each listed output is cropped, grayscale-converted, auto-contrasted, and resized
 - License: Public domain
 - Artist: Napoleon Sarony
 - Credit: postcard Tesla Museum, document no. MNT, VI/V 10, via RadioGraphics
+- Changes: crop; grayscale; autocontrast; resize to 256 px and 64 px PNG.
+
+## Turing
+
+- Source: https://upload.wikimedia.org/wikipedia/commons/e/e8/Bates%2C_John_AV_%26_the_Ratio_Club._Wellcome_L0030978.jpg
+- Source revision: 1131054810
+- Source SHA-1: `35a39ed464673d33a4cb4e06d5fbd76428d8188a`
+- License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+- Artist: Unnamed photographer (Ratio Club members and guests, 2 or 3 May 1952; Turing seated front left)
+- Credit: Wellcome Library, London. Wellcome Images L0030978 (https://wellcomeimages.org/indexplus/image/L0030978.html; the licence and credit are also in the file's IPTC metadata)
 - Changes: crop; grayscale; autocontrast; resize to 256 px and 64 px PNG.
 
 ## Vesalius
