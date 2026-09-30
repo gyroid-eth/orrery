@@ -86,6 +86,12 @@ In Settings, Color theme switches between a dark scheme (Dark) and a paper-like 
 
 → [Usage: Color theme (light mode)](docs/en/usage.md#color-theme-light-mode)
 
+### Hide your user name on screen (demo mode)
+
+For recordings, live demos and screen sharing, the cockpit can show your user name and machine name masked, like `********`. Turn on Demo mode in Settings, or add `?demo=1` to the URL. The roster, tooltips, Mail, Planetarium, the embedded TELEMETRY and the terminal contents are masked, and `DEMO` shows in a corner. Only the display changes: clicking a path or URL in a terminal, and copying text, still use the real values. To also hide other words, such as a person's name written in Mail, add them under "Also mask these words" in Settings.
+
+→ [Configuration: Stored data and privacy](docs/en/configuration.md#stored-data-and-privacy)
+
 ### See how much quota is left (Usage)
 
 `LEFT` in the header shows what percentage of your Claude and Codex account quota remains. Click it to see the 5-hour window, the weekly window, and per-model windows, each with the time until reset. The numbers change between green, yellow, and red, and when a value cannot be fetched, the reason is shown.

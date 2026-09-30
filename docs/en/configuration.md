@@ -185,6 +185,11 @@ On a shared Mac, during screen sharing, or with confidential sessions, consider 
 - Separate the browser profile
 - Clear the prompt history / localStorage after use
 - Do not screen-share while the mail rail and terminal are showing
+- For screen sharing and recordings, use demo mode
+
+Demo mode (Demo mode in Settings, or `?demo=1` in the URL; `?demo=0` turns it off for that page) masks your user name and machine name on screen with the same number of `*`. It masks the user name inside a home path (`/Users/<name>`, `/home/<name>`, `C:\Users\<name>`), in the form `<name>@`, and the machine name as a word of its own. The names come from the backend's `GET /telemetry/identity`, which reads them from `$HOME`, the login name and the host name (and, on WSL, the Windows user name); nothing is guessed. A name inside another word, and people's names written in text, are not masked. Only the display changes: agents, records and Mail stay as they are, and clicking a path or URL in a terminal, and copying, use the real values. A text field keeps its real value and shows a masked copy over it (sending, editing and copying use the real value). Nothing is shown until the names are known; if the backend cannot return them, the page stays hidden and shows the reason with Retry (choose "Open without demo mode" to see the page unmasked). The Settings switch is saved in browser `localStorage`.
+
+To hide other words too (a person's name written in Mail, a project name), add them, separated by `,`, under "Also mask these words" in Settings (saved in browser `localStorage`). They are hidden like the user name: the same number of `*`, in terminal contents too, and clicks and copies get the real text back. A word of letters and digits is hidden in any letter case, only as a whole word (`Kobo`, but not inside `kobold`). A word with any other character, such as Japanese, which has no spaces between words, is hidden wherever it appears (adding `ミラノ` also hides it in `ミラノさん`). One-character words are ignored. For one page you can also pass `?mask=word,word` in the URL, but a URL stays in history and in anything you share, so prefer the Settings field.
 
 For where data is saved and what remains after deletion, see also ["Data locations and uninstall" in Installation](install.md#data-locations-and-uninstall).
 

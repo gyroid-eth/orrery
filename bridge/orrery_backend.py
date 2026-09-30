@@ -2075,6 +2075,53 @@ async def serve_platform(request: web.Request) -> web.Response:
     return web.json_response(host_platform())
 
 
+_windows_user_cache: list[str] = []
+
+
+def windows_user() -> str:
+    """The Windows account name under WSL (its /mnt/c/Users/<name> shows up
+    in paths), or "" elsewhere or when interop does not answer."""
+    if _windows_user_cache:
+        return _windows_user_cache[0]
+    name = ""
+    cmd = windows_exe("cmd.exe") if host_kind() == "wsl" else None
+    if cmd:
+        try:
+            done = subprocess.run([cmd, "/d", "/c", "echo %USERNAME%"], capture_output=True,
+                                  text=True, timeout=3, cwd="/")
+            value = done.stdout.strip()
+            if done.returncode == 0 and value and "%" not in value:
+                name = value
+        except (OSError, subprocess.SubprocessError):
+            name = ""
+    _windows_user_cache.append(name)
+    return name
+
+
+def demo_identity() -> dict[str, Any]:
+    """The names demo mode hides on screen: the user name from $HOME (and the
+    login name, and the Windows account under WSL) and the host name. Only the
+    cockpit's own page asks for this, and only in demo mode."""
+    home = os.environ.get("HOME") or str(Path.home())
+    users = [Path(home).name]
+    with contextlib.suppress(Exception):
+        import getpass
+        users.append(getpass.getuser())
+    users.append(windows_user())
+    import socket
+    full = socket.gethostname()
+    hosts = [full, full.split(".", 1)[0]]
+    return {
+        "home": home,
+        "users": [u for u in dict.fromkeys(users) if u],
+        "hosts": [h for h in dict.fromkeys(hosts) if h and h not in ("localhost", "")],
+    }
+
+
+async def serve_identity(request: web.Request) -> web.Response:
+    return web.json_response(demo_identity(), headers={"Cache-Control": "no-store"})
+
+
 def launch_ghostty(tmux_bin: str, session: str) -> None:
     """Launch a detached Ghostty client attached to the requested tmux session."""
     subprocess.Popen(
@@ -2925,6 +2972,7 @@ def create_app(tmux_bin: str = "tmux") -> web.Application:
     app.router.add_post("/telemetry/path-probe", path_probe)
     app.router.add_get("/telemetry/health", serve_health)
     app.router.add_get("/telemetry/platform", serve_platform)
+    app.router.add_get("/telemetry/identity", serve_identity)
     app.router.add_get("/telemetry/usage", serve_usage)
     app.router.add_get("/telemetry/prefs", serve_prefs)
     app.router.add_put("/telemetry/prefs", update_prefs)

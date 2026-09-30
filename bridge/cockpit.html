@@ -1271,6 +1271,22 @@
         </label>
         <div class="settings-help">Light uses the warm-paper palette. System follows the OS appearance without changing the dark default.</div>
       </div>
+      <div class="settings-row">
+        <label class="settings-toggle-row" for="demoModeToggle">
+          <span class="settings-toggle-copy">
+            <span class="settings-row-name">Demo mode</span>
+            <span class="settings-help">Masks your user name and machine name on screen, for recordings and screen sharing. Clicks and copies still use the real paths. Reloads the page.</span>
+          </span>
+          <span class="settings-switch"><input id="demoModeToggle" type="checkbox"></span>
+        </label>
+        <div class="settings-help">Also on for one page with <code>?demo=1</code> in the URL (<code>?demo=0</code> turns it off).</div>
+      </div>
+      <div class="settings-row">
+        <label class="settings-row-name" for="demoMaskWords">Also mask these words</label>
+        <input class="settings-select" id="demoMaskWords" type="text" spellcheck="false" autocomplete="off"
+               placeholder="a name, another name" aria-describedby="demoMaskWordsHelp">
+        <div class="settings-help" id="demoMaskWordsHelp">Comma-separated, kept in this browser. A word of Latin letters is masked as a whole word in any case; a word in another script (日本語) wherever it appears. In demo mode this field shows its own words masked too.</div>
+      </div>
     </section>
     <section aria-labelledby="themeAbTitle">
       <div class="settings-section-title" id="themeAbTitle">Vision profile · small text + tracking</div>
@@ -1507,6 +1523,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.js"></script>
 <script src="roster_descriptor.js"></script>
+<script src="demo_mask.js"></script>
+<script src="demo_mode.js"></script>
 <script id="agentstack-theme-axis-inventory" type="application/json">
 {
   "axes": {
@@ -4452,9 +4470,9 @@
       }
     }
   },
-  "inventory_digest": "7042f3c15fa376d3f4a3897bb410eb4c4cbe97a4bb44c0cda72ca01cb827f98a",
+  "inventory_digest": "414c16fef81acb83bdb2e6c69bac5643bfa180f390c8e8d9b5122264e1bb0c9b",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "6f8169d0794a96574324e6fb7fec4ccd363c57af48d2db123b9402b6abbdb920",
+  "source_digest": "c4a6499cb8a299790d4ccd4961c629476ae85715f3ca0b84b276fa1356b5ece5",
   "surface": "cockpit",
   "version": 1
 }
@@ -5018,6 +5036,10 @@ function paneWindowUrl(href,session){
   const next=new URLSearchParams({solo:'1',session});
   const ws=url.searchParams.get('ws');
   if(ws)next.set('ws',ws); /* a cockpit pointed at another backend keeps it */
+  const demo=url.searchParams.get('demo');
+  if(demo)next.set('demo',demo); /* so does a page in demo mode */
+  const maskWords=url.searchParams.get('mask');
+  if(maskWords)next.set('mask',maskWords); /* and its extra words */
   url.search=next.toString();url.hash='';
   return url.toString();
 }
@@ -6683,6 +6705,16 @@ terminalFontRange.addEventListener('input',()=>{
   terminalFontSize=clampTerminalFontSize(terminalFontRange.value);
   persistTerminalSettings();applyTerminalSettings();
 });
+const demoMaskWords=document.getElementById('demoMaskWords');
+if(demoMaskWords){
+  demoMaskWords.value=OrreryDemo.storedWords().join(', ');
+  demoMaskWords.addEventListener('change',()=>OrreryDemo.setWords(OrreryDemo.parseWords(demoMaskWords.value)));
+}
+const demoModeToggle=document.getElementById('demoModeToggle');
+if(demoModeToggle){
+  demoModeToggle.checked=OrreryDemo.on;
+  demoModeToggle.addEventListener('change',()=>OrreryDemo.reloadFor(demoModeToggle.checked));
+}
 terminalAutoShrinkToggle.addEventListener('change',()=>{
   terminalAutoShrink=terminalAutoShrinkToggle.checked;
   persistTerminalSettings();applyTerminalSettings();
@@ -8702,7 +8734,8 @@ window.addEventListener('beforeunload',()=>occupiedSessions().forEach(session=>{
   releaseSessionClaim(session,{resize:false});
   send({type:"detach",session});
 }));
-connect();
+// Demo mode: no terminal output before the page knows which names to hide.
+OrreryDemo.ready.then(connect);
 
 /* ── clock ── */
 function tick(){const d=new Date();
@@ -9924,6 +9957,35 @@ async function submitSpawn(event){
    turns its jump clicks into postMessage → we focus the pane here. */
 const networkOverlay=document.getElementById('networkOverlay');
 const networkFrame=document.getElementById('networkFrame');
+OrreryDemo.attachFrame(networkFrame); /* the telemetry dashboard shows paths too */
+/* Demo mode masks a terminal where xterm draws it (the DOM renderer's rows),
+   and leaves the buffer real, so the cursor, wrapping, selection, copy and
+   links all work on the real text. A name can wrap over several rows, some of
+   them scrolled out of view: this gives demo_mode.js the drawn rows of one
+   wrapped line, the spaces xterm trims from the end of each row but the
+   last, and the real text of the line's rows that are not drawn (before and
+   after), so the name is matched in its whole line. */
+OrreryDemo.rowGroup=function(rowEl){
+  const host=rowEl.closest('.termhost');
+  const pane=host&&panes.get(host.dataset.paneId);
+  const rowsEl=rowEl.parentElement;
+  if(!pane||!rowsEl)return null;
+  const rows=[...rowsEl.children],index=rows.indexOf(rowEl);
+  const buffer=pane.term.buffer.active,line=y=>buffer.getLine(buffer.viewportY+y);
+  if(index<0||!line(index))return null;
+  let first=index,last=index;
+  while(first>0&&line(first)&&line(first).isWrapped)first--;
+  while(last+1<rows.length&&line(last+1)&&line(last+1).isWrapped)last++;
+  const group=rows.slice(first,last+1);
+  // The line's rows above and below the drawn ones, from the buffer.
+  let before='',above=first;
+  while(line(above)&&line(above).isWrapped&&line(above-1)){above--;before=line(above).translateToString(false)+before;}
+  let after='',below=last+1;
+  while(line(below)&&line(below).isWrapped){after+=line(below).translateToString(false);below++;}
+  const pads=group.map((row,i)=>i===group.length-1&&!after?0:
+    Math.max(0,line(first+i).translateToString(false).length-row.textContent.length));
+  return {rows:group,pads,before,after:after.replace(/\s+$/,'')};
+};
 function openNetwork({focus=activeSession()}={}){
   const query=new URLSearchParams({embed:'1'});
   if(focus)query.set('focus',focus);

@@ -86,6 +86,12 @@ Settings の Color theme で、暗い配色（Dark）と、紙のような明る
 
 → [使い方: 配色テーマ（light mode）](docs/usage.md#配色テーマlight-mode)
 
+### 画面のユーザー名を伏せる（デモモード）
+
+録画・ライブのデモ・画面共有のために、画面に出るユーザー名と機体名を `********` のように伏せられます。Settings の Demo mode を入れるか、URL に `?demo=1` を付けます。roster・tooltip・Mail・Planetarium・埋め込みの TELEMETRY・端末の中身まで伏せ、画面の隅に `DEMO` と出ます。伏せるのは表示だけで、端末の中の path や URL をクリックしたときと、コピーした文字は本当の値です。Mail に書かれた人の名前なども伏せたいときは、Settings の「Also mask these words」に語を足します。
+
+→ [設定: 保存データとプライバシー](docs/configuration.md#保存データとプライバシー)
+
 ### 利用枠の残りを見る（残量表示）
 
 header の `LEFT` に、Claude と Codex のアカウントの利用枠があと何 % 残っているかが出ます。クリックすると、5 時間の枠・週の枠・モデル別の枠を、reset までの時間つきで並べます。数字は緑・黄・赤で変わり、取れないときは理由を出します。
