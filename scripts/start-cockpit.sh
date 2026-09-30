@@ -21,6 +21,9 @@ VENV_DIR="${ORRERY_VENV:-${BRIDGE_DIR}/.venv}"
 AGENTSTACK_ENV_FILE="${AGENTSTACK_HOME:-${HOME}/.agentstack}/env.sh"
 MIN_PY_MAJOR=3
 MIN_PY_MINOR=10
+# The oldest orrery-telemetry release this cockpit is made for. An older one
+# only gets a warning at startup (see telemetry_version_check below).
+MIN_TELEMETRY_VERSION=2026.09.30.1
 
 check_only=false
 
@@ -61,6 +64,14 @@ done
 say() { printf '%s\n' "$*"; }
 ok() { printf '  ok    %s\n' "$*"; }
 note() { printf '  note  %s\n' "$*"; }
+# A warning does not stop the start; each argument is one line.
+warn() {
+  printf '\n  WARN  %s\n' "$1"
+  shift
+  for line in "$@"; do
+    printf '        %s\n' "$line"
+  done
+}
 
 # Collect every missing prerequisite before stopping, so one run shows them all.
 problems=0
@@ -231,6 +242,7 @@ dashboard_url="${dashboard_url%/}"
 #   exit 0: the expected service; 1: no answer; 2: something else answered.
 #   $2 = cockpit: /telemetry/health with backend == "ok" and a boot id
 #   $2 = dashboard: /api/agents with an "agents" list
+#   $2 = version: /api/version of orrery-telemetry; prints its version
 probe() {
   "${probe_python}" - "$1" "$2" <<'PY' 2>/dev/null
 import json, sys, urllib.error, urllib.request
@@ -250,11 +262,59 @@ if not isinstance(data, dict):
     sys.exit(2)
 if kind == "cockpit":
     good = data.get("backend") == "ok" and isinstance(data.get("boot"), str)
+elif kind == "version":
+    good = data.get("name") == "orrery-telemetry" and isinstance(data.get("version"), str)
+    if good:
+        print(data["version"])
 else:
     good = isinstance(data.get("agents"), list)
 sys.exit(0 if good else 2)
 PY
 }
+# Release versions are a date and an optional count: 2026.09.30 < 2026.09.30.1
+# < 2026.10.01. Compare the dot-separated numbers in order, a missing one
+# counting as 0; "10#" keeps "09" from being read as octal. Plain string
+# walking keeps it working in macOS bash 3.2.
+#   exit 0: $1 is older than $2; 1: not older; 2: $1 is not a version.
+version_older() {
+  case "$1" in
+    '' | .* | *. | *..* | *[!0-9.]*) return 2 ;;
+  esac
+  a="$1." b="$2."
+  while [ -n "$a" ] || [ -n "$b" ]; do
+    x="${a%%.*}" y="${b%%.*}"
+    a="${a#*.}" b="${b#*.}"
+    [ -n "$x" ] || x=0
+    [ -n "$y" ] || y=0
+    if [ $((10#$x)) -lt $((10#$y)) ]; then return 0; fi
+    if [ $((10#$x)) -gt $((10#$y)) ]; then return 1; fi
+  done
+  return 1
+}
+
+# Warn, never stop: an older orrery-telemetry still runs most of the cockpit.
+telemetry_version_check() {
+  version_status=0
+  telemetry_version="$(probe "${dashboard_url}/api/version" version)" || version_status=$?
+  if [ "$version_status" -ne 0 ]; then
+    note "could not read the orrery-telemetry version at ${dashboard_url}/api/version (older releases may not have it); if the cockpit misbehaves, update orrery-telemetry to ${MIN_TELEMETRY_VERSION} or later."
+    return 0
+  fi
+  older=0
+  version_older "$telemetry_version" "$MIN_TELEMETRY_VERSION" || older=$?
+  case "$older" in
+    0)
+      warn "orrery-telemetry ${telemetry_version} is older than ${MIN_TELEMETRY_VERSION}, which this cockpit is made for." \
+        "Some parts will not work, e.g. resuming a Codex agent that has exited." \
+        "Update it (the cockpit starts anyway):" \
+        "  cd /path/to/orrery-telemetry && git pull && ./scripts/install.sh" \
+        "then run this script again."
+      ;;
+    1) ok "orrery-telemetry version: ${telemetry_version}" ;;
+    *) note "orrery-telemetry reports version '${telemetry_version}', which is not in the usual form; expected ${MIN_TELEMETRY_VERSION} or later." ;;
+  esac
+}
+
 # Any Python 3 can probe, even one too old to run the backend.
 probe_python="${python_bin:-$(command -v python3 2>/dev/null || printf '%s' "${VENV_DIR}/bin/python")}"
 
@@ -263,6 +323,7 @@ if [ -x "$probe_python" ] || command -v "$probe_python" >/dev/null 2>&1; then
   probe "${dashboard_url}/api/agents" dashboard || dashboard_status=$?
   if [ "$dashboard_status" -eq 0 ]; then
     ok "orrery-telemetry dashboard: ${dashboard_url}"
+    telemetry_version_check
   elif [ "$dashboard_status" -eq 2 ]; then
     problem "Something answers at ${dashboard_url}, but it is not the orrery-telemetry dashboard." \
       "Another program may be using the dashboard port, or ORRERY_DASHBOARD_URL points to the wrong place." \

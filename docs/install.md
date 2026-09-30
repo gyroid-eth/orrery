@@ -12,7 +12,7 @@
 
 ORRERY cockpit は、エージェント一覧・NEW AGENT（spawn）・Mail・利用枠を [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry)（repository は orrery-telemetry。旧名 AgentStack で、環境変数 `AGENTSTACK_*` と `~/.agentstack` にその名残がある）から読みます。**orrery-telemetry の [インストール手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/install.md) を最後まで済ませてから**、この先に進んでください。Windows の人は、その文書の「Windows（WSL2）で入れる」節に従い、WSL2 の Ubuntu の中に入れます。
 
-cockpit は orrery-telemetry の最新の release に合わせて作っています（この文書の時点で 2026.09.30.1 以降）。**すでに入れている人も、先に orrery-telemetry を最新にしてください**（orrery-telemetry の repository で `git pull` のあと `./scripts/install.sh`）。古い版のままだと、終了した Codex の agent の再開ができないなど、cockpit の一部が動きません。
+cockpit は orrery-telemetry の最新の release に合わせて作っています（この文書の時点で 2026.09.30.1 以降）。**すでに入れている人も、先に orrery-telemetry を最新にしてください**（orrery-telemetry の repository で `git pull` のあと `./scripts/install.sh`）。古い版のままだと、終了した Codex の agent の再開ができないなど、cockpit の一部が動きません。古い版のときは、手順 2 の `scripts/start-cockpit.sh` が起動時に `WARN` で知らせます（起動は止めません）。
 
 次の 4 つがそろっていれば準備完了です。
 
@@ -52,7 +52,7 @@ repository の中で:
 
 script は 1 回で次を行います。
 
-1. 前提の確認（Python 3.10 以上・tmux・orrery-telemetry の設定・project key・dashboard の応答）
+1. 前提の確認（Python 3.10 以上・tmux・orrery-telemetry の設定・project key・dashboard の応答。orrery-telemetry の版が古ければ警告だけ出す）
 2. `bridge/.venv` に Python の環境を作り、`bridge/requirements.txt` の package を入れる（初回だけ時間がかかります。2 回目からは変更が無ければ飛ばします）
 3. orrery-telemetry の設定（`~/.agentstack/env.sh` の project key・Mail DB・dashboard の port）を引き継ぐ。`~/.agentstack` や `~/.orrery` の設定 file は書き換えません
 4. backend を**この窓の中で**起動し、応答を確かめてから開く URL を表示する

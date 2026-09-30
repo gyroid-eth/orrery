@@ -12,7 +12,7 @@ This section alone takes you from nothing to ORRERY cockpit installed on your ow
 
 ORRERY cockpit reads the agent list, NEW AGENT (spawn), Mail, and usage quota from [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) (the repository is named orrery-telemetry; it was formerly called AgentStack, and the `AGENTSTACK_*` environment variables and `~/.agentstack` are remnants of that name). **Finish the orrery-telemetry [installation steps](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/install.md) all the way through before you continue.** On Windows, follow the "Install on Windows (WSL2)" section of that document and install inside the WSL2 Ubuntu.
 
-The cockpit is built against the latest orrery-telemetry release (2026.09.30.1 or later as of this document). **If you already have orrery-telemetry, update it first** (in the orrery-telemetry repository, run `git pull` and then `./scripts/install.sh`). With an older version, parts of the cockpit do not work; for example, a finished Codex agent cannot be resumed.
+The cockpit is built against the latest orrery-telemetry release (2026.09.30.1 or later as of this document). **If you already have orrery-telemetry, update it first** (in the orrery-telemetry repository, run `git pull` and then `./scripts/install.sh`). With an older version, parts of the cockpit do not work; for example, a finished Codex agent cannot be resumed. `scripts/start-cockpit.sh` (step 2) prints a `WARN` at startup when the version is older (it still starts).
 
 You are ready when all four of these are true:
 
@@ -52,7 +52,7 @@ Inside the repository:
 
 In one run, the script does the following.
 
-1. Checks the prerequisites (Python 3.10 or newer, tmux, the orrery-telemetry settings, the project key, and a response from the dashboard)
+1. Checks the prerequisites (Python 3.10 or newer, tmux, the orrery-telemetry settings, the project key, and a response from the dashboard; an older orrery-telemetry only gets a warning)
 2. Creates a Python environment in `bridge/.venv` and installs the packages in `bridge/requirements.txt` (the first run takes a while; from the second run on it skips this if nothing changed)
 3. Takes over the orrery-telemetry settings (the project key, Mail DB, and dashboard port in `~/.agentstack/env.sh`). It does not rewrite settings files under `~/.agentstack` or `~/.orrery`
 4. Starts the backend **inside this window**, confirms it responds, and then prints the URL to open
