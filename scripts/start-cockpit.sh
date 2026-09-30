@@ -8,7 +8,8 @@
 #
 # Works on macOS (including /bin/bash 3.2) and on Linux inside WSL2.
 # It never edits ~/.agentstack or ~/.orrery; the only thing it writes is the
-# venv (default: bridge/.venv in this checkout).
+# venv (default: bridge/.venv in this checkout), which also keeps a one-day
+# cache of the latest orrery-telemetry release.
 set -eu
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
@@ -21,9 +22,16 @@ VENV_DIR="${ORRERY_VENV:-${BRIDGE_DIR}/.venv}"
 AGENTSTACK_ENV_FILE="${AGENTSTACK_HOME:-${HOME}/.agentstack}/env.sh"
 MIN_PY_MAJOR=3
 MIN_PY_MINOR=10
-# The oldest orrery-telemetry release this cockpit is made for. An older one
-# only gets a warning at startup (see telemetry_version_check below).
-MIN_TELEMETRY_VERSION=2026.09.30.1
+# The orrery-telemetry API generation this cockpit needs: the "api" number in
+# its /api/version, which orrery-telemetry raises only when it adds or changes
+# something the cockpit relies on. An older one only gets a warning at startup
+# (see telemetry_version_check below); release dates are never hard-coded here.
+# orrery-telemetry manages "api" this way from 2 on; every release before that
+# reports 1, whatever it can do, so 1 always means "update".
+MIN_TELEMETRY_API=2
+# Where the newest release is announced. Set ORRERY_NO_UPDATE_CHECK=1 to skip
+# the check; the answer is kept for a day in the venv folder.
+TELEMETRY_RELEASES_URL="${ORRERY_UPDATE_CHECK_URL:-https://api.github.com/repos/gyroid-eth/orrery-telemetry/releases/latest}"
 
 check_only=false
 
@@ -45,6 +53,7 @@ Environment (all optional):
   ORRERY_VENV          venv directory (default: bridge/.venv)
   ORRERY_PROJECT_KEY   project key (default: taken from orrery-telemetry)
   ORRERY_DASHBOARD_URL orrery-telemetry dashboard (default: from its port)
+  ORRERY_NO_UPDATE_CHECK=1  do not ask GitHub whether a newer orrery-telemetry exists
 EOF
 }
 
@@ -242,7 +251,8 @@ dashboard_url="${dashboard_url%/}"
 #   exit 0: the expected service; 1: no answer; 2: something else answered.
 #   $2 = cockpit: /telemetry/health with backend == "ok" and a boot id
 #   $2 = dashboard: /api/agents with an "agents" list
-#   $2 = version: /api/version of orrery-telemetry; prints its version
+#   $2 = version: /api/version of orrery-telemetry; prints "<version> <api>"
+#        (either may be empty)
 probe() {
   "${probe_python}" - "$1" "$2" <<'PY' 2>/dev/null
 import json, sys, urllib.error, urllib.request
@@ -263,9 +273,11 @@ if not isinstance(data, dict):
 if kind == "cockpit":
     good = data.get("backend") == "ok" and isinstance(data.get("boot"), str)
 elif kind == "version":
-    good = data.get("name") == "orrery-telemetry" and isinstance(data.get("version"), str)
+    good = data.get("name") == "orrery-telemetry"
     if good:
-        print(data["version"])
+        version, api = data.get("version"), data.get("api")
+        print("%s %s" % (version if isinstance(version, str) and " " not in version else "",
+                         api if isinstance(api, int) and not isinstance(api, bool) else ""))
 else:
     good = isinstance(data.get("agents"), list)
 sys.exit(0 if good else 2)
@@ -292,27 +304,114 @@ version_older() {
   return 1
 }
 
+# The newest orrery-telemetry release on GitHub, from a cache younger than a
+# day when there is one. Prints nothing on any failure (no network, slow,
+# rate limited): this check must never hold up or stop the start.
+latest_telemetry_release() {
+  cache=""
+  [ -d "$VENV_DIR" ] && cache="${VENV_DIR}/.orrery-telemetry-latest.json"
+  "${probe_python}" - "$TELEMETRY_RELEASES_URL" "$cache" <<'PY' 2>/dev/null
+import json, os, re, sys, threading, time, urllib.request
+url, cache = sys.argv[1], sys.argv[2]
+DAY = 24 * 60 * 60
+
+def version(tag):
+    if isinstance(tag, str) and re.fullmatch(r"v?\d+(\.\d+)*", tag):
+        return tag.lstrip("v")
+    return None
+
+if cache:
+    try:
+        with open(cache, encoding="utf-8") as f:
+            kept = json.load(f)
+        if kept.get("url") == url and 0 <= time.time() - kept["checked"] < DAY and version(kept.get("tag")):
+            print(version(kept["tag"]))
+            sys.exit(0)
+    except Exception:
+        pass
+answer = {}
+
+def ask():
+    try:
+        request = urllib.request.Request(url, headers={
+            "Accept": "application/vnd.github+json", "User-Agent": "orrery-cockpit-start"})
+        with urllib.request.urlopen(request, timeout=3) as response:
+            answer["tag"] = json.loads(response.read(1 << 20)).get("tag_name")
+    except Exception:
+        pass
+
+# urllib's timeout is per read, so a server that trickles its answer could
+# hold the start much longer; the whole lookup gets 3 seconds.
+worker = threading.Thread(target=ask, daemon=True)
+worker.start()
+worker.join(3)
+tag = answer.get("tag")
+if not version(tag):
+    sys.exit(1)
+if cache:
+    try:
+        with open(cache + ".tmp", "w", encoding="utf-8") as f:
+            json.dump({"url": url, "checked": time.time(), "tag": tag}, f)
+        os.replace(cache + ".tmp", cache)
+    except OSError:
+        pass
+print(version(tag))
+PY
+}
+
+update_hint="  cd /path/to/orrery-telemetry && git pull && ./scripts/install.sh"
+
+telemetry_update_check() {
+  case "${ORRERY_NO_UPDATE_CHECK:-}" in
+    '' | 0) ;;
+    *) return 0 ;;
+  esac
+  latest="$(latest_telemetry_release)" || return 0
+  [ -n "$latest" ] || return 0
+  if version_older "$1" "$latest"; then
+    # After a WARN the update steps are already on screen.
+    if [ "$api_warned" = true ]; then
+      note "a newer orrery-telemetry is available: ${latest} (this one is ${1})."
+    else
+      note "a newer orrery-telemetry is available: ${latest} (this one is ${1}). Update it:"
+      note "$update_hint"
+    fi
+  fi
+}
+
 # Warn, never stop: an older orrery-telemetry still runs most of the cockpit.
 telemetry_version_check() {
+  api_warned=false
   version_status=0
-  telemetry_version="$(probe "${dashboard_url}/api/version" version)" || version_status=$?
-  if [ "$version_status" -ne 0 ]; then
-    note "could not read the orrery-telemetry version at ${dashboard_url}/api/version (older releases may not have it); if the cockpit misbehaves, update orrery-telemetry to ${MIN_TELEMETRY_VERSION} or later."
-    return 0
-  fi
-  older=0
-  version_older "$telemetry_version" "$MIN_TELEMETRY_VERSION" || older=$?
-  case "$older" in
-    0)
-      warn "orrery-telemetry ${telemetry_version} is older than ${MIN_TELEMETRY_VERSION}, which this cockpit is made for." \
-        "Some parts will not work, e.g. resuming a Codex agent that has exited." \
-        "Update it (the cockpit starts anyway):" \
-        "  cd /path/to/orrery-telemetry && git pull && ./scripts/install.sh" \
-        "then run this script again."
-      ;;
-    1) ok "orrery-telemetry version: ${telemetry_version}" ;;
-    *) note "orrery-telemetry reports version '${telemetry_version}', which is not in the usual form; expected ${MIN_TELEMETRY_VERSION} or later." ;;
+  answer="$(probe "${dashboard_url}/api/version" version)" || version_status=$?
+  telemetry_version="${answer%% *}"
+  telemetry_api="${answer#* }"
+  case "$telemetry_api" in
+    '' | *[!0-9]*) telemetry_api="" ;;
   esac
+  if [ "$version_status" -ne 0 ] || [ -z "$telemetry_api" ] || [ "$telemetry_api" -lt "$MIN_TELEMETRY_API" ]; then
+    if [ "$version_status" -ne 0 ]; then
+      found="could not read its API generation at ${dashboard_url}/api/version"
+    elif [ -z "$telemetry_api" ]; then
+      found="orrery-telemetry ${telemetry_version:-(unknown version)} does not report an API generation"
+    else
+      found="orrery-telemetry ${telemetry_version:-(unknown version)} has API ${telemetry_api}"
+    fi
+    warn "This cockpit needs orrery-telemetry API ${MIN_TELEMETRY_API} or later; ${found}." \
+      "Some parts may not work, e.g. resuming a Codex agent that has exited." \
+      "Update it (the cockpit starts anyway):" \
+      "$update_hint" \
+      "then run this script again."
+    api_warned=true
+  else
+    ok "orrery-telemetry version: ${telemetry_version:-unknown} (API ${telemetry_api})"
+  fi
+  # Only a version in the usual form can be compared with the newest release.
+  form=0
+  version_older "$telemetry_version" 0 || form=$?
+  if [ "$form" -ne 2 ]; then
+    telemetry_update_check "$telemetry_version"
+  fi
 }
 
 # Any Python 3 can probe, even one too old to run the backend.

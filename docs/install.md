@@ -12,13 +12,18 @@
 
 ORRERY cockpit は、エージェント一覧・NEW AGENT（spawn）・Mail・利用枠を [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry)（repository は orrery-telemetry。旧名 AgentStack で、環境変数 `AGENTSTACK_*` と `~/.agentstack` にその名残がある）から読みます。**orrery-telemetry の [インストール手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/install.md) を最後まで済ませてから**、この先に進んでください。Windows の人は、その文書の「Windows（WSL2）で入れる」節に従い、WSL2 の Ubuntu の中に入れます。
 
-cockpit は orrery-telemetry の最新の release に合わせて作っています（この文書の時点で 2026.09.30.1 以降）。**すでに入れている人も、先に orrery-telemetry を最新にしてください**（orrery-telemetry の repository で `git pull` のあと `./scripts/install.sh`）。古い版のままだと、終了した Codex の agent の再開ができないなど、cockpit の一部が動きません。古い版のときは、手順 2 の `scripts/start-cockpit.sh` が起動時に `WARN` で知らせます（起動は止めません）。
+cockpit は orrery-telemetry の最新の release に合わせて作っています。**すでに入れている人も、先に orrery-telemetry を最新にしてください**（orrery-telemetry の repository で `git pull` のあと `./scripts/install.sh`）。古い版のままだと、終了した Codex の agent の再開ができないなど、cockpit の一部が動きません。
+
+手順 2 の `scripts/start-cockpit.sh` は、起動のたびに次の 2 つを確かめます。どちらも起動は止めません。
+
+- **必要な世代か**: dashboard の `/api/version` の `api`（cockpit が頼る API の世代）が cockpit の必要とする値より小さい・無い・読めないときは、`WARN` と更新の手順を出す
+- **新しい版が出ているか**: GitHub で orrery-telemetry の最新の release を調べ、手元より新しければ `note` で知らせる。結果は 1 日、venv の folder（`bridge/.venv`）に覚えておく。ネットにつながらない・遅いときは何も出さない。調べないようにするには `ORRERY_NO_UPDATE_CHECK=1` を付けて起動する
 
 次の 4 つがそろっていれば準備完了です。
 
 - `~/.agentstack/bin/agentstack-doctor` が問題を報告しない
 - ブラウザで `http://127.0.0.1:8770/` を開くと orrery-telemetry の dashboard が表示される
-- `curl -s http://127.0.0.1:8770/api/version` の `version` が 2026.09.30.1 以降
+- `curl -s http://127.0.0.1:8770/api/version` に `"api": 2` 以上がある。1 は、この仕組みより前のすべての版（`version` が [最新の release](https://github.com/gyroid-eth/orrery-telemetry/releases/latest) と同じならなおよい）
 - Claude Code か Codex CLI にログイン済み（`claude` を起動して `/login`、または `codex login`）。Windows では **Ubuntu の中に入れたもの**にログインします。Windows 側に入れたものは使われません
 
 ### 守ること: 同じマシン・同じユーザー・同じ tmux

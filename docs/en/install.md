@@ -12,13 +12,18 @@ This section alone takes you from nothing to ORRERY cockpit installed on your ow
 
 ORRERY cockpit reads the agent list, NEW AGENT (spawn), Mail, and usage quota from [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) (the repository is named orrery-telemetry; it was formerly called AgentStack, and the `AGENTSTACK_*` environment variables and `~/.agentstack` are remnants of that name). **Finish the orrery-telemetry [installation steps](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/install.md) all the way through before you continue.** On Windows, follow the "Install on Windows (WSL2)" section of that document and install inside the WSL2 Ubuntu.
 
-The cockpit is built against the latest orrery-telemetry release (2026.09.30.1 or later as of this document). **If you already have orrery-telemetry, update it first** (in the orrery-telemetry repository, run `git pull` and then `./scripts/install.sh`). With an older version, parts of the cockpit do not work; for example, a finished Codex agent cannot be resumed. `scripts/start-cockpit.sh` (step 2) prints a `WARN` at startup when the version is older (it still starts).
+The cockpit is built against the latest orrery-telemetry release. **If you already have orrery-telemetry, update it first** (in the orrery-telemetry repository, run `git pull` and then `./scripts/install.sh`). With an older version, parts of the cockpit do not work; for example, a finished Codex agent cannot be resumed.
+
+`scripts/start-cockpit.sh` (step 2) checks two things at every start. Neither stops the start.
+
+- **The API generation**: when the `api` in the dashboard's `/api/version` (the generation of the API the cockpit relies on) is lower than the cockpit needs, missing, or unreadable, it prints a `WARN` with the update steps
+- **A newer release**: it looks up the latest orrery-telemetry release on GitHub and prints a `note` when it is newer than yours. The answer is kept for a day in the venv folder (`bridge/.venv`). Without a network, or when GitHub is slow, it prints nothing. To skip this lookup, start with `ORRERY_NO_UPDATE_CHECK=1`
 
 You are ready when all four of these are true:
 
 - `~/.agentstack/bin/agentstack-doctor` reports no problems
 - Opening `http://127.0.0.1:8770/` in a browser shows the orrery-telemetry dashboard
-- `curl -s http://127.0.0.1:8770/api/version` reports a `version` of 2026.09.30.1 or later
+- `curl -s http://127.0.0.1:8770/api/version` reports `"api": 2` or higher; 1 means any release from before this scheme (ideally with the same `version` as the [latest release](https://github.com/gyroid-eth/orrery-telemetry/releases/latest))
 - You are logged in to Claude Code or Codex CLI (start `claude` and run `/login`, or run `codex login`). On Windows, log in to the copy **installed inside Ubuntu**. A copy installed on the Windows side is not used
 
 ### What to keep the same: same machine, same user, same tmux
