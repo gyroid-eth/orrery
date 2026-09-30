@@ -130,6 +130,8 @@ When you run agents inside an Obsidian vault, work logs, paper notes, and tasks 
 
 → [Use it together with Obsidian](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/obsidian.en.md) (an ORRERY Telemetry document) · a template you can try right away, [orrery-demo-vault](https://github.com/gyroid-eth/orrery-demo-vault)
 
+Reading notes for papers come from the add-on [orrery-digest-paper](https://github.com/gyroid-eth/orrery-digest-paper): Claude writes the note, and Codex checks it against the text and the figures (a version for Zotero users is included).
+
 ### The same screen on Windows (WSL2)
 
 Run the backend in WSL2 and open it in a Windows browser to use the same screen as on Mac. Shortcuts change to `Alt+K` and so on, the terminal opened externally becomes Windows Terminal, and links open in the Windows browser and File Explorer. Files copied in File Explorer and screenshots can also be handed to the agent as paths by pasting them into the composer.
