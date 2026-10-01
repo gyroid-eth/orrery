@@ -287,7 +287,7 @@ def test_a_slow_dashboard_keeps_the_roster_and_says_slow_not_offline():
     r = run_agents("""
       reply=json(502,{error:'dashboard slow'});const ok=await pollAgents();
       return {ok,tag:rosterTag.textContent,shown:!rosterTag.hidden,dot:agentDot.className,removed};""")
-    assert r == {"ok": False, "tag": "dashboard slow · showing the last roster", "shown": True,
+    assert r == {"ok": False, "tag": "dashboard slow", "shown": True,
                  "dot": "dot open", "removed": []}
 
 

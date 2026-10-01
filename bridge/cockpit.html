@@ -9373,7 +9373,7 @@ async function pollAgents(){
     if(!response.ok){
       const why=await response.json().catch(()=>({}));
       if(why&&why.error==='dashboard slow'){
-        rosterTag.hidden=false;rosterTag.textContent='dashboard slow · showing the last roster';return false;}
+        rosterTag.hidden=false;rosterTag.textContent='dashboard slow';return false;}
       throw new Error(String(response.status));
     }
     const d=await response.json();
