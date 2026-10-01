@@ -85,18 +85,26 @@ def browser(identity_mode="ok"):
     threading.Thread(target=server.serve_forever, daemon=True).start()
     port = cdp._free_port()
     profile = tempfile.mkdtemp(prefix="orrery-demo-cdp-")
+    chrome_log = open(Path(profile) / "chrome.log", "w+")
     process = subprocess.Popen(
         [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", f"--remote-debugging-port={port}",
          "--window-size=1400,900", f"--user-data-dir={profile}", "about:blank"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        stdout=chrome_log, stderr=subprocess.STDOUT)
     try:
-        tabs = None
-        for _ in range(100):
-            with contextlib.suppress(OSError):
+        page = None
+        for _ in range(300):   # a cold start on a CI runner can take several seconds
+            with contextlib.suppress(OSError, ValueError):
                 tabs = json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/json"))
+                page = next((tab for tab in tabs if tab["type"] == "page"), None)
+                if page:
+                    break
+            if process.poll() is not None:
                 break
             time.sleep(.1)
-        page = next(tab for tab in tabs if tab["type"] == "page")
+        if page is None:
+            chrome_log.seek(0)
+            raise RuntimeError(f"Chromium gave no page over CDP (exit {process.poll()}):\n"
+                               + chrome_log.read()[-3000:])
         client = cdp._WebSocket(page["webSocketDebuggerUrl"])
         client.call("Page.enable")
         client.call("Runtime.enable")
@@ -122,6 +130,7 @@ def browser(identity_mode="ok"):
             process.kill()
         server.shutdown()
         server.server_close()
+        chrome_log.close()
         shutil.rmtree(profile, ignore_errors=True)
 
 
