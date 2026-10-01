@@ -137,6 +137,19 @@ def write_credits(manifest: dict[str, dict[str, object]]) -> None:
             "with ChatGPT image generation from text prompts only; no photographs were used as input.",
             "They are distributed under the same terms as the repository (see `LICENSE`).",
             "",
+            "## Provider logos",
+            "",
+            "The usage pill names Claude and Codex (OpenAI) by their logos, taken from Iconify.",
+            "The same files ship in orrery-telemetry as `dashboard/assets/`.",
+            "",
+            "| File | Mark | Source | License |",
+            "| --- | --- | --- | --- |",
+            "| `bridge/assets/anthropic.svg` | Claude | Simple Icons (Iconify `simple-icons:claude`) | CC0 1.0 |",
+            "| `bridge/assets/openai.svg` | OpenAI | SVG Logos by Gil Barbara (Iconify `logos:openai-icon`) | CC0 1.0 |",
+            "",
+            "Changes: fill colour set to `#ece2cc`.",
+            "Each logo is a trademark of its company and is used only to identify the provider.",
+            "",
         ]
     )
     CREDITS_PATH.write_text("\n".join(lines), encoding="utf-8")
