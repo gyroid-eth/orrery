@@ -253,12 +253,13 @@ dashboard_url="${dashboard_url%/}"
 #   $2 = dashboard: /api/agents with an "agents" list
 #   $2 = version: /api/version of orrery-telemetry; prints "<version> <api>"
 #        (either may be empty)
+#   $3 = seconds to wait for the answer (default 3)
 probe() {
-  "${probe_python}" - "$1" "$2" <<'PY' 2>/dev/null
+  "${probe_python}" - "$1" "$2" "${3:-3}" <<'PY' 2>/dev/null
 import json, sys, urllib.error, urllib.request
-url, kind = sys.argv[1], sys.argv[2]
+url, kind, wait = sys.argv[1], sys.argv[2], float(sys.argv[3])
 try:
-    with urllib.request.urlopen(url, timeout=3) as response:
+    with urllib.request.urlopen(url, timeout=wait) as response:
         body = response.read(1 << 20)
 except urllib.error.HTTPError:
     sys.exit(2)
@@ -424,9 +425,32 @@ telemetry_version_check() {
 # Any Python 3 can probe, even one too old to run the backend.
 probe_python="${python_bin:-$(command -v python3 2>/dev/null || printf '%s' "${VENV_DIR}/bin/python")}"
 
+# Is the orrery-telemetry dashboard there? Ask /api/version, which answers at
+# once: /api/agents builds the whole agent list, and on WSL its first answer
+# after the dashboard (re)starts took 3.7 and 6.9 s (2026-09-30, issue #1),
+# so a 3 s check on it stopped the start while the dashboard was fine. A
+# first answer that does not come in 3 s gets one more, longer chance.
+# A release from before /api/version (2026.09.16 and older) is still checked
+# the old way, on /api/agents, with the longer wait.
+#   exit 0: the dashboard; 1: no answer; 2: something else answered.
+dashboard_probe() {
+  local status=0
+  probe "${dashboard_url}/api/version" version 3 >/dev/null || status=$?
+  if [ "$status" -eq 1 ]; then
+    note "the dashboard did not answer in 3 s; one that has just started can take a few seconds. Asking again (up to 10 s) ..."
+    status=0
+    probe "${dashboard_url}/api/version" version 10 >/dev/null || status=$?
+  fi
+  if [ "$status" -eq 2 ]; then
+    status=0
+    probe "${dashboard_url}/api/agents" dashboard 10 || status=$?
+  fi
+  return "$status"
+}
+
 if [ -x "$probe_python" ] || command -v "$probe_python" >/dev/null 2>&1; then
   dashboard_status=0
-  probe "${dashboard_url}/api/agents" dashboard || dashboard_status=$?
+  dashboard_probe || dashboard_status=$?
   if [ "$dashboard_status" -eq 0 ]; then
     ok "orrery-telemetry dashboard: ${dashboard_url}"
     telemetry_version_check

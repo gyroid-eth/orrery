@@ -59,16 +59,22 @@ def test_versions_compare_as_date_and_count(a, b, expected):
     assert version_older(a, b) == expected
 
 
-def serve(routes: dict[str, tuple[int, bytes]], delay: float = 0.0, trickle: float = 0.0):
+def serve(routes: dict[str, tuple], delay: float = 0.0, trickle: float = 0.0):
     """A tiny HTTP server; records the paths it was asked for. With trickle,
-    the body goes out a few bytes at a time, that many seconds apart."""
+    the body goes out a few bytes at a time, that many seconds apart. A route
+    may carry a third item, the delays of its answers in turn (the last one
+    repeats), to be slow only the first time."""
     asked: list[str] = []
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):  # noqa: N802
             asked.append(self.path)
-            time.sleep(delay)
-            status, body = routes.get(self.path, (404, b"{}"))
+            status, body, *rest = routes.get(self.path, (404, b"{}"))
+            if rest:
+                delays = rest[0]
+                time.sleep(delays[min(asked.count(self.path) - 1, len(delays) - 1)])
+            else:
+                time.sleep(delay)
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -127,7 +133,7 @@ def version(v: str | None, api=MIN_API) -> bytes:
 
 
 def start(tmp_path, dash_url: str, releases_url: str | None = None, script: Path = SCRIPT,
-          **env_extra) -> str:
+          problems: int = 1, **env_extra) -> str:
     home = tmp_path / "home"
     agentstack = home / ".agentstack"
     agentstack.mkdir(parents=True, exist_ok=True)
@@ -147,7 +153,7 @@ def start(tmp_path, dash_url: str, releases_url: str | None = None, script: Path
                             text=True, timeout=60, check=False)
     # Stopped by the missing tmux alone, as intended: the warnings are not
     # counted as missing prerequisites, and no venv was created.
-    assert result.returncode == 1 and "Stopped: 1 prerequisite(s) missing" in result.stdout, result.stdout
+    assert result.returncode == 1 and f"Stopped: {problems} prerequisite(s) missing" in result.stdout, result.stdout
     assert not (tmp_path / "venv" / "bin").exists()
     return result.stdout
 
