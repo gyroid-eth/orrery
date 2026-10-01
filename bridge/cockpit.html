@@ -393,9 +393,10 @@
   .usage-pill .up-k{color:var(--ink-faint);letter-spacing:.18em;font-size:9px;margin-right:2px}
   .usage-pill .up-p{display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
   .usage-pill .up-p+.up-p{margin-left:12px}
-  /* the provider is named in words: the repository ships no vendor logos */
-  .up-logo{flex:none;color:var(--ink-dim);font-size:10px;letter-spacing:.06em}
+  /* the provider is named by its logo (bridge/assets: CC0 marks from Simple Icons and SVG Logos; see CREDITS.md) */
+  .up-logo{width:16px;height:16px;object-fit:contain;flex:none}
   .usage-pill .up-p.none .up-logo{opacity:.5}
+  .usage-popover .up-name .up-logo{width:20px;height:20px;margin-right:8px;vertical-align:-4px}
   /* the number takes the tmux chip's emerald while there is room, amber at
      half, and the alert red near the floor — the same three tiers as the dials */
   .usage-pill .up-p b{font-weight:600;color:var(--ln-local);font-size:11px}
@@ -1149,7 +1150,7 @@
     <button class="new-agent header-utility usage-pill" id="usageBtn" type="button"
             popovertarget="usagePopover" aria-haspopup="dialog"
             aria-label="Account usage: percent left for Claude and Codex" title="Percent of each account window still left — click for every window">
-      <span class="up-k">LEFT</span><span class="up-p none" data-provider="claude"><span class="up-logo">Claude</span><b>—</b></span><span class="up-p none" data-provider="codex"><span class="up-logo">Codex</span><b>—</b></span></button>
+      <span class="up-k">LEFT</span><span class="up-p none" data-provider="claude"><img class="up-logo" src="assets/anthropic.svg" alt="Claude"><b>—</b></span><span class="up-p none" data-provider="codex"><img class="up-logo" src="assets/openai.svg" alt="Codex"><b>—</b></span></button>
     <button class="new-agent header-utility settings-trigger" id="settingsBtn" type="button"
             popovertarget="settingsPopover" aria-haspopup="dialog"
             aria-label="Open cockpit settings" title="Cockpit settings">⚙ Settings</button>
@@ -1850,11 +1851,6 @@
             "property": "color",
             "selector": ".usage-pill .up-k",
             "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".up-logo",
-            "value": "var(--ink-dim)"
           },
           {
             "property": "color",
@@ -3495,11 +3491,6 @@
           },
           {
             "property": "color",
-            "selector": ".up-logo",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
             "selector": ".usage-pill .up-p.none b",
             "value": "var(--ink-faint)"
           },
@@ -4271,7 +4262,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "6973b4392a32a667e3f52b945874fc8bd4bc1a625e74a24a1c035c1c19d25e02",
+        "digest": "50c628436b092db0ba32817d6e435cdba2edc6dbe3ed310f05bf6f9e1b67a05b",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4289,7 +4280,6 @@
           ".ctx .lab\u0000font-size",
           ".ctx .pct\u0000font-size",
           ".usage-pill .up-k\u0000font-size",
-          ".up-logo\u0000font-size",
           ".usage-pill .up-p b\u0000font-size",
           ".usage-popover .up-reset\u0000font-size",
           ".usage-popover .dial .u\u0000font-size",
@@ -4423,7 +4413,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "fabb865d4fb632fd3440b951604045cad22f8d3c7d194df77f9bb3799db31f63",
+        "digest": "01408879dc1976c6ba5a3cde0adee95b9aed189505f807cf4ae50705cd228261",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4470,9 +4460,9 @@
       }
     }
   },
-  "inventory_digest": "414c16fef81acb83bdb2e6c69bac5643bfa180f390c8e8d9b5122264e1bb0c9b",
+  "inventory_digest": "c9f7ec44a4e51381218a6881b7967e02411240e1551b90c609644cecfb097cbe",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "c4a6499cb8a299790d4ccd4961c629476ae85715f3ca0b84b276fa1356b5ece5",
+  "source_digest": "d06622ab9be4366067ae3950691f06cba035046d285f5f4f3229ebe665cc68e3",
   "surface": "cockpit",
   "version": 1
 }
@@ -8757,6 +8747,7 @@ function usageClock(ts){if(!ts)return'';const d=new Date(ts*1000);
 const USAGE_REASON={sign_in_required:'sign in to Claude Code',codex_not_found:'codex not on PATH',
   probe_failed:'not reachable',rate_limited:'rate limited · retrying later',no_windows_returned:'no windows returned'};
 function usageProviderName(p){return p==='claude'?'Claude':p==='codex'?'Codex':p;}
+const USAGE_LOGO={claude:'assets/anthropic.svg',codex:'assets/openai.svg'};
 function usageMainWindows(prov){return prov.windows.filter(w=>!w.extra);}
 function usageBinding(prov){      /* the ordinary window with the least left: what actually limits the next task */
   return usageMainWindows(prov).slice().sort((a,b)=>a.remaining_percent-b.remaining_percent)[0]||null;}
@@ -8796,7 +8787,10 @@ function renderUsagePopover(){
     const sec=document.createElement('section');sec.className='up-prov';
     const head=document.createElement('div');head.className='up-head';
     head.innerHTML=`<span class="up-name"></span><span class="up-reset"></span>`;
+    const logo=USAGE_LOGO[prov.provider];
     head.querySelector('.up-name').textContent=usageProviderName(prov.provider)+(prov.status==='stale'?' · stale':'');
+    if(logo){const img=document.createElement('img');img.className='up-logo';img.src=logo;img.alt='';
+      head.querySelector('.up-name').prepend(img);}
     const soon=(usageMainWindows(prov).some(w=>w.resets_at)?usageMainWindows(prov):prov.windows).filter(w=>w.resets_at).sort((a,b)=>a.resets_at-b.resets_at)[0];
     head.querySelector('.up-reset').textContent=prov.status==='unavailable'?(USAGE_REASON[prov.reason]||'unavailable')
       :soon?`next reset ${soon.label} · ${usageClock(soon.resets_at)}`:'';
