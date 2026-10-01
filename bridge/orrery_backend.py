@@ -521,6 +521,7 @@ USAGE_CACHE_KEY = web.AppKey("usage_cache", UsageCache)
 USAGE_LOCKS_KEY = web.AppKey("usage_locks", dict)
 PREFS_PATH = Path(os.path.expanduser(os.environ.get("ORRERY_PREFS_PATH") or "~/.orrery/prefs.json"))
 PREFS_LOCK_KEY = web.AppKey("prefs_lock", asyncio.Lock)
+PROXY_INFLIGHT_KEY = web.AppKey("proxy_inflight", dict)
 # Identifies this backend process. The page compares it on every poll and
 # reloads itself when it changes, so a restarted backend never sits behind a
 # window still running the page it served hours ago.
@@ -1344,6 +1345,56 @@ async def send_error(
     await peer.send_json(payload)
 
 
+# The polled routes: every cockpit tab and pane window asks for these every few
+# seconds with the same query. While one is on its way to the dashboard, the
+# same request from another tab shares its answer instead of starting a second
+# computation there (the dashboard computes these in seconds, and computations
+# that overlap slow each other down). Nothing is kept once the answer is in:
+# a request that comes after it goes to the dashboard as before.
+COALESCED_ROUTES = frozenset({"/telemetry/agents", "/telemetry/graph", "/telemetry/messages"})
+
+
+async def fetch_proxied(
+    http_session: ClientSession, path: str, url: str
+) -> tuple[bytes, int, str]:
+    """One upstream GET for proxy_dashboard: (body, status, content type).
+    Raises ClientError / asyncio.TimeoutError when the dashboard does not answer."""
+    async with http_session.get(url) as response:
+        body = await response.read()
+        status = response.status
+        content_type = response.headers.get("Content-Type", "application/octet-stream")
+    if path == "/telemetry/agents" and status == 200:
+        labels = await annotations_by_agent(http_session)
+        body = merge_agent_annotations(body, labels)
+    if path == "/telemetry/spawn-catalog" and status == 200:
+        body = merge_spawn_catalog(body)
+    return body, status, content_type
+
+
+def shared_fetch(
+    inflight: dict[str, "asyncio.Task[tuple[bytes, int, str]]"],
+    http_session: ClientSession,
+    path: str,
+    url: str,
+) -> "asyncio.Task[tuple[bytes, int, str]]":
+    """The fetch for `url` already on its way, or a new one. The task is not
+    tied to the request that started it, so a tab that closes mid-request
+    does not cancel the answer the others wait for."""
+    task = inflight.get(url)
+    if task is None:
+        task = asyncio.create_task(fetch_proxied(http_session, path, url))
+        inflight[url] = task
+
+        def done(finished: asyncio.Task) -> None:
+            if inflight.get(url) is finished:
+                del inflight[url]
+            if not finished.cancelled():
+                finished.exception()  # retrieved, even when every waiter has gone
+
+        task.add_done_callback(done)
+    return task
+
+
 async def proxy_dashboard(request: web.Request) -> web.Response:
     dash_path, allowed = PROXY_ROUTES[request.path]
     kept = {
@@ -1357,17 +1408,11 @@ async def proxy_dashboard(request: web.Request) -> web.Response:
 
     http_session = request.app[HTTP_SESSION_KEY]
     try:
-        async with http_session.get(url) as response:
-            body = await response.read()
-            status = response.status
-            content_type = response.headers.get(
-                "Content-Type", "application/octet-stream"
-            )
-        if request.path == "/telemetry/agents" and status == 200:
-            labels = await annotations_by_agent(http_session)
-            body = merge_agent_annotations(body, labels)
-        if request.path == "/telemetry/spawn-catalog" and status == 200:
-            body = merge_spawn_catalog(body)
+        if request.path in COALESCED_ROUTES:
+            task = shared_fetch(request.app[PROXY_INFLIGHT_KEY], http_session, request.path, url)
+            body, status, content_type = await asyncio.shield(task)
+        else:
+            body, status, content_type = await fetch_proxied(http_session, request.path, url)
         return web.Response(
             body=body,
             status=status,
@@ -2968,6 +3013,7 @@ def create_app(tmux_bin: str = "tmux") -> web.Application:
     app[USAGE_CACHE_KEY] = UsageCache()
     app[USAGE_LOCKS_KEY] = {}
     app[PREFS_LOCK_KEY] = asyncio.Lock()
+    app[PROXY_INFLIGHT_KEY] = {}
     app.cleanup_ctx.append(app_resources)
     app.router.add_get("/telemetry/agents", proxy_dashboard)
     app.router.add_get("/telemetry/messages", proxy_dashboard)
