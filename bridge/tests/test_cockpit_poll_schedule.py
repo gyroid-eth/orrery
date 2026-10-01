@@ -64,7 +64,11 @@ function stand(kind){return function(){
   if(mode[kind]==='slow502')return new Promise(res=>waiting[kind].push(()=>res(false)));
   if(mode[kind]==='slow')return new Promise(res=>waiting[kind].push(res));
   return Promise.resolve();};}
-const pollGraph=stand('graph'),pollAgents=stand('agents'),pollMail=stand('mail');
+// the graph stand-in fills the lineage on a good answer, as pollGraph does
+let lineageParent=new Map(),lineageAnswer=[['Kid','Mom']];
+const graphStand=stand('graph');
+const pollGraph=()=>graphStand().then(ok=>{if(ok!==false)lineageParent=new Map(lineageAnswer);return ok;});
+const pollAgents=stand('agents'),pollMail=stand('mail');
 async function answer(kind){waiting[kind].splice(0).forEach(res=>res());await flush();}
 const count=kind=>calls.filter(c=>c[0]===kind).length;
 """
@@ -253,20 +257,77 @@ def test_a_502_from_mail_counts_as_a_failure():
     assert r is False
 
 
-def test_a_502_from_the_agents_is_not_read_as_an_empty_roster():
-    """Before, {error} had no agents, so every tile was removed until the next
-    good answer. Now it takes the offline path, which keeps the tiles."""
+AGENTS_HARNESS = r"""
+const rosterTag={hidden:true,textContent:''},agentDot={className:'dot open'},removed=[];
+const tiles=new Map([['Kid',{remove(){removed.push('Kid');}}]]);
+let reply;const json=(status,body)=>({ok:status>=200&&status<300,status,headers:{get:()=>null},
+  json:()=>Promise.resolve(body)});
+const known={rosterTag,agentDot,tiles,fetch:()=>Promise.resolve(reply)};
+// everything else pollAgents touches is a do-nothing stand-in
+const nothing=new Proxy(function(){},{get:()=>nothing,apply:()=>nothing});
+const env=new Proxy(known,{has:(t,k)=>k in t||!(k in globalThis),
+  get:(t,k)=>typeof k==='symbol'?undefined:k in t?t[k]:nothing});   // no Symbol.unscopables
+with(env){globalThis.pollAgentsUnderTest=__POLL__;}
+const pollAgents=globalThis.pollAgentsUnderTest;
+"""
+
+
+def run_agents(steps: str):
     html = COCKPIT.read_text(encoding="utf-8")
     body = re.search(r"async function pollAgents\(\)\{.*?\n\}\n", html, re.DOTALL).group(0)
-    assert body.index("if(!response.ok)throw") < body.index("response.json()")
-    assert "return false;}" in body
+    poll = body.replace("async function pollAgents(){", "async function(){", 1)
+    script = AGENTS_HARNESS.replace("__POLL__", poll) + f"(async()=>{{\n{steps}\n}})().then(r=>console.log(JSON.stringify(r)));"
+    done = subprocess.run([NODE, "-e", script], capture_output=True, text=True, check=False, timeout=30)
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout)
+
+
+def test_a_slow_dashboard_keeps_the_roster_and_says_slow_not_offline():
+    """Review P3: the backend gave up after 6 s; the dashboard is still there."""
+    r = run_agents("""
+      reply=json(502,{error:'dashboard slow'});const ok=await pollAgents();
+      return {ok,tag:rosterTag.textContent,shown:!rosterTag.hidden,dot:agentDot.className,removed};""")
+    assert r == {"ok": False, "tag": "dashboard slow · showing the last roster", "shown": True,
+                 "dot": "dot open", "removed": []}
+
+
+def test_an_offline_dashboard_keeps_the_roster_and_says_offline():
+    """Before, the 502 body had no agents, so every tile was removed."""
+    r = run_agents("""
+      reply=json(502,{error:'dashboard offline'});const ok=await pollAgents();
+      return {ok,tag:rosterTag.textContent,dot:agentDot.className,removed};""")
+    assert r == {"ok": False, "tag": "dashboard offline", "dot": "dot error", "removed": []}
 
 
 # ---------------------------------------------------------------- negative
 
-def test_a_page_loaded_hidden_asks_for_no_graph_until_shown():
+def test_a_page_loaded_hidden_takes_its_first_lineage_and_then_waits():
+    """Review P2-1: a tab opened in the background must show the right
+    lineage colours the moment it is brought forward."""
     r = run("""
-      await advance(30000);const hidden=count('graph');
-      await setHidden(false);return {hidden,shown:count('graph')};""",
+      await advance(30000);const hidden=count('graph'),lineage=[...lineageParent];
+      await setHidden(false);return {hidden,lineage,shown:count('graph')};""",
             setup="document.hidden=true;")
-    assert r == {"hidden": 0, "shown": 1}
+    assert r == {"hidden": 1, "lineage": [["Kid", "Mom"]], "shown": 2}
+
+
+def test_a_hidden_tab_keeps_asking_for_the_graph_while_it_has_no_lineage():
+    """As before the change: no lineage yet (a failed first answer, or no
+    spawns at all) and the graph is asked for even in a hidden tab."""
+    r = run("await advance(12000);return count('graph');",
+            setup="document.hidden=true;lineageAnswer=[];")
+    assert r == 3
+
+
+def test_switching_back_within_a_second_does_not_ask_again():
+    """Review P3: a request that started under a second ago is fresh enough;
+    the usual pace goes on."""
+    r = run("""
+      await advance(500);await setHidden(true);await setHidden(false);
+      const quick={graph:count('graph'),agents:count('agents'),mail:count('mail')};
+      await advance(1000);await setHidden(true);await setHidden(false);
+      const later={graph:count('graph'),agents:count('agents'),mail:count('mail')};
+      await advance(4500);return {quick,later,paced:count('agents')};""")
+    assert r["quick"] == {"graph": 1, "agents": 1, "mail": 1}
+    assert r["later"] == {"graph": 2, "agents": 2, "mail": 2}   # 1.5 s after the first round
+    assert r["paced"] == 3   # agents at 0, 1.5 (shown again), then 3 s from that: 4.5

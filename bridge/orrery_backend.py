@@ -1376,7 +1376,14 @@ async def proxy_dashboard(request: web.Request) -> web.Response:
                 "Cache-Control": "no-store",
             },
         )
-    except (ClientError, asyncio.TimeoutError):
+    except asyncio.TimeoutError:
+        # it is there but did not answer in time (a heavy graph, many tabs):
+        # the cockpit says "slow" rather than sending people to restart it
+        return web.json_response(
+            {"error": "dashboard slow"},
+            status=502,
+        )
+    except ClientError:
         return web.json_response(
             {"error": "dashboard offline"},
             status=502,

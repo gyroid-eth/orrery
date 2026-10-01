@@ -9368,8 +9368,14 @@ async function pollAgents(){
   try{
     const response=await fetch('/telemetry/agents',{cache:'no-store'});
     noteBackendBoot(response.headers.get('X-Orrery-Boot'));
-    // a 502 (the dashboard timed out) is no roster: keep the tiles, say offline
-    if(!response.ok)throw new Error(String(response.status));
+    // a 502 is no roster: keep the tiles. The backend says whether the
+    // dashboard is down or only slow (it gave up after 6 s); slow is not offline
+    if(!response.ok){
+      const why=await response.json().catch(()=>({}));
+      if(why&&why.error==='dashboard slow'){
+        rosterTag.hidden=false;rosterTag.textContent='dashboard slow · showing the last roster';return false;}
+      throw new Error(String(response.status));
+    }
     const d=await response.json();
     pruneRetiredPins(d.agents);
     // warmup(warm-*/pending-*) はプール予熱でありエージェントではない。
@@ -10529,30 +10535,37 @@ promptInput.addEventListener('keydown',e=>{
    backend gives up on the dashboard after 6 s, but the dashboard may still be
    computing that answer.
    Polls without `whileHidden` stop in a hidden tab, and kickPolls asks them at
-   once when the tab is shown again. The agents and mail polls keep running
+   once when the tab is shown again. `whileHidden` may be a function, asked
+   each time. The agents and mail polls keep running
    there: the roster stamps each change with the time it was seen, and the mail
    stream only reaches five minutes back, so a pause would show the wrong order
    and lose mail when the tab comes back. */
 function startPoll(fn,ms,{whileHidden=false}={}){
-  let inFlight=null,timer=0;
+  let inFlight=null,timer=0,started=-Infinity;
   function run(){
     clearTimeout(timer);timer=0;
     if(inFlight)return inFlight;
-    if(document.hidden&&!whileHidden)return Promise.resolve();
-    const started=Date.now();
+    if(document.hidden&&!(typeof whileHidden==='function'?whileHidden():whileHidden))return Promise.resolve();
+    started=Date.now();
     inFlight=Promise.resolve().then(fn).then(ok=>ok===false,()=>true).then(failed=>{
       inFlight=null;timer=setTimeout(run,failed?ms:Math.max(0,started+ms-Date.now()));
     });
     return inFlight;
   }
+  /* kickPolls: at once, unless a request is out or started under a second ago
+     (switching tabs back and forth); the timer then keeps the usual pace */
+  run.kick=()=>inFlight||(Date.now()-started<KICK_FRESH_MS?Promise.resolve():run());
   return run;
 }
+const KICK_FRESH_MS=1000;
 const agentsPoll=startPoll(pollAgents,3000,{whileHidden:true});
-const graphPoll=soloSession?null:startPoll(pollGraph,6000);
+// a tab opened in the background still takes its first lineage, so the roster
+// it shows when brought forward has the right colours from the start
+const graphPoll=soloSession?null:startPoll(pollGraph,6000,{whileHidden:()=>!lineageParent.size});
 const mailPoll=soloSession?null:startPoll(pollMail,4000,{whileHidden:true});
 function kickPolls(){
-  if(soloSession){agentsPoll();return;}
-  graphPoll().then(agentsPoll);mailPoll();   // lineage ready before first roster paint
+  if(soloSession){agentsPoll.kick();return;}
+  graphPoll.kick().then(agentsPoll.kick);mailPoll.kick();   // lineage ready before first roster paint
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)kickPolls();});
 kickPolls();
