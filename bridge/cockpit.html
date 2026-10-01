@@ -9362,11 +9362,12 @@ async function pollAgents(){
   try{
     const response=await fetch('/telemetry/agents',{cache:'no-store'});
     noteBackendBoot(response.headers.get('X-Orrery-Boot'));
-    // a 502 is no roster: keep the tiles. The backend says whether the
-    // dashboard is down or only slow (it gave up after 6 s); slow is not offline
+    // a 502/503 is no roster: keep the tiles. Slow is not offline: the backend
+    // gave up after 6 s ("dashboard slow"), or the dashboard itself said it is
+    // busy (503 {"error":"busy"}); either way the next tick asks again
     if(!response.ok){
       const why=await response.json().catch(()=>({}));
-      if(why&&why.error==='dashboard slow'){
+      if(why&&(why.error==='dashboard slow'||why.error==='busy')){
         rosterTag.hidden=false;rosterTag.textContent='dashboard slow';return false;}
       throw new Error(String(response.status));
     }

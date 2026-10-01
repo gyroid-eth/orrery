@@ -291,6 +291,22 @@ def test_a_slow_dashboard_keeps_the_roster_and_says_slow_not_offline():
                  "dot": "dot open", "removed": []}
 
 
+def test_a_busy_dashboard_is_slow_too_not_offline():
+    """The dashboard answers 503 {"error":"busy","retry":true} at its wait limit
+    (orrery-telemetry #166); the backend passes it through."""
+    r = run_agents("""
+      reply=json(503,{error:'busy',retry:true});const ok=await pollAgents();
+      return {ok,tag:rosterTag.textContent,dot:agentDot.className,removed};""")
+    assert r == {"ok": False, "tag": "dashboard slow", "dot": "dot open", "removed": []}
+
+
+def test_a_503_keeps_the_lineage_and_counts_as_a_failure():
+    r = run_polls("""
+      reply=json(503,{error:'busy',retry:true});const ok=await pollGraph();
+      return {ok,lineage:[...lineageParent]};""")
+    assert r == {"ok": False, "lineage": [["Kid", "Mom"]]}
+
+
 def test_an_offline_dashboard_keeps_the_roster_and_says_offline():
     """Before, the 502 body had no agents, so every tile was removed."""
     r = run_agents("""
