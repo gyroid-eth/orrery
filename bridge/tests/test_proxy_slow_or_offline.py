@@ -47,11 +47,11 @@ def ask(dashboard_url: str, path: str, upstream_timeout: float) -> tuple[int, ob
     return asyncio.run(main())
 
 
-def with_dashboard(delay: float, path: str, upstream_timeout: float):
+def with_dashboard(delay: float, path: str, upstream_timeout: float, status: int = 200, body=None):
     async def main():
         async def handle(_request):
             await asyncio.sleep(delay)
-            return web.json_response({"agents": []})
+            return web.json_response({"agents": []} if body is None else body, status=status)
         app = web.Application()
         app.router.add_route("GET", "/{tail:.*}", handle)
         runner, url = await start(app)
@@ -75,3 +75,9 @@ def test_no_dashboard_at_all_is_offline():
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]   # free, and nothing listens once closed
     assert ask(f"http://127.0.0.1:{port}", "/telemetry/graph?all=1", 2) == (502, {"error": "dashboard offline"})
+
+
+def test_a_busy_dashboard_is_passed_through_as_it_said():
+    """telemetry #166: 503 {"error":"busy","retry":true} at the dashboard's wait limit."""
+    busy = {"error": "busy", "retry": True}
+    assert with_dashboard(0.0, "/telemetry/agents", 2, 503, busy) == (503, busy)
