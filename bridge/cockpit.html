@@ -9368,6 +9368,8 @@ async function pollAgents(){
   try{
     const response=await fetch('/telemetry/agents',{cache:'no-store'});
     noteBackendBoot(response.headers.get('X-Orrery-Boot'));
+    // a 502 (the dashboard timed out) is no roster: keep the tiles, say offline
+    if(!response.ok)throw new Error(String(response.status));
     const d=await response.json();
     pruneRetiredPins(d.agents);
     // warmup(warm-*/pending-*) はプール予熱でありエージェントではない。
@@ -9398,7 +9400,7 @@ async function pollAgents(){
     document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:live}}));
     if(spawnOverlay.classList.contains('on'))populateSpawnParents();
     if(paletteOverlay.classList.contains('on'))renderPalette();
-  }catch(e){rosterTag.hidden=false;rosterTag.textContent='dashboard offline';agentDot.className='dot error';}
+  }catch(e){rosterTag.hidden=false;rosterTag.textContent='dashboard offline';agentDot.className='dot error';return false;}
 }
 
 /* ── live mail poller (thin) ──
@@ -9408,7 +9410,9 @@ async function pollAgents(){
 const seenMsg=new Set();let mailSince=0;const mailBacklog=[];
 async function pollMail(){
   try{
-    const d=await (await fetch('/telemetry/messages?since='+mailSince+'&limit=40',{cache:'no-store'})).json();
+    const response=await fetch('/telemetry/messages?since='+mailSince+'&limit=40',{cache:'no-store'});
+    if(!response.ok)return false;
+    const d=await response.json();
     if(d&&d.ok){
       const fresh=(d.messages||[]).filter(m=>!seenMsg.has(m.id));
       fresh.forEach(m=>{seenMsg.add(m.id);mailBacklog.push(m);});
@@ -9416,7 +9420,7 @@ async function pollMail(){
       if(d.now)mailSince=d.now;
       if(fresh.length)document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages:fresh}}));
     }
-  }catch(e){/* keep last render */}
+  }catch(e){return false;/* keep last render */}
 }
 
 /* ── spawn lineage — parent/child map from /api/graph spawn edges ──
@@ -9426,17 +9430,19 @@ async function pollGraph(){
   // spawn_only=1 asks for the lineage alone; the cockpit never reads the rest
   // of the graph, and the full payload runs to ~750KB.  While the telemetry
   // overlay is up the embedded dashboard polls the graph itself, so stepping
-  // aside here keeps one webview from parsing it twice.  The first call always
-  // goes through — the lineage has to exist before the first roster paint.
+  // aside here keeps one webview from parsing it twice.  The first call goes
+  // through even then — the lineage has to exist before the first roster paint.
+  // (A hidden tab is not polled at all: startPoll below.)
   if(lineageParent.size&&
      (document.hidden||networkOverlay.classList.contains('on')))return;
   try{
-    const g=await (await fetch('/telemetry/graph?all=1&spawn_only=1',
-      {cache:'no-store'})).json();
+    const response=await fetch('/telemetry/graph?all=1&spawn_only=1',{cache:'no-store'});
+    if(!response.ok)return false;   // a 502 is no graph: keep the lineage it would have wiped
+    const g=await response.json();
     const parent=new Map();
     (g.spawn||[]).forEach(s=>{if(s.source&&s.target)parent.set(s.target,s.source);});
     lineageParent=parent;
-  }catch(e){/* keep last lineage */}
+  }catch(e){return false;/* keep last lineage */}
 }
 function assignLineageHues(live){
   const roots=[...new Set(live.map(a=>rootOf(a.name)))].sort();
@@ -10515,13 +10521,41 @@ promptInput.addEventListener('keydown',e=>{
   e.preventDefault();sendPrompt();
 });
 
-if(soloSession){pollAgents();setInterval(pollAgents,3000);}
-else{
-  pollGraph().then(pollAgents);pollMail();   // lineage ready before first roster paint
-  setInterval(pollGraph,6000);
-  setInterval(pollAgents,3000);
-  setInterval(pollMail,4000);
+/* A poll sends one request at a time. The next starts `ms` after the last one
+   started, as setInterval did, or as soon as it answers if it took longer, so a
+   slow dashboard is never asked again while it is still computing the last
+   answer (a fixed interval stacked them up and pinned several cores). A poll
+   that fails (returns false or throws) waits `ms` from its end instead: the
+   backend gives up on the dashboard after 6 s, but the dashboard may still be
+   computing that answer.
+   Polls without `whileHidden` stop in a hidden tab, and kickPolls asks them at
+   once when the tab is shown again. The agents and mail polls keep running
+   there: the roster stamps each change with the time it was seen, and the mail
+   stream only reaches five minutes back, so a pause would show the wrong order
+   and lose mail when the tab comes back. */
+function startPoll(fn,ms,{whileHidden=false}={}){
+  let inFlight=null,timer=0;
+  function run(){
+    clearTimeout(timer);timer=0;
+    if(inFlight)return inFlight;
+    if(document.hidden&&!whileHidden)return Promise.resolve();
+    const started=Date.now();
+    inFlight=Promise.resolve().then(fn).then(ok=>ok===false,()=>true).then(failed=>{
+      inFlight=null;timer=setTimeout(run,failed?ms:Math.max(0,started+ms-Date.now()));
+    });
+    return inFlight;
+  }
+  return run;
 }
+const agentsPoll=startPoll(pollAgents,3000,{whileHidden:true});
+const graphPoll=soloSession?null:startPoll(pollGraph,6000);
+const mailPoll=soloSession?null:startPoll(pollMail,4000,{whileHidden:true});
+function kickPolls(){
+  if(soloSession){agentsPoll();return;}
+  graphPoll().then(agentsPoll);mailPoll();   // lineage ready before first roster paint
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)kickPolls();});
+kickPolls();
 </script>
 <script src="orrery_view.js"></script>
 <script src="mail_view.js"></script>

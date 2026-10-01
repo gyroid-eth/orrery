@@ -259,9 +259,9 @@ def test_a_session_that_is_out_is_never_attached_again_by_the_cockpit():
 def test_a_pane_window_polls_only_what_one_terminal_needs():
     html = _html()
     assert "if(!soloSession){pollUsage(false);" in html
-    tail = html[html.index("if(soloSession){pollAgents();"):]
-    solo_branch = tail[: tail.index("else{")]
-    assert "pollMail" not in solo_branch and "pollGraph" not in solo_branch
+    # the polls themselves: test_cockpit_poll_schedule.py runs them
+    assert "const graphPoll=soloSession?null:" in html and "const mailPoll=soloSession?null:" in html
+    assert "function kickPolls(){\n  if(soloSession){agentsPoll();return;}" in html
 
 
 def test_the_solo_class_is_set_before_first_paint():
