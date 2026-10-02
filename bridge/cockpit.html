@@ -9053,7 +9053,9 @@ async function runBulkExit(){
   }
   if(failures.length)console.warn('bulk exit failures',failures);
   bulkExitBusy=false;setRosterSelectMode(false);
-  showToast(`BULK EXIT · ${succeeded} succeeded${failed?` · ${failed} failed`:''}`,failed>0);
+  // The first failure's reason, not only a count: "1 failed" alone sent the
+  // 2026-10-01 seminar looking for a bug in the wrong place.
+  showToast(`BULK EXIT · ${succeeded} succeeded${failed?` · ${failed} failed — ${failures[0]}`:''}`,failed>0,failed?9000:4200);
 }
 /* ── who needs a person ──
    A running agent is in one of three states worth counting: it is working,

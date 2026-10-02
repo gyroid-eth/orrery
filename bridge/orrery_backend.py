@@ -26,7 +26,14 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import quote, urlencode
 
-from aiohttp import ClientError, ClientSession, ClientTimeout, WSMsgType, web
+from aiohttp import (
+    ClientConnectorError,
+    ClientError,
+    ClientSession,
+    ClientTimeout,
+    WSMsgType,
+    web,
+)
 from control_server import (
     ControlConfig,
     TmuxControlBridge,
@@ -1504,6 +1511,18 @@ def cache_control_for(request: web.Request, response: Any) -> str:
     return "no-store"
 
 
+# A POST through the passthrough is an action (EXIT, RESUME, kill, annotate),
+# not a display poll. The shared session gives up after 6 s, which a loaded
+# dashboard overruns: on 2026-10-01 (load 40-50) a NETWORK bulk EXIT was cut
+# off and shown as "failed" while the dashboard went on and sent the exit.
+# An action gets longer, and when even that runs out the error says the action
+# may still go through instead of calling the dashboard offline.
+ACTION_PROXY_TIMEOUT = 60.0
+ACTION_RESULT_UNKNOWN = (
+    "the action may still go through — check the agent before trying again"
+)
+
+
 async def proxy_dashboard_passthrough(request: web.Request) -> web.Response:
     """Same-origin embed support: forward /network/*, /api/*, /assets/* to :8770.
 
@@ -1525,9 +1544,11 @@ async def proxy_dashboard_passthrough(request: web.Request) -> web.Response:
     if content_type:
         headers["Content-Type"] = content_type
     http_session = request.app[HTTP_SESSION_KEY]
+    action = request.method == "POST"
     try:
         async with http_session.request(
-            request.method, url, data=body, headers=headers
+            request.method, url, data=body, headers=headers,
+            **({"timeout": ClientTimeout(total=ACTION_PROXY_TIMEOUT)} if action else {}),
         ) as response:
             payload = await response.read()
             content_type = response.headers.get(
@@ -1542,7 +1563,36 @@ async def proxy_dashboard_passthrough(request: web.Request) -> web.Response:
                     "Cache-Control": cache_control_for(request, response),
                 },
             )
-    except (ClientError, asyncio.TimeoutError):
+    except asyncio.TimeoutError:
+        if action:
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error": (
+                        f"the dashboard did not answer within {ACTION_PROXY_TIMEOUT:g} s; "
+                        f"{ACTION_RESULT_UNKNOWN}"
+                    ),
+                },
+                status=504,
+            )
+        return web.json_response({"error": "dashboard offline"}, status=502)
+    except ClientConnectorError:
+        # Refused before anything was sent: the dashboard is not there.
+        return web.json_response(
+            {"ok": False, "error": "dashboard offline"} if action else {"error": "dashboard offline"},
+            status=502,
+        )
+    except ClientError:
+        if action:
+            # Connected and sent, then the answer was lost (closed, cut short):
+            # the dashboard may well have acted on it.
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error": f"the dashboard's answer was lost; {ACTION_RESULT_UNKNOWN}",
+                },
+                status=502,
+            )
         return web.json_response({"error": "dashboard offline"}, status=502)
 
 
