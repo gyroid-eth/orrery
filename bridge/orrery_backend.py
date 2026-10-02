@@ -526,6 +526,24 @@ PROXY_INFLIGHT_KEY = web.AppKey("proxy_inflight", dict)
 # reloads itself when it changes, so a restarted backend never sits behind a
 # window still running the page it served hours ago.
 BACKEND_BOOT_ID = f"{int(time.time())}-{os.getpid()}"
+
+
+def _checkout_commit() -> str:
+    """The commit this backend was started from ("" outside a git checkout)."""
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return done.stdout.strip() if done.returncode == 0 else ""
+
+
+# Fixed at startup, so the health answer tells which checkout and commit are
+# actually running (scripts/setup.sh compares them after an update).
+BACKEND_ROOT = str(REPO_ROOT)
+BACKEND_COMMIT = _checkout_commit()
 # Which localStorage keys are cockpit preferences worth sharing between the
 # app window and browser tabs. Drafts, histories and caches stay per window.
 # Mirrors SYNC_RE in bridge/prefs_sync.js.
@@ -2500,6 +2518,8 @@ async def serve_health(request: web.Request) -> web.Response:
             "backend": "ok",
             "boot": BACKEND_BOOT_ID,
             "dashboard": dashboard_online,
+            "root": BACKEND_ROOT,
+            "commit": BACKEND_COMMIT,
         }
     )
 
