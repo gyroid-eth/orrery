@@ -1000,15 +1000,16 @@ new_installer=false
 if printf '%s\n' "$installer_help" | grep -q -- '--mail auto|update|keep'; then new_installer=true; fi
 mail_result_line="$(grep '^mail-result: ' "$LOG" | tail -n 1 || true)"
 mail_field() { printf '%s\n' "$mail_result_line" | sed -n "s/.* $1=\([^ ]*\).*/\1/p"; }
+mail_id() { short "$(mail_field "$1")"; }   # commits are shown with 7 characters
 mail_reconnect=""
 if [ -n "$mail_result_line" ]; then
   mail_result="$(printf '%s\n' "$mail_result_line" | sed -n 's/^mail-result: \([a-z-]*\).*/\1/p')"
   case "$mail_result" in
-    installed) ok "Mail: set up (new, $(mail_field running))" ;;
-    switched) ok "Mail: updated to $(mail_field to) (was $(mail_field from); without Mail for $(mail_field outage_s) s)" ;;
-    kept | unchanged) ok "Mail: ${mail_result} (running $(mail_field running))" ;;
+    installed) ok "Mail: set up (new, $(mail_id running))" ;;
+    switched) ok "Mail: updated to $(mail_id to) (was $(mail_id from); without Mail for $(mail_field outage_s) s)" ;;
+    kept | unchanged) ok "Mail: ${mail_result} (running $(mail_id running))" ;;
     refused | rolled-back)
-      warn_line "Mail: ${mail_result}; not updated, the running one ($(mail_field running)) stays (reason: $(mail_field reason))" ;;
+      warn_line "Mail: ${mail_result}; not updated, the running one ($(mail_id running)) stays (reason: $(mail_field reason))" ;;
     *) warn_line "Mail: the installer reported something unknown: ${mail_result_line}"; checks_ok=false ;;
   esac
   case "$mail_result" in
