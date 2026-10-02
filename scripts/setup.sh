@@ -1034,7 +1034,19 @@ harmless="AGENTSTACK_WORKTREE_ROOT: directory does not exist yet"
 install_warnings="$(grep '^warning:' "$LOG" | grep -v -- "$harmless" | sort -u || true)"
 harmless_count="$(grep -c -- "$harmless" "$LOG" || true)"
 if [ -n "$install_warnings" ]; then
-  printf '%s\n' "$install_warnings" | while IFS= read -r line; do warn_line "install: ${line#warning: }"; done
+  printf '%s\n' "$install_warnings" | while IFS= read -r line; do
+    case "$line" in
+      "warning: optional dependency 'fswatch' not found"*)
+        note "install: fswatch is not installed; Mail notices are checked every 2 seconds instead (fine)" ;;
+      "warning: Claude skill '"*"' already exists; leaving it untouched: "*)
+        skill="${line#warning: Claude skill \'}"; skill="${skill%%\'*}"
+        skill_path="${line##*: }"
+        warn_line "install: your own Claude skill '${skill}' (${skill_path})"
+        printf '        is kept and used instead of ORRERY'"'"'s /%s. To use ORRERY'"'"'s, move yours\n' "$skill"
+        printf '        away (e.g. mv %s %s.mine) and run the same line again.\n' "$skill_path" "$skill_path" ;;
+      *) warn_line "install: ${line#warning: }" ;;
+    esac
+  done
 fi
 if [ "${harmless_count:-0}" -gt 0 ]; then note "install: ${harmless_count} known harmless warning(s) (folders made on first use)"; fi
 

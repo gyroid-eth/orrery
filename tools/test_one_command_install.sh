@@ -199,6 +199,10 @@ if [ -n "${AGENTSTACK_CODEX_BIN:-}" ] && ! "$AGENTSTACK_CODEX_BIN" --version >/d
 fi
 if [ -n "${STUB_INSTALL_ERROR:-}" ]; then echo "error: ${STUB_INSTALL_ERROR}" >&2; exit 1; fi
 printf 'args=%s env=%s\n' "$*" "${AGENTSTACK_MAIL_UPDATE-unset}" >"$HOME/install-args"
+if [ -n "${STUB_WARN:-}" ]; then
+  echo "warning: Claude skill 'delegate' already exists; leaving it untouched: $HOME/.claude/skills/delegate" >&2
+  echo "warning: optional dependency 'fswatch' not found; mail watcher will use polling" >&2
+fi
 mkdir -p "$dir/bin"
 printf '2026.10.01.1\n' >"$dir/VERSION"
 printf 'export AGENTSTACK_PROJECT_KEY=%s\n' "$HOME/orrery-work" >"$dir/env.sh"
@@ -467,6 +471,12 @@ stub_cockpit "$H"
 setup_in "$H" bash "$H/orrery/scripts/setup.sh" --yes --no-start >/dev/null 2>&1
 setup_in "$H" bash "$H/orrery/scripts/setup.sh" --yes --no-start >/dev/null 2>&1
 check "mail on update: keep reaches the installer explicitly" grep -q "env=keep" "$H/install-args"
+
+# Installer warnings a first user meets get a plain explanation.
+out="$(mail_run warnings STUB_WARN=1)"
+check "skill kept: explained" sh -c 'printf "%s" "$1" | grep -q "is kept and used instead of ORRERY"' _ "$out"
+check "fswatch: a harmless note, not a WARN" sh -c 'printf "%s" "$1" | grep -q "note  install: fswatch" && ! printf "%s" "$1" | grep -q "WARN  install: optional dependency"' _ "$out"
+check "warnings: still ready" sh -c 'printf "%s" "$1" | grep -q "is ready"' _ "$out"
 
 # An unfinished Mail copy: never a command that deletes anything.
 H="$(fresh_home mail-incomplete)"
