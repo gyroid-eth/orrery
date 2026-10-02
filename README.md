@@ -136,7 +136,7 @@ Obsidian の vault の中で agent を動かすと、作業ログ・論文ノー
 
 → [Obsidian と一緒に使う](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/obsidian.md)（ORRERY Telemetry の文書）・すぐ試せるひな形 [orrery-demo-vault](https://github.com/gyroid-eth/orrery-demo-vault)
 
-論文の読書ノートは、add-on の [orrery-digest-paper](https://github.com/gyroid-eth/orrery-digest-paper) が作ります。Claude が書き、Codex が本文と図に照らして確かめます（Zotero を使う人向けの版もあります）。
+論文の読書ノートは、add-on の [orrery-digest-paper](https://github.com/gyroid-eth/orrery-digest-paper) が作ります。Claude が書き、Codex が本文と図に照らして確かめます（Zotero を使う人向けの版もあります）。add-on と demo vault は [研究セットの 1 行](docs/research-set.md) でまとめて入ります。
 
 ### Windows（WSL2）でも同じ画面で
 
