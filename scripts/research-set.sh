@@ -96,16 +96,22 @@ main() {
     codex_bin="$(sed -n "s/^export AGENTSTACK_CODEX_BIN=//p" "${agentstack}/env.sh" | tail -n 1 | tr -d "'\"")"
   fi
   [ -n "$codex_bin" ] || codex_bin="$(command -v codex 2>/dev/null || true)"
+  codex_real=""
+  [ -z "$codex_bin" ] || codex_real="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$codex_bin" 2>/dev/null || true)"
+  case "${codex_bin}|${codex_real}" in
+    /mnt/* | *"|/mnt/"*)
+      # A Windows Codex seen from WSL: even if it answers --version through
+      # interop, ORRERY cannot run it as a Linux child. Never used.
+      codex_note="${codex_bin} is the Windows Codex; ORRERY cannot use it from WSL. Install Codex inside WSL to use it."
+      codex_bin="" ;;
+  esac
   if [ -n "$codex_bin" ]; then
     # codex --version writes into CODEX_HOME; give it a throwaway one.
     probe_home="$(mktemp -d)"
     if CODEX_HOME="$probe_home" "$codex_bin" --version >/dev/null 2>&1; then
       have_codex=true
     else
-      case "$codex_bin" in
-        /mnt/*) codex_note="${codex_bin} is the Windows Codex; it does not run in WSL. Install Codex inside WSL to use it." ;;
-        *) codex_note="${codex_bin} does not run (--version failed)." ;;
-      esac
+      codex_note="${codex_bin} does not run (--version failed)."
     fi
     rm -rf "$probe_home"
   fi
@@ -119,6 +125,30 @@ main() {
     team="none"
   fi
 
+  # ------------------------------------------------------------ where the vault goes
+  # Decided before anything is written, so a stop here leaves nothing behind.
+  win_form=""
+  if [ -z "$vault_dir" ]; then
+    if [ "$os" = wsl ]; then
+      profile="$(cmd.exe /c 'echo %USERPROFILE%' 2>/dev/null | tr -d '\r' || true)"
+      case "$profile" in
+        [A-Za-z]:\\*) vault_dir="$(wslpath -u "$profile")/Documents/orrery-demo-vault" ;;
+        *) stop "Could not find your Windows user folder (Windows interop is off?)." \
+          "Give the folder yourself, for example:" \
+          "  ... | bash -s -- --vault-dir /mnt/c/Users/<you>/Documents/orrery-demo-vault" ;;
+      esac
+    else
+      vault_dir="${HOME}/Documents/orrery-demo-vault"
+    fi
+  fi
+  case "$vault_dir" in /*) ;; *) vault_dir="$(pwd)/${vault_dir}" ;; esac
+  vault_warn=""
+  if [ "$os" = wsl ]; then
+    case "$vault_dir" in
+      /mnt/*) ;;
+      *) vault_warn="${vault_dir} is inside WSL; Windows Obsidian opens it slowly and may miss changes. A folder under /mnt/c is better." ;;
+    esac
+  fi
   # ------------------------------------------------------------ trust
   # >>> remote-match (tools/test_one_command_install.sh reads this block)
   # Exact match only: the official GitHub repository in its HTTPS / SSH forms,
@@ -165,34 +195,26 @@ main() {
     addon_state="$(git -C "$src" rev-parse --short HEAD)"
   fi
   skill="${addon}/current/skills/digest-paper/SKILL.md"
+  # Another digest-paper skill (not this add-on's link) on either side means
+  # the requests must name this add-on's SKILL.md. The installer records what
+  # it kept in install-state.json; before an install, look at both homes.
   collision=false
-  if [ -e "${HOME}/.claude/skills/digest-paper" ] || [ -L "${HOME}/.claude/skills/digest-paper" ]; then
-    [ "$(readlink "${HOME}/.claude/skills/digest-paper" 2>/dev/null || true)" = "${addon}/current/skills/digest-paper" ] || collision=true
+  collision_where=""
+  state_file="${addon}/install-state.json"
+  if [ "$read_only" = false ] && [ -f "$state_file" ]; then
+    collision_where="$(python3 -c 'import json, sys; print(" ".join(json.load(open(sys.argv[1])).get("collisions", [])))' "$state_file" 2>/dev/null || true)"
+  else
+    for dir in "${CLAUDE_SKILLS_DIR:-${HOME}/.claude/skills}" "${CODEX_HOME:-${HOME}/.codex}/skills"; do
+      target="${dir}/digest-paper"
+      if [ -e "$target" ] || [ -L "$target" ]; then
+        [ "$(readlink "$target" 2>/dev/null || true)" = "${addon}/current/skills/digest-paper" ] \
+          || collision_where="${collision_where} ${target}"
+      fi
+    done
   fi
+  [ -z "$(printf '%s' "$collision_where" | tr -d ' ')" ] || collision=true
 
   # ------------------------------------------------------------ 2. the demo vault
-  win_form=""
-  if [ -z "$vault_dir" ]; then
-    if [ "$os" = wsl ]; then
-      profile="$(cmd.exe /c 'echo %USERPROFILE%' 2>/dev/null | tr -d '\r' || true)"
-      case "$profile" in
-        [A-Za-z]:\\*) vault_dir="$(wslpath -u "$profile")/Documents/orrery-demo-vault" ;;
-        *) stop "Could not find your Windows user folder (Windows interop is off?)." \
-          "Give the folder yourself, for example:" \
-          "  ... | bash -s -- --vault-dir /mnt/c/Users/<you>/Documents/orrery-demo-vault" ;;
-      esac
-    else
-      vault_dir="${HOME}/Documents/orrery-demo-vault"
-    fi
-  fi
-  case "$vault_dir" in /*) ;; *) vault_dir="$(pwd)/${vault_dir}" ;; esac
-  vault_warn=""
-  if [ "$os" = wsl ]; then
-    case "$vault_dir" in
-      /mnt/*) ;;
-      *) vault_warn="${vault_dir} is inside WSL; Windows Obsidian opens it slowly and may miss changes. A folder under /mnt/c is better." ;;
-    esac
-  fi
   if [ -e "$vault_dir" ]; then
     vault_state="kept (already there; not changed)"
   elif [ "$read_only" = true ]; then
@@ -215,7 +237,13 @@ main() {
     mkdir -p "$partial"
     tar -xzf "${work}/vault.tar.gz" -C "$partial" --strip-components 1 --no-same-owner --no-same-permissions \
       || { rm -rf "$partial" "$work"; stop "Could not unpack the demo vault."; }
-    mv "$partial" "$vault_dir"
+    # rename(2) through Python: it fails if the folder appeared meanwhile and
+    # has anything in it, and never moves the vault *into* it, as mv would.
+    if ! python3 -c 'import os, sys; os.rename(sys.argv[1], sys.argv[2])' "$partial" "$vault_dir" 2>/dev/null; then
+      rm -rf "$partial" "$work"
+      stop "${vault_dir} appeared while the demo vault was downloading; nothing was written into it." \
+        "Run this again (the existing folder will be used as it is)."
+    fi
     rm -rf "$work"
     vault_state="downloaded (${vault_rev})"
   fi
@@ -237,7 +265,7 @@ main() {
   esac
   [ -z "$codex_note" ] || say "  note  ${codex_note}"
   say "  ok    digest-paper          ${addon_state}"
-  [ "$collision" = false ] || say "  note  another digest-paper skill is in ~/.claude/skills; the requests below name this add-on's SKILL.md"
+  [ "$collision" = false ] || say "  note  another digest-paper skill is kept at${collision_where}; the requests below name this add-on's SKILL.md"
   say "  ok    demo vault            ${vault_dir}: ${vault_state}"
   [ -z "$vault_warn" ] || say "  note  ${vault_warn}"
   [ "$have_uv" = true ] || say "  note  uv not found: the no-key (local) conversion needs it; it comes with ORRERY"
@@ -269,7 +297,12 @@ main() {
   say ""
   say "     (b) no Mistral key (the PDF is converted on this machine; figures are rougher):"
   say "     ${prefix}digest-paper で、Mistral のキーが無いので、この PDF を local で変換してからノートにして。"
-  say "     PDF: ${vault_dir}/10_Reference/Papers/<論文名>.pdf"
+  guo="${vault_dir}/10_Reference/Papers/Guo et al. 2024 - Self-regulated reversal deformation and locomotion of structurally homogenous hydrogels subjected to constant light illumination.pdf"
+  if [ -f "$guo" ]; then
+    say "     PDF: ${guo}"
+  else
+    say "     PDF: ${vault_dir}/10_Reference/Papers/<論文名>.pdf   (<論文名> を自分の PDF の名前に)"
+  fi
   say "     vault: ${vault_dir}"
   say "     保存先: ${vault_dir}/10_Reference/Notes"
   say ""

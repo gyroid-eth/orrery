@@ -68,4 +68,50 @@ touch "$home/.agentstack/skills/delegate/SKILL.md"
 out="$(run "$home" 2>&1 || true)"
 echo "$out" | grep -q "not this research set's copy" || fail "foreign src: $out"
 
+# Codex only, with another digest-paper kept on the Codex side (review P2-3).
+home="$tmp/h4"; mkdir -p "$home/.agentstack/skills/delegate" "$home/.codex/skills/digest-paper"
+touch "$home/.agentstack/skills/delegate/SKILL.md" "$home/.codex/skills/digest-paper/SKILL.md"
+mkdir -p "$tmp/bin4"; printf '#!/bin/sh\nexit 0\n' >"$tmp/bin4/codex"; chmod +x "$tmp/bin4/codex"
+out="$(env -i PATH="$tmp/bin4:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" \
+  ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
+  /bin/bash "$script")" || fail "codex collision: $out"
+echo "$out" | grep -q "Codex only" || fail "codex-only team: $out"
+echo "$out" | grep -q "SKILL.md を読んで" || fail "codex-side collision not named: $out"
+
+# A Windows codex under /mnt/ is never used, even before asking it anything (P2-4).
+home="$tmp/h5"; mkdir -p "$home/.agentstack/skills/delegate"; touch "$home/.agentstack/skills/delegate/SKILL.md"
+out="$(env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" \
+  AGENTSTACK_CODEX_BIN=/mnt/c/Users/test/AppData/Roaming/npm/codex \
+  ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
+  /bin/bash "$script" --check)" || fail "windows codex: $out"
+echo "$out" | grep -q "Windows Codex; ORRERY cannot use it" || fail "windows codex note: $out"
+echo "$out" | grep -q "Claude only" || fail "windows codex counted: $out"
+
+# The vault folder appears while downloading: nothing is written into it (P2-5).
+home="$tmp/h6"; mkdir -p "$home/.agentstack/skills/delegate"; touch "$home/.agentstack/skills/delegate/SKILL.md"
+mkdir -p "$tmp/bin6"; cp "$tmp/bin/claude" "$tmp/bin6/"
+real_tar="$(command -v tar)"
+printf '#!/bin/sh\nmkdir -p "%s" && echo mine >"%s/sentinel"\nexec "%s" "$@"\n' "$tmp/race" "$tmp/race" "$real_tar" >"$tmp/bin6/tar"
+chmod +x "$tmp/bin6/tar"
+out="$(env -i PATH="$tmp/bin6:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" \
+  ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
+  /bin/bash "$script" --vault-dir "$tmp/race" 2>&1 || true)"
+echo "$out" | grep -q "appeared while the demo vault was downloading" || fail "race: $out"
+[ "$(ls -A "$tmp/race")" = "sentinel" ] || fail "race wrote into the folder: $(ls -A "$tmp/race")"
+! ls -d "$tmp"/race.partial-* >/dev/null 2>&1 || fail "partial left behind"
+
+# The no-key request names the PDF that the new vault has (P3-2).
+out="$(run "$tmp/h1")"
+echo "$out" | grep -q "PDF: .*Guo et al. 2024" || fail "Guo PDF not named: $out"
+
+# WSL without interop: stop before writing anything (review P3-1).
+home="$tmp/h7"; mkdir -p "$home/.agentstack/skills/delegate"; touch "$home/.agentstack/skills/delegate/SKILL.md"
+mkdir -p "$tmp/bin7"; cp "$tmp/bin/claude" "$tmp/bin7/"; printf '#!/bin/sh\necho Linux\n' >"$tmp/bin7/uname"; chmod +x "$tmp/bin7/uname"
+before="$(cd "$home" && find . | sort)"
+out="$(env -i PATH="$tmp/bin7:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" WSL_DISTRO_NAME=Ubuntu \
+  ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
+  /bin/bash "$script" 2>&1 || true)"
+echo "$out" | grep -q "Could not find your Windows user folder" || fail "no interop: $out"
+[ "$before" = "$(cd "$home" && find . | sort)" ] || fail "no interop wrote something"
+
 echo "ok: research-set"
