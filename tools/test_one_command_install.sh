@@ -10,8 +10,15 @@
 set -u
 
 ROOT="$(cd -- "$(dirname -- "$0")/.." && pwd)"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/orrery-install-test.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
+WORK="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/orrery-install-test.XXXXXX")" && pwd -P)"
+# Every cockpit a test starts lives in this test-only tmux server.
+TEST_SOCK="orrery-cockpit-test-$$"
+cleanup() {
+  env -u TMUX tmux -L "$TEST_SOCK" kill-server 2>/dev/null; env -u TMUX tmux -L "${TEST_SOCK}-bg" kill-server 2>/dev/null
+  pkill -f "$WORK" 2>/dev/null
+  rm -rf "$WORK"
+}
+trap cleanup EXIT
 failures=0
 pass() { printf 'ok    %s\n' "$1"; }
 fail() { printf 'FAIL  %s\n' "$1"; failures=$((failures + 1)); }
@@ -34,7 +41,7 @@ fresh_home() { # $1 = name; prints the new HOME
 run_in() { # $1 = HOME; rest = command (a clean environment)
   h="$1"; shift
   env -i PATH="$PATH" HOME="$h" TMPDIR="$h/tmp" TERM=dumb LANG=C ORRERY_RETRY_SLEEP=0 \
-    ORRERY_NO_OPEN=1 PORT=18999 AGENTSTACK_PORT=18998 "$@"
+    ORRERY_NO_OPEN=1 PORT=18999 AGENTSTACK_PORT=18998 ORRERY_COCKPIT_TMUX_SOCKET="$TEST_SOCK" "$@"
 }
 
 # ---------------------------------------------------------------- remote match
@@ -191,8 +198,21 @@ stub_cockpit() { # $1 = HOME
   git clone --quiet --branch "$BRANCH" "$COCKPIT_URL" "$1/orrery"
   cat >"$1/orrery/scripts/start-cockpit.sh" <<'EOF'
 #!/bin/sh
-echo "stub start-cockpit $*"
-exit 0
+# Stub: --check succeeds; a start serves /telemetry/health like the real
+# backend (root and commit fixed at start) until it is stopped.
+case "${1:-}" in --check) echo "stub start-cockpit --check"; exit 0 ;; esac
+root="$(cd "$(dirname "$0")/.." && pwd -P)"
+commit="$(git -C "$root" rev-parse HEAD)"
+exec python3 - "$PORT" "$root" "$commit" <<'PY'
+import http.server, json, sys
+port, root, commit = int(sys.argv[1]), sys.argv[2], sys.argv[3]
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = json.dumps({"backend": "ok", "root": root, "commit": commit}).encode()
+        self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(body)
+    def log_message(self, *a): pass
+http.server.HTTPServer(("127.0.0.1", port), H).serve_forever()
+PY
 EOF
   cat >"$1/orrery/scripts/update.sh" <<'EOF'
 #!/bin/sh
@@ -239,13 +259,68 @@ pty_run() { # rest = command; answers yes twice through a pseudo-terminal
     (sleep 3; printf 'yes\n'; sleep 3; printf 'yes\n'; sleep 3) | script -q /dev/null sh -c "$*"
   fi
 }
-out="$(pty_run env -i PATH="$PATH" HOME="$H" TMPDIR="$H/tmp" TERM=dumb ORRERY_RETRY_SLEEP=0 ORRERY_NO_OPEN=1 PORT=18999 AGENTSTACK_PORT=18998 \
+out="$(pty_run env -i PATH="$PATH" HOME="$H" TMPDIR="$H/tmp" TERM=dumb ORRERY_RETRY_SLEEP=0 ORRERY_NO_OPEN=1 PORT=18999 AGENTSTACK_PORT=18998 ORRERY_COCKPIT_TMUX_SOCKET="$TEST_SOCK" \
   ORRERY_DIR="$H/orrery" ORRERY_REPO_URL="$COCKPIT_URL" ORRERY_REF="$BRANCH" ORRERY_TELEMETRY_URL="$STUBTEL_URL" \
   AGENTSTACK_PYTHON="$(command -v python3)" STUB_UPDATE_EXIT=1 bash "$H/orrery/scripts/setup.sh" 2>&1 | tr -d '\r')"
+env -u TMUX tmux -L "$TEST_SOCK" kill-server 2>/dev/null
 check "update-failed: offered to start what is there" sh -c 'printf "%s" "$1" | grep -q "Start the cockpit with the versions you have now"' _ "$out"
 check "update-failed: not ready" sh -c '! printf "%s" "$1" | grep -q "is ready"' _ "$out"
 check "update-failed: says the update did not finish" sh -c 'printf "%s" "$1" | grep -q "update did not finish"' _ "$out"
 check "update-failed: first record kept" test -s "$H/.orrery-install/baseline"
+
+# A fresh interactive run asks one thing only: yes to the plan. The project
+# folder is the default unless --project-key / ORRERY_PROJECT_KEY says otherwise.
+H="$(fresh_home one-question)"
+stub_cockpit "$H"
+pty_yes_once() {
+  if script --version >/dev/null 2>&1; then
+    (sleep 3; printf 'yes\n'; sleep 4) | script -qec "$*" /dev/null
+  else
+    (sleep 3; printf 'yes\n'; sleep 4) | script -q /dev/null sh -c "$*"
+  fi
+}
+out="$(pty_yes_once env -i PATH="$PATH" HOME="$H" TMPDIR="$H/tmp" TERM=dumb ORRERY_RETRY_SLEEP=0 ORRERY_NO_OPEN=1 PORT=18999 AGENTSTACK_PORT=18998 ORRERY_COCKPIT_TMUX_SOCKET="$TEST_SOCK" \
+  ORRERY_DIR="$H/orrery" ORRERY_REPO_URL="$COCKPIT_URL" ORRERY_REF="$BRANCH" ORRERY_TELEMETRY_URL="$STUBTEL_URL" \
+  AGENTSTACK_PYTHON="$(command -v python3)" bash "$H/orrery/scripts/setup.sh" --no-start 2>&1 | tr -d '\r')"
+env -u TMUX tmux -L "$TEST_SOCK" kill-server 2>/dev/null
+check "one question: no folder question" sh -c '! printf "%s" "$1" | grep -q "Folder the agents will work in"' _ "$out"
+check "one question: the default folder is used" test -d "$H/orrery-work"
+check "one question: the plan says how to choose another folder" sh -c 'printf "%s" "$1" | grep -q -- "--project-key"' _ "$out"
+check "one question: ready after a single yes" sh -c 'printf "%s" "$1" | grep -q "is ready"' _ "$out"
+H="$(fresh_home project-key-option)"
+stub_cockpit "$H"
+setup_in "$H" bash "$H/orrery/scripts/setup.sh" --yes --no-start --project-key "~/elsewhere" >/dev/null 2>&1
+check "--project-key: that folder is used" test -d "$H/elsewhere"
+
+# The cockpit starts in the background (its own tmux server) and the window
+# comes back; a later update restarts the cockpit setup started itself.
+SOCK="${TEST_SOCK}-bg"
+H="$(fresh_home background)"
+stub_cockpit "$H"
+default_before="$(env -u TMUX tmux list-sessions -F '#{session_name}' 2>/dev/null | sort)"
+start_ts=$(date +%s)
+out="$(setup_in "$H" PORT=18997 ORRERY_COCKPIT_TMUX_SOCKET="$SOCK" bash "$H/orrery/scripts/setup.sh" --yes 2>&1)"; status=$?
+check "background: setup returns (exit 0)" test "$status" -eq 0
+check "background: returns promptly" test $(( $(date +%s) - start_ts )) -lt 60
+check "background: the cockpit answers after setup returned" sh -c 'curl -fsS --max-time 2 http://127.0.0.1:18997/telemetry/health >/dev/null'
+check "background: in its own tmux server" tmux -L "$SOCK" has-session
+check "background: the default tmux server (the agents') is untouched" \
+  test "$default_before" = "$(env -u TMUX tmux list-sessions -F '#{session_name}' 2>/dev/null | sort)"
+check "background: says how to stop it" sh -c 'printf "%s" "$1" | grep -q "kill-server"' _ "$out"
+check "background: says the window is free" sh -c 'printf "%s" "$1" | grep -q "this window is free"' _ "$out"
+git -C "$H/orrery" -c user.name=t -c user.email=t@t commit --quiet --allow-empty -m "newer"
+out="$(setup_in "$H" PORT=18997 ORRERY_COCKPIT_TMUX_SOCKET="$SOCK" bash "$H/orrery/scripts/setup.sh" --yes 2>&1)"
+check "background: an older cockpit it started is restarted" sh -c 'printf "%s" "$1" | grep -q "restarted the cockpit"' _ "$out"
+check "background: now runs the new commit" sh -c 'curl -fsS --max-time 2 http://127.0.0.1:18997/telemetry/health | grep -q "$1"' _ "$(git -C "$H/orrery" rev-parse HEAD)"
+tmux -L "$SOCK" kill-server 2>/dev/null
+# A cockpit it did not start (not in its tmux server) is never stopped.
+H2="$(fresh_home foreign-cockpit)"
+stub_cockpit "$H2"
+(cd "$H2" && env PORT=18996 "$H/orrery/scripts/start-cockpit.sh" >/dev/null 2>&1 &) ; sleep 2
+out="$(setup_in "$H2" PORT=18996 ORRERY_COCKPIT_TMUX_SOCKET="$SOCK" bash "$H2/orrery/scripts/setup.sh" --yes 2>&1)"
+check "foreign cockpit: not stopped" sh -c 'curl -fsS --max-time 2 http://127.0.0.1:18996/telemetry/health >/dev/null'
+check "foreign cockpit: says a restart is needed" sh -c 'printf "%s" "$1" | grep -q "not this version"' _ "$out"
+pkill -f "$H2" 2>/dev/null
 
 # An unfinished Mail copy: never a command that deletes anything.
 H="$(fresh_home mail-incomplete)"

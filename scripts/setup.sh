@@ -67,7 +67,7 @@ work, then start the cockpit and print its URL. Shows the plan and asks once
 
 Options:
   --project-key PATH  folder the agents work in (first install; default
-                      ~/orrery-work, created if missing)
+                      ~/orrery-work, created if missing; nothing asks for it)
   -y, --yes           do not ask; accept the plan (you have read it here)
   --ask-each          also show orrery-telemetry's installer previews and let
                       it ask before each of its four changes
@@ -514,15 +514,12 @@ elif [ -n "${AGENTSTACK_PROJECT_KEY:-}" ]; then
 elif [ -n "$saved_key" ]; then
   project_key="$saved_key"
 fi
+# No question here: the plan is the one thing to answer. The default is
+# shown in the plan with the option that changes it.
+project_key_default=false
 if [ -z "$project_key" ]; then
-  if [ "$assume_yes" = true ] || ! have_tty || [ "$read_only" = true ]; then
-    project_key="$DEFAULT_PROJECT"
-  else
-    printf '\n  Folder the agents will work in [%s]: ' "$DEFAULT_PROJECT"
-    answer=""
-    read -r answer || answer=""
-    project_key="$(expand_path "${answer:-$DEFAULT_PROJECT}")"
-  fi
+  project_key="$DEFAULT_PROJECT"
+  project_key_default=true
 fi
 ok "project folder: ${project_key}"
 
@@ -635,7 +632,10 @@ if [ -n "$detached_fix" ]; then
 $detached_fix
 EOF
 fi
-if [ ! -d "$project_key" ]; then say "    - create the project folder ${project_key}"; fi
+if [ ! -d "$project_key" ]; then say "    - create the project folder ${project_key} (where the agents work)"; fi
+if [ "$project_key_default" = true ]; then
+  say "      (another folder: add --project-key PATH, e.g.  ... | bash -s -- --project-key ~/my-project)"
+fi
 if [ -z "$COCKPIT_ROOT" ]; then say "    - download the cockpit to ${COCKPIT_PLANNED}"; fi
 case "$mode" in
   fresh | reinstall)
@@ -1026,16 +1026,81 @@ if [ "$checks_ok" = true ]; then
 fi
 
 # ================================================================ 7. start
+# The cockpit runs in the background, in a tmux server of its own, so this
+# window comes back for what comes next (installing Claude Code, logging in).
+# Its own server keeps it out of the agents' tmux server, which the dashboard
+# and the cockpit list as agents. A cockpit that this setup started there can
+# be restarted by it; any other running cockpit is never stopped.
 step "Start"
 url="http://127.0.0.1:${COCKPIT_PORT}/cockpit.html"
+SOCK="${ORRERY_COCKPIT_TMUX_SOCKET:-orrery-cockpit}"
+cockpit_log="${STATE_DIR}/cockpit.log"
 cockpit_head_full="$(git -C "$COCKPIT_ROOT" rev-parse HEAD)"
+root_real="$(cd "$COCKPIT_ROOT" && pwd -P)"
 running="$(backend_state)"
-restart_needed=false
+ours=false
+if env -u TMUX -u TMUX_PANE tmux -L "$SOCK" has-session 2>/dev/null; then ours=true; fi
 case "$running" in
-  none) ;;
-  "$(cd "$COCKPIT_ROOT" && pwd -P)@${cockpit_head_full}" | "${COCKPIT_ROOT}@${cockpit_head_full}") ;;
-  *) restart_needed=true ;;
+  none) action=start ;;
+  "${root_real}@${cockpit_head_full}" | "${COCKPIT_ROOT}@${cockpit_head_full}") action=current ;;
+  "${root_real}@"* | "${COCKPIT_ROOT}@"* | unknown*)
+    if [ "$ours" = true ]; then action=restart; else action=foreign; fi ;;
+  *) action=foreign ;;
 esac
+if [ "$no_start" = true ] && [ "$action" != current ]; then action=none; fi
+
+stop_ours() {
+  env -u TMUX -u TMUX_PANE tmux -L "$SOCK" kill-server 2>/dev/null || true
+  i=0
+  while [ "$i" -lt 20 ] && [ "$(backend_state)" != none ]; do i=$((i + 1)); sleep 0.5; done
+}
+start_ours() {
+  env -u TMUX -u TMUX_PANE tmux -L "$SOCK" kill-server 2>/dev/null || true
+  printf '\n==== %s start %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$COCKPIT_ROOT" >>"$cockpit_log"
+  inner="env -u TMUX -u TMUX_PANE ORRERY_NO_UPDATE_CHECK=1 PORT=$(printf '%q' "$COCKPIT_PORT") $(printf '%q' "${COCKPIT_ROOT}/scripts/start-cockpit.sh") 2>&1 | tee -a $(printf '%q' "$cockpit_log")"
+  env -u TMUX -u TMUX_PANE tmux -L "$SOCK" new-session -d -s cockpit -x 160 -y 48 "$inner" \
+    || stop "Could not start tmux for the cockpit." "Start it yourself in a window of its own: ${COCKPIT_ROOT}/scripts/start-cockpit.sh"
+  i=0
+  while [ "$i" -lt 90 ]; do
+    i=$((i + 1))
+    if [ "$(backend_state)" != none ]; then return 0; fi
+    if ! env -u TMUX -u TMUX_PANE tmux -L "$SOCK" has-session 2>/dev/null; then break; fi
+    sleep 0.5
+  done
+  say ""
+  say "  --- last lines of ${cockpit_log} ---"
+  tail -n 20 "$cockpit_log" | sed 's/^/  | /'
+  env -u TMUX -u TMUX_PANE tmux -L "$SOCK" kill-server 2>/dev/null || true
+  stop "The cockpit did not start (see above). Fix what it reports, then run the same command again."
+}
+open_browser() {
+  [ "${ORRERY_NO_OPEN:-0}" != 1 ] || return 0
+  case "$os" in
+    mac) open "$url" >/dev/null 2>&1 || true ;;
+    wsl) { if command -v wslview >/dev/null 2>&1; then wslview "$url"; else explorer.exe "$url"; fi; } >/dev/null 2>&1 || true ;;
+    *) if command -v xdg-open >/dev/null 2>&1; then xdg-open "$url" >/dev/null 2>&1 || true; fi ;;
+  esac
+}
+
+case "$action" in
+  start)
+    say "  starting the cockpit in the background ..."
+    start_ours
+    ok "cockpit running: ${url}"
+    open_browser
+    ;;
+  restart)
+    say "  the cockpit this setup started earlier runs an older version (${running}); restarting it ..."
+    stop_ours
+    start_ours
+    ok "restarted the cockpit: ${url}"
+    open_browser
+    ;;
+  current) ok "the cockpit is already running this version: ${url}" ;;
+  foreign) ;;
+  none) ;;
+esac
+step_done "Start"
 
 say ""
 say "=============================================================="
@@ -1046,78 +1111,60 @@ elif [ "$checks_ok" = true ]; then
   if [ -n "$agent_cli" ]; then
     say "  ORRERY is ready."
   else
-    say "  ORRERY's base is ready. To run agents, install Claude Code or Codex CLI"
-    say "  and log in (claude, then /login  |  codex login), then follow step 2 below."
+    say "  ORRERY's base is ready. Agents need Claude Code or Codex CLI (next, below)."
   fi
 else
   say "  Installed, but not every check passed (WARN above). If you need help,"
   say "  send this file: ${LOG}"
 fi
 say ""
+case "$action" in
+  start | restart | current)
+    say "  The cockpit runs in the background; this window is free."
+    say "    Open:          ${url}"
+    say "    Its output:    tmux -L ${SOCK} attach      (leave it with Ctrl-b, then d)"
+    say "    Stop it:       tmux -L ${SOCK} kill-server"
+    say "    Start again:   the same command as before (it also updates)"
+    ;;
+  foreign)
+    say "  A cockpit is already running on port ${COCKPIT_PORT}, but not this version"
+    say "  (running: ${running})."
+    say "  This setup did not start it, so it was not stopped. In its window press"
+    say "  Ctrl-C, then run the same command again. Until then the browser shows"
+    say "  the old cockpit."
+    ;;
+  none)
+    say "  The cockpit was not started (--no-start). Start it with the same command"
+    say "  without --no-start, or in a window of its own:"
+    say "    ${COCKPIT_ROOT}/scripts/start-cockpit.sh"
+    ;;
+esac
+say ""
+if [ -z "$agent_cli" ]; then
+  say "  Next, in this window: install Claude Code and log in"
+  say "    curl -fsSL https://claude.ai/install.sh | bash"
+  say "    claude          (then type /login)"
+  say "  (or Codex CLI: npm install -g @openai/codex@latest, then codex login)"
+  say ""
+fi
 say "  See it work:"
 say "    1. In the browser, the cockpit shows your project: $(basename "$project_key")"
 say "    2. NEW AGENT starts a small agent (or in a new window:"
 say "       ~/.agentstack/bin/agent-start ${project_key})"
 say "    3. The agent appears in the list and its reply shows up"
-say "  After closing this window or restarting the computer:"
-say "    ~/.agentstack/bin/agentstack-doctor"
-say "    (if stopped) ~/.agentstack/dashboard/agentctl.sh start; ~/.agentstack/bin/agentstack-mailctl start"
-say "    ${COCKPIT_ROOT}/scripts/start-cockpit.sh"
+say "  After restarting the computer: ~/.agentstack/bin/agentstack-doctor, then the"
+say "  same command again (it starts what is stopped)."
 if [ "$mode" = fresh ]; then
   say "  To remove this new install: ${tel_root}/scripts/uninstall.sh"
   say "  (it keeps the Mail database unless --purge-data; the 2 checkouts, uv and Python stay)"
+  say "  and stop the cockpit: tmux -L ${SOCK} kill-server"
+fi
+if [ "$os" = wsl ]; then
+  say "  If the Windows browser shows nothing: in PowerShell run"
+  say "    curl http://127.0.0.1:${COCKPIT_PORT}/telemetry/health   (localhost forwarding)"
+  say "  and in Ubuntu run  explorer.exe .   (opening Windows apps from Ubuntu)."
 fi
 say "  Log: ${LOG}"
 say "=============================================================="
-
-if [ "$restart_needed" = true ]; then
-  say ""
-  say "  A cockpit is already running on port ${COCKPIT_PORT}, but not this version"
-  say "  (running: ${running})."
-  say "  It was not stopped. In its window press Ctrl-C, then run:"
-  say "    ${COCKPIT_ROOT}/scripts/start-cockpit.sh"
-  say "  Until then the browser shows the old cockpit."
-  exit 0
-fi
-if [ "$running" != none ]; then
-  say ""
-  say "  The cockpit is already running this version: ${url}"
-  exit 0
-fi
-if [ "$no_start" = true ]; then
-  say ""
-  say "Start the cockpit when you want with:"
-  say "  ${COCKPIT_ROOT}/scripts/start-cockpit.sh"
-  exit 0
-fi
-
-# Open the browser once the cockpit answers (never blocks the start).
-if [ "${ORRERY_NO_OPEN:-0}" != 1 ]; then
-  (
-    i=0
-    while [ "$i" -lt 60 ]; do
-      i=$((i + 1))
-      sleep 1
-      if curl -fsS -o /dev/null --max-time 1 "http://127.0.0.1:${COCKPIT_PORT}/telemetry/health" 2>/dev/null; then
-        case "$os" in
-          mac) open "$url" ;;
-          wsl) if command -v wslview >/dev/null 2>&1; then wslview "$url"; else explorer.exe "$url"; fi ;;
-          *) if command -v xdg-open >/dev/null 2>&1; then xdg-open "$url"; fi ;;
-        esac
-        exit 0
-      fi
-    done
-  ) </dev/null >/dev/null 2>&1 &
-fi
-say ""
-say "Starting the cockpit in this window. It keeps running here: leave the window"
-say "open; Ctrl-C (or closing the window) stops it. If it reports NG, follow its Fix."
-if [ "$os" = wsl ]; then
-  say "If the Windows browser shows nothing: in PowerShell run"
-  say "  curl http://127.0.0.1:${COCKPIT_PORT}/telemetry/health   (localhost forwarding)"
-  say "and in Ubuntu run  explorer.exe .   (opening Windows apps from Ubuntu)."
-fi
-if [ -n "$LOCK" ]; then rm -rf "$LOCK"; fi
-trap - EXIT
-export ORRERY_NO_UPDATE_CHECK=1
-exec "${COCKPIT_ROOT}/scripts/start-cockpit.sh"
+if [ "$update_failed" = true ] || [ "$checks_ok" != true ]; then exit 1; fi
+exit 0
