@@ -1160,6 +1160,22 @@ root_real="$(cd "$COCKPIT_ROOT" && pwd -P)"
 ctmux() { env -u TMUX -u TMUX_PANE tmux -L "$SOCK" "$@"; }
 health_boot() { http_get "http://127.0.0.1:${COCKPIT_PORT}/telemetry/health" | json_str boot; }
 owner_value() { sed -n "s/^$1=//p" "$OWNER" 2>/dev/null | head -n 1; }
+# A tmux session's identity: names are reused, so it is the session's id and
+# creation time plus a random marker this setup sets on the session it creates
+# (a session someone else made under the same name has no such marker).
+session_identity() { # $1 = socket, $2 = session name; empty when there is none
+  base="$(env -u TMUX -u TMUX_PANE tmux -L "$1" list-sessions -F '#{session_name} #{session_id}@#{session_created}' 2>/dev/null \
+    | awk -v name="$2" '$1 == name { print $2; exit }')"
+  [ -n "$base" ] || return 0
+  marker="$(env -u TMUX -u TMUX_PANE tmux -L "$1" show-options -v -t "=$2:" @orrery_cockpit 2>/dev/null || true)"
+  printf '%s@%s' "$base" "${marker:-none}"
+}
+is_recorded_session() { # $1 = socket, $2 = session name: the very session this setup recorded
+  [ "$(owner_value socket)" = "$1" ] && [ "$(owner_value session)" = "$2" ] || return 1
+  recorded="$(owner_value session_identity)"
+  case "$recorded" in "" | *@none) return 1 ;; esac
+  [ "$(session_identity "$1" "$2")" = "$recorded" ]
+}
 # The tmux server and session this setup recorded for the cockpit it started.
 OWNER_SOCK=""
 OWNER_SESSION=""
@@ -1170,13 +1186,13 @@ is_ours() { # the running cockpit is the one this setup started on this port
   OWNER_SESSION="$(owner_value session)"
   [ -n "$boot_now" ] && [ "$boot_now" = "$(owner_value boot)" ] \
     && [ -n "$OWNER_SOCK" ] && [ "$OWNER_SESSION" = "$SESSION" ] \
-    && env -u TMUX -u TMUX_PANE tmux -L "$OWNER_SOCK" has-session -t "=$OWNER_SESSION" 2>/dev/null
+    && is_recorded_session "$OWNER_SOCK" "$OWNER_SESSION"
 }
 # Before anything is stopped: the session name in the tmux server to start in
 # must be free, or be the one this setup recorded (a leftover of its own).
 session_free_or_ours() {
   ctmux has-session -t "=$SESSION" 2>/dev/null || return 0
-  [ "$(owner_value socket)" = "$SOCK" ] && [ "$(owner_value session)" = "$SESSION" ] && return 0
+  is_recorded_session "$SOCK" "$SESSION" && return 0
   stop "tmux server '${SOCK}' already has a session '${SESSION}' that was not started by this setup;" \
     "nothing was stopped or started. Use another server (ORRERY_COCKPIT_TMUX_SOCKET=...)" \
     "or end that session yourself, then run the same command again."
@@ -1221,6 +1237,7 @@ start_ours() {
   inner="env -u TMUX -u TMUX_PANE ORRERY_NO_UPDATE_CHECK=1 PORT=$(printf '%q' "$COCKPIT_PORT") $(printf '%q' "${COCKPIT_ROOT}/scripts/start-cockpit.sh") 2>&1 | tee -a $(printf '%q' "$cockpit_log")"
   ctmux new-session -d -s "$SESSION" -x 160 -y 48 "$inner" \
     || stop "Could not start tmux for the cockpit." "Start it yourself in a window of its own: ${COCKPIT_ROOT}/scripts/start-cockpit.sh"
+  ctmux set-option -t "=${SESSION}:" @orrery_cockpit "$(date +%s)-$$-${RANDOM}${RANDOM}" 2>/dev/null || true
   i=0
   while [ "$i" -lt 90 ]; do
     i=$((i + 1))
@@ -1243,8 +1260,8 @@ start_ours() {
       "expected ${root_real}@${cockpit_head_full}). Nothing was stopped." \
       "See ${cockpit_log}, and what else uses port ${COCKPIT_PORT}."
   fi
-  printf 'boot=%s\nroot=%s\ncommit=%s\nsocket=%s\nsession=%s\n' "$(health_boot)" "$root_real" \
-    "$cockpit_head_full" "$SOCK" "$SESSION" >"$OWNER"
+  printf 'boot=%s\nroot=%s\ncommit=%s\nsocket=%s\nsession=%s\nsession_identity=%s\n' "$(health_boot)" "$root_real" \
+    "$cockpit_head_full" "$SOCK" "$SESSION" "$(session_identity "$SOCK" "$SESSION")" >"$OWNER"
 }
 open_browser() {
   [ "${ORRERY_NO_OPEN:-0}" != 1 ] || return 0

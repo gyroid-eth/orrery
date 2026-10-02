@@ -557,6 +557,19 @@ check "current elsewhere: the stop step names the server it runs in" sh -c 'prin
 check "current elsewhere: not the server of this run" sh -c '! printf "%s" "$1" | grep -q "tmux -L $2 "' _ "$out" "$SOCK2"
 env -u TMUX tmux -L "$SOCK1" kill-server 2>/dev/null
 
+# Stopped with the shown step, the name reused by another session in the same
+# tmux server: the old record proves nothing about that session; never killed.
+HI="$(fresh_home own-reuse)"; stub_cockpit "$HI"
+setup_in "$HI" PORT=18987 ORRERY_COCKPIT_TMUX_SOCKET="$SOCK1" bash "$HI/orrery/scripts/setup.sh" --yes >/dev/null 2>&1
+env -u TMUX tmux -L "$SOCK1" kill-session -t =cockpit-18987
+# (no pause: the new session may get the same id and creation second)
+env -u TMUX tmux -L "$SOCK1" new-session -d -s cockpit-18987 "sleep 600"
+out="$(setup_in "$HI" PORT=18987 ORRERY_COCKPIT_TMUX_SOCKET="$SOCK1" bash "$HI/orrery/scripts/setup.sh" --yes 2>&1)"; status=$?
+check "name reused: the other session is untouched" sh -c 'env -u TMUX tmux -L "$1" list-panes -t =cockpit-18987 -F "#{pane_current_command}" | grep -q sleep' _ "$SOCK1"
+check "name reused: the run stops" test "$status" -ne 0
+check "name reused: says the session is not this setup's" sh -c 'printf "%s" "$1" | grep -q "was not started by this setup"' _ "$out"
+env -u TMUX tmux -L "$SOCK1" kill-server 2>/dev/null
+
 # P2-2: started, but the answer is not this checkout: not ready.
 HD="$(fresh_home wrong-root)"; stub_cockpit "$HD"
 out="$(setup_in "$HD" PORT=18991 ORRERY_COCKPIT_TMUX_SOCKET="$SOCKX" STUB_HEALTH_ROOT=/somewhere/else bash "$HD/orrery/scripts/setup.sh" --yes 2>&1)"; status=$?
