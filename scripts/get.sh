@@ -220,6 +220,7 @@ main() {
     [ ! -e "$target" ] || stop "${target} appeared while downloading (another install running?); nothing was changed."
     mv "${tmp_root}/orrery" "$target"
     cockpit="$target"
+    export ORRERY_BOOTSTRAP_DID="downloaded the cockpit to ${target}"
     say "  ok    cockpit: ${cockpit} at $(describe "$cockpit")"
   fi
 
@@ -237,6 +238,7 @@ main() {
     git -C "$cockpit" show FETCH_HEAD:scripts/setup.sh >"$setup" 2>/dev/null \
       || stop "The remote of ${cockpit} has no scripts/setup.sh; nothing was changed."
     chmod +x "$setup"
+    export ORRERY_BOOTSTRAP_DID="fetched the newest version into ${cockpit}/.git (its files are unchanged)"
     say "  ok    setup: from $(origin_of "$cockpit") at $(git -C "$cockpit" log -1 --format='%h (%cd)' --date=short FETCH_HEAD)"
     say "        (this checkout is older than the setup; the setup updates it)"
     export ORRERY_TEMP_SETUP=1

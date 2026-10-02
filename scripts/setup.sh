@@ -262,6 +262,20 @@ after_failure() {
   say "  Steps: ${RUN_DIR}/steps    Log: ${LOG}"
 }
 
+# What get.sh did before handing over (a new cockpit checkout, or git data
+# fetched into an old one). It stays when the setup stops, so say so.
+BOOTSTRAP_DID="${ORRERY_BOOTSTRAP_DID:-}"
+LOCK=""
+on_exit() {
+  status=$?
+  if [ -n "$LOCK" ] && [ -f "${LOCK}/pid" ] && [ "$(cat "${LOCK}/pid" 2>/dev/null)" = "$$" ]; then rm -rf "$LOCK"; fi
+  if [ "$status" -ne 0 ] && [ "$changes_started" != true ] && [ -n "$BOOTSTRAP_DID" ]; then
+    printf '\n  note  The setup changed nothing, but before it get.sh %s;\n' "$BOOTSTRAP_DID"
+    printf '        that stays (the same command uses it next time).\n'
+  fi
+}
+trap on_exit EXIT
+
 # ---------------------------------------------------------------- questions
 ask_yes() { # $1 = question; continues only on "yes"
   if [ "$assume_yes" = true ]; then return 0; fi
@@ -407,8 +421,8 @@ step_done "Prerequisites"
 step "What is installed"
 
 # Only one setup at a time for this user.
-LOCK="${STATE_DIR}/lock"
 if [ "$read_only" != true ]; then
+  LOCK="${STATE_DIR}/lock"
   mkdir -p "$STATE_DIR"
   if ! mkdir "$LOCK" 2>/dev/null; then
     other="$(cat "${LOCK}/pid" 2>/dev/null || true)"
@@ -420,7 +434,6 @@ if [ "$read_only" != true ]; then
     mkdir "$LOCK" || stop "Could not take the setup lock ${LOCK}."
   fi
   printf '%s\n' "$$" >"${LOCK}/pid"
-  trap 'rm -rf "$LOCK"' EXIT
 fi
 
 if [ -n "$COCKPIT_ROOT" ]; then
@@ -603,6 +616,7 @@ step_done "What is installed"
 if [ "$read_only" != true ]; then
   open_run
   snapshot >"${RUN_DIR}/start"
+  if [ -n "$BOOTSTRAP_DID" ]; then printf 'before the setup\tget.sh %s\n' "$BOOTSTRAP_DID" >>"${RUN_DIR}/start"; fi
   if [ ! -s "$BASELINE" ]; then
     { printf 'started\t%s\n' "$(date '+%Y-%m-%d %H:%M:%S')"; cat "${RUN_DIR}/start"; } >"$BASELINE"
   fi
@@ -672,12 +686,29 @@ if [ "$dry_run" = true ]; then
     preview_root="${preview_tmp}/t"
   fi
   if [ "$mode" = update ]; then say "(this is the version you have now; the update may change it)"; fi
-  (cd "$preview_root" && ./scripts/install.sh --dry-run --project-key "$project_key") || true
+  # The installer asks codex for its version, and codex writes into its
+  # CODEX_HOME when it starts. Give that probe a throwaway CODEX_HOME through
+  # a wrapper first on PATH; everything else still sees your real settings.
+  probe_dir="$(mktemp -d "${TMPDIR:-/tmp}/orrery-probe.XXXXXX")"
+  real_codex="$(command -v codex 2>/dev/null || true)"
+  mkdir -p "${probe_dir}/bin" "${probe_dir}/codex-home"
+  if [ -n "$real_codex" ]; then
+    printf '#!/bin/sh\nCODEX_HOME=%s exec %s "$@"\n' "'${probe_dir}/codex-home'" "'${real_codex}'" >"${probe_dir}/bin/codex"
+    chmod +x "${probe_dir}/bin/codex"
+  fi
+  preview_status=0
+  (cd "$preview_root" && PATH="${probe_dir}/bin:${PATH}" ./scripts/install.sh --dry-run --project-key "$project_key") \
+    || preview_status=$?
+  rm -rf "$probe_dir"
   if [ -n "$preview_tmp" ]; then rm -rf "$preview_tmp"; fi
+  if [ "$preview_status" -ne 0 ]; then
+    stop "The installer's preview failed (exit ${preview_status}, see above). Nothing was changed."
+  fi
   if [ "$mode" = update ]; then
     say ""
     say "Dry run: what the update would fetch"
-    "${COCKPIT_ROOT}/scripts/update.sh" --dry-run || true
+    "${COCKPIT_ROOT}/scripts/update.sh" --dry-run \
+      || stop "The update's preview failed (see above). Nothing was changed."
   fi
   say ""
   say "Dry run finished: nothing was changed."
@@ -753,21 +784,17 @@ run_installer() {
   )
 }
 
-# The installer's own failure, with a known recovery where there is one.
+# The installer's own failure. One known case gets its own explanation; this
+# setup never offers to delete anything of ORRERY Mail.
 installer_failed_hint() {
-  # A Mail download that failed halfway leaves an incomplete candidate venv,
-  # and the installer then refuses to run again until it is removed.
   bad_venv="$(sed -n 's/^error: ORRERY Mail candidate venv exists but is incomplete: //p' "$LOG" | tail -n 1)"
-  case "$bad_venv" in
-    "${AGENTSTACK_DIR}/mail-service/candidates/"*/venv)
-      if [ -z "$(http_get "${mail_url:-http://127.0.0.1:18765/mcp}")" ] || ! pgrep -f "$bad_venv" >/dev/null 2>&1; then
-        stop "orrery-telemetry's installer stopped: an earlier ORRERY Mail download was cut off and" \
-          "left an unfinished copy, which the installer will not reuse. Nothing runs from it." \
-          "Fix:  rm -rf \"${bad_venv}\"" \
-          "then run the same command again (with a working network)."
-      fi
-      ;;
-  esac
+  if [ -n "$bad_venv" ]; then
+    stop "orrery-telemetry's installer stopped: it found an unfinished copy of ORRERY Mail" \
+      "(${bad_venv})," \
+      "probably from a download that was cut off, and it does not continue past it." \
+      "This setup does not remove it: it cannot tell for sure that nothing uses it." \
+      "Ask for help with this log: ${LOG}"
+  fi
   stop "orrery-telemetry's installer stopped (see above)." \
     "Fix what it reports, then run the same command again."
 }
@@ -913,23 +940,28 @@ if [ -n "$install_warnings" ]; then
 fi
 if [ "${harmless_count:-0}" -gt 0 ]; then note "install: ${harmless_count} known harmless warning(s) (folders made on first use)"; fi
 
-# doctor: read-only.
+# doctor: read-only. Its exit status decides; the lines only explain. It
+# reports problems as "missing:" (and some as "warn:") with exit 1, and any
+# other non-zero exit counts as a problem too.
 if [ -x "${bin_dir}/agentstack-doctor" ]; then
-  doctor_out="$("${bin_dir}/agentstack-doctor" 2>&1 || true)"
-  printf '\n$ agentstack-doctor\n%s\n' "$doctor_out" >>"$LOG"
-  doctor_fail="$(printf '%s\n' "$doctor_out" | grep -c '^\(fail\|error\|FAIL\|ERROR\):' || true)"
-  doctor_warn="$(printf '%s\n' "$doctor_out" | grep -c '^warn:' || true)"
-  if [ "${doctor_fail:-0}" -gt 0 ]; then
+  doctor_status=0
+  doctor_out="$("${bin_dir}/agentstack-doctor" 2>&1)" || doctor_status=$?
+  printf '\n$ agentstack-doctor   (exit %s)\n%s\n' "$doctor_status" "$doctor_out" >>"$LOG"
+  doctor_lines="$(printf '%s\n' "$doctor_out" | grep -v '^ok:' | grep -v '^ *$' || true)"
+  if [ "$doctor_status" -ne 0 ]; then
     checks_ok=false
-    warn_line "doctor: ${doctor_fail} problem(s):"
-    printf '%s\n' "$doctor_out" | grep '^\(fail\|error\|FAIL\|ERROR\):' | sed 's/^/          /'
+    warn_line "doctor: exited ${doctor_status}; what it reported (all of it: ${bin_dir}/agentstack-doctor):"
+    if [ -n "$doctor_lines" ]; then
+      printf '%s\n' "$doctor_lines" | head -n 20 | sed 's/^/          /'
+    else
+      printf '          (no explanation printed; see %s)\n' "$LOG"
+    fi
   else
     ok "doctor: no problems"
-  fi
-  if [ "${doctor_warn:-0}" -gt 0 ]; then
-    note "doctor: ${doctor_warn} note(s) (warn:), not blocking:"
-    printf '%s\n' "$doctor_out" | grep '^warn:' | head -n 8 | sed 's/^/          /'
-    if [ "$doctor_warn" -gt 8 ]; then note "      ... all of them: ${bin_dir}/agentstack-doctor"; fi
+    if [ -n "$doctor_lines" ]; then
+      note "doctor: notes (it still exited 0):"
+      printf '%s\n' "$doctor_lines" | head -n 8 | sed 's/^/          /'
+    fi
   fi
 else
   checks_ok=false
@@ -959,7 +991,9 @@ else
 fi
 step_done "Checks"
 
-# A run that passes every check closes the first attempt's record.
+# A run that passes every check closes the first attempt's record. A run
+# whose update failed never does, even when what is there works.
+if [ "$update_failed" = true ]; then checks_ok=false; fi
 if [ "$checks_ok" = true ]; then
   mv "$BASELINE" "${RUN_DIR}/baseline" 2>/dev/null || true
 fi
@@ -978,7 +1012,10 @@ esac
 
 say ""
 say "=============================================================="
-if [ "$checks_ok" = true ]; then
+if [ "$update_failed" = true ]; then
+  say "  The update did not finish (see NG above). What runs now is the version"
+  say "  you had. Fix what the update reported, then run the same command again."
+elif [ "$checks_ok" = true ]; then
   if [ -n "$agent_cli" ]; then
     say "  ORRERY is ready."
   else
@@ -1053,7 +1090,7 @@ if [ "$os" = wsl ]; then
   say "  curl http://127.0.0.1:${COCKPIT_PORT}/telemetry/health   (localhost forwarding)"
   say "and in Ubuntu run  explorer.exe .   (opening Windows apps from Ubuntu)."
 fi
-rm -rf "$LOCK"
+if [ -n "$LOCK" ]; then rm -rf "$LOCK"; fi
 trap - EXIT
 export ORRERY_NO_UPDATE_CHECK=1
 exec "${COCKPIT_ROOT}/scripts/start-cockpit.sh"
