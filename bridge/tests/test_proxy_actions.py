@@ -20,6 +20,8 @@ import socket
 import sys
 from pathlib import Path
 
+import pytest
+
 from aiohttp import ClientSession, ClientTimeout, web
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -37,7 +39,7 @@ async def _start(app: web.Application) -> tuple[web.AppRunner, str]:
 
 
 def _relay(method: str, path: str, *, delay: float = 0.0, action_timeout: float = 2.0,
-           dashboard: bool = True, monkeypatch=None):
+           dashboard: bool = True, monkeypatch=None, answer: str = "json"):
     """Send one request through the real passthrough to a dashboard that takes
     `delay` seconds. Returns (status, body, what the dashboard received)."""
     received: list[tuple[str, str, dict]] = []
@@ -47,6 +49,17 @@ def _relay(method: str, path: str, *, delay: float = 0.0, action_timeout: float 
             body = await request.json() if request.method == "POST" else {}
             await asyncio.sleep(delay)
             received.append((request.method, request.path, body))
+            if answer == "close":      # took the action, then dropped the line
+                request.transport.close()
+                await asyncio.sleep(0.5)
+            if answer == "short":      # began the answer, then dropped the line
+                response = web.StreamResponse(headers={"Content-Type": "application/json"})
+                response.content_length = 100
+                await response.prepare(request)
+                await response.write(b'{"ok": tr')
+                request.transport.close()
+                await asyncio.sleep(0.5)
+                return response
             return web.json_response({"ok": True, "session": body.get("session")})
 
         upstream = web.Application()
@@ -86,13 +99,27 @@ def test_an_exit_slower_than_a_poll_is_answered(monkeypatch):
     assert received == [("POST", "/api/exit", {"session": "AquaFermi"})]
 
 
+UNKNOWN = "the action may still go through — check the agent before trying again"
+
+
 def test_an_exit_past_the_action_limit_may_still_go_through(monkeypatch):
-    status, body, _ = _relay("POST", "/api/exit", delay=1.0, action_timeout=0.3,
-                             monkeypatch=monkeypatch)
+    status, body, received = _relay("POST", "/api/exit", delay=1.0, action_timeout=0.3,
+                                    monkeypatch=monkeypatch)
     assert status == 504
-    assert body["ok"] is False
-    assert re.fullmatch(r"the dashboard did not answer within 0\.3 s; "
-                        r"the action may still go through", body["error"])
+    assert body == {"ok": False,
+                    "error": f"the dashboard did not answer within 0.3 s; {UNKNOWN}"}
+    # A timeout is not a cancel: the dashboard went on and acted.
+    assert received == [("POST", "/api/exit", {"session": "AquaFermi"})]
+
+
+@pytest.mark.parametrize("answer", ["close", "short"])
+def test_an_answer_lost_after_the_action_was_received_is_not_offline(monkeypatch, answer):
+    """Review of #11 (P2-1): the dashboard had the exit, then the connection
+    closed (or the answer was cut short). That is not "offline"."""
+    status, body, received = _relay("POST", "/api/exit", answer=answer, monkeypatch=monkeypatch)
+    assert status == 502
+    assert body == {"ok": False, "error": f"the dashboard's answer was lost; {UNKNOWN}"}
+    assert received == [("POST", "/api/exit", {"session": "AquaFermi"})]
 
 
 def test_an_exit_with_no_dashboard_is_offline(monkeypatch):

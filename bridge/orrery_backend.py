@@ -25,7 +25,14 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import quote, urlencode
 
-from aiohttp import ClientError, ClientSession, ClientTimeout, WSMsgType, web
+from aiohttp import (
+    ClientConnectorError,
+    ClientError,
+    ClientSession,
+    ClientTimeout,
+    WSMsgType,
+    web,
+)
 from control_server import (
     ControlConfig,
     TmuxControlBridge,
@@ -1510,6 +1517,9 @@ def cache_control_for(request: web.Request, response: Any) -> str:
 # An action gets longer, and when even that runs out the error says the action
 # may still go through instead of calling the dashboard offline.
 ACTION_PROXY_TIMEOUT = 60.0
+ACTION_RESULT_UNKNOWN = (
+    "the action may still go through — check the agent before trying again"
+)
 
 
 async def proxy_dashboard_passthrough(request: web.Request) -> web.Response:
@@ -1559,17 +1569,30 @@ async def proxy_dashboard_passthrough(request: web.Request) -> web.Response:
                     "ok": False,
                     "error": (
                         f"the dashboard did not answer within {ACTION_PROXY_TIMEOUT:g} s; "
-                        "the action may still go through"
+                        f"{ACTION_RESULT_UNKNOWN}"
                     ),
                 },
                 status=504,
             )
         return web.json_response({"error": "dashboard offline"}, status=502)
-    except ClientError:
+    except ClientConnectorError:
+        # Refused before anything was sent: the dashboard is not there.
         return web.json_response(
             {"ok": False, "error": "dashboard offline"} if action else {"error": "dashboard offline"},
             status=502,
         )
+    except ClientError:
+        if action:
+            # Connected and sent, then the answer was lost (closed, cut short):
+            # the dashboard may well have acted on it.
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error": f"the dashboard's answer was lost; {ACTION_RESULT_UNKNOWN}",
+                },
+                status=502,
+            )
+        return web.json_response({"error": "dashboard offline"}, status=502)
 
 
 # The cockpit has always posted its colour theme at the NETWORK iframe and
