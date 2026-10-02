@@ -4,6 +4,27 @@
 
 [Back to README](../../README.en.md) · [Next: Configuration](configuration.md)
 
+## Install or update with one line
+
+In a Mac terminal, or inside WSL2 Ubuntu on Windows, run this one line. It installs both orrery-telemetry and the cockpit, checks that they work (doctor, and a selftest that sends Mail both ways), then starts the cockpit and prints its URL. Where ORRERY is already (partly) installed, the same line updates it (telemetry only, an old version, an old checkout without setup.sh, a detached HEAD).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
+```
+
+- **What is trusted and what runs**: only GitHub's `gyroid-eth/orrery` and `gyroid-eth/orrery-telemetry` (a checkout whose origin is not exactly one of these is left alone, and the setup stops). What runs: `get.sh`, the cockpit's `scripts/setup.sh`, orrery-telemetry's `scripts/install.sh`, and uv's official installer only when uv is missing
+- **Look without changing anything**: `curl -fsSL …/get.sh | bash -s -- --check` (prerequisites and the plan), `… | bash -s -- --dry-run` (plus the installer's preview of the 4 changes). Neither writes to your home folder (what they download goes to a temporary folder that is removed)
+- **CI and scripts that use the exit code**: `curl | bash` can return 0 when the download fails, so save first: `curl -fsSL …/get.sh -o get.sh && bash get.sh --yes`
+- Prerequisites (git, tmux, curl, uv, Python 3.11+) are checked at once. Missing git / tmux / curl stop it with nothing changed and the line that installs them. uv and Python need no sudo, so they go into the plan (your shell profile is not changed)
+- Before changing anything it shows one plan; **type `yes` and Enter** once. Four things change: `~/.claude.json` (MCP), `~/.claude/settings.json` (hooks and permissions), `~/.codex/AGENTS.md` (a global block for all your Codex work), and the project's `CLAUDE.md` (a block). Each is backed up first. `--ask-each` also shows each change and asks; `--yes` does not ask (you have read the plan) (`… | bash -s -- --ask-each`)
+- The first time, it asks for the folder agents work in (Enter for `~/orrery-work`), or take `--project-key PATH`
+- At the end it shows, for each of the 4 changes, applied / already the same / skipped; whether Mail was set up or the running one kept; and the doctor and selftest results. Without Claude Code or Codex it says the base is ready, agents are not yet
+- If a cockpit of another version is already running, it is not stopped; you are told to press Ctrl-C in its window and start it again
+- **When something fails**: a check that fails before you type yes changes nothing. After that, **nothing is rolled back**: you get a table of what changed since the first attempt and the line that carries on (the first attempt's record, in `~/.orrery-install/`, is kept until a run passes every check). There is no command to go back to the previous version
+- To remove a new install, use the printed `<orrery-telemetry checkout>/scripts/uninstall.sh` (the Mail database stays unless `--purge-data`; the 2 checkouts, uv and Python stay). **Do not use it to undo an update**: it removes the whole install
+
+The rest of this section installs step by step by hand.
+
 ## For first-time installers (browser, Mac / Windows WSL2)
 
 This section alone takes you from nothing to ORRERY cockpit installed on your own Mac or Windows (WSL2) machine and open in a browser. It does not use the desktop app (`ORRERY.app`). Even on a Mac, you open it in the browser. For building or keeping the app running, see "Requirements" and the sections after it.
