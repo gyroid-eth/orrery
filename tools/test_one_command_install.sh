@@ -14,7 +14,7 @@ WORK="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/orrery-install-test.XXXXXX")" && pwd -P
 # Every cockpit a test starts lives in this test-only tmux server.
 TEST_SOCK="orrery-cockpit-test-$$"
 cleanup() {
-  for sock in "$TEST_SOCK" "${TEST_SOCK}-bg" "${TEST_SOCK}-x"; do env -u TMUX tmux -L "$sock" kill-server 2>/dev/null; done
+  for sock in "$TEST_SOCK" "${TEST_SOCK}-bg" "${TEST_SOCK}-x" "${TEST_SOCK}-y"; do env -u TMUX tmux -L "$sock" kill-server 2>/dev/null; done
   pkill -f "$WORK" 2>/dev/null
   rm -rf "$WORK"
 }
@@ -523,6 +523,39 @@ out="$(setup_in "$HC" PORT=18992 ORRERY_COCKPIT_TMUX_SOCKET="$SOCKX" bash "$HC/o
 check "P2-1: a hand-started cockpit of this version: no tmux stop steps" sh -c '! printf "%s" "$1" | grep -q "kill-se"' _ "$out"
 check "P2-1: says it was not started by this setup" sh -c 'printf "%s" "$1" | grep -q "not started by this setup"' _ "$out"
 pkill -f "$HC/orrery" 2>/dev/null
+
+# Ownership is the recorded boot AND the recorded tmux socket and session: an
+# unrelated session of the same name in another tmux server is never touched,
+# and the cockpit this setup started is not left running by mistake.
+SOCK1="${TEST_SOCK}-x"; SOCK2="${TEST_SOCK}-y"
+HG="$(fresh_home own-socket)"; stub_cockpit "$HG"
+setup_in "$HG" PORT=18989 ORRERY_COCKPIT_TMUX_SOCKET="$SOCK1" bash "$HG/orrery/scripts/setup.sh" --yes >/dev/null 2>&1
+boot_a="$(curl -fsS --max-time 2 http://127.0.0.1:18989/telemetry/health | sed -n 's/.*"boot": *"\([^"]*\)".*/\1/p')"
+env -u TMUX tmux -L "$SOCK2" new-session -d -s cockpit-18989 "sleep 600"
+git -C "$HG/orrery" -c user.name=t -c user.email=t@t commit --quiet --allow-empty -m "newer"
+out="$(setup_in "$HG" PORT=18989 ORRERY_COCKPIT_TMUX_SOCKET="$SOCK2" bash "$HG/orrery/scripts/setup.sh" --yes 2>&1)"; status=$?
+check "owner socket: the unrelated session in the other tmux server is untouched" env -u TMUX tmux -L "$SOCK2" has-session -t =cockpit-18989
+check "owner socket: the run stops (the session name is taken)" test "$status" -ne 0
+check "owner socket: says the session is not this setup's" sh -c 'printf "%s" "$1" | grep -q "was not started by this setup"' _ "$out"
+check "owner socket: cockpit A was not stopped before that was known" \
+  test "$(curl -fsS --max-time 2 http://127.0.0.1:18989/telemetry/health | sed -n 's/.*"boot": *"\([^"]*\)".*/\1/p')" = "$boot_a"
+env -u TMUX tmux -L "$SOCK2" kill-server 2>/dev/null
+# With the name free in the new tmux server, the old cockpit is stopped where
+# it was started (its recorded server) and the new one starts.
+out="$(setup_in "$HG" PORT=18989 ORRERY_COCKPIT_TMUX_SOCKET="$SOCK2" bash "$HG/orrery/scripts/setup.sh" --yes 2>&1)"; status=$?
+check "owner socket: restarted after all" test "$status" -eq 0
+check "owner socket: nothing left in the old tmux server" sh -c '! env -u TMUX tmux -L "$1" has-session -t =cockpit-18989 2>/dev/null' _ "$SOCK1"
+check "owner socket: the new cockpit is this commit" sh -c 'curl -fsS --max-time 2 http://127.0.0.1:18989/telemetry/health | grep -q "$1"' _ "$(git -C "$HG/orrery" rev-parse HEAD)"
+env -u TMUX tmux -L "$SOCK2" kill-server 2>/dev/null; env -u TMUX tmux -L "$SOCK1" kill-server 2>/dev/null
+
+# The same version already running (ours) in another tmux server: the steps
+# shown are for where it actually runs.
+HH="$(fresh_home own-current)"; stub_cockpit "$HH"
+setup_in "$HH" PORT=18988 ORRERY_COCKPIT_TMUX_SOCKET="$SOCK1" bash "$HH/orrery/scripts/setup.sh" --yes >/dev/null 2>&1
+out="$(setup_in "$HH" PORT=18988 ORRERY_COCKPIT_TMUX_SOCKET="$SOCK2" bash "$HH/orrery/scripts/setup.sh" --yes 2>&1)"
+check "current elsewhere: the stop step names the server it runs in" sh -c 'printf "%s" "$1" | grep -q "tmux -L $2 kill-session -t cockpit-18988"' _ "$out" "$SOCK1"
+check "current elsewhere: not the server of this run" sh -c '! printf "%s" "$1" | grep -q "tmux -L $2 "' _ "$out" "$SOCK2"
+env -u TMUX tmux -L "$SOCK1" kill-server 2>/dev/null
 
 # P2-2: started, but the answer is not this checkout: not ready.
 HD="$(fresh_home wrong-root)"; stub_cockpit "$HD"

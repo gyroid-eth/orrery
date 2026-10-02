@@ -1159,11 +1159,27 @@ cockpit_head_full="$(git -C "$COCKPIT_ROOT" rev-parse HEAD)"
 root_real="$(cd "$COCKPIT_ROOT" && pwd -P)"
 ctmux() { env -u TMUX -u TMUX_PANE tmux -L "$SOCK" "$@"; }
 health_boot() { http_get "http://127.0.0.1:${COCKPIT_PORT}/telemetry/health" | json_str boot; }
+owner_value() { sed -n "s/^$1=//p" "$OWNER" 2>/dev/null | head -n 1; }
+# The tmux server and session this setup recorded for the cockpit it started.
+OWNER_SOCK=""
+OWNER_SESSION=""
 is_ours() { # the running cockpit is the one this setup started on this port
   [ -r "$OWNER" ] || return 1
   boot_now="$(health_boot)"
-  [ -n "$boot_now" ] && [ "$boot_now" = "$(sed -n 's/^boot=//p' "$OWNER")" ] \
-    && ctmux has-session -t "=$SESSION" 2>/dev/null
+  OWNER_SOCK="$(owner_value socket)"
+  OWNER_SESSION="$(owner_value session)"
+  [ -n "$boot_now" ] && [ "$boot_now" = "$(owner_value boot)" ] \
+    && [ -n "$OWNER_SOCK" ] && [ "$OWNER_SESSION" = "$SESSION" ] \
+    && env -u TMUX -u TMUX_PANE tmux -L "$OWNER_SOCK" has-session -t "=$OWNER_SESSION" 2>/dev/null
+}
+# Before anything is stopped: the session name in the tmux server to start in
+# must be free, or be the one this setup recorded (a leftover of its own).
+session_free_or_ours() {
+  ctmux has-session -t "=$SESSION" 2>/dev/null || return 0
+  [ "$(owner_value socket)" = "$SOCK" ] && [ "$(owner_value session)" = "$SESSION" ] && return 0
+  stop "tmux server '${SOCK}' already has a session '${SESSION}' that was not started by this setup;" \
+    "nothing was stopped or started. Use another server (ORRERY_COCKPIT_TMUX_SOCKET=...)" \
+    "or end that session yourself, then run the same command again."
 }
 is_this_version() { # $1 = backend_state
   case "$1" in
@@ -1186,7 +1202,8 @@ fi
 if [ "$no_start" = true ] && { [ "$action" = start ] || [ "$action" = restart ]; }; then action=none; fi
 
 stop_ours() {
-  ctmux kill-session -t "=$SESSION" 2>/dev/null || true
+  # Where it was started: the recorded tmux server and session, proven by is_ours.
+  env -u TMUX -u TMUX_PANE tmux -L "$OWNER_SOCK" kill-session -t "=$OWNER_SESSION" 2>/dev/null || true
   i=0
   while [ "$i" -lt 20 ] && [ "$(backend_state)" != none ]; do i=$((i + 1)); sleep 0.5; done
   if [ "$(backend_state)" != none ]; then
@@ -1196,7 +1213,9 @@ stop_ours() {
   rm -f "$OWNER"
 }
 start_ours() {
-  # A session of this name with nothing answering on its port is a leftover.
+  session_free_or_ours
+  # A session of this name recorded as this setup's, with nothing answering on
+  # its port, is a leftover.
   ctmux kill-session -t "=$SESSION" 2>/dev/null || true
   printf '\n==== %s start %s on port %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$COCKPIT_ROOT" "$COCKPIT_PORT" >>"$cockpit_log"
   inner="env -u TMUX -u TMUX_PANE ORRERY_NO_UPDATE_CHECK=1 PORT=$(printf '%q' "$COCKPIT_PORT") $(printf '%q' "${COCKPIT_ROOT}/scripts/start-cockpit.sh") 2>&1 | tee -a $(printf '%q' "$cockpit_log")"
@@ -1245,6 +1264,7 @@ case "$action" in
     ;;
   restart)
     say "  the cockpit this setup started earlier runs an older version (${running}); restarting it ..."
+    session_free_or_ours
     stop_ours
     start_ours
     ok "restarted the cockpit: ${url}"
@@ -1255,6 +1275,11 @@ case "$action" in
   foreign | none) ;;
 esac
 step_done "Start"
+# The steps shown are for where the cockpit actually runs: the recorded tmux
+# server and session when it was already running, else the ones just used.
+SHOW_SOCK="$SOCK"
+SHOW_SESSION="$SESSION"
+if [ "$action" = current ]; then SHOW_SOCK="$OWNER_SOCK"; SHOW_SESSION="$OWNER_SESSION"; fi
 
 # A run that passed every check and got the cockpit up (or was told not to
 # start it) closes the first attempt's record; anything less keeps it.
@@ -1282,8 +1307,8 @@ case "$action" in
   start | restart | current)
     say "  The cockpit runs in the background; this window is free."
     say "    Open:          ${url}"
-    say "    Its output:    tmux -L ${SOCK} attach -t ${SESSION}      (leave it with Ctrl-b, then d)"
-    say "    Stop it:       tmux -L ${SOCK} kill-session -t ${SESSION}"
+    say "    Its output:    tmux -L ${SHOW_SOCK} attach -t ${SHOW_SESSION}      (leave it with Ctrl-b, then d)"
+    say "    Stop it:       tmux -L ${SHOW_SOCK} kill-session -t ${SHOW_SESSION}"
     say "    Start again:   the same command as before (it also updates)"
     ;;
   current_other)
@@ -1333,7 +1358,7 @@ say "  same command again (it starts what is stopped)."
 if [ "$mode" = fresh ]; then
   say "  To remove this new install: ${tel_root}/scripts/uninstall.sh"
   say "  (it keeps the Mail database unless --purge-data; the 2 checkouts, uv and Python stay)"
-  say "  and stop the cockpit: tmux -L ${SOCK} kill-session -t ${SESSION}"
+  say "  and stop the cockpit: tmux -L ${SHOW_SOCK} kill-session -t ${SHOW_SESSION}"
 fi
 if [ "$os" = wsl ]; then
   say "  If the Windows browser shows nothing: in PowerShell run"
