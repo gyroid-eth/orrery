@@ -62,16 +62,22 @@ def short_dir():
     shutil.rmtree(path, ignore_errors=True)
 
 
-def _socket(path: str) -> socket.socket:
+def _socket(path: str, *, listening: bool = True) -> socket.socket:
+    """A Unix socket at ``path``: accepting connections, or closed with its
+    file left behind (what a gone WSL session leaves in /run/WSL)."""
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.bind(path)
+    if listening:
+        sock.listen(1)
+    else:
+        sock.close()
     return sock
 
 
 # --- WSL_INTEROP --------------------------------------------------------------
 
 
-def test_a_stale_wsl_interop_is_replaced_by_the_newest_live_socket(monkeypatch, short_dir):
+def test_a_gone_wsl_interop_is_replaced_by_the_newest_answering_socket(monkeypatch, short_dir):
     old = _socket(f"{short_dir}/100_interop")
     time.sleep(0.05)
     new = _socket(f"{short_dir}/200_interop")
@@ -85,7 +91,53 @@ def test_a_stale_wsl_interop_is_replaced_by_the_newest_live_socket(monkeypatch, 
         new.close()
 
 
-def test_a_live_wsl_interop_is_kept(monkeypatch, short_dir):
+def test_a_closed_socket_left_behind_is_not_kept(monkeypatch, short_dir):
+    """Review of #10 (P2-4): the file of a closed socket stays; connecting to
+    it is refused. Its existence is not life."""
+    _socket(f"{short_dir}/1_interop", listening=False)
+    live = _socket(f"{short_dir}/2_interop")
+    try:
+        os.utime(f"{short_dir}/2_interop", (1, 1))  # the older one answers
+        monkeypatch.setattr(ob, "WSL_INTEROP_DIR", short_dir)
+        monkeypatch.setenv("WSL_INTEROP", f"{short_dir}/1_interop")
+        assert ob.wsl_interop_env()["WSL_INTEROP"] == f"{short_dir}/2_interop"
+    finally:
+        live.close()
+
+
+def test_the_newest_closed_socket_is_passed_over(monkeypatch, short_dir):
+    live = _socket(f"{short_dir}/1_interop")
+    time.sleep(0.05)
+    _socket(f"{short_dir}/2_interop", listening=False)
+    try:
+        monkeypatch.setattr(ob, "WSL_INTEROP_DIR", short_dir)
+        monkeypatch.delenv("WSL_INTEROP", raising=False)
+        assert ob.wsl_interop_env()["WSL_INTEROP"] == f"{short_dir}/1_interop"
+    finally:
+        live.close()
+
+
+def test_a_symlinked_socket_is_not_trusted(monkeypatch, short_dir):
+    live = _socket(f"{short_dir}/real")
+    try:
+        os.symlink(f"{short_dir}/real", f"{short_dir}/9_interop")
+        monkeypatch.setattr(ob, "WSL_INTEROP_DIR", short_dir)
+        monkeypatch.delenv("WSL_INTEROP", raising=False)
+        assert "WSL_INTEROP" not in ob.wsl_interop_env()
+    finally:
+        live.close()
+
+
+def test_with_nothing_answering_the_environment_is_left_alone(monkeypatch, short_dir):
+    _socket(f"{short_dir}/1_interop", listening=False)
+    monkeypatch.setattr(ob, "WSL_INTEROP_DIR", short_dir)
+    monkeypatch.setenv("WSL_INTEROP", f"{short_dir}/1_interop")
+    assert ob.wsl_interop_env()["WSL_INTEROP"] == f"{short_dir}/1_interop"
+    monkeypatch.delenv("WSL_INTEROP")
+    assert "WSL_INTEROP" not in ob.wsl_interop_env()
+
+
+def test_an_answering_wsl_interop_is_kept(monkeypatch, short_dir):
     mine = _socket(f"{short_dir}/1_interop")
     time.sleep(0.05)
     newer = _socket(f"{short_dir}/2_interop")
@@ -98,13 +150,7 @@ def test_a_live_wsl_interop_is_kept(monkeypatch, short_dir):
         newer.close()
 
 
-def test_with_no_socket_to_pick_the_environment_is_left_alone(monkeypatch, short_dir):
-    monkeypatch.setattr(ob, "WSL_INTEROP_DIR", short_dir)
-    monkeypatch.delenv("WSL_INTEROP", raising=False)
-    assert "WSL_INTEROP" not in ob.wsl_interop_env()
-
-
-def test_the_opener_runs_with_the_live_socket(monkeypatch, short_dir, tmp_path):
+def test_the_opener_runs_with_the_answering_socket(monkeypatch, short_dir, tmp_path):
     live = _socket(f"{short_dir}/7_interop")
     out = tmp_path / "env.txt"
     try:
@@ -139,6 +185,98 @@ def test_an_interop_failure_on_stderr_is_an_error(monkeypatch, tmp_path, stderr)
 def test_mac_openers_do_not_read_interop_stderr(monkeypatch):
     monkeypatch.setattr(ob, "_sys_platform", lambda: "darwin")
     ob.run_opener(["sh", "-c", "echo 'interop' >&2; exit 1"], trust_exit_status=False)
+
+
+def _slow(monkeypatch, script):
+    monkeypatch.setattr(ob, "OPENER_WAIT_SECONDS", 0.5)
+    return ["sh", "-c", script]
+
+
+def test_an_interop_failure_before_the_wait_runs_out_is_an_error(monkeypatch, tmp_path):
+    """Review of #10 (P2-5): it said so on stderr, then hung."""
+    _wsl(monkeypatch, tmp=tmp_path)
+    argv = _slow(monkeypatch, "echo 'UtilConnectToInteropServer:300: connect failed 2' >&2; exec sleep 3")
+    with pytest.raises(OSError, match="did not start: .*UtilConnectToInteropServer"):
+        ob.run_opener(argv, trust_exit_status=False)
+
+
+def test_an_explorer_that_does_not_return_is_unconfirmed(monkeypatch, tmp_path):
+    _wsl(monkeypatch, tmp=tmp_path)
+    with pytest.raises(OSError, match="not confirmed"):
+        ob.run_opener(_slow(monkeypatch, "exec sleep 3"), trust_exit_status=False, confirm=True)
+
+
+def test_without_confirm_a_quiet_slow_opener_is_still_delivered(monkeypatch, tmp_path):
+    _wsl(monkeypatch, tmp=tmp_path)
+    ob.run_opener(_slow(monkeypatch, "exec sleep 3"), trust_exit_status=False)
+
+
+def test_explorer_is_run_asking_for_confirmation(monkeypatch, tmp_path):
+    _wsl(monkeypatch, tmp=tmp_path)
+    monkeypatch.setattr(ob, "windows_path", lambda path: r"C:\proj")
+    seen = []
+    monkeypatch.setattr(ob, "run_opener", lambda argv, **kw: seen.append(kw))
+    ob.reveal_in_finder(tmp_path)
+    assert seen == [{"trust_exit_status": False, "confirm": True}]
+
+
+# --- a Mac bundle is revealed, never launched (review of #10, P1) -------------
+
+
+@pytest.fixture
+def mac(monkeypatch):
+    monkeypatch.setattr(ob, "_sys_platform", lambda: "darwin")
+    calls = []
+    monkeypatch.setattr(ob, "run_opener", lambda argv, **kw: calls.append(argv))
+    return calls
+
+
+@pytest.mark.parametrize("make", ["app", "odd-bundle", "link-to-plain", "link-to-app", "app-inside-link"])
+def test_a_bundle_or_a_link_is_revealed_not_opened(mac, tmp_path, make):
+    app = tmp_path / "Report.app"
+    (app / "Contents").mkdir(parents=True)
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    odd = tmp_path / "Odd Name"
+    (odd / "Contents").mkdir(parents=True)
+    (odd / "Contents" / "Info.plist").write_text("x")
+    target = {
+        "app": app,
+        "odd-bundle": odd,
+        "link-to-plain": tmp_path / "l1",
+        "link-to-app": tmp_path / "l2",
+        "app-inside-link": tmp_path / "l3" / "Report.app",
+    }[make]
+    (tmp_path / "l1").symlink_to(plain)
+    (tmp_path / "l2").symlink_to(app)
+    (tmp_path / "l3").symlink_to(tmp_path)
+    assert ob.reveal_in_finder(target) == "bundle"
+    assert mac == [["open", "-R", str(target)]]
+
+
+def test_a_plain_folder_still_opens(mac, tmp_path):
+    assert ob.reveal_in_finder(tmp_path) == "dir"
+    assert mac == [["open", str(tmp_path)]]
+
+
+def test_a_shortened_name_reaching_a_bundle_only_reveals_it(mac, tmp_path):
+    """The review's route: "Report….app" resolved to Report-current.app."""
+    (tmp_path / "Report-current.app" / "Contents").mkdir(parents=True)
+    body = json.loads(asyncio.run(ob.reveal_path(_Request({"path": f"{tmp_path}/Report….app"}))).body)
+    assert body["kind"] == "bundle"
+    assert mac == [["open", "-R", str(tmp_path / "Report-current.app")]]
+
+
+@pytest.mark.parametrize("kind,name", [("mac", "Finder"), ("wsl", "Explorer"), ("linux", "the file manager")])
+def test_the_error_names_the_hosts_file_manager(monkeypatch, tmp_path, kind, name):
+    monkeypatch.setattr(ob, "host_kind", lambda: kind)
+
+    def broken(path):
+        raise OSError("boom")
+
+    monkeypatch.setattr(ob, "reveal_in_finder", broken)
+    body = json.loads(asyncio.run(ob.reveal_path(_Request({"path": str(tmp_path)}))).body)
+    assert body["error"] == f"failed to open {name}: boom"
 
 
 # --- interop turned off -------------------------------------------------------
@@ -279,39 +417,60 @@ def _cockpit_functions(*names: str) -> str:
 NODE = shutil.which("node")
 
 
-def _run_reveal(host: str, response: dict, status: int, clipboard: bool) -> dict:
-    script = _cockpit_functions("fileManagerLabel", "showUnopenedPath", "revealLocalPath") + f"""
+def _run_reveal(host: str, response: dict, status: int, clipboard) -> dict:
+    """revealLocalPath against a canned backend answer. ``clipboard``: True
+    (writes), "reject", "pending" (never answers) or False (none). The state
+    is read 50 ms after the answer, whether or not the clipboard has."""
+    clip = {True: "async t=>{copied=t;}", "reject": "async t=>{throw new Error('denied');}",
+            "pending": "t=>new Promise(()=>{})"}.get(clipboard)
+    script = _cockpit_functions("fileManagerLabel", "showUnopenedPath", "showCandidates",
+                                "revealLocalPath") + f"""
 const hostPlatform={{host:{json.dumps(host)}}};
 const toasts=[];let copied=null;
-const toastEl={{classList:{{add:c=>toasts.at(-1).classes.push(c)}}}};
-function showToast(message,isError=false,ms=4200){{toasts.push({{message,isError,ms,classes:[]}});}}
+const toastEl={{textContent:'',classList:{{add:c=>toasts.at(-1).classes.push(c)}}}};
+function showToast(message,isError=false,ms=4200){{toastEl.textContent=message;toasts.push({{message,isError,ms,classes:[]}});}}
 function appInvoke(){{return null;}}
-Object.defineProperty(globalThis,'navigator',{{configurable:true,value:{json.dumps(clipboard)}?{{clipboard:{{writeText:async t=>{{copied=t;}}}}}}:{{}}}});
+Object.defineProperty(globalThis,'navigator',{{configurable:true,value:{json.dumps(clip is not None)}?{{clipboard:{{writeText:{clip or 'null'}}}}}:{{}}}});
 globalThis.fetch=async()=>({{ok:{json.dumps(status < 400)},status:{status},json:async()=>({json.dumps(response)})}});
-revealLocalPath('/home/u/proj').then(ok=>console.log(JSON.stringify({{ok,toasts,copied}})));
+revealLocalPath('/home/u/proj');
+setTimeout(()=>{{console.log(JSON.stringify({{toasts,copied,shown:toastEl.textContent}}));process.exit(0);}},50);
 """
     done = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=20)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
 
 
+SHOW = r"\\wsl.localhost\OrreryTest\home\u\proj"
+
+
 @pytest.mark.skipif(NODE is None, reason="no node")
 def test_the_cockpit_shows_and_copies_the_path_to_open_by_hand():
     result = _run_reveal("wsl", {"ok": False, "error": "failed to open Explorer: x",
-                                 "show": r"\\wsl.localhost\OrreryTest\home\u\proj"}, 500, True)
+                                 "show": SHOW}, 500, True)
     (toast,) = result["toasts"]
-    assert result["ok"] is False
-    assert result["copied"] == r"\\wsl.localhost\OrreryTest\home\u\proj"
-    assert toast["message"].startswith("EXPLORER FAILED · open it by hand (copied): \\\\wsl.localhost")
+    assert result["copied"] == SHOW
+    assert result["shown"].startswith("EXPLORER FAILED · open it by hand (copied): \\\\wsl.localhost")
     assert toast["isError"] and toast["ms"] == 15000
     assert toast["classes"] == ["selectable"]
 
 
 @pytest.mark.skipif(NODE is None, reason="no node")
-def test_without_a_clipboard_the_path_is_still_shown():
-    result = _run_reveal("wsl", {"ok": False, "error": "e", "show": r"C:\proj"}, 500, False)
+@pytest.mark.parametrize("clipboard", ["pending", "reject", False])
+def test_the_path_is_shown_whatever_the_clipboard_does(clipboard):
+    """Review of #10 (P2-6): a clipboard waiting for permission held back the
+    failure and the path."""
+    result = _run_reveal("wsl", {"ok": False, "error": "e", "show": r"C:\proj"}, 500, clipboard)
     assert result["copied"] is None
-    assert "open it by hand: C:\\proj" in result["toasts"][0]["message"]
+    assert result["shown"] == "EXPLORER FAILED · open it by hand: C:\\proj — e"
+
+
+@pytest.mark.skipif(NODE is None, reason="no node")
+def test_several_matches_are_listed_not_opened():
+    result = _run_reveal("mac", {"ok": False, "error": "2 paths match; not opened",
+                                 "candidates": ["/a/x/note.md", "/a/y/note.md"]}, 409, True)
+    (toast,) = result["toasts"]
+    assert toast["message"] == "FINDER · 2 paths match; not opened: /a/x/note.md  ·  /a/y/note.md"
+    assert toast["classes"] == ["selectable"]
 
 
 @pytest.mark.skipif(NODE is None, reason="no node")
@@ -319,5 +478,5 @@ def test_without_a_clipboard_the_path_is_still_shown():
 def test_the_toast_names_the_hosts_file_manager(host, label):
     result = _run_reveal(host, {"ok": True, "kind": "dir"}, 200, True)
     assert result["toasts"][0]["message"] == f"{label} · opened /home/u/proj"
-    failed = _run_reveal(host, {"ok": False, "error": "failed to open Finder: boom"}, 500, True)
-    assert failed["toasts"][0]["message"] == f"{label} FAILED · failed to open Finder: boom"
+    bundle = _run_reveal(host, {"ok": True, "kind": "bundle", "path": "/a/R.app"}, 200, True)
+    assert bundle["toasts"][0]["message"] == f"{label} · revealed /a/R.app"

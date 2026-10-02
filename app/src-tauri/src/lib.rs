@@ -192,11 +192,38 @@ fn reveal_opener_args(raw: &str, home: Option<&Path>) -> Result<(String, Vec<Str
         return Err("no such path".to_owned());
     }
     let shown = path.to_string_lossy().into_owned();
-    if path.is_dir() {
-        Ok(("dir".to_owned(), vec![shown]))
-    } else {
+    // Only a plain folder is opened. `open` on a bundle (.app and the like)
+    // launches it, and a symlink may lead into one: both are revealed, as the
+    // backend does (orrery_backend.reveal_in_finder).
+    let is_link = std::fs::symlink_metadata(&path)
+        .map(|meta| meta.file_type().is_symlink())
+        .unwrap_or(false);
+    if !path.is_dir() {
         Ok(("file".to_owned(), vec!["-R".to_owned(), shown]))
+    } else if is_link || is_mac_bundle(&path) {
+        Ok(("bundle".to_owned(), vec!["-R".to_owned(), shown]))
+    } else {
+        Ok(("dir".to_owned(), vec![shown]))
     }
+}
+
+const MAC_BUNDLE_SUFFIXES: &[&str] = &[
+    "app", "appex", "bundle", "framework", "plugin", "kext", "prefpane", "saver", "xpc",
+    "qlgenerator", "mdimporter", "component", "action", "workflow", "pkg", "mpkg",
+    "photoslibrary", "musiclibrary", "rtfd", "playground", "xcodeproj", "xcworkspace",
+    "scptd", "docset",
+];
+
+fn is_mac_bundle(path: &Path) -> bool {
+    let real = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    if !real.is_dir() {
+        return false;
+    }
+    let suffix = real
+        .extension()
+        .map(|ext| ext.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    MAC_BUNDLE_SUFFIXES.contains(&suffix.as_str()) || real.join("Contents/Info.plist").is_file()
 }
 
 #[cfg(target_os = "macos")]
@@ -679,6 +706,31 @@ mod tests {
 
         assert!(reveal_opener_args("relative/path", None).is_err());
         assert!(reveal_opener_args("/definitely/not/here", None).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn reveal_opener_never_opens_a_bundle_or_a_link() {
+        let dir = std::env::temp_dir().join(format!("orrery-bundle-{}", std::process::id()));
+        let app = dir.join("Report.app");
+        let odd = dir.join("Odd Name");
+        std::fs::create_dir_all(app.join("Contents")).unwrap();
+        std::fs::create_dir_all(odd.join("Contents")).unwrap();
+        std::fs::write(odd.join("Contents/Info.plist"), "x").unwrap();
+        let plain = dir.join("plain");
+        std::fs::create_dir_all(&plain).unwrap();
+        let link = dir.join("link-to-plain");
+        std::os::unix::fs::symlink(&plain, &link).unwrap();
+        let app_link = dir.join("link-to-app");
+        std::os::unix::fs::symlink(&app, &app_link).unwrap();
+
+        for target in [&app, &odd, &link, &app_link] {
+            let (kind, args) = reveal_opener_args(target.to_str().unwrap(), None).unwrap();
+            assert_eq!(kind, "bundle", "{target:?}");
+            assert_eq!(args[0], "-R", "{target:?} would be opened");
+        }
+        let (kind, args) = reveal_opener_args(plain.to_str().unwrap(), None).unwrap();
+        assert_eq!((kind.as_str(), args.len()), ("dir", 1));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -7711,8 +7711,10 @@ function createPane(session,meta){
       const line=term.buffer.active.getLine(y-1);if(!line)return cb(undefined);
       const text=line.translateToString(true);const pending=[];
       const re=/(^|[\s"'`(\[<=])((?:~|\/)[^\s"'`()\[\]<>]+)/g;let m;
-      const mk=(start,p)=>({range:{start:{x:start+1,y},end:{x:start+p.length,y}},text:p,
-        activate:(event,target)=>{event.preventDefault();revealLocalPath(target);},
+      // `open` is what the click reveals: the path the probe resolved a
+      // shortened "…" path to, bound when the link was made.
+      const mk=(start,p,open=p)=>({range:{start:{x:start+1,y},end:{x:start+p.length,y}},text:p,
+        activate:(event)=>{event.preventDefault();revealLocalPath(open);},
         decorations:{pointerCursor:true,underline:true}});
       while((m=re.exec(text))){
         let p=m[2].replace(/[.,;:!?]+$/,'');
@@ -7725,7 +7727,7 @@ function createPane(session,meta){
         // of the rest of the row. Rows without a further space need no probe.
         const rest=text.slice(start).split(/["'`<>]/)[0];
         if(!/[\s\u3000]|[^\x00-\x7f]/.test(rest)){pending.push(Promise.resolve(mk(start,p)));continue;}
-        pending.push(probeLocalPath(rest).then(found=>mk(start,found||p)));
+        pending.push(probeLocalPath(rest).then(found=>found?mk(start,found.path,found.resolved||found.path):mk(start,p)));
       }
       if(!pending.length)return cb(undefined);
       Promise.all(pending).then(links=>cb(links.length?links:undefined),()=>cb(undefined));
@@ -8229,7 +8231,8 @@ async function probeLocalPath(text){
         method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text}),
       });
       const result=await response.json();
-      return response.ok&&result.ok?String(result.path):null;
+      if(!response.ok||!result.ok)return null;
+      return {path:String(result.path),resolved:typeof result.resolved==='string'?result.resolved:null};
     }catch(_){return null;}
   })();
   probeCache.set(text,p);
@@ -8246,9 +8249,21 @@ function fileManagerLabel(){
    clipboard when the browser lets us, so it can be pasted into the address
    bar by hand. */
 async function showUnopenedPath(label,shown,error){
-  let copied=false;
-  try{if(navigator.clipboard){await navigator.clipboard.writeText(shown);copied=true;}}catch(_){/* not allowed here */}
-  showToast(`${label} FAILED · open it by hand${copied?' (copied)':''}: ${shown} — ${error}`,true,15000);
+  // Shown first: a clipboard that waits for permission must not hold back
+  // the failure or the path.
+  const message=`${label} FAILED · open it by hand: ${shown} — ${error}`;
+  showToast(message,true,15000);
+  toastEl.classList.add('selectable');
+  try{
+    if(!navigator.clipboard)return;
+    await navigator.clipboard.writeText(shown);
+    if(toastEl.textContent===message)toastEl.textContent=message.replace(' by hand:',' by hand (copied):');
+  }catch(_){/* not allowed here: the path stays on screen */}
+}
+/* A shortened path that matches several: nothing is opened; they are listed
+   to choose from (each is a full path that can be copied from the toast). */
+function showCandidates(label,error,candidates){
+  showToast(`${label} · ${error}: ${candidates.join('  ·  ')}`,true,15000);
   toastEl.classList.add('selectable');
 }
 async function revealLocalPath(path){
@@ -8280,6 +8295,10 @@ async function revealLocalPath(path){
     if(!response.ok||!result.ok){
       if(typeof result.show==='string'&&result.show){
         await showUnopenedPath(label,result.show,result.error||`HTTP ${response.status}`);
+        return false;
+      }
+      if(Array.isArray(result.candidates)&&result.candidates.length){
+        showCandidates(label,result.error||'several paths match',result.candidates.map(String));
         return false;
       }
       throw new Error(result.error||`HTTP ${response.status}`);
