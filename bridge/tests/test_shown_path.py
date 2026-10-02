@@ -198,7 +198,7 @@ def test_an_ambiguous_probe_links_without_resolving(runs):
 def test_the_cockpit_opens_the_probed_path():
     html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
     assert "mk(start,found.path,found.resolved||found.path)" in html
-    assert "activate:(event)=>{event.preventDefault();revealLocalPath(open);}" in html
+    assert "activate:(event)=>{event.preventDefault();revealLocalPath(open,{literal:open!==p});}" in html
 
 
 # --- the endpoint -------------------------------------------------------------
@@ -242,6 +242,37 @@ def test_reveal_refuses_a_search_that_ran_out(tmp_path, monkeypatch):
     assert response.status == 422
 
 
+def test_a_probed_path_is_opened_as_it_is_or_not_at_all(tmp_path, monkeypatch):
+    """Review of #10 (R2-P2-2): the probe resolved task…/note.md to a real
+    task…-one/note.md; that file goes, task-long-one/note.md appears. The
+    click must not read the resolved path's own "…" as a shortening."""
+    (tmp_path / "task…-one").mkdir()
+    (tmp_path / "task…-one" / "note.md").write_text("x")
+    probe = json.loads(asyncio.run(ob.path_probe(_Request({"text": f"{tmp_path}/task…/note.md"}))).body)
+    resolved = probe["resolved"]
+    assert resolved == f"{tmp_path}/task…-one/note.md"
+    (tmp_path / "task…-one" / "note.md").unlink()
+    (tmp_path / "task-long-one").mkdir()
+    (tmp_path / "task-long-one" / "note.md").write_text("x")
+    monkeypatch.setattr(ob, "reveal_in_finder", lambda path: pytest.fail(f"opened {path}"))
+    response = asyncio.run(ob.reveal_path(_Request({"path": resolved, "literal": True})))
+    assert response.status == 404
+
+
+def test_a_probed_path_that_is_still_there_opens(runs, monkeypatch):
+    seen = []
+    monkeypatch.setattr(ob, "reveal_in_finder", lambda path: seen.append(path) or "file")
+    real = runs / RUN / "draft" / "note.md"
+    body = json.loads(asyncio.run(ob.reveal_path(_Request({"path": str(real), "literal": True}))).body)
+    assert body["ok"] is True and seen == [real]
+
+
+def test_the_cockpit_opens_a_probed_path_literally():
+    html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
+    assert "revealLocalPath(open,{literal:open!==p})" in html
+    assert "JSON.stringify(literal?{path,literal:true}:{path})" in html
+
+
 def test_reveal_still_refuses_what_does_not_resolve(runs, monkeypatch):
     monkeypatch.setattr(ob, "reveal_in_finder", lambda path: pytest.fail("opened"))
     response = asyncio.run(ob.reveal_path(_Request({"path": f"{runs}/Nothing…/x.md"})))
@@ -250,7 +281,7 @@ def test_reveal_still_refuses_what_does_not_resolve(runs, monkeypatch):
 
 def test_the_app_rejection_of_a_missing_path_falls_through_to_the_backend():
     html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
-    start = html.index("async function revealLocalPath(path){")
+    start = html.index("async function revealLocalPath(path,")
     body = html[start : html.index("async function openActivePaneInGhostty", start)]
     final = re.search(r"if\(/([^/]+)/\.test\(detail\)\)\{", body).group(1)
     assert "no such path" not in final

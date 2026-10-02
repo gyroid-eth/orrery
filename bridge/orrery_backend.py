@@ -2244,13 +2244,18 @@ WSL_INTEROP_FAILURE_RE = re.compile(
 
 
 def _interop_socket_answers(path: str) -> bool:
-    """A socket of this user's that accepts a connection right now. A socket
-    file outlives the server that made it, so its existence proves nothing."""
+    """A socket that accepts a connection right now. A socket file outlives
+    the server that made it, so its existence proves nothing.
+
+    WSL's init creates the interop socket as root before it drops to the
+    user (and opens it to everyone), so root's is the normal owner; this
+    user's is accepted too. Another user's, and a symlink, are not — the
+    current value included."""
     try:
-        info = os.stat(path)
+        info = os.lstat(path)
     except OSError:
         return False
-    if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid():
+    if not stat.S_ISSOCK(info.st_mode) or info.st_uid not in (0, os.getuid()):
         return False
     probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     probe.settimeout(0.5)
@@ -2664,11 +2669,18 @@ async def reveal_path(request: web.Request) -> web.Response:
     raw = payload.get("path")
     if not isinstance(raw, str) or not raw or len(raw) > 4096 or "\x00" in raw:
         return web.json_response({"ok": False, "error": "path is required"}, status=400)
+    # A path the probe already resolved is opened as it is: if it has gone,
+    # a "…" in its name must not be read as a shortening and land elsewhere.
+    literal = payload.get("literal") is True
     if not (raw.startswith("/") or raw.startswith("~")):
         return web.json_response(
             {"ok": False, "error": "path must be absolute or start with ~"}, status=400
         )
-    matches = await asyncio.to_thread(shown_path_matches, raw)
+    if literal:
+        exact = pathlib.Path(raw).expanduser()
+        matches = [exact] if exact.exists() else []
+    else:
+        matches = await asyncio.to_thread(shown_path_matches, raw)
     if matches is None:
         return web.json_response(
             {"ok": False, "error": "too many entries to search; not opened"}, status=422

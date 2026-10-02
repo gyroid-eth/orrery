@@ -137,6 +137,59 @@ def test_with_nothing_answering_the_environment_is_left_alone(monkeypatch, short
     assert "WSL_INTEROP" not in ob.wsl_interop_env()
 
 
+def _owned_by(monkeypatch, uid: int, me: int = 1000):
+    """Report every file as owned by ``uid`` while this process runs as ``me``
+    (WSL's init creates the interop socket as root; tests cannot chown)."""
+    real = os.lstat
+
+    def lstat(path, *args, **kwargs):
+        info = real(path, *args, **kwargs)
+        return os.stat_result((info.st_mode, info.st_ino, info.st_dev, info.st_nlink,
+                               uid, info.st_gid, info.st_size,
+                               int(info.st_atime), int(info.st_mtime), int(info.st_ctime)))
+
+    monkeypatch.setattr(ob.os, "lstat", lstat)
+    monkeypatch.setattr(ob.os, "getuid", lambda: me)
+
+
+def test_a_root_owned_interop_socket_is_used(monkeypatch, short_dir):
+    """Review of #10 (R2-P2-1): WSL's own socket belongs to root."""
+    live = _socket(f"{short_dir}/5_interop")
+    try:
+        _owned_by(monkeypatch, 0)
+        monkeypatch.setattr(ob, "WSL_INTEROP_DIR", short_dir)
+        monkeypatch.setenv("WSL_INTEROP", f"{short_dir}/1_interop")  # gone
+        assert ob.wsl_interop_env()["WSL_INTEROP"] == f"{short_dir}/5_interop"
+        monkeypatch.setenv("WSL_INTEROP", f"{short_dir}/5_interop")
+        assert ob.wsl_interop_env()["WSL_INTEROP"] == f"{short_dir}/5_interop"
+    finally:
+        live.close()
+
+
+def test_another_users_interop_socket_is_not_used(monkeypatch, short_dir):
+    live = _socket(f"{short_dir}/5_interop")
+    try:
+        _owned_by(monkeypatch, 4242)
+        monkeypatch.setattr(ob, "WSL_INTEROP_DIR", short_dir)
+        monkeypatch.delenv("WSL_INTEROP", raising=False)
+        assert "WSL_INTEROP" not in ob.wsl_interop_env()
+    finally:
+        live.close()
+
+
+def test_a_symlinked_current_value_is_not_kept(monkeypatch, short_dir):
+    live = _socket(f"{short_dir}/real")
+    other = _socket(f"{short_dir}/3_interop")
+    try:
+        os.symlink(f"{short_dir}/real", f"{short_dir}/link")
+        monkeypatch.setattr(ob, "WSL_INTEROP_DIR", short_dir)
+        monkeypatch.setenv("WSL_INTEROP", f"{short_dir}/link")
+        assert ob.wsl_interop_env()["WSL_INTEROP"] == f"{short_dir}/3_interop"
+    finally:
+        live.close()
+        other.close()
+
+
 def test_an_answering_wsl_interop_is_kept(monkeypatch, short_dir):
     mine = _socket(f"{short_dir}/1_interop")
     time.sleep(0.05)
@@ -404,7 +457,7 @@ def _cockpit_functions(*names: str) -> str:
         start = html.index(f"function {name}(")
         if html[start - 6 : start] == "async ":
             start -= 6
-        depth, i = 0, html.index("{", start)
+        depth, i = 0, html.index("){", start) + 1  # the body, not a default parameter
         while True:
             depth += {"{": 1, "}": -1}.get(html[i], 0)
             i += 1

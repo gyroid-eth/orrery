@@ -7714,7 +7714,7 @@ function createPane(session,meta){
       // `open` is what the click reveals: the path the probe resolved a
       // shortened "…" path to, bound when the link was made.
       const mk=(start,p,open=p)=>({range:{start:{x:start+1,y},end:{x:start+p.length,y}},text:p,
-        activate:(event)=>{event.preventDefault();revealLocalPath(open);},
+        activate:(event)=>{event.preventDefault();revealLocalPath(open,{literal:open!==p});},
         decorations:{pointerCursor:true,underline:true}});
       while((m=re.exec(text))){
         let p=m[2].replace(/[.,;:!?]+$/,'');
@@ -8266,7 +8266,8 @@ function showCandidates(label,error,candidates){
   showToast(`${label} · ${error}: ${candidates.join('  ·  ')}`,true,15000);
   toastEl.classList.add('selectable');
 }
-async function revealLocalPath(path){
+/* `literal`: the path is one the probe resolved; open exactly it or nothing. */
+async function revealLocalPath(path,{literal=false}={}){
   const label=fileManagerLabel();
   const invoke=appInvoke();
   if(invoke){
@@ -8288,7 +8289,7 @@ async function revealLocalPath(path){
   try{
     const response=await fetch('/telemetry/reveal-path',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({path}),
+      body:JSON.stringify(literal?{path,literal:true}:{path}),
     });
     let result={};
     try{result=await response.json();}catch(_){/* HTTP status remains useful */}
