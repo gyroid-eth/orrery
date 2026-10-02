@@ -1106,12 +1106,18 @@ fi
 # ORRERY Mail older than this install: the installer's notice (what is
 # missing, the risk, how to reconnect), else the doctor's block. Their wording
 # is the one source; this setup only adds how to update with the same line.
+# The update line is added only where the source itself says this checkout
+# can update Mail: the installer's advice (given only when the running build
+# is older than this checkout), or a doctor block with its own "To update:".
 mail_notice=""
+mail_update_hint=false
 if printf '%s\n' "$installer_help" | grep -q -- '--print-mail-update-advice'; then
   mail_notice="$(cd "$tel_root" && ./scripts/install.sh --print-mail-update-advice 2>/dev/null || true)"
+  if [ -n "$mail_notice" ]; then mail_update_hint=true; fi
 fi
 if [ -z "$mail_notice" ] && printf '%s\n' "${doctor_out:-}" | grep -q '^mail-features: status=missing'; then
   mail_notice="${doctor_mail_block:-}"
+  if printf '%s\n' "$mail_notice" | grep -q 'To update:'; then mail_update_hint=true; fi
 fi
 step_done "Checks"
 
@@ -1250,8 +1256,10 @@ if [ -n "$mail_reconnect" ]; then
 fi
 if [ -n "$mail_notice" ]; then
   printf '%s\n' "$mail_notice" | sed 's/^/  /'
-  say "  To update it, run the same line with --mail update:"
-  say "    curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --mail update"
+  if [ "$mail_update_hint" = true ]; then
+    say "  To update it, run the same line with --mail update:"
+    say "    curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --mail update"
+  fi
   say ""
 fi
 say "  See it work:"

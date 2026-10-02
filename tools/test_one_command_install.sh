@@ -214,6 +214,12 @@ case "${STUB_DOCTOR:-ok}" in
   missing) echo "ok: env"; echo "missing: hooks under $HOME/.agentstack/hooks" >&2; exit 1 ;;
   warn) echo "warn: dashboard does not answer"; exit 1 ;;
   unknown) echo "something odd happened"; exit 3 ;;
+  mailnewer)
+    echo "ok: everything else"
+    echo "warn: ORRERY Mail (running ccccccc) lacks register_agent.existing_agent_id, which this install relies on: STUB-NEEDED-FOR" >&2
+    echo "      Update ORRERY Mail from an orrery-telemetry checkout at least as new as the running build (docs/agentstack-mail-update.md)." >&2
+    echo "mail-features: status=missing missing=register_agent.existing_agent_id running=ccccccc"
+    exit 0 ;;
   mailmissing)
     echo "ok: everything else"
     echo "warn: ORRERY Mail (running aaaaaaa) lacks register_agent.existing_agent_id, which this install relies on: STUB-NEEDED-FOR" >&2
@@ -464,6 +470,9 @@ out="$(mail_run doctor STUB_DOCTOR=mailmissing)"
 check "mail missing (doctor): the doctor's block is shown" sh -c 'printf "%s" "$1" | grep -q "lacks register_agent.existing_agent_id" && printf "%s" "$1" | grep -q "To update: ./scripts/install.sh --mail update"' _ "$out"
 check "mail missing (doctor): setup's own update line" sh -c 'printf "%s" "$1" | grep -q -- "bash -s -- --mail update"' _ "$out"
 check "mail missing (doctor): still ready" sh -c 'printf "%s" "$1" | grep -q "is ready"' _ "$out"
+out="$(mail_run newer STUB_DOCTOR=mailnewer)"
+check "mail missing but not older: the doctor's block is shown" sh -c 'printf "%s" "$1" | grep -q "at least as new as the running build"' _ "$out"
+check "mail missing but not older: no --mail update from setup" sh -c '! printf "%s" "$1" | grep -q -- "--mail update"' _ "$out"
 # On update, the choice reaches the installer explicitly (keep by default),
 # even through an update.sh without --mail.
 H="$(fresh_home mail-keep-explicit)"
