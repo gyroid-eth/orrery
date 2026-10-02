@@ -152,7 +152,10 @@ cat >"$STUBTEL/scripts/install.sh" <<'EOF'
 set -eu
 dir="${AGENTSTACK_HOME:-$HOME/.agentstack}"
 if [ "${1:-}" = "--dry-run" ] || [ "${2:-}" = "--dry-run" ]; then
-  codex --version >/dev/null 2>&1 || true   # as the real installer probes Codex
+  # As the real installer probes Codex: an explicit AGENTSTACK_CODEX_BIN,
+  # else the one saved in env.sh, else codex on PATH.
+  saved="$(sed -n 's/^export AGENTSTACK_CODEX_BIN=//p' "$dir/env.sh" 2>/dev/null | head -n 1)"
+  "${AGENTSTACK_CODEX_BIN:-${saved:-codex}}" --version >/dev/null 2>&1 || true
   echo "Tier1 settings safe-merge dry-run: (stub)"
   exit "${STUB_PREVIEW_EXIT:-0}"
 fi
@@ -269,6 +272,27 @@ check "dry-run: shows the installer's preview" sh -c 'printf "%s" "$1" | grep -q
 out="$(PATH="$WORK/stubbin:$PATH" setup_in "$H" STUB_PREVIEW_EXIT=1 bash "$H/orrery/scripts/setup.sh" --dry-run 2>&1)"; status=$?
 check "dry-run: a failed preview fails" test "$status" -ne 0
 check "dry-run: says the preview failed" sh -c 'printf "%s" "$1" | grep -q "preview failed"' _ "$out"
+
+# ... also when the Codex binary is given by absolute path, explicitly or as
+# saved in env.sh (the installer probes that path directly, not PATH).
+mkdir -p "$WORK/abscodex"
+cp "$WORK/stubbin/codex" "$WORK/abscodex/codex-abs"
+H="$(fresh_home dryrun-explicit)"
+stub_cockpit "$H"
+before="$(cd "$H" && find . -not -path './orrery/*' -not -path './tmp*' | sort)"
+out="$(setup_in "$H" AGENTSTACK_CODEX_BIN="$WORK/abscodex/codex-abs" bash "$H/orrery/scripts/setup.sh" --dry-run 2>&1)"; status=$?
+after="$(cd "$H" && find . -not -path './orrery/*' -not -path './tmp*' | sort)"
+check "dry-run, explicit AGENTSTACK_CODEX_BIN: exits 0" test "$status" -eq 0
+check "dry-run, explicit AGENTSTACK_CODEX_BIN: HOME unchanged" test "$before" = "$after"
+H="$(fresh_home dryrun-saved)"
+stub_cockpit "$H"
+mkdir -p "$H/.agentstack"
+printf 'export AGENTSTACK_CODEX_BIN=%s\nexport AGENTSTACK_PROJECT_KEY=%s\n' "$WORK/abscodex/codex-abs" "$H/orrery-work" >"$H/.agentstack/env.sh"
+before="$(cd "$H" && find . -not -path './orrery/*' -not -path './tmp*' | sort)"
+out="$(setup_in "$H" bash "$H/orrery/scripts/setup.sh" --dry-run 2>&1)"; status=$?
+after="$(cd "$H" && find . -not -path './orrery/*' -not -path './tmp*' | sort)"
+check "dry-run, AGENTSTACK_CODEX_BIN saved in env.sh: exits 0" test "$status" -eq 0
+check "dry-run, AGENTSTACK_CODEX_BIN saved in env.sh: HOME unchanged" test "$before" = "$after"
 
 # What get.sh already did is reported when the setup then stops before yes.
 H="$(fresh_home bootstrap-note)"

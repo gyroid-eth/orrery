@@ -687,17 +687,40 @@ if [ "$dry_run" = true ]; then
   fi
   if [ "$mode" = update ]; then say "(this is the version you have now; the update may change it)"; fi
   # The installer asks codex for its version, and codex writes into its
-  # CODEX_HOME when it starts. Give that probe a throwaway CODEX_HOME through
-  # a wrapper first on PATH; everything else still sees your real settings.
+  # CODEX_HOME when it starts. It probes an explicit AGENTSTACK_CODEX_BIN, else
+  # the one saved in env.sh (if it runs), else the first codex that runs in
+  # PATH and a few usual folders. Pick the same binary here (probing it with a
+  # throwaway CODEX_HOME) and hand the installer a wrapper as an explicit
+  # AGENTSTACK_CODEX_BIN, so every probe it makes goes to the throwaway home.
+  # Everything else (e.g. ~/.codex/AGENTS.md for the preview) is untouched.
   probe_dir="$(mktemp -d "${TMPDIR:-/tmp}/orrery-probe.XXXXXX")"
-  real_codex="$(command -v codex 2>/dev/null || true)"
   mkdir -p "${probe_dir}/bin" "${probe_dir}/codex-home"
-  if [ -n "$real_codex" ]; then
-    printf '#!/bin/sh\nCODEX_HOME=%s exec %s "$@"\n' "'${probe_dir}/codex-home'" "'${real_codex}'" >"${probe_dir}/bin/codex"
+  codex_runs() { [ -f "$1" ] || [ -L "$1" ] || return 1; CODEX_HOME="${probe_dir}/codex-home" "$1" --version >/dev/null 2>&1; }
+  preview_codex=""
+  if [ -n "${AGENTSTACK_CODEX_BIN:-}" ]; then
+    preview_codex="$AGENTSTACK_CODEX_BIN"   # explicit: used as given, even if it fails
+  else
+    saved_codex="$(env_value AGENTSTACK_CODEX_BIN)"
+    if [ -n "$saved_codex" ] && codex_runs "$saved_codex"; then
+      preview_codex="$saved_codex"
+    else
+      old_ifs="$IFS"; IFS=:
+      for dir in $PATH "$HOME/.local/bin" "$HOME/.npm-global/bin" "$HOME/.nodebrew/current/bin" /opt/homebrew/bin /usr/local/bin; do
+        if [ -n "$dir" ] && codex_runs "$dir/codex"; then preview_codex="$dir/codex"; break; fi
+      done
+      IFS="$old_ifs"
+    fi
+  fi
+  rm -rf "${probe_dir}/codex-home" && mkdir -p "${probe_dir}/codex-home"
+  preview_env=""
+  if [ -n "$preview_codex" ]; then
+    printf '#!/bin/sh\nCODEX_HOME=%s exec %s "$@"\n' "'${probe_dir}/codex-home'" "'${preview_codex}'" >"${probe_dir}/bin/codex"
     chmod +x "${probe_dir}/bin/codex"
+    preview_env="AGENTSTACK_CODEX_BIN=${probe_dir}/bin/codex"
+    note "the preview asks ${preview_codex} for its version with a throwaway CODEX_HOME"
   fi
   preview_status=0
-  (cd "$preview_root" && PATH="${probe_dir}/bin:${PATH}" ./scripts/install.sh --dry-run --project-key "$project_key") \
+  (cd "$preview_root" && env PATH="${probe_dir}/bin:${PATH}" $preview_env ./scripts/install.sh --dry-run --project-key "$project_key") \
     || preview_status=$?
   rm -rf "$probe_dir"
   if [ -n "$preview_tmp" ]; then rm -rf "$preview_tmp"; fi
