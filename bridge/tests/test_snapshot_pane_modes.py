@@ -116,7 +116,8 @@ def test_nothing_is_reset_cleared_or_switched():
                      keypad_cursor_flag="1", keypad_flag="1"))
     for sequence in ("\x1bc", "\x1b[?1049", "\x1b[2J", "\x1b[3J", "2004"):
         assert sequence not in replay
-    # Nothing is turned off: a newer live state is never undone.
+    # Nothing is turned off, so a mode live output turned on is kept. (An "on"
+    # here can still undo a newer "off"; that race is a known limit.)
     assert not re.search(r"\x1b\[\?\d+l|\x1b>", replay)
 
 

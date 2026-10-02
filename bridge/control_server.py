@@ -54,8 +54,9 @@ CLIENT_SIZE_FORMAT = (
 # Claude Code (tui: fullscreen) and Codex track the mouse on the alternate
 # screen, and neither could be scrolled back (2026-10-02 report).
 # The replay therefore ends with the modes tmux reports as on. Only "on": the
-# replay may land after live output that already set the viewer's modes, and
-# turning anything off here could undo a newer state.
+# replay never turns off a mode the viewer's live output turned on. It can
+# still turn back on a mode that live output switched off between the query
+# and the replay's arrival, until the app sends that mode again.
 PANE_MODE_SEQUENCES = {
     "mouse_standard_flag": "\x1b[?1000h",
     "mouse_button_flag": "\x1b[?1002h",
