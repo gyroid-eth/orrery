@@ -6,7 +6,7 @@
 
 ## 1 行で入れる・更新する
 
-Mac のターミナル、または Windows では WSL2 の Ubuntu の中で、次の 1 行を打ちます。orrery-telemetry と cockpit の両方が入り、動作の確認（doctor と、Mail の往復を試す selftest）まで済ませてから、cockpit が起動して URL が出ます。すでに入っている人では、同じ 1 行が更新になります（telemetry だけ・古い版・setup.sh の無い従来の版・detached でも）。
+Mac のターミナル、または Windows では WSL2 の Ubuntu の中で、次の 1 行を打ちます。orrery-telemetry と cockpit の両方が入り、動作の確認（doctor と、Mail の往復を試す selftest）まで済ませてから、cockpit を**裏で**起動して URL を出し、ブラウザで開きます。窓は返ってくるので、続けて Claude Code を入れる・ログインする、をその窓でできます。すでに入っている人では、同じ 1 行が更新になります（telemetry だけ・古い版・setup.sh の無い従来の版・detached でも）。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
@@ -17,10 +17,12 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - **終了コードで判定する CI や script** では、`curl | bash` は取得の失敗を 0 と返すことがあるので、`curl -fsSL …/get.sh -o get.sh && bash get.sh --yes` のように保存してから実行します
 - 前提（git・tmux・curl・uv・Python 3.11 以上）はまとめて確かめます。git・tmux・curl が足りなければ入れる 1 行を出して、何も変えずに止まります。uv と Python は sudo なしで入れられるので計画に入れます（shell の設定 file は変えません）
 - 変更の前に計画を 1 画面にまとめ、**`yes` と打って Enter** で 1 回だけ承認します。変わるのは 4 つです: `~/.claude.json`（MCP）、`~/.claude/settings.json`（hooks と permissions）、`~/.codex/AGENTS.md`（Codex の全作業に効く global な block）、project の `CLAUDE.md`（block）。どれも先に backup を取ります。各変更ごとに preview を見て答えたいときは `--ask-each`、計画を読んだうえで質問を省くときは `--yes` を付けます（`… | bash -s -- --ask-each`）
-- 初回は agent に作業させる folder を聞きます（Enter で `~/orrery-work`）。`--project-key PATH` でも渡せます
+- agent に作業させる folder は、指定が無ければ `~/orrery-work` です（質問はしません。計画の画面に出ます）。別の folder にするときは `… | bash -s -- --project-key ~/my-project`
+- cockpit は専用の tmux server（`tmux -L orrery-cockpit`）で動きます。agent の tmux とは別なので、agent の一覧には出ません。出力を見る: `tmux -L orrery-cockpit attach`（Ctrl-b、d で戻る）。止める: `tmux -L orrery-cockpit kill-server`。もう一度起動する: 同じ 1 行。update のときは、自分が起動した cockpit なら新しい版で起動し直します（それ以外の cockpit は止めずに案内だけ）
+- 確認の selftest が作る試験用の agent 2 つは、cockpit の一覧と network には出しません（dashboard には残ります）
 - 確認は doctor の終了コードで判定します（0 以外なら、出力を画面に出して ready とは言いません）。更新が失敗して「今の版のまま起動」を選んだ run も ready とは言わず、最初の記録を残します
 - 最後に、4 項目が「適用した／すでに同じ／skip」のどれだったか、Mail を新しく入れたか動いているものを使い続けたか、doctor と selftest の結果を出します。Claude Code か Codex が無ければ「基盤のみ準備済み」と出ます
-- すでに cockpit が動いていて版が違うときは、止めずに「その窓で Ctrl-C して起動し直す」と案内します
+- この setup が起動したのではない cockpit が別の版で動いているときは、止めずに「その窓で Ctrl-C して、同じ 1 行をもう一度」と案内します
 - **失敗したとき**: 承認の前の検査で止まったときは、setup は何も変えていません（ただし入口の `get.sh` がその前に行ったこと、つまり新しく取得した cockpit の checkout、または従来版の `.git` への取得は残り、画面にそう出ます）。承認の後に失敗したときは**巻き戻しません**。最初の試みの時点と今とで何が変わったかを表で出し、続きから進める 1 行を出します（その表の「最初」は、すべての確認が通るまで上書きされません。`~/.orrery-install/`）。前の版に戻すコマンドは用意していません
 - 新しく入れたものを取り除くときは、表示された `<orrery-telemetry の checkout>/scripts/uninstall.sh` を使います（Mail の DB は `--purge-data` を付けない限り残ります。2 つの checkout・uv・Python も残ります）。**更新の取り消しには使わないでください**（既存の環境ごと取り除きます）
 
