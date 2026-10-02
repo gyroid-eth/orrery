@@ -32,6 +32,9 @@ TEL_URL="${TEL_OVERRIDE:-https://github.com/gyroid-eth/orrery-telemetry.git}"
 TEL_REF="${ORRERY_TELEMETRY_REF:-master}"
 TEL_DEFAULT="${ORRERY_TELEMETRY_DIR:-${HOME}/orrery-telemetry}"
 COCKPIT_REF="${ORRERY_REF:-master}"
+# The update.sh that comes with this setup.sh (get.sh hands over the newest
+# pair, also for an older checkout), run on the cockpit checkout.
+UPDATE_SH="${SCRIPT_DIR}/update.sh"
 DEFAULT_PROJECT="${HOME}/orrery-work"
 COCKPIT_PORT="${PORT:-8791}"
 STATE_DIR="${ORRERY_INSTALL_STATE_DIR:-${HOME}/.orrery-install}"
@@ -180,6 +183,13 @@ expand_path() { # ~ and relative paths -> absolute
     /*) printf '%s' "$1" ;;
     *) printf '%s/%s' "$(pwd)" "$1" ;;
   esac
+}
+run_update() {
+  if [ -x "$UPDATE_SH" ]; then
+    ORRERY_COCKPIT_ROOT="$COCKPIT_ROOT" "$UPDATE_SH" "$@"
+  else
+    "${COCKPIT_ROOT}/scripts/update.sh" "$@"
+  fi
 }
 on_windows_drive() { case "$1" in /mnt/[a-z] | /mnt/[a-z]/*) return 0 ;; esac; return 1; }
 have_tty() { [ -t 0 ]; }
@@ -592,7 +602,7 @@ pass_mail=""
 if [ -n "$mail_mode" ]; then
   if [ "$mode" != update ]; then
     note "--mail ${mail_mode}: a new install sets up ORRERY Mail anyway; the option is not needed"
-  elif "${COCKPIT_ROOT}/scripts/update.sh" --help 2>/dev/null | grep -q -- '--mail'; then
+  elif run_update --help 2>/dev/null | grep -q -- '--mail'; then
     pass_mail="--mail=${mail_mode}"
     mail_line="ORRERY Mail: --mail ${mail_mode}, as scripts/update.sh does it"
   elif [ "$mail_mode" = keep ]; then
@@ -734,7 +744,7 @@ if [ "$dry_run" = true ]; then
   if [ "$mode" = update ]; then
     say ""
     say "Dry run: what the update would fetch"
-    "${COCKPIT_ROOT}/scripts/update.sh" --dry-run \
+    run_update --dry-run \
       || stop "The update's preview failed (see above). Nothing was changed."
   fi
   say ""
@@ -873,7 +883,7 @@ case "$mode" in
     if [ -n "$project_key_arg" ]; then export AGENTSTACK_PROJECT_KEY="$project_key"; fi
     if [ "$ask_each" != true ]; then export AGENTSTACK_ASSUME_YES=1; fi
     say "  updating orrery-telemetry and the cockpit ..."
-    if logged "${COCKPIT_ROOT}/scripts/update.sh" $pass_mail; then
+    if logged run_update $pass_mail; then
       ok "orrery-telemetry: $(head_of "$tel_root") ($(cat "${AGENTSTACK_DIR}/VERSION" 2>/dev/null || printf '?')), cockpit: $(head_of "$COCKPIT_ROOT")"
     else
       update_failed=true

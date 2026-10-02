@@ -340,6 +340,46 @@ out="$(setup_in "$H" bash "$H/orrery/scripts/setup.sh" --yes --no-start 2>&1)"; 
 check "saved broken codex: the install goes on" test "$status" -eq 0
 check "saved broken codex: not refused as chosen" sh -c '! printf "%s" "$1" | grep -q "cannot be used"' _ "$out"
 
+# An existing cockpit checkout that is behind: the newest setup.sh AND the
+# newest update.sh run on it (a fix to update.sh takes effect on this run,
+# not the next one). MacBook Air, 2026-10-02.
+REMOTE_B="$WORK/behind.git"
+git clone --quiet --bare "$WORK/orrery.git" "$REMOTE_B"
+SEED_B="$WORK/behind-seed"
+git clone --quiet --branch "$BRANCH" "file://$REMOTE_B" "$SEED_B"
+cat >"$SEED_B/scripts/start-cockpit.sh" <<'EOF'
+#!/bin/sh
+case "${1:-}" in --check) exit 0 ;; esac
+exit 0
+EOF
+git -C "$SEED_B" -c user.name=t -c user.email=t@t commit --quiet -am "stub start-cockpit"
+git -C "$SEED_B" push --quiet origin "HEAD:$BRANCH"
+H="$(fresh_home behind)"
+git clone --quiet --branch "$BRANCH" "file://$REMOTE_B" "$H/orrery"
+setup_in "$H" ORRERY_REPO_URL="file://$REMOTE_B" bash "$H/orrery/scripts/setup.sh" --yes --no-start >/dev/null 2>&1   # a first install
+# A newer update.sh appears on the remote; the checkout is now one behind.
+sed -i.bak 's/^set -eu$/set -eu\necho "NEWEST-UPDATE-SH ran"/' "$SEED_B/scripts/update.sh" && rm -f "$SEED_B/scripts/update.sh.bak"
+git -C "$SEED_B" -c user.name=t -c user.email=t@t commit --quiet -am "a newer update.sh"
+git -C "$SEED_B" push --quiet origin "HEAD:$BRANCH"
+out="$(run_in "$H" ORRERY_REPO_URL="file://$REMOTE_B" ORRERY_REF="$BRANCH" ORRERY_TELEMETRY_URL="$STUBTEL_URL" \
+  AGENTSTACK_PYTHON="$(command -v python3)" bash "$ROOT/scripts/get.sh" --yes --no-start 2>&1)"; status=$?
+log="$(ls -d "$H"/.orrery-install/runs/*/ | tail -n 1)log"
+check "behind: the run succeeds" test "$status" -eq 0
+check "behind: the newest update.sh ran (not the checkout's old one)" grep -q "NEWEST-UPDATE-SH ran" "$log"
+check "behind: the checkout is at the newest commit afterwards" \
+  test "$(git -C "$H/orrery" rev-parse HEAD)" = "$(git -C "$SEED_B" rev-parse HEAD)"
+check "behind: says it uses the newest setup" sh -c 'printf "%s" "$1" | grep -q "setup: from"' _ "$out"
+# Uncommitted changes in that checkout: the newest update.sh stops, nothing moves.
+git -C "$SEED_B" -c user.name=t -c user.email=t@t commit --quiet --allow-empty -m "newer again"
+git -C "$SEED_B" push --quiet origin "HEAD:$BRANCH"
+echo "# local edit" >>"$H/orrery/README.md"
+before="$(git -C "$H/orrery" rev-parse HEAD)"
+out="$(run_in "$H" ORRERY_REPO_URL="file://$REMOTE_B" ORRERY_REF="$BRANCH" ORRERY_TELEMETRY_URL="$STUBTEL_URL" \
+  AGENTSTACK_PYTHON="$(command -v python3)" bash "$ROOT/scripts/get.sh" --yes --no-start 2>&1)"; status=$?
+check "behind + uncommitted: stops" test "$status" -ne 0
+check "behind + uncommitted: the checkout did not move" test "$(git -C "$H/orrery" rev-parse HEAD)" = "$before"
+check "behind + uncommitted: the local edit is still there" grep -q "# local edit" "$H/orrery/README.md"
+
 # An unfinished Mail copy: never a command that deletes anything.
 H="$(fresh_home mail-incomplete)"
 stub_cockpit "$H"

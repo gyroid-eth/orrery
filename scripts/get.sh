@@ -225,25 +225,37 @@ main() {
   fi
 
   # ------------------------------------------------------------ which setup
+  # The newest setup.sh and update.sh always run, also on an older checkout:
+  # a fix to them then works on this run, not only on the next one. Only
+  # .git's remote-tracking data and FETCH_HEAD change here; the checkout's
+  # files are updated later by update.sh (which stops, changing nothing, on
+  # uncommitted changes or a checkout that cannot be fast-forwarded).
   setup="${cockpit}/scripts/setup.sh"
-  if [ ! -x "$setup" ] || [ "$(contract_of "$setup")" -lt "$required_contract" ]; then
-    # A checkout from before this setup existed (or too old for this get.sh):
-    # use the remote's setup. Only .git's remote-tracking data and FETCH_HEAD
-    # change here; the checkout's files are updated later by update.sh.
-    git -C "$cockpit" fetch --quiet origin "$ref" 2>/dev/null \
-      || stop "Could not reach the remote of ${cockpit}; nothing was changed." \
-        "Check the network connection, then run this again."
-    [ -n "$tmp_root" ] || tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/orrery-setup.XXXXXX")"
-    setup="${tmp_root}/setup.sh"
-    git -C "$cockpit" show FETCH_HEAD:scripts/setup.sh >"$setup" 2>/dev/null \
-      || stop "The remote of ${cockpit} has no scripts/setup.sh; nothing was changed."
-    chmod +x "$setup"
-    export ORRERY_BOOTSTRAP_DID="fetched the newest version into ${cockpit}/.git (its files are unchanged)"
-    say "  ok    setup: from $(origin_of "$cockpit") at $(git -C "$cockpit" log -1 --format='%h (%cd)' --date=short FETCH_HEAD)"
-    say "        (this checkout is older than the setup; the setup updates it)"
-    export ORRERY_TEMP_SETUP=1
+  local_ok=true
+  if [ ! -x "$setup" ] || [ "$(contract_of "$setup")" -lt "$required_contract" ]; then local_ok=false; fi
+  if git -C "$cockpit" fetch --quiet origin "$ref" 2>/dev/null; then
+    newest="$(git -C "$cockpit" rev-parse FETCH_HEAD)"
+    if [ "$local_ok" != true ] || [ "$(git -C "$cockpit" rev-parse HEAD)" != "$newest" ]; then
+      [ -n "$tmp_root" ] || tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/orrery-setup.XXXXXX")"
+      mkdir -p "${tmp_root}/scripts"
+      git -C "$cockpit" show "${newest}:scripts/setup.sh" >"${tmp_root}/scripts/setup.sh" 2>/dev/null \
+        || stop "The remote of ${cockpit} has no scripts/setup.sh; nothing was changed."
+      git -C "$cockpit" show "${newest}:scripts/update.sh" >"${tmp_root}/scripts/update.sh" 2>/dev/null \
+        || stop "The remote of ${cockpit} has no scripts/update.sh; nothing was changed."
+      chmod +x "${tmp_root}/scripts/setup.sh" "${tmp_root}/scripts/update.sh"
+      setup="${tmp_root}/scripts/setup.sh"
+      export ORRERY_BOOTSTRAP_DID="fetched the newest version into ${cockpit}/.git (its files are unchanged)"
+      say "  ok    setup: from $(origin_of "$cockpit") at $(git -C "$cockpit" log -1 --format='%h (%cd)' --date=short "$newest")"
+      say "        (this checkout, at $(describe "$cockpit"), is older; the newest setup updates it)"
+      export ORRERY_TEMP_SETUP=1
+    else
+      say "  ok    setup: ${setup} (the checkout is at the newest version)"
+    fi
+  elif [ "$local_ok" = true ]; then
+    say "  note  could not reach the remote of ${cockpit}; using its own setup"
   else
-    say "  ok    setup: ${setup}"
+    stop "Could not reach the remote of ${cockpit}; nothing was changed." \
+      "Check the network connection, then run this again."
   fi
   export ORRERY_DIR="$cockpit"
   say "  ok    got ORRERY; handing over to the setup"

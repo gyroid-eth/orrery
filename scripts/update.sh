@@ -13,7 +13,9 @@
 set -eu
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
-COCKPIT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+# The checkout to update: this file's own, unless setup.sh runs a newer copy of
+# this file on an older checkout (ORRERY_COCKPIT_ROOT names that checkout).
+COCKPIT_ROOT="$(cd -- "${ORRERY_COCKPIT_ROOT:-${SCRIPT_DIR}/..}" && pwd)"
 AGENTSTACK_DIR="${AGENTSTACK_HOME:-${HOME}/.agentstack}"
 INSTALL_STATE="${AGENTSTACK_DIR}/install-state.json"
 CODEX_INTEGRATION_DIR="${AGENTSTACK_DIR}/integrations/codex_app"
