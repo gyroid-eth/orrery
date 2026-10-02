@@ -216,6 +216,16 @@ telemetry_install() {
       done
       # shellcheck disable=SC1090
       . "${AGENTSTACK_DIR}/env.sh"
+      # What install.sh reads back from env.sh by itself (its resolve_setting
+      # lines) is left to it: in its environment a value counts as chosen on
+      # purpose, so a saved Codex path that no longer runs would be refused
+      # instead of looked up again. Values set in this shell still win below.
+      for name in $(sed -n 's/^resolve_setting [A-Z_]* \(AGENTSTACK_[A-Z_]*\).*/\1/p' ./scripts/install.sh 2>/dev/null); do
+        case " $explicit " in
+          *" $name "*) ;;
+          *) unset "$name" ;;
+        esac
+      done
       for name in $explicit; do
         eval "export ${name}=\"\${saved_${name}}\""
       done

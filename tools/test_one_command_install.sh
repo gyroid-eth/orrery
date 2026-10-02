@@ -166,6 +166,14 @@ if [ "${1:-}" = "--dry-run" ] || [ "${2:-}" = "--dry-run" ]; then
   echo "Tier1 settings safe-merge dry-run: (stub)"
   exit "${STUB_PREVIEW_EXIT:-0}"
 fi
+# Like the real installer: settings it reads back from env.sh itself, and a
+# Codex path in its environment counts as chosen; a chosen one that does not
+# run is refused (exit 2).
+resolve_setting() { :; }
+resolve_setting CODEX_BIN_SETTING AGENTSTACK_CODEX_BIN "" found
+if [ -n "${AGENTSTACK_CODEX_BIN:-}" ] && ! "$AGENTSTACK_CODEX_BIN" --version >/dev/null 2>&1; then
+  echo "error: --codex-bin / AGENTSTACK_CODEX_BIN cannot be used: $AGENTSTACK_CODEX_BIN" >&2; exit 2
+fi
 if [ -n "${STUB_INSTALL_ERROR:-}" ]; then echo "error: ${STUB_INSTALL_ERROR}" >&2; exit 1; fi
 mkdir -p "$dir/bin"
 printf '2026.10.01.1\n' >"$dir/VERSION"
@@ -321,6 +329,16 @@ out="$(setup_in "$H2" PORT=18996 ORRERY_COCKPIT_TMUX_SOCKET="$SOCK" bash "$H2/or
 check "foreign cockpit: not stopped" sh -c 'curl -fsS --max-time 2 http://127.0.0.1:18996/telemetry/health >/dev/null'
 check "foreign cockpit: says a restart is needed" sh -c 'printf "%s" "$1" | grep -q "not this version"' _ "$out"
 pkill -f "$H2" 2>/dev/null
+
+# A Codex path saved in env.sh that no longer runs is not handed to the
+# installer as chosen (it looks for codex again instead of refusing).
+H="$(fresh_home saved-broken-codex)"
+stub_cockpit "$H"
+mkdir -p "$H/.agentstack"
+printf "export AGENTSTACK_CODEX_BIN='/broken/codex'\nexport AGENTSTACK_PROJECT_KEY='%s'\n" "$H/orrery-work" >"$H/.agentstack/env.sh"
+out="$(setup_in "$H" bash "$H/orrery/scripts/setup.sh" --yes --no-start 2>&1)"; status=$?
+check "saved broken codex: the install goes on" test "$status" -eq 0
+check "saved broken codex: not refused as chosen" sh -c '! printf "%s" "$1" | grep -q "cannot be used"' _ "$out"
 
 # An unfinished Mail copy: never a command that deletes anything.
 H="$(fresh_home mail-incomplete)"

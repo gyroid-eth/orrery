@@ -451,3 +451,44 @@ def test_negative_a_branch_with_nothing_to_pull_from(stack):
 def test_negative_unknown_option(stack):
     result = stack.update("--yes")
     assert result.returncode == 2 and "Unknown option: --yes" in result.stderr
+
+
+# ---------------------------------------------------------------- saved is not explicit
+# install.sh reads most saved settings back from env.sh itself (its
+# resolve_setting lines) and treats a value in its environment as chosen on
+# purpose. Exporting env.sh's copy made a saved, since-broken Codex path look
+# explicit, and install.sh refused it instead of looking for codex again
+# (MacBook Air, 2026-10-02). update.sh now leaves those to install.sh.
+FAKE_INSTALL_RESOLVING = """#!/bin/sh
+resolve_setting() { :; }
+resolve_setting PORT AGENTSTACK_PORT 8770
+resolve_setting CODEX_BIN_SETTING AGENTSTACK_CODEX_BIN "" found
+printf 'install cockpit=%s\\n' "$(git -C "$FAKE_COCKPIT" rev-parse HEAD)" >> "$FAKE_LOG"
+printf 'codex=%s port=%s maildb=%s\\n' "${AGENTSTACK_CODEX_BIN-unset}" "${AGENTSTACK_PORT-unset}" \\
+  "${AGENTSTACK_MAIL_DB-unset}" > "$FAKE_LOG.env"
+"""
+SAVED_WITH_CODEX = ("export AGENTSTACK_CODEX_BIN='/broken/codex'\n"
+                    "export AGENTSTACK_PORT='19876'\n"
+                    "export AGENTSTACK_MAIL_DB='/saved/storage.sqlite3'\n")
+
+
+def use_resolving_installer(stack):
+    seed = stack.tmp / "telemetry-seed"
+    (seed / "scripts" / "install.sh").write_text(FAKE_INSTALL_RESOLVING)
+    git(seed, "commit", "-q", "-am", "an installer that resolves saved settings itself")
+    git(seed, "push", "-q", "origin", "HEAD:master")
+    (stack.agentstack / "env.sh").write_text(SAVED_WITH_CODEX)
+
+
+def test_positive_settings_install_sh_reads_itself_are_not_passed_as_chosen(stack, dashboard):
+    use_resolving_installer(stack)
+    assert stack.update(ORRERY_DASHBOARD_URL=dashboard).returncode == 0
+    # codex and port come from env.sh inside install.sh (saved, not chosen);
+    # the Mail database, which install.sh does not read back, is still passed.
+    assert stack.install_env() == "codex=unset port=unset maildb=/saved/storage.sqlite3"
+
+
+def test_positive_a_value_set_in_this_environment_is_still_passed(stack, dashboard):
+    use_resolving_installer(stack)
+    assert stack.update(ORRERY_DASHBOARD_URL=dashboard, AGENTSTACK_CODEX_BIN="/chosen/codex").returncode == 0
+    assert stack.install_env() == "codex=/chosen/codex port=unset maildb=/saved/storage.sqlite3"
