@@ -534,6 +534,24 @@ PROXY_INFLIGHT_KEY = web.AppKey("proxy_inflight", dict)
 # reloads itself when it changes, so a restarted backend never sits behind a
 # window still running the page it served hours ago.
 BACKEND_BOOT_ID = f"{int(time.time())}-{os.getpid()}"
+
+
+def _checkout_commit() -> str:
+    """The commit this backend was started from ("" outside a git checkout)."""
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return done.stdout.strip() if done.returncode == 0 else ""
+
+
+# Fixed at startup, so the health answer tells which checkout and commit are
+# actually running (scripts/setup.sh compares them after an update).
+BACKEND_ROOT = str(REPO_ROOT)
+BACKEND_COMMIT = _checkout_commit()
 # Which localStorage keys are cockpit preferences worth sharing between the
 # app window and browser tabs. Drafts, histories and caches stay per window.
 # Mirrors SYNC_RE in bridge/prefs_sync.js.
@@ -1403,6 +1421,52 @@ def shared_fetch(
     return task
 
 
+# agentstack-selftest (run by the one-line install) registers two test agents
+# under this program and retires them. They are not the user's agents, so the
+# cockpit's roster and network leave them out; the dashboard still lists them.
+SELFTEST_PROGRAM = "agentstack-selftest"
+
+
+def hide_selftest_agents(path: str, body: bytes) -> bytes:
+    """Drop the self-test's agents (and links touching them) from a proxied answer."""
+    try:
+        payload = json.loads(body)
+    except (ValueError, UnicodeDecodeError):
+        return body
+    if not isinstance(payload, dict):
+        return body
+
+    def is_selftest(entry: Any) -> bool:
+        return isinstance(entry, dict) and entry.get("program") == SELFTEST_PROGRAM
+
+    if path == "/telemetry/agents":
+        agents = payload.get("agents")
+        if not isinstance(agents, list) or not any(is_selftest(a) for a in agents):
+            return body
+        payload["agents"] = [a for a in agents if not is_selftest(a)]
+        return json.dumps(payload).encode()
+
+    nodes = payload.get("nodes")
+    if not isinstance(nodes, list):
+        return body
+    hidden = {n.get("name") for n in nodes if is_selftest(n)}
+    if not hidden:
+        return body
+    payload["nodes"] = [n for n in nodes if not is_selftest(n)]
+    for key in ("edges", "spawn"):
+        links = payload.get(key)
+        if isinstance(links, list):
+            payload[key] = [
+                link for link in links
+                if not (isinstance(link, dict)
+                        and (link.get("source") in hidden or link.get("target") in hidden))
+            ]
+    for key in ("total", "shown"):
+        if isinstance(payload.get(key), int):
+            payload[key] = max(0, payload[key] - len(hidden))
+    return json.dumps(payload).encode()
+
+
 async def proxy_dashboard(request: web.Request) -> web.Response:
     dash_path, allowed = PROXY_ROUTES[request.path]
     kept = {
@@ -1421,6 +1485,8 @@ async def proxy_dashboard(request: web.Request) -> web.Response:
             body, status, content_type = await asyncio.shield(task)
         else:
             body, status, content_type = await fetch_proxied(http_session, request.path, url)
+        if status == 200 and request.path in ("/telemetry/agents", "/telemetry/graph"):
+            body = hide_selftest_agents(request.path, body)
         return web.Response(
             body=body,
             status=status,
@@ -2839,6 +2905,8 @@ async def serve_health(request: web.Request) -> web.Response:
             "backend": "ok",
             "boot": BACKEND_BOOT_ID,
             "dashboard": dashboard_online,
+            "root": BACKEND_ROOT,
+            "commit": BACKEND_COMMIT,
         }
     )
 

@@ -13,16 +13,20 @@
 set -eu
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
-COCKPIT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+# The checkout to update: this file's own, unless setup.sh runs a newer copy of
+# this file on an older checkout (ORRERY_COCKPIT_ROOT names that checkout).
+COCKPIT_ROOT="$(cd -- "${ORRERY_COCKPIT_ROOT:-${SCRIPT_DIR}/..}" && pwd)"
 AGENTSTACK_DIR="${AGENTSTACK_HOME:-${HOME}/.agentstack}"
 INSTALL_STATE="${AGENTSTACK_DIR}/install-state.json"
 CODEX_INTEGRATION_DIR="${AGENTSTACK_DIR}/integrations/codex_app"
 
 dry_run=false
+# ORRERY Mail on this update; always passed to install.sh explicitly.
+mail_mode=keep
 
 usage() {
   cat <<'EOF'
-Usage: scripts/update.sh [--dry-run] [-h|--help]
+Usage: scripts/update.sh [--mail auto|update|keep] [--dry-run] [-h|--help]
 
 Update orrery-telemetry and this ORRERY cockpit to the latest version:
   1. orrery-telemetry: git pull --ff-only, then ./scripts/install.sh
@@ -32,6 +36,11 @@ Nothing is changed when either checkout has uncommitted changes, cannot be
 fast-forwarded, or its remote cannot be reached.
 
 Options:
+  --mail auto|update|keep
+             ORRERY Mail: keep the running one (default), update it to this
+             orrery-telemetry's build, or auto (update when it is safe).
+             Passed to install.sh as --mail (older ones: --update-mail, or
+             AGENTSTACK_MAIL_UPDATE for keep / auto).
   --dry-run  Show what would be done; change nothing (not even git fetch).
   -h, --help Show this help text.
 
@@ -43,6 +52,10 @@ EOF
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) dry_run=true ;;
+    --mail)
+      [ $# -ge 2 ] || { printf 'Missing value for --mail (auto|update|keep)\n' >&2; exit 2; }
+      mail_mode="$2"; shift ;;
+    --mail=*) mail_mode="${1#*=}" ;;
     -h | --help) usage; exit 0 ;;
     *)
       printf 'Unknown option: %s\n\n' "$1" >&2
@@ -52,6 +65,11 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+case "$mail_mode" in
+  auto | update | keep) ;;
+  *) printf 'Unknown --mail value: %s (auto|update|keep)\n' "$mail_mode" >&2; exit 2 ;;
+esac
 
 say() { printf '%s\n' "$*"; }
 ok() { printf '  ok    %s\n' "$*"; }
@@ -214,17 +232,47 @@ telemetry_install() {
           AGENTSTACK_*) explicit="${explicit} ${name}"; eval "saved_${name}=\"\${${name}}\"" ;;
         esac
       done
+      for name in $explicit; do unset "$name"; done   # so the next line shows env.sh's own values
       # shellcheck disable=SC1090
       . "${AGENTSTACK_DIR}/env.sh"
+      # What install.sh reads back from env.sh by itself (its resolve_setting
+      # lines) is left to it: in its environment a value counts as chosen on
+      # purpose, so a saved Codex path that no longer runs would be refused
+      # instead of looked up again. A value set in this shell is passed on as a
+      # choice only when it differs from env.sh's; one equal to it is treated as
+      # the saved value (that is the rule, not a proof of where it came from: a
+      # login shell that sources env.sh, like ~/.zshenv, puts exactly these here).
+      # The names come from install.sh's resolve_setting lines, so a change to
+      # that form in install.sh must come with a change here.
+      echoed=""
+      for name in $(sed -n 's/^resolve_setting [A-Z_]* \(AGENTSTACK_[A-Z_]*\).*/\1/p' ./scripts/install.sh 2>/dev/null); do
+        case " $explicit " in
+          *" $name "*)
+            eval "from_file=\${${name}-__not_in_env_sh__}"
+            eval "from_shell=\${saved_${name}}"
+            if [ "$from_shell" = "$from_file" ]; then echoed="${echoed} ${name}"; fi
+            ;;
+        esac
+        unset "$name"
+      done
       for name in $explicit; do
+        case " $echoed " in *" $name "*) continue ;; esac
         eval "export ${name}=\"\${saved_${name}}\""
       done
     fi
-    exec ./scripts/install.sh
+    # The Mail choice, in the form this install.sh understands.
+    # (Read from the file, not by running it.)
+    if grep -q -- '--mail auto|update|keep' ./scripts/install.sh 2>/dev/null; then
+      exec ./scripts/install.sh --mail "$mail_mode"
+    fi
+    case "$mail_mode" in
+      update) exec ./scripts/install.sh --update-mail ;;
+      *) export AGENTSTACK_MAIL_UPDATE="$mail_mode"; exec ./scripts/install.sh ;;
+    esac
   )
 }
-printf '  run   cd %s && ./scripts/install.sh   (with the saved settings in %s/env.sh)\n' \
-  "$telemetry_root" "$AGENTSTACK_DIR"
+printf '  run   cd %s && ./scripts/install.sh --mail %s   (with the saved settings in %s/env.sh)\n' \
+  "$telemetry_root" "$mail_mode" "$AGENTSTACK_DIR"
 if [ "$dry_run" != true ] && ! telemetry_install; then
   fail "orrery-telemetry's install.sh failed (see its output above); the cockpit was not updated." \
     "Fix what it reports, then run this again."

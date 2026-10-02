@@ -1,0 +1,1388 @@
+#!/usr/bin/env bash
+# Install or update orrery-telemetry and this ORRERY cockpit, check that they
+# work, then start the cockpit. scripts/get.sh (the one-line install) ends
+# here; it can also be run directly from a checkout.
+#
+# It decides what to call and calls the existing tools:
+#   nothing installed     -> clone orrery-telemetry, run its install.sh
+#   orrery-telemetry in   -> scripts/update.sh (updates both checkouts)
+#   then                  -> agentstack-doctor, agentstack-selftest,
+#                            scripts/start-cockpit.sh (venv, start, URL)
+# Before anything is changed it shows one plan and asks once (type yes).
+#
+# What it promises when something fails:
+#   - a check that fails before the plan is approved changes nothing;
+#   - after that, nothing is rolled back. It shows what changed since the
+#     first attempt (kept in ~/.orrery-install/baseline until a run passes
+#     every check) and the one line that carries on.
+#
+# Works on macOS (including /bin/bash 3.2) and on Linux inside WSL2.
+set -eu
+
+# Raised when get.sh needs something new from this file (see get.sh).
+ORRERY_SETUP_CONTRACT=1
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
+AGENTSTACK_DIR="${AGENTSTACK_HOME:-${HOME}/.agentstack}"
+INSTALL_STATE="${AGENTSTACK_DIR}/install-state.json"
+ENV_FILE="${AGENTSTACK_DIR}/env.sh"
+COCKPIT_OVERRIDE="${ORRERY_REPO_URL:-}"
+TEL_OVERRIDE="${ORRERY_TELEMETRY_URL:-}"
+TEL_URL="${TEL_OVERRIDE:-https://github.com/gyroid-eth/orrery-telemetry.git}"
+TEL_REF="${ORRERY_TELEMETRY_REF:-master}"
+TEL_DEFAULT="${ORRERY_TELEMETRY_DIR:-${HOME}/orrery-telemetry}"
+COCKPIT_REF="${ORRERY_REF:-master}"
+# The update.sh that comes with this setup.sh (get.sh hands over the newest
+# pair, also for an older checkout), run on the cockpit checkout.
+UPDATE_SH="${SCRIPT_DIR}/update.sh"
+DEFAULT_PROJECT="${HOME}/orrery-work"
+COCKPIT_PORT="${PORT:-8791}"
+STATE_DIR="${ORRERY_INSTALL_STATE_DIR:-${HOME}/.orrery-install}"
+BASELINE="${STATE_DIR}/baseline"
+
+# The cockpit checkout: the one get.sh chose, else the one this file is in.
+# With --check / --dry-run from get.sh there may be none yet (PLANNED).
+COCKPIT_PLANNED=""
+if [ -n "${ORRERY_DIR:-}" ]; then
+  COCKPIT_ROOT="$(cd -- "$ORRERY_DIR" && pwd)"
+elif [ -n "${ORRERY_PLANNED_DIR:-}" ]; then
+  COCKPIT_ROOT=""
+  COCKPIT_PLANNED="$ORRERY_PLANNED_DIR"
+else
+  COCKPIT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+fi
+
+assume_yes=false
+ask_each=false
+check_only=false
+dry_run=false
+no_start=false
+mail_mode=""
+project_key_arg=""
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/setup.sh [options]
+
+Install or update orrery-telemetry and the ORRERY cockpit, check that they
+work, then start the cockpit and print its URL. Shows the plan and asks once
+(type yes) before changing anything.
+
+Options:
+  --project-key PATH  folder the agents work in (first install; default
+                      ~/orrery-work, created if missing; nothing asks for it)
+  -y, --yes           do not ask; accept the plan (you have read it here)
+  --ask-each          also show orrery-telemetry's installer previews and let
+                      it ask before each of its four changes
+  --mail auto|update|keep
+                      ORRERY Mail on update (default keep), passed on to
+                      scripts/update.sh every time (stops before changing
+                      anything if update cannot be passed on)
+  --check             only check and show the plan; changes nothing
+  --dry-run           also show the installer's own previews; changes nothing
+  --no-start          do everything but start the cockpit
+  -h, --help          show this help
+
+Environment (optional): ORRERY_DIR, ORRERY_TELEMETRY_DIR (default
+~/orrery-telemetry), PORT (cockpit, default 8791), ORRERY_NO_OPEN=1 (do not
+open the browser). AGENTSTACK_* values are passed on to orrery-telemetry.
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -y | --yes) assume_yes=true ;;
+    --ask-each) ask_each=true ;;
+    --check) check_only=true ;;
+    --dry-run) dry_run=true ;;
+    --no-start) no_start=true ;;
+    --project-key)
+      [ $# -ge 2 ] || { printf 'Missing value for --project-key\n' >&2; exit 2; }
+      project_key_arg="$2"; shift ;;
+    --project-key=*) project_key_arg="${1#*=}" ;;
+    --mail)
+      [ $# -ge 2 ] || { printf 'Missing value for --mail\n' >&2; exit 2; }
+      mail_mode="$2"; shift ;;
+    --mail=*) mail_mode="${1#*=}" ;;
+    -h | --help) usage; exit 0 ;;
+    *) printf 'Unknown option: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
+  esac
+  shift
+done
+case "$mail_mode" in
+  "" | keep | update | auto) ;;
+  *) printf 'Unknown --mail value: %s (auto|update|keep)\n' "$mail_mode" >&2; exit 2 ;;
+esac
+read_only=false
+if [ "$check_only" = true ] || [ "$dry_run" = true ]; then read_only=true; fi
+if [ -z "$COCKPIT_ROOT" ] && [ "$read_only" != true ]; then
+  printf 'No cockpit checkout (ORRERY_PLANNED_DIR is only for --check / --dry-run).\n' >&2
+  exit 2
+fi
+
+say() { printf '%s\n' "$*"; }
+ok() { printf '  ok    %s\n' "$*"; }
+note() { printf '  note  %s\n' "$*"; }
+warn_line() { printf '  WARN  %s\n' "$*"; }
+problems=0
+problem() {
+  problems=$((problems + 1))
+  printf '\n  NG    %s\n' "$1"
+  shift
+  for line in "$@"; do printf '        %s\n' "$line"; done
+}
+changes_started=false
+stop() {
+  printf '\n  NG    %s\n' "$1"
+  shift
+  for line in "$@"; do printf '        %s\n' "$line"; done
+  if [ "$changes_started" = true ]; then after_failure; fi
+  exit 1
+}
+TAB="$(printf '\t')"
+step_no=0
+step() {
+  step_no=$((step_no + 1))
+  printf '\n[%d/7] %s\n' "$step_no" "$1"
+  if [ -n "${RUN_DIR:-}" ]; then printf '%s start %s\n' "$(date +%H:%M:%S)" "$1" >>"${RUN_DIR}/steps"; fi
+}
+step_done() {
+  if [ -n "${RUN_DIR:-}" ]; then printf '%s done  %s\n' "$(date +%H:%M:%S)" "$1" >>"${RUN_DIR}/steps"; fi
+}
+
+# >>> remote-match (tools/test_one_command_install.sh reads this block)
+# Exact match only: the official GitHub repository in its HTTPS / SSH forms,
+# or the exact URL given in the test override.
+official_remote() { # $1 = URL, $2 = repository name, $3 = override URL (may be empty)
+  if [ -n "$3" ]; then
+    [ "$1" = "$3" ]
+    return
+  fi
+  case "$1" in
+    "https://github.com/gyroid-eth/$2" | "https://github.com/gyroid-eth/$2.git" | \
+      "git@github.com:gyroid-eth/$2" | "git@github.com:gyroid-eth/$2.git" | \
+      "ssh://git@github.com/gyroid-eth/$2" | "ssh://git@github.com/gyroid-eth/$2.git") return 0 ;;
+  esac
+  return 1
+}
+# <<< remote-match
+
+# ---------------------------------------------------------------- helpers
+env_value() { # $1 = name in orrery-telemetry's env.sh
+  [ -r "$ENV_FILE" ] || return 0
+  ( . "$ENV_FILE" >/dev/null 2>&1 || true; eval "printf '%s' \"\${$1:-}\"" )
+}
+origin_of() { git -C "$1" remote get-url origin 2>/dev/null || true; }
+is_checkout_root() { # $1 = folder
+  top="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || true)"
+  [ -n "$top" ] && [ "$(cd "$top" && pwd -P)" = "$(cd "$1" && pwd -P)" ]
+}
+py_ok() { "$1" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1; }
+expand_path() { # ~ and relative paths -> absolute
+  case "$1" in
+    "~") printf '%s' "$HOME" ;;
+    "~/"*) printf '%s/%s' "$HOME" "${1#\~/}" ;;
+    /*) printf '%s' "$1" ;;
+    *) printf '%s/%s' "$(pwd)" "$1" ;;
+  esac
+}
+run_update() {
+  if [ -n "$LOG" ]; then printf 'update.sh: %s (on %s)\n' "$UPDATE_SH" "$COCKPIT_ROOT" >>"$LOG"; fi
+  if [ -x "$UPDATE_SH" ]; then
+    ORRERY_COCKPIT_ROOT="$COCKPIT_ROOT" "$UPDATE_SH" "$@"
+  else
+    "${COCKPIT_ROOT}/scripts/update.sh" "$@"
+  fi
+}
+on_windows_drive() { case "$1" in /mnt/[a-z] | /mnt/[a-z]/*) return 0 ;; esac; return 1; }
+have_tty() { [ -t 0 ]; }
+http_get() { curl -fsS --max-time 2 "$1" 2>/dev/null || true; }
+json_str() { # $1 = key; reads one JSON object on stdin; prints the string value
+  sed -n "s/.*\"$1\": *\"\([^\"]*\)\".*/\1/p" | head -n 1
+}
+short() { printf '%s' "$1" | cut -c1-7; }
+head_of() { git -C "$1" rev-parse --short HEAD 2>/dev/null || printf -- '-'; }
+branch_of() { git -C "$1" symbolic-ref -q --short HEAD 2>/dev/null || printf 'detached'; }
+
+# ---------------------------------------------------------------- run state
+RUN_DIR=""
+LOG=""
+open_run() {
+  [ -z "$RUN_DIR" ] || return 0
+  RUN_DIR="${STATE_DIR}/runs/$(date +%Y%m%d-%H%M%S)-$$"
+  mkdir -p "$RUN_DIR"
+  LOG="${RUN_DIR}/log"
+  : >"$LOG"
+  : >"${RUN_DIR}/steps"
+  printf 'setup: %s (%s); update.sh: %s\n' "${SCRIPT_DIR}/setup.sh" "${setup_origin:-?}" "$UPDATE_SH" >>"$LOG"
+}
+backend_state() { # running backend on the cockpit port: none | root@commit | unknown (older backend)
+  health="$(http_get "http://127.0.0.1:${COCKPIT_PORT}/telemetry/health")"
+  if [ -z "$health" ]; then printf 'none'; return; fi
+  b_root="$(printf '%s' "$health" | json_str root)"
+  b_commit="$(printf '%s' "$health" | json_str commit)"
+  if [ -n "$b_root" ] && [ -n "$b_commit" ]; then
+    printf '%s@%s' "$b_root" "$b_commit"
+  else
+    printf 'unknown (started before it reported its version)'
+  fi
+}
+# One line per item: "name<TAB>value". Recorded before anything changes.
+snapshot() {
+  if [ -n "${tel_root:-}" ] && [ -e "${tel_root}/.git" ]; then
+    printf 'telemetry checkout\t%s (%s)\n' "$(head_of "$tel_root")" "$(branch_of "$tel_root")"
+  else
+    printf 'telemetry checkout\t-\n'
+  fi
+  printf 'installed version\t%s\n' "$(cat "${AGENTSTACK_DIR}/VERSION" 2>/dev/null || printf -- '-')"
+  from="$(sed -n 's/^ *"repo_root": *"\(.*\)",*$/\1/p' "$INSTALL_STATE" 2>/dev/null | head -n 1 || true)"
+  printf 'installed from\t%s\n' "${from:--}"
+  mail_build="$(sed -n 's/.*"candidate_venv": *"[^"]*candidates\/\([0-9a-f]\{7\}\)[0-9a-f]*\/venv".*/\1/p' "$INSTALL_STATE" 2>/dev/null | head -n 1 || true)"
+  printf 'Mail build\t%s\n' "${mail_build:--}"
+  dash="$(http_get "http://127.0.0.1:${dash_port:-8770}/api/version" | json_str version)"
+  printf 'dashboard answers\t%s\n' "${dash:-no}"
+  if [ -n "$COCKPIT_ROOT" ]; then
+    printf 'cockpit checkout\t%s (%s)\n' "$(head_of "$COCKPIT_ROOT")" "$(branch_of "$COCKPIT_ROOT")"
+    if [ -f "${COCKPIT_ROOT}/bridge/.venv/.orrery-requirements" ]; then
+      printf 'cockpit venv\tready\n'
+    elif [ -e "${COCKPIT_ROOT}/bridge/.venv" ]; then
+      printf 'cockpit venv\tincomplete\n'
+    else
+      printf 'cockpit venv\tnone\n'
+    fi
+  fi
+  printf 'cockpit backend\t%s\n' "$(backend_state)"
+}
+after_failure() {
+  [ -n "$RUN_DIR" ] || return 0
+  snapshot >"${RUN_DIR}/now" 2>/dev/null || true
+  since="$(sed -n "s/^started${TAB}//p" "$BASELINE" 2>/dev/null)"
+  say ""
+  say "  What changed since the first attempt (${since:-unknown}):"
+  printf '    %-19s %-40s %s\n' "" "then" "now"
+  while IFS="$TAB" read -r name value; do
+    case "$name" in started | "") continue ;; esac
+    now="$(sed -n "s/^${name}${TAB}//p" "${RUN_DIR}/now" | head -n 1)"
+    mark=""
+    [ "$value" = "$now" ] || mark="   <- changed"
+    printf '    %-19s %-40s %s%s\n' "$name" "$value" "$now" "$mark"
+  done <"$BASELINE"
+  say ""
+  say "  Nothing is rolled back. What stays changed until a later run fixes it: the"
+  say "  4 settings (their backups are kept), the Mail database, uv and Python."
+  say "  To carry on: fix what is reported above, then run the same command again."
+  say "  It continues from what is already there; the 'then' column stays the first"
+  say "  attempt's until a run passes every check."
+  say "  Steps: ${RUN_DIR}/steps    Log: ${LOG}"
+}
+
+# What get.sh did before handing over (a new cockpit checkout, or git data
+# fetched into an old one). It stays when the setup stops, so say so.
+BOOTSTRAP_DID="${ORRERY_BOOTSTRAP_DID:-}"
+LOCK=""
+on_exit() {
+  status=$?
+  if [ -n "$LOCK" ] && [ -f "${LOCK}/pid" ] && [ "$(cat "${LOCK}/pid" 2>/dev/null)" = "$$" ]; then rm -rf "$LOCK"; fi
+  if [ "$status" -ne 0 ] && [ "$changes_started" != true ] && [ -n "$BOOTSTRAP_DID" ]; then
+    printf '\n  note  The setup changed nothing, but before it get.sh %s;\n' "$BOOTSTRAP_DID"
+    printf '        that stays (the same command uses it next time).\n'
+  fi
+}
+trap on_exit EXIT
+
+# ---------------------------------------------------------------- questions
+ask_yes() { # $1 = question; continues only on "yes"
+  if [ "$assume_yes" = true ]; then return 0; fi
+  have_tty || stop "No terminal to ask in." \
+    "Run this in a terminal, or add --yes after reading the plan above."
+  printf '%s ' "$1"
+  reply=""
+  read -r reply || reply=""
+  case "$reply" in
+    yes | YES | Yes) return 0 ;;
+  esac
+  say "Stopped: you did not type yes. Nothing more was changed."
+  exit 1
+}
+
+# ---------------------------------------------------------------- run a tool
+# Output goes to the log (and to the screen with --ask-each, where the
+# installer's previews and questions must be seen). Returns its status.
+logged() {
+  printf '\n$ %s\n' "$*" >>"$LOG"
+  if [ "$ask_each" = true ]; then
+    set +e
+    "$@" 2>&1 | tee -a "$LOG"
+    status=${PIPESTATUS[0]}
+    set -e
+    return "$status"
+  fi
+  "$@" >>"$LOG" 2>&1
+}
+show_log_tail() {
+  if [ -z "$LOG" ] || [ ! -r "$LOG" ]; then return 0; fi
+  say ""
+  say "  --- last lines of ${LOG} ---"
+  tail -n 20 "$LOG" | sed 's/^/  | /'
+  say "  ---"
+}
+
+# ================================================================ 1. prerequisites
+if [ "$check_only" = true ]; then
+  say "ORRERY setup (check only: nothing will be changed)"
+elif [ "$dry_run" = true ]; then
+  say "ORRERY setup (dry run: nothing will be changed)"
+else
+  say "ORRERY setup"
+fi
+step "Prerequisites"
+if [ "${ORRERY_TEMP_SETUP:-0}" = 1 ]; then
+  setup_origin="the newest, taken from the remote by get.sh"
+else
+  setup_origin="this checkout's"
+fi
+ok "setup: ${SCRIPT_DIR}/setup.sh (${setup_origin})"
+
+case "$(uname -s)" in
+  Darwin) os=mac; platform=macOS ;;
+  Linux)
+    os=linux; platform=Linux
+    if [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/version 2>/dev/null; then
+      os=wsl; platform="WSL2 (${WSL_DISTRO_NAME:-unknown distro})"
+    fi
+    ;;
+  *) stop "Unsupported OS: $(uname -s). On Windows, run this inside WSL2 Ubuntu." ;;
+esac
+[ "$(id -u)" != 0 ] || stop "Do not run this as root or with sudo."
+ok "platform: ${platform} ($(uname -m))"
+
+missing_pkgs=""
+for cmd in git tmux curl; do
+  if command -v "$cmd" >/dev/null 2>&1; then
+    ok "$cmd"
+  else
+    missing_pkgs="${missing_pkgs} ${cmd}"
+  fi
+done
+if [ -n "$missing_pkgs" ]; then
+  if [ "$os" = mac ]; then
+    problem "Missing:${missing_pkgs}" \
+      "Fix (Homebrew, https://brew.sh):  brew install${missing_pkgs}"
+  else
+    problem "Missing:${missing_pkgs}" \
+      "Fix:  sudo apt update && sudo apt install -y${missing_pkgs}"
+  fi
+fi
+
+# uv: orrery-telemetry builds ORRERY Mail's Python environment with it. It
+# installs without sudo, so it goes into the plan when missing.
+export PATH="${HOME}/.local/bin:${PATH}"
+need_uv=false
+if uv --version >/dev/null 2>&1; then
+  ok "uv: $(command -v uv) ($(uv --version 2>/dev/null | awk '{print $2}'))"
+else
+  need_uv=true
+  if command -v uv >/dev/null 2>&1; then
+    note "$(command -v uv) does not run here; a working uv will be installed into ~/.local/bin"
+  else
+    note "uv is not installed; it will be installed into ~/.local/bin (no sudo)"
+  fi
+fi
+
+# Python 3.11+, judged by running it. Without one, uv installs one (no sudo).
+python_bin=""
+for candidate in "${AGENTSTACK_PYTHON:-}" "$(env_value AGENTSTACK_PYTHON)" python3 python3.14 python3.13 python3.12 python3.11 \
+  /opt/homebrew/bin/python3 /usr/local/bin/python3; do
+  [ -n "$candidate" ] || continue
+  resolved="$(command -v "$candidate" 2>/dev/null || true)"
+  [ -n "$resolved" ] || continue
+  if py_ok "$resolved"; then python_bin="$resolved"; break; fi
+done
+need_python=false
+if [ -n "$python_bin" ]; then
+  ok "Python: ${python_bin} ($("$python_bin" -c 'import platform; print(platform.python_version())'))"
+else
+  need_python=true
+  sys_py="$(command -v python3 2>/dev/null || true)"
+  if [ -n "$sys_py" ]; then
+    note "${sys_py} is $("$sys_py" -c 'import platform; print(platform.python_version())' 2>/dev/null || printf '?'); 3.11 or newer is needed"
+  fi
+  note "uv will install Python 3.12 (no sudo) and both parts will use it"
+fi
+
+# Does each agent CLI run? (codex --version writes into CODEX_HOME, so it is
+# asked with a throwaway one; a check must not change anything.)
+agent_cli=""
+if command -v claude >/dev/null 2>&1 && claude --version >/dev/null 2>&1; then
+  agent_cli="claude"
+fi
+if command -v codex >/dev/null 2>&1; then
+  probe_home="$(mktemp -d "${TMPDIR:-/tmp}/orrery-codex-probe.XXXXXX")"
+  if CODEX_HOME="$probe_home" codex --version >/dev/null 2>&1; then
+    agent_cli="${agent_cli}${agent_cli:+ }codex"
+  fi
+  rm -rf "$probe_home"
+fi
+if [ -n "$agent_cli" ]; then
+  ok "agent CLI: ${agent_cli}"
+else
+  note "neither 'claude' nor 'codex' runs here. The install works without them;"
+  note "      agents need one of them, installed and logged in (see the end)."
+fi
+
+if [ "$problems" -gt 0 ]; then
+  say ""
+  say "Stopped: ${problems} problem(s) above. Nothing was changed."
+  exit 1
+fi
+step_done "Prerequisites"
+
+# ================================================================ 2. what is here
+step "What is installed"
+
+# Only one setup at a time for this user.
+if [ "$read_only" != true ]; then
+  LOCK="${STATE_DIR}/lock"
+  mkdir -p "$STATE_DIR"
+  if ! mkdir "$LOCK" 2>/dev/null; then
+    other="$(cat "${LOCK}/pid" 2>/dev/null || true)"
+    if [ -n "$other" ] && kill -0 "$other" 2>/dev/null; then
+      stop "Another ORRERY setup is running (pid ${other}); nothing was changed." \
+        "Wait for it to finish, then run this again."
+    fi
+    rm -rf "$LOCK"
+    mkdir "$LOCK" || stop "Could not take the setup lock ${LOCK}."
+  fi
+  printf '%s\n' "$$" >"${LOCK}/pid"
+fi
+
+if [ -n "$COCKPIT_ROOT" ]; then
+  is_checkout_root "$COCKPIT_ROOT" || stop "${COCKPIT_ROOT} is not a git checkout of ORRERY."
+  origin="$(origin_of "$COCKPIT_ROOT")"
+  official_remote "$origin" orrery "$COCKPIT_OVERRIDE" \
+    || stop "The cockpit checkout ${COCKPIT_ROOT} has origin '${origin:-none}'." \
+      "That is not https://github.com/gyroid-eth/orrery, so this setup does not change it." \
+      "Use another folder for the official one:  ORRERY_DIR=/path/to/new/folder"
+  ok "cockpit: ${COCKPIT_ROOT} ($(head_of "$COCKPIT_ROOT"), ${origin})"
+else
+  ok "cockpit: not here yet; would be downloaded to ${COCKPIT_PLANNED}"
+fi
+[ -z "$COCKPIT_OVERRIDE" ] || note "test override: ORRERY_REPO_URL=${COCKPIT_OVERRIDE}"
+
+# orrery-telemetry: env.sh, the install record and the checkout are looked at
+# separately; any of them may be left from an install that stopped halfway.
+tel_root=""
+recorded_root=""
+state_readable=false
+if [ -r "$INSTALL_STATE" ]; then
+  recorded_root="$(sed -n 's/^ *"repo_root": *"\(.*\)",*$/\1/p' "$INSTALL_STATE" | head -n 1)"
+  if [ -n "$recorded_root" ]; then state_readable=true; fi
+fi
+mode=""
+tel_clone=false
+if [ "$state_readable" = true ] && [ -d "$recorded_root" ] && is_checkout_root "$recorded_root" \
+  && [ -x "${recorded_root}/scripts/install.sh" ]; then
+  tel_root="$recorded_root"
+  origin="$(origin_of "$tel_root")"
+  official_remote "$origin" orrery-telemetry "$TEL_OVERRIDE" \
+    || stop "orrery-telemetry was installed from ${tel_root}, whose origin is '${origin:-none}'." \
+      "That is not https://github.com/gyroid-eth/orrery-telemetry, so this setup does not change it." \
+      "Update it yourself: docs/install.md, step 5."
+  mode=update
+  ok "orrery-telemetry: installed from ${tel_root} ($(head_of "$tel_root")) -> update"
+else
+  if [ -r "$INSTALL_STATE" ] || [ -r "$ENV_FILE" ] || [ -d "${AGENTSTACK_DIR}/bin" ]; then
+    mode=reinstall
+    if [ "$state_readable" = true ]; then
+      note "orrery-telemetry was installed from ${recorded_root}, which is no longer a checkout"
+    else
+      note "an orrery-telemetry install in ${AGENTSTACK_DIR} stopped halfway (no readable install record)"
+    fi
+    note "      -> its installer runs again (it keeps the settings in env.sh)"
+  else
+    mode=fresh
+    ok "orrery-telemetry: not installed -> new install"
+  fi
+  tel_root="$TEL_DEFAULT"
+  if [ -e "$tel_root" ]; then
+    origin="$(origin_of "$tel_root")"
+    if ! is_checkout_root "$tel_root" || [ ! -x "${tel_root}/scripts/install.sh" ]; then
+      stop "${tel_root} exists but is not an orrery-telemetry checkout; nothing was changed." \
+        "Move it away, or choose another folder: ORRERY_TELEMETRY_DIR=/path/to/new/folder"
+    fi
+    official_remote "$origin" orrery-telemetry "$TEL_OVERRIDE" \
+      || stop "${tel_root} has origin '${origin:-none}', not https://github.com/gyroid-eth/orrery-telemetry; nothing was changed." \
+        "Choose another folder: ORRERY_TELEMETRY_DIR=/path/to/new/folder"
+    ok "orrery-telemetry checkout: ${tel_root} ($(head_of "$tel_root"), already here)"
+  else
+    tel_clone=true
+    ok "orrery-telemetry: would be downloaded from ${TEL_URL} to ${tel_root}"
+  fi
+fi
+[ -z "$TEL_OVERRIDE" ] || note "test override: ORRERY_TELEMETRY_URL=${TEL_OVERRIDE}"
+
+# Project key: the folder the agents work in. Only collected here and passed
+# on to the installer, which owns what it means.
+project_key=""
+saved_key="$(env_value AGENTSTACK_PROJECT_KEY)"
+if [ -n "$project_key_arg" ]; then
+  project_key="$(expand_path "$project_key_arg")"
+elif [ -n "${ORRERY_PROJECT_KEY:-}" ]; then
+  project_key="$(expand_path "$ORRERY_PROJECT_KEY")"
+elif [ -n "${AGENTSTACK_PROJECT_KEY:-}" ]; then
+  project_key="$AGENTSTACK_PROJECT_KEY"
+elif [ -n "$saved_key" ]; then
+  project_key="$saved_key"
+fi
+# No question here: the plan is the one thing to answer. The default is
+# shown in the plan with the option that changes it.
+project_key_default=false
+if [ -z "$project_key" ]; then
+  project_key="$DEFAULT_PROJECT"
+  project_key_default=true
+fi
+ok "project folder: ${project_key}"
+
+# Everything this writes must be on the Linux side in WSL.
+if [ "$os" = wsl ]; then
+  for path in "$HOME" "${COCKPIT_ROOT:-$COCKPIT_PLANNED}" "$tel_root" "$project_key" "${ORRERY_VENV:-}"; do
+    [ -n "$path" ] || continue
+    if on_windows_drive "$path"; then
+      stop "${path} is on the Windows drive (/mnt/...); nothing was changed." \
+        "ORRERY's folders must be in the Ubuntu home (e.g. ~/orrery-work)."
+    fi
+  done
+fi
+
+# A checkout on a detached HEAD cannot be pulled. It goes back to its branch
+# only when nothing can be lost; both checkouts are checked before either is
+# switched (after the plan is approved).
+detached_fix=""
+check_detached() { # $1 = label, $2 = checkout, $3 = branch
+  if git -C "$2" symbolic-ref -q HEAD >/dev/null 2>&1; then return 0; fi
+  head="$(git -C "$2" rev-parse HEAD)"
+  if [ "$read_only" = true ]; then
+    note "$1 is on a detached HEAD ($(short "$head")); a real run checks whether it can go back to $3"
+    return 0
+  fi
+  [ -z "$(git -C "$2" status --porcelain --untracked-files=no)" ] \
+    || stop "$1 (${2}) is on a detached HEAD and has uncommitted changes; nothing was changed." \
+      "Commit them on a branch (git -C \"$2\" switch -c my-work), then run this again."
+  tag="$(git -C "$2" tag --points-at HEAD 2>/dev/null | head -n 1)"
+  [ -z "$tag" ] || stop "$1 (${2}) is on tag ${tag}; it is left there on purpose. Nothing was changed." \
+    "To follow the newest version instead: git -C \"$2\" switch $3, then run this again."
+  git -C "$2" fetch --quiet origin "$3" 2>/dev/null \
+    || stop "could not reach the remote of $1 (${2}); nothing was changed." "Check the network connection, then run this again."
+  remote_head="$(git -C "$2" rev-parse FETCH_HEAD)"
+  if ! git -C "$2" merge-base --is-ancestor HEAD "$remote_head" 2>/dev/null; then
+    if [ -f "$(git -C "$2" rev-parse --git-dir)/shallow" ]; then
+      git -C "$2" fetch --quiet --deepen=50 origin "$3" 2>/dev/null || true
+      remote_head="$(git -C "$2" rev-parse FETCH_HEAD)"
+    fi
+    if ! git -C "$2" merge-base --is-ancestor HEAD "$remote_head" 2>/dev/null; then
+      if git -C "$2" merge-base HEAD "$remote_head" >/dev/null 2>&1; then
+        stop "$1 (${2}) is on a detached HEAD with commits that are not on origin/$3; nothing was changed." \
+          "Look at them with: git -C \"$2\" log $(short "$remote_head")..HEAD" \
+          "Keep them on a branch (git -C \"$2\" switch -c my-work), then: git -C \"$2\" switch $3"
+      fi
+      stop "$1 (${2}) is on a detached HEAD, and this shallow checkout cannot show whether it is on origin/$3; nothing was changed." \
+        "Switch it yourself after checking: git -C \"$2\" switch $3"
+    fi
+  fi
+  if git -C "$2" show-ref --verify --quiet "refs/heads/$3"; then
+    git -C "$2" merge-base --is-ancestor "refs/heads/$3" "$remote_head" 2>/dev/null \
+      || stop "$1 (${2}): your local branch $3 has commits that are not on origin/$3; nothing was changed." \
+        "Look at them with: git -C \"$2\" log origin/$3..$3"
+  fi
+  detached_fix="${detached_fix}${2}|${3}|${head}
+"
+  note "$1 is on a detached HEAD that is already on origin/$3; it will go back to $3"
+}
+if [ -n "$COCKPIT_ROOT" ]; then check_detached cockpit "$COCKPIT_ROOT" "$COCKPIT_REF"; fi
+if [ "$mode" = update ]; then check_detached orrery-telemetry "$tel_root" "$TEL_REF"; fi
+
+# ORRERY Mail: this setup does not touch it. On an update the choice (keep
+# unless --mail says otherwise) goes to update.sh every time: as --mail when
+# that update.sh takes it, else as AGENTSTACK_MAIL_UPDATE (an older update.sh
+# runs install.sh without options, and keep must stay keep).
+mail_choice="${mail_mode:-keep}"
+pass_mail=""
+mail_env=""
+if [ "$mode" = update ]; then
+  case "$mail_choice" in
+    keep) mail_line="keep the running ORRERY Mail (the installer says when a newer build is available)" ;;
+    update) mail_line="update ORRERY Mail to this orrery-telemetry's build (Mail stops meanwhile; see below)" ;;
+    auto) mail_line="update ORRERY Mail only when the installer finds it safe, else keep it (see below)" ;;
+  esac
+  if run_update --help 2>/dev/null | grep -q -- '--mail'; then
+    pass_mail="--mail=${mail_choice}"
+  elif [ "$mail_choice" = update ]; then
+    stop "--mail update was asked for, but this cockpit's update.sh cannot take --mail yet; nothing was changed." \
+      "To switch ORRERY Mail now, follow orrery-telemetry's docs/agentstack-mail-update.md" \
+      "(install.sh --mail update), or run this without --mail."
+  else
+    mail_env="$mail_choice"
+  fi
+else
+  mail_line="set up ORRERY Mail (or keep one that is already running and healthy)"
+  if [ -n "$mail_mode" ]; then note "--mail ${mail_mode}: a new install sets up ORRERY Mail anyway"; fi
+fi
+
+dash_port="${AGENTSTACK_PORT:-$(env_value AGENTSTACK_PORT)}"
+mail_url="${AGENTSTACK_MCP_URL:-$(env_value AGENTSTACK_MCP_URL)}"
+step_done "What is installed"
+
+# Before anything changes: what is here now. The first attempt's record is
+# kept until a run passes every check, so a retry never overwrites it.
+if [ "$read_only" != true ]; then
+  open_run
+  snapshot >"${RUN_DIR}/start"
+  if [ -n "$BOOTSTRAP_DID" ]; then printf 'before the setup\tget.sh %s\n' "$BOOTSTRAP_DID" >>"${RUN_DIR}/start"; fi
+  if [ ! -s "$BASELINE" ]; then
+    { printf 'started\t%s\n' "$(date '+%Y-%m-%d %H:%M:%S')"; cat "${RUN_DIR}/start"; } >"$BASELINE"
+  fi
+fi
+
+# ================================================================ 3. plan + confirm
+step "Plan"
+backup_dir="${AGENTSTACK_DIR}/backups"
+say "  This will:"
+if [ "$need_uv" = true ]; then say "    - install uv into ~/.local/bin (your shell profile is not changed)"; fi
+if [ "$need_python" = true ]; then say "    - install Python 3.12 with uv (into uv's own folder)"; fi
+if [ -n "$detached_fix" ]; then
+  while IFS='|' read -r path branch head; do
+    [ -z "$path" ] || say "    - switch ${path} from $(short "$head") back to ${branch}"
+  done <<EOF
+$detached_fix
+EOF
+fi
+if [ ! -d "$project_key" ]; then say "    - create the project folder ${project_key} (where the agents work)"; fi
+if [ "$project_key_default" = true ]; then
+  say "      (another folder: add --project-key PATH, e.g.  ... | bash -s -- --project-key ~/my-project)"
+fi
+if [ -z "$COCKPIT_ROOT" ]; then say "    - download the cockpit to ${COCKPIT_PLANNED}"; fi
+case "$mode" in
+  fresh | reinstall)
+    if [ "$tel_clone" = true ]; then say "    - download orrery-telemetry (${TEL_REF}) to ${tel_root}"; fi
+    say "    - install orrery-telemetry into ${AGENTSTACK_DIR}"
+    ;;
+  update)
+    say "    - update orrery-telemetry (${tel_root}) and the cockpit (${COCKPIT_ROOT})"
+    say "      with scripts/update.sh: git pull --ff-only, then the installer again"
+    ;;
+esac
+say "    - change these 4 things (each is backed up first):"
+say "        1. ~/.claude.json            all your Claude Code sessions: MCP server 'orrery-mail'"
+say "                                     -> ${mail_url:-http://127.0.0.1:18765/mcp}"
+say "                                     backup: ${backup_dir}/claude-mcp.<time>"
+say "        2. ~/.claude/settings.json   all your Claude Code sessions: ORRERY hooks (file"
+say "                                     reservations, Mail) and permissions are added;"
+say "                                     your own entries are kept.  backup: ${backup_dir}/<time>/"
+say "        3. ~/.codex/AGENTS.md        ALL your Codex work (global): ORRERY's marked block only"
+say "                                     backup: next to it, AGENTS.md.bak.<time>"
+say "        4. ${project_key}/CLAUDE.md"
+say "                                     Claude Code in that folder: ORRERY's marked block only"
+say "                                     backup: next to it, CLAUDE.md.bak.<time>"
+say "    - run 2 background services: dashboard (port ${dash_port:-8770}) and ORRERY Mail"
+say "    - ${mail_line}"
+# Before yes: what updating Mail costs and how to recover, from the one source
+# of that wording in orrery-telemetry (scripts/lib/mail_update_notice.py).
+if [ "$mode" = update ] && { [ "$mail_choice" = update ] || [ "$mail_choice" = auto ]; }; then
+  notice_py="${tel_root}/scripts/lib/mail_update_notice.py"
+  mail_risk=""
+  if grep -q 'add_parser("risk")' "$notice_py" 2>/dev/null; then
+    mail_risk="$("${python_bin:-python3}" "$notice_py" risk 2>/dev/null || true)"
+  fi
+  if [ -n "$mail_risk" ]; then
+    printf '%s\n' "$mail_risk" | sed 's/^/    /'
+  else
+    say "      Risk: Mail stops while it switches; usually seconds, but it can take minutes"
+    say "      (no short limit is guaranteed). Afterwards, in each Claude Code session, /mcp"
+    say "      shows whether orrery-mail is connected; if it failed: choose it, then Reconnect."
+  fi
+fi
+say "    - check: agentstack-doctor, and agentstack-selftest (a Mail round trip with 2 test"
+say "      agents, which it removes again)"
+if [ "$no_start" != true ]; then say "    - start the cockpit in this window: http://127.0.0.1:${COCKPIT_PORT}/cockpit.html"; fi
+say "  If something fails after you type yes, nothing is rolled back; you get a list of"
+say "  what changed and the line that carries on."
+if [ "$ask_each" = true ]; then say "  (--ask-each: the installer also shows each change and asks before it.)"; fi
+
+if [ "$check_only" = true ]; then
+  say ""
+  say "Check finished: nothing was changed. Run without --check to do the above."
+  exit 0
+fi
+
+if [ "$dry_run" = true ]; then
+  say ""
+  say "Dry run: the installer's own preview of the 4 changes"
+  preview_root="$tel_root"
+  preview_tmp=""
+  if [ "$tel_clone" = true ]; then
+    preview_tmp="$(mktemp -d "${TMPDIR:-/tmp}/orrery-preview.XXXXXX")"
+    git clone --quiet --depth 1 --branch "$TEL_REF" "$TEL_URL" "${preview_tmp}/t" \
+      || { rm -rf "$preview_tmp"; stop "Could not download orrery-telemetry for the preview."; }
+    preview_root="${preview_tmp}/t"
+  fi
+  if [ "$mode" = update ]; then say "(this is the version you have now; the update may change it)"; fi
+  # The installer asks codex for its version, and codex writes into its
+  # CODEX_HOME when it starts. It probes an explicit AGENTSTACK_CODEX_BIN, else
+  # the one saved in env.sh (if it runs), else the first codex that runs in
+  # PATH and a few usual folders. Pick the same binary here (probing it with a
+  # throwaway CODEX_HOME) and hand the installer a wrapper as an explicit
+  # AGENTSTACK_CODEX_BIN, so every probe it makes goes to the throwaway home.
+  # Everything else (e.g. ~/.codex/AGENTS.md for the preview) is untouched.
+  probe_dir="$(mktemp -d "${TMPDIR:-/tmp}/orrery-probe.XXXXXX")"
+  mkdir -p "${probe_dir}/bin" "${probe_dir}/codex-home"
+  codex_runs() { [ -f "$1" ] || [ -L "$1" ] || return 1; CODEX_HOME="${probe_dir}/codex-home" "$1" --version >/dev/null 2>&1; }
+  preview_codex=""
+  if [ -n "${AGENTSTACK_CODEX_BIN:-}" ]; then
+    preview_codex="$AGENTSTACK_CODEX_BIN"   # explicit: used as given, even if it fails
+  else
+    saved_codex="$(env_value AGENTSTACK_CODEX_BIN)"
+    if [ -n "$saved_codex" ] && codex_runs "$saved_codex"; then
+      preview_codex="$saved_codex"
+    else
+      old_ifs="$IFS"; IFS=:
+      for dir in $PATH "$HOME/.local/bin" "$HOME/.npm-global/bin" "$HOME/.nodebrew/current/bin" /opt/homebrew/bin /usr/local/bin; do
+        if [ -n "$dir" ] && codex_runs "$dir/codex"; then preview_codex="$dir/codex"; break; fi
+      done
+      IFS="$old_ifs"
+    fi
+  fi
+  rm -rf "${probe_dir}/codex-home" && mkdir -p "${probe_dir}/codex-home"
+  preview_env=""
+  if [ -n "$preview_codex" ]; then
+    printf '#!/bin/sh\nCODEX_HOME=%s exec %s "$@"\n' "'${probe_dir}/codex-home'" "'${preview_codex}'" >"${probe_dir}/bin/codex"
+    chmod +x "${probe_dir}/bin/codex"
+    preview_env="AGENTSTACK_CODEX_BIN=${probe_dir}/bin/codex"
+    note "the preview asks ${preview_codex} for its version with a throwaway CODEX_HOME"
+  fi
+  preview_status=0
+  (cd "$preview_root" && env PATH="${probe_dir}/bin:${PATH}" $preview_env ./scripts/install.sh --dry-run --project-key "$project_key") \
+    || preview_status=$?
+  if [ -n "$preview_codex" ]; then
+    note "in the preview above, 'codex bin: ${probe_dir}/bin/codex' stands for ${preview_codex}"
+    note "      (a real run uses ${preview_codex} itself)"
+  fi
+  rm -rf "$probe_dir"
+  if [ -n "$preview_tmp" ]; then rm -rf "$preview_tmp"; fi
+  if [ "$preview_status" -ne 0 ]; then
+    stop "The installer's preview failed (exit ${preview_status}, see above). Nothing was changed."
+  fi
+  if [ "$mode" = update ]; then
+    say ""
+    say "Dry run: what the update would fetch"
+    run_update --dry-run \
+      || stop "The update's preview failed (see above). Nothing was changed."
+  fi
+  say ""
+  say "Dry run finished: nothing was changed."
+  exit 0
+fi
+
+say ""
+ask_yes "Type yes and press Enter to go ahead (anything else stops):"
+step_done "Plan"
+
+# ================================================================ 4. orrery-telemetry
+step "orrery-telemetry"
+say "  log: ${LOG}"
+changes_started=true
+
+if [ "$need_uv" = true ]; then
+  say "  installing uv ..."
+  logged env UV_NO_MODIFY_PATH=1 sh -c 'curl -LsSf https://astral.sh/uv/install.sh | sh' \
+    || { show_log_tail; stop "Installing uv failed (see above)."; }
+  uv --version >/dev/null 2>&1 || stop "uv was installed but does not run (looked in ~/.local/bin)."
+  ok "uv: $(command -v uv) ($(uv --version | awk '{print $2}'))"
+fi
+if [ "$need_python" = true ]; then
+  say "  installing Python 3.12 with uv ..."
+  logged uv python install 3.12 || { show_log_tail; stop "Installing Python with uv failed (see above)."; }
+  python_bin="$(uv python find 3.12 2>/dev/null || true)"
+  if [ -z "$python_bin" ] || ! py_ok "$python_bin"; then stop "uv installed Python 3.12 but it cannot be run."; fi
+  ok "Python: ${python_bin} ($("$python_bin" -c 'import platform; print(platform.python_version())'))"
+fi
+# Both parts use the same interpreter.
+export AGENTSTACK_PYTHON="${AGENTSTACK_PYTHON:-$python_bin}"
+export ORRERY_PYTHON="${ORRERY_PYTHON:-$python_bin}"
+
+if [ -n "$detached_fix" ]; then
+  while IFS='|' read -r path branch head; do
+    [ -n "$path" ] || continue
+    printf '%s was detached at %s\n' "$path" "$head" >>"${RUN_DIR}/steps"
+    if git -C "$path" show-ref --verify --quiet "refs/heads/${branch}"; then
+      logged git -C "$path" switch "$branch" || { show_log_tail; stop "Could not switch ${path} back to ${branch}."; }
+    else
+      logged git -C "$path" switch -c "$branch" --track "origin/${branch}" \
+        || { show_log_tail; stop "Could not switch ${path} back to ${branch}."; }
+    fi
+    ok "switched ${path} to ${branch} (it was at $(short "$head"); back: git -C \"${path}\" switch --detach ${head})"
+  done <<EOF
+$detached_fix
+EOF
+fi
+
+mkdir -p "$project_key"
+assume_flag=""
+if [ "$ask_each" != true ]; then assume_flag="--assume-yes"; fi
+
+# install.sh reads some saved settings from env.sh by itself and others only
+# from the environment, so load env.sh first; values set in this shell win.
+# (The same rule as scripts/update.sh.)
+run_installer() {
+  (
+    cd "$tel_root"
+    if [ -r "$ENV_FILE" ]; then
+      explicit=""
+      for name in $(compgen -e); do
+        case "$name" in
+          AGENTSTACK_*) explicit="${explicit} ${name}"; eval "saved_${name}=\"\${${name}}\"" ;;
+        esac
+      done
+      for name in $explicit; do unset "$name"; done   # so the next line shows env.sh's own values
+      . "$ENV_FILE"
+      # What install.sh reads back from env.sh by itself (its resolve_setting
+      # lines) is left to it: in its environment a value counts as chosen on
+      # purpose, so a saved Codex path that no longer runs would be refused
+      # instead of looked up again. A value set in this shell is passed on as a
+      # choice only when it differs from env.sh's; one equal to it is treated as
+      # the saved value (that is the rule, not a proof of where it came from: a
+      # login shell that sources env.sh, like ~/.zshenv, puts exactly these here).
+      # The names come from install.sh's resolve_setting lines, so a change to
+      # that form in install.sh must come with a change here.
+      echoed=""
+      for name in $(sed -n 's/^resolve_setting [A-Z_]* \(AGENTSTACK_[A-Z_]*\).*/\1/p' ./scripts/install.sh 2>/dev/null); do
+        case " $explicit " in
+          *" $name "*)
+            eval "from_file=\${${name}-__not_in_env_sh__}"
+            eval "from_shell=\${saved_${name}}"
+            if [ "$from_shell" = "$from_file" ]; then echoed="${echoed} ${name}"; fi
+            ;;
+        esac
+        unset "$name"
+      done
+      for name in $explicit; do
+        case " $echoed " in *" $name "*) continue ;; esac
+        eval "export ${name}=\"\${saved_${name}}\""
+      done
+    fi
+    exec ./scripts/install.sh $assume_flag --project-key "$project_key"
+  )
+}
+
+# The installer's own failure. One known case gets its own explanation; this
+# setup never offers to delete anything of ORRERY Mail.
+installer_failed_hint() {
+  bad_venv="$(sed -n 's/^error: ORRERY Mail candidate venv exists but is incomplete: //p' "$LOG" | tail -n 1)"
+  if [ -n "$bad_venv" ]; then
+    stop "orrery-telemetry's installer stopped: it found an unfinished copy of ORRERY Mail" \
+      "(${bad_venv})," \
+      "probably from a download that was cut off, and it does not continue past it." \
+      "This setup does not remove it: it cannot tell for sure that nothing uses it." \
+      "Ask for help with this log: ${LOG}"
+  fi
+  stop "orrery-telemetry's installer stopped (see above)." \
+    "Fix what it reports, then run the same command again."
+}
+
+update_failed=false
+case "$mode" in
+  fresh | reinstall)
+    if [ "$tel_clone" = true ]; then
+      say "  downloading orrery-telemetry (about 55 MB) ..."
+      parent="$(dirname "$tel_root")"
+      mkdir -p "$parent"
+      tmp="$(mktemp -d "${parent}/.orrery-telemetry-get.XXXXXX")"
+      tries=0
+      until logged git clone --depth 1 --branch "$TEL_REF" "$TEL_URL" "${tmp}/t"; do
+        rm -rf "${tmp}/t"
+        tries=$((tries + 1))
+        if [ "$tries" -ge 3 ]; then
+          rm -rf "$tmp"
+          show_log_tail
+          stop "Could not download orrery-telemetry from ${TEL_URL} (3 tries)." \
+            "Check the network connection, then run the same command again."
+        fi
+        note "download failed; trying again in $((tries * ${ORRERY_RETRY_SLEEP:-5})) seconds (${tries}/3)"
+        sleep $((tries * ${ORRERY_RETRY_SLEEP:-5}))
+      done
+      if [ -e "$tel_root" ]; then rm -rf "$tmp"; stop "${tel_root} appeared while downloading (another install?)."; fi
+      mv "${tmp}/t" "$tel_root"
+      rm -rf "$tmp"
+      ok "downloaded: ${tel_root} ($(head_of "$tel_root"))"
+    fi
+    say "  installing (about a minute) ..."
+    if ! logged run_installer; then
+      show_log_tail
+      installer_failed_hint
+    fi
+    ok "orrery-telemetry installed ($(cat "${AGENTSTACK_DIR}/VERSION" 2>/dev/null || printf '?'))"
+    ;;
+  update)
+    if [ -n "$project_key_arg" ]; then export AGENTSTACK_PROJECT_KEY="$project_key"; fi
+    if [ "$ask_each" != true ]; then export AGENTSTACK_ASSUME_YES=1; fi
+    say "  updating orrery-telemetry and the cockpit ..."
+    if [ -n "$mail_env" ]; then export AGENTSTACK_MAIL_UPDATE="$mail_env"; fi
+    if logged run_update $pass_mail; then
+      ok "orrery-telemetry: $(head_of "$tel_root") ($(cat "${AGENTSTACK_DIR}/VERSION" 2>/dev/null || printf '?')), cockpit: $(head_of "$COCKPIT_ROOT")"
+    else
+      update_failed=true
+      show_log_tail
+      say ""
+      say "  NG    The update stopped (see above)."
+      start_tel="$(sed -n "s/^telemetry checkout${TAB}\([^ ]*\).*/\1/p" "${RUN_DIR}/start")"
+      start_cockpit="$(sed -n "s/^cockpit checkout${TAB}\([^ ]*\).*/\1/p" "${RUN_DIR}/start")"
+      if [ "$(head_of "$tel_root")" = "$start_tel" ] && [ "$(head_of "$COCKPIT_ROOT")" = "$start_cockpit" ] \
+        && ! grep -q '^\$ .*install.sh\|Updating orrery-telemetry' "$LOG"; then
+        say "        It stopped in its checks: neither checkout moved."
+        say "        Fix what it reports and run the same command again."
+      else
+        after_failure
+      fi
+    fi
+    unset AGENTSTACK_ASSUME_YES AGENTSTACK_MAIL_UPDATE
+    ;;
+esac
+
+if [ "$update_failed" = true ]; then
+  if [ ! -r "$ENV_FILE" ] || [ "$no_start" = true ] || [ "$assume_yes" = true ] || ! have_tty; then exit 1; fi
+  say ""
+  ask_yes "Start the cockpit with the versions you have now? Type yes to start:"
+fi
+step_done "orrery-telemetry"
+
+# ================================================================ 5. cockpit environment
+step "Cockpit environment"
+say "  preparing the Python environment (the first time takes a minute) ..."
+default_venv="${COCKPIT_ROOT}/bridge/.venv"
+if ! logged env ORRERY_NO_UPDATE_CHECK=1 "${COCKPIT_ROOT}/scripts/start-cockpit.sh" --check; then
+  # A venv left half-made (no completion stamp) is rebuilt, but only the
+  # default one, and only while no cockpit is running from it.
+  if [ -z "${ORRERY_VENV:-}" ] && [ -d "$default_venv" ] && [ ! -f "${default_venv}/.orrery-requirements" ] \
+    && [ "$(backend_state)" = none ]; then
+    note "the Python environment ${default_venv} was left unfinished; making it again"
+    rm -rf "$default_venv"
+    logged env ORRERY_NO_UPDATE_CHECK=1 "${COCKPIT_ROOT}/scripts/start-cockpit.sh" --check \
+      || { show_log_tail; stop "The cockpit check stopped (see above). Fix what it reports, then run the same command again."; }
+  else
+    show_log_tail
+    stop "The cockpit check stopped (see above). Fix what it reports, then run the same command again."
+  fi
+fi
+ok "cockpit environment ready"
+step_done "Cockpit environment"
+
+# ================================================================ 6. checks
+step "Checks"
+checks_ok=true
+bin_dir="${AGENTSTACK_DIR}/bin"
+
+# The 4 changes, from the installer's own lines in this run's log.
+item_result() { # $1 = "applied" pattern, $2 = "already" pattern (may be empty), $3 = "skipped" pattern
+  if grep -q -- "$3" "$LOG"; then printf 'SKIPPED'
+  elif [ -n "$2" ] && grep -q -- "$2" "$LOG"; then printf 'already the same'
+  elif grep -q -- "$1" "$LOG"; then printf 'applied'
+  else printf 'not reported by the installer'
+  fi
+}
+show_item() { # $1 = label, $2 = result
+  case "$2" in
+    applied | "already the same") ok "$1: $2" ;;
+    *) warn_line "$1: $2"; checks_ok=false ;;
+  esac
+}
+if [ "$ask_each" = true ]; then
+  applied_mcp="Claude MCP user-config safe-merge dry-run"
+  applied_settings="Tier1 settings safe-merge dry-run"
+  applied_codex="Codex AGENTS.md managed setup dry-run"
+  applied_claude="Claude CLAUDE.md managed setup dry-run"
+else
+  applied_mcp="assume-yes: registered orrery-mail"
+  applied_settings="assume-yes: applied Tier1 settings merge"
+  applied_codex="assume-yes: applied Codex AGENTS.md managed setup"
+  applied_claude="assume-yes: applied Claude CLAUDE.md managed setup"
+fi
+show_item "1. ~/.claude.json (MCP)" "$(item_result "$applied_mcp" "Claude MCP already registered" "Skipped Claude MCP\|skipping Claude MCP")"
+show_item "2. ~/.claude/settings.json" "$(item_result "$applied_settings" "" "Skipped Tier1\|skipping Tier1")"
+show_item "3. ~/.codex/AGENTS.md" "$(item_result "$applied_codex" "" "Skipped Codex AGENTS.md\|skipping Codex AGENTS.md")"
+show_item "4. ${project_key}/CLAUDE.md" "$(item_result "$applied_claude" "" "Skipped Claude CLAUDE.md\|skipping Claude CLAUDE.md")"
+
+# What the installer did with ORRERY Mail. An installer that knows the Mail
+# choice ends with a "mail-result:" line; from such an installer, no line (or
+# one that cannot be read) is not a success. An older one is read as before.
+installer_file="${tel_root}/scripts/install.sh"
+installer_help="$("$installer_file" --help 2>/dev/null || true)"
+new_installer=false
+if printf '%s\n' "$installer_help" | grep -q -- '--mail auto|update|keep'; then new_installer=true; fi
+mail_result_line="$(grep '^mail-result: ' "$LOG" | tail -n 1 || true)"
+mail_field() { printf '%s\n' "$mail_result_line" | sed -n "s/.* $1=\([^ ]*\).*/\1/p"; }
+mail_id() { short "$(mail_field "$1")"; }   # commits are shown with 7 characters
+mail_reconnect=""
+if [ -n "$mail_result_line" ]; then
+  mail_result="$(printf '%s\n' "$mail_result_line" | sed -n 's/^mail-result: \([a-z-]*\).*/\1/p')"
+  case "$mail_result" in
+    installed) ok "Mail: set up (new, $(mail_id running))" ;;
+    switched) ok "Mail: updated to $(mail_id to) (was $(mail_id from); without Mail for $(mail_field outage_s) s)" ;;
+    kept | unchanged) ok "Mail: ${mail_result} (running $(mail_id running))" ;;
+    refused | rolled-back)
+      warn_line "Mail: ${mail_result}; not updated, the running one ($(mail_id running)) stays (reason: $(mail_field reason))" ;;
+    *) warn_line "Mail: the installer reported something unknown: ${mail_result_line}"; checks_ok=false ;;
+  esac
+  case "$mail_result" in
+    switched | rolled-back)
+      # The installer's own check-and-reconnect lines (one source of wording).
+      mail_reconnect="$(awk '/^ORRERY Mail was unavailable for /{block=$0; n=4; next} n>0{block=block "\n" $0; n--} END{print block}' "$LOG")" ;;
+  esac
+elif [ "$new_installer" = true ]; then
+  warn_line "Mail: the installer did not report what it did with ORRERY Mail (no mail-result line)"
+  checks_ok=false
+elif grep -q 'installer will provision ORRERY Mail' "$LOG"; then
+  ok "Mail: set up (new)"
+elif grep -q 'adopted the running ORRERY Mail deployment' "$LOG"; then
+  ok "Mail: kept the running one (not switched)"
+else
+  mail_report="$(grep 'ORRERY Mail update\|ORRERY Mail .*rolled back\|switched ORRERY Mail' "$LOG" | tail -n 1 || true)"
+  ok "Mail: ${mail_report:-${mail_line}}"
+fi
+
+# Warnings the installer printed even though it finished. Known harmless
+# ones are only counted.
+harmless="AGENTSTACK_WORKTREE_ROOT: directory does not exist yet"
+install_warnings="$(grep '^warning:' "$LOG" | grep -v -- "$harmless" | sort -u || true)"
+harmless_count="$(grep -c -- "$harmless" "$LOG" || true)"
+if [ -n "$install_warnings" ]; then
+  printf '%s\n' "$install_warnings" | while IFS= read -r line; do
+    case "$line" in
+      "warning: optional dependency 'fswatch' not found"*)
+        note "install: fswatch is not installed; Mail notices are checked every 2 seconds instead (fine)" ;;
+      "warning: Claude skill '"*"' already exists; leaving it untouched: "*)
+        skill="${line#warning: Claude skill \'}"; skill="${skill%%\'*}"
+        skill_path="${line##*: }"
+        warn_line "install: your own Claude skill '${skill}' (${skill_path})"
+        printf '        is kept and used instead of ORRERY'"'"'s /%s. To use ORRERY'"'"'s, move yours\n' "$skill"
+        printf '        away (e.g. mv "%s" "%s.mine") and run the same line again.\n' "$skill_path" "$skill_path" ;;
+      *) warn_line "install: ${line#warning: }" ;;
+    esac
+  done
+fi
+if [ "${harmless_count:-0}" -gt 0 ]; then note "install: ${harmless_count} known harmless warning(s) (folders made on first use)"; fi
+
+# doctor: read-only. Its exit status decides; the lines only explain. It
+# reports problems as "missing:" (and some as "warn:") with exit 1, and any
+# other non-zero exit counts as a problem too.
+if [ -x "${bin_dir}/agentstack-doctor" ]; then
+  doctor_status=0
+  doctor_out="$("${bin_dir}/agentstack-doctor" 2>&1)" || doctor_status=$?
+  printf '\n$ agentstack-doctor   (exit %s)\n%s\n' "$doctor_status" "$doctor_out" >>"$LOG"
+  # The doctor's ORRERY Mail block ("warn: ... lacks" up to "mail-features:")
+  # is shown once, with the Mail notice at the end, not among these lines.
+  doctor_mail_block="$(printf '%s\n' "$doctor_out" | awk '/^warn: ORRERY Mail .* lacks /{on=1} /^mail-features:/{on=0} on')"
+  doctor_lines="$(printf '%s\n' "$doctor_out" | awk '/^warn: ORRERY Mail .* lacks /{on=1} /^mail-features:/{on=0; next} !on' | grep -v '^ok:' | grep -v '^ *$' || true)"
+  if [ "$doctor_status" -ne 0 ]; then
+    checks_ok=false
+    warn_line "doctor: exited ${doctor_status}; what it reported (all of it: ${bin_dir}/agentstack-doctor):"
+    if [ -n "$doctor_lines" ]; then
+      printf '%s\n' "$doctor_lines" | head -n 20 | sed 's/^/          /'
+    else
+      printf '          (no explanation printed; see %s)\n' "$LOG"
+    fi
+  else
+    ok "doctor: no problems"
+    if [ -n "$doctor_lines" ]; then
+      note "doctor: notes (it still exited 0):"
+      printf '%s\n' "$doctor_lines" | head -n 8 | sed 's/^/          /'
+    fi
+  fi
+else
+  checks_ok=false
+  warn_line "doctor: ${bin_dir}/agentstack-doctor is missing"
+fi
+
+# selftest: registers 2 test agents, sends a message both ways, reserves a
+# file, checks the dashboard reads the same database, and removes the agents.
+if [ -x "${bin_dir}/agentstack-selftest" ]; then
+  say "  running agentstack-selftest (a Mail round trip with 2 test agents) ..."
+  if logged "${bin_dir}/agentstack-selftest"; then
+    ok "selftest: Mail round trip, file reservation and dashboard all work"
+  else
+    checks_ok=false
+    warn_line "selftest failed; its output is in ${LOG}"
+    tail -n 8 "$LOG" | sed 's/^/          /'
+  fi
+else
+  checks_ok=false
+  warn_line "selftest: ${bin_dir}/agentstack-selftest is missing"
+fi
+
+if [ -n "$agent_cli" ]; then
+  ok "agent CLI: ${agent_cli}"
+else
+  note "agent CLI: none -> the base is ready, agents are not yet"
+fi
+# ORRERY Mail older than this install: the installer's notice (what is
+# missing, the risk, how to reconnect), else the doctor's block. Their wording
+# is the one source; this setup only adds how to update with the same line.
+# The update line is added only where the source itself says this checkout
+# can update Mail: the installer's advice (given only when the running build
+# is older than this checkout), or a doctor block with its own "To update:".
+mail_notice=""
+mail_update_hint=false
+if printf '%s\n' "$installer_help" | grep -q -- '--print-mail-update-advice'; then
+  mail_notice="$(cd "$tel_root" && ./scripts/install.sh --print-mail-update-advice 2>/dev/null || true)"
+  if [ -n "$mail_notice" ]; then mail_update_hint=true; fi
+fi
+if [ -z "$mail_notice" ] && printf '%s\n' "${doctor_out:-}" | grep -q '^mail-features: status=missing'; then
+  mail_notice="${doctor_mail_block:-}"
+  if printf '%s\n' "$mail_notice" | grep -q 'To update:'; then mail_update_hint=true; fi
+fi
+step_done "Checks"
+
+# A run whose update failed is never a success, even when what is there works.
+if [ "$update_failed" = true ]; then checks_ok=false; fi
+
+# ================================================================ 7. start
+# The cockpit runs in the background, in a tmux server of its own (out of the
+# agents' tmux server, which the dashboard and the cockpit list as agents), in
+# a session per port. This setup counts a running cockpit as its own only by
+# proof: the boot id it recorded when it started it, answered by that port's
+# health now. Only such a cockpit is ever stopped, and only its own session.
+step "Start"
+url="http://127.0.0.1:${COCKPIT_PORT}/cockpit.html"
+SOCK="${ORRERY_COCKPIT_TMUX_SOCKET:-orrery-cockpit}"
+SESSION="cockpit-${COCKPIT_PORT}"
+OWNER="${STATE_DIR}/cockpit-${COCKPIT_PORT}.owner"
+cockpit_log="${STATE_DIR}/cockpit.log"
+cockpit_head_full="$(git -C "$COCKPIT_ROOT" rev-parse HEAD)"
+root_real="$(cd "$COCKPIT_ROOT" && pwd -P)"
+ctmux() { env -u TMUX -u TMUX_PANE tmux -L "$SOCK" "$@"; }
+health_boot() { http_get "http://127.0.0.1:${COCKPIT_PORT}/telemetry/health" | json_str boot; }
+owner_value() { sed -n "s/^$1=//p" "$OWNER" 2>/dev/null | head -n 1; }
+# A tmux session's identity: names are reused, so it is the session's id and
+# creation time plus a random marker this setup sets on the session it creates
+# (a session someone else made under the same name has no such marker).
+session_identity() { # $1 = socket, $2 = session name; empty when there is none
+  base="$(env -u TMUX -u TMUX_PANE tmux -L "$1" list-sessions -F '#{session_name} #{session_id}@#{session_created}' 2>/dev/null \
+    | awk -v name="$2" '$1 == name { print $2; exit }')"
+  [ -n "$base" ] || return 0
+  marker="$(env -u TMUX -u TMUX_PANE tmux -L "$1" show-options -v -t "=$2:" @orrery_cockpit 2>/dev/null || true)"
+  printf '%s@%s' "$base" "${marker:-none}"
+}
+is_recorded_session() { # $1 = socket, $2 = session name: the very session this setup recorded
+  [ "$(owner_value socket)" = "$1" ] && [ "$(owner_value session)" = "$2" ] || return 1
+  recorded="$(owner_value session_identity)"
+  case "$recorded" in "" | *@none) return 1 ;; esac
+  [ "$(session_identity "$1" "$2")" = "$recorded" ]
+}
+# The tmux server and session this setup recorded for the cockpit it started.
+OWNER_SOCK=""
+OWNER_SESSION=""
+is_ours() { # the running cockpit is the one this setup started on this port
+  [ -r "$OWNER" ] || return 1
+  boot_now="$(health_boot)"
+  OWNER_SOCK="$(owner_value socket)"
+  OWNER_SESSION="$(owner_value session)"
+  [ -n "$boot_now" ] && [ "$boot_now" = "$(owner_value boot)" ] \
+    && [ -n "$OWNER_SOCK" ] && [ "$OWNER_SESSION" = "$SESSION" ] \
+    && is_recorded_session "$OWNER_SOCK" "$OWNER_SESSION"
+}
+# Before anything is stopped: the session name in the tmux server to start in
+# must be free, or be the one this setup recorded (a leftover of its own).
+session_free_or_ours() {
+  ctmux has-session -t "=$SESSION" 2>/dev/null || return 0
+  is_recorded_session "$SOCK" "$SESSION" && return 0
+  stop "tmux server '${SOCK}' already has a session '${SESSION}' that was not started by this setup;" \
+    "nothing was stopped or started. Use another server (ORRERY_COCKPIT_TMUX_SOCKET=...)" \
+    "or end that session yourself, then run the same command again."
+}
+is_this_version() { # $1 = backend_state
+  case "$1" in
+    "${root_real}@${cockpit_head_full}" | "${COCKPIT_ROOT}@${cockpit_head_full}") return 0 ;;
+  esac
+  return 1
+}
+running="$(backend_state)"
+ours=false
+if [ "$running" != none ] && is_ours; then ours=true; fi
+if [ "$running" = none ]; then
+  action=start
+elif is_this_version "$running"; then
+  if [ "$ours" = true ]; then action=current; else action=current_other; fi
+elif [ "$ours" = true ]; then
+  action=restart
+else
+  action=foreign
+fi
+if [ "$no_start" = true ] && { [ "$action" = start ] || [ "$action" = restart ]; }; then action=none; fi
+
+stop_ours() {
+  # Where it was started: the recorded tmux server and session, proven by is_ours.
+  env -u TMUX -u TMUX_PANE tmux -L "$OWNER_SOCK" kill-session -t "=$OWNER_SESSION" 2>/dev/null || true
+  i=0
+  while [ "$i" -lt 20 ] && [ "$(backend_state)" != none ]; do i=$((i + 1)); sleep 0.5; done
+  if [ "$(backend_state)" != none ]; then
+    stop "The cockpit on port ${COCKPIT_PORT} did not stop (still answering: $(backend_state))." \
+      "Nothing else was started. Stop it yourself, then run the same command again."
+  fi
+  rm -f "$OWNER"
+}
+start_ours() {
+  session_free_or_ours
+  # A session of this name recorded as this setup's, with nothing answering on
+  # its port, is a leftover.
+  ctmux kill-session -t "=$SESSION" 2>/dev/null || true
+  printf '\n==== %s start %s on port %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$COCKPIT_ROOT" "$COCKPIT_PORT" >>"$cockpit_log"
+  inner="env -u TMUX -u TMUX_PANE ORRERY_NO_UPDATE_CHECK=1 PORT=$(printf '%q' "$COCKPIT_PORT") $(printf '%q' "${COCKPIT_ROOT}/scripts/start-cockpit.sh") 2>&1 | tee -a $(printf '%q' "$cockpit_log")"
+  ctmux new-session -d -s "$SESSION" -x 160 -y 48 "$inner" \
+    || stop "Could not start tmux for the cockpit." "Start it yourself in a window of its own: ${COCKPIT_ROOT}/scripts/start-cockpit.sh"
+  ctmux set-option -t "=${SESSION}:" @orrery_cockpit "$(date +%s)-$$-${RANDOM}${RANDOM}" 2>/dev/null || true
+  i=0
+  while [ "$i" -lt 90 ]; do
+    i=$((i + 1))
+    answer="$(backend_state)"
+    if [ "$answer" != none ]; then break; fi
+    if ! ctmux has-session -t "=$SESSION" 2>/dev/null; then break; fi
+    sleep 0.5
+  done
+  answer="$(backend_state)"
+  if [ "$answer" = none ]; then
+    say ""
+    say "  --- last lines of ${cockpit_log} ---"
+    tail -n 20 "$cockpit_log" | sed 's/^/  | /'
+    ctmux kill-session -t "=$SESSION" 2>/dev/null || true
+    stop "The cockpit did not start (see above). Fix what it reports, then run the same command again."
+  fi
+  # Started is not enough: it must be this checkout at this commit.
+  if ! is_this_version "$answer"; then
+    stop "Port ${COCKPIT_PORT} answers, but not with this cockpit (${answer};" \
+      "expected ${root_real}@${cockpit_head_full}). Nothing was stopped." \
+      "See ${cockpit_log}, and what else uses port ${COCKPIT_PORT}."
+  fi
+  printf 'boot=%s\nroot=%s\ncommit=%s\nsocket=%s\nsession=%s\nsession_identity=%s\n' "$(health_boot)" "$root_real" \
+    "$cockpit_head_full" "$SOCK" "$SESSION" "$(session_identity "$SOCK" "$SESSION")" >"$OWNER"
+}
+open_browser() {
+  [ "${ORRERY_NO_OPEN:-0}" != 1 ] || return 0
+  case "$os" in
+    mac) open "$url" >/dev/null 2>&1 || true ;;
+    wsl) { if command -v wslview >/dev/null 2>&1; then wslview "$url"; else explorer.exe "$url"; fi; } >/dev/null 2>&1 || true ;;
+    *) if command -v xdg-open >/dev/null 2>&1; then xdg-open "$url" >/dev/null 2>&1 || true; fi ;;
+  esac
+}
+
+case "$action" in
+  start)
+    say "  starting the cockpit in the background ..."
+    start_ours
+    ok "cockpit running: ${url}"
+    open_browser
+    ;;
+  restart)
+    say "  the cockpit this setup started earlier runs an older version (${running}); restarting it ..."
+    session_free_or_ours
+    stop_ours
+    start_ours
+    ok "restarted the cockpit: ${url}"
+    open_browser
+    ;;
+  current) ok "the cockpit is already running this version: ${url}" ;;
+  current_other) ok "a cockpit of this version is already running (not started by this setup): ${url}" ;;
+  foreign | none) ;;
+esac
+step_done "Start"
+# The steps shown are for where the cockpit actually runs: the recorded tmux
+# server and session when it was already running, else the ones just used.
+SHOW_SOCK="$SOCK"
+SHOW_SESSION="$SESSION"
+if [ "$action" = current ]; then SHOW_SOCK="$OWNER_SOCK"; SHOW_SESSION="$OWNER_SESSION"; fi
+
+# A run that passed every check and got the cockpit up (or was told not to
+# start it) closes the first attempt's record; anything less keeps it.
+if [ "$checks_ok" = true ] && [ "$action" != foreign ]; then
+  mv "$BASELINE" "${RUN_DIR}/baseline" 2>/dev/null || true
+fi
+
+say ""
+say "=============================================================="
+if [ "$update_failed" = true ]; then
+  say "  The update did not finish (see NG above). What runs now is the version"
+  say "  you had. Fix what the update reported, then run the same command again."
+elif [ "$checks_ok" = true ]; then
+  if [ -n "$agent_cli" ]; then
+    say "  ORRERY is ready."
+  else
+    say "  ORRERY's base is ready. Agents need Claude Code or Codex CLI (next, below)."
+  fi
+else
+  say "  Installed, but not every check passed (WARN above). If you need help,"
+  say "  send this file: ${LOG}"
+fi
+say ""
+case "$action" in
+  start | restart | current)
+    say "  The cockpit runs in the background; this window is free."
+    say "    Open:          ${url}"
+    say "    Its output:    tmux -L ${SHOW_SOCK} attach -t ${SHOW_SESSION}      (leave it with Ctrl-b, then d)"
+    say "    Stop it:       tmux -L ${SHOW_SOCK} kill-session -t ${SHOW_SESSION}"
+    say "    Start again:   the same command as before (it also updates)"
+    ;;
+  current_other)
+    say "  A cockpit of this version is already running: ${url}"
+    say "  It was not started by this setup; stop or restart it where it was started."
+    ;;
+  foreign)
+    say "  A cockpit is already running on port ${COCKPIT_PORT}, but not this version"
+    say "  (running: ${running})."
+    say "  This setup did not start it, so it was not stopped. In its window press"
+    say "  Ctrl-C, then run the same command again. Until then the browser shows"
+    say "  the old cockpit."
+    ;;
+  none)
+    say "  The cockpit was not started (--no-start). Start it with the same command"
+    say "  without --no-start, or in a window of its own:"
+    say "    ${COCKPIT_ROOT}/scripts/start-cockpit.sh"
+    ;;
+esac
+say ""
+if [ -z "$agent_cli" ]; then
+  say "  Next, in this window: install Claude Code and log in"
+  say "    curl -fsSL https://claude.ai/install.sh | bash"
+  say "    claude          (then type /login)"
+  say "  (or Codex CLI: npm install -g @openai/codex@latest, then codex login)"
+  say ""
+fi
+if [ -n "$mail_reconnect" ]; then
+  printf '%b\n' "$mail_reconnect" | sed 's/^/  /'
+  say ""
+fi
+if [ -n "$mail_notice" ]; then
+  printf '%s\n' "$mail_notice" | sed 's/^/  /'
+  if [ "$mail_update_hint" = true ]; then
+    say "  To update it, run the same line with --mail update:"
+    say "    curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --mail update"
+  fi
+  say ""
+fi
+say "  See it work:"
+say "    1. In the browser, the cockpit shows your project: $(basename "$project_key")"
+say "    2. NEW AGENT starts a small agent (or in a new window:"
+say "       ~/.agentstack/bin/agent-start ${project_key})"
+say "    3. The agent appears in the list and its reply shows up"
+say "  After restarting the computer: ~/.agentstack/bin/agentstack-doctor, then the"
+say "  same command again (it starts what is stopped)."
+if [ "$mode" = fresh ]; then
+  say "  To remove this new install: ${tel_root}/scripts/uninstall.sh"
+  say "  (it keeps the Mail database unless --purge-data; the 2 checkouts, uv and Python stay)"
+  say "  and stop the cockpit: tmux -L ${SHOW_SOCK} kill-session -t ${SHOW_SESSION}"
+fi
+if [ "$os" = wsl ]; then
+  say "  If the Windows browser shows nothing: in PowerShell run"
+  say "    curl http://127.0.0.1:${COCKPIT_PORT}/telemetry/health   (localhost forwarding)"
+  say "  and in Ubuntu run  explorer.exe .   (opening Windows apps from Ubuntu)."
+fi
+say "  Log: ${LOG}"
+say "=============================================================="
+if [ "$update_failed" = true ] || [ "$checks_ok" != true ]; then exit 1; fi
+exit 0
