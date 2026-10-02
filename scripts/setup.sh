@@ -74,8 +74,10 @@ Options:
   -y, --yes           do not ask; accept the plan (you have read it here)
   --ask-each          also show orrery-telemetry's installer previews and let
                       it ask before each of its four changes
-  --mail keep|update  ORRERY Mail on update, passed on to scripts/update.sh
-                      (stops before changing anything if update.sh cannot take it)
+  --mail auto|update|keep
+                      ORRERY Mail on update (default keep), passed on to
+                      scripts/update.sh every time (stops before changing
+                      anything if update cannot be passed on)
   --check             only check and show the plan; changes nothing
   --dry-run           also show the installer's own previews; changes nothing
   --no-start          do everything but start the cockpit
@@ -108,8 +110,8 @@ while [ $# -gt 0 ]; do
   shift
 done
 case "$mail_mode" in
-  "" | keep | update) ;;
-  *) printf 'Unknown --mail value: %s (keep or update)\n' "$mail_mode" >&2; exit 2 ;;
+  "" | keep | update | auto) ;;
+  *) printf 'Unknown --mail value: %s (auto|update|keep)\n' "$mail_mode" >&2; exit 2 ;;
 esac
 read_only=false
 if [ "$check_only" = true ] || [ "$dry_run" = true ]; then read_only=true; fi
@@ -185,6 +187,7 @@ expand_path() { # ~ and relative paths -> absolute
   esac
 }
 run_update() {
+  if [ -n "$LOG" ]; then printf 'update.sh: %s (on %s)\n' "$UPDATE_SH" "$COCKPIT_ROOT" >>"$LOG"; fi
   if [ -x "$UPDATE_SH" ]; then
     ORRERY_COCKPIT_ROOT="$COCKPIT_ROOT" "$UPDATE_SH" "$@"
   else
@@ -211,6 +214,7 @@ open_run() {
   LOG="${RUN_DIR}/log"
   : >"$LOG"
   : >"${RUN_DIR}/steps"
+  printf 'setup: %s (%s); update.sh: %s\n' "${SCRIPT_DIR}/setup.sh" "${setup_origin:-?}" "$UPDATE_SH" >>"$LOG"
 }
 backend_state() { # running backend on the cockpit port: none | root@commit | unknown (older backend)
   health="$(http_get "http://127.0.0.1:${COCKPIT_PORT}/telemetry/health")"
@@ -332,6 +336,12 @@ else
   say "ORRERY setup"
 fi
 step "Prerequisites"
+if [ "${ORRERY_TEMP_SETUP:-0}" = 1 ]; then
+  setup_origin="the newest, taken from the remote by get.sh"
+else
+  setup_origin="this checkout's"
+fi
+ok "setup: ${SCRIPT_DIR}/setup.sh (${setup_origin})"
 
 case "$(uname -s)" in
   Darwin) os=mac; platform=macOS ;;
@@ -591,27 +601,31 @@ check_detached() { # $1 = label, $2 = checkout, $3 = branch
 if [ -n "$COCKPIT_ROOT" ]; then check_detached cockpit "$COCKPIT_ROOT" "$COCKPIT_REF"; fi
 if [ "$mode" = update ]; then check_detached orrery-telemetry "$tel_root" "$TEL_REF"; fi
 
-# ORRERY Mail: this setup does not touch it. --mail is passed on to update.sh
-# only when that update.sh says it takes --mail.
-if [ "$mode" = update ]; then
-  mail_line="keep the running ORRERY Mail (the installer reports a newer build; it does not switch)"
-else
-  mail_line="set up ORRERY Mail (or keep one that is already running and healthy)"
-fi
+# ORRERY Mail: this setup does not touch it. On an update the choice (keep
+# unless --mail says otherwise) goes to update.sh every time: as --mail when
+# that update.sh takes it, else as AGENTSTACK_MAIL_UPDATE (an older update.sh
+# runs install.sh without options, and keep must stay keep).
+mail_choice="${mail_mode:-keep}"
 pass_mail=""
-if [ -n "$mail_mode" ]; then
-  if [ "$mode" != update ]; then
-    note "--mail ${mail_mode}: a new install sets up ORRERY Mail anyway; the option is not needed"
-  elif run_update --help 2>/dev/null | grep -q -- '--mail'; then
-    pass_mail="--mail=${mail_mode}"
-    mail_line="ORRERY Mail: --mail ${mail_mode}, as scripts/update.sh does it"
-  elif [ "$mail_mode" = keep ]; then
-    note "this update.sh has no --mail option; keeping the running ORRERY Mail is what it does anyway"
-  else
+mail_env=""
+if [ "$mode" = update ]; then
+  case "$mail_choice" in
+    keep) mail_line="keep the running ORRERY Mail (the installer says when a newer build is available)" ;;
+    update) mail_line="update ORRERY Mail to this orrery-telemetry's build (a few seconds without Mail)" ;;
+    auto) mail_line="update ORRERY Mail only when the installer finds it safe; otherwise keep it" ;;
+  esac
+  if run_update --help 2>/dev/null | grep -q -- '--mail'; then
+    pass_mail="--mail=${mail_choice}"
+  elif [ "$mail_choice" = update ]; then
     stop "--mail update was asked for, but this cockpit's update.sh cannot take --mail yet; nothing was changed." \
       "To switch ORRERY Mail now, follow orrery-telemetry's docs/agentstack-mail-update.md" \
-      "(install.sh --update-mail), or run this without --mail."
+      "(install.sh --mail update), or run this without --mail."
+  else
+    mail_env="$mail_choice"
   fi
+else
+  mail_line="set up ORRERY Mail (or keep one that is already running and healthy)"
+  if [ -n "$mail_mode" ]; then note "--mail ${mail_mode}: a new install sets up ORRERY Mail anyway"; fi
 fi
 
 dash_port="${AGENTSTACK_PORT:-$(env_value AGENTSTACK_PORT)}"
@@ -812,18 +826,27 @@ run_installer() {
           AGENTSTACK_*) explicit="${explicit} ${name}"; eval "saved_${name}=\"\${${name}}\"" ;;
         esac
       done
+      for name in $explicit; do unset "$name"; done   # so the next line shows env.sh's own values
       . "$ENV_FILE"
       # What install.sh reads back from env.sh by itself (its resolve_setting
       # lines) is left to it: in its environment a value counts as chosen on
       # purpose, so a saved Codex path that no longer runs would be refused
-      # instead of looked up again. Values set in this shell still win below.
+      # instead of looked up again. A value set in this shell is passed on as a
+      # choice only when it differs from env.sh's: a login shell that sources
+      # env.sh (~/.zshenv) only echoes the saved value back.
+      echoed=""
       for name in $(sed -n 's/^resolve_setting [A-Z_]* \(AGENTSTACK_[A-Z_]*\).*/\1/p' ./scripts/install.sh 2>/dev/null); do
         case " $explicit " in
-          *" $name "*) ;;
-          *) unset "$name" ;;
+          *" $name "*)
+            eval "from_file=\${${name}-__not_in_env_sh__}"
+            eval "from_shell=\${saved_${name}}"
+            if [ "$from_shell" = "$from_file" ]; then echoed="${echoed} ${name}"; fi
+            ;;
         esac
+        unset "$name"
       done
       for name in $explicit; do
+        case " $echoed " in *" $name "*) continue ;; esac
         eval "export ${name}=\"\${saved_${name}}\""
       done
     fi
@@ -883,6 +906,7 @@ case "$mode" in
     if [ -n "$project_key_arg" ]; then export AGENTSTACK_PROJECT_KEY="$project_key"; fi
     if [ "$ask_each" != true ]; then export AGENTSTACK_ASSUME_YES=1; fi
     say "  updating orrery-telemetry and the cockpit ..."
+    if [ -n "$mail_env" ]; then export AGENTSTACK_MAIL_UPDATE="$mail_env"; fi
     if logged run_update $pass_mail; then
       ok "orrery-telemetry: $(head_of "$tel_root") ($(cat "${AGENTSTACK_DIR}/VERSION" 2>/dev/null || printf '?')), cockpit: $(head_of "$COCKPIT_ROOT")"
     else
@@ -900,7 +924,7 @@ case "$mode" in
         after_failure
       fi
     fi
-    unset AGENTSTACK_ASSUME_YES
+    unset AGENTSTACK_ASSUME_YES AGENTSTACK_MAIL_UPDATE
     ;;
 esac
 
@@ -967,8 +991,35 @@ show_item "2. ~/.claude/settings.json" "$(item_result "$applied_settings" "" "Sk
 show_item "3. ~/.codex/AGENTS.md" "$(item_result "$applied_codex" "" "Skipped Codex AGENTS.md\|skipping Codex AGENTS.md")"
 show_item "4. ${project_key}/CLAUDE.md" "$(item_result "$applied_claude" "" "Skipped Claude CLAUDE.md\|skipping Claude CLAUDE.md")"
 
-# What the installer did with ORRERY Mail, in one line.
-if grep -q 'installer will provision ORRERY Mail' "$LOG"; then
+# What the installer did with ORRERY Mail. An installer that knows the Mail
+# choice ends with a "mail-result:" line; from such an installer, no line (or
+# one that cannot be read) is not a success. An older one is read as before.
+installer_file="${tel_root}/scripts/install.sh"
+installer_help="$("$installer_file" --help 2>/dev/null || true)"
+new_installer=false
+if printf '%s\n' "$installer_help" | grep -q -- '--mail auto|update|keep'; then new_installer=true; fi
+mail_result_line="$(grep '^mail-result: ' "$LOG" | tail -n 1 || true)"
+mail_field() { printf '%s\n' "$mail_result_line" | sed -n "s/.* $1=\([^ ]*\).*/\1/p"; }
+mail_reconnect=""
+if [ -n "$mail_result_line" ]; then
+  mail_result="$(printf '%s\n' "$mail_result_line" | sed -n 's/^mail-result: \([a-z-]*\).*/\1/p')"
+  case "$mail_result" in
+    installed) ok "Mail: set up (new, $(mail_field running))" ;;
+    switched) ok "Mail: updated to $(mail_field to) (was $(mail_field from); without Mail for $(mail_field outage_s) s)" ;;
+    kept | unchanged) ok "Mail: ${mail_result} (running $(mail_field running))" ;;
+    refused | rolled-back)
+      warn_line "Mail: ${mail_result}; not updated, the running one ($(mail_field running)) stays (reason: $(mail_field reason))" ;;
+    *) warn_line "Mail: the installer reported something unknown: ${mail_result_line}"; checks_ok=false ;;
+  esac
+  case "$mail_result" in
+    switched | rolled-back)
+      # The installer's own check-and-reconnect lines (one source of wording).
+      mail_reconnect="$(awk '/^ORRERY Mail was unavailable for /{block=$0; n=4; next} n>0{block=block "\n" $0; n--} END{print block}' "$LOG")" ;;
+  esac
+elif [ "$new_installer" = true ]; then
+  warn_line "Mail: the installer did not report what it did with ORRERY Mail (no mail-result line)"
+  checks_ok=false
+elif grep -q 'installer will provision ORRERY Mail' "$LOG"; then
   ok "Mail: set up (new)"
 elif grep -q 'adopted the running ORRERY Mail deployment' "$LOG"; then
   ok "Mail: kept the running one (not switched)"
@@ -994,7 +1045,10 @@ if [ -x "${bin_dir}/agentstack-doctor" ]; then
   doctor_status=0
   doctor_out="$("${bin_dir}/agentstack-doctor" 2>&1)" || doctor_status=$?
   printf '\n$ agentstack-doctor   (exit %s)\n%s\n' "$doctor_status" "$doctor_out" >>"$LOG"
-  doctor_lines="$(printf '%s\n' "$doctor_out" | grep -v '^ok:' | grep -v '^ *$' || true)"
+  # The doctor's ORRERY Mail block ("warn: ... lacks" up to "mail-features:")
+  # is shown once, with the Mail notice at the end, not among these lines.
+  doctor_mail_block="$(printf '%s\n' "$doctor_out" | awk '/^warn: ORRERY Mail .* lacks /{on=1} /^mail-features:/{on=0} on')"
+  doctor_lines="$(printf '%s\n' "$doctor_out" | awk '/^warn: ORRERY Mail .* lacks /{on=1} /^mail-features:/{on=0; next} !on' | grep -v '^ok:' | grep -v '^ *$' || true)"
   if [ "$doctor_status" -ne 0 ]; then
     checks_ok=false
     warn_line "doctor: exited ${doctor_status}; what it reported (all of it: ${bin_dir}/agentstack-doctor):"
@@ -1035,6 +1089,16 @@ if [ -n "$agent_cli" ]; then
   ok "agent CLI: ${agent_cli}"
 else
   note "agent CLI: none -> the base is ready, agents are not yet"
+fi
+# ORRERY Mail older than this install: the installer's notice (what is
+# missing, the risk, how to reconnect), else the doctor's block. Their wording
+# is the one source; this setup only adds how to update with the same line.
+mail_notice=""
+if printf '%s\n' "$installer_help" | grep -q -- '--print-mail-update-advice'; then
+  mail_notice="$(cd "$tel_root" && ./scripts/install.sh --print-mail-update-advice 2>/dev/null || true)"
+fi
+if [ -z "$mail_notice" ] && printf '%s\n' "${doctor_out:-}" | grep -q '^mail-features: status=missing'; then
+  mail_notice="${doctor_mail_block:-}"
 fi
 step_done "Checks"
 
@@ -1165,6 +1229,16 @@ if [ -z "$agent_cli" ]; then
   say "    curl -fsSL https://claude.ai/install.sh | bash"
   say "    claude          (then type /login)"
   say "  (or Codex CLI: npm install -g @openai/codex@latest, then codex login)"
+  say ""
+fi
+if [ -n "$mail_reconnect" ]; then
+  printf '%b\n' "$mail_reconnect" | sed 's/^/  /'
+  say ""
+fi
+if [ -n "$mail_notice" ]; then
+  printf '%s\n' "$mail_notice" | sed 's/^/  /'
+  say "  To update it, run the same line with --mail update:"
+  say "    curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --mail update"
   say ""
 fi
 say "  See it work:"

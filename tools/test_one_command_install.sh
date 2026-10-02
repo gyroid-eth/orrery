@@ -21,7 +21,11 @@ cleanup() {
 trap cleanup EXIT
 failures=0
 pass() { printf 'ok    %s\n' "$1"; }
-fail() { printf 'FAIL  %s\n' "$1"; failures=$((failures + 1)); }
+fail() {
+  printf 'FAIL  %s\n' "$1"; failures=$((failures + 1))
+  # ORRERY_TEST_VERBOSE=1: the end of the last setup output, to see why.
+  if [ "${ORRERY_TEST_VERBOSE:-0}" = 1 ]; then printf '%s\n' "${out:-}" | tail -n 25 | sed 's/^/      | /'; fi
+}
 check() { # $1 = name; rest = command that must succeed
   name="$1"; shift
   if "$@"; then pass "$name"; else fail "$name"; fi
@@ -133,7 +137,6 @@ check "lock: says another is running" sh -c 'printf "%s" "$1" | grep -q "Another
 
 # ---------------------------------------------------------------- --mail update without support
 H="$(fresh_home mail)"
-git clone --quiet --branch "$BRANCH" "$COCKPIT_URL" "$H/orrery"
 git init --quiet "$WORK/fake-telemetry"
 mkdir -p "$WORK/fake-telemetry/scripts" && printf '#!/bin/sh\nexit 0\n' >"$WORK/fake-telemetry/scripts/install.sh"
 chmod +x "$WORK/fake-telemetry/scripts/install.sh"
@@ -141,6 +144,10 @@ git -C "$WORK/fake-telemetry" add -A && git -C "$WORK/fake-telemetry" -c user.na
 git clone --quiet "file://$WORK/fake-telemetry" "$H/orrery-telemetry"
 mkdir -p "$H/.agentstack"
 printf '{\n  "repo_root": "%s",\n  "tool": "x"\n}\n' "$H/orrery-telemetry" >"$H/.agentstack/install-state.json"
+# A cockpit whose update.sh is older and has no --mail.
+git clone --quiet --branch "$BRANCH" "$COCKPIT_URL" "$H/orrery"
+printf '#!/bin/sh\necho "Usage: update.sh [--dry-run]"\n' >"$H/orrery/scripts/update.sh"
+git -C "$H/orrery" -c user.name=t -c user.email=t@t commit --quiet -am "an update.sh without --mail"
 out="$(run_in "$H" ORRERY_DIR="$H/orrery" ORRERY_REPO_URL="$COCKPIT_URL" ORRERY_TELEMETRY_URL="file://$WORK/fake-telemetry" \
   bash "$H/orrery/scripts/setup.sh" --yes --no-start --mail update 2>&1)"; status=$?
 check "--mail update unsupported: stops" test "$status" -ne 0
@@ -158,6 +165,22 @@ cat >"$STUBTEL/scripts/install.sh" <<'EOF'
 #!/usr/bin/env bash
 set -eu
 dir="${AGENTSTACK_HOME:-$HOME/.agentstack}"
+if [ "${1:-}" = "--help" ]; then
+  echo "Usage: install.sh"
+  if [ -n "${STUB_MAIL_HELP:-}" ]; then
+    echo "  --mail auto|update|keep"
+    echo "  --print-mail-update-advice"
+  fi
+  exit 0
+fi
+if [ "${1:-}" = "--print-mail-update-advice" ]; then
+  if [ -n "${STUB_MAIL_ADVICE:-}" ]; then
+    echo "ORRERY Mail is out of date (running aaaaaaa, this checkout bbbbbbb)."
+    echo "  Risk: STUB-RISK-LINE"
+    echo "  If one shows orrery-mail as failed afterwards, in that session: /mcp, choose orrery-mail (shown as failed), then Reconnect (not Authenticate)."
+  fi
+  exit 0
+fi
 if [ "${1:-}" = "--dry-run" ] || [ "${2:-}" = "--dry-run" ]; then
   # As the real installer probes Codex: an explicit AGENTSTACK_CODEX_BIN,
   # else the one saved in env.sh, else codex on PATH.
@@ -175,6 +198,7 @@ if [ -n "${AGENTSTACK_CODEX_BIN:-}" ] && ! "$AGENTSTACK_CODEX_BIN" --version >/d
   echo "error: --codex-bin / AGENTSTACK_CODEX_BIN cannot be used: $AGENTSTACK_CODEX_BIN" >&2; exit 2
 fi
 if [ -n "${STUB_INSTALL_ERROR:-}" ]; then echo "error: ${STUB_INSTALL_ERROR}" >&2; exit 1; fi
+printf 'args=%s env=%s\n' "$*" "${AGENTSTACK_MAIL_UPDATE-unset}" >"$HOME/install-args"
 mkdir -p "$dir/bin"
 printf '2026.10.01.1\n' >"$dir/VERSION"
 printf 'export AGENTSTACK_PROJECT_KEY=%s\n' "$HOME/orrery-work" >"$dir/env.sh"
@@ -186,6 +210,12 @@ case "${STUB_DOCTOR:-ok}" in
   missing) echo "ok: env"; echo "missing: hooks under $HOME/.agentstack/hooks" >&2; exit 1 ;;
   warn) echo "warn: dashboard does not answer"; exit 1 ;;
   unknown) echo "something odd happened"; exit 3 ;;
+  mailmissing)
+    echo "ok: everything else"
+    echo "warn: ORRERY Mail (running aaaaaaa) lacks register_agent.existing_agent_id, which this install relies on: STUB-NEEDED-FOR" >&2
+    echo "      To update: ./scripts/install.sh --mail update" >&2
+    echo "mail-features: status=missing missing=register_agent.existing_agent_id running=aaaaaaa"
+    exit 0 ;;
 esac
 DOC
 printf '#!/bin/sh\necho "self-test passed"\n' >"$dir/bin/agentstack-selftest"
@@ -195,6 +225,13 @@ echo "assume-yes: registered orrery-mail in $HOME/.claude.json"
 echo "assume-yes: applied Tier1 settings merge to $HOME/.claude/settings.json"
 echo "assume-yes: applied Codex AGENTS.md managed setup"
 echo "assume-yes: applied Claude CLAUDE.md managed setup"
+if [ "${STUB_MAIL_RESULT:-}" = switched ]; then
+  echo "ORRERY Mail was unavailable for 3s."
+  echo "  in each running Claude Code session: STUB-RECONNECT-LINE"
+fi
+if [ -n "${STUB_MAIL_RESULT:-}" ]; then
+  echo "mail-result: ${STUB_MAIL_RESULT} mode=keep from=aaaaaaa to=bbbbbbb running=aaaaaaa outage_s=0 reason=keep_requested"
+fi
 EOF
 chmod +x "$STUBTEL/scripts/install.sh"
 git -C "$STUBTEL" init --quiet
@@ -339,6 +376,14 @@ printf "export AGENTSTACK_CODEX_BIN='/broken/codex'\nexport AGENTSTACK_PROJECT_K
 out="$(setup_in "$H" bash "$H/orrery/scripts/setup.sh" --yes --no-start 2>&1)"; status=$?
 check "saved broken codex: the install goes on" test "$status" -eq 0
 check "saved broken codex: not refused as chosen" sh -c '! printf "%s" "$1" | grep -q "cannot be used"' _ "$out"
+# ... also when the login shell already exported env.sh (~/.zshenv on the Air).
+H="$(fresh_home saved-broken-codex-echoed)"
+stub_cockpit "$H"
+mkdir -p "$H/.agentstack"
+printf "export AGENTSTACK_CODEX_BIN='/broken/codex'\nexport AGENTSTACK_PROJECT_KEY='%s'\n" "$H/orrery-work" >"$H/.agentstack/env.sh"
+out="$(setup_in "$H" AGENTSTACK_CODEX_BIN=/broken/codex AGENTSTACK_PROJECT_KEY="$H/orrery-work" bash "$H/orrery/scripts/setup.sh" --yes --no-start 2>&1)"; status=$?
+check "saved broken codex, echoed by the shell: the install goes on" test "$status" -eq 0
+check "saved broken codex, echoed by the shell: not refused as chosen" sh -c '! printf "%s" "$1" | grep -q "cannot be used"' _ "$out"
 
 # An existing cockpit checkout that is behind: the newest setup.sh AND the
 # newest update.sh run on it (a fix to update.sh takes effect on this run,
@@ -369,6 +414,14 @@ check "behind: the newest update.sh ran (not the checkout's old one)" grep -q "N
 check "behind: the checkout is at the newest commit afterwards" \
   test "$(git -C "$H/orrery" rev-parse HEAD)" = "$(git -C "$SEED_B" rev-parse HEAD)"
 check "behind: says it uses the newest setup" sh -c 'printf "%s" "$1" | grep -q "setup: from"' _ "$out"
+check "behind: the log says which setup and update.sh ran" sh -c 'grep -q "setup: .*(the newest, taken from the remote by get.sh)" "$1" && grep -q "^update.sh: .*(on $2)" "$1"' _ "$log" "$H/orrery"
+# A cached, older get.sh hands over to the newer get.sh of the fetched commit.
+sed -i.bak 's/^  get_version=[0-9]*/  get_version=99\n  echo "NEWEST-GET-SH ran with: $*"/' "$SEED_B/scripts/get.sh" && rm -f "$SEED_B/scripts/get.sh.bak"
+git -C "$SEED_B" -c user.name=t -c user.email=t@t commit --quiet -am "a newer get.sh"
+git -C "$SEED_B" push --quiet origin "HEAD:$BRANCH"
+out="$(run_in "$H" ORRERY_REPO_URL="file://$REMOTE_B" ORRERY_REF="$BRANCH" ORRERY_TELEMETRY_URL="$STUBTEL_URL" \
+  AGENTSTACK_PYTHON="$(command -v python3)" bash "$ROOT/scripts/get.sh" --check 2>&1)"
+check "older get.sh: runs the newer one, with the same options" sh -c 'printf "%s" "$1" | grep -q "NEWEST-GET-SH ran with: --check"' _ "$out"
 # Uncommitted changes in that checkout: the newest update.sh stops, nothing moves.
 git -C "$SEED_B" -c user.name=t -c user.email=t@t commit --quiet --allow-empty -m "newer again"
 git -C "$SEED_B" push --quiet origin "HEAD:$BRANCH"
@@ -379,6 +432,41 @@ out="$(run_in "$H" ORRERY_REPO_URL="file://$REMOTE_B" ORRERY_REF="$BRANCH" ORRER
 check "behind + uncommitted: stops" test "$status" -ne 0
 check "behind + uncommitted: the checkout did not move" test "$(git -C "$H/orrery" rev-parse HEAD)" = "$before"
 check "behind + uncommitted: the local edit is still there" grep -q "# local edit" "$H/orrery/README.md"
+
+# ORRERY Mail at the end: what the installer and doctor say is relayed as is
+# (their wording is the one source); setup adds only its own update line.
+mail_run() { # $1 = name; rest = env assignments
+  name="$1"; shift
+  H="$(fresh_home "mail-$name")"
+  stub_cockpit "$H"
+  setup_in "$H" "$@" bash "$H/orrery/scripts/setup.sh" --yes --no-start 2>&1
+}
+out="$(mail_run advice STUB_MAIL_HELP=1 STUB_MAIL_RESULT=kept STUB_MAIL_ADVICE=1)"
+check "mail advice: the installer's notice is shown" sh -c 'printf "%s" "$1" | grep -q "ORRERY Mail is out of date (running aaaaaaa"' _ "$out"
+check "mail advice: risk and reconnect lines as the installer wrote them" sh -c 'printf "%s" "$1" | grep -q "STUB-RISK-LINE" && printf "%s" "$1" | grep -q "Reconnect (not Authenticate)"' _ "$out"
+check "mail advice: setup's own update line" sh -c 'printf "%s" "$1" | grep -q -- "bash -s -- --mail update"' _ "$out"
+check "mail advice: the result line is read" sh -c 'printf "%s" "$1" | grep -q "Mail: kept"' _ "$out"
+check "mail advice: still ready (an older Mail is a note, not a failure)" sh -c 'printf "%s" "$1" | grep -q "is ready"' _ "$out"
+out="$(mail_run current STUB_MAIL_HELP=1 STUB_MAIL_RESULT=unchanged)"
+check "mail current: no update notice" sh -c '! printf "%s" "$1" | grep -q -- "--mail update"' _ "$out"
+out="$(mail_run noline STUB_MAIL_HELP=1)"
+check "mail result missing from a new installer: not ready" sh -c '! printf "%s" "$1" | grep -q "is ready"' _ "$out"
+check "mail result missing from a new installer: says so" sh -c 'printf "%s" "$1" | grep -q "did not report what it did with ORRERY Mail"' _ "$out"
+out="$(mail_run old)"
+check "mail result from an older installer: no line needed" sh -c 'printf "%s" "$1" | grep -q "is ready"' _ "$out"
+out="$(mail_run switched STUB_MAIL_HELP=1 STUB_MAIL_RESULT=switched)"
+check "mail switched: the reconnect check is shown as the installer wrote it" sh -c 'printf "%s" "$1" | grep -q "ORRERY Mail was unavailable for 3s" && printf "%s" "$1" | grep -q STUB-RECONNECT-LINE' _ "$out"
+out="$(mail_run doctor STUB_DOCTOR=mailmissing)"
+check "mail missing (doctor): the doctor's block is shown" sh -c 'printf "%s" "$1" | grep -q "lacks register_agent.existing_agent_id" && printf "%s" "$1" | grep -q "To update: ./scripts/install.sh --mail update"' _ "$out"
+check "mail missing (doctor): setup's own update line" sh -c 'printf "%s" "$1" | grep -q -- "bash -s -- --mail update"' _ "$out"
+check "mail missing (doctor): still ready" sh -c 'printf "%s" "$1" | grep -q "is ready"' _ "$out"
+# On update, the choice reaches the installer explicitly (keep by default),
+# even through an update.sh without --mail.
+H="$(fresh_home mail-keep-explicit)"
+stub_cockpit "$H"
+setup_in "$H" bash "$H/orrery/scripts/setup.sh" --yes --no-start >/dev/null 2>&1
+setup_in "$H" bash "$H/orrery/scripts/setup.sh" --yes --no-start >/dev/null 2>&1
+check "mail on update: keep reaches the installer explicitly" grep -q "env=keep" "$H/install-args"
 
 # An unfinished Mail copy: never a command that deletes anything.
 H="$(fresh_home mail-incomplete)"

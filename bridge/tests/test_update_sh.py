@@ -492,3 +492,59 @@ def test_positive_a_value_set_in_this_environment_is_still_passed(stack, dashboa
     use_resolving_installer(stack)
     assert stack.update(ORRERY_DASHBOARD_URL=dashboard, AGENTSTACK_CODEX_BIN="/chosen/codex").returncode == 0
     assert stack.install_env() == "codex=/chosen/codex port=unset maildb=/saved/storage.sqlite3"
+
+
+# ---------------------------------------------------------------- --mail
+# update.sh passes the ORRERY Mail choice to install.sh explicitly every run
+# (keep by default), in the form that install.sh understands.
+FAKE_INSTALL_MAIL = """#!/bin/sh
+# usage: --update-mail
+printf 'install cockpit=%s\\n' "$(git -C "$FAKE_COCKPIT" rev-parse HEAD)" >> "$FAKE_LOG"
+printf 'args=%s env=%s\\n' "$*" "${AGENTSTACK_MAIL_UPDATE-unset}" > "$FAKE_LOG.env"
+"""
+
+
+def use_mail_installer(stack, new: bool):
+    seed = stack.tmp / "telemetry-seed"
+    text = FAKE_INSTALL_MAIL
+    if new:  # update.sh reads the option from the installer's own text
+        text = text.replace("# usage: --update-mail", "# usage: --mail auto|update|keep, --update-mail")
+    (seed / "scripts" / "install.sh").write_text(text)
+    git(seed, "commit", "-q", "-am", "an installer with Mail options")
+    git(seed, "push", "-q", "origin", "HEAD:master")
+
+
+def test_positive_help_lists_the_mail_choice(stack):
+    out = stack.update("--help")
+    assert out.returncode == 0 and "--mail auto|update|keep" in out.stdout
+
+
+@pytest.mark.parametrize("args,new,expected", [
+    ((), True, "args=--mail keep env=unset"),
+    (("--mail", "update"), True, "args=--mail update env=unset"),
+    (("--mail=auto",), True, "args=--mail auto env=unset"),
+    (("--mail", "keep"), True, "args=--mail keep env=unset"),
+    ((), False, "args= env=keep"),
+    (("--mail", "update"), False, "args=--update-mail env=unset"),
+    (("--mail", "auto"), False, "args= env=auto"),
+])
+def test_positive_the_mail_choice_reaches_install_sh(stack, dashboard, args, new, expected):
+    use_mail_installer(stack, new)
+    assert stack.update(*args, ORRERY_DASHBOARD_URL=dashboard).returncode == 0
+    assert stack.install_env() == expected
+
+
+def test_negative_an_unknown_mail_choice(stack):
+    out = stack.update("--mail", "sometimes")
+    assert out.returncode == 2 and "auto|update|keep" in out.stderr
+
+
+def test_positive_values_the_login_shell_echoes_from_env_sh_stay_saved(stack, dashboard):
+    """MacBook Air, 2026-10-02: ~/.zshenv sources ~/.agentstack/env.sh, so every
+    saved value is also in update.sh's environment. A value equal to the saved
+    one is an echo of env.sh, not a choice; install.sh reads it as saved (and
+    looks for codex again when the saved path no longer runs)."""
+    use_resolving_installer(stack)
+    assert stack.update(ORRERY_DASHBOARD_URL=dashboard, AGENTSTACK_CODEX_BIN="/broken/codex",
+                        AGENTSTACK_PORT="19876", AGENTSTACK_MAIL_DB="/saved/storage.sqlite3").returncode == 0
+    assert stack.install_env() == "codex=unset port=unset maildb=/saved/storage.sqlite3"

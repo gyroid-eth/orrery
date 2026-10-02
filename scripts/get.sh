@@ -17,6 +17,9 @@
 main() {
   set -eu
 
+  # This file's version. A newer get.sh in the fetched commit replaces this
+  # one for the run (a cached download of an older get.sh cannot hold a fix back).
+  get_version=2
   # The setup.sh contract this get.sh needs. A checkout whose setup.sh is
   # older (or missing) is set up with the remote's setup.sh instead.
   required_contract=1
@@ -175,6 +178,22 @@ main() {
     n="$(sed -n 's/^ORRERY_SETUP_CONTRACT=\([0-9][0-9]*\).*/\1/p' "$1" 2>/dev/null | head -n 1)"
     printf '%s' "${n:-0}"
   }
+  # Run the get.sh of the given commit instead, when it is newer than this one.
+  newer_get() { # $1 = checkout, $2 = commit, then this script's own arguments
+    repo="$1"; commit="$2"; shift 2
+    [ "${ORRERY_GET_REEXEC:-0}" != 1 ] || return 0
+    their="$(git -C "$repo" show "${commit}:scripts/get.sh" 2>/dev/null | sed -n 's/^ *get_version=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+    [ -n "$their" ] && [ "$their" -gt "$get_version" ] || return 0
+    newer="$(mktemp "${TMPDIR:-/tmp}/orrery-get.XXXXXX")"
+    git -C "$repo" show "${commit}:scripts/get.sh" >"$newer" || return 0
+    say "  note  this get.sh is version ${get_version}; running the newer one (${their}) from $(git -C "$repo" log -1 --format=%h "$commit")"
+    cleanup
+    export ORRERY_GET_REEXEC=1
+    if [ -r /dev/tty ] && { : </dev/tty; } 2>/dev/null; then
+      exec bash "$newer" "$@" </dev/tty
+    fi
+    exec bash "$newer" "$@"
+  }
   describe() { git -C "$1" log -1 --format='%h (%cd)' --date=short 2>/dev/null || printf '?'; }
 
   tmp_root=""
@@ -188,6 +207,7 @@ main() {
     clone_cockpit "${tmp_root}/orrery" \
       || stop "Could not download ORRERY from ${repo_url}." "Check the network connection, then run this again."
     say "  ok    got ORRERY $(describe "${tmp_root}/orrery") from ${repo_url}"
+    newer_get "${tmp_root}/orrery" HEAD "$@"
     if [ -n "$cockpit" ]; then
       export ORRERY_DIR="$cockpit"
     else
@@ -221,6 +241,7 @@ main() {
     mv "${tmp_root}/orrery" "$target"
     cockpit="$target"
     export ORRERY_BOOTSTRAP_DID="downloaded the cockpit to ${target}"
+    newer_get "$cockpit" HEAD "$@"
     say "  ok    cockpit: ${cockpit} at $(describe "$cockpit")"
   fi
 
@@ -235,6 +256,7 @@ main() {
   if [ ! -x "$setup" ] || [ "$(contract_of "$setup")" -lt "$required_contract" ]; then local_ok=false; fi
   if git -C "$cockpit" fetch --quiet origin "$ref" 2>/dev/null; then
     newest="$(git -C "$cockpit" rev-parse FETCH_HEAD)"
+    newer_get "$cockpit" "$newest" "$@"
     if [ "$local_ok" != true ] || [ "$(git -C "$cockpit" rev-parse HEAD)" != "$newest" ]; then
       [ -n "$tmp_root" ] || tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/orrery-setup.XXXXXX")"
       mkdir -p "${tmp_root}/scripts"
