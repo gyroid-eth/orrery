@@ -18,6 +18,8 @@ import asyncio
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -197,8 +199,8 @@ def test_an_ambiguous_probe_links_without_resolving(runs):
 
 def test_the_cockpit_opens_the_probed_path():
     html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
-    assert "mk(start,found.path,found.resolved||found.path)" in html
-    assert "activate:(event)=>{event.preventDefault();revealLocalPath(open,{literal:open!==p});}" in html
+    assert "mk(start,found.path,found.resolved||found.path,Boolean(found.resolved))" in html
+    assert "activate:(event)=>{event.preventDefault();revealLocalPath(open,{literal});}" in html
 
 
 # --- the endpoint -------------------------------------------------------------
@@ -267,9 +269,57 @@ def test_a_probed_path_that_is_still_there_opens(runs, monkeypatch):
     assert body["ok"] is True and seen == [real]
 
 
-def test_the_cockpit_opens_a_probed_path_literally():
+NODE = shutil.which("node")
+
+
+def _links_for(row: str, probe: dict | None) -> list[dict]:
+    """Run the cockpit's own link provider on one pane row, with the probe
+    answering ``probe``; return each link's text and what a click sends."""
     html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
-    assert "revealLocalPath(open,{literal:open!==p})" in html
+    start = html.index("  term.registerLinkProvider({")
+    provider = html[start : html.index("\n  });", start) + len("\n  });")]
+    script = f"""
+const sent=[];
+function revealLocalPath(path,opts={{}}){{sent.push({{path,literal:Boolean(opts.literal)}});}}
+async function probeLocalPath(text){{return {json.dumps(probe)};}}
+const line={{translateToString:()=>{json.dumps(row)}}};
+const term={{buffer:{{active:{{getLine:()=>line}}}},registerLinkProvider(p){{this.p=p;}}}};
+{provider}
+term.p.provideLinks(1,links=>{{
+  for(const l of links||[])l.activate({{preventDefault(){{}}}});
+  console.log(JSON.stringify((links||[]).map((l,i)=>({{text:l.text,...sent[i]}}))));
+}});
+"""
+    done = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=20)
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout)
+
+
+@pytest.mark.skipif(NODE is None, reason="no node")
+def test_a_probed_path_spelled_like_the_text_is_still_sent_literally(tmp_path):
+    """Review of #10 (R3): a real task…/note.md resolves to itself; the click
+    must still open exactly it, not re-read its "…" once it has gone."""
+    real = f"{tmp_path}/task…/note.md"
+    (link,) = _links_for(f"● Write({real})", {"path": real, "resolved": real})
+    assert link == {"text": real, "path": real, "literal": True}
+
+
+@pytest.mark.skipif(NODE is None, reason="no node")
+def test_a_shortened_link_sends_its_resolved_path_literally(tmp_path):
+    shown, real = f"{tmp_path}/ta…/note.md", f"{tmp_path}/task-x/note.md"
+    (link,) = _links_for(f"● Write({shown})", {"path": shown, "resolved": real})
+    assert link == {"text": shown, "path": real, "literal": True}
+
+
+@pytest.mark.skipif(NODE is None, reason="no node")
+def test_an_ambiguous_link_is_sent_as_printed(tmp_path):
+    shown = f"{tmp_path}/ta…/note.md"
+    (link,) = _links_for(f"● Write({shown})", {"path": shown, "resolved": None})
+    assert link == {"text": shown, "path": shown, "literal": False}
+
+
+def test_the_backend_receives_literal_from_the_cockpit():
+    html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
     assert "JSON.stringify(literal?{path,literal:true}:{path})" in html
 
 

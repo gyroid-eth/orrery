@@ -7711,10 +7711,12 @@ function createPane(session,meta){
       const line=term.buffer.active.getLine(y-1);if(!line)return cb(undefined);
       const text=line.translateToString(true);const pending=[];
       const re=/(^|[\s"'`(\[<=])((?:~|\/)[^\s"'`()\[\]<>]+)/g;let m;
-      // `open` is what the click reveals: the path the probe resolved a
-      // shortened "…" path to, bound when the link was made.
-      const mk=(start,p,open=p)=>({range:{start:{x:start+1,y},end:{x:start+p.length,y}},text:p,
-        activate:(event)=>{event.preventDefault();revealLocalPath(open,{literal:open!==p});},
+      // `open` is what the click reveals. When the probe resolved the text
+      // (a shortened "…" path, or a real name with a "…" in it), that path is
+      // bound when the link is made and opened as it is — even when it is
+      // spelled like the text — so a later click never re-reads its "…".
+      const mk=(start,p,open=p,literal=false)=>({range:{start:{x:start+1,y},end:{x:start+p.length,y}},text:p,
+        activate:(event)=>{event.preventDefault();revealLocalPath(open,{literal});},
         decorations:{pointerCursor:true,underline:true}});
       while((m=re.exec(text))){
         let p=m[2].replace(/[.,;:!?]+$/,'');
@@ -7727,7 +7729,9 @@ function createPane(session,meta){
         // of the rest of the row. Rows without a further space need no probe.
         const rest=text.slice(start).split(/["'`<>]/)[0];
         if(!/[\s\u3000]|[^\x00-\x7f]/.test(rest)){pending.push(Promise.resolve(mk(start,p)));continue;}
-        pending.push(probeLocalPath(rest).then(found=>found?mk(start,found.path,found.resolved||found.path):mk(start,p)));
+        pending.push(probeLocalPath(rest).then(found=>found
+          ?mk(start,found.path,found.resolved||found.path,Boolean(found.resolved))
+          :mk(start,p)));
       }
       if(!pending.length)return cb(undefined);
       Promise.all(pending).then(links=>cb(links.length?links:undefined),()=>cb(undefined));
