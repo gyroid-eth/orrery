@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import sqlite3
 import stat
 import pathlib
@@ -2225,8 +2226,93 @@ def launch_terminal(tmux_bin: str, session: str) -> None:
 
 OPENER_WAIT_SECONDS = 5.0
 
+# --- reaching Windows programs from WSL --------------------------------------
+# A Windows program started from WSL talks back through the socket named in
+# WSL_INTEROP (/run/WSL/<pid>_interop). A tmux server keeps the value from the
+# terminal that started it; once that terminal closes, the socket is gone and
+# every .exe fails with an interop error on stderr. explorer.exe's own exit
+# status means nothing (it exits 1 after opening a window), so that stderr is
+# the only sign — without reading it the cockpit said "opened" while nothing
+# opened (2026-10-01 seminar, cockpit under WSL).
+WSL_INTEROP_DIR = "/run/WSL"
+BINFMT_DIR = "/proc/sys/fs/binfmt_misc"
+WSL_INTEROP_FAILURE_RE = re.compile(
+    r"UtilConnectToInteropServer|UtilBindVsockAnyPort|UtilAcceptVsock|"
+    r"Exec format error|interop",
+    re.IGNORECASE,
+)
 
-def run_opener(argv: list[str], *, trust_exit_status: bool = True) -> None:
+
+def _interop_socket_answers(path: str) -> bool:
+    """A socket that accepts a connection right now. A socket file outlives
+    the server that made it, so its existence proves nothing.
+
+    WSL's init creates the interop socket as root before it drops to the
+    user (and opens it to everyone), so root's is the normal owner; this
+    user's is accepted too. Another user's, and a symlink, are not — the
+    current value included."""
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return False
+    if not stat.S_ISSOCK(info.st_mode) or info.st_uid not in (0, os.getuid()):
+        return False
+    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    probe.settimeout(0.5)
+    try:
+        probe.connect(path)
+    except OSError:
+        return False
+    finally:
+        probe.close()
+    return True
+
+
+def wsl_interop_env() -> dict[str, str]:
+    """This process's environment with WSL_INTEROP naming a socket that answers.
+
+    Kept when the current one answers, or when nothing better answers (WSL 1
+    has no socket; a guess would not help). Otherwise the newest of this
+    user's /run/WSL/*_interop sockets that accepts a connection is used. Any
+    answering interop server can start a Windows program; whether it did is
+    still judged by the program's own result (run_opener).
+    """
+    env = dict(os.environ)
+    if _interop_socket_answers(env.get("WSL_INTEROP", "")):
+        return env
+    try:
+        names = os.listdir(WSL_INTEROP_DIR)
+    except OSError:
+        return env
+    candidates = []
+    for name in names:
+        path = os.path.join(WSL_INTEROP_DIR, name)
+        if not name.endswith("_interop") or os.path.islink(path):
+            continue
+        with contextlib.suppress(OSError):
+            candidates.append((os.stat(path).st_mtime, path))
+    for _, path in sorted(candidates, reverse=True):
+        if _interop_socket_answers(path):
+            env["WSL_INTEROP"] = path
+            break
+    return env
+
+
+def wsl_interop_problem() -> str | None:
+    """Why this distro cannot run Windows programs at all, or None if it
+    can (or if it cannot be told: binfmt_misc not readable)."""
+    try:
+        entries = os.listdir(BINFMT_DIR)
+    except OSError:
+        return None
+    if not any(name.startswith("WSLInterop") for name in entries):
+        return "Windows interop is turned off in this distro ([interop] enabled=false in /etc/wsl.conf)"
+    return None
+
+
+def run_opener(
+    argv: list[str], *, trust_exit_status: bool = True, confirm: bool = False
+) -> None:
     """Run `open`/`xdg-open` and raise OSError if it reports a failure.
 
     The opener used to be fired and forgotten, so a backend that had lost its
@@ -2238,20 +2324,39 @@ def run_opener(argv: list[str], *, trust_exit_status: bool = True) -> None:
 
     explorer.exe exits 1 even when it opened the window, so for it only a
     failure to start at all is an error (``trust_exit_status=False``).
+    explorer.exe hands the window over and returns at once; when it has not
+    returned in time nothing says a window opened, so with ``confirm`` that
+    is an error too, and the caller shows the path instead.
     """
+    wsl = host_kind() == "wsl"
     proc = subprocess.Popen(
         argv,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
         start_new_session=True,
+        env=wsl_interop_env() if wsl else None,
     )
     try:
         _, err = proc.communicate(timeout=OPENER_WAIT_SECONDS)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        # Whatever it said before the wait ran out still counts.
+        detail = (exc.stderr or b"").decode("utf-8", "replace").strip()
+        if wsl and WSL_INTEROP_FAILURE_RE.search(detail):
+            raise OSError(f"{argv[0]} did not start: {detail[:300]}") from None
+        if confirm:
+            raise OSError(
+                f"{argv[0]} did not finish within {OPENER_WAIT_SECONDS:g} s; "
+                "whether it opened is not confirmed"
+            ) from None
         return
-    if proc.returncode != 0 and trust_exit_status:
-        detail = (err or b"").decode("utf-8", "replace").strip()
+    detail = (err or b"").decode("utf-8", "replace").strip()
+    failed = proc.returncode != 0 and trust_exit_status
+    # A Windows program that never started says so on stderr, whatever its
+    # exit status is trusted to mean.
+    if wsl and proc.returncode != 0 and WSL_INTEROP_FAILURE_RE.search(detail):
+        failed = True
+    if failed:
         message = f"{argv[0]} exited {proc.returncode}" + (f": {detail[:300]}" if detail else "")
         print(f"[opener] {message}", file=sys.stderr, flush=True)
         raise OSError(message)
@@ -2311,19 +2416,66 @@ async def open_url(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+class RevealUnavailable(OSError):
+    """The file manager could not be reached; `shown` is the path to show the
+    person instead, spelled the way their file manager would take it."""
+
+    def __init__(self, reason: str, shown: str) -> None:
+        super().__init__(reason)
+        self.shown = shown
+
+
+# A directory that is a macOS bundle (.app and the like) is a program or a
+# document to the system: `open` on it launches the app instead of showing the
+# folder. Recognised by its suffix or, for one with an unusual name, by
+# Contents/Info.plist. A bundle, and any symlink, is revealed (`open -R`),
+# never opened; only a plain folder is opened.
+MAC_BUNDLE_SUFFIXES = frozenset({
+    ".app", ".appex", ".bundle", ".framework", ".plugin", ".kext", ".prefpane",
+    ".saver", ".xpc", ".qlgenerator", ".mdimporter", ".component", ".action",
+    ".workflow", ".pkg", ".mpkg", ".photoslibrary", ".musiclibrary", ".rtfd",
+    ".playground", ".xcodeproj", ".xcworkspace", ".scptd", ".docset",
+})
+
+
+def is_mac_bundle(path: pathlib.Path) -> bool:
+    if not path.is_dir():
+        return False
+    if path.suffix.lower() in MAC_BUNDLE_SUFFIXES:
+        return True
+    return (path / "Contents" / "Info.plist").is_file()
+
+
 def reveal_in_finder(path: pathlib.Path) -> str:
-    """Show a local path in the file manager: directories open, files are revealed."""
+    """Show a local path in the file manager: a plain folder opens; a file, a
+    bundle or a symlink is revealed (selected in its folder), never launched."""
     kind = "dir" if path.is_dir() else "file"
     host = host_kind()
     if host == "mac":
+        if kind == "dir" and (path.is_symlink() or is_mac_bundle(path.resolve())):
+            kind = "bundle"
         argv = ["open", str(path)] if kind == "dir" else ["open", "-R", str(path)]
     elif host == "wsl":
+        # /mnt/c/... becomes C:\..., a distro path \\wsl.localhost\<distro>\...
+        target, unconverted = None, None
+        try:
+            target = windows_path(path)
+        except OSError as exc:
+            unconverted = str(exc)
+        shown = target or str(path)
         explorer = windows_exe("explorer.exe")
-        if not explorer:
-            raise OSError("explorer.exe is not reachable from this WSL distro")
-        target = windows_path(path)
+        problem = wsl_interop_problem() or (
+            None if explorer else "explorer.exe is not reachable from this WSL distro"
+        )
+        if problem:
+            raise RevealUnavailable(problem, shown)
+        if target is None:
+            raise RevealUnavailable(unconverted or "wslpath gave no Windows path", shown)
         argv = [explorer, target] if kind == "dir" else [explorer, "/select,", target]
-        run_opener(argv, trust_exit_status=False)
+        try:
+            run_opener(argv, trust_exit_status=False, confirm=True)
+        except OSError as exc:
+            raise RevealUnavailable(str(exc), shown) from exc
         return kind
     else:
         argv = ["xdg-open", str(path if kind == "dir" else path.parent)]
@@ -2346,6 +2498,121 @@ def windows_path(path: pathlib.Path) -> str:
     return converted
 
 
+# Claude Code shortens a long path to fit its pane, with one "…" standing for
+# any run of characters — across folders too: "runs/The-fin-to-lim…/note.md"
+# is runs/The-fin-to-limb-…-20261001T224253/draft/note.md. Clicked as printed
+# it named nothing, so the cockpit answered "no such path" (2026-10-01
+# seminar, a narrow pane under WSL).
+#
+# The "…" is read only when the text names nothing as it is. The search runs
+# under the folder before the "…", never follows or returns a symlink (so it
+# stays under that folder), and stops after ELLIPSIS_MAX_ENTRIES entries in
+# all — the top folder's included, across every prefix a probe tries. A
+# search cut short resolves nothing; several matches open nothing and are
+# listed for the person to choose from.
+ELLIPSIS = "\u2026"
+ELLIPSIS_MAX_DEPTH = 6
+ELLIPSIS_MAX_ENTRIES = 5000
+SHOWN_PATH_MAX_LISTED = 5
+
+
+class WalkBudget:
+    """Directory entries an ellipsis search may still look at."""
+
+    def __init__(self, entries: int | None = None) -> None:
+        self.left = ELLIPSIS_MAX_ENTRIES if entries is None else entries
+        self.exhausted = False
+
+    def take(self) -> bool:
+        if self.left <= 0:
+            self.exhausted = True
+            return False
+        self.left -= 1
+        return True
+
+
+def shown_path_matches(
+    text: str, budget: WalkBudget | None = None
+) -> list[pathlib.Path] | None:
+    """The existing paths ``text`` may name, reading one "…" as Claude Code's
+    shortening when the text itself names nothing. None when the search ran
+    out of budget: then nothing is known, not "no match"."""
+    path = pathlib.Path(text).expanduser()
+    if path.exists():
+        return [path]
+    if text.count(ELLIPSIS) != 1:
+        return []
+    head, tail = str(path).split(ELLIPSIS)
+    base, _, prefix = head.rpartition("/")
+    base = base or "/"
+    if not tail or not os.path.isdir(base):
+        return []
+    budget = budget or WalkBudget()
+    matches: list[pathlib.Path] = []
+    pending = [(base, 0)]
+    while pending:
+        folder, depth = pending.pop()
+        try:
+            entries = os.scandir(folder)
+        except OSError:
+            continue
+        with entries:
+            for entry in entries:
+                if not budget.take():
+                    return None
+                if depth == 0 and not entry.name.startswith(prefix):
+                    continue
+                try:
+                    if entry.is_symlink():
+                        continue
+                    is_dir = entry.is_dir(follow_symlinks=False)
+                except OSError:
+                    continue
+                if entry.path.endswith(tail) and len(entry.path) >= len(head) + len(tail):
+                    matches.append(pathlib.Path(entry.path))
+                if is_dir and depth < ELLIPSIS_MAX_DEPTH:
+                    pending.append((entry.path, depth + 1))
+    return sorted(matches)
+
+
+def resolve_shown_path(text: str) -> pathlib.Path | None:
+    """The one existing path ``text`` names, or None (nothing, several, or
+    the search ran out)."""
+    matches = shown_path_matches(text)
+    return matches[0] if matches and len(matches) == 1 else None
+
+
+def probe_shown_path(text: str) -> tuple[str, list[pathlib.Path]] | None:
+    """The longest leading part of ``text`` that names an existing path, with
+    what it names. One budget covers every prefix tried."""
+    if not (text.startswith("/") or text.startswith("~")):
+        return None
+    # Candidate ends: before any ASCII / ideographic space and before any
+    # non-ASCII character (prose such as "…/logs はうまくいかない" follows a
+    # path without a space), plus the end of the text. Longest first.
+    ends = [
+        i for i, ch in enumerate(text)
+        if ch in " \u3000)]}>\"'`" or (not ch.isascii() and ch != ELLIPSIS)
+    ]
+    ends.append(len(text))
+    seen: set[str] = set()
+    budget = WalkBudget()
+    for end in sorted(set(ends), reverse=True):
+        candidate = text[:end].rstrip(" \u3000").rstrip(".,;:!?")
+        if len(candidate) < 2 or candidate in seen:
+            continue
+        seen.add(candidate)
+        try:
+            matches = shown_path_matches(candidate, budget)
+        except OSError:
+            continue
+        if matches is None:
+            return None
+        if matches:
+            return candidate, matches
+    return None
+
+
 def longest_existing_path_prefix(text: str) -> str | None:
     """Return the longest space-delimited prefix of ``text`` that names an existing path.
 
@@ -2353,25 +2620,8 @@ def longest_existing_path_prefix(text: str) -> str | None:
     so the client cannot tell where the path ends. Try the whole text first, then
     drop one space-separated word at a time.
     """
-    if not (text.startswith("/") or text.startswith("~")):
-        return None
-    # Candidate ends: before any ASCII / ideographic space and before any
-    # non-ASCII character (prose such as "…/logs はうまくいかない" follows a
-    # path without a space), plus the end of the text. Longest first.
-    ends = [i for i, ch in enumerate(text) if ch in " \u3000" or not ch.isascii()]
-    ends.append(len(text))
-    seen: set[str] = set()
-    for end in sorted(set(ends), reverse=True):
-        candidate = text[:end].rstrip(" \u3000").rstrip(".,;:!?")
-        if len(candidate) < 2 or candidate in seen:
-            continue
-        seen.add(candidate)
-        try:
-            if pathlib.Path(candidate).expanduser().exists():
-                return candidate
-        except OSError:
-            continue
-    return None
+    found = probe_shown_path(text)
+    return found[0] if found else None
 
 
 async def path_probe(request: web.Request) -> web.Response:
@@ -2383,10 +2633,19 @@ async def path_probe(request: web.Request) -> web.Response:
     text = payload.get("text") if isinstance(payload, dict) else None
     if not isinstance(text, str) or not text or len(text) > 4096 or "\x00" in text:
         return web.json_response({"ok": False, "error": "text is required"}, status=400)
-    found = await asyncio.to_thread(longest_existing_path_prefix, text)
+    found = await asyncio.to_thread(probe_shown_path, text)
     if found is None:
         return web.json_response({"ok": False, "error": "no such path"}, status=404)
-    return web.json_response({"ok": True, "path": found, "length": len(found)})
+    shown, matches = found
+    payload: dict[str, Any] = {"ok": True, "path": shown, "length": len(shown)}
+    if len(matches) == 1:
+        # The link opens what it was resolved to here, not whatever the text
+        # resolves to by the time it is clicked.
+        payload["resolved"] = str(matches[0])
+    return web.json_response(payload)
+
+
+FILE_MANAGER_NAMES = {"mac": "Finder", "wsl": "Explorer", "linux": "the file manager"}
 
 
 async def reveal_path(request: web.Request) -> web.Response:
@@ -2394,7 +2653,8 @@ async def reveal_path(request: web.Request) -> web.Response:
 
     Accepts absolute or ~-relative paths that exist; never executes them and
     never opens them with an application (that is what the path's own app
-    association would do): a file is selected in its folder, a folder opens.
+    association would do): a file, a bundle or a link is selected in its
+    folder, a plain folder opens.
     """
     try:
         payload = await request.json()
@@ -2409,18 +2669,47 @@ async def reveal_path(request: web.Request) -> web.Response:
     raw = payload.get("path")
     if not isinstance(raw, str) or not raw or len(raw) > 4096 or "\x00" in raw:
         return web.json_response({"ok": False, "error": "path is required"}, status=400)
+    # A path the probe already resolved is opened as it is: if it has gone,
+    # a "…" in its name must not be read as a shortening and land elsewhere.
+    literal = payload.get("literal") is True
     if not (raw.startswith("/") or raw.startswith("~")):
         return web.json_response(
             {"ok": False, "error": "path must be absolute or start with ~"}, status=400
         )
-    path = pathlib.Path(raw).expanduser()
-    if not path.exists():
+    if literal:
+        exact = pathlib.Path(raw).expanduser()
+        matches = [exact] if exact.exists() else []
+    else:
+        matches = await asyncio.to_thread(shown_path_matches, raw)
+    if matches is None:
+        return web.json_response(
+            {"ok": False, "error": "too many entries to search; not opened"}, status=422
+        )
+    if not matches:
         return web.json_response({"ok": False, "error": "no such path"}, status=404)
+    if len(matches) > 1:
+        listed = [str(match) for match in matches[:SHOWN_PATH_MAX_LISTED]]
+        return web.json_response(
+            {
+                "ok": False,
+                "error": f"{len(matches)} paths match; not opened",
+                "candidates": listed,
+            },
+            status=409,
+        )
+    path = matches[0]
+    manager = FILE_MANAGER_NAMES.get(host_kind(), "the file manager")
     try:
         kind = await asyncio.to_thread(reveal_in_finder, path)
+    except RevealUnavailable as exc:
+        # The cockpit shows `show` for the person to open by hand.
+        return web.json_response(
+            {"ok": False, "error": f"failed to open {manager}: {exc}", "show": exc.shown},
+            status=500,
+        )
     except OSError as exc:
         return web.json_response(
-            {"ok": False, "error": f"failed to open Finder: {exc}"}, status=500
+            {"ok": False, "error": f"failed to open {manager}: {exc}"}, status=500
         )
     return web.json_response({"ok": True, "kind": kind, "path": str(path)})
 

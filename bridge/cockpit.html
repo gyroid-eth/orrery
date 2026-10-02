@@ -1053,6 +1053,8 @@
     opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .2s,transform .2s;
   }
   .toast.on{opacity:1;transform:none}
+  /* A path to open by hand: wrap it anywhere and let it be selected. */
+  .toast.on.selectable{pointer-events:auto;user-select:text;-webkit-user-select:text;overflow-wrap:anywhere}
   .toast.error{border-color:rgb(var(--theme-accent-rgb) / .45);animation:blinkring .22s steps(1) 2}
 
   /* scrollbars */
@@ -7709,8 +7711,12 @@ function createPane(session,meta){
       const line=term.buffer.active.getLine(y-1);if(!line)return cb(undefined);
       const text=line.translateToString(true);const pending=[];
       const re=/(^|[\s"'`(\[<=])((?:~|\/)[^\s"'`()\[\]<>]+)/g;let m;
-      const mk=(start,p)=>({range:{start:{x:start+1,y},end:{x:start+p.length,y}},text:p,
-        activate:(event,target)=>{event.preventDefault();revealLocalPath(target);},
+      // `open` is what the click reveals. When the probe resolved the text
+      // (a shortened "…" path, or a real name with a "…" in it), that path is
+      // bound when the link is made and opened as it is — even when it is
+      // spelled like the text — so a later click never re-reads its "…".
+      const mk=(start,p,open=p,literal=false)=>({range:{start:{x:start+1,y},end:{x:start+p.length,y}},text:p,
+        activate:(event)=>{event.preventDefault();revealLocalPath(open,{literal});},
         decorations:{pointerCursor:true,underline:true}});
       while((m=re.exec(text))){
         let p=m[2].replace(/[.,;:!?]+$/,'');
@@ -7723,7 +7729,9 @@ function createPane(session,meta){
         // of the rest of the row. Rows without a further space need no probe.
         const rest=text.slice(start).split(/["'`<>]/)[0];
         if(!/[\s\u3000]|[^\x00-\x7f]/.test(rest)){pending.push(Promise.resolve(mk(start,p)));continue;}
-        pending.push(probeLocalPath(rest).then(found=>mk(start,found||p)));
+        pending.push(probeLocalPath(rest).then(found=>found
+          ?mk(start,found.path,found.resolved||found.path,Boolean(found.resolved))
+          :mk(start,p)));
       }
       if(!pending.length)return cb(undefined);
       Promise.all(pending).then(links=>cb(links.length?links:undefined),()=>cb(undefined));
@@ -8227,26 +8235,57 @@ async function probeLocalPath(text){
         method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text}),
       });
       const result=await response.json();
-      return response.ok&&result.ok?String(result.path):null;
+      if(!response.ok||!result.ok)return null;
+      return {path:String(result.path),resolved:typeof result.resolved==='string'?result.resolved:null};
     }catch(_){return null;}
   })();
   probeCache.set(text,p);
   if(probeCache.size>500)probeCache.delete(probeCache.keys().next().value);
   return p;
 }
-async function revealLocalPath(path){
+/* The file manager's name on this host, for the toast. */
+function fileManagerLabel(){
+  return hostPlatform.host==='wsl'?'EXPLORER':hostPlatform.host==='linux'?'FILES':'FINDER';
+}
+/* When the backend could not reach the file manager (under WSL: interop off,
+   no explorer.exe, or explorer.exe never started), it sends the path spelled
+   for that file manager. Show it long enough to read, and put it on the
+   clipboard when the browser lets us, so it can be pasted into the address
+   bar by hand. */
+async function showUnopenedPath(label,shown,error){
+  // Shown first: a clipboard that waits for permission must not hold back
+  // the failure or the path.
+  const message=`${label} FAILED · open it by hand: ${shown} — ${error}`;
+  showToast(message,true,15000);
+  toastEl.classList.add('selectable');
+  try{
+    if(!navigator.clipboard)return;
+    await navigator.clipboard.writeText(shown);
+    if(toastEl.textContent===message)toastEl.textContent=message.replace(' by hand:',' by hand (copied):');
+  }catch(_){/* not allowed here: the path stays on screen */}
+}
+/* A shortened path that matches several: nothing is opened; they are listed
+   to choose from (each is a full path that can be copied from the toast). */
+function showCandidates(label,error,candidates){
+  showToast(`${label} · ${error}: ${candidates.join('  ·  ')}`,true,15000);
+  toastEl.classList.add('selectable');
+}
+/* `literal`: the path is one the probe resolved; open exactly it or nothing. */
+async function revealLocalPath(path,{literal=false}={}){
+  const label=fileManagerLabel();
   const invoke=appInvoke();
   if(invoke){
     try{
       const kind=await invoke('reveal_local_path',{path});
-      showToast(`FINDER · ${kind==='dir'?'opened':'revealed'} ${path}`);
+      showToast(`${label} · ${kind==='dir'?'opened':'revealed'} ${path}`);
       return true;
     }catch(error){
       const detail=String((error&&error.message)||error);
-      // A path the app rejected (missing, relative) would be rejected by the
-      // backend too; only an unavailable opener falls through to it.
-      if(/no such path|must be absolute|path is required/.test(detail)){
-        showToast(`FINDER FAILED · ${detail}`,true);return false;
+      // A path the app rejected as malformed would be rejected by the backend
+      // too. "No such path" is not final: the backend also reads Claude Code's
+      // shortened "…/note.md" paths, which the app takes literally.
+      if(/must be absolute|path is required/.test(detail)){
+        showToast(`${label} FAILED · ${detail}`,true);return false;
       }
       console.warn('[links] app reveal unavailable:',detail);
     }
@@ -8254,15 +8293,25 @@ async function revealLocalPath(path){
   try{
     const response=await fetch('/telemetry/reveal-path',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({path}),
+      body:JSON.stringify(literal?{path,literal:true}:{path}),
     });
     let result={};
     try{result=await response.json();}catch(_){/* HTTP status remains useful */}
-    if(!response.ok||!result.ok)throw new Error(result.error||`HTTP ${response.status}`);
-    showToast(`FINDER · ${result.kind==='dir'?'opened':'revealed'} ${path}`);
+    if(!response.ok||!result.ok){
+      if(typeof result.show==='string'&&result.show){
+        await showUnopenedPath(label,result.show,result.error||`HTTP ${response.status}`);
+        return false;
+      }
+      if(Array.isArray(result.candidates)&&result.candidates.length){
+        showCandidates(label,result.error||'several paths match',result.candidates.map(String));
+        return false;
+      }
+      throw new Error(result.error||`HTTP ${response.status}`);
+    }
+    showToast(`${label} · ${result.kind==='dir'?'opened':'revealed'} ${result.path||path}`);
     return true;
   }catch(error){
-    showToast(`FINDER FAILED · ${String(error&&error.message||error||'request failed')}`,true);
+    showToast(`${label} FAILED · ${String(error&&error.message||error||'request failed')}`,true);
     return false;
   }
 }
@@ -9889,10 +9938,10 @@ function closeSpawnModal(force=false){
   spawnOverlay.classList.remove('on');spawnOverlay.setAttribute('aria-hidden','true');
   if(spawnLastFocus&&spawnLastFocus.isConnected)spawnLastFocus.focus();
 }
-function showToast(message,isError=false){
+function showToast(message,isError=false,ms=4200){
   clearTimeout(toastTimer);toastEl.textContent=message;
   toastEl.className='toast on'+(isError?' error':'');
-  toastTimer=setTimeout(()=>{toastEl.className='toast';},4200);
+  toastTimer=setTimeout(()=>{toastEl.className='toast';},ms);
 }
 function spawnPayloadFromForm(){
   const dir=spawnDirPath;

@@ -47,7 +47,7 @@ def opened(monkeypatch):
     """Every argv handed to run_opener, with its exit-status policy."""
     calls: list[tuple[list[str], bool]] = []
 
-    def record(argv, *, trust_exit_status=True):
+    def record(argv, *, trust_exit_status=True, confirm=False):
         calls.append((list(argv), trust_exit_status))
 
     monkeypatch.setattr(ob, "run_opener", record)
