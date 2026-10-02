@@ -136,7 +136,7 @@ When you run agents inside an Obsidian vault, work logs, paper notes, and tasks 
 
 → [Use it together with Obsidian](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/obsidian.en.md) (an ORRERY Telemetry document) · a template you can try right away, [orrery-demo-vault](https://github.com/gyroid-eth/orrery-demo-vault)
 
-Reading notes for papers come from the add-on [orrery-digest-paper](https://github.com/gyroid-eth/orrery-digest-paper): Claude writes the note, and Codex checks it against the text and the figures (a version for Zotero users is included).
+Reading notes for papers come from the add-on [orrery-digest-paper](https://github.com/gyroid-eth/orrery-digest-paper): Claude writes the note, and Codex checks it against the text and the figures (a version for Zotero users is included). The add-on and the demo vault come together with [the research set's one line](docs/en/research-set.md).
 
 ### The same screen on Windows (WSL2)
 
