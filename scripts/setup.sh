@@ -722,6 +722,10 @@ if [ "$dry_run" = true ]; then
   preview_status=0
   (cd "$preview_root" && env PATH="${probe_dir}/bin:${PATH}" $preview_env ./scripts/install.sh --dry-run --project-key "$project_key") \
     || preview_status=$?
+  if [ -n "$preview_codex" ]; then
+    note "in the preview above, 'codex bin: ${probe_dir}/bin/codex' stands for ${preview_codex}"
+    note "      (a real run uses ${preview_codex} itself)"
+  fi
   rm -rf "$probe_dir"
   if [ -n "$preview_tmp" ]; then rm -rf "$preview_tmp"; fi
   if [ "$preview_status" -ne 0 ]; then
