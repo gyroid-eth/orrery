@@ -239,8 +239,11 @@ telemetry_install() {
       # lines) is left to it: in its environment a value counts as chosen on
       # purpose, so a saved Codex path that no longer runs would be refused
       # instead of looked up again. A value set in this shell is passed on as a
-      # choice only when it differs from env.sh's: a login shell that sources
-      # env.sh (~/.zshenv) only echoes the saved value back.
+      # choice only when it differs from env.sh's; one equal to it is treated as
+      # the saved value (that is the rule, not a proof of where it came from: a
+      # login shell that sources env.sh, like ~/.zshenv, puts exactly these here).
+      # The names come from install.sh's resolve_setting lines, so a change to
+      # that form in install.sh must come with a change here.
       echoed=""
       for name in $(sed -n 's/^resolve_setting [A-Z_]* \(AGENTSTACK_[A-Z_]*\).*/\1/p' ./scripts/install.sh 2>/dev/null); do
         case " $explicit " in

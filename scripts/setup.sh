@@ -611,8 +611,8 @@ mail_env=""
 if [ "$mode" = update ]; then
   case "$mail_choice" in
     keep) mail_line="keep the running ORRERY Mail (the installer says when a newer build is available)" ;;
-    update) mail_line="update ORRERY Mail to this orrery-telemetry's build (a few seconds without Mail)" ;;
-    auto) mail_line="update ORRERY Mail only when the installer finds it safe; otherwise keep it" ;;
+    update) mail_line="update ORRERY Mail to this orrery-telemetry's build (Mail stops meanwhile; see below)" ;;
+    auto) mail_line="update ORRERY Mail only when the installer finds it safe, else keep it (see below)" ;;
   esac
   if run_update --help 2>/dev/null | grep -q -- '--mail'; then
     pass_mail="--mail=${mail_choice}"
@@ -685,6 +685,22 @@ say "                                     Claude Code in that folder: ORRERY's m
 say "                                     backup: next to it, CLAUDE.md.bak.<time>"
 say "    - run 2 background services: dashboard (port ${dash_port:-8770}) and ORRERY Mail"
 say "    - ${mail_line}"
+# Before yes: what updating Mail costs and how to recover, from the one source
+# of that wording in orrery-telemetry (scripts/lib/mail_update_notice.py).
+if [ "$mode" = update ] && { [ "$mail_choice" = update ] || [ "$mail_choice" = auto ]; }; then
+  notice_py="${tel_root}/scripts/lib/mail_update_notice.py"
+  mail_risk=""
+  if grep -q 'add_parser("risk")' "$notice_py" 2>/dev/null; then
+    mail_risk="$("${python_bin:-python3}" "$notice_py" risk 2>/dev/null || true)"
+  fi
+  if [ -n "$mail_risk" ]; then
+    printf '%s\n' "$mail_risk" | sed 's/^/    /'
+  else
+    say "      Risk: Mail stops while it switches; usually seconds, but it can take minutes"
+    say "      (no short limit is guaranteed). Afterwards, in each Claude Code session, /mcp"
+    say "      shows whether orrery-mail is connected; if it failed: choose it, then Reconnect."
+  fi
+fi
 say "    - check: agentstack-doctor, and agentstack-selftest (a Mail round trip with 2 test"
 say "      agents, which it removes again)"
 if [ "$no_start" != true ]; then say "    - start the cockpit in this window: http://127.0.0.1:${COCKPIT_PORT}/cockpit.html"; fi
@@ -832,8 +848,11 @@ run_installer() {
       # lines) is left to it: in its environment a value counts as chosen on
       # purpose, so a saved Codex path that no longer runs would be refused
       # instead of looked up again. A value set in this shell is passed on as a
-      # choice only when it differs from env.sh's: a login shell that sources
-      # env.sh (~/.zshenv) only echoes the saved value back.
+      # choice only when it differs from env.sh's; one equal to it is treated as
+      # the saved value (that is the rule, not a proof of where it came from: a
+      # login shell that sources env.sh, like ~/.zshenv, puts exactly these here).
+      # The names come from install.sh's resolve_setting lines, so a change to
+      # that form in install.sh must come with a change here.
       echoed=""
       for name in $(sed -n 's/^resolve_setting [A-Z_]* \(AGENTSTACK_[A-Z_]*\).*/\1/p' ./scripts/install.sh 2>/dev/null); do
         case " $explicit " in
@@ -1044,7 +1063,7 @@ if [ -n "$install_warnings" ]; then
         skill_path="${line##*: }"
         warn_line "install: your own Claude skill '${skill}' (${skill_path})"
         printf '        is kept and used instead of ORRERY'"'"'s /%s. To use ORRERY'"'"'s, move yours\n' "$skill"
-        printf '        away (e.g. mv %s %s.mine) and run the same line again.\n' "$skill_path" "$skill_path" ;;
+        printf '        away (e.g. mv "%s" "%s.mine") and run the same line again.\n' "$skill_path" "$skill_path" ;;
       *) warn_line "install: ${line#warning: }" ;;
     esac
   done
@@ -1121,60 +1140,92 @@ if [ -z "$mail_notice" ] && printf '%s\n' "${doctor_out:-}" | grep -q '^mail-fea
 fi
 step_done "Checks"
 
-# A run that passes every check closes the first attempt's record. A run
-# whose update failed never does, even when what is there works.
+# A run whose update failed is never a success, even when what is there works.
 if [ "$update_failed" = true ]; then checks_ok=false; fi
-if [ "$checks_ok" = true ]; then
-  mv "$BASELINE" "${RUN_DIR}/baseline" 2>/dev/null || true
-fi
 
 # ================================================================ 7. start
-# The cockpit runs in the background, in a tmux server of its own, so this
-# window comes back for what comes next (installing Claude Code, logging in).
-# Its own server keeps it out of the agents' tmux server, which the dashboard
-# and the cockpit list as agents. A cockpit that this setup started there can
-# be restarted by it; any other running cockpit is never stopped.
+# The cockpit runs in the background, in a tmux server of its own (out of the
+# agents' tmux server, which the dashboard and the cockpit list as agents), in
+# a session per port. This setup counts a running cockpit as its own only by
+# proof: the boot id it recorded when it started it, answered by that port's
+# health now. Only such a cockpit is ever stopped, and only its own session.
 step "Start"
 url="http://127.0.0.1:${COCKPIT_PORT}/cockpit.html"
 SOCK="${ORRERY_COCKPIT_TMUX_SOCKET:-orrery-cockpit}"
+SESSION="cockpit-${COCKPIT_PORT}"
+OWNER="${STATE_DIR}/cockpit-${COCKPIT_PORT}.owner"
 cockpit_log="${STATE_DIR}/cockpit.log"
 cockpit_head_full="$(git -C "$COCKPIT_ROOT" rev-parse HEAD)"
 root_real="$(cd "$COCKPIT_ROOT" && pwd -P)"
+ctmux() { env -u TMUX -u TMUX_PANE tmux -L "$SOCK" "$@"; }
+health_boot() { http_get "http://127.0.0.1:${COCKPIT_PORT}/telemetry/health" | json_str boot; }
+is_ours() { # the running cockpit is the one this setup started on this port
+  [ -r "$OWNER" ] || return 1
+  boot_now="$(health_boot)"
+  [ -n "$boot_now" ] && [ "$boot_now" = "$(sed -n 's/^boot=//p' "$OWNER")" ] \
+    && ctmux has-session -t "=$SESSION" 2>/dev/null
+}
+is_this_version() { # $1 = backend_state
+  case "$1" in
+    "${root_real}@${cockpit_head_full}" | "${COCKPIT_ROOT}@${cockpit_head_full}") return 0 ;;
+  esac
+  return 1
+}
 running="$(backend_state)"
 ours=false
-if env -u TMUX -u TMUX_PANE tmux -L "$SOCK" has-session 2>/dev/null; then ours=true; fi
-case "$running" in
-  none) action=start ;;
-  "${root_real}@${cockpit_head_full}" | "${COCKPIT_ROOT}@${cockpit_head_full}") action=current ;;
-  "${root_real}@"* | "${COCKPIT_ROOT}@"* | unknown*)
-    if [ "$ours" = true ]; then action=restart; else action=foreign; fi ;;
-  *) action=foreign ;;
-esac
-if [ "$no_start" = true ] && [ "$action" != current ]; then action=none; fi
+if [ "$running" != none ] && is_ours; then ours=true; fi
+if [ "$running" = none ]; then
+  action=start
+elif is_this_version "$running"; then
+  if [ "$ours" = true ]; then action=current; else action=current_other; fi
+elif [ "$ours" = true ]; then
+  action=restart
+else
+  action=foreign
+fi
+if [ "$no_start" = true ] && { [ "$action" = start ] || [ "$action" = restart ]; }; then action=none; fi
 
 stop_ours() {
-  env -u TMUX -u TMUX_PANE tmux -L "$SOCK" kill-server 2>/dev/null || true
+  ctmux kill-session -t "=$SESSION" 2>/dev/null || true
   i=0
   while [ "$i" -lt 20 ] && [ "$(backend_state)" != none ]; do i=$((i + 1)); sleep 0.5; done
+  if [ "$(backend_state)" != none ]; then
+    stop "The cockpit on port ${COCKPIT_PORT} did not stop (still answering: $(backend_state))." \
+      "Nothing else was started. Stop it yourself, then run the same command again."
+  fi
+  rm -f "$OWNER"
 }
 start_ours() {
-  env -u TMUX -u TMUX_PANE tmux -L "$SOCK" kill-server 2>/dev/null || true
-  printf '\n==== %s start %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$COCKPIT_ROOT" >>"$cockpit_log"
+  # A session of this name with nothing answering on its port is a leftover.
+  ctmux kill-session -t "=$SESSION" 2>/dev/null || true
+  printf '\n==== %s start %s on port %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$COCKPIT_ROOT" "$COCKPIT_PORT" >>"$cockpit_log"
   inner="env -u TMUX -u TMUX_PANE ORRERY_NO_UPDATE_CHECK=1 PORT=$(printf '%q' "$COCKPIT_PORT") $(printf '%q' "${COCKPIT_ROOT}/scripts/start-cockpit.sh") 2>&1 | tee -a $(printf '%q' "$cockpit_log")"
-  env -u TMUX -u TMUX_PANE tmux -L "$SOCK" new-session -d -s cockpit -x 160 -y 48 "$inner" \
+  ctmux new-session -d -s "$SESSION" -x 160 -y 48 "$inner" \
     || stop "Could not start tmux for the cockpit." "Start it yourself in a window of its own: ${COCKPIT_ROOT}/scripts/start-cockpit.sh"
   i=0
   while [ "$i" -lt 90 ]; do
     i=$((i + 1))
-    if [ "$(backend_state)" != none ]; then return 0; fi
-    if ! env -u TMUX -u TMUX_PANE tmux -L "$SOCK" has-session 2>/dev/null; then break; fi
+    answer="$(backend_state)"
+    if [ "$answer" != none ]; then break; fi
+    if ! ctmux has-session -t "=$SESSION" 2>/dev/null; then break; fi
     sleep 0.5
   done
-  say ""
-  say "  --- last lines of ${cockpit_log} ---"
-  tail -n 20 "$cockpit_log" | sed 's/^/  | /'
-  env -u TMUX -u TMUX_PANE tmux -L "$SOCK" kill-server 2>/dev/null || true
-  stop "The cockpit did not start (see above). Fix what it reports, then run the same command again."
+  answer="$(backend_state)"
+  if [ "$answer" = none ]; then
+    say ""
+    say "  --- last lines of ${cockpit_log} ---"
+    tail -n 20 "$cockpit_log" | sed 's/^/  | /'
+    ctmux kill-session -t "=$SESSION" 2>/dev/null || true
+    stop "The cockpit did not start (see above). Fix what it reports, then run the same command again."
+  fi
+  # Started is not enough: it must be this checkout at this commit.
+  if ! is_this_version "$answer"; then
+    stop "Port ${COCKPIT_PORT} answers, but not with this cockpit (${answer};" \
+      "expected ${root_real}@${cockpit_head_full}). Nothing was stopped." \
+      "See ${cockpit_log}, and what else uses port ${COCKPIT_PORT}."
+  fi
+  printf 'boot=%s\nroot=%s\ncommit=%s\nsocket=%s\nsession=%s\n' "$(health_boot)" "$root_real" \
+    "$cockpit_head_full" "$SOCK" "$SESSION" >"$OWNER"
 }
 open_browser() {
   [ "${ORRERY_NO_OPEN:-0}" != 1 ] || return 0
@@ -1200,10 +1251,16 @@ case "$action" in
     open_browser
     ;;
   current) ok "the cockpit is already running this version: ${url}" ;;
-  foreign) ;;
-  none) ;;
+  current_other) ok "a cockpit of this version is already running (not started by this setup): ${url}" ;;
+  foreign | none) ;;
 esac
 step_done "Start"
+
+# A run that passed every check and got the cockpit up (or was told not to
+# start it) closes the first attempt's record; anything less keeps it.
+if [ "$checks_ok" = true ] && [ "$action" != foreign ]; then
+  mv "$BASELINE" "${RUN_DIR}/baseline" 2>/dev/null || true
+fi
 
 say ""
 say "=============================================================="
@@ -1225,9 +1282,13 @@ case "$action" in
   start | restart | current)
     say "  The cockpit runs in the background; this window is free."
     say "    Open:          ${url}"
-    say "    Its output:    tmux -L ${SOCK} attach      (leave it with Ctrl-b, then d)"
-    say "    Stop it:       tmux -L ${SOCK} kill-server"
+    say "    Its output:    tmux -L ${SOCK} attach -t ${SESSION}      (leave it with Ctrl-b, then d)"
+    say "    Stop it:       tmux -L ${SOCK} kill-session -t ${SESSION}"
     say "    Start again:   the same command as before (it also updates)"
+    ;;
+  current_other)
+    say "  A cockpit of this version is already running: ${url}"
+    say "  It was not started by this setup; stop or restart it where it was started."
     ;;
   foreign)
     say "  A cockpit is already running on port ${COCKPIT_PORT}, but not this version"
@@ -1272,7 +1333,7 @@ say "  same command again (it starts what is stopped)."
 if [ "$mode" = fresh ]; then
   say "  To remove this new install: ${tel_root}/scripts/uninstall.sh"
   say "  (it keeps the Mail database unless --purge-data; the 2 checkouts, uv and Python stay)"
-  say "  and stop the cockpit: tmux -L ${SOCK} kill-server"
+  say "  and stop the cockpit: tmux -L ${SOCK} kill-session -t ${SESSION}"
 fi
 if [ "$os" = wsl ]; then
   say "  If the Windows browser shows nothing: in PowerShell run"

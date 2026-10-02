@@ -188,11 +188,20 @@ main() {
     git -C "$repo" show "${commit}:scripts/get.sh" >"$newer" || return 0
     say "  note  this get.sh is version ${get_version}; running the newer one (${their}) from $(git -C "$repo" log -1 --format=%h "$commit")"
     cleanup
+    # Run it as a child (not exec), so its copy is removed afterwards, also
+    # when it fails or is interrupted; its exit status is this script's.
+    tmp_root=""
+    trap 'rm -f "$newer"' EXIT
+    trap 'rm -f "$newer"; exit 130' INT TERM HUP
     export ORRERY_GET_REEXEC=1
+    status=0
     if [ -r /dev/tty ] && { : </dev/tty; } 2>/dev/null; then
-      exec bash "$newer" "$@" </dev/tty
+      bash "$newer" "$@" </dev/tty || status=$?
+    else
+      bash "$newer" "$@" || status=$?
     fi
-    exec bash "$newer" "$@"
+    rm -f "$newer"
+    exit "$status"
   }
   describe() { git -C "$1" log -1 --format='%h (%cd)' --date=short 2>/dev/null || printf '?'; }
 

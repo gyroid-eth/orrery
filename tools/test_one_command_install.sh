@@ -14,7 +14,7 @@ WORK="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/orrery-install-test.XXXXXX")" && pwd -P
 # Every cockpit a test starts lives in this test-only tmux server.
 TEST_SOCK="orrery-cockpit-test-$$"
 cleanup() {
-  env -u TMUX tmux -L "$TEST_SOCK" kill-server 2>/dev/null; env -u TMUX tmux -L "${TEST_SOCK}-bg" kill-server 2>/dev/null
+  for sock in "$TEST_SOCK" "${TEST_SOCK}-bg" "${TEST_SOCK}-x"; do env -u TMUX tmux -L "$sock" kill-server 2>/dev/null; done
   pkill -f "$WORK" 2>/dev/null
   rm -rf "$WORK"
 }
@@ -244,6 +244,17 @@ if [ -n "${STUB_MAIL_RESULT:-}" ]; then
 fi
 EOF
 chmod +x "$STUBTEL/scripts/install.sh"
+mkdir -p "$STUBTEL/scripts/lib"
+cat >"$STUBTEL/scripts/lib/mail_update_notice.py" <<'EOF'
+import argparse, sys
+parser = argparse.ArgumentParser()
+sub = parser.add_subparsers(dest="kind", required=True)
+sub.add_parser("risk")
+args = parser.parse_args(sys.argv[1:])
+if args.kind == "risk":
+    print("  Risk: STUB-CANONICAL-RISK can take minutes")
+    print("  If one shows orrery-mail as failed afterwards, STUB-RECONNECT.")
+EOF
 git -C "$STUBTEL" init --quiet
 git -C "$STUBTEL" add -A && git -C "$STUBTEL" -c user.name=t -c user.email=t@t commit --quiet -m stub
 STUBTEL_URL="file://$STUBTEL"
@@ -256,14 +267,16 @@ stub_cockpit() { # $1 = HOME
 # Stub: --check succeeds; a start serves /telemetry/health like the real
 # backend (root and commit fixed at start) until it is stopped.
 case "${1:-}" in --check) echo "stub start-cockpit --check"; exit 0 ;; esac
-root="$(cd "$(dirname "$0")/.." && pwd -P)"
-commit="$(git -C "$root" rev-parse HEAD)"
+[ -z "${STUB_START_FAIL:-}" ] || { echo "stub start-cockpit: failing on purpose"; exit 23; }
+root="${STUB_HEALTH_ROOT:-$(cd "$(dirname "$0")/.." && pwd -P)}"
+commit="$(git -C "$(dirname "$0")/.." rev-parse HEAD)"
 exec python3 - "$PORT" "$root" "$commit" <<'PY'
-import http.server, json, sys
+import http.server, json, os, sys, time
 port, root, commit = int(sys.argv[1]), sys.argv[2], sys.argv[3]
+boot = f"{int(time.time())}-{os.getpid()}"
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        body = json.dumps({"backend": "ok", "root": root, "commit": commit}).encode()
+        body = json.dumps({"backend": "ok", "boot": boot, "root": root, "commit": commit}).encode()
         self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(body)
     def log_message(self, *a): pass
 http.server.HTTPServer(("127.0.0.1", port), H).serve_forever()
@@ -271,7 +284,7 @@ PY
 EOF
   cat >"$1/orrery/scripts/update.sh" <<'EOF'
 #!/bin/sh
-case "${1:-}" in --help) echo "Usage: update.sh"; exit 0 ;; esac
+case "${1:-}" in --help) echo "Usage: update.sh${STUB_UPDATE_MAIL:+ [--mail auto|update|keep]}"; exit 0 ;; esac
 echo "Updating orrery-telemetry ..."
 (cd "$HOME/orrery-telemetry" && ./scripts/install.sh --assume-yes) || exit 1
 exit "${STUB_UPDATE_EXIT:-0}"
@@ -361,7 +374,7 @@ check "background: the cockpit answers after setup returned" sh -c 'curl -fsS --
 check "background: in its own tmux server" tmux -L "$SOCK" has-session
 check "background: the default tmux server (the agents') is untouched" \
   test "$default_before" = "$(env -u TMUX tmux list-sessions -F '#{session_name}' 2>/dev/null | sort)"
-check "background: says how to stop it" sh -c 'printf "%s" "$1" | grep -q "kill-server"' _ "$out"
+check "background: says how to stop it (only its session)" sh -c 'printf "%s" "$1" | grep -q "kill-session -t cockpit-18997"' _ "$out"
 check "background: says the window is free" sh -c 'printf "%s" "$1" | grep -q "this window is free"' _ "$out"
 git -C "$H/orrery" -c user.name=t -c user.email=t@t commit --quiet --allow-empty -m "newer"
 out="$(setup_in "$H" PORT=18997 ORRERY_COCKPIT_TMUX_SOCKET="$SOCK" bash "$H/orrery/scripts/setup.sh" --yes 2>&1)"
@@ -432,6 +445,7 @@ git -C "$SEED_B" push --quiet origin "HEAD:$BRANCH"
 out="$(run_in "$H" ORRERY_REPO_URL="file://$REMOTE_B" ORRERY_REF="$BRANCH" ORRERY_TELEMETRY_URL="$STUBTEL_URL" \
   AGENTSTACK_PYTHON="$(command -v python3)" bash "$ROOT/scripts/get.sh" --check 2>&1)"
 check "older get.sh: runs the newer one, with the same options" sh -c 'printf "%s" "$1" | grep -q "NEWEST-GET-SH ran with: --check"' _ "$out"
+check "older get.sh: leaves no copy of the newer one behind (P2-4)" sh -c '! ls "$1"/tmp/orrery-get.* >/dev/null 2>&1' _ "$H"
 # Uncommitted changes in that checkout: the newest update.sh stops, nothing moves.
 git -C "$SEED_B" -c user.name=t -c user.email=t@t commit --quiet --allow-empty -m "newer again"
 git -C "$SEED_B" push --quiet origin "HEAD:$BRANCH"
@@ -486,6 +500,61 @@ out="$(mail_run warnings STUB_WARN=1)"
 check "skill kept: explained" sh -c 'printf "%s" "$1" | grep -q "is kept and used instead of ORRERY"' _ "$out"
 check "fswatch: a harmless note, not a WARN" sh -c 'printf "%s" "$1" | grep -q "note  install: fswatch" && ! printf "%s" "$1" | grep -q "WARN  install: optional dependency"' _ "$out"
 check "warnings: still ready" sh -c 'printf "%s" "$1" | grep -q "is ready"' _ "$out"
+
+# ---- WhiteHopper's final review of #7 (P2-1 .. P2-5)
+# P2-1: a cockpit is "ours" only by proof (the boot id this setup recorded),
+# never by the tmux socket alone; another checkout's cockpit on another port
+# is not stopped.
+SOCKX="${TEST_SOCK}-x"
+HA="$(fresh_home own-a)"; stub_cockpit "$HA"
+HB="$(fresh_home own-b)"; stub_cockpit "$HB"
+setup_in "$HA" PORT=18993 ORRERY_COCKPIT_TMUX_SOCKET="$SOCKX" bash "$HA/orrery/scripts/setup.sh" --yes >/dev/null 2>&1
+check "P2-1: cockpit A runs" curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:18993/telemetry/health
+out="$(setup_in "$HB" PORT=18994 ORRERY_COCKPIT_TMUX_SOCKET="$SOCKX" bash "$HB/orrery/scripts/setup.sh" --yes 2>&1)"
+check "P2-1: cockpit B runs" curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:18994/telemetry/health
+check "P2-1: starting B did not stop A (other checkout, other port)" curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:18993/telemetry/health
+env -u TMUX tmux -L "$SOCKX" kill-server 2>/dev/null
+# ... and a cockpit of this version started by hand is "current", but not ours:
+# no tmux stop instructions for it.
+HC="$(fresh_home own-c)"; stub_cockpit "$HC"
+setup_in "$HC" PORT=18992 bash "$HC/orrery/scripts/setup.sh" --yes --no-start >/dev/null 2>&1
+(env PORT=18992 "$HC/orrery/scripts/start-cockpit.sh" >/dev/null 2>&1 &); sleep 2
+out="$(setup_in "$HC" PORT=18992 ORRERY_COCKPIT_TMUX_SOCKET="$SOCKX" bash "$HC/orrery/scripts/setup.sh" --yes 2>&1)"
+check "P2-1: a hand-started cockpit of this version: no tmux stop steps" sh -c '! printf "%s" "$1" | grep -q "kill-se"' _ "$out"
+check "P2-1: says it was not started by this setup" sh -c 'printf "%s" "$1" | grep -q "not started by this setup"' _ "$out"
+pkill -f "$HC/orrery" 2>/dev/null
+
+# P2-2: started, but the answer is not this checkout: not ready.
+HD="$(fresh_home wrong-root)"; stub_cockpit "$HD"
+out="$(setup_in "$HD" PORT=18991 ORRERY_COCKPIT_TMUX_SOCKET="$SOCKX" STUB_HEALTH_ROOT=/somewhere/else bash "$HD/orrery/scripts/setup.sh" --yes 2>&1)"; status=$?
+check "P2-2: another root answers: not ready" sh -c '! printf "%s" "$1" | grep -q "is ready"' _ "$out"
+check "P2-2: another root answers: fails" test "$status" -ne 0
+check "P2-2: says which root answered" sh -c 'printf "%s" "$1" | grep -q "/somewhere/else"' _ "$out"
+env -u TMUX tmux -L "$SOCKX" kill-server 2>/dev/null
+
+# P2-3: the cockpit fails to start: the first attempt's record stays open
+# until a run gets the cockpit up.
+HE="$(fresh_home start-fails)"; stub_cockpit "$HE"
+out="$(setup_in "$HE" PORT=18990 ORRERY_COCKPIT_TMUX_SOCKET="$SOCKX" STUB_START_FAIL=1 bash "$HE/orrery/scripts/setup.sh" --yes 2>&1)"; status=$?
+check "P2-3: start fails: the run fails" test "$status" -ne 0
+check "P2-3: start fails: first record kept" test -s "$HE/.orrery-install/baseline"
+setup_in "$HE" PORT=18990 ORRERY_COCKPIT_TMUX_SOCKET="$SOCKX" bash "$HE/orrery/scripts/setup.sh" --yes >/dev/null 2>&1
+check "P2-3: the next run starts it and closes the record" test ! -e "$HE/.orrery-install/baseline"
+env -u TMUX tmux -L "$SOCKX" kill-server 2>/dev/null
+
+# P2-5: before yes, --mail update / auto show the canonical risk; keep does not.
+HF="$(fresh_home mail-risk)"; stub_cockpit "$HF"
+setup_in "$HF" bash "$HF/orrery/scripts/setup.sh" --yes --no-start >/dev/null 2>&1
+out="$(setup_in "$HF" STUB_UPDATE_MAIL=1 bash "$HF/orrery/scripts/setup.sh" --check --mail update 2>&1)"
+check "P2-5: --mail update: the canonical risk before yes" sh -c 'printf "%s" "$1" | grep -q "STUB-CANONICAL-RISK"' _ "$out"
+check "P2-5: --mail update: no promise of a few seconds" sh -c '! printf "%s" "$1" | grep -q "a few seconds without Mail"' _ "$out"
+out="$(setup_in "$HF" STUB_UPDATE_MAIL=1 bash "$HF/orrery/scripts/setup.sh" --check --mail auto 2>&1)"
+check "P2-5: --mail auto: the canonical risk before yes" sh -c 'printf "%s" "$1" | grep -q "STUB-CANONICAL-RISK"' _ "$out"
+out="$(setup_in "$HF" STUB_UPDATE_MAIL=1 bash "$HF/orrery/scripts/setup.sh" --check 2>&1)"
+check "P2-5: keep: no risk lines" sh -c '! printf "%s" "$1" | grep -q "STUB-CANONICAL-RISK"' _ "$out"
+rm -f "$HF/orrery-telemetry/scripts/lib/mail_update_notice.py"
+out="$(setup_in "$HF" STUB_UPDATE_MAIL=1 bash "$HF/orrery/scripts/setup.sh" --check --mail update 2>&1)"
+check "P2-5: without the canonical text: a fallback that promises no short limit" sh -c 'printf "%s" "$1" | grep -q "minutes" && printf "%s" "$1" | grep -q "/mcp"' _ "$out"
 
 # An unfinished Mail copy: never a command that deletes anything.
 H="$(fresh_home mail-incomplete)"
