@@ -16,7 +16,7 @@ Mac はターミナル、Windows は WSL2 の Ubuntu の中で打ちます。先
 ## すること
 
 1. **digest-paper の add-on**: `~/.agentstack/addons/digest-paper/src` に取得し（2 回目からは更新）、add-on 自身の `scripts/install.sh` で入れます。Claude と Codex の skill の置き場に link し、同じ名前の別の skill があれば置き換えません（そのときは、最後に出す頼み方の文が add-on の SKILL.md を名指しします）
-2. **demo vault**: GitHub の tarball を展開して置きます。git の checkout にはしません（Mistral のキーを入れた plugin の設定を誤って commit しないため）。**フォルダがすでにあれば何も変えません**
+2. **demo vault**: GitHub の tarball を展開して置きます。git の checkout にはしません（Mistral のキーを入れた plugin の設定を誤って commit しないため）。**フォルダがすでにあり、中に何かあれば何も変えません**（空のフォルダは vault ではないので、そこに置きます。中断した実行が残した空のフォルダもこれで使われます）
    - Mac: `~/Documents/orrery-demo-vault`
    - WSL: Windows の `C:\Users\<あなた>\Documents\orrery-demo-vault`（Obsidian は Windows 側で動くため。WSL からは `/mnt/c/...`）
 3. **次にすることを出す**: Obsidian で開くフォルダ（WSL では Windows の形）、pdf-mistral に Mistral のキーを入れる場所、cockpit の agent に貼る頼み方の文（パスを埋めたもの）を 3 つ

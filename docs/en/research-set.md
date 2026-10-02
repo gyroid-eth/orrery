@@ -16,7 +16,7 @@ Type it in Terminal on a Mac, or inside the WSL2 Ubuntu on Windows. ORRERY's own
 ## What it does
 
 1. **The digest-paper add-on**: fetched to `~/.agentstack/addons/digest-paper/src` (updated on later runs) and installed with the add-on's own `scripts/install.sh`, which links it for Claude and Codex and never replaces another skill of the same name (the requests it prints then name the add-on's SKILL.md).
-2. **The demo vault**: a GitHub tarball, unpacked; not a git checkout (so a plugin setting holding your Mistral key is never committed by mistake). **A folder that already exists is never changed.**
+2. **The demo vault**: a GitHub tarball, unpacked; not a git checkout (so a plugin setting holding your Mistral key is never committed by mistake). **A folder that already exists and has anything in it is never changed.** (An empty folder is not a vault, so the demo vault is put there; this also picks up an empty folder left by an interrupted run.)
    - Mac: `~/Documents/orrery-demo-vault`
    - WSL: Windows' `C:\Users\<you>\Documents\orrery-demo-vault` (Obsidian runs on Windows; from WSL it is `/mnt/c/...`)
 3. **What to do next**: the folder to open in Obsidian (in Windows form on WSL), where to enter a Mistral key for pdf-mistral, and three requests to paste to an agent in the cockpit, with the paths filled in:

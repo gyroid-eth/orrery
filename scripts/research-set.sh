@@ -13,8 +13,11 @@
 #      it for Claude and Codex and never replaces a skill it did not install.
 #   2. The demo vault: a GitHub tarball unpacked to ~/Documents/orrery-demo-vault
 #      (on WSL, the Windows Documents folder, since Obsidian runs on Windows). A
-#      folder that already exists is never touched, so your notes and the API
-#      key you entered stay as they are. It is not a git checkout on purpose.
+#      folder that already exists and has anything in it is never touched, so
+#      your notes and the API key you entered stay as they are. The one
+#      exception is an empty folder (left by an interrupted run, or made by
+#      hand): it is not a vault, so the demo vault is put there. It is not a
+#      git checkout on purpose.
 #   3. What to do next: where to open the vault in Obsidian, how to enter the
 #      Mistral key (or go without one), and requests to paste, paths filled in.
 # It never reads or writes an API key, never uses sudo and trusts only the
