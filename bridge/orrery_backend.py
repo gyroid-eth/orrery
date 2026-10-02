@@ -1413,6 +1413,52 @@ def shared_fetch(
     return task
 
 
+# agentstack-selftest (run by the one-line install) registers two test agents
+# under this program and retires them. They are not the user's agents, so the
+# cockpit's roster and network leave them out; the dashboard still lists them.
+SELFTEST_PROGRAM = "agentstack-selftest"
+
+
+def hide_selftest_agents(path: str, body: bytes) -> bytes:
+    """Drop the self-test's agents (and links touching them) from a proxied answer."""
+    try:
+        payload = json.loads(body)
+    except (ValueError, UnicodeDecodeError):
+        return body
+    if not isinstance(payload, dict):
+        return body
+
+    def is_selftest(entry: Any) -> bool:
+        return isinstance(entry, dict) and entry.get("program") == SELFTEST_PROGRAM
+
+    if path == "/telemetry/agents":
+        agents = payload.get("agents")
+        if not isinstance(agents, list) or not any(is_selftest(a) for a in agents):
+            return body
+        payload["agents"] = [a for a in agents if not is_selftest(a)]
+        return json.dumps(payload).encode()
+
+    nodes = payload.get("nodes")
+    if not isinstance(nodes, list):
+        return body
+    hidden = {n.get("name") for n in nodes if is_selftest(n)}
+    if not hidden:
+        return body
+    payload["nodes"] = [n for n in nodes if not is_selftest(n)]
+    for key in ("edges", "spawn"):
+        links = payload.get(key)
+        if isinstance(links, list):
+            payload[key] = [
+                link for link in links
+                if not (isinstance(link, dict)
+                        and (link.get("source") in hidden or link.get("target") in hidden))
+            ]
+    for key in ("total", "shown"):
+        if isinstance(payload.get(key), int):
+            payload[key] = max(0, payload[key] - len(hidden))
+    return json.dumps(payload).encode()
+
+
 async def proxy_dashboard(request: web.Request) -> web.Response:
     dash_path, allowed = PROXY_ROUTES[request.path]
     kept = {
@@ -1431,6 +1477,8 @@ async def proxy_dashboard(request: web.Request) -> web.Response:
             body, status, content_type = await asyncio.shield(task)
         else:
             body, status, content_type = await fetch_proxied(http_session, request.path, url)
+        if status == 200 and request.path in ("/telemetry/agents", "/telemetry/graph"):
+            body = hide_selftest_agents(request.path, body)
         return web.Response(
             body=body,
             status=status,
