@@ -2225,6 +2225,66 @@ def launch_terminal(tmux_bin: str, session: str) -> None:
 
 OPENER_WAIT_SECONDS = 5.0
 
+# --- reaching Windows programs from WSL --------------------------------------
+# A Windows program started from WSL talks back through the socket named in
+# WSL_INTEROP (/run/WSL/<pid>_interop). A tmux server keeps the value from the
+# terminal that started it; once that terminal closes, the socket is gone and
+# every .exe fails with an interop error on stderr. explorer.exe's own exit
+# status means nothing (it exits 1 after opening a window), so that stderr is
+# the only sign — without reading it the cockpit said "opened" while nothing
+# opened (2026-10-01 seminar, cockpit under WSL).
+WSL_INTEROP_DIR = "/run/WSL"
+BINFMT_DIR = "/proc/sys/fs/binfmt_misc"
+WSL_INTEROP_FAILURE_RE = re.compile(
+    r"UtilConnectToInteropServer|UtilBindVsockAnyPort|UtilAcceptVsock|"
+    r"Exec format error|interop",
+    re.IGNORECASE,
+)
+
+
+def _is_socket(path: str) -> bool:
+    try:
+        return stat.S_ISSOCK(os.stat(path).st_mode)
+    except OSError:
+        return False
+
+
+def wsl_interop_env() -> dict[str, str]:
+    """This process's environment with WSL_INTEROP pointing at a live socket.
+
+    Kept as it is when it already does (or when there is no socket to pick:
+    WSL 1 has none). Otherwise the newest /run/WSL/*_interop socket is used —
+    the one of the most recently started WSL session.
+    """
+    env = dict(os.environ)
+    if _is_socket(env.get("WSL_INTEROP", "")):
+        return env
+    try:
+        names = os.listdir(WSL_INTEROP_DIR)
+    except OSError:
+        return env
+    candidates = []
+    for name in names:
+        path = os.path.join(WSL_INTEROP_DIR, name)
+        if name.endswith("_interop") and _is_socket(path):
+            with contextlib.suppress(OSError):
+                candidates.append((os.stat(path).st_mtime, path))
+    if candidates:
+        env["WSL_INTEROP"] = max(candidates)[1]
+    return env
+
+
+def wsl_interop_problem() -> str | None:
+    """Why this distro cannot run Windows programs at all, or None if it
+    can (or if it cannot be told: binfmt_misc not readable)."""
+    try:
+        entries = os.listdir(BINFMT_DIR)
+    except OSError:
+        return None
+    if not any(name.startswith("WSLInterop") for name in entries):
+        return "Windows interop is turned off in this distro ([interop] enabled=false in /etc/wsl.conf)"
+    return None
+
 
 def run_opener(argv: list[str], *, trust_exit_status: bool = True) -> None:
     """Run `open`/`xdg-open` and raise OSError if it reports a failure.
@@ -2239,19 +2299,26 @@ def run_opener(argv: list[str], *, trust_exit_status: bool = True) -> None:
     explorer.exe exits 1 even when it opened the window, so for it only a
     failure to start at all is an error (``trust_exit_status=False``).
     """
+    wsl = host_kind() == "wsl"
     proc = subprocess.Popen(
         argv,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
         start_new_session=True,
+        env=wsl_interop_env() if wsl else None,
     )
     try:
         _, err = proc.communicate(timeout=OPENER_WAIT_SECONDS)
     except subprocess.TimeoutExpired:
         return
-    if proc.returncode != 0 and trust_exit_status:
-        detail = (err or b"").decode("utf-8", "replace").strip()
+    detail = (err or b"").decode("utf-8", "replace").strip()
+    failed = proc.returncode != 0 and trust_exit_status
+    # A Windows program that never started says so on stderr, whatever its
+    # exit status is trusted to mean.
+    if wsl and proc.returncode != 0 and WSL_INTEROP_FAILURE_RE.search(detail):
+        failed = True
+    if failed:
         message = f"{argv[0]} exited {proc.returncode}" + (f": {detail[:300]}" if detail else "")
         print(f"[opener] {message}", file=sys.stderr, flush=True)
         raise OSError(message)
@@ -2311,6 +2378,15 @@ async def open_url(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+class RevealUnavailable(OSError):
+    """The file manager could not be reached; `shown` is the path to show the
+    person instead, spelled the way their file manager would take it."""
+
+    def __init__(self, reason: str, shown: str) -> None:
+        super().__init__(reason)
+        self.shown = shown
+
+
 def reveal_in_finder(path: pathlib.Path) -> str:
     """Show a local path in the file manager: directories open, files are revealed."""
     kind = "dir" if path.is_dir() else "file"
@@ -2318,12 +2394,26 @@ def reveal_in_finder(path: pathlib.Path) -> str:
     if host == "mac":
         argv = ["open", str(path)] if kind == "dir" else ["open", "-R", str(path)]
     elif host == "wsl":
+        # /mnt/c/... becomes C:\..., a distro path \\wsl.localhost\<distro>\...
+        target, unconverted = None, None
+        try:
+            target = windows_path(path)
+        except OSError as exc:
+            unconverted = str(exc)
+        shown = target or str(path)
         explorer = windows_exe("explorer.exe")
-        if not explorer:
-            raise OSError("explorer.exe is not reachable from this WSL distro")
-        target = windows_path(path)
+        problem = wsl_interop_problem() or (
+            None if explorer else "explorer.exe is not reachable from this WSL distro"
+        )
+        if problem:
+            raise RevealUnavailable(problem, shown)
+        if target is None:
+            raise RevealUnavailable(unconverted or "wslpath gave no Windows path", shown)
         argv = [explorer, target] if kind == "dir" else [explorer, "/select,", target]
-        run_opener(argv, trust_exit_status=False)
+        try:
+            run_opener(argv, trust_exit_status=False)
+        except OSError as exc:
+            raise RevealUnavailable(str(exc), shown) from exc
         return kind
     else:
         argv = ["xdg-open", str(path if kind == "dir" else path.parent)]
@@ -2346,6 +2436,60 @@ def windows_path(path: pathlib.Path) -> str:
     return converted
 
 
+# Claude Code shortens a long path to fit its pane, with one "…" standing for
+# any run of characters — across folders too: "runs/The-fin-to-lim…/note.md"
+# is runs/The-fin-to-limb-…-20261001T224253/draft/note.md. Clicked as printed
+# it named nothing, so the cockpit answered "no such path" (2026-10-01
+# seminar, a narrow pane under WSL). The walk under the folder before the "…"
+# is bounded; of several matches the newest wins, which is the one an agent
+# has just written.
+ELLIPSIS = "\u2026"
+ELLIPSIS_MAX_DEPTH = 6
+ELLIPSIS_MAX_ENTRIES = 5000
+
+
+def resolve_shown_path(text: str) -> pathlib.Path | None:
+    """The existing path ``text`` names, reading one "…" as Claude Code's
+    shortening; None if there is none."""
+    path = pathlib.Path(text).expanduser()
+    if ELLIPSIS not in text:
+        return path if path.exists() else None
+    if text.count(ELLIPSIS) != 1:
+        return None
+    head, tail = str(path).split(ELLIPSIS)
+    base, _, prefix = head.rpartition("/")
+    base = base or "/"
+    if not tail or not os.path.isdir(base):
+        return None
+    best: tuple[float, str] | None = None
+    seen = 0
+    try:
+        tops = [name for name in os.listdir(base) if name.startswith(prefix)]
+    except OSError:
+        return None
+    for top in tops:
+        start = os.path.join(base, top)
+        candidates = [start]
+        if os.path.isdir(start) and not os.path.islink(start):
+            for root, dirs, files in os.walk(start):
+                depth = root[len(start):].count("/")
+                if depth >= ELLIPSIS_MAX_DEPTH:
+                    dirs[:] = []
+                candidates.extend(os.path.join(root, name) for name in dirs + files)
+                seen += len(dirs) + len(files)
+                if seen > ELLIPSIS_MAX_ENTRIES:
+                    break
+        for candidate in candidates:
+            if candidate.endswith(tail) and len(candidate) >= len(head) + len(tail):
+                with contextlib.suppress(OSError):
+                    stamp = (os.stat(candidate).st_mtime, candidate)
+                    if best is None or stamp > best:
+                        best = stamp
+        if seen > ELLIPSIS_MAX_ENTRIES:
+            break
+    return pathlib.Path(best[1]) if best else None
+
+
 def longest_existing_path_prefix(text: str) -> str | None:
     """Return the longest space-delimited prefix of ``text`` that names an existing path.
 
@@ -2358,7 +2502,10 @@ def longest_existing_path_prefix(text: str) -> str | None:
     # Candidate ends: before any ASCII / ideographic space and before any
     # non-ASCII character (prose such as "…/logs はうまくいかない" follows a
     # path without a space), plus the end of the text. Longest first.
-    ends = [i for i, ch in enumerate(text) if ch in " \u3000" or not ch.isascii()]
+    ends = [
+        i for i, ch in enumerate(text)
+        if ch in " \u3000)]}>\"'`" or (not ch.isascii() and ch != ELLIPSIS)
+    ]
     ends.append(len(text))
     seen: set[str] = set()
     for end in sorted(set(ends), reverse=True):
@@ -2367,7 +2514,7 @@ def longest_existing_path_prefix(text: str) -> str | None:
             continue
         seen.add(candidate)
         try:
-            if pathlib.Path(candidate).expanduser().exists():
+            if resolve_shown_path(candidate) is not None:
                 return candidate
         except OSError:
             continue
@@ -2413,11 +2560,17 @@ async def reveal_path(request: web.Request) -> web.Response:
         return web.json_response(
             {"ok": False, "error": "path must be absolute or start with ~"}, status=400
         )
-    path = pathlib.Path(raw).expanduser()
-    if not path.exists():
+    path = await asyncio.to_thread(resolve_shown_path, raw)
+    if path is None:
         return web.json_response({"ok": False, "error": "no such path"}, status=404)
     try:
         kind = await asyncio.to_thread(reveal_in_finder, path)
+    except RevealUnavailable as exc:
+        # The cockpit shows `show` for the person to open by hand.
+        return web.json_response(
+            {"ok": False, "error": f"failed to open Explorer: {exc}", "show": exc.shown},
+            status=500,
+        )
     except OSError as exc:
         return web.json_response(
             {"ok": False, "error": f"failed to open Finder: {exc}"}, status=500

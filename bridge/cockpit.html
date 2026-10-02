@@ -1053,6 +1053,8 @@
     opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .2s,transform .2s;
   }
   .toast.on{opacity:1;transform:none}
+  /* A path to open by hand: wrap it anywhere and let it be selected. */
+  .toast.on.selectable{pointer-events:auto;user-select:text;-webkit-user-select:text;overflow-wrap:anywhere}
   .toast.error{border-color:rgb(var(--theme-accent-rgb) / .45);animation:blinkring .22s steps(1) 2}
 
   /* scrollbars */
@@ -8234,19 +8236,36 @@ async function probeLocalPath(text){
   if(probeCache.size>500)probeCache.delete(probeCache.keys().next().value);
   return p;
 }
+/* The file manager's name on this host, for the toast. */
+function fileManagerLabel(){
+  return hostPlatform.host==='wsl'?'EXPLORER':hostPlatform.host==='linux'?'FILES':'FINDER';
+}
+/* When the backend could not reach the file manager (under WSL: interop off,
+   no explorer.exe, or explorer.exe never started), it sends the path spelled
+   for that file manager. Show it long enough to read, and put it on the
+   clipboard when the browser lets us, so it can be pasted into the address
+   bar by hand. */
+async function showUnopenedPath(label,shown,error){
+  let copied=false;
+  try{if(navigator.clipboard){await navigator.clipboard.writeText(shown);copied=true;}}catch(_){/* not allowed here */}
+  showToast(`${label} FAILED · open it by hand${copied?' (copied)':''}: ${shown} — ${error}`,true,15000);
+  toastEl.classList.add('selectable');
+}
 async function revealLocalPath(path){
+  const label=fileManagerLabel();
   const invoke=appInvoke();
   if(invoke){
     try{
       const kind=await invoke('reveal_local_path',{path});
-      showToast(`FINDER · ${kind==='dir'?'opened':'revealed'} ${path}`);
+      showToast(`${label} · ${kind==='dir'?'opened':'revealed'} ${path}`);
       return true;
     }catch(error){
       const detail=String((error&&error.message)||error);
-      // A path the app rejected (missing, relative) would be rejected by the
-      // backend too; only an unavailable opener falls through to it.
-      if(/no such path|must be absolute|path is required/.test(detail)){
-        showToast(`FINDER FAILED · ${detail}`,true);return false;
+      // A path the app rejected as malformed would be rejected by the backend
+      // too. "No such path" is not final: the backend also reads Claude Code's
+      // shortened "…/note.md" paths, which the app takes literally.
+      if(/must be absolute|path is required/.test(detail)){
+        showToast(`${label} FAILED · ${detail}`,true);return false;
       }
       console.warn('[links] app reveal unavailable:',detail);
     }
@@ -8258,11 +8277,17 @@ async function revealLocalPath(path){
     });
     let result={};
     try{result=await response.json();}catch(_){/* HTTP status remains useful */}
-    if(!response.ok||!result.ok)throw new Error(result.error||`HTTP ${response.status}`);
-    showToast(`FINDER · ${result.kind==='dir'?'opened':'revealed'} ${path}`);
+    if(!response.ok||!result.ok){
+      if(typeof result.show==='string'&&result.show){
+        await showUnopenedPath(label,result.show,result.error||`HTTP ${response.status}`);
+        return false;
+      }
+      throw new Error(result.error||`HTTP ${response.status}`);
+    }
+    showToast(`${label} · ${result.kind==='dir'?'opened':'revealed'} ${result.path||path}`);
     return true;
   }catch(error){
-    showToast(`FINDER FAILED · ${String(error&&error.message||error||'request failed')}`,true);
+    showToast(`${label} FAILED · ${String(error&&error.message||error||'request failed')}`,true);
     return false;
   }
 }
@@ -9889,10 +9914,10 @@ function closeSpawnModal(force=false){
   spawnOverlay.classList.remove('on');spawnOverlay.setAttribute('aria-hidden','true');
   if(spawnLastFocus&&spawnLastFocus.isConnected)spawnLastFocus.focus();
 }
-function showToast(message,isError=false){
+function showToast(message,isError=false,ms=4200){
   clearTimeout(toastTimer);toastEl.textContent=message;
   toastEl.className='toast on'+(isError?' error':'');
-  toastTimer=setTimeout(()=>{toastEl.className='toast';},4200);
+  toastTimer=setTimeout(()=>{toastEl.className='toast';},ms);
 }
 function spawnPayloadFromForm(){
   const dir=spawnDirPath;
