@@ -7731,6 +7731,8 @@ function createPane(session,meta){
   });
   term.open(host);
   term.onData(data=>{if(activeId===meta.paneId)send({type:"input",paneId:meta.paneId,data});});
+  // Classic (non-SGR) mouse reports: xterm emits them here, one char per byte.
+  term.onBinary(data=>{if(activeId===meta.paneId)send({type:"input",paneId:meta.paneId,data,binary:true});});
   term.attachCustomKeyEventHandler(event=>{
     if(terminalYieldsHostShortcut(event,hostPlatform))return false;
     if(!isBottomJumpShortcut(event))return true;
