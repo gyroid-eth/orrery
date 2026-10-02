@@ -215,11 +215,29 @@ main() {
   [ -z "$(printf '%s' "$collision_where" | tr -d ' ')" ] || collision=true
 
   # ------------------------------------------------------------ 2. the demo vault
-  if [ -e "$vault_dir" ]; then
+  # An empty folder is not a vault (it may be one left by an interrupted run);
+  # anything else at that path is never touched.
+  vault_empty=false
+  if [ -d "$vault_dir" ] && [ ! -L "$vault_dir" ] && [ -z "$(ls -A "$vault_dir" 2>/dev/null)" ]; then
+    vault_empty=true
+  fi
+  if [ -e "$vault_dir" ] && [ "$vault_empty" = false ]; then
     vault_state="kept (already there; not changed)"
   elif [ "$read_only" = true ]; then
     vault_state="would download the demo vault to ${vault_dir}"
   else
+    # Claim the folder first: mkdir (without -p) fails if anyone else has it,
+    # so from here on only this run owns that name. An empty folder already
+    # there is taken over the same way (rmdir fails if it is not empty).
+    mkdir -p "$(dirname "$vault_dir")"
+    if [ "$vault_empty" = true ]; then
+      rmdir "$vault_dir" 2>/dev/null || stop "${vault_dir} is no longer empty; nothing was written into it." \
+        "Run this again (the existing folder will be used as it is)."
+    fi
+    mkdir "$vault_dir" 2>/dev/null || stop "${vault_dir} appeared just now; nothing was written into it." \
+      "Run this again (the existing folder will be used as it is)."
+    claimed="$vault_dir"
+    trap 'rmdir "$claimed" 2>/dev/null || true' EXIT
     work="$(mktemp -d)"
     if [ -n "$vault_tarball" ]; then
       cp "$vault_tarball" "${work}/vault.tar.gz"
@@ -237,13 +255,15 @@ main() {
     mkdir -p "$partial"
     tar -xzf "${work}/vault.tar.gz" -C "$partial" --strip-components 1 --no-same-owner --no-same-permissions \
       || { rm -rf "$partial" "$work"; stop "Could not unpack the demo vault."; }
-    # rename(2) through Python: it fails if the folder appeared meanwhile and
-    # has anything in it, and never moves the vault *into* it, as mv would.
+    # rename(2) through Python replaces only our own claimed, still empty
+    # folder; if anything was put into it meanwhile it fails (ENOTEMPTY), and
+    # unlike mv it never moves the vault *into* a folder.
     if ! python3 -c 'import os, sys; os.rename(sys.argv[1], sys.argv[2])' "$partial" "$vault_dir" 2>/dev/null; then
       rm -rf "$partial" "$work"
-      stop "${vault_dir} appeared while the demo vault was downloading; nothing was written into it." \
-        "Run this again (the existing folder will be used as it is)."
+      stop "Something was put into ${vault_dir} while the demo vault was downloading; it was left as it is." \
+        "Move it away, or use another folder with --vault-dir, and run this again."
     fi
+    trap - EXIT
     rm -rf "$work"
     vault_state="downloaded (${vault_rev})"
   fi

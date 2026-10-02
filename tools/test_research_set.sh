@@ -87,18 +87,28 @@ out="$(env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOM
 echo "$out" | grep -q "Windows Codex; ORRERY cannot use it" || fail "windows codex note: $out"
 echo "$out" | grep -q "Claude only" || fail "windows codex counted: $out"
 
-# The vault folder appears while downloading: nothing is written into it (P2-5).
+# Something is put into the vault folder while downloading: left as it is (P2-5).
 home="$tmp/h6"; mkdir -p "$home/.agentstack/skills/delegate"; touch "$home/.agentstack/skills/delegate/SKILL.md"
 mkdir -p "$tmp/bin6"; cp "$tmp/bin/claude" "$tmp/bin6/"
 real_tar="$(command -v tar)"
 printf '#!/bin/sh\nmkdir -p "%s" && echo mine >"%s/sentinel"\nexec "%s" "$@"\n' "$tmp/race" "$tmp/race" "$real_tar" >"$tmp/bin6/tar"
 chmod +x "$tmp/bin6/tar"
-out="$(env -i PATH="$tmp/bin6:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" \
+race() { env -i PATH="$tmp/bin6:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" \
   ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
-  /bin/bash "$script" --vault-dir "$tmp/race" 2>&1 || true)"
-echo "$out" | grep -q "appeared while the demo vault was downloading" || fail "race: $out"
+  /bin/bash "$script" --vault-dir "$1" 2>&1 || true; }
+out="$(race "$tmp/race")"
+echo "$out" | grep -q "was put into .* while the demo vault was downloading" || fail "race: $out"
 [ "$(ls -A "$tmp/race")" = "sentinel" ] || fail "race wrote into the folder: $(ls -A "$tmp/race")"
 ! ls -d "$tmp"/race.partial-* >/dev/null 2>&1 || fail "partial left behind"
+# An empty folder made meanwhile (the reviewer's case) is never replaced by
+# someone else's: this run claimed the name first, so the other mkdir -p finds ours.
+printf '#!/bin/sh\nmkdir -p "%s"\nexec "%s" "$@"\n' "$tmp/race2" "$real_tar" >"$tmp/bin6/tar"
+out="$(race "$tmp/race2")"
+[ -f "$tmp/race2/CLAUDE.md" ] || fail "empty-folder race: $out"
+# An empty folder left by an interrupted run is used; one with anything in it is kept.
+mkdir -p "$tmp/empty"; printf '#!/bin/sh\nexec "%s" "$@"\n' "$real_tar" >"$tmp/bin6/tar"
+out="$(race "$tmp/empty")"
+[ -f "$tmp/empty/CLAUDE.md" ] || fail "empty folder not used: $out"
 
 # The no-key request names the PDF that the new vault has (P3-2).
 out="$(run "$tmp/h1")"
