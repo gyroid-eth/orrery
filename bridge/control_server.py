@@ -46,6 +46,39 @@ CLIENT_SIZE_FORMAT = (
     "#{client_control_mode}\t#{client_width}\t#{client_height}\t"
     "#{client_activity}"
 )
+# capture-pane returns text only, so a replay alone leaves a viewer that
+# attached after the app turned on mouse tracking without it. The first viewer
+# usually gets the mode anyway, from the redraw its attach resize causes; a
+# second viewer (another tab, the app, a pane window, a reload) attaches at the
+# size already claimed, nothing redraws, and the wheel never reaches the app:
+# Claude Code (tui: fullscreen) and Codex track the mouse on the alternate
+# screen, and neither could be scrolled back (2026-10-02 report).
+# The replay therefore ends with the modes tmux reports as on. Only "on": the
+# replay never turns off a mode the viewer's live output turned on. It can
+# still turn back on a mode that live output switched off between the query
+# and the replay's arrival, until the app sends that mode again.
+PANE_MODE_SEQUENCES = {
+    "mouse_standard_flag": "\x1b[?1000h",
+    "mouse_button_flag": "\x1b[?1002h",
+    "mouse_all_flag": "\x1b[?1003h",
+    "mouse_sgr_flag": "\x1b[?1006h",
+    "mouse_utf8_flag": "\x1b[?1005h",
+    "keypad_cursor_flag": "\x1b[?1h",
+    "keypad_flag": "\x1b=",
+}
+PANE_STATE_FORMAT = "\t".join(
+    ["#{cursor_x}", "#{cursor_y}"] + [f"#{{{flag}}}" for flag in PANE_MODE_SEQUENCES]
+)
+
+
+def pane_mode_sequences(fields: list[str]) -> str:
+    """The on-modes in a PANE_STATE_FORMAT reply (after the cursor). A flag an
+    older tmux does not know formats as empty and counts as off."""
+    return "".join(
+        sequence
+        for sequence, value in zip(PANE_MODE_SEQUENCES.values(), fields[2:])
+        if value == "1"
+    )
 
 
 @dataclass(frozen=True)
@@ -832,30 +865,32 @@ class TmuxControlBridge:
         history = (
             self._restored_history.get(pane_id, []) + live_history
         )[-SNAPSHOT_HISTORY_LINES:]
-        if not any(line.strip() for line in history + lines):
-            return ""
-        lines += [""] * (pane.height - len(lines))
-        text = "\r\n".join(history + lines)
-        cursor = await self.send_command(
-            [
-                "display-message", "-p", "-t", pane_id,
-                "#{cursor_x}\t#{cursor_y}",
-            ],
+        state = await self.send_command(
+            ["display-message", "-p", "-t", pane_id, PANE_STATE_FORMAT],
             wait=True,
             timeout=5.0,
         )
+        fields = (
+            state.lines[0].split("\t")
+            if state is not None and state.ok and state.lines
+            else []
+        )
+        modes = pane_mode_sequences(fields)
+        if not any(line.strip() for line in history + lines):
+            # A TUI that turned its modes on and has not drawn yet.
+            return modes
+        lines += [""] * (pane.height - len(lines))
+        text = "\r\n".join(history + lines) + modes
         suffix = ""
-        if cursor is not None and cursor.ok and cursor.lines:
-            fields = cursor.lines[0].split("\t")
-            if len(fields) == 2:
-                try:
-                    cx, cy = int(fields[0]), int(fields[1])
-                    up = max(0, (pane.height - 1) - cy)
-                    suffix = (f"\x1b[{up}A" if up else "") + "\r"
-                    if cx > 0:
-                        suffix += f"\x1b[{cx}C"
-                except ValueError:
-                    pass
+        if len(fields) >= 2:
+            try:
+                cx, cy = int(fields[0]), int(fields[1])
+                up = max(0, (pane.height - 1) - cy)
+                suffix = (f"\x1b[{up}A" if up else "") + "\r"
+                if cx > 0:
+                    suffix += f"\x1b[{cx}C"
+            except ValueError:
+                pass
         return text + suffix
 
     async def send_snapshot(self, websocket: Any) -> None:
@@ -900,7 +935,9 @@ class TmuxControlBridge:
         if message_type == "input":
             data = payload.get("data")
             if isinstance(data, str):
-                await self.send_input(pane_id, data)
+                await self.send_input(
+                    pane_id, data, binary=payload.get("binary") is True
+                )
             return
 
         if message_type == "resize":
@@ -1060,8 +1097,19 @@ class TmuxControlBridge:
         parts.append(f"\x1b[{cy + 1};{cx + 1}H")
         return "".join(parts)
 
-    async def send_input(self, pane_id: str, data: str) -> None:
-        raw = data.encode("utf-8", errors="replace")
+    async def send_input(
+        self, pane_id: str, data: str, *, binary: bool = False
+    ) -> None:
+        # xterm hands classic (non-SGR) mouse reports to onBinary as a string
+        # of byte values 0-255; UTF-8 would turn a coordinate byte >= 0x80
+        # into two bytes and the app would misread the report.
+        if binary:
+            try:
+                raw = data.encode("latin-1")
+            except UnicodeEncodeError:
+                return
+        else:
+            raw = data.encode("utf-8", errors="replace")
         for start in range(0, len(raw), 64):
             chunk = raw[start : start + 64]
             await self.send_command(
