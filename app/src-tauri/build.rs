@@ -15,6 +15,9 @@ fn main() {
             "open_pane_window",
             "focus_pane_window",
             "close_pane_window",
+            "open_tour_window",
+            "close_tour_window",
+            "tour_window_exists",
         ]),
     ))
     .expect("failed to run tauri-build");

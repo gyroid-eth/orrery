@@ -306,12 +306,14 @@ fn pane_window_label(origin: &Url, session: &str) -> String {
     format!("{PANE_WINDOW_PREFIX}{hash:016x}")
 }
 
-fn pane_window_url(origin: &Url, session: &str) -> Result<Url, String> {
+// Every cockpit window loads a page of the caller's own local origin, keeping
+// only the caller's ?ws= backend override next to its own query.
+fn cockpit_window_url(origin: &Url, path: &str, pairs: &[(&str, &str)]) -> Result<Url, String> {
     if origin.scheme() != "http" || !matches!(origin.host_str(), Some("127.0.0.1" | "localhost")) {
-        return Err("pane windows open only from the local cockpit".to_owned());
+        return Err("cockpit windows open only from the local cockpit".to_owned());
     }
     let mut url = origin.clone();
-    url.set_path("/cockpit.html");
+    url.set_path(path);
     url.set_fragment(None);
     let ws = origin
         .query_pairs()
@@ -319,12 +321,60 @@ fn pane_window_url(origin: &Url, session: &str) -> Result<Url, String> {
         .map(|(_, value)| value.into_owned());
     {
         let mut query = url.query_pairs_mut();
-        query.clear().append_pair("solo", "1").append_pair("session", session);
+        query.clear();
+        for (key, value) in pairs {
+            query.append_pair(key, value);
+        }
         if let Some(ws) = ws.as_deref() {
             query.append_pair("ws", ws);
         }
     }
     Ok(url)
+}
+
+fn pane_window_url(origin: &Url, session: &str) -> Result<Url, String> {
+    cockpit_window_url(origin, "/cockpit.html", &[("solo", "1"), ("session", session)])
+}
+
+// Builds a cockpit window, or brings back the one already open under the
+// label. `closed` is sent to the main window when it goes away.
+#[allow(clippy::too_many_arguments)]
+fn open_cockpit_window(
+    app: &AppHandle,
+    label: &str,
+    url: Url,
+    title: String,
+    closed: serde_json::Value,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    if let Some(existing) = app.get_webview_window(label) {
+        let _ = existing.unminimize();
+        let _ = existing.show();
+        return existing.set_focus().map_err(|error| error.to_string());
+    }
+    let pane = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url))
+        .title(title)
+        .inner_size(width.clamp(360.0, 4000.0), height.clamp(240.0, 3000.0))
+        .min_inner_size(360.0, 240.0)
+        .build()
+        .map_err(|error| error.to_string())?;
+    if x.is_finite() && y.is_finite() {
+        let _ = pane.set_position(LogicalPosition::new(x, y));
+    }
+    let _ = pane.set_size(LogicalSize::new(
+        width.clamp(360.0, 4000.0),
+        height.clamp(240.0, 3000.0),
+    ));
+    let notifier = app.clone();
+    pane.on_window_event(move |event| {
+        if let WindowEvent::Destroyed = event {
+            let _ = notifier.emit_to("main", PANE_WINDOW_CLOSED_EVENT, closed.clone());
+        }
+    });
+    Ok(())
 }
 
 #[tauri::command]
@@ -343,35 +393,11 @@ fn open_pane_window(
     let origin = window.url().map_err(|error| error.to_string())?;
     let url = pane_window_url(&origin, &session)?;
     let label = pane_window_label(&origin, &session);
-    if let Some(existing) = app.get_webview_window(&label) {
-        let _ = existing.unminimize();
-        let _ = existing.show();
-        return existing.set_focus().map_err(|error| error.to_string());
-    }
-    let closed = serde_json::json!({ "session": session, "url": url.as_str() });
-    let pane = WebviewWindowBuilder::new(&app, &label, WebviewUrl::External(url))
-        .title(format!("{session} · ORRERY"))
-        .inner_size(width.clamp(360.0, 4000.0), height.clamp(240.0, 3000.0))
-        .min_inner_size(360.0, 240.0)
-        .build()
-        .map_err(|error| error.to_string())?;
-    if x.is_finite() && y.is_finite() {
-        let _ = pane.set_position(LogicalPosition::new(x, y));
-    }
-    let _ = pane.set_size(LogicalSize::new(
-        width.clamp(360.0, 4000.0),
-        height.clamp(240.0, 3000.0),
-    ));
     // The payload carries the window's own address so the cockpit can tell
     // which backend it belonged to: the same session name on another backend
     // is another window.
-    let notifier = app.clone();
-    pane.on_window_event(move |event| {
-        if let WindowEvent::Destroyed = event {
-            let _ = notifier.emit_to("main", PANE_WINDOW_CLOSED_EVENT, closed.clone());
-        }
-    });
-    Ok(())
+    let closed = serde_json::json!({ "session": session, "url": url.as_str() });
+    open_cockpit_window(&app, &label, url, format!("{session} · ORRERY"), closed, x, y, width, height)
 }
 
 // Focus and close resolve the label from the caller's own address, so a
@@ -398,6 +424,69 @@ fn close_pane_window(app: AppHandle, window: WebviewWindow, session: String) -> 
         Some(pane) => pane.close().map_err(|error| error.to_string()),
         None => Ok(()),
     }
+}
+
+// Tour windows: a tour checklist (cockpit_tour.js) in a window of its own,
+// tour.html?tour=<id>, a page with the checklist alone. The label keeps the pane- prefix so the
+// pane capability covers it; the key starts with a control character, which no
+// session name may contain, so a tour never takes a pane's window.
+fn tour_id_ok(tour: &str) -> bool {
+    !tour.is_empty()
+        && tour.len() <= 64
+        && tour.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+}
+
+fn tour_window_key(tour: &str) -> String {
+    format!("\u{1}tour\u{1}{tour}")
+}
+
+fn tour_window_url(origin: &Url, tour: &str) -> Result<Url, String> {
+    if !tour_id_ok(tour) {
+        return Err("invalid tour id".to_owned());
+    }
+    cockpit_window_url(origin, "/tour.html", &[("tour", tour)])
+}
+
+#[tauri::command]
+fn open_tour_window(
+    app: AppHandle,
+    window: WebviewWindow,
+    tour: String,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    let origin = window.url().map_err(|error| error.to_string())?;
+    let url = tour_window_url(&origin, &tour)?;
+    let label = pane_window_label(&origin, &tour_window_key(&tour));
+    let closed = serde_json::json!({ "tour": tour, "url": url.as_str() });
+    open_cockpit_window(&app, &label, url, "Tour · ORRERY".to_owned(), closed, x, y, width, height)
+}
+
+#[tauri::command]
+fn close_tour_window(app: AppHandle, window: WebviewWindow, tour: String) -> Result<(), String> {
+    if !tour_id_ok(&tour) {
+        return Err("invalid tour id".to_owned());
+    }
+    let origin = window.url().map_err(|error| error.to_string())?;
+    match app.get_webview_window(&pane_window_label(&origin, &tour_window_key(&tour))) {
+        Some(pane) => pane.close().map_err(|error| error.to_string()),
+        None => Ok(()),
+    }
+}
+
+// Whether this backend's window for the tour is still there: the cockpit asks
+// while the tour is out, in case a close notice went unheard.
+#[tauri::command]
+fn tour_window_exists(app: AppHandle, window: WebviewWindow, tour: String) -> Result<bool, String> {
+    if !tour_id_ok(&tour) {
+        return Err("invalid tour id".to_owned());
+    }
+    let origin = window.url().map_err(|error| error.to_string())?;
+    Ok(app
+        .get_webview_window(&pane_window_label(&origin, &tour_window_key(&tour)))
+        .is_some())
 }
 
 fn native_theme(preference: &str) -> Result<Option<Theme>, String> {
@@ -664,7 +753,10 @@ pub fn run() {
             set_native_color_theme,
             open_pane_window,
             focus_pane_window,
-            close_pane_window
+            close_pane_window,
+            open_tour_window,
+            close_tour_window,
+            tour_window_exists
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -806,6 +898,40 @@ mod tests {
         );
         assert!(pane_window_url(&Url::parse("https://example.com/cockpit.html").unwrap(), "a").is_err());
         assert!(pane_window_url(&Url::parse("tauri://localhost/index.html").unwrap(), "a").is_err());
+    }
+
+    #[test]
+    fn tour_window_url_carries_only_the_tour_and_ws() {
+        let origin = Url::parse("http://127.0.0.1:8791/cockpit.html?ws=ws://127.0.0.1:9/ws&solo=1&session=x#top").unwrap();
+        let url = tour_window_url(&origin, "first-flight").unwrap();
+        assert_eq!(url.path(), "/tour.html");
+        assert_eq!(url.fragment(), None);
+        let pairs: Vec<(String, String)> = url
+            .query_pairs()
+            .map(|(key, value)| (key.into_owned(), value.into_owned()))
+            .collect();
+        assert_eq!(
+            pairs,
+            vec![
+                ("tour".to_owned(), "first-flight".to_owned()),
+                ("ws".to_owned(), "ws://127.0.0.1:9/ws".to_owned()),
+            ]
+        );
+        assert!(tour_window_url(&origin, "").is_err());
+        assert!(tour_window_url(&origin, "a&solo=1").is_err());
+        assert!(tour_window_url(&origin, &"x".repeat(65)).is_err());
+        assert!(tour_window_url(&Url::parse("https://example.com/cockpit.html").unwrap(), "full-tour").is_err());
+    }
+
+    #[test]
+    fn tour_window_labels_never_meet_a_pane_label() {
+        let origin = Url::parse("http://127.0.0.1:8791/cockpit.html").unwrap();
+        let tour = pane_window_label(&origin, &tour_window_key("first-flight"));
+        assert!(tour.starts_with(PANE_WINDOW_PREFIX));
+        // A session literally named like the tour key is refused, so it cannot share the label.
+        assert!(!pane_session_ok(&tour_window_key("first-flight")));
+        assert_ne!(tour, pane_window_label(&origin, "first-flight"));
+        assert_ne!(tour, pane_window_label(&origin, &tour_window_key("full-tour")));
     }
 
     #[test]
