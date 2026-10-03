@@ -178,7 +178,7 @@ function mountChecklist(definition){
     listeners.forEach(fn=>fn());
   }
   // The app reports its windows closing; ours carries this tour and this backend's address.
-  let appWatch=null,appCloses=0;
+  let appWatch=null,appCloses=0,appOpenings=0;
   // Resolves true once the close notice is subscribed, false when it cannot be.
   function watchAppWindow(){
     if(appWatch)return appWatch;
@@ -197,11 +197,14 @@ function mountChecklist(definition){
     clearTimeout(appCheck);
     const invoke=appInvoke();
     if(!popped||!invoke||popup)return;
+    // An answer about an earlier opening of the window says nothing about this one.
+    const opening=appOpenings;
     appCheck=setTimeout(()=>{
-      if(!popped)return;
+      if(!popped||opening!==appOpenings)return;
       Promise.resolve().then(()=>invoke('tour_window_exists',{tour:id})).then(exists=>{
+        if(opening!==appOpenings)return;
         if(exists===false){popped=false;render();}else checkAppWindow();
-      },()=>checkAppWindow());
+      },()=>{if(opening===appOpenings)checkAppWindow();});
     },APP_CHECK_MS);
   }
   function show(){
@@ -221,9 +224,9 @@ function mountChecklist(definition){
       // arrive unheard; without that the panel stays rather than vanish for good.
       watchAppWindow().then(listening=>{
         if(!listening){appTourWindows=false;render();return;}
-        const closesBefore=appCloses;
+        const closesBefore=appCloses,opening=++appOpenings;
         return Promise.resolve().then(()=>invoke('open_tour_window',{tour:id,x:left,y:top,width,height})).then(()=>{
-          if(appCloses!==closesBefore)return; // closed while it was opening
+          if(appCloses!==closesBefore||opening!==appOpenings)return; // closed, or opened again, meanwhile
           popped=true;render();checkAppWindow();
         },error=>{
           // An older app without the command: keep the panel and stop offering windows.
