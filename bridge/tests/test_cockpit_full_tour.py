@@ -97,7 +97,7 @@ def test_drag_window_completion_waits_for_successful_creation(native, success, e
       globalThis.window={open:()=>WINDOW_RESULT};
       const paneWindowGeometry=()=>({}),paneWindowUrl=()=>'',paneWindowName=()=>'';
       const paneWindows=new Map(),showToast=()=>{},returnPaneSession=()=>{};
-    """.replace('WINDOW_RESULT', '{}' if success else 'null')
+    """.replace('WINDOW_RESULT', '({})' if success else 'null')
     script += 'const appInvoke=()=>'+('('+native_handler+')' if native else 'null')+';'
     script += function + """
       openPaneWindow('Pilot',{onOpened:()=>calls++});
