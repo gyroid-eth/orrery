@@ -213,7 +213,7 @@ MAP_LAYOUT = """new Promise(resolve=>{
     const boxes=[...notes,document.querySelector('.flight-map-title')].map(el=>el.getBoundingClientRect());
     const overlap=boxes.some((a,i)=>boxes.slice(i+1).some(b=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top));
     const leaders=[...document.querySelectorAll('.flight-map-leader')].map(path=>{
-      const step=OrreryTour.STEPS.find(s=>s.id===path.dataset.step);
+      const step=OrreryTour.MAP_NOTES.find(s=>s.id===path.dataset.step);
       const r=document.querySelector(step.target).getBoundingClientRect();
       const n=document.querySelector('.flight-map-note[data-step="'+step.id+'"]').getBoundingClientRect();
       const pts=path.getAttribute('d').match(/-?[0-9.]+/g).map(Number);
@@ -223,32 +223,55 @@ MAP_LAYOUT = """new Promise(resolve=>{
         fromTarget:x0>=r.left-6&&x0<=r.right+6&&y0>=r.top-6&&y0<=r.bottom+6,
         toNote:end.y>=n.top&&end.y<=n.bottom&&Math.min(Math.abs(end.x-n.left),Math.abs(end.x-n.right))<=14};
     });
-    resolve({count:notes.length,compact:map.classList.contains('compact'),overlap,leaders,
+    // Leaders are runs of horizontal and vertical segments; no two leaders may
+    // cross or run along each other.
+    const segments=[...document.querySelectorAll('.flight-map-leader')].map(path=>{
+      const parts=path.getAttribute('d').match(/[MHV][^MHV]*/g);let x=0,y=0;const out=[];
+      parts.forEach(part=>{const n=part.slice(1).split(',').map(Number);
+        if(part[0]==='M'){x=n[0];y=n[1];}
+        else if(part[0]==='H'){out.push([x,y,n[0],y]);x=n[0];}
+        else{out.push([x,y,x,n[0]]);y=n[0];}});
+      return out;
+    });
+    const within=(a,lo,hi)=>a>Math.min(lo,hi)+.5&&a<Math.max(lo,hi)-.5;
+    const meets=(a,b)=>{
+      const ah=a[1]===a[3],bh=b[1]===b[3];
+      if(ah&&!bh)return within(b[0],a[0],a[2])&&within(a[1],b[1],b[3]);
+      if(!ah&&bh)return within(a[0],b[0],b[2])&&within(b[1],a[1],a[3]);
+      if(ah&&bh)return Math.abs(a[1]-b[1])<1.5&&Math.min(Math.max(a[0],a[2]),Math.max(b[0],b[2]))-Math.max(Math.min(a[0],a[2]),Math.min(b[0],b[2]))>.5;
+      return Math.abs(a[0]-b[0])<1.5&&Math.min(Math.max(a[1],a[3]),Math.max(b[1],b[3]))-Math.max(Math.min(a[1],a[3]),Math.min(b[1],b[3]))>.5;
+    };
+    const crossings=[];
+    segments.forEach((one,i)=>segments.slice(i+1).forEach((other,j)=>{
+      if(one.some(a=>other.some(b=>meets(a,b))))crossings.push([leaders[i].id,leaders[i+1+j].id]);
+    }));
+    resolve({count:notes.length,compact:map.classList.contains('compact'),overlap,leaders,crossings,
       frames:document.querySelectorAll('.flight-map-frame').length,
       within:boxes.every(r=>r.left>=0&&r.right<=innerWidth),
       vertically:map.classList.contains('compact')||boxes.every(r=>r.top>=0&&r.bottom<=innerHeight),
-      copy:notes.every(n=>n.querySelector('p').textContent===OrreryTour.STEPS.find(s=>s.id===n.dataset.step).copy)});
+      copy:notes.every(n=>n.querySelector('p').textContent===OrreryTour.MAP_NOTES.find(s=>s.id===n.dataset.step).copy)});
   }));
 })"""
 
 
-@pytest.mark.parametrize('width,height', [(1600, 1000), (1440, 900), (1280, 800)])
+@pytest.mark.parametrize('width,height', [(1920, 1080), (1600, 1000), (1440, 900)])
 def test_dom_map_annotates_every_control_with_a_leader(tour_browser, width, height):
     client, evaluate = tour_browser
     client.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=1, mobile=False)
     result = evaluate(MAP_LAYOUT)
     assert result['compact'] is False, result
-    assert (result['count'], result['frames'], result['overlap'], result['within'], result['vertically'], result['copy']) == (7, 7, False, True, True, True)
-    assert sorted(l['id'] for l in result['leaders']) == sorted(['start', 'choose', 'talk', 'mail', 'telemetry', 'planetarium', 'settings'])
+    assert (result['count'], result['frames'], result['overlap'], result['within'], result['vertically'], result['copy']) == (10, 10, False, True, True, True)
+    assert sorted(l['id'] for l in result['leaders']) == sorted(['start', 'select', 'choose', 'talk', 'mail', 'crew', 'usage', 'telemetry', 'planetarium', 'settings'])
     assert all(l['fromTarget'] and l['toNote'] for l in result['leaders']), result['leaders']
+    assert result['crossings'] == [], result['crossings']
 
 
-@pytest.mark.parametrize('width,height', [(1100, 700), (980, 800), (420, 800)])
+@pytest.mark.parametrize('width,height', [(1280, 800), (1100, 700), (980, 800), (420, 800)])
 def test_dom_map_falls_back_to_a_legend_when_leaders_do_not_fit(tour_browser, width, height):
     client, evaluate = tour_browser
     client.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=1, mobile=False)
     result = evaluate(MAP_LAYOUT)
-    assert (result['compact'], result['count'], result['leaders'], result['overlap'], result['within'], result['copy']) == (True, 7, [], False, True, True)
+    assert (result['compact'], result['count'], result['leaders'], result['overlap'], result['within'], result['copy']) == (True, 10, [], False, True, True)
 
 
 def test_dom_map_click_anywhere_closes_but_legend_scrolls(tour_browser):
