@@ -476,6 +476,19 @@ fn close_tour_window(app: AppHandle, window: WebviewWindow, tour: String) -> Res
     }
 }
 
+// Whether this backend's window for the tour is still there: the cockpit asks
+// while the tour is out, in case a close notice went unheard.
+#[tauri::command]
+fn tour_window_exists(app: AppHandle, window: WebviewWindow, tour: String) -> Result<bool, String> {
+    if !tour_id_ok(&tour) {
+        return Err("invalid tour id".to_owned());
+    }
+    let origin = window.url().map_err(|error| error.to_string())?;
+    Ok(app
+        .get_webview_window(&pane_window_label(&origin, &tour_window_key(&tour)))
+        .is_some())
+}
+
 fn native_theme(preference: &str) -> Result<Option<Theme>, String> {
     match preference {
         "dark" => Ok(Some(Theme::Dark)),
@@ -742,7 +755,8 @@ pub fn run() {
             focus_pane_window,
             close_pane_window,
             open_tour_window,
-            close_tour_window
+            close_tour_window,
+            tour_window_exists
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
