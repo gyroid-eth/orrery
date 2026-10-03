@@ -196,3 +196,67 @@ def test_dom_map_cards_are_readable_and_do_not_overlap(tour_browser, width, heig
       }));
     })""")
     assert result == {'count': 7, 'overlap': False, 'within': True, 'copy': True, 'vertically': True}
+
+
+@pytest.mark.parametrize('outcome', ['success', 'local-reject', 'remote-reject', 'noop', 'busy'])
+def test_profile_notifies_only_after_a_successful_commit(outcome):
+    source = (BRIDGE / 'cockpit.html').read_text()
+    commit = re.search(r'function commitThemeValuesTransaction\(transaction\)\{.*?(?=\nasync function setThemeProfile)', source, re.S).group()
+    profile = re.search(r'async function setThemeProfile\(candidate,.*?(?=\nfunction setThemeAxis)', source, re.S).group()
+    result = node(f"const outcome={json.dumps(outcome)};" + """
+      const events=[];const document={dispatchEvent:e=>events.push(e.type)};
+      class CustomEvent{constructor(type,v){this.type=type;this.detail=v.detail;}}
+      let themeAxisState={values:{'small-text':null}};
+      let themeAxisCommittedState={values:{'small-text':null}};
+      let themeProfilePending=outcome==='busy',themeProfileRecovery=false;
+      let themeAxisTransactionActive=false,themeProfileLastCandidateMeasurement,themeProfileLastTelemetryOutcome;
+      function normalizeThemeAxisState(state){return {values:{...state.values}};}
+      function themeAxisStrictProfileValues(values){return values;}
+      function themeAxisValuesEqual(a,b){return JSON.stringify(a)===JSON.stringify(b);}
+      function beginThemeValuesTransaction(values){
+        const previousState=normalizeThemeAxisState(themeAxisState);
+        themeAxisState={values};
+        document.dispatchEvent(new CustomEvent('oc:theme-axis',{detail:{values}}));
+        if(outcome==='local-reject')themeAxisState=previousState;
+        return {ok:outcome!=='local-reject',transaction:{previousState,reason:'fixture'}};
+      }
+      async function requestTelemetryThemeProfile(){return {ok:outcome!=='remote-reject',rollbackVerified:true};}
+      function restoreThemeValuesTransaction(tx){themeAxisState=tx.previousState;}
+      function showToast(){}function setTelemetryThemeProfileReports(){}
+      function appendThemeAxisHistory(){}function persistThemeAxisExperiment(){}
+      function finishThemeAxisSettledTransaction(){}function paintThemeAxisControls(){}
+      function activeThemeAxes(){return [];}
+    """ + commit + profile + """
+      setThemeProfile({'small-text':outcome==='noop'?null:1}).then(ok=>console.log(JSON.stringify({
+        ok,events,committed:themeAxisCommittedState.values['small-text']})));
+    """)
+    assert ('oc:theme-profile-committed' in result['events']) is (outcome == 'success')
+    assert result['committed'] == (1 if outcome == 'success' else None)
+    assert result['ok'] is (outcome in {'success', 'noop'})
+
+
+def test_dom_real_profile_button_completion_and_rejection(tour_browser):
+    _, evaluate = tour_browser
+    result = evaluate("""(async()=>{
+      for(const id of ['start','choose','talk','mail','telemetry','planetarium'])
+        document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id}}));
+      const button=document.querySelector('[data-theme-axis-level="small-text"][data-theme-axis-value="1"]');
+      // Keep the real click handler, setThemeProfile and commit function. Only
+      // the local/remote acceptance stages are fixtures (coverage depends on
+      // the browser's external fonts and styles).
+      beginThemeValuesTransaction=values=>({ok:false,transaction:{reason:'fixture rejection'}});
+      button.click();await new Promise(resolve=>setTimeout(resolve,0));
+      const rejected=!OrreryTour.state.done.has('settings');
+      document.dispatchEvent(new CustomEvent('oc:theme-axis',{detail:{values:{'small-text':1}}}));
+      const provisional=!OrreryTour.state.done.has('settings');
+      beginThemeValuesTransaction=values=>{
+        const previousState=normalizeThemeAxisState(themeAxisState);
+        themeAxisState=themeProfileStateAfter(values,new Date().toISOString());
+        return {ok:true,transaction:{previousState,endSettledTransaction:()=>{},settledFinished:false}};
+      };
+      requestTelemetryThemeProfile=async()=>({ok:true});
+      button.click();await new Promise(resolve=>setTimeout(resolve,0));
+      return {rejected,provisional,committed:themeAxisCommittedState.values['small-text'],
+        marked:OrreryTour.state.done.has('settings'),done:OrreryTour.state.done.size};
+    })()""")
+    assert result == {'rejected': True, 'provisional': True, 'committed': 1, 'marked': True, 'done': 7}

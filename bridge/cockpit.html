@@ -4463,9 +4463,9 @@
       }
     }
   },
-  "inventory_digest": "dc965d9b287df08f32feaf716d8d03dec22d62b9d4061761241888cf754ee42d",
+  "inventory_digest": "d5f98652077ee724394b471779476575c134aaf1939d0a4dd928fb3538188b75",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "64b3d82ea4717d2908b0bb6c14b74fb7670ad8ed54223acdbc5ff48edb33e151",
+  "source_digest": "1b66e07af3b366935f256ef08c905f6928c3b26d63f30a87b37356d82a76afc3",
   "surface": "cockpit",
   "version": 1
 }
@@ -6571,6 +6571,11 @@ function commitThemeValuesTransaction(transaction){
   themeAxisCommittedState=normalizeThemeAxisState(themeAxisState);
   appendThemeAxisHistory();persistThemeAxisExperiment();
   themeAxisTransactionActive=false;finishThemeAxisSettledTransaction(transaction);paintThemeAxisControls();
+  // Provisional application and rollback also emit oc:theme-axis. Notify help
+  // only after the guarded transaction has committed successfully.
+  document.dispatchEvent(new CustomEvent('oc:theme-profile-committed',{
+    detail:{values:{...themeAxisCommittedState.values}},
+  }));
 }
 async function setThemeProfile(candidate,{clock={},localOptions={}}={}){
   if(themeProfilePending||themeProfileRecovery)return false;

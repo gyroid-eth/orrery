@@ -139,6 +139,7 @@ function mount(){
     if(event.key==='Escape'&&state.map){event.preventDefault();event.stopImmediatePropagation();hideMap();}
   },true);
   doc.addEventListener('oc:tour-action',event=>{if(state.mark(event.detail&&event.detail.id))render();});
+  doc.addEventListener('oc:theme-profile-committed',()=>{if(state.mark('settings'))render();});
   doc.getElementById('mail').addEventListener('click',()=>{if(state.mark('mail'))render();});
   settings.addEventListener('change',event=>{if(event.target.matches('input,select,textarea')&&state.mark('settings'))render();});
   // Sliders apply on input rather than waiting for a change event.
