@@ -4463,9 +4463,9 @@
       }
     }
   },
-  "inventory_digest": "d5f98652077ee724394b471779476575c134aaf1939d0a4dd928fb3538188b75",
+  "inventory_digest": "bd7a1da259ee31ace6e42f3aa401b3e78288573d77822b06643b1f00039ad859",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "1b66e07af3b366935f256ef08c905f6928c3b26d63f30a87b37356d82a76afc3",
+  "source_digest": "2fe3644960a3ae63f50e38bd201f44733ce98afd9ddc45704fec7aeafda80f06",
   "surface": "cockpit",
   "version": 1
 }
@@ -7431,6 +7431,7 @@ function finishSplitLabelDrag(event,{cancel=false}={}){
   if(shouldSwap){
     replaceSplitSessions(swapSplitMembers(splitSessions,drag.session,targetSession));
     renderStage();showToast(`SPLIT · ${drag.session} ↔ ${targetSession}`);
+    emitFullTourAction('full-drag');
     return true;
   }
   if(!cancel&&!drag.started&&event&&event.type==='pointerup'){
@@ -7495,6 +7496,10 @@ function ensureSplitCell(session){
   cell._empty=empty;cell._close=close;cell._role=lrole;
   splitCells.set(session,cell);return cell;
 }
+let fullTourSplitPending=false;
+function emitFullTourAction(id){
+  document.dispatchEvent(new CustomEvent('oc:full-tour-action',{detail:{id}}));
+}
 function renderStage({fit=true}={}){
   const members=splitVisible?splitSessions.slice():[];
   const oldCountClasses=[...stageEl.classList].filter(name=>name.startsWith('split-count-'));
@@ -7556,6 +7561,10 @@ function renderStage({fit=true}={}){
   panes.forEach(paintPaneBottomJump);
   refreshSplitDecorations();
   if(fit)queueStageFit(activeId);
+  if(fullTourSplitPending&&splitVisible&&members.length>=2&&
+     members.every(session=>splitCells.get(session)?.querySelector('.termhost.on'))){
+    fullTourSplitPending=false;emitFullTourAction('full-split');
+  }
 }
 function paintPendingSession(session){
   scrName.textContent=session;scrPath.textContent='waiting for terminal panes';
@@ -7639,6 +7648,7 @@ function toggleSplitSession(session,{forceFocus=false}={}){
   }
   replaceSplitSessions(result.members);
   if(result.action==='added'){
+    fullTourSplitPending=true;
     manualDetached.delete(session);splitVisible=true;focusedSplitSession=session;
     const paneId=paneIdForSession(session);
     if(paneId)setActive(paneId,'split',{forceFocus});
@@ -8096,7 +8106,7 @@ function jumpToSessionTarget(name,{forceFocus=false}={}){
 }
 function jumpToAgent(name,event=null){
   selectAgent(name);
-  document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'choose'}}));
+  document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'choose',name}}));
   if(isSplitToggle(event)){
     if(event&&typeof event.preventDefault==='function')event.preventDefault();
     toggleSplitSession(name,{forceFocus:Boolean(event&&event.isTrusted)});return;
@@ -8447,18 +8457,37 @@ function restorePendingPaneDraft(session){
   }
 }
 document.addEventListener('oc:focus-agent',event=>restorePendingPaneDraft(event.detail&&event.detail.name));
+const pendingPaneFocus=new Map();
+function notifyPaneFocus(session,entry){
+  if(paneWindows.get(session)!==entry)return;
+  pendingPaneFocus.delete(session);
+  document.dispatchEvent(new CustomEvent('oc:tour-focus',{detail:{name:session}}));
+}
+function acknowledgePaneFocus(msg){
+  if(!paneMessageInScope(msg,paneScope)||msg.type!=='focused')return;
+  const pending=pendingPaneFocus.get(msg.session),entry=paneWindows.get(msg.session);
+  if(!pending||pending.entry!==entry||entry.kind!=='window'||!entry.instance
+    ||entry.instance!==msg.id||pending.request!==msg.request)return;
+  notifyPaneFocus(msg.session,entry);
+}
 function focusPaneWindow(session){
   const entry=paneWindows.get(session);if(!entry)return false;
-  if(entry.kind==='float'&&entry.el){raisePaneFloat(entry.el);return true;}
-  if(entry.win&&!entry.win.closed){try{entry.win.focus();return true;}catch(_){/* fall through */}}
+  if(entry.kind==='float'&&entry.el){raisePaneFloat(entry.el);notifyPaneFocus(session,entry);return true;}
+  if(entry.win&&!entry.win.closed){try{entry.win.focus();notifyPaneFocus(session,entry);return true;}catch(_){/* fall through */}}
+  const fallback=()=>{
+    if(paneWindows.get(session)!==entry)return;
+    const request=crypto.randomUUID();
+    pendingPaneFocus.set(session,{entry,request});
+    postPaneMessage({type:'focus',session,request});
+  };
   const invoke=appInvoke();
-  if(invoke){invoke('focus_pane_window',{session}).catch(()=>postPaneMessage({type:'focus',session}));return true;}
-  postPaneMessage({type:'focus',session});
+  if(invoke){invoke('focus_pane_window',{session}).then(()=>notifyPaneFocus(session,entry)).catch(fallback);return true;}
+  fallback();
   return true;
 }
 
 /* own window: a Tauri window in the app, a popup in a browser */
-function openPaneWindow(session,{screenX,screenY,width,height}={}){
+function openPaneWindow(session,{screenX,screenY,width,height,onOpened}={}){
   const geometry=paneWindowGeometry({
     screenX,screenY,width:width||760,height:height||540,
     availLeft:Number(screen.availLeft)||0,availTop:Number(screen.availTop)||0,
@@ -8467,6 +8496,7 @@ function openPaneWindow(session,{screenX,screenY,width,height}={}){
   const invoke=appInvoke();
   if(invoke){
     invoke('open_pane_window',{session,x:geometry.left,y:geometry.top,width:geometry.width,height:geometry.height})
+      .then(()=>{if(onOpened)onOpened();})
       .catch(error=>{
         showToast(`WINDOW FAILED · ${String(error&&error.message||error)}`,true);
         if(paneWindows.get(session)?.kind==='window')returnPaneSession(session,{close:false});
@@ -8476,6 +8506,7 @@ function openPaneWindow(session,{screenX,screenY,width,height}={}){
   const features=`popup=yes,width=${geometry.width},height=${geometry.height},left=${geometry.left},top=${geometry.top}`;
   let win=null;
   try{win=window.open(paneWindowUrl(location.href,session),paneWindowName(paneScope,session),features);}catch(_){win=null;}
+  if(win&&onOpened)onOpened();
   return win?{win}:null;
 }
 function popSessionToWindow(session,geometry){
@@ -8549,7 +8580,8 @@ function openPaneFloat(session,{clientX,clientY}={}){
   bar.addEventListener('pointerdown',event=>{
     if(event.button!==0||event.target.closest('button'))return;
     event.preventDefault();
-    move={pointerId:event.pointerId,dx:event.clientX-el.offsetLeft,dy:event.clientY-el.offsetTop};
+    move={pointerId:event.pointerId,dx:event.clientX-el.offsetLeft,dy:event.clientY-el.offsetTop,
+      left:el.offsetLeft,top:el.offsetTop};
     try{bar.setPointerCapture(event.pointerId);}catch(_){}
     el.classList.add('moving');
   });
@@ -8562,14 +8594,16 @@ function openPaneFloat(session,{clientX,clientY}={}){
   });
   const finish=(event,cancel)=>{
     if(!move||event.pointerId!==move.pointerId)return;
-    move=null;el.classList.remove('moving','leaving');hint.textContent='drag out → own window';
+    const start=move;move=null;el.classList.remove('moving','leaving');hint.textContent='drag out → own window';
     const r=el.getBoundingClientRect();
     if(!cancel&&pointerLeftViewport(event.clientX,event.clientY,innerWidth,innerHeight)){
-      if(popSessionToWindow(session,{screenX:event.screenX,screenY:event.screenY,width:r.width,height:r.height-30}))return;
+      if(popSessionToWindow(session,{screenX:event.screenX,screenY:event.screenY,width:r.width,height:r.height-30,
+        onOpened:()=>emitFullTourAction('full-drag')}))return;
       showToast('POPUP BLOCKED · allow popups for the cockpit',true);
     }
     const next=clampFloatRect({left:r.left,top:r.top,width:r.width,height:r.height},innerWidth,innerHeight);
     el.style.left=next.left+'px';el.style.top=next.top+'px';
+    if(!cancel&&Math.hypot(next.left-start.left,next.top-start.top)>=5)emitFullTourAction('full-drag');
   };
   bar.addEventListener('pointerup',event=>finish(event,false));
   bar.addEventListener('pointercancel',event=>finish(event,true));
@@ -8617,11 +8651,16 @@ function endPaneTabDrag(event,{cancel=false}={}){
   if(cancel||!event)return;
   const target=paneDropTarget(event);
   if(target==='window'){
-    if(popSessionToWindow(drag.session,{screenX:event.screenX,screenY:event.screenY}))return;
+    if(popSessionToWindow(drag.session,{screenX:event.screenX,screenY:event.screenY,
+      onOpened:()=>emitFullTourAction('full-drag')}))return;
     showToast('POPUP BLOCKED · floating it over the cockpit instead',true);
-    openPaneFloat(drag.session,{});return;
+    openPaneFloat(drag.session,{});
+    if(paneWindows.get(drag.session)?.kind==='float')emitFullTourAction('full-drag');return;
   }
-  if(target==='float')openPaneFloat(drag.session,{clientX:event.clientX,clientY:event.clientY});
+  if(target==='float'){
+    openPaneFloat(drag.session,{clientX:event.clientX,clientY:event.clientY});
+    if(paneWindows.get(drag.session)?.kind==='float')emitFullTourAction('full-drag');
+  }
 }
 function paneTabDragJustEnded(label){
   return Date.now()-(label._paneDragEndedAt||0)<350;
@@ -8642,10 +8681,11 @@ if(paneChannel)paneChannel.addEventListener('message',event=>{
     if(msg.type==='hello'){postPaneMessage({type:'open',session:soloSession,embedded:paneEmbedded});return;}
     if(msg.session!==soloSession||paneEmbedded)return;
     if(msg.type==='close')closeThisPaneWindow();
-    else if(msg.type==='focus'){try{window.focus();}catch(_){/* the OS decides */}}
+    else if(msg.type==='focus'){try{window.focus();postPaneMessage({type:'focused',session:soloSession,request:msg.request});}catch(_){/* no success acknowledgement */}}
     return;
   }
   if(msg.type==='open'&&msg.embedded)return; /* another cockpit's floating pane */
+  if(msg.type==='focused'){acknowledgePaneFocus(msg);return;}
   const entry=paneWindows.get(msg.session);
   switch(paneWindowMessageEffect(entry,msg)){
     case 'adopt':
@@ -8885,7 +8925,7 @@ async function pollUsage(force){
   if(document.getElementById('usagePopover').matches(':popover-open'))renderUsagePopover();
 }
 document.getElementById('usagePopover').addEventListener('toggle',e=>{
-  if(e.newState==='open'){renderUsagePopover();pollUsage(false);}});
+  if(e.newState==='open'){renderUsagePopover();pollUsage(false);emitFullTourAction('full-usage');}});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)pollUsage(false);});
 /* a pane window shows one terminal: no usage, lineage or mail polling there */
 if(!soloSession){pollUsage(false);setInterval(()=>{if(!document.hidden)pollUsage(false);},USAGE_POLL_MS);}
@@ -10115,8 +10155,10 @@ window.addEventListener('message',e=>{
     if(!themeProfileRecovery&&!themeProfilePending)postThemeAxesToTelemetry();
     return;
   }
-  if(d&&d.type==='orrery-jump'&&typeof d.name==='string'&&d.name){
-    closeNetwork();jumpToAgent(d.name);
+  if(e.source===networkFrame.contentWindow&&d&&d.type==='orrery-jump'&&typeof d.name==='string'&&d.name){
+    closeNetwork();
+    document.dispatchEvent(new CustomEvent('oc:telemetry-return',{detail:{name:d.name}}));
+    jumpToAgent(d.name);
   }
   // NEW AGENT inside the embed opens the cockpit's own spawn modal —
   // one modal to maintain, and it already knows the catalog + name picker.
@@ -10289,7 +10331,7 @@ function sendPrompt(opts){
   if(!send({type:"input",paneId:activeId,data:"\x1b[200~"+text+"\x1b[201~"})){showToast('not connected — try again');return;}
   setTimeout(()=>{
     if(send({type:"input",paneId:activeId,data:"\r"}))
-      document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'talk'}}));
+      document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'talk',name:p.session}}));
   },250);
   pushPromptHistory(text);
   promptInput.value='';saveDraft();closeSlashMenu();
@@ -10633,5 +10675,6 @@ kickPolls();
 <script src="orrery_view.js"></script>
 <script src="mail_view.js"></script>
 <script src="cockpit_tour.js"></script>
+<script src="cockpit_full_tour.js"></script>
 </body>
 </html>
