@@ -1,45 +1,94 @@
-/* Uses the cockpit palette so both color themes have the same readable help. */
+/* Tour checklists and the help map share the cockpit palette, Fraunces and
+   IBM Plex Mono, and one accent; structure comes from rules and space, not boxes. */
 .flight-guide,.flight-map{font-family:var(--mono);color:var(--ink)}
 .flight-guide[hidden],.flight-map[hidden]{display:none!important}
-.flight-guide{position:fixed;z-index:90;top:68px;right:12px;bottom:12px;width:300px;background:var(--panel);border:1px solid rgb(var(--theme-local-rgb)/.5);border-radius:12px;display:flex;flex-direction:column;box-shadow:0 12px 35px rgb(0 0 0/.16)}
-.flight-head{display:flex;align-items:center;justify-content:space-between;padding:19px 17px 13px;gap:8px}
-.flight-kicker{font-size:9px;letter-spacing:.14em;color:var(--ln-local)}
-.flight-head h2{font-family:var(--serif);font-size:23px;font-weight:500;margin:5px 0 0}
-.flight-close{border:1px solid var(--hair);border-radius:6px;background:var(--panel-2);color:var(--ink);font-size:21px;line-height:1;width:30px;height:30px;flex-shrink:0;cursor:pointer}
-.flight-close:focus-visible,.flight-read:focus-visible,.flight-restart:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
-.flight-status{font-size:10px;line-height:1.5;color:var(--ink-dim);padding:0 17px}
-.flight-progress{appearance:none;width:calc(100% - 34px);height:4px;margin:11px 17px 14px;border:0;border-radius:9px;background:var(--elev)}
-.flight-progress::-webkit-progress-bar{background:var(--elev);border-radius:9px}
-.flight-progress::-webkit-progress-value{background:var(--ln-local);border-radius:9px}
-.flight-progress::-moz-progress-bar{background:var(--ln-local);border-radius:9px}
-.flight-steps{margin:0;padding:0 12px 12px;list-style:none;overflow-y:auto;min-height:0;flex:1}
-.flight-steps li{display:flex;align-items:start;gap:10px;padding:12px 5px;border-top:1px solid var(--hair)}
-.flight-steps li.current{background:var(--panel-2);border:1px solid rgb(var(--theme-local-rgb)/.5);border-radius:8px;padding:12px 9px}
-.flight-number{width:24px;height:24px;display:grid;place-items:center;flex-shrink:0;border:1px solid var(--hair);border-radius:50%;font-size:11px;color:var(--ink-dim)}
-.flight-steps .done .flight-number{background:var(--ln-local);color:var(--bg);border-color:var(--ln-local)}
-.flight-steps .current .flight-number{color:var(--ln-local);border-color:var(--ln-local)}
-.flight-steps h3{font-size:12px;margin:2px 0 6px;font-weight:500;color:var(--ink)}
-.flight-steps p{font-size:11px;line-height:1.55;color:var(--ink-dim);margin:0}
-.flight-read,.flight-restart{border:0;background:none;color:var(--ln-local);cursor:pointer;font-size:10px;padding:0}
-.flight-read{margin-top:12px}.flight-read[hidden]{display:none}
-.flight-footer{border-top:1px solid var(--hair);padding:12px 17px;display:flex;justify-content:space-between;gap:10px;font-size:9px;color:var(--ink-dim)}
-.flight-target{outline:2px solid rgb(var(--theme-local-rgb)/.8);outline-offset:-2px}
-.flight-settings{margin-bottom:19px}.flight-settings-actions{display:flex;flex-wrap:wrap;gap:8px}
-@media(min-width:1450px){body.flight-open .app{width:calc(100% - 324px)}}
-@media(max-width:1449px){
-  .flight-guide{top:auto;left:12px;right:12px;bottom:12px;width:auto;height:240px}
-  body.flight-open .app{height:calc(100vh - 256px)}
-  .flight-head{padding:12px 17px 8px}.flight-head h2{font-size:19px;margin-top:3px}
-  .flight-kicker{display:none}.flight-progress{margin:7px 17px}.flight-steps{padding-bottom:10px}
-  .flight-footer{padding:9px 17px}
+.flight-guide button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+.flight-guide button:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+/* Docked on the right edge above the overlays (Telemetry included), below toasts. */
+.flight-guide{position:fixed;z-index:1150;right:0;bottom:0;width:318px;box-sizing:border-box;
+  background:var(--panel);border-left:1px solid var(--hair)}
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  /* Frosted: the cockpit (Agent Mail, usually) stays visible through the panel. */
+  .flight-guide{background:color-mix(in srgb,var(--panel) 58%,transparent);
+    -webkit-backdrop-filter:blur(5px) saturate(1.1);backdrop-filter:blur(5px) saturate(1.1)}
+  html[data-color-theme="light"] .flight-guide{background:color-mix(in srgb,var(--panel) 64%,transparent)}
 }
-.flight-map{position:fixed;inset:0;z-index:1050;pointer-events:none}
-.flight-map-head{position:absolute;z-index:3;right:14px;top:61px;display:flex;align-items:center;gap:18px;padding:11px 14px;background:var(--panel);border:1px solid var(--hair);border-radius:8px;pointer-events:auto;box-shadow:0 8px 24px rgb(0 0 0/.2)}
-.flight-map-head b{display:block;font-size:12px;font-weight:500}.flight-map-head span{display:block;font-size:10px;color:var(--ink-dim);margin-top:5px}
-.flight-map-card{position:absolute;z-index:2;width:230px;padding:14px 15px;background:var(--panel-2);border:1px solid rgb(var(--theme-remote-rgb)/.55);border-radius:9px;box-shadow:0 9px 26px rgb(0 0 0/.18);pointer-events:auto}
-.flight-map-card h3{font-size:11px;color:var(--ln-remote);margin:0 0 8px;font-weight:500;letter-spacing:.06em}
-.flight-map-card p{font-size:12px;line-height:1.55;margin:0;color:var(--ink)}
-.flight-map-marker{position:absolute;z-index:1;width:23px;height:23px;display:grid;place-items:center;border-radius:50%;background:var(--ln-remote);color:var(--bg);font-size:12px;font-weight:600;box-shadow:0 0 0 2px var(--panel);pointer-events:none}
-.flight-map.compact .flight-map-cards{position:absolute;right:14px;top:139px;bottom:14px;width:min(360px,calc(100vw - 28px));overflow-y:auto;pointer-events:auto;display:flex;flex-direction:column;gap:10px;padding:4px;background:var(--panel);border:1px solid var(--hair);border-radius:10px}
-.flight-map.compact .flight-map-card{position:static!important;width:auto;flex-shrink:0;box-shadow:none}
-@media(max-width:680px){.flight-map-head{left:14px;justify-content:space-between}.flight-map.compact .flight-map-cards{width:calc(100vw - 28px)}}
+.flight-guide:not(.folded){top:53px;display:flex;flex-direction:column}
+.flight-guide.placed{right:auto;bottom:auto;border:1px solid var(--hair)}
+.flight-guide.placed:not(.folded){max-height:calc(100vh - 24px)}
+.flight-guide.dragging{opacity:.92;cursor:grabbing;user-select:none}
+.flight-guide.leaving{outline:1px dashed var(--amber);outline-offset:4px;opacity:.7}
+.flight-panel{display:flex;flex-direction:column;min-height:0;flex:1}
+.flight-guide.folded .flight-panel{display:none}
+/* Folded: one printed line, "Read Agent Mail …… now   3 / 7". */
+.flight-band{display:flex;align-items:baseline;gap:8px;width:100%;height:44px;box-sizing:border-box;
+  padding:0 18px!important;border-top:1px solid var(--amber)!important;text-align:left;cursor:grab!important}
+.flight-guide:not(.folded) .flight-band{display:none}
+.flight-band .flight-item{font:italic 400 18px var(--serif);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.flight-band .flight-response{color:var(--amber);font-size:11px}
+.flight-band .flight-count{color:var(--ink-dim);font-size:11px;margin-left:6px;white-space:nowrap}
+.flight-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:22px 22px 0;cursor:grab}
+.flight-guide.solo .flight-head{cursor:default}
+.flight-head h2{font:400 24px/1.1 var(--serif);margin:0}
+.flight-controls{display:flex;gap:14px;align-items:baseline;color:var(--ink-dim);font-size:11px}
+.flight-controls button:hover{color:var(--ink)}
+.flight-controls .flight-close{font-size:19px;line-height:1}
+.flight-controls [hidden]{display:none}
+.flight-meta{display:flex;justify-content:space-between;margin:14px 22px 0;padding-bottom:10px;border-bottom:1px solid var(--ink);font-size:11px;color:var(--ink-dim)}
+.flight-meta .flight-count{color:var(--ink)}
+.flight-status{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.flight-steps{list-style:none;margin:6px 22px 0;padding:0 0 0 14px;overflow-y:auto;min-height:0;flex:1}
+.flight-steps li{position:relative;padding:11px 0;border-bottom:1px dashed var(--hair)}
+.flight-line{display:flex;align-items:baseline;gap:8px;font-size:12.5px}
+.flight-leader{flex:1;min-width:12px;border-bottom:1px dotted var(--ink-faint);transform:translateY(-3px)}
+.flight-band .flight-leader{border-color:color-mix(in srgb,var(--amber) 55%,transparent)}
+.flight-response{font-size:11px;min-width:30px;text-align:right}
+.flight-steps li.done .flight-item,.flight-steps li.done .flight-response{color:var(--ink-dim)}
+.flight-steps li p,.flight-steps li .flight-read{display:none}
+.flight-steps li.current{padding:16px 0 18px}
+.flight-steps li.current::before{content:"";position:absolute;left:-12px;top:14px;bottom:16px;width:2px;background:var(--amber)}
+.flight-steps li.current .flight-item{font:italic 400 19px var(--serif);color:var(--ink)}
+.flight-steps li.current .flight-response{color:var(--amber)}
+.flight-steps li.current .flight-leader{border-color:color-mix(in srgb,var(--amber) 55%,transparent)}
+.flight-steps li.current p{display:block;font-size:12px;line-height:1.65;margin:10px 0 0}
+.flight-steps li.current .flight-read:not([hidden]){display:inline-block;margin-top:12px;font-size:11px;color:var(--amber);border-bottom:1px solid var(--amber)}
+.flight-footer{display:flex;justify-content:space-between;gap:10px;padding:14px 22px 18px;font-size:10.5px;color:var(--ink-dim);border-top:1px solid var(--hair)}
+.flight-restart{color:var(--amber)!important}
+.flight-target{outline:2px solid rgb(var(--theme-accent-rgb)/.8);outline-offset:-2px}
+.flight-settings{margin-bottom:19px}.flight-settings-actions{display:flex;flex-wrap:wrap;gap:8px}
+/* Narrow screens: always the default place, a bottom sheet when open. */
+@media(max-width:719px){
+  .flight-guide{left:0;width:auto}
+  .flight-guide:not(.folded){top:auto;max-height:60vh}
+  .flight-popout{display:none}
+}
+/* A tour in its own window: the checklist fills it and the cockpit stays hidden. */
+html.tour-window body>*:not(.flight-guide):not(.flight-missing){display:none!important}
+.flight-missing{margin:0;padding:28px 22px;font:12px/1.65 var(--mono);color:var(--ink-dim)}
+html.tour-window .flight-guide{inset:0;width:auto;max-height:none;border:0;background:var(--panel);backdrop-filter:none;-webkit-backdrop-filter:none}
+.flight-map{position:fixed;inset:0;z-index:1050;cursor:default}
+/* Help map: an annotated drawing of the cockpit. Gold corner ticks frame each
+   control, hairline leaders carry its note into the empty terminal area; no cards. */
+.flight-map-art{position:absolute;inset:0;pointer-events:none}
+.flight-map-veil{fill:color-mix(in srgb,var(--bg) 68%,transparent)}
+.flight-map-frame{fill:none;stroke:var(--amber);stroke-width:1.4}
+.flight-map-leader{fill:none;stroke:color-mix(in srgb,var(--amber) 75%,transparent);stroke-width:1}
+.flight-map-dot{fill:var(--amber)}
+.flight-map-note,.flight-map-title{position:absolute;margin:0;text-shadow:0 0 3px var(--bg),0 0 8px var(--bg)}
+.flight-map-note h3,.flight-map-title b{display:block;margin:0;font:italic 500 18px/1.25 var(--serif);color:var(--ink)}
+.flight-map-note p{margin:5px 0 0;font-size:12px;line-height:1.6;color:color-mix(in srgb,var(--ink) 84%,var(--bg))}
+.flight-map-title b{font-size:23px;font-weight:400;color:var(--amber)}
+.flight-map-title span{display:block;margin-top:7px;font-size:11px;color:var(--ink-dim)}
+.flight-map-close{margin-top:10px;padding:0 0 1px;border:0;border-bottom:1px solid color-mix(in srgb,var(--amber) 55%,transparent);background:none;color:var(--amber);font:11px var(--mono);cursor:pointer}
+.flight-map-close:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+/* Right-hand notes read toward their leader. */
+.flight-map-note.end{text-align:right}
+/* Compact: too little room for leaders, so the notes become a legend beside the framed controls. */
+.flight-map.compact{display:flex;flex-direction:column;align-items:flex-end;padding:64px 14px 14px;box-sizing:border-box}
+.flight-map.compact .flight-map-title,.flight-map.compact .flight-map-notes{position:relative;width:min(380px,100%)!important;box-sizing:border-box;background:var(--bg);text-shadow:none}
+.flight-map.compact .flight-map-title{padding:18px 20px 14px;border:1px solid var(--hair);border-bottom:0;border-top:1px solid var(--amber)}
+.flight-map.compact .flight-map-notes{flex:1;min-height:0;overflow-y:auto;padding:4px 20px 18px;border:1px solid var(--hair);border-top:1px solid var(--hair)}
+.flight-map.compact .flight-map-note{position:static;width:auto!important;text-align:left;padding:13px 0;border-top:1px solid var(--hair-2)}
+.flight-map.compact .flight-map-note:first-child{border-top:0}
+.flight-map.compact .flight-map-note h3{font-size:17px}
+@media(max-width:680px){.flight-map.compact{align-items:stretch}.flight-map.compact .flight-map-title,.flight-map.compact .flight-map-notes{width:auto!important}}
