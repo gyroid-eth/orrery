@@ -64,6 +64,18 @@ def test_help_map_toggle_does_not_reset_or_dismiss_checklist():
     """) == {'shown': True, 'restored': True, 'closed': True}
 
 
+def test_any_tour_keeps_its_own_steps_key_and_fold():
+    assert state("""
+      const steps=[{id:'a',title:'A',copy:'a'},{id:'b',title:'B',copy:'b'}];
+      const s=tour.createState(storage,{steps,key:'oc-other',autoOpen:false});
+      const closed=!s.open;s.show();s.mark('a');s.mark('start');s.fold();
+      const again=tour.createState(storage,{steps,key:'oc-other',autoOpen:false});
+      console.log(JSON.stringify({closed,open:again.open,folded:again.folded,done:[...again.done],current:again.current.id,
+        saved:Object.keys(JSON.parse(value))}));
+    """) == {'closed': True, 'open': True, 'folded': True, 'done': ['a'], 'current': 'b',
+             'saved': ['seen', 'open', 'folded', 'done']}
+
+
 def prompt(connected=True, pane=True, text='Hello', guarded=False):
     source = (BRIDGE / 'cockpit.html').read_text()
     fn = re.search(r'function sendPrompt\(opts\)\{.*?(?=\nfunction sendInterrupt)', source, re.S).group()
@@ -151,6 +163,9 @@ def tour_browser():
             time.sleep(.1)
         else:
             pytest.fail('tour did not mount')
+        # Tests that open another page or window need the served address and the browser.
+        evaluate.base = f'http://127.0.0.1:{server.server_port}'
+        evaluate.endpoint = endpoint
         yield client, evaluate
     finally:
         with contextlib.suppress(OSError):
@@ -305,3 +320,123 @@ def test_dom_real_profile_button_completion_and_rejection(tour_browser):
         marked:OrreryTour.state.done.has('settings'),done:OrreryTour.state.done.size};
     })()""")
     assert result == {'rejected': True, 'provisional': True, 'committed': 1, 'marked': True, 'done': 7}
+
+
+def test_dom_checklist_folds_to_a_band_that_follows_progress(tour_browser):
+    _, evaluate = tour_browser
+    result = evaluate("""(()=>{
+      const flight=OrreryTour.firstFlight,el=flight.el;flight.reset();
+      document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}));
+      el.querySelector('.flight-fold').click();
+      const band=el.querySelector('.flight-band');
+      const folded={folded:el.classList.contains('folded'),panel:getComputedStyle(el.querySelector('.flight-panel')).display,
+        text:band.textContent,height:Math.round(el.getBoundingClientRect().height)};
+      document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'choose'}}));
+      const next=band.querySelector('.flight-item').textContent;
+      band.click();
+      return {...folded,next,unfolded:!el.classList.contains('folded'),saved:JSON.parse(localStorage.getItem(OrreryTour.KEY)).folded};
+    })()""")
+    assert result == {'folded': True, 'panel': 'none', 'text': 'Choose your agent' + 'now' + '1 / 7', 'height': 44,
+                      'next': 'Talk to it', 'unfolded': True, 'saved': False}
+
+
+def test_dom_tour_actions_are_scoped_to_their_tour(tour_browser):
+    _, evaluate = tour_browser
+    result = evaluate("""(()=>{
+      OrreryTour.firstFlight.reset();
+      document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start',tour:'full-tour'}}));
+      const foreign=OrreryTour.state.done.has('start');
+      document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start',tour:'first-flight'}}));
+      return {foreign,own:OrreryTour.state.done.has('start')};
+    })()""")
+    assert result == {'foreign': False, 'own': True}
+
+
+def test_dom_checklist_drags_inside_the_window_and_remembers_the_spot(tour_browser):
+    client, evaluate = tour_browser
+    evaluate("localStorage.removeItem(OrreryTour.KEY+'-pos');OrreryTour.firstFlight.reset();OrreryTour.firstFlight.fold()")
+    band = evaluate("(()=>{const r=document.querySelector('.flight-band').getBoundingClientRect();return {x:r.left+40,y:r.top+20};})()")
+    mouse = lambda kind, x, y: client.call('Input.dispatchMouseEvent', type=kind, x=x, y=y, button='left',
+                                           buttons=0 if kind == 'mouseReleased' else 1, clickCount=1)
+    mouse('mousePressed', band['x'], band['y'])
+    for step in range(1, 9):
+        mouse('mouseMoved', band['x'] - 70 * step, band['y'] - 50 * step)
+    mouse('mouseReleased', band['x'] - 560, band['y'] - 400)
+    moved = evaluate("""(()=>{const el=OrreryTour.firstFlight.el,r=el.getBoundingClientRect();
+      return {placed:el.classList.contains('placed'),folded:el.classList.contains('folded'),
+        saved:JSON.parse(localStorage.getItem(OrreryTour.KEY+'-pos')),left:Math.round(r.left),top:Math.round(r.top)};})()""")
+    assert moved['placed'] and moved['folded'], moved  # a drag is not a click on the band
+    assert (moved['left'], moved['top']) == (round(moved['saved']['left']), round(moved['saved']['top']))
+    # A spot outside a smaller window is pulled back in; a narrow window uses the default place.
+    client.call('Emulation.setDeviceMetricsOverride', width=760, height=500, deviceScaleFactor=1, mobile=False)
+    evaluate("localStorage.setItem(OrreryTour.KEY+'-pos',JSON.stringify({left:1500,top:900}));OrreryTour.firstFlight.render()")
+    pulled = evaluate("(()=>{const r=OrreryTour.firstFlight.el.getBoundingClientRect();return r.right<=innerWidth&&r.bottom<=innerHeight&&r.left>=0;})()")
+    client.call('Emulation.setDeviceMetricsOverride', width=420, height=800, deviceScaleFactor=1, mobile=False)
+    evaluate("OrreryTour.firstFlight.render()")
+    narrow = evaluate("(()=>{const el=OrreryTour.firstFlight.el,r=el.getBoundingClientRect();return {placed:el.classList.contains('placed'),left:r.left,right:r.right===innerWidth};})()")
+    assert pulled is True
+    assert narrow == {'placed': False, 'left': 0, 'right': True}
+
+
+def test_dom_checklist_pops_out_to_its_own_window_and_comes_back(tour_browser):
+    import time
+    import urllib.request
+    client, evaluate = tour_browser
+    # A popup needs a user gesture, as it would from a real press of the button.
+    client.call('Runtime.evaluate', expression="OrreryTour.firstFlight.reset();document.querySelector('.flight-popout').click()",
+                userGesture=True)
+    popup = None
+    for _ in range(50):
+        targets = json.load(urllib.request.urlopen(evaluate.endpoint + '/json', timeout=5))
+        popup = next((t for t in targets if t.get('url', '').startswith(evaluate.base) and 'tour=first-flight' in t['url']), None)
+        if popup:
+            break
+        time.sleep(.1)
+    assert popup, 'no tour window opened'
+    try:
+        assert evaluate("OrreryTour.firstFlight.el.hidden") is True
+        from tools.theme_axis_browser_test import _WebSocket
+        other = _WebSocket(popup['webSocketDebuggerUrl'])
+        other.call('Runtime.enable')
+
+        def in_popup(expression):
+            return other.call('Runtime.evaluate', expression=expression, returnByValue=True)['result'].get('value')
+        for _ in range(100):
+            if in_popup("Boolean(window.OrreryTour&&OrreryTour.state)"):
+                break
+            time.sleep(.1)
+        evaluate("document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}))")
+        for _ in range(30):
+            if in_popup("OrreryTour.state.done.has('start')"):
+                break
+            time.sleep(.1)
+        alone = in_popup("""JSON.stringify({synced:OrreryTour.state.done.has('start'),
+          shown:[...document.body.children].filter(e=>getComputedStyle(e).display!=='none').map(e=>e.className),
+          map:!!document.querySelector('.flight-map'),popout:document.querySelector('.flight-popout').hidden})""")
+        assert json.loads(alone) == {'synced': True, 'shown': ['flight-guide solo'], 'map': False, 'popout': True}
+    finally:
+        urllib.request.urlopen(evaluate.endpoint + '/json/close/' + popup['id'], timeout=5)
+    for _ in range(40):
+        if evaluate("!OrreryTour.firstFlight.el.hidden"):
+            break
+        time.sleep(.1)
+    assert evaluate("!OrreryTour.firstFlight.el.hidden") is True
+
+
+def test_dom_another_tours_window_leaves_the_first_flight_out(tour_browser):
+    import time
+    client, evaluate = tour_browser
+    client.call('Page.navigate', url=evaluate.base + '/cockpit.html?tour=full-tour')
+    for _ in range(100):
+        if evaluate("Boolean(window.OrreryTour&&OrreryTour.mountChecklist&&document.readyState==='complete')"):
+            break
+        time.sleep(.1)
+    result = evaluate("""(()=>{
+      const before=document.querySelectorAll('.flight-guide').length;
+      const later=OrreryTour.mountChecklist({id:'full-tour',title:'Full tour',storageKey:'oc-test-full-tour',
+        steps:[{id:'exit',title:'Exit an agent',copy:'Use EXIT in the deck.'}]});
+      let seen=null;later.onChange(()=>{seen=later.state.current&&later.state.current.id;});later.show();
+      return {before,solo:later.el.classList.contains('solo'),visible:!later.el.hidden,seen,
+        hiddenCockpit:getComputedStyle(document.querySelector('.app')).display};
+    })()""")
+    assert result == {'before': 0, 'solo': True, 'visible': True, 'seen': 'exit', 'hiddenCockpit': 'none'}
