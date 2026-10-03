@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en" class="tour-window">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tour · ORRERY</title>
+<!-- A tour checklist in a window of its own (?tour=<id>). Only the checklist
+     runs here: no cockpit script, so no palette, key handler, terminal or poll
+     can act unseen behind it. Progress reaches it from the cockpit through
+     localStorage and the orrery-tour BroadcastChannel (cockpit_tour.js). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="theme_core.js"></script>
+<script src="theme_controller.js"></script>
+<style>
+  /* The cockpit's dark palette (cockpit.html :root); light comes from
+     theme_controller.js. tests/test_cockpit_tour.py keeps the two in step. */
+  :root{
+    --theme-accent-rgb:242 182 90;
+    --theme-ink-rgb:236 229 214;
+    --bg:#0b0d11;
+    --panel:#111419;
+    --panel-2:#161a21;
+    --ink:#ece5d6;
+    --ink-dim:#9a9384;
+    --ink-faint:#5f5c52;
+    --hair:rgb(var(--theme-ink-rgb) / .085);
+    --hair-2:rgb(var(--theme-ink-rgb) / .045);
+    --amber:#f2b65a;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --serif:'Fraunces',Georgia,serif;
+  }
+  html,body{margin:0;height:100%;background:var(--panel);color:var(--ink)}
+</style>
+<link rel="stylesheet" href="cockpit_tour.css">
+</head>
+<body>
+<script src="cockpit_tour.js"></script>
+</body>
+</html>
