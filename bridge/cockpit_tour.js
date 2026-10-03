@@ -52,9 +52,17 @@ const params=new URLSearchParams(root.location.search);
 const windowTour=doc.documentElement.classList.contains('tour-window')?params.get('tour'):null;
 let storage;try{storage=root.localStorage;}catch(_){}
 let channel=null;try{channel=new BroadcastChannel(CHANNEL);}catch(_){}
-// The desktop app's webview opens no window.open popups (its own windows come
-// from the open_pane_window command), so there a checklist stays docked.
-const canPopOut=!(root.__TAURI__&&root.__TAURI__.core)&&typeof root.open==='function';
+// In the desktop app the webview opens no window.open popups; the app builds a
+// tour window itself (open_tour_window). An app from before that command
+// refuses the call, and from then on the checklist stays docked.
+let appTourWindows=true;
+function appInvoke(){return root.__TAURI__&&root.__TAURI__.core&&root.__TAURI__.core.invoke;}
+function canPopOut(){return appInvoke()?appTourWindows:typeof root.open==='function';}
+// A window of this backend: same origin and the same ?ws= override.
+function sameBackend(href){
+  try{const url=new URL(href);return url.origin===root.location.origin&&(url.searchParams.get('ws')||'')===(params.get('ws')||'');}
+  catch(_){return false;}
+}
 function narrow(){return root.innerWidth<720;}
 function readPosition(key){try{const p=JSON.parse(storage.getItem(key+'-pos'));return p&&Number.isFinite(p.left)&&Number.isFinite(p.top)?p:null;}catch(_){return null;}}
 function writePosition(key,p){try{if(p)storage.setItem(key+'-pos',JSON.stringify(p));else storage.removeItem(key+'-pos');}catch(_){}}
@@ -114,7 +122,6 @@ function mountChecklist(definition){
   el.querySelector('.flight-meta span').textContent=meta;
   el.querySelector('.flight-footer span').textContent=footer;
   el.querySelector('.flight-close').setAttribute('aria-label',solo?'Close this window':'Close '+title);
-  el.querySelector('.flight-popout').hidden=!canPopOut||solo;
   el.querySelector('.flight-fold').hidden=solo;
   el.classList.toggle('solo',solo);
   const band=el.querySelector('.flight-band'),head=el.querySelector('.flight-head');
@@ -150,6 +157,7 @@ function mountChecklist(definition){
     const done=state.done,current=state.current,count=done.size+' / '+steps.length;
     el.hidden=!solo&&(!state.open||suspended||popped);
     el.classList.toggle('folded',state.folded&&!solo);
+    el.querySelector('.flight-popout').hidden=solo||!canPopOut();
     el.querySelectorAll('.flight-count').forEach(node=>{node.textContent=count;});
     el.querySelector('.flight-status').textContent=current?done.size+' of '+steps.length+' done. Next: '+current.title+'.':'All '+steps.length+' done.';
     band.querySelector('.flight-item').textContent=current?current.title:'All done';
@@ -168,12 +176,38 @@ function mountChecklist(definition){
     if(!el.hidden)place();
     listeners.forEach(fn=>fn());
   }
-  function show(){state.show();popped=popped&&!!popup&&!popup.closed;render();if(popped)popup.focus();}
+  // The app reports its windows closing; ours carries this tour and this backend's address.
+  let appWatch=null;
+  function watchAppWindow(){
+    const events=root.__TAURI__&&root.__TAURI__.event;
+    if(appWatch||!events||typeof events.listen!=='function')return;
+    appWatch=Promise.resolve(events.listen('orrery://pane-window-closed',event=>{
+      const payload=event&&event.payload||{};
+      if(payload.tour===id&&sameBackend(payload.url)){popped=false;render();}
+    })).catch(()=>{appWatch=null;});
+  }
+  function show(){
+    state.show();
+    // An app window has no handle here; asking for it again brings it forward.
+    if(popped&&!popup&&appInvoke()){render();popOut();return;}
+    popped=popped&&!!popup&&!popup.closed;render();if(popped)popup.focus();
+  }
   function popOut(screenX,screenY){
-    if(!canPopOut)return false;
+    if(!canPopOut())return false;
     const width=360,height=Math.min(680,root.screen.availHeight||680);
     const left=Math.round(Number.isFinite(screenX)?screenX-width/2:root.screenX+root.outerWidth-width-24);
     const top=Math.round(Number.isFinite(screenY)?screenY-20:root.screenY+80);
+    const invoke=appInvoke();
+    if(invoke){
+      Promise.resolve().then(()=>invoke('open_tour_window',{tour:id,x:left,y:top,width,height})).then(()=>{
+        watchAppWindow();popped=true;render();
+      },error=>{
+        // An older app without the command: keep the panel and stop offering windows.
+        appTourWindows=false;popped=false;render();
+        console.warn('[tour] no tour windows in this app:',error);
+      });
+      return true;
+    }
     const url=new URL('tour.html',root.location.href);
     ['ws'].forEach(key=>{if(params.get(key))url.searchParams.set(key,params.get(key));});
     url.searchParams.set('tour',id);
@@ -200,7 +234,7 @@ function mountChecklist(definition){
     const dx=event.clientX-dragged.x,dy=event.clientY-dragged.y;
     if(!dragged.moved&&Math.hypot(dx,dy)<5)return;
     dragged.moved=true;el.classList.add('dragging','placed');
-    el.classList.toggle('leaving',canPopOut&&outside(event));
+    el.classList.toggle('leaving',canPopOut()&&outside(event));
     el.style.left=dragged.left+dx+'px';el.style.top=dragged.top+dy+'px';
   }
   function endDrag(event){
@@ -209,7 +243,7 @@ function mountChecklist(definition){
     if(!moved)return;
     event.preventDefault();
     band.dataset.dragged='1';setTimeout(()=>{delete band.dataset.dragged;},0);
-    if(canPopOut&&outside(event)&&popOut(event.screenX,event.screenY))return;
+    if(canPopOut()&&outside(event)&&popOut(event.screenX,event.screenY))return;
     const r=el.getBoundingClientRect();writePosition(storageKey,{left:r.left,top:r.top});place();
   }
   [head,band].forEach(handle=>{
@@ -218,7 +252,10 @@ function mountChecklist(definition){
   });
   band.addEventListener('click',()=>{if(band.dataset.dragged)return;state.unfold();changed();el.querySelector('.flight-fold').focus();});
   el.querySelector('.flight-fold').addEventListener('click',()=>{state.fold();changed();band.focus();});
-  el.querySelector('.flight-close').addEventListener('click',()=>{if(solo){root.close();return;}state.close();changed();});
+  el.querySelector('.flight-close').addEventListener('click',()=>{
+    if(solo){const invoke=appInvoke();if(invoke)Promise.resolve().then(()=>invoke('close_tour_window',{tour:id})).catch(()=>root.close());else root.close();return;}
+    state.close();changed();
+  });
   el.querySelector('.flight-restart').addEventListener('click',()=>{state.reset();changed();});
   el.querySelector('.flight-popout').addEventListener('click',()=>{
     if(!popOut()&&typeof root.showToast==='function')root.showToast('POPUP BLOCKED · allow popups for the cockpit',true);

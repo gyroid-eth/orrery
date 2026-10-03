@@ -602,3 +602,66 @@ def test_dom_tour_page_script_wins_over_the_stored_definition(tour_browser):
     assert fallback == [{'title': 'Old title', 'items': ['Old step']}]
     assert json.loads(evaluate(shown)) == [{'title': 'Current title', 'items': ['Current step']}]
 
+
+FAKE_APP = """(()=>{
+  // The desktop app's bridge, as far as the checklist uses it.
+  window.appCalls=[];window.appClosed=null;
+  window.__TAURI__={core:{invoke:(name,args)=>{appCalls.push([name,args]);
+      return window.appHasTourWindows?Promise.resolve():Promise.reject('Command '+name+' not found');}},
+    event:{listen:(name,handler)=>{if(name==='orrery://pane-window-closed')appClosed=handler;return Promise.resolve(()=>{});}}};
+})()"""
+
+
+def test_dom_older_app_without_tour_windows_keeps_the_panel(tour_browser):
+    _, evaluate = tour_browser
+    evaluate(FAKE_APP)
+    result = evaluate("""(async()=>{
+      window.appHasTourWindows=false;
+      const flight=OrreryTour.firstFlight;flight.reset();
+      const offered=!flight.el.querySelector('.flight-popout').hidden;
+      flight.el.querySelector('.flight-popout').click();
+      await new Promise(resolve=>setTimeout(resolve,50));
+      return {offered,calls:appCalls.map(c=>c[0]),panel:!flight.el.hidden,
+        stillOffered:!flight.el.querySelector('.flight-popout').hidden};
+    })()""")
+    assert result == {'offered': True, 'calls': ['open_tour_window'], 'panel': True, 'stillOffered': False}
+
+
+def test_dom_app_opens_a_tour_window_and_takes_the_panel_back_when_it_closes(tour_browser):
+    _, evaluate = tour_browser
+    evaluate(FAKE_APP)
+    result = evaluate("""(async()=>{
+      window.appHasTourWindows=true;
+      const flight=OrreryTour.firstFlight;flight.reset();
+      flight.el.querySelector('.flight-popout').click();
+      await new Promise(resolve=>setTimeout(resolve,50));
+      const [name,args]=appCalls[0];
+      const opened={name,tour:args.tour,size:[args.width,args.height],hidden:flight.el.hidden};
+      appClosed({payload:{tour:'first-flight',url:location.origin+'/tour.html?tour=first-flight&ws=ws://elsewhere/ws'}});
+      const otherBackend=flight.el.hidden;
+      appClosed({payload:{tour:'full-tour',url:location.origin+'/tour.html?tour=full-tour'}});
+      const otherTour=flight.el.hidden;
+      appClosed({payload:{tour:'first-flight',url:location.origin+'/tour.html?tour=first-flight'}});
+      return {...opened,otherBackend,otherTour,back:!flight.el.hidden};
+    })()""")
+    assert result == {'name': 'open_tour_window', 'tour': 'first-flight', 'size': [360, result['size'][1]],
+                      'hidden': True, 'otherBackend': True, 'otherTour': True, 'back': True}
+
+
+def test_dom_app_tour_window_closes_through_the_app(tour_browser):
+    import time
+    client, evaluate = tour_browser
+    client.call('Page.navigate', url=evaluate.base + '/tour.html?tour=first-flight')
+    for _ in range(100):
+        if evaluate("document.readyState==='complete'&&Boolean(window.OrreryTour&&OrreryTour.firstFlight)"):
+            break
+        time.sleep(.1)
+    evaluate(FAKE_APP)
+    result = evaluate("""(async()=>{
+      window.appHasTourWindows=true;
+      OrreryTour.firstFlight.el.querySelector('.flight-close').click();
+      await new Promise(resolve=>setTimeout(resolve,50));
+      return JSON.stringify(appCalls);
+    })()""")
+    assert json.loads(result) == [['close_tour_window', {'tour': 'first-flight'}]]
+
