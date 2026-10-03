@@ -90,7 +90,7 @@ function mount(){
       const visible=r.width>0&&r.height>0&&r.bottom>0&&r.top<root.innerHeight&&r.right>0&&r.left<root.innerWidth;
       if(!visible)return;
       const ring=doc.createElement('span');ring.className='flight-map-marker';ring.textContent=String(index+1);
-      ring.style.left=Math.max(pad,Math.min(root.innerWidth-32,r.right-14))+'px';
+      ring.style.left=Math.max(pad,Math.min(root.innerWidth-32,STEPS[index].id==='choose'?r.left+12:r.right-14))+'px';
       ring.style.top=Math.max(4,Math.min(root.innerHeight-30,r.top+(STEPS[index].id==='choose'?106:3)))+'px';map.append(ring);rings.push(ring);
       if(compact)return;
       const w=card.offsetWidth,h=card.offsetHeight;

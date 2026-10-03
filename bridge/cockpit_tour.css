@@ -34,12 +34,12 @@
   .flight-footer{padding:9px 17px}
 }
 .flight-map{position:fixed;inset:0;z-index:1050;pointer-events:none}
-.flight-map-head{position:absolute;right:14px;top:61px;display:flex;align-items:center;gap:18px;padding:11px 14px;background:var(--panel);border:1px solid var(--hair);border-radius:8px;pointer-events:auto;box-shadow:0 8px 24px rgb(0 0 0/.2)}
+.flight-map-head{position:absolute;z-index:3;right:14px;top:61px;display:flex;align-items:center;gap:18px;padding:11px 14px;background:var(--panel);border:1px solid var(--hair);border-radius:8px;pointer-events:auto;box-shadow:0 8px 24px rgb(0 0 0/.2)}
 .flight-map-head b{display:block;font-size:12px;font-weight:500}.flight-map-head span{display:block;font-size:10px;color:var(--ink-dim);margin-top:5px}
-.flight-map-card{position:absolute;width:230px;padding:14px 15px;background:var(--panel-2);border:1px solid rgb(var(--theme-remote-rgb)/.55);border-radius:9px;box-shadow:0 9px 26px rgb(0 0 0/.18);pointer-events:auto}
+.flight-map-card{position:absolute;z-index:2;width:230px;padding:14px 15px;background:var(--panel-2);border:1px solid rgb(var(--theme-remote-rgb)/.55);border-radius:9px;box-shadow:0 9px 26px rgb(0 0 0/.18);pointer-events:auto}
 .flight-map-card h3{font-size:11px;color:var(--ln-remote);margin:0 0 8px;font-weight:500;letter-spacing:.06em}
 .flight-map-card p{font-size:12px;line-height:1.55;margin:0;color:var(--ink)}
-.flight-map-marker{position:absolute;width:23px;height:23px;display:grid;place-items:center;border-radius:50%;background:var(--ln-remote);color:var(--bg);font-size:12px;font-weight:600;box-shadow:0 0 0 2px var(--panel);pointer-events:none}
+.flight-map-marker{position:absolute;z-index:1;width:23px;height:23px;display:grid;place-items:center;border-radius:50%;background:var(--ln-remote);color:var(--bg);font-size:12px;font-weight:600;box-shadow:0 0 0 2px var(--panel);pointer-events:none}
 .flight-map.compact .flight-map-cards{position:absolute;right:14px;top:139px;bottom:14px;width:min(360px,calc(100vw - 28px));overflow-y:auto;pointer-events:auto;display:flex;flex-direction:column;gap:10px;padding:4px;background:var(--panel);border:1px solid var(--hair);border-radius:10px}
 .flight-map.compact .flight-map-card{position:static!important;width:auto;flex-shrink:0;box-shadow:none}
 @media(max-width:680px){.flight-map-head{left:14px;justify-content:space-between}.flight-map.compact .flight-map-cards{width:calc(100vw - 28px)}}
