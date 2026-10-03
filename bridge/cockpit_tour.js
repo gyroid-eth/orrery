@@ -88,13 +88,17 @@ const DEFINITION_PREFIX='oc-tour-definition:';
 API.getChecklist=id=>checklists.get(id)||null;
 function mountChecklist(definition){
   const {id,title,steps,storageKey,autoOpen=false,meta='Use each control once',footer='Reopen anytime in Settings.'}=definition;
-  if(checklists.has(id))return checklists.get(id);
+  const existing=checklists.get(id);
+  // A tour window mounted from the stored definition gives way to the page's own
+  // script, whose definition is the current one.
+  if(existing&&!(existing.fromStore&&!definition.fromStore))return existing;
+  if(existing)existing.destroy();
   // A tour's own window (tour.html?tour=<id>) shows that tour alone; any other checklist stays out of it.
   if(windowTour&&windowTour!==id)return null;
   const solo=windowTour===id;
   // The cockpit leaves the definition (plain data) for the tour's own window,
   // which mounts it from there when no script of the page did (see tour.html).
-  if(!solo)try{storage.setItem(DEFINITION_PREFIX+id,JSON.stringify({id,title,steps,storageKey,meta,footer}));}catch(_){}
+  if(!solo&&!definition.fromStore)try{storage.setItem(DEFINITION_PREFIX+id,JSON.stringify({id,title,steps,storageKey,meta,footer}));}catch(_){}
   const state=createState(storage,{steps,key:storageKey,autoOpen});
   const el=doc.createElement('aside');
   el.className='flight-guide';el.dataset.tour=id;el.setAttribute('aria-label',title);
@@ -140,7 +144,9 @@ function mountChecklist(definition){
     el.style.left=Math.max(0,Math.min(root.innerWidth-w,pos.left))+'px';
     el.style.top=Math.max(0,Math.min(root.innerHeight-Math.min(h,root.innerHeight),pos.top))+'px';
   }
+  let destroyed=false;
   function render(){
+    if(destroyed)return;
     const done=state.done,current=state.current,count=done.size+' / '+steps.length;
     el.hidden=!solo&&(!state.open||suspended||popped);
     el.classList.toggle('folded',state.folded&&!solo);
@@ -236,7 +242,8 @@ function mountChecklist(definition){
   }
   root.addEventListener('resize',()=>{if(!el.hidden)place();});
   doc.body.append(el);
-  const controller={el,state,render,show,popOut,
+  const controller={el,state,render,show,popOut,fromStore:!!definition.fromStore,
+    destroy(){destroyed=true;el.remove();if(checklists.get(id)===controller)checklists.delete(id);},
     fold(){state.fold();changed();},unfold(){state.unfold();changed();},
     close(){state.close();changed();},reset(){state.reset();changed();},
     mark(stepId){if(state.mark(stepId)){changed();return true;}return false;},
@@ -257,7 +264,7 @@ function mountWindowTour(){
   if(!windowTour||checklists.has(windowTour))return;
   let definition=null;
   try{definition=JSON.parse(storage.getItem(DEFINITION_PREFIX+windowTour));}catch(_){}
-  if(definition&&definition.id===windowTour&&Array.isArray(definition.steps)&&definition.steps.length){mountChecklist(definition);return;}
+  if(definition&&definition.id===windowTour&&Array.isArray(definition.steps)&&definition.steps.length){mountChecklist({...definition,fromStore:true});return;}
   const note=doc.createElement('p');note.className='flight-missing';
   note.textContent='This tour is not available here. Close this window and open it again from the cockpit.';
   doc.body.append(note);
@@ -421,6 +428,7 @@ function mount(){
   render();
 }
 if(doc.readyState==='loading')doc.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
-// After the first flight and the page's own tour scripts have had their turn.
-if(windowTour){if(doc.readyState==='loading')doc.addEventListener('DOMContentLoaded',mountWindowTour,{once:true});else setTimeout(mountWindowTour,0);}
+// After the page has loaded, so the page's own tour scripts (including ones that
+// mount on DOMContentLoaded) have had their turn.
+if(windowTour){if(doc.readyState==='complete')setTimeout(mountWindowTour,0);else root.addEventListener('load',()=>setTimeout(mountWindowTour,0),{once:true});}
 })(typeof window==='undefined'?globalThis:window);
