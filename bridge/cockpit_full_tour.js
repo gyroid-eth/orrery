@@ -32,16 +32,18 @@ function telemetryAction(event,origin,frame){
 }
 
 // A ready message is not a game move; old rounds and unrelated peers do not count.
-function createShiritoriTracker(parent,since){
+function createShiritoriTracker(parent,since,afterId=0){
   const rounds=new Map(),seen=new Set();
   return {
     add(messages,agents){
       const children=new Set((Array.isArray(agents)?agents:[]).filter(a=>a&&a.parent===parent).map(a=>a.name));
       for(const m of Array.isArray(messages)?messages:[]){
         if(!m||m.id==null||seen.has(String(m.id)))continue;
+        const id=Number(m.id);
+        if(!Number.isSafeInteger(id)||id<=afterId)continue;
         const rawTime=m.ts_unix??m.ts??m.created_ts??m.timestamp;
         const ts=typeof rawTime==='number'?rawTime*1000:Date.parse(rawTime);
-        if(!Number.isFinite(ts)||ts<since||/^ready\s*$/i.test(String(m.body??m.body_md??'').trim()))continue;
+        if(!Number.isFinite(ts)||ts<since||/^ready\s*$/i.test(String(m.body??m.body_md??m.excerpt??'').trim()))continue;
         const sender=String(m.sender||'');
         const recipients=(Array.isArray(m.recipients)?m.recipients:[]).filter(Boolean).map(r=>typeof r==='string'?r:r.name??r.recipient);
         if(m.recipient)recipients.push(m.recipient);
@@ -51,10 +53,10 @@ function createShiritoriTracker(parent,since){
         if(!child)continue;
         seen.add(String(m.id));
         const pair=rounds.get(child)||{},prior=pair[direction];
-        if(!prior||(direction==='out'?ts<prior.ts:ts>prior.ts))pair[direction]={id:String(m.id),ts};
+        if(!prior||(direction==='out'?id<prior.id:id>prior.id))pair[direction]={id,ts};
         rounds.set(child,pair);
       }
-      return [...rounds.values()].some(pair=>pair.out&&pair.in&&pair.out.id!==pair.in.id&&pair.in.ts>=pair.out.ts);
+      return [...rounds.values()].some(pair=>pair.out&&pair.in&&pair.in.id>pair.out.id&&pair.in.ts>=pair.out.ts);
     },
   };
 }
@@ -100,7 +102,7 @@ function mount(){
   const contextKey='oc-full-tour-shiritori-v1';
   try{context=JSON.parse(root.localStorage.getItem(contextKey));}catch(_){}
   if(context&&typeof context.parent==='string'&&Number.isFinite(context.since))
-    tracker=createShiritoriTracker(context.parent,context.since);
+    tracker=createShiritoriTracker(context.parent,context.since,context.afterId||0);
   else context=null;
   function current(id){return tour.state.open&&tour.state.current?.id===id;}
   function mark(id){return current(id)&&tour.mark(id);}
@@ -123,7 +125,7 @@ function mount(){
     if(current('full-start')){context=null;tracker=null;lastTalk=null;saveContext();}
     if(current('full-shiritori')&&!context){
       const parent=lastTalk||oc.activeAgent();
-      if(parent){context={parent,since:Date.now()};tracker=createShiritoriTracker(parent,context.since);saveContext();}
+      if(parent){context={parent,since:Math.floor(Date.now()/1000)*1000,afterId:Math.max(0,...oc.mailBacklog().map(m=>Number(m.id)||0))};tracker=createShiritoriTracker(parent,context.since,context.afterId);saveContext();}
     }
     if(!current('full-return')){returnArmed=false;returnPending=null;}
     observeMail();
@@ -155,11 +157,13 @@ function mount(){
     const ids={start:'full-start',talk:'full-talk',planetarium:'full-planetarium',telemetry:'full-telemetry'};
     if(ids[detail.id])mark(ids[detail.id]);
   });
-  doc.addEventListener('oc:focus-agent',event=>{
+  function focused(event){
     const name=event.detail?.name;
     if(name&&name===choosePending&&mark('full-choose'))choosePending=null;
     if(name&&name===returnPending&&!doc.getElementById('networkOverlay').classList.contains('on'))mark('full-return');
-  });
+  }
+  doc.addEventListener('oc:focus-agent',focused);
+  doc.addEventListener('oc:tour-focus',focused);
   doc.addEventListener('oc:mail',observeMail);doc.addEventListener('oc:agents',observeMail);
   root.addEventListener('message',event=>{
     const frame=doc.getElementById('networkFrame')?.contentWindow;
