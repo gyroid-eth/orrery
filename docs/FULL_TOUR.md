@@ -30,7 +30,9 @@ Only the current step advances. Failed requests, cancelled drags, a single
 selected node, a ready message, and opening an already-running agent do not
 complete the corresponding operation. Shiritori requires fresh, observed
 Mail with distinct IDs between the selected parent and the same actual child,
-with the child's response at or after the parent's move. Ready-only bodies,
+with the child's response ID after the parent's move ID. The live API uses
+whole-second timestamps and body excerpts: the starting second and the
+last observed ID form the game boundary. Ready-only bodies or excerpts,
 unrelated peers and earlier games do not count. Subjects may be absent,
 Japanese, or prefixed by a reply tool; they do not decide completion.
 
@@ -53,4 +55,5 @@ then accepts only the current step's successful action. Returning additionally
 requires the selected terminal to become focused after Telemetry closes,
 including its floating pane or own window. Native focus waits for success;
 channel fallback requires an acknowledgement from the registered window
-instance for that particular request.
+instance for that particular request. Its tour-only focus event does not
+move pending drafts into the main composer.

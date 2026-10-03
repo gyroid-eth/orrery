@@ -4463,9 +4463,9 @@
       }
     }
   },
-  "inventory_digest": "d5f98652077ee724394b471779476575c134aaf1939d0a4dd928fb3538188b75",
+  "inventory_digest": "bd7a1da259ee31ace6e42f3aa401b3e78288573d77822b06643b1f00039ad859",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "1b66e07af3b366935f256ef08c905f6928c3b26d63f30a87b37356d82a76afc3",
+  "source_digest": "2fe3644960a3ae63f50e38bd201f44733ce98afd9ddc45704fec7aeafda80f06",
   "surface": "cockpit",
   "version": 1
 }
@@ -8461,7 +8461,7 @@ const pendingPaneFocus=new Map();
 function notifyPaneFocus(session,entry){
   if(paneWindows.get(session)!==entry)return;
   pendingPaneFocus.delete(session);
-  document.dispatchEvent(new CustomEvent('oc:focus-agent',{detail:{name:session}}));
+  document.dispatchEvent(new CustomEvent('oc:tour-focus',{detail:{name:session}}));
 }
 function acknowledgePaneFocus(msg){
   if(!paneMessageInScope(msg,paneScope)||msg.type!=='focused')return;

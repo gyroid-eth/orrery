@@ -294,3 +294,40 @@ def test_dom_return_completes_when_owned_pane_focus_succeeds(tour_browser, kind)
       return {overlayClosed:!document.getElementById('networkOverlay').classList.contains('on'),complete:full.state.current===null};
     })()""".replace('ENTRY', entry))
     assert result == {'overlayClosed': True, 'complete': True}
+
+
+@pytest.mark.parametrize('excerpt', ['ready', 'Ready  ', 'child started'])
+def test_real_api_excerpt_and_same_second_preceding_child_mail_do_not_count(excerpt):
+    assert run("""
+      const t=tour.createShiritoriTracker('P',1000000),agents=[{name:'C',parent:'P'}];
+      const before={id:10,ts:1001,sender:'C',recipient:'P',excerpt:EXCERPT,kind:'to',thread_id:null};
+      const out={id:11,ts:1001,sender:'P',recipient:'C',excerpt:'りんご',kind:'to',thread_id:null};
+      const reply={id:12,ts:1001,sender:'C',recipient:'P',excerpt:'ごりら',subject:'ごりら',kind:'to',thread_id:'game'};
+      console.log(JSON.stringify([t.add([before,out],agents),t.add([reply],agents)]));
+    """.replace('EXCERPT', json.dumps(excerpt))) == [False, True]
+
+
+def test_ready_excerpt_after_parent_move_and_start_watermark_do_not_count():
+    assert run("""
+      const agents=[{name:'C',parent:'P'}],out={id:11,ts:1001,sender:'P',recipient:'C',excerpt:'りんご'};
+      const ready={id:12,ts:1001,sender:'C',recipient:'P',excerpt:'ready'};
+      const t=tour.createShiritoriTracker('P',1000000);
+      const old=tour.createShiritoriTracker('P',1001000,12);
+      console.log(JSON.stringify([t.add([out,ready],agents),old.add([out,{...ready,excerpt:'ごりら'}],agents),
+        old.add([{...out,id:13},{...ready,id:14,excerpt:'ごりら'}],agents)]));
+    """) == [False, False, True]
+
+
+@pytest.mark.parametrize('kind', ['browser', 'float'])
+def test_dom_owned_focus_leaves_pending_returned_draft_with_its_agent(tour_browser, kind):
+    _, evaluate = tour_browser
+    entry = "{kind:'window',win:{closed:false,focus:()=>{}}}" if kind == 'browser' else "{kind:'float',el:document.createElement('div')}"
+    assert evaluate("""(()=>{
+      activeId='other';panes.set('other',{session:'OtherAgent'});
+      promptInput.value='';availableSessions.set('ReviewChild',{});
+      const key=paneDraftKey(paneScope,'ReviewChild');
+      localStorage.setItem(key,'ReviewChild unsent draft');takeBackPaneDraft('ReviewChild');
+      paneWindows.set('ReviewChild',ENTRY);focusPaneWindow('ReviewChild');
+      return {active:OC.activeAgent(),composer:promptInput.value,draft:localStorage.getItem(key),pending:pendingPaneDraft};
+    })()""".replace('ENTRY', entry)) == {
+        'active':'OtherAgent', 'composer':'', 'draft':'ReviewChild unsent draft', 'pending':'ReviewChild'}
