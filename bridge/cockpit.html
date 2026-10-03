@@ -1132,6 +1132,7 @@
   }
 </style>
 <link rel="stylesheet" href="theme_light.css">
+<link rel="stylesheet" href="cockpit_tour.css">
 </head>
 <body>
 <div class="app">
@@ -4264,7 +4265,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "50c628436b092db0ba32817d6e435cdba2edc6dbe3ed310f05bf6f9e1b67a05b",
+        "digest": "4f4cee192584c0dfb34eaed68f81209aab7a4b73c7412ee61689eed91b1c31cd",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4415,7 +4416,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "01408879dc1976c6ba5a3cde0adee95b9aed189505f807cf4ae50705cd228261",
+        "digest": "610747346cb725b3e4f1ea9404f3fb545add63f5ff55ba40665e7ba9801fda63",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4462,9 +4463,9 @@
       }
     }
   },
-  "inventory_digest": "c9f7ec44a4e51381218a6881b7967e02411240e1551b90c609644cecfb097cbe",
+  "inventory_digest": "dc965d9b287df08f32feaf716d8d03dec22d62b9d4061761241888cf754ee42d",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "d06622ab9be4366067ae3950691f06cba035046d285f5f4f3229ebe665cc68e3",
+  "source_digest": "64b3d82ea4717d2908b0bb6c14b74fb7670ad8ed54223acdbc5ff48edb33e151",
   "surface": "cockpit",
   "version": 1
 }
@@ -8090,6 +8091,7 @@ function jumpToSessionTarget(name,{forceFocus=false}={}){
 }
 function jumpToAgent(name,event=null){
   selectAgent(name);
+  document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'choose'}}));
   if(isSplitToggle(event)){
     if(event&&typeof event.preventDefault==='function')event.preventDefault();
     toggleSplitSession(name,{forceFocus:Boolean(event&&event.isTrusted)});return;
@@ -9970,7 +9972,7 @@ async function watchSpawnLaunch(name){
       status=await r.json();
     }catch(_){continue;}
     if(!status||!status.ok||status.state==='launching')continue;
-    if(status.state==='ready')showToast(`SPAWNED · ${name}`);
+    if(status.state==='ready'){showToast(`SPAWNED · ${name}`);document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}));}
     else showToast(`SPAWN FAILED · ${name} · ${status.error||'launcher failed'}`,true);
     return;
   }
@@ -10002,6 +10004,7 @@ async function submitSpawn(event){
       watchSpawnLaunch(childName);
     }else{
       showToast(`SPAWNED · ${childName}`);
+      document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}));
     }
     // The regular roster poll is the only discovery path for the new child.
   }catch(error){
@@ -10053,6 +10056,7 @@ function openNetwork({focus=activeSession()}={}){
   const loaded=networkFrame.getAttribute('src')===src;
   if(!loaded)networkFrame.src=src;
   networkOverlay.classList.add('on');networkOverlay.setAttribute('aria-hidden','false');
+  document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'telemetry'}}));
   if(loaded&&networkFrame.contentWindow){
     networkFrame.contentWindow.postMessage({type:'net-resume'},location.origin);
     if(focus)networkFrame.contentWindow.postMessage({type:'net-focus',name:focus},location.origin);
@@ -10071,7 +10075,7 @@ function closeNetwork(){
    it at click time rather than at wire-up. */
 document.getElementById('planetariumBtn').addEventListener('click',()=>{
   const rail=window.OrreryRail;
-  if(rail&&rail.openPlanetarium)rail.openPlanetarium();
+  if(rail&&rail.openPlanetarium){rail.openPlanetarium();document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'planetarium'}}));}
 });
 document.getElementById('networkBtn').addEventListener('click',openNetwork);
 document.addEventListener('oc:open-telemetry',event=>openNetwork(event.detail||{}));
@@ -10277,8 +10281,11 @@ function sendPrompt(opts){
   hideSendGuard();
   // one bracketed paste (multiline stays one block in the TUI input box),
   // then a separate CR to submit — same shape the pty expects from a human.
-  send({type:"input",paneId:activeId,data:"\x1b[200~"+text+"\x1b[201~"});
-  setTimeout(()=>send({type:"input",paneId:activeId,data:"\r"}),250);
+  if(!send({type:"input",paneId:activeId,data:"\x1b[200~"+text+"\x1b[201~"})){showToast('not connected — try again');return;}
+  setTimeout(()=>{
+    if(send({type:"input",paneId:activeId,data:"\r"}))
+      document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'talk'}}));
+  },250);
   pushPromptHistory(text);
   promptInput.value='';saveDraft();closeSlashMenu();
   showToast(`sent → ${p.session}`);
@@ -10620,5 +10627,6 @@ kickPolls();
 </script>
 <script src="orrery_view.js"></script>
 <script src="mail_view.js"></script>
+<script src="cockpit_tour.js"></script>
 </body>
 </html>
