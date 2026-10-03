@@ -66,6 +66,12 @@ for example `cockpit.html?ws=ws://127.0.0.1:8803/ws`. The cockpit auto-reconnect
 if the backend drops and degrades gracefully (roster tag shows
 `dashboard offline`, terminal shows `disconnected`) rather than going blank.
 
+**Settings → Getting started → Full tour** opens the sixteen-step workshop
+checklist, separate from Your first flight. It covers /delegate shiritori over
+ORRERY Mail, pane arrangement and Telemetry's crew/history controls. Fold or
+move it when it covers a control. See [Full tour](../docs/FULL_TOUR.md) for the
+order, completion boundaries and embedded Telemetry requirement.
+
 For a tmux-free frontend check, run the protocol-v2 mock:
 
 ```sh

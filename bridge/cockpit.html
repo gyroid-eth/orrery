@@ -7431,6 +7431,7 @@ function finishSplitLabelDrag(event,{cancel=false}={}){
   if(shouldSwap){
     replaceSplitSessions(swapSplitMembers(splitSessions,drag.session,targetSession));
     renderStage();showToast(`SPLIT · ${drag.session} ↔ ${targetSession}`);
+    emitFullTourAction('full-drag');
     return true;
   }
   if(!cancel&&!drag.started&&event&&event.type==='pointerup'){
@@ -7495,6 +7496,10 @@ function ensureSplitCell(session){
   cell._empty=empty;cell._close=close;cell._role=lrole;
   splitCells.set(session,cell);return cell;
 }
+let fullTourSplitPending=false;
+function emitFullTourAction(id){
+  document.dispatchEvent(new CustomEvent('oc:full-tour-action',{detail:{id}}));
+}
 function renderStage({fit=true}={}){
   const members=splitVisible?splitSessions.slice():[];
   const oldCountClasses=[...stageEl.classList].filter(name=>name.startsWith('split-count-'));
@@ -7556,6 +7561,10 @@ function renderStage({fit=true}={}){
   panes.forEach(paintPaneBottomJump);
   refreshSplitDecorations();
   if(fit)queueStageFit(activeId);
+  if(fullTourSplitPending&&splitVisible&&members.length>=2&&
+     members.every(session=>splitCells.get(session)?.querySelector('.termhost.on'))){
+    fullTourSplitPending=false;emitFullTourAction('full-split');
+  }
 }
 function paintPendingSession(session){
   scrName.textContent=session;scrPath.textContent='waiting for terminal panes';
@@ -7639,6 +7648,7 @@ function toggleSplitSession(session,{forceFocus=false}={}){
   }
   replaceSplitSessions(result.members);
   if(result.action==='added'){
+    fullTourSplitPending=true;
     manualDetached.delete(session);splitVisible=true;focusedSplitSession=session;
     const paneId=paneIdForSession(session);
     if(paneId)setActive(paneId,'split',{forceFocus});
@@ -8096,7 +8106,7 @@ function jumpToSessionTarget(name,{forceFocus=false}={}){
 }
 function jumpToAgent(name,event=null){
   selectAgent(name);
-  document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'choose'}}));
+  document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'choose',name}}));
   if(isSplitToggle(event)){
     if(event&&typeof event.preventDefault==='function')event.preventDefault();
     toggleSplitSession(name,{forceFocus:Boolean(event&&event.isTrusted)});return;
@@ -8549,7 +8559,8 @@ function openPaneFloat(session,{clientX,clientY}={}){
   bar.addEventListener('pointerdown',event=>{
     if(event.button!==0||event.target.closest('button'))return;
     event.preventDefault();
-    move={pointerId:event.pointerId,dx:event.clientX-el.offsetLeft,dy:event.clientY-el.offsetTop};
+    move={pointerId:event.pointerId,dx:event.clientX-el.offsetLeft,dy:event.clientY-el.offsetTop,
+      left:el.offsetLeft,top:el.offsetTop};
     try{bar.setPointerCapture(event.pointerId);}catch(_){}
     el.classList.add('moving');
   });
@@ -8562,14 +8573,17 @@ function openPaneFloat(session,{clientX,clientY}={}){
   });
   const finish=(event,cancel)=>{
     if(!move||event.pointerId!==move.pointerId)return;
-    move=null;el.classList.remove('moving','leaving');hint.textContent='drag out → own window';
+    const start=move;move=null;el.classList.remove('moving','leaving');hint.textContent='drag out → own window';
     const r=el.getBoundingClientRect();
     if(!cancel&&pointerLeftViewport(event.clientX,event.clientY,innerWidth,innerHeight)){
-      if(popSessionToWindow(session,{screenX:event.screenX,screenY:event.screenY,width:r.width,height:r.height-30}))return;
+      if(popSessionToWindow(session,{screenX:event.screenX,screenY:event.screenY,width:r.width,height:r.height-30})){
+        emitFullTourAction('full-drag');return;
+      }
       showToast('POPUP BLOCKED · allow popups for the cockpit',true);
     }
     const next=clampFloatRect({left:r.left,top:r.top,width:r.width,height:r.height},innerWidth,innerHeight);
     el.style.left=next.left+'px';el.style.top=next.top+'px';
+    if(!cancel&&Math.hypot(next.left-start.left,next.top-start.top)>=5)emitFullTourAction('full-drag');
   };
   bar.addEventListener('pointerup',event=>finish(event,false));
   bar.addEventListener('pointercancel',event=>finish(event,true));
@@ -8617,11 +8631,17 @@ function endPaneTabDrag(event,{cancel=false}={}){
   if(cancel||!event)return;
   const target=paneDropTarget(event);
   if(target==='window'){
-    if(popSessionToWindow(drag.session,{screenX:event.screenX,screenY:event.screenY}))return;
+    if(popSessionToWindow(drag.session,{screenX:event.screenX,screenY:event.screenY})){
+      emitFullTourAction('full-drag');return;
+    }
     showToast('POPUP BLOCKED · floating it over the cockpit instead',true);
-    openPaneFloat(drag.session,{});return;
+    openPaneFloat(drag.session,{});
+    if(paneWindows.get(drag.session)?.kind==='float')emitFullTourAction('full-drag');return;
   }
-  if(target==='float')openPaneFloat(drag.session,{clientX:event.clientX,clientY:event.clientY});
+  if(target==='float'){
+    openPaneFloat(drag.session,{clientX:event.clientX,clientY:event.clientY});
+    if(paneWindows.get(drag.session)?.kind==='float')emitFullTourAction('full-drag');
+  }
 }
 function paneTabDragJustEnded(label){
   return Date.now()-(label._paneDragEndedAt||0)<350;
@@ -8885,7 +8905,7 @@ async function pollUsage(force){
   if(document.getElementById('usagePopover').matches(':popover-open'))renderUsagePopover();
 }
 document.getElementById('usagePopover').addEventListener('toggle',e=>{
-  if(e.newState==='open'){renderUsagePopover();pollUsage(false);}});
+  if(e.newState==='open'){renderUsagePopover();pollUsage(false);emitFullTourAction('full-usage');}});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)pollUsage(false);});
 /* a pane window shows one terminal: no usage, lineage or mail polling there */
 if(!soloSession){pollUsage(false);setInterval(()=>{if(!document.hidden)pollUsage(false);},USAGE_POLL_MS);}
@@ -10115,8 +10135,10 @@ window.addEventListener('message',e=>{
     if(!themeProfileRecovery&&!themeProfilePending)postThemeAxesToTelemetry();
     return;
   }
-  if(d&&d.type==='orrery-jump'&&typeof d.name==='string'&&d.name){
-    closeNetwork();jumpToAgent(d.name);
+  if(e.source===networkFrame.contentWindow&&d&&d.type==='orrery-jump'&&typeof d.name==='string'&&d.name){
+    closeNetwork();
+    document.dispatchEvent(new CustomEvent('oc:telemetry-return',{detail:{name:d.name}}));
+    jumpToAgent(d.name);
   }
   // NEW AGENT inside the embed opens the cockpit's own spawn modal —
   // one modal to maintain, and it already knows the catalog + name picker.
@@ -10289,7 +10311,7 @@ function sendPrompt(opts){
   if(!send({type:"input",paneId:activeId,data:"\x1b[200~"+text+"\x1b[201~"})){showToast('not connected — try again');return;}
   setTimeout(()=>{
     if(send({type:"input",paneId:activeId,data:"\r"}))
-      document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'talk'}}));
+      document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'talk',name:p.session}}));
   },250);
   pushPromptHistory(text);
   promptInput.value='';saveDraft();closeSlashMenu();
@@ -10633,5 +10655,6 @@ kickPolls();
 <script src="orrery_view.js"></script>
 <script src="mail_view.js"></script>
 <script src="cockpit_tour.js"></script>
+<script src="cockpit_full_tour.js"></script>
 </body>
 </html>

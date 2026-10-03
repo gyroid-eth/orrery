@@ -439,14 +439,14 @@ def test_dom_checklist_pops_out_to_its_own_window_and_comes_back(tour_browser):
 def test_dom_another_tours_window_leaves_the_first_flight_out(tour_browser):
     import time
     client, evaluate = tour_browser
-    client.call('Page.navigate', url=evaluate.base + '/tour.html?tour=full-tour')
+    client.call('Page.navigate', url=evaluate.base + '/tour.html?tour=review-later-tour')
     for _ in range(100):
         if evaluate("Boolean(window.OrreryTour&&OrreryTour.mountChecklist&&document.readyState==='complete')"):
             break
         time.sleep(.1)
     result = evaluate("""(()=>{
       const before=document.querySelectorAll('.flight-guide').length;
-      const later=OrreryTour.mountChecklist({id:'full-tour',title:'Full tour',storageKey:'oc-test-full-tour',
+      const later=OrreryTour.mountChecklist({id:'review-later-tour',title:'Later tour',storageKey:'oc-test-review-later-tour',
         steps:[{id:'exit',title:'Exit an agent',copy:'Use EXIT in the deck.'}]});
       let seen=null;later.onChange(()=>{seen=later.state.current&&later.state.current.id;});later.show();
       return {before,solo:later.el.classList.contains('solo'),visible:!later.el.hidden,seen};
