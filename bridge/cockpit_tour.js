@@ -1,62 +1,251 @@
-/* First-flight copy and state are shared by the checklist and help map. */
+/* Tour checklists (first flight, and any later tour) and the help map.
+   A checklist's copy and progress are shared by every view of it: the docked
+   panel, its folded band, its own window, and (for the first flight) the help map. */
 (function(root){
 'use strict';
 const STEPS=Object.freeze([
   {id:'start',title:'Start an agent',label:'New agent',target:'#newAgentBtn',copy:'Start an agent here. Give it a task and choose a model.'},
   {id:'choose',title:'Choose your agent',label:'Agent list',target:'.col.roster',copy:'Choose an agent on the left to open its terminal.'},
   {id:'talk',title:'Talk to it',label:'Terminal and input',target:'.promptbar',copy:'Read the agent’s work in the center. Type below and press Enter to talk to it.'},
-  {id:'mail',title:'Read Agent Mail',label:'Agent mail',target:'#mail',copy:'Follow messages exchanged between agents on the right.'},
+  {id:'mail',title:'Read Agent Mail',label:'Agent mail',target:'#mail',manual:'Mark as read',copy:'Follow messages exchanged between agents on the right.'},
   {id:'telemetry',title:'Open Telemetry',label:'Telemetry',target:'#networkBtn',copy:"Cockpit is for working with agents; Telemetry shows everyone's status and history, with RESUME / EXIT."},
   {id:'planetarium',title:'Explore Planetarium',label:'Planetarium',target:'#planetariumBtn',copy:'See who spawned whom in the full agent family tree.'},
   {id:'settings',title:'Make it comfortable',label:'Settings',target:'#settingsBtn',copy:'Adjust the theme, terminal text size, and mini view.'},
 ]);
 const KEY='oc-first-flight-v1';
-function createState(storage){
-  let saved={};
-  try{saved=JSON.parse(storage.getItem(KEY))||{};}catch(_){}
-  const valid=new Set(STEPS.map(s=>s.id));
-  const done=new Set(Array.isArray(saved.done)?saved.done.filter(id=>valid.has(id)):[]);
-  let open=saved.seen!==true||saved.open===true, map=false;
-  function persist(){try{storage.setItem(KEY,JSON.stringify({seen:true,open,done:[...done]}));}catch(_){}}
-  persist();
+const CHANNEL='orrery-tour';
+function createState(storage,{steps=STEPS,key=KEY,autoOpen=true}={}){
+  const valid=new Set(steps.map(s=>s.id));
+  let done,open,folded,map=false;
+  function load(){
+    let saved={};
+    try{saved=JSON.parse(storage.getItem(key))||{};}catch(_){}
+    done=new Set(Array.isArray(saved.done)?saved.done.filter(id=>valid.has(id)):[]);
+    open=autoOpen?saved.seen!==true||saved.open===true:saved.open===true;
+    folded=saved.folded===true;
+  }
+  function persist(){try{storage.setItem(key,JSON.stringify({seen:true,open,folded,done:[...done]}));}catch(_){}}
+  load();persist();
   return {
-    get open(){return open;},get map(){return map;},get done(){return new Set(done);},
-    get current(){return STEPS.find(s=>!done.has(s.id))||null;},
-    show(){open=true;map=false;persist();},
+    get open(){return open;},get folded(){return folded;},get map(){return map;},get done(){return new Set(done);},
+    get current(){return steps.find(s=>!done.has(s.id))||null;},
+    get steps(){return steps;},
+    show(){open=true;folded=false;map=false;persist();},
     close(){open=false;persist();},
+    fold(){folded=true;persist();},
+    unfold(){folded=false;persist();},
     toggleMap(){map=!map;return map;},
     hideMap(){map=false;},
     mark(id){if(!open||!valid.has(id)||done.has(id))return false;done.add(id);persist();return true;},
-    reset(){done.clear();open=true;map=false;persist();},
+    reset(){done.clear();open=true;folded=false;map=false;persist();},
+    // Another window of the same viewer changed the saved progress.
+    reload(){load();},
   };
 }
-const API={STEPS,KEY,createState};
+const API={STEPS,KEY,CHANNEL,createState};
 if(typeof module!=='undefined'&&module.exports)module.exports=API;
 root.OrreryTour=API;
 if(!root.document)return;
 const doc=root.document;
+const params=new URLSearchParams(root.location.search);
+const windowTour=params.get('tour');
+let storage;try{storage=root.localStorage;}catch(_){}
+let channel=null;try{channel=new BroadcastChannel(CHANNEL);}catch(_){}
+// The desktop app's webview opens no window.open popups (its own windows come
+// from the open_pane_window command), so there a checklist stays docked.
+const canPopOut=!(root.__TAURI__&&root.__TAURI__.core)&&typeof root.open==='function';
+function narrow(){return root.innerWidth<720;}
+function readPosition(key){try{const p=JSON.parse(storage.getItem(key+'-pos'));return p&&Number.isFinite(p.left)&&Number.isFinite(p.top)?p:null;}catch(_){return null;}}
+function writePosition(key,p){try{if(p)storage.setItem(key+'-pos',JSON.stringify(p));else storage.removeItem(key+'-pos');}catch(_){}}
+function settingsSection(){
+  const settings=doc.getElementById('settingsPopover');
+  let section=settings&&settings.querySelector('.flight-settings');
+  if(settings&&!section){
+    section=doc.createElement('section');section.className='flight-settings';
+    section.innerHTML='<div class="settings-section-title">Getting started</div><div class="flight-settings-actions"></div>';
+    settings.querySelector('.settings-body').prepend(section);
+  }
+  return section;
+}
+function closeSettings(){const settings=doc.getElementById('settingsPopover');if(settings&&settings.matches(':popover-open'))settings.hidePopover();}
+function addSettingsEntry(label,handler,id){
+  const section=settingsSection();if(!section)return null;
+  const button=doc.createElement('button');button.type='button';button.className='modal-btn';button.textContent=label;
+  if(id)button.id=id;
+  button.addEventListener('click',()=>{closeSettings();handler();});
+  section.querySelector('.flight-settings-actions').append(button);
+  return button;
+}
+API.addSettingsEntry=addSettingsEntry;
+
+/* A checklist panel: a printed checklist (item …… response) that folds to a
+   one-line band, floats over the cockpit on frosted glass, drags anywhere in
+   the window and, dragged past the edge, moves into a window of its own. */
+function mountChecklist({id,title,steps,storageKey,autoOpen=false,meta='Use each control once',footer='Reopen anytime in Settings.'}){
+  // A tour's own window (?tour=<id>) shows that tour alone; any other checklist stays out of it.
+  if(windowTour&&windowTour!==id)return null;
+  const solo=windowTour===id;
+  const state=createState(storage,{steps,key:storageKey,autoOpen});
+  const el=doc.createElement('aside');
+  el.className='flight-guide';el.dataset.tour=id;el.setAttribute('aria-label',title);
+  el.innerHTML='<button type="button" class="flight-band"><span class="flight-item"></span><span class="flight-leader"></span><span class="flight-response"></span><span class="flight-count"></span></button>'+
+    '<div class="flight-panel"><div class="flight-head"><h2></h2><span class="flight-controls">'+
+    '<button type="button" class="flight-popout" aria-label="Open in its own window" title="Open in its own window">↗</button>'+
+    '<button type="button" class="flight-fold">Fold</button>'+
+    '<button type="button" class="flight-close">×</button></span></div>'+
+    '<div class="flight-meta"><span></span><span class="flight-count"></span></div>'+
+    '<div class="flight-status" aria-live="polite"></div><ol class="flight-steps"></ol>'+
+    '<div class="flight-footer"><span></span><button type="button" class="flight-restart">Restart</button></div></div>';
+  el.querySelector('h2').textContent=title;
+  el.querySelector('.flight-meta span').textContent=meta;
+  el.querySelector('.flight-footer span').textContent=footer;
+  el.querySelector('.flight-close').setAttribute('aria-label',solo?'Close this window':'Close '+title);
+  el.querySelector('.flight-popout').hidden=!canPopOut||solo;
+  el.querySelector('.flight-fold').hidden=solo;
+  el.classList.toggle('solo',solo);
+  const band=el.querySelector('.flight-band'),head=el.querySelector('.flight-head');
+  const rows=new Map();
+  steps.forEach(step=>{
+    const row=doc.createElement('li');row.dataset.step=step.id;
+    const line=doc.createElement('div');line.className='flight-line';
+    line.innerHTML='<span class="flight-item"></span><span class="flight-leader"></span><span class="flight-response"></span>';
+    line.firstChild.textContent=step.title;
+    const copy=doc.createElement('p');copy.textContent=step.copy;
+    row.append(line,copy);
+    if(step.manual){
+      const button=doc.createElement('button');button.type='button';button.className='flight-read';button.textContent=step.manual;
+      button.addEventListener('click',()=>{if(state.mark(step.id))changed();});row.append(button);
+    }
+    el.querySelector('.flight-steps').append(row);rows.set(step.id,row);
+  });
+  let popup=null,popped=false,suspended=false,highlight=null,dragged=null;
+  const listeners=[];
+  function changed(){render();if(!solo&&channel)channel.postMessage({type:'changed',tour:id});}
+  function place(){
+    const pos=solo||narrow()?null:readPosition(storageKey);
+    el.classList.toggle('placed',!!pos);
+    if(!pos){el.style.left=el.style.top='';return;}
+    const w=el.offsetWidth,h=el.offsetHeight;
+    // A spot that no longer fits (smaller window, other screen) is pulled back in.
+    el.style.left=Math.max(0,Math.min(root.innerWidth-w,pos.left))+'px';
+    el.style.top=Math.max(0,Math.min(root.innerHeight-Math.min(h,root.innerHeight),pos.top))+'px';
+  }
+  function render(){
+    const done=state.done,current=state.current,count=done.size+' / '+steps.length;
+    el.hidden=!solo&&(!state.open||suspended||popped);
+    el.classList.toggle('folded',state.folded&&!solo);
+    el.querySelectorAll('.flight-count').forEach(node=>{node.textContent=count;});
+    el.querySelector('.flight-status').textContent=current?done.size+' of '+steps.length+' done. Next: '+current.title+'.':'All '+steps.length+' done.';
+    band.querySelector('.flight-item').textContent=current?current.title:'All done';
+    band.querySelector('.flight-response').textContent=current?'now':'done';
+    band.setAttribute('aria-label',(current?'Next: '+current.title:'All done')+', '+count+'. Open '+title+'.');
+    rows.forEach((row,stepId)=>{
+      const isDone=done.has(stepId),isCurrent=!!current&&current.id===stepId;
+      row.classList.toggle('done',isDone);row.classList.toggle('current',isCurrent);
+      row.querySelector('.flight-response').textContent=isDone?'done':isCurrent?'now':'';
+      if(isCurrent)row.setAttribute('aria-current','step');else row.removeAttribute('aria-current');
+      const button=row.querySelector('.flight-read');if(button)button.hidden=!isCurrent;
+    });
+    if(highlight)highlight.classList.remove('flight-target');
+    highlight=!solo&&!el.hidden&&!state.folded&&current&&current.target?doc.querySelector(current.target):null;
+    if(highlight)highlight.classList.add('flight-target');
+    if(!el.hidden)place();
+    listeners.forEach(fn=>fn());
+  }
+  function show(){state.show();popped=popped&&!!popup&&!popup.closed;render();if(popped)popup.focus();}
+  function popOut(screenX,screenY){
+    if(!canPopOut)return false;
+    const width=360,height=Math.min(680,root.screen.availHeight||680);
+    const left=Math.round(Number.isFinite(screenX)?screenX-width/2:root.screenX+root.outerWidth-width-24);
+    const top=Math.round(Number.isFinite(screenY)?screenY-20:root.screenY+80);
+    const url=new URL(root.location.href);url.search='';url.hash='';
+    ['ws'].forEach(key=>{if(params.get(key))url.searchParams.set(key,params.get(key));});
+    url.searchParams.set('tour',id);
+    let win=null;
+    try{win=root.open(url.href,'orrery-tour-'+id,`popup=yes,width=${width},height=${height},left=${left},top=${top}`);}catch(_){win=null;}
+    if(!win)return false;
+    popup=win;popped=true;render();
+    // A popup closed from its title bar may not say so; watching it brings the panel back.
+    const timer=setInterval(()=>{if(popup!==win)return clearInterval(timer);if(win.closed){clearInterval(timer);popup=null;popped=false;render();}},800);
+    return true;
+  }
+  // Drag from the header or the band; a press that barely moves is a click.
+  function startDrag(event){
+    if(solo||narrow()||event.button!==0||event.target.closest('.flight-controls'))return;
+    const r=el.getBoundingClientRect();
+    dragged={x:event.clientX,y:event.clientY,left:r.left,top:r.top,moved:false,pointer:event.pointerId};
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  function outside(event){return event.clientX<0||event.clientY<0||event.clientX>root.innerWidth||event.clientY>root.innerHeight;}
+  function moveDrag(event){
+    if(!dragged||event.pointerId!==dragged.pointer)return;
+    const dx=event.clientX-dragged.x,dy=event.clientY-dragged.y;
+    if(!dragged.moved&&Math.hypot(dx,dy)<5)return;
+    dragged.moved=true;el.classList.add('dragging','placed');
+    el.classList.toggle('leaving',canPopOut&&outside(event));
+    el.style.left=dragged.left+dx+'px';el.style.top=dragged.top+dy+'px';
+  }
+  function endDrag(event){
+    if(!dragged||event.pointerId!==dragged.pointer)return;
+    const moved=dragged.moved;dragged=null;el.classList.remove('dragging','leaving');
+    if(!moved)return;
+    event.preventDefault();
+    band.dataset.dragged='1';setTimeout(()=>{delete band.dataset.dragged;},0);
+    if(canPopOut&&outside(event)&&popOut(event.screenX,event.screenY))return;
+    const r=el.getBoundingClientRect();writePosition(storageKey,{left:r.left,top:r.top});place();
+  }
+  [head,band].forEach(handle=>{
+    handle.addEventListener('pointerdown',startDrag);handle.addEventListener('pointermove',moveDrag);
+    handle.addEventListener('pointerup',endDrag);handle.addEventListener('pointercancel',endDrag);
+  });
+  band.addEventListener('click',()=>{if(band.dataset.dragged)return;state.unfold();changed();el.querySelector('.flight-fold').focus();});
+  el.querySelector('.flight-fold').addEventListener('click',()=>{state.fold();changed();band.focus();});
+  el.querySelector('.flight-close').addEventListener('click',()=>{if(solo){root.close();return;}state.close();changed();});
+  el.querySelector('.flight-restart').addEventListener('click',()=>{state.reset();changed();});
+  el.querySelector('.flight-popout').addEventListener('click',()=>{
+    if(!popOut()&&typeof root.showToast==='function')root.showToast('POPUP BLOCKED · allow popups for the cockpit',true);
+  });
+  // Every window of this viewer saves to the same storage; the others repaint from it.
+  root.addEventListener('storage',event=>{if(event.key===storageKey){state.reload();render();}});
+  if(channel)channel.addEventListener('message',event=>{
+    const msg=event.data||{};if(msg.tour!==id)return;
+    if(msg.type==='changed'){state.reload();render();}
+    else if(!solo&&msg.type==='open'){popped=true;render();}
+    else if(!solo&&msg.type==='closed'){popup=null;popped=false;render();}
+  });
+  if(solo){
+    if(channel){channel.postMessage({type:'open',tour:id});root.addEventListener('pagehide',()=>channel.postMessage({type:'closed',tour:id}));}
+    doc.title=title+' · ORRERY';
+  }else{
+    doc.addEventListener('oc:tour-action',event=>{
+      const detail=event.detail||{};
+      if((detail.tour===undefined||detail.tour===id)&&state.mark(detail.id))changed();
+    });
+  }
+  root.addEventListener('resize',()=>{if(!el.hidden)place();});
+  doc.body.append(el);
+  const controller={el,state,render,show,popOut,
+    fold(){state.fold();changed();},unfold(){state.unfold();changed();},
+    close(){state.close();changed();},reset(){state.reset();changed();},
+    mark(stepId){if(state.mark(stepId)){changed();return true;}return false;},
+    // Hide without closing (the help map stands in for the first flight).
+    suspend(flag){suspended=!!flag;render();},
+    // Called after every repaint (progress, fold, window); read controller.state.current.
+    onChange(fn){listeners.push(fn);},
+    get solo(){return solo;},
+  };
+  render();
+  return controller;
+}
+API.mountChecklist=mountChecklist;
+
 function mount(){
   if(doc.documentElement.classList.contains('pane-window'))return;
-  let storage;try{storage=root.localStorage;}catch(_){}
-  const state=createState(storage);
-  const guide=doc.createElement('aside');
-  guide.className='flight-guide';guide.setAttribute('aria-label','Your first flight');
-  guide.innerHTML='<div class="flight-head"><div><div class="flight-kicker">GETTING STARTED</div><h2>Your first flight</h2></div><button class="flight-close" type="button" aria-label="Close first flight">×</button></div><div class="flight-status" aria-live="polite"></div><progress class="flight-progress" max="7"></progress><ol class="flight-steps"></ol><div class="flight-footer"><span>Reopen anytime in Settings.</span><button type="button" class="flight-restart">Restart</button></div>';
-  const list=guide.querySelector('.flight-steps');
-  const rows=new Map();
-  STEPS.forEach((step,index)=>{
-    const row=doc.createElement('li');row.dataset.step=step.id;
-    const num=doc.createElement('span');num.className='flight-number';num.textContent=String(index+1);
-    const content=doc.createElement('div');
-    const title=doc.createElement('h3');title.textContent=step.title;
-    const copy=doc.createElement('p');copy.textContent=step.copy;
-    content.append(title,copy);
-    if(step.id==='mail'){
-      const button=doc.createElement('button');button.type='button';button.className='flight-read';button.textContent='I’ve read it →';
-      button.addEventListener('click',()=>{state.mark('mail');render();});content.append(button);
-    }
-    row.append(num,content);list.append(row);rows.set(step.id,row);
-  });
+  const flight=mountChecklist({id:'first-flight',title:'Your first flight',steps:STEPS,storageKey:KEY,autoOpen:true});
+  if(!flight)return;
+  API.state=flight.state;API.firstFlight=flight;
+  if(flight.solo)return;
+  const state=flight.state;
   const map=doc.createElement('section');map.className='flight-map';map.hidden=true;
   map.setAttribute('aria-label','Cockpit help map');
   map.innerHTML='<svg class="flight-map-art" aria-hidden="true"><defs><mask id="flightMapMask" maskUnits="userSpaceOnUse"></mask></defs><rect class="flight-map-veil" mask="url(#flightMapMask)"/><g class="flight-map-marks"></g></svg><div class="flight-map-title"><b>The cockpit, annotated</b><span>Press Esc or click anywhere to close.</span><button type="button" class="flight-map-close">Close</button></div><div class="flight-map-notes"></div>';
@@ -66,13 +255,15 @@ function mount(){
     const heading=doc.createElement('h3');heading.textContent=step.label;
     const copy=doc.createElement('p');copy.textContent=step.copy;note.append(heading,copy);notes.append(note);
   });
-  doc.body.append(guide,map);
+  doc.body.append(map);
   const settings=doc.getElementById('settingsPopover');
-  const help=doc.createElement('section');help.className='flight-settings';
-  help.innerHTML='<div class="settings-section-title">Getting started</div><div class="flight-settings-actions"><button type="button" class="modal-btn" id="firstFlightBtn">Your first flight</button><button type="button" class="modal-btn" id="helpMapBtn" aria-pressed="false">Show help map</button></div>';
-  settings.querySelector('.settings-body').prepend(help);
-  let previousFocus=null,highlight=null;
-  function closeSettings(){if(settings.matches(':popover-open'))settings.hidePopover();}
+  addSettingsEntry('Your first flight',()=>{flight.show();(flight.el.querySelector('.flight-fold:not([hidden])')||flight.el.querySelector('.flight-close')).focus();},'firstFlightBtn');
+  const helpMapBtn=addSettingsEntry('Show help map',()=>{
+    previousFocus=doc.getElementById('settingsBtn');state.toggleMap();render();
+    if(state.map)map.querySelector('.flight-map-close').focus();
+  },'helpMapBtn');
+  helpMapBtn.setAttribute('aria-pressed','false');
+  let previousFocus=null;
   function hideMap(){state.hideMap();render();if(previousFocus&&previousFocus.isConnected)previousFocus.focus();}
   const SVG='http://www.w3.org/2000/svg';
   function svg(tag,attrs,parent){const el=doc.createElementNS(SVG,tag);for(const k in attrs)el.setAttribute(k,attrs[k]);parent.append(el);return el;}
@@ -183,49 +374,27 @@ function mount(){
     }
   }
   function render(){
-    guide.hidden=!state.open||state.map;map.hidden=!state.map;
-    doc.body.classList.toggle('flight-open',state.open&&!state.map);
-    const done=state.done,current=state.current;
-    guide.querySelector('.flight-status').textContent=done.size===7?'All set. Enjoy your first flight!':done.size+' / 7 complete · use a control to check it off';
-    guide.querySelector('progress').value=done.size;
-    rows.forEach((row,id)=>{
-      row.classList.toggle('done',done.has(id));row.classList.toggle('current',current&&current.id===id);
-      row.querySelector('.flight-number').textContent=done.has(id)?'✓':String(STEPS.findIndex(s=>s.id===id)+1);
-      if(current&&current.id===id)row.setAttribute('aria-current','step');else row.removeAttribute('aria-current');
-      const button=row.querySelector('button');if(button)button.hidden=done.has(id)||!current||current.id!==id;
-    });
-    if(highlight)highlight.classList.remove('flight-target');
-    highlight=state.open&&!state.map&&current?doc.querySelector(current.target):null;
-    if(highlight)highlight.classList.add('flight-target');
-    doc.getElementById('helpMapBtn').setAttribute('aria-pressed',String(state.map));
-    doc.getElementById('helpMapBtn').textContent=state.map?'Hide help map':'Show help map';
+    map.hidden=!state.map;flight.suspend(state.map);
+    helpMapBtn.setAttribute('aria-pressed',String(state.map));
+    helpMapBtn.textContent=state.map?'Hide help map':'Show help map';
     placeMap();
-    root.dispatchEvent(new Event('resize'));
   }
-  guide.querySelector('.flight-close').addEventListener('click',()=>{state.close();render();});
-  guide.querySelector('.flight-restart').addEventListener('click',()=>{state.reset();render();});
   map.querySelector('.flight-map-close').addEventListener('click',hideMap);
   // Anywhere outside the compact legend closes the map; the legend itself scrolls.
   map.addEventListener('click',event=>{if(event.target.closest('.flight-map-close'))return;
     if(!(map.classList.contains('compact')&&event.target.closest('.flight-map-notes,.flight-map-title')))hideMap();});
-  doc.getElementById('firstFlightBtn').addEventListener('click',()=>{closeSettings();state.show();render();guide.querySelector('.flight-close').focus();});
-  doc.getElementById('helpMapBtn').addEventListener('click',()=>{
-    previousFocus=doc.getElementById('settingsBtn');closeSettings();state.toggleMap();render();
-    if(state.map)map.querySelector('.flight-map-close').focus();
-  });
   doc.addEventListener('keydown',event=>{
     if(event.key==='Escape'&&state.map){event.preventDefault();event.stopImmediatePropagation();hideMap();}
   },true);
-  doc.addEventListener('oc:tour-action',event=>{if(state.mark(event.detail&&event.detail.id))render();});
-  doc.addEventListener('oc:theme-profile-committed',()=>{if(state.mark('settings'))render();});
-  doc.getElementById('mail').addEventListener('click',()=>{if(state.mark('mail'))render();});
-  settings.addEventListener('change',event=>{if(event.target.matches('input,select,textarea')&&state.mark('settings'))render();});
+  doc.addEventListener('oc:theme-profile-committed',()=>flight.mark('settings'));
+  doc.getElementById('mail').addEventListener('click',()=>flight.mark('mail'));
+  settings.addEventListener('change',event=>{if(event.target.matches('input,select,textarea'))flight.mark('settings');});
   // Sliders apply on input rather than waiting for a change event.
-  settings.addEventListener('input',event=>{if(event.target.matches('input[type="range"]')&&state.mark('settings'))render();});
+  settings.addEventListener('input',event=>{if(event.target.matches('input[type="range"]'))flight.mark('settings');});
   let frame=0;
   root.addEventListener('resize',()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(placeMap);});
   root.addEventListener('scroll',()=>{if(state.map)placeMap();},true);
-  API.state=state;render();
+  render();
 }
 if(doc.readyState==='loading')doc.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })(typeof window==='undefined'?globalThis:window);
