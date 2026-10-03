@@ -51,7 +51,7 @@ def test_first_actual_round_must_be_between_parent_and_same_child():
     assert run("""
       const t=tour.createShiritoriTracker('Parent',1000000);
       const agents=[{name:'Child',parent:'Parent'},{name:'Other',parent:'Someone'}];
-      const ready={id:1,ts:1001,sender:'Child',recipient:'Parent',subject:'shiritori ready'};
+      const ready={id:1,ts:1001,sender:'Child',recipient:'Parent',subject:'shiritori ready',body:'Ready'};
       const out={id:2,ts:1002,sender:'Parent',recipient:'Child',subject:'shiritori round 1'};
       const reply={id:3,ts:1003,sender:'Child',recipients:[{name:'Parent'}],subject:'Re: shiritori round 1'};
       const unrelated={...reply,id:4,sender:'Other'};
@@ -61,14 +61,14 @@ def test_first_actual_round_must_be_between_parent_and_same_child():
     """) == [False, False, False, True, True]
 
 
-def test_old_missing_time_wrong_round_and_different_children_do_not_count():
+def test_old_missing_time_reverse_order_and_different_children_do_not_count():
     assert run("""
       const agents=[{name:'C1',parent:'P'},{name:'C2',parent:'P'}];
       const out={id:1,ts:1001,sender:'P',recipient:'C1',subject:'shiritori round 1'};
       const reply={id:2,ts:1002,sender:'C1',recipient:'P',subject:'shiritori round 1'};
       const results=[];
       for(const bad of [{...reply,ts:999},{...reply,ts:null},
-        {...reply,subject:'shiritori round 2'},{...reply,sender:'C2'}, {...reply,id:1}]){
+        {...reply,ts:1000.5},{...reply,sender:'C2'}, {...reply,id:1}]){
         const t=tour.createShiritoriTracker('P',1000000);
         results.push(t.add([out,bad],agents));
       }
@@ -167,6 +167,19 @@ def test_dom_return_waits_for_handoff_and_matching_terminal_focus(tour_browser):
                       'stillInTelemetry': 'full-return', 'complete': True}
 
 
+def test_dom_restart_forgets_an_earlier_pending_agent_choice(tour_browser):
+    _, evaluate = tour_browser
+    result = evaluate("""(()=>{
+      const full=OrreryFullTour.checklist;document.getElementById('fullTourBtn').click();
+      full.mark('full-start');
+      document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'choose',name:'OldPending'}}));
+      full.reset();full.mark('full-start');
+      document.dispatchEvent(new CustomEvent('oc:focus-agent',{detail:{name:'OldPending'}}));
+      return full.state.current.id;
+    })()""")
+    assert result == 'full-choose'
+
+
 def test_dom_full_popup_loads_current_definition_without_injected_mount(tour_browser):
     import contextlib
     import time
@@ -209,3 +222,75 @@ def test_dom_full_popup_loads_current_definition_without_injected_mount(tour_bro
         if popup:
             with contextlib.suppress(OSError):
                 urllib.request.urlopen(evaluate.endpoint + '/json/close/' + popup['id'])
+
+
+@pytest.mark.parametrize('subject', [None, 'ごりら (gorira, gorilla)', 'Re: りんご', 'shiritori round 2'])
+def test_free_reply_subject_and_reply_message_metadata_count(subject):
+    script = """
+      const t=tour.createShiritoriTracker('P',1000000),agents=[{name:'C',parent:'P'}];
+      const out={id:10,ts:1001,sender:'P',recipient:'C',body:'りんご'};
+      const reply={id:11,ts:1002,sender:'C',recipient:'P',body_md:'Round 1: ごりら',thread_id:'game',reply_to:10,subject:SUBJECT};
+      console.log(JSON.stringify(t.add([reply,out],agents)));
+    """.replace('SUBJECT', json.dumps(subject))
+    assert run(script) is True
+
+
+@pytest.mark.parametrize('kind,success,expected', [('float', True, 1), ('browser', True, 1),
+    ('browser', False, 0), ('native', True, 1), ('native', False, 0)])
+def test_owned_pane_focus_notifies_only_after_actual_success(kind, success, expected):
+    html = (MODULE.parent / 'cockpit.html').read_text()
+    functions = re.search(r'const pendingPaneFocus=new Map\(\);.*?(?=\n/\* own window:)', html, re.S).group()
+    script = """
+      let events=0,requests=[];
+      const paneScope='scope',paneWindows=new Map();
+      const document={dispatchEvent:()=>events++};
+      class CustomEvent{constructor(type,options){this.detail=options.detail;}}
+      const raisePaneFloat=()=>{},paneMessageInScope=(m,s)=>m.scope===s;
+      const postPaneMessage=m=>requests.push(m);
+      const entry=ENTRY;paneWindows.set('P',entry);
+      const appInvoke=()=>INVOKE;
+    """.replace('ENTRY', {'float':"{kind:'float',el:{}}", 'browser':
+        "{kind:'window',win:{closed:false,focus:()=>FOCUS}}".replace('FOCUS', '{}' if success else "{throw Error('refused')}"),
+        'native':"{kind:'window',instance:'child'}"}[kind]).replace('INVOKE',
+        ('()=>Promise.resolve()' if success else '()=>Promise.reject(Error("refused"))') if kind == 'native' else 'null')
+    script += functions + "focusPaneWindow('P');setTimeout(()=>console.log(JSON.stringify(events)),0);"
+    assert run(script) == expected
+
+
+def test_channel_focus_ack_requires_requested_scope_instance_and_nonce():
+    html = (MODULE.parent / 'cockpit.html').read_text()
+    functions = re.search(r'const pendingPaneFocus=new Map\(\);.*?(?=\n/\* own window:)', html, re.S).group()
+    assert run("""
+      let events=0,request;
+      const paneScope='ours',paneWindows=new Map([['P',{kind:'window',instance:'child'}]]);
+      const document={dispatchEvent:()=>events++};
+      class CustomEvent{constructor(type,options){this.detail=options.detail;}}
+      const raisePaneFloat=()=>{},appInvoke=()=>null,postPaneMessage=m=>request=m;
+      const paneMessageInScope=(m,s)=>m.scope===s;
+    """ + functions + """
+      focusPaneWindow('P');
+      const good={...request,type:'focused',id:'child',scope:'ours'};
+      acknowledgePaneFocus({...good,scope:'other'});
+      acknowledgePaneFocus({...good,id:'stranger'});
+      acknowledgePaneFocus({...good,request:'old'});
+      const refused=events;
+      acknowledgePaneFocus(good);acknowledgePaneFocus(good);
+      console.log(JSON.stringify({refused,accepted:events}));
+    """) == {'refused': 0, 'accepted': 1}
+
+
+@pytest.mark.parametrize('kind', ['browser', 'float'])
+def test_dom_return_completes_when_owned_pane_focus_succeeds(tour_browser, kind):
+    _, evaluate = tour_browser
+    entry = "{kind:'window',win:{closed:false,focus:()=>{window.focusedOwnPane=true;}}}" if kind == 'browser' else "{kind:'float',el:document.createElement('div')}"
+    result = evaluate("""(()=>{
+      const full=OrreryFullTour.checklist;document.getElementById('fullTourBtn').click();
+      full.state.steps.slice(0,15).forEach(s=>full.mark(s.id));
+      paneWindows.set('ReviewChild',ENTRY);
+      const frame=document.getElementById('networkFrame').contentWindow;
+      document.getElementById('networkOverlay').classList.add('on');
+      for(const data of [{type:'orrery-tour-action',version:1,action:'return'},{type:'orrery-jump',name:'ReviewChild'}])
+        window.dispatchEvent(new MessageEvent('message',{source:frame,origin:location.origin,data}));
+      return {overlayClosed:!document.getElementById('networkOverlay').classList.contains('on'),complete:full.state.current===null};
+    })()""".replace('ENTRY', entry))
+    assert result == {'overlayClosed': True, 'complete': True}
