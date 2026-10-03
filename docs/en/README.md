@@ -35,6 +35,6 @@ Start with **Your first flight → help map → Full tour** on screen, from cock
 - [Implementation architecture](ARCHITECTURE.md) — Read backend HTTP/WebSocket, tmux control, and Mail integration.
 - [Design language](DESIGN.md) — The implementation reference for visuals, motion, color, and typography.
 - [Roster findability design (discussion draft)](DESIGN_roster_findability.md) — Historical measurements and proposals, distinct from current operating instructions.
-- [Development entry](../../app/README.md) — Build, validation, and contribution procedures.
+- [Development entry](../../app/README.md) — Start the desktop app in development mode and check its show/hide hotkey.
 
 Documents without a translation are labelled with their original language. Images/GIFs accompany their articles. From the repository root, run `python3 scripts/check_docs_index.py` to check index coverage.
