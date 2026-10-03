@@ -12,6 +12,16 @@ const STEPS=Object.freeze([
   {id:'planetarium',title:'Explore Planetarium',label:'Planetarium',target:'#planetariumBtn',copy:'See who spawned whom in the full agent family tree.'},
   {id:'settings',title:'Make it comfortable',label:'Settings',target:'#settingsBtn',copy:'Adjust the theme, terminal text size, and mini view.'},
 ]);
+// Help-map notes for controls that are not first-flight steps. The steps supply
+// the other notes, so every note's words live in one place; MAP_ORDER is the
+// order the compact legend reads in.
+const MAP_EXTRA=Object.freeze([
+  {id:'select',label:'Select',target:'#rosterSelectBtn',copy:'Turn on Select to pick several agents in the list, then exit them together.'},
+  {id:'crew',label:'Working and waiting',target:'.topstat.crew',copy:'How many of your running agents are working right now, and how many are waiting for their next instruction.'},
+  {id:'usage',label:'Usage left',target:'#usageBtn',copy:'LEFT shows how much account allowance remains for Claude and Codex. Open it to see each window and when it resets.'},
+]);
+const MAP_ORDER=['start','select','choose','talk','mail','crew','usage','telemetry','planetarium','settings'];
+const MAP_NOTES=Object.freeze(MAP_ORDER.map(id=>STEPS.find(s=>s.id===id)||MAP_EXTRA.find(s=>s.id===id)));
 const KEY='oc-first-flight-v1';
 const CHANNEL='orrery-tour';
 function createState(storage,{steps=STEPS,key=KEY,autoOpen=true}={}){
@@ -42,7 +52,7 @@ function createState(storage,{steps=STEPS,key=KEY,autoOpen=true}={}){
     reload(){load();},
   };
 }
-const API={STEPS,KEY,CHANNEL,createState};
+const API={STEPS,MAP_NOTES,KEY,CHANNEL,createState};
 if(typeof module!=='undefined'&&module.exports)module.exports=API;
 root.OrreryTour=API;
 if(!root.document)return;
@@ -346,7 +356,7 @@ function mount(){
   map.setAttribute('aria-label','Cockpit help map');
   map.innerHTML='<svg class="flight-map-art" aria-hidden="true"><defs><mask id="flightMapMask" maskUnits="userSpaceOnUse"></mask></defs><rect class="flight-map-veil" mask="url(#flightMapMask)"/><g class="flight-map-marks"></g></svg><div class="flight-map-title"><b>The cockpit, annotated</b><span>Press Esc or click anywhere to close.</span><button type="button" class="flight-map-close">Close</button></div><div class="flight-map-notes"></div>';
   const notes=map.querySelector('.flight-map-notes'),title=map.querySelector('.flight-map-title');
-  STEPS.forEach(step=>{
+  MAP_NOTES.forEach(step=>{
     const note=doc.createElement('article');note.className='flight-map-note';note.dataset.step=step.id;note.tabIndex=-1;
     const heading=doc.createElement('h3');heading.textContent=step.label;
     const copy=doc.createElement('p');copy.textContent=step.copy;note.append(heading,copy);notes.append(note);
@@ -368,7 +378,7 @@ function mount(){
   // in the annotated layout a leader runs from it to its note.
   function targetRects(){
     const view={l:0,t:0,r:root.innerWidth,b:root.innerHeight};
-    const rects=STEPS.map(step=>{
+    const rects=MAP_NOTES.map(step=>{
       const el=doc.querySelector(step.target);if(!el)return null;
       const r=el.getBoundingClientRect();
       const l=Math.max(view.l,r.left),t=Math.max(view.t,r.top),rr=Math.min(view.r,r.right),b=Math.min(view.b,r.bottom);
@@ -396,26 +406,51 @@ function mount(){
   function leader(step,d,dot){svg('path',{class:'flight-map-leader','data-step':step,d},marks);svg('circle',{class:'flight-map-dot',cx:dot[0],cy:dot[1],r:2.4},marks);}
   // The reason the annotated layout gave way to the legend, kept for tests.
   function fail(reason){map.dataset.fallback=reason;return false;}
-  function annotate(rects){
+  // spread: the space between stacked notes, in units of the gap.
+  function annotate(rects,spread){
     const stage=doc.getElementById('termstage');
     const v=stage&&stage.getBoundingClientRect();
     if(!v||rects.some(r=>!r)||v.width<440||v.height<320)return fail('room');
-    const inset=30,gap=18,colGap=28;
+    const gap=18,colGap=28,lane=6,wide=210;
+    const headerEl=doc.querySelector('header');
+    const hb=headerEl?headerEl.getBoundingClientRect().bottom:v.top;
+    const cxOf=r=>(r.l+r.r)/2;
     const sides=rects.map(r=>r.r<=v.left+2?'left':r.b<=v.top+2?'top':r.l>=v.right-2?'right':'bottom');
-    const tops=rects.map((r,i)=>sides[i]==='top'?(r.l+r.r)/2:Infinity);
-    const leftDot=v.left+inset,rightDot=Math.min(v.right-inset,Math.min(...tops)-18);
-    const width=Math.min(300,(rightDot-leftDot-colGap)/2-10);
+    // Each left-column leader runs down its own lane just left of the dots.
+    const leftDotFor=lanes=>v.left+14+lane*lanes;
+    const sizeFor=(leftDot,rightDot)=>Math.min(300,(rightDot-leftDot-colGap)/2-10);
+    // Header controls over the stage: the rightmost join the right column while
+    // both columns keep room; the rest join the left one along the header's edge.
+    const tops=rects.map((r,i)=>i).filter(i=>sides[i]==='top').sort((a,b)=>cxOf(rects[b])-cxOf(rects[a]));
+    const leftLeaders=sides.filter(side=>side==='left').length;
+    // Right-column header leaders each keep a lane of their own right of the dots.
+    let rightDot=v.right-30;
+    tops.forEach((i,k)=>{
+      const dot=Math.min(v.right-30,cxOf(rects[i])-18-lane*(k+1));
+      const remaining=tops.length-k-1;
+      if(sizeFor(leftDotFor(leftLeaders+remaining),dot)>=wide)rightDot=dot;
+      else tops.slice(k).forEach(j=>{sides[j]='head';});
+    });
+    const heads=sides.filter(side=>side==='head').length;
+    const leftDot=leftDotFor(leftLeaders+heads);
+    const width=sizeFor(leftDot,rightDot);
     if(width<180)return fail('width');
     const els=[...notes.children];
     els.forEach(el=>{el.style.width=width+'px';el.style.left='';el.style.top='';el.classList.remove('end');});
     title.style.width=width+'px';
     const mid=el=>{const h=el.firstElementChild;return h.offsetTop+h.offsetHeight/2;};
-    // Columns are stacked top-down in the order their controls sit, so leaders never cross.
+    // A left control with another framed control beside it leaves over the top
+    // instead of running through its neighbour.
+    const boxed=i=>{const r=rects[i],y=(r.t+r.b)/2;return rects.some((o,j)=>j!==i&&o.l>=r.r-1&&o.l<v.left&&o.t<=y&&o.b>=y);};
+    // Columns are stacked top-down in the order their leaders arrive, so none cross:
+    // header notes first (rightmost highest), then controls leaving over the top.
     const left=[],right=[];let bottom=null;
     rects.forEach((r,i)=>{
       const item={i,el:els[i],r,h:els[i].offsetHeight};
-      if(sides[i]==='left')item.want=r.b-r.t<90?Math.max(v.top+gap,(r.t+r.b)/2):r.t+(r.b-r.t)*.45,left.push(item);
-      else if(sides[i]==='top')item.want=v.top+gap+(r.l+r.r)/2/1e4,right.push(item);
+      if(sides[i]==='head')item.want=-1e6-cxOf(r),left.push(item);
+      else if(sides[i]==='left'&&boxed(i))item.over=true,item.want=-1e5+r.t,left.push(item);
+      else if(sides[i]==='left')item.want=r.b-r.t<90?Math.max(v.top+gap,(r.t+r.b)/2):r.t+(r.b-r.t)*.45,left.push(item);
+      else if(sides[i]==='top')item.want=v.top+gap+cxOf(r)/1e4,right.push(item);
       else if(sides[i]==='right')item.want=r.t+(r.b-r.t)*.45,right.push(item);
       else bottom=item;
     });
@@ -423,7 +458,7 @@ function mount(){
     const stack=(items,x,alignRight)=>{
       let y=v.top+gap;
       items.sort((a,b)=>a.want-b.want).forEach(item=>{
-        item.y=Math.max(y,item.want-mid(item.el));y=item.y+item.h+gap*1.4;
+        item.y=Math.max(y,item.want-mid(item.el));y=item.y+item.h+gap*spread;
         item.x=alignRight?x-width:x;item.el.classList.toggle('end',alignRight);
       });
       return y;
@@ -433,27 +468,38 @@ function mount(){
     // above it; its leader rises straight from the bar along that column's dots.
     if(bottom){
       bottom.y=bottom.r.t-gap-6-bottom.h;
-      const fits=end=>end-gap*0.4<=bottom.y;
+      const fits=end=>end-gap*(spread-1)<=bottom.y;
       if(fits(leftEnd)){bottom.x=leftDot+10;bottom.col='left';}
       else if(fits(rightEnd)){bottom.x=rightDot-10-width;bottom.col='right';bottom.el.classList.add('end');}
       else return fail('bottom');
     }
-    if(leftEnd-gap*1.4>v.bottom||rightEnd-gap*1.4>v.bottom)return fail('height');
+    if(leftEnd-gap*spread>v.bottom||rightEnd-gap*spread>v.bottom)return fail('height');
     [...left,...right,...(bottom?[bottom]:[])].forEach(item=>{item.el.style.left=item.x+'px';item.el.style.top=item.y+'px';});
+    const rightTops=rects.map((r,i)=>i).filter(i=>sides[i]==='top').sort((a,b)=>cxOf(rects[a])-cxOf(rects[b]));
+    // Lanes: the higher a left note, the nearer its lane to the dots.
+    let laneIndex=0,headIndex=0;
+    left.forEach(item=>{if(item.i!==undefined)item.lane=leftDot-lane*(++laneIndex);});
     left.concat(right,bottom?[bottom]:[]).forEach(item=>{
       if(item.i===undefined)return;
-      const r=item.r,y=item.y+mid(item.el),side=sides[item.i];
-      if(side==='left'){const sy=Math.max(r.t+8,Math.min(r.b-8,y));leader(STEPS[item.i].id,`M${r.r+3},${sy}H${leftDot-10}V${y}H${leftDot}`,[leftDot,y]);}
-      else if(side==='right'){const sy=Math.max(r.t+8,Math.min(r.b-8,y));leader(STEPS[item.i].id,`M${r.l-3},${sy}H${rightDot+10}V${y}H${rightDot}`,[rightDot,y]);}
-      else if(side==='top'){
-        const cx=(r.l+r.r)/2;
-        // A drop that would run through another framed control turns into the
-        // margin just above that frame instead.
-        const block=rects.find((o,j)=>sides[j]==='right'&&cx>=o.l&&cx<=o.r&&y>o.t-8);
-        if(block)leader(STEPS[item.i].id,`M${cx},${r.b+3}V${block.t-16}H${rightDot+12}V${y}H${rightDot}`,[rightDot,y]);
-        else leader(STEPS[item.i].id,`M${cx},${r.b+3}V${y}H${rightDot}`,[rightDot,y]);
+      const r=item.r,y=item.y+mid(item.el),side=sides[item.i],id=MAP_NOTES[item.i].id;
+      if(side==='head'){
+        // Along the header's lower edge, the higher note on the lower track.
+        const track=Math.max(r.b+5,hb-3-4*headIndex++);
+        leader(id,`M${cxOf(r)},${r.b+3}V${track}H${item.lane}V${y}H${leftDot}`,[leftDot,y]);
       }
-      else{const x=item.col==='left'?leftDot:rightDot;leader(STEPS[item.i].id,`M${x},${r.t-3}V${y}`,[x,y]);}
+      else if(side==='left'&&item.over){
+        const track=Math.max(hb+2,r.t-8);
+        leader(id,`M${cxOf(r)},${r.t-3}V${track}H${item.lane}V${y}H${leftDot}`,[leftDot,y]);
+      }
+      else if(side==='left'){const sy=Math.max(r.t+8,Math.min(r.b-8,y));leader(id,`M${r.r+3},${sy}H${item.lane}V${y}H${leftDot}`,[leftDot,y]);}
+      else if(side==='right'){const sy=Math.max(r.t+8,Math.min(r.b-8,y));leader(id,`M${r.l-3},${sy}H${rightDot+lane*(rightTops.length+1)}V${y}H${rightDot}`,[rightDot,y]);}
+      else if(side==='top'){
+        // Just below the header and down a lane of its own: the further right the
+        // control, the lower its track and the further out its lane.
+        const k=rightTops.indexOf(item.i);
+        leader(id,`M${cxOf(r)},${r.b+3}V${hb+4+5*k}H${rightDot+lane*(k+1)}V${y}H${rightDot}`,[rightDot,y]);
+      }
+      else{const x=item.col==='left'?leftDot:rightDot;leader(id,`M${x},${r.t-3}V${y}`,[x,y]);}
     });
     return true;
   }
@@ -464,7 +510,8 @@ function mount(){
     art.querySelector('.flight-map-veil').setAttribute('height',root.innerHeight);
     const rects=targetRects();
     map.classList.remove('compact');delete map.dataset.fallback;drawFrames(rects);
-    if(!annotate(rects)){
+    // Ten notes are a lot for a small stage: close the spacing before giving up the leaders.
+    if(!annotate(rects,1.4)&&!annotate(rects,.8)){
       [title,...notes.children].forEach(el=>{el.style.left=el.style.top=el.style.width='';el.classList.remove('end');});
       map.classList.add('compact');drawFrames(rects);
     }
