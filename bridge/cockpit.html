@@ -14,8 +14,6 @@
 <script src="theme_core.js"></script>
 <script src="theme_controller.js"></script>
 <script>
-/* tour window (?tour=ID): only that tour's checklist shows (cockpit_tour.js) */
-(function(){if(new URLSearchParams(location.search).get('tour'))document.documentElement.classList.add('tour-window');})();
 /* pane window (?solo=1&session=NAME): hide the cockpit chrome before first paint */
 (function(){var q=new URLSearchParams(location.search);if(q.get('solo')!=='1'||!q.get('session'))return;
   var root=document.documentElement;root.classList.add('pane-window');

@@ -426,7 +426,7 @@ def test_dom_checklist_pops_out_to_its_own_window_and_comes_back(tour_browser):
 def test_dom_another_tours_window_leaves_the_first_flight_out(tour_browser):
     import time
     client, evaluate = tour_browser
-    client.call('Page.navigate', url=evaluate.base + '/cockpit.html?tour=full-tour')
+    client.call('Page.navigate', url=evaluate.base + '/tour.html?tour=full-tour')
     for _ in range(100):
         if evaluate("Boolean(window.OrreryTour&&OrreryTour.mountChecklist&&document.readyState==='complete')"):
             break
@@ -436,7 +436,40 @@ def test_dom_another_tours_window_leaves_the_first_flight_out(tour_browser):
       const later=OrreryTour.mountChecklist({id:'full-tour',title:'Full tour',storageKey:'oc-test-full-tour',
         steps:[{id:'exit',title:'Exit an agent',copy:'Use EXIT in the deck.'}]});
       let seen=null;later.onChange(()=>{seen=later.state.current&&later.state.current.id;});later.show();
-      return {before,solo:later.el.classList.contains('solo'),visible:!later.el.hidden,seen,
-        hiddenCockpit:getComputedStyle(document.querySelector('.app')).display};
+      return {before,solo:later.el.classList.contains('solo'),visible:!later.el.hidden,seen};
     })()""")
-    assert result == {'before': 0, 'solo': True, 'visible': True, 'seen': 'exit', 'hiddenCockpit': 'none'}
+    assert result == {'before': 0, 'solo': True, 'visible': True, 'seen': 'exit'}
+
+
+def test_dom_tour_window_runs_no_cockpit_behind_the_checklist(tour_browser):
+    """Review of #14: a hidden cockpit in the tour window answered Cmd+K, Enter."""
+    import time
+    client, evaluate = tour_browser
+    client.call('Page.navigate', url=evaluate.base + '/tour.html?tour=first-flight')
+    for _ in range(100):
+        if evaluate("Boolean(window.OrreryTour&&OrreryTour.state)"):
+            break
+        time.sleep(.1)
+    for key, modifiers in [('k', 4), ('Enter', 0), ('Escape', 0)]:
+        client.call('Input.dispatchKeyEvent', type='keyDown', key=key, modifiers=modifiers)
+        client.call('Input.dispatchKeyEvent', type='keyUp', key=key, modifiers=modifiers)
+    result = evaluate("""JSON.stringify({
+      cockpit:['jumpToAgent','sendPrompt','pollMail','startPoll'].filter(name=>name in window),
+      elements:[...document.body.children].filter(e=>e.tagName!=='SCRIPT').map(e=>e.className),
+      palette:!!document.getElementById('paletteOverlay'),
+      shown:!OrreryTour.firstFlight.el.hidden,solo:OrreryTour.firstFlight.solo})""")
+    assert json.loads(result) == {'cockpit': [], 'elements': ['flight-guide solo'], 'palette': False,
+                                  'shown': True, 'solo': True}
+
+
+def test_tour_page_keeps_the_cockpit_dark_palette():
+    root = re.search(r':root\{(.*?)\n  \}', (BRIDGE / 'cockpit.html').read_text(), re.S).group(1)
+    tour = re.search(r':root\{(.*?)\n  \}', (BRIDGE / 'tour.html').read_text(), re.S).group(1)
+    token = lambda css: dict((k.strip(), v.split('/*')[0].strip()) for k, v in re.findall(r'(--[\w-]+):([^;]+);', css))
+    cockpit, page = token(root), token(tour)
+    assert page and all(cockpit.get(name) == value for name, value in page.items()), \
+        {name: (value, cockpit.get(name)) for name, value in page.items() if cockpit.get(name) != value}
+
+
+def test_cockpit_with_a_tour_query_is_still_the_cockpit():
+    assert 'tour-window' not in (BRIDGE / 'cockpit.html').read_text()

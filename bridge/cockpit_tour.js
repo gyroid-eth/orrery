@@ -48,7 +48,8 @@ root.OrreryTour=API;
 if(!root.document)return;
 const doc=root.document;
 const params=new URLSearchParams(root.location.search);
-const windowTour=params.get('tour');
+// Only the dedicated tour page (tour.html) is a tour window.
+const windowTour=doc.documentElement.classList.contains('tour-window')?params.get('tour'):null;
 let storage;try{storage=root.localStorage;}catch(_){}
 let channel=null;try{channel=new BroadcastChannel(CHANNEL);}catch(_){}
 // The desktop app's webview opens no window.open popups (its own windows come
@@ -158,7 +159,7 @@ function mountChecklist({id,title,steps,storageKey,autoOpen=false,meta='Use each
     const width=360,height=Math.min(680,root.screen.availHeight||680);
     const left=Math.round(Number.isFinite(screenX)?screenX-width/2:root.screenX+root.outerWidth-width-24);
     const top=Math.round(Number.isFinite(screenY)?screenY-20:root.screenY+80);
-    const url=new URL(root.location.href);url.search='';url.hash='';
+    const url=new URL('tour.html',root.location.href);
     ['ws'].forEach(key=>{if(params.get(key))url.searchParams.set(key,params.get(key));});
     url.searchParams.set('tour',id);
     let win=null;
