@@ -1,5 +1,6 @@
 """Full-tour order, trusted iframe messages and observed parent/child rounds."""
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -82,6 +83,27 @@ def test_observation_accepts_iso_time_and_delayed_lineage():
         {id:2,created_ts:'2026-10-04T00:00:03Z',sender:'C',recipient:'P',subject:'shiritori round 1'}];
       console.log(JSON.stringify([t.add(mails,[]),t.add(mails,[{name:'C',parent:'P'}])]));
     """) == [False, True]
+
+
+@pytest.mark.parametrize('native,success,expected', [(True, True, 1), (True, False, 0),
+                                                   (False, True, 1), (False, False, 0)])
+def test_drag_window_completion_waits_for_successful_creation(native, success, expected):
+    html = (MODULE.parent / 'cockpit.html').read_text()
+    function = re.search(r'function openPaneWindow\(.*?(?=\nfunction popSessionToWindow)', html, re.S).group()
+    native_handler = '()=>Promise.resolve()' if success else '()=>Promise.reject(Error("refused"))'
+    script = """
+      let calls=0;
+      const screen={},paneScope='test',location={href:'http://local'};
+      globalThis.window={open:()=>WINDOW_RESULT};
+      const paneWindowGeometry=()=>({}),paneWindowUrl=()=>'',paneWindowName=()=>'';
+      const paneWindows=new Map(),showToast=()=>{},returnPaneSession=()=>{};
+    """.replace('WINDOW_RESULT', '{}' if success else 'null')
+    script += 'const appInvoke=()=>'+('('+native_handler+')' if native else 'null')+';'
+    script += function + """
+      openPaneWindow('Pilot',{onOpened:()=>calls++});
+      setTimeout(()=>console.log(JSON.stringify(calls)),0);
+    """
+    assert run(script) == expected
 
 
 def test_dom_full_tour_is_separate_and_restart_preserves_first_flight(tour_browser):

@@ -8468,7 +8468,7 @@ function focusPaneWindow(session){
 }
 
 /* own window: a Tauri window in the app, a popup in a browser */
-function openPaneWindow(session,{screenX,screenY,width,height}={}){
+function openPaneWindow(session,{screenX,screenY,width,height,onOpened}={}){
   const geometry=paneWindowGeometry({
     screenX,screenY,width:width||760,height:height||540,
     availLeft:Number(screen.availLeft)||0,availTop:Number(screen.availTop)||0,
@@ -8477,6 +8477,7 @@ function openPaneWindow(session,{screenX,screenY,width,height}={}){
   const invoke=appInvoke();
   if(invoke){
     invoke('open_pane_window',{session,x:geometry.left,y:geometry.top,width:geometry.width,height:geometry.height})
+      .then(()=>{if(onOpened)onOpened();})
       .catch(error=>{
         showToast(`WINDOW FAILED · ${String(error&&error.message||error)}`,true);
         if(paneWindows.get(session)?.kind==='window')returnPaneSession(session,{close:false});
@@ -8486,6 +8487,7 @@ function openPaneWindow(session,{screenX,screenY,width,height}={}){
   const features=`popup=yes,width=${geometry.width},height=${geometry.height},left=${geometry.left},top=${geometry.top}`;
   let win=null;
   try{win=window.open(paneWindowUrl(location.href,session),paneWindowName(paneScope,session),features);}catch(_){win=null;}
+  if(win&&onOpened)onOpened();
   return win?{win}:null;
 }
 function popSessionToWindow(session,geometry){
@@ -8576,9 +8578,8 @@ function openPaneFloat(session,{clientX,clientY}={}){
     const start=move;move=null;el.classList.remove('moving','leaving');hint.textContent='drag out → own window';
     const r=el.getBoundingClientRect();
     if(!cancel&&pointerLeftViewport(event.clientX,event.clientY,innerWidth,innerHeight)){
-      if(popSessionToWindow(session,{screenX:event.screenX,screenY:event.screenY,width:r.width,height:r.height-30})){
-        emitFullTourAction('full-drag');return;
-      }
+      if(popSessionToWindow(session,{screenX:event.screenX,screenY:event.screenY,width:r.width,height:r.height-30,
+        onOpened:()=>emitFullTourAction('full-drag')}))return;
       showToast('POPUP BLOCKED · allow popups for the cockpit',true);
     }
     const next=clampFloatRect({left:r.left,top:r.top,width:r.width,height:r.height},innerWidth,innerHeight);
@@ -8631,9 +8632,8 @@ function endPaneTabDrag(event,{cancel=false}={}){
   if(cancel||!event)return;
   const target=paneDropTarget(event);
   if(target==='window'){
-    if(popSessionToWindow(drag.session,{screenX:event.screenX,screenY:event.screenY})){
-      emitFullTourAction('full-drag');return;
-    }
+    if(popSessionToWindow(drag.session,{screenX:event.screenX,screenY:event.screenY,
+      onOpened:()=>emitFullTourAction('full-drag')}))return;
     showToast('POPUP BLOCKED · floating it over the cockpit instead',true);
     openPaneFloat(drag.session,{});
     if(paneWindows.get(drag.session)?.kind==='float')emitFullTourAction('full-drag');return;
