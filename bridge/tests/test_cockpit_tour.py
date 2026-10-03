@@ -139,6 +139,19 @@ def tour_browser():
             if self.path.startswith(('/telemetry/', '/ws', '/api/')):
                 self.send_error(404)
                 return
+            if self.path.startswith('/tour-late-fixture.html'):
+                # tour.html plus a page script that mounts its tour on DOMContentLoaded,
+                # as a later tour's own script may; built here, never written to the checkout.
+                late = ("<script>document.addEventListener('DOMContentLoaded',()=>OrreryTour.mountChecklist("
+                        "{id:'late',title:'Current title',storageKey:'oc-test-late',"
+                        "steps:[{id:'new',title:'Current step',copy:'From the page script.'}]}));</script></body>")
+                body = (BRIDGE / 'tour.html').read_text().replace('</body>', late).encode()
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             super().do_GET()
 
     server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
@@ -559,4 +572,33 @@ def test_dom_mounting_a_tour_twice_returns_the_first(tour_browser):
       const a=OrreryTour.mountChecklist(def),b=OrreryTour.mountChecklist({...def,title:'Other'});
       return a===b&&OrreryTour.getChecklist('twice')===a&&document.querySelectorAll('[data-tour="twice"]').length===1;
     })()""") is True
+
+
+def test_dom_tour_page_script_wins_over_the_stored_definition(tour_browser):
+    """Review of #14 (P3): the stored-definition fallback must not pre-empt a page
+    script that mounts its tour on DOMContentLoaded, nor keep an older definition."""
+    import time
+    client, evaluate = tour_browser
+    evaluate("""localStorage.setItem('oc-tour-definition:late',JSON.stringify({id:'late',title:'Old title',
+      storageKey:'oc-test-late',steps:[{id:'old',title:'Old step',copy:'Saved earlier.'}]}))""")
+    client.call('Page.navigate', url=evaluate.base + '/tour-late-fixture.html?tour=late')
+    for _ in range(100):
+        if evaluate("document.readyState==='complete'&&Boolean(window.OrreryTour&&OrreryTour.getChecklist('late'))"):
+            break
+        time.sleep(.1)
+    time.sleep(.2)
+    shown = """JSON.stringify([...document.querySelectorAll('.flight-guide')].map(el=>({
+      title:el.querySelector('h2').textContent,items:[...el.querySelectorAll('.flight-steps .flight-item')].map(n=>n.textContent)})))"""
+    assert json.loads(evaluate(shown)) == [{'title': 'Current title', 'items': ['Current step']}]
+    # A page script that only arrives after the fallback still replaces it.
+    client.call('Page.navigate', url=evaluate.base + '/tour.html?tour=late')
+    for _ in range(100):
+        if evaluate("document.readyState==='complete'&&Boolean(window.OrreryTour&&OrreryTour.getChecklist('late'))"):
+            break
+        time.sleep(.1)
+    fallback = json.loads(evaluate(shown))
+    evaluate("""OrreryTour.mountChecklist({id:'late',title:'Current title',storageKey:'oc-test-late',
+      steps:[{id:'new',title:'Current step',copy:'From the page script.'}]})""")
+    assert fallback == [{'title': 'Old title', 'items': ['Old step']}]
+    assert json.loads(evaluate(shown)) == [{'title': 'Current title', 'items': ['Current step']}]
 
