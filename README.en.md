@@ -190,6 +190,8 @@ The same one line also updates an existing install. See [Update](docs/en/install
 
 ## Documentation
 
+Find material by purpose in the [complete docs index](docs/en/README.md).
+
 The Japanese documents are the source of truth. The English versions are in README.en.md and `docs/en/`, and every document in this table has an English version.
 
 | Document | Contents |

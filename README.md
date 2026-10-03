@@ -190,6 +190,8 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 ## ドキュメント
 
+目的から探すときは[全 docs の索引](docs/README.md)へ。
+
 日本語文書が正本です。英語版は [README.en.md](README.en.md) と `docs/en/` にあり、この表のすべての文書に対応する英語版があります。
 
 | 文書 | 内容 |
