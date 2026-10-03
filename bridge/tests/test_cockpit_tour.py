@@ -607,15 +607,16 @@ FAKE_APP = """(()=>{
   // The desktop app's bridge, as far as the checklist uses it. Knobs set the timing
   // of the review cases: how long listen takes, whether it fails, and when the
   // native window closes relative to open_tour_window.
-  window.appCalls=[];window.appClosed=null;window.appKnobs={listenMs:0,listenFails:false,closeAfterMs:null,closeDuringOpen:false,windowExists:true};
+  window.appCalls=[];window.appClosed=null;window.appKnobs={listenMs:0,listenFails:false,closeAfterMs:null,closeDuringOpen:false,windowExists:true,existsMs:0};
   const closeNotice={payload:{tour:'first-flight',url:location.origin+'/tour.html?tour=first-flight'}};
   let handler=null;
   const emit=()=>{if(handler)handler(closeNotice);};
+  window.appEmitClose=emit;
   window.__TAURI__={core:{invoke:(name,args)=>{appCalls.push([name,args]);
       if(!window.appHasTourWindows)return Promise.reject('Command '+name+' not found');
       if(name==='open_tour_window'&&appKnobs.closeDuringOpen)emit();
       if(name==='open_tour_window'&&appKnobs.closeAfterMs!==null)setTimeout(emit,appKnobs.closeAfterMs);
-      if(name==='tour_window_exists')return Promise.resolve(appKnobs.windowExists);
+      if(name==='tour_window_exists'){const answer=appKnobs.windowExists;return new Promise(r=>setTimeout(()=>r(answer),appKnobs.existsMs));}
       return Promise.resolve();}},
     event:{listen:(name,fn)=>new Promise((resolve,reject)=>setTimeout(()=>{
       if(appKnobs.listenFails)return reject('no event permission');
@@ -722,4 +723,25 @@ def test_dom_app_window_gone_without_a_notice_is_noticed(tour_browser):
       return {out,asked:appCalls.filter(c=>c[0]==='tour_window_exists').length>0,panel:!flight.el.hidden};
     })()""")
     assert result == {'out': True, 'asked': True, 'panel': True}
+
+
+def test_dom_stale_window_answer_does_not_undo_a_reopened_window(tour_browser):
+    """Review of #15 (P3): a slow "no window" answer from before a reopen."""
+    _, evaluate = tour_browser
+    evaluate(FAKE_APP)
+    result = evaluate("""(async()=>{
+      window.appHasTourWindows=true;
+      const flight=OrreryTour.firstFlight,wait=ms=>new Promise(r=>setTimeout(r,ms));flight.reset();
+      flight.el.querySelector('.flight-popout').click();
+      await wait(50);
+      appKnobs.windowExists=false;appKnobs.existsMs=600;   // the next check answers late, about the old window
+      await wait(2100);
+      appEmitClose();appKnobs.windowExists=true;          // closed, then opened again before that answer
+      flight.el.querySelector('.flight-popout').click();
+      await wait(100);
+      const reopened=flight.el.hidden;
+      await wait(700);                                     // the stale "no window" answer has arrived
+      return {reopened,stillOut:flight.el.hidden};
+    })()""")
+    assert result == {'reopened': True, 'stillOut': True}
 
