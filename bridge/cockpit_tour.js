@@ -82,10 +82,19 @@ API.addSettingsEntry=addSettingsEntry;
 /* A checklist panel: a printed checklist (item …… response) that folds to a
    one-line band, floats over the cockpit on frosted glass, drags anywhere in
    the window and, dragged past the edge, moves into a window of its own. */
-function mountChecklist({id,title,steps,storageKey,autoOpen=false,meta='Use each control once',footer='Reopen anytime in Settings.'}){
-  // A tour's own window (?tour=<id>) shows that tour alone; any other checklist stays out of it.
+// Every mounted checklist by id: mounting the same tour twice returns the first.
+const checklists=new Map();
+const DEFINITION_PREFIX='oc-tour-definition:';
+API.getChecklist=id=>checklists.get(id)||null;
+function mountChecklist(definition){
+  const {id,title,steps,storageKey,autoOpen=false,meta='Use each control once',footer='Reopen anytime in Settings.'}=definition;
+  if(checklists.has(id))return checklists.get(id);
+  // A tour's own window (tour.html?tour=<id>) shows that tour alone; any other checklist stays out of it.
   if(windowTour&&windowTour!==id)return null;
   const solo=windowTour===id;
+  // The cockpit leaves the definition (plain data) for the tour's own window,
+  // which mounts it from there when no script of the page did (see tour.html).
+  if(!solo)try{storage.setItem(DEFINITION_PREFIX+id,JSON.stringify({id,title,steps,storageKey,meta,footer}));}catch(_){}
   const state=createState(storage,{steps,key:storageKey,autoOpen});
   const el=doc.createElement('aside');
   el.className='flight-guide';el.dataset.tour=id;el.setAttribute('aria-label',title);
@@ -165,7 +174,9 @@ function mountChecklist({id,title,steps,storageKey,autoOpen=false,meta='Use each
     let win=null;
     try{win=root.open(url.href,'orrery-tour-'+id,`popup=yes,width=${width},height=${height},left=${left},top=${top}`);}catch(_){win=null;}
     if(!win)return false;
-    popup=win;popped=true;render();
+    popup=win;
+    // The panel steps aside once the window reports that it shows the tour.
+    if(!channel){popped=true;render();}
     // A popup closed from its title bar may not say so; watching it brings the panel back.
     const timer=setInterval(()=>{if(popup!==win)return clearInterval(timer);if(win.closed){clearInterval(timer);popup=null;popped=false;render();}},800);
     return true;
@@ -235,10 +246,22 @@ function mountChecklist({id,title,steps,storageKey,autoOpen=false,meta='Use each
     onChange(fn){listeners.push(fn);},
     get solo(){return solo;},
   };
+  checklists.set(id,controller);
   render();
   return controller;
 }
 API.mountChecklist=mountChecklist;
+// tour.html: after the page's own scripts, mount the tour from the definition
+// the cockpit left; without one, say so instead of a blank window.
+function mountWindowTour(){
+  if(!windowTour||checklists.has(windowTour))return;
+  let definition=null;
+  try{definition=JSON.parse(storage.getItem(DEFINITION_PREFIX+windowTour));}catch(_){}
+  if(definition&&definition.id===windowTour&&Array.isArray(definition.steps)&&definition.steps.length){mountChecklist(definition);return;}
+  const note=doc.createElement('p');note.className='flight-missing';
+  note.textContent='This tour is not available here. Close this window and open it again from the cockpit.';
+  doc.body.append(note);
+}
 
 function mount(){
   if(doc.documentElement.classList.contains('pane-window'))return;
@@ -398,4 +421,6 @@ function mount(){
   render();
 }
 if(doc.readyState==='loading')doc.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
+// After the first flight and the page's own tour scripts have had their turn.
+if(windowTour){if(doc.readyState==='loading')doc.addEventListener('DOMContentLoaded',mountWindowTour,{once:true});else setTimeout(mountWindowTour,0);}
 })(typeof window==='undefined'?globalThis:window);

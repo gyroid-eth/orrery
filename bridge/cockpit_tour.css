@@ -63,7 +63,8 @@
   .flight-popout{display:none}
 }
 /* A tour in its own window: the checklist fills it and the cockpit stays hidden. */
-html.tour-window body>*:not(.flight-guide){display:none!important}
+html.tour-window body>*:not(.flight-guide):not(.flight-missing){display:none!important}
+.flight-missing{margin:0;padding:28px 22px;font:12px/1.65 var(--mono);color:var(--ink-dim)}
 html.tour-window .flight-guide{inset:0;width:auto;max-height:none;border:0;background:var(--panel);backdrop-filter:none;-webkit-backdrop-filter:none}
 .flight-map{position:fixed;inset:0;z-index:1050;cursor:default}
 /* Help map: an annotated drawing of the cockpit. Gold corner ticks frame each

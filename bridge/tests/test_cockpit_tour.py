@@ -473,3 +473,90 @@ def test_tour_page_keeps_the_cockpit_dark_palette():
 
 def test_cockpit_with_a_tour_query_is_still_the_cockpit():
     assert 'tour-window' not in (BRIDGE / 'cockpit.html').read_text()
+
+
+def _popup_for(evaluate, tour):
+    import time
+    import urllib.request
+    for _ in range(50):
+        targets = json.load(urllib.request.urlopen(evaluate.endpoint + '/json', timeout=5))
+        found = next((t for t in targets if t.get('url', '').startswith(evaluate.base + '/tour.html') and 'tour=' + tour in t['url']), None)
+        if found:
+            return found
+        time.sleep(.1)
+    return None
+
+
+def test_dom_any_tour_pops_out_through_its_stored_definition(tour_browser):
+    """Review of #14: a tour other than the first flight opened a blank window.
+    Only the cockpit page is driven here; the tour window is read, never injected."""
+    import time
+    import urllib.request
+    client, evaluate = tour_browser
+    evaluate("""(()=>{
+      const tour=OrreryTour.mountChecklist({id:'review-extended',title:'Review tour',storageKey:'oc-test-review-tour',autoOpen:true,
+        steps:[{id:'one',title:'First thing',copy:'Do the first thing.'},{id:'two',title:'Second thing',copy:'Then this.'}]});
+      tour.reset();
+    })()""")
+    client.call('Runtime.evaluate', userGesture=True,
+                expression="OrreryTour.getChecklist('review-extended').el.querySelector('.flight-popout').click()")
+    popup = _popup_for(evaluate, 'review-extended')
+    assert popup, 'no tour window opened'
+    try:
+        from tools.theme_axis_browser_test import _WebSocket
+        other = _WebSocket(popup['webSocketDebuggerUrl'])
+        other.call('Runtime.enable')
+
+        def read():
+            value = other.call('Runtime.evaluate', returnByValue=True, expression="""JSON.stringify((()=>{
+              const el=document.querySelector('.flight-guide[data-tour="review-extended"]');
+              return el&&{solo:el.classList.contains('solo'),hidden:el.hidden,title:el.querySelector('h2').textContent,
+                items:[...el.querySelectorAll('.flight-steps .flight-item')].map(n=>n.textContent),
+                done:[...el.querySelectorAll('.flight-steps li.done')].map(n=>n.dataset.step)};
+            })())""")['result'].get('value')
+            return json.loads(value) if value else None
+        for _ in range(60):
+            if read():
+                break
+            time.sleep(.1)
+        assert read() == {'solo': True, 'hidden': False, 'title': 'Review tour',
+                          'items': ['First thing', 'Second thing'], 'done': []}
+        for _ in range(30):
+            if evaluate("OrreryTour.getChecklist('review-extended').el.hidden"):
+                break
+            time.sleep(.1)
+        assert evaluate("OrreryTour.getChecklist('review-extended').el.hidden") is True
+        evaluate("document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'one',tour:'review-extended'}}))")
+        for _ in range(30):
+            if read()['done'] == ['one']:
+                break
+            time.sleep(.1)
+        assert read()['done'] == ['one']
+    finally:
+        urllib.request.urlopen(evaluate.endpoint + '/json/close/' + popup['id'], timeout=5)
+
+
+def test_dom_tour_window_without_a_definition_says_so(tour_browser):
+    import time
+    client, evaluate = tour_browser
+    evaluate("localStorage.removeItem('oc-tour-definition:nowhere')")
+    client.call('Page.navigate', url=evaluate.base + '/tour.html?tour=nowhere')
+    for _ in range(100):
+        if evaluate("document.readyState==='complete'&&Boolean(window.OrreryTour)"):
+            break
+        time.sleep(.1)
+    time.sleep(.2)
+    assert evaluate("""JSON.stringify({guides:document.querySelectorAll('.flight-guide').length,
+      note:(document.querySelector('.flight-missing')||{}).textContent||null})""") == json.dumps(
+        {'guides': 0, 'note': 'This tour is not available here. Close this window and open it again from the cockpit.'},
+        separators=(',', ':'))
+
+
+def test_dom_mounting_a_tour_twice_returns_the_first(tour_browser):
+    _, evaluate = tour_browser
+    assert evaluate("""(()=>{
+      const def={id:'twice',title:'Twice',storageKey:'oc-test-twice',steps:[{id:'a',title:'A',copy:'a'}]};
+      const a=OrreryTour.mountChecklist(def),b=OrreryTour.mountChecklist({...def,title:'Other'});
+      return a===b&&OrreryTour.getChecklist('twice')===a&&document.querySelectorAll('[data-tour="twice"]').length===1;
+    })()""") is True
+
