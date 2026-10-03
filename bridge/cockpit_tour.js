@@ -2,13 +2,13 @@
 (function(root){
 'use strict';
 const STEPS=Object.freeze([
-  {id:'start',title:'Start an agent',label:'NEW AGENT',target:'#newAgentBtn',copy:'Start an agent here. Give it a task and choose a model.'},
-  {id:'choose',title:'Choose your agent',label:'AGENT LIST',target:'.col.roster',copy:'Choose an agent on the left to open its terminal.'},
-  {id:'talk',title:'Talk to it',label:'TERMINAL + INPUT',target:'.promptbar',copy:'Read the agent’s work in the center. Type below and press Enter to talk to it.'},
-  {id:'mail',title:'Read Agent Mail',label:'AGENT MAIL',target:'#mail',copy:'Follow messages exchanged between agents on the right.'},
-  {id:'telemetry',title:'Open Telemetry',label:'TELEMETRY',target:'#networkBtn',copy:"Cockpit is for working with agents; Telemetry shows everyone's status and history, with RESUME / EXIT."},
-  {id:'planetarium',title:'Explore Planetarium',label:'PLANETARIUM',target:'#planetariumBtn',copy:'See who spawned whom in the full agent family tree.'},
-  {id:'settings',title:'Make it comfortable',label:'SETTINGS',target:'#settingsBtn',copy:'Adjust the theme, terminal text size, and mini view.'},
+  {id:'start',title:'Start an agent',label:'New agent',target:'#newAgentBtn',copy:'Start an agent here. Give it a task and choose a model.'},
+  {id:'choose',title:'Choose your agent',label:'Agent list',target:'.col.roster',copy:'Choose an agent on the left to open its terminal.'},
+  {id:'talk',title:'Talk to it',label:'Terminal and input',target:'.promptbar',copy:'Read the agent’s work in the center. Type below and press Enter to talk to it.'},
+  {id:'mail',title:'Read Agent Mail',label:'Agent mail',target:'#mail',copy:'Follow messages exchanged between agents on the right.'},
+  {id:'telemetry',title:'Open Telemetry',label:'Telemetry',target:'#networkBtn',copy:"Cockpit is for working with agents; Telemetry shows everyone's status and history, with RESUME / EXIT."},
+  {id:'planetarium',title:'Explore Planetarium',label:'Planetarium',target:'#planetariumBtn',copy:'See who spawned whom in the full agent family tree.'},
+  {id:'settings',title:'Make it comfortable',label:'Settings',target:'#settingsBtn',copy:'Adjust the theme, terminal text size, and mini view.'},
 ]);
 const KEY='oc-first-flight-v1';
 function createState(storage){
@@ -59,12 +59,12 @@ function mount(){
   });
   const map=doc.createElement('section');map.className='flight-map';map.hidden=true;
   map.setAttribute('aria-label','Cockpit help map');
-  map.innerHTML='<div class="flight-map-head"><div><b>Cockpit help map</b><span>Explore in any order · Esc to close</span></div><button type="button" class="flight-close" aria-label="Close help map">×</button></div><div class="flight-map-cards"></div>';
-  const cards=map.querySelector('.flight-map-cards');
-  STEPS.forEach((step,index)=>{
-    const card=doc.createElement('article');card.className='flight-map-card';card.dataset.step=step.id;
-    const heading=doc.createElement('h3');heading.textContent=(index+1)+' · '+step.label;
-    const copy=doc.createElement('p');copy.textContent=step.copy;card.append(heading,copy);cards.append(card);
+  map.innerHTML='<svg class="flight-map-art" aria-hidden="true"><defs><mask id="flightMapMask" maskUnits="userSpaceOnUse"></mask></defs><rect class="flight-map-veil" mask="url(#flightMapMask)"/><g class="flight-map-marks"></g></svg><div class="flight-map-title"><b>The cockpit, annotated</b><span>Press Esc or click anywhere to close.</span><button type="button" class="flight-map-close">Close</button></div><div class="flight-map-notes"></div>';
+  const notes=map.querySelector('.flight-map-notes'),title=map.querySelector('.flight-map-title');
+  STEPS.forEach(step=>{
+    const note=doc.createElement('article');note.className='flight-map-note';note.dataset.step=step.id;note.tabIndex=-1;
+    const heading=doc.createElement('h3');heading.textContent=step.label;
+    const copy=doc.createElement('p');copy.textContent=step.copy;note.append(heading,copy);notes.append(note);
   });
   doc.body.append(guide,map);
   const settings=doc.getElementById('settingsPopover');
@@ -72,40 +72,115 @@ function mount(){
   help.innerHTML='<div class="settings-section-title">Getting started</div><div class="flight-settings-actions"><button type="button" class="modal-btn" id="firstFlightBtn">Your first flight</button><button type="button" class="modal-btn" id="helpMapBtn" aria-pressed="false">Show help map</button></div>';
   settings.querySelector('.settings-body').prepend(help);
   let previousFocus=null,highlight=null;
-  const rings=[];
-  function clearRings(){rings.splice(0).forEach(el=>el.remove());}
   function closeSettings(){if(settings.matches(':popover-open'))settings.hidePopover();}
   function hideMap(){state.hideMap();render();if(previousFocus&&previousFocus.isConnected)previousFocus.focus();}
-  function placeMap(){
-    clearRings();if(!state.map)return;
-    const compact=root.innerWidth<1100||root.innerHeight<620;
-    map.classList.toggle('compact',compact);
-    const occupied=[];
-    const gap=12,pad=14,top=132;
-    [...cards.children].forEach((card,index)=>{
-      card.style.left='';card.style.top='';
-      const target=doc.querySelector(STEPS[index].target);
-      if(!target)return;
-      const r=target.getBoundingClientRect();
-      const visible=r.width>0&&r.height>0&&r.bottom>0&&r.top<root.innerHeight&&r.right>0&&r.left<root.innerWidth;
-      if(!visible)return;
-      const ring=doc.createElement('span');ring.className='flight-map-marker';ring.textContent=String(index+1);
-      ring.style.left=Math.max(pad,Math.min(root.innerWidth-32,STEPS[index].id==='choose'?r.left+12:r.right-14))+'px';
-      ring.style.top=Math.max(4,Math.min(root.innerHeight-30,r.top+(STEPS[index].id==='choose'?106:3)))+'px';map.append(ring);rings.push(ring);
-      if(compact)return;
-      const w=card.offsetWidth,h=card.offsetHeight;
-      const maxX=root.innerWidth-w-pad,maxY=root.innerHeight-h-pad;
-      const clamp=(x,y)=>({x:Math.max(pad,Math.min(maxX,x)),y:Math.max(top,Math.min(maxY,y))});
-      const candidates=[clamp(r.left,r.bottom+gap),clamp(r.right+gap,r.top),clamp(r.left-w-gap,r.top),clamp(r.left,r.top-h-gap)];
-      // Search free locations nearest the control when an anchored card collides.
-      for(let y=top;y<=maxY;y+=28)for(let x=pad;x<=maxX;x+=28)candidates.push({x,y});
-      const intersects=(p)=>occupied.some(o=>p.x<o.x+o.w+gap&&p.x+w+gap>o.x&&p.y<o.y+o.h+gap&&p.y+h+gap>o.y);
-      const distance=p=>Math.hypot(p.x+w/2-(r.left+r.width/2),p.y+h/2-(r.top+r.height/2));
-      const available=candidates.filter(p=>!intersects(p));
-      if(!available.length){map.classList.add('compact');return;}
-      const pos=available.sort((a,b)=>distance(a)-distance(b))[0];
-      card.style.left=pos.x+'px';card.style.top=pos.y+'px';occupied.push({...pos,w,h});
+  const SVG='http://www.w3.org/2000/svg';
+  function svg(tag,attrs,parent){const el=doc.createElementNS(SVG,tag);for(const k in attrs)el.setAttribute(k,attrs[k]);parent.append(el);return el;}
+  const art=map.querySelector('.flight-map-art'),mask=art.querySelector('mask'),marks=art.querySelector('.flight-map-marks');
+  // Each visible control is cut out of the veil and framed with corner ticks;
+  // in the annotated layout a leader runs from it to its note.
+  function targetRects(){
+    const view={l:0,t:0,r:root.innerWidth,b:root.innerHeight};
+    const rects=STEPS.map(step=>{
+      const el=doc.querySelector(step.target);if(!el)return null;
+      const r=el.getBoundingClientRect();
+      const l=Math.max(view.l,r.left),t=Math.max(view.t,r.top),rr=Math.min(view.r,r.right),b=Math.min(view.b,r.bottom);
+      return rr-l>4&&b-t>4?{l,t,r:rr,b}:null;
     });
+    // A control inside a larger one (New agent inside the roster) keeps its own
+    // frame; the larger frame starts below it.
+    rects.forEach((a,i)=>rects.forEach((b,j)=>{
+      if(!a||!b||i===j)return;
+      if(b.l>=a.l&&b.r<=a.r&&b.t>=a.t&&b.b<=a.b&&b.b<a.t+(a.b-a.t)/3)a.t=b.b+8;
+    }));
+    return rects;
+  }
+  function drawFrames(rects){
+    mask.replaceChildren();marks.replaceChildren();
+    svg('rect',{width:'100%',height:'100%',fill:'white'},mask);
+    rects.forEach(r=>{
+      if(!r)return;
+      const p=3,x=Math.max(1,r.l-p),y=Math.max(1,r.t-p);
+      const w=Math.min(root.innerWidth-1,r.r+p)-x,h=Math.min(root.innerHeight-1,r.b+p)-y,a=Math.min(10,w/3,h/3);
+      svg('rect',{x,y,width:w,height:h,rx:5,fill:'black'},mask);
+      svg('path',{class:'flight-map-frame',d:[[x,y,1,1],[x+w,y,-1,1],[x,y+h,1,-1],[x+w,y+h,-1,-1]].map(([cx,cy,dx,dy])=>`M${cx+dx*a},${cy}H${cx}V${cy+dy*a}`).join('')},marks);
+    });
+  }
+  function leader(step,d,dot){svg('path',{class:'flight-map-leader','data-step':step,d},marks);svg('circle',{class:'flight-map-dot',cx:dot[0],cy:dot[1],r:2.4},marks);}
+  // The reason the annotated layout gave way to the legend, kept for tests.
+  function fail(reason){map.dataset.fallback=reason;return false;}
+  function annotate(rects){
+    const stage=doc.getElementById('termstage');
+    const v=stage&&stage.getBoundingClientRect();
+    if(!v||rects.some(r=>!r)||v.width<440||v.height<320)return fail('room');
+    const inset=30,gap=18,colGap=28;
+    const sides=rects.map(r=>r.r<=v.left+2?'left':r.b<=v.top+2?'top':r.l>=v.right-2?'right':'bottom');
+    const tops=rects.map((r,i)=>sides[i]==='top'?(r.l+r.r)/2:Infinity);
+    const leftDot=v.left+inset,rightDot=Math.min(v.right-inset,Math.min(...tops)-18);
+    const width=Math.min(300,(rightDot-leftDot-colGap)/2-10);
+    if(width<180)return fail('width');
+    const els=[...notes.children];
+    els.forEach(el=>{el.style.width=width+'px';el.style.left='';el.style.top='';el.classList.remove('end');});
+    title.style.width=width+'px';
+    const mid=el=>{const h=el.firstElementChild;return h.offsetTop+h.offsetHeight/2;};
+    // Columns are stacked top-down in the order their controls sit, so leaders never cross.
+    const left=[],right=[];let bottom=null;
+    rects.forEach((r,i)=>{
+      const item={i,el:els[i],r,h:els[i].offsetHeight};
+      if(sides[i]==='left')item.want=r.b-r.t<90?Math.max(v.top+gap,(r.t+r.b)/2):r.t+(r.b-r.t)*.45,left.push(item);
+      else if(sides[i]==='top')item.want=v.top+gap+(r.l+r.r)/2/1e4,right.push(item);
+      else if(sides[i]==='right')item.want=r.t+(r.b-r.t)*.45,right.push(item);
+      else bottom=item;
+    });
+    left.push({el:title,h:title.offsetHeight,want:v.top+v.height*.36});
+    const stack=(items,x,alignRight)=>{
+      let y=v.top+gap;
+      items.sort((a,b)=>a.want-b.want).forEach(item=>{
+        item.y=Math.max(y,item.want-mid(item.el));y=item.y+item.h+gap*1.4;
+        item.x=alignRight?x-width:x;item.el.classList.toggle('end',alignRight);
+      });
+      return y;
+    };
+    const leftEnd=stack(left,leftDot+10,false),rightEnd=stack(right,rightDot-10,true);
+    // The prompt bar's note sits at the foot of whichever column still has room
+    // above it; its leader rises straight from the bar along that column's dots.
+    if(bottom){
+      bottom.y=bottom.r.t-gap-6-bottom.h;
+      const fits=end=>end-gap*0.4<=bottom.y;
+      if(fits(leftEnd)){bottom.x=leftDot+10;bottom.col='left';}
+      else if(fits(rightEnd)){bottom.x=rightDot-10-width;bottom.col='right';bottom.el.classList.add('end');}
+      else return fail('bottom');
+    }
+    if(leftEnd-gap*1.4>v.bottom||rightEnd-gap*1.4>v.bottom)return fail('height');
+    [...left,...right,...(bottom?[bottom]:[])].forEach(item=>{item.el.style.left=item.x+'px';item.el.style.top=item.y+'px';});
+    left.concat(right,bottom?[bottom]:[]).forEach(item=>{
+      if(item.i===undefined)return;
+      const r=item.r,y=item.y+mid(item.el),side=sides[item.i];
+      if(side==='left'){const sy=Math.max(r.t+8,Math.min(r.b-8,y));leader(STEPS[item.i].id,`M${r.r+3},${sy}H${leftDot-10}V${y}H${leftDot}`,[leftDot,y]);}
+      else if(side==='right'){const sy=Math.max(r.t+8,Math.min(r.b-8,y));leader(STEPS[item.i].id,`M${r.l-3},${sy}H${rightDot+10}V${y}H${rightDot}`,[rightDot,y]);}
+      else if(side==='top'){
+        const cx=(r.l+r.r)/2;
+        // A drop that would run through another framed control turns into the
+        // margin just above that frame instead.
+        const block=rects.find((o,j)=>sides[j]==='right'&&cx>=o.l&&cx<=o.r&&y>o.t-8);
+        if(block)leader(STEPS[item.i].id,`M${cx},${r.b+3}V${block.t-16}H${rightDot+12}V${y}H${rightDot}`,[rightDot,y]);
+        else leader(STEPS[item.i].id,`M${cx},${r.b+3}V${y}H${rightDot}`,[rightDot,y]);
+      }
+      else{const x=item.col==='left'?leftDot:rightDot;leader(STEPS[item.i].id,`M${x},${r.t-3}V${y}`,[x,y]);}
+    });
+    return true;
+  }
+  function placeMap(){
+    if(!state.map)return;
+    art.setAttribute('width',root.innerWidth);art.setAttribute('height',root.innerHeight);
+    art.querySelector('.flight-map-veil').setAttribute('width',root.innerWidth);
+    art.querySelector('.flight-map-veil').setAttribute('height',root.innerHeight);
+    const rects=targetRects();
+    map.classList.remove('compact');delete map.dataset.fallback;drawFrames(rects);
+    if(!annotate(rects)){
+      [title,...notes.children].forEach(el=>{el.style.left=el.style.top=el.style.width='';el.classList.remove('end');});
+      map.classList.add('compact');drawFrames(rects);
+    }
   }
   function render(){
     guide.hidden=!state.open||state.map;map.hidden=!state.map;
@@ -129,11 +204,14 @@ function mount(){
   }
   guide.querySelector('.flight-close').addEventListener('click',()=>{state.close();render();});
   guide.querySelector('.flight-restart').addEventListener('click',()=>{state.reset();render();});
-  map.querySelector('.flight-close').addEventListener('click',hideMap);
+  map.querySelector('.flight-map-close').addEventListener('click',hideMap);
+  // Anywhere outside the compact legend closes the map; the legend itself scrolls.
+  map.addEventListener('click',event=>{if(event.target.closest('.flight-map-close'))return;
+    if(!(map.classList.contains('compact')&&event.target.closest('.flight-map-notes,.flight-map-title')))hideMap();});
   doc.getElementById('firstFlightBtn').addEventListener('click',()=>{closeSettings();state.show();render();guide.querySelector('.flight-close').focus();});
   doc.getElementById('helpMapBtn').addEventListener('click',()=>{
     previousFocus=doc.getElementById('settingsBtn');closeSettings();state.toggleMap();render();
-    if(state.map)map.querySelector('.flight-close').focus();
+    if(state.map)map.querySelector('.flight-map-close').focus();
   });
   doc.addEventListener('keydown',event=>{
     if(event.key==='Escape'&&state.map){event.preventDefault();event.stopImmediatePropagation();hideMap();}

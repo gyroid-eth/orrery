@@ -177,25 +177,70 @@ def test_dom_map_escape_and_settings_reopen_keep_progress(tour_browser):
     assert all(result.values()), result
 
 
-@pytest.mark.parametrize('width,height', [(1600, 1000), (1100, 700), (420, 800)])
-def test_dom_map_cards_are_readable_and_do_not_overlap(tour_browser, width, height):
+MAP_LAYOUT = """new Promise(resolve=>{
+  if(document.querySelector('.flight-map').hidden)document.getElementById('helpMapBtn').click();
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const map=document.querySelector('.flight-map');
+    const notes=[...document.querySelectorAll('.flight-map-note')];
+    const boxes=[...notes,document.querySelector('.flight-map-title')].map(el=>el.getBoundingClientRect());
+    const overlap=boxes.some((a,i)=>boxes.slice(i+1).some(b=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top));
+    const leaders=[...document.querySelectorAll('.flight-map-leader')].map(path=>{
+      const step=OrreryTour.STEPS.find(s=>s.id===path.dataset.step);
+      const r=document.querySelector(step.target).getBoundingClientRect();
+      const n=document.querySelector('.flight-map-note[data-step="'+step.id+'"]').getBoundingClientRect();
+      const pts=path.getAttribute('d').match(/-?[0-9.]+/g).map(Number);
+      // The path starts on its control and its last point sits beside its own note.
+      const [x0,y0]=pts;const end=path.getPointAtLength(path.getTotalLength());
+      return {id:step.id,
+        fromTarget:x0>=r.left-6&&x0<=r.right+6&&y0>=r.top-6&&y0<=r.bottom+6,
+        toNote:end.y>=n.top&&end.y<=n.bottom&&Math.min(Math.abs(end.x-n.left),Math.abs(end.x-n.right))<=14};
+    });
+    resolve({count:notes.length,compact:map.classList.contains('compact'),overlap,leaders,
+      frames:document.querySelectorAll('.flight-map-frame').length,
+      within:boxes.every(r=>r.left>=0&&r.right<=innerWidth),
+      vertically:map.classList.contains('compact')||boxes.every(r=>r.top>=0&&r.bottom<=innerHeight),
+      copy:notes.every(n=>n.querySelector('p').textContent===OrreryTour.STEPS.find(s=>s.id===n.dataset.step).copy)});
+  }));
+})"""
+
+
+@pytest.mark.parametrize('width,height', [(1600, 1000), (1440, 900), (1280, 800)])
+def test_dom_map_annotates_every_control_with_a_leader(tour_browser, width, height):
     client, evaluate = tour_browser
     client.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=1, mobile=False)
-    result = evaluate("""new Promise(resolve=>{
-      document.getElementById('helpMapBtn').click();
-      requestAnimationFrame(()=>requestAnimationFrame(()=>{
-        const cards=[...document.querySelectorAll('.flight-map-card')];
-        const rects=cards.map(c=>c.getBoundingClientRect());
-        const compact=document.querySelector('.flight-map').classList.contains('compact');
-        const toolbar=document.querySelector('.flight-map-head').getBoundingClientRect();
-        const headerOverlap=!compact&&rects.some(r=>r.left<toolbar.right&&r.right>toolbar.left&&r.top<toolbar.bottom&&r.bottom>toolbar.top);
-        const overlap=headerOverlap||rects.some((a,i)=>rects.slice(i+1).some(b=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top));
-        resolve({count:cards.length,overlap,within:rects.every(r=>r.left>=0&&r.right<=innerWidth),
-          copy:cards.every(c=>c.querySelector('p').textContent===OrreryTour.STEPS.find(s=>s.id===c.dataset.step).copy),
-          vertically:compact||rects.every(r=>r.top>=0&&r.bottom<=innerHeight)});
-      }));
-    })""")
-    assert result == {'count': 7, 'overlap': False, 'within': True, 'copy': True, 'vertically': True}
+    result = evaluate(MAP_LAYOUT)
+    assert result['compact'] is False, result
+    assert (result['count'], result['frames'], result['overlap'], result['within'], result['vertically'], result['copy']) == (7, 7, False, True, True, True)
+    assert sorted(l['id'] for l in result['leaders']) == sorted(['start', 'choose', 'talk', 'mail', 'telemetry', 'planetarium', 'settings'])
+    assert all(l['fromTarget'] and l['toNote'] for l in result['leaders']), result['leaders']
+
+
+@pytest.mark.parametrize('width,height', [(1100, 700), (980, 800), (420, 800)])
+def test_dom_map_falls_back_to_a_legend_when_leaders_do_not_fit(tour_browser, width, height):
+    client, evaluate = tour_browser
+    client.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=1, mobile=False)
+    result = evaluate(MAP_LAYOUT)
+    assert (result['compact'], result['count'], result['leaders'], result['overlap'], result['within'], result['copy']) == (True, 7, [], False, True, True)
+
+
+def test_dom_map_click_anywhere_closes_but_legend_scrolls(tour_browser):
+    client, evaluate = tour_browser
+    evaluate(MAP_LAYOUT)
+    closed_by_veil = evaluate("""(()=>{
+      document.querySelector('.flight-map').dispatchEvent(new MouseEvent('click',{bubbles:true}));
+      return document.querySelector('.flight-map').hidden;
+    })()""")
+    client.call('Emulation.setDeviceMetricsOverride', width=420, height=800, deviceScaleFactor=1, mobile=False)
+    evaluate(MAP_LAYOUT)
+    legend = evaluate("""(()=>{
+      document.querySelector('.flight-map-note').click();
+      const kept=!document.querySelector('.flight-map').hidden;
+      document.querySelector('.flight-map-close').click();
+      return {kept,closed:document.querySelector('.flight-map').hidden,
+        focus:document.activeElement===document.getElementById('settingsBtn')};
+    })()""")
+    assert closed_by_veil is True
+    assert legend == {'kept': True, 'closed': True, 'focus': True}
 
 
 @pytest.mark.parametrize('outcome', ['success', 'local-reject', 'remote-reject', 'noop', 'busy'])
