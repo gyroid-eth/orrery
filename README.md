@@ -155,7 +155,7 @@ WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同
 
 ## 動作要件
 
-- macOS、または Windows の WSL2（Ubuntu）。`ORRERY.app`、installer、global hotkey は macOS だけ
+- macOS、または Windows の WSL2（Ubuntu）。`ORRERY.app` とその installer、global hotkey は macOS だけ
 - Python 3.10 以上、`tmux`
 - Node.js / npm、Rust / Cargo（desktop app の開発・build 時）
 - 稼働中の [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry)（全連携機能を使う場合）
@@ -166,62 +166,27 @@ WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同
 
 ## クイックスタート
 
-**はじめて入れる人は、[インストールの「はじめて入れる人へ」](docs/install.md#はじめて入れる人へブラウザで使うmac--windows-wsl2)の手順だけで進められます。** ORRERY Telemetry を入れたあと `./scripts/start-cockpit.sh` を実行し、表示された URL をブラウザで開きます（Mac と Windows の WSL2）。以下は手作業で組む場合の手順です。
-
-**更新するとき**は、cockpit の folder で `./scripts/update.sh` を実行します。orrery-telemetry と cockpit が 1 回で最新になります。終わったら `./scripts/start-cockpit.sh` を起動し直します。詳しくは[インストールの「5. 更新する」](docs/install.md#5-更新する)を見てください。
+Mac のターミナル、または Windows の WSL2 Ubuntu 内で、次の1行を実行します。ORRERY cockpit と ORRERY Telemetry を一緒に入れ、確認結果と開く URL を表示します。前提条件、変更する設定、手動での導入は[インストール](docs/install.md)を参照してください。
 
 ```bash
-git clone https://github.com/gyroid-eth/orrery.git
-cd orrery
-
-python3 -m venv bridge/.venv
-bridge/.venv/bin/python -m pip install -r bridge/requirements.txt
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
 ```
 
-ORRERY Telemetry の dashboard を既定の `http://127.0.0.1:8770` で起動し、同じ project key と mail DB を ORRERY に設定します。
+表示される計画を読んで承認し、doctor と Mail の selftest が成功したことを確かめます。Claude Code か Codex CLI を同じ OS 環境でログイン済みにしてから、表示された cockpit の URL を開きます（既定は `http://127.0.0.1:8791/cockpit.html`）。CLI が無ければ installer の完了だけでは agent を動かせません。
 
-```bash
-export AGENTSTACK_PROJECT_KEY=/absolute/path/to/your/project
-export ORRERY_PROJECT_KEY="$AGENTSTACK_PROJECT_KEY"
-# default 以外の DB を使う場合だけ:
-# export ORRERY_MAIL_DB=/absolute/path/to/storage.sqlite3
-```
+## 画面のガイドで始める
 
-まず backend と browser で接続を確認します。
+1. **Your first flight** — 初回に右側へ出る7項目のガイドを通します。agent の起動、選択、入力など、画面の説明どおりに操作すると ✓ が付きます。Mail を読んだ項目は `Mark as read` で確認します。閉じたガイドは `Settings → Getting started → Your first flight` から開けます。
+2. **Show help map** — 同じ `Getting started` の `Show help map` を押し、主要な部品の注記を見ながら画面を見回します。`Esc` または画面のクリックで閉じられます。
+3. **Full tour** — 同じ場所の `Full tour` で16段の操作を順に試します。子とのしりとり、端末の配置、Telemetry の EXIT / RESUME、NETWORK / REPLAY から端末への帰還までを案内します。ゲームはガイドの ✓ が付いた後も3往復まで終えます。進行は最初のガイドとは別に保存されます（[Full tour の説明・英語](docs/FULL_TOUR.md)）。
 
-```bash
-bridge/.venv/bin/python bridge/orrery_backend.py
-open http://127.0.0.1:8791/cockpit.html
-```
+普段の操作は、画面内のガイドと help map から始めてください。操作の詳しい参照は[使い方](docs/usage.md)、表示や接続が合わないときは[トラブルシューティング](docs/troubleshooting.md)へ進みます。ガイドで起動する agent は CLI のアカウント利用枠を消費します。
 
-desktop app を build する場合:
+## 更新・手動導入
 
-```bash
-cd app
-npm ci
-npm run build
-```
+更新も上の1行から行えます。cockpit の folder で `./scripts/update.sh` を実行する方法や再起動の条件は[更新手順](docs/install.md#5-更新する)を参照してください。
 
-生成先は `app/src-tauri/target/release/bundle/macos/ORRERY.app` です。現行の `.app` は checkout と構築済み `bridge/.venv` を利用する sidecar 構成で、backend を内包していません。Finder 起動では `~/.orrery/config.json` の `orrery_root` から sidecar を解決します。詳しくは[インストール](docs/install.md#sidecar-の-path-を設定する)と[設定](docs/configuration.md#共有設定-file)を参照してください。
-
-## 最初の30分
-
-clone と venv の準備が終わったら、まず次の一本道で「agent を見つけ、操作し、増やし、会話を観測する」ところまで確認します。途中で表示が異なる場合は先へ進まず、[トラブルシューティング](docs/troubleshooting.md)でその段階を切り分けてください。
-
-1. **backend と ORRERY Telemetry の接続を確認する。** ORRERY Telemetry の dashboard を `127.0.0.1:8770`、ORRERY backend を `127.0.0.1:8791` で起動し、browser で `http://127.0.0.1:8791/telemetry/health` を開きます。**成功:** `backend` が `ok` で、全連携機能を使う場合は `dashboard` も `true` と表示されます。
-2. **cockpit に agent が現れることを確認する。** `http://127.0.0.1:8791/cockpit.html` を開きます。**成功:** header が `live` になり、左 roster に稼働中の agent が名前、model、role、context 使用率とともに表示されます。
-3. **agent の terminal を開いて一往復する。** roster の agent をクリックし、中央の prompt composer に短い確認メッセージを入力して `Enter` で送信します。**成功:** agent 名の session tab と terminal が開き、送信内容に続いて agent の応答が terminal に表示されます。Codex App 由来など tmux pane を持たない agent は、この手順ではなく TELEMETRY から開きます。
-4. **もう一体 spawn する。** `+ NEW AGENT` を開き、provider / model、launch directory、必須の task を指定して `Spawn` を押します。最初は `standalone` のままで構いません。**成功:** `SPAWNED` toast の後、新しい agent が roster に現れます。catalog が見えても spawn が失敗する場合は ORRERY Telemetry の dashboard への接続を確認します。
-5. **二体を並べて操作する。** `Cmd`（macOS）または `Ctrl` を押しながら、最初の agent と二体目の agent の roster tile を順にクリックします。**成功:** 中央が `SPLIT 2` になり、両 session の terminal が同時に見えます。
-6. **agent 間の往来を見る。** 二体の間で ORRERY Mail が発生したら、右 rail の新しい mail card をクリックし、本文または thread を開きます。mini-orrery の comet / edge でも直近90秒の通信を確認できます。**成功:** sender と recipient、subject、本文が読め、mini-orrery に spawn 系譜と最近の通信が反映されます。
-
-ここまで接続できた状態で `TELEMETRY` を開くと、増えた agent とその通信は次のように見えます。これは ORRERY cockpit 本体ではなく、ORRERY に埋め込まれる ORRERY Telemetry の dashboard の `DECK` 実画面です。画像は12体まで増えたデモ例で、agent 数と内容は環境により異なります。
-
-![ORRERY に埋め込まれる TELEMETRY の DECK。12体の agent がカードで並ぶ](docs/images/deck_growing.png)
-
-見るポイント: 上部の `RUNNING` / `AGENTS`、各 card の task、通信がある card の `RX` が自分の環境に応じて並べば、複数 agent の telemetry をまとめて観測できています。
-
-次にやりたいことから操作を探す場合は、[使い方の「やりたいことから探す」](docs/usage.md#やりたいことから探す)へ進んでください。
+手動での clone・venv・backend の起動、Telemetry と同じ project key / Mail DB の設定、desktop app の build と sidecar の設定は[インストール](docs/install.md)と[設定](docs/configuration.md)にまとめています。
 
 ## ドキュメント
 

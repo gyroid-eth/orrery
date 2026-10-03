@@ -155,7 +155,7 @@ Run the backend in WSL2 and open it in a Windows browser to use the same screen 
 
 ## Requirements
 
-- macOS, or Windows with WSL2 (Ubuntu). `ORRERY.app`, the installer, and the global hotkey are macOS only
+- macOS, or Windows with WSL2 (Ubuntu). `ORRERY.app`, its app installer, and the global hotkey are macOS only
 - Python 3.10 or later, and `tmux`
 - Node.js / npm and Rust / Cargo (to develop or build the desktop app)
 - A running [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) (to use all integrated features)
@@ -166,62 +166,27 @@ See [Installation](docs/en/install.md) for details and requirements by role.
 
 ## Quick start
 
-**If this is your first install, the steps in [Installation, "For first-time installers"](docs/en/install.md#for-first-time-installers-browser-mac--windows-wsl2) are all you need.** After installing ORRERY Telemetry, run `./scripts/start-cockpit.sh` and open the URL it prints in a browser (Mac and Windows WSL2). What follows is the procedure for setting things up by hand.
-
-**To update**, run `./scripts/update.sh` in the cockpit folder. It brings orrery-telemetry and the cockpit up to date in one go. When it is done, start `./scripts/start-cockpit.sh` again. See [Installation, "5. Update"](docs/en/install.md#5-update) for details.
+Run this one line in a Mac terminal, or inside WSL2 Ubuntu on Windows. It installs ORRERY cockpit and ORRERY Telemetry together, then prints the check results and the URL to open. See [Installation](docs/en/install.md) for prerequisites, settings changes, and manual setup.
 
 ```bash
-git clone https://github.com/gyroid-eth/orrery.git
-cd orrery
-
-python3 -m venv bridge/.venv
-bridge/.venv/bin/python -m pip install -r bridge/requirements.txt
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
 ```
 
-Start the ORRERY Telemetry dashboard at its default `http://127.0.0.1:8770`, and give ORRERY the same project key and mail DB.
+Read and confirm the plan, and check that doctor and the Mail selftest succeeded. Sign in to Claude Code or Codex CLI in the same OS environment, then open the printed cockpit URL (default: `http://127.0.0.1:8791/cockpit.html`). Without a CLI, completing the installer does not make agents available.
 
-```bash
-export AGENTSTACK_PROJECT_KEY=/absolute/path/to/your/project
-export ORRERY_PROJECT_KEY="$AGENTSTACK_PROJECT_KEY"
-# Only if you use a DB other than the default:
-# export ORRERY_MAIL_DB=/absolute/path/to/storage.sqlite3
-```
+## Start with the guides on screen
 
-First check the connection with the backend and a browser.
+1. **Your first flight** — Follow the seven-item guide on the right on your first visit. Starting an agent, choosing it, and sending a prompt check off as you use the controls described on screen. Confirm the Mail-reading item with `Mark as read`. Reopen a closed guide from `Settings → Getting started → Your first flight`.
+2. **Show help map** — Choose `Show help map` in the same `Getting started` section and look around the annotated controls. Press `Esc` or click the screen to close it.
+3. **Full tour** — Choose `Full tour` there to try sixteen steps in order: shiritori with a child, arranging terminals, Telemetry EXIT / RESUME, NETWORK / REPLAY, and returning to a terminal. Finish all three game round trips even after its step checks off. Progress is saved separately from the first guide ([Full tour details](docs/FULL_TOUR.md)).
 
-```bash
-bridge/.venv/bin/python bridge/orrery_backend.py
-open http://127.0.0.1:8791/cockpit.html
-```
+For everyday controls, start with the in-app guides and help map. [Usage](docs/en/usage.md) is the detailed reference; if the screen or connection differs, use [Troubleshooting](docs/en/troubleshooting.md). Agents started during the guides consume your CLI account allowance.
 
-To build the desktop app:
+## Update and manual setup
 
-```bash
-cd app
-npm ci
-npm run build
-```
+The same one line also updates an existing install. See [Update](docs/en/install.md#5-update) for the alternative `./scripts/update.sh` command in the cockpit folder and when to restart.
 
-The output is `app/src-tauri/target/release/bundle/macos/ORRERY.app`. The current `.app` is a sidecar setup that uses the checkout and the already-built `bridge/.venv`; it does not bundle the backend. When launched from Finder, it resolves the sidecar from `orrery_root` in `~/.orrery/config.json`. See [Installation](docs/en/install.md#set-the-sidecar-path) and [Configuration](docs/en/configuration.md#shared-settings-file) for details.
-
-## Your first 30 minutes
-
-Once the clone and venv are ready, follow this single path to confirm that you can find agents, operate them, add more, and observe their conversations. If what you see differs at any step, do not go on; use [Troubleshooting](docs/en/troubleshooting.md) to isolate that step.
-
-1. **Check the connection between the backend and ORRERY Telemetry.** Start the ORRERY Telemetry dashboard on `127.0.0.1:8770` and the ORRERY backend on `127.0.0.1:8791`, and open `http://127.0.0.1:8791/telemetry/health` in a browser. **Success:** `backend` is `ok`, and if you are using all integrated features, `dashboard` is also `true`.
-2. **Check that agents appear in the cockpit.** Open `http://127.0.0.1:8791/cockpit.html`. **Success:** the header shows `live`, and the left roster lists running agents with their name, model, role, and context usage.
-3. **Open an agent's terminal and do one round trip.** Click an agent in the roster, type a short test message into the prompt composer in the center, and press `Enter`. **Success:** a session tab and terminal for that agent open, and the agent's reply appears in the terminal after your message. Agents without a tmux pane, such as those from Codex App, are opened from TELEMETRY instead of in this step.
-4. **Spawn one more agent.** Open `+ NEW AGENT`, choose the provider / model, the launch directory, and the required task, and press `Spawn`. Leaving it as `standalone` is fine at first. **Success:** after the `SPAWNED` toast, the new agent appears in the roster. If the catalog is visible but spawning fails, check the connection to the ORRERY Telemetry dashboard.
-5. **Operate two agents side by side.** Hold `Cmd` (macOS) or `Ctrl` and click the roster tiles of the first agent and the second agent in turn. **Success:** the center becomes `SPLIT 2`, and the terminals of both sessions are visible at once.
-6. **Watch the traffic between agents.** When ORRERY Mail passes between the two, click the new mail card on the right rail and open the body or thread. The comets and edges of the mini-orrery also show the last 90 seconds of traffic. **Success:** the sender, recipient, subject, and body are readable, and the mini-orrery reflects the spawn lineage and recent traffic.
-
-With everything connected up to here, opening `TELEMETRY` shows the added agents and their traffic as below. This is not the ORRERY cockpit itself but a real `DECK` screen of the ORRERY Telemetry dashboard embedded in ORRERY. The image is a demo that grew to 12 agents; the number of agents and their content vary by environment.
-
-![The TELEMETRY DECK embedded in ORRERY. Twelve agents lined up as cards](docs/images/deck_growing.png)
-
-What to look for: if the `RUNNING` / `AGENTS` counts at the top, each card's task, and the `RX` on cards with traffic line up for your own environment, you are observing the telemetry of several agents together.
-
-To find an operation starting from what you want to do, go to [Usage, "Find what you want to do"](docs/en/usage.md#find-what-you-want-to-do).
+[Installation](docs/en/install.md) and [Configuration](docs/en/configuration.md) cover manual clone / venv / backend setup, matching Telemetry's project key and Mail DB, building the desktop app, and setting its sidecar path.
 
 ## Documentation
 
