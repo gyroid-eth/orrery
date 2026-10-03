@@ -9,7 +9,7 @@ minutes, depending on agent startup and the game.
 2. Choose it in the agent list.
 3. Send a prompt below the terminal.
 4. Use the workshop prompt to delegate one child and play shiritori through
-   ORRERY Mail. The first numbered round in both directions completes this
+   ORRERY Mail. A fresh Mail round trip between parent and child completes this
    step; let the three-round game finish before exiting the child.
 5. Modifier-click the parent and child to split their terminals.
 6. Drag a split label to swap panes, a pane tab to float it, or a floating
@@ -29,8 +29,10 @@ minutes, depending on agent startup and the game.
 Only the current step advances. Failed requests, cancelled drags, a single
 selected node, a ready message, and opening an already-running agent do not
 complete the corresponding operation. Shiritori requires fresh, observed
-Mail with distinct IDs between the selected parent and the same actual child;
-unrelated peers and earlier games do not count.
+Mail with distinct IDs between the selected parent and the same actual child,
+with the child's response at or after the parent's move. Ready-only bodies,
+unrelated peers and earlier games do not count. Subjects may be absent,
+Japanese, or prefixed by a reply tool; they do not decide completion.
 
 The workshop prompt is inserted into an empty composer, preserving an existing
 draft. It is not sent automatically. Its wording matches
@@ -48,4 +50,7 @@ only Full tour and its game observation, leaving first-flight progress intact.
 Embedded Telemetry must support `orrery-tour-action` version 1
 (orrery-telemetry PR #191). The host checks the exact origin and owned iframe,
 then accepts only the current step's successful action. Returning additionally
-requires the selected terminal to become focused after Telemetry closes.
+requires the selected terminal to become focused after Telemetry closes,
+including its floating pane or own window. Native focus waits for success;
+channel fallback requires an acknowledgement from the registered window
+instance for that particular request.

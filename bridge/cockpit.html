@@ -8457,13 +8457,32 @@ function restorePendingPaneDraft(session){
   }
 }
 document.addEventListener('oc:focus-agent',event=>restorePendingPaneDraft(event.detail&&event.detail.name));
+const pendingPaneFocus=new Map();
+function notifyPaneFocus(session,entry){
+  if(paneWindows.get(session)!==entry)return;
+  pendingPaneFocus.delete(session);
+  document.dispatchEvent(new CustomEvent('oc:focus-agent',{detail:{name:session}}));
+}
+function acknowledgePaneFocus(msg){
+  if(!paneMessageInScope(msg,paneScope)||msg.type!=='focused')return;
+  const pending=pendingPaneFocus.get(msg.session),entry=paneWindows.get(msg.session);
+  if(!pending||pending.entry!==entry||entry.kind!=='window'||!entry.instance
+    ||entry.instance!==msg.id||pending.request!==msg.request)return;
+  notifyPaneFocus(msg.session,entry);
+}
 function focusPaneWindow(session){
   const entry=paneWindows.get(session);if(!entry)return false;
-  if(entry.kind==='float'&&entry.el){raisePaneFloat(entry.el);return true;}
-  if(entry.win&&!entry.win.closed){try{entry.win.focus();return true;}catch(_){/* fall through */}}
+  if(entry.kind==='float'&&entry.el){raisePaneFloat(entry.el);notifyPaneFocus(session,entry);return true;}
+  if(entry.win&&!entry.win.closed){try{entry.win.focus();notifyPaneFocus(session,entry);return true;}catch(_){/* fall through */}}
+  const fallback=()=>{
+    if(paneWindows.get(session)!==entry)return;
+    const request=crypto.randomUUID();
+    pendingPaneFocus.set(session,{entry,request});
+    postPaneMessage({type:'focus',session,request});
+  };
   const invoke=appInvoke();
-  if(invoke){invoke('focus_pane_window',{session}).catch(()=>postPaneMessage({type:'focus',session}));return true;}
-  postPaneMessage({type:'focus',session});
+  if(invoke){invoke('focus_pane_window',{session}).then(()=>notifyPaneFocus(session,entry)).catch(fallback);return true;}
+  fallback();
   return true;
 }
 
@@ -8662,10 +8681,11 @@ if(paneChannel)paneChannel.addEventListener('message',event=>{
     if(msg.type==='hello'){postPaneMessage({type:'open',session:soloSession,embedded:paneEmbedded});return;}
     if(msg.session!==soloSession||paneEmbedded)return;
     if(msg.type==='close')closeThisPaneWindow();
-    else if(msg.type==='focus'){try{window.focus();}catch(_){/* the OS decides */}}
+    else if(msg.type==='focus'){try{window.focus();postPaneMessage({type:'focused',session:soloSession,request:msg.request});}catch(_){/* no success acknowledgement */}}
     return;
   }
   if(msg.type==='open'&&msg.embedded)return; /* another cockpit's floating pane */
+  if(msg.type==='focused'){acknowledgePaneFocus(msg);return;}
   const entry=paneWindows.get(msg.session);
   switch(paneWindowMessageEffect(entry,msg)){
     case 'adopt':
