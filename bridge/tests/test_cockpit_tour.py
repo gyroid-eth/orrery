@@ -604,11 +604,23 @@ def test_dom_tour_page_script_wins_over_the_stored_definition(tour_browser):
 
 
 FAKE_APP = """(()=>{
-  // The desktop app's bridge, as far as the checklist uses it.
-  window.appCalls=[];window.appClosed=null;
+  // The desktop app's bridge, as far as the checklist uses it. Knobs set the timing
+  // of the review cases: how long listen takes, whether it fails, and when the
+  // native window closes relative to open_tour_window.
+  window.appCalls=[];window.appClosed=null;window.appKnobs={listenMs:0,listenFails:false,closeAfterMs:null,closeDuringOpen:false,windowExists:true};
+  const closeNotice={payload:{tour:'first-flight',url:location.origin+'/tour.html?tour=first-flight'}};
+  let handler=null;
+  const emit=()=>{if(handler)handler(closeNotice);};
   window.__TAURI__={core:{invoke:(name,args)=>{appCalls.push([name,args]);
-      return window.appHasTourWindows?Promise.resolve():Promise.reject('Command '+name+' not found');}},
-    event:{listen:(name,handler)=>{if(name==='orrery://pane-window-closed')appClosed=handler;return Promise.resolve(()=>{});}}};
+      if(!window.appHasTourWindows)return Promise.reject('Command '+name+' not found');
+      if(name==='open_tour_window'&&appKnobs.closeDuringOpen)emit();
+      if(name==='open_tour_window'&&appKnobs.closeAfterMs!==null)setTimeout(emit,appKnobs.closeAfterMs);
+      if(name==='tour_window_exists')return Promise.resolve(appKnobs.windowExists);
+      return Promise.resolve();}},
+    event:{listen:(name,fn)=>new Promise((resolve,reject)=>setTimeout(()=>{
+      if(appKnobs.listenFails)return reject('no event permission');
+      if(name==='orrery://pane-window-closed'){handler=fn;appClosed=fn;}
+      resolve(()=>{});},appKnobs.listenMs))}};
 })()"""
 
 
@@ -664,4 +676,50 @@ def test_dom_app_tour_window_closes_through_the_app(tour_browser):
       return JSON.stringify(appCalls);
     })()""")
     assert json.loads(result) == [['close_tour_window', {'tour': 'first-flight'}]]
+
+
+@pytest.mark.parametrize('case', [
+    {'listenMs': 40, 'closeAfterMs': 5},      # review of #15: closed before the subscription was ready
+    {'listenMs': 0, 'closeDuringOpen': True},  # closed before open_tour_window resolved
+])
+def test_dom_app_window_closing_early_still_brings_the_panel_back(tour_browser, case):
+    _, evaluate = tour_browser
+    evaluate(FAKE_APP)
+    result = evaluate("""(async()=>{
+      window.appHasTourWindows=true;Object.assign(appKnobs,%s);
+      const flight=OrreryTour.firstFlight;flight.reset();
+      flight.el.querySelector('.flight-popout').click();
+      await new Promise(resolve=>setTimeout(resolve,150));
+      return {opened:appCalls.some(c=>c[0]==='open_tour_window'),panel:!flight.el.hidden};
+    })()""" % json.dumps(case))
+    assert result == {'opened': True, 'panel': True}
+
+
+def test_dom_app_without_a_close_subscription_does_not_open(tour_browser):
+    _, evaluate = tour_browser
+    evaluate(FAKE_APP)
+    result = evaluate("""(async()=>{
+      window.appHasTourWindows=true;appKnobs.listenFails=true;
+      const flight=OrreryTour.firstFlight;flight.reset();
+      flight.el.querySelector('.flight-popout').click();
+      await new Promise(resolve=>setTimeout(resolve,50));
+      return {calls:appCalls.map(c=>c[0]),panel:!flight.el.hidden,offered:!flight.el.querySelector('.flight-popout').hidden};
+    })()""")
+    assert result == {'calls': [], 'panel': True, 'offered': False}
+
+
+def test_dom_app_window_gone_without_a_notice_is_noticed(tour_browser):
+    _, evaluate = tour_browser
+    evaluate(FAKE_APP)
+    result = evaluate("""(async()=>{
+      window.appHasTourWindows=true;
+      const flight=OrreryTour.firstFlight;flight.reset();
+      flight.el.querySelector('.flight-popout').click();
+      await new Promise(resolve=>setTimeout(resolve,50));
+      const out=flight.el.hidden;
+      appKnobs.windowExists=false; // the window went away and no notice came
+      await new Promise(resolve=>setTimeout(resolve,2300));
+      return {out,asked:appCalls.filter(c=>c[0]==='tour_window_exists').length>0,panel:!flight.el.hidden};
+    })()""")
+    assert result == {'out': True, 'asked': True, 'panel': True}
 

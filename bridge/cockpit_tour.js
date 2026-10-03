@@ -56,6 +56,7 @@ let channel=null;try{channel=new BroadcastChannel(CHANNEL);}catch(_){}
 // tour window itself (open_tour_window). An app from before that command
 // refuses the call, and from then on the checklist stays docked.
 let appTourWindows=true;
+const APP_CHECK_MS=2000;
 function appInvoke(){return root.__TAURI__&&root.__TAURI__.core&&root.__TAURI__.core.invoke;}
 function canPopOut(){return appInvoke()?appTourWindows:typeof root.open==='function';}
 // A window of this backend: same origin and the same ?ws= override.
@@ -177,14 +178,31 @@ function mountChecklist(definition){
     listeners.forEach(fn=>fn());
   }
   // The app reports its windows closing; ours carries this tour and this backend's address.
-  let appWatch=null;
+  let appWatch=null,appCloses=0;
+  // Resolves true once the close notice is subscribed, false when it cannot be.
   function watchAppWindow(){
+    if(appWatch)return appWatch;
     const events=root.__TAURI__&&root.__TAURI__.event;
-    if(appWatch||!events||typeof events.listen!=='function')return;
-    appWatch=Promise.resolve(events.listen('orrery://pane-window-closed',event=>{
+    if(!events||typeof events.listen!=='function')return Promise.resolve(false);
+    appWatch=Promise.resolve().then(()=>events.listen('orrery://pane-window-closed',event=>{
       const payload=event&&event.payload||{};
-      if(payload.tour===id&&sameBackend(payload.url)){popped=false;render();}
-    })).catch(()=>{appWatch=null;});
+      if(payload.tour===id&&sameBackend(payload.url)){appCloses++;popped=false;render();}
+    })).then(()=>true,()=>{appWatch=null;return false;});
+    return appWatch;
+  }
+  // While the tour is out, ask the app now and then whether its window is still
+  // there, in case a close notice went unheard.
+  let appCheck=0;
+  function checkAppWindow(){
+    clearTimeout(appCheck);
+    const invoke=appInvoke();
+    if(!popped||!invoke||popup)return;
+    appCheck=setTimeout(()=>{
+      if(!popped)return;
+      Promise.resolve().then(()=>invoke('tour_window_exists',{tour:id})).then(exists=>{
+        if(exists===false){popped=false;render();}else checkAppWindow();
+      },()=>checkAppWindow());
+    },APP_CHECK_MS);
   }
   function show(){
     state.show();
@@ -199,12 +217,19 @@ function mountChecklist(definition){
     const top=Math.round(Number.isFinite(screenY)?screenY-20:root.screenY+80);
     const invoke=appInvoke();
     if(invoke){
-      Promise.resolve().then(()=>invoke('open_tour_window',{tour:id,x:left,y:top,width,height})).then(()=>{
-        watchAppWindow();popped=true;render();
-      },error=>{
-        // An older app without the command: keep the panel and stop offering windows.
-        appTourWindows=false;popped=false;render();
-        console.warn('[tour] no tour windows in this app:',error);
+      // Listen for the window closing before asking for it, so a close cannot
+      // arrive unheard; without that the panel stays rather than vanish for good.
+      watchAppWindow().then(listening=>{
+        if(!listening){appTourWindows=false;render();return;}
+        const closesBefore=appCloses;
+        return Promise.resolve().then(()=>invoke('open_tour_window',{tour:id,x:left,y:top,width,height})).then(()=>{
+          if(appCloses!==closesBefore)return; // closed while it was opening
+          popped=true;render();checkAppWindow();
+        },error=>{
+          // An older app without the command: keep the panel and stop offering windows.
+          appTourWindows=false;popped=false;render();
+          console.warn('[tour] no tour windows in this app:',error);
+        });
       });
       return true;
     }
