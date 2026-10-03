@@ -70,11 +70,14 @@ html.tour-window .flight-guide{inset:0;width:auto;max-height:none;border:0;backg
 /* Help map: an annotated drawing of the cockpit. Gold corner ticks frame each
    control, hairline leaders carry its note into the empty terminal area; no cards. */
 .flight-map-art{position:absolute;inset:0;pointer-events:none}
-.flight-map-veil{fill:color-mix(in srgb,var(--bg) 68%,transparent)}
+.flight-map-veil{fill:color-mix(in srgb,var(--bg) 78%,transparent)}
 .flight-map-frame{fill:none;stroke:var(--amber);stroke-width:1.4}
 .flight-map-leader{fill:none;stroke:color-mix(in srgb,var(--amber) 75%,transparent);stroke-width:1}
 .flight-map-dot{fill:var(--amber)}
-.flight-map-note,.flight-map-title{position:absolute;margin:0;text-shadow:0 0 3px var(--bg),0 0 8px var(--bg)}
+/* A feathered backing, not a box: whatever the stage shows (an idle hint, a live
+   terminal) stays behind the note's words in either theme. */
+.flight-map-note,.flight-map-title{position:absolute;margin:0;text-shadow:0 0 3px var(--bg),0 0 8px var(--bg);
+  background:color-mix(in srgb,var(--bg) 86%,transparent);box-shadow:0 0 14px 10px color-mix(in srgb,var(--bg) 86%,transparent);border-radius:12px}
 .flight-map-note h3,.flight-map-title b{display:block;margin:0;font:italic 500 18px/1.25 var(--serif);color:var(--ink)}
 .flight-map-note p{margin:5px 0 0;font-size:12px;line-height:1.6;color:color-mix(in srgb,var(--ink) 84%,var(--bg))}
 .flight-map-title b{font-size:23px;font-weight:400;color:var(--amber)}
@@ -85,10 +88,10 @@ html.tour-window .flight-guide{inset:0;width:auto;max-height:none;border:0;backg
 .flight-map-note.end{text-align:right}
 /* Compact: too little room for leaders, so the notes become a legend beside the framed controls. */
 .flight-map.compact{display:flex;flex-direction:column;align-items:flex-end;padding:64px 14px 14px;box-sizing:border-box}
-.flight-map.compact .flight-map-title,.flight-map.compact .flight-map-notes{position:relative;width:min(380px,100%)!important;box-sizing:border-box;background:var(--bg);text-shadow:none}
+.flight-map.compact .flight-map-title,.flight-map.compact .flight-map-notes{position:relative;width:min(380px,100%)!important;box-sizing:border-box;background:var(--bg);text-shadow:none;box-shadow:none;border-radius:0}
 .flight-map.compact .flight-map-title{padding:18px 20px 14px;border:1px solid var(--hair);border-bottom:0;border-top:1px solid var(--amber)}
 .flight-map.compact .flight-map-notes{flex:1;min-height:0;overflow-y:auto;padding:4px 20px 18px;border:1px solid var(--hair);border-top:1px solid var(--hair)}
-.flight-map.compact .flight-map-note{position:static;width:auto!important;text-align:left;padding:13px 0;border-top:1px solid var(--hair-2)}
+.flight-map.compact .flight-map-note{position:static;box-shadow:none;border-radius:0;background:none;width:auto!important;text-align:left;padding:13px 0;border-top:1px solid var(--hair-2)}
 .flight-map.compact .flight-map-note:first-child{border-top:0}
 .flight-map.compact .flight-map-note h3{font-size:17px}
 @media(max-width:680px){.flight-map.compact{align-items:stretch}.flight-map.compact .flight-map-title,.flight-map.compact .flight-map-notes{width:auto!important}}
