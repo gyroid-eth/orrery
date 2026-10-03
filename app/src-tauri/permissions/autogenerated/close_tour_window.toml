@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-close-tour-window"
+description = "Enables the close_tour_window command without any pre-configured scope."
+commands.allow = ["close_tour_window"]
+
+[[permission]]
+identifier = "deny-close-tour-window"
+description = "Denies the close_tour_window command without any pre-configured scope."
+commands.deny = ["close_tour_window"]

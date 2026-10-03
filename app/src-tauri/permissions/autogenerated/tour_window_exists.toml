@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tour-window-exists"
+description = "Enables the tour_window_exists command without any pre-configured scope."
+commands.allow = ["tour_window_exists"]
+
+[[permission]]
+identifier = "deny-tour-window-exists"
+description = "Denies the tour_window_exists command without any pre-configured scope."
+commands.deny = ["tour_window_exists"]

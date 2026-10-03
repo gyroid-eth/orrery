@@ -602,3 +602,146 @@ def test_dom_tour_page_script_wins_over_the_stored_definition(tour_browser):
     assert fallback == [{'title': 'Old title', 'items': ['Old step']}]
     assert json.loads(evaluate(shown)) == [{'title': 'Current title', 'items': ['Current step']}]
 
+
+FAKE_APP = """(()=>{
+  // The desktop app's bridge, as far as the checklist uses it. Knobs set the timing
+  // of the review cases: how long listen takes, whether it fails, and when the
+  // native window closes relative to open_tour_window.
+  window.appCalls=[];window.appClosed=null;window.appKnobs={listenMs:0,listenFails:false,closeAfterMs:null,closeDuringOpen:false,windowExists:true,existsMs:0};
+  const closeNotice={payload:{tour:'first-flight',url:location.origin+'/tour.html?tour=first-flight'}};
+  let handler=null;
+  const emit=()=>{if(handler)handler(closeNotice);};
+  window.appEmitClose=emit;
+  window.__TAURI__={core:{invoke:(name,args)=>{appCalls.push([name,args]);
+      if(!window.appHasTourWindows)return Promise.reject('Command '+name+' not found');
+      if(name==='open_tour_window'&&appKnobs.closeDuringOpen)emit();
+      if(name==='open_tour_window'&&appKnobs.closeAfterMs!==null)setTimeout(emit,appKnobs.closeAfterMs);
+      if(name==='tour_window_exists'){const answer=appKnobs.windowExists;return new Promise(r=>setTimeout(()=>r(answer),appKnobs.existsMs));}
+      return Promise.resolve();}},
+    event:{listen:(name,fn)=>new Promise((resolve,reject)=>setTimeout(()=>{
+      if(appKnobs.listenFails)return reject('no event permission');
+      if(name==='orrery://pane-window-closed'){handler=fn;appClosed=fn;}
+      resolve(()=>{});},appKnobs.listenMs))}};
+})()"""
+
+
+def test_dom_older_app_without_tour_windows_keeps_the_panel(tour_browser):
+    _, evaluate = tour_browser
+    evaluate(FAKE_APP)
+    result = evaluate("""(async()=>{
+      window.appHasTourWindows=false;
+      const flight=OrreryTour.firstFlight;flight.reset();
+      const offered=!flight.el.querySelector('.flight-popout').hidden;
+      flight.el.querySelector('.flight-popout').click();
+      await new Promise(resolve=>setTimeout(resolve,50));
+      return {offered,calls:appCalls.map(c=>c[0]),panel:!flight.el.hidden,
+        stillOffered:!flight.el.querySelector('.flight-popout').hidden};
+    })()""")
+    assert result == {'offered': True, 'calls': ['open_tour_window'], 'panel': True, 'stillOffered': False}
+
+
+def test_dom_app_opens_a_tour_window_and_takes_the_panel_back_when_it_closes(tour_browser):
+    _, evaluate = tour_browser
+    evaluate(FAKE_APP)
+    result = evaluate("""(async()=>{
+      window.appHasTourWindows=true;
+      const flight=OrreryTour.firstFlight;flight.reset();
+      flight.el.querySelector('.flight-popout').click();
+      await new Promise(resolve=>setTimeout(resolve,50));
+      const [name,args]=appCalls[0];
+      const opened={name,tour:args.tour,size:[args.width,args.height],hidden:flight.el.hidden};
+      appClosed({payload:{tour:'first-flight',url:location.origin+'/tour.html?tour=first-flight&ws=ws://elsewhere/ws'}});
+      const otherBackend=flight.el.hidden;
+      appClosed({payload:{tour:'full-tour',url:location.origin+'/tour.html?tour=full-tour'}});
+      const otherTour=flight.el.hidden;
+      appClosed({payload:{tour:'first-flight',url:location.origin+'/tour.html?tour=first-flight'}});
+      return {...opened,otherBackend,otherTour,back:!flight.el.hidden};
+    })()""")
+    assert result == {'name': 'open_tour_window', 'tour': 'first-flight', 'size': [360, result['size'][1]],
+                      'hidden': True, 'otherBackend': True, 'otherTour': True, 'back': True}
+
+
+def test_dom_app_tour_window_closes_through_the_app(tour_browser):
+    import time
+    client, evaluate = tour_browser
+    client.call('Page.navigate', url=evaluate.base + '/tour.html?tour=first-flight')
+    for _ in range(100):
+        if evaluate("document.readyState==='complete'&&Boolean(window.OrreryTour&&OrreryTour.firstFlight)"):
+            break
+        time.sleep(.1)
+    evaluate(FAKE_APP)
+    result = evaluate("""(async()=>{
+      window.appHasTourWindows=true;
+      OrreryTour.firstFlight.el.querySelector('.flight-close').click();
+      await new Promise(resolve=>setTimeout(resolve,50));
+      return JSON.stringify(appCalls);
+    })()""")
+    assert json.loads(result) == [['close_tour_window', {'tour': 'first-flight'}]]
+
+
+@pytest.mark.parametrize('case', [
+    {'listenMs': 40, 'closeAfterMs': 5},      # review of #15: closed before the subscription was ready
+    {'listenMs': 0, 'closeDuringOpen': True},  # closed before open_tour_window resolved
+])
+def test_dom_app_window_closing_early_still_brings_the_panel_back(tour_browser, case):
+    _, evaluate = tour_browser
+    evaluate(FAKE_APP)
+    result = evaluate("""(async()=>{
+      window.appHasTourWindows=true;Object.assign(appKnobs,%s);
+      const flight=OrreryTour.firstFlight;flight.reset();
+      flight.el.querySelector('.flight-popout').click();
+      await new Promise(resolve=>setTimeout(resolve,150));
+      return {opened:appCalls.some(c=>c[0]==='open_tour_window'),panel:!flight.el.hidden};
+    })()""" % json.dumps(case))
+    assert result == {'opened': True, 'panel': True}
+
+
+def test_dom_app_without_a_close_subscription_does_not_open(tour_browser):
+    _, evaluate = tour_browser
+    evaluate(FAKE_APP)
+    result = evaluate("""(async()=>{
+      window.appHasTourWindows=true;appKnobs.listenFails=true;
+      const flight=OrreryTour.firstFlight;flight.reset();
+      flight.el.querySelector('.flight-popout').click();
+      await new Promise(resolve=>setTimeout(resolve,50));
+      return {calls:appCalls.map(c=>c[0]),panel:!flight.el.hidden,offered:!flight.el.querySelector('.flight-popout').hidden};
+    })()""")
+    assert result == {'calls': [], 'panel': True, 'offered': False}
+
+
+def test_dom_app_window_gone_without_a_notice_is_noticed(tour_browser):
+    _, evaluate = tour_browser
+    evaluate(FAKE_APP)
+    result = evaluate("""(async()=>{
+      window.appHasTourWindows=true;
+      const flight=OrreryTour.firstFlight;flight.reset();
+      flight.el.querySelector('.flight-popout').click();
+      await new Promise(resolve=>setTimeout(resolve,50));
+      const out=flight.el.hidden;
+      appKnobs.windowExists=false; // the window went away and no notice came
+      await new Promise(resolve=>setTimeout(resolve,2300));
+      return {out,asked:appCalls.filter(c=>c[0]==='tour_window_exists').length>0,panel:!flight.el.hidden};
+    })()""")
+    assert result == {'out': True, 'asked': True, 'panel': True}
+
+
+def test_dom_stale_window_answer_does_not_undo_a_reopened_window(tour_browser):
+    """Review of #15 (P3): a slow "no window" answer from before a reopen."""
+    _, evaluate = tour_browser
+    evaluate(FAKE_APP)
+    result = evaluate("""(async()=>{
+      window.appHasTourWindows=true;
+      const flight=OrreryTour.firstFlight,wait=ms=>new Promise(r=>setTimeout(r,ms));flight.reset();
+      flight.el.querySelector('.flight-popout').click();
+      await wait(50);
+      appKnobs.windowExists=false;appKnobs.existsMs=600;   // the next check answers late, about the old window
+      await wait(2100);
+      appEmitClose();appKnobs.windowExists=true;          // closed, then opened again before that answer
+      flight.el.querySelector('.flight-popout').click();
+      await wait(100);
+      const reopened=flight.el.hidden;
+      await wait(700);                                     // the stale "no window" answer has arrived
+      return {reopened,stillOut:flight.el.hidden};
+    })()""")
+    assert result == {'reopened': True, 'stillOut': True}
+
