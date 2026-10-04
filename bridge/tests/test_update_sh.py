@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import shlex
 import socket
 import subprocess
 import threading
@@ -548,3 +549,222 @@ def test_positive_values_the_login_shell_echoes_from_env_sh_stay_saved(stack, da
     assert stack.update(ORRERY_DASHBOARD_URL=dashboard, AGENTSTACK_CODEX_BIN="/broken/codex",
                         AGENTSTACK_PORT="19876", AGENTSTACK_MAIL_DB="/saved/storage.sqlite3").returncode == 0
     assert stack.install_env() == "codex=unset port=unset maildb=/saved/storage.sqlite3"
+
+
+# ---------------------------------------------------------------- rewritten cockpit history
+# No installed stack is involved: every force-push targets a temporary bare repo.
+ISSUE_20 = "https://github.com/gyroid-eth/orrery/issues/20"
+
+
+def rewrite_cockpit(stack):
+    seed = stack.tmp / "cockpit-seed"
+    old_tree = git(seed, "rev-parse", "HEAD^{tree}")
+    git(seed, "commit", "-q", "--amend", "-m", "rewritten metadata")
+    git(seed, "push", "-q", "--force", "origin", "HEAD:master")
+    assert git(seed, "rev-parse", "HEAD^{tree}") == old_tree
+    return git(seed, "rev-parse", "HEAD")
+
+
+def checkout_contents(checkout):
+    """Working files, staged contents and HEAD; fetch may update remote refs."""
+    files = {str(p.relative_to(checkout)): p.read_bytes()
+             for p in checkout.rglob("*") if p.is_file() and ".git" not in p.relative_to(checkout).parts}
+    return (git(checkout, "rev-parse", "HEAD"), git(checkout, "ls-files", "--stage"),
+            git(checkout, "status", "--porcelain", "--untracked-files=all"), files)
+
+
+def recovery_commands(output):
+    return [shlex.split(line.strip()) for line in output.splitlines()
+            if line.strip().startswith("git -C ") and
+            (" fetch origin master" in line or " reset --hard origin/master" in line)]
+
+
+def test_rewritten_cockpit_gives_manual_commands_without_changing_checkouts(stack):
+    stack.publish("telemetry")  # Must not install this before diagnosing cockpit.
+    # Reproduce a user who already updated to the now-rewritten release.
+    stack.publish("cockpit")
+    git(stack.cockpit, "pull", "-q", "--ff-only")
+    new_remote = rewrite_cockpit(stack)
+    before = [checkout_contents(getattr(stack, n)) for n in ("telemetry", "cockpit")]
+    result = stack.update()
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert ISSUE_20 in result.stdout and "may have been rewritten" in result.stdout
+    assert "or this checkout has local commits" in result.stdout
+    assert "reset --hard discards local commits and changes" in result.stdout
+    assert recovery_commands(result.stdout) == [
+        ["git", "-C", str(stack.cockpit), "fetch", "origin", "master"],
+        ["git", "-C", str(stack.cockpit), "reset", "--hard", "origin/master"],
+    ]
+    assert [checkout_contents(getattr(stack, n)) for n in ("telemetry", "cockpit")] == before
+    assert stack.tracking("cockpit") == new_remote  # Normal preflight fetch only.
+    assert stack.calls() == []
+
+
+@pytest.mark.parametrize("dirty", ["tracked", "staged", "untracked"])
+def test_rewritten_dirty_cockpit_preserves_work_and_asks_for_backup(stack, dirty):
+    rewrite_cockpit(stack)
+    path = stack.cockpit / ("notes.txt" if dirty == "untracked" else "VERSION")
+    path.write_text("unsaved work\n")
+    if dirty == "staged":
+        git(stack.cockpit, "add", "VERSION")
+    before = [checkout_contents(getattr(stack, n)) for n in ("telemetry", "cockpit")]
+    result = stack.update()
+    assert result.returncode == 1, result.stdout
+    assert "back up or commit" in result.stdout.lower()
+    assert "Do not reset unsaved work" in result.stdout
+    assert recovery_commands(result.stdout) == []
+    assert [checkout_contents(getattr(stack, n)) for n in ("telemetry", "cockpit")] == before
+    assert stack.calls() == []
+
+
+def test_rewritten_cockpit_dry_run_does_not_even_fetch(stack):
+    rewrite_cockpit(stack)
+    before = [checkout_contents(getattr(stack, n)) for n in ("telemetry", "cockpit")]
+    refs = [stack.tracking(n) for n in ("telemetry", "cockpit")]
+    result = stack.update("--dry-run")
+    assert result.returncode == 0, result.stdout
+    assert ISSUE_20 not in result.stdout and recovery_commands(result.stdout) == []
+    assert "checked only by the real run" in result.stdout
+    assert [stack.tracking(n) for n in ("telemetry", "cockpit")] == refs
+    assert [checkout_contents(getattr(stack, n)) for n in ("telemetry", "cockpit")] == before
+    assert stack.calls() == []
+
+
+@pytest.mark.parametrize("dry", [False, True])
+def test_cockpit_network_failure_is_not_reported_as_history_rewrite(stack, dry):
+    git(stack.cockpit, "remote", "set-url", "origin", str(stack.tmp / "gone.git"))
+    before = [stack.head(n) for n in ("telemetry", "cockpit")]
+    result = stack.update(*(["--dry-run"] if dry else []))
+    assert result.returncode == 1
+    assert "could not reach the remote of cockpit" in result.stdout
+    assert ISSUE_20 not in result.stdout and recovery_commands(result.stdout) == []
+    unchanged(stack, before)
+
+
+def test_local_commits_only_are_not_reported_as_history_rewrite(stack):
+    add_local(stack.cockpit, "local.txt")
+    git(stack.cockpit, "add", "local.txt")
+    git(stack.cockpit, "commit", "-q", "-m", "local work")
+    before = checkout_contents(stack.cockpit)
+    result = stack.update()
+    assert result.returncode == 1
+    assert "cannot be fast-forwarded" in result.stdout
+    assert ISSUE_20 not in result.stdout and recovery_commands(result.stdout) == []
+    assert checkout_contents(stack.cockpit) == before and stack.calls() == []
+
+
+@pytest.mark.parametrize("branch", ["feature", "other-upstream"])
+def test_rewritten_other_branch_does_not_offer_a_master_reset(stack, branch):
+    if branch == "feature":
+        git(stack.cockpit, "switch", "-q", "-c", "feature")
+        git(stack.cockpit, "branch", "--set-upstream-to=origin/master")
+    else:
+        git(stack.tmp / "cockpit-seed", "push", "-q", "origin", "HEAD:other")
+        git(stack.cockpit, "fetch", "-q", "origin")
+        git(stack.cockpit, "branch", "--set-upstream-to=origin/other")
+        git(stack.tmp / "cockpit-seed", "commit", "-q", "--amend", "-m", "rewritten other")
+        git(stack.tmp / "cockpit-seed", "push", "-q", "--force", "origin", "HEAD:other")
+    if branch == "feature":
+        rewrite_cockpit(stack)
+    before = checkout_contents(stack.cockpit)
+    result = stack.update()
+    assert result.returncode == 1
+    assert ISSUE_20 not in result.stdout and recovery_commands(result.stdout) == []
+    assert checkout_contents(stack.cockpit) == before and stack.calls() == []
+
+
+def test_recovery_commands_quote_the_actual_checkout_path(stack):
+    renamed = stack.tmp / "cockpit space'$(example)"
+    stack.cockpit.rename(renamed)
+    stack.cockpit = renamed
+    rewrite_cockpit(stack)
+    result = stack.update()
+    assert result.returncode == 1
+    assert recovery_commands(result.stdout) == [
+        ["git", "-C", str(renamed), "fetch", "origin", "master"],
+        ["git", "-C", str(renamed), "reset", "--hard", "origin/master"],
+    ]
+    assert stack.calls() == []
+
+
+@pytest.mark.parametrize("failure", ["rewrite", "network", "dirty"])
+def test_cockpit_pull_failure_after_preflight_is_classified_without_reset(stack, failure):
+    # The fake installer changes remote state after preflight, before cockpit pull.
+    seed = stack.tmp / "telemetry-seed"
+    hook = {
+        "rewrite": 'git -C "$FAKE_SEED" commit -q --amend -m "rewritten metadata"\n'
+                   'git -C "$FAKE_SEED" push -q --force origin HEAD:master\n',
+        "network": 'git -C "$FAKE_COCKPIT" remote set-url origin "$FAKE_GONE"\n',
+        "dirty": 'git -C "$FAKE_SEED" commit -q --amend -m "rewritten metadata"\n'
+                 'git -C "$FAKE_SEED" push -q --force origin HEAD:master\n'
+                 'printf "unsaved work\\n" > "$FAKE_COCKPIT/VERSION"\n',
+    }[failure]
+    (seed / "scripts/install.sh").write_text(FAKE_INSTALL + hook)
+    git(seed, "commit", "-q", "-am", "installer test hook")
+    git(seed, "push", "-q", "origin", "HEAD:master")
+    old_cockpit = checkout_contents(stack.cockpit)
+    result = stack.update(FAKE_SEED=str(stack.tmp / "cockpit-seed"),
+                          FAKE_GONE=str(stack.tmp / "gone.git"))
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "git pull of the cockpit failed" in result.stdout
+    assert "orrery-telemetry was updated" in result.stdout
+    assert len(stack.calls()) == 1  # Installation already happened; say so accurately.
+    assert stack.head("cockpit") == old_cockpit[0]
+    if failure == "rewrite":
+        assert ISSUE_20 in result.stdout and len(recovery_commands(result.stdout)) == 2
+        assert checkout_contents(stack.cockpit) == old_cockpit
+    else:
+        assert recovery_commands(result.stdout) == [] and ISSUE_20 not in result.stdout
+        if failure == "dirty":
+            assert "Do not reset unsaved work" in result.stdout
+            assert (stack.cockpit / "VERSION").read_text() == "unsaved work\n"
+        else:
+            assert checkout_contents(stack.cockpit) == old_cockpit
+
+
+@pytest.mark.parametrize("name", ["telemetry", "cockpit"])
+@pytest.mark.parametrize("failure", ["rewrite", "local-ahead", "no-upstream"])
+def test_all_displayed_git_advice_preserves_literal_shell_arguments(stack, name, failure):
+    # Exercise Bash itself: shlex parsing alone cannot detect command substitution
+    # inside double quotes or Bash's ANSI-C quoting for a newline in the path.
+    renamed = stack.tmp / (name + " space'\"$(example)`example`\\newline\nend")
+    getattr(stack, name).rename(renamed)
+    setattr(stack, name, renamed)
+    stack.env["FAKE_COCKPIT"] = str(stack.cockpit)
+    (stack.agentstack / "install-state.json").write_text(json.dumps({"repo_root": str(stack.telemetry)}))
+    if failure == "rewrite":
+        seed = stack.tmp / f"{name}-seed"
+        git(seed, "commit", "-q", "--amend", "-m", "rewritten metadata")
+        git(seed, "push", "-q", "--force", "origin", "HEAD:master")
+    elif failure == "local-ahead":
+        add_local(renamed, "local.txt")
+        git(renamed, "add", "local.txt")
+        git(renamed, "commit", "-q", "-m", "local work")
+    else:
+        git(renamed, "switch", "-q", "-c", "local-only")
+    before = [checkout_contents(getattr(stack, n)) for n in ("telemetry", "cockpit")]
+    result = stack.update()
+    assert result.returncode == 1
+    commands = []
+    for line in result.stdout.splitlines():
+        if "Look at them with: " in line:
+            commands.append(line.split("Look at them with: ", 1)[1])
+        elif line.strip().startswith("git -C "):
+            commands.append(line.strip())
+    expected = [["-C", str(renamed), "switch", "master"]] if failure == "no-upstream" else [
+        ["-C", str(renamed), "log", "@{u}..HEAD"]]
+    if failure == "rewrite" and name == "cockpit":
+        expected = [["-C", str(renamed), "fetch", "origin", "master"],
+                    ["-C", str(renamed), "reset", "--hard", "origin/master"]] + expected
+    assert len(commands) == len(expected)
+    marker = stack.tmp / "substitution-marker"
+    # Stub git to record argv only: especially, never execute the displayed reset.
+    prelude = 'example() { printf evaluated > "$SUBSTITUTION_MARKER"; }; '
+    prelude += "git() { printf '%s\\0' \"$@\"; }; "
+    for command, argv in zip(commands, expected):
+        probe = subprocess.run([BASH, "-c", prelude + command], capture_output=True,
+                               env={**stack.env, "SUBSTITUTION_MARKER": str(marker)}, check=True)
+        assert not marker.exists(), command
+        assert probe.stdout.decode().split("\0")[:-1] == argv
+    assert [checkout_contents(getattr(stack, n)) for n in ("telemetry", "cockpit")] == before
+    assert stack.calls() == []
