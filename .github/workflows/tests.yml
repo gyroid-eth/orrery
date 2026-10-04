@@ -43,12 +43,16 @@ jobs:
       # contract suite needs ORRERY_E2E_V2=1; the two spawn cases stay off
       # (they would need a fake dashboard) and are reported as skipped.
       - name: bridge e2e (own tmux server)
+        # Run even when an earlier suite failed, so one failure hides nothing.
+        if: ${{ !cancelled() }}
         working-directory: bridge
         env:
           ORRERY_E2E_V2: "1"
         run: python -m pytest -q -rs tests/e2e_bridge.py
 
       - name: tools tests
+        # Run even when an earlier suite failed, so one failure hides nothing.
+        if: ${{ !cancelled() }}
         env:
           # The commits this pull request or push adds; earlier master history
           # is not judged here (see tools/test_no_personal_identifiers.py).
@@ -56,4 +60,6 @@ jobs:
         run: python -m pytest -q -rs tools
 
       - name: descriptor quality (node)
+        # Run even when an earlier suite failed, so one failure hides nothing.
+        if: ${{ !cancelled() }}
         run: node tools/descriptor_quality_js_test.js

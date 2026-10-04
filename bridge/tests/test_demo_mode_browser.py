@@ -259,7 +259,10 @@ def test_literal_stars_written_over_a_masked_name_copy_as_stars():
         start_pane(js)
         write(js, "/Users/mira/x\r\n")
         write(js, "\x1b[1;1H\x1b[2K/Users/****/x\r\n")
-        assert drawn(js)[0] == "/Users/****/x"
+        # xterm draws on an animation frame; a busy CI runner had not drawn
+        # the row yet 0.15s after the write (CI run 37169738585).
+        first_row = "[...demoPane.host.querySelector('.xterm-rows').children][0].textContent.replace(/\\s+$/,'')"
+        assert wait(js, f"{first_row}==='/Users/****/x'"), drawn(js)[:2]
         assert copy_rows(js, 0, 0) == "/Users/****/x"
 
 
