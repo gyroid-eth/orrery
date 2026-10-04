@@ -5,7 +5,7 @@ const STEPS=Object.freeze([
   {id:'full-start',title:'Start an agent',target:'#newAgentBtn',copy:'Start an agent in your workshop folder with a signed-in CLI. Give it a simple task and wait until it is ready.'},
   {id:'full-choose',title:'Choose your agent',target:'.col.roster',copy:'Choose your agent on the left. Its terminal opens in the center, and Agent Mail follows it.'},
   {id:'full-talk',title:'Send a prompt',target:'.promptbar',copy:'Say hello in the input below the terminal and press Enter or SEND. Use Shift+Enter for another line.'},
-  {id:'full-shiritori',title:'Delegate a game of shiritori',target:'#mail',copy:'Use the workshop prompt below and send it to your parent agent to create one child with /delegate and play over ORRERY Mail. This step checks off after a fresh parent–child Mail round trip; let all three rounds finish.'},
+  {id:'full-shiritori',title:'Delegate a game of shiritori',target:'#promptInput',copy:'Use the workshop prompt below and send it to your parent agent to create one child with /delegate and play over ORRERY Mail. This step checks off after a fresh parent–child Mail round trip; let all three rounds finish.'},
   {id:'full-split',title:'Work side by side',target:'.col.roster',copy:'Modifier-click your parent and child in the agent list to show both terminals together. Use ⌘click on macOS or Ctrl+click on WSL.'},
   {id:'full-drag',title:'Move a pane',target:'.tabstrip',copy:'Drag a pane tab or split label to move it, or move a floating pane by its header. You can arrange the workspace around your task.'},
   {id:'full-planetarium',title:'Open Planetarium',target:'#planetariumBtn',copy:'Open PLANETARIUM to see who spawned whom. Find the parent and child from your game, then close the view.'},
@@ -56,7 +56,12 @@ function createShiritoriTracker(parent,since,afterId=0){
         if(!prior||(direction==='out'?id<prior.id:id>prior.id))pair[direction]={id,ts};
         rounds.set(child,pair);
       }
-      return [...rounds.values()].some(pair=>pair.out&&pair.in&&pair.in.id>pair.out.id&&pair.in.ts>=pair.out.ts);
+      return !!this.child();
+    },
+    // The child that played a full round with the parent, once there is one.
+    child(){
+      for(const [name,pair] of rounds)if(pair.out&&pair.in&&pair.in.id>pair.out.id&&pair.in.ts>=pair.out.ts)return name;
+      return null;
     },
   };
 }
@@ -117,7 +122,11 @@ function mount(){
   function observeMail(){
     if(!current('full-shiritori')||!tracker)return;
     const agents=oc.agents().map(a=>({...a,parent:oc.lineageParent.get(a.name)}));
-    if(tracker.add(oc.mailBacklog(),agents))mark('full-shiritori');
+    if(tracker.add(oc.mailBacklog(),agents)){
+      // Kept for the Network edge step, which may come after a reload.
+      context.child=tracker.child();saveContext();
+      mark('full-shiritori');
+    }
   }
   function changed(){
     copy.hidden=!current('full-shiritori');
@@ -188,7 +197,10 @@ function mount(){
       const f=frameEl.getBoundingClientRect(),g=tour.el.getBoundingClientRect();
       if(g.width&&g.height)avoid.push({l:Math.round(g.left-f.left),t:Math.round(g.top-f.top),r:Math.round(g.right-f.left),b:Math.round(g.bottom-f.top)});
     }
-    const message={type:'orrery-tour-cue',version:1,step:cue,avoid};
+    // The game's parent and child, so the page can ring their edge and not
+    // another one; without them it rings no edge at all.
+    const child=cue&&context?(typeof context.child==='string'&&context.child)||(tracker&&tracker.child()):null;
+    const message={type:'orrery-tour-cue',version:1,step:cue,avoid,...(child?{pair:[context.parent,child]}:{})};
     const key=JSON.stringify(message);
     if(!force&&key===lastCue)return;
     lastCue=key;

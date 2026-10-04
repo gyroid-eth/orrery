@@ -106,9 +106,11 @@ function leadersCross(paths){
 }
 // Where the HERE tag sits next to the tour's ring: below, above, right or left
 // of the ring, inside the view and clear of what it must not cover (the tour's
-// panel). r: the ring; size: {w,h} of the tag; view: {w,h}; avoid: rects.
-// Returns {x,y,side}, or null when no side has room (the ring alone shows).
-function placeHereTag(r,size,view,avoid=[],gap=8,margin=6){
+// panel). r: the ring; size: {w,h} of the tag; view: {w,h}; avoid: rects;
+// blocked: optionally, whether a spot would cover something the person reads
+// or presses there. Returns {x,y,side}, or null when no side has room (the
+// ring alone shows).
+function placeHereTag(r,size,view,avoid=[],gap=8,margin=6,blocked=null){
   const cx=(r.l+r.r)/2,cy=(r.t+r.b)/2;
   const sides=[
     ['below',cx-size.w/2,r.b+gap],['above',cx-size.w/2,r.t-gap-size.h],
@@ -119,10 +121,14 @@ function placeHereTag(r,size,view,avoid=[],gap=8,margin=6){
     const box={l:x,t:y,r:x+size.w,b:y+size.h};
     if(box.l<margin||box.t<margin||box.r>view.w-margin||box.b>view.h-margin)continue;
     if(avoid.some(a=>a&&box.l<a.r&&box.r>a.l&&box.t<a.b&&box.b>a.t))continue;
+    if(blocked&&blocked(box))continue;
     return {x,y,side};
   }
   return null;
 }
+// What the HERE tag must not cover: controls, the brand, the clock, the
+// header's status and terminals (their last line is where people type).
+const KEEP_CLEAR='button,a[href],input,textarea,select,[role="button"],[contenteditable="true"],.brand,.clock,.topstat,.termhost';
 const API={STEPS,MAP_NOTES,KEY,CHANNEL,createState,leadersCross,placeHereTag};
 if(typeof module!=='undefined'&&module.exports)module.exports=API;
 root.OrreryTour=API;
@@ -250,18 +256,40 @@ function mountChecklist(definition){
     const cx=Math.min(W-1,Math.max(0,(b.left+b.right)/2)),cy=Math.min(H-1,Math.max(0,(b.top+b.bottom)/2));
     const top=doc.elementFromPoint(cx,cy);
     if(top&&top!==highlight&&!highlight.contains(top)&&!top.closest('.flight-guide'))return hide();
+    // Under the panel the ring alone shows where it is: a tag beside it would
+    // land on whatever is next to the panel, such as a terminal's input line.
+    const underPanel=!!(top&&top.closest('.flight-guide'));
     const pad=4,r={l:Math.max(2,b.left-pad),t:Math.max(2,b.top-pad),r:Math.min(W-2,b.right+pad),b:Math.min(H-2,b.bottom+pad)};
     Object.assign(ring.style,{left:r.l+'px',top:r.t+'px',width:(r.r-r.l)+'px',height:(r.b-r.t)+'px'});
     ring.hidden=false;
     here.hidden=false;here.style.visibility='hidden';
+    // The panel's words and buttons are kept clear, not its empty top edge: a
+    // small header button whose only free side is above the panel still gets
+    // its tag in that strip.
     const panel=el.hidden?null:el.getBoundingClientRect();
-    const avoid=panel?[{l:panel.left-6,t:panel.top-6,r:panel.right+6,b:panel.bottom+6}]:[];
+    let contentTop=panel?panel.top:0;
+    if(panel){
+      const tops=[...el.querySelectorAll('.flight-panel h2,.flight-panel button,.flight-panel .flight-meta')]
+        .map(c=>c.getBoundingClientRect()).filter(b=>b.width>0&&b.height>0).map(b=>b.top);
+      if(tops.length)contentTop=Math.max(panel.top,Math.min(...tops));
+    }
+    const avoid=panel?[{l:panel.left-6,t:contentTop-4,r:panel.right+6,b:panel.bottom+6}]:[];
+    if(underPanel){here.hidden=true;here.style.visibility='';return;}
+    // Nor does the tag sit on another control, the brand, the clock or a
+    // terminal: a few points across the spot say what is under it.
+    const blocked=box=>{
+      const xs=[box.l+2,(box.l+box.r)/2,box.r-2],ys=[box.t+2,(box.t+box.b)/2,box.b-2];
+      return xs.some(x=>ys.some(y=>{
+        const hit=doc.elementFromPoint(x,y);
+        return !!hit&&hit!==highlight&&!highlight.contains(hit)&&!!hit.closest(KEEP_CLEAR);
+      }));
+    };
     const label=side=>side==='below'?'▲ HERE':side==='above'?'▼ HERE':side==='right'?'◀ HERE':'HERE ▶';
     // The arrow depends on the side and the size on the arrow: measure the
     // finished tag, and settle when its side gives back the same label.
     let spot=null;here.textContent=here.textContent||label('below');
     for(let i=0;i<3;i++){
-      spot=placeHereTag(r,{w:here.offsetWidth,h:here.offsetHeight},{w:W,h:H},avoid);
+      spot=placeHereTag(r,{w:here.offsetWidth,h:here.offsetHeight},{w:W,h:H},avoid,8,6,blocked);
       if(!spot||label(spot.side)===here.textContent)break;
       here.textContent=label(spot.side);
     }

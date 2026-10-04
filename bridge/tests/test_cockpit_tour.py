@@ -116,6 +116,21 @@ def test_here_tag_goes_below_above_or_beside_and_never_over_the_panel():
         True]
 
 
+def test_here_tag_skips_a_side_that_would_cover_something():
+    """A spot that would cover a control, the brand, the clock or a terminal
+    is skipped like one off the view; with every side covered only the ring
+    shows."""
+    assert node(f"""const t=require({json.dumps(str(BRIDGE / 'cockpit_tour.js'))});
+      const size={{w:60,h:20}},view={{w:1000,h:600}};
+      const r=(l,tp,rr,b)=>({{l,t:tp,r:rr,b}});
+      const below=box=>box.t>=140;
+      console.log(JSON.stringify([
+        t.placeHereTag(r(100,100,200,140),size,view,[],8,6,below),
+        t.placeHereTag(r(100,100,200,140),size,view,[],8,6,()=>true)]));""") == [
+        {'x': 120, 'y': 72, 'side': 'above'},
+        None]
+
+
 def test_help_map_toggle_does_not_reset_or_dismiss_checklist():
     assert state("""
       const s=tour.createState(storage);s.mark('start');s.toggleMap();const shown=s.map;
@@ -507,7 +522,9 @@ RING_STATE = """(()=>{
   // The ring stays inside the window: compare with the control's visible part.
   const target=document.querySelector('.flight-target'),g=rect(ring),c=rect(target);
   const t={l:Math.max(2,c.l),t:Math.max(2,c.t),r:Math.min(innerWidth-2,c.r),b:Math.min(innerHeight-2,c.b)};
-  const panels=[...document.querySelectorAll('.flight-guide:not([hidden])')].map(rect);
+  // The panel's words and buttons; its empty top strip may hold the tag.
+  const panels=[...document.querySelectorAll('.flight-guide:not([hidden]) .flight-panel :is(h2,button,.flight-meta,li)')]
+    .filter(e=>e.getBoundingClientRect().width>0).map(rect);
   const h=here&&rect(here);
   return {ring:true,target:target.id||target.className,
     around:g.l<=t.l&&g.t<=t.t&&g.r>=t.r&&g.b>=t.b,
@@ -523,8 +540,9 @@ def test_dom_the_next_control_gets_a_cyan_ring_and_a_here_tag(tour_browser):
     client, evaluate = tour_browser
     evaluate("OrreryTour.firstFlight.reset();OrreryTour.firstFlight.show()")
     shown = evaluate(RING_STATE)
+    # Below NEW AGENT is the roster filter, which the tag must not cover.
     assert shown == {'ring': True, 'target': 'newAgentBtn', 'around': True, 'colour': 'rgb(63, 210, 230)',
-                     'pulse': 'flight-ring-pulse', 'here': True, 'label': '▲ HERE',
+                     'pulse': 'flight-ring-pulse', 'here': True, 'label': '◀ HERE',
                      'hereOnScreen': True, 'hereClearOfPanel': True}
     # Light theme: a darker cyan that holds on paper.
     light = evaluate("document.documentElement.dataset.colorTheme='light';" + RING_STATE)
@@ -579,6 +597,49 @@ def test_dom_a_control_under_the_tour_panel_keeps_its_ring(tour_browser):
     _, evaluate = tour_browser
     state = evaluate("(()=>{const f=OrreryTour.firstFlight;f.reset();f.show();f.state.goTo('mail');f.show();})();" + RING_STATE)
     assert (state['ring'], state['target'], state['around'], state['hereClearOfPanel']) == (True, 'mail', True, True)
+
+
+def test_dom_a_control_under_the_tour_panel_gets_no_here_tag(tour_browser):
+    # The recording showed the tag for Agent Mail on the terminal's input line.
+    _, evaluate = tour_browser
+    state = evaluate("(()=>{const f=OrreryTour.firstFlight;f.reset();f.show();f.state.goTo('mail');f.show();})();" + RING_STATE)
+    assert (state['ring'], state['here']) == (True, False)
+
+
+@pytest.mark.parametrize('step', ['full-planetarium', 'full-telemetry', 'full-split', 'full-usage'])
+def test_dom_the_here_tag_covers_no_control_brand_clock_or_terminal(tour_browser, step):
+    # The recording showed it on the brand, the clock and the next button.
+    _, evaluate = tour_browser
+    covered = evaluate("""(()=>{OrreryTour.firstFlight.el.querySelector('.flight-close').click();
+      const t=OrreryFullTour.checklist;t.state.reset();t.show();t.state.goTo(%s);t.show();
+      const here=document.querySelector('.flight-here:not([hidden])');
+      if(!here)return [];
+      const b=here.getBoundingClientRect(),hits=new Set();
+      for(const x of [b.left+2,(b.left+b.right)/2,b.right-2])for(const y of [b.top+2,(b.top+b.bottom)/2,b.bottom-2]){
+        const e=document.elementFromPoint(x,y);
+        const c=e&&e.closest('button,a[href],input,textarea,select,[role="button"],.brand,.clock,.topstat,.termhost');
+        if(c)hits.add(c.id||c.className);
+      }
+      return [...hits];})()""" % json.dumps(step))
+    assert covered == []
+
+
+@pytest.mark.parametrize('step,target', [('full-planetarium', 'planetariumBtn'), ('full-telemetry', 'networkBtn')])
+def test_dom_a_small_header_button_still_gets_its_tag(tour_browser, step, target):
+    # Its neighbours are buttons and the clock, and below it is the panel:
+    # the tag goes in the panel's empty top strip, clear of its words.
+    _, evaluate = tour_browser
+    state = evaluate("""(()=>{OrreryTour.firstFlight.el.querySelector('.flight-close').click();
+      const t=OrreryFullTour.checklist;t.state.reset();t.show();t.state.goTo(%s);t.show();})();""" % json.dumps(step) + RING_STATE)
+    assert (state['target'], state['here'], state['label'], state['hereClearOfPanel']) == (target, True, '▲ HERE', True)
+
+
+def test_dom_the_shiritori_step_rings_where_the_prompt_is_sent(tour_browser):
+    # Agent Mail lies under the panel; the step's action is sending the prompt.
+    _, evaluate = tour_browser
+    state = evaluate("""(()=>{OrreryTour.firstFlight.el.querySelector('.flight-close').click();
+      const t=OrreryFullTour.checklist;t.state.reset();t.show();t.state.goTo('full-shiritori');t.show();})();""" + RING_STATE)
+    assert (state['ring'], state['target'], state['around']) == (True, 'promptInput', True)
 
 
 def test_dom_a_target_that_fills_the_window_gets_no_ring(tour_browser):

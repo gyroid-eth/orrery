@@ -261,6 +261,18 @@ def test_free_reply_subject_and_reply_message_metadata_count(subject):
     assert run(script) is True
 
 
+def test_the_tracker_names_the_child_that_played_a_full_round():
+    # The Network edge step rings that pair's edge, not the first edge drawn.
+    assert run("""
+      const t=tour.createShiritoriTracker('P',1000000),agents=[{name:'C',parent:'P'},{name:'D',parent:'P'}];
+      const before=t.child();
+      t.add([{id:10,ts:1001,sender:'P',recipient:'D',body:'りんご'}],agents);
+      const half=t.child();
+      t.add([{id:11,ts:1002,sender:'P',recipient:'C',body:'りんご'},{id:12,ts:1003,sender:'C',recipient:'P',body:'ごりら'}],agents);
+      console.log(JSON.stringify([before,half,t.child()]));
+    """) == [None, None, 'C']
+
+
 @pytest.mark.parametrize('kind,success,expected', [('float', True, 1), ('browser', True, 1),
     ('browser', False, 0), ('native', True, 1), ('native', False, 0)])
 def test_owned_pane_focus_notifies_only_after_actual_success(kind, success, expected):
