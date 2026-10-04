@@ -22,6 +22,10 @@ const MAP_EXTRA=Object.freeze([
 ]);
 const MAP_ORDER=['start','select','choose','talk','mail','crew','usage','telemetry','planetarium','settings'];
 const MAP_NOTES=Object.freeze(MAP_ORDER.map(id=>STEPS.find(s=>s.id===id)||MAP_EXTRA.find(s=>s.id===id)));
+// The help map's sizes, largest first: [data-scale, gap between notes, spacings
+// to try]. Scale 0 is the full size; 1-3 set the notes smaller in
+// cockpit_tour.css (the smallest: 12px headings, 9px text).
+const MAP_SCALES=Object.freeze([[0,18,[1.4,.8]],[1,13,[1,.6]],[2,9,[1,.6]],[3,6,[1,.6]]]);
 const KEY='oc-first-flight-v1';
 const CHANNEL='orrery-tour';
 function createState(storage,{steps=STEPS,key=KEY,autoOpen=true}={}){
@@ -75,7 +79,32 @@ function createState(storage,{steps=STEPS,key=KEY,autoOpen=true}={}){
     reload(){load();},
   };
 }
-const API={STEPS,MAP_NOTES,KEY,CHANNEL,createState};
+// Leaders are runs of horizontal and vertical segments ("M x,y H x V y ...").
+// Two leaders cross, or run along each other, when any of their segments meet
+// away from their ends.
+function leaderSegments(d){
+  let x=0,y=0;const out=[];
+  for(const part of d.match(/[MHV][^MHV]*/g)||[]){
+    const n=part.slice(1).split(',').map(Number);
+    if(part[0]==='M'){x=n[0];y=n[1];}
+    else if(part[0]==='H'){out.push([x,y,n[0],y]);x=n[0];}
+    else{out.push([x,y,x,n[0]]);y=n[0];}
+  }
+  return out;
+}
+function segmentsMeet(a,b){
+  const within=(v,lo,hi)=>v>Math.min(lo,hi)+.5&&v<Math.max(lo,hi)-.5;
+  const ah=a[1]===a[3],bh=b[1]===b[3];
+  if(ah&&!bh)return within(b[0],a[0],a[2])&&within(a[1],b[1],b[3]);
+  if(!ah&&bh)return within(a[0],b[0],b[2])&&within(b[1],a[1],a[3]);
+  if(ah&&bh)return Math.abs(a[1]-b[1])<1.5&&Math.min(Math.max(a[0],a[2]),Math.max(b[0],b[2]))-Math.max(Math.min(a[0],a[2]),Math.min(b[0],b[2]))>.5;
+  return Math.abs(a[0]-b[0])<1.5&&Math.min(Math.max(a[1],a[3]),Math.max(b[1],b[3]))-Math.max(Math.min(a[1],a[3]),Math.min(b[1],b[3]))>.5;
+}
+function leadersCross(paths){
+  const segs=paths.map(leaderSegments);
+  return segs.some((one,i)=>segs.slice(i+1).some(other=>one.some(a=>other.some(b=>segmentsMeet(a,b)))));
+}
+const API={STEPS,MAP_NOTES,KEY,CHANNEL,createState,leadersCross};
 if(typeof module!=='undefined'&&module.exports)module.exports=API;
 root.OrreryTour=API;
 if(!root.document)return;
@@ -438,15 +467,16 @@ function mount(){
       svg('path',{class:'flight-map-frame',d:[[x,y,1,1],[x+w,y,-1,1],[x,y+h,1,-1],[x+w,y+h,-1,-1]].map(([cx,cy,dx,dy])=>`M${cx+dx*a},${cy}H${cx}V${cy+dy*a}`).join('')},marks);
     });
   }
-  function leader(step,d,dot){svg('path',{class:'flight-map-leader','data-step':step,d},marks);svg('circle',{class:'flight-map-dot',cx:dot[0],cy:dot[1],r:2.4},marks);}
+  function drawLeader(step,d,dot){svg('path',{class:'flight-map-leader','data-step':step,d},marks);svg('circle',{class:'flight-map-dot',cx:dot[0],cy:dot[1],r:2.4},marks);}
   // The reason the annotated layout gave way to the legend, kept for tests.
   function fail(reason){map.dataset.fallback=reason;return false;}
   // spread: the space between stacked notes, in units of the gap.
-  function annotate(rects,spread){
+  // gap: the space between notes and their leaders' room (smaller when scaled down).
+  function annotate(rects,spread,gap=18){
     const stage=doc.getElementById('termstage');
     const v=stage&&stage.getBoundingClientRect();
     if(!v||rects.some(r=>!r)||v.width<440||v.height<320)return fail('room');
-    const gap=18,colGap=28,lane=6,wide=210;
+    const colGap=28,lane=6,wide=210;
     const headerEl=doc.querySelector('header');
     const hb=headerEl?headerEl.getBoundingClientRect().bottom:v.top;
     const cxOf=r=>(r.l+r.r)/2;
@@ -513,6 +543,8 @@ function mount(){
     const rightTops=rects.map((r,i)=>i).filter(i=>sides[i]==='top').sort((a,b)=>cxOf(rects[a])-cxOf(rects[b]));
     // Lanes: the higher a left note, the nearer its lane to the dots.
     let laneIndex=0,headIndex=0;
+    // Leaders are drawn only once the whole set is known not to cross.
+    const pending=[],leader=(id,d,dot)=>pending.push([id,d,dot]);
     left.forEach(item=>{if(item.i!==undefined)item.lane=leftDot-lane*(++laneIndex);});
     left.concat(right,bottom?[bottom]:[]).forEach(item=>{
       if(item.i===undefined)return;
@@ -536,6 +568,11 @@ function mount(){
       }
       else{const x=item.col==='left'?leftDot:rightDot;leader(id,`M${x},${r.t-3}V${y}`,[x,y]);}
     });
+    // A wrapped header control (Settings at 1160px) can push its track past its
+    // neighbour's; a layout whose leaders cross is not used (the next size, or
+    // the legend, is tried instead).
+    if(leadersCross(pending.map(p=>p[1])))return fail('crossing');
+    pending.forEach(p=>drawLeader(...p));
     return true;
   }
   function placeMap(){
@@ -545,11 +582,17 @@ function mount(){
     art.querySelector('.flight-map-veil').setAttribute('height',root.innerHeight);
     const rects=targetRects();
     map.classList.remove('compact');delete map.dataset.fallback;drawFrames(rects);
-    // Ten notes are a lot for a small stage: close the spacing before giving up the leaders.
-    if(!annotate(rects,1.4)&&!annotate(rects,.8)){
-      [title,...notes.children].forEach(el=>{el.style.left=el.style.top=el.style.width='';el.classList.remove('end');});
-      map.classList.add('compact');drawFrames(rects);
+    // Ten notes are a lot for a small stage. Keep the large layout and close
+    // the spacing first, then set the notes smaller step by step (data-scale,
+    // see cockpit_tour.css); the legend is left for when even the smallest
+    // step does not fit.
+    for(const [scale,gap,spreads] of MAP_SCALES){
+      if(scale)map.dataset.scale=scale;else delete map.dataset.scale;
+      if(spreads.some(spread=>annotate(rects,spread,gap))){delete map.dataset.fallback;return;}
     }
+    delete map.dataset.scale;
+    [title,...notes.children].forEach(el=>{el.style.left=el.style.top=el.style.width='';el.classList.remove('end');});
+    map.classList.add('compact');drawFrames(rects);
   }
   function render(){
     map.hidden=!state.map;flight.suspend(state.map);
