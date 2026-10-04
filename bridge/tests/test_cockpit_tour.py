@@ -698,6 +698,29 @@ def test_dom_a_folded_band_dragged_is_judged_where_it_would_open(tour_browser, s
     assert placed and settled
 
 
+def test_dom_a_band_held_mid_drag_stays_where_it_is_taken(tour_browser):
+    # Review of #29: held still for a second mid-drag, the band jumped back to
+    # its saved place, and that place was saved again on release.
+    import time
+    client, evaluate = tour_browser
+    evaluate("(()=>{localStorage.removeItem('oc-first-flight-v1-pos');const f=OrreryTour.firstFlight;f.reset();f.show();f.state.goTo('mail');f.show();})()")
+    assert _wait_dodge(evaluate, 'OrreryTour.firstFlight', True)
+    band = evaluate("(()=>{const r=OrreryTour.firstFlight.el.querySelector('.flight-band').getBoundingClientRect();return {x:r.left+40,y:r.top+r.height/2};})()")
+    mouse = lambda kind, x, y: client.call('Input.dispatchMouseEvent', type=kind, x=x, y=y, button='left',
+                                          buttons=1 if kind != 'mouseReleased' else 0, clickCount=1)
+    mouse('mousePressed', band['x'], band['y'])
+    for i in range(1, 21):
+        mouse('mouseMoved', band['x'] + (100 - band['x']) * i / 20, band['y'] + (170 - band['y']) * i / 20)
+    time.sleep(1.5)
+    held = evaluate("(()=>{const r=OrreryTour.firstFlight.el.getBoundingClientRect();return {l:Math.round(r.left),t:Math.round(r.top)};})()")
+    mouse('mouseReleased', 100, 170)
+    reopened = _wait_dodge(evaluate, 'OrreryTour.firstFlight', False)
+    saved = evaluate("JSON.parse(localStorage.getItem('oc-first-flight-v1-pos'))")
+    evaluate("localStorage.removeItem('oc-first-flight-v1-pos');OrreryTour.firstFlight.render()")
+    assert abs(held['l'] - (100 - 40)) <= 2, held
+    assert reopened and abs(saved['left'] - held['l']) <= 2 and abs(saved['top'] - held['t']) <= 2, (saved, held)
+
+
 def test_dom_the_panel_folds_for_a_marked_control_and_a_reported_drawer(tour_browser):
     _, evaluate = tour_browser
     evaluate("""(()=>{OrreryTour.firstFlight.el.querySelector('.flight-close').click();

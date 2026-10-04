@@ -352,6 +352,9 @@ function mountChecklist(definition){
     return b.width&&b.height?{l:b.left,t:b.top,r:b.right,b:b.bottom}:panelBox;
   }
   function checkDodge(){
+    // Not mid-drag: measuring opens the panel through place(), which would put
+    // it back where it was saved; the drag's end judges it once.
+    if(dragged)return;
     if(solo||destroyed||el.hidden||state.folded){
       if(dodging||dodgeOverride){dodging=false;dodgeOverride=false;render();}
       return;
@@ -498,6 +501,7 @@ function mountChecklist(definition){
     band.dataset.dragged='1';setTimeout(()=>{delete band.dataset.dragged;},0);
     if(canPopOut()&&outside(event)&&popOut(event.screenX,event.screenY))return;
     const r=el.getBoundingClientRect();writePosition(storageKey,{left:r.left,top:r.top});place();
+    checkDodge();
   }
   [head,band].forEach(handle=>{
     handle.addEventListener('pointerdown',startDrag);handle.addEventListener('pointermove',moveDrag);
