@@ -104,7 +104,26 @@ function leadersCross(paths){
   const segs=paths.map(leaderSegments);
   return segs.some((one,i)=>segs.slice(i+1).some(other=>one.some(a=>other.some(b=>segmentsMeet(a,b)))));
 }
-const API={STEPS,MAP_NOTES,KEY,CHANNEL,createState,leadersCross};
+// Where the HERE tag sits next to the tour's ring: below, above, right or left
+// of the ring, inside the view and clear of what it must not cover (the tour's
+// panel). r: the ring; size: {w,h} of the tag; view: {w,h}; avoid: rects.
+// Returns {x,y,side}, or null when no side has room (the ring alone shows).
+function placeHereTag(r,size,view,avoid=[],gap=8,margin=6){
+  const cx=(r.l+r.r)/2,cy=(r.t+r.b)/2;
+  const sides=[
+    ['below',cx-size.w/2,r.b+gap],['above',cx-size.w/2,r.t-gap-size.h],
+    ['right',r.r+gap,cy-size.h/2],['left',r.l-gap-size.w,cy-size.h/2]];
+  for(const [side,x0,y0] of sides){
+    const x=side==='below'||side==='above'?Math.max(margin,Math.min(view.w-margin-size.w,x0)):x0;
+    const y=side==='left'||side==='right'?Math.max(margin,Math.min(view.h-margin-size.h,y0)):y0;
+    const box={l:x,t:y,r:x+size.w,b:y+size.h};
+    if(box.l<margin||box.t<margin||box.r>view.w-margin||box.b>view.h-margin)continue;
+    if(avoid.some(a=>a&&box.l<a.r&&box.r>a.l&&box.t<a.b&&box.b>a.t))continue;
+    return {x,y,side};
+  }
+  return null;
+}
+const API={STEPS,MAP_NOTES,KEY,CHANNEL,createState,leadersCross,placeHereTag};
 if(typeof module!=='undefined'&&module.exports)module.exports=API;
 root.OrreryTour=API;
 if(!root.document)return;
@@ -210,6 +229,54 @@ function mountChecklist(definition){
     el.querySelector('.flight-steps').append(row);rows.set(step.id,row);
   });
   let popup=null,popped=false,suspended=false,highlight=null,dragged=null;
+  // The next control: a ring drawn over it (not a style on it, which its
+  // container could clip) and a HERE tag beside it. Cyan, unlike the gold the
+  // cockpit and its help map use, so it reads as the tour's.
+  const ring=doc.createElement('div');ring.className='flight-ring';ring.hidden=true;ring.setAttribute('aria-hidden','true');
+  const here=doc.createElement('div');here.className='flight-here';here.hidden=true;here.setAttribute('aria-hidden','true');
+  if(!solo)doc.body.append(ring,here);
+  function placeRing(){
+    const hide=()=>{ring.hidden=true;here.hidden=true;};
+    if(destroyed)return hide();
+    if(!highlight||!highlight.isConnected)return hide();
+    const b=highlight.getBoundingClientRect(),W=root.innerWidth,H=root.innerHeight;
+    if(b.width<2||b.height<2||b.right<=0||b.bottom<=0||b.left>=W||b.top>=H)return hide();
+    // A target that fills the window (the Telemetry overlay, for its steps)
+    // has nothing to point at; a frame around the whole screen would only pulse.
+    const shown=(Math.min(W,b.right)-Math.max(0,b.left))*(Math.min(H,b.bottom)-Math.max(0,b.top));
+    if(shown>=.9*W*H)return hide();
+    // A control under something else (a dialog opened over it) is not pointed
+    // at. The tour's own panel does not count: Agent Mail sits under it.
+    const cx=Math.min(W-1,Math.max(0,(b.left+b.right)/2)),cy=Math.min(H-1,Math.max(0,(b.top+b.bottom)/2));
+    const top=doc.elementFromPoint(cx,cy);
+    if(top&&top!==highlight&&!highlight.contains(top)&&!top.closest('.flight-guide'))return hide();
+    const pad=4,r={l:Math.max(2,b.left-pad),t:Math.max(2,b.top-pad),r:Math.min(W-2,b.right+pad),b:Math.min(H-2,b.bottom+pad)};
+    Object.assign(ring.style,{left:r.l+'px',top:r.t+'px',width:(r.r-r.l)+'px',height:(r.b-r.t)+'px'});
+    ring.hidden=false;
+    here.hidden=false;here.style.visibility='hidden';
+    const panel=el.hidden?null:el.getBoundingClientRect();
+    const avoid=panel?[{l:panel.left-6,t:panel.top-6,r:panel.right+6,b:panel.bottom+6}]:[];
+    const label=side=>side==='below'?'▲ HERE':side==='above'?'▼ HERE':side==='right'?'◀ HERE':'HERE ▶';
+    // The arrow depends on the side and the size on the arrow: measure the
+    // finished tag, and settle when its side gives back the same label.
+    let spot=null;here.textContent=here.textContent||label('below');
+    for(let i=0;i<3;i++){
+      spot=placeHereTag(r,{w:here.offsetWidth,h:here.offsetHeight},{w:W,h:H},avoid);
+      if(!spot||label(spot.side)===here.textContent)break;
+      here.textContent=label(spot.side);
+    }
+    if(!spot||label(spot.side)!==here.textContent){here.hidden=true;here.style.visibility='';return;}
+    here.dataset.side=spot.side;
+    Object.assign(here.style,{left:spot.x+'px',top:spot.y+'px',visibility:''});
+  }
+  // The control can move (layout, scrolling, a pane opening) without a tour change.
+  let ringTimer=0;
+  function followRing(){
+    clearInterval(ringTimer);placeRing();
+    if(highlight)ringTimer=setInterval(placeRing,700);
+  }
+  root.addEventListener('resize',()=>placeRing());
+  root.addEventListener('scroll',()=>placeRing(),true);
   const listeners=[];
   function changed(){render();if(!solo&&channel)channel.postMessage({type:'changed',tour:id});}
   function place(){
@@ -249,6 +316,7 @@ function mountChecklist(definition){
     highlight=!solo&&!el.hidden&&!state.folded&&current&&current.target?doc.querySelector(current.target):null;
     if(highlight)highlight.classList.add('flight-target');
     if(!el.hidden)place();
+    followRing();
     listeners.forEach(fn=>fn());
   }
   // The app reports its windows closing; ours carries this tour and this backend's address.
@@ -382,7 +450,7 @@ function mountChecklist(definition){
   root.addEventListener('resize',()=>{if(!el.hidden)place();});
   doc.body.append(el);
   const controller={el,state,render,show,popOut,fromStore:!!definition.fromStore,
-    destroy(){destroyed=true;el.remove();if(checklists.get(id)===controller)checklists.delete(id);},
+    destroy(){destroyed=true;clearInterval(ringTimer);el.remove();ring.remove();here.remove();if(checklists.get(id)===controller)checklists.delete(id);},
     fold(){state.fold();changed();},unfold(){state.unfold();changed();},
     close(){state.close();changed();},reset(){state.reset();changed();},
     mark(stepId){if(state.mark(stepId)){changed();return true;}return false;},

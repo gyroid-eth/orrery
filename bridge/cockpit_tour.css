@@ -54,7 +54,20 @@
 .flight-steps li.current .flight-read:not([hidden]){display:inline-block;margin-top:12px;font-size:11px;color:var(--amber);border-bottom:1px solid var(--amber)}
 .flight-footer{display:flex;justify-content:space-between;gap:10px;padding:14px 22px 18px;font-size:10.5px;color:var(--ink-dim);border-top:1px solid var(--hair)}
 .flight-restart{color:var(--amber)!important}
-.flight-target{outline:2px solid rgb(var(--theme-accent-rgb)/.8);outline-offset:-2px}
+/* The tour's next control: a cyan ring that pulses, and a HERE tag beside it
+   (cockpit_tour.js placeRing). Gold is the cockpit's own accent and the help
+   map's, so the tour's pointer uses another colour. With reduced motion the
+   ring stays still. */
+:root{--tour-cue:#3fd2e6;--tour-cue-ink:#04222a;--tour-cue-glow:rgba(63,210,230,.55)}
+:root[data-color-theme="light"]{--tour-cue:#0a8fa3;--tour-cue-ink:#ffffff;--tour-cue-glow:rgba(10,143,163,.45)}
+.flight-ring,.flight-here{position:fixed;z-index:1110;pointer-events:none}
+.flight-ring{box-sizing:border-box;border:2px solid var(--tour-cue);border-radius:10px;box-shadow:0 0 14px 2px var(--tour-cue-glow)}
+/* The pulse grows by the same 10px around any control, wide or small. */
+.flight-ring::after{content:"";position:absolute;inset:-2px;border-radius:10px;animation:flight-ring-pulse 1.6s ease-out infinite}
+@keyframes flight-ring-pulse{from{box-shadow:0 0 0 0 var(--tour-cue)}to{box-shadow:0 0 0 10px transparent}}
+.flight-here{padding:5px 9px;border-radius:999px;background:var(--tour-cue);color:var(--tour-cue-ink);
+  font:600 10px/1 var(--mono);letter-spacing:.14em;white-space:nowrap;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+@media (prefers-reduced-motion: reduce){.flight-ring::after{animation:none;opacity:0}}
 .flight-settings{margin-bottom:19px}.flight-settings-actions{display:flex;flex-wrap:wrap;gap:8px}
 /* Narrow screens: always the default place, a bottom sheet when open. */
 @media(max-width:719px){
