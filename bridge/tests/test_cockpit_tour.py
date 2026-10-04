@@ -522,7 +522,9 @@ RING_STATE = """(()=>{
   // The ring stays inside the window: compare with the control's visible part.
   const target=document.querySelector('.flight-target'),g=rect(ring),c=rect(target);
   const t={l:Math.max(2,c.l),t:Math.max(2,c.t),r:Math.min(innerWidth-2,c.r),b:Math.min(innerHeight-2,c.b)};
-  const panels=[...document.querySelectorAll('.flight-guide:not([hidden])')].map(rect);
+  // The panel's words and buttons; its empty top strip may hold the tag.
+  const panels=[...document.querySelectorAll('.flight-guide:not([hidden]) .flight-panel :is(h2,button,.flight-meta,li)')]
+    .filter(e=>e.getBoundingClientRect().width>0).map(rect);
   const h=here&&rect(here);
   return {ring:true,target:target.id||target.className,
     around:g.l<=t.l&&g.t<=t.t&&g.r>=t.r&&g.b>=t.b,
@@ -620,6 +622,24 @@ def test_dom_the_here_tag_covers_no_control_brand_clock_or_terminal(tour_browser
       }
       return [...hits];})()""" % json.dumps(step))
     assert covered == []
+
+
+@pytest.mark.parametrize('step,target', [('full-planetarium', 'planetariumBtn'), ('full-telemetry', 'networkBtn')])
+def test_dom_a_small_header_button_still_gets_its_tag(tour_browser, step, target):
+    # Its neighbours are buttons and the clock, and below it is the panel:
+    # the tag goes in the panel's empty top strip, clear of its words.
+    _, evaluate = tour_browser
+    state = evaluate("""(()=>{OrreryTour.firstFlight.el.querySelector('.flight-close').click();
+      const t=OrreryFullTour.checklist;t.state.reset();t.show();t.state.goTo(%s);t.show();})();""" % json.dumps(step) + RING_STATE)
+    assert (state['target'], state['here'], state['label'], state['hereClearOfPanel']) == (target, True, '▲ HERE', True)
+
+
+def test_dom_the_shiritori_step_rings_where_the_prompt_is_sent(tour_browser):
+    # Agent Mail lies under the panel; the step's action is sending the prompt.
+    _, evaluate = tour_browser
+    state = evaluate("""(()=>{OrreryTour.firstFlight.el.querySelector('.flight-close').click();
+      const t=OrreryFullTour.checklist;t.state.reset();t.show();t.state.goTo('full-shiritori');t.show();})();""" + RING_STATE)
+    assert (state['ring'], state['target'], state['around']) == (True, 'promptInput', True)
 
 
 def test_dom_a_target_that_fills_the_window_gets_no_ring(tour_browser):

@@ -263,8 +263,17 @@ function mountChecklist(definition){
     Object.assign(ring.style,{left:r.l+'px',top:r.t+'px',width:(r.r-r.l)+'px',height:(r.b-r.t)+'px'});
     ring.hidden=false;
     here.hidden=false;here.style.visibility='hidden';
+    // The panel's words and buttons are kept clear, not its empty top edge: a
+    // small header button whose only free side is above the panel still gets
+    // its tag in that strip.
     const panel=el.hidden?null:el.getBoundingClientRect();
-    const avoid=panel?[{l:panel.left-6,t:panel.top-6,r:panel.right+6,b:panel.bottom+6}]:[];
+    let contentTop=panel?panel.top:0;
+    if(panel){
+      const tops=[...el.querySelectorAll('.flight-panel h2,.flight-panel button,.flight-panel .flight-meta')]
+        .map(c=>c.getBoundingClientRect()).filter(b=>b.width>0&&b.height>0).map(b=>b.top);
+      if(tops.length)contentTop=Math.max(panel.top,Math.min(...tops));
+    }
+    const avoid=panel?[{l:panel.left-6,t:contentTop-4,r:panel.right+6,b:panel.bottom+6}]:[];
     if(underPanel){here.hidden=true;here.style.visibility='';return;}
     // Nor does the tag sit on another control, the brand, the clock or a
     // terminal: a few points across the spot say what is under it.

@@ -61,6 +61,8 @@
 :root{--tour-cue:#3fd2e6;--tour-cue-ink:#04222a;--tour-cue-glow:rgba(63,210,230,.55)}
 :root[data-color-theme="light"]{--tour-cue:#0a8fa3;--tour-cue-ink:#ffffff;--tour-cue-glow:rgba(10,143,163,.45)}
 .flight-ring,.flight-here{position:fixed;z-index:1110;pointer-events:none}
+/* Over the checklist: the tag may sit in the panel's empty top strip. */
+.flight-here{z-index:1160}
 .flight-ring{box-sizing:border-box;border:2px solid var(--tour-cue);border-radius:10px;box-shadow:0 0 14px 2px var(--tour-cue-glow)}
 /* The pulse grows by the same 10px around any control, wide or small. */
 .flight-ring::after{content:"";position:absolute;inset:-2px;border-radius:10px;animation:flight-ring-pulse 1.6s ease-out infinite}
