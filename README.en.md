@@ -182,6 +182,8 @@ Read and confirm the plan, and check that doctor and the Mail selftest succeeded
 
 For everyday controls, start with the in-app guides and help map. [Usage](docs/en/usage.md) is the detailed reference; if the screen or connection differs, use [Troubleshooting](docs/en/troubleshooting.md). Agents started during the guides consume your CLI account allowance.
 
+![Find Your first flight, then open Show help map and Full tour from Settings](docs/images/cockpit-guide-entry.gif)
+
 ## Update and manual setup
 
 The same one line also updates an existing install. See [Update](docs/en/install.md#5-update) for the alternative `./scripts/update.sh` command in the cockpit folder and when to restart.
