@@ -131,8 +131,38 @@ check_clean() { # $1 = label, $2 = checkout
   printf '\n  NG    %s has uncommitted changes; nothing was updated.\n' "$1"
   printf '        In %s:\n' "$2"
   printf '%s\n' "$changed" | sed 's/^/          /'
-  printf '        Commit or discard them, then run this again.\n'
+  if [ "$1" = cockpit ]; then
+    printf '        Back up or commit your changes, then run this again. Do not reset unsaved work.\n'
+  else
+    printf '        Commit or discard them, then run this again.\n'
+  fi
   exit 1
+}
+# Read-only recovery advice for the documented origin/master history rewrite.
+# Divergence alone is not proof: local commits can produce the same graph.
+cockpit_non_ff_help() { # $1 = checkout
+  [ "$(git -C "$1" symbolic-ref --quiet --short HEAD 2>/dev/null || true)" = master ] || return 0
+  [ "$(git -C "$1" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)" = origin/master ] || return 0
+  ancestry=0
+  git -C "$1" merge-base --is-ancestor HEAD origin/master 2>/dev/null || ancestry=$?
+  [ "$ancestry" = 1 ] || return 0  # 0 = can fast-forward, >1 = cannot diagnose
+  # A checkout only ahead of its remote has local work, not divergent history.
+  ancestry=0
+  git -C "$1" merge-base --is-ancestor origin/master HEAD 2>/dev/null || ancestry=$?
+  [ "$ancestry" = 1 ] || return 0
+  changed="$(git -C "$1" status --porcelain --untracked-files=all 2>/dev/null)" || return 0
+  if [ -n "$changed" ]; then
+    note "cockpit has local changes or untracked files; back up or commit them before retrying."
+    note "Do not reset unsaved work."
+    return 0
+  fi
+  note "cockpit's remote history may have been rewritten, or this checkout has local commits."
+  note "See https://github.com/gyroid-eth/orrery/issues/20"
+  note "Only if you want the upstream version: back up local work first; reset --hard discards local commits and changes."
+  note "No reset is performed automatically. Run these yourself after checking:"
+  printf -v quoted_cockpit '%q' "$1"
+  printf '        git -C %s fetch origin master\n' "$quoted_cockpit"
+  printf '        git -C %s reset --hard origin/master\n' "$quoted_cockpit"
 }
 check_upstream() { # $1 = label, $2 = checkout
   git -C "$2" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1 \
@@ -167,9 +197,14 @@ fetch() { # $1 = label, $2 = checkout
   git -C "$2" fetch --quiet 2>/dev/null \
     || fail "could not reach the remote of $1 (${2}); nothing was updated." \
       "Check the network connection, then run this again."
-  if ! git -C "$2" merge-base --is-ancestor HEAD '@{u}'; then
-    fail "$1 (${2}) has commits of its own that are not on its remote, so it cannot be fast-forwarded; nothing was updated." \
+  ancestry=0
+  git -C "$2" merge-base --is-ancestor HEAD '@{u}' || ancestry=$?
+  if [ "$ancestry" = 1 ]; then
+    [ "$1" != cockpit ] || cockpit_non_ff_help "$2"
+    fail "$1 (${2}) cannot be fast-forwarded; nothing was updated." \
       "Look at them with: git -C \"$2\" log @{u}..HEAD"
+  elif [ "$ancestry" != 0 ]; then
+    fail "could not compare $1 (${2}) with its remote; nothing was updated."
   fi
   # Untracked files that an incoming commit would overwrite stop the pull, so
   # find them now, before either checkout changes.
@@ -303,9 +338,11 @@ fi
 # ---------------------------------------------------------------- cockpit
 say ""
 say "Updating the cockpit ..."
-run git -C "$COCKPIT_ROOT" pull --ff-only --quiet \
-  || fail "git pull of the cockpit failed (see above); orrery-telemetry was updated." \
+if ! run git -C "$COCKPIT_ROOT" pull --ff-only --quiet; then
+  cockpit_non_ff_help "$COCKPIT_ROOT"
+  fail "git pull of the cockpit failed (see above); orrery-telemetry was updated." \
     "Fix what git reports, then run this again."
+fi
 
 # ---------------------------------------------------------------- summary
 [ "$dry_run" = true ] && { say ""; say "Dry run finished: nothing was changed."; exit 0; }
