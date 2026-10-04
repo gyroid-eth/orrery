@@ -4463,9 +4463,9 @@
       }
     }
   },
-  "inventory_digest": "1f748bf6234ed2e1b44b4b346846759391d5fdc0b61bd148b3f98a1941a20f13",
+  "inventory_digest": "fd0d64f8f59f498ded2ff4d1073e65eed568983ccce941732a987e21e959d907",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "ed6858e6ae46fd5d6f1b005f3a82f231ea6dd438041040b1c44d0dce8b19511a",
+  "source_digest": "9a584ef54f5869a307c5393235fa4efd43778bcca876bec37b76d1103ac1ace1",
   "surface": "cockpit",
   "version": 1
 }
@@ -5203,6 +5203,11 @@ const availableSessions=new Map();
 const attachedSessions=new Set();
 const requestedSessions=new Set();
 const manualDetached=new Set();
+// Sessions the backend closed while their tab stayed (an EXIT): with where
+// each stood in the split, if it was there. When the session comes back (a
+// RESUME), its tab attaches again and, if that split is still as it was, it
+// takes its old place; one closed by hand has no tab and is not here.
+const closedByBackend=new Map();
 const claimedSessions=new Set();
 const splitSessions=[];
 const selectedPaneBySession=new Map();
@@ -6866,6 +6871,7 @@ function ensureSessionGroup(session){
   refreshSplitDecorations();return group;
 }
 function removeSessionGroup(session){
+  closedByBackend.delete(session);
   const group=sessionGroups.get(session);if(!group)return;
   group.el.remove();sessionGroups.delete(session);refreshHeaderStats();
 }
@@ -7625,6 +7631,24 @@ function closeSplitCellPane(session){
   else renderStage();
   return true;
 }
+// A session the backend closed is back: attach its tab again, and put it back
+// in the split only where it stood, with the same companions in the same
+// order; a split folded or changed meanwhile is left as it is.
+function restoreClosedSessions(availableNames){
+  const available=new Set(availableNames);
+  for(const [session,place] of [...closedByBackend]){
+    if(!available.has(session))continue;
+    closedByBackend.delete(session);
+    if(manualDetached.has(session)||!sessionGroups.has(session))continue;
+    const unchanged=place&&splitVisible&&place.others.length===splitSessions.length&&
+      place.others.every((name,i)=>splitSessions[i]===name);
+    if(unchanged){
+      const next=[...splitSessions];next.splice(Math.min(place.index,next.length),0,session);
+      replaceSplitSessions(next);
+    }
+    requestAttach(session);
+  }
+}
 function pruneSplitSessions(availableNames){
   const available=new Set(availableNames);
   const next=splitSessions.filter(name=>available.has(name));
@@ -7992,6 +8016,7 @@ function handleSessions(items){
     if(typeof name==='string'&&name&&!availableSessions.has(name))availableSessions.set(name,item);
   });
   pruneSplitSessions(names);
+  restoreClosedSessions(names);
   const plan=attachmentPlan(names,[...occupiedSessions()],[...manualDetached],MAX_ATTACHED_SESSIONS);
   plan.detach.forEach(session=>detachSession(session));
   // Lazy attach (2026-07-30 product decision): the cockpit opens with NO tabs — a
@@ -8781,7 +8806,12 @@ function handle(msg){
       break;
     }
     case "status":
-      if(msg.state==='closed'&&msg.session)forgetSession(msg.session,{removeGroup:false});
+      if(msg.state==='closed'&&msg.session){
+        const index=splitSessions.indexOf(msg.session);
+        closedByBackend.set(msg.session,index<0?null:
+          {index,others:splitSessions.filter(name=>name!==msg.session)});
+        forgetSession(msg.session,{removeGroup:false});
+      }
       break;
     case "error":
       if(msg.session){
