@@ -106,9 +106,11 @@ function leadersCross(paths){
 }
 // Where the HERE tag sits next to the tour's ring: below, above, right or left
 // of the ring, inside the view and clear of what it must not cover (the tour's
-// panel). r: the ring; size: {w,h} of the tag; view: {w,h}; avoid: rects.
-// Returns {x,y,side}, or null when no side has room (the ring alone shows).
-function placeHereTag(r,size,view,avoid=[],gap=8,margin=6){
+// panel). r: the ring; size: {w,h} of the tag; view: {w,h}; avoid: rects;
+// blocked: optionally, whether a spot would cover something the person reads
+// or presses there. Returns {x,y,side}, or null when no side has room (the
+// ring alone shows).
+function placeHereTag(r,size,view,avoid=[],gap=8,margin=6,blocked=null){
   const cx=(r.l+r.r)/2,cy=(r.t+r.b)/2;
   const sides=[
     ['below',cx-size.w/2,r.b+gap],['above',cx-size.w/2,r.t-gap-size.h],
@@ -119,10 +121,14 @@ function placeHereTag(r,size,view,avoid=[],gap=8,margin=6){
     const box={l:x,t:y,r:x+size.w,b:y+size.h};
     if(box.l<margin||box.t<margin||box.r>view.w-margin||box.b>view.h-margin)continue;
     if(avoid.some(a=>a&&box.l<a.r&&box.r>a.l&&box.t<a.b&&box.b>a.t))continue;
+    if(blocked&&blocked(box))continue;
     return {x,y,side};
   }
   return null;
 }
+// What the HERE tag must not cover: controls, the brand, the clock, the
+// header's status and terminals (their last line is where people type).
+const KEEP_CLEAR='button,a[href],input,textarea,select,[role="button"],[contenteditable="true"],.brand,.clock,.topstat,.termhost';
 const API={STEPS,MAP_NOTES,KEY,CHANNEL,createState,leadersCross,placeHereTag};
 if(typeof module!=='undefined'&&module.exports)module.exports=API;
 root.OrreryTour=API;
@@ -250,18 +256,40 @@ function mountChecklist(definition){
     const cx=Math.min(W-1,Math.max(0,(b.left+b.right)/2)),cy=Math.min(H-1,Math.max(0,(b.top+b.bottom)/2));
     const top=doc.elementFromPoint(cx,cy);
     if(top&&top!==highlight&&!highlight.contains(top)&&!top.closest('.flight-guide'))return hide();
+    // Under the panel the ring alone shows where it is: a tag beside it would
+    // land on whatever is next to the panel, such as a terminal's input line.
+    const underPanel=!!(top&&top.closest('.flight-guide'));
     const pad=4,r={l:Math.max(2,b.left-pad),t:Math.max(2,b.top-pad),r:Math.min(W-2,b.right+pad),b:Math.min(H-2,b.bottom+pad)};
     Object.assign(ring.style,{left:r.l+'px',top:r.t+'px',width:(r.r-r.l)+'px',height:(r.b-r.t)+'px'});
     ring.hidden=false;
     here.hidden=false;here.style.visibility='hidden';
+    // The panel's words and buttons are kept clear, not its empty top edge: a
+    // small header button whose only free side is above the panel still gets
+    // its tag in that strip.
     const panel=el.hidden?null:el.getBoundingClientRect();
-    const avoid=panel?[{l:panel.left-6,t:panel.top-6,r:panel.right+6,b:panel.bottom+6}]:[];
+    let contentTop=panel?panel.top:0;
+    if(panel){
+      const tops=[...el.querySelectorAll('.flight-panel h2,.flight-panel button,.flight-panel .flight-meta')]
+        .map(c=>c.getBoundingClientRect()).filter(b=>b.width>0&&b.height>0).map(b=>b.top);
+      if(tops.length)contentTop=Math.max(panel.top,Math.min(...tops));
+    }
+    const avoid=panel?[{l:panel.left-6,t:contentTop-4,r:panel.right+6,b:panel.bottom+6}]:[];
+    if(underPanel){here.hidden=true;here.style.visibility='';return;}
+    // Nor does the tag sit on another control, the brand, the clock or a
+    // terminal: a few points across the spot say what is under it.
+    const blocked=box=>{
+      const xs=[box.l+2,(box.l+box.r)/2,box.r-2],ys=[box.t+2,(box.t+box.b)/2,box.b-2];
+      return xs.some(x=>ys.some(y=>{
+        const hit=doc.elementFromPoint(x,y);
+        return !!hit&&hit!==highlight&&!highlight.contains(hit)&&!!hit.closest(KEEP_CLEAR);
+      }));
+    };
     const label=side=>side==='below'?'▲ HERE':side==='above'?'▼ HERE':side==='right'?'◀ HERE':'HERE ▶';
     // The arrow depends on the side and the size on the arrow: measure the
     // finished tag, and settle when its side gives back the same label.
     let spot=null;here.textContent=here.textContent||label('below');
     for(let i=0;i<3;i++){
-      spot=placeHereTag(r,{w:here.offsetWidth,h:here.offsetHeight},{w:W,h:H},avoid);
+      spot=placeHereTag(r,{w:here.offsetWidth,h:here.offsetHeight},{w:W,h:H},avoid,8,6,blocked);
       if(!spot||label(spot.side)===here.textContent)break;
       here.textContent=label(spot.side);
     }
@@ -288,12 +316,70 @@ function mountChecklist(definition){
     el.style.left=Math.max(0,Math.min(root.innerWidth-w,pos.left))+'px';
     el.style.top=Math.max(0,Math.min(root.innerHeight-Math.min(h,root.innerHeight),pos.top))+'px';
   }
+  // Dodging: the panel folds to its band on its own while it would hide what
+  // the step needs (its control under the panel, a control the page marks
+  // data-tour-keep-visible, or a drawer the embedded Telemetry reports), and
+  // opens again once nothing is under it. Not saved, and the ring stays.
+  // Opening the band by hand wins until the cover ends.
+  let dodging=false,dodgeOverride=false,panelBox=null,measuredSpot=null,cover=[];
+  const meets=(a,b)=>a.l<b.r&&a.r>b.l&&a.t<b.b&&a.b>b.t;
+  function needsRoom(box){
+    const rects=[...cover];
+    for(const node of doc.querySelectorAll('[data-tour-keep-visible]')){
+      const b=node.getBoundingClientRect();
+      if(b.width>0&&b.height>0)rects.push({l:b.left,t:b.top,r:b.right,b:b.bottom});
+    }
+    const target=highlight&&highlight.isConnected?highlight.getBoundingClientRect():null;
+    if(target&&target.width>0&&target.height>0){
+      // Only a control mostly under the panel: one beside it, or a target that
+      // fills the window (the Telemetry overlay), is not hidden by it.
+      const cx=(target.left+target.right)/2,cy=(target.top+target.bottom)/2;
+      if(cx>=box.l&&cx<=box.r&&cy>=box.t&&cy<=box.b)rects.push({l:target.left,t:target.top,r:target.right,b:target.bottom});
+    }
+    return rects.some(r=>meets(r,box));
+  }
+  // The rect the panel has open: itself when open; when folded, opened unseen
+  // within this frame (nothing is painted) by the same place() that opening
+  // uses, so a placed panel's own height limit is included.
+  function openRect(){
+    if(!el.classList.contains('folded')){
+      const b=el.getBoundingClientRect();
+      return b.width&&b.height?{l:b.left,t:b.top,r:b.right,b:b.bottom}:panelBox;
+    }
+    el.style.visibility='hidden';el.classList.remove('folded');place();
+    const b=el.getBoundingClientRect();
+    el.classList.add('folded');place();el.style.visibility='';
+    return b.width&&b.height?{l:b.left,t:b.top,r:b.right,b:b.bottom}:panelBox;
+  }
+  function checkDodge(){
+    // Not mid-drag: measuring opens the panel through place(), which would put
+    // it back where it was saved; the drag's end judges it once.
+    if(dragged)return;
+    if(solo||destroyed||el.hidden||state.folded){
+      if(dodging||dodgeOverride){dodging=false;dodgeOverride=false;render();}
+      return;
+    }
+    // Docked, the panel opens where it was; placed by hand (the band dragged),
+    // judge it where it would open now.
+    if(!dodging){panelBox=openRect();measuredSpot=null;}
+    else if(el.classList.contains('placed')){
+      const band=el.getBoundingClientRect(),spot=band.left+','+band.top;
+      if(spot!==measuredSpot){measuredSpot=spot;panelBox=openRect();}
+    }
+    if(!panelBox)return;
+    const covered=needsRoom(panelBox);
+    if(!covered)dodgeOverride=false;
+    const next=covered&&!dodgeOverride;
+    if(next!==dodging){dodging=next;render();}
+  }
+  const dodgeTimer=solo?0:setInterval(checkDodge,500);
   let destroyed=false;
   function render(){
     if(destroyed)return;
     const done=state.done,current=state.current,count=done.size+' / '+steps.length;
     el.hidden=!solo&&(!state.open||suspended||popped);
-    el.classList.toggle('folded',state.folded&&!solo);
+    el.classList.toggle('folded',(state.folded||dodging)&&!solo);
+    el.classList.toggle('dodging',dodging&&!solo);
     el.querySelector('.flight-popout').hidden=solo||!canPopOut();
     el.querySelectorAll('.flight-count').forEach(node=>{node.textContent=count;});
     el.querySelector('.flight-status').textContent=current?done.size+' of '+steps.length+' done. Next: '+current.title+'.':'All '+steps.length+' done.';
@@ -415,12 +501,17 @@ function mountChecklist(definition){
     band.dataset.dragged='1';setTimeout(()=>{delete band.dataset.dragged;},0);
     if(canPopOut()&&outside(event)&&popOut(event.screenX,event.screenY))return;
     const r=el.getBoundingClientRect();writePosition(storageKey,{left:r.left,top:r.top});place();
+    checkDodge();
   }
   [head,band].forEach(handle=>{
     handle.addEventListener('pointerdown',startDrag);handle.addEventListener('pointermove',moveDrag);
     handle.addEventListener('pointerup',endDrag);handle.addEventListener('pointercancel',endDrag);
   });
-  band.addEventListener('click',()=>{if(band.dataset.dragged)return;state.unfold();changed();el.querySelector('.flight-fold').focus();});
+  band.addEventListener('click',()=>{
+    if(band.dataset.dragged)return;
+    if(dodging){dodging=false;dodgeOverride=true;render();el.querySelector('.flight-fold').focus();return;}
+    state.unfold();changed();el.querySelector('.flight-fold').focus();
+  });
   el.querySelector('.flight-fold').addEventListener('click',()=>{state.fold();changed();band.focus();});
   el.querySelector('.flight-close').addEventListener('click',()=>{
     if(solo){const invoke=appInvoke();if(invoke)Promise.resolve().then(()=>invoke('close_tour_window',{tour:id})).catch(()=>root.close());else root.close();return;}
@@ -450,7 +541,7 @@ function mountChecklist(definition){
   root.addEventListener('resize',()=>{if(!el.hidden)place();});
   doc.body.append(el);
   const controller={el,state,render,show,popOut,fromStore:!!definition.fromStore,
-    destroy(){destroyed=true;clearInterval(ringTimer);el.remove();ring.remove();here.remove();if(checklists.get(id)===controller)checklists.delete(id);},
+    destroy(){destroyed=true;clearInterval(ringTimer);clearInterval(dodgeTimer);el.remove();ring.remove();here.remove();if(checklists.get(id)===controller)checklists.delete(id);},
     fold(){state.fold();changed();},unfold(){state.unfold();changed();},
     close(){state.close();changed();},reset(){state.reset();changed();},
     mark(stepId){if(state.mark(stepId)){changed();return true;}return false;},
@@ -458,6 +549,12 @@ function mountChecklist(definition){
     suspend(flag){suspended=!!flag;render();},
     // Called after every repaint (progress, fold, window); read controller.state.current.
     onChange(fn){listeners.push(fn);},
+    // Rects (page coordinates) the embedded page needs to keep in view.
+    setCover(rects){
+      cover=(Array.isArray(rects)?rects:[]).filter(a=>a&&[a.l,a.t,a.r,a.b].every(Number.isFinite));
+      checkDodge();
+    },
+    get dodging(){return dodging;},
     get solo(){return solo;},
   };
   checklists.set(id,controller);

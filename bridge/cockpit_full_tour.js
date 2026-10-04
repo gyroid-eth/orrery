@@ -5,17 +5,17 @@ const STEPS=Object.freeze([
   {id:'full-start',title:'Start an agent',target:'#newAgentBtn',copy:'Start an agent in your workshop folder with a signed-in CLI. Give it a simple task and wait until it is ready.'},
   {id:'full-choose',title:'Choose your agent',target:'.col.roster',copy:'Choose your agent on the left. Its terminal opens in the center, and Agent Mail follows it.'},
   {id:'full-talk',title:'Send a prompt',target:'.promptbar',copy:'Say hello in the input below the terminal and press Enter or SEND. Use Shift+Enter for another line.'},
-  {id:'full-shiritori',title:'Delegate a game of shiritori',target:'#mail',copy:'Use the workshop prompt below and send it to your parent agent to create one child with /delegate and play over ORRERY Mail. This step checks off after a fresh parent–child Mail round trip; let all three rounds finish.'},
+  {id:'full-shiritori',title:'Delegate a game of shiritori',target:'#promptInput',copy:'Use the workshop prompt below and send it to your parent agent to create one child with /delegate and play over ORRERY Mail. This step checks off after a fresh parent–child Mail round trip; let all three rounds finish.'},
   {id:'full-split',title:'Work side by side',target:'.col.roster',copy:'Modifier-click your parent and child in the agent list to show both terminals together. Use ⌘click on macOS or Ctrl+click on WSL.'},
   {id:'full-drag',title:'Move a pane',target:'.tabstrip',copy:'Drag a pane tab or split label to move it, or move a floating pane by its header. You can arrange the workspace around your task.'},
   {id:'full-planetarium',title:'Open Planetarium',target:'#planetariumBtn',copy:'Open PLANETARIUM to see who spawned whom. Find the parent and child from your game, then close the view.'},
-  {id:'full-usage',title:'Read what is left',target:'#usageBtn',copy:'Open LEFT to see the remaining account allowance and when its windows reset. A stale or unavailable reading is labelled rather than shown as a current value.',manual:'I’ve seen it'},
+  {id:'full-usage',title:'Read what is left',target:'#usageBtn',copy:'Open LEFT to see the remaining account allowance and when its windows reset, then close it. A stale or unavailable reading is labelled rather than shown as a current value.',manual:'I’ve seen it'},
   {id:'full-telemetry',title:'Open Telemetry',target:'#networkBtn',copy:'Open TELEMETRY for the crew’s status and history; fold or move this checklist when it covers a control. Cockpit is where you work with agents; Telemetry is where you observe and manage them.'},
   {id:'full-exit',title:'Exit from Deck',target:'#networkOverlay',copy:'On Deck, use EXIT on the shiritori child after the game has finished, then confirm. EXIT asks it to finish gracefully; your parent stays available.'},
   {id:'full-edge',title:'Read a Network edge',target:'#networkOverlay',copy:'Switch to Network and click the message count on the edge between your parent and child. Read the game’s Mail thread in the drawer.'},
   {id:'full-select',title:'Select several agents',target:'#networkOverlay',copy:'Turn on Select and click both agents, or drag a rectangle around them. The selection bar shows actions for the selected crew.'},
-  {id:'full-replay',title:'Replay the collaboration',target:'#networkOverlay',copy:'Choose Replay to watch the selected agents’ history. Try play, pause or seeking, then close Replay before continuing.'},
-  {id:'full-resume',title:'Resume the child',target:'#networkOverlay',copy:'Open the exited child’s details and use RESUME when it is available. After returning to Cockpit, reopen TELEMETRY to continue; an already-running agent does not count as a resume.'},
+  {id:'full-replay',title:'Replay the collaboration',target:'#networkOverlay',copy:'Choose Replay to watch the selected agents’ history. Try play, pause or seeking; close Replay when you are done.'},
+  {id:'full-resume',title:'Resume the child',target:'#networkOverlay',copy:'Open the exited child’s details and use RESUME when it is available, or select the child and use RESUME in the selection bar. If RESUME takes you to Cockpit, reopen TELEMETRY to continue; an already-running agent does not count as a resume.'},
   {id:'full-network-settings',title:'Adjust the Network',target:'#networkOverlay',copy:'In Network, close agent details if needed and fold this checklist to reach SETTINGS. Change a slider such as Node size or Link distance and watch the graph update.'},
   {id:'full-return',title:'Return to your agent',target:'#networkOverlay',copy:'Select a running agent in Telemetry and choose OPEN IN COCKPIT. Its terminal becomes your workspace again.'},
 ]);
@@ -56,7 +56,12 @@ function createShiritoriTracker(parent,since,afterId=0){
         if(!prior||(direction==='out'?id<prior.id:id>prior.id))pair[direction]={id,ts};
         rounds.set(child,pair);
       }
-      return [...rounds.values()].some(pair=>pair.out&&pair.in&&pair.in.id>pair.out.id&&pair.in.ts>=pair.out.ts);
+      return !!this.child();
+    },
+    // The child that played a full round with the parent, once there is one.
+    child(){
+      for(const [name,pair] of rounds)if(pair.out&&pair.in&&pair.in.id>pair.out.id&&pair.in.ts>=pair.out.ts)return name;
+      return null;
     },
   };
 }
@@ -117,7 +122,11 @@ function mount(){
   function observeMail(){
     if(!current('full-shiritori')||!tracker)return;
     const agents=oc.agents().map(a=>({...a,parent:oc.lineageParent.get(a.name)}));
-    if(tracker.add(oc.mailBacklog(),agents))mark('full-shiritori');
+    if(tracker.add(oc.mailBacklog(),agents)){
+      // Kept for the Network edge step, which may come after a reload.
+      context.child=tracker.child();saveContext();
+      mark('full-shiritori');
+    }
   }
   function changed(){
     copy.hidden=!current('full-shiritori');
@@ -144,6 +153,7 @@ function mount(){
       returnPending=event.detail?.name;returnArmed=false;
     }
   });
+  doc.addEventListener('oc:planetarium-closed',()=>mark('full-planetarium'));
   doc.addEventListener('oc:tour-action',event=>{
     const detail=event.detail||{};
     if(detail.tour==='full-tour'){mark(detail.id);return;}
@@ -154,7 +164,8 @@ function mount(){
       return;
     }
     if(detail.id==='talk'&&current('full-talk'))lastTalk=detail.name||oc.activeAgent();
-    const ids={start:'full-start',talk:'full-talk',planetarium:'full-planetarium',telemetry:'full-telemetry'};
+    // Planetarium checks off when the view closes (oc:planetarium-closed), as its text says.
+    const ids={start:'full-start',talk:'full-talk',telemetry:'full-telemetry'};
     if(ids[detail.id])mark(ids[detail.id]);
   });
   function focused(event){
@@ -165,6 +176,20 @@ function mount(){
   doc.addEventListener('oc:focus-agent',focused);
   doc.addEventListener('oc:tour-focus',focused);
   doc.addEventListener('oc:mail',observeMail);doc.addEventListener('oc:agents',observeMail);
+  // The embedded Telemetry reports the drawers it has open on the side the
+  // checklist sits (orrery-tour-cover, frame coordinates); the checklist folds
+  // out of their way while they are open.
+  root.addEventListener('message',event=>{
+    const frameEl=doc.getElementById('networkFrame'),data=event.data;
+    if(!frameEl||event.origin!==root.location.origin||event.source!==frameEl.contentWindow||
+       !data||data.type!=='orrery-tour-cover'||data.version!==1)return;
+    const f=frameEl.getBoundingClientRect();
+    tour.setCover((Array.isArray(data.rects)?data.rects:[]).map(a=>a&&({l:a.l+f.left,t:a.t+f.top,r:a.r+f.left,b:a.b+f.top})));
+  });
+  // A reloaded page has nothing open until it says otherwise.
+  doc.getElementById('networkFrame')?.addEventListener('load',()=>tour.setCover([]));
+  new MutationObserver(()=>{if(!doc.getElementById('networkOverlay')?.classList.contains('on'))tour.setCover([]);})
+    .observe(doc.getElementById('networkOverlay')||doc.body,{attributes:true,attributeFilter:['class']});
   root.addEventListener('message',event=>{
     const frame=doc.getElementById('networkFrame')?.contentWindow;
     const id=telemetryAction(event,root.location.origin,frame);
@@ -188,7 +213,10 @@ function mount(){
       const f=frameEl.getBoundingClientRect(),g=tour.el.getBoundingClientRect();
       if(g.width&&g.height)avoid.push({l:Math.round(g.left-f.left),t:Math.round(g.top-f.top),r:Math.round(g.right-f.left),b:Math.round(g.bottom-f.top)});
     }
-    const message={type:'orrery-tour-cue',version:1,step:cue,avoid};
+    // The game's parent and child, so the page can ring their edge and not
+    // another one; without them it rings no edge at all.
+    const child=cue&&context?(typeof context.child==='string'&&context.child)||(tracker&&tracker.child()):null;
+    const message={type:'orrery-tour-cue',version:1,step:cue,avoid,...(child?{pair:[context.parent,child]}:{})};
     const key=JSON.stringify(message);
     if(!force&&key===lastCue)return;
     lastCue=key;

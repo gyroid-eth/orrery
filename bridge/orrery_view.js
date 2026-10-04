@@ -735,6 +735,8 @@ function addExpandAffordance(target,dimensions,isOpen){
     role:'button',
     tabindex:'0',
     'aria-label':isOpen?'Close planetarium':'Open planetarium',
+    // The tour's checklist folds out of the way of the way out.
+    ...(isOpen?{'data-tour-keep-visible':''}:{}),
   });
   group.appendChild(svgEl('rect',{
     x:x-(large?20:11),y:y-(large?20:10),
@@ -910,6 +912,7 @@ function closePlanetarium(){
     planetLastFocus!==document.body
     ?planetLastFocus:miniSvg.querySelector('.orrery-expand');
   if(restoreTarget)restoreTarget.focus();
+  document.dispatchEvent(new CustomEvent('oc:planetarium-closed'));
 }
 
 function recipientNames(message){

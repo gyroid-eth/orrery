@@ -261,6 +261,18 @@ def test_free_reply_subject_and_reply_message_metadata_count(subject):
     assert run(script) is True
 
 
+def test_the_tracker_names_the_child_that_played_a_full_round():
+    # The Network edge step rings that pair's edge, not the first edge drawn.
+    assert run("""
+      const t=tour.createShiritoriTracker('P',1000000),agents=[{name:'C',parent:'P'},{name:'D',parent:'P'}];
+      const before=t.child();
+      t.add([{id:10,ts:1001,sender:'P',recipient:'D',body:'りんご'}],agents);
+      const half=t.child();
+      t.add([{id:11,ts:1002,sender:'P',recipient:'C',body:'りんご'},{id:12,ts:1003,sender:'C',recipient:'P',body:'ごりら'}],agents);
+      console.log(JSON.stringify([before,half,t.child()]));
+    """) == [None, None, 'C']
+
+
 @pytest.mark.parametrize('kind,success,expected', [('float', True, 1), ('browser', True, 1),
     ('browser', False, 0), ('native', True, 1), ('native', False, 0)])
 def test_owned_pane_focus_notifies_only_after_actual_success(kind, success, expected):
@@ -357,3 +369,27 @@ def test_dom_owned_focus_leaves_pending_returned_draft_with_its_agent(tour_brows
       return {active:OC.activeAgent(),composer:promptInput.value,draft:localStorage.getItem(key),pending:pendingPaneDraft};
     })()""".replace('ENTRY', entry)) == {
         'active':'OtherAgent', 'composer':'', 'draft':'ReviewChild unsent draft', 'pending':'ReviewChild'}
+
+
+def test_dom_planetarium_and_usage_check_off_when_closed_not_when_opened(tour_browser):
+    """The recording checked both off the moment they opened, while the step
+    text asks to look and then close the view."""
+    _, evaluate = tour_browser
+    result = evaluate("""(async()=>{
+      const full=OrreryFullTour.checklist;document.getElementById('fullTourBtn').click();
+      full.state.reset();full.show();full.state.goTo('full-planetarium');full.show();
+      document.getElementById('planetariumBtn').click();
+      await new Promise(r=>setTimeout(r,200));
+      const planetOpen=full.state.current.id;
+      window.OrreryRail.closePlanetarium?window.OrreryRail.closePlanetarium():document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));
+      await new Promise(r=>setTimeout(r,200));
+      const planetClosed=full.state.current.id;
+      const pop=document.getElementById('usagePopover');pop.showPopover();
+      await new Promise(r=>setTimeout(r,200));
+      const usageOpen=full.state.current.id;
+      pop.hidePopover();
+      await new Promise(r=>setTimeout(r,200));
+      return {planetOpen,planetClosed,usageOpen,usageClosed:full.state.current.id};
+    })()""")
+    assert result == {'planetOpen': 'full-planetarium', 'planetClosed': 'full-usage',
+                      'usageOpen': 'full-usage', 'usageClosed': 'full-telemetry'}

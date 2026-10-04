@@ -4463,9 +4463,9 @@
       }
     }
   },
-  "inventory_digest": "0d8fecb73883e331cdd667492b31601e60cd9a836711170d12a637de034c223b",
+  "inventory_digest": "25cd8d321fc031b6b63fb7fca8fb2af3e0f49da3938f474c9c44b85431237275",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "992859f385578b8d3c840d189cd544f16d25670337a1d76dda9b6d52810ce640",
+  "source_digest": "b94baec9983a1d769201363873aa1e8204d81f3d6d974fb0d4c86aea69d32b21",
   "surface": "cockpit",
   "version": 1
 }
@@ -8953,7 +8953,9 @@ async function pollUsage(force){
   if(document.getElementById('usagePopover').matches(':popover-open'))renderUsagePopover();
 }
 document.getElementById('usagePopover').addEventListener('toggle',e=>{
-  if(e.newState==='open'){renderUsagePopover();pollUsage(false);emitFullTourAction('full-usage');}});
+  // Read what is left checks off once the numbers were open and are closed again.
+  if(e.newState==='open'){renderUsagePopover();pollUsage(false);}
+  else if(e.newState==='closed')emitFullTourAction('full-usage');});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)pollUsage(false);});
 /* a pane window shows one terminal: no usage, lineage or mail polling there */
 if(!soloSession){pollUsage(false);setInterval(()=>{if(!document.hidden)pollUsage(false);},USAGE_POLL_MS);}
