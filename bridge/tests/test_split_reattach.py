@@ -80,3 +80,18 @@ def test_a_return_that_could_not_attach_is_tried_again(tour_browser):  # noqa: F
     evaluate(CLEANUP)
     assert first == {'noted': True, 'requested': False}, first
     assert after['attachB'] and noted_after is False, after
+
+
+def test_a_slot_freed_by_the_same_list_is_there_for_the_return(tour_browser):  # noqa: F811
+    # Review of #31: the list that brings B back also drops C; with the
+    # cockpit full, B was judged before C left and stayed closed (the
+    # backend sends a list only when it changes).
+    _, evaluate = tour_browser
+    evaluate(SETUP)
+    evaluate("handle({type:'status',state:'closed',session:'B'})")
+    full = evaluate("""(()=>{const extra=[];for(let i=0;occupiedSessions().size<MAX_ATTACHED_SESSIONS;i++){
+      const n='X'+i;extra.push(n);ensureSessionGroup(n);attachedSessions.add(n);}return extra;})()""")
+    evaluate(BACK % repr(['A', 'B'] + full).replace("'", '"'))
+    after = evaluate(STATE)
+    evaluate(CLEANUP)
+    assert after['attachB'] and 'C' in after['detached'], after

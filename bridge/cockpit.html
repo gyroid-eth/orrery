@@ -4463,9 +4463,9 @@
       }
     }
   },
-  "inventory_digest": "f7b7caaa09e07b5a4b1596a08049e2d7d8cf848612d41cdf568b9f7aa2120859",
+  "inventory_digest": "0d8fecb73883e331cdd667492b31601e60cd9a836711170d12a637de034c223b",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "5fee14d4a820fe343a1625e91aced36135ae6fccd0b37cf90053c68a19f3d0dd",
+  "source_digest": "992859f385578b8d3c840d189cd544f16d25670337a1d76dda9b6d52810ce640",
   "surface": "cockpit",
   "version": 1
 }
@@ -8015,9 +8015,10 @@ function handleSessions(items){
   // closed message says: note it, and keep its tab (below) like closed does.
   occupiedSessions().forEach(session=>{if(!names.includes(session))noteBackendClosed(session);});
   pruneSplitSessions(names);
-  restoreClosedSessions(names);
   const plan=attachmentPlan(names,[...occupiedSessions()],[...manualDetached],MAX_ATTACHED_SESSIONS);
   plan.detach.forEach(session=>detachSession(session,false,{keepTab:true}));
+  // After those leave: a slot the same list frees is there for a return.
+  restoreClosedSessions(names);
   // Lazy attach (2026-07-30 product decision): the cockpit opens with NO tabs — a
   // session attaches only when the user asks for it (agent tile / palette /
   // split toggle). plan.attach is intentionally ignored; the backend's
