@@ -674,6 +674,21 @@ def test_dom_the_panel_folds_out_of_the_way_of_a_control_under_it(tour_browser):
     assert evaluate("OrreryTour.firstFlight.dodging") is False
 
 
+def test_dom_a_folded_band_dragged_clear_opens_again(tour_browser):
+    # Review of #29: dragged to a free spot, the band stayed folded because
+    # the check kept the panel's old place.
+    _, evaluate = tour_browser
+    evaluate("(()=>{const f=OrreryTour.firstFlight;f.reset();f.show();f.state.goTo('mail');f.show();})()")
+    assert _wait_dodge(evaluate, 'OrreryTour.firstFlight', True)
+    # Where a drag leaves it: the saved spot, applied as the drag does.
+    evaluate("""(()=>{localStorage.setItem('oc-first-flight-v1-pos',JSON.stringify({left:69,top:160}));
+      OrreryTour.firstFlight.render();})()""")
+    placed = evaluate("OrreryTour.firstFlight.el.classList.contains('placed')")
+    reopened = _wait_dodge(evaluate, 'OrreryTour.firstFlight', False)
+    evaluate("localStorage.removeItem('oc-first-flight-v1-pos');OrreryTour.firstFlight.render()")
+    assert placed and reopened
+
+
 def test_dom_the_panel_folds_for_a_marked_control_and_a_reported_drawer(tour_browser):
     _, evaluate = tour_browser
     evaluate("""(()=>{OrreryTour.firstFlight.el.querySelector('.flight-close').click();

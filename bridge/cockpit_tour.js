@@ -321,7 +321,7 @@ function mountChecklist(definition){
   // data-tour-keep-visible, or a drawer the embedded Telemetry reports), and
   // opens again once nothing is under it. Not saved, and the ring stays.
   // Opening the band by hand wins until the cover ends.
-  let dodging=false,dodgeOverride=false,panelBox=null,cover=[];
+  let dodging=false,dodgeOverride=false,panelBox=null,panelSize=null,cover=[];
   const meets=(a,b)=>a.l<b.r&&a.r>b.l&&a.t<b.b&&a.b>b.t;
   function needsRoom(box){
     const rects=[...cover];
@@ -343,7 +343,15 @@ function mountChecklist(definition){
       if(dodging||dodgeOverride){dodging=false;dodgeOverride=false;render();}
       return;
     }
-    if(!dodging){const b=el.getBoundingClientRect();if(b.width&&b.height)panelBox={l:b.left,t:b.top,r:b.right,b:b.bottom};}
+    if(!dodging){
+      const b=el.getBoundingClientRect();
+      if(b.width&&b.height){panelBox={l:b.left,t:b.top,r:b.right,b:b.bottom};panelSize={w:b.width,h:b.height};}
+    }else if(panelSize&&el.classList.contains('placed')){
+      // The band was dragged: judge where the panel would open from there.
+      const b=el.getBoundingClientRect(),W=root.innerWidth,H=root.innerHeight;
+      const l=Math.max(0,Math.min(W-panelSize.w,b.left)),t=Math.max(0,Math.min(H-Math.min(panelSize.h,H),b.top));
+      panelBox={l,t,r:l+panelSize.w,b:Math.min(H,t+panelSize.h)};
+    }
     if(!panelBox)return;
     const covered=needsRoom(panelBox);
     if(!covered)dodgeOverride=false;
