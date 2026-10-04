@@ -95,6 +95,27 @@ def test_a_saved_choice_that_is_done_or_unknown_is_dropped():
     """) == {'a': 'start', 'b': 'start'}
 
 
+def test_here_tag_goes_below_above_or_beside_and_never_over_the_panel():
+    """The HERE tag beside the tour's ring: below first, then above, right,
+    left; inside the view and clear of the panel, or not shown at all."""
+    assert node(f"""const t=require({json.dumps(str(BRIDGE / 'cockpit_tour.js'))});
+      const size={{w:60,h:20}},view={{w:1000,h:600}};
+      const r=(l,tp,rr,b)=>({{l,t:tp,r:rr,b}});
+      console.log(JSON.stringify([
+        t.placeHereTag(r(100,100,200,140),size,view),
+        t.placeHereTag(r(100,560,200,590),size,view),
+        t.placeHereTag(r(100,100,200,140),size,view,[r(80,140,300,600)]),
+        t.placeHereTag(r(100,100,200,140),size,view,[r(80,140,300,600),r(80,0,300,100)]),
+        t.placeHereTag(r(0,0,1000,600),size,view),
+        t.placeHereTag(r(900,10,990,30),size,view).x+size.w<=view.w-6]));""") == [
+        {'x': 120, 'y': 148, 'side': 'below'},
+        {'x': 120, 'y': 532, 'side': 'above'},
+        {'x': 120, 'y': 72, 'side': 'above'},
+        {'x': 208, 'y': 110, 'side': 'right'},
+        None,
+        True]
+
+
 def test_help_map_toggle_does_not_reset_or_dismiss_checklist():
     assert state("""
       const s=tour.createState(storage);s.mark('start');s.toggleMap();const shown=s.map;
@@ -477,6 +498,81 @@ def test_dom_a_step_is_chosen_by_click_or_key_and_only_actions_complete_it(tour_
         'clicked': {'current': 'mail', 'done': 0, 'targeted': True, 'band': 'Read Agent Mail'},
         'keyed': 'choose', 'doneTab': -1, 'doneDisabled': 'true',
         'openTab': 0, 'openLabel': 'Go to step: Talk to it', 'currentDisabled': 'true'}
+
+
+RING_STATE = """(()=>{
+  const ring=document.querySelector('.flight-ring:not([hidden])'),here=document.querySelector('.flight-here:not([hidden])');
+  if(!ring)return {ring:false,here:!!here};
+  const rect=el=>{const r=el.getBoundingClientRect();return {l:r.left,t:r.top,r:r.right,b:r.bottom};};
+  // The ring stays inside the window: compare with the control's visible part.
+  const target=document.querySelector('.flight-target'),g=rect(ring),c=rect(target);
+  const t={l:Math.max(2,c.l),t:Math.max(2,c.t),r:Math.min(innerWidth-2,c.r),b:Math.min(innerHeight-2,c.b)};
+  const panels=[...document.querySelectorAll('.flight-guide:not([hidden])')].map(rect);
+  const h=here&&rect(here);
+  return {ring:true,target:target.id||target.className,
+    around:g.l<=t.l&&g.t<=t.t&&g.r>=t.r&&g.b>=t.b,
+    colour:getComputedStyle(ring).borderTopColor,
+    pulse:getComputedStyle(ring,'::after').animationName,
+    here:!!here,label:here&&here.textContent,
+    hereOnScreen:!h||(h.l>=0&&h.t>=0&&h.r<=innerWidth&&h.b<=innerHeight),
+    hereClearOfPanel:!h||!panels.some(p=>h.l<p.r&&h.r>p.l&&h.t<p.b&&h.b>p.t)};
+})()"""
+
+
+def test_dom_the_next_control_gets_a_cyan_ring_and_a_here_tag(tour_browser):
+    client, evaluate = tour_browser
+    evaluate("OrreryTour.firstFlight.reset();OrreryTour.firstFlight.show()")
+    shown = evaluate(RING_STATE)
+    assert shown == {'ring': True, 'target': 'newAgentBtn', 'around': True, 'colour': 'rgb(63, 210, 230)',
+                     'pulse': 'flight-ring-pulse', 'here': True, 'label': '▲ HERE',
+                     'hereOnScreen': True, 'hereClearOfPanel': True}
+    # Light theme: a darker cyan that holds on paper.
+    light = evaluate("document.documentElement.dataset.colorTheme='light';" + RING_STATE)
+    evaluate("delete document.documentElement.dataset.colorTheme")
+    assert light['colour'] == 'rgb(10, 143, 163)'
+    # Reduced motion: the ring stays, without the pulse.
+    client.call('Emulation.setEmulatedMedia', features=[{'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    try:
+        still = evaluate(RING_STATE)
+    finally:
+        client.call('Emulation.setEmulatedMedia', features=[])
+    assert (still['ring'], still['pulse']) == (True, 'none')
+
+
+def test_dom_the_ring_leaves_a_covered_or_folded_control(tour_browser):
+    _, evaluate = tour_browser
+    evaluate("OrreryTour.firstFlight.reset();OrreryTour.firstFlight.show()")
+    covered = evaluate("openSpawnModal();OrreryTour.firstFlight.el.dispatchEvent(new Event('x'));" + RING_STATE.replace("(()=>{", "(()=>{document.dispatchEvent(new Event('scroll'));", 1))
+    evaluate("closeSpawnModal(true)")
+    folded = evaluate("OrreryTour.firstFlight.el.querySelector('.flight-fold').click();" + RING_STATE)
+    evaluate("OrreryTour.firstFlight.el.querySelector('.flight-band').click()")
+    assert covered == {'ring': False, 'here': False}
+    assert folded == {'ring': False, 'here': False}
+
+
+def test_dom_a_control_under_the_tour_panel_keeps_its_ring(tour_browser):
+    # Agent Mail sits under the panel; the panel is the tour's, not a dialog.
+    _, evaluate = tour_browser
+    state = evaluate("(()=>{const f=OrreryTour.firstFlight;f.reset();f.show();f.state.goTo('mail');f.show();})();" + RING_STATE)
+    assert (state['ring'], state['target'], state['around'], state['hereClearOfPanel']) == (True, 'mail', True, True)
+
+
+def test_dom_a_target_that_fills_the_window_gets_no_ring(tour_browser):
+    # The Telemetry steps point at the whole overlay: nothing to ring.
+    _, evaluate = tour_browser
+    state = evaluate("""(()=>{OrreryTour.firstFlight.el.querySelector('.flight-close').click();
+      const t=OrreryFullTour.checklist;t.state.reset();t.show();t.state.goTo('full-exit');t.show();
+      openNetwork({focus:''});t.show();})();""" + RING_STATE)
+    evaluate("closeNetwork()")
+    assert state == {'ring': False, 'here': False}
+
+
+def test_dom_the_full_tour_points_the_same_way(tour_browser):
+    _, evaluate = tour_browser
+    state = evaluate("""(()=>{OrreryTour.firstFlight.el.querySelector('.flight-close').click();
+      const t=OrreryFullTour.checklist;t.state.reset();t.show();t.state.goTo('full-telemetry');t.show();})();""" + RING_STATE)
+    assert (state['ring'], state['target'], state['around'], state['hereOnScreen'], state['hereClearOfPanel']) == (
+        True, 'networkBtn', True, True, True)
 
 
 def test_dom_tour_actions_are_scoped_to_their_tour(tour_browser):
