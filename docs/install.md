@@ -48,7 +48,7 @@ cockpit は orrery-telemetry の最新の release に合わせて作っていま
 - `~/.agentstack/bin/agentstack-doctor` が問題を報告しない
 - ブラウザで `http://127.0.0.1:8770/` を開くと orrery-telemetry の dashboard が表示される
 - `curl -s http://127.0.0.1:8770/api/version` に `"api": 2` 以上がある。1 は、この仕組みより前のすべての版（`version` が [最新の release](https://github.com/gyroid-eth/orrery-telemetry/releases/latest) と同じならなおよい）
-- Claude Code か Codex CLI にログイン済み（`claude` を起動して `/login`、または `codex login`）。Windows では **Ubuntu の中に入れたもの**にログインします。Windows 側に入れたものは使われません
+- Claude Code の初回設定が済んでいる（`claude` を起動し、text style・ログイン・Security notes・フォルダの信頼まで進めて、通常の入力欄が出たら `/exit`。fullscreen renderer を試すかなど、ほかに一度だけ出る質問にも自分で答えておく）。または Codex CLI にログイン済み（`codex login`）。初回設定の途中で閉じると、NEW AGENT の Claude は初回設定の画面で止まり、起動しません。ORRERY はこれらの質問に代わりに答えません。Windows では **Ubuntu の中に入れたもの**にログインします。Windows 側に入れたものは使われません
 
 ### 守ること: 同じマシン・同じユーザー・同じ tmux
 
