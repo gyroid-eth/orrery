@@ -539,6 +539,30 @@ def test_dom_the_next_control_gets_a_cyan_ring_and_a_here_tag(tour_browser):
     assert (still['ring'], still['pulse']) == (True, 'none')
 
 
+def test_dom_the_here_arrow_always_matches_the_side_it_is_on(tour_browser):
+    """Review of #26: the tag was placed by its empty size ("below", ▲), moved
+    above once measured with its text, and kept ▲ until the next check. A
+    checklist whose panel sits just below and right of NEW AGENT shows it at
+    once."""
+    _, evaluate = tour_browser
+    result = evaluate("""(()=>{
+      OrreryTour.firstFlight.el.querySelector('.flight-close').click();
+      const t=document.getElementById('newAgentBtn').getBoundingClientRect();
+      localStorage.setItem('oc-review-pointer-pos',JSON.stringify({left:(t.left+t.right)/2+22,top:t.bottom+12}));
+      const qa=OrreryTour.mountChecklist({id:'qa-pointer',title:'QA',storageKey:'oc-review-pointer',autoOpen:true,
+        steps:[{id:'start',title:'Start',target:'#newAgentBtn',copy:'Test'}]});
+      const ring=document.querySelector('.flight-ring:not([hidden])').getBoundingClientRect();
+      const here=[...document.querySelectorAll('.flight-here:not([hidden])')].pop(),b=here.getBoundingClientRect();
+      const actual=b.bottom<=ring.top?'above':b.top>=ring.bottom?'below':b.left>=ring.right?'right':'left';
+      const out={label:here.textContent,side:here.dataset.side,actual};
+      qa.destroy();localStorage.removeItem('oc-review-pointer-pos');localStorage.removeItem('oc-review-pointer');
+      return out;
+    })()""")
+    arrow = {'below': '▲ HERE', 'above': '▼ HERE', 'right': '◀ HERE', 'left': 'HERE ▶'}
+    assert result['side'] == result['actual'], result
+    assert result['label'] == arrow[result['actual']], result
+
+
 def test_dom_the_ring_leaves_a_covered_or_folded_control(tour_browser):
     _, evaluate = tour_browser
     evaluate("OrreryTour.firstFlight.reset();OrreryTour.firstFlight.show()")

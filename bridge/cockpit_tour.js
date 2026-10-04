@@ -255,14 +255,19 @@ function mountChecklist(definition){
     ring.hidden=false;
     here.hidden=false;here.style.visibility='hidden';
     const panel=el.hidden?null:el.getBoundingClientRect();
-    const spot=placeHereTag(r,{w:here.offsetWidth,h:here.offsetHeight},{w:W,h:H},
-      panel?[{l:panel.left-6,t:panel.top-6,r:panel.right+6,b:panel.bottom+6}]:[]);
-    if(!spot){here.hidden=true;here.style.visibility='';return;}
-    here.dataset.side=spot.side;here.textContent=spot.side==='below'?'▲ HERE':spot.side==='above'?'▼ HERE':spot.side==='right'?'◀ HERE':'HERE ▶';
-    const again=placeHereTag(r,{w:here.offsetWidth,h:here.offsetHeight},{w:W,h:H},
-      panel?[{l:panel.left-6,t:panel.top-6,r:panel.right+6,b:panel.bottom+6}]:[]);
-    if(!again){here.hidden=true;here.style.visibility='';return;}
-    Object.assign(here.style,{left:again.x+'px',top:again.y+'px',visibility:''});
+    const avoid=panel?[{l:panel.left-6,t:panel.top-6,r:panel.right+6,b:panel.bottom+6}]:[];
+    const label=side=>side==='below'?'▲ HERE':side==='above'?'▼ HERE':side==='right'?'◀ HERE':'HERE ▶';
+    // The arrow depends on the side and the size on the arrow: measure the
+    // finished tag, and settle when its side gives back the same label.
+    let spot=null;here.textContent=here.textContent||label('below');
+    for(let i=0;i<3;i++){
+      spot=placeHereTag(r,{w:here.offsetWidth,h:here.offsetHeight},{w:W,h:H},avoid);
+      if(!spot||label(spot.side)===here.textContent)break;
+      here.textContent=label(spot.side);
+    }
+    if(!spot||label(spot.side)!==here.textContent){here.hidden=true;here.style.visibility='';return;}
+    here.dataset.side=spot.side;
+    Object.assign(here.style,{left:spot.x+'px',top:spot.y+'px',visibility:''});
   }
   // The control can move (layout, scrolling, a pane opening) without a tour change.
   let ringTimer=0;
