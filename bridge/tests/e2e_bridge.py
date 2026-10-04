@@ -100,13 +100,18 @@ def random_session(prefix: str) -> str:
     return f"{prefix}-{secrets.token_hex(4)}"
 
 
+# A short base for tmux sockets (macOS's $TMPDIR is too long for a socket
+# path). /private/tmp exists only on macOS; Linux has /tmp.
+SHORT_TMP = "/private/tmp" if os.path.isdir("/private/tmp") else "/tmp"
+
+
 def qa_tmux_bin() -> str:
     """Return a tmux wrapper pinned to this process's isolated QA server."""
     global _QA_TMUX_BIN, _QA_TMUX_WRAPPER_DIR
     if _QA_TMUX_BIN is None:
         _QA_TMUX_WRAPPER_DIR = tempfile.TemporaryDirectory(
             prefix="orrery-e2e-tmux-",
-            dir="/private/tmp",
+            dir=SHORT_TMP,
         )
         wrapper = Path(_QA_TMUX_WRAPPER_DIR.name) / "tmux-qa"
         wrapper.write_text(
@@ -1904,12 +1909,17 @@ class V2UnifiedBackendContractTest(unittest.TestCase):
         payload = json_response(status, body)
         self.assertEqual(status, 200)
         self.assertIsInstance(payload, dict)
-        # "boot" (11da62e) lets the cockpit reload after a backend restart.
-        self.assertEqual(set(payload), {"backend", "boot", "dashboard"})
+        # "boot" (11da62e) lets the cockpit reload after a backend restart;
+        # "root" and "commit" (720a0e3) let setup.sh tell an old backend apart.
+        self.assertEqual(set(payload), {"backend", "boot", "dashboard", "root", "commit"})
         self.assertEqual(payload["backend"], "ok")
         self.assertIsInstance(payload["boot"], str)
         self.assertTrue(payload["boot"])
         self.assertIsInstance(payload["dashboard"], bool)
+        self.assertIsInstance(payload["root"], str)
+        self.assertTrue(payload["root"])
+        # None outside a git checkout (an unpacked release).
+        self.assertTrue(payload["commit"] is None or isinstance(payload["commit"], str))
 
     def test_110_spawn_proxy_is_safe_for_dashboard_state(self) -> None:
         refusal = spawn_request_refusal()
@@ -2073,7 +2083,7 @@ class Cycle10PersistenceContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory(
             prefix="orrery-e2e-history-",
-            dir="/private/tmp",
+            dir=SHORT_TMP,
         )
         self.history_dir = Path(self.temp_dir.name)
         self.session = random_session("orrery-qa-persist")

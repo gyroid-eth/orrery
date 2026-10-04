@@ -91,9 +91,24 @@ class NoPersonalIdentifiersTest(unittest.TestCase):
         must never be pushed. Checking --all would make this test fail on
         every developer clone that still has them.
         """
-        refs = ["master"]
-        if subprocess.run(["git", "rev-parse", "--verify", "-q", "release"], cwd=ROOT, stdout=subprocess.DEVNULL).returncode == 0:
-            refs.append("release")
+        # CI names the commits this pull request or push adds (base..head,
+        # see .github/workflows/tests.yml): its checkout has no local master,
+        # and master's earlier history is a separate decision, so CI stops
+        # new identifiers without failing on old ones. Locally the whole
+        # master/release history is checked as before.
+        history_range = os.environ.get("ORRERY_HISTORY_RANGE", "").strip()
+        if history_range:
+            refs = [history_range]
+            count = subprocess.run(
+                ["git", "rev-list", "--count", history_range],
+                capture_output=True, check=True, cwd=ROOT, text=True,
+            ).stdout.strip()
+            # An empty range would pass without looking at anything.
+            self.assertGreater(int(count), 0, f"ORRERY_HISTORY_RANGE {history_range} holds no commits")
+        else:
+            refs = ["master"]
+            if subprocess.run(["git", "rev-parse", "--verify", "-q", "release"], cwd=ROOT, stdout=subprocess.DEVNULL).returncode == 0:
+                refs.append("release")
         fields = subprocess.run(
             ["git", "log", *refs, "--format=%an%n%ae%n%cn%n%ce%n%s%n%b"],
             capture_output=True, check=True, cwd=ROOT,

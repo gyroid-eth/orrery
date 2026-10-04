@@ -1,0 +1,65 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Full history: the identifier test reads the commits this run adds.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: bridge/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # e2e_bridge.py drives its own tmux server (tmux -L orrery-e2e-*)
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
+
+      - name: Install Python dependencies
+        run: python -m pip install -r bridge/requirements.txt pytest
+
+      - name: bridge tests
+        working-directory: bridge
+        run: python -m pytest -q -rs tests
+
+      # Not named test_*, so the step above does not collect it. Its v2
+      # contract suite needs ORRERY_E2E_V2=1; the two spawn cases stay off
+      # (they would need a fake dashboard) and are reported as skipped.
+      - name: bridge e2e (own tmux server)
+        # Run even when an earlier suite failed, so one failure hides nothing.
+        if: ${{ !cancelled() }}
+        working-directory: bridge
+        env:
+          ORRERY_E2E_V2: "1"
+        run: python -m pytest -q -rs tests/e2e_bridge.py
+
+      - name: tools tests
+        # Run even when an earlier suite failed, so one failure hides nothing.
+        if: ${{ !cancelled() }}
+        env:
+          # The commits this pull request or push adds; earlier master history
+          # is not judged here (see tools/test_no_personal_identifiers.py).
+          ORRERY_HISTORY_RANGE: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
+        run: python -m pytest -q -rs tools
+
+      - name: descriptor quality (node)
+        # Run even when an earlier suite failed, so one failure hides nothing.
+        if: ${{ !cancelled() }}
+        run: node tools/descriptor_quality_js_test.js
