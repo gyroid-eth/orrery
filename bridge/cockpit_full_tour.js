@@ -174,6 +174,20 @@ function mount(){
   doc.addEventListener('oc:focus-agent',focused);
   doc.addEventListener('oc:tour-focus',focused);
   doc.addEventListener('oc:mail',observeMail);doc.addEventListener('oc:agents',observeMail);
+  // The embedded Telemetry reports the drawers it has open on the side the
+  // checklist sits (orrery-tour-cover, frame coordinates); the checklist folds
+  // out of their way while they are open.
+  root.addEventListener('message',event=>{
+    const frameEl=doc.getElementById('networkFrame'),data=event.data;
+    if(!frameEl||event.origin!==root.location.origin||event.source!==frameEl.contentWindow||
+       !data||data.type!=='orrery-tour-cover'||data.version!==1)return;
+    const f=frameEl.getBoundingClientRect();
+    tour.setCover((Array.isArray(data.rects)?data.rects:[]).map(a=>a&&({l:a.l+f.left,t:a.t+f.top,r:a.r+f.left,b:a.b+f.top})));
+  });
+  // A reloaded page has nothing open until it says otherwise.
+  doc.getElementById('networkFrame')?.addEventListener('load',()=>tour.setCover([]));
+  new MutationObserver(()=>{if(!doc.getElementById('networkOverlay')?.classList.contains('on'))tour.setCover([]);})
+    .observe(doc.getElementById('networkOverlay')||doc.body,{attributes:true,attributeFilter:['class']});
   root.addEventListener('message',event=>{
     const frame=doc.getElementById('networkFrame')?.contentWindow;
     const id=telemetryAction(event,root.location.origin,frame);
