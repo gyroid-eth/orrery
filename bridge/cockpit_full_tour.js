@@ -171,6 +171,37 @@ function mount(){
     if(id==='full-return'){if(current(id))returnArmed=true;return;}
     if(id){mark(id);return;}
   });
+  // The Telemetry steps happen inside the embedded page, which this page
+  // cannot ring into: it is told the step instead and rings its own control
+  // (orrery-telemetry dashboard/tour_cue.js). The checklist, folded or not,
+  // lies over the page; the cue's tag keeps clear of it (avoid, in the
+  // frame's coordinates). Sent only when something changed.
+  const overlay=doc.getElementById('networkOverlay'),frameEl=doc.getElementById('networkFrame');
+  if(!overlay||!frameEl)return;
+  let lastCue='';
+  function sendCue(force){
+    const win=frameEl.contentWindow;if(!win)return;
+    const id=tour.state.current?.id,step=STEPS.find(s=>s.id===id);
+    const cue=tour.state.open&&step&&step.target==='#networkOverlay'&&overlay.classList.contains('on')?id:null;
+    const avoid=[];
+    if(cue&&!tour.el.hidden){
+      const f=frameEl.getBoundingClientRect(),g=tour.el.getBoundingClientRect();
+      if(g.width&&g.height)avoid.push({l:Math.round(g.left-f.left),t:Math.round(g.top-f.top),r:Math.round(g.right-f.left),b:Math.round(g.bottom-f.top)});
+    }
+    const message={type:'orrery-tour-cue',version:1,step:cue,avoid};
+    const key=JSON.stringify(message);
+    if(!force&&key===lastCue)return;
+    lastCue=key;
+    try{win.postMessage(message,root.location.origin);}catch(_){}
+  }
+  tour.onChange(()=>sendCue());
+  new MutationObserver(()=>sendCue()).observe(overlay,{attributes:true,attributeFilter:['class']});
+  // A reloaded page forgot the cue.
+  frameEl.addEventListener('load',()=>sendCue(true));
+  root.addEventListener('resize',()=>sendCue());
+  // The checklist can be dragged over the page without a tour change.
+  setInterval(()=>sendCue(),1000);
+  API.sendCue=sendCue;
 }
 if(root.document.readyState==='loading')root.document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })(typeof window==='undefined'?globalThis:window);
