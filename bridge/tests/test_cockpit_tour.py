@@ -312,6 +312,37 @@ def test_dom_map_annotates_every_control_with_a_leader(tour_browser, width, heig
     assert result['crossings'] == [], result['crossings']
 
 
+def test_dom_map_never_draws_crossing_leaders_while_the_window_changes(tour_browser):
+    """Review of #25: at 1160px the header's Settings wraps onto two lines and
+    its leader's track passed its neighbour's, so two leaders crossed at the
+    smallest step. A layout whose leaders cross is not used; the sweep covers
+    1160 and the steps on either side of it."""
+    client, evaluate = tour_browser
+    seen, bad = set(), []
+    for width in range(1120, 1441, 40):
+        for height in (660, 720, 800, 880, 940):
+            client.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=1, mobile=False)
+            result = evaluate(MAP_LAYOUT)
+            seen.add('legend' if result['compact'] else 'scale' + result['scale'])
+            ok = not result['crossings'] and (result['compact'] or (
+                not result['overlap'] and result['within'] and result['vertically']
+                and all(l['fromTarget'] and l['toNote'] for l in result['leaders'])))
+            if not ok:
+                bad.append((width, height, result['scale'], result['crossings']))
+    assert bad == []
+    # The sweep passes through every size of the map, and the legend.
+    assert seen >= {'scale0', 'scale1', 'scale2', 'scale3', 'legend'}, seen
+
+
+def test_crossing_leaders_are_told_apart_from_meeting_ones():
+    assert node(f"""const t=require({json.dumps(str(BRIDGE / 'cockpit_tour.js'))});
+      console.log(JSON.stringify([
+        t.leadersCross(['M10,0V50H100','M0,20H150']),
+        t.leadersCross(['M10,0V50H100','M110,20H150']),
+        t.leadersCross(['M10,10H100','M50,10H150']),
+        t.leadersCross(['M10,10H100','M100,10V50'])]));""") == [True, False, True, False]
+
+
 @pytest.mark.parametrize('width,height', [(1100, 700), (980, 800), (420, 800)])
 def test_dom_map_falls_back_to_a_legend_when_leaders_do_not_fit(tour_browser, width, height):
     client, evaluate = tour_browser
