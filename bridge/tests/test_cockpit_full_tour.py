@@ -369,3 +369,27 @@ def test_dom_owned_focus_leaves_pending_returned_draft_with_its_agent(tour_brows
       return {active:OC.activeAgent(),composer:promptInput.value,draft:localStorage.getItem(key),pending:pendingPaneDraft};
     })()""".replace('ENTRY', entry)) == {
         'active':'OtherAgent', 'composer':'', 'draft':'ReviewChild unsent draft', 'pending':'ReviewChild'}
+
+
+def test_dom_planetarium_and_usage_check_off_when_closed_not_when_opened(tour_browser):
+    """The recording checked both off the moment they opened, while the step
+    text asks to look and then close the view."""
+    _, evaluate = tour_browser
+    result = evaluate("""(async()=>{
+      const full=OrreryFullTour.checklist;document.getElementById('fullTourBtn').click();
+      full.state.reset();full.show();full.state.goTo('full-planetarium');full.show();
+      document.getElementById('planetariumBtn').click();
+      await new Promise(r=>setTimeout(r,200));
+      const planetOpen=full.state.current.id;
+      window.OrreryRail.closePlanetarium?window.OrreryRail.closePlanetarium():document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));
+      await new Promise(r=>setTimeout(r,200));
+      const planetClosed=full.state.current.id;
+      const pop=document.getElementById('usagePopover');pop.showPopover();
+      await new Promise(r=>setTimeout(r,200));
+      const usageOpen=full.state.current.id;
+      pop.hidePopover();
+      await new Promise(r=>setTimeout(r,200));
+      return {planetOpen,planetClosed,usageOpen,usageClosed:full.state.current.id};
+    })()""")
+    assert result == {'planetOpen': 'full-planetarium', 'planetClosed': 'full-usage',
+                      'usageOpen': 'full-usage', 'usageClosed': 'full-telemetry'}

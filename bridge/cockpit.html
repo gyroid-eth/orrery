@@ -8925,7 +8925,9 @@ async function pollUsage(force){
   if(document.getElementById('usagePopover').matches(':popover-open'))renderUsagePopover();
 }
 document.getElementById('usagePopover').addEventListener('toggle',e=>{
-  if(e.newState==='open'){renderUsagePopover();pollUsage(false);emitFullTourAction('full-usage');}});
+  // Read what is left checks off once the numbers were open and are closed again.
+  if(e.newState==='open'){renderUsagePopover();pollUsage(false);}
+  else if(e.newState==='closed')emitFullTourAction('full-usage');});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)pollUsage(false);});
 /* a pane window shows one terminal: no usage, lineage or mail polling there */
 if(!soloSession){pollUsage(false);setInterval(()=>{if(!document.hidden)pollUsage(false);},USAGE_POLL_MS);}

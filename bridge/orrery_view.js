@@ -910,6 +910,7 @@ function closePlanetarium(){
     planetLastFocus!==document.body
     ?planetLastFocus:miniSvg.querySelector('.orrery-expand');
   if(restoreTarget)restoreTarget.focus();
+  document.dispatchEvent(new CustomEvent('oc:planetarium-closed'));
 }
 
 function recipientNames(message){

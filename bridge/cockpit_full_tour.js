@@ -9,13 +9,13 @@ const STEPS=Object.freeze([
   {id:'full-split',title:'Work side by side',target:'.col.roster',copy:'Modifier-click your parent and child in the agent list to show both terminals together. Use ⌘click on macOS or Ctrl+click on WSL.'},
   {id:'full-drag',title:'Move a pane',target:'.tabstrip',copy:'Drag a pane tab or split label to move it, or move a floating pane by its header. You can arrange the workspace around your task.'},
   {id:'full-planetarium',title:'Open Planetarium',target:'#planetariumBtn',copy:'Open PLANETARIUM to see who spawned whom. Find the parent and child from your game, then close the view.'},
-  {id:'full-usage',title:'Read what is left',target:'#usageBtn',copy:'Open LEFT to see the remaining account allowance and when its windows reset. A stale or unavailable reading is labelled rather than shown as a current value.',manual:'I’ve seen it'},
+  {id:'full-usage',title:'Read what is left',target:'#usageBtn',copy:'Open LEFT to see the remaining account allowance and when its windows reset, then close it. A stale or unavailable reading is labelled rather than shown as a current value.',manual:'I’ve seen it'},
   {id:'full-telemetry',title:'Open Telemetry',target:'#networkBtn',copy:'Open TELEMETRY for the crew’s status and history; fold or move this checklist when it covers a control. Cockpit is where you work with agents; Telemetry is where you observe and manage them.'},
   {id:'full-exit',title:'Exit from Deck',target:'#networkOverlay',copy:'On Deck, use EXIT on the shiritori child after the game has finished, then confirm. EXIT asks it to finish gracefully; your parent stays available.'},
   {id:'full-edge',title:'Read a Network edge',target:'#networkOverlay',copy:'Switch to Network and click the message count on the edge between your parent and child. Read the game’s Mail thread in the drawer.'},
   {id:'full-select',title:'Select several agents',target:'#networkOverlay',copy:'Turn on Select and click both agents, or drag a rectangle around them. The selection bar shows actions for the selected crew.'},
-  {id:'full-replay',title:'Replay the collaboration',target:'#networkOverlay',copy:'Choose Replay to watch the selected agents’ history. Try play, pause or seeking, then close Replay before continuing.'},
-  {id:'full-resume',title:'Resume the child',target:'#networkOverlay',copy:'Open the exited child’s details and use RESUME when it is available. After returning to Cockpit, reopen TELEMETRY to continue; an already-running agent does not count as a resume.'},
+  {id:'full-replay',title:'Replay the collaboration',target:'#networkOverlay',copy:'Choose Replay to watch the selected agents’ history. Try play, pause or seeking; close Replay when you are done.'},
+  {id:'full-resume',title:'Resume the child',target:'#networkOverlay',copy:'Open the exited child’s details and use RESUME when it is available, or select the child and use RESUME in the selection bar. If RESUME takes you to Cockpit, reopen TELEMETRY to continue; an already-running agent does not count as a resume.'},
   {id:'full-network-settings',title:'Adjust the Network',target:'#networkOverlay',copy:'In Network, close agent details if needed and fold this checklist to reach SETTINGS. Change a slider such as Node size or Link distance and watch the graph update.'},
   {id:'full-return',title:'Return to your agent',target:'#networkOverlay',copy:'Select a running agent in Telemetry and choose OPEN IN COCKPIT. Its terminal becomes your workspace again.'},
 ]);
@@ -153,6 +153,7 @@ function mount(){
       returnPending=event.detail?.name;returnArmed=false;
     }
   });
+  doc.addEventListener('oc:planetarium-closed',()=>mark('full-planetarium'));
   doc.addEventListener('oc:tour-action',event=>{
     const detail=event.detail||{};
     if(detail.tour==='full-tour'){mark(detail.id);return;}
@@ -163,7 +164,8 @@ function mount(){
       return;
     }
     if(detail.id==='talk'&&current('full-talk'))lastTalk=detail.name||oc.activeAgent();
-    const ids={start:'full-start',talk:'full-talk',planetarium:'full-planetarium',telemetry:'full-telemetry'};
+    // Planetarium checks off when the view closes (oc:planetarium-closed), as its text says.
+    const ids={start:'full-start',talk:'full-talk',telemetry:'full-telemetry'};
     if(ids[detail.id])mark(ids[detail.id]);
   });
   function focused(event){
