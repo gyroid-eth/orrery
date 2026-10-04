@@ -4463,9 +4463,9 @@
       }
     }
   },
-  "inventory_digest": "bd7a1da259ee31ace6e42f3aa401b3e78288573d77822b06643b1f00039ad859",
+  "inventory_digest": "1f748bf6234ed2e1b44b4b346846759391d5fdc0b61bd148b3f98a1941a20f13",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "2fe3644960a3ae63f50e38bd201f44733ce98afd9ddc45704fec7aeafda80f06",
+  "source_digest": "ed6858e6ae46fd5d6f1b005f3a82f231ea6dd438041040b1c44d0dce8b19511a",
   "surface": "cockpit",
   "version": 1
 }
@@ -10018,7 +10018,9 @@ async function watchSpawnLaunch(name){
     }catch(_){continue;}
     if(!status||!status.ok||status.state==='launching')continue;
     if(status.state==='ready'){showToast(`SPAWNED · ${name}`);document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}));}
-    else showToast(`SPAWN FAILED · ${name} · ${status.error||'launcher failed'}`,true);
+    // The launcher's reason can be a few sentences of what to do; leave it
+    // up long enough to read (the default 4.2s is for one-line notices).
+    else showToast(`SPAWN FAILED · ${name} · ${status.error||'launcher failed'}`,true,20000);
     return;
   }
   showToast(`SPAWN · ${name} · no verdict after 140s`,true);

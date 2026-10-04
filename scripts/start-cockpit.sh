@@ -473,7 +473,7 @@ command -v claude >/dev/null 2>&1 && agent_cli="${agent_cli} claude"
 { command -v codex >/dev/null 2>&1 || [ -n "$(telemetry_value AGENTSTACK_CODEX_BIN)" ]; } \
   && agent_cli="${agent_cli} codex"
 if [ -n "$agent_cli" ]; then
-  ok "agent CLI:${agent_cli} (log in once with 'claude' → /login, or 'codex login')"
+  ok "agent CLI:${agent_cli} (once: run 'claude' and finish its setup up to the input prompt, or 'codex login')"
 else
   note "neither 'claude' nor 'codex' is on PATH; NEW AGENT cannot start agents until one is installed and logged in."
 fi

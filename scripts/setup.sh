@@ -1347,9 +1347,14 @@ case "$action" in
 esac
 say ""
 if [ -z "$agent_cli" ]; then
-  say "  Next, in this window: install Claude Code and log in"
+  say "  Next, in this window: install Claude Code and finish its first-run setup"
   say "    curl -fsSL https://claude.ai/install.sh | bash"
-  say "    claude          (then type /login)"
+  say "    claude"
+  say "  In claude, go through text style, login, Security notes and trusting the"
+  say "  folder until the normal input prompt appears. Answer any other one-time"
+  say "  question it asks (such as trying the fullscreen renderer) yourself, then"
+  say "  type /exit. Until this has been done once, NEW AGENT cannot start a"
+  say "  Claude agent: ORRERY never answers these questions for you."
   say "  (or Codex CLI: npm install -g @openai/codex@latest, then codex login)"
   say ""
 fi

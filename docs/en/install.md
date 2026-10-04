@@ -48,7 +48,7 @@ You are ready when all four of these are true:
 - `~/.agentstack/bin/agentstack-doctor` reports no problems
 - Opening `http://127.0.0.1:8770/` in a browser shows the orrery-telemetry dashboard
 - `curl -s http://127.0.0.1:8770/api/version` reports `"api": 2` or higher; 1 means any release from before this scheme (ideally with the same `version` as the [latest release](https://github.com/gyroid-eth/orrery-telemetry/releases/latest))
-- You are logged in to Claude Code or Codex CLI (start `claude` and run `/login`, or run `codex login`). On Windows, log in to the copy **installed inside Ubuntu**. A copy installed on the Windows side is not used
+- Claude Code's first-run setup is finished (start `claude` and go through text style, login, Security notes and trusting the folder until the normal input prompt appears, answer any other one-time question it asks, such as trying the fullscreen renderer, then `/exit`), or you are logged in to Codex CLI (`codex login`). If the setup was left halfway, a Claude agent from NEW AGENT stops on the setup screen and does not start. ORRERY never answers these questions for you. On Windows, log in to the copy **installed inside Ubuntu**. A copy installed on the Windows side is not used
 
 ### What to keep the same: same machine, same user, same tmux
 
