@@ -4463,9 +4463,9 @@
       }
     }
   },
-  "inventory_digest": "738ebd1688ced7c22a3a2fc97ed25b33a625e2af326bc1641f16bbecd1d9d2d7",
+  "inventory_digest": "25cd8d321fc031b6b63fb7fca8fb2af3e0f49da3938f474c9c44b85431237275",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "5b6050e19bc6a84a3b781d9f0cfbd57b135dd7e2eb965f51612c2e6b869f35ce",
+  "source_digest": "b94baec9983a1d769201363873aa1e8204d81f3d6d974fb0d4c86aea69d32b21",
   "surface": "cockpit",
   "version": 1
 }
@@ -5203,6 +5203,10 @@ const availableSessions=new Map();
 const attachedSessions=new Set();
 const requestedSessions=new Set();
 const manualDetached=new Set();
+// Sessions the backend ended while their tab stayed (an EXIT). When one comes
+// back (a RESUME), its tab attaches again; putting it in a split is left to
+// the person. One closed by hand has no tab and is not here.
+const closedByBackend=new Set();
 const claimedSessions=new Set();
 const splitSessions=[];
 const selectedPaneBySession=new Map();
@@ -6866,6 +6870,7 @@ function ensureSessionGroup(session){
   refreshSplitDecorations();return group;
 }
 function removeSessionGroup(session){
+  closedByBackend.delete(session);
   const group=sessionGroups.get(session);if(!group)return;
   group.el.remove();sessionGroups.delete(session);refreshHeaderStats();
 }
@@ -7625,6 +7630,21 @@ function closeSplitCellPane(session){
   else renderStage();
   return true;
 }
+// The backend ended a session: it said closed, or the session left the list
+// while shown. Either can come first and closed can come twice; noting it is
+// the same each time.
+function noteBackendClosed(session){closedByBackend.add(session);}
+// A session the backend ended is back: attach its tab again, by the usual
+// rule (no priority: with the cockpit full, nothing is displaced). Until an
+// attach goes out (the link was down, the cockpit full), it is tried again
+// with the next list; closing its tab, or closing it by hand, ends that.
+function restoreClosedSessions(availableNames){
+  const available=new Set(availableNames);
+  for(const session of [...closedByBackend]){
+    if(manualDetached.has(session)||!sessionGroups.has(session)){closedByBackend.delete(session);continue;}
+    if(available.has(session)&&requestAttach(session))closedByBackend.delete(session);
+  }
+}
 function pruneSplitSessions(availableNames){
   const available=new Set(availableNames);
   const next=splitSessions.filter(name=>available.has(name));
@@ -7944,13 +7964,13 @@ function forgetSession(session,{removeGroup=true}={}){
   if(pendingJump===session)pendingJump=null;
   renderStage();
 }
-function detachSession(session,remember=false){
+function detachSession(session,remember=false,{keepTab=false}={}){
   if(attachedSessions.has(session)||requestedSessions.has(session)){
     releaseSessionClaim(session,{resize:false});
     send({type:"detach",session});
   }
   if(remember)manualDetached.add(session);
-  forgetSession(session);
+  forgetSession(session,{removeGroup:!keepTab});
 }
 function requestAttach(session,priority=false){
   if(!paneSessionAllowed(session))return false;
@@ -7991,9 +8011,14 @@ function handleSessions(items){
     const name=typeof item==='string'?item:item&&item.session;
     if(typeof name==='string'&&name&&!availableSessions.has(name))availableSessions.set(name,item);
   });
+  // A session that left the list while shown was ended by the backend, as a
+  // closed message says: note it, and keep its tab (below) like closed does.
+  occupiedSessions().forEach(session=>{if(!names.includes(session))noteBackendClosed(session);});
   pruneSplitSessions(names);
   const plan=attachmentPlan(names,[...occupiedSessions()],[...manualDetached],MAX_ATTACHED_SESSIONS);
-  plan.detach.forEach(session=>detachSession(session));
+  plan.detach.forEach(session=>detachSession(session,false,{keepTab:true}));
+  // After those leave: a slot the same list frees is there for a return.
+  restoreClosedSessions(names);
   // Lazy attach (2026-07-30 product decision): the cockpit opens with NO tabs — a
   // session attaches only when the user asks for it (agent tile / palette /
   // split toggle). plan.attach is intentionally ignored; the backend's
@@ -8781,7 +8806,10 @@ function handle(msg){
       break;
     }
     case "status":
-      if(msg.state==='closed'&&msg.session)forgetSession(msg.session,{removeGroup:false});
+      if(msg.state==='closed'&&msg.session){
+        noteBackendClosed(msg.session);
+        forgetSession(msg.session,{removeGroup:false});
+      }
       break;
     case "error":
       if(msg.session){
