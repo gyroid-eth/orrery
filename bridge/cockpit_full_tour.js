@@ -56,7 +56,12 @@ function createShiritoriTracker(parent,since,afterId=0){
         if(!prior||(direction==='out'?id<prior.id:id>prior.id))pair[direction]={id,ts};
         rounds.set(child,pair);
       }
-      return [...rounds.values()].some(pair=>pair.out&&pair.in&&pair.in.id>pair.out.id&&pair.in.ts>=pair.out.ts);
+      return !!this.child();
+    },
+    // The child that played a full round with the parent, once there is one.
+    child(){
+      for(const [name,pair] of rounds)if(pair.out&&pair.in&&pair.in.id>pair.out.id&&pair.in.ts>=pair.out.ts)return name;
+      return null;
     },
   };
 }
@@ -117,7 +122,11 @@ function mount(){
   function observeMail(){
     if(!current('full-shiritori')||!tracker)return;
     const agents=oc.agents().map(a=>({...a,parent:oc.lineageParent.get(a.name)}));
-    if(tracker.add(oc.mailBacklog(),agents))mark('full-shiritori');
+    if(tracker.add(oc.mailBacklog(),agents)){
+      // Kept for the Network edge step, which may come after a reload.
+      context.child=tracker.child();saveContext();
+      mark('full-shiritori');
+    }
   }
   function changed(){
     copy.hidden=!current('full-shiritori');
@@ -188,7 +197,10 @@ function mount(){
       const f=frameEl.getBoundingClientRect(),g=tour.el.getBoundingClientRect();
       if(g.width&&g.height)avoid.push({l:Math.round(g.left-f.left),t:Math.round(g.top-f.top),r:Math.round(g.right-f.left),b:Math.round(g.bottom-f.top)});
     }
-    const message={type:'orrery-tour-cue',version:1,step:cue,avoid};
+    // The game's parent and child, so the page can ring their edge and not
+    // another one; without them it rings no edge at all.
+    const child=cue&&context?(typeof context.child==='string'&&context.child)||(tracker&&tracker.child()):null;
+    const message={type:'orrery-tour-cue',version:1,step:cue,avoid,...(child?{pair:[context.parent,child]}:{})};
     const key=JSON.stringify(message);
     if(!force&&key===lastCue)return;
     lastCue=key;
