@@ -39,6 +39,15 @@ jobs:
         working-directory: bridge
         run: python -m pytest -q -rs tests
 
+      # Not named test_*, so the step above does not collect it. Its v2
+      # contract suite needs ORRERY_E2E_V2=1; the two spawn cases stay off
+      # (they would need a fake dashboard) and are reported as skipped.
+      - name: bridge e2e (own tmux server)
+        working-directory: bridge
+        env:
+          ORRERY_E2E_V2: "1"
+        run: python -m pytest -q -rs tests/e2e_bridge.py
+
       - name: tools tests
         env:
           # The commits this pull request or push adds; earlier master history
