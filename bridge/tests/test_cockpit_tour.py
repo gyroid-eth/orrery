@@ -285,6 +285,8 @@ MAP_LAYOUT = """new Promise(resolve=>{
       if(one.some(a=>other.some(b=>meets(a,b))))crossings.push([leaders[i].id,leaders[i+1+j].id]);
     }));
     resolve({count:notes.length,compact:map.classList.contains('compact'),overlap,leaders,crossings,
+      scale:map.dataset.scale||'0',
+      smallest:Math.min(...notes.map(n=>parseFloat(getComputedStyle(n.querySelector('p')).fontSize))),
       frames:document.querySelectorAll('.flight-map-frame').length,
       within:boxes.every(r=>r.left>=0&&r.right<=innerWidth),
       vertically:map.classList.contains('compact')||boxes.every(r=>r.top>=0&&r.bottom<=innerHeight),
@@ -293,24 +295,31 @@ MAP_LAYOUT = """new Promise(resolve=>{
 })"""
 
 
-@pytest.mark.parametrize('width,height', [(1920, 1080), (1600, 1000), (1440, 900)])
-def test_dom_map_annotates_every_control_with_a_leader(tour_browser, width, height):
+# A smaller window keeps the leaders and sets the notes smaller, in steps; the
+# smallest step's text is 9px (1200x680 needs it).
+@pytest.mark.parametrize('width,height,scale,text', [
+    (1920, 1080, '0', 12), (1600, 1000, '0', 12), (1440, 900, '0', 12),
+    (1400, 860, '1', 10.5), (1280, 800, '1', 10.5), (1200, 680, '3', 9)])
+def test_dom_map_annotates_every_control_with_a_leader(tour_browser, width, height, scale, text):
     client, evaluate = tour_browser
     client.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=1, mobile=False)
     result = evaluate(MAP_LAYOUT)
     assert result['compact'] is False, result
+    assert (result['scale'], result['smallest']) == (scale, text)
     assert (result['count'], result['frames'], result['overlap'], result['within'], result['vertically'], result['copy']) == (10, 10, False, True, True, True)
     assert sorted(l['id'] for l in result['leaders']) == sorted(['start', 'select', 'choose', 'talk', 'mail', 'crew', 'usage', 'telemetry', 'planetarium', 'settings'])
     assert all(l['fromTarget'] and l['toNote'] for l in result['leaders']), result['leaders']
     assert result['crossings'] == [], result['crossings']
 
 
-@pytest.mark.parametrize('width,height', [(1280, 800), (1100, 700), (980, 800), (420, 800)])
+@pytest.mark.parametrize('width,height', [(1100, 700), (980, 800), (420, 800)])
 def test_dom_map_falls_back_to_a_legend_when_leaders_do_not_fit(tour_browser, width, height):
     client, evaluate = tour_browser
     client.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=1, mobile=False)
     result = evaluate(MAP_LAYOUT)
     assert (result['compact'], result['count'], result['leaders'], result['overlap'], result['within'], result['copy']) == (True, 10, [], False, True, True)
+    # The legend keeps the full-size notes: no step is left set from the attempts.
+    assert result['scale'] == '0'
 
 
 def test_dom_map_click_anywhere_closes_but_legend_scrolls(tour_browser):

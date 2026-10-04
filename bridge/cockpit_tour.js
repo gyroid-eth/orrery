@@ -22,6 +22,10 @@ const MAP_EXTRA=Object.freeze([
 ]);
 const MAP_ORDER=['start','select','choose','talk','mail','crew','usage','telemetry','planetarium','settings'];
 const MAP_NOTES=Object.freeze(MAP_ORDER.map(id=>STEPS.find(s=>s.id===id)||MAP_EXTRA.find(s=>s.id===id)));
+// The help map's sizes, largest first: [data-scale, gap between notes, spacings
+// to try]. Scale 0 is the full size; 1-3 set the notes smaller in
+// cockpit_tour.css (the smallest: 12px headings, 9px text).
+const MAP_SCALES=Object.freeze([[0,18,[1.4,.8]],[1,13,[1,.6]],[2,9,[1,.6]],[3,6,[1,.6]]]);
 const KEY='oc-first-flight-v1';
 const CHANNEL='orrery-tour';
 function createState(storage,{steps=STEPS,key=KEY,autoOpen=true}={}){
@@ -442,11 +446,12 @@ function mount(){
   // The reason the annotated layout gave way to the legend, kept for tests.
   function fail(reason){map.dataset.fallback=reason;return false;}
   // spread: the space between stacked notes, in units of the gap.
-  function annotate(rects,spread){
+  // gap: the space between notes and their leaders' room (smaller when scaled down).
+  function annotate(rects,spread,gap=18){
     const stage=doc.getElementById('termstage');
     const v=stage&&stage.getBoundingClientRect();
     if(!v||rects.some(r=>!r)||v.width<440||v.height<320)return fail('room');
-    const gap=18,colGap=28,lane=6,wide=210;
+    const colGap=28,lane=6,wide=210;
     const headerEl=doc.querySelector('header');
     const hb=headerEl?headerEl.getBoundingClientRect().bottom:v.top;
     const cxOf=r=>(r.l+r.r)/2;
@@ -545,11 +550,17 @@ function mount(){
     art.querySelector('.flight-map-veil').setAttribute('height',root.innerHeight);
     const rects=targetRects();
     map.classList.remove('compact');delete map.dataset.fallback;drawFrames(rects);
-    // Ten notes are a lot for a small stage: close the spacing before giving up the leaders.
-    if(!annotate(rects,1.4)&&!annotate(rects,.8)){
-      [title,...notes.children].forEach(el=>{el.style.left=el.style.top=el.style.width='';el.classList.remove('end');});
-      map.classList.add('compact');drawFrames(rects);
+    // Ten notes are a lot for a small stage. Keep the large layout and close
+    // the spacing first, then set the notes smaller step by step (data-scale,
+    // see cockpit_tour.css); the legend is left for when even the smallest
+    // step does not fit.
+    for(const [scale,gap,spreads] of MAP_SCALES){
+      if(scale)map.dataset.scale=scale;else delete map.dataset.scale;
+      if(spreads.some(spread=>annotate(rects,spread,gap))){delete map.dataset.fallback;return;}
     }
+    delete map.dataset.scale;
+    [title,...notes.children].forEach(el=>{el.style.left=el.style.top=el.style.width='';el.classList.remove('end');});
+    map.classList.add('compact');drawFrames(rects);
   }
   function render(){
     map.hidden=!state.map;flight.suspend(state.map);

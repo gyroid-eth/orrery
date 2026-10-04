@@ -84,6 +84,21 @@ html.tour-window .flight-guide{inset:0;width:auto;max-height:none;border:0;backg
 .flight-map-title span{display:block;margin-top:7px;font-size:11px;color:var(--ink-dim)}
 .flight-map-close{margin-top:10px;padding:0 0 1px;border:0;border-bottom:1px solid color-mix(in srgb,var(--amber) 55%,transparent);background:none;color:var(--amber);font:11px var(--mono);cursor:pointer}
 .flight-map-close:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+/* A smaller window keeps the same leaders with smaller notes, in steps
+   (data-scale, MAP_SCALES in cockpit_tour.js); the smallest is 12px headings
+   over 9px text. */
+.flight-map[data-scale="1"] .flight-map-note h3{font-size:15px}
+.flight-map[data-scale="1"] .flight-map-note p{margin-top:3px;font-size:10.5px;line-height:1.45}
+.flight-map[data-scale="1"] .flight-map-title b{font-size:19px}
+.flight-map[data-scale="1"] .flight-map-title span{font-size:10.5px}
+.flight-map[data-scale="2"] .flight-map-note h3{font-size:13px}
+.flight-map[data-scale="2"] .flight-map-note p{margin-top:2px;font-size:9.5px;line-height:1.38}
+.flight-map[data-scale="2"] .flight-map-title b{font-size:16px}
+.flight-map[data-scale="2"] .flight-map-title span{font-size:9.5px}
+.flight-map[data-scale="3"] .flight-map-note h3{font-size:12px}
+.flight-map[data-scale="3"] .flight-map-note p{margin-top:1px;font-size:9px;line-height:1.32}
+.flight-map[data-scale="3"] .flight-map-title b{font-size:15px}
+.flight-map[data-scale="3"] .flight-map-title span{font-size:9px}
 /* Right-hand notes read toward their leader. */
 .flight-map-note.end{text-align:right}
 /* Compact: too little room for leaders, so the notes become a legend beside the framed controls. */
