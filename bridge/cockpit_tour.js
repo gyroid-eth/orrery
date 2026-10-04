@@ -26,19 +26,29 @@ const KEY='oc-first-flight-v1';
 const CHANNEL='orrery-tour';
 function createState(storage,{steps=STEPS,key=KEY,autoOpen=true}={}){
   const valid=new Set(steps.map(s=>s.id));
-  let done,open,folded,map=false;
+  // focus: a step the viewer moved to by clicking it. It only changes which
+  // step is current; a step is done only through its real action.
+  let done,open,folded,focus,map=false;
   function load(){
     let saved={};
     try{saved=JSON.parse(storage.getItem(key))||{};}catch(_){}
     done=new Set(Array.isArray(saved.done)?saved.done.filter(id=>valid.has(id)):[]);
     open=autoOpen?saved.seen!==true||saved.open===true:saved.open===true;
     folded=saved.folded===true;
+    focus=valid.has(saved.focus)&&!done.has(saved.focus)?saved.focus:null;
   }
-  function persist(){try{storage.setItem(key,JSON.stringify({seen:true,open,folded,done:[...done]}));}catch(_){}}
+  function persist(){try{storage.setItem(key,JSON.stringify({seen:true,open,folded,done:[...done],focus}));}catch(_){}}
+  // After the focused step is done, go on from there rather than back to a
+  // step that was skipped: the next open step after it, else the first.
+  function nextOpenAfter(id){
+    const at=steps.findIndex(s=>s.id===id);
+    const later=steps.slice(at+1).find(s=>!done.has(s.id));
+    return later?later.id:null;
+  }
   load();persist();
   return {
     get open(){return open;},get folded(){return folded;},get map(){return map;},get done(){return new Set(done);},
-    get current(){return steps.find(s=>!done.has(s.id))||null;},
+    get current(){return (focus&&steps.find(s=>s.id===focus))||steps.find(s=>!done.has(s.id))||null;},
     get steps(){return steps;},
     show(){open=true;folded=false;map=false;persist();},
     close(){open=false;persist();},
@@ -46,8 +56,21 @@ function createState(storage,{steps=STEPS,key=KEY,autoOpen=true}={}){
     unfold(){folded=false;persist();},
     toggleMap(){map=!map;return map;},
     hideMap(){map=false;},
-    mark(id){if(!open||!valid.has(id)||done.has(id))return false;done.add(id);persist();return true;},
-    reset(){done.clear();open=true;folded=false;map=false;persist();},
+    mark(id){
+      if(!open||!valid.has(id)||done.has(id))return false;
+      done.add(id);
+      if(focus===id)focus=nextOpenAfter(id);
+      persist();return true;
+    },
+    // Make an open step the current one (back or ahead); a done step cannot be.
+    goTo(id){
+      if(!valid.has(id)||done.has(id))return false;
+      const first=steps.find(s=>!done.has(s.id));
+      const next=first&&first.id===id?null:id;
+      if(next===focus)return false;
+      focus=next;persist();return true;
+    },
+    reset(){done.clear();focus=null;open=true;folded=false;map=false;persist();},
     // Another window of the same viewer changed the saved progress.
     reload(){load();},
   };
@@ -142,6 +165,13 @@ function mountChecklist(definition){
     const line=doc.createElement('div');line.className='flight-line';
     line.innerHTML='<span class="flight-item"></span><span class="flight-leader"></span><span class="flight-response"></span>';
     line.firstChild.textContent=step.title;
+    // Choosing a step moves the tour there; it does not complete it.
+    line.setAttribute('role','button');
+    const go=()=>{if(state.goTo(step.id))changed();};
+    line.addEventListener('click',go);
+    line.addEventListener('keydown',event=>{
+      if(event.key==='Enter'||event.key===' '){event.preventDefault();go();}
+    });
     const copy=doc.createElement('p');copy.textContent=step.copy;
     row.append(line,copy);
     if(step.manual){
@@ -179,6 +209,11 @@ function mountChecklist(definition){
       row.classList.toggle('done',isDone);row.classList.toggle('current',isCurrent);
       row.querySelector('.flight-response').textContent=isDone?'done':isCurrent?'now':'';
       if(isCurrent)row.setAttribute('aria-current','step');else row.removeAttribute('aria-current');
+      const line=row.querySelector('.flight-line'),pickable=!isDone&&!isCurrent;
+      line.tabIndex=pickable?0:-1;
+      line.setAttribute('aria-disabled',String(!pickable));
+      line.setAttribute('aria-label',isDone?steps.find(s=>s.id===stepId).title+', done':
+        isCurrent?steps.find(s=>s.id===stepId).title+', current step':'Go to step: '+steps.find(s=>s.id===stepId).title);
       const button=row.querySelector('.flight-read');if(button)button.hidden=!isCurrent;
     });
     if(highlight)highlight.classList.remove('flight-target');

@@ -95,3 +95,7 @@ html.tour-window .flight-guide{inset:0;width:auto;max-height:none;border:0;backg
 .flight-map.compact .flight-map-note:first-child{border-top:0}
 .flight-map.compact .flight-map-note h3{font-size:17px}
 @media(max-width:680px){.flight-map.compact{align-items:stretch}.flight-map.compact .flight-map-title,.flight-map.compact .flight-map-notes{width:auto!important}}
+/* A step's line moves the tour to that step (it does not complete it). */
+.flight-guide .flight-line[role="button"][aria-disabled="false"]{cursor:pointer}
+.flight-guide .flight-line[role="button"][aria-disabled="false"]:hover .flight-item{text-decoration:underline;text-underline-offset:3px}
+.flight-guide .flight-line[role="button"]:focus-visible{outline:1px solid currentColor;outline-offset:2px}
