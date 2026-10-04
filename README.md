@@ -178,7 +178,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 1. **Your first flight** — 初回に右側へ出る7項目のガイドを通します。agent の起動、選択、入力など、画面の説明どおりに操作すると ✓ が付きます。Mail を読んだ項目は `Mark as read` で確認します。閉じたガイドは `Settings → Getting started → Your first flight` から開けます。
 2. **Show help map** — 同じ `Getting started` の `Show help map` を押し、主要な部品の注記を見ながら画面を見回します。`Esc` または画面のクリックで閉じられます。
-3. **Full tour** — 同じ場所の `Full tour` で16段の操作を順に試します。子とのしりとり、端末の配置、Telemetry の EXIT / RESUME、NETWORK / REPLAY から端末への帰還までを案内します。ゲームはガイドの ✓ が付いた後も3往復まで終えます。進行は最初のガイドとは別に保存されます（[Full tour の説明・英語](docs/FULL_TOUR.md)）。
+3. **Full tour** — 同じ場所の `Full tour` で16段の操作を順に試します。子とのしりとり、端末の配置、Telemetry の EXIT / RESUME、NETWORK / REPLAY から端末への帰還までを案内します。ゲームはガイドの ✓ が付いた後も3往復まで終えます。進行は最初のガイドとは別に保存されます（[Full tour の説明](docs/FULL_TOUR.md)）。
 
 普段の操作は、画面内のガイドと help map から始めてください。操作の詳しい参照は[使い方](docs/usage.md)、表示や接続が合わないときは[トラブルシューティング](docs/troubleshooting.md)へ進みます。ガイドで起動する agent は CLI のアカウント利用枠を消費します。
 

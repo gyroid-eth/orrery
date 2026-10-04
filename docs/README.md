@@ -13,7 +13,7 @@
 ## 使い方
 
 - [使い方](usage.md) — 画面の guide/help map を入口に、必要な操作を詳しく調べる。
-- [Full tour（英語）](FULL_TOUR.md) — 16段の実操作とチェックの条件、ゲーム・保存・別窓の仕様。
+- [Full tour](FULL_TOUR.md) — 16段の実操作とチェックの条件、ゲーム・保存・別窓の仕様。
 
 ## install・update
 
@@ -37,4 +37,4 @@
 - [Roster findability 設計メモ（discussion draft）](DESIGN_roster_findability.md) — 過去の計測と設計案。現行操作の手順書とは区別して読む。
 - [開発への入口](../app/README.md) — desktop app の開発用起動と、hotkey の表示・非表示の確認。
 
-英語版の無い文書は原語を明記しています。画像/GIFは各文書に付随する資料です。索引の網羅性は `python3 scripts/check_docs_index.py`（repository の根から）で確認できます。
+`docs/*.md` と `docs/en/*.md` は、同じファイル名で日英の対にします。画像/GIFは各文書に付随する資料です。索引の網羅性と日英の対応は `python3 scripts/check_docs_index.py`（repository の根から）で確認できます。

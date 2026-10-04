@@ -1,59 +1,32 @@
 # Full tour
 
-Open **Settings → Getting started → Full tour** for the extended workshop
-checklist. Your first flight remains a separate seven-step introduction with
-its own saved progress. Full tour has sixteen steps and takes about ten
-minutes, depending on agent startup and the game.
+[English](en/FULL_TOUR.md) · [ドキュメント索引](README.md)
 
-1. Spawn an agent with NEW AGENT.
-2. Choose it in the agent list.
-3. Send a prompt below the terminal.
-4. Use the workshop prompt to delegate one child and play shiritori through
-   ORRERY Mail. A fresh Mail round trip between parent and child completes this
-   step; let the three-round game finish before exiting the child.
-5. Modifier-click the parent and child to split their terminals.
-6. Drag a split label to swap panes, a pane tab to float it, or a floating
-   pane's header to move it.
-7. Open PLANETARIUM.
-8. Open LEFT and read the remaining allowance. Unavailable data is labelled;
-   this observation can also be acknowledged with “I’ve seen it”.
-9. Open TELEMETRY for the crew's status and history.
-10. Confirm EXIT on the finished game's child from Deck.
-11. Open Network and read the Mail edge between parent and child.
-12. Select several agents.
-13. Start Replay, then close it.
-14. RESUME the exited child. Reopen TELEMETRY after the handoff.
-15. Change a Network Settings slider.
-16. Choose an agent in Telemetry and OPEN IN COCKPIT, returning to its terminal.
+**Settings → Getting started → Full tour** を開くと、講演・演習向けの詳しい checklist が出ます。Your first flight は7段の入門ガイドとして残り、進行も別に保存されます。Full tour は16段です。agent の起動とゲームにかかる時間によりますが、目安は約10分です。
 
-Only the current step advances. Failed requests, cancelled drags, a single
-selected node, a ready message, and opening an already-running agent do not
-complete the corresponding operation. Shiritori requires fresh, observed
-Mail with distinct IDs between the selected parent and the same actual child,
-with the child's response ID after the parent's move ID. The live API uses
-whole-second timestamps and body excerpts: the starting second and the
-last observed ID form the game boundary. Ready-only bodies or excerpts,
-unrelated peers and earlier games do not count. Subjects may be absent,
-Japanese, or prefixed by a reply tool; they do not decide completion.
+1. `NEW AGENT` で agent を起動する。
+2. agent 一覧から、その agent を選ぶ。
+3. terminal の下の入力欄から prompt を送る。
+4. workshop の prompt を使い、子を1体 delegate して ORRERY Mail でしりとりをする。親子の新しい Mail の1往復を確認すると、この段に ✓ が付く。子を終了する前に、ゲームは3往復まで終える。
+5. `Cmd` / `Ctrl` を押しながら親と子をクリックし、terminal を Split で並べる。
+6. Split の名札を drag して pane の位置を交換する、pane tab を drag して浮かせる、または浮いた pane の header を drag して移動する。
+7. `PLANETARIUM` を開く。
+8. `LEFT` を開き、利用枠の残りを読む。取得できない値はその旨が表示される。この確認は `I’ve seen it` でも完了にできる。
+9. `TELEMETRY` を開き、チームの状態と履歴を見る。
+10. DECK で、ゲームを終えた子の `EXIT` を確認して実行する。
+11. NETWORK を開き、親子を結ぶ Mail の edge を読む。
+12. agent を複数選ぶ。
+13. Replay を始め、その後に閉じる。
+14. 終了した子を `RESUME` する。cockpit へ処理が引き渡されたら、`TELEMETRY` をもう一度開く。
+15. NETWORK の Settings の slider を変える。
+16. Telemetry で agent を選び、`OPEN IN COCKPIT` でその terminal に戻る。
 
-The workshop prompt is inserted into an empty composer, preserving an existing
-draft. It is not sent automatically. Its wording matches
-`orrery-workshop/play/shiritori.md`: use the installed /delegate skill and
-ORRERY Mail, three round trips, actual message evidence, no native subagent.
-An authenticated CLI is needed for the real game.
+操作で ✓ が付くのは、現在の段だけです。失敗した要求、途中で取り消した drag、node を1体だけ選ぶこと、ready の Mail、すでに稼働中の agent を開くことでは、それぞれの操作は完了になりません。
 
-The printed checklist shares folding, dragging, frosted glass and pop-out
-behavior with Your first flight. Its separate window uses
-`tour.html?tour=full-tour`, presents the same steps and progress, and can copy
-the workshop prompt; it runs no agent or terminal operations. Progress is
-saved for this browser and synchronized with the main window. Restart clears
-only Full tour and its game observation, leaving first-flight progress intact.
+しりとりでは、選んだ親と実際に起動した子との間で、新しい Mail を確認する必要があります。子はゲームを通して同じ1体でなければなりません。Mail の ID は別々で、子の返答の ID が親の手の ID より後でなければなりません。live API は秒単位の時刻と本文の抜粋を返すため、開始した秒と最後に確認した ID をゲームの境界にします。ready だけの本文・抜粋、別の相手との通信、以前のゲームは数えません。件名が無い、日本語である、返信 tool の接頭辞が付いている、といった違いは完了の判定に使いません。
 
-Embedded Telemetry must support `orrery-tour-action` version 1
-(orrery-telemetry PR #191). The host checks the exact origin and owned iframe,
-then accepts only the current step's successful action. Returning additionally
-requires the selected terminal to become focused after Telemetry closes,
-including its floating pane or own window. Native focus waits for success;
-channel fallback requires an acknowledgement from the registered window
-instance for that particular request. Its tour-only focus event does not
-move pending drafts into the main composer.
+workshop の prompt は入力欄が空のときだけ入り、すでにある下書きは保ちます。自動では送信しません。文面は `orrery-workshop/play/shiritori.md` と同じです。install 済みの `/delegate` skill と ORRERY Mail を使い、3往復を行い、実際の Mail を根拠として示します。組み込みの subagent は使いません。実際にゲームをするには、認証を済ませた CLI が必要です。
+
+checklist の折りたたみ・drag・すりガラスの表示・別窓での表示は、Your first flight と共通です。別窓は `tour.html?tour=full-tour` を使い、同じ手順と進行を表示し、workshop の prompt をコピーできます。別窓から agent や terminal を操作することはありません。進行はこの browser に保存し、main window と同期します。Restart が消すのは Full tour の進行とゲームの観測だけで、Your first flight の進行は残ります。
+
+埋め込む Telemetry は `orrery-tour-action` version 1（orrery-telemetry PR #191）に対応している必要があります。cockpit は origin の完全一致と、自分が管理する iframe からの通知であることを確認し、現在の段に対応する成功した操作だけを受け入れます。terminal への帰還では、Telemetry を閉じた後に、選んだ terminal に実際に focus が移ることも必要です。浮いた pane や独立の窓にある terminal も対象です。native の focus は成功を待ちます。channel を使う fallback では、その要求に対して、登録済みの window instance からの応答が必要です。Full tour 専用の focus event は、書きかけの下書きを main の入力欄へ移しません。

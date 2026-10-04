@@ -178,7 +178,7 @@ Read and confirm the plan, and check that doctor and the Mail selftest succeeded
 
 1. **Your first flight** — Follow the seven-item guide on the right on your first visit. Starting an agent, choosing it, and sending a prompt check off as you use the controls described on screen. Confirm the Mail-reading item with `Mark as read`. Reopen a closed guide from `Settings → Getting started → Your first flight`.
 2. **Show help map** — Choose `Show help map` in the same `Getting started` section and look around the annotated controls. Press `Esc` or click the screen to close it.
-3. **Full tour** — Choose `Full tour` there to try sixteen steps in order: shiritori with a child, arranging terminals, Telemetry EXIT / RESUME, NETWORK / REPLAY, and returning to a terminal. Finish all three game round trips even after its step checks off. Progress is saved separately from the first guide ([Full tour details](docs/FULL_TOUR.md)).
+3. **Full tour** — Choose `Full tour` there to try sixteen steps in order: shiritori with a child, arranging terminals, Telemetry EXIT / RESUME, NETWORK / REPLAY, and returning to a terminal. Finish all three game round trips even after its step checks off. Progress is saved separately from the first guide ([Full tour details](docs/en/FULL_TOUR.md)).
 
 For everyday controls, start with the in-app guides and help map. [Usage](docs/en/usage.md) is the detailed reference; if the screen or connection differs, use [Troubleshooting](docs/en/troubleshooting.md). Agents started during the guides consume your CLI account allowance.
 
