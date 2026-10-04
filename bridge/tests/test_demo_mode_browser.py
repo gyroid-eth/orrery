@@ -40,6 +40,9 @@ FRAME_HTML = (b"<!doctype html><html><body><p id=raw>/Users/mira/private.txt on 
               b"<img src='/slow.png'></body></html>")
 
 
+CHROME_START_SECONDS = 90
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(BRIDGE), **kwargs)
@@ -87,14 +90,18 @@ def browser(identity_mode="ok"):
     profile = tempfile.mkdtemp(prefix="orrery-demo-cdp-")
     chrome_log = open(Path(profile) / "chrome.log", "w+")
     process = subprocess.Popen(
-        [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", f"--remote-debugging-port={port}",
+        [CHROME, "--headless=new", "--use-mock-keychain", "--password-store=basic", "--no-sandbox", "--disable-gpu", f"--remote-debugging-port={port}",
          "--window-size=1400,900", f"--user-data-dir={profile}", "about:blank"],
         stdout=chrome_log, stderr=subprocess.STDOUT)
     try:
         page = None
-        for _ in range(300):   # a cold start on a CI runner can take several seconds
+        # A deadline, not a poll count: the first Chromium start on a fresh CI
+        # runner (no font or profile caches yet) took longer than 300 polls,
+        # while every later start in the same run came up at once.
+        started = time.monotonic()
+        while time.monotonic() - started < CHROME_START_SECONDS:
             with contextlib.suppress(OSError, ValueError):
-                tabs = json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/json"))
+                tabs = json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=2))
                 page = next((tab for tab in tabs if tab["type"] == "page"), None)
                 if page:
                     break
@@ -103,8 +110,8 @@ def browser(identity_mode="ok"):
             time.sleep(.1)
         if page is None:
             chrome_log.seek(0)
-            raise RuntimeError(f"Chromium gave no page over CDP (exit {process.poll()}):\n"
-                               + chrome_log.read()[-3000:])
+            raise RuntimeError(f"Chromium gave no page over CDP after {time.monotonic() - started:.1f}s "
+                               f"(exit {process.poll()}):\n" + chrome_log.read()[-3000:])
         client = cdp._WebSocket(page["webSocketDebuggerUrl"])
         client.call("Page.enable")
         client.call("Runtime.enable")
