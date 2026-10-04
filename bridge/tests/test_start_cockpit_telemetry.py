@@ -10,12 +10,14 @@ backend. Nothing here reaches the real GitHub.
 """
 from __future__ import annotations
 
+import functools
 import json
 import os
 import re
 import shutil
 import socket
 import subprocess
+import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -132,6 +134,18 @@ def version(v: str | None, api=MIN_API) -> bytes:
     return json.dumps(data).encode()
 
 
+@functools.cache
+def agent_cli_stub() -> str:
+    """A folder with a do-nothing `claude`, put first on PATH: without an agent
+    CLI the script adds a note of its own, so the notes these tests count would
+    differ between a machine that runs agents and a CI runner. It lives outside
+    tmp_path, which some tests list file by file."""
+    folder = Path(tempfile.mkdtemp(prefix="orrery-agent-cli-"))
+    (folder / "claude").write_text("#!/bin/sh\nexit 0\n")
+    (folder / "claude").chmod(0o755)
+    return str(folder)
+
+
 def start(tmp_path, dash_url: str, releases_url: str | None = None, script: Path = SCRIPT,
           problems: int = 1, **env_extra) -> str:
     home = tmp_path / "home"
@@ -139,7 +153,7 @@ def start(tmp_path, dash_url: str, releases_url: str | None = None, script: Path
     agentstack.mkdir(parents=True, exist_ok=True)
     (agentstack / "env.sh").write_text(f"export AGENTSTACK_PROJECT_KEY='{tmp_path}'\n")
     env = {
-        "PATH": os.environ["PATH"],
+        "PATH": f"{agent_cli_stub()}{os.pathsep}{os.environ['PATH']}",
         "HOME": str(home),
         "AGENTSTACK_HOME": str(agentstack),
         "ORRERY_DASHBOARD_URL": dash_url,

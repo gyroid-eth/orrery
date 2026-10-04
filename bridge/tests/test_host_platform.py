@@ -32,6 +32,11 @@ def _host(monkeypatch, kind, *, which=None, files=(), distro="Ubuntu"):
     kernel = WSL_KERNEL if kind == "wsl" else PLAIN_KERNEL
     monkeypatch.setattr(ob, "_sys_platform", lambda: platform)
     monkeypatch.setattr(ob, "_proc_version", lambda: kernel)
+    # wsl_interop_problem() reads the real binfmt_misc. On macOS it cannot,
+    # but on a Linux CI runner it can and finds no WSLInterop entry, so a
+    # pretended WSL looked like one with interop off. "Cannot tell" is the
+    # neutral answer; test_reveal_wsl.py covers the interop check itself.
+    monkeypatch.setattr(ob, "BINFMT_DIR", "/nonexistent/binfmt_misc")
     if distro:
         monkeypatch.setenv("WSL_DISTRO_NAME", distro)
     else:

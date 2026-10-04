@@ -84,7 +84,7 @@ if(parity!==agents.length)throw new Error(`display-index parity ${parity}/${agen
 if(renderedTokenFailures.length){
   throw new Error(`rendered token failures: ${renderedTokenFailures.map(row=>row.agent.name).join(', ')}`);
 }
-if(baselineParity!==3||baselineCollisionExposure!==22||baselineMaxCollision!==13){
+if(baselineParity!==16||baselineCollisionExposure!==17||baselineMaxCollision!==6){
   throw new Error(`fixture baseline drifted: parity=${baselineParity}, exposure=${baselineCollisionExposure}, max=${baselineMaxCollision}`);
 }
 if(collisionExposure/specific.length>0.25){

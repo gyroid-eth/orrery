@@ -146,7 +146,7 @@ def _run_browser_fixture(fixture: Path, chrome: str | None = None) -> dict[str, 
     cdp_port = _free_port()
     profile = tempfile.mkdtemp(prefix="orrery-theme-cdp-")
     process = subprocess.Popen(
-        [executable, "--headless=new", "--no-sandbox", "--single-process", "--disable-gpu",
+        [executable, "--headless=new", "--use-mock-keychain", "--password-store=basic", "--no-sandbox", "--single-process", "--disable-gpu",
          f"--remote-debugging-port={cdp_port}", "--window-size=1600,1000",
          f"--user-data-dir={profile}", "about:blank"],
         stdout=subprocess.DEVNULL,

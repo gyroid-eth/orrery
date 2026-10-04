@@ -40,6 +40,9 @@ FRAME_HTML = (b"<!doctype html><html><body><p id=raw>/Users/mira/private.txt on 
               b"<img src='/slow.png'></body></html>")
 
 
+CHROME_START_SECONDS = 90
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(BRIDGE), **kwargs)
@@ -85,18 +88,30 @@ def browser(identity_mode="ok"):
     threading.Thread(target=server.serve_forever, daemon=True).start()
     port = cdp._free_port()
     profile = tempfile.mkdtemp(prefix="orrery-demo-cdp-")
+    chrome_log = open(Path(profile) / "chrome.log", "w+")
     process = subprocess.Popen(
-        [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", f"--remote-debugging-port={port}",
+        [CHROME, "--headless=new", "--use-mock-keychain", "--password-store=basic", "--no-sandbox", "--disable-gpu", f"--remote-debugging-port={port}",
          "--window-size=1400,900", f"--user-data-dir={profile}", "about:blank"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        stdout=chrome_log, stderr=subprocess.STDOUT)
     try:
-        tabs = None
-        for _ in range(100):
-            with contextlib.suppress(OSError):
-                tabs = json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/json"))
+        page = None
+        # A deadline, not a poll count: the first Chromium start on a fresh CI
+        # runner (no font or profile caches yet) took longer than 300 polls,
+        # while every later start in the same run came up at once.
+        started = time.monotonic()
+        while time.monotonic() - started < CHROME_START_SECONDS:
+            with contextlib.suppress(OSError, ValueError):
+                tabs = json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=2))
+                page = next((tab for tab in tabs if tab["type"] == "page"), None)
+                if page:
+                    break
+            if process.poll() is not None:
                 break
             time.sleep(.1)
-        page = next(tab for tab in tabs if tab["type"] == "page")
+        if page is None:
+            chrome_log.seek(0)
+            raise RuntimeError(f"Chromium gave no page over CDP after {time.monotonic() - started:.1f}s "
+                               f"(exit {process.poll()}):\n" + chrome_log.read()[-3000:])
         client = cdp._WebSocket(page["webSocketDebuggerUrl"])
         client.call("Page.enable")
         client.call("Runtime.enable")
@@ -122,6 +137,7 @@ def browser(identity_mode="ok"):
             process.kill()
         server.shutdown()
         server.server_close()
+        chrome_log.close()
         shutil.rmtree(profile, ignore_errors=True)
 
 
@@ -243,7 +259,10 @@ def test_literal_stars_written_over_a_masked_name_copy_as_stars():
         start_pane(js)
         write(js, "/Users/mira/x\r\n")
         write(js, "\x1b[1;1H\x1b[2K/Users/****/x\r\n")
-        assert drawn(js)[0] == "/Users/****/x"
+        # xterm draws on an animation frame; a busy CI runner had not drawn
+        # the row yet 0.15s after the write (CI run 37169738585).
+        first_row = "[...demoPane.host.querySelector('.xterm-rows').children][0].textContent.replace(/\\s+$/,'')"
+        assert wait(js, f"{first_row}==='/Users/****/x'"), drawn(js)[:2]
         assert copy_rows(js, 0, 0) == "/Users/****/x"
 
 

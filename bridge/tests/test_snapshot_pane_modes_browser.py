@@ -83,7 +83,7 @@ def js():
     port = cdp._free_port()
     profile = tempfile.mkdtemp(prefix="orrery-modes-cdp-")
     process = subprocess.Popen(
-        [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu",
+        [CHROME, "--headless=new", "--use-mock-keychain", "--password-store=basic", "--no-sandbox", "--disable-gpu",
          f"--remote-debugging-port={port}", "--window-size=1400,900",
          f"--user-data-dir={profile}", "about:blank"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
