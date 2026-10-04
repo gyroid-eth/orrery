@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that both documentation indexes cover every Markdown article."""
+"""Check index coverage and one-to-one Japanese/English documentation pairs."""
 from __future__ import annotations
 
 import argparse
@@ -11,10 +11,18 @@ from urllib.parse import unquote, urlsplit
 def check(root: Path) -> list[str]:
     root = root.resolve()
     docs = root / "docs"
+    errors: list[str] = []
+    # Every top-level Markdown file, including the index, needs the same
+    # filename in docs/en/. There are no intentional single-language files.
+    japanese = {p.name for p in docs.glob("*.md") if p.is_file()}
+    english = {p.name for p in (docs / "en").glob("*.md") if p.is_file()}
+    for name in sorted(japanese - english):
+        errors.append(f"missing English counterpart: docs/en/{name} (Japanese: docs/{name})")
+    for name in sorted(english - japanese):
+        errors.append(f"missing Japanese counterpart: docs/{name} (English: docs/en/{name})")
     indexes = [docs / "README.md", docs / "en/README.md"] if (docs / "en").is_dir() else [docs / "README.md", docs / "README.en.md"]
     articles = {p.resolve() for p in docs.rglob("*.md")} - {p.resolve() for p in indexes}
     linked: set[Path] = set()
-    errors: list[str] = []
     for index in indexes:
         if not index.is_file():
             errors.append(f"missing index: {index.relative_to(root)}")
@@ -46,7 +54,8 @@ def main() -> int:
     docs = root / "docs"
     articles = sum(1 for p in docs.rglob("*.md")) - 2
     assets = sum(1 for p in docs.rglob("*") if p.is_file() and p.suffix.lower() in {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"})
-    print(f"OK: {articles} Markdown articles indexed; {assets} accompanying image/GIF assets")
+    pairs = sum(1 for p in docs.glob("*.md") if p.is_file())
+    print(f"OK: {articles} Markdown articles indexed; {assets} accompanying image/GIF assets; {pairs} Japanese/English file pairs")
     return 0
 
 

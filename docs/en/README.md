@@ -13,7 +13,7 @@ Start with **Your first flight → help map → Full tour** on screen, from cock
 ## Use the screen
 
 - [Usage](usage.md) — Start with in-app guides and help map; look up detailed controls as needed.
-- [Full tour](../FULL_TOUR.md) — Sixteen real interactions, completion checks, the game, progress, and pop-out window.
+- [Full tour](FULL_TOUR.md) — Sixteen real interactions, completion checks, the game, progress, and pop-out window.
 
 ## Install and update
 
@@ -37,4 +37,4 @@ Start with **Your first flight → help map → Full tour** on screen, from cock
 - [Roster findability design (discussion draft)](DESIGN_roster_findability.md) — Historical measurements and proposals, distinct from current operating instructions.
 - [Development entry](../../app/README.md) — Start the desktop app in development mode and check its show/hide hotkey.
 
-Documents without a translation are labelled with their original language. Images/GIFs accompany their articles. From the repository root, run `python3 scripts/check_docs_index.py` to check index coverage.
+Each `docs/*.md` file has an English counterpart with the same filename in `docs/en/*.md`. Images/GIFs accompany their articles. From the repository root, run `python3 scripts/check_docs_index.py` to check index coverage and Japanese/English pairs.
