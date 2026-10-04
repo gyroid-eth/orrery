@@ -674,19 +674,28 @@ def test_dom_the_panel_folds_out_of_the_way_of_a_control_under_it(tour_browser):
     assert evaluate("OrreryTour.firstFlight.dodging") is False
 
 
-def test_dom_a_folded_band_dragged_clear_opens_again(tour_browser):
-    # Review of #29: dragged to a free spot, the band stayed folded because
-    # the check kept the panel's old place.
+@pytest.mark.parametrize('spot,opens', [((69, 160), True), (None, True), ((1300, 800), False)],
+                         ids=['left', 'top', 'bottom-right'])
+def test_dom_a_folded_band_dragged_is_judged_where_it_would_open(tour_browser, spot, opens):
+    # Review of #29: dragged clear, the band stayed folded because the check
+    # kept the panel's old place, then its docked height. 'top' keeps the
+    # docked x at the top edge; bottom-right still lies over Agent Mail.
     _, evaluate = tour_browser
     evaluate("(()=>{const f=OrreryTour.firstFlight;f.reset();f.show();f.state.goTo('mail');f.show();})()")
     assert _wait_dodge(evaluate, 'OrreryTour.firstFlight', True)
+    left, top = spot or (evaluate("OrreryTour.firstFlight.el.getBoundingClientRect().left"), 0)
     # Where a drag leaves it: the saved spot, applied as the drag does.
-    evaluate("""(()=>{localStorage.setItem('oc-first-flight-v1-pos',JSON.stringify({left:69,top:160}));
-      OrreryTour.firstFlight.render();})()""")
+    evaluate("""(()=>{localStorage.setItem('oc-first-flight-v1-pos',JSON.stringify({left:%s,top:%s}));
+      OrreryTour.firstFlight.render();})()""" % (json.dumps(left), json.dumps(top)))
     placed = evaluate("OrreryTour.firstFlight.el.classList.contains('placed')")
-    reopened = _wait_dodge(evaluate, 'OrreryTour.firstFlight', False)
+    if opens:
+        settled = _wait_dodge(evaluate, 'OrreryTour.firstFlight', False)
+    else:
+        import time
+        time.sleep(1.5)
+        settled = evaluate("OrreryTour.firstFlight.dodging") is True
     evaluate("localStorage.removeItem('oc-first-flight-v1-pos');OrreryTour.firstFlight.render()")
-    assert placed and reopened
+    assert placed and settled
 
 
 def test_dom_the_panel_folds_for_a_marked_control_and_a_reported_drawer(tour_browser):

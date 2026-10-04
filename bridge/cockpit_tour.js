@@ -321,7 +321,7 @@ function mountChecklist(definition){
   // data-tour-keep-visible, or a drawer the embedded Telemetry reports), and
   // opens again once nothing is under it. Not saved, and the ring stays.
   // Opening the band by hand wins until the cover ends.
-  let dodging=false,dodgeOverride=false,panelBox=null,panelSize=null,cover=[];
+  let dodging=false,dodgeOverride=false,panelBox=null,measuredSpot=null,cover=[];
   const meets=(a,b)=>a.l<b.r&&a.r>b.l&&a.t<b.b&&a.b>b.t;
   function needsRoom(box){
     const rects=[...cover];
@@ -338,19 +338,30 @@ function mountChecklist(definition){
     }
     return rects.some(r=>meets(r,box));
   }
+  // The rect the panel has open: itself when open; when folded, opened unseen
+  // within this frame (nothing is painted) by the same place() that opening
+  // uses, so a placed panel's own height limit is included.
+  function openRect(){
+    if(!el.classList.contains('folded')){
+      const b=el.getBoundingClientRect();
+      return b.width&&b.height?{l:b.left,t:b.top,r:b.right,b:b.bottom}:panelBox;
+    }
+    el.style.visibility='hidden';el.classList.remove('folded');place();
+    const b=el.getBoundingClientRect();
+    el.classList.add('folded');place();el.style.visibility='';
+    return b.width&&b.height?{l:b.left,t:b.top,r:b.right,b:b.bottom}:panelBox;
+  }
   function checkDodge(){
     if(solo||destroyed||el.hidden||state.folded){
       if(dodging||dodgeOverride){dodging=false;dodgeOverride=false;render();}
       return;
     }
-    if(!dodging){
-      const b=el.getBoundingClientRect();
-      if(b.width&&b.height){panelBox={l:b.left,t:b.top,r:b.right,b:b.bottom};panelSize={w:b.width,h:b.height};}
-    }else if(panelSize&&el.classList.contains('placed')){
-      // The band was dragged: judge where the panel would open from there.
-      const b=el.getBoundingClientRect(),W=root.innerWidth,H=root.innerHeight;
-      const l=Math.max(0,Math.min(W-panelSize.w,b.left)),t=Math.max(0,Math.min(H-Math.min(panelSize.h,H),b.top));
-      panelBox={l,t,r:l+panelSize.w,b:Math.min(H,t+panelSize.h)};
+    // Docked, the panel opens where it was; placed by hand (the band dragged),
+    // judge it where it would open now.
+    if(!dodging){panelBox=openRect();measuredSpot=null;}
+    else if(el.classList.contains('placed')){
+      const band=el.getBoundingClientRect(),spot=band.left+','+band.top;
+      if(spot!==measuredSpot){measuredSpot=spot;panelBox=openRect();}
     }
     if(!panelBox)return;
     const covered=needsRoom(panelBox);
