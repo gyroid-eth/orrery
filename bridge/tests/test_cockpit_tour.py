@@ -56,6 +56,45 @@ def test_storage_denial_and_corrupt_or_unknown_values():
     """) == {'corrupt': True, 'closed': ['talk'], 'blocked': ['choose']}
 
 
+def test_choosing_a_step_makes_it_current_without_completing_it():
+    assert state("""
+      let s=tour.createState(storage);const log=[];const now=()=>s.current&&s.current.id;
+      log.push(s.goTo('mail'),now(),[...s.done]);
+      log.push(s.mark('mail'),now());
+      log.push(s.goTo('choose'),now());
+      s=tour.createState(storage);log.push(now());
+      log.push(s.goTo('mail'),s.goTo('choose'),s.goTo('nowhere'));
+      log.push(s.goTo('start'),now());
+      s.reset();log.push(now(),JSON.parse(value).focus);
+      console.log(JSON.stringify(log));
+    """) == [True, 'mail', [],               # ahead: current, still not done
+             True, 'telemetry',              # done: on to the next open step after it
+             True, 'choose',                 # back to a skipped step
+             'choose',                       # remembered
+             False, False, False,            # a done step, the current one, an unknown one
+             True, 'start',                  # the first open step clears the choice
+             'start', None]                  # restart forgets it
+
+
+def test_marking_another_step_keeps_the_chosen_one_and_the_last_step_ends_the_tour():
+    assert state("""
+      const s=tour.createState(storage);s.goTo('settings');s.mark('start');
+      const kept=s.current.id;s.mark('settings');const after=s.current.id;
+      tour.STEPS.forEach(step=>s.mark(step.id));
+      console.log(JSON.stringify({kept,after,end:s.current}));
+    """) == {'kept': 'settings', 'after': 'choose', 'end': None}
+
+
+def test_a_saved_choice_that_is_done_or_unknown_is_dropped():
+    assert state("""
+      value=JSON.stringify({seen:true,open:true,done:['mail'],focus:'mail'});
+      const a=tour.createState(storage).current.id;
+      value=JSON.stringify({seen:true,open:true,done:[],focus:'injected'});
+      const b=tour.createState(storage).current.id;
+      console.log(JSON.stringify({a,b}));
+    """) == {'a': 'start', 'b': 'start'}
+
+
 def test_help_map_toggle_does_not_reset_or_dismiss_checklist():
     assert state("""
       const s=tour.createState(storage);s.mark('start');s.toggleMap();const shown=s.map;
@@ -73,7 +112,7 @@ def test_any_tour_keeps_its_own_steps_key_and_fold():
       console.log(JSON.stringify({closed,open:again.open,folded:again.folded,done:[...again.done],current:again.current.id,
         saved:Object.keys(JSON.parse(value))}));
     """) == {'closed': True, 'open': True, 'folded': True, 'done': ['a'], 'current': 'b',
-             'saved': ['seen', 'open', 'folded', 'done']}
+             'saved': ['seen', 'open', 'folded', 'done', 'focus']}
 
 
 def prompt(connected=True, pane=True, text='Hello', guarded=False):
@@ -374,6 +413,30 @@ def test_dom_checklist_folds_to_a_band_that_follows_progress(tour_browser):
     })()""")
     assert result == {'folded': True, 'panel': 'none', 'text': 'Choose your agent' + 'now' + '1 / 7', 'height': 44,
                       'next': 'Talk to it', 'unfolded': True, 'saved': False}
+
+
+def test_dom_a_step_is_chosen_by_click_or_key_and_only_actions_complete_it(tour_browser):
+    _, evaluate = tour_browser
+    result = evaluate("""(()=>{
+      const flight=OrreryTour.firstFlight,el=flight.el;flight.reset();
+      const line=id=>el.querySelector('li[data-step="'+id+'"] .flight-line');
+      const current=()=>el.querySelector('li[aria-current="step"]').dataset.step;
+      line('mail').click();
+      const clicked={current:current(),done:OrreryTour.state.done.size,
+        targeted:document.querySelector('#mail').classList.contains('flight-target'),
+        band:el.querySelector('.flight-band .flight-item').textContent};
+      line('choose').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+      const keyed=current();
+      document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}));
+      const doneLine=line('start');
+      return {clicked,keyed,doneTab:doneLine.tabIndex,doneDisabled:doneLine.getAttribute('aria-disabled'),
+        openTab:line('talk').tabIndex,openLabel:line('talk').getAttribute('aria-label'),
+        currentDisabled:line('choose').getAttribute('aria-disabled')};
+    })()""")
+    assert result == {
+        'clicked': {'current': 'mail', 'done': 0, 'targeted': True, 'band': 'Read Agent Mail'},
+        'keyed': 'choose', 'doneTab': -1, 'doneDisabled': 'true',
+        'openTab': 0, 'openLabel': 'Go to step: Talk to it', 'currentDisabled': 'true'}
 
 
 def test_dom_tour_actions_are_scoped_to_their_tour(tour_browser):
