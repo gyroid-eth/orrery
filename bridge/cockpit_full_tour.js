@@ -184,6 +184,8 @@ function mount(){
     const f=frameEl.getBoundingClientRect();
     tour.setCover((Array.isArray(data.rects)?data.rects:[]).map(a=>a&&({l:a.l+f.left,t:a.t+f.top,r:a.r+f.left,b:a.b+f.top})));
   });
+  // A reloaded page has nothing open until it says otherwise.
+  doc.getElementById('networkFrame')?.addEventListener('load',()=>tour.setCover([]));
   new MutationObserver(()=>{if(!doc.getElementById('networkOverlay')?.classList.contains('on'))tour.setCover([]);})
     .observe(doc.getElementById('networkOverlay')||doc.body,{attributes:true,attributeFilter:['class']});
   root.addEventListener('message',event=>{
