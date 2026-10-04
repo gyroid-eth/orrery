@@ -720,3 +720,51 @@ def test_cockpit_pull_failure_after_preflight_is_classified_without_reset(stack,
             assert (stack.cockpit / "VERSION").read_text() == "unsaved work\n"
         else:
             assert checkout_contents(stack.cockpit) == old_cockpit
+
+
+@pytest.mark.parametrize("name", ["telemetry", "cockpit"])
+@pytest.mark.parametrize("failure", ["rewrite", "local-ahead", "no-upstream"])
+def test_all_displayed_git_advice_preserves_literal_shell_arguments(stack, name, failure):
+    # Exercise Bash itself: shlex parsing alone cannot detect command substitution
+    # inside double quotes or Bash's ANSI-C quoting for a newline in the path.
+    renamed = stack.tmp / (name + " space'\"$(example)`example`\\newline\nend")
+    getattr(stack, name).rename(renamed)
+    setattr(stack, name, renamed)
+    stack.env["FAKE_COCKPIT"] = str(stack.cockpit)
+    (stack.agentstack / "install-state.json").write_text(json.dumps({"repo_root": str(stack.telemetry)}))
+    if failure == "rewrite":
+        seed = stack.tmp / f"{name}-seed"
+        git(seed, "commit", "-q", "--amend", "-m", "rewritten metadata")
+        git(seed, "push", "-q", "--force", "origin", "HEAD:master")
+    elif failure == "local-ahead":
+        add_local(renamed, "local.txt")
+        git(renamed, "add", "local.txt")
+        git(renamed, "commit", "-q", "-m", "local work")
+    else:
+        git(renamed, "switch", "-q", "-c", "local-only")
+    before = [checkout_contents(getattr(stack, n)) for n in ("telemetry", "cockpit")]
+    result = stack.update()
+    assert result.returncode == 1
+    commands = []
+    for line in result.stdout.splitlines():
+        if "Look at them with: " in line:
+            commands.append(line.split("Look at them with: ", 1)[1])
+        elif line.strip().startswith("git -C "):
+            commands.append(line.strip())
+    expected = [["-C", str(renamed), "switch", "master"]] if failure == "no-upstream" else [
+        ["-C", str(renamed), "log", "@{u}..HEAD"]]
+    if failure == "rewrite" and name == "cockpit":
+        expected = [["-C", str(renamed), "fetch", "origin", "master"],
+                    ["-C", str(renamed), "reset", "--hard", "origin/master"]] + expected
+    assert len(commands) == len(expected)
+    marker = stack.tmp / "substitution-marker"
+    # Stub git to record argv only: especially, never execute the displayed reset.
+    prelude = 'example() { printf evaluated > "$SUBSTITUTION_MARKER"; }; '
+    prelude += "git() { printf '%s\\0' \"$@\"; }; "
+    for command, argv in zip(commands, expected):
+        probe = subprocess.run([BASH, "-c", prelude + command], capture_output=True,
+                               env={**stack.env, "SUBSTITUTION_MARKER": str(marker)}, check=True)
+        assert not marker.exists(), command
+        assert probe.stdout.decode().split("\0")[:-1] == argv
+    assert [checkout_contents(getattr(stack, n)) for n in ("telemetry", "cockpit")] == before
+    assert stack.calls() == []

@@ -165,9 +165,12 @@ cockpit_non_ff_help() { # $1 = checkout
   printf '        git -C %s reset --hard origin/master\n' "$quoted_cockpit"
 }
 check_upstream() { # $1 = label, $2 = checkout
-  git -C "$2" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1 \
-    || fail "$1 (${2}) is on a branch with nothing to pull from; nothing was updated." \
-      "Switch it back to the branch you cloned (e.g. git -C \"$2\" switch master), then run this again."
+  if ! git -C "$2" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+    printf -v quoted_checkout '%q' "$2"
+    fail "$1 (${2}) is on a branch with nothing to pull from; nothing was updated." \
+      "Switch it back to the branch you cloned, then run this again. For master:" \
+      "git -C $quoted_checkout switch master"
+  fi
 }
 check_clean orrery-telemetry "$telemetry_root"
 check_clean cockpit "$COCKPIT_ROOT"
@@ -201,8 +204,9 @@ fetch() { # $1 = label, $2 = checkout
   git -C "$2" merge-base --is-ancestor HEAD '@{u}' || ancestry=$?
   if [ "$ancestry" = 1 ]; then
     [ "$1" != cockpit ] || cockpit_non_ff_help "$2"
+    printf -v quoted_checkout '%q' "$2"
     fail "$1 (${2}) cannot be fast-forwarded; nothing was updated." \
-      "Look at them with: git -C \"$2\" log @{u}..HEAD"
+      "Look at them with: git -C $quoted_checkout log @{u}..HEAD"
   elif [ "$ancestry" != 0 ]; then
     fail "could not compare $1 (${2}) with its remote; nothing was updated."
   fi
