@@ -316,12 +316,48 @@ function mountChecklist(definition){
     el.style.left=Math.max(0,Math.min(root.innerWidth-w,pos.left))+'px';
     el.style.top=Math.max(0,Math.min(root.innerHeight-Math.min(h,root.innerHeight),pos.top))+'px';
   }
+  // Dodging: the panel folds to its band on its own while it would hide what
+  // the step needs (its control under the panel, a control the page marks
+  // data-tour-keep-visible, or a drawer the embedded Telemetry reports), and
+  // opens again once nothing is under it. Not saved, and the ring stays.
+  // Opening the band by hand wins until the cover ends.
+  let dodging=false,dodgeOverride=false,panelBox=null,cover=[];
+  const meets=(a,b)=>a.l<b.r&&a.r>b.l&&a.t<b.b&&a.b>b.t;
+  function needsRoom(box){
+    const rects=[...cover];
+    for(const node of doc.querySelectorAll('[data-tour-keep-visible]')){
+      const b=node.getBoundingClientRect();
+      if(b.width>0&&b.height>0)rects.push({l:b.left,t:b.top,r:b.right,b:b.bottom});
+    }
+    const target=highlight&&highlight.isConnected?highlight.getBoundingClientRect():null;
+    if(target&&target.width>0&&target.height>0){
+      // Only a control mostly under the panel: one beside it, or a target that
+      // fills the window (the Telemetry overlay), is not hidden by it.
+      const cx=(target.left+target.right)/2,cy=(target.top+target.bottom)/2;
+      if(cx>=box.l&&cx<=box.r&&cy>=box.t&&cy<=box.b)rects.push({l:target.left,t:target.top,r:target.right,b:target.bottom});
+    }
+    return rects.some(r=>meets(r,box));
+  }
+  function checkDodge(){
+    if(solo||destroyed||el.hidden||state.folded){
+      if(dodging||dodgeOverride){dodging=false;dodgeOverride=false;render();}
+      return;
+    }
+    if(!dodging){const b=el.getBoundingClientRect();if(b.width&&b.height)panelBox={l:b.left,t:b.top,r:b.right,b:b.bottom};}
+    if(!panelBox)return;
+    const covered=needsRoom(panelBox);
+    if(!covered)dodgeOverride=false;
+    const next=covered&&!dodgeOverride;
+    if(next!==dodging){dodging=next;render();}
+  }
+  const dodgeTimer=solo?0:setInterval(checkDodge,500);
   let destroyed=false;
   function render(){
     if(destroyed)return;
     const done=state.done,current=state.current,count=done.size+' / '+steps.length;
     el.hidden=!solo&&(!state.open||suspended||popped);
-    el.classList.toggle('folded',state.folded&&!solo);
+    el.classList.toggle('folded',(state.folded||dodging)&&!solo);
+    el.classList.toggle('dodging',dodging&&!solo);
     el.querySelector('.flight-popout').hidden=solo||!canPopOut();
     el.querySelectorAll('.flight-count').forEach(node=>{node.textContent=count;});
     el.querySelector('.flight-status').textContent=current?done.size+' of '+steps.length+' done. Next: '+current.title+'.':'All '+steps.length+' done.';
@@ -448,7 +484,11 @@ function mountChecklist(definition){
     handle.addEventListener('pointerdown',startDrag);handle.addEventListener('pointermove',moveDrag);
     handle.addEventListener('pointerup',endDrag);handle.addEventListener('pointercancel',endDrag);
   });
-  band.addEventListener('click',()=>{if(band.dataset.dragged)return;state.unfold();changed();el.querySelector('.flight-fold').focus();});
+  band.addEventListener('click',()=>{
+    if(band.dataset.dragged)return;
+    if(dodging){dodging=false;dodgeOverride=true;render();el.querySelector('.flight-fold').focus();return;}
+    state.unfold();changed();el.querySelector('.flight-fold').focus();
+  });
   el.querySelector('.flight-fold').addEventListener('click',()=>{state.fold();changed();band.focus();});
   el.querySelector('.flight-close').addEventListener('click',()=>{
     if(solo){const invoke=appInvoke();if(invoke)Promise.resolve().then(()=>invoke('close_tour_window',{tour:id})).catch(()=>root.close());else root.close();return;}
@@ -478,7 +518,7 @@ function mountChecklist(definition){
   root.addEventListener('resize',()=>{if(!el.hidden)place();});
   doc.body.append(el);
   const controller={el,state,render,show,popOut,fromStore:!!definition.fromStore,
-    destroy(){destroyed=true;clearInterval(ringTimer);el.remove();ring.remove();here.remove();if(checklists.get(id)===controller)checklists.delete(id);},
+    destroy(){destroyed=true;clearInterval(ringTimer);clearInterval(dodgeTimer);el.remove();ring.remove();here.remove();if(checklists.get(id)===controller)checklists.delete(id);},
     fold(){state.fold();changed();},unfold(){state.unfold();changed();},
     close(){state.close();changed();},reset(){state.reset();changed();},
     mark(stepId){if(state.mark(stepId)){changed();return true;}return false;},
@@ -486,6 +526,12 @@ function mountChecklist(definition){
     suspend(flag){suspended=!!flag;render();},
     // Called after every repaint (progress, fold, window); read controller.state.current.
     onChange(fn){listeners.push(fn);},
+    // Rects (page coordinates) the embedded page needs to keep in view.
+    setCover(rects){
+      cover=(Array.isArray(rects)?rects:[]).filter(a=>a&&[a.l,a.t,a.r,a.b].every(Number.isFinite));
+      checkDodge();
+    },
+    get dodging(){return dodging;},
     get solo(){return solo;},
   };
   checklists.set(id,controller);

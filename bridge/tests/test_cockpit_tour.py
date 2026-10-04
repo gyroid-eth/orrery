@@ -642,6 +642,56 @@ def test_dom_the_shiritori_step_rings_where_the_prompt_is_sent(tour_browser):
     assert (state['ring'], state['target'], state['around']) == (True, 'promptInput', True)
 
 
+def _wait_dodge(evaluate, tour, want, seconds=3):
+    import time
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if evaluate(f"{tour}.dodging") is want:
+            return True
+        time.sleep(.1)
+    return False
+
+
+def test_dom_the_panel_folds_out_of_the_way_of_a_control_under_it(tour_browser):
+    # First flight's Agent Mail lies under the panel: it folds to its band, the
+    # ring stays on Agent Mail, and nothing is saved as folded.
+    _, evaluate = tour_browser
+    evaluate("(()=>{const f=OrreryTour.firstFlight;f.reset();f.show();f.state.goTo('mail');f.show();})()")
+    assert _wait_dodge(evaluate, 'OrreryTour.firstFlight', True)
+    state = evaluate("""(()=>{const f=OrreryTour.firstFlight,ring=document.querySelector('.flight-ring:not([hidden])');
+      return {folded:f.el.classList.contains('folded'),saved:f.state.folded,ring:!!ring,
+        target:document.querySelector('.flight-target')?.id};})()""")
+    assert state == {'folded': True, 'saved': False, 'ring': True, 'target': 'mail'}
+    # Opening the band by hand wins until the cover ends.
+    evaluate("OrreryTour.firstFlight.el.querySelector('.flight-band').click()")
+    assert _wait_dodge(evaluate, 'OrreryTour.firstFlight', False)
+    import time
+    time.sleep(1)
+    assert evaluate("OrreryTour.firstFlight.el.classList.contains('folded')") is False
+    # Another step: the panel stays open.
+    evaluate("(()=>{const f=OrreryTour.firstFlight;f.state.goTo('talk');f.show();})()")
+    time.sleep(1)
+    assert evaluate("OrreryTour.firstFlight.dodging") is False
+
+
+def test_dom_the_panel_folds_for_a_marked_control_and_a_reported_drawer(tour_browser):
+    _, evaluate = tour_browser
+    evaluate("""(()=>{OrreryTour.firstFlight.el.querySelector('.flight-close').click();
+      const t=OrreryFullTour.checklist;t.state.reset();t.show();t.state.goTo('full-planetarium');t.show();
+      const b=t.el.getBoundingClientRect(),d=document.createElement('button');d.id='qa-keep';d.dataset.tourKeepVisible='';
+      Object.assign(d.style,{position:'fixed',left:(b.left+20)+'px',top:(b.top+20)+'px',width:'30px',height:'30px'});
+      document.body.appendChild(d);})()""")
+    assert _wait_dodge(evaluate, 'OrreryFullTour.checklist', True)
+    evaluate("document.getElementById('qa-keep').remove()")
+    assert _wait_dodge(evaluate, 'OrreryFullTour.checklist', False)
+    # A drawer the embedded Telemetry reports (page coordinates here).
+    evaluate("""(()=>{const t=OrreryFullTour.checklist,b=t.el.getBoundingClientRect();
+      t.setCover([{l:b.left-100,t:b.top+40,r:b.right,b:b.bottom}]);})()""")
+    assert evaluate("OrreryFullTour.checklist.dodging") is True
+    evaluate("OrreryFullTour.checklist.setCover([])")
+    assert evaluate("OrreryFullTour.checklist.dodging") is False
+
+
 def test_dom_a_target_that_fills_the_window_gets_no_ring(tour_browser):
     # The Telemetry steps point at the whole overlay: nothing to ring.
     _, evaluate = tour_browser
