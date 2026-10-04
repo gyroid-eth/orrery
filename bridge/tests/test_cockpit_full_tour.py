@@ -144,6 +144,32 @@ def test_dom_telemetry_notifications_require_owned_frame_and_current_step(tour_b
                       'noSkip': 'full-edge', 'done': 10}
 
 
+def test_dom_telemetry_steps_tell_the_embedded_page_which_control_to_ring(tour_browser):
+    """The cockpit cannot ring a control inside the embedded Telemetry; it
+    sends the step (orrery-telemetry dashboard/tour_cue.js draws the ring),
+    only while a Telemetry step is current and the overlay is open."""
+    _, evaluate = tour_browser
+    result = evaluate("""(()=>{
+      const full=OrreryFullTour.checklist;document.getElementById('fullTourBtn').click();
+      full.state.reset();full.show();full.state.goTo('full-exit');full.show();
+      openNetwork({focus:''});
+      const sent=[],frame=document.getElementById('networkFrame').contentWindow;
+      frame.postMessage=(message,origin)=>sent.push({...message,origin});
+      OrreryFullTour.sendCue(true);
+      full.state.goTo('full-telemetry');full.show();
+      full.state.goTo('full-edge');full.show();
+      // Closing is seen by a MutationObserver; ask for the same check now.
+      closeNetwork();OrreryFullTour.sendCue();
+      // The page also gets its other messages (net-pause, the theme); keep the cue.
+      return sent.filter(m=>m&&m.type==='orrery-tour-cue').map(m=>({type:m.type,version:m.version,step:m.step,origin:m.origin===location.origin,
+        avoid:m.avoid.length,avoidOk:m.avoid.every(a=>a.r>a.l&&a.b>a.t)}));
+    })()""")
+    assert [r['step'] for r in result] == ['full-exit', None, 'full-edge', None], result
+    assert all(r['type'] == 'orrery-tour-cue' and r['version'] == 1 and r['origin'] for r in result)
+    # The checklist over the page is passed on, so the tag keeps clear of it.
+    assert result[0]['avoid'] == 1 and result[0]['avoidOk'] and result[1]['avoid'] == 0
+
+
 def test_dom_return_waits_for_handoff_and_matching_terminal_focus(tour_browser):
     _, evaluate = tour_browser
     result = evaluate("""(()=>{
