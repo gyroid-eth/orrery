@@ -100,13 +100,18 @@ def random_session(prefix: str) -> str:
     return f"{prefix}-{secrets.token_hex(4)}"
 
 
+# A short base for tmux sockets (macOS's $TMPDIR is too long for a socket
+# path). /private/tmp exists only on macOS; Linux has /tmp.
+SHORT_TMP = "/private/tmp" if os.path.isdir("/private/tmp") else "/tmp"
+
+
 def qa_tmux_bin() -> str:
     """Return a tmux wrapper pinned to this process's isolated QA server."""
     global _QA_TMUX_BIN, _QA_TMUX_WRAPPER_DIR
     if _QA_TMUX_BIN is None:
         _QA_TMUX_WRAPPER_DIR = tempfile.TemporaryDirectory(
             prefix="orrery-e2e-tmux-",
-            dir="/private/tmp",
+            dir=SHORT_TMP,
         )
         wrapper = Path(_QA_TMUX_WRAPPER_DIR.name) / "tmux-qa"
         wrapper.write_text(
@@ -2078,7 +2083,7 @@ class Cycle10PersistenceContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory(
             prefix="orrery-e2e-history-",
-            dir="/private/tmp",
+            dir=SHORT_TMP,
         )
         self.history_dir = Path(self.temp_dir.name)
         self.session = random_session("orrery-qa-persist")
