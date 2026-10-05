@@ -150,4 +150,120 @@ out="$(env -i PATH="$tmp/bin7:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HO
 echo "$out" | grep -q "Could not find your Windows user folder" || fail "no interop: $out"
 [ "$before" = "$(cd "$home" && find . | sort)" ] || fail "no interop wrote something"
 
+# The work folder: the vault replaces the default one only (setup is a stub here).
+rp() { python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"; }
+cat >"$tmp/setup-stub" <<'STUB'
+#!/bin/bash
+printf '%s\n' "$*" >>"$STUB_LOG"
+# Like the real setup: a successful run has saved the new folder.
+[ "${STUB_EXIT:-0}" != 0 ] || printf 'export AGENTSTACK_PROJECT_KEY=%q\n' "$2" >"$HOME/.agentstack/env.sh"
+exit "${STUB_EXIT:-0}"
+STUB
+chmod +x "$tmp/setup-stub"
+wf_home() { # $1 = name, $2 = saved project key (empty: no env.sh); prints the HOME
+  local h="$tmp/$1"; mkdir -p "$h/.agentstack/skills/delegate"; touch "$h/.agentstack/skills/delegate/SKILL.md"
+  [ -z "$2" ] || printf "export AGENTSTACK_PROJECT_KEY=%s\n" "$2" >"$h/.agentstack/env.sh"
+  printf '%s' "$h"
+}
+wf_run() { # $1 = HOME, $2 = stub exit; rest = options
+  local h="$1" ex="$2"; shift 2
+  env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$h" STUB_LOG="$tmp/stub.log" STUB_EXIT="$ex" \
+    ORRERY_SETUP="$tmp/setup-stub" ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
+    /bin/bash "$script" "$@" 2>&1
+}
+# default work folder: the setup is run again with the vault
+home="$(wf_home h8 "$tmp/h8/orrery-work")"; : >"$tmp/stub.log"
+out="$(wf_run "$home" 0)" || fail "work folder default: $out"
+v8="$(rp "$home/Documents/orrery-demo-vault")"
+[ "$(cat "$tmp/stub.log")" = "--project-key $v8" ] || fail "setup args: $(cat "$tmp/stub.log")"
+echo "$out" | grep -q "ok    work folder           the vault" || fail "work folder state: $out"
+echo "$out" | grep -q "Agents that were already running stay on the old folder" || fail "old agents note: $out"
+echo "$out" | grep -q "NEW AGENT (it starts in the vault" || fail "next step for the vault: $out"
+# --check: the plan only
+home="$(wf_home h9 "$tmp/h9/orrery-work")"; : >"$tmp/stub.log"
+out="$(wf_run "$home" 0 --check)" || fail "work folder check: $out"
+[ ! -s "$tmp/stub.log" ] || fail "--check ran the setup"
+echo "$out" | grep -q "would make the vault the work folder" || fail "check plan for the work folder: $out"
+# a folder the user chose is kept; the line that changes it is shown
+home="$(wf_home h10 "$tmp/h10/mine")"; : >"$tmp/stub.log"
+out="$(wf_run "$home" 0)" || fail "work folder chosen: $out"
+[ ! -s "$tmp/stub.log" ] || fail "a chosen folder was changed"
+echo "$out" | grep -q "kept: $tmp/h10/mine (a folder you chose)" || fail "chosen folder note: $out"
+echo "$out" | grep -q -- "--project-key $(printf '%q' "$(rp "$home/Documents/orrery-demo-vault")")" || fail "retry line: $out"
+# already the vault: nothing to do
+home="$(wf_home h11 "")"; printf "export AGENTSTACK_PROJECT_KEY=%s\n" "$(rp "$home")/Documents/orrery-demo-vault" >"$home/.agentstack/env.sh"; : >"$tmp/stub.log"
+out="$(wf_run "$home" 0)" || fail "work folder already: $out"
+[ ! -s "$tmp/stub.log" ] || fail "the setup ran although the vault is the work folder"
+echo "$out" | grep -q "work folder           already the vault" || fail "already note: $out"
+# no saved project key (ORRERY not installed through setup): not touched
+home="$(wf_home h12 "")"; : >"$tmp/stub.log"
+out="$(wf_run "$home" 0)" || fail "work folder unknown: $out"
+[ ! -s "$tmp/stub.log" ] || fail "setup ran without a saved project key"
+echo "$out" | grep -q "work folder           not known" || fail "unknown note: $out"
+# the setup stops: reported, the rest is still done, the exit status is 1
+home="$(wf_home h13 "$tmp/h13/orrery-work")"; : >"$tmp/stub.log"
+if out="$(wf_run "$home" 1)"; then fail "a failed setup must exit 1: $out"; fi
+echo "$out" | grep -q "NG    work folder           NOT changed" || fail "failed setup note: $out"
+[ -f "$home/Documents/orrery-demo-vault/CLAUDE.md" ] || fail "the vault is still put there"
+# the setup is missing: said, with the line that does it
+home="$(wf_home h14 "$tmp/h14/orrery-work")"
+out="$(env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" \
+  ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
+  /bin/bash "$script" 2>&1)" || fail "no setup: $out"
+echo "$out" | grep -q "the ORRERY setup was not found at" || fail "no setup note: $out"
+
+# A quote in HOME: env.sh holds shell-quoted values, and the default folder is still recognised.
+home="$tmp/ap'ostrophe"; mkdir -p "$home/.agentstack/skills/delegate"; touch "$home/.agentstack/skills/delegate/SKILL.md"
+python3 -c 'import shlex, sys; print("export AGENTSTACK_PROJECT_KEY=" + shlex.quote(sys.argv[1]))' "$home/orrery-work" >"$home/.agentstack/env.sh"
+: >"$tmp/stub.log"
+out="$(wf_run "$home" 0)" || fail "apostrophe in HOME: $out"
+[ "$(cat "$tmp/stub.log")" = "--project-key $(rp "$home/Documents/orrery-demo-vault")" ] || fail "apostrophe: the default folder was not recognised: $out"
+# The printed line is safe to paste: a path with a quote and a command substitution is not executed.
+home="$(wf_home h15 "$tmp/h15/mine")"; : >"$tmp/stub.log"
+vd="$tmp/v'\$(touch $tmp/INJECTED)'x"
+out="$(wf_run "$home" 0 --vault-dir "$vd")" || fail "odd vault path: $out"
+line="$(echo "$out" | grep -o -- "--project-key .*" | head -1)"
+arg="${line#--project-key }"
+[ "$(eval "printf '%s' $arg")" = "$(rp "$vd")" ] || fail "retry line does not give back the path: $line"
+[ ! -e "$tmp/INJECTED" ] || fail "the printed line ran a command from the path"
+
+# The setup writes the new folder and then stops at a later check: said as changed (read from env.sh, not the exit status).
+cat >"$tmp/setup-stub-writes" <<'STUB'
+#!/bin/bash
+printf '%s\n' "$*" >>"$STUB_LOG"
+printf 'export AGENTSTACK_PROJECT_KEY=%q\n' "$2" >"$HOME/.agentstack/env.sh"
+exit 1
+STUB
+chmod +x "$tmp/setup-stub-writes"
+home="$(wf_home h16 "$tmp/h16/orrery-work")"; : >"$tmp/stub.log"
+if out="$(env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" STUB_LOG="$tmp/stub.log" \
+  ORRERY_SETUP="$tmp/setup-stub-writes" ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
+  /bin/bash "$script" 2>&1)"; then fail "a setup that stops late must still exit 1: $out"; fi
+echo "$out" | grep -q "is saved as the work folder, but the ORRERY setup stopped at a later check" || fail "late stop not said as changed: $out"
+! echo "$out" | grep -q "NOT changed" || fail "a changed folder was reported as not changed: $out"
+echo "$out" | grep -q "NEW AGENT (it starts in the vault" || fail "next step after a late stop: $out"
+# env.sh that cannot be loaded: unknown, even if this shell carries a default key from elsewhere.
+home="$(wf_home h17 "")"; printf 'return 1\n' >"$home/.agentstack/env.sh"; : >"$tmp/stub.log"
+out="$(env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" STUB_LOG="$tmp/stub.log" \
+  AGENTSTACK_PROJECT_KEY="$home/orrery-work" ORRERY_SETUP="$tmp/setup-stub" \
+  ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
+  /bin/bash "$script" 2>&1)" || fail "unreadable env.sh: $out"
+[ ! -s "$tmp/stub.log" ] || fail "setup ran although env.sh could not be read"
+echo "$out" | grep -q "env.sh could not be read); not changed" || fail "unreadable env.sh note: $out"
+
+# The setup leaves an env.sh that cannot be read: said as not confirmed, not as unchanged.
+cat >"$tmp/setup-stub-broken" <<'STUB'
+#!/bin/bash
+printf '%s\n' "$*" >>"$STUB_LOG"
+printf 'return 1\n' >"$HOME/.agentstack/env.sh"
+exit 1
+STUB
+chmod +x "$tmp/setup-stub-broken"
+home="$(wf_home h18 "$tmp/h18/orrery-work")"; : >"$tmp/stub.log"
+if out="$(env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" STUB_LOG="$tmp/stub.log" \
+  ORRERY_SETUP="$tmp/setup-stub-broken" ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
+  /bin/bash "$script" 2>&1)"; then fail "an unreadable env.sh after the setup must exit 1: $out"; fi
+echo "$out" | grep -q "could not confirm the saved work folder" || fail "unreadable env.sh after the setup: $out"
+! echo "$out" | grep -q "NOT changed" || fail "an unknown state was reported as not changed: $out"
+
 echo "ok: research-set"

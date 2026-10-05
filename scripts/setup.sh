@@ -172,6 +172,17 @@ env_value() { # $1 = name in orrery-telemetry's env.sh
   [ -r "$ENV_FILE" ] || return 0
   ( . "$ENV_FILE" >/dev/null 2>&1 || true; eval "printf '%s' \"\${$1:-}\"" )
 }
+# >>> roots-follow (tools/test_one_command_install.sh reads this block)
+# The protected roots (where file reservations are required) follow a new
+# project key, but only when they were never chosen apart from the old key.
+# Roots given explicitly now (a live value that is not just env.sh's own) stay
+# as given. $1 = new key, $2 = saved key, $3 = saved roots, $4 = live roots.
+# Prints the new key when the roots should follow it, nothing otherwise.
+roots_follow_key() {
+  if [ -n "$4" ] && [ "$4" != "$3" ]; then return 0; fi
+  if [ -z "$3" ] || [ "$3" = "$2" ]; then printf '%s' "$1"; fi
+}
+# <<< roots-follow
 origin_of() { git -C "$1" remote get-url origin 2>/dev/null || true; }
 is_checkout_root() { # $1 = folder
   top="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || true)"
@@ -543,9 +554,11 @@ if [ -z "$project_key" ]; then
 fi
 ok "project folder: ${project_key}"
 
-# Everything this writes must be on the Linux side in WSL.
+# Everything this installs must be on the Linux side in WSL. The project key is
+# the one exception: it is only the folder the agents work in, and a vault that
+# Windows Obsidian opens lives on the Windows drive (/mnt/c/...).
 if [ "$os" = wsl ]; then
-  for path in "$HOME" "${COCKPIT_ROOT:-$COCKPIT_PLANNED}" "$tel_root" "$project_key" "${ORRERY_VENV:-}"; do
+  for path in "$HOME" "${COCKPIT_ROOT:-$COCKPIT_PLANNED}" "$tel_root" "${ORRERY_VENV:-}"; do
     [ -n "$path" ] || continue
     if on_windows_drive "$path"; then
       stop "${path} is on the Windows drive (/mnt/...); nothing was changed." \
@@ -922,7 +935,14 @@ case "$mode" in
     ok "orrery-telemetry installed ($(cat "${AGENTSTACK_DIR}/VERSION" 2>/dev/null || printf '?'))"
     ;;
   update)
-    if [ -n "$project_key_arg" ]; then export AGENTSTACK_PROJECT_KEY="$project_key"; fi
+    if [ -n "$project_key_arg" ]; then
+      export AGENTSTACK_PROJECT_KEY="$project_key"
+      # The saved protected roots (where file reservations are required) follow
+      # the project key unless they were chosen separately: update.sh loads
+      # env.sh, so the old roots would otherwise stay on the old folder.
+      follow="$(roots_follow_key "$project_key" "$saved_key" "$(env_value AGENTSTACK_PROTECTED_ROOTS)" "${AGENTSTACK_PROTECTED_ROOTS:-}")"
+      if [ -n "$follow" ]; then export AGENTSTACK_PROTECTED_ROOTS="$follow"; fi
+    fi
     if [ "$ask_each" != true ]; then export AGENTSTACK_ASSUME_YES=1; fi
     say "  updating orrery-telemetry and the cockpit ..."
     if [ -n "$mail_env" ]; then export AGENTSTACK_MAIL_UPDATE="$mail_env"; fi
