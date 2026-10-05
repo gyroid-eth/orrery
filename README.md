@@ -210,7 +210,11 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 ```bash
 ~/.agentstack/bin/agentstack-uninstall --dry-run      # 先に確認
 ~/.agentstack/bin/agentstack-uninstall --purge-data   # Mail の DB も消す（残すなら付けない）
-# cockpit を動かしている窓で Ctrl-C（ORRERY.app は終了）
+```
+
+次に cockpit を止めます。1 行の installer が裏で起動した cockpit は、別の tmux server で動いています。installer の最後に表示された `Stop it:` の行（既定は `tmux -L orrery-cockpit kill-session -t cockpit-8791`）を実行します。自分で `start-cockpit.sh` を動かしたなら、その窓で `Ctrl-C` です。`ORRERY.app` は終了します。`http://127.0.0.1:8791/` が開かなくなったことを確かめてから、source を消します。
+
+```bash
 rm -rf ~/orrery ~/orrery-telemetry
 ```
 
