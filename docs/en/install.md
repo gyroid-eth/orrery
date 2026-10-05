@@ -30,9 +30,142 @@ The rest of this section installs step by step by hand.
 
 ## For first-time installers (browser, Mac / Windows WSL2)
 
-This section alone takes you from nothing to ORRERY cockpit installed on your own Mac or Windows (WSL2) machine and open in a browser. It does not use the desktop app (`ORRERY.app`). Even on a Mac, you open it in the browser. For building or keeping the app running, see "Requirements" and the sections after it.
+This section alone takes you from nothing to ORRERY installed on your own Mac or Windows 11 PC and the cockpit open in a browser. Each command is in its own code block, and copying and pasting them in order works. It does not use the desktop app (`ORRERY.app`). Even on a Mac, you open it in the browser. For building or keeping the app running, see "Requirements" and the sections after it.
 
-### 0. Install orrery-telemetry first
+### 0. Obsidian (when you use it)
+
+If you will use ORRERY together with Obsidian (a note-taking app), install Obsidian first. If you will not, skip to "Mac" or "Windows 11" (ORRERY works without Obsidian).
+
+- **Mac**: download the Mac version from https://obsidian.md/ and move it to Applications
+- **Windows 11**: download the Windows installer from https://obsidian.md/ and run it. Install Obsidian on the **Windows side** (not inside the WSL2 Ubuntu)
+
+### Mac
+
+Paste the commands below into Terminal (press Cmd+Space, type "Terminal"), one at a time, and press Enter after each.
+
+**1. Homebrew and tmux**
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Enter your Mac password when asked (nothing appears as you type). Press Enter when it tells you to. Apple's command line tools (including git) are installed at this point. At the end the installer prints "Next steps" with the PATH setup; the next three lines are the same thing (for an Apple silicon Mac; skip them on an Intel Mac; if the installer shows something different, follow what it shows).
+
+```bash
+echo >> ~/.zprofile
+```
+
+```bash
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+```
+
+```bash
+eval "$(/opt/homebrew/bin/brew shellenv)"
+```
+
+```bash
+brew install tmux
+```
+
+**2. ORRERY**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
+```
+
+A plan appears. Read it, type `yes`, and press Enter. It takes from tens of seconds to a few minutes, and the cockpit opens in your browser. If something is missing (git, tmux, curl), it changes nothing, stops, and shows how to install it. When it stops, run the one "how to continue" line it shows.
+
+**3. Claude Code**
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+If you see `claude: command not found`, add it to your PATH (or follow the PATH note the installer printed at the end):
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+```
+
+```bash
+source ~/.zshrc
+```
+
+```bash
+claude
+```
+
+Sign in, answer every first-run question (text style, security notes, trusting the folder, and so on), and when the input prompt appears, type `/exit`. If you close it halfway, a Claude started from NEW AGENT in the cockpit stops at the first-run screen. If you use Codex, install Codex CLI and run `codex login` (ORRERY's last screen shows how to install it).
+
+From here, `+ NEW AGENT` in the cockpit starts agents. If you use Obsidian, continue with "Using it with Obsidian".
+
+### Windows 11
+
+ORRERY runs in Ubuntu on Windows (WSL2), and its screen appears in a Windows browser. Obsidian runs on the Windows side.
+
+**1. WSL2 Ubuntu**
+
+In the Start menu, right-click "PowerShell", choose "Run as administrator", and paste:
+
+```powershell
+wsl --install
+```
+
+When it finishes, restart the PC. Open "Ubuntu" from the Start menu and choose a user name and password for Ubuntu (nothing appears as you type the password). If you already have Ubuntu, skip up to here. **From here on, type everything in the Ubuntu window** (`username@PC:~$`). Install the tools (nothing happens if they are already there):
+
+```bash
+sudo apt update && sudo apt install -y git tmux curl
+```
+
+**2. ORRERY**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
+```
+
+A plan appears. Read it, type `yes`, and press Enter. It takes from tens of seconds to a few minutes, and the cockpit URL (`http://127.0.0.1:8791/cockpit.html`) is printed. If your Windows browser does not open by itself, paste that URL into it. If something is missing, it changes nothing and stops, so run the one "how to continue" line it shows.
+
+**3. Claude Code** (install it inside Ubuntu. A Claude Code or Codex installed on the Windows side is not used)
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+If you see `claude: command not found` (or follow the PATH note the installer printed at the end):
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+```
+
+```bash
+source ~/.bashrc
+```
+
+```bash
+claude
+```
+
+Sign in (if no browser opens, paste the URL it shows into your Windows browser), answer every first-run question, and when the input prompt appears, type `/exit`. If you use Codex, install Codex CLI inside Ubuntu and run `codex login` (a `codex` from Windows' npm (`/mnt/c/...`) does not work from WSL).
+
+From here, `+ NEW AGENT` in the cockpit starts agents. If you use Obsidian, continue with "Using it with Obsidian".
+
+### Using it with Obsidian
+
+The same on Mac and Windows (on Windows, type it in the Ubuntu window). This installs the research set: digest-paper, which turns papers into reading notes, and a practice Obsidian vault. Add `--lang en` for the English vault and requests (without it, Japanese).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/research-set.sh | bash -s -- --lang en
+```
+
+At the end it shows where to open the vault in Obsidian and the requests to paste to an agent. The vault is `~/Documents/orrery-demo-vault-en` on a Mac (`orrery-demo-vault` without `--lang en`), and a folder of the same name in the Windows Documents folder on Windows (the Windows form of the location is printed at the end).
+
+In Obsidian, choose "Open folder as vault" and open the vault at the location shown. When asked about community plugins, choose "Trust author and enable plugins". That vault becomes the agents' work folder, so an agent you start from then on with `+ NEW AGENT` in the cockpit works inside the vault (agents that were already running stay on the old folder, so start new ones). See [The research set](research-set.md) for details.
+
+### Install by hand (from getting the repository)
+
+These are the steps without the one line above: you get the repository and install by hand.
+
+#### 0. Install orrery-telemetry first
 
 ORRERY cockpit reads the agent list, NEW AGENT (spawn), Mail, and usage quota from [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) (the repository is named orrery-telemetry; it was formerly called AgentStack, and the `AGENTSTACK_*` environment variables and `~/.agentstack` are remnants of that name). **Finish the orrery-telemetry [installation steps](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/install.md) all the way through before you continue.** On Windows, follow the "Install on Windows (WSL2)" section of that document and install inside the WSL2 Ubuntu.
 
@@ -50,7 +183,7 @@ You are ready when all four of these are true:
 - `curl -s http://127.0.0.1:8770/api/version` reports `"api": 2` or higher; 1 means any release from before this scheme (ideally with the same `version` as the [latest release](https://github.com/gyroid-eth/orrery-telemetry/releases/latest))
 - Claude Code's first-run setup is finished (start `claude` and go through text style, login, Security notes and trusting the folder until the normal input prompt appears, answer any other one-time question it asks, such as trying the fullscreen renderer, then `/exit`), or you are logged in to Codex CLI (`codex login`). If the setup was left halfway, a Claude agent from NEW AGENT stops on the setup screen and does not start. ORRERY never answers these questions for you. On Windows, log in to the copy **installed inside Ubuntu**. A copy installed on the Windows side is not used
 
-### What to keep the same: same machine, same user, same tmux
+#### What to keep the same: same machine, same user, same tmux
 
 The cockpit looks directly at the tmux sessions of the agents that orrery-telemetry started. So keep all of the following the same.
 
@@ -58,7 +191,7 @@ The cockpit looks directly at the tmux sessions of the agents that orrery-teleme
 - **The same user**: the user who installed orrery-telemetry (do not start the cockpit with `sudo` or as another user)
 - **The same tmux server**: start agents with `agent-start` / `agent-start-codex` or the cockpit's NEW AGENT. Do not use a different tmux server through `tmux -L name` or `TMUX_TMPDIR`
 
-### 1. Put ORRERY on your machine
+#### 1. Put ORRERY on your machine
 
 Get the repository.
 
@@ -71,7 +204,7 @@ Until the repository is made public, only a GitHub account that has been invited
 
 On Windows, type this **at the Ubuntu prompt (`user@PC:~$`)**. Put it under the Ubuntu home directory (for example `~/orrery`). Avoid placing it under `/mnt/c/...` (a Windows drive): it is slow and handles permissions differently.
 
-### 2. Run the start script
+#### 2. Run the start script
 
 Inside the repository:
 
@@ -97,7 +230,7 @@ When it works, the end of the output looks like this.
 ==============================================================
 ```
 
-### 3. Open it in the browser
+#### 3. Open it in the browser
 
 Open the printed `http://127.0.0.1:8791/cockpit.html` in your browser.
 
@@ -106,13 +239,13 @@ Open the printed `http://127.0.0.1:8791/cockpit.html` in your browser.
 
 If no agents appear in the list on the left, start one from the cockpit's NEW AGENT, or run `~/.agentstack/bin/agent-start /path/to/your-project` (`agent-start-codex` for Codex) in another window.
 
-### 4. Stop it and start it again
+#### 4. Stop it and start it again
 
 - To stop, press `Ctrl-C` in the window where the script is running. Closing that window also stops it
 - **Leave the window you started it in open.** The cockpit runs inside that window (it does not stay resident)
 - On Windows, agents, the dashboard, and Mail started from Windows Terminal keep running in the background after you close the Ubuntu windows. When you are done and want WSL to give its memory back to Windows, run `wsl --shutdown` in PowerShell. After that, or after restarting the PC, open Ubuntu and check the state with `~/.agentstack/bin/agentstack-doctor`. If something has stopped, start it with `~/.agentstack/dashboard/agentctl.sh start` and `~/.agentstack/bin/agentstack-mailctl start`, and then run `./scripts/start-cockpit.sh` again
 
-### 5. Update
+#### 5. Update
 
 Run this in the cockpit folder. It brings orrery-telemetry and the cockpit up to date in one go.
 
@@ -122,7 +255,7 @@ Run this in the cockpit folder. It brings orrery-telemetry and the cockpit up to
 
 When it is done, press `Ctrl-C` in the window running the cockpit, and run `./scripts/start-cockpit.sh` again.
 
-#### Details
+##### Details
 
 - orrery-telemetry is updated first: `git pull --ff-only` and `./scripts/install.sh` where it was installed from.
 - Then the cockpit: `git pull --ff-only`.
