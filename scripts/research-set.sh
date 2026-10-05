@@ -309,14 +309,22 @@ main() {
   vault_real="$(realpath_of "$vault_dir")"
   cur_key=""
   # env.sh holds shell-quoted values (a quote or a space in HOME), so read it by sourcing, as the setup does.
-  [ ! -f "${agentstack}/env.sh" ] || cur_key="$( ( . "${agentstack}/env.sh" >/dev/null 2>&1 || true; printf '%s' "${AGENTSTACK_PROJECT_KEY:-}" ) )"
+  # A file that fails to load counts as unknown (never the value this shell may carry from elsewhere).
+  env_readable=true
+  if [ -f "${agentstack}/env.sh" ]; then
+    if ! cur_key="$( ( unset AGENTSTACK_PROJECT_KEY; . "${agentstack}/env.sh" >/dev/null 2>&1 || exit 1; printf '%s' "${AGENTSTACK_PROJECT_KEY:-}" ) )"; then
+      cur_key=""; env_readable=false
+    fi
+  fi
   default_key="${HOME}/orrery-work"
   work_state=""
   work_failed=false
   work_is_vault=false
   # printf %q quotes a path so that it can be pasted into a shell as it is, whatever it contains.
   retry_line="curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key $(printf '%q' "$vault_real")"
-  if [ -z "$cur_key" ]; then
+  if [ "$env_readable" = false ]; then
+    work_state="not known (${agentstack}/env.sh could not be read); not changed"
+  elif [ -z "$cur_key" ]; then
     work_state="not known (no project key in ${agentstack}/env.sh); not changed"
   elif [ "$(realpath_of "$cur_key")" = "$vault_real" ]; then
     work_state="already the vault"
@@ -337,9 +345,18 @@ main() {
     else
       env ORRERY_NO_OPEN=1 ORRERY_DIR="$cockpit" "$setup_sh" --project-key "$vault_real" || status=$?
     fi
-    if [ "$status" -eq 0 ]; then
-      work_state="the vault (${vault_real})"
+    # The exit status alone does not say what changed (the setup can stop at a check after it
+    # wrote the new folder), so read the saved folder again.
+    now_key=""
+    now_key="$( ( unset AGENTSTACK_PROJECT_KEY; . "${agentstack}/env.sh" >/dev/null 2>&1 || exit 1; printf '%s' "${AGENTSTACK_PROJECT_KEY:-}" ) )" || now_key=""
+    if [ -n "$now_key" ] && [ "$(realpath_of "$now_key")" = "$vault_real" ]; then
       work_is_vault=true
+      if [ "$status" -eq 0 ]; then
+        work_state="the vault (${vault_real})"
+      else
+        work_state="the vault (${vault_real}) is saved as the work folder, but the ORRERY setup stopped at a later check (above). To check again: ${retry_line}"
+        work_failed=true
+      fi
     else
       work_state="NOT changed: the ORRERY setup stopped (above). To try again: ${retry_line}"
       work_failed=true

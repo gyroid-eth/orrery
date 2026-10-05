@@ -153,8 +153,10 @@ echo "$out" | grep -q "Could not find your Windows user folder" || fail "no inte
 # The work folder: the vault replaces the default one only (setup is a stub here).
 rp() { python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"; }
 cat >"$tmp/setup-stub" <<'STUB'
-#!/bin/sh
+#!/bin/bash
 printf '%s\n' "$*" >>"$STUB_LOG"
+# Like the real setup: a successful run has saved the new folder.
+[ "${STUB_EXIT:-0}" != 0 ] || printf 'export AGENTSTACK_PROJECT_KEY=%q\n' "$2" >"$HOME/.agentstack/env.sh"
 exit "${STUB_EXIT:-0}"
 STUB
 chmod +x "$tmp/setup-stub"
@@ -224,5 +226,29 @@ line="$(echo "$out" | grep -o -- "--project-key .*" | head -1)"
 arg="${line#--project-key }"
 [ "$(eval "printf '%s' $arg")" = "$(rp "$vd")" ] || fail "retry line does not give back the path: $line"
 [ ! -e "$tmp/INJECTED" ] || fail "the printed line ran a command from the path"
+
+# The setup writes the new folder and then stops at a later check: said as changed (read from env.sh, not the exit status).
+cat >"$tmp/setup-stub-writes" <<'STUB'
+#!/bin/bash
+printf '%s\n' "$*" >>"$STUB_LOG"
+printf 'export AGENTSTACK_PROJECT_KEY=%q\n' "$2" >"$HOME/.agentstack/env.sh"
+exit 1
+STUB
+chmod +x "$tmp/setup-stub-writes"
+home="$(wf_home h16 "$tmp/h16/orrery-work")"; : >"$tmp/stub.log"
+if out="$(env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" STUB_LOG="$tmp/stub.log" \
+  ORRERY_SETUP="$tmp/setup-stub-writes" ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
+  /bin/bash "$script" 2>&1)"; then fail "a setup that stops late must still exit 1: $out"; fi
+echo "$out" | grep -q "is saved as the work folder, but the ORRERY setup stopped at a later check" || fail "late stop not said as changed: $out"
+! echo "$out" | grep -q "NOT changed" || fail "a changed folder was reported as not changed: $out"
+echo "$out" | grep -q "NEW AGENT (it starts in the vault" || fail "next step after a late stop: $out"
+# env.sh that cannot be loaded: unknown, even if this shell carries a default key from elsewhere.
+home="$(wf_home h17 "")"; printf 'return 1\n' >"$home/.agentstack/env.sh"; : >"$tmp/stub.log"
+out="$(env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" STUB_LOG="$tmp/stub.log" \
+  AGENTSTACK_PROJECT_KEY="$home/orrery-work" ORRERY_SETUP="$tmp/setup-stub" \
+  ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
+  /bin/bash "$script" 2>&1)" || fail "unreadable env.sh: $out"
+[ ! -s "$tmp/stub.log" ] || fail "setup ran although env.sh could not be read"
+echo "$out" | grep -q "env.sh could not be read); not changed" || fail "unreadable env.sh note: $out"
 
 echo "ok: research-set"
