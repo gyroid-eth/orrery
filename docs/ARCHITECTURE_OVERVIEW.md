@@ -6,6 +6,10 @@
 
 この文書は、ORRERY が tmux・Codex App・network・手元のデータ・肖像画像をどう扱うかをまとめます。route と内部実装の詳細は[実装アーキテクチャ](ARCHITECTURE.md)、視覚仕様は[デザイン言語](DESIGN.md)にあります。
 
+ORRERY は、terminal を操作する画面の cockpit と、dashboard と agent graph の画面の Telemetry の 2 つでできています。cockpit は Telemetry の画面を埋め込めます。agent は tmux の中で動き、どちらの画面からも見え、Mail で話します。
+
+![cockpit は terminal を操作する画面、Telemetry は dashboard と agent graph の画面。cockpit は Telemetry の画面を埋め込める。agent は tmux の中で動き、両方の画面から見え、Mail で話す](images/cockpit_telemetry_relation.svg)
+
 ## tmux との取り決め
 
 agent name と tmux session name の一致が roster jump の前提です。

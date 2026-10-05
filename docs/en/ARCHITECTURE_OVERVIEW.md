@@ -6,6 +6,10 @@
 
 This document summarizes how ORRERY handles tmux, Codex App, the network, local data, and portrait images. Route and internal implementation details are in [Implementation architecture](ARCHITECTURE.md), and the visual specification is in [Design language](../DESIGN.md) (Japanese).
 
+ORRERY is made of two screens: the cockpit, which operates terminals, and Telemetry, the dashboard and agent-graph screen. The cockpit can embed the Telemetry screen. Agents run in tmux, are visible from both screens, and talk through Mail.
+
+![The cockpit is the screen for operating terminals; Telemetry is the dashboard and agent-graph screen. The cockpit can embed the Telemetry screen. Agents run in tmux, are visible from both screens, and talk through Mail](../images/cockpit_telemetry_relation.svg)
+
 ## Agreement with tmux
 
 The agent name must match the tmux session name for a roster jump to work.
