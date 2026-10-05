@@ -23,7 +23,7 @@ Read and confirm the plan, and check that doctor and the Mail selftest succeeded
 | `~/orrery` | The cockpit source (start and update scripts) |
 | `~/orrery-telemetry` | The source of Telemetry, Mail, hooks, and the installer. What actually runs is the copy installed in `~/.agentstack` |
 | `~/.agentstack` | The running installation, the `env.sh` settings, and the Mail DB |
-| `~/orrery-work` | The agents' work folder (the project folder). It receives a `CLAUDE.md` with ORRERY's instructions. Mail and reservations are scoped to it |
+| `~/orrery-work` | The agents' work folder (the project folder). It receives a `CLAUDE.md` with ORRERY's instructions. It is the default folder of `+ NEW AGENT`. Mail and reservations are scoped to it |
 
 Ports: cockpit 8791, Telemetry 8770, Mail 18765. `ORRERY.app` is a window that opens the cockpit on 8791. For changing the work folder and removing everything, see [Work folder and removal](#work-folder-and-removal).
 
@@ -155,7 +155,7 @@ When you run agents inside an Obsidian vault, work logs, paper notes, and tasks 
 
 ![Typing /adddone review the paper note to Claude on WSL makes that task disappear from "Tasks" and appear under "Done today" in the Obsidian Daily Note on the right](docs/images/cockpit_obsidian.gif)
 
-→ [Use it together with Obsidian](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/obsidian.en.md) (an ORRERY Telemetry document) · a template you can try right away, [orrery-demo-vault](https://github.com/gyroid-eth/orrery-demo-vault)
+→ [Use it together with Obsidian](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/obsidian.en.md) (an ORRERY Telemetry document) · to make a vault the work folder, see [Change the work folder](#change-the-work-folder) · a template you can try right away, [orrery-demo-vault](https://github.com/gyroid-eth/orrery-demo-vault)
 
 Reading notes for papers come from the add-on [orrery-digest-paper](https://github.com/gyroid-eth/orrery-digest-paper): Claude writes the note, and Codex checks it against the text and the figures (a version for Zotero users is included). The add-on and the demo vault come together with [the research set's one line](docs/en/research-set.md).
 
@@ -196,9 +196,11 @@ Add `--project-key` to the install line. To change it later, run the same line a
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key ~/my-project
 ```
 
+**To have agents work on an Obsidian vault**, pass the vault's path as `--project-key` (for example `--project-key ~/Documents/MyVault`). The vault's `CLAUDE.md` receives ORRERY's block of instructions; if it already has a `CLAUDE.md`, only the block is added and the existing content stays ([Use it together with Obsidian](#use-it-together-with-obsidian)). For a Windows-side vault under WSL2 (`/mnt/c/Users/<you>/…`), the one-line installer refuses folders under `/mnt`, so run `cd ~/orrery-telemetry && ./scripts/install.sh --project-key /mnt/c/Users/<you>/Documents/MyVault` instead.
+
 - The ORRERY block in the old folder's `CLAUDE.md` stays. Delete between its markers by hand if you do not want it.
 - Mail is scoped per project. Agents that were already running keep showing in Telemetry, but they stay on the old project and cannot exchange Mail with new agents. EXIT them and start them again.
-- The folder choices of `+ NEW AGENT` (`~` when unset) are a separate setting. Change them with `cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"` (the project key is kept).
+- The folder choices of `+ NEW AGENT` are the work folder and `~` by default. To change them, use `cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"` (the project key is kept).
 - **If you start `claude` directly in a terminal, it runs in the folder you are in and does not have ORRERY's instructions.** `/delegate` is not used and no parent–child line appears. Start agents with `+ NEW AGENT` or `~/.agentstack/bin/agent-start <work folder>`.
 
 ### Remove everything

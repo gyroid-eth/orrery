@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 | `~/orrery` | cockpit の source（起動・更新の script） |
 | `~/orrery-telemetry` | Telemetry・Mail・hook・installer の source。実際に動くのは `~/.agentstack` に入れた方 |
 | `~/.agentstack` | 実際に動いている本体、設定 `env.sh`、Mail の DB |
-| `~/orrery-work` | agent の作業 folder（project folder）。ORRERY の指示を書いた `CLAUDE.md` が入る。Mail と予約はこの単位 |
+| `~/orrery-work` | agent の作業 folder（project folder）。ORRERY の指示を書いた `CLAUDE.md` が入る。`+ NEW AGENT` の既定の folder。Mail と予約はこの単位 |
 
 port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY.app` は、8791 の cockpit を開く窓です。作業 folder の変え方と消し方は[作業 folder と消し方](#作業-folder-と消し方)にあります。
 
@@ -155,7 +155,7 @@ Obsidian の vault の中で agent を動かすと、作業ログ・論文ノー
 
 ![WSL の Claude に /adddone 論文ノートを見直す と打つと、右の Obsidian の Daily Note で、そのタスクが「タスク」から消え「今日完了した」に出る](docs/images/cockpit_obsidian.gif)
 
-→ [Obsidian と一緒に使う](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/obsidian.md)（ORRERY Telemetry の文書）・すぐ試せるひな形 [orrery-demo-vault](https://github.com/gyroid-eth/orrery-demo-vault)
+→ [Obsidian と一緒に使う](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/obsidian.md)（ORRERY Telemetry の文書）・vault を作業 folder にする手順は[作業 folder を変える](#作業-folder-を変える)・すぐ試せるひな形 [orrery-demo-vault](https://github.com/gyroid-eth/orrery-demo-vault)
 
 論文の読書ノートは、add-on の [orrery-digest-paper](https://github.com/gyroid-eth/orrery-digest-paper) が作ります。Claude が書き、Codex が本文と図に照らして確かめます（Zotero を使う人向けの版もあります）。add-on と demo vault は [研究セットの 1 行](docs/research-set.md) でまとめて入ります。
 
@@ -196,9 +196,11 @@ install の 1 行に `--project-key` を足します。後から変えるとき�
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key ~/my-project
 ```
 
+**Obsidian の vault を agent に扱わせたいとき**は、`--project-key` に vault の path を渡します（例: `--project-key ~/Documents/MyVault`）。その vault の `CLAUDE.md` に ORRERY の指示の block が入ります。`CLAUDE.md` が既にあれば block だけが足され、既存の内容はそのまま残ります（[Obsidian と一緒に使う](#obsidian-と一緒に使う)）。WSL2 で Windows 側の vault（`/mnt/c/Users/<you>/…`）を使うときは、1 行の installer が `/mnt` の folder を断るので、`cd ~/orrery-telemetry && ./scripts/install.sh --project-key /mnt/c/Users/<you>/Documents/MyVault` を使います。
+
 - 古い folder の `CLAUDE.md` の ORRERY の block は残ります。要らなければ marker の間を手で消します。
 - Mail は project 単位です。変える前に起動していた agent は Telemetry に出続けますが、古い project のままで、新しい agent と Mail が通じません。EXIT して起動し直してください。
-- `+ NEW AGENT` の folder の候補（未設定なら `~`）は別の設定です。`cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"` で変えます（project key は引き継がれます）。
+- `+ NEW AGENT` の folder の候補は、既定では作業 folder と `~` です。変えるには `cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"`（project key は引き継がれます。指定した folder だけになるので、作業 folder も入れます）。
 - **terminal で直接 `claude` を起動すると、その場の folder で動き、ORRERY の指示が入っていません。** `/delegate` が使われず、親子の線も出ません。agent は `+ NEW AGENT` か `~/.agentstack/bin/agent-start <作業 folder>` で起動します。
 
 ### 完全に消す
