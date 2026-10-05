@@ -6,6 +6,29 @@
 
 ORRERY is a cockpit for people who run several Claude Code / Codex agents as a team. You do not have to hunt from window to window for the agent that is waiting for your reply. However many agents you run, only the ones waiting for a human decision blink in the roster so you can spot them at a glance, and you see every terminal, the traffic between agents, and your remaining usage quota on one screen while sending instructions from the same place. It runs on Mac (`ORRERY.app` and a browser) and on Windows (WSL2 and a browser), and works with [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry).
 
+## Quick start
+
+ORRERY is made of two parts: the **cockpit** (this repository: the screen where you arrange and drive terminals) and [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) (what runs agents and Mail behind the scenes, plus the Telemetry screen). **The next line installs both.** Run it in a Mac terminal, or inside WSL2 Ubuntu on Windows.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
+```
+
+Read and confirm the plan, and check that doctor and the Mail selftest succeeded. Sign in to Claude Code or Codex CLI in the same OS environment, then open the printed cockpit URL (default: `http://127.0.0.1:8791/cockpit.html`). Without a CLI, completing the installer does not make agents available. See [Installation](docs/en/install.md) for prerequisites, settings changes, and manual setup.
+
+![The cockpit is the screen for operating terminals; Telemetry is the dashboard and agent-graph screen. The cockpit can embed the Telemetry screen. Agents run in tmux, are visible from both screens, and talk through Mail](docs/images/cockpit_telemetry_relation.svg)
+
+### What goes where
+
+| Location | What it holds |
+| --- | --- |
+| `~/orrery` | The cockpit source (start and update scripts) |
+| `~/orrery-telemetry` | The source of Telemetry, Mail, hooks, and the installer. What actually runs is the copy installed in `~/.agentstack` |
+| `~/.agentstack` | The running installation, the `env.sh` settings, and the Mail DB |
+| `~/orrery-work` | The agents' work folder (the project folder). It receives a `CLAUDE.md` with ORRERY's instructions. It is the default folder of `+ NEW AGENT`. Mail and reservations are scoped to it |
+
+Ports: cockpit 8791, Telemetry 8770, Mail 18765. `ORRERY.app` is a window that opens the cockpit on 8791. For changing the work folder and removing everything, see [Work folder and removal](#work-folder-and-removal).
+
 ![The whole ORRERY cockpit. On the left, the agent roster; in the center, a Split with three terminals side by side; at the top right, the mini-orrery drawing the parent–child tree; at the bottom right, the ORRERY Mail list](docs/images/cockpit_overview.png)
 
 Pick an agent in the roster on the left, give instructions in the terminal in the center, and follow parent–child relationships and messages in the mini-orrery and Mail on the right. The terminals work even when ORRERY Telemetry is not running; features that depend on it show their status and degrade gracefully.
@@ -134,7 +157,7 @@ When you run agents inside an Obsidian vault, work logs, paper notes, and tasks 
 
 ![Typing /adddone review the paper note to Claude on WSL makes that task disappear from "Tasks" and appear under "Done today" in the Obsidian Daily Note on the right](docs/images/cockpit_obsidian.gif)
 
-→ [Use it together with Obsidian](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/obsidian.en.md) (an ORRERY Telemetry document) · a template you can try right away, [orrery-demo-vault](https://github.com/gyroid-eth/orrery-demo-vault)
+→ [Use it together with Obsidian](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/obsidian.en.md) (an ORRERY Telemetry document) · to make a vault the work folder, see [Change the work folder](#change-the-work-folder) · a template you can try right away, [orrery-demo-vault](https://github.com/gyroid-eth/orrery-demo-vault)
 
 Reading notes for papers come from the add-on [orrery-digest-paper](https://github.com/gyroid-eth/orrery-digest-paper): Claude writes the note, and Codex checks it against the text and the figures (a version for Zotero users is included). The add-on and the demo vault come together with [the research set's one line](docs/en/research-set.md).
 
@@ -158,21 +181,46 @@ Run the backend in WSL2 and open it in a Windows browser to use the same screen 
 - macOS, or Windows with WSL2 (Ubuntu). `ORRERY.app`, its app installer, and the global hotkey are macOS only
 - Python 3.10 or later, and `tmux`
 - Node.js / npm and Rust / Cargo (to develop or build the desktop app)
+- On a Mac where `tmux` installed by Homebrew is not found, set up `brew shellenv` in your shell so `/opt/homebrew/bin` is on PATH (the installer reports `tmux` as "Missing" when it is not)
 - A running [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) (to use all integrated features)
 - ORRERY Mail SQLite (to use the mail rail)
 - Access to a runtime CDN (for `xterm.js` and its addons; the current distribution is not a fully offline bundle)
 
 See [Installation](docs/en/install.md) for details and requirements by role.
 
-## Quick start
+## Work folder and removal
 
-Run this one line in a Mac terminal, or inside WSL2 Ubuntu on Windows. It installs ORRERY cockpit and ORRERY Telemetry together, then prints the check results and the URL to open. See [Installation](docs/en/install.md) for prerequisites, settings changes, and manual setup.
+### Change the work folder
+
+Add `--project-key` to the install line. To change it later, run the same line again with `--project-key`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key ~/my-project
 ```
 
-Read and confirm the plan, and check that doctor and the Mail selftest succeeded. Sign in to Claude Code or Codex CLI in the same OS environment, then open the printed cockpit URL (default: `http://127.0.0.1:8791/cockpit.html`). Without a CLI, completing the installer does not make agents available.
+**To have agents work on an Obsidian vault**, pass the vault's path as `--project-key` (for example `--project-key ~/Documents/MyVault`). The vault's `CLAUDE.md` receives ORRERY's block of instructions (Codex's instructions go to `~/.codex/AGENTS.md`); if it already has a `CLAUDE.md`, only the block is added and the existing content stays ([Use it together with Obsidian](#use-it-together-with-obsidian)). **On WSL2, keep the work folder inside the Ubuntu home.** If you pass a Windows-side folder (`/mnt/c/…`) as `--project-key`, the one-line installer stops without changing anything. Do not make a Windows-side vault the work folder: keep the work folder in the Ubuntu home and hand agents the `/mnt/c/…` path to work on, as the [research set](docs/en/research-set.md) does.
+
+- The ORRERY block in the old folder's `CLAUDE.md` stays. Delete between its markers by hand if you do not want it.
+- Mail is scoped per project. Agents that were already running keep showing in Telemetry, but they stay on the old project and cannot exchange Mail with new agents. EXIT them and start them again.
+- The folder choices of `+ NEW AGENT` are the work folder and `~` by default. To change them, use `cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"` (the project key is kept).
+- **If you start `claude` directly in a terminal from a folder without ORRERY's instructions (such as home), it runs without them.** `/delegate` is not used and no parent–child line appears. Started inside the work folder (the project-key folder or a vault), it picks up that folder's `CLAUDE.md` block. Start agents with `+ NEW AGENT` or `~/.agentstack/bin/agent-start <work folder>`.
+
+### Remove everything
+
+`agentstack-uninstall` removes only what is inside `~/.agentstack` (plus the services and the settings changes). The source folders, your work folder, and uv stay.
+
+```bash
+~/.agentstack/bin/agentstack-uninstall --dry-run      # check first
+~/.agentstack/bin/agentstack-uninstall --purge-data   # also delete the Mail DB (omit to keep it)
+```
+
+Then stop the cockpit. A cockpit that the one-line installer started in the background runs in its own tmux server. Run the `Stop it:` line the installer printed at the end (by default `tmux -L orrery-cockpit kill-session -t cockpit-8791`). If you ran `start-cockpit.sh` yourself, press `Ctrl-C` in that window. Quit `ORRERY.app`. Check that `http://127.0.0.1:8791/` no longer opens, then remove the source folders.
+
+```bash
+rm -rf ~/orrery ~/orrery-telemetry
+```
+
+Your work folder (such as `~/orrery-work`) is where your own work lives; delete it only if you decide to. `uv`, if the installer added it, stays in `~/.local/bin`.
 
 ## Start with the guides on screen
 
