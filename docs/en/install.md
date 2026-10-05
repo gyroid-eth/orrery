@@ -32,12 +32,16 @@ The rest of this section installs step by step by hand.
 
 This section alone takes you from nothing to ORRERY installed on your own Mac or Windows 11 PC and the cockpit open in a browser. Each command is in its own code block, and copying and pasting them in order works. It does not use the desktop app (`ORRERY.app`). Even on a Mac, you open it in the browser. For building or keeping the app running, see "Requirements" and the sections after it.
 
+**Get this ready first**: to run agents you need an account that can sign in to Claude Code or Codex CLI. Claude Code needs a paid Claude plan (Pro, Max, Team, Enterprise) or a Console account, and **the free claude.ai plan does not include it** ([official setup page](https://code.claude.com/docs/en/setup)). Codex needs a paid ChatGPT plan (Plus, Pro, Business, Edu, Enterprise; [official README](https://github.com/openai/codex)). Decide which one you will use before you reach the sign-in screen.
+
 ### 0. Obsidian (when you use it)
 
 If you will use ORRERY together with Obsidian (a note-taking app), install Obsidian first. If you will not, skip to "Mac" or "Windows 11" (ORRERY works without Obsidian).
 
 - **Mac**: download the Mac version from https://obsidian.md/ and move it to Applications
 - **Windows 11**: download the Windows installer from https://obsidian.md/ and run it. Install Obsidian on the **Windows side** (not inside the WSL2 Ubuntu)
+
+**Check**: start Obsidian. When it shows the screen for choosing a vault (with "Create new vault", "Open folder as vault" and so on), you are ready.
 
 ### Mac
 
@@ -65,6 +69,16 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 
 ```bash
 brew install tmux
+```
+
+**Check**: these two commands each print a version (a line such as `Homebrew 4.…` and `tmux 3.…`).
+
+```bash
+brew --version
+```
+
+```bash
+tmux -V
 ```
 
 **2. ORRERY**
@@ -95,7 +109,7 @@ source ~/.zshrc
 claude
 ```
 
-Sign in, answer every first-run question (text style, security notes, trusting the folder, and so on), and when the input prompt appears, type `/exit`. If you close it halfway, a Claude started from NEW AGENT in the cockpit stops at the first-run screen. If you use Codex, install Codex CLI and run `codex login` (ORRERY's last screen shows how to install it).
+Sign in, answer every first-run question (text style, security notes, trusting the folder, and so on), and when the input prompt appears, type `/exit`. If you close it halfway, a Claude started from NEW AGENT in the cockpit stops at the first-run screen. If you use Codex, install Codex CLI and sign in (the method in its official README: on a Mac, `brew install --cask codex`, then `codex login`).
 
 From here, `+ NEW AGENT` in the cockpit starts agents. If you use Obsidian, continue with "Using it with Obsidian".
 
@@ -111,10 +125,30 @@ In the Start menu, right-click "PowerShell", choose "Run as administrator", and 
 wsl --install
 ```
 
-When it finishes, restart the PC. Open "Ubuntu" from the Start menu and choose a user name and password for Ubuntu (nothing appears as you type the password). If you already have Ubuntu, skip up to here. **From here on, type everything in the Ubuntu window** (`username@PC:~$`). Install the tools (nothing happens if they are already there):
+When it finishes, restart the PC. Open "Ubuntu" from the Start menu and choose a user name and password for Ubuntu (nothing appears as you type the password). If you already have Ubuntu, skip the above and do only the check below.
+
+**Check (that it is WSL2)**: in PowerShell, run this and make sure the `VERSION` of Ubuntu is **2**.
+
+```powershell
+wsl -l -v
+```
+
+If `VERSION` is 1, make that Ubuntu WSL2 (use the name shown in the table instead of `Ubuntu`; this is Microsoft's documented command).
+
+```powershell
+wsl --set-version Ubuntu 2
+```
+
+**From here on, type everything in the Ubuntu window** (`username@PC:~$`). Install the tools (nothing happens if they are already there):
 
 ```bash
 sudo apt update && sudo apt install -y git tmux curl
+```
+
+**Check**: this prints the versions of git, tmux and curl on three lines.
+
+```bash
+git --version && tmux -V && curl --version | head -n 1
 ```
 
 **2. ORRERY**
@@ -145,7 +179,7 @@ source ~/.bashrc
 claude
 ```
 
-Sign in (if no browser opens, paste the URL it shows into your Windows browser), answer every first-run question, and when the input prompt appears, type `/exit`. If you use Codex, install Codex CLI inside Ubuntu and run `codex login` (a `codex` from Windows' npm (`/mnt/c/...`) does not work from WSL).
+Sign in (if no browser opens, paste the URL it shows into your Windows browser), answer every first-run question, and when the input prompt appears, type `/exit`. If you use Codex, install Codex CLI inside Ubuntu and sign in (the method in its official README: `curl -fsSL https://chatgpt.com/codex/install.sh | sh`, then `codex login`; a `codex` from Windows' npm (`/mnt/c/...`) does not work from WSL).
 
 From here, `+ NEW AGENT` in the cockpit starts agents. If you use Obsidian, continue with "Using it with Obsidian".
 

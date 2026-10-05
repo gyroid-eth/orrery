@@ -32,12 +32,16 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 この節だけで、自分の Mac または Windows 11 の PC に ORRERY を入れ、ブラウザで cockpit を開くところまで進めます。コマンドは 1 つずつコードブロックに分けてあり、上から順にコピーして貼れば通ります。デスクトップアプリ（`ORRERY.app`）は使いません。Mac でもブラウザで開きます。アプリの build や常駐は、「動作環境」以降を参照してください。
 
+**先に用意するもの**: agent を動かすには、Claude Code か Codex CLI にログインできるアカウントが要ります。Claude Code は Claude の有料 plan（Pro・Max・Team・Enterprise）か Console のアカウントが必要で、**無料の claude.ai の plan では使えません**（[公式の説明](https://code.claude.com/docs/en/setup)）。Codex は ChatGPT の有料 plan（Plus・Pro・Business・Edu・Enterprise。[公式の README](https://github.com/openai/codex)）です。ログインの画面に進む前に、どれを使うか決めておいてください。
+
 ### 0. Obsidian（一緒に使う場合）
 
 Obsidian（ノートのアプリ）と一緒に使う人は、先に Obsidian を入れます。使わない人は飛ばして、「Mac」か「Windows 11」へ進んでください（ORRERY は Obsidian が無くても動きます）。
 
 - **Mac**: https://obsidian.md/ から Mac 版を download し、Applications に入れます
 - **Windows 11**: https://obsidian.md/ から Windows 版の installer を download して実行します。Obsidian は **Windows 側**に入れます（WSL2 の Ubuntu の中ではありません）
+
+**確かめ**: Obsidian を起動して、vault を選ぶ画面（「Create new vault」「Open folder as vault」などが並ぶ画面）が出れば準備完了です。
 
 ### Mac
 
@@ -65,6 +69,16 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 
 ```bash
 brew install tmux
+```
+
+**確かめ**: 次の 2 つのコマンドが、それぞれ版を表示します（`Homebrew 4.…` と `tmux 3.…` のような 1 行）。
+
+```bash
+brew --version
+```
+
+```bash
+tmux -V
 ```
 
 **2. ORRERY**
@@ -95,7 +109,7 @@ source ~/.zshrc
 claude
 ```
 
-ログインし、最初の質問（文字の見た目・Security notes・フォルダの信頼など）にすべて答えて、入力欄が出たら `/exit` と打ちます。途中で閉じると、cockpit の NEW AGENT で起動した Claude が最初の設定の画面で止まります。Codex を使う人は、Codex CLI を入れて `codex login` します（入れ方は ORRERY の最後の画面に出ます）。
+ログインし、最初の質問（文字の見た目・Security notes・フォルダの信頼など）にすべて答えて、入力欄が出たら `/exit` と打ちます。途中で閉じると、cockpit の NEW AGENT で起動した Claude が最初の設定の画面で止まります。Codex を使う人は、Codex CLI を入れてログインします（公式の README の方法です。Mac は `brew install --cask codex`、そのあと `codex login`）。
 
 ここまでで、cockpit の `+ NEW AGENT` から agent を起動できます。続いて Obsidian と使う人は、「Obsidian と一緒に使う」へ進んでください。
 
@@ -111,10 +125,30 @@ ORRERY は Windows の中の Ubuntu（WSL2）で動き、画面は Windows の�
 wsl --install
 ```
 
-終わったら PC を再起動します。スタートメニューから「Ubuntu」を開き、Ubuntu 用のユーザー名とパスワードを決めます（パスワードは画面に出ません）。すでに Ubuntu がある人は、ここまでを飛ばします。**以降は全部 Ubuntu の画面**（`ユーザー名@PC名:~$`）で打ちます。必要な道具を入れます（すでに入っていれば何も起きません）。
+終わったら PC を再起動します。スタートメニューから「Ubuntu」を開き、Ubuntu 用のユーザー名とパスワードを決めます（パスワードは画面に出ません）。すでに Ubuntu がある人は、ここまでを飛ばして、次の確かめだけ行います。
+
+**確かめ（WSL2 であること）**: PowerShell で次を打ち、Ubuntu の `VERSION` が **2** であることを確かめます。
+
+```powershell
+wsl -l -v
+```
+
+`VERSION` が 1 の Ubuntu は WSL2 にします（`Ubuntu` の部分は、表に出た名前にします。Microsoft の公式の手順です）。
+
+```powershell
+wsl --set-version Ubuntu 2
+```
+
+**以降は全部 Ubuntu の画面**（`ユーザー名@PC名:~$`）で打ちます。必要な道具を入れます（すでに入っていれば何も起きません）。
 
 ```bash
 sudo apt update && sudo apt install -y git tmux curl
+```
+
+**確かめ**: 次が、git・tmux・curl の版を 3 行で表示します。
+
+```bash
+git --version && tmux -V && curl --version | head -n 1
 ```
 
 **2. ORRERY**
@@ -145,7 +179,7 @@ source ~/.bashrc
 claude
 ```
 
-ログインし（ブラウザが開かなければ、表示された URL を Windows のブラウザに貼ります）、最初の質問にすべて答えて、入力欄が出たら `/exit` と打ちます。Codex を使う人は、Ubuntu の中に Codex CLI を入れて `codex login` します（Windows 側の npm の `codex`（`/mnt/c/...`）は WSL では動きません）。
+ログインし（ブラウザが開かなければ、表示された URL を Windows のブラウザに貼ります）、最初の質問にすべて答えて、入力欄が出たら `/exit` と打ちます。Codex を使う人は、Ubuntu の中に Codex CLI を入れてログインします（公式の README の方法です。`curl -fsSL https://chatgpt.com/codex/install.sh | sh`、そのあと `codex login`。Windows 側の npm の `codex`（`/mnt/c/...`）は WSL では動きません）。
 
 ここまでで、cockpit の `+ NEW AGENT` から agent を起動できます。続いて Obsidian と使う人は、「Obsidian と一緒に使う」へ進んでください。
 
