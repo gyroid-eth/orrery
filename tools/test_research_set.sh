@@ -187,7 +187,7 @@ home="$(wf_home h10 "$tmp/h10/mine")"; : >"$tmp/stub.log"
 out="$(wf_run "$home" 0)" || fail "work folder chosen: $out"
 [ ! -s "$tmp/stub.log" ] || fail "a chosen folder was changed"
 echo "$out" | grep -q "kept: $tmp/h10/mine (a folder you chose)" || fail "chosen folder note: $out"
-echo "$out" | grep -q -- "--project-key '$(rp "$home/Documents/orrery-demo-vault")'" || fail "retry line: $out"
+echo "$out" | grep -q -- "--project-key $(printf '%q' "$(rp "$home/Documents/orrery-demo-vault")")" || fail "retry line: $out"
 # already the vault: nothing to do
 home="$(wf_home h11 "")"; printf "export AGENTSTACK_PROJECT_KEY=%s\n" "$(rp "$home")/Documents/orrery-demo-vault" >"$home/.agentstack/env.sh"; : >"$tmp/stub.log"
 out="$(wf_run "$home" 0)" || fail "work folder already: $out"
@@ -209,5 +209,20 @@ out="$(env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOM
   ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
   /bin/bash "$script" 2>&1)" || fail "no setup: $out"
 echo "$out" | grep -q "the ORRERY setup was not found at" || fail "no setup note: $out"
+
+# A quote in HOME: env.sh holds shell-quoted values, and the default folder is still recognised.
+home="$tmp/ap'ostrophe"; mkdir -p "$home/.agentstack/skills/delegate"; touch "$home/.agentstack/skills/delegate/SKILL.md"
+python3 -c 'import shlex, sys; print("export AGENTSTACK_PROJECT_KEY=" + shlex.quote(sys.argv[1]))' "$home/orrery-work" >"$home/.agentstack/env.sh"
+: >"$tmp/stub.log"
+out="$(wf_run "$home" 0)" || fail "apostrophe in HOME: $out"
+[ "$(cat "$tmp/stub.log")" = "--project-key $(rp "$home/Documents/orrery-demo-vault")" ] || fail "apostrophe: the default folder was not recognised: $out"
+# The printed line is safe to paste: a path with a quote and a command substitution is not executed.
+home="$(wf_home h15 "$tmp/h15/mine")"; : >"$tmp/stub.log"
+vd="$tmp/v'\$(touch $tmp/INJECTED)'x"
+out="$(wf_run "$home" 0 --vault-dir "$vd")" || fail "odd vault path: $out"
+line="$(echo "$out" | grep -o -- "--project-key .*" | head -1)"
+arg="${line#--project-key }"
+[ "$(eval "printf '%s' $arg")" = "$(rp "$vd")" ] || fail "retry line does not give back the path: $line"
+[ ! -e "$tmp/INJECTED" ] || fail "the printed line ran a command from the path"
 
 echo "ok: research-set"

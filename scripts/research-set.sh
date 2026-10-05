@@ -308,12 +308,14 @@ main() {
   }
   vault_real="$(realpath_of "$vault_dir")"
   cur_key=""
-  [ ! -f "${agentstack}/env.sh" ] || cur_key="$(sed -n "s/^export AGENTSTACK_PROJECT_KEY=//p" "${agentstack}/env.sh" | tail -n 1 | tr -d "'\"")"
+  # env.sh holds shell-quoted values (a quote or a space in HOME), so read it by sourcing, as the setup does.
+  [ ! -f "${agentstack}/env.sh" ] || cur_key="$( ( . "${agentstack}/env.sh" >/dev/null 2>&1 || true; printf '%s' "${AGENTSTACK_PROJECT_KEY:-}" ) )"
   default_key="${HOME}/orrery-work"
   work_state=""
   work_failed=false
   work_is_vault=false
-  retry_line="curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key '${vault_real}'"
+  # printf %q quotes a path so that it can be pasted into a shell as it is, whatever it contains.
+  retry_line="curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key $(printf '%q' "$vault_real")"
   if [ -z "$cur_key" ]; then
     work_state="not known (no project key in ${agentstack}/env.sh); not changed"
   elif [ "$(realpath_of "$cur_key")" = "$vault_real" ]; then

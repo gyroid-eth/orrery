@@ -657,6 +657,15 @@ check "bootstrap: stops without a terminal" test "$status" -ne 0
 check "bootstrap: says what get.sh left" sh -c 'printf "%s" "$1" | grep -q "get.sh downloaded the cockpit to"' _ "$out"
 check "bootstrap: and that it stays" test -d "$H/orrery"
 
+
+# ---------------------------------------------------------------- protected roots follow a new project key
+eval "$(sed -n '/# >>> roots-follow/,/# <<< roots-follow/p' "$ROOT/scripts/setup.sh" | sed 's/^ *//')"
+check "roots: saved roots equal to the old key follow the new key" test "$(roots_follow_key /new /old /old "")" = "/new"
+check "roots: no saved roots follow the new key" test "$(roots_follow_key /new /old "" "")" = "/new"
+check "roots: roots chosen apart from the old key stay" test -z "$(roots_follow_key /new /old /chosen "")"
+check "roots: roots given now stay as given" test -z "$(roots_follow_key /new /old /old /given)"
+check "roots: a live value equal to env.sh's own is not an explicit choice" test "$(roots_follow_key /new /old /old /old)" = "/new"
+
 # ---------------------------------------------------------------- WSL: the project key may be on the Windows drive
 H="$(fresh_home wsl-mnt)"
 mkdir -p "$H/fakebin"
