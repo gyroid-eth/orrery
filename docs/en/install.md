@@ -89,7 +89,9 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 A plan appears. Read it, type `yes`, and press Enter. It takes from tens of seconds to a few minutes, and the cockpit opens in your browser. If something is missing (git, tmux, curl), it changes nothing, stops, and shows how to install it. When it stops, run the one "how to continue" line it shows.
 
-**3. Claude Code**
+**3. Claude Code or Codex** (install the one you will use; if you use Codex only, skip the Claude Code part)
+
+**Claude Code**
 
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash
@@ -109,7 +111,25 @@ source ~/.zshrc
 claude
 ```
 
-Sign in, answer every first-run question (text style, security notes, trusting the folder, and so on), and when the input prompt appears, type `/exit`. If you close it halfway, a Claude started from NEW AGENT in the cockpit stops at the first-run screen. If you use Codex, install Codex CLI and sign in (the method in its official README: on a Mac, `brew install --cask codex`, then `codex login`).
+Sign in, answer every first-run question (text style, security notes, trusting the folder, and so on), and when the input prompt appears, type `/exit`. If you close it halfway, a Claude started from NEW AGENT in the cockpit stops at the first-run screen.
+
+**Codex** (skip this if you use Claude Code only; the commands are from Codex's official README)
+
+```bash
+brew install --cask codex
+```
+
+```bash
+codex --version
+```
+
+**Check**: the second command prints a version.
+
+```bash
+codex login
+```
+
+Sign in with your ChatGPT account when it asks (if no browser opens, follow what it shows). **Check**: after you finish the sign-in as it directs, it shows that you are signed in (the wording depends on the Codex version).
 
 From here, `+ NEW AGENT` in the cockpit starts agents. If you use Obsidian, continue with "Using it with Obsidian".
 
@@ -159,7 +179,9 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 A plan appears. Read it, type `yes`, and press Enter. It takes from tens of seconds to a few minutes, and the cockpit URL (`http://127.0.0.1:8791/cockpit.html`) is printed. If your Windows browser does not open by itself, paste that URL into it. If something is missing, it changes nothing and stops, so run the one "how to continue" line it shows.
 
-**3. Claude Code** (install it inside Ubuntu. A Claude Code or Codex installed on the Windows side is not used)
+**3. Claude Code or Codex** (install the one you will use, **inside Ubuntu**; if you use Codex only, skip the Claude Code part. A Claude Code or Codex installed on the Windows side is not used)
+
+**Claude Code**
 
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash
@@ -179,7 +201,27 @@ source ~/.bashrc
 claude
 ```
 
-Sign in (if no browser opens, paste the URL it shows into your Windows browser), answer every first-run question, and when the input prompt appears, type `/exit`. If you use Codex, install Codex CLI inside Ubuntu and sign in (the method in its official README: `curl -fsSL https://chatgpt.com/codex/install.sh | sh`, then `codex login`; a `codex` from Windows' npm (`/mnt/c/...`) does not work from WSL).
+Sign in (if no browser opens, paste the URL it shows into your Windows browser), answer every first-run question, and when the input prompt appears, type `/exit`.
+
+**Codex** (skip this if you use Claude Code only; the commands are from Codex's official README. A `codex` from Windows' npm (`/mnt/c/...`) does not work from WSL)
+
+```bash
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+```
+
+If the installer tells you to add something to your PATH, follow what it shows.
+
+```bash
+codex --version
+```
+
+**Check**: it prints a version.
+
+```bash
+codex login
+```
+
+Sign in with your ChatGPT account when it asks (if no browser opens, paste the URL it shows into your Windows browser). **Check**: after you finish the sign-in as it directs, it shows that you are signed in (the wording depends on the Codex version).
 
 From here, `+ NEW AGENT` in the cockpit starts agents. If you use Obsidian, continue with "Using it with Obsidian".
 

@@ -89,7 +89,9 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 計画の画面が出るので、読んで `yes` と打ち、Enter を押します。数十秒から数分で終わり、ブラウザで cockpit が開きます。足りないもの（git・tmux・curl）があると、何も変えずに止まって入れる方法を表示します。止まったときは、表示された「続け方」の 1 行を打ち直してください。
 
-**3. Claude Code**
+**3. Claude Code か Codex**（使う方を入れます。Codex だけの人は、Claude Code の部分を飛ばします）
+
+**Claude Code**
 
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash
@@ -109,7 +111,25 @@ source ~/.zshrc
 claude
 ```
 
-ログインし、最初の質問（文字の見た目・Security notes・フォルダの信頼など）にすべて答えて、入力欄が出たら `/exit` と打ちます。途中で閉じると、cockpit の NEW AGENT で起動した Claude が最初の設定の画面で止まります。Codex を使う人は、Codex CLI を入れてログインします（公式の README の方法です。Mac は `brew install --cask codex`、そのあと `codex login`）。
+ログインし、最初の質問（文字の見た目・Security notes・フォルダの信頼など）にすべて答えて、入力欄が出たら `/exit` と打ちます。途中で閉じると、cockpit の NEW AGENT で起動した Claude が最初の設定の画面で止まります。
+
+**Codex**（Claude Code だけの人は飛ばします。コマンドは Codex の公式の README のものです）
+
+```bash
+brew install --cask codex
+```
+
+```bash
+codex --version
+```
+
+**確かめ**: 2 つ目のコマンドが版を表示します。
+
+```bash
+codex login
+```
+
+聞かれたら ChatGPT のアカウントでログインします（ブラウザが開かなければ、表示に従います）。**確かめ**: 画面の案内どおりにログインを終えると、その旨の表示が出ます（文面は Codex の版で変わります）。
 
 ここまでで、cockpit の `+ NEW AGENT` から agent を起動できます。続いて Obsidian と使う人は、「Obsidian と一緒に使う」へ進んでください。
 
@@ -159,7 +179,9 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 計画の画面が出るので、読んで `yes` と打ち、Enter を押します。数十秒から数分で終わり、cockpit の URL（`http://127.0.0.1:8791/cockpit.html`）が表示されます。Windows のブラウザが自動で開かなければ、その URL を Windows のブラウザに貼ります。足りないものがあると何も変えずに止まるので、表示された「続け方」の 1 行を打ち直してください。
 
-**3. Claude Code**（Ubuntu の中に入れます。Windows 側に入れた Claude Code や Codex は使われません）
+**3. Claude Code か Codex**（使う方を **Ubuntu の中に**入れます。Codex だけの人は、Claude Code の部分を飛ばします。Windows 側に入れた Claude Code や Codex は使われません）
+
+**Claude Code**
 
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash
@@ -179,7 +201,27 @@ source ~/.bashrc
 claude
 ```
 
-ログインし（ブラウザが開かなければ、表示された URL を Windows のブラウザに貼ります）、最初の質問にすべて答えて、入力欄が出たら `/exit` と打ちます。Codex を使う人は、Ubuntu の中に Codex CLI を入れてログインします（公式の README の方法です。`curl -fsSL https://chatgpt.com/codex/install.sh | sh`、そのあと `codex login`。Windows 側の npm の `codex`（`/mnt/c/...`）は WSL では動きません）。
+ログインし（ブラウザが開かなければ、表示された URL を Windows のブラウザに貼ります）、最初の質問にすべて答えて、入力欄が出たら `/exit` と打ちます。
+
+**Codex**（Claude Code だけの人は飛ばします。コマンドは Codex の公式の README のものです。Windows 側の npm の `codex`（`/mnt/c/...`）は WSL では動きません）
+
+```bash
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+```
+
+install の最後に PATH を足すよう表示されたら、それに従います。
+
+```bash
+codex --version
+```
+
+**確かめ**: 版を表示します。
+
+```bash
+codex login
+```
+
+聞かれたら ChatGPT のアカウントでログインします（ブラウザが開かなければ、表示された URL を Windows のブラウザに貼ります）。**確かめ**: 画面の案内どおりにログインを終えると、その旨の表示が出ます（文面は Codex の版で変わります）。
 
 ここまでで、cockpit の `+ NEW AGENT` から agent を起動できます。続いて Obsidian と使う人は、「Obsidian と一緒に使う」へ進んでください。
 
