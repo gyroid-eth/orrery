@@ -201,7 +201,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - The ORRERY block in the old folder's `CLAUDE.md` stays. Delete between its markers by hand if you do not want it.
 - Mail is scoped per project. Agents that were already running keep showing in Telemetry, but they stay on the old project and cannot exchange Mail with new agents. EXIT them and start them again.
 - The folder choices of `+ NEW AGENT` are the work folder and `~` by default. To change them, use `cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"` (the project key is kept).
-- **If you start `claude` directly in a terminal, it runs in the folder you are in and does not have ORRERY's instructions.** `/delegate` is not used and no parent–child line appears. Start agents with `+ NEW AGENT` or `~/.agentstack/bin/agent-start <work folder>`.
+- **If you start `claude` directly in a terminal from a folder without ORRERY's instructions (such as home), it runs without them.** `/delegate` is not used and no parent–child line appears. Started inside the work folder (the project-key folder or a vault), it picks up that folder's `CLAUDE.md` block. Start agents with `+ NEW AGENT` or `~/.agentstack/bin/agent-start <work folder>`.
 
 ### Remove everything
 
