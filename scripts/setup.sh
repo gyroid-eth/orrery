@@ -543,9 +543,11 @@ if [ -z "$project_key" ]; then
 fi
 ok "project folder: ${project_key}"
 
-# Everything this writes must be on the Linux side in WSL.
+# Everything this installs must be on the Linux side in WSL. The project key is
+# the one exception: it is only the folder the agents work in, and a vault that
+# Windows Obsidian opens lives on the Windows drive (/mnt/c/...).
 if [ "$os" = wsl ]; then
-  for path in "$HOME" "${COCKPIT_ROOT:-$COCKPIT_PLANNED}" "$tel_root" "$project_key" "${ORRERY_VENV:-}"; do
+  for path in "$HOME" "${COCKPIT_ROOT:-$COCKPIT_PLANNED}" "$tel_root" "${ORRERY_VENV:-}"; do
     [ -n "$path" ] || continue
     if on_windows_drive "$path"; then
       stop "${path} is on the Windows drive (/mnt/...); nothing was changed." \
@@ -922,7 +924,16 @@ case "$mode" in
     ok "orrery-telemetry installed ($(cat "${AGENTSTACK_DIR}/VERSION" 2>/dev/null || printf '?'))"
     ;;
   update)
-    if [ -n "$project_key_arg" ]; then export AGENTSTACK_PROJECT_KEY="$project_key"; fi
+    if [ -n "$project_key_arg" ]; then
+      export AGENTSTACK_PROJECT_KEY="$project_key"
+      # The saved protected roots (where file reservations are required) follow
+      # the project key unless they were chosen separately: update.sh loads
+      # env.sh, so the old roots would otherwise stay on the old folder.
+      saved_roots="$(env_value AGENTSTACK_PROTECTED_ROOTS)"
+      if [ -z "$saved_roots" ] || [ "$saved_roots" = "$saved_key" ]; then
+        export AGENTSTACK_PROTECTED_ROOTS="$project_key"
+      fi
+    fi
     if [ "$ask_each" != true ]; then export AGENTSTACK_ASSUME_YES=1; fi
     say "  updating orrery-telemetry and the cockpit ..."
     if [ -n "$mail_env" ]; then export AGENTSTACK_MAIL_UPDATE="$mail_env"; fi

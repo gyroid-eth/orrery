@@ -20,7 +20,8 @@ Mac はターミナル、Windows は WSL2 の Ubuntu の中で打ちます。先
 2. **demo vault**: GitHub の tarball を展開して置きます。git の checkout にはしません（Mistral のキーを入れた plugin の設定を誤って commit しないため）。**フォルダがすでにあり、中に何かあれば何も変えません**（空のフォルダは vault ではないので、そこに置きます。中断した実行が残した空のフォルダもこれで使われます）。`--lang en` のときは英語版の vault（`orrery-demo-vault-en`）、それ以外は日本語版です
    - Mac: `~/Documents/orrery-demo-vault`（`--lang en` では `orrery-demo-vault-en`）
    - WSL: Windows の `C:\Users\<あなた>\Documents\orrery-demo-vault`（`--lang en` では `orrery-demo-vault-en`。Obsidian は Windows 側で動くため。WSL からは `/mnt/c/...`）
-3. **次にすることを出す**: Obsidian で開くフォルダ（WSL では Windows の形）、pdf-mistral に Mistral のキーを入れる場所、cockpit の agent に貼る頼み方の文（パスを埋めたもの、`--lang en` では英語）を 3 つ
+3. **vault を agent の作業 folder にする**: agent の作業 folder が既定の `~/orrery-work` のままなら、ORRERY の setup を `--project-key <vault>` で打ち直して、vault を作業 folder にします（setup が計画を見せて、1 回だけ確認します）。これ以降に起動した agent は vault で動き、vault の `CLAUDE.md` に ORRERY の指示の block が足され（元の内容はそのまま。2 回目以降も 1 つだけ）、file の予約が vault に効き、`+ NEW AGENT` も vault から始まります。Codex の指示は `~/.codex/AGENTS.md` です。すでに動いている agent は古い folder のままなので、新しく起動してください。**自分で選んだ作業 folder は変えません**（変える 1 行を出すだけです）。`--check` では何も変えません
+4. **次にすることを出す**: Obsidian で開くフォルダ（WSL では Windows の形）、pdf-mistral に Mistral のキーを入れる場所、cockpit の agent に貼る頼み方の文（パスを埋めたもの、`--lang en` では英語）を 3 つ
    - (a) pdf-mistral で変換した論文から
    - (b) **Mistral のキーが無いとき**: PDF をこの機械で変換してから（図はラスターの図の切り出しとページ全体の画像で、pdf-mistral より粗い）
    - (c) vault に入っている変換済みの論文から（一番速い。見本のノートがあるので、自分のノートは `...-r2` として隣に保存される）

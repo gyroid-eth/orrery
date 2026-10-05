@@ -8,7 +8,7 @@
 #   ... | bash -s -- --lang en            # English demo vault and requests (default: ja)
 #
 # It needs ORRERY itself first (the one-line install, scripts/get.sh), and does
-# three things, each reported at the end:
+# these things, each reported at the end:
 #   1. digest-paper: cloned to $AGENTSTACK_HOME/addons/digest-paper/src (or
 #      updated there) and installed with its own scripts/install.sh, which links
 #      it for Claude and Codex and never replaces a skill it did not install.
@@ -19,7 +19,12 @@
 #      you entered stay as they are. The one exception is an empty folder (left
 #      by an interrupted run, or made by hand): it is not a vault, so the demo
 #      vault is put there. It is not a git checkout on purpose.
-#   3. What to do next: where to open the vault in Obsidian, how to enter the
+#   3. The work folder: if the agents' work folder is still the default
+#      (~/orrery-work), the vault becomes it (the ORRERY setup is run again with
+#      --project-key <vault>; it shows its plan and asks once), so that an agent
+#      started from now on works in the vault with ORRERY's instructions. A
+#      folder you chose yourself is never changed; with --check nothing is.
+#   4. What to do next: where to open the vault in Obsidian, how to enter the
 #      Mistral key (or go without one), and requests to paste, paths filled in
 #      (in English with --lang en).
 # It never reads or writes an API key, never uses sudo and trusts only the
@@ -39,6 +44,9 @@ main() {
   agentstack="${AGENTSTACK_HOME:-${HOME}/.agentstack}"
   addon="${agentstack}/addons/digest-paper"
   src="${addon}/src"
+  # Tests point these at a stub.
+  cockpit="${ORRERY_DIR:-${HOME}/orrery}"
+  setup_sh="${ORRERY_SETUP:-${cockpit}/scripts/setup.sh}"
 
   say() { printf '%s\n' "$*"; }
   stop() {
@@ -59,7 +67,7 @@ main() {
       --lang)
         [ $# -ge 2 ] || stop "--lang needs ja or en."
         lang="$2"; shift 2 ;;
-      -h | --help) sed -n '2,29p' "$0" 2>/dev/null || true; exit 0 ;;
+      -h | --help) sed -n '2,34p' "$0" 2>/dev/null || true; exit 0 ;;
       *) stop "Unknown option: $1" "Options: --check, --vault-dir DIR, --lang ja|en" ;;
     esac
   done
@@ -287,7 +295,56 @@ main() {
   fi
   open_form="${win_form:-$vault_dir}"
 
-  # ------------------------------------------------------------ 3. report
+  # ------------------------------------------------------------ 3. the work folder
+  # The agents' work folder (ORRERY's project key) is a folder that gets ORRERY's
+  # instructions (CLAUDE.md) and whose files are reservation-protected. Only
+  # the default is replaced; one the user chose stays.
+  # The folder with symbolic links resolved (python3 would leave a cache in HOME, also under --check).
+  realpath_of() {
+    if [ -d "$1" ]; then (cd "$1" && pwd -P)
+    elif [ -d "$(dirname "$1")" ]; then printf '%s/%s\n' "$(cd "$(dirname "$1")" && pwd -P)" "$(basename "$1")"
+    else printf '%s\n' "$1"
+    fi
+  }
+  vault_real="$(realpath_of "$vault_dir")"
+  cur_key=""
+  [ ! -f "${agentstack}/env.sh" ] || cur_key="$(sed -n "s/^export AGENTSTACK_PROJECT_KEY=//p" "${agentstack}/env.sh" | tail -n 1 | tr -d "'\"")"
+  default_key="${HOME}/orrery-work"
+  work_state=""
+  work_failed=false
+  work_is_vault=false
+  retry_line="curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key '${vault_real}'"
+  if [ -z "$cur_key" ]; then
+    work_state="not known (no project key in ${agentstack}/env.sh); not changed"
+  elif [ "$(realpath_of "$cur_key")" = "$vault_real" ]; then
+    work_state="already the vault"
+    work_is_vault=true
+  elif [ "$(realpath_of "$cur_key")" != "$(realpath_of "$default_key")" ]; then
+    work_state="kept: ${cur_key} (a folder you chose). To use the vault instead: ${retry_line}"
+  elif [ "$read_only" = true ]; then
+    work_state="would make the vault the work folder (the ORRERY setup is run again with --project-key)"
+  elif [ ! -f "$setup_sh" ]; then
+    work_state="not changed: the ORRERY setup was not found at ${setup_sh}. To use the vault: ${retry_line}"
+  else
+    say ""
+    say "  The work folder is still the default (${cur_key}); making the vault the work folder ..."
+    status=0
+    # The setup asks once (type yes); under curl | bash, stdin is this script, so give it the terminal.
+    if [ -r /dev/tty ] && { : </dev/tty; } 2>/dev/null; then
+      env ORRERY_NO_OPEN=1 ORRERY_DIR="$cockpit" "$setup_sh" --project-key "$vault_real" </dev/tty || status=$?
+    else
+      env ORRERY_NO_OPEN=1 ORRERY_DIR="$cockpit" "$setup_sh" --project-key "$vault_real" || status=$?
+    fi
+    if [ "$status" -eq 0 ]; then
+      work_state="the vault (${vault_real})"
+      work_is_vault=true
+    else
+      work_state="NOT changed: the ORRERY setup stopped (above). To try again: ${retry_line}"
+      work_failed=true
+    fi
+  fi
+
+  # ------------------------------------------------------------ 4. report
   have_uv=false
   command -v uv >/dev/null 2>&1 && have_uv=true
   say ""
@@ -303,6 +360,12 @@ main() {
   [ "$collision" = false ] || say "  note  another digest-paper skill is kept at${collision_where}; the requests below name this add-on's SKILL.md"
   say "  ok    demo vault            ${vault_dir}: ${vault_state}"
   [ -z "$vault_warn" ] || say "  note  ${vault_warn}"
+  if [ "$work_failed" = true ]; then say "  NG    work folder           ${work_state}"; else say "  ok    work folder           ${work_state}"; fi
+  if [ "$work_is_vault" = true ] && [ "$read_only" = false ]; then
+    say "  note  agents started from now on work in the vault: its CLAUDE.md has ORRERY's block (your own text stays;"
+    say "        Codex's instructions are in ~/.codex/AGENTS.md), file reservations cover the vault, and NEW AGENT"
+    say "        starts there. Agents that were already running stay on the old folder: start new ones."
+  fi
   [ "$have_uv" = true ] || say "  note  uv not found: the no-key (local) conversion needs it; it comes with ORRERY"
   [ "$read_only" = false ] || { say ""; say "  --check: nothing was changed."; exit 0; }
 
@@ -325,9 +388,13 @@ main() {
   say "  2. With a Mistral API key: Settings -> Community plugins -> PDF Mistral (Hi-Res) -> API key."
   say "     Keep the key there only. Open a PDF in 10_Reference/Papers, then Ctrl/Cmd+P ->"
   say "     \"Convert PDF to Markdown with images\"."
-  say "  3. In the cockpit, NEW AGENT with the vault as its working folder (${vault_dir})."
-  say "     Started anywhere else, the agent does not see the vault's /addtodo, /adddone, /log"
-  say "     and rules. Then paste one of these:"
+  if [ "$work_is_vault" = true ]; then
+    say "  3. In the cockpit, NEW AGENT (it starts in the vault: ${vault_dir}). Then paste one of these:"
+  else
+    say "  3. In the cockpit, NEW AGENT with the vault as its working folder (${vault_dir})."
+    say "     Started anywhere else, the agent does not see the vault's /addtodo, /adddone, /log"
+    say "     and rules. Then paste one of these:"
+  fi
   say ""
   guo="${vault_dir}/10_Reference/Papers/Guo et al. 2024 - Self-regulated reversal deformation and locomotion of structurally homogenous hydrogels subjected to constant light illumination.pdf"
   onimaru="${paper_dir}/Onimaru et al. 2016 - The fin-to-limb transition as the re-organization of a Turing pattern.md"
@@ -387,6 +454,7 @@ main() {
   fi
   say ""
   say "  Run this line again later to update digest-paper (the vault is left as it is)."
+  [ "$work_failed" = false ] || exit 1
 }
 
 main "$@"

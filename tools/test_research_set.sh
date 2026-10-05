@@ -150,4 +150,64 @@ out="$(env -i PATH="$tmp/bin7:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HO
 echo "$out" | grep -q "Could not find your Windows user folder" || fail "no interop: $out"
 [ "$before" = "$(cd "$home" && find . | sort)" ] || fail "no interop wrote something"
 
+# The work folder: the vault replaces the default one only (setup is a stub here).
+rp() { python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"; }
+cat >"$tmp/setup-stub" <<'STUB'
+#!/bin/sh
+printf '%s\n' "$*" >>"$STUB_LOG"
+exit "${STUB_EXIT:-0}"
+STUB
+chmod +x "$tmp/setup-stub"
+wf_home() { # $1 = name, $2 = saved project key (empty: no env.sh); prints the HOME
+  local h="$tmp/$1"; mkdir -p "$h/.agentstack/skills/delegate"; touch "$h/.agentstack/skills/delegate/SKILL.md"
+  [ -z "$2" ] || printf "export AGENTSTACK_PROJECT_KEY=%s\n" "$2" >"$h/.agentstack/env.sh"
+  printf '%s' "$h"
+}
+wf_run() { # $1 = HOME, $2 = stub exit; rest = options
+  local h="$1" ex="$2"; shift 2
+  env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$h" STUB_LOG="$tmp/stub.log" STUB_EXIT="$ex" \
+    ORRERY_SETUP="$tmp/setup-stub" ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
+    /bin/bash "$script" "$@" 2>&1
+}
+# default work folder: the setup is run again with the vault
+home="$(wf_home h8 "$tmp/h8/orrery-work")"; : >"$tmp/stub.log"
+out="$(wf_run "$home" 0)" || fail "work folder default: $out"
+v8="$(rp "$home/Documents/orrery-demo-vault")"
+[ "$(cat "$tmp/stub.log")" = "--project-key $v8" ] || fail "setup args: $(cat "$tmp/stub.log")"
+echo "$out" | grep -q "ok    work folder           the vault" || fail "work folder state: $out"
+echo "$out" | grep -q "Agents that were already running stay on the old folder" || fail "old agents note: $out"
+echo "$out" | grep -q "NEW AGENT (it starts in the vault" || fail "next step for the vault: $out"
+# --check: the plan only
+home="$(wf_home h9 "$tmp/h9/orrery-work")"; : >"$tmp/stub.log"
+out="$(wf_run "$home" 0 --check)" || fail "work folder check: $out"
+[ ! -s "$tmp/stub.log" ] || fail "--check ran the setup"
+echo "$out" | grep -q "would make the vault the work folder" || fail "check plan for the work folder: $out"
+# a folder the user chose is kept; the line that changes it is shown
+home="$(wf_home h10 "$tmp/h10/mine")"; : >"$tmp/stub.log"
+out="$(wf_run "$home" 0)" || fail "work folder chosen: $out"
+[ ! -s "$tmp/stub.log" ] || fail "a chosen folder was changed"
+echo "$out" | grep -q "kept: $tmp/h10/mine (a folder you chose)" || fail "chosen folder note: $out"
+echo "$out" | grep -q -- "--project-key '$(rp "$home/Documents/orrery-demo-vault")'" || fail "retry line: $out"
+# already the vault: nothing to do
+home="$(wf_home h11 "")"; printf "export AGENTSTACK_PROJECT_KEY=%s\n" "$(rp "$home")/Documents/orrery-demo-vault" >"$home/.agentstack/env.sh"; : >"$tmp/stub.log"
+out="$(wf_run "$home" 0)" || fail "work folder already: $out"
+[ ! -s "$tmp/stub.log" ] || fail "the setup ran although the vault is the work folder"
+echo "$out" | grep -q "work folder           already the vault" || fail "already note: $out"
+# no saved project key (ORRERY not installed through setup): not touched
+home="$(wf_home h12 "")"; : >"$tmp/stub.log"
+out="$(wf_run "$home" 0)" || fail "work folder unknown: $out"
+[ ! -s "$tmp/stub.log" ] || fail "setup ran without a saved project key"
+echo "$out" | grep -q "work folder           not known" || fail "unknown note: $out"
+# the setup stops: reported, the rest is still done, the exit status is 1
+home="$(wf_home h13 "$tmp/h13/orrery-work")"; : >"$tmp/stub.log"
+if out="$(wf_run "$home" 1)"; then fail "a failed setup must exit 1: $out"; fi
+echo "$out" | grep -q "NG    work folder           NOT changed" || fail "failed setup note: $out"
+[ -f "$home/Documents/orrery-demo-vault/CLAUDE.md" ] || fail "the vault is still put there"
+# the setup is missing: said, with the line that does it
+home="$(wf_home h14 "$tmp/h14/orrery-work")"
+out="$(env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" \
+  ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
+  /bin/bash "$script" 2>&1)" || fail "no setup: $out"
+echo "$out" | grep -q "the ORRERY setup was not found at" || fail "no setup note: $out"
+
 echo "ok: research-set"
