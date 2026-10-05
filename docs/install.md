@@ -227,11 +227,21 @@ codex login
 
 ### Obsidian と一緒に使う
 
-Mac も Windows も同じです（Windows は Ubuntu の画面で打ちます）。研究セット（論文を読書ノートにする digest-paper と、練習用の Obsidian の vault）を入れます。英語の vault と頼み方の文にするには `--lang en` を付けます（付けなければ日本語です）。
+Mac も Windows も同じです（Windows は Ubuntu の画面で打ちます）。研究セット（論文を読書ノートにする digest-paper と、練習用の Obsidian の vault）を入れます。次の 2 行の**どちらか 1 つ**を打ちます。英語の vault と頼み方の文（`--lang en`）か、日本語のもの（オプション無し）です。
+
+英語:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/research-set.sh | bash -s -- --lang en
 ```
+
+日本語:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/research-set.sh | bash
+```
+
+あとからもう一方も打つと、agent の作業 folder は最初の vault のままです（既定でなくなった作業 folder は変えず、変える 1 行を表示します）。
 
 最後に、Obsidian で開く場所と、agent に貼る頼み方の文が表示されます。vault の置き場所は、Mac が `~/Documents/orrery-demo-vault-en`（`--lang en` でなければ `orrery-demo-vault`）、Windows が Windows 側の「ドキュメント」の同名のフォルダです（Windows の形の場所が最後に表示されます）。
 

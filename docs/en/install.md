@@ -227,11 +227,21 @@ From here, `+ NEW AGENT` in the cockpit starts agents. If you use Obsidian, cont
 
 ### Using it with Obsidian
 
-The same on Mac and Windows (on Windows, type it in the Ubuntu window). This installs the research set: digest-paper, which turns papers into reading notes, and a practice Obsidian vault. Add `--lang en` for the English vault and requests (without it, Japanese).
+The same on Mac and Windows (on Windows, type it in the Ubuntu window). This installs the research set: digest-paper, which turns papers into reading notes, and a practice Obsidian vault. Choose **one** of the two lines: the English vault and requests (`--lang en`), or the Japanese ones (no option).
+
+English:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/research-set.sh | bash -s -- --lang en
 ```
+
+Japanese:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/research-set.sh | bash
+```
+
+If you run the second one later as well, the agents' work folder stays on the first vault (a work folder that is no longer the default is never changed; the line that changes it is shown).
 
 At the end it shows where to open the vault in Obsidian and the requests to paste to an agent. The vault is `~/Documents/orrery-demo-vault-en` on a Mac (`orrery-demo-vault` without `--lang en`), and a folder of the same name in the Windows Documents folder on Windows (the Windows form of the location is printed at the end).
 
