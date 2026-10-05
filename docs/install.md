@@ -30,9 +30,228 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 ## はじめて入れる人へ（ブラウザで使う・Mac / Windows WSL2）
 
-この節だけで、自分の Mac または Windows（WSL2）に ORRERY cockpit を入れ、ブラウザで開くところまで進めます。デスクトップアプリ（`ORRERY.app`）は使いません。Mac でもブラウザで開きます。アプリの build や常駐は、この節の後ろの「動作環境」以降を参照してください。
+この節だけで、自分の Mac または Windows 11 の PC に ORRERY を入れ、ブラウザで cockpit を開くところまで進めます。コマンドは 1 つずつコードブロックに分けてあり、上から順にコピーして貼れば通ります。デスクトップアプリ（`ORRERY.app`）は使いません。Mac でもブラウザで開きます。アプリの build や常駐は、「動作環境」以降を参照してください。
 
-### 0. 先に orrery-telemetry を入れる
+**先に用意するもの**: agent を動かすには、Claude Code か Codex CLI にログインできるアカウントが要ります。Claude Code は Claude の有料 plan（Pro・Max・Team・Enterprise）か Console のアカウントが必要で、**無料の claude.ai の plan では使えません**（[公式の説明](https://code.claude.com/docs/en/setup)）。Codex は ChatGPT の有料 plan（Plus・Pro・Business・Edu・Enterprise。[公式の README](https://github.com/openai/codex)）です。ログインの画面に進む前に、どれを使うか決めておいてください。
+
+### 0. Obsidian（一緒に使う場合）
+
+Obsidian（ノートのアプリ）と一緒に使う人は、先に Obsidian を入れます。使わない人は飛ばして、「Mac」か「Windows 11」へ進んでください（ORRERY は Obsidian が無くても動きます）。
+
+- **Mac**: https://obsidian.md/ から Mac 版を download し、Applications に入れます
+- **Windows 11**: https://obsidian.md/ から Windows 版の installer を download して実行します。Obsidian は **Windows 側**に入れます（WSL2 の Ubuntu の中ではありません）
+
+**確かめ**: Obsidian を起動して、vault を選ぶ画面（「Create new vault」「Open folder as vault」などが並ぶ画面）が出れば準備完了です。
+
+### Mac
+
+ターミナル（Spotlight で「ターミナル」と打つと開きます）に、次を 1 つずつ貼って Enter を押します。
+
+**1. Homebrew と tmux**
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Mac のパスワードを聞かれたら入れます（画面に文字は出ません）。Enter を押すよう言われたら押します。Apple のコマンドラインツール（git を含む）もこのとき入ります。終わりに「Next steps」と PATH の設定が表示されるので、次の 3 行はそれと同じものです（Apple シリコンの Mac。Intel の Mac は不要です。表示された指示が違うときは、表示に従ってください）。
+
+```bash
+echo >> ~/.zprofile
+```
+
+```bash
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+```
+
+```bash
+eval "$(/opt/homebrew/bin/brew shellenv)"
+```
+
+```bash
+brew install tmux
+```
+
+**確かめ**: 次の 2 つのコマンドが、それぞれ版を表示します（`Homebrew 4.…` と `tmux 3.…` のような 1 行）。
+
+```bash
+brew --version
+```
+
+```bash
+tmux -V
+```
+
+**2. ORRERY**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
+```
+
+計画の画面が出るので、読んで `yes` と打ち、Enter を押します。数十秒から数分で終わり、ブラウザで cockpit が開きます。足りないもの（git・tmux・curl）があると、何も変えずに止まって入れる方法を表示します。止まったときは、表示された「続け方」の 1 行を打ち直してください。
+
+**3. Claude Code か Codex**（使う方を入れます。Codex だけの人は、Claude Code の部分を飛ばします）
+
+**Claude Code**
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+`claude: command not found` と言われたら、PATH を足します（install の終わりに PATH の案内が出たら、それに従っても構いません）。
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+```
+
+```bash
+source ~/.zshrc
+```
+
+```bash
+claude
+```
+
+ログインし、最初の質問（文字の見た目・Security notes・フォルダの信頼など）にすべて答えて、入力欄が出たら `/exit` と打ちます。途中で閉じると、cockpit の NEW AGENT で起動した Claude が最初の設定の画面で止まります。
+
+**Codex**（Claude Code だけの人は飛ばします。コマンドは Codex の公式の README のものです）
+
+```bash
+brew install --cask codex
+```
+
+```bash
+codex --version
+```
+
+**確かめ**: 2 つ目のコマンドが版を表示します。
+
+```bash
+codex login
+```
+
+聞かれたら ChatGPT のアカウントでログインします（ブラウザが開かなければ、表示に従います）。**確かめ**: 画面の案内どおりにログインを終えると、その旨の表示が出ます（文面は Codex の版で変わります）。
+
+ここまでで、cockpit の `+ NEW AGENT` から agent を起動できます。続いて Obsidian と使う人は、「Obsidian と一緒に使う」へ進んでください。
+
+### Windows 11
+
+ORRERY は Windows の中の Ubuntu（WSL2）で動き、画面は Windows のブラウザに出ます。Obsidian は Windows 側です。
+
+**1. WSL2 の Ubuntu**
+
+スタートメニューで「PowerShell」を右クリックし、「管理者として実行」を選んで、次を貼ります。
+
+```powershell
+wsl --install
+```
+
+終わったら PC を再起動します。スタートメニューから「Ubuntu」を開き、Ubuntu 用のユーザー名とパスワードを決めます（パスワードは画面に出ません）。すでに Ubuntu がある人は、ここまでを飛ばして、次の確かめだけ行います。
+
+**確かめ（WSL2 であること）**: PowerShell で次を打ち、Ubuntu の `VERSION` が **2** であることを確かめます。
+
+```powershell
+wsl -l -v
+```
+
+`VERSION` が 1 の Ubuntu は WSL2 にします（`Ubuntu` の部分は、表に出た名前にします。Microsoft の公式の手順です）。
+
+```powershell
+wsl --set-version Ubuntu 2
+```
+
+**以降は全部 Ubuntu の画面**（`ユーザー名@PC名:~$`）で打ちます。必要な道具を入れます（すでに入っていれば何も起きません）。
+
+```bash
+sudo apt update && sudo apt install -y git tmux curl
+```
+
+**確かめ**: 次が、git・tmux・curl の版を 3 行で表示します。
+
+```bash
+git --version && tmux -V && curl --version | head -n 1
+```
+
+**2. ORRERY**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
+```
+
+計画の画面が出るので、読んで `yes` と打ち、Enter を押します。数十秒から数分で終わり、cockpit の URL（`http://127.0.0.1:8791/cockpit.html`）が表示されます。Windows のブラウザが自動で開かなければ、その URL を Windows のブラウザに貼ります。足りないものがあると何も変えずに止まるので、表示された「続け方」の 1 行を打ち直してください。
+
+**3. Claude Code か Codex**（使う方を **Ubuntu の中に**入れます。Codex だけの人は、Claude Code の部分を飛ばします。Windows 側に入れた Claude Code や Codex は使われません）
+
+**Claude Code**
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+`claude: command not found` と言われたら（install の終わりに PATH の案内が出たら、それに従っても構いません）:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+```
+
+```bash
+source ~/.bashrc
+```
+
+```bash
+claude
+```
+
+ログインし（ブラウザが開かなければ、表示された URL を Windows のブラウザに貼ります）、最初の質問にすべて答えて、入力欄が出たら `/exit` と打ちます。
+
+**Codex**（Claude Code だけの人は飛ばします。コマンドは Codex の公式の README のものです。Windows 側の npm の `codex`（`/mnt/c/...`）は WSL では動きません）
+
+```bash
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+```
+
+install の最後に PATH を足すよう表示されたら、それに従います。
+
+```bash
+codex --version
+```
+
+**確かめ**: 版を表示します。
+
+```bash
+codex login
+```
+
+聞かれたら ChatGPT のアカウントでログインします（ブラウザが開かなければ、表示された URL を Windows のブラウザに貼ります）。**確かめ**: 画面の案内どおりにログインを終えると、その旨の表示が出ます（文面は Codex の版で変わります）。
+
+ここまでで、cockpit の `+ NEW AGENT` から agent を起動できます。続いて Obsidian と使う人は、「Obsidian と一緒に使う」へ進んでください。
+
+### Obsidian と一緒に使う
+
+Mac も Windows も同じです（Windows は Ubuntu の画面で打ちます）。研究セット（論文を読書ノートにする digest-paper と、練習用の Obsidian の vault）を入れます。次の 2 行の**どちらか 1 つ**を打ちます。英語の vault と頼み方の文（`--lang en`）か、日本語のもの（オプション無し）です。
+
+英語:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/research-set.sh | bash -s -- --lang en
+```
+
+日本語:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/research-set.sh | bash
+```
+
+あとからもう一方も打つと、agent の作業 folder は最初の vault のままです（既定でなくなった作業 folder は変えず、変える 1 行を表示します）。
+
+最後に、Obsidian で開く場所と、agent に貼る頼み方の文が表示されます。vault の置き場所は、Mac が `~/Documents/orrery-demo-vault-en`（`--lang en` でなければ `orrery-demo-vault`）、Windows が Windows 側の「ドキュメント」の同名のフォルダです（Windows の形の場所が最後に表示されます）。
+
+Obsidian で「Open folder as vault」を選び、表示された場所の vault を開きます。コミュニティプラグインについて聞かれたら「Trust author and enable plugins」を選びます。その vault が agent の作業 folder になるので、これ以降に cockpit の `+ NEW AGENT` で起動した agent は vault の中で動きます（すでに動いている agent は古い folder のままなので、新しく起動してください）。詳しくは[研究セット](research-set.md)にあります。
+
+### 手で 1 段ずつ入れる（git の取得から）
+
+上の 1 行を使わず、repository を取得して手で入れる手順です。
+
+#### 0. 先に orrery-telemetry を入れる
 
 ORRERY cockpit は、エージェント一覧・NEW AGENT（spawn）・Mail・利用枠を [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry)（repository は orrery-telemetry。旧名 AgentStack で、環境変数 `AGENTSTACK_*` と `~/.agentstack` にその名残がある）から読みます。**orrery-telemetry の [インストール手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/install.md) を最後まで済ませてから**、この先に進んでください。Windows の人は、その文書の「Windows（WSL2）で入れる」節に従い、WSL2 の Ubuntu の中に入れます。
 
@@ -50,7 +269,7 @@ cockpit は orrery-telemetry の最新の release に合わせて作っていま
 - `curl -s http://127.0.0.1:8770/api/version` に `"api": 2` 以上がある。1 は、この仕組みより前のすべての版（`version` が [最新の release](https://github.com/gyroid-eth/orrery-telemetry/releases/latest) と同じならなおよい）
 - Claude Code の初回設定が済んでいる（`claude` を起動し、text style・ログイン・Security notes・フォルダの信頼まで進めて、通常の入力欄が出たら `/exit`。fullscreen renderer を試すかなど、ほかに一度だけ出る質問にも自分で答えておく）。または Codex CLI にログイン済み（`codex login`）。初回設定の途中で閉じると、NEW AGENT の Claude は初回設定の画面で止まり、起動しません。ORRERY はこれらの質問に代わりに答えません。Windows では **Ubuntu の中に入れたもの**にログインします。Windows 側に入れたものは使われません
 
-### 守ること: 同じマシン・同じユーザー・同じ tmux
+#### 守ること: 同じマシン・同じユーザー・同じ tmux
 
 cockpit は、orrery-telemetry が起動したエージェントの tmux セッションを直接見に行きます。そのため、次をすべて同じにします。
 
@@ -58,7 +277,7 @@ cockpit は、orrery-telemetry が起動したエージェントの tmux セッ�
 - **同じユーザー**: orrery-telemetry を入れたユーザーのまま（`sudo` や別ユーザーで cockpit を起動しない）
 - **同じ tmux server**: エージェントは `agent-start` / `agent-start-codex` か cockpit の NEW AGENT で起動する。`tmux -L 名前` や `TMUX_TMPDIR` で別の tmux server を使わない
 
-### 1. ORRERY を手元に置く
+#### 1. ORRERY を手元に置く
 
 repository を取得します。
 
@@ -71,7 +290,7 @@ repository が公開される前は、招待を受けた GitHub アカウント�
 
 Windows では、**Ubuntu のプロンプト（`user@PC:~$`）で**打ちます。置き場所は Ubuntu の home の下（例: `~/orrery`）にします。`/mnt/c/...`（Windows のドライブ）の下は遅く、権限の扱いも違うので避けます。
 
-### 2. 起動 script を走らせる
+#### 2. 起動 script を走らせる
 
 repository の中で:
 
@@ -97,7 +316,7 @@ script は 1 回で次を行います。
 ==============================================================
 ```
 
-### 3. ブラウザで開く
+#### 3. ブラウザで開く
 
 表示された `http://127.0.0.1:8791/cockpit.html` をブラウザで開きます。
 
@@ -106,13 +325,13 @@ script は 1 回で次を行います。
 
 左の一覧にエージェントが出ていなければ、cockpit の NEW AGENT から起動するか、別の窓で `~/.agentstack/bin/agent-start /path/to/your-project`（Codex なら `agent-start-codex`）を実行します。
 
-### 4. 止める・次に起動する
+#### 4. 止める・次に起動する
 
 - 止めるときは、script を動かしている窓で `Ctrl-C` を押します。窓を閉じても止まります
 - **起動した窓は開いたままにします。** cockpit はその窓の中で動いています（常駐はしません）
 - Windows では、Windows Terminal から起動した agent・dashboard・Mail は、Ubuntu の窓を閉じても裏で動き続けます。使い終わって WSL のメモリを Windows に返したいときは、PowerShell で `wsl --shutdown` を打ちます。その後や PC の再起動の後に使うときは、Ubuntu を開き、`~/.agentstack/bin/agentstack-doctor` で状態を見て、止まっていれば `~/.agentstack/dashboard/agentctl.sh start` と `~/.agentstack/bin/agentstack-mailctl start` で起動してから、もう一度 `./scripts/start-cockpit.sh` を実行します
 
-### 5. 更新する
+#### 5. 更新する
 
 cockpit の folder で次を実行します。orrery-telemetry と cockpit が 1 回で最新になります。
 
@@ -122,7 +341,7 @@ cockpit の folder で次を実行します。orrery-telemetry と cockpit が 1
 
 終わったら、cockpit を動かしている窓で `Ctrl-C` を押し、`./scripts/start-cockpit.sh` をもう一度実行します。
 
-#### 詳しく
+##### 詳しく
 
 - 先に orrery-telemetry を更新します。入れた場所で `git pull --ff-only` と `./scripts/install.sh` を実行します。
 - 次に cockpit で `git pull --ff-only` を実行します。
