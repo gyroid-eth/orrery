@@ -198,7 +198,7 @@ install の 1 行に `--project-key` を足します。後から変えるとき�
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key ~/my-project
 ```
 
-**Obsidian の vault を agent に扱わせたいとき**は、`--project-key` に vault の path を渡します（例: `--project-key ~/Documents/MyVault`）。その vault の `CLAUDE.md` に ORRERY の指示の block が入ります。`CLAUDE.md` が既にあれば block だけが足され、既存の内容はそのまま残ります（[Obsidian と一緒に使う](#obsidian-と一緒に使う)）。WSL2 で Windows 側の vault（`/mnt/c/Users/<you>/…`）を使うときは、1 行の installer が `/mnt` の folder を断るので、`cd ~/orrery-telemetry && ./scripts/install.sh --project-key /mnt/c/Users/<you>/Documents/MyVault` を使います。
+**Obsidian の vault を agent に扱わせたいとき**は、`--project-key` に vault の path を渡します（例: `--project-key ~/Documents/MyVault`）。その vault の `CLAUDE.md` に ORRERY の指示の block が入ります（Codex の指示は `~/.codex/AGENTS.md` に入ります）。`CLAUDE.md` が既にあれば block だけが足され、既存の内容はそのまま残ります（[Obsidian と一緒に使う](#obsidian-と一緒に使う)）。**WSL2 では、作業 folder は Ubuntu の home の中に置きます。** Windows 側の folder（`/mnt/c/…`）を `--project-key` に渡すと、1 行の installer は何も変えずに止まります。Windows 側の vault は作業 folder にせず、作業 folder を Ubuntu の home に置いたまま、agent に `/mnt/c/…` の path を渡して扱わせます（[研究セット](docs/research-set.md)がこの形です）。
 
 - 古い folder の `CLAUDE.md` の ORRERY の block は残ります。要らなければ marker の間を手で消します。
 - Mail は project 単位です。変える前に起動していた agent は Telemetry に出続けますが、古い project のままで、新しい agent と Mail が通じません。EXIT して起動し直してください。
