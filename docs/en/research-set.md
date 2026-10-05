@@ -10,16 +10,17 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/re
 
 - Only look, change nothing: `... | bash -s -- --check`
 - Put the vault elsewhere: `... | bash -s -- --vault-dir <folder>`
+- English demo vault and requests (default: Japanese): `... | bash -s -- --lang en`
 
 Type it in Terminal on a Mac, or inside the WSL2 Ubuntu on Windows. ORRERY's own one-line install ([install](install.md)) comes first.
 
 ## What it does
 
 1. **The digest-paper add-on**: fetched to `~/.agentstack/addons/digest-paper/src` (updated on later runs) and installed with the add-on's own `scripts/install.sh`, which links it for Claude and Codex and never replaces another skill of the same name (the requests it prints then name the add-on's SKILL.md).
-2. **The demo vault**: a GitHub tarball, unpacked; not a git checkout (so a plugin setting holding your Mistral key is never committed by mistake). **A folder that already exists and has anything in it is never changed.** (An empty folder is not a vault, so the demo vault is put there; this also picks up an empty folder left by an interrupted run.)
-   - Mac: `~/Documents/orrery-demo-vault`
-   - WSL: Windows' `C:\Users\<you>\Documents\orrery-demo-vault` (Obsidian runs on Windows; from WSL it is `/mnt/c/...`)
-3. **What to do next**: the folder to open in Obsidian (in Windows form on WSL), where to enter a Mistral key for pdf-mistral, and three requests to paste to an agent in the cockpit, with the paths filled in:
+2. **The demo vault**: a GitHub tarball, unpacked; not a git checkout (so a plugin setting holding your Mistral key is never committed by mistake). **A folder that already exists and has anything in it is never changed.** (An empty folder is not a vault, so the demo vault is put there; this also picks up an empty folder left by an interrupted run.) With `--lang en`, the vault is the English one (`orrery-demo-vault-en`); otherwise it's the Japanese one.
+   - Mac: `~/Documents/orrery-demo-vault` (`orrery-demo-vault-en` with `--lang en`)
+   - WSL: Windows' `C:\Users\<you>\Documents\orrery-demo-vault` (`orrery-demo-vault-en` with `--lang en`; Obsidian runs on Windows; from WSL it is `/mnt/c/...`)
+3. **What to do next**: the folder to open in Obsidian (in Windows form on WSL), where to enter a Mistral key for pdf-mistral, and three requests to paste to an agent in the cockpit, with the paths filled in (in English with `--lang en`, otherwise in Japanese, since that's the language the vault's agent instructions are written in):
    - (a) a paper converted with pdf-mistral
    - (b) **no Mistral key**: the PDF is converted on your machine first (figures are rougher: raster figures cut out, otherwise whole-page images)
    - (c) the paper already converted in the vault (quickest; the vault has a sample note of it, so yours is saved beside it as `...-r2`)

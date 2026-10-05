@@ -5,6 +5,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/research-set.sh | bash
 #   ... | bash -s -- --check              # only look; change nothing
 #   ... | bash -s -- --vault-dir DIR      # put the demo vault somewhere else
+#   ... | bash -s -- --lang en            # English demo vault and requests (default: ja)
 #
 # It needs ORRERY itself first (the one-line install, scripts/get.sh), and does
 # three things, each reported at the end:
@@ -12,14 +13,15 @@
 #      updated there) and installed with its own scripts/install.sh, which links
 #      it for Claude and Codex and never replaces a skill it did not install.
 #   2. The demo vault: a GitHub tarball unpacked to ~/Documents/orrery-demo-vault
-#      (on WSL, the Windows Documents folder, since Obsidian runs on Windows). A
-#      folder that already exists and has anything in it is never touched, so
-#      your notes and the API key you entered stay as they are. The one
-#      exception is an empty folder (left by an interrupted run, or made by
-#      hand): it is not a vault, so the demo vault is put there. It is not a
-#      git checkout on purpose.
+#      (orrery-demo-vault-en with --lang en; on WSL, the Windows Documents
+#      folder, since Obsidian runs on Windows). A folder that already exists
+#      and has anything in it is never touched, so your notes and the API key
+#      you entered stay as they are. The one exception is an empty folder (left
+#      by an interrupted run, or made by hand): it is not a vault, so the demo
+#      vault is put there. It is not a git checkout on purpose.
 #   3. What to do next: where to open the vault in Obsidian, how to enter the
-#      Mistral key (or go without one), and requests to paste, paths filled in.
+#      Mistral key (or go without one), and requests to paste, paths filled in
+#      (in English with --lang en).
 # It never reads or writes an API key, never uses sudo and trusts only the
 # gyroid-eth repositories on GitHub. Running it again updates the add-on.
 #
@@ -31,7 +33,7 @@ main() {
 
   override_url="${ORRERY_RESEARCH_ADDON_URL:-}"
   addon_url="${override_url:-https://github.com/gyroid-eth/orrery-digest-paper.git}"
-  vault_repo="https://github.com/gyroid-eth/orrery-demo-vault.git"
+  lang="ja"
   # Tests point these at local copies.
   vault_tarball="${ORRERY_RESEARCH_VAULT_TARBALL:-}"
   agentstack="${AGENTSTACK_HOME:-${HOME}/.agentstack}"
@@ -54,10 +56,20 @@ main() {
       --vault-dir)
         [ $# -ge 2 ] || stop "--vault-dir needs a folder."
         vault_dir="$2"; shift 2 ;;
-      -h | --help) sed -n '2,26p' "$0" 2>/dev/null || true; exit 0 ;;
-      *) stop "Unknown option: $1" "Options: --check, --vault-dir DIR" ;;
+      --lang)
+        [ $# -ge 2 ] || stop "--lang needs ja or en."
+        lang="$2"; shift 2 ;;
+      -h | --help) sed -n '2,29p' "$0" 2>/dev/null || true; exit 0 ;;
+      *) stop "Unknown option: $1" "Options: --check, --vault-dir DIR, --lang ja|en" ;;
     esac
   done
+  case "$lang" in
+    ja | en) ;;
+    *) stop "Unknown --lang: ${lang}" "Options: ja, en" ;;
+  esac
+  vault_name="orrery-demo-vault"
+  [ "$lang" = en ] && vault_name="orrery-demo-vault-en"
+  vault_repo="https://github.com/gyroid-eth/${vault_name}.git"
 
   say "ORRERY research set (digest-paper + demo vault)"
   [ -z "${ORRERY_RESEARCH_ADDON_URL:-}${ORRERY_RESEARCH_VAULT_TARBALL:-}" ] || say "  note  test override in use"
@@ -135,13 +147,13 @@ main() {
     if [ "$os" = wsl ]; then
       profile="$(cmd.exe /c 'echo %USERPROFILE%' 2>/dev/null | tr -d '\r' || true)"
       case "$profile" in
-        [A-Za-z]:\\*) vault_dir="$(wslpath -u "$profile")/Documents/orrery-demo-vault" ;;
+        [A-Za-z]:\\*) vault_dir="$(wslpath -u "$profile")/Documents/${vault_name}" ;;
         *) stop "Could not find your Windows user folder (Windows interop is off?)." \
           "Give the folder yourself, for example:" \
-          "  ... | bash -s -- --vault-dir /mnt/c/Users/<you>/Documents/orrery-demo-vault" ;;
+          "  ... | bash -s -- --vault-dir /mnt/c/Users/<you>/Documents/${vault_name}" ;;
       esac
     else
-      vault_dir="${HOME}/Documents/orrery-demo-vault"
+      vault_dir="${HOME}/Documents/${vault_name}"
     fi
   fi
   case "$vault_dir" in /*) ;; *) vault_dir="$(pwd)/${vault_dir}" ;; esac
@@ -248,7 +260,7 @@ main() {
     else
       vault_rev="$(git ls-remote "$vault_repo" refs/heads/main | cut -c1-40)"
       [ -n "$vault_rev" ] || stop "Could not reach the demo vault on GitHub." "Check the network and run this again."
-      curl -fsSL "https://codeload.github.com/gyroid-eth/orrery-demo-vault/tar.gz/${vault_rev}" -o "${work}/vault.tar.gz" \
+      curl -fsSL "https://codeload.github.com/gyroid-eth/${vault_name}/tar.gz/${vault_rev}" -o "${work}/vault.tar.gz" \
         || stop "Could not download the demo vault." "Check the network and run this again."
       vault_rev="$(printf '%s' "$vault_rev" | cut -c1-7)"
     fi
@@ -296,7 +308,13 @@ main() {
 
   paper_dir="${vault_dir}/20_MDPapers"
   prefix=""
-  [ "$collision" = false ] || prefix="${skill} を読んで、それに従って。"
+  if [ "$collision" = true ]; then
+    if [ "$lang" = en ]; then
+      prefix="Read ${skill} and follow it. "
+    else
+      prefix="${skill} を読んで、それに従って。"
+    fi
+  fi
   say ""
   say "  Next:"
   say "  1. Obsidian: \"Open folder as vault\" ->  ${open_form}"
@@ -311,31 +329,62 @@ main() {
   say "     Started anywhere else, the agent does not see the vault's /addtodo, /adddone, /log"
   say "     and rules. Then paste one of these:"
   say ""
-  say "     (a) a paper you converted with pdf-mistral:"
-  say "     ${prefix}digest-paper で、この論文のノートを作って。"
-  say "     論文: ${paper_dir}/<論文名>.md"
-  say "     vault: ${vault_dir}"
-  say "     図のフォルダ: ${paper_dir}/pdf-mistral-images"
-  say "     保存先: ${vault_dir}/10_Reference/Notes"
-  say ""
-  say "     (b) no Mistral key (the PDF is converted on this machine; figures are rougher):"
-  say "     ${prefix}digest-paper で、Mistral のキーが無いので、この PDF を local で変換してからノートにして。"
   guo="${vault_dir}/10_Reference/Papers/Guo et al. 2024 - Self-regulated reversal deformation and locomotion of structurally homogenous hydrogels subjected to constant light illumination.pdf"
-  if [ -f "$guo" ]; then
-    say "     PDF: ${guo}"
+  onimaru="${paper_dir}/Onimaru et al. 2016 - The fin-to-limb transition as the re-organization of a Turing pattern.md"
+  if [ "$lang" = en ]; then
+    say "     (a) a paper you converted with pdf-mistral:"
+    say "     ${prefix}Use digest-paper to write a reading note for this paper."
+    say "     Paper: ${paper_dir}/<paper name>.md"
+    say "     Vault: ${vault_dir}"
+    say "     Figures folder: ${paper_dir}/pdf-mistral-images"
+    say "     Save to: ${vault_dir}/10_Reference/Notes"
+    say "     Write the note in English."
+    say ""
+    say "     (b) no Mistral key (the PDF is converted on this machine; figures are rougher):"
+    say "     ${prefix}Use digest-paper. I don't have a Mistral key, so convert this PDF locally first, then write the note."
+    if [ -f "$guo" ]; then
+      say "     PDF: ${guo}"
+    else
+      say "     PDF: ${vault_dir}/10_Reference/Papers/<paper name>.pdf   (replace <paper name> with your own PDF's name)"
+    fi
+    say "     Vault: ${vault_dir}"
+    say "     Save to: ${vault_dir}/10_Reference/Notes"
+    say "     Write the note in English."
+    say ""
+    say "     (c) quickest: the paper already converted in the vault (the vault has a sample note"
+    say "         of it, so yours is saved beside it as ...-r2):"
+    say "     ${prefix}Use digest-paper to write a reading note for this paper."
+    say "     Paper: ${onimaru}"
+    say "     Vault: ${vault_dir}"
+    say "     Figures folder: ${paper_dir}/pdf-mistral-images"
+    say "     Save to: ${vault_dir}/10_Reference/Notes"
+    say "     Write the note in English."
   else
-    say "     PDF: ${vault_dir}/10_Reference/Papers/<論文名>.pdf   (<論文名> を自分の PDF の名前に)"
+    say "     (a) a paper you converted with pdf-mistral:"
+    say "     ${prefix}digest-paper で、この論文のノートを作って。"
+    say "     論文: ${paper_dir}/<論文名>.md"
+    say "     vault: ${vault_dir}"
+    say "     図のフォルダ: ${paper_dir}/pdf-mistral-images"
+    say "     保存先: ${vault_dir}/10_Reference/Notes"
+    say ""
+    say "     (b) no Mistral key (the PDF is converted on this machine; figures are rougher):"
+    say "     ${prefix}digest-paper で、Mistral のキーが無いので、この PDF を local で変換してからノートにして。"
+    if [ -f "$guo" ]; then
+      say "     PDF: ${guo}"
+    else
+      say "     PDF: ${vault_dir}/10_Reference/Papers/<論文名>.pdf   (<論文名> を自分の PDF の名前に)"
+    fi
+    say "     vault: ${vault_dir}"
+    say "     保存先: ${vault_dir}/10_Reference/Notes"
+    say ""
+    say "     (c) quickest: the paper already converted in the vault (the vault has a sample note"
+    say "         of it, so yours is saved beside it as ...-r2):"
+    say "     ${prefix}digest-paper で、この論文のノートを作って。"
+    say "     論文: ${onimaru}"
+    say "     vault: ${vault_dir}"
+    say "     図のフォルダ: ${paper_dir}/pdf-mistral-images"
+    say "     保存先: ${vault_dir}/10_Reference/Notes"
   fi
-  say "     vault: ${vault_dir}"
-  say "     保存先: ${vault_dir}/10_Reference/Notes"
-  say ""
-  say "     (c) quickest: the paper already converted in the vault (the vault has a sample note"
-  say "         of it, so yours is saved beside it as ...-r2):"
-  say "     ${prefix}digest-paper で、この論文のノートを作って。"
-  say "     論文: ${paper_dir}/Onimaru et al. 2016 - The fin-to-limb transition as the re-organization of a Turing pattern.md"
-  say "     vault: ${vault_dir}"
-  say "     図のフォルダ: ${paper_dir}/pdf-mistral-images"
-  say "     保存先: ${vault_dir}/10_Reference/Notes"
   say ""
   say "  Run this line again later to update digest-paper (the vault is left as it is)."
 }
