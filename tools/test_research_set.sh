@@ -2,23 +2,35 @@
 # Tests for scripts/research-set.sh in a throwaway HOME, with local copies of
 # digest-paper and the demo vault (no network). Run: tools/test_research_set.sh
 # DIGEST_PAPER_SRC and DEMO_VAULT_SRC default to sibling checkouts.
+# DEMO_VAULT_EN_SRC (default: sibling orrery-demo-vault-en) is optional; the
+# --lang en tests are skipped (not the whole file) if it's missing.
 set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 script="${here}/scripts/research-set.sh"
 digest="${DIGEST_PAPER_SRC:-${here}/../orrery-digest-paper}"
 vault_src="${DEMO_VAULT_SRC:-${here}/../orrery-demo-vault}"
+vault_en_src="${DEMO_VAULT_EN_SRC:-${here}/../orrery-demo-vault-en}"
 [ -e "$digest/.git" ] && [ -e "$vault_src/.git" ] || { echo "skip: need checkouts of orrery-digest-paper and orrery-demo-vault"; exit 0; }
+have_en_vault=false
+[ -e "$vault_en_src/.git" ] && have_en_vault=true
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 fail() { echo "FAIL: $*"; exit 1; }
 git -C "$vault_src" archive --prefix=orrery-demo-vault-main/ -o "$tmp/vault.tar.gz" HEAD
+[ "$have_en_vault" = false ] || git -C "$vault_en_src" archive --prefix=orrery-demo-vault-en-main/ -o "$tmp/vault-en.tar.gz" HEAD
 git clone -q "$digest" "$tmp/digest-origin"
 
 run() { # $1 = HOME; rest = args
   local home="$1"; shift
   env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" \
     ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
+    /bin/bash "$script" "$@"
+}
+run_en() { # $1 = HOME; rest = args (the English vault tarball instead of the Japanese one)
+  local home="$1"; shift
+  env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" \
+    ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault-en.tar.gz" \
     /bin/bash "$script" "$@"
 }
 mkdir -p "$tmp/bin"
@@ -113,6 +125,20 @@ out="$(race "$tmp/empty")"
 # The no-key request names the PDF that the new vault has (P3-2).
 out="$(run "$tmp/h1")"
 echo "$out" | grep -q "PDF: .*Guo et al. 2024" || fail "Guo PDF not named: $out"
+
+# --lang en: the English vault (a different folder; the ja vault above is untouched), English requests.
+if [ "$have_en_vault" = true ]; then
+  out="$(run_en "$tmp/h1" --lang en)" || fail "lang en: $out"
+  ven="$tmp/h1/Documents/orrery-demo-vault-en"
+  [ -f "$ven/00_Inbox/Getting started.md" ] && [ -d "$ven/.obsidian" ] || fail "en vault not unpacked"
+  [ ! -d "$ven/.git" ] || fail "en vault must not be a git checkout"
+  [ -f "$v/CLAUDE.md" ] || fail "en run touched the ja vault"
+  echo "$out" | grep -q "Write the note in English." || fail "en request missing: $out"
+  echo "$out" | grep -q "Paper: ${ven}/20_MDPapers/Onimaru" || fail "en request paths: $out"
+  ! echo "$out" | grep -q "論文:" || fail "ja text leaked into en request: $out"
+else
+  echo "skip: --lang en needs a checkout of orrery-demo-vault-en (DEMO_VAULT_EN_SRC)"
+fi
 
 # WSL without interop: stop before writing anything (review P3-1).
 home="$tmp/h7"; mkdir -p "$home/.agentstack/skills/delegate"; touch "$home/.agentstack/skills/delegate/SKILL.md"
