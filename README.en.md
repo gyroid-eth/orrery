@@ -6,6 +6,27 @@
 
 ORRERY is a cockpit for people who run several Claude Code / Codex agents as a team. You do not have to hunt from window to window for the agent that is waiting for your reply. However many agents you run, only the ones waiting for a human decision blink in the roster so you can spot them at a glance, and you see every terminal, the traffic between agents, and your remaining usage quota on one screen while sending instructions from the same place. It runs on Mac (`ORRERY.app` and a browser) and on Windows (WSL2 and a browser), and works with [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry).
 
+## Quick start
+
+ORRERY is made of two parts: the **cockpit** (this repository: the screen where you arrange and drive terminals) and [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) (what runs agents and Mail behind the scenes, plus the Telemetry screen). **The next line installs both.** Run it in a Mac terminal, or inside WSL2 Ubuntu on Windows.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
+```
+
+Read and confirm the plan, and check that doctor and the Mail selftest succeeded. Sign in to Claude Code or Codex CLI in the same OS environment, then open the printed cockpit URL (default: `http://127.0.0.1:8791/cockpit.html`). Without a CLI, completing the installer does not make agents available. See [Installation](docs/en/install.md) for prerequisites, settings changes, and manual setup.
+
+### What goes where
+
+| Location | What it holds |
+| --- | --- |
+| `~/orrery` | The cockpit source (start and update scripts) |
+| `~/orrery-telemetry` | The source of Telemetry, Mail, hooks, and the installer. What actually runs is the copy installed in `~/.agentstack` |
+| `~/.agentstack` | The running installation, the `env.sh` settings, and the Mail DB |
+| `~/orrery-work` | The agents' work folder (the project folder). It receives a `CLAUDE.md` with ORRERY's instructions. Mail and reservations are scoped to it |
+
+Ports: cockpit 8791, Telemetry 8770, Mail 18765. `ORRERY.app` is a window that opens the cockpit on 8791. For changing the work folder and removing everything, see [Work folder and removal](#work-folder-and-removal).
+
 ![The whole ORRERY cockpit. On the left, the agent roster; in the center, a Split with three terminals side by side; at the top right, the mini-orrery drawing the parent–child tree; at the bottom right, the ORRERY Mail list](docs/images/cockpit_overview.png)
 
 Pick an agent in the roster on the left, give instructions in the terminal in the center, and follow parent–child relationships and messages in the mini-orrery and Mail on the right. The terminals work even when ORRERY Telemetry is not running; features that depend on it show their status and degrade gracefully.
@@ -158,21 +179,40 @@ Run the backend in WSL2 and open it in a Windows browser to use the same screen 
 - macOS, or Windows with WSL2 (Ubuntu). `ORRERY.app`, its app installer, and the global hotkey are macOS only
 - Python 3.10 or later, and `tmux`
 - Node.js / npm and Rust / Cargo (to develop or build the desktop app)
+- On a Mac where `tmux` installed by Homebrew is not found, set up `brew shellenv` in your shell so `/opt/homebrew/bin` is on PATH (the installer reports `tmux` as "Missing" when it is not)
 - A running [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) (to use all integrated features)
 - ORRERY Mail SQLite (to use the mail rail)
 - Access to a runtime CDN (for `xterm.js` and its addons; the current distribution is not a fully offline bundle)
 
 See [Installation](docs/en/install.md) for details and requirements by role.
 
-## Quick start
+## Work folder and removal
 
-Run this one line in a Mac terminal, or inside WSL2 Ubuntu on Windows. It installs ORRERY cockpit and ORRERY Telemetry together, then prints the check results and the URL to open. See [Installation](docs/en/install.md) for prerequisites, settings changes, and manual setup.
+### Change the work folder
+
+Add `--project-key` to the install line. To change it later, run the same line again with `--project-key`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key ~/my-project
 ```
 
-Read and confirm the plan, and check that doctor and the Mail selftest succeeded. Sign in to Claude Code or Codex CLI in the same OS environment, then open the printed cockpit URL (default: `http://127.0.0.1:8791/cockpit.html`). Without a CLI, completing the installer does not make agents available.
+- The ORRERY block in the old folder's `CLAUDE.md` stays. Delete between its markers by hand if you do not want it.
+- Mail is scoped per project. Agents that were already running keep showing in Telemetry, but they stay on the old project and cannot exchange Mail with new agents. EXIT them and start them again.
+- The folder choices of `+ NEW AGENT` (`~` when unset) are a separate setting. Change them with `cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"` (the project key is kept).
+- **If you start `claude` directly in a terminal, it runs in the folder you are in and does not have ORRERY's instructions.** `/delegate` is not used and no parent–child line appears. Start agents with `+ NEW AGENT` or `~/.agentstack/bin/agent-start <work folder>`.
+
+### Remove everything
+
+`agentstack-uninstall` removes only what is inside `~/.agentstack` (plus the services and the settings changes). The source folders, your work folder, and uv stay.
+
+```bash
+~/.agentstack/bin/agentstack-uninstall --dry-run      # check first
+~/.agentstack/bin/agentstack-uninstall --purge-data   # also delete the Mail DB (omit to keep it)
+# press Ctrl-C in the window running the cockpit (quit ORRERY.app)
+rm -rf ~/orrery ~/orrery-telemetry
+```
+
+Your work folder (such as `~/orrery-work`) is where your own work lives; delete it only if you decide to. `uv`, if the installer added it, stays in `~/.local/bin`.
 
 ## Start with the guides on screen
 

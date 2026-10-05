@@ -6,6 +6,27 @@
 
 ORRERY は、複数の Claude Code / Codex の agent をチームとして動かす人のための cockpit です。どの agent が返事を待っているかを窓から窓へ探し回る必要はありません。何体動かしていても、人の判断を待っている agent だけが roster で点滅して一目で分かり、全員の端末・agent 同士のやり取り・残りの利用枠を一つの画面で見渡しながら、そのまま指示を送れます。Mac（`ORRERY.app` とブラウザ）と Windows（WSL2 とブラウザ）で使え、[ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) と連携します。
 
+## クイックスタート
+
+ORRERY は 2 つでできています。**cockpit**（この repository。端末を並べて操作する画面）と、裏で agent と Mail を動かし Telemetry 画面を出す [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) です。**次の 1 行で両方入ります。** Mac のターミナル、または Windows の WSL2 Ubuntu 内で実行します。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
+```
+
+表示される計画を読んで承認し、doctor と Mail の selftest が成功したことを確かめます。Claude Code か Codex CLI を同じ OS 環境でログイン済みにしてから、表示された cockpit の URL（既定は `http://127.0.0.1:8791/cockpit.html`）を開きます。CLI が無ければ installer の完了だけでは agent を動かせません。前提条件、変更する設定、手動での導入は[インストール](docs/install.md)を参照してください。
+
+### 入るものと置き場所
+
+| 場所 | 中身 |
+| --- | --- |
+| `~/orrery` | cockpit の source（起動・更新の script） |
+| `~/orrery-telemetry` | Telemetry・Mail・hook・installer の source。実際に動くのは `~/.agentstack` に入れた方 |
+| `~/.agentstack` | 実際に動いている本体、設定 `env.sh`、Mail の DB |
+| `~/orrery-work` | agent の作業 folder（project folder）。ORRERY の指示を書いた `CLAUDE.md` が入る。Mail と予約はこの単位 |
+
+port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY.app` は、8791 の cockpit を開く窓です。作業 folder の変え方と消し方は[作業 folder と消し方](#作業-folder-と消し方)にあります。
+
 ![ORRERY cockpit の全体。左に agent の roster、中央に3体の端末を並べた Split、右上に親子の木を描く mini-orrery、右下に ORRERY Mail の一覧](docs/images/cockpit_overview.png)
 
 左の roster で agent を選び、中央の端末で指示し、右の mini-orrery と Mail で親子関係とやり取りを追います。端末だけなら ORRERY Telemetry が止まっていても使え、連携する機能は状態を表示して縮退します。
@@ -158,21 +179,40 @@ WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同
 - macOS、または Windows の WSL2（Ubuntu）。`ORRERY.app` とその installer、global hotkey は macOS だけ
 - Python 3.10 以上、`tmux`
 - Node.js / npm、Rust / Cargo（desktop app の開発・build 時）
+- Homebrew で入れた `tmux` が見つからない Mac では、`brew shellenv` を shell に設定して `/opt/homebrew/bin` を PATH に通す（installer が `tmux` を「Missing」と言うのは、これが無いときです）
 - 稼働中の [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry)（全連携機能を使う場合）
 - ORRERY Mail SQLite（mail rail を使う場合）
 - runtime CDN への接続（`xterm.js` と addon。現行配布は完全 offline bundle ではありません）
 
 詳細と役割別の要件は[インストール](docs/install.md)を参照してください。
 
-## クイックスタート
+## 作業 folder と消し方
 
-Mac のターミナル、または Windows の WSL2 Ubuntu 内で、次の1行を実行します。ORRERY cockpit と ORRERY Telemetry を一緒に入れ、確認結果と開く URL を表示します。前提条件、変更する設定、手動での導入は[インストール](docs/install.md)を参照してください。
+### 作業 folder を変える
+
+install の 1 行に `--project-key` を足します。後から変えるときも、同じ 1 行に `--project-key` を付けて実行し直します。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key ~/my-project
 ```
 
-表示される計画を読んで承認し、doctor と Mail の selftest が成功したことを確かめます。Claude Code か Codex CLI を同じ OS 環境でログイン済みにしてから、表示された cockpit の URL を開きます（既定は `http://127.0.0.1:8791/cockpit.html`）。CLI が無ければ installer の完了だけでは agent を動かせません。
+- 古い folder の `CLAUDE.md` の ORRERY の block は残ります。要らなければ marker の間を手で消します。
+- Mail は project 単位です。変える前に起動していた agent は Telemetry に出続けますが、古い project のままで、新しい agent と Mail が通じません。EXIT して起動し直してください。
+- `+ NEW AGENT` の folder の候補（未設定なら `~`）は別の設定です。`cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"` で変えます（project key は引き継がれます）。
+- **terminal で直接 `claude` を起動すると、その場の folder で動き、ORRERY の指示が入っていません。** `/delegate` が使われず、親子の線も出ません。agent は `+ NEW AGENT` か `~/.agentstack/bin/agent-start <作業 folder>` で起動します。
+
+### 完全に消す
+
+`agentstack-uninstall` が消すのは `~/.agentstack` の中（と service、settings の変更）だけです。source・作業 folder・uv は残ります。
+
+```bash
+~/.agentstack/bin/agentstack-uninstall --dry-run      # 先に確認
+~/.agentstack/bin/agentstack-uninstall --purge-data   # Mail の DB も消す（残すなら付けない）
+# cockpit を動かしている窓で Ctrl-C（ORRERY.app は終了）
+rm -rf ~/orrery ~/orrery-telemetry
+```
+
+作業 folder（`~/orrery-work` など）は自分の仕事の場所なので、消すかどうかは自分で決めます。入れた `uv` は `~/.local/bin` に残ります。
 
 ## 画面のガイドで始める
 
