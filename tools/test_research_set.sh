@@ -251,4 +251,19 @@ out="$(env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOM
 [ ! -s "$tmp/stub.log" ] || fail "setup ran although env.sh could not be read"
 echo "$out" | grep -q "env.sh could not be read); not changed" || fail "unreadable env.sh note: $out"
 
+# The setup leaves an env.sh that cannot be read: said as not confirmed, not as unchanged.
+cat >"$tmp/setup-stub-broken" <<'STUB'
+#!/bin/bash
+printf '%s\n' "$*" >>"$STUB_LOG"
+printf 'return 1\n' >"$HOME/.agentstack/env.sh"
+exit 1
+STUB
+chmod +x "$tmp/setup-stub-broken"
+home="$(wf_home h18 "$tmp/h18/orrery-work")"; : >"$tmp/stub.log"
+if out="$(env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" HOME="$home" STUB_LOG="$tmp/stub.log" \
+  ORRERY_SETUP="$tmp/setup-stub-broken" ORRERY_RESEARCH_ADDON_URL="$tmp/digest-origin" ORRERY_RESEARCH_VAULT_TARBALL="$tmp/vault.tar.gz" \
+  /bin/bash "$script" 2>&1)"; then fail "an unreadable env.sh after the setup must exit 1: $out"; fi
+echo "$out" | grep -q "could not confirm the saved work folder" || fail "unreadable env.sh after the setup: $out"
+! echo "$out" | grep -q "NOT changed" || fail "an unknown state was reported as not changed: $out"
+
 echo "ok: research-set"

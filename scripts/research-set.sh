@@ -348,8 +348,13 @@ main() {
     # The exit status alone does not say what changed (the setup can stop at a check after it
     # wrote the new folder), so read the saved folder again.
     now_key=""
-    now_key="$( ( unset AGENTSTACK_PROJECT_KEY; . "${agentstack}/env.sh" >/dev/null 2>&1 || exit 1; printf '%s' "${AGENTSTACK_PROJECT_KEY:-}" ) )" || now_key=""
-    if [ -n "$now_key" ] && [ "$(realpath_of "$now_key")" = "$vault_real" ]; then
+    now_known=true
+    now_key="$( ( unset AGENTSTACK_PROJECT_KEY; . "${agentstack}/env.sh" >/dev/null 2>&1 || exit 1; printf '%s' "${AGENTSTACK_PROJECT_KEY:-}" ) )" || now_known=false
+    [ -n "$now_key" ] || now_known=false
+    if [ "$now_known" = false ]; then
+      work_state="could not confirm the saved work folder (${agentstack}/env.sh could not be read after the setup). To check: ${retry_line}"
+      work_failed=true
+    elif [ "$(realpath_of "$now_key")" = "$vault_real" ]; then
       work_is_vault=true
       if [ "$status" -eq 0 ]; then
         work_state="the vault (${vault_real})"
