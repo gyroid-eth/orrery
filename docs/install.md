@@ -217,7 +217,11 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 curl -fsSL https://chatgpt.com/codex/install.sh | sh
 ```
 
-install の最後に PATH を足すよう表示されたら、それに従います。
+最後に「Start Codex now? [y/N]」と聞かれたら `N` と答えます（ログインはこの後です）。続けて、次の 1 行を必ず打ちます。Ubuntu には Windows の PATH が引き継がれるので、Windows に npm の Codex がある PC では、これを打たないと `codex` が `/mnt/c/.../npm/codex` を呼び、`node: not found` で止まります。
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
 
 ```bash
 codex --version
@@ -275,7 +279,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/re
 
 最後に、Obsidian で開く場所と、agent に貼る頼み方の文が表示されます。vault の置き場所は、Mac が `~/Documents/orrery-demo-vault-en`（`--lang en` でなければ `orrery-demo-vault`）、Windows が Windows 側の「ドキュメント」の同名のフォルダです（Windows の形の場所が最後に表示されます）。
 
-Obsidian で「Open folder as vault」を選び、表示された場所の vault を開きます。コミュニティプラグインについて聞かれたら「Trust author and enable plugins」を選びます。その vault が agent の作業 folder になるので、これ以降に cockpit の `+ NEW AGENT` で起動した agent は vault の中で動きます（すでに動いている agent は古い folder のままなので、新しく起動してください）。詳しくは[研究セット](research-set.md)にあります。
+Obsidian で「Open folder as vault」を選び、表示された場所の vault を開きます。Windows では、開いた画面の上のアドレス欄に、表示された Windows の形の場所（`C:\Users\…\Documents\…`）を貼って Enter を押し、「フォルダーの選択」を押します。エクスプローラーの「ドキュメント」が OneDrive に移っている PC では、「ドキュメント」を開いても vault は見えません。コミュニティプラグインについて聞かれたら「Trust author and enable plugins」を選びます。その vault が agent の作業 folder になるので、これ以降に cockpit の `+ NEW AGENT` で起動した agent は vault の中で動きます（すでに動いている agent は古い folder のままなので、新しく起動してください）。詳しくは[研究セット](research-set.md)にあります。
 
 ### Codex の plugin を入れる（Codex を使う人）
 
