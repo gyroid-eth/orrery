@@ -16,7 +16,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - **Look without changing anything**: `curl -fsSL …/get.sh | bash -s -- --check` (prerequisites and the plan), `… | bash -s -- --dry-run` (plus the installer's preview of the 4 changes). Neither writes to your home folder (what they download goes to a temporary folder that is removed)
 - **CI and scripts that use the exit code**: `curl | bash` can return 0 when the download fails, so save first: `curl -fsSL …/get.sh -o get.sh && bash get.sh --yes`
 - Prerequisites (git, tmux, curl, uv, Python 3.11+) are checked at once. Missing git / tmux / curl stop it with nothing changed and the line that installs them. uv and Python need no sudo, so they go into the plan (your shell profile is not changed)
-- Before changing anything it shows one plan; **type `yes` and Enter** once. Four things change: `~/.claude.json` (MCP), `~/.claude/settings.json` (hooks and permissions), `~/.codex/AGENTS.md` (a global block for all your Codex work), and the project's `CLAUDE.md` (a block). Each is backed up first. `--ask-each` also shows each change and asks; `--yes` does not ask (you have read the plan) (`… | bash -s -- --ask-each`)
+- Before changing anything it shows one plan; **type `yes` and Enter** once. Four things change: `~/.claude.json` (MCP), `~/.claude/settings.json` (hooks and permissions), `~/.codex/AGENTS.md` (a global block for all your Codex work), and the project's `CLAUDE.md` (a block). Each is backed up first (the folders and background services it adds besides these 4 are listed in [What is installed, and what changes](#what-is-installed-and-what-changes)). `--ask-each` also shows each change and asks; `--yes` does not ask (you have read the plan) (`… | bash -s -- --ask-each`)
 - The folder agents work in is `~/orrery-work` unless you say otherwise (no question; the plan shows it). Another folder: `… | bash -s -- --project-key ~/my-project`
 - The cockpit runs in a tmux server of its own (`tmux -L orrery-cockpit`), apart from the agents' tmux, so it never shows up as an agent. Its output: `tmux -L orrery-cockpit attach` (Ctrl-b, d to leave). Stop it: `tmux -L orrery-cockpit kill-server`. Start it again: the same line. On an update, a cockpit this setup started is restarted on the new version (any other cockpit is left running, with a note)
 - The 2 test agents the selftest makes are not shown in the cockpit's roster and network (the dashboard still lists them)
@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - At the end it shows, for each of the 4 changes, applied / already the same / skipped; whether Mail was set up or the running one kept; and the doctor and selftest results. Without Claude Code or Codex it says the base is ready, agents are not yet
 - If a cockpit of another version that this setup did not start is already running, it is not stopped; you are told to press Ctrl-C in its window and run the same line again
 - **When something fails**: a check that fails before you type yes means the setup changed nothing (what `get.sh` did before it stays, and the screen says so: a newly downloaded cockpit checkout, or git data fetched into an old one). After that, **nothing is rolled back**: you get a table of what changed since the first attempt and the line that carries on (the first attempt's record, in `~/.orrery-install/`, is kept until a run passes every check). There is no command to go back to the previous version
-- To remove a new install, use the printed `<orrery-telemetry checkout>/scripts/uninstall.sh` (the Mail database stays unless `--purge-data`; the 2 checkouts, uv and Python stay). **Do not use it to undo an update**: it removes the whole install
+- To remove a new install, use the printed `<orrery-telemetry checkout>/scripts/uninstall.sh` (the Mail database stays unless `--purge-data`; the 2 checkouts, uv and Python stay). To remove everything, see [Remove everything](../../README.en.md#remove-everything) in the README. **Do not use it to undo an update**: it removes the whole install
 
 The rest of this section installs step by step by hand.
 
@@ -32,7 +32,37 @@ The rest of this section installs step by step by hand.
 
 This section alone takes you from nothing to ORRERY installed on your own Mac or Windows 11 PC and the cockpit open in a browser. Each command is in its own code block, and copying and pasting them in order works. It does not use the desktop app (`ORRERY.app`). Even on a Mac, you open it in the browser. For building or keeping the app running, see "Requirements" and the sections after it.
 
-**Get this ready first**: to run agents you need an account that can sign in to Claude Code or Codex CLI. Claude Code needs a paid Claude plan (Pro, Max, Team, Enterprise) or a Console account, and **the free claude.ai plan does not include it** ([official setup page](https://code.claude.com/docs/en/setup)). Codex needs a paid ChatGPT plan (Plus, Pro, Business, Edu, Enterprise; [official README](https://github.com/openai/codex)). Decide which one you will use before you reach the sign-in screen.
+**Get this ready first**: to run agents you need an account that can sign in to Claude Code or Codex CLI. Claude Code needs a paid Claude plan (Pro, Max, Team, Enterprise) or a Console account, and **the free claude.ai plan does not include it** ([official setup page](https://code.claude.com/docs/en/setup)). Codex signs in with a ChatGPT account ([official README](https://github.com/openai/codex)). We have checked that even a free ChatGPT plan runs a full agent-to-agent word-chain game with the light model `gpt-6-luna` (its usage allowance is small). The agents' default model is chosen from the models that account can use. Most people already have a ChatGPT account, so if you are unsure, use Codex. Decide which one you will use before you reach the sign-in screen.
+
+### What is installed, and what changes
+
+So you can check before installing it on your own computer, here is what is installed and what changes. The one-line installer first shows its plan and changes no settings until you type `yes` (the entry script `get.sh` may download the source before that). ORRERY itself does not use administrator rights (sudo); only the prerequisites, Homebrew (Mac) and `apt` (Ubuntu), need sudo.
+
+**New folders (all inside your home folder)**
+
+| Where | What |
+| --- | --- |
+| `~/orrery`, `~/orrery-telemetry` | ORRERY's source |
+| `~/.agentstack` | the parts that actually run, their settings, and Mail's records |
+| `~/.orrery`, `~/.orrery-install` | screen history and settings, and install records |
+| `~/orrery-work` | the agents' work folder (`--project-key` or the research set can make it another folder) |
+| `uv` in `~/.local/bin` | a Python tool (installed only if missing) |
+
+**Settings it adds to (the previous content is kept as a backup)**
+
+| Where | What it adds |
+| --- | --- |
+| `~/.claude/settings.json` | ORRERY's hooks. In permissions: allowing Mail's tools, denying Mail's delete tools, and letting agents read the skill folder (`~/.agentstack/skills`) without editing it |
+| `~/.claude.json` | the ORRERY Mail server (`orrery-mail`) |
+| `~/.claude/skills`, `~/.codex/skills` | links to ORRERY's skills (`delegate`, `log`) |
+| `~/.codex/AGENTS.md` | ORRERY's instructions (only the block between markers) |
+| `~/.codex/config.toml` | the Codex plugin and its hook approvals (only if you do [Install the Codex plugin](#install-the-codex-plugin-if-you-use-codex)) |
+| `CLAUDE.md` in the work folder | ORRERY's instructions (a block; the existing content stays as it is) |
+| Mac: `~/Library/LaunchAgents` / Ubuntu: `~/.config/systemd/user` | entries that run Mail and Telemetry in the background (the cockpit is not registered here; it runs in its own tmux server, `tmux -L orrery-cockpit`) |
+
+**Not changed**: `~/.zshrc` and `~/.bashrc` (ORRERY does not edit them; PATH lines for Claude Code or Codex are ones you add yourself), anything outside your home folder (except the work folder's `CLAUDE.md` and the backup placed next to it, including a Windows-side vault made the work folder by the research set), and Windows settings. The screens and Mail listen only on `127.0.0.1` (inside this computer) and cannot be reached from outside.
+
+**To remove it**: if you installed the Codex plugin, **first** remove it with `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` (its record is inside `~/.agentstack`, so it cannot be removed once that is gone). Then follow [Remove everything](../../README.en.md#remove-everything) in the README (`~/.agentstack/bin/agentstack-uninstall --purge-data` removes `~/.agentstack`, the background entries and the skill links, and takes back what was added to `~/.claude/settings.json` and `~/.claude.json`; then stop the cockpit and run `rm -rf ~/orrery ~/orrery-telemetry`). The ORRERY blocks in `~/.codex/AGENTS.md` and in the work folder's `CLAUDE.md` stay; delete what is between the markers by hand if you do not want them. All of the source is public on GitHub ([orrery](https://github.com/gyroid-eth/orrery), [orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)).
 
 ### 0. Obsidian (when you use it)
 
@@ -89,9 +119,27 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 A plan appears. Read it, type `yes`, and press Enter. It takes from tens of seconds to a few minutes, and the cockpit opens in your browser. If something is missing (git, tmux, curl), it changes nothing, stops, and shows how to install it. When it stops, run the one "how to continue" line it shows.
 
-**3. Claude Code or Codex** (install the one you will use; if you use Codex only, skip the Claude Code part)
+**3. Codex or Claude Code** (install the one you will use; if unsure, Codex. If you use Claude Code only, skip the Codex part; if you use Codex only, skip the Claude Code part)
 
-**Claude Code**
+**Codex** (the commands are from Codex's official README)
+
+```bash
+brew install --cask codex
+```
+
+```bash
+codex --version
+```
+
+**Check**: the second command prints a version.
+
+```bash
+codex login
+```
+
+Sign in with your ChatGPT account when it asks (if no browser opens, follow what it shows). **Check**: after you finish the sign-in as it directs, it shows that you are signed in (the wording depends on the Codex version).
+
+**Claude Code** (if you have a paid Claude plan)
 
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash
@@ -113,25 +161,7 @@ claude
 
 Sign in, answer every first-run question (text style, security notes, trusting the folder, and so on), and when the input prompt appears, type `/exit`. If you close it halfway, a Claude started from NEW AGENT in the cockpit stops at the first-run screen.
 
-**Codex** (skip this if you use Claude Code only; the commands are from Codex's official README)
-
-```bash
-brew install --cask codex
-```
-
-```bash
-codex --version
-```
-
-**Check**: the second command prints a version.
-
-```bash
-codex login
-```
-
-Sign in with your ChatGPT account when it asks (if no browser opens, follow what it shows). **Check**: after you finish the sign-in as it directs, it shows that you are signed in (the wording depends on the Codex version).
-
-From here, `+ NEW AGENT` in the cockpit starts agents. If you use Obsidian, continue with "Using it with Obsidian".
+From here, `+ NEW AGENT` in the cockpit starts agents. If you use Obsidian, continue with "Using it with Obsidian". If you use Codex, also do "[Install the Codex plugin](#install-the-codex-plugin-if-you-use-codex)" after that (now, if you do not use Obsidian).
 
 ### Windows 11
 
@@ -179,9 +209,29 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 A plan appears. Read it, type `yes`, and press Enter. It takes from tens of seconds to a few minutes, and the cockpit URL (`http://127.0.0.1:8791/cockpit.html`) is printed. If your Windows browser does not open by itself, paste that URL into it. If something is missing, it changes nothing and stops, so run the one "how to continue" line it shows.
 
-**3. Claude Code or Codex** (install the one you will use, **inside Ubuntu**; if you use Codex only, skip the Claude Code part. A Claude Code or Codex installed on the Windows side is not used)
+**3. Codex or Claude Code** (install the one you will use, **inside Ubuntu**; if unsure, Codex. If you use Claude Code only, skip the Codex part; if you use Codex only, skip the Claude Code part. A Codex or Claude Code installed on the Windows side is not used)
 
-**Claude Code**
+**Codex** (the commands are from Codex's official README. A `codex` from Windows' npm (`/mnt/c/...`) does not work from WSL)
+
+```bash
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+```
+
+If the installer tells you to add something to your PATH, follow what it shows.
+
+```bash
+codex --version
+```
+
+**Check**: it prints a version.
+
+```bash
+codex login
+```
+
+Sign in with your ChatGPT account when it asks (if no browser opens, paste the URL it shows into your Windows browser). **Check**: after you finish the sign-in as it directs, it shows that you are signed in (the wording depends on the Codex version).
+
+**Claude Code** (if you have a paid Claude plan)
 
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash
@@ -203,27 +253,7 @@ claude
 
 Sign in (if no browser opens, paste the URL it shows into your Windows browser), answer every first-run question, and when the input prompt appears, type `/exit`.
 
-**Codex** (skip this if you use Claude Code only; the commands are from Codex's official README. A `codex` from Windows' npm (`/mnt/c/...`) does not work from WSL)
-
-```bash
-curl -fsSL https://chatgpt.com/codex/install.sh | sh
-```
-
-If the installer tells you to add something to your PATH, follow what it shows.
-
-```bash
-codex --version
-```
-
-**Check**: it prints a version.
-
-```bash
-codex login
-```
-
-Sign in with your ChatGPT account when it asks (if no browser opens, paste the URL it shows into your Windows browser). **Check**: after you finish the sign-in as it directs, it shows that you are signed in (the wording depends on the Codex version).
-
-From here, `+ NEW AGENT` in the cockpit starts agents. If you use Obsidian, continue with "Using it with Obsidian".
+From here, `+ NEW AGENT` in the cockpit starts agents. If you use Obsidian, continue with "Using it with Obsidian". If you use Codex, also do "[Install the Codex plugin](#install-the-codex-plugin-if-you-use-codex)" after that (now, if you do not use Obsidian).
 
 ### Using it with Obsidian
 
@@ -246,6 +276,28 @@ If you run the second one later as well, the agents' work folder stays on the fi
 At the end it shows where to open the vault in Obsidian and the requests to paste to an agent. The vault is `~/Documents/orrery-demo-vault-en` on a Mac (`orrery-demo-vault` without `--lang en`), and a folder of the same name in the Windows Documents folder on Windows (the Windows form of the location is printed at the end).
 
 In Obsidian, choose "Open folder as vault" and open the vault at the location shown. When asked about community plugins, choose "Trust author and enable plugins". That vault becomes the agents' work folder, so an agent you start from then on with `+ NEW AGENT` in the cockpit works inside the vault (agents that were already running stay on the old folder, so start new ones). See [The research set](research-set.md) for details.
+
+### Install the Codex plugin (if you use Codex)
+
+You need this to resume a finished Codex agent in the same conversation with the cockpit's Resume (without it, a finished Codex agent cannot be resumed). If you install the research set, do this **after the research set** (the plugin remembers the work folder at the time you install it). On Windows, type these in the Ubuntu window.
+
+```bash
+source ~/.agentstack/env.sh
+```
+
+```bash
+bash ~/orrery-telemetry/scripts/install-codex-app-integration.sh --project-key "$AGENTSTACK_PROJECT_KEY" --agent-mail-url "$AGENTSTACK_MCP_URL"
+```
+
+```bash
+codex
+```
+
+When the hook review screen appears, trust the 6 AgentStack hooks (SessionStart, SubagentStart, UserPromptSubmit, PostToolUse, Stop, SubagentStop; all of them `run-hook.sh`). You do not need to trust other plugins' hooks here. Then type `/exit`.
+
+**Check**: start a Codex agent with `+ NEW AGENT` in the cockpit, EXIT it, then Resume it; it comes back to the same conversation. To remove the plugin, run `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh`.
+
+When you ask a Codex agent to use a skill, write `$delegate`, not `/delegate` (and `$log` for `/log`). In Codex's input box, a word starting with `/` is treated as one of Codex's own commands.
 
 ### Install by hand (from getting the repository)
 

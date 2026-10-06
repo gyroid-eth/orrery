@@ -16,7 +16,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - **何も変えずに確かめる**: `curl -fsSL …/get.sh | bash -s -- --check`（前提と計画だけ）、`… | bash -s -- --dry-run`（加えて 4 項目の変更の preview）。どちらも HOME に何も書きません（必要な取得は一時 folder で行い、終われば消します）
 - **終了コードで判定する CI や script** では、`curl | bash` は取得の失敗を 0 と返すことがあるので、`curl -fsSL …/get.sh -o get.sh && bash get.sh --yes` のように保存してから実行します
 - 前提（git・tmux・curl・uv・Python 3.11 以上）はまとめて確かめます。git・tmux・curl が足りなければ入れる 1 行を出して、何も変えずに止まります。uv と Python は sudo なしで入れられるので計画に入れます（shell の設定 file は変えません）
-- 変更の前に計画を 1 画面にまとめ、**`yes` と打って Enter** で 1 回だけ承認します。変わるのは 4 つです: `~/.claude.json`（MCP）、`~/.claude/settings.json`（hooks と permissions）、`~/.codex/AGENTS.md`（Codex の全作業に効く global な block）、project の `CLAUDE.md`（block）。どれも先に backup を取ります。各変更ごとに preview を見て答えたいときは `--ask-each`、計画を読んだうえで質問を省くときは `--yes` を付けます（`… | bash -s -- --ask-each`）
+- 変更の前に計画を 1 画面にまとめ、**`yes` と打って Enter** で 1 回だけ承認します。変わるのは 4 つです: `~/.claude.json`（MCP）、`~/.claude/settings.json`（hooks と permissions）、`~/.codex/AGENTS.md`（Codex の全作業に効く global な block）、project の `CLAUDE.md`（block）。どれも先に backup を取ります（この 4 つのほかに作る folder や裏で動く service は[何が入り、どこが変わるか](#何が入りどこが変わるか)）。各変更ごとに preview を見て答えたいときは `--ask-each`、計画を読んだうえで質問を省くときは `--yes` を付けます（`… | bash -s -- --ask-each`）
 - agent に作業させる folder は、指定が無ければ `~/orrery-work` です（質問はしません。計画の画面に出ます）。別の folder にするときは `… | bash -s -- --project-key ~/my-project`
 - cockpit は専用の tmux server（`tmux -L orrery-cockpit`）で動きます。agent の tmux とは別なので、agent の一覧には出ません。出力を見る: `tmux -L orrery-cockpit attach`（Ctrl-b、d で戻る）。止める: `tmux -L orrery-cockpit kill-server`。もう一度起動する: 同じ 1 行。update のときは、自分が起動した cockpit なら新しい版で起動し直します（それ以外の cockpit は止めずに案内だけ）
 - 確認の selftest が作る試験用の agent 2 つは、cockpit の一覧と network には出しません（dashboard には残ります）
@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - 最後に、4 項目が「適用した／すでに同じ／skip」のどれだったか、Mail を新しく入れたか動いているものを使い続けたか、doctor と selftest の結果を出します。Claude Code か Codex が無ければ「基盤のみ準備済み」と出ます
 - この setup が起動したのではない cockpit が別の版で動いているときは、止めずに「その窓で Ctrl-C して、同じ 1 行をもう一度」と案内します
 - **失敗したとき**: 承認の前の検査で止まったときは、setup は何も変えていません（ただし入口の `get.sh` がその前に行ったこと、つまり新しく取得した cockpit の checkout、または従来版の `.git` への取得は残り、画面にそう出ます）。承認の後に失敗したときは**巻き戻しません**。最初の試みの時点と今とで何が変わったかを表で出し、続きから進める 1 行を出します（その表の「最初」は、すべての確認が通るまで上書きされません。`~/.orrery-install/`）。前の版に戻すコマンドは用意していません
-- 新しく入れたものを取り除くときは、表示された `<orrery-telemetry の checkout>/scripts/uninstall.sh` を使います（Mail の DB は `--purge-data` を付けない限り残ります。2 つの checkout・uv・Python も残ります）。**更新の取り消しには使わないでください**（既存の環境ごと取り除きます）
+- 新しく入れたものを取り除くときは、表示された `<orrery-telemetry の checkout>/scripts/uninstall.sh` を使います（Mail の DB は `--purge-data` を付けない限り残ります。2 つの checkout・uv・Python も残ります）。全部を消す手順は README の[完全に消す](../README.md#完全に消す)です。**更新の取り消しには使わないでください**（既存の環境ごと取り除きます）
 
 以下は、手で 1 段ずつ入れる手順です。
 
@@ -32,7 +32,37 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 この節だけで、自分の Mac または Windows 11 の PC に ORRERY を入れ、ブラウザで cockpit を開くところまで進めます。コマンドは 1 つずつコードブロックに分けてあり、上から順にコピーして貼れば通ります。デスクトップアプリ（`ORRERY.app`）は使いません。Mac でもブラウザで開きます。アプリの build や常駐は、「動作環境」以降を参照してください。
 
-**先に用意するもの**: agent を動かすには、Claude Code か Codex CLI にログインできるアカウントが要ります。Claude Code は Claude の有料 plan（Pro・Max・Team・Enterprise）か Console のアカウントが必要で、**無料の claude.ai の plan では使えません**（[公式の説明](https://code.claude.com/docs/en/setup)）。Codex は ChatGPT の有料 plan（Plus・Pro・Business・Edu・Enterprise。[公式の README](https://github.com/openai/codex)）です。ログインの画面に進む前に、どれを使うか決めておいてください。
+**先に用意するもの**: agent を動かすには、Claude Code か Codex CLI にログインできるアカウントが要ります。Claude Code は Claude の有料 plan（Pro・Max・Team・Enterprise）か Console のアカウントが必要で、**無料の claude.ai の plan では使えません**（[公式の説明](https://code.claude.com/docs/en/setup)）。Codex は ChatGPT のアカウントでログインします（[公式の README](https://github.com/openai/codex)）。無料の ChatGPT の plan でも、軽い model の `gpt-6-luna` で agent どうしのしりとりが最後まで通ることを確かめています（使える量は少なめです）。agent の既定の model は、そのアカウントで使えるものから選ばれます。ChatGPT のアカウントは多くの人が持っているので、迷ったら Codex を使ってください。ログインの画面に進む前に、どれを使うか決めておいてください。
+
+### 何が入り、どこが変わるか
+
+自分の PC に入れる前に、何が入ってどこが変わるかを確かめられるように書いておきます。1 行の installer は最初に計画を表示し、`yes` と打つまで設定を変えません（入口の `get.sh` が、その前に source を取得することはあります）。ORRERY 自身は管理者の権限（sudo）を使いません。sudo が要るのは、前提の Homebrew（Mac）と `apt`（Ubuntu）だけです。
+
+**新しく作る folder（すべて home の中）**
+
+| 場所 | 中身 |
+| --- | --- |
+| `~/orrery`・`~/orrery-telemetry` | ORRERY の source |
+| `~/.agentstack` | 実際に動いている本体・設定・Mail の記録 |
+| `~/.orrery`・`~/.orrery-install` | 画面の履歴と設定・install の記録 |
+| `~/orrery-work` | agent の作業 folder（`--project-key` や研究セットで別の folder にできます） |
+| `~/.local/bin` の `uv` | Python の道具（無いときだけ入れます） |
+
+**書き足す設定（書き換える前の内容は backup に残します）**
+
+| 場所 | 書き足すもの |
+| --- | --- |
+| `~/.claude/settings.json` | ORRERY の hook。permissions に、Mail の道具の許可、Mail の削除系の道具の禁止、skill の folder（`~/.agentstack/skills`）を読む許可と、そこを編集しない設定 |
+| `~/.claude.json` | ORRERY Mail の server（`orrery-mail`）の登録 |
+| `~/.claude/skills`・`~/.codex/skills` | ORRERY の skill（`delegate`・`log`）へのリンク |
+| `~/.codex/AGENTS.md` | ORRERY の指示（marker で囲んだ block だけ） |
+| `~/.codex/config.toml` | Codex の plugin と、その hook の承認（[Codex の plugin を入れる](#codex-の-plugin-を入れるcodex-を使う人)をしたときだけ） |
+| 作業 folder の `CLAUDE.md` | ORRERY の指示（block。元の内容はそのまま残ります） |
+| Mac: `~/Library/LaunchAgents`／Ubuntu: `~/.config/systemd/user` | Mail と Telemetry を裏で動かす登録（cockpit はここに登録せず、専用の tmux server `tmux -L orrery-cockpit` で動きます） |
+
+**変えないもの**: `~/.zshrc` や `~/.bashrc`（ORRERY は書き換えません。Claude Code や Codex の PATH の行は、自分で足す分です）、home の外（指定した作業 folder の `CLAUDE.md` と、その隣に置く backup を除きます。研究セットで Windows 側の vault を作業 folder にしたときも同じです）、Windows の設定。画面と Mail は `127.0.0.1`（この PC の中だけ）で待ち受け、外からはつながりません。
+
+**消し方**: Codex の plugin を入れた人は、**最初に** `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` で外します（plugin の記録は `~/.agentstack` の中にあるので、先に消すと外せなくなります）。そのあとは README の[完全に消す](../README.md#完全に消す)の手順です（`~/.agentstack/bin/agentstack-uninstall --purge-data` で `~/.agentstack`・裏で動かす登録・skill のリンクを消し、`~/.claude/settings.json` と `~/.claude.json` に書き足した分を戻します。cockpit を止めてから `rm -rf ~/orrery ~/orrery-telemetry`）。`~/.codex/AGENTS.md` と作業 folder の `CLAUDE.md` の ORRERY の block は残るので、要らなければ marker の間を手で消します。source はすべて GitHub で公開しています（[orrery](https://github.com/gyroid-eth/orrery)・[orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)）。
 
 ### 0. Obsidian（一緒に使う場合）
 
@@ -89,9 +119,27 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 計画の画面が出るので、読んで `yes` と打ち、Enter を押します。数十秒から数分で終わり、ブラウザで cockpit が開きます。足りないもの（git・tmux・curl）があると、何も変えずに止まって入れる方法を表示します。止まったときは、表示された「続け方」の 1 行を打ち直してください。
 
-**3. Claude Code か Codex**（使う方を入れます。Codex だけの人は、Claude Code の部分を飛ばします）
+**3. Codex か Claude Code**（使う方を入れます。迷ったら Codex です。Claude Code だけの人は Codex の部分を、Codex だけの人は Claude Code の部分を飛ばします）
 
-**Claude Code**
+**Codex**（コマンドは Codex の公式の README のものです）
+
+```bash
+brew install --cask codex
+```
+
+```bash
+codex --version
+```
+
+**確かめ**: 2 つ目のコマンドが版を表示します。
+
+```bash
+codex login
+```
+
+聞かれたら ChatGPT のアカウントでログインします（ブラウザが開かなければ、表示に従います）。**確かめ**: 画面の案内どおりにログインを終えると、その旨の表示が出ます（文面は Codex の版で変わります）。
+
+**Claude Code**（Claude の有料 plan がある人）
 
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash
@@ -113,25 +161,7 @@ claude
 
 ログインし、最初の質問（文字の見た目・Security notes・フォルダの信頼など）にすべて答えて、入力欄が出たら `/exit` と打ちます。途中で閉じると、cockpit の NEW AGENT で起動した Claude が最初の設定の画面で止まります。
 
-**Codex**（Claude Code だけの人は飛ばします。コマンドは Codex の公式の README のものです）
-
-```bash
-brew install --cask codex
-```
-
-```bash
-codex --version
-```
-
-**確かめ**: 2 つ目のコマンドが版を表示します。
-
-```bash
-codex login
-```
-
-聞かれたら ChatGPT のアカウントでログインします（ブラウザが開かなければ、表示に従います）。**確かめ**: 画面の案内どおりにログインを終えると、その旨の表示が出ます（文面は Codex の版で変わります）。
-
-ここまでで、cockpit の `+ NEW AGENT` から agent を起動できます。続いて Obsidian と使う人は、「Obsidian と一緒に使う」へ進んでください。
+ここまでで、cockpit の `+ NEW AGENT` から agent を起動できます。続いて Obsidian と使う人は、「Obsidian と一緒に使う」へ進んでください。Codex を使う人は、そのあと（Obsidian を使わない人は今）「[Codex の plugin を入れる](#codex-の-plugin-を入れるcodex-を使う人)」も行います。
 
 ### Windows 11
 
@@ -179,9 +209,29 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 計画の画面が出るので、読んで `yes` と打ち、Enter を押します。数十秒から数分で終わり、cockpit の URL（`http://127.0.0.1:8791/cockpit.html`）が表示されます。Windows のブラウザが自動で開かなければ、その URL を Windows のブラウザに貼ります。足りないものがあると何も変えずに止まるので、表示された「続け方」の 1 行を打ち直してください。
 
-**3. Claude Code か Codex**（使う方を **Ubuntu の中に**入れます。Codex だけの人は、Claude Code の部分を飛ばします。Windows 側に入れた Claude Code や Codex は使われません）
+**3. Codex か Claude Code**（使う方を **Ubuntu の中に**入れます。迷ったら Codex です。Claude Code だけの人は Codex の部分を、Codex だけの人は Claude Code の部分を飛ばします。Windows 側に入れた Codex や Claude Code は使われません）
 
-**Claude Code**
+**Codex**（コマンドは Codex の公式の README のものです。Windows 側の npm の `codex`（`/mnt/c/...`）は WSL では動きません）
+
+```bash
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+```
+
+install の最後に PATH を足すよう表示されたら、それに従います。
+
+```bash
+codex --version
+```
+
+**確かめ**: 版を表示します。
+
+```bash
+codex login
+```
+
+聞かれたら ChatGPT のアカウントでログインします（ブラウザが開かなければ、表示された URL を Windows のブラウザに貼ります）。**確かめ**: 画面の案内どおりにログインを終えると、その旨の表示が出ます（文面は Codex の版で変わります）。
+
+**Claude Code**（Claude の有料 plan がある人）
 
 ```bash
 curl -fsSL https://claude.ai/install.sh | bash
@@ -203,27 +253,7 @@ claude
 
 ログインし（ブラウザが開かなければ、表示された URL を Windows のブラウザに貼ります）、最初の質問にすべて答えて、入力欄が出たら `/exit` と打ちます。
 
-**Codex**（Claude Code だけの人は飛ばします。コマンドは Codex の公式の README のものです。Windows 側の npm の `codex`（`/mnt/c/...`）は WSL では動きません）
-
-```bash
-curl -fsSL https://chatgpt.com/codex/install.sh | sh
-```
-
-install の最後に PATH を足すよう表示されたら、それに従います。
-
-```bash
-codex --version
-```
-
-**確かめ**: 版を表示します。
-
-```bash
-codex login
-```
-
-聞かれたら ChatGPT のアカウントでログインします（ブラウザが開かなければ、表示された URL を Windows のブラウザに貼ります）。**確かめ**: 画面の案内どおりにログインを終えると、その旨の表示が出ます（文面は Codex の版で変わります）。
-
-ここまでで、cockpit の `+ NEW AGENT` から agent を起動できます。続いて Obsidian と使う人は、「Obsidian と一緒に使う」へ進んでください。
+ここまでで、cockpit の `+ NEW AGENT` から agent を起動できます。続いて Obsidian と使う人は、「Obsidian と一緒に使う」へ進んでください。Codex を使う人は、そのあと（Obsidian を使わない人は今）「[Codex の plugin を入れる](#codex-の-plugin-を入れるcodex-を使う人)」も行います。
 
 ### Obsidian と一緒に使う
 
@@ -246,6 +276,28 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/re
 最後に、Obsidian で開く場所と、agent に貼る頼み方の文が表示されます。vault の置き場所は、Mac が `~/Documents/orrery-demo-vault-en`（`--lang en` でなければ `orrery-demo-vault`）、Windows が Windows 側の「ドキュメント」の同名のフォルダです（Windows の形の場所が最後に表示されます）。
 
 Obsidian で「Open folder as vault」を選び、表示された場所の vault を開きます。コミュニティプラグインについて聞かれたら「Trust author and enable plugins」を選びます。その vault が agent の作業 folder になるので、これ以降に cockpit の `+ NEW AGENT` で起動した agent は vault の中で動きます（すでに動いている agent は古い folder のままなので、新しく起動してください）。詳しくは[研究セット](research-set.md)にあります。
+
+### Codex の plugin を入れる（Codex を使う人）
+
+終了した Codex の agent を、cockpit の Resume で同じ会話から再開するのに必要です（入れないと、終了した Codex の agent は再開できません）。研究セットを入れる人は、**研究セットの後に**行います（plugin は入れた時点の作業 folder を覚えるためです）。Windows は Ubuntu の画面で打ちます。
+
+```bash
+source ~/.agentstack/env.sh
+```
+
+```bash
+bash ~/orrery-telemetry/scripts/install-codex-app-integration.sh --project-key "$AGENTSTACK_PROJECT_KEY" --agent-mail-url "$AGENTSTACK_MCP_URL"
+```
+
+```bash
+codex
+```
+
+hook の確認の画面が出たら、AgentStack の 6 つ（SessionStart・SubagentStart・UserPromptSubmit・PostToolUse・Stop・SubagentStop。どれも `run-hook.sh`）を trust します。ほかの plugin の hook は、ここで trust しなくて構いません。終わったら `/exit` と打ちます。
+
+**確かめ**: cockpit の `+ NEW AGENT` で Codex の agent を起動し、EXIT してから Resume すると、同じ会話に戻ります。外すときは `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` です。
+
+Codex の agent に skill を頼むときは、`/delegate` ではなく `$delegate` と書きます（`/log` も `$log`）。Codex の入力欄で `/` から始まる語は Codex 自身のコマンドとして扱われるためです。
 
 ### 手で 1 段ずつ入れる（git の取得から）
 
