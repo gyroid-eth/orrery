@@ -217,7 +217,11 @@ A plan appears. Read it, type `yes`, and press Enter. It takes from tens of seco
 curl -fsSL https://chatgpt.com/codex/install.sh | sh
 ```
 
-If the installer tells you to add something to your PATH, follow what it shows.
+If it asks "Start Codex now? [y/N]" at the end, answer `N` (you sign in next). Then always type the line below. Ubuntu inherits the Windows PATH, so on a PC with Codex from Windows' npm, skipping it makes `codex` run `/mnt/c/.../npm/codex`, which stops with `node: not found`.
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
 
 ```bash
 codex --version
@@ -275,7 +279,7 @@ If you run the second one later as well, the agents' work folder stays on the fi
 
 At the end it shows where to open the vault in Obsidian and the requests to paste to an agent. The vault is `~/Documents/orrery-demo-vault-en` on a Mac (`orrery-demo-vault` without `--lang en`), and a folder of the same name in the Windows Documents folder on Windows (the Windows form of the location is printed at the end).
 
-In Obsidian, choose "Open folder as vault" and open the vault at the location shown. When asked about community plugins, choose "Trust author and enable plugins". That vault becomes the agents' work folder, so an agent you start from then on with `+ NEW AGENT` in the cockpit works inside the vault (agents that were already running stay on the old folder, so start new ones). See [The research set](research-set.md) for details.
+In Obsidian, choose "Open folder as vault" and open the vault at the location shown. On Windows, paste the Windows-form location it printed (`C:\Users\…\Documents\…`) into the address bar at the top of the window that opens, press Enter, then click "Select Folder". On a PC whose "Documents" has been moved to OneDrive, the vault does not appear when you open "Documents" in Explorer. When asked about community plugins, choose "Trust author and enable plugins". That vault becomes the agents' work folder, so an agent you start from then on with `+ NEW AGENT` in the cockpit works inside the vault (agents that were already running stay on the old folder, so start new ones). See [The research set](research-set.md) for details.
 
 ### Install the Codex plugin (if you use Codex)
 
