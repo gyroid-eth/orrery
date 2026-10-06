@@ -60,7 +60,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 | 作業 folder の `CLAUDE.md` | ORRERY の指示（block。元の内容はそのまま残ります） |
 | Mac: `~/Library/LaunchAgents`／Ubuntu: `~/.config/systemd/user` | Mail と Telemetry を裏で動かす登録（cockpit はここに登録せず、専用の tmux server `tmux -L orrery-cockpit` で動きます） |
 
-**変えないもの**: `~/.zshrc` や `~/.bashrc`（ORRERY は書き換えません。Claude Code や Codex の PATH の行は、自分で足す分です）、home の外（研究セットなどで Windows 側の vault を作業 folder にしたときの、その `CLAUDE.md` を除きます）、Windows の設定。画面と Mail は `127.0.0.1`（この PC の中だけ）で待ち受け、外からはつながりません。
+**変えないもの**: `~/.zshrc` や `~/.bashrc`（ORRERY は書き換えません。Claude Code や Codex の PATH の行は、自分で足す分です）、home の外（指定した作業 folder の `CLAUDE.md` と、その隣に置く backup を除きます。研究セットで Windows 側の vault を作業 folder にしたときも同じです）、Windows の設定。画面と Mail は `127.0.0.1`（この PC の中だけ）で待ち受け、外からはつながりません。
 
 **消し方**: Codex の plugin を入れた人は、**最初に** `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` で外します（plugin の記録は `~/.agentstack` の中にあるので、先に消すと外せなくなります）。そのあとは README の[完全に消す](../README.md#完全に消す)の手順です（`~/.agentstack/bin/agentstack-uninstall --purge-data` で `~/.agentstack`・裏で動かす登録・skill のリンクを消し、`~/.claude/settings.json` と `~/.claude.json` に書き足した分を戻します。cockpit を止めてから `rm -rf ~/orrery ~/orrery-telemetry`）。`~/.codex/AGENTS.md` と作業 folder の `CLAUDE.md` の ORRERY の block は残るので、要らなければ marker の間を手で消します。source はすべて GitHub で公開しています（[orrery](https://github.com/gyroid-eth/orrery)・[orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)）。
 
