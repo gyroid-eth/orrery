@@ -1,4 +1,5 @@
 """Full-tour order, trusted iframe messages and observed parent/child rounds."""
+import hashlib
 import json
 import re
 import shutil
@@ -31,6 +32,85 @@ def test_selected_order_and_exact_workshop_rules_are_present():
                         'Do not use Claude Code\'s built-in Agent or SendMessage',
                         'observed Mail ID', 'no new game']:
         assert requirement in result['prompt']
+
+
+@pytest.mark.parametrize('program', ['claude-code', 'claude', None, 'unknown'])
+def test_claude_and_unknown_program_keep_the_original_prompt_bytes(program):
+    result = run("console.log(JSON.stringify({prompt:tour.getShiritoriPrompt(PROGRAM),legacy:tour.SHIRITORI_PROMPT}));"
+                 .replace('PROGRAM', json.dumps(program)))
+    assert result['prompt'] == result['legacy']
+    # Digest of the original public prompt before provider selection was added.
+    assert hashlib.sha256(result['prompt'].encode()).hexdigest() == 'ffa84516bdb0f17e4995d3679c5821d993a26c3ddc9996175cc0bca3e6851ade'
+
+
+@pytest.mark.parametrize('program', ['codex', 'codex-cli'])
+def test_codex_prompt_uses_the_installed_delegate_skill_without_slash_commands(program):
+    prompt = run("console.log(JSON.stringify(tour.getShiritoriPrompt(PROGRAM)));"
+                 .replace('PROGRAM', json.dumps(program)))
+    assert prompt.startswith('$delegate ')
+    assert '/delegate' not in prompt
+    assert 'Use the $delegate skill (the installed ORRERY delegate skill)' in prompt
+    original = run('console.log(JSON.stringify(tour.SHIRITORI_PROMPT));')
+    assert prompt == original.replace('/delegate ', '$delegate ', 1).replace(
+        'Use /delegate to create the child',
+        'Use the $delegate skill (the installed ORRERY delegate skill) to create the child')
+
+
+def test_only_both_exact_workshop_prompts_are_replaceable_drafts():
+    assert run("""
+      const claude=tour.SHIRITORI_PROMPT,codex=tour.getShiritoriPrompt('codex');
+      console.log(JSON.stringify([claude,codex,'custom draft',claude+' edited',codex+' edited']
+        .map(tour.isShiritoriPrompt)));
+    """) == [True, True, False, False, False]
+
+
+@pytest.mark.parametrize('program', ['claude-code', 'codex', 'codex-cli'])
+def test_dom_workshop_button_uses_context_parent_and_preserves_custom_drafts(tour_browser, program):
+    _, evaluate = tour_browser
+    result = evaluate("""(()=>{
+      currentAgents=[{name:'Parent',program:PROGRAM},{name:'Other',program:'claude-code'}];
+      activeId='parent';panes.set('parent',{session:'Parent'});
+      const full=OrreryFullTour.checklist;full.reset();full.show();
+      full.state.goTo('full-shiritori');full.show();
+      const button=full.el.querySelector('[data-step="full-shiritori"] button.flight-read');
+      const input=document.getElementById('promptInput'),expected=OrreryFullTour.getShiritoriPrompt(PROGRAM);
+      const replaced=['', '  ', OrreryFullTour.SHIRITORI_PROMPT, OrreryFullTour.getShiritoriPrompt('codex')].map(draft=>{
+        input.value=draft;button.click();return input.value===expected;
+      });
+      input.value='my unsent draft';button.click();const preserved=input.value;
+      activeId='other';panes.set('other',{session:'Other'});input.value='';button.click();
+      return {replaced,preserved,otherInput:input.value,
+        saved:JSON.parse(localStorage.getItem('oc-full-tour-shiritori-v1')).program};
+    })()""".replace('PROGRAM', json.dumps(program)))
+    assert result == {'replaced': [True]*4, 'preserved': 'my unsent draft',
+                      'otherInput': '', 'saved': program}
+
+
+@pytest.mark.parametrize('program,label,prefix', [('codex', 'Codex', '$delegate '),
+    ('codex-cli', 'Codex', '$delegate '), ('claude-code', 'Claude', '/delegate '),
+    (None, 'Claude', '/delegate ')])
+def test_dom_solo_copy_uses_saved_parent_program_or_labelled_claude_default(tour_browser, program, label, prefix):
+    import time
+    client, evaluate = tour_browser
+    evaluate("localStorage.setItem('oc-full-tour-shiritori-v1',JSON.stringify({parent:'Parent',since:Date.now(),program:PROGRAM}))"
+             .replace('PROGRAM', json.dumps(program)))
+    client.call('Page.navigate', url=evaluate.base+'/tour.html?tour=full-tour')
+    for _ in range(100):
+        if evaluate('Boolean(window.OrreryFullTour?.checklist?.solo)'):
+            break
+        time.sleep(.1)
+    result = evaluate("""(async()=>{
+      const full=OrreryFullTour.checklist;full.show();
+      full.state.goTo('full-shiritori');full.show();
+      const button=full.el.querySelector('[data-step="full-shiritori"] button.flight-read');
+      const label=button.textContent;let copied=null;
+      Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{copied=text;}}});
+      button.click();await new Promise(r=>setTimeout(r,0));
+      return {label,copied,noCockpit:typeof OC==='undefined'};
+    })()""")
+    assert result['label'] == 'Copy workshop prompt · '+label
+    assert result['copied'].startswith(prefix)
+    assert result['noCockpit']
 
 
 def test_telemetry_messages_require_owned_frame_origin_version_and_action():

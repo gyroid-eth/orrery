@@ -48,7 +48,7 @@
 
 しりとりでは、選んだ親と実際に起動した子との間で、新しい Mail を確認する必要があります。子はゲームを通して同じ1体でなければなりません。Mail の ID は別々で、子の返答の ID が親の手の ID より後でなければなりません。live API は秒単位の時刻と本文の抜粋を返すため、開始した秒と最後に確認した ID をゲームの境界にします。ready だけの本文・抜粋、別の相手との通信、以前のゲームは数えません。件名が無い、日本語である、返信 tool の接頭辞が付いている、といった違いは完了の判定に使いません。
 
-workshop の prompt は入力欄が空のときだけ入り、すでにある下書きは保ちます。自動では送信しません。文面は `orrery-workshop/play/shiritori.md` と同じです。install 済みの `/delegate` skill と ORRERY Mail を使い、3往復を行い、実際の Mail を根拠として示します。組み込みの subagent は使いません。実際にゲームをするには、認証を済ませた CLI が必要です。
+workshop の prompt は入力欄が空、またはどちらかの既定の workshop 文のときに入り、それ以外の下書きは保ちます。自動では送信しません。`orrery-workshop/play/shiritori.md` のルールに従い、選んだ親が Claude なら `/delegate`、Codex なら `$delegate` で install 済みの ORRERY delegate skill を呼びます。ORRERY Mail を使い、3往復を行い、実際の Mail を根拠として示します。組み込みの subagent は使いません。実際にゲームをするには、認証を済ませた CLI が必要です。別窓の Copy workshop prompt は保存済みの親の program に合わせます。program が不明なら Claude 用の文をコピーし、ボタンにも Claude と表示します。
 
 checklist の折りたたみ・drag・すりガラスの表示・別窓での表示は、Your first flight と共通です。別窓は `tour.html?tour=full-tour` を使い、同じ手順と進行を表示し、workshop の prompt をコピーできます。別窓から agent や terminal を操作することはありません。進行はこの browser に保存し、main window と同期します。Restart が消すのは Full tour の進行とゲームの観測だけで、Your first flight の進行は残ります。
 

@@ -61,16 +61,19 @@ last observed ID form the game boundary. Ready-only bodies or excerpts,
 unrelated peers and earlier games do not count. Subjects may be absent,
 Japanese, or prefixed by a reply tool; they do not decide completion.
 
-The workshop prompt is inserted into an empty composer, preserving an existing
-draft. It is not sent automatically. Its wording matches
-`orrery-workshop/play/shiritori.md`: use the installed /delegate skill and
-ORRERY Mail, three round trips, actual message evidence, no native subagent.
+The workshop prompt is inserted into an empty composer or replaces either
+default workshop prompt, preserving other drafts. It is not sent automatically.
+It follows the rules in `orrery-workshop/play/shiritori.md`, invoking the installed
+ORRERY delegate skill as `/delegate` for a Claude parent or `$delegate` for a
+Codex parent: ORRERY Mail, three round trips, actual message evidence, no native subagent.
 An authenticated CLI is needed for the real game.
 
 The printed checklist shares folding, dragging, frosted glass and pop-out
 behavior with Your first flight. Its separate window uses
 `tour.html?tour=full-tour`, presents the same steps and progress, and can copy
-the workshop prompt; it runs no agent or terminal operations. Progress is
+the workshop prompt using the saved parent's program. If that program is unknown,
+it copies the Claude prompt and labels the button accordingly. It runs no agent
+or terminal operations. Progress is
 saved for this browser and synchronized with the main window. Restart clears
 only Full tour and its game observation, leaving first-flight progress intact.
 
