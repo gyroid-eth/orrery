@@ -52,17 +52,17 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 | 場所 | 書き足すもの |
 | --- | --- |
-| `~/.claude/settings.json` | ORRERY の hook と、ORRERY の Mail の道具の許可 |
+| `~/.claude/settings.json` | ORRERY の hook。permissions に、Mail の道具の許可、Mail の削除系の道具の禁止、skill の folder（`~/.agentstack/skills`）を読む許可と、そこを編集しない設定 |
 | `~/.claude.json` | ORRERY Mail の server（`orrery-mail`）の登録 |
 | `~/.claude/skills`・`~/.codex/skills` | ORRERY の skill（`delegate`・`log`）へのリンク |
 | `~/.codex/AGENTS.md` | ORRERY の指示（marker で囲んだ block だけ） |
 | `~/.codex/config.toml` | Codex の plugin と、その hook の承認（[Codex の plugin を入れる](#codex-の-plugin-を入れるcodex-を使う人)をしたときだけ） |
 | 作業 folder の `CLAUDE.md` | ORRERY の指示（block。元の内容はそのまま残ります） |
-| Mac: `~/Library/LaunchAgents`／Ubuntu: `~/.config/systemd/user` | Mail・Telemetry・cockpit を裏で動かす登録 |
+| Mac: `~/Library/LaunchAgents`／Ubuntu: `~/.config/systemd/user` | Mail と Telemetry を裏で動かす登録（cockpit はここに登録せず、専用の tmux server `tmux -L orrery-cockpit` で動きます） |
 
 **変えないもの**: `~/.zshrc` や `~/.bashrc`（ORRERY は書き換えません。Claude Code や Codex の PATH の行は、自分で足す分です）、home の外、Windows の設定。画面と Mail は `127.0.0.1`（この PC の中だけ）で待ち受け、外からはつながりません。
 
-**消し方**: README の[完全に消す](../README.md#完全に消す)の手順です（`~/.agentstack/bin/agentstack-uninstall --purge-data` で `~/.agentstack`・裏で動かす登録・設定に書き足した分を戻し、cockpit を止めてから `rm -rf ~/orrery ~/orrery-telemetry`）。Codex の plugin は `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` で外します。source はすべて GitHub で公開しています（[orrery](https://github.com/gyroid-eth/orrery)・[orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)）。
+**消し方**: README の[完全に消す](../README.md#完全に消す)の手順です（`~/.agentstack/bin/agentstack-uninstall --purge-data` で `~/.agentstack`・裏で動かす登録・skill のリンクを消し、`~/.claude/settings.json` と `~/.claude.json` に書き足した分を戻します。cockpit を止めてから `rm -rf ~/orrery ~/orrery-telemetry`）。`~/.codex/AGENTS.md` と作業 folder の `CLAUDE.md` の ORRERY の block は残るので、要らなければ marker の間を手で消します。Codex の plugin は `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` で外します。source はすべて GitHub で公開しています（[orrery](https://github.com/gyroid-eth/orrery)・[orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)）。
 
 ### 0. Obsidian（一緒に使う場合）
 
