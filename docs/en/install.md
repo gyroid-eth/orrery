@@ -36,7 +36,7 @@ This section alone takes you from nothing to ORRERY installed on your own Mac or
 
 ### What is installed, and what changes
 
-So you can check before installing it on your own computer, here is what is installed and what changes. The one-line installer first shows its plan and changes nothing until you type `yes`. ORRERY itself does not use administrator rights (sudo); only the prerequisites, Homebrew (Mac) and `apt` (Ubuntu), need sudo.
+So you can check before installing it on your own computer, here is what is installed and what changes. The one-line installer first shows its plan and changes no settings until you type `yes` (the entry script `get.sh` may download the source before that). ORRERY itself does not use administrator rights (sudo); only the prerequisites, Homebrew (Mac) and `apt` (Ubuntu), need sudo.
 
 **New folders (all inside your home folder)**
 
@@ -60,9 +60,9 @@ So you can check before installing it on your own computer, here is what is inst
 | `CLAUDE.md` in the work folder | ORRERY's instructions (a block; the existing content stays as it is) |
 | Mac: `~/Library/LaunchAgents` / Ubuntu: `~/.config/systemd/user` | entries that run Mail and Telemetry in the background (the cockpit is not registered here; it runs in its own tmux server, `tmux -L orrery-cockpit`) |
 
-**Not changed**: `~/.zshrc` and `~/.bashrc` (ORRERY does not edit them; PATH lines for Claude Code or Codex are ones you add yourself), anything outside your home folder, and Windows settings. The screens and Mail listen only on `127.0.0.1` (inside this computer) and cannot be reached from outside.
+**Not changed**: `~/.zshrc` and `~/.bashrc` (ORRERY does not edit them; PATH lines for Claude Code or Codex are ones you add yourself), anything outside your home folder (except the `CLAUDE.md` of a Windows-side vault you make the work folder, for example with the research set), and Windows settings. The screens and Mail listen only on `127.0.0.1` (inside this computer) and cannot be reached from outside.
 
-**To remove it**: follow [Remove everything](../../README.en.md#remove-everything) in the README (`~/.agentstack/bin/agentstack-uninstall --purge-data` removes `~/.agentstack`, the background entries and the skill links, and takes back what was added to `~/.claude/settings.json` and `~/.claude.json`; then stop the cockpit and run `rm -rf ~/orrery ~/orrery-telemetry`). The ORRERY blocks in `~/.codex/AGENTS.md` and in the work folder's `CLAUDE.md` stay; delete what is between the markers by hand if you do not want them. The Codex plugin is removed with `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh`. All of the source is public on GitHub ([orrery](https://github.com/gyroid-eth/orrery), [orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)).
+**To remove it**: follow [Remove everything](../../README.en.md#remove-everything) in the README (`~/.agentstack/bin/agentstack-uninstall --purge-data` removes `~/.agentstack`, the background entries and the skill links, and takes back what was added to `~/.claude/settings.json` and `~/.claude.json`; then stop the cockpit and run `rm -rf ~/orrery ~/orrery-telemetry`). If you installed the Codex plugin, remove it **before deleting the source**, with `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh`. The ORRERY blocks in `~/.codex/AGENTS.md` and in the work folder's `CLAUDE.md` stay; delete what is between the markers by hand if you do not want them. All of the source is public on GitHub ([orrery](https://github.com/gyroid-eth/orrery), [orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)).
 
 ### 0. Obsidian (when you use it)
 

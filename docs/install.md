@@ -36,7 +36,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 ### 何が入り、どこが変わるか
 
-自分の PC に入れる前に、何が入ってどこが変わるかを確かめられるように書いておきます。1 行の installer は最初に計画を表示し、`yes` と打つまで何も変えません。ORRERY 自身は管理者の権限（sudo）を使いません。sudo が要るのは、前提の Homebrew（Mac）と `apt`（Ubuntu）だけです。
+自分の PC に入れる前に、何が入ってどこが変わるかを確かめられるように書いておきます。1 行の installer は最初に計画を表示し、`yes` と打つまで設定を変えません（入口の `get.sh` が、その前に source を取得することはあります）。ORRERY 自身は管理者の権限（sudo）を使いません。sudo が要るのは、前提の Homebrew（Mac）と `apt`（Ubuntu）だけです。
 
 **新しく作る folder（すべて home の中）**
 
@@ -60,9 +60,9 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 | 作業 folder の `CLAUDE.md` | ORRERY の指示（block。元の内容はそのまま残ります） |
 | Mac: `~/Library/LaunchAgents`／Ubuntu: `~/.config/systemd/user` | Mail と Telemetry を裏で動かす登録（cockpit はここに登録せず、専用の tmux server `tmux -L orrery-cockpit` で動きます） |
 
-**変えないもの**: `~/.zshrc` や `~/.bashrc`（ORRERY は書き換えません。Claude Code や Codex の PATH の行は、自分で足す分です）、home の外、Windows の設定。画面と Mail は `127.0.0.1`（この PC の中だけ）で待ち受け、外からはつながりません。
+**変えないもの**: `~/.zshrc` や `~/.bashrc`（ORRERY は書き換えません。Claude Code や Codex の PATH の行は、自分で足す分です）、home の外（研究セットなどで Windows 側の vault を作業 folder にしたときの、その `CLAUDE.md` を除きます）、Windows の設定。画面と Mail は `127.0.0.1`（この PC の中だけ）で待ち受け、外からはつながりません。
 
-**消し方**: README の[完全に消す](../README.md#完全に消す)の手順です（`~/.agentstack/bin/agentstack-uninstall --purge-data` で `~/.agentstack`・裏で動かす登録・skill のリンクを消し、`~/.claude/settings.json` と `~/.claude.json` に書き足した分を戻します。cockpit を止めてから `rm -rf ~/orrery ~/orrery-telemetry`）。`~/.codex/AGENTS.md` と作業 folder の `CLAUDE.md` の ORRERY の block は残るので、要らなければ marker の間を手で消します。Codex の plugin は `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` で外します。source はすべて GitHub で公開しています（[orrery](https://github.com/gyroid-eth/orrery)・[orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)）。
+**消し方**: README の[完全に消す](../README.md#完全に消す)の手順です（`~/.agentstack/bin/agentstack-uninstall --purge-data` で `~/.agentstack`・裏で動かす登録・skill のリンクを消し、`~/.claude/settings.json` と `~/.claude.json` に書き足した分を戻します。cockpit を止めてから `rm -rf ~/orrery ~/orrery-telemetry`）。Codex の plugin を入れた人は、**source を消す前に** `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` で外します。`~/.codex/AGENTS.md` と作業 folder の `CLAUDE.md` の ORRERY の block は残るので、要らなければ marker の間を手で消します。source はすべて GitHub で公開しています（[orrery](https://github.com/gyroid-eth/orrery)・[orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)）。
 
 ### 0. Obsidian（一緒に使う場合）
 
