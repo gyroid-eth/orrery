@@ -273,10 +273,13 @@ main() {
       vault_rev="$(printf '%s' "$vault_rev" | cut -c1-7)"
     fi
     # Unpack next to the target and rename, so a half-written vault never has
-    # the final name.
+    # the final name. -m leaves each file's time as "now" instead of setting the
+    # archive's: on WSL, a C: drive mounted before the first user existed belongs
+    # to root, and setting a time there fails with "Cannot utime: Operation not
+    # permitted" for every file (a fresh `wsl --install` without the restart).
     partial="${vault_dir}.partial-$$"
     mkdir -p "$partial"
-    tar -xzf "${work}/vault.tar.gz" -C "$partial" --strip-components 1 --no-same-owner --no-same-permissions \
+    tar -xzmf "${work}/vault.tar.gz" -C "$partial" --strip-components 1 --no-same-owner --no-same-permissions \
       || { rm -rf "$partial" "$work"; stop "Could not unpack the demo vault."; }
     # rename(2) through Python replaces only our own claimed, still empty
     # folder; if anything was put into it meanwhile it fails (ENOTEMPTY), and
