@@ -34,6 +34,12 @@ The one-line installer above, `scripts/setup.sh`, and `scripts/update.sh` defaul
 - A value passed from the shell or a saved value listed in `AGENTSTACK_CHOSEN_SETTINGS` is kept. However, when a choice record exists, a shell value equal to the saved value is treated as a read-back (echo), following the existing installer rule. **An unselected saved `1` plus the same shell `1` is also moved to `0`; it does not count as a selection**
 - An older `env.sh` without a choice record cannot distinguish a saved default `1` from a deliberate choice. Its saved value is kept, so automatic opening continues in this case
 
+This policy covers settings produced by the regular installer. Manually editing a saved value to `0` without listing it in the choice record can let core's equal-value echo rule revert it to `1`. Recover with this one line, explicitly passing `0` to the installer twice (the first run can save `1`; the second records the choice of `0`):
+
+```bash
+cd ~/orrery-telemetry && AGENTSTACK_AUTO_OPEN_CHILD=0 ./scripts/install.sh && AGENTSTACK_AUTO_OPEN_CHILD=0 ./scripts/install.sh
+```
+
 To move an older saved `1` to `0`, explicitly select it with `cd ~/orrery-telemetry && AGENTSTACK_AUTO_OPEN_CHILD=0 ./scripts/install.sh`.
 
 To reliably enable automatic opening, first let the setup / update above set it to `0`, then run this in the Telemetry checkout (shown in its default location):

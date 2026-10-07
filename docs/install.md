@@ -34,6 +34,12 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - shell から渡した値、または `AGENTSTACK_CHOSEN_SETTINGS` にこの設定名が載っている保存値を引き継ぎます。ただし、選択の記録がある `env.sh` と同値の shell env は、既存の installer と同じく読み戻し（echo）と扱います。**未選択の保存値 `1` と shell の `1` が同じ場合も、選んだとはみなさず `0` に移ります**
 - 選択の記録自体が無い古い `env.sh` の保存値 `1` は、既定か利用者の選択かを区別できません。保存値を維持するので、この場合は自動表示が続きます
 
+対象は正規の installer が作った設定です。手で編集し「保存値は `0`、選択記録には未登録」にした場合は、core の同値 echo 判定で `1` に戻ることがあります。回復には次の 1 行で `0` を明示して installer を 2 回実行します（初回は `1` に戻り得ますが、2 回目に `0` の選択が記録されます）。
+
+```bash
+cd ~/orrery-telemetry && AGENTSTACK_AUTO_OPEN_CHILD=0 ./scripts/install.sh && AGENTSTACK_AUTO_OPEN_CHILD=0 ./scripts/install.sh
+```
+
 古い形式の保存値 `1` を `0` に移すには、`cd ~/orrery-telemetry && AGENTSTACK_AUTO_OPEN_CHILD=0 ./scripts/install.sh` で明示的に選びます。
 
 自動表示を確実に有効にするには、まず上の setup / update で `0` に更新したあと、Telemetry の checkout で次を実行します（既定の置き場所の場合）。

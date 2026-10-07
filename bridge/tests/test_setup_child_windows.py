@@ -138,6 +138,22 @@ def test_legacy_one_remains_selected_through_three_updates(tmp_path, script):
         shutil.rmtree(tmp_path / "telemetry")
 
 
+def test_explicit_zero_twice_recovers_manually_edited_unselected_zero(tmp_path):
+    saved(tmp_path, "0", "")
+    tel = installer(tmp_path)
+    home = tmp_path / "home"
+    env = {"HOME": str(home), "PATH": os.environ["PATH"],
+           "AGENTSTACK_HOME": str(home / ".agentstack"), CHOICE: "0"}
+    for expected in ("1|", "0|" + CHOICE):
+        result = subprocess.run([BASH, str(tel / "scripts" / "install.sh")],
+                                env=env, capture_output=True, text=True, timeout=10)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (home / "result").read_text().strip() == expected
+    shutil.rmtree(tel)
+    assert run(tmp_path, "update.sh").returncode == 0
+    assert (home / "result").read_text().strip() == "0|" + CHOICE
+
+
 @pytest.mark.parametrize("script", ["setup.sh", "update.sh"])
 def test_invalid_explicit_value_reaches_installer_validation(tmp_path, script):
     saved(tmp_path, "1", CHOICE)
