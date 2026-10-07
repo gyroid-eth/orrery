@@ -215,6 +215,36 @@ short() { printf '%s' "$1" | cut -c1-7; }
 head_of() { git -C "$1" rev-parse --short HEAD 2>/dev/null || printf -- '-'; }
 branch_of() { git -C "$1" symbolic-ref -q --short HEAD 2>/dev/null || printf 'detached'; }
 
+# >>> child-window-setting
+# get.sh can run setup.sh/update.sh outside the checkout: keep this small
+# policy in both scripts rather than source a file from an older checkout.
+# A shell value equal to a recorded value is env.sh's echo, just as in the
+# installer merge below. Only the choice record can distinguish its default.
+child_window_setting() (
+  file="$1"
+  saved=""; chosen=""; recorded=false
+  if [ -r "$file" ]; then
+    saved="$( unset AGENTSTACK_AUTO_OPEN_CHILD AGENTSTACK_CHOSEN_SETTINGS; . "$file" >/dev/null 2>&1; printf '%s' "${AGENTSTACK_AUTO_OPEN_CHILD:-}" )"
+    chosen="$( unset AGENTSTACK_AUTO_OPEN_CHILD AGENTSTACK_CHOSEN_SETTINGS; . "$file" >/dev/null 2>&1; printf '%s' "${AGENTSTACK_CHOSEN_SETTINGS:-}" )"
+    if grep -q '^export AGENTSTACK_CHOSEN_SETTINGS=' "$file"; then recorded=true; fi
+  fi
+  if [ "${AGENTSTACK_AUTO_OPEN_CHILD+x}" = x ]; then
+    if [ "$recorded" != true ] || [ "${AGENTSTACK_AUTO_OPEN_CHILD}" != "$saved" ]; then
+      printf '%s' "${AGENTSTACK_AUTO_OPEN_CHILD:-0}"; return
+    fi
+  fi
+  if [ "${AGENTSTACK_RESET_SETTINGS:-0}" != 1 ]; then
+    case " $chosen " in
+      *" AGENTSTACK_AUTO_OPEN_CHILD "*) printf '%s' "$saved"; return ;;
+    esac
+    # Before the choice record, a saved 1 is indistinguishable from a
+    # deliberate choice. Preserve it (and any other saved value).
+    if [ "$recorded" != true ] && [ -n "$saved" ]; then printf '%s' "$saved"; return; fi
+  fi
+  printf '0'
+)
+# <<< child-window-setting
+
 # ---------------------------------------------------------------- run state
 RUN_DIR=""
 LOG=""
@@ -656,10 +686,13 @@ if [ "$read_only" != true ]; then
   fi
 fi
 
+export AGENTSTACK_AUTO_OPEN_CHILD="$(child_window_setting "$ENV_FILE")"
+
 # ================================================================ 3. plan + confirm
 step "Plan"
 backup_dir="${AGENTSTACK_DIR}/backups"
 say "  This will:"
+say "    - child terminal windows: ${AGENTSTACK_AUTO_OPEN_CHILD} (0: use the cockpit; Open tmux stays available)"
 if [ "$need_uv" = true ]; then say "    - install uv into ~/.local/bin (your shell profile is not changed)"; fi
 if [ "$need_python" = true ]; then say "    - install Python 3.12 with uv (into uv's own folder)"; fi
 if [ -n "$detached_fix" ]; then

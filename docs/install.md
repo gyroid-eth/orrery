@@ -26,6 +26,22 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - **失敗したとき**: 承認の前の検査で止まったときは、setup は何も変えていません（ただし入口の `get.sh` がその前に行ったこと、つまり新しく取得した cockpit の checkout、または従来版の `.git` への取得は残り、画面にそう出ます）。承認の後に失敗したときは**巻き戻しません**。最初の試みの時点と今とで何が変わったかを表で出し、続きから進める 1 行を出します（その表の「最初」は、すべての確認が通るまで上書きされません。`~/.orrery-install/`）。前の版に戻すコマンドは用意していません
 - 新しく入れたものを取り除くときは、表示された `<orrery-telemetry の checkout>/scripts/uninstall.sh` を使います（Mail の DB は `--purge-data` を付けない限り残ります。2 つの checkout・uv・Python も残ります）。全部を消す手順は README の[完全に消す](../README.md#完全に消す)です。**更新の取り消しには使わないでください**（既存の環境ごと取り除きます）
 
+### 子の窓の自動表示
+
+上の 1 行、`scripts/setup.sh`、`scripts/update.sh` では、子の OS ターミナル窓を自動で開く設定の既定を `AGENTSTACK_AUTO_OPEN_CHILD=0` にします。子は cockpit で見られ、必要な窓は `Open tmux` で開けます。`AGENTSTACK_TERMINAL` は変更しません。この設定は次に起動する子から効き、既に開いた窓は閉じません。
+
+- 新規 install と、`env.sh` に選択の記録があるもののこの設定が未選択の install では `0` にします。従来の既定 `1` も更新で `0` に移ります
+- shell から渡した値、または `AGENTSTACK_CHOSEN_SETTINGS` にこの設定名が載っている保存値を引き継ぎます。ただし、選択の記録がある `env.sh` と同値の shell env は、既存の installer と同じく読み戻し（echo）と扱います。**未選択の保存値 `1` と shell の `1` が同じ場合も、選んだとはみなさず `0` に移ります**
+- 選択の記録自体が無い古い `env.sh` の保存値 `1` は、既定か利用者の選択かを区別できません。保存値を維持するので、この場合は自動表示が続きます
+
+自動表示を確実に有効にするには、まず上の setup / update で `0` に更新したあと、Telemetry の checkout で次を実行します（既定の置き場所の場合）。
+
+```bash
+cd ~/orrery-telemetry && AGENTSTACK_AUTO_OPEN_CHILD=1 ./scripts/install.sh
+```
+
+保存済みの `0` と異なる `1` を明示するので、installer がこの設定を `AGENTSTACK_CHOSEN_SETTINGS` に記録します。その後の cockpit の更新でも `1` が保たれます。
+
 以下は、手で 1 段ずつ入れる手順です。
 
 ## はじめて入れる人へ（ブラウザで使う・Mac / Windows WSL2）

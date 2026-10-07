@@ -16,6 +16,8 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 Read and confirm the plan, and check that doctor and the Mail selftest succeeded. Sign in to Claude Code or Codex CLI in the same OS environment, then open the printed cockpit URL (default: `http://127.0.0.1:8791/cockpit.html`). Without a CLI, completing the installer does not make agents available. See [Installation](docs/en/install.md) for prerequisites, settings changes, and manual setup.
 
+Installing through the cockpit defaults to keeping child OS terminal windows closed (`AGENTSTACK_AUTO_OPEN_CHILD=0`). Previously selected settings are kept, and `Open tmux` still opens a window when you need one. See [Automatic child windows](docs/en/install.md#automatic-child-windows) to enable automatic opening and for the treatment of older settings and equal environment values.
+
 ![The cockpit is the screen for operating terminals; Telemetry is the dashboard and agent-graph screen. The cockpit can embed the Telemetry screen. Agents run in tmux, are visible from both screens, and talk through Mail](docs/images/cockpit_telemetry_relation.svg)
 
 ### What goes where
