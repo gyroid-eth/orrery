@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import shlex
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -66,12 +67,13 @@ def run(tmp: Path, script: str, shell: str | None = None, reset: str = "0"):
         f"ENV_FILE={shlex.quote(str(install / 'env.sh'))}",
         f"tel_root={shlex.quote(str(tel))}",
         f"telemetry_root={shlex.quote(str(tel))}",
+        'AGENTSTACK_DIR="$AGENTSTACK_HOME"',
         "assume_flag=''", "project_key=$HOME/work", "mail_mode=keep",
         'export AGENTSTACK_AUTO_OPEN_CHILD="$(child_window_setting "$ENV_FILE")"',
         name,
     ])
     env = {"PATH": os.environ["PATH"], "HOME": str(home), "AGENTSTACK_HOME": str(install),
-           "AGENTSTACK_DIR": str(install), "AGENTSTACK_RESET_SETTINGS": reset}
+           "AGENTSTACK_RESET_SETTINGS": reset}
     if shell is not None:
         env["AGENTSTACK_AUTO_OPEN_CHILD"] = shell
     return subprocess.run([BASH, "-c", command], env=env, capture_output=True, text=True, timeout=10)
@@ -115,13 +117,25 @@ def test_effective_setting_and_saved_choice(tmp_path, script, value, chosen, she
     saved(tmp_path, value, chosen)
     result = run(tmp_path, script, shell)
     assert result.returncode == 0, result.stdout + result.stderr
+    assert not result.stderr
     effect, record = (tmp_path / "home" / "result").read_text().strip().split("|", 1)
     assert effect == expected
-    assert CHOICE in record.split() or (value == "1" and chosen is None)
+    assert CHOICE in record.split()
 
 
 def test_same_policy_in_temporary_setup_and_update():
     assert policy("setup.sh") == policy("update.sh")
+
+
+@pytest.mark.parametrize("script", ["setup.sh", "update.sh"])
+def test_legacy_one_remains_selected_through_three_updates(tmp_path, script):
+    saved(tmp_path, "1", None)
+    for _ in range(3):
+        result = run(tmp_path, script)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert not result.stderr
+        assert (tmp_path / "home" / "result").read_text().strip() == "1|" + CHOICE
+        shutil.rmtree(tmp_path / "telemetry")
 
 
 @pytest.mark.parametrize("script", ["setup.sh", "update.sh"])
@@ -183,6 +197,7 @@ def test_complete_update_entry_uses_cockpit_policy(tmp_path, dashboard, value, c
     env = {"ORRERY_DASHBOARD_URL": dashboard}
     if shell is not None:
         env[CHOICE] = shell
-    result = stack.update(**env)
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert (stack.home / "result").read_text().split("|", 1)[0] == expected
+    for _ in range(3 if value == "1" and chosen is None else 1):
+        result = stack.update(**env)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (stack.home / "result").read_text().split("|", 1)[0] == expected

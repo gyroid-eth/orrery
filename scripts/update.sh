@@ -321,7 +321,11 @@ telemetry_install() {
           *" $name "*)
             eval "from_file=\${${name}-__not_in_env_sh__}"
             eval "from_shell=\${saved_${name}}"
-            if [ "$from_shell" = "$from_file" ]; then echoed="${echoed} ${name}"; fi
+            # Keep ambiguous legacy auto-open as a choice: otherwise core
+            # writes an empty choice record and flips it on the next update.
+            if [ "$from_shell" = "$from_file" ] && {
+              [ "$name" != AGENTSTACK_AUTO_OPEN_CHILD ] || grep -q '^export AGENTSTACK_CHOSEN_SETTINGS=' "${AGENTSTACK_DIR}/env.sh";
+            }; then echoed="${echoed} ${name}"; fi
             ;;
         esac
         unset "$name"
