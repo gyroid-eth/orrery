@@ -37,6 +37,25 @@ from test_snapshot_pane_modes import (  # noqa: E402
 
 CHROME = cdp.find_chrome()
 pytestmark = pytest.mark.skipif(CHROME is None, reason="no Chromium (set ORRERY_CHROME)")
+CHROME_START_SECONDS = 90  # Same cold-start allowance as test_demo_mode_browser.
+
+
+def _wait_for_page(process, port, chrome_log):
+    started = time.monotonic()
+    while time.monotonic() - started < CHROME_START_SECONDS:
+        if process.poll() is not None:
+            break
+        with contextlib.suppress(OSError, ValueError):
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=2) as reply:
+                tabs = json.load(reply)
+            page = next((tab for tab in tabs if tab.get("type") == "page"
+                         and tab.get("webSocketDebuggerUrl")), None)
+            if page:
+                return page
+        time.sleep(.1)
+    chrome_log.seek(0)
+    raise RuntimeError(f"Chromium gave no page over CDP after {time.monotonic() - started:.1f}s "
+                       f"(exit {process.poll()}):\n" + chrome_log.read()[-3000:])
 
 PAGE = b"""<!doctype html><meta charset=utf-8>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
@@ -82,19 +101,14 @@ def js():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     port = cdp._free_port()
     profile = tempfile.mkdtemp(prefix="orrery-modes-cdp-")
+    chrome_log = open(Path(profile) / "chrome.log", "w+")
     process = subprocess.Popen(
         [CHROME, "--headless=new", "--use-mock-keychain", "--password-store=basic", "--no-sandbox", "--disable-gpu",
          f"--remote-debugging-port={port}", "--window-size=1400,900",
          f"--user-data-dir={profile}", "about:blank"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        stdout=chrome_log, stderr=subprocess.STDOUT)
     try:
-        tabs = None
-        for _ in range(100):
-            with contextlib.suppress(OSError):
-                tabs = json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/json"))
-                break
-            time.sleep(.1)
-        page = next(tab for tab in tabs if tab["type"] == "page")
+        page = _wait_for_page(process, port, chrome_log)
         client = cdp._WebSocket(page["webSocketDebuggerUrl"])
         client.call("Page.enable")
         client.call("Runtime.enable")
@@ -122,8 +136,10 @@ def js():
             process.wait(timeout=5)
         if process.poll() is None:
             process.kill()
+            process.wait(timeout=5)
         server.shutdown()
         server.server_close()
+        chrome_log.close()
         shutil.rmtree(profile, ignore_errors=True)
 
 
