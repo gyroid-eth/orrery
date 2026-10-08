@@ -1435,7 +1435,7 @@ say "    3. The agent appears in the list and its reply shows up"
 say "  After restarting the computer: ~/.agentstack/bin/agentstack-doctor, then the"
 say "  same command again (it starts what is stopped)."
 if [ "$mode" = fresh ]; then
-  say "  To remove this new install: ${tel_root}/scripts/uninstall.sh"
+  say "  To uninstall this new install: ${tel_root}/scripts/uninstall.sh"
   say "  (it keeps the Mail database unless --purge-data; the 2 checkouts, uv and Python stay)"
   say "  and stop the cockpit: tmux -L ${SHOW_SOCK} kill-session -t ${SHOW_SESSION}"
 fi

@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - 最後に、4 項目が「適用した／すでに同じ／skip」のどれだったか、Mail を新しく入れたか動いているものを使い続けたか、doctor と selftest の結果を出します。Claude Code か Codex が無ければ「基盤のみ準備済み」と出ます
 - この setup が起動したのではない cockpit が別の版で動いているときは、止めずに「その窓で Ctrl-C して、同じ 1 行をもう一度」と案内します
 - **失敗したとき**: 承認の前の検査で止まったときは、setup は何も変えていません（ただし入口の `get.sh` がその前に行ったこと、つまり新しく取得した cockpit の checkout、または従来版の `.git` への取得は残り、画面にそう出ます）。承認の後に失敗したときは**巻き戻しません**。最初の試みの時点と今とで何が変わったかを表で出し、続きから進める 1 行を出します（その表の「最初」は、すべての確認が通るまで上書きされません。`~/.orrery-install/`）。前の版に戻すコマンドは用意していません
-- 新しく入れたものを取り除くときは、表示された `<orrery-telemetry の checkout>/scripts/uninstall.sh` を使います（Mail の DB は `--purge-data` を付けない限り残ります。2 つの checkout・uv・Python も残ります）。全部を消す手順は README の[完全に消す](../README.md#完全に消す)です。**更新の取り消しには使わないでください**（既存の環境ごと取り除きます）
+- 新しく入れたものをアンインストールするときは、表示された `<orrery-telemetry の checkout>/scripts/uninstall.sh` を使います（Mail の DB は `--purge-data` を付けない限り残ります。2 つの checkout・uv・Python も残ります）。アンインストールの手順は README の[アンインストール](../README.md#アンインストール)です。**更新の取り消しには使わないでください**（既存の環境ごと取り除きます）
 
 ### 子の窓の自動表示
 
@@ -92,7 +92,7 @@ cd ~/orrery-telemetry && AGENTSTACK_AUTO_OPEN_CHILD=1 ./scripts/install.sh
 
 **変えないもの**: `~/.zshrc` や `~/.bashrc`（ORRERY は書き換えません。Claude Code や Codex の PATH の行は、自分で足す分です）、home の外（指定した作業 folder の `CLAUDE.md` と、その隣に置く backup を除きます。研究セットで Windows 側の vault を作業 folder にしたときも同じです）、Windows の設定。Windows に入れた Codex や Claude Code にも影響しません。この手順の既定の保存先では（`CODEX_HOME`・`AGENTSTACK_CLAUDE_SETTINGS`・`AGENTSTACK_CLAUDE_JSON` で保存先を Windows 側に変えておらず、`~/.codex` や `~/.claude` を Windows 側と link などで共有していなければ）、ORRERY が書く設定は Ubuntu の home（`~/.codex`・`~/.claude`）の中だけで、Windows 側の `C:\Users\…\.codex` や `.claude` には触れません（研究セットの vault は Windows 側にあるので、Windows の Claude Code でその vault を開くと、`CLAUDE.md` の ORRERY の block も読みます）。画面と Mail は `127.0.0.1`（この PC の中だけ）で待ち受け、外からはつながりません。
 
-**消し方**: Codex の plugin を入れた人は、**最初に** `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` で外します（plugin の記録は `~/.agentstack` の中にあるので、先に消すと外せなくなります）。そのあとは README の[完全に消す](../README.md#完全に消す)の手順です（`~/.agentstack/bin/agentstack-uninstall --purge-data` で `~/.agentstack`・裏で動かす登録・skill のリンクを消し、`~/.claude/settings.json` と `~/.claude.json` に書き足した分を戻します。cockpit を止めてから `rm -rf ~/orrery ~/orrery-telemetry`）。`~/.codex/AGENTS.md` と作業 folder の `CLAUDE.md` の ORRERY の block は残るので、要らなければ marker の間を手で消します。source はすべて GitHub で公開しています（[orrery](https://github.com/gyroid-eth/orrery)・[orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)）。
+**アンインストール**: Codex の plugin を入れた人は、**最初に** `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` で外します（plugin の記録は `~/.agentstack` の中にあるので、先に消すと外せなくなります）。そのあとは README の[アンインストール](../README.md#アンインストール)の手順です（`~/.agentstack/bin/agentstack-uninstall --purge-data` で `~/.agentstack`・裏で動かす登録・skill のリンクを消し、`~/.claude/settings.json` と `~/.claude.json` に書き足した分を戻します。cockpit を止めてから `rm -rf ~/orrery ~/orrery-telemetry`）。`~/.codex/AGENTS.md` と作業 folder の `CLAUDE.md` の ORRERY の block は残るので、要らなければ marker の間を手で消します。source はすべて GitHub で公開しています（[orrery](https://github.com/gyroid-eth/orrery)・[orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)）。
 
 ### 0. Obsidian（一緒に使う場合）
 
@@ -329,7 +329,7 @@ codex
 
 hook の確認の画面が出たら、AgentStack の 6 つ（SessionStart・SubagentStart・UserPromptSubmit・PostToolUse・Stop・SubagentStop。どれも `run-hook.sh`）を trust します。ほかの plugin の hook は、ここで trust しなくて構いません。終わったら `/exit` と打ちます。
 
-**確かめ**: cockpit の `+ NEW AGENT` で Codex の agent を起動し、EXIT してから Resume すると、同じ会話に戻ります。外すときは `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` です。
+**確かめ**: cockpit の `+ NEW AGENT` で Codex の agent を起動し、EXIT してから Resume すると、同じ会話に戻ります。アンインストールするときは `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` です。
 
 Codex の agent に skill を頼むときは、`/delegate` ではなく `$delegate` と書きます（`/log` も `$log`）。Codex の入力欄で `/` から始まる語は Codex 自身のコマンドとして扱われるためです。
 
@@ -692,7 +692,7 @@ app は次の順に登録を試み、最初に利用できる key を採用し�
 4. `~/.orrery/config.json`
 5. ORRERY origin の WebView / browser localStorage
 
-ORRERY Telemetry、ORRERY Mail DB、利用者の tmux session は共有基盤・利用者データです。ORRERY の uninstall 手順で削除しないでください。
+ORRERY Telemetry、ORRERY Mail DB、利用者の tmux session は共有基盤・利用者データです。ORRERY のアンインストール手順で削除しないでください。
 
 ## 関連文書
 
