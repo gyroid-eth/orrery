@@ -26,6 +26,36 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - **When something fails**: a check that fails before you type yes means the setup changed nothing (what `get.sh` did before it stays, and the screen says so: a newly downloaded cockpit checkout, or git data fetched into an old one). After that, **nothing is rolled back**: you get a table of what changed since the first attempt and the line that carries on (the first attempt's record, in `~/.orrery-install/`, is kept until a run passes every check). There is no command to go back to the previous version
 - To remove a new install, use the printed `<orrery-telemetry checkout>/scripts/uninstall.sh` (the Mail database stays unless `--purge-data`; the 2 checkouts, uv and Python stay). To remove everything, see [Remove everything](../../README.en.md#remove-everything) in the README. **Do not use it to undo an update**: it removes the whole install
 
+### Automatic child windows
+
+The one-line installer above, `scripts/setup.sh`, and `scripts/update.sh` default to `AGENTSTACK_AUTO_OPEN_CHILD=0`: child OS terminal windows do not open automatically. You can see children in the cockpit and use `Open tmux` when you need a window. `AGENTSTACK_TERMINAL` is kept. This applies to children started afterwards and does not close existing windows.
+
+- New installs, and installs with a choice record in `env.sh` where this setting is unselected, use `0`. Updates also move the previous default `1` to `0`
+- A value passed from the shell or a saved value listed in `AGENTSTACK_CHOSEN_SETTINGS` is kept. However, when a choice record exists, a shell value equal to the saved value is treated as a read-back (echo), following the existing installer rule. **An unselected saved `1` plus the same shell `1` is also moved to `0`; it does not count as a selection**
+- An older `env.sh` without a choice record cannot distinguish a saved default `1` from a deliberate choice. Its saved value is kept, so automatic opening continues in this case
+
+**Reset limitation**: when `env.sh` has a choice record and the saved value is `0`, running setup / update with `AGENTSTACK_RESET_SETTINGS=1` reverts it to Telemetry core's default `1`. OS terminal windows then open automatically for children started afterwards. To clear reset and restore `0`, run this one line. In this case a single run records the choice of `0`, which later ordinary updates keep.
+
+```bash
+cd ~/orrery-telemetry && AGENTSTACK_RESET_SETTINGS=0 AGENTSTACK_AUTO_OPEN_CHILD=0 ./scripts/install.sh
+```
+
+This policy covers settings produced by the regular installer. Manually editing a saved value to `0` without listing it in the choice record can let core's equal-value echo rule revert it to `1`. Recover with this one line, explicitly passing `0` to the installer twice (the first run can save `1`; the second records the choice of `0`):
+
+```bash
+cd ~/orrery-telemetry && AGENTSTACK_AUTO_OPEN_CHILD=0 ./scripts/install.sh && AGENTSTACK_AUTO_OPEN_CHILD=0 ./scripts/install.sh
+```
+
+To move an older saved `1` to `0`, explicitly select it with `cd ~/orrery-telemetry && AGENTSTACK_AUTO_OPEN_CHILD=0 ./scripts/install.sh`.
+
+To reliably enable automatic opening, first let the setup / update above set it to `0`, then run this in the Telemetry checkout (shown in its default location):
+
+```bash
+cd ~/orrery-telemetry && AGENTSTACK_AUTO_OPEN_CHILD=1 ./scripts/install.sh
+```
+
+The explicit `1` differs from the saved `0`, so the installer records this setting in `AGENTSTACK_CHOSEN_SETTINGS`. Later cockpit updates keep `1`.
+
 The rest of this section installs step by step by hand.
 
 ## For first-time installers (browser, Mac / Windows WSL2)

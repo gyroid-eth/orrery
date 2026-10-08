@@ -199,6 +199,7 @@ if [ -n "${AGENTSTACK_CODEX_BIN:-}" ] && ! "$AGENTSTACK_CODEX_BIN" --version >/d
 fi
 if [ -n "${STUB_INSTALL_ERROR:-}" ]; then echo "error: ${STUB_INSTALL_ERROR}" >&2; exit 1; fi
 printf 'args=%s env=%s\n' "$*" "${AGENTSTACK_MAIL_UPDATE-unset}" >"$HOME/install-args"
+printf '%s\n' "${AGENTSTACK_AUTO_OPEN_CHILD-unset}" >"$HOME/child-window-setting"
 if [ -n "${STUB_WARN:-}" ]; then
   echo "warning: Claude skill 'delegate' already exists; leaving it untouched: $HOME/.claude/skills/delegate" >&2
   echo "warning: optional dependency 'fswatch' not found; mail watcher will use polling" >&2
@@ -296,6 +297,21 @@ setup_in() { # $1 = HOME; rest = env assignments and setup options
   run_in "$h" ORRERY_DIR="$h/orrery" ORRERY_REPO_URL="$COCKPIT_URL" ORRERY_REF="$BRANCH" \
     ORRERY_TELEMETRY_URL="$STUBTEL_URL" AGENTSTACK_PYTHON="$(command -v python3)" "$@"
 }
+
+for value in default 1; do
+  H="$(fresh_home "child-windows-$value")"
+  stub_cockpit "$H"
+  if [ "$value" = default ]; then
+    out="$(setup_in "$H" bash "$H/orrery/scripts/setup.sh" --yes --no-start 2>&1)"; status=$?
+    expected=0
+  else
+    out="$(setup_in "$H" AGENTSTACK_AUTO_OPEN_CHILD=1 bash "$H/orrery/scripts/setup.sh" --yes --no-start 2>&1)"; status=$?
+    expected=1
+  fi
+  check "child windows $value: setup succeeds" test "$status" -eq 0
+  check "child windows $value: installer receives $expected" test "$(cat "$H/child-window-setting" 2>/dev/null)" = "$expected"
+  check "child windows $value: plan shows $expected" sh -c 'printf "%s" "$1" | grep -q "child terminal windows: $2"' _ "$out" "$expected"
+done
 
 for case_ in ok missing warn unknown; do
   H="$(fresh_home "doctor-$case_")"
