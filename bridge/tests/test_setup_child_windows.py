@@ -162,11 +162,47 @@ def test_invalid_explicit_value_reaches_installer_validation(tmp_path, script):
 
 
 @pytest.mark.parametrize("script", ["setup.sh", "update.sh"])
-def test_reset_drops_saved_choice_to_cockpit_default(tmp_path, script):
-    saved(tmp_path, "1", CHOICE)
+@pytest.mark.parametrize("value", ["0", "1"])
+def test_reset_current_behavior_depends_on_saved_value(tmp_path, script, value):
+    saved(tmp_path, value, CHOICE)
     result = run(tmp_path, script, reset="1")
     assert result.returncode == 0, result.stdout + result.stderr
-    assert (tmp_path / "home" / "result").read_text().startswith("0|")
+    # Equal saved 0 is an echo, so core's reset falls back to its default 1.
+    # Saved 1 differs from the cockpit's 0, which core records as a choice.
+    expected = "1|" if value == "0" else "0|" + CHOICE
+    assert (tmp_path / "home" / "result").read_text().strip() == expected
+
+
+def recover_zero(tel: Path, home: Path):
+    # The documented one-line recovery clears reset even if the invoking
+    # shell still exports it. All files here belong to the synthetic HOME.
+    return subprocess.run([BASH, str(tel / "scripts" / "install.sh")],
+                          env={"HOME": str(home), "PATH": os.environ["PATH"],
+                               "AGENTSTACK_HOME": str(home / ".agentstack"),
+                               "AGENTSTACK_RESET_SETTINGS": "0", CHOICE: "0"},
+                          capture_output=True, text=True, timeout=10)
+
+
+@pytest.mark.parametrize("script", ["setup.sh", "update.sh"])
+@pytest.mark.parametrize("shell", [None, "1"])
+def test_normal_install_reset_recovery_and_next_update(tmp_path, script, shell):
+    saved(tmp_path, None, None)
+    result = run(tmp_path, script)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (tmp_path / "home" / "result").read_text().split("|", 1)[0] == "0"
+    shutil.rmtree(tmp_path / "telemetry")
+    expected = "1|" if shell is None else "1|" + CHOICE
+    result = run(tmp_path, script, shell=shell, reset="1")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (tmp_path / "home" / "result").read_text().strip() == expected
+    home = tmp_path / "home"
+    result = recover_zero(tmp_path / "telemetry", home)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (home / "result").read_text().strip() == "0|" + CHOICE
+    shutil.rmtree(tmp_path / "telemetry")
+    result = run(tmp_path, "update.sh")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (home / "result").read_text().strip() == "0|" + CHOICE
 
 
 @pytest.mark.parametrize("script", ["setup.sh", "update.sh"])
@@ -217,3 +253,22 @@ def test_complete_update_entry_uses_cockpit_policy(tmp_path, dashboard, value, c
         result = stack.update(**env)
         assert result.returncode == 0, result.stdout + result.stderr
         assert (stack.home / "result").read_text().split("|", 1)[0] == expected
+
+
+def test_complete_update_reset_recovery_and_next_update(tmp_path, dashboard):
+    stack = Stack(tmp_path)
+    generated = installer(tmp_path / "core") / "scripts" / "install.sh"
+    seed = tmp_path / "telemetry-seed"
+    (seed / "scripts" / "install.sh").write_text(generated.read_text())
+    git(seed, "commit", "-q", "-am", "installer resolver")
+    git(seed, "push", "-q", "origin", "HEAD:master")
+    for reset, expected in [("0", "0|" + CHOICE), ("1", "1|")]:
+        result = stack.update(ORRERY_DASHBOARD_URL=dashboard, AGENTSTACK_RESET_SETTINGS=reset)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (stack.home / "result").read_text().strip() == expected
+    result = recover_zero(stack.telemetry, stack.home)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (stack.home / "result").read_text().strip() == "0|" + CHOICE
+    result = stack.update(ORRERY_DASHBOARD_URL=dashboard, AGENTSTACK_RESET_SETTINGS="0")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (stack.home / "result").read_text().strip() == "0|" + CHOICE
