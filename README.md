@@ -29,7 +29,7 @@ cockpit から入れると、子の OS ターミナル窓は既定では自動�
 | `~/.agentstack` | 実際に動いている本体、設定 `env.sh`、Mail の DB |
 | `~/orrery-work` | agent の作業 folder（project folder）。ORRERY の指示を書いた `CLAUDE.md` が入る。`+ NEW AGENT` の既定の folder。Mail と予約はこの単位 |
 
-port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY.app` は、8791 の cockpit を開く窓です。作業 folder の変え方と消し方は[作業 folder と消し方](#作業-folder-と消し方)にあります。
+port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY.app` は、8791 の cockpit を開く窓です。作業 folder の変え方とアンインストールは[作業 folder とアンインストール](#作業-folder-とアンインストール)にあります。
 
 ![ORRERY cockpit の全体。左に agent の roster、中央に3体の端末を並べた Split、右上に親子の木を描く mini-orrery、右下に ORRERY Mail の一覧](docs/images/cockpit_overview.png)
 
@@ -190,7 +190,7 @@ WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同
 
 詳細と役割別の要件は[インストール](docs/install.md)を参照してください。
 
-## 作業 folder と消し方
+## 作業 folder とアンインストール
 
 ### 作業 folder を変える
 
@@ -207,7 +207,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - `+ NEW AGENT` の folder の候補は、既定では作業 folder と `~` です。変えるには `cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"`（project key は引き継がれます。指定した folder だけになるので、作業 folder も入れます）。
 - **ORRERY の指示が入っていない folder（home など）で terminal から直接 `claude` を起動すると、その指示が無いまま動きます。** `/delegate` が使われず、親子の線も出ません。作業 folder（project key の folder や vault）の中で起動すれば、その folder の `CLAUDE.md` の block が入ります。agent は `+ NEW AGENT` か `~/.agentstack/bin/agent-start <作業 folder>` で起動します。
 
-### 完全に消す
+### アンインストール
 
 `agentstack-uninstall` が消すのは `~/.agentstack` の中（と service、settings の変更）だけです。source・作業 folder・uv は残ります。
 

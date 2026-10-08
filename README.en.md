@@ -29,7 +29,7 @@ Installing through the cockpit defaults to keeping child OS terminal windows clo
 | `~/.agentstack` | The running installation, the `env.sh` settings, and the Mail DB |
 | `~/orrery-work` | The agents' work folder (the project folder). It receives a `CLAUDE.md` with ORRERY's instructions. It is the default folder of `+ NEW AGENT`. Mail and reservations are scoped to it |
 
-Ports: cockpit 8791, Telemetry 8770, Mail 18765. `ORRERY.app` is a window that opens the cockpit on 8791. For changing the work folder and removing everything, see [Work folder and removal](#work-folder-and-removal).
+Ports: cockpit 8791, Telemetry 8770, Mail 18765. `ORRERY.app` is a window that opens the cockpit on 8791. For changing the work folder and uninstalling, see [Work folder and Uninstall](#work-folder-and-uninstall).
 
 ![The whole ORRERY cockpit. On the left, the agent roster; in the center, a Split with three terminals side by side; at the top right, the mini-orrery drawing the parent–child tree; at the bottom right, the ORRERY Mail list](docs/images/cockpit_overview.png)
 
@@ -190,7 +190,7 @@ Run the backend in WSL2 and open it in a Windows browser to use the same screen 
 
 See [Installation](docs/en/install.md) for details and requirements by role.
 
-## Work folder and removal
+## Work folder and Uninstall
 
 ### Change the work folder
 
@@ -207,7 +207,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - The folder choices of `+ NEW AGENT` are the work folder and `~` by default. To change them, use `cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"` (the project key is kept).
 - **If you start `claude` directly in a terminal from a folder without ORRERY's instructions (such as home), it runs without them.** `/delegate` is not used and no parent–child line appears. Started inside the work folder (the project-key folder or a vault), it picks up that folder's `CLAUDE.md` block. Start agents with `+ NEW AGENT` or `~/.agentstack/bin/agent-start <work folder>`.
 
-### Remove everything
+### Uninstall
 
 `agentstack-uninstall` removes only what is inside `~/.agentstack` (plus the services and the settings changes). The source folders, your work folder, and uv stay.
 
