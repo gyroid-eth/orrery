@@ -40,7 +40,8 @@ DEFAULT_HISTORY_DIR = "~/.orrery/history"
 PANE_FORMAT = (
     "#{pane_id}\t#{window_id}\t#{session_id}\t#{window_index}\t"
     "#{pane_index}\t#{pane_width}\t#{pane_height}\t#{pane_active}\t"
-    "#{window_name}\t#{pane_current_command}"
+    "#{window_name}\t#{pane_current_command}\t#{alternate_on}\t"
+    "#{mouse_standard_flag}\t#{mouse_button_flag}\t#{mouse_all_flag}"
 )
 CLIENT_SIZE_FORMAT = (
     "#{client_control_mode}\t#{client_width}\t#{client_height}\t"
@@ -99,6 +100,8 @@ class PaneInfo:
     active: bool
     window_name: str
     current_command: str
+    alternate_on: bool | None = None
+    mouse_tracking: bool | None = None
 
     def to_json(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -108,6 +111,8 @@ class PaneInfo:
         payload["windowIndex"] = payload.pop("window_index")
         payload["paneIndex"] = payload.pop("pane_index")
         payload["currentCommand"] = payload.pop("current_command")
+        payload["alternateOn"] = payload.pop("alternate_on")
+        payload["mouseTracking"] = payload.pop("mouse_tracking")
         payload["windowName"] = payload.pop("window_name")
         return payload
 
@@ -329,11 +334,11 @@ def decode_tmux_output(value: str | bytes) -> str:
 
 def parse_pane_line(line: str) -> PaneInfo | None:
     fields = line.split("\t")
-    if len(fields) != 10:
+    if len(fields) not in (10, 14):
         return None
 
     pane_id, window_id, session_id, window_index, pane_index = fields[:5]
-    width, height, active, window_name, current_command = fields[5:]
+    width, height, active, window_name, current_command = fields[5:10]
     try:
         width_int = int(width)
         height_int = int(height)
@@ -351,6 +356,9 @@ def parse_pane_line(line: str) -> PaneInfo | None:
         active=active == "1",
         window_name=window_name,
         current_command=current_command,
+        alternate_on=(fields[10] == "1" if len(fields) == 14 and fields[10] in ("0", "1") else None),
+        mouse_tracking=(any(flag == "1" for flag in fields[11:14])
+                        if len(fields) == 14 and all(flag in ("0", "1") for flag in fields[11:14]) else None),
     )
 
 
@@ -925,11 +933,16 @@ class TmuxControlBridge:
         pane_id = payload.get("paneId")
         if not isinstance(pane_id, str) and message_type in {
             "input",
+            "codex-page",
             "resize",
             "release",
             "split",
             "close",
         }:
+            return
+
+        if message_type == "codex-page":
+            await self.send_codex_page(pane_id, payload.get("direction"), payload.get("count"))
             return
 
         if message_type == "input":
@@ -1096,6 +1109,29 @@ class TmuxControlBridge:
                     cx, cy = int(fields[0]), int(fields[1])
         parts.append(f"\x1b[{cy + 1};{cx + 1}H")
         return "".join(parts)
+
+    async def send_codex_page(self, pane_id: str, direction: Any, count: Any) -> None:
+        """Recheck live tmux state before a wheel becomes application keys.
+
+        The viewer also requires the canonical agent record. This guard rejects
+        a pane that became a shell, normal screen, mouse-on app, or unknown while
+        that viewer's metadata was in flight. Ordinary xterm input is unchanged.
+        """
+        if pane_id not in self.panes or direction not in ("up", "down"):
+            return
+        if type(count) is not int or not 1 <= count <= 3:
+            return
+        result = await self.send_command(
+            ["display-message", "-p", "-t", pane_id,
+             "#{pane_current_command}\t#{alternate_on}\t#{mouse_standard_flag}\t#{mouse_button_flag}\t#{mouse_all_flag}"],
+            wait=True, timeout=5.0,
+        )
+        if result is None or not result.ok or not result.lines:
+            return
+        fields = result.lines[0].split("\t")
+        if len(fields) != 5 or fields[0] not in ("codex", "node") or fields[1:] != ["1", "0", "0", "0"]:
+            return
+        await self.send_input(pane_id, ("\x1b[5~" if direction == "up" else "\x1b[6~") * count)
 
     async def send_input(
         self, pane_id: str, data: str, *, binary: bool = False

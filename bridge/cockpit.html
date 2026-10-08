@@ -4463,9 +4463,9 @@
       }
     }
   },
-  "inventory_digest": "25cd8d321fc031b6b63fb7fca8fb2af3e0f49da3938f474c9c44b85431237275",
+  "inventory_digest": "2491b7f728b61c0ab8d837c66649155250c81a5b536e8d243df3066fb6e892c4",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "b94baec9983a1d769201363873aa1e8204d81f3d6d974fb0d4c86aea69d32b21",
+  "source_digest": "ab57f174a6378a18ff221695471082d6e1d497bc8c74803539db76908fa45fc2",
   "surface": "cockpit",
   "version": 1
 }
@@ -7714,6 +7714,59 @@ window.addEventListener('keydown',event=>{
   }
 },true);
 
+/* >>> codex-wheel
+   A later viewer can have a normal xterm buffer for a remote alternate TUI.
+   Use the pane's explicit tmux modes, then follow live DEC mode transitions.
+   Missing metadata is not mouse-off. The backend rechecks before paging. */
+function codexWheelEligible(p,active,agent){
+  return Boolean(p&&active===p.meta.paneId&&agent&&agent.running===true&&
+    agent.category==='agent'&&['codex','codex-cli'].includes(agent.program)&&
+    ['codex','node'].includes(p.meta.currentCommand)&&p._wheelAlternate===true&&
+    p._wheelMouse.every(flag=>flag===false)&&p.term.modes.mouseTrackingMode==='none');
+}
+function codexWheelPages(state,event,now){
+  const delta=Number(event.deltaY);
+  if(!Number.isFinite(delta)||!delta)return 0;
+  if(now-state.last>240){state.amount=0;state.pages=0;state.direction=0;}
+  const direction=Math.sign(delta);
+  if(direction!==state.direction)state.amount=0;
+  state.direction=direction;state.last=now;
+  const unit=event.deltaMode===1?16:event.deltaMode===2?96:1;
+  state.amount+=Math.abs(delta)*unit;
+  const pages=Math.min(Math.floor(state.amount/96),Math.max(0,3-state.pages));
+  state.pages+=pages;
+  state.amount=state.pages>=3?0:state.amount-pages*96;
+  return direction*pages;
+}
+function setCodexWheelModes(p,meta){
+  p._wheelAlternate=typeof meta.alternateOn==='boolean'?meta.alternateOn:null;
+  p._wheelMouse=[0,1,2].map(()=>meta.mouseTracking===false?false:null);
+}
+function installCodexWheel(p){
+  const state={amount:0,pages:0,last:-Infinity,direction:0};
+  for(const final of ['h','l'])p.term.parser.registerCsiHandler({prefix:'?',final},params=>{
+    for(const mode of params){
+      if([47,1047,1049].includes(mode))p._wheelAlternate=final==='h';
+      const index=[1000,1002,1003].indexOf(mode);
+      if(index>=0)p._wheelMouse[index]=final==='h';
+    }
+    return false; // Keep xterm's mode parser and mouse-on path intact.
+  });
+  p.term.attachCustomWheelEventHandler(event=>{
+    if(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||
+       !codexWheelEligible(p,activeId,currentAgentNamed(p.session))){
+      state.amount=0;state.pages=0;state.last=-Infinity;return true;
+    }
+    if(!Number.isFinite(event.deltaY)||event.deltaY===0)return true;
+    const pages=codexWheelPages(state,event,performance.now());
+    if(pages)send({type:'codex-page',paneId:p.meta.paneId,
+      direction:pages<0?'up':'down',count:Math.abs(pages)});
+    event.preventDefault();
+    return false; // Suppress xterm's alternate-scroll Up/Down, including tiny deltas.
+  });
+}
+/* <<< codex-wheel */
+
 function createPane(session,meta){
   if(!session||!meta||!meta.paneId)return;
   const normalized={...meta,session};
@@ -7807,6 +7860,7 @@ function createPane(session,meta){
   group.paneTabs.appendChild(tab);
   const paneRec={session,meta:normalized,term,fit,host,tab,bottomJump,_xtermAtBottom:true};
   panes.set(meta.paneId,paneRec);
+  setCodexWheelModes(paneRec,normalized);installCodexWheel(paneRec);
   beginPaneSnapshot(paneRec);
   host.addEventListener('scroll',()=>{
     if(host.classList.contains('follow'))paneRec._followStick=followNearBottom(host);
@@ -7847,6 +7901,7 @@ function updatePane(session,meta){
   if(!p){createPane(session,meta);return;}
   if(p.session!==session)return;
   p.meta={...meta,session};
+  setCodexWheelModes(p,p.meta);
   resizePaneToFollow(p);
   p.tab.querySelector('.lbl').textContent=paneTitle(p.meta);
   p.tab.classList.toggle('active-pane',Boolean(p.meta.active));
