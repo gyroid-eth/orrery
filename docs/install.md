@@ -34,7 +34,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - shell から渡した値、または `AGENTSTACK_CHOSEN_SETTINGS` にこの設定名が載っている保存値を引き継ぎます。ただし、選択の記録がある `env.sh` と同値の shell env は、既存の installer と同じく読み戻し（echo）と扱います。**未選択の保存値 `1` と shell の `1` が同じ場合も、選んだとはみなさず `0` に移ります**
 - 選択の記録自体が無い古い `env.sh` の保存値 `1` は、既定か利用者の選択かを区別できません。保存値を維持するので、この場合は自動表示が続きます
 
-**reset の制限**: 保存値が `0` の環境で `AGENTSTACK_RESET_SETTINGS=1` を付けて setup / update すると、Telemetry 本体の既定値 `1` に戻り、次に起動する子の窓が自動で開きます。reset を解除して `0` に戻すには、次の 1 行を実行します。この場合は 1 回で `0` の選択が記録され、その後の通常の更新でも維持されます。
+**reset の制限**: `env.sh` に選択記録があり、保存値が `0` の環境で `AGENTSTACK_RESET_SETTINGS=1` を付けて setup / update すると、Telemetry 本体の既定値 `1` に戻り、次に起動する子の窓が自動で開きます。reset を解除して `0` に戻すには、次の 1 行を実行します。この場合は 1 回で `0` の選択が記録され、その後の通常の更新でも維持されます。
 
 ```bash
 cd ~/orrery-telemetry && AGENTSTACK_RESET_SETTINGS=0 AGENTSTACK_AUTO_OPEN_CHILD=0 ./scripts/install.sh
