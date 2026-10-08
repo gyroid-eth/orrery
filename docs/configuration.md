@@ -6,6 +6,8 @@
 
 ORRERY は `~/.orrery/config.json` と環境変数で設定します。共有設定 file は Finder 起動でも読まれ、環境変数は常に同じ項目の設定 file より優先されます。
 
+Codex の代替画面でマウス追跡が無いと確認できた active pane では、ホイールを PageUp / PageDown に変えて会話を遡れます。小さな移動はまとめ、1 回の連続操作は最大 3 ページまでです。Claude Code・通常の shell・マウスを要求する Codex の扱いは変わりません。
+
 ## 最小設定
 
 全連携機能を使う最小例:

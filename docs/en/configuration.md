@@ -6,6 +6,8 @@
 
 ORRERY is configured with `~/.orrery/config.json` and environment variables. The shared settings file is also read when the app is launched from Finder, and an environment variable always takes precedence over the same item in the settings file.
 
+In an active Codex pane verified to use the alternate screen without mouse tracking, the wheel sends PageUp / PageDown to scroll the conversation. Small movements accumulate, with at most three pages per continuous gesture; Claude Code, ordinary shells, and Codex panes requesting mouse tracking keep their existing behavior.
+
 ## Minimum settings
 
 A minimal example for using all the integrated features:
