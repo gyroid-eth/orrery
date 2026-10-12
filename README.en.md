@@ -293,3 +293,5 @@ This repository is under the **PolyForm Perimeter License 1.0.1** (except the po
 ## Reporting problems
 
 Report problems in the GitHub repository's Issues. Including the task name, the steps to reproduce, the startup logs of ORRERY / ORRERY Telemetry, and the result of `/telemetry/health` will speed up isolating the cause.
+
+[Global-mode cockpit](docs/en/global-cockpit.md) — explicit opt-in; legacy remains the default.

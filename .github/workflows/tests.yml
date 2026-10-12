@@ -18,6 +18,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Shared operator/browser contracts are consumed from their source repo.
+      - uses: actions/checkout@v4
+        with:
+          repository: gyroid-eth/orrery-telemetry
+          ref: b38b76a4abcd07b44c0184665ef8e7a2e3f0393e
+          path: .telemetry
+          fetch-depth: 0
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -33,7 +41,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y tmux
 
       - name: Install Python dependencies
-        run: python -m pip install -r bridge/requirements.txt pytest
+        run: python -m pip install -r bridge/requirements.txt pytest -e .telemetry/packages/agentstack_mail
 
       - name: bridge tests
         working-directory: bridge

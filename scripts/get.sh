@@ -19,7 +19,7 @@ main() {
 
   # This file's version. A newer get.sh in the fetched commit replaces this
   # one for the run (a cached download of an older get.sh cannot hold a fix back).
-  get_version=2
+  get_version=3
   # The setup.sh contract this get.sh needs. A checkout whose setup.sh is
   # older (or missing) is set up with the remote's setup.sh instead.
   required_contract=1
@@ -273,6 +273,15 @@ main() {
         || stop "The remote of ${cockpit} has no scripts/setup.sh; nothing was changed."
       git -C "$cockpit" show "${newest}:scripts/update.sh" >"${tmp_root}/scripts/update.sh" 2>/dev/null \
         || stop "The remote of ${cockpit} has no scripts/update.sh; nothing was changed."
+      # Only newer setup contracts require these dependencies. Older remote
+      # versions still run with their original two-file bootstrap.
+      if git -C "$cockpit" cat-file -e "${newest}:scripts/lib/runtime-mode.sh" 2>/dev/null; then
+        mkdir -p "${tmp_root}/scripts/lib"
+        for payload in lib/runtime-mode.sh global-probe.py; do
+          git -C "$cockpit" show "${newest}:scripts/${payload}" >"${tmp_root}/scripts/${payload}" \
+            || stop "Incomplete setup runtime payload; nothing was changed."
+        done
+      fi
       chmod +x "${tmp_root}/scripts/setup.sh" "${tmp_root}/scripts/update.sh"
       setup="${tmp_root}/scripts/setup.sh"
       export ORRERY_BOOTSTRAP_DID="fetched the newest version into ${cockpit}/.git (its files are unchanged)"

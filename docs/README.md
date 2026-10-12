@@ -38,3 +38,5 @@
 - [開発への入口](../app/README.md) — desktop app の開発用起動と、hotkey の表示・非表示の確認。
 
 `docs/*.md` と `docs/en/*.md` は、同じファイル名で日英の対にします。画像/GIFは各文書に付随する資料です。索引の網羅性と日英の対応は `python3 scripts/check_docs_index.py`（repository の根から）で確認できます。
+
+- [Global mode の cockpit](global-cockpit.md) — explicit global connection, Unlock/Lock and capability proof.

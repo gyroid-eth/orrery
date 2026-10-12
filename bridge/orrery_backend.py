@@ -47,6 +47,7 @@ from usage_probe import (
     provider_from_quota_payload,
 )
 
+GLOBAL_COCKPIT_KEY = web.AppKey("global_cockpit", object)
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8791
 DASHBOARD_URL = (
@@ -3331,9 +3332,12 @@ async def _session_list_refresher(
 async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
     response = web.WebSocketResponse(heartbeat=30)
     await response.prepare(request)
+    global_integration = request.app.get(GLOBAL_COCKPIT_KEY)
+    if global_integration is not None and not await global_integration.authenticate_socket(request, response):
+        return response
     peer = WebSocketPeer(response)
     attached: set[str] = set()
-    manager = request.app[BRIDGE_MANAGER_KEY]
+    manager = await global_integration.manager() if global_integration is not None else request.app[BRIDGE_MANAGER_KEY]
     refresher: asyncio.Task[None] | None = None
 
     try:
@@ -3359,6 +3363,9 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
                 if not isinstance(payload, dict):
                     await send_error(peer, None, "message must be a JSON object")
                     continue
+                if global_integration is not None and payload.get('type') == 'authenticate':
+                    await response.close(code=4401, message=b'Authentication required')
+                    break
                 try:
                     await manager.handle_message(peer, attached, payload)
                 except Exception as exc:
@@ -3385,10 +3392,15 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
 
 async def app_resources(app: web.Application):
     app[HTTP_SESSION_KEY] = ClientSession(timeout=ClientTimeout(total=6))
-    app[BRIDGE_MANAGER_KEY] = SessionBridgeManager(app[TMUX_BIN_KEY])
-    await app[BRIDGE_MANAGER_KEY].start()
+    integration = app.get(GLOBAL_COCKPIT_KEY)
+    if integration is None:
+        app[BRIDGE_MANAGER_KEY] = SessionBridgeManager(app[TMUX_BIN_KEY])
+        await app[BRIDGE_MANAGER_KEY].start()
     yield
-    await app[BRIDGE_MANAGER_KEY].close()
+    if integration is None:
+        await app[BRIDGE_MANAGER_KEY].close()
+    else:
+        await integration.close()
     await app[HTTP_SESSION_KEY].close()
 
 
@@ -3415,6 +3427,12 @@ async def revalidate_static(request: web.Request, handler):
 
 
 def create_app(tmux_bin: str = "tmux") -> web.Application:
+    runtime_mode = os.environ.get('AGENTSTACK_RUNTIME_MODE', 'legacy')
+    if runtime_mode not in ('legacy', 'global'):
+        raise RuntimeError('RUNTIME_MODE_INVALID')
+    if runtime_mode == 'global':
+        from global_cockpit import create_app as create_global_app
+        return create_global_app(sys.modules[__name__], tmux_bin)
     app = web.Application(middlewares=[revalidate_static])
     app[TMUX_BIN_KEY] = tmux_bin
     app[USAGE_CACHE_KEY] = UsageCache()

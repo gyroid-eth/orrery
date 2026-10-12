@@ -38,3 +38,5 @@ Start with **Your first flight → help map → Full tour** on screen, from cock
 - [Development entry](../../app/README.md) — Start the desktop app in development mode and check its show/hide hotkey.
 
 Each `docs/*.md` file has an English counterpart with the same filename in `docs/en/*.md`. Images/GIFs accompany their articles. From the repository root, run `python3 scripts/check_docs_index.py` to check index coverage and Japanese/English pairs.
+
+- [Global-mode cockpit](global-cockpit.md) — explicit global connection, Unlock/Lock and capability proof.
