@@ -144,7 +144,7 @@ let channel=null;try{channel=new BroadcastChannel(CHANNEL);}catch(_){}
 // refuses the call, and from then on the checklist stays docked.
 let appTourWindows=true;
 const APP_CHECK_MS=2000;
-function appInvoke(){return root.__TAURI__&&root.__TAURI__.core&&root.__TAURI__.core.invoke;}
+function appInvoke(){if(root.ORRERY_GLOBAL_MODE)return root.OrreryCockpitGlobal.nativeInvoke();return root.__TAURI__&&root.__TAURI__.core&&root.__TAURI__.core.invoke;}
 function canPopOut(){return appInvoke()?appTourWindows:typeof root.open==='function';}
 // A window of this backend: same origin and the same ?ws= override.
 function sameBackend(href){

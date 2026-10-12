@@ -1,0 +1,303 @@
+{
+  "version": 1,
+  "activation_enabled": false,
+  "proxy_map": [
+    [
+      "GET",
+      "/api/version",
+      "/api/version",
+      "query無し"
+    ],
+    [
+      "GET",
+      "/api/agents",
+      "/api/agents",
+      "before_agent_id,limit"
+    ],
+    [
+      "GET",
+      "/api/runtime-observations",
+      "/api/runtime-observations",
+      "agent_ids"
+    ],
+    [
+      "GET",
+      "/api/mail-watcher-health",
+      "/api/mail-watcher-health",
+      "query無し"
+    ],
+    [
+      "GET",
+      "/api/mail/recent",
+      "/api/mail/recent",
+      "view_as_agent_id,limit,cursor,query"
+    ],
+    [
+      "GET",
+      "/api/mail/message",
+      "/api/mail/message",
+      "view_as_agent_id,id"
+    ],
+    [
+      "GET",
+      "/api/mail/conversation",
+      "/api/mail/conversation",
+      "view_as_agent_id,message_id,limit,cursor"
+    ],
+    [
+      "GET",
+      "/api/mail/legacy-label",
+      "/api/mail/legacy-label",
+      "view_as_agent_id,label,limit,cursor"
+    ],
+    [
+      "GET",
+      "/api/messages-since",
+      "/api/messages-since",
+      "view_as_agent_id,after_id,limit,cursor"
+    ],
+    [
+      "GET",
+      "/api/agent-history",
+      "/api/agent-history",
+      "view_as_agent_id,agent_id,limit,cursor"
+    ],
+    [
+      "GET",
+      "/api/edge-messages",
+      "/api/edge-messages",
+      "view_as_agent_id,a_agent_id,b_agent_id,limit,cursor"
+    ],
+    [
+      "GET",
+      "/api/graph",
+      "/api/graph",
+      "view_as_agent_id,limit,cursor"
+    ],
+    [
+      "GET",
+      "/api/global/clients",
+      "/api/global/clients",
+      "name"
+    ],
+    [
+      "GET",
+      "/api/global/spawn-status",
+      "/api/global/spawn-status",
+      "client_name"
+    ],
+    [
+      "GET",
+      "/api/instruction-migration",
+      "/api/instruction-migration",
+      "agent_id,session_id"
+    ],
+    [
+      "GET",
+      "/api/deliverables",
+      "/api/deliverables",
+      "existing configured rootsのみ、query無し"
+    ],
+    [
+      "GET",
+      "/api/fs/dirs",
+      "/api/fs/dirs",
+      "path: existing folder guard"
+    ],
+    [
+      "GET",
+      "/api/quotas",
+      "/api/quotas",
+      "query無し、既存QUOTA_SERVICE読取を共通化、試験はfixture providerのみ"
+    ],
+    [
+      "POST",
+      "/api/global/spawn",
+      "/api/global/spawn",
+      "既存 global-ui fixture exact schema"
+    ],
+    [
+      "POST",
+      "/api/global/resume",
+      "/api/global/resume",
+      "既存 global-ui fixture exact schema"
+    ],
+    [
+      "POST",
+      "/api/global/registration-abandon",
+      "/api/global/registration-abandon",
+      "既存 global-ui fixture exact schema"
+    ],
+    [
+      "GET",
+      "/portrait",
+      "/portrait",
+      "既存 portrait query/asset resolver、共通admission。shared session.apiBlobでBearer fetch→objectURL、Lock時revoke。capability URL無し"
+    ]
+  ],
+  "query_keys": {
+    "/api/version": [],
+    "/api/agents": [
+      "before_agent_id",
+      "limit"
+    ],
+    "/api/runtime-observations": [
+      "agent_ids"
+    ],
+    "/api/mail-watcher-health": [],
+    "/api/mail/recent": [
+      "view_as_agent_id",
+      "limit",
+      "cursor",
+      "query"
+    ],
+    "/api/mail/message": [
+      "view_as_agent_id",
+      "id"
+    ],
+    "/api/mail/conversation": [
+      "view_as_agent_id",
+      "message_id",
+      "limit",
+      "cursor"
+    ],
+    "/api/mail/legacy-label": [
+      "view_as_agent_id",
+      "label",
+      "limit",
+      "cursor"
+    ],
+    "/api/messages-since": [
+      "view_as_agent_id",
+      "after_id",
+      "limit",
+      "cursor"
+    ],
+    "/api/agent-history": [
+      "view_as_agent_id",
+      "agent_id",
+      "limit",
+      "cursor"
+    ],
+    "/api/edge-messages": [
+      "view_as_agent_id",
+      "a_agent_id",
+      "b_agent_id",
+      "limit",
+      "cursor"
+    ],
+    "/api/graph": [
+      "view_as_agent_id",
+      "limit",
+      "cursor"
+    ],
+    "/api/global/clients": [
+      "name"
+    ],
+    "/api/global/spawn-status": [
+      "client_name"
+    ],
+    "/api/instruction-migration": [
+      "agent_id",
+      "session_id"
+    ],
+    "/api/deliverables": [],
+    "/api/fs/dirs": [
+      "path"
+    ],
+    "/api/quotas": [],
+    "/portrait": [
+      "name",
+      "hi",
+      "style"
+    ]
+  },
+  "websocket": {
+    "path": "/ws",
+    "upgrade": "shared Admission.network(websocket=True)のみ。Host/Origin必須・capabilityfile存在を確認、アプリ状態に触れない。",
+    "first_frame_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "version",
+        "capability"
+      ],
+      "properties": {
+        "type": {
+          "const": "authenticate"
+        },
+        "version": {
+          "const": 1
+        },
+        "capability": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        }
+      }
+    },
+    "authenticated_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "version"
+      ],
+      "properties": {
+        "type": {
+          "const": "authenticated"
+        },
+        "version": {
+          "const": 1
+        }
+      }
+    },
+    "deadline_seconds": 5,
+    "maximum_utf8_bytes": 1024,
+    "before_auth": "no sessions/list/snapshot/refresher/manager/client membership/attach/input/output/usage push。protocol PING/PONG/close以外送らない。invalid/timeout→close4401 generic。",
+    "after_auth": "authenticate→authenticated→既存sessions/refresher/dispatch。再接続ごとに認証。2回目authenticate拒否。Lockでclose、unlock前の自動reconnect無し。capability rotationは両server restartを必要とし、WSの別session ledgerは持たない。"
+  },
+  "network_assets": [
+    "global_ui.js",
+    "global_ui.css",
+    "mail_flow.js",
+    "mail_flow.css",
+    "operator_session.js",
+    "mail_controller.js",
+    "operation_controller.js",
+    "network_node.js",
+    "runtime_node.js",
+    "theme_core.js",
+    "theme_controller.js",
+    "theme_light.css",
+    "help_map.js",
+    "help_map.css",
+    "tour_cue.js",
+    "tour_cue.css",
+    "assets/anthropic.svg",
+    "assets/openai.svg",
+    "assets/google.svg"
+  ],
+  "cockpit_assets": [
+    "cockpit.html",
+    "cockpit_full_tour.js",
+    "cockpit_tour.css",
+    "cockpit_tour.js",
+    "demo_mask.js",
+    "demo_mode.js",
+    "mail_view.css",
+    "mail_view.js",
+    "orrery_view.css",
+    "orrery_view.js",
+    "prefs_sync.js",
+    "roster_descriptor.js",
+    "telemetry_light.css",
+    "telemetry_light.js",
+    "theme_controller.js",
+    "theme_core.js",
+    "theme_light.css",
+    "tour.html",
+    "global_cockpit.js",
+    "global_cockpit.css"
+  ]
+}

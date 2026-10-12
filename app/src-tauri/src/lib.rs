@@ -672,8 +672,39 @@ fn spawn_backend_sidecar() -> Result<(), String> {
     // to /dev/null, so a sidecar that had lost the window server left no trace.
     // It prints only on errors; append them to a per-user log.
     let (stdout, stderr) = backend_log_stdio();
-    match std::process::Command::new(&python)
-        .arg(&script)
+    // The same launcher reads the installed runtime mode for browser and app.
+    // A GUI process may not inherit the terminal's generated environment.
+    let wrapper = script
+        .parent()
+        .and_then(Path::parent)
+        .map(|root| root.join("scripts/start-cockpit.sh"));
+    let mut command =
+        if script.file_name().and_then(|name| name.to_str()) == Some("orrery_backend.py") {
+            let wrapper = wrapper.filter(|path| path.is_file()).ok_or_else(|| {
+                "COCKPIT_START_WRAPPER_UNAVAILABLE: run scripts/setup.sh".to_owned()
+            })?;
+            let mut command = std::process::Command::new("/bin/bash");
+            command
+                .arg(wrapper)
+                .env("ORRERY_PYTHON", &python)
+                .env("ORRERY_NO_UPDATE_CHECK", "1");
+            if let Some(venv) = python
+                .parent()
+                .and_then(Path::parent)
+                .filter(|path| path.join("pyvenv.cfg").is_file())
+            {
+                command.env("ORRERY_VENV", venv);
+            }
+            command
+        } else {
+            if std::env::var("AGENTSTACK_RUNTIME_MODE").ok().as_deref() == Some("global") {
+                return Err("COCKPIT_START_WRAPPER_REQUIRED".to_owned());
+            }
+            let mut command = std::process::Command::new(&python);
+            command.arg(&script);
+            command
+        };
+    match command
         .stdin(std::process::Stdio::null())
         .stdout(stdout)
         .stderr(stderr)

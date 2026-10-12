@@ -4476,6 +4476,8 @@
    telemetry plus lazily attached panes for many tmux sessions.
    ════════════════════════════════════════════════════════════════════ */
 
+const fetch=(...args)=>window.ORRERY_GLOBAL_MODE ? window.OrreryCockpitGlobal.fetch(...args) : window.fetch(...args);
+
 /* COCKPIT_PURE_LOGIC_START — kept DOM-free for the headless node gate. */
 function normalizedSessionNames(items){
   const names=[],seen=new Set();
@@ -6644,6 +6646,7 @@ if(initial.ok){
 function setLink(state,label){linkDot.className='dot '+state;linkText.textContent=label;
   const stat=document.getElementById('linkStat');if(stat)stat.hidden=(state==='open');}
 function send(payload){
+  if(window.ORRERY_GLOBAL_MODE&&!window.OrreryCockpitGlobal.socketReady)return false;
   if(!socket||socket.readyState!==WebSocket.OPEN)return false;
   socket.send(JSON.stringify(payload));return true;
 }
@@ -8293,6 +8296,7 @@ claimToggle.addEventListener('click',toggleActivePaneClaim);
    week-old sidecar answered "opened" and nothing opened). The backend routes
    below stay as the fallback for browser-hosted cockpits. */
 function appInvoke(){
+  if(window.ORRERY_GLOBAL_MODE){if(!window.OrreryCockpitGlobal.unlocked)throw Error('HTTP_OPERATOR_REQUIRED');return window.OrreryCockpitGlobal.nativeInvoke();}
   return window.__TAURI__&&window.__TAURI__.core&&window.__TAURI__.core.invoke;
 }
 async function openExternalUrl(uri){
@@ -8878,6 +8882,7 @@ function handle(msg){
 }
 
 function connect(){
+  if(window.ORRERY_GLOBAL_MODE){window.OrreryCockpitGlobal.connect();return;}
   setLink('connecting','connecting');
   const nextSocket=new WebSocket(wsUrl);socket=nextSocket;
   nextSocket.addEventListener('open',()=>{if(socket===nextSocket){setLink('open','live');scheduleFit();}});
@@ -8894,7 +8899,7 @@ function connect(){
   nextSocket.addEventListener('error',()=>{if(socket===nextSocket)setLink('error','error');});
 }
 let reconnectTimer=null;
-function scheduleReconnect(){clearTimeout(reconnectTimer);reconnectTimer=setTimeout(connect,1500);}
+function scheduleReconnect(){if(window.ORRERY_GLOBAL_MODE&&!window.OrreryCockpitGlobal.unlocked)return;clearTimeout(reconnectTimer);reconnectTimer=setTimeout(connect,1500);}
 
 window.addEventListener('resize',scheduleFit);
 window.addEventListener('resize',queueTabOverflow);
@@ -8906,7 +8911,7 @@ window.addEventListener('beforeunload',()=>occupiedSessions().forEach(session=>{
   send({type:"detach",session});
 }));
 // Demo mode: no terminal output before the page knows which names to hide.
-OrreryDemo.ready.then(connect);
+if(!window.ORRERY_GLOBAL_MODE)OrreryDemo.ready.then(connect);
 
 /* ── clock ── */
 function tick(){const d=new Date();
@@ -8999,6 +9004,7 @@ function renderUsagePopover(){
   body.appendChild(foot);
 }
 async function pollUsage(force){
+  if(window.ORRERY_GLOBAL_MODE)return;
   try{
     const r=await fetch('/telemetry/usage'+(force?'?refresh=1':''),{cache:'no-store'});
     if(!r.ok)throw new Error(String(r.status));
@@ -9013,7 +9019,7 @@ document.getElementById('usagePopover').addEventListener('toggle',e=>{
   else if(e.newState==='closed')emitFullTourAction('full-usage');});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)pollUsage(false);});
 /* a pane window shows one terminal: no usage, lineage or mail polling there */
-if(!soloSession){pollUsage(false);setInterval(()=>{if(!document.hidden)pollUsage(false);},USAGE_POLL_MS);}
+if(!soloSession&&!window.ORRERY_GLOBAL_MODE){pollUsage(false);setInterval(()=>{if(!document.hidden)pollUsage(false);},USAGE_POLL_MS);}
 
 /* ════════════════════════════════════════════════════════════════════
    LIVE TELEMETRY — roster + mail + mini-orrery, read through the unified
@@ -9117,8 +9123,8 @@ function updateRosterBulkUI(){
   rosterBulkCount.textContent=`${count} selected`;
   rosterBulkExit.textContent=bulkExitBusy?'Exiting…':
     bulkExitArmed?`Confirm Exit (${count})`:'Exit';
-  rosterBulkExit.disabled=bulkExitBusy||count===0;
-  rosterSelectBtn.disabled=bulkExitBusy;
+  rosterBulkExit.disabled=Boolean(window.ORRERY_GLOBAL_MODE)||bulkExitBusy||count===0;
+  rosterSelectBtn.disabled=Boolean(window.ORRERY_GLOBAL_MODE)||bulkExitBusy;
 }
 function setRosterSelectMode(on){
   if(bulkExitBusy)return;
@@ -9155,6 +9161,7 @@ function reconcileBulkSelection(agents){
   refreshBulkTileStates();updateRosterBulkUI();
 }
 async function runBulkExit(){
+  if(window.ORRERY_GLOBAL_MODE){showToast('Global exit is unavailable; required before PR7.');return;}
   if(bulkExitBusy)return;
   const names=[...bulkSelectedAgents].filter(name=>isBulkExitEligibleAgent(currentAgentNamed(name)));
   if(!names.length){setRosterSelectMode(false);return;}
@@ -9351,7 +9358,8 @@ function paintTile(el,a){
   el.querySelector('.ini').textContent=(a.name[0]||'?');
   const img=el.querySelector('img');
   const src='/telemetry/portrait?v=3&name='+encodeURIComponent(a.name)+'&hi=1';
-  if(img.getAttribute('src')!==src){img.style.display='';img.src=src;img.onerror=()=>{img.style.display='none';};}
+  if(window.ORRERY_GLOBAL_MODE){window.OrreryCockpitGlobal.portrait(img,a.name);}
+  else if(img.getAttribute('src')!==src){img.style.display='';img.src=src;img.onerror=()=>{img.style.display='none';};}
   el.querySelector('.cname').textContent=a.name;
   const engPill=el.querySelector('.pill.eng');engPill.className='pill eng '+eng.cls;engPill.textContent=eng.lbl;
   el.querySelector('.pill.model').textContent=(a.model||a.cmd||'—')+(a.ctx_window?(' · '+a.ctx_window):'');
@@ -9543,29 +9551,10 @@ function reorderRoster(live){
     want.forEach(a=>{const el=tiles.get(a.name);if(el)rosterEl.appendChild(el);});
   paintPinnedBoundary();
 }
-async function pollAgents(){
-  try{
-    const response=await fetch('/telemetry/agents',{cache:'no-store'});
-    noteBackendBoot(response.headers.get('X-Orrery-Boot'));
-    // a 502/503 is no roster: keep the tiles. Slow is not offline: the backend
-    // gave up after 6 s ("dashboard slow"), or the dashboard itself said it is
-    // busy (503 {"error":"busy"}); either way the next tick asks again
-    if(!response.ok){
-      const why=await response.json().catch(()=>({}));
-      if(why&&(why.error==='dashboard slow'||why.error==='busy')){
-        rosterTag.hidden=false;rosterTag.textContent='dashboard slow';return false;}
-      throw new Error(String(response.status));
-    }
-    const d=await response.json();
-    pruneRetiredPins(d.agents);
-    // warmup(warm-*/pending-*) はプール予熱でありエージェントではない。
-    // 従来は名前順で最下部に沈んで見えなかったが、recency ソート導入で
-    // 浮上するようになったため明示除外（claim され改名された時点で現れる）。
-    const live=(d.agents||[]).filter(a=>
-      (a.running||a.category==='agent')&&a.category!=='warmup');
+function renderAgentRoster(live){
     noteDescriptorTasks(live);
     descriptorStore.retain(live.map(agent=>agent.name));
-    live.forEach(agent=>{agent.descriptor=descriptorStore.get(agent,live);});
+    live.forEach(agent=>{agent.descriptor=descriptorStore.get(agent,live);if(window.ORRERY_GLOBAL_MODE)agent.descriptor={...agent.descriptor,primary:agent.annot.role};});
     currentAgents=live;
     assignLineageHues(live);
     const seen=new Set();
@@ -9586,6 +9575,28 @@ async function pollAgents(){
     document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:live}}));
     if(spawnOverlay.classList.contains('on'))populateSpawnParents();
     if(paletteOverlay.classList.contains('on'))renderPalette();
+}
+async function pollAgents(){
+  try{
+    const response=await fetch('/telemetry/agents',{cache:'no-store'});
+    noteBackendBoot(response.headers.get('X-Orrery-Boot'));
+    // a 502/503 is no roster: keep the tiles. Slow is not offline: the backend
+    // gave up after 6 s ("dashboard slow"), or the dashboard itself said it is
+    // busy (503 {"error":"busy"}); either way the next tick asks again
+    if(!response.ok){
+      const why=await response.json().catch(()=>({}));
+      if(why&&(why.error==='dashboard slow'||why.error==='busy')){
+        rosterTag.hidden=false;rosterTag.textContent='dashboard slow';return false;}
+      throw new Error(String(response.status));
+    }
+    const d=await response.json();
+    pruneRetiredPins(d.agents);
+    // warmup(warm-*/pending-*) はプール予熱でありエージェントではない。
+    // 従来は名前順で最下部に沈んで見えなかったが、recency ソート導入で
+    // 浮上するようになったため明示除外（claim され改名された時点で現れる）。
+    const live=(d.agents||[]).filter(a=>
+      (a.running||a.category==='agent')&&a.category!=='warmup');
+    renderAgentRoster(live);
   }catch(e){rosterTag.hidden=false;rosterTag.textContent='dashboard offline';agentDot.className='dot error';return false;}
 }
 
@@ -9668,7 +9679,7 @@ async function showMailConfigurationState(){
     }
   }catch(_){/* the existing mail views retain their dashboard/offline state */}
 }
-window.addEventListener('DOMContentLoaded',showMailConfigurationState,{once:true});
+if(!window.ORRERY_GLOBAL_MODE)window.addEventListener('DOMContentLoaded',showMailConfigurationState,{once:true});
 
 /* ── command palette + keyboard navigation ── */
 const paletteOverlay=document.getElementById('paletteOverlay');
@@ -10059,6 +10070,7 @@ document.getElementById('adjDice').addEventListener('click',()=>{
 });
 
 function openSpawnModal(){
+  if(window.ORRERY_GLOBAL_MODE){window.OrreryCockpitGlobal.spawn();return;}
   closePalette(false);spawnLastFocus=document.activeElement;spawnForm.reset();
   spawnWorktreeBaseWrap.classList.remove('on');spawnStatus.textContent='ready';
   selScientist='';selProvider=null;selModel=null;selEffort=null;
@@ -10182,6 +10194,7 @@ OrreryDemo.rowGroup=function(rowEl){
   return {rows:group,pads,before,after:after.replace(/\s+$/,'')};
 };
 function openNetwork({focus=activeSession()}={}){
+  if(window.ORRERY_GLOBAL_MODE){window.OrreryCockpitGlobal.network();return;}
   const query=new URLSearchParams({embed:'1'});
   if(focus)query.set('focus',focus);
   const src='/network/?'+query.toString();
@@ -10457,7 +10470,8 @@ function clipboardFilesOverHttp(reason){
     .catch(()=>({files:[],error:reason||'clipboard endpoint unreachable'}));
 }
 function readClipboardFiles(){
-  const invoke=window.__TAURI__&&window.__TAURI__.core&&window.__TAURI__.core.invoke;
+  if(window.ORRERY_GLOBAL_MODE&&!window.OrreryCockpitGlobal.unlocked)return Promise.resolve({files:[],error:'HTTP_OPERATOR_REQUIRED'});
+  const invoke=appInvoke();
   if(!invoke)return clipboardFilesOverHttp('');
   // The app's reader is preferred, never required: a host that refuses the
   // command must not take the backend route away with it.
@@ -10753,11 +10767,22 @@ const agentsPoll=startPoll(pollAgents,3000,{whileHidden:true});
 const graphPoll=soloSession?null:startPoll(pollGraph,6000,{whileHidden:()=>!lineageParent.size});
 const mailPoll=soloSession?null:startPoll(pollMail,4000,{whileHidden:true});
 function kickPolls(){
+  if(typeof window!=='undefined'&&window.ORRERY_GLOBAL_MODE)return;
   if(soloSession){agentsPoll.kick();return;}
   graphPoll.kick().then(agentsPoll.kick);mailPoll.kick();   // lineage ready before first roster paint
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)kickPolls();});
-kickPolls();
+if(typeof window==='undefined'||!window.ORRERY_GLOBAL_MODE)kickPolls();
+if(typeof window!=='undefined'&&window.ORRERY_GLOBAL_MODE)window.OrreryCockpitHost=Object.freeze({
+ renderRoster:renderAgentRoster,
+ receive:handle,
+ socket(value){socket=value;},
+ linked(){setLink('open','live');scheduleFit();},
+ disconnected(){attachedSessions.clear();requestedSessions.clear();setLink('closed','disconnected');},
+ clear(){clearTimeout(reconnectTimer);socket=null;for(const id of [...panes.keys()])closePane(id,true);for(const name of [...sessionGroups.keys()])forgetSession(name);availableSessions.clear();attachedSessions.clear();requestedSessions.clear();tiles.forEach(el=>el.remove());tiles.clear();currentAgents=[];descriptorStore.retain([]);lineageParent.clear();lineageHue.clear();bulkSelectedAgents.clear();detailAnchor=null;agentDetail.hidden=true;agentDetail.querySelector('.agent-detail-name').textContent='';agentDetail.querySelector('.agent-detail-primary').textContent='';agentDetail.querySelector('.agent-detail-grid').replaceChildren();networkFrame.removeAttribute('src');closeNetwork();promptInput.value='';promptHistory=[];histDraft='';histIndex=-1;activeId=null;selectedAgent=null;terminalLessAgent=null;pendingJump=null;promptTarget.textContent='—';promptAva.hidden=true;renderCrewCounts([]);refreshHeaderStats();renderStage({fit:false});closePalette(false);const settings=document.getElementById('settingsPopover');if(settings?.matches(':popover-open'))settings.hidePopover();document.getElementById('globalInstructionSettings')?.remove();},
+ network(viewer){networkFrame.src='/network/?embed=1'+(viewer?'&view_as_agent_id='+viewer:'');networkOverlay.classList.add('on');networkOverlay.setAttribute('aria-hidden','false');},
+ parents(values){lineageParent.clear();for(const [child,parent] of values)lineageParent.set(child,parent);}
+});
 </script>
 <script src="orrery_view.js"></script>
 <script src="mail_view.js"></script>

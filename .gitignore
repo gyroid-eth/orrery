@@ -14,3 +14,6 @@ runtime/
 # portrait source originals (large; refetch via scripts/build_portraits.py docs)
 assets/portraits_src/*
 !assets/portraits_src/manifest.json
+
+# Pinned shared-contract checkout used by CI and isolated tests.
+.telemetry/

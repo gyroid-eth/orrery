@@ -207,7 +207,13 @@ run_update() {
 }
 on_windows_drive() { case "$1" in /mnt/[a-z] | /mnt/[a-z]/*) return 0 ;; esac; return 1; }
 have_tty() { [ -t 0 ]; }
-http_get() { curl -fsS --max-time 2 "$1" 2>/dev/null || true; }
+http_get() {
+  if [ "${AGENTSTACK_RUNTIME_MODE:-legacy}" = global ]; then
+    "$probe_python" "${SCRIPT_DIR}/global-probe.py" cockpit --port "$COCKPIT_PORT" 2>/dev/null || true
+  else
+    curl -fsS --max-time 2 "$1" 2>/dev/null || true
+  fi
+}
 json_str() { # $1 = key; reads one JSON object on stdin; prints the string value
   sed -n "s/.*\"$1\": *\"\([^\"]*\)\".*/\1/p" | head -n 1
 }
@@ -368,6 +374,44 @@ show_log_tail() {
   say "  ---"
 }
 
+# Global setup consumes an already prepared runtime; installation and cutover
+# remain explicit Telemetry operations. The existing ownership/start path below
+# is shared with legacy setup.
+. "${SCRIPT_DIR}/lib/runtime-mode.sh"
+orrery_load_runtime
+if [ "${AGENTSTACK_RUNTIME_MODE:-legacy}" = global ]; then
+  [ -z "$project_key_arg" ] || stop "GLOBAL_PROJECT_KEY_NOT_SUPPORTED" "Choose a work folder in NEW AGENT; Mail has no project key."
+  case "$(uname -s)" in Darwin) os=mac ;; Linux) os=linux; [ -z "${WSL_DISTRO_NAME:-}" ] || os=wsl ;; *) stop "UNSUPPORTED_PLATFORM" ;; esac
+  mode=global
+  project_key=""
+  tel_root=""
+  agent_cli="configured per client"
+  mail_reconnect=""
+  mail_notice=""
+  mail_update_hint=false
+  update_failed=false
+  checks_ok=true
+  setup_origin="this checkout's"
+  UPDATE_SH="${COCKPIT_ROOT}/scripts/update.sh"
+  export ORRERY_DASHBOARD_URL="${ORRERY_DASHBOARD_URL:-http://127.0.0.1:$(orrery_runtime_value AGENTSTACK_PORT)}"
+  case "$ORRERY_DASHBOARD_URL" in *:) ORRERY_DASHBOARD_URL="${ORRERY_DASHBOARD_URL}8770" ;; esac
+  probe_python="${ORRERY_PYTHON:-${AGENTSTACK_PYTHON:-$(orrery_runtime_value AGENTSTACK_PYTHON)}}"
+  probe_python="${probe_python:-python3}"
+  # The installed probe is stdlib-only. Instruction changes use the existing
+  # resolver/consent engine rather than writing provider files here.
+  "$probe_python" "${SCRIPT_DIR}/global-probe.py" telemetry --port "$COCKPIT_PORT" || stop "COCKPIT_GLOBAL_CAPABILITY_REQUIRED"
+  instructions="${AGENTSTACK_HOME}/bin/agentstack-claude-setup"
+  [ -x "$instructions" ] || stop "INSTRUCTION_SETUP_UNAVAILABLE"
+  if [ "$read_only" = true ]; then
+    "$instructions" --plan --json
+    printf '%s\n' 'Global setup: no project, Mail DB, provider file or service was changed.'
+    exit 0
+  fi
+  if [ "$assume_yes" = true ]; then "$instructions" --assume-yes; else "$instructions"; fi
+  "$COCKPIT_ROOT/scripts/start-cockpit.sh" --check || stop "COCKPIT_GLOBAL_CAPABILITY_REQUIRED"
+  open_run
+  if [ ! -f "$BASELINE" ]; then snapshot >"$BASELINE"; fi
+else
 # ================================================================ 1. prerequisites
 if [ "$check_only" = true ]; then
   say "ORRERY setup (check only: nothing will be changed)"
@@ -1200,6 +1244,8 @@ step_done "Checks"
 # A run whose update failed is never a success, even when what is there works.
 if [ "$update_failed" = true ]; then checks_ok=false; fi
 
+fi
+
 # ================================================================ 7. start
 # The cockpit runs in the background, in a tmux server of its own (out of the
 # agents' tmux server, which the dashboard and the cockpit list as agents), in
@@ -1291,7 +1337,11 @@ start_ours() {
   # its port, is a leftover.
   ctmux kill-session -t "=$SESSION" 2>/dev/null || true
   printf '\n==== %s start %s on port %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$COCKPIT_ROOT" "$COCKPIT_PORT" >>"$cockpit_log"
-  inner="env -u TMUX -u TMUX_PANE ORRERY_NO_UPDATE_CHECK=1 PORT=$(printf '%q' "$COCKPIT_PORT") $(printf '%q' "${COCKPIT_ROOT}/scripts/start-cockpit.sh") 2>&1 | tee -a $(printf '%q' "$cockpit_log")"
+  runtime_env=""
+  if [ "${AGENTSTACK_RUNTIME_MODE:-legacy}" = global ]; then
+    runtime_env="AGENTSTACK_RUNTIME_MODE=global AGENTSTACK_HOME=$(printf '%q' "$AGENTSTACK_HOME") AGENTSTACK_GLOBAL_SERVER_CONFIG=$(printf '%q' "$AGENTSTACK_GLOBAL_SERVER_CONFIG") ORRERY_DASHBOARD_URL=$(printf '%q' "$ORRERY_DASHBOARD_URL")"
+  fi
+  inner="env -u TMUX -u TMUX_PANE ${runtime_env} ORRERY_NO_UPDATE_CHECK=1 PORT=$(printf '%q' "$COCKPIT_PORT") $(printf '%q' "${COCKPIT_ROOT}/scripts/start-cockpit.sh") 2>&1 | tee -a $(printf '%q' "$cockpit_log")"
   ctmux new-session -d -s "$SESSION" -x 160 -y 48 "$inner" \
     || stop "Could not start tmux for the cockpit." "Start it yourself in a window of its own: ${COCKPIT_ROOT}/scripts/start-cockpit.sh"
   ctmux set-option -t "=${SESSION}:" @orrery_cockpit "$(date +%s)-$$-${RANDOM}${RANDOM}" 2>/dev/null || true
@@ -1319,6 +1369,9 @@ start_ours() {
   fi
   printf 'boot=%s\nroot=%s\ncommit=%s\nsocket=%s\nsession=%s\nsession_identity=%s\n' "$(health_boot)" "$root_real" \
     "$cockpit_head_full" "$SOCK" "$SESSION" "$(session_identity "$SOCK" "$SESSION")" >"$OWNER"
+  if [ "${AGENTSTACK_RUNTIME_MODE:-legacy}" = global ]; then
+    printf 'runtime_mode=global\nproof=%s\n' "$(http_get "$url")" >>"$OWNER"
+  fi
 }
 open_browser() {
   [ "${ORRERY_NO_OPEN:-0}" != 1 ] || return 0
@@ -1427,6 +1480,10 @@ if [ -n "$mail_notice" ]; then
   fi
   say ""
 fi
+if [ "${AGENTSTACK_RUNTIME_MODE:-legacy}" = global ]; then
+  say "  Unlock the cockpit with the existing operator capability; choose a Mail viewpoint."
+  say "  NEW AGENT uses a work folder, never a Mail project namespace. Cutover remains disabled."
+else
 say "  See it work:"
 say "    1. In the browser, the cockpit shows your project: $(basename "$project_key")"
 say "    2. NEW AGENT starts a small agent (or in a new window:"
@@ -1434,6 +1491,7 @@ say "       ~/.agentstack/bin/agent-start ${project_key})"
 say "    3. The agent appears in the list and its reply shows up"
 say "  After restarting the computer: ~/.agentstack/bin/agentstack-doctor, then the"
 say "  same command again (it starts what is stopped)."
+fi
 if [ "$mode" = fresh ]; then
   say "  To uninstall this new install: ${tel_root}/scripts/uninstall.sh"
   say "  (it keeps the Mail database unless --purge-data; the 2 checkouts, uv and Python stay)"

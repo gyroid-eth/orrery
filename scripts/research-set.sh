@@ -299,6 +299,17 @@ main() {
   open_form="${win_form:-$vault_dir}"
 
   # ------------------------------------------------------------ 3. the work folder
+  runtime_scripts="${cockpit}/scripts"
+  if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+    runtime_scripts="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+  fi
+  . "${runtime_scripts}/lib/runtime-mode.sh"
+  orrery_load_runtime
+  if [ "${AGENTSTACK_RUNTIME_MODE:-legacy}" = global ]; then
+    work_state="${vault_real} (work folder only; global Mail identity is unchanged)"
+    work_failed=false
+    work_is_vault=false
+  else
   # The agents' work folder (ORRERY's project key) is a folder that gets ORRERY's
   # instructions (CLAUDE.md) and whose files are reservation-protected. Only
   # the default is replaced; one the user chose stays.
@@ -369,6 +380,8 @@ main() {
       work_state="NOT changed: the ORRERY setup stopped (above). To try again: ${retry_line}"
       work_failed=true
     fi
+  fi
+
   fi
 
   # ------------------------------------------------------------ 4. report

@@ -1,0 +1,14 @@
+/* Host layout only; reply rendering comes from the shared Mail stylesheet. */
+.cockpit-global #orrery{display:none}
+.cockpit-global-tools{display:flex;gap:8px;align-items:center;padding:8px 12px;flex-wrap:wrap;font:10px var(--mono);color:var(--ink-dim)}
+.cockpit-global-tools select,.cockpit-global-tools button,.global-form input,.global-form select,.global-form button{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--hair);border-radius:4px;padding:5px 7px;min-width:0}
+.cockpit-global-tools select{max-width:170px}.cockpit-global-tools button{cursor:pointer}
+.global-status{font:10px/1.6 var(--mono);color:var(--ink-dim);margin:4px 12px;overflow-wrap:anywhere}
+.cockpit-mail-heading{padding:8px 14px;font:11px var(--mono);overflow-wrap:anywhere}.cockpit-mail-heading small{display:block;color:var(--ink-dim);margin-top:4px;font-size:9px}
+.cockpit-mail-list{min-width:0}.cockpit-mail-list .reply-subject{font-family:var(--serif)}
+.global-dialog{position:fixed;inset:0;z-index:10000;background:#0008;display:grid;place-items:center;padding:16px}
+.global-form{display:flex;flex-direction:column;gap:12px;max-height:90vh;overflow:auto;width:min(480px,100%);padding:24px;background:var(--panel);color:var(--ink);border:1px solid var(--hair);border-radius:12px;box-sizing:border-box;font:12px var(--mono)}
+.global-form label{display:flex;flex-direction:column;gap:4px}.global-form input,.global-form select{padding:8px}
+.global-form p{font-size:12px;line-height:1.6;overflow-wrap:anywhere}.global-error{color:var(--theme-status-alert,#d2685e)}.global-form h2{font:500 22px var(--serif)}.cockpit-mail-drawer{min-width:0}
+
+.global-exit-note{margin:0;padding:4px 12px;color:var(--ink-dim);font:10px var(--mono);line-height:1.5}

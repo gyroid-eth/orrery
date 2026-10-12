@@ -93,6 +93,9 @@ problem() {
   done
 }
 
+. "${SCRIPT_DIR}/lib/runtime-mode.sh"
+orrery_load_runtime
+
 # ---------------------------------------------------------------- platform
 os_name="$(uname -s)"
 is_wsl=false
@@ -198,6 +201,9 @@ else
     "See docs/install.md in orrery-telemetry (it has a WSL2 section)."
 fi
 
+project_key=""
+mail_db=""
+if [ "${AGENTSTACK_RUNTIME_MODE:-legacy}" != global ]; then
 # Project key: explicit ORRERY_* > AGENTSTACK_* in this shell > orrery-telemetry
 # env.sh > ~/.orrery/config.json (the backend reads the last one by itself).
 project_key="${ORRERY_PROJECT_KEY:-${AGENTSTACK_PROJECT_KEY:-}}"
@@ -240,6 +246,8 @@ if [ -n "$mail_db" ]; then
   fi
 fi
 
+fi
+
 # Dashboard: explicit ORRERY_DASHBOARD_URL > port from env.sh > 8770.
 dashboard_port="$(telemetry_value AGENTSTACK_PORT)"
 dashboard_url="${ORRERY_DASHBOARD_URL:-http://127.0.0.1:${dashboard_port:-8770}}"
@@ -255,6 +263,11 @@ dashboard_url="${dashboard_url%/}"
 #        (either may be empty)
 #   $3 = seconds to wait for the answer (default 3)
 probe() {
+  if [ "${AGENTSTACK_RUNTIME_MODE:-legacy}" = global ]; then
+    case "$2" in cockpit) service=cockpit ;; *) service=telemetry ;; esac
+    ORRERY_DASHBOARD_URL="$dashboard_url" "$probe_python" "${SCRIPT_DIR}/global-probe.py" "$service" --port "$PORT"
+    return $?
+  fi
   "${probe_python}" - "$1" "$2" "${3:-3}" <<'PY' 2>/dev/null
 import json, sys, urllib.error, urllib.request
 url, kind, wait = sys.argv[1], sys.argv[2], float(sys.argv[3])
@@ -453,7 +466,7 @@ if [ -x "$probe_python" ] || command -v "$probe_python" >/dev/null 2>&1; then
   dashboard_probe || dashboard_status=$?
   if [ "$dashboard_status" -eq 0 ]; then
     ok "orrery-telemetry dashboard: ${dashboard_url}"
-    telemetry_version_check
+    if [ "${AGENTSTACK_RUNTIME_MODE:-legacy}" != global ]; then telemetry_version_check; fi
   elif [ "$dashboard_status" -eq 2 ]; then
     problem "Something answers at ${dashboard_url}, but it is not the orrery-telemetry dashboard." \
       "Another program may be using the dashboard port, or ORRERY_DASHBOARD_URL points to the wrong place." \

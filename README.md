@@ -293,3 +293,5 @@ ORRERY は ORRERY Telemetry、`tmux`、`xterm.js` などと連携します。こ
 ## 不具合の報告
 
 不具合は GitHub repository の Issues へ報告してください。task 名、再現手順、ORRERY / ORRERY Telemetry の起動 log、`/telemetry/health` の結果を添えると切り分けが早くなります。
+
+[Global mode の cockpit](docs/global-cockpit.md) — explicit opt-in; legacy remains the default.
