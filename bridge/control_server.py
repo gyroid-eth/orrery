@@ -424,6 +424,7 @@ class TmuxControlBridge:
         self._incarnation = uuid.uuid4().hex
         self.master_fd: int | None = None
         self.process: subprocess.Popen[bytes] | None = None
+        self._lifetime_fd: int | None = None
         self.panes: dict[str, PaneInfo] = {}
         self.clients: set[Any] = set()
         self.client_locks: dict[Any, asyncio.Lock] = {}
@@ -480,16 +481,36 @@ class TmuxControlBridge:
         self.master_fd = master_fd
         os.set_blocking(master_fd, False)
 
+        lifetime_read = lifetime_write = None
         try:
+            lifetime_read, lifetime_write = os.pipe()
+            # The guard watches a private pipe, rather than trusting PTY HUP.
+            # Only this backend holds its writer; the guard owns exactly one
+            # tmux child, in the same process group used by stop().
             self.process = subprocess.Popen(
-                [self.config.tmux_bin, "-CC", "attach", "-t", self.config.session],
+                [
+                    sys.executable,
+                    str(Path(__file__).with_name("control_client_guard.py")),
+                    str(lifetime_read),
+                    self.config.tmux_bin, "-CC", "attach", "-t", self.config.session,
+                ],
                 stdin=slave_fd,
                 stdout=slave_fd,
                 stderr=slave_fd,
                 close_fds=True,
+                pass_fds=(lifetime_read,),
                 start_new_session=True,
             )
+            self._lifetime_fd = lifetime_write
+        except BaseException:
+            if lifetime_write is not None:
+                os.close(lifetime_write)
+            os.close(master_fd)
+            self.master_fd = None
+            raise
         finally:
+            if lifetime_read is not None:
+                os.close(lifetime_read)
             os.close(slave_fd)
 
         self._loop.add_reader(master_fd, self._read_ready)
@@ -507,6 +528,9 @@ class TmuxControlBridge:
             with contextlib.suppress(asyncio.CancelledError):
                 await closed_task
 
+        if self._lifetime_fd is not None:
+            os.close(self._lifetime_fd)
+            self._lifetime_fd = None
         if self._refresh_task is not None:
             self._refresh_task.cancel()
 
@@ -528,15 +552,31 @@ class TmuxControlBridge:
                 os.close(self.master_fd)
             self.master_fd = None
 
-        if self.process is not None and self.process.poll() is None:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(self.process.pid, signal.SIGTERM)
+        # Consume group ownership before yielding: later (or concurrent) stops
+        # must not signal a PGID that may have been recycled after cleanup.
+        process = self.process
+        self.process = None
+        if process is not None:
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(process.pid, signal.SIGTERM)
             try:
-                await asyncio.to_thread(self.process.wait, 2)
+                await asyncio.to_thread(process.wait, 2)
             except subprocess.TimeoutExpired:
-                with contextlib.suppress(ProcessLookupError):
-                    os.killpg(self.process.pid, signal.SIGKILL)
-                await asyncio.to_thread(self.process.wait)
+                pass
+            finally:
+                # A killed/reaped guard can leave tmux in its process group.
+                # Waiting for the leader alone does not prove the group exited.
+                with contextlib.suppress(ProcessLookupError, PermissionError):
+                    os.killpg(process.pid, signal.SIGKILL)
+            try:
+                await asyncio.to_thread(process.wait, 1)
+            except subprocess.TimeoutExpired:
+                print(
+                    f"ORRERY control guard {process.pid} not reaped after bounded "
+                    "group cleanup; continuing history flush",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
         await self.flush_history()
 
