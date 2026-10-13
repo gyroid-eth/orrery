@@ -177,3 +177,44 @@ def test_startup_failure_closes_pty_and_lifetime_descriptors(monkeypatch, tmp_pa
         with pytest.raises(OSError) as error:
             os.fstat(fd)
         assert error.value.errno == errno.EBADF
+
+
+def test_session_death_closes_guard_and_emits_one_incarnation_status(isolated_tmux):
+    command, wrapper, tmp_path = isolated_tmux
+    # Keep a queryable current session after probe dies; list-clients otherwise
+    # reports "no current session" even when an empty server remains alive.
+    subprocess.run(command + ['new-session', '-d', '-s', 'keeper',
+                              '-e', 'CLAUDECODE=1', 'sleep 60'], check=True)
+
+    async def scenario():
+        bridge = TmuxControlBridge(ControlConfig('127.0.0.1', 0, 'probe', str(wrapper),
+                                                history_dir=tmp_path / 'history'))
+        events = []
+        closed = asyncio.Event()
+
+        async def broadcast(payload):
+            if payload.get('state') == 'closed':
+                events.append(payload)
+                closed.set()
+
+        bridge.broadcast = broadcast
+        try:
+            await bridge.start()
+            assert len(client_pids(command)) == 1
+            subprocess.run(command + ['kill-session', '-t', '=probe'], check=True)
+            await asyncio.wait_for(closed.wait(), 5)
+            assert events == [{
+                'type': 'status', 'state': 'closed', 'session': 'probe',
+                'incarnation': bridge._incarnation, 'sessionGone': True,
+            }]
+            assert asyncio.get_running_loop().remove_reader(bridge.master_fd) is False
+            bridge._schedule_closed()
+            await asyncio.sleep(0)
+            assert len(events) == 1
+            assert await asyncio.to_thread(eventually, lambda: bridge.process.poll() is not None)
+            assert client_pids(command) == set()
+        finally:
+            await bridge.stop()
+        assert bridge._lifetime_fd is None
+
+    asyncio.run(scenario())
