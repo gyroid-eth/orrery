@@ -552,15 +552,19 @@ class TmuxControlBridge:
                 os.close(self.master_fd)
             self.master_fd = None
 
-        if self.process is not None and self.process.poll() is None:
+        if self.process is not None:
             with contextlib.suppress(ProcessLookupError):
                 os.killpg(self.process.pid, signal.SIGTERM)
             try:
                 await asyncio.to_thread(self.process.wait, 2)
             except subprocess.TimeoutExpired:
+                pass
+            finally:
+                # A killed/reaped guard can leave tmux in its process group.
+                # Waiting for the leader alone does not prove the group exited.
                 with contextlib.suppress(ProcessLookupError):
                     os.killpg(self.process.pid, signal.SIGKILL)
-                await asyncio.to_thread(self.process.wait)
+            await asyncio.to_thread(self.process.wait)
 
         await self.flush_history()
 

@@ -218,3 +218,43 @@ def test_session_death_closes_guard_and_emits_one_incarnation_status(isolated_tm
         assert bridge._lifetime_fd is None
 
     asyncio.run(scenario())
+
+
+def test_stop_cleans_client_after_guard_sigkill_with_retained_master(isolated_tmux):
+    command, wrapper, tmp_path = isolated_tmux
+    master, slave = pty.openpty()
+    foreign = subprocess.Popen(command + ['-CC', 'attach', '-t', 'probe'],
+                               stdin=slave, stdout=slave, stderr=slave,
+                               start_new_session=True)
+    os.close(slave)
+
+    async def scenario():
+        bridge = TmuxControlBridge(ControlConfig('127.0.0.1', 0, 'probe', str(wrapper),
+                                                history_dir=tmp_path / 'history'))
+        holder = None
+        try:
+            await bridge.start()
+            assert await asyncio.to_thread(eventually, lambda: len(client_pids(command)) == 2)
+            holder = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'],
+                                      pass_fds=(bridge.master_fd,), start_new_session=True,
+                                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                      stderr=subprocess.DEVNULL)
+            bridge.process.kill()
+            await asyncio.to_thread(bridge.process.wait, 5)
+            assert len(client_pids(command)) == 2
+            await bridge.stop()
+            assert await asyncio.to_thread(eventually, lambda: client_pids(command) == {foreign.pid})
+            assert holder.poll() is None, 'PTY holder must outlive client cleanup'
+        finally:
+            await bridge.stop()
+            if holder is not None:
+                if holder.poll() is None:
+                    holder.kill()
+                holder.wait(timeout=5)
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        foreign.kill()
+        foreign.wait(timeout=5)
+        os.close(master)
