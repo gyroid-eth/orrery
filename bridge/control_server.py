@@ -19,6 +19,7 @@ import sys
 import tempfile
 import time
 import tty
+import uuid
 from collections import deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -420,6 +421,7 @@ def parse_pane_line(line: str) -> PaneInfo | None:
 class TmuxControlBridge:
     def __init__(self, config: ControlConfig) -> None:
         self.config = config
+        self._incarnation = uuid.uuid4().hex
         self.master_fd: int | None = None
         self.process: subprocess.Popen[bytes] | None = None
         self.panes: dict[str, PaneInfo] = {}
@@ -441,23 +443,35 @@ class TmuxControlBridge:
         self._history_flush_lock = asyncio.Lock()
         self._refresh_task: asyncio.Task[None] | None = None
         self._history_flush_task: asyncio.Task[None] | None = None
+        self._closed_task: asyncio.Task[None] | None = None
+        self._closed = False
         self._history_dir = config.history_dir or history_directory()
         self._session_created = config.session_created
         self._loop: asyncio.AbstractEventLoop | None = None
 
-    def _closed_status(self) -> dict[str, Any]:
+    def _schedule_closed(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        if self.master_fd is not None and self._loop is not None:
+            self._loop.remove_reader(self.master_fd)
+        self._closed_task = asyncio.create_task(self._broadcast_closed())
+
+    async def _broadcast_closed(self) -> None:
         payload: dict[str, Any] = {
             "type": "status",
             "state": "closed",
             "session": self.config.session,
+            "incarnation": self._incarnation,
         }
-        session_gone = tmux_session_gone(
+        session_gone = await asyncio.to_thread(
+            tmux_session_gone,
             self.config.tmux_bin,
             self.config.session,
         )
         if session_gone is not None:
             payload["sessionGone"] = session_gone
-        return payload
+        await self.broadcast(payload)
 
     async def start(self) -> None:
         self._loop = asyncio.get_running_loop()
@@ -485,6 +499,14 @@ class TmuxControlBridge:
         self._history_flush_task = asyncio.create_task(self._history_flush_loop())
 
     async def stop(self) -> None:
+        self._closed = True
+        closed_task = self._closed_task
+        self._closed_task = None
+        if closed_task is not None:
+            closed_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await closed_task
+
         if self._refresh_task is not None:
             self._refresh_task.cancel()
 
@@ -665,7 +687,7 @@ class TmuxControlBridge:
         return lines[-RECORDER_HISTORY_LINES:]
 
     def _read_ready(self) -> None:
-        if self.master_fd is None:
+        if self.master_fd is None or self._closed:
             return
 
         while True:
@@ -674,17 +696,19 @@ class TmuxControlBridge:
             except BlockingIOError:
                 return
             except OSError:
-                self._schedule_broadcast(self._closed_status())
+                self._schedule_closed()
                 return
 
             if not chunk:
-                self._schedule_broadcast(self._closed_status())
+                self._schedule_closed()
                 return
 
             self._buffer += chunk
             while b"\n" in self._buffer:
                 raw_line, self._buffer = self._buffer.split(b"\n", 1)
                 self._handle_line(raw_line.rstrip(b"\r"))
+                if self._closed:
+                    return
 
     def _handle_line(self, line: str | bytes) -> None:
         raw_line = line.encode("utf-8") if isinstance(line, str) else line
@@ -729,7 +753,7 @@ class TmuxControlBridge:
             return
 
         if line.startswith("%exit"):
-            self._schedule_broadcast(self._closed_status())
+            self._schedule_closed()
             return
 
         if line.startswith(
@@ -976,6 +1000,7 @@ class TmuxControlBridge:
             {
                 "type": "reset",
                 "session": self.config.session,
+                "incarnation": self._incarnation,
                 "panes": [pane.to_json() for pane in sorted(self.panes.values(), key=pane_key)],
             },
         )

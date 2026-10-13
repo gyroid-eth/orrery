@@ -64,6 +64,26 @@ def test_a_gone_session_can_be_opened_again_under_the_same_name(tour_browser):  
     assert state == {'requested': True, 'group': True, 'attached': True}
 
 
+@pytest.mark.parametrize('closed_incarnation,group_remains', [('old', True), ('new', False)])
+def test_old_output_new_reset_then_closed_cannot_remove_a_different_incarnation(
+    tour_browser, closed_incarnation, group_remains
+):
+    _, evaluate = tour_browser
+    evaluate(SETUP)
+    state = evaluate(f"""(()=>{{
+      handle({{type:'reset',session:'B',panes:[],incarnation:'old'}});
+      // The wire ordering from the shared peer-lock race in the backend test.
+      handle({{type:'output',session:'B',data:'old final bytes'}});
+      handle({{type:'reset',session:'B',panes:[],incarnation:'new'}});
+      handle({{type:'status',state:'closed',session:'B',sessionGone:true,
+        incarnation:'{closed_incarnation}'}});
+      return {{group:sessionGroups.has('B'),attached:attachedSessions.has('B'),
+        noted:closedByBackend.has('B')}};
+    }})()""")
+    evaluate(CLEANUP)
+    assert state == {'group': group_remains, 'attached': group_remains, 'noted': False}
+
+
 @pytest.mark.parametrize('case', ['exit-then-resume', 'closed-twice', 'list-first', 'closed-by-hand'])
 def test_a_session_the_backend_ended_comes_back_as_an_attached_tab(tour_browser, case):  # noqa: F811
     _, evaluate = tour_browser
