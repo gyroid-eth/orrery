@@ -568,7 +568,15 @@ class TmuxControlBridge:
                 # Waiting for the leader alone does not prove the group exited.
                 with contextlib.suppress(ProcessLookupError, PermissionError):
                     os.killpg(process.pid, signal.SIGKILL)
-            await asyncio.to_thread(process.wait)
+            try:
+                await asyncio.to_thread(process.wait, 1)
+            except subprocess.TimeoutExpired:
+                print(
+                    f"ORRERY control guard {process.pid} not reaped after bounded "
+                    "group cleanup; continuing history flush",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
         await self.flush_history()
 

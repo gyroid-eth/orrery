@@ -10,6 +10,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 import uuid
 
@@ -320,3 +321,52 @@ def test_stop_still_flushes_history_when_group_signal_is_denied(monkeypatch, tmp
     monkeypatch.setattr(os, 'killpg', killpg)
     asyncio.run(bridge.stop())
     assert flushed == [True]
+
+
+def test_denied_signals_cannot_make_guard_wait_block_history_flush(monkeypatch, tmp_path, capsys):
+    bridge = TmuxControlBridge(ControlConfig('127.0.0.1', 0, 'probe', 'unused',
+                                            history_dir=tmp_path, session_created=1))
+    external_exit = threading.Event()
+    waits = []
+    flushed = []
+
+    class StoppedGuard:
+        pid = 424242
+
+        def wait(self, timeout=None):
+            waits.append(timeout)
+            if timeout is not None:
+                raise subprocess.TimeoutExpired('stopped guard', timeout)
+            external_exit.wait()
+            return 0
+
+    def denied(*args):
+        raise PermissionError(errno.EPERM, 'process group signal denied')
+
+    async def flush_history():
+        flushed.append(True)
+
+    bridge.process = StoppedGuard()
+    bridge.flush_history = flush_history
+    monkeypatch.setattr(os, 'killpg', denied)
+
+    async def scenario():
+        stopped = asyncio.create_task(bridge.stop())
+        try:
+            try:
+                await asyncio.wait_for(asyncio.shield(stopped), 1)
+            except asyncio.TimeoutError:
+                pass
+            finished_without_exit = stopped.done()
+            flushed_without_exit = list(flushed)
+        finally:
+            # Release a broken implementation's blocking worker so the probe
+            # fails cleanly rather than hanging pytest's executor shutdown.
+            external_exit.set()
+            await asyncio.wait_for(stopped, 2)
+        assert finished_without_exit, 'stop required an external guard exit'
+        assert flushed_without_exit == [True]
+
+    asyncio.run(scenario())
+    assert waits and all(timeout is not None and timeout > 0 for timeout in waits)
+    assert '424242' in capsys.readouterr().err
