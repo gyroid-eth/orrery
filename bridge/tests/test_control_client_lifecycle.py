@@ -258,3 +258,65 @@ def test_stop_cleans_client_after_guard_sigkill_with_retained_master(isolated_tm
         foreign.kill()
         foreign.wait(timeout=5)
         os.close(master)
+
+
+@pytest.mark.parametrize('guard_already_dead', [False, True])
+def test_repeated_stop_never_signals_a_reused_process_group(monkeypatch, tmp_path, guard_already_dead):
+    bridge = TmuxControlBridge(ControlConfig('127.0.0.1', 0, 'probe', 'unused',
+                                            history_dir=tmp_path, session_created=1))
+    owner = 'owned'
+    signals = []
+
+    class Guard:
+        pid = 424242
+        returncode = -signal.SIGKILL if guard_already_dead else None
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            self.returncode = 0
+            return 0
+
+    bridge.process = Guard()
+    monkeypatch.setattr(os, 'killpg', lambda pid, sig: signals.append((owner, pid, sig)))
+
+    async def scenario():
+        nonlocal owner
+        await bridge.stop()
+        assert signals == [('owned', 424242, signal.SIGTERM), ('owned', 424242, signal.SIGKILL)]
+        owner = 'foreign-reused-group'
+        await bridge.stop()
+        await bridge.stop()
+        assert not [entry for entry in signals if entry[0] == owner]
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('denied_signal', [signal.SIGTERM, signal.SIGKILL])
+def test_stop_still_flushes_history_when_group_signal_is_denied(monkeypatch, tmp_path, denied_signal):
+    bridge = TmuxControlBridge(ControlConfig('127.0.0.1', 0, 'probe', 'unused',
+                                            history_dir=tmp_path, session_created=1))
+    flushed = []
+
+    class DeadGuard:
+        pid = 424242
+
+        def poll(self):
+            return -signal.SIGKILL
+
+        def wait(self, timeout=None):
+            return -signal.SIGKILL
+
+    def killpg(pid, sig):
+        if sig == denied_signal:
+            raise PermissionError(errno.EPERM, 'process group signal denied')
+
+    async def flush_history():
+        flushed.append(True)
+
+    bridge.process = DeadGuard()
+    bridge.flush_history = flush_history
+    monkeypatch.setattr(os, 'killpg', killpg)
+    asyncio.run(bridge.stop())
+    assert flushed == [True]

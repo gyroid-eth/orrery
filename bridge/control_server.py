@@ -552,19 +552,23 @@ class TmuxControlBridge:
                 os.close(self.master_fd)
             self.master_fd = None
 
-        if self.process is not None:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(self.process.pid, signal.SIGTERM)
+        # Consume group ownership before yielding: later (or concurrent) stops
+        # must not signal a PGID that may have been recycled after cleanup.
+        process = self.process
+        self.process = None
+        if process is not None:
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(process.pid, signal.SIGTERM)
             try:
-                await asyncio.to_thread(self.process.wait, 2)
+                await asyncio.to_thread(process.wait, 2)
             except subprocess.TimeoutExpired:
                 pass
             finally:
                 # A killed/reaped guard can leave tmux in its process group.
                 # Waiting for the leader alone does not prove the group exited.
-                with contextlib.suppress(ProcessLookupError):
-                    os.killpg(self.process.pid, signal.SIGKILL)
-            await asyncio.to_thread(self.process.wait)
+                with contextlib.suppress(ProcessLookupError, PermissionError):
+                    os.killpg(process.pid, signal.SIGKILL)
+            await asyncio.to_thread(process.wait)
 
         await self.flush_history()
 
