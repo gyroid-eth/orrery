@@ -19,6 +19,7 @@ import sys
 import tempfile
 import time
 import tty
+import uuid
 from collections import deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -268,12 +269,67 @@ def prune_history_files(
 
 def tmux_session_exists(tmux_bin: str, session: str) -> bool:
     result = subprocess.run(
-        [tmux_bin, "has-session", "-t", session],
+        [tmux_bin, "has-session", "-t", f"={session}"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         check=False,
     )
     return result.returncode == 0
+
+
+def tmux_session_gone(tmux_bin: str, session: str) -> bool | None:
+    """Return True only when tmux can confirm that *session* is absent.
+
+    ``has-session`` uses prefix matching unless its target starts with ``=``.
+    A missing server and a missing session both return 1, so confirm that the
+    server can list sessions before calling the session gone.  ``None`` keeps
+    the cockpit's closed group when tmux itself cannot answer reliably.
+    """
+    try:
+        result = subprocess.run(
+            [tmux_bin, "has-session", "-t", f"={session}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=1,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode == 0:
+        return False
+    if result.returncode != 1:
+        return None
+
+    try:
+        roster = subprocess.run(
+            [tmux_bin, "list-sessions", "-F", "#{session_name}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            check=False,
+            timeout=1,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if roster.returncode == 0:
+        return session not in roster.stdout.splitlines()
+    if roster.returncode != 1:
+        return None
+
+    # With ``exit-empty off`` a live tmux server may have zero sessions, and
+    # list-sessions then returns the same 1 as a missing server.  A global
+    # option query needs no session and distinguishes those two cases.
+    try:
+        server_probe = subprocess.run(
+            [tmux_bin, "show-options", "-gqv", "exit-empty"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=1,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return True if server_probe.returncode == 0 else None
 
 
 def ensure_tmux_session(tmux_bin: str, session: str, *, create: bool) -> None:
@@ -365,6 +421,7 @@ def parse_pane_line(line: str) -> PaneInfo | None:
 class TmuxControlBridge:
     def __init__(self, config: ControlConfig) -> None:
         self.config = config
+        self._incarnation = uuid.uuid4().hex
         self.master_fd: int | None = None
         self.process: subprocess.Popen[bytes] | None = None
         self.panes: dict[str, PaneInfo] = {}
@@ -386,9 +443,35 @@ class TmuxControlBridge:
         self._history_flush_lock = asyncio.Lock()
         self._refresh_task: asyncio.Task[None] | None = None
         self._history_flush_task: asyncio.Task[None] | None = None
+        self._closed_task: asyncio.Task[None] | None = None
+        self._closed = False
         self._history_dir = config.history_dir or history_directory()
         self._session_created = config.session_created
         self._loop: asyncio.AbstractEventLoop | None = None
+
+    def _schedule_closed(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        if self.master_fd is not None and self._loop is not None:
+            self._loop.remove_reader(self.master_fd)
+        self._closed_task = asyncio.create_task(self._broadcast_closed())
+
+    async def _broadcast_closed(self) -> None:
+        payload: dict[str, Any] = {
+            "type": "status",
+            "state": "closed",
+            "session": self.config.session,
+            "incarnation": self._incarnation,
+        }
+        session_gone = await asyncio.to_thread(
+            tmux_session_gone,
+            self.config.tmux_bin,
+            self.config.session,
+        )
+        if session_gone is not None:
+            payload["sessionGone"] = session_gone
+        await self.broadcast(payload)
 
     async def start(self) -> None:
         self._loop = asyncio.get_running_loop()
@@ -416,6 +499,14 @@ class TmuxControlBridge:
         self._history_flush_task = asyncio.create_task(self._history_flush_loop())
 
     async def stop(self) -> None:
+        self._closed = True
+        closed_task = self._closed_task
+        self._closed_task = None
+        if closed_task is not None:
+            closed_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await closed_task
+
         if self._refresh_task is not None:
             self._refresh_task.cancel()
 
@@ -596,7 +687,7 @@ class TmuxControlBridge:
         return lines[-RECORDER_HISTORY_LINES:]
 
     def _read_ready(self) -> None:
-        if self.master_fd is None:
+        if self.master_fd is None or self._closed:
             return
 
         while True:
@@ -605,17 +696,19 @@ class TmuxControlBridge:
             except BlockingIOError:
                 return
             except OSError:
-                self._schedule_broadcast({"type": "status", "state": "closed"})
+                self._schedule_closed()
                 return
 
             if not chunk:
-                self._schedule_broadcast({"type": "status", "state": "closed"})
+                self._schedule_closed()
                 return
 
             self._buffer += chunk
             while b"\n" in self._buffer:
                 raw_line, self._buffer = self._buffer.split(b"\n", 1)
                 self._handle_line(raw_line.rstrip(b"\r"))
+                if self._closed:
+                    return
 
     def _handle_line(self, line: str | bytes) -> None:
         raw_line = line.encode("utf-8") if isinstance(line, str) else line
@@ -660,7 +753,7 @@ class TmuxControlBridge:
             return
 
         if line.startswith("%exit"):
-            self._schedule_broadcast({"type": "status", "state": "closed"})
+            self._schedule_closed()
             return
 
         if line.startswith(
@@ -907,6 +1000,7 @@ class TmuxControlBridge:
             {
                 "type": "reset",
                 "session": self.config.session,
+                "incarnation": self._incarnation,
                 "panes": [pane.to_json() for pane in sorted(self.panes.values(), key=pane_key)],
             },
         )
