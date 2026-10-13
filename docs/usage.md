@@ -204,7 +204,7 @@ terminal は `xterm.js` を使い、ORRERY backend の `/ws` と tmux control mo
 - backend 切断後1.5秒で自動再接続
 - pane 内の URL はクリックで既定ブラウザ、`/…` や `~/…` の絶対パスはクリックで Finder（ファイルは選択表示、フォルダは開く）。空白入りのパスも実在する範囲まで自動で判定。`/compact` のような 1 語や相対パスはリンクにならない
 
-active な session label / pane tab を再クリックしても末尾へ移動します。`Cmd+↓` は Mac だけです。WSL では `↓ BOTTOM` か label の再クリックを使います。session group の `×` は cockpit から detach するだけで、tmux session を kill しません。pane tab の `×` は backend へ pane close を要求しますが、破壊的 close は `orrery-` prefix の管理 session だけに制限され、最後の1 pane は閉じません。
+active な session label / pane tab を再クリックしても末尾へ移動します。`Cmd+↓` は Mac だけです。WSL では `↓ BOTTOM` か label の再クリックを使います。session group の `×` は cockpit から detach するだけで、tmux session を kill しません。pane tab の `×` は backend へ pane close を要求しますが、破壊的 close は `orrery-` prefix の管理 session だけに制限され、最後の1 pane は閉じません。tmux session 自体が終了した場合は session group も消えます。一時的な backend 切断や tmux の確認に失敗した場合は group を `closed` のまま残し、自動再接続を待ちます。
 
 backend は起動時に live tmux session ごとに recorder connection を一つ接続します。browser からの pane attach は tile / palette の操作時に遅延実行されます。
 

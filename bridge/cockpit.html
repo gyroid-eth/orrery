@@ -8862,8 +8862,9 @@ function handle(msg){
     }
     case "status":
       if(msg.state==='closed'&&msg.session){
-        noteBackendClosed(msg.session);
-        forgetSession(msg.session,{removeGroup:false});
+        const sessionGone=msg.sessionGone===true;
+        if(!sessionGone)noteBackendClosed(msg.session);
+        forgetSession(msg.session,{removeGroup:sessionGone});
       }
       break;
     case "error":

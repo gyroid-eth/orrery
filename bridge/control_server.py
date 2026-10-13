@@ -268,12 +268,67 @@ def prune_history_files(
 
 def tmux_session_exists(tmux_bin: str, session: str) -> bool:
     result = subprocess.run(
-        [tmux_bin, "has-session", "-t", session],
+        [tmux_bin, "has-session", "-t", f"={session}"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         check=False,
     )
     return result.returncode == 0
+
+
+def tmux_session_gone(tmux_bin: str, session: str) -> bool | None:
+    """Return True only when tmux can confirm that *session* is absent.
+
+    ``has-session`` uses prefix matching unless its target starts with ``=``.
+    A missing server and a missing session both return 1, so confirm that the
+    server can list sessions before calling the session gone.  ``None`` keeps
+    the cockpit's closed group when tmux itself cannot answer reliably.
+    """
+    try:
+        result = subprocess.run(
+            [tmux_bin, "has-session", "-t", f"={session}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=1,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode == 0:
+        return False
+    if result.returncode != 1:
+        return None
+
+    try:
+        roster = subprocess.run(
+            [tmux_bin, "list-sessions", "-F", "#{session_name}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            check=False,
+            timeout=1,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if roster.returncode == 0:
+        return session not in roster.stdout.splitlines()
+    if roster.returncode != 1:
+        return None
+
+    # With ``exit-empty off`` a live tmux server may have zero sessions, and
+    # list-sessions then returns the same 1 as a missing server.  A global
+    # option query needs no session and distinguishes those two cases.
+    try:
+        server_probe = subprocess.run(
+            [tmux_bin, "show-options", "-gqv", "exit-empty"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=1,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return True if server_probe.returncode == 0 else None
 
 
 def ensure_tmux_session(tmux_bin: str, session: str, *, create: bool) -> None:
@@ -389,6 +444,20 @@ class TmuxControlBridge:
         self._history_dir = config.history_dir or history_directory()
         self._session_created = config.session_created
         self._loop: asyncio.AbstractEventLoop | None = None
+
+    def _closed_status(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "type": "status",
+            "state": "closed",
+            "session": self.config.session,
+        }
+        session_gone = tmux_session_gone(
+            self.config.tmux_bin,
+            self.config.session,
+        )
+        if session_gone is not None:
+            payload["sessionGone"] = session_gone
+        return payload
 
     async def start(self) -> None:
         self._loop = asyncio.get_running_loop()
@@ -605,11 +674,11 @@ class TmuxControlBridge:
             except BlockingIOError:
                 return
             except OSError:
-                self._schedule_broadcast({"type": "status", "state": "closed"})
+                self._schedule_broadcast(self._closed_status())
                 return
 
             if not chunk:
-                self._schedule_broadcast({"type": "status", "state": "closed"})
+                self._schedule_broadcast(self._closed_status())
                 return
 
             self._buffer += chunk
@@ -660,7 +729,7 @@ class TmuxControlBridge:
             return
 
         if line.startswith("%exit"):
-            self._schedule_broadcast({"type": "status", "state": "closed"})
+            self._schedule_broadcast(self._closed_status())
             return
 
         if line.startswith(
