@@ -4,6 +4,16 @@ The original standalone PTY and control-mode browser prototypes have been
 retired in favor of the unified backend and cockpit. `control_server.py`
 remains as the shared tmux control plumbing used by the backend and v1 smoke test.
 
+Each control connection runs through `control_client_guard.py`. The guard owns
+one `tmux -CC attach` child and watches a private pipe whose writer belongs only
+to the backend. Backend exit (including SIGKILL) closes that pipe; the guard
+terminates and reaps its child, escalating to SIGKILL after one second. This
+does not rely on PTY hangup: a descendant may still hold the PTY master open.
+The guard never scans or signals another cockpit's or user's clients. It adds
+one small Python process and one backend pipe descriptor per recorded session.
+It prevents new leaks from this lifetime failure; it does not remove existing
+unattributed control clients left by earlier versions.
+
 ## Setup
 
 ```sh
