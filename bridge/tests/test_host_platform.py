@@ -12,6 +12,7 @@ import asyncio
 import base64
 import json
 import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -434,10 +435,52 @@ def test_a_hung_powershell_is_unavailable_and_is_killed(windows_clipboard, monke
     more with every retry."""
     monkeypatch.setattr(ob, "WINDOWS_CLIPBOARD_TIMEOUT", 0.5)
     pidfile = tmp_path / "ps.pid"
-    body = windows_clipboard(b"S\t1\n", FAKE_PS_SLEEP="30", FAKE_PS_PIDFILE=str(pidfile))
-    assert body["error"] == "clipboard_unavailable"
-    with pytest.raises(ProcessLookupError):      # killed and reaped, not a zombie
-        os.kill(int(pidfile.read_text()), 0)
+    spawn = ob.asyncio.create_subprocess_exec
+    processes = []
+
+    async def spawn_started_helper(*args, **kwargs):
+        proc = await spawn(*args, **kwargs)
+        processes.append(proc)
+
+        async def ready():
+            # The helper writes its PID immediately before the 30s sleep.
+            # Startup under load must not consume the hung-reader timeout.
+            while True:
+                try:
+                    recorded = int(pidfile.read_text())
+                except (FileNotFoundError, ValueError):
+                    assert proc.returncode is None, "fake PowerShell exited before readiness"
+                    await asyncio.sleep(0.01)
+                else:
+                    assert recorded == proc.pid
+                    return
+
+        try:
+            await asyncio.wait_for(ready(), timeout=10)
+        except BaseException:
+            if proc.returncode is None:
+                proc.kill()
+            await proc.wait()
+            raise
+        return proc
+
+    monkeypatch.setattr(ob.asyncio, "create_subprocess_exec", spawn_started_helper)
+    try:
+        body = windows_clipboard(b"S\t1\n", FAKE_PS_SLEEP="30", FAKE_PS_PIDFILE=str(pidfile))
+        assert body["error"] == "clipboard_unavailable"
+        [proc] = processes
+        assert proc.returncode == -signal.SIGKILL
+        with pytest.raises(ProcessLookupError):  # killed and reaped, not a zombie
+            os.kill(proc.pid, 0)
+    finally:
+        # Do not leave the 30s sleeper behind if kill/reap itself regresses.
+        for proc in processes:
+            if proc.returncode is None:
+                try:
+                    os.kill(proc.pid, signal.SIGKILL)
+                    os.waitpid(proc.pid, 0)
+                except (ProcessLookupError, ChildProcessError):
+                    pass
 
 
 def test_windows_paths_wslpath_cannot_convert_are_reported(windows_clipboard):
