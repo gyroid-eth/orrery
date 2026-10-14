@@ -1292,12 +1292,21 @@ class TmuxControlBridge:
                 return
         else:
             raw = data.encode("utf-8", errors="replace")
-        for start in range(0, len(raw), 64):
-            chunk = raw[start : start + 64]
-            await self.send_command(
-                ["send-keys", "-t", pane_id, "-H", *[f"{byte:02x}" for byte in chunk]],
-                wait=False,
-            )
+        commands = [
+            ['send-keys', '-t', pane_id, '-H', *[f'{byte:02x}' for byte in raw[start:start+64]]]
+            for start in range(0, len(raw), 64)
+        ]
+        if not commands:
+            return
+        if self.master_fd is None:
+            raise RuntimeError('tmux control bridge is not running')
+        # One input intent, one admission, one lock. No other command can
+        # interleave between the proof and any chunk of this paste.
+        async with self._write_lock:
+            await asyncio.to_thread(admit_command, self.config.tmux_bin, commands[0], session=self.config.session)
+            for args in commands:
+                self._pending_blocks.append(None)
+                await self._write_master((make_tmux_command(args) + '\n').encode('utf-8'))
 
     async def broadcast(self, payload: dict[str, Any]) -> None:
         stale_clients = []

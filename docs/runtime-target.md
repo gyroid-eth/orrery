@@ -1,6 +1,6 @@
 # 旧 cockpit の tmux 対象保護
 
-cockpit は起動時に legacy の接続先を1つ確定し、以後は絶対 socket を明示した `tmux -S` を使います。control attach・入力・split/close・terminal を開く操作の直前に、Telemetry の共有 helper で対象を照合します。socket や server PID が変わったときは拒否し、裸の tmux へ戻しません。server が無い状態で起動した場合だけ、同じ接続先に現れた最初の server を固定できます。
+正常な共有 helper がある cockpit は起動時に legacy の接続先を1つ確定し、以後は絶対 socket を明示した `tmux -S` を使います。control attach・入力・split/close・terminal を開く操作の直前に、Telemetry の共有 helper で対象を照合します。socket や server PID が変わったときは拒否し、裸の tmux へ戻しません。server が無い状態で起動した場合だけ、同じ接続先に現れた最初の server を固定できます。
 
 これは旧 consumer の互換保護です。global の専用 terminal・WS・pane window の移植は後続です。新規 global 専用起動を有効にするものではありません。既存の純旧 mode の操作と、補助 session に対する従来の split/close 制限は維持します。
 
@@ -9,7 +9,7 @@ cockpit は起動時に legacy の接続先を1つ確定し、以後は絶対 so
 | 配置 | 対象への操作 |
 |---|---|
 | 共有 helper が正常 | 既存 context/live の読取 snapshot で global pane を拒否し、通常の legacy pane は継続 |
-| helper が欠落・旧版・内部失敗、global の手掛かりが無い | 固定 layout の負の admission を通して旧操作を継続 |
+| helper が欠落・旧版・内部失敗、global の手掛かりが無い | 固定 layout の負の admission を通して元の裸 tmux・継承環境で旧操作を継続（socket/PID を独自に固定しない） |
 | helper が使えず、client root・context・config 等がある／不明 | `GLOBAL_TARGET_HELPER_UNAVAILABLE` で操作を拒否、一覧の読取は継続 |
 | 正常 helper でも root が壊れている／partial | `GLOBAL_TARGET_OWNERSHIP_UNKNOWN`。任意名の global standalone を除外できないため、修復まで全対象の副作用を拒否 |
 | dedicated global socket を継承した legacy 起動 | `GLOBAL_TMUX_LEGACY_CONSUMER_REFUSED` で起動を拒否 |
@@ -25,7 +25,7 @@ cockpit は起動時に legacy の接続先を1つ確定し、以後は絶対 so
 | 呼び手 | transport / admission |
 |---|---|
 | roster、interactive client、pane→session、question capture | 同じ明示 `-S`。question の内容を読む前に対象照合 |
-| control-mode attach と入力・capture・resize・split/close | attach 前、既存送信 lock 内の書込み直前に対象照合。lifetime pipe/guard は維持 |
+| control-mode attach と入力・capture・resize・split/close | attach 前に照合。入力・読取は下記の最大5秒の証明を送信 lock 内で確認し、split/close は毎回照合。lifetime pipe/guard は維持 |
 | closed 判定の has-session / list-sessions / show-options | 3本とも同じ明示 `-S` と TMUX/TMUX_PANE を外した環境。従来の True/False/unknown 判定は維持 |
 | Ghostty / WT attach | 照合後の完全 argv/env。同一 Linux socket、WT の distro は既存処理 |
 | control bridge の補助 session 作成 | 配置照合を作成前に行い、存在する他の session を採用・rename しない |
@@ -35,3 +35,12 @@ cockpit は起動時に legacy の接続先を1つ確定し、以後は絶対 so
 共有 helper は製品コードを複製せず、固定した Telemetry commit の installer payload 宣言から配備します。試験には `ORRERY_TEST_TELEMETRY_ROOT` でその checkout を指定します。隔離 HOME・短い一時 directory・専用 tmux server を使い、live の default server・実 provider・実 Mail DB は使いません。schema/consumer の試験では process-start を fixture に固定し、実 OS の証明は共有契約の外側試験で区別します。
 
 admission と tmux の副作用は OS の原子的 transaction ではありません。同 UID の非協調 process を完全に隔離できるとは説明しません。送信 lock の内側で直前に照合し、外部待機を挟みません。
+
+
+## 入力の照合と期限
+
+貼り付けは1回の入力を1回だけ照合し、全64B chunk を同じ送信 lock の下で書きます。入力・capture・refresh の対象証明は最大5秒だけメモリ内で再利用します。各利用時に共有の pane query で socket inode・pane ID/PID・session 所属を読み直し、変化か期限切れで重い配置照合へ戻ります。global 配置の変更が反映されるまで最大5秒ある境界です。attach・split・close・kill-session・terminal 起動・補助 session 作成は証明を再利用せず、その都度照合します。
+
+共有 helper はコードの namespace を process 内で一度だけ読みます。env.sh と既存 literal reader の結果は、両方の dev/inode/mtime/ctime/size/mode/UID が同じ間だけ再利用し、context/live の snapshot 自体は保存しません。helper を更新したら cockpit を再起動します。CI の共有契約 ref は対応する Telemetry の merge 後にその merge commit へ更新します。
+
+配置不明の間は attach 済み pane の capture/refresh も期限切れ後に止まり、roster の一覧だけ継続します。修復後に再接続してください。

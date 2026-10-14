@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: gyroid-eth/orrery-telemetry
-          ref: 6f13cf10fed3df8c672175b97edecd4d56b02be1
+          ref: 4a04c1c617a9097f88b8860901d812be377878f2
           fetch-depth: 0
           path: .telemetry-contract
       - name: Place contract fixtures outside the cockpit checkout

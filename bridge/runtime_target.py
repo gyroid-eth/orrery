@@ -13,6 +13,10 @@ import shlex
 import stat
 import subprocess
 import threading
+import time
+
+# At most one roster interval; destructive operations never reuse a proof.
+PANE_PROOF_SECONDS = 5.0
 
 
 class TargetRefused(RuntimeError):
@@ -20,7 +24,7 @@ class TargetRefused(RuntimeError):
 
 
 class LegacyTargetBoundary:
-    """One frozen endpoint per consumer, with fresh admission per operation."""
+    """One frozen endpoint per consumer, with bounded pane proofs and fresh destructive admission."""
 
     def __init__(self, binary, *, home=None, environ=None):
         self.binary = binary
@@ -30,7 +34,7 @@ class LegacyTargetBoundary:
         self.shared = None
         self.transport = None
         self.pin = None
-        self.fallback_pid = None
+        self._pane_proofs = {}
         self.validate = None
         self._settings_stamp = None
         self._settings_hint = False
@@ -70,10 +74,20 @@ class LegacyTargetBoundary:
         return str(self.binary)
 
     def env(self):
+        if self.shared is None:
+            return dict(self.environment)  # old bare-tmux endpoint semantics
         return {k: v for k, v in self.environment.items() if k not in ('TMUX', 'TMUX_PANE')}
 
     def _installed_hint(self):
         """Reuse the installed literal reader; never execute env.sh or parse it twice."""
+        if self.shared is not None:
+            try:
+                values = self.shared['installed_hints'](self.home, time.monotonic()+5)
+                return (values.get('AGENTSTACK_RUNTIME_MODE','legacy') not in ('','legacy')
+                        or bool(values.get('AGENTSTACK_GLOBAL_SERVER_CONFIG'))
+                        or bool(values.get('AGENTSTACK_CLIENT_CONFIG')))
+            except (Exception, SystemExit):
+                return True
         path = self.home / 'env.sh'
         if not path.exists() and not path.is_symlink():
             return False
@@ -132,52 +146,16 @@ class LegacyTargetBoundary:
             return True
 
     def _legacy_bootstrap(self):
-        # This bootstrap is only for an old/missing/broken shared helper. It
-        # selects one legacy endpoint, never a global target or an owner.
-        inherited = self.environment.get('TMUX')
-        expected_pid = None
-        if inherited:
-            parts = inherited.rsplit(',', 2)
-            if len(parts) != 3 or not parts[1].isdigit():
-                raise TargetRefused('LEGACY_TMUX_TRANSPORT_UNAVAILABLE')
-            path = Path(parts[0])
-            expected_pid = int(parts[1])
-        else:
-            base = Path(self.environment.get('TMUX_TMPDIR') or '/tmp').resolve()
-            path = base / ('tmux-' + str(os.getuid())) / 'default'
-        if str(path).startswith('/tmp/'):
-            path = Path('/tmp').resolve() / path.relative_to('/tmp')
-        if path.parent == Path('/tmp').resolve() / ('orrery-tmux-' + str(os.getuid())):
+        # Old installs retain their original tmux behavior. Do not copy the
+        # shared endpoint resolver or invent a second socket/PID proof.
+        inherited = self.environment.get('TMUX', '').rsplit(',', 2)[0]
+        if Path(inherited).parent.resolve() == Path('/tmp').resolve() / ('orrery-tmux-' + str(os.getuid())):
             raise TargetRefused('GLOBAL_TMUX_LEGACY_CONSUMER_REFUSED')
-        if not path.is_absolute() or any(c in str(path) for c in '\0\r\n') or path.resolve() != path:
-            raise TargetRefused('LEGACY_TMUX_TRANSPORT_UNAVAILABLE')
-        prefix = [self.binary, '-S', str(path)]
-        if inherited or path.exists() or path.is_symlink():
-            self.fallback_pid = self._fallback_server(prefix)
-            if expected_pid is not None and expected_pid != self.fallback_pid:
-                raise TargetRefused('LEGACY_TMUX_TRANSPORT_UNAVAILABLE')
-        return prefix
-
-    def _fallback_server(self, prefix):
-        try:
-            result = subprocess.run([*prefix, 'display-message', '-p', '#{socket_path}\t#{pid}'],
-                capture_output=True, text=True, timeout=3, env=self.env())
-            fields = result.stdout.strip().split('\t')
-            if result.returncode or len(fields) != 2 or fields[0] != prefix[-1] or not fields[1].isdigit():
-                raise TargetRefused('LEGACY_TMUX_TRANSPORT_UNAVAILABLE')
-            return int(fields[1])
-        except (OSError, subprocess.SubprocessError) as exc:
-            raise TargetRefused('LEGACY_TMUX_TRANSPORT_UNAVAILABLE') from exc
+        return [self.binary]
 
     def _fallback_admit(self):
         if self.global_hint():
             raise TargetRefused('GLOBAL_TARGET_HELPER_UNAVAILABLE')
-        pid = self._fallback_server(self.prefix)
-        with self._pin_lock:
-            expected = self.fallback_pid if self.fallback_pid is not None else (self.pin or {}).get('server_pid')
-            if expected is not None and pid != expected:
-                raise TargetRefused('TMUX_SOCKET_CHANGED')
-            self.fallback_pid = pid
 
     def _helper_failure(self, exc):
         # Only the shared helper defines domain refusals. Broken/old helpers
@@ -201,11 +179,22 @@ class LegacyTargetBoundary:
         except (Exception, SystemExit) as exc:
             self._helper_failure(exc)
 
-    def admit(self, operation, *, session=None, pane=None):
+    def admit(self, operation, *, session=None, pane=None, reuse=False):
         if self.shared is None:
             self._fallback_admit()
             return  # Proven pure legacy; preserve its existing target rules.
         try:
+            key = (session, pane)
+            cacheable = reuse and operation in ('input', 'capture')
+            # The cheap shared pane query validates the pinned socket inode
+            # on both sides. PID/membership changes invalidate a cached proof.
+            if cacheable and self.transport.identity is not None:
+                rows = self.shared['panes'](self.transport, session=session, pane=pane)
+                with self._pin_lock:
+                    cached = self._pane_proofs.get(key)
+                if cached and time.monotonic() < cached[0] and rows == cached[1]:
+                    return {**cached[2], 'operation': operation}
+            proof_started = time.monotonic()
             refreshed = self.shared['legacy_transport'](binary=self.binary, environ=self.environment)
             public = refreshed.public()
             self.validate({'contract':self.shared['CONTRACT'],'ok':True,**public},
@@ -220,6 +209,14 @@ class LegacyTargetBoundary:
             self.validate(value, self.shared['result_schema']('legacy-target'))
             with self._pin_lock:
                 self.shared['check_pinned_transport'](self.pin, value)
+                if cacheable:
+                    rows = [{k:v for k,v in row.items() if k != 'process_start'} for row in value['panes']]
+                    # Retain only active, bounded proofs in consumer memory.
+                    now = time.monotonic()
+                    self._pane_proofs = {k:v for k,v in self._pane_proofs.items() if v[0] > now}
+                    self._pane_proofs[key] = (proof_started + PANE_PROOF_SECONDS, rows, value)
+                else:
+                    self._pane_proofs.clear()
             return value
         except (Exception, SystemExit) as exc:
             self._helper_failure(exc)
@@ -257,6 +254,6 @@ def admit_command(binary, args, *, session):
                  'kill-session' if args[0] == 'kill-session' else
                  'capture' if args[0] in ('capture-pane', 'list-panes', 'display-message') else 'input')
     if isinstance(target, str) and re.fullmatch(r'%[0-9]+', target):
-        binary.admit(operation, pane=target)
+        binary.admit(operation, pane=target, reuse=True)
     else:
-        binary.admit(operation, session=session)
+        binary.admit(operation, session=session, reuse=True)

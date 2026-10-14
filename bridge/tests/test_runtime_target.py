@@ -90,11 +90,14 @@ def test_pure_legacy_operation_and_explicit_endpoint_are_preserved(endpoint,help
         original=boundary.shared['legacy_admission']
         api=runpy.run_path(str(library/'runtime_client.py'))
         api['process_start']=lambda *args,**kwargs:'fixture-start'
-        boundary.shared['legacy_admission']=lambda *args,**kwargs:original(*args,api=api,**kwargs)
+        boundary.shared['legacy_admission']=lambda *args,**kwargs:original(*args,**{**kwargs,'api':api})
     require_target(boundary,'split',pane=endpoint['pane'])
-    assert tmux_argv(boundary,'display-message') == [endpoint['binary'],'-S',endpoint['socket'],'display-message']
-    assert 'TMUX' not in tmux_env(boundary)['env']
-    assert 'TMUX_PANE' not in tmux_env(boundary)['env']
+    assert tmux_argv(boundary,'display-message') == ([endpoint['binary'],'-S',endpoint['socket'],'display-message'] if helper=='actual' else [endpoint['binary'],'display-message'])
+    if helper=='actual':
+        assert 'TMUX' not in tmux_env(boundary)['env']
+        assert 'TMUX_PANE' not in tmux_env(boundary)['env']
+    else:
+        assert tmux_env(boundary)['env']['TMUX']==endpoint['env']['TMUX']
 
 
 @pytest.mark.parametrize('helper',['missing','old','broken','actual'])
@@ -149,7 +152,7 @@ def test_global_standalone_is_refused_and_normal_legacy_continues(endpoint,monke
         boundary=LegacyTargetBoundary(endpoint['binary'],home=home,environ=endpoint['env'])
         original=boundary.shared['legacy_admission']
         api=operator.api;api['process_start']=lambda *args,**kwargs:'fixture-start'
-        boundary.shared['legacy_admission']=lambda *args,**kwargs:original(*args,api=api,**kwargs)
+        boundary.shared['legacy_admission']=lambda *args,**kwargs:original(*args,**{**kwargs,'api':api})
         before=operator.read({'kind':'health'})['as_of_revision']
         for operation in ('attach','input','split','close','kill-session','signal'):
             with pytest.raises(TargetRefused,match='LEGACY_TARGET_IS_GLOBAL'):
@@ -205,6 +208,7 @@ def test_dedicated_socket_is_never_a_legacy_startup(endpoint,helper):
 
 
 def test_closed_probe_uses_one_explicit_transport_for_all_three_queries(endpoint,monkeypatch):
+    deploy(endpoint['home'])
     import control_server
     from types import SimpleNamespace
     boundary=LegacyTargetBoundary(endpoint['binary'],home=endpoint['home'],environ=endpoint['env'])
@@ -232,6 +236,7 @@ def test_attach_refusal_precedes_pty_creation(endpoint,monkeypatch):
 
 
 def test_terminal_argv_carries_the_pinned_linux_socket(endpoint,monkeypatch):
+    deploy(endpoint['home'])
     import orrery_backend as backend
     boundary=LegacyTargetBoundary(endpoint['binary'],home=endpoint['home'],environ=endpoint['env'])
     admitted=[];spawned=[];opened=[]
@@ -266,3 +271,93 @@ def test_released_literal_reader_keeps_legacy_and_refuses_unknown_global(endpoin
     else:
         boundary.admit('input',pane=endpoint['pane'])
     assert not sentinel.exists()
+
+
+
+def test_paste_admission_is_once_per_input_not_per_64_bytes(monkeypatch):
+    import control_server
+    import time
+    bridge=TmuxControlBridge(ControlConfig('127.0.0.1',0,'fixture','tmux'))
+    bridge.master_fd=123
+    checks=[];writes=[]
+    def check(*args,**kwargs):
+        checks.append(args)
+        time.sleep(.01)  # a cheap stand-in for the real 150–320ms reader
+    async def write(payload):writes.append(payload)
+    monkeypatch.setattr(control_server,'admit_command',check)
+    monkeypatch.setattr(bridge,'_write_master',write)
+    start=time.monotonic()
+    asyncio.run(bridge.send_input('%1','x'*4096))
+    elapsed=time.monotonic()-start
+    print('paste_admissions=',len(checks),'elapsed=',elapsed)
+    assert len(checks)==1
+    assert len(writes)==64 and len(bridge._pending_blocks)==64
+    assert elapsed<.4
+
+
+@pytest.mark.parametrize('installed_env',[False,True])
+def test_100_keystrokes_reuse_pane_proof_with_bounded_latency(endpoint,monkeypatch,installed_env):
+    import time
+    deploy(endpoint['home'])
+    if installed_env:
+        (endpoint['home']/'env.sh').write_text('export AGENTSTACK_RUNTIME_MODE=legacy\n')
+    boundary=LegacyTargetBoundary(endpoint['binary'],home=endpoint['home'],environ=endpoint['env'])
+    original=boundary.shared['legacy_admission'];checks=[]
+    api=runpy.run_path(str(endpoint['home']/'bin/lib/runtime_client.py'))
+    api['process_start']=lambda *a,**kw:'fixture-start'
+    def check(*a,**kw):
+        checks.append(1)
+        kw['api']=api
+        return original(*a,**kw)
+    boundary.shared['legacy_admission']=check
+    bridge=TmuxControlBridge(ControlConfig('127.0.0.1',0,'orrery-normal',boundary))
+    bridge.master_fd=123
+    async def write(payload):pass
+    monkeypatch.setattr(bridge,'_write_master',write)
+    async def type_keys():
+        for _ in range(100):await bridge.send_input(endpoint['pane'],'x')
+    start=time.monotonic();asyncio.run(type_keys());elapsed=time.monotonic()-start
+    print('keystroke_admissions=',len(checks),'elapsed=',elapsed)
+    assert len(checks)<=2
+    assert elapsed<3
+
+
+
+def test_cached_input_rechecks_membership_expiry_and_destructive_operations(endpoint,monkeypatch):
+    import runtime_target
+    from types import SimpleNamespace
+    deploy(endpoint['home'])
+    boundary=LegacyTargetBoundary(endpoint['binary'],home=endpoint['home'],environ=endpoint['env'])
+    original=boundary.shared['legacy_admission'];calls=[];refuse=[False]
+    api=runpy.run_path(str(endpoint['home']/'bin/lib/runtime_client.py'))
+    api['process_start']=lambda *a,**kw:'fixture-start'
+    def check(*a,**kw):
+        calls.append(1)
+        if refuse[0]:raise boundary.shared['TargetError']('LEGACY_TARGET_IS_GLOBAL')
+        return original(*a,**{**kw,'api':api})
+    boundary.shared['legacy_admission']=check
+    clock=[100.0]
+    monkeypatch.setattr(runtime_target,'time',SimpleNamespace(monotonic=lambda:clock[0]))
+    boundary.admit('input',pane=endpoint['pane'],reuse=True)
+    boundary.admit('capture',pane=endpoint['pane'],reuse=True)
+    assert len(calls)==1
+    subprocess.run([*endpoint['prefix'],'respawn-pane','-k','-t',endpoint['pane'],'sleep','600'],check=True)
+    boundary.admit('input',pane=endpoint['pane'],reuse=True)
+    assert len(calls)==2  # same pane ID with a different process is not reused
+    refuse[0]=True
+    for operation in ('split','close','kill-session','attach'):
+        with pytest.raises(TargetRefused,match='LEGACY_TARGET_IS_GLOBAL'):
+            boundary.admit(operation,pane=endpoint['pane'],reuse=True)
+    assert len(calls)==6
+    clock[0]+=5.0
+    with pytest.raises(TargetRefused,match='LEGACY_TARGET_IS_GLOBAL'):
+        boundary.admit('input',pane=endpoint['pane'],reuse=True)
+    assert len(calls)==7
+
+
+
+def test_missing_helper_refuses_dedicated_socket_through_temp_alias(endpoint):
+    socket=Path('/tmp')/('orrery-tmux-'+str(os.getuid()))/'fixture.sock'
+    with pytest.raises(TargetRefused,match='GLOBAL_TMUX_LEGACY_CONSUMER_REFUSED'):
+        LegacyTargetBoundary(endpoint['binary'],home=endpoint['home'],
+            environ={**endpoint['env'],'TMUX':str(socket)+',123,0'})
