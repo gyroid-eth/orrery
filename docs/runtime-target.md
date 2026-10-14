@@ -44,3 +44,5 @@ admission と tmux の副作用は OS の原子的 transaction ではありま�
 共有 helper はコードの namespace を process 内で一度だけ読みます。env.sh と既存 literal reader の結果は、両方の dev/inode/mtime/ctime/size/mode/UID が同じ間だけ再利用し、context/live の snapshot 自体は保存しません。helper を更新したら cockpit を再起動します。CI の共有契約 ref は対応する Telemetry の merge 後にその merge commit へ更新します。
 
 配置不明の間は attach 済み pane の capture/refresh も期限切れ後に止まり、roster の一覧だけ継続します。修復後に再接続してください。
+
+`@window` と `refresh-client -C @window:WxH` は元の bridge session へ読み替えず、共有 helper で現在の window の全 pane を照合します。window 操作では5秒の証明を再利用しません。別の global session に移した窓は disconnect の復元も拒否し、寸法と未復元の claim を保持します。

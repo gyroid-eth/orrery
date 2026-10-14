@@ -361,3 +361,72 @@ def test_missing_helper_refuses_dedicated_socket_through_temp_alias(endpoint):
     with pytest.raises(TargetRefused,match='GLOBAL_TMUX_LEGACY_CONSUMER_REFUSED'):
         LegacyTargetBoundary(endpoint['binary'],home=endpoint['home'],
             environ={**endpoint['env'],'TMUX':str(socket)+',123,0'})
+
+
+
+@pytest.fixture
+def protected_window_client(endpoint,monkeypatch):
+    root=telemetry_root()
+    for path in (root/'tests',root/'packages/agentstack_mail/tests',root/'packages/agentstack_mail/src'):
+        monkeypatch.syspath_prepend(str(path))
+    spec=importlib.util.spec_from_file_location('window_operator_fixture',root/'tests/test_global_operator_client.py')
+    fixture=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
+    server=fixture.server.__wrapped__(monkeypatch)
+    try:
+        state=next(server);monkeypatch.setenv('AGENTSTACK_MCP_URL',state['url'])
+        operator=fixture.api['RuntimeOperator'](state['config_path'])
+        operator.create('protected',agent_name='ProtectedWindow',program='daemon',model='deterministic')
+        client=operator.client('protected')
+        with client.operation_mutex():pass
+        home=operator.clients_parent.parent;deploy(home)
+        boundary=LegacyTargetBoundary(endpoint['binary'],home=home,environ=endpoint['env'])
+        original=boundary.shared['legacy_admission']
+        api=operator.api;api['process_start']=lambda *a,**kw:'fixture-start'
+        boundary.shared['legacy_admission']=lambda *a,**kw:original(*a,**{**kw,'api':api})
+        yield operator,client,boundary
+    finally:server.close()
+
+
+@pytest.mark.parametrize('protected',[False,True])
+def test_disconnect_restore_checks_moved_window_actual_panes(endpoint,protected_window_client,protected):
+    from orrery_backend import SessionTmuxBridge,SessionState,SessionBridgeManager,WindowSizeSnapshot
+    operator,client,boundary=protected_window_client
+    def tmux(*args):
+        return subprocess.check_output([*endpoint['prefix'],*args],text=True,env=endpoint['env']).strip()
+    async def exercise():
+        bridge=SessionTmuxBridge(ControlConfig('127.0.0.1',0,'orrery-normal',boundary,history_dir=endpoint['home']/'history'))
+        window=tmux('display-message','-p','-t',endpoint['pane'],'#{window_id}')
+        tmux('new-window','-d','-t','=orrery-normal','sleep','600')
+        await bridge.start()
+        try:
+            assert await bridge.capture_window_size(window)
+            state=SessionState(bridge=bridge,claimed_windows={window:WindowSizeSnapshot('manual',91,29)})
+            tmux('new-session','-d','-s','orrery-moved','sleep','600')
+            tmux('move-window','-s',window,'-t','=orrery-moved:1')
+            tmux('resize-window','-t',window,'-x','141','-y','43')
+            if protected:
+                lives=client.runtime_dir/'live-sessions';lives.mkdir(mode=0o700,exist_ok=True)
+                operator.api['atomic_json'](lives/'standalone.json',{'kind':'orrery-global-live-session-v1',
+                    **client.binding,'agent_id':client.identity['agent_id'],'session_id':'standalone',
+                    'pid':endpoint['pid'],'process_start':'fixture-start','pane_id':endpoint['pane']})
+                with pytest.raises(TargetRefused,match='LEGACY_TARGET_IS_GLOBAL'):
+                    boundary.admit('input',pane=endpoint['pane'])
+            await bridge.refresh_panes(send_captures=False)
+            assert endpoint['pane'] not in bridge.panes
+            before=operator.read({'kind':'health'})['as_of_revision']
+            await SessionBridgeManager._restore_claimed_windows(state)
+            actual=tmux('display-message','-p','-t',window,'#{window_width}x#{window_height}')
+            assert actual==('141x43' if protected else '91x29')
+            assert (window in state.claimed_windows) is protected
+            if protected:
+                for command in (
+                    ['resize-window','-t',window,'-x','91','-y','29'],
+                    ['refresh-client','-C',window+':91x29'],
+                    ['set-option','-w','-t',window,'-u','window-size'],
+                ):
+                    with pytest.raises(TargetRefused,match='LEGACY_TARGET_IS_GLOBAL'):
+                        await bridge.send_command(command,wait=True)
+                assert tmux('display-message','-p','-t',window,'#{window_width}x#{window_height}')=='141x43'
+            assert operator.read({'kind':'health'})['as_of_revision']==before
+        finally:await bridge.stop()
+    asyncio.run(exercise())

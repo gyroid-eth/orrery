@@ -47,7 +47,7 @@ class LegacyTargetBoundary:
                     raise TargetRefused('GLOBAL_TARGET_HELPER_UNAVAILABLE')
                 shared = runpy.run_path(str(module))
                 if (shared.get('CONTRACT') != 'orrery-tmux-target-v1'
-                        or not {'legacy-transport', 'legacy-target-admission'} <= set(shared.get('CAPABILITIES', []))):
+                        or not {'legacy-transport', 'legacy-target-admission', 'legacy-window-target-admission'} <= set(shared.get('CAPABILITIES', []))):
                     raise TargetRefused('GLOBAL_TARGET_HELPER_UNAVAILABLE')
                 validator = runpy.run_path(str(module.with_name('schema_contract.py')))
                 self.validate = validator['validate_schema']
@@ -179,13 +179,13 @@ class LegacyTargetBoundary:
         except (Exception, SystemExit) as exc:
             self._helper_failure(exc)
 
-    def admit(self, operation, *, session=None, pane=None, reuse=False):
+    def admit(self, operation, *, session=None, pane=None, window=None, reuse=False):
         if self.shared is None:
             self._fallback_admit()
             return  # Proven pure legacy; preserve its existing target rules.
         try:
-            key = (session, pane)
-            cacheable = reuse and operation in ('input', 'capture')
+            key = (session, pane, window)
+            cacheable = reuse and window is None and operation in ('input', 'capture')
             # The cheap shared pane query validates the pinned socket inode
             # on both sides. PID/membership changes invalidate a cached proof.
             if cacheable and self.transport.identity is not None:
@@ -204,8 +204,9 @@ class LegacyTargetBoundary:
                 if self.transport.identity is None:
                     self.transport = refreshed
                 transport = self.transport
+            selector = {'window':window} if window is not None else {'session':session,'pane':pane}
             value = self.shared['legacy_admission'](transport, self.home,
-                session=session, pane=pane, operation=operation)
+                **selector, operation=operation)
             self.validate(value, self.shared['result_schema']('legacy-target'))
             with self._pin_lock:
                 self.shared['check_pinned_transport'](self.pin, value)
@@ -249,11 +250,22 @@ def admit_command(binary, args, *, session):
     target = None
     if '-t' in args and args.index('-t') + 1 < len(args):
         target = args[args.index('-t') + 1]
+    if args[0] == 'refresh-client' and '-C' in args:
+        index = args.index('-C') + 1
+        size = args[index] if index < len(args) else ''
+        match = re.fullmatch(r'(@[0-9]+):[0-9]+x[0-9]+', size)
+        if match is None:
+            raise TargetRefused('TMUX_TARGET_INPUT_INVALID')
+        target = match[1]
     operation = ('split' if args[0] == 'split-window' else
                  'close' if args[0] == 'kill-pane' else
                  'kill-session' if args[0] == 'kill-session' else
                  'capture' if args[0] in ('capture-pane', 'list-panes', 'display-message') else 'input')
-    if isinstance(target, str) and re.fullmatch(r'%[0-9]+', target):
+    if isinstance(target,str) and re.fullmatch(r'@[0-9]+',target):
+        # A moved/linked window is not the bridge's configured session. Check
+        # every current pane in the actual window; never reuse an old proof.
+        binary.admit(operation, window=target)
+    elif isinstance(target, str) and re.fullmatch(r'%[0-9]+', target):
         binary.admit(operation, pane=target, reuse=True)
     else:
         binary.admit(operation, session=session, reuse=True)
