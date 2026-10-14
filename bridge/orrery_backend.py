@@ -41,6 +41,7 @@ from control_server import (
     prune_history_files,
     tmux_session_exists,
 )
+from runtime_target import LegacyTargetBoundary, TargetRefused, require_target, tmux_argv, tmux_env
 from usage_probe import (
     ProviderUsage,
     UsageCache,
@@ -313,7 +314,7 @@ async def annotations_by_agent(
     return labels
 
 
-def pane_has_pending_user_question(session: str) -> bool:
+def pane_has_pending_user_question(session: str, tmux_bin="tmux") -> bool:
     """Detect a recent prose question followed by Claude's idle prompt."""
     now = time.monotonic()
     cached = _question_probe_cache.get(session)
@@ -321,9 +322,10 @@ def pane_has_pending_user_question(session: str) -> bool:
         return cached[1]
     pending = False
     try:
+        require_target(tmux_bin, "capture", session=session)
         result = subprocess.run(
-            ["tmux", "capture-pane", "-p", "-J", "-t", session, "-S", "-36"],
-            capture_output=True, text=True, timeout=2,
+            tmux_argv(tmux_bin, "capture-pane", "-p", "-J", "-t", "=" + session, "-S", "-36"),
+            capture_output=True, text=True, timeout=2, **tmux_env(tmux_bin),
         )
         tail = "\n".join(result.stdout.splitlines()[-32:]) if result.returncode == 0 else ""
         prompts = list(_IDLE_PROMPT_RE.finditer(tail))
@@ -334,7 +336,7 @@ def pane_has_pending_user_question(session: str) -> bool:
                     continue  # skip blanks / box-drawing chrome
                 pending = bool(_PENDING_QUESTION_LINE_RE.match(line))
                 break
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, RuntimeError, subprocess.SubprocessError):
         pending = False
     _question_probe_cache[session] = (now, pending)
     return pending
@@ -343,6 +345,7 @@ def pane_has_pending_user_question(session: str) -> bool:
 def merge_agent_annotations(
     payload: bytes,
     labels: dict[str, dict[str, str]],
+    tmux_bin="tmux",
 ) -> bytes:
     """Add cockpit annotations and conservative prose-question state."""
     try:
@@ -360,7 +363,7 @@ def merge_agent_annotations(
                 agent["annot"] = annot
                 changed = True
             if agent.get("running") and agent.get("act_state") == "wait" \
-                    and pane_has_pending_user_question(agent["name"]):
+                    and pane_has_pending_user_question(agent["name"], tmux_bin):
                 agent["act_state"] = "question"
                 changed = True
     return json.dumps(data, ensure_ascii=False).encode("utf-8") if changed else payload
@@ -524,7 +527,7 @@ def merge_spawn_catalog(payload: bytes) -> bytes:
 
 
 HTTP_SESSION_KEY = web.AppKey("http_session", ClientSession)
-TMUX_BIN_KEY = web.AppKey("tmux_bin", str)
+TMUX_BIN_KEY = web.AppKey("tmux_bin", LegacyTargetBoundary)
 USAGE_CACHE_KEY = web.AppKey("usage_cache", UsageCache)
 USAGE_LOCKS_KEY = web.AppKey("usage_locks", dict)
 PREFS_PATH = Path(os.path.expanduser(os.environ.get("ORRERY_PREFS_PATH") or "~/.orrery/prefs.json"))
@@ -726,11 +729,12 @@ async def _usage_from_dashboard(request: web.Request, cache) -> list[ProviderUsa
 def _interactive_sessions(tmux_bin: str) -> set[str]:
     """Sessions with at least one non-control (human terminal) client."""
     result = subprocess.run(
-        [tmux_bin, "list-clients", "-F",
-         "#{session_name}\t#{client_control_mode}"],
+        tmux_argv(tmux_bin, "list-clients", "-F",
+         "#{session_name}\t#{client_control_mode}"),
         capture_output=True,
         text=True,
         check=False,
+        **tmux_env(tmux_bin),
     )
     if result.returncode != 0:
         return set()
@@ -781,10 +785,11 @@ def resolve_tmux_bin(preferred: str) -> str:
 def list_tmux_sessions(tmux_bin: str) -> list[dict[str, Any]]:
     """Return the protocol-v2 session roster from tmux."""
     result = subprocess.run(
-        [tmux_bin, "list-sessions", "-F", SESSION_FORMAT],
+        tmux_argv(tmux_bin, "list-sessions", "-F", SESSION_FORMAT),
         capture_output=True,
         text=True,
         check=False,
+        **tmux_env(tmux_bin),
     )
     if result.returncode != 0:
         # An empty tmux server reports an error rather than an empty result.
@@ -822,17 +827,11 @@ def list_tmux_sessions(tmux_bin: str) -> list[dict[str, Any]]:
 def pane_tmux_session(tmux_bin: str, pane_id: str) -> str | None:
     """Resolve a pane's current session name for destructive-op checks."""
     result = subprocess.run(
-        [
-            tmux_bin,
-            "display-message",
-            "-p",
-            "-t",
-            pane_id,
-            "#{session_name}",
-        ],
+        tmux_argv(tmux_bin, "display-message", "-p", "-t", pane_id, "#{session_name}"),
         capture_output=True,
         text=True,
         check=False,
+        **tmux_env(tmux_bin),
     )
     if result.returncode != 0:
         return None
@@ -1040,7 +1039,7 @@ class SessionBridgeManager:
             except Exception as exc:
                 print(
                     f"ORRERY recorder failed to attach {session!r}: "
-                    f"{type(exc).__name__}",
+                    f"{str(exc) if isinstance(exc, TargetRefused) else type(exc).__name__}",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -1082,6 +1081,11 @@ class SessionBridgeManager:
         attached: set[str],
         session: str,
     ) -> None:
+        try:
+            await asyncio.to_thread(require_target, self.tmux_bin, "attach", session=session)
+        except TargetRefused as exc:
+            await send_error(peer, session, str(exc))
+            return
         if session in attached:
             state = self.states.get(session)
             if state is not None and peer in state.bridge.clients:
@@ -1113,7 +1117,7 @@ class SessionBridgeManager:
             await send_error(
                 peer,
                 session,
-                f"failed to attach tmux session: {type(exc).__name__}",
+                str(exc) if isinstance(exc, TargetRefused) else f"failed to attach tmux session: {type(exc).__name__}",
             )
             return
         if state is None:
@@ -1264,7 +1268,6 @@ class SessionBridgeManager:
                     return False
                 state.claimed_windows[window_id] = snapshot
 
-            await state.bridge.handle_client_message(payload)
             result = await state.bridge.send_command(
                 [
                     "resize-window",
@@ -1278,6 +1281,10 @@ class SessionBridgeManager:
                 wait=True,
             )
             if result is not None and result.ok:
+                # Commit the manual policy before refresh-client can expose
+                # the requested size under the old automatic policy. Admission
+                # may yield between commands; size alone is not a claim.
+                await state.bridge.handle_client_message(payload)
                 return True
 
             if created_snapshot:
@@ -1381,7 +1388,7 @@ COALESCED_ROUTES = frozenset({"/telemetry/agents", "/telemetry/graph", "/telemet
 
 
 async def fetch_proxied(
-    http_session: ClientSession, path: str, url: str
+    http_session: ClientSession, path: str, url: str, tmux_bin="tmux"
 ) -> tuple[bytes, int, str]:
     """One upstream GET for proxy_dashboard: (body, status, content type).
     Raises ClientError / asyncio.TimeoutError when the dashboard does not answer."""
@@ -1391,7 +1398,7 @@ async def fetch_proxied(
         content_type = response.headers.get("Content-Type", "application/octet-stream")
     if path == "/telemetry/agents" and status == 200:
         labels = await annotations_by_agent(http_session)
-        body = merge_agent_annotations(body, labels)
+        body = await asyncio.to_thread(merge_agent_annotations, body, labels, tmux_bin)
     if path == "/telemetry/spawn-catalog" and status == 200:
         body = merge_spawn_catalog(body)
     return body, status, content_type
@@ -1402,13 +1409,14 @@ def shared_fetch(
     http_session: ClientSession,
     path: str,
     url: str,
+    tmux_bin="tmux",
 ) -> "asyncio.Task[tuple[bytes, int, str]]":
     """The fetch for `url` already on its way, or a new one. The task is not
     tied to the request that started it, so a tab that closes mid-request
     does not cancel the answer the others wait for."""
     task = inflight.get(url)
     if task is None:
-        task = asyncio.create_task(fetch_proxied(http_session, path, url))
+        task = asyncio.create_task(fetch_proxied(http_session, path, url, tmux_bin))
         inflight[url] = task
 
         def done(finished: asyncio.Task) -> None:
@@ -1481,10 +1489,10 @@ async def proxy_dashboard(request: web.Request) -> web.Response:
     http_session = request.app[HTTP_SESSION_KEY]
     try:
         if request.path in COALESCED_ROUTES:
-            task = shared_fetch(request.app[PROXY_INFLIGHT_KEY], http_session, request.path, url)
+            task = shared_fetch(request.app[PROXY_INFLIGHT_KEY], http_session, request.path, url, request.app[TMUX_BIN_KEY])
             body, status, content_type = await asyncio.shield(task)
         else:
-            body, status, content_type = await fetch_proxied(http_session, request.path, url)
+            body, status, content_type = await fetch_proxied(http_session, request.path, url, request.app[TMUX_BIN_KEY])
         if status == 200 and request.path in ("/telemetry/agents", "/telemetry/graph"):
             body = hide_selftest_agents(request.path, body)
         return web.Response(
@@ -2138,17 +2146,11 @@ async def serve_clipboard_files(request: web.Request) -> web.Response:
 def tmux_has_non_control_client(tmux_bin: str, session: str) -> bool:
     """Return whether an interactive client is already attached to a session."""
     result = subprocess.run(
-        [
-            tmux_bin,
-            "list-clients",
-            "-t",
-            session,
-            "-F",
-            CLIENT_CONTROL_MODE_FORMAT,
-        ],
+        tmux_argv(tmux_bin, "list-clients", "-t", "=" + session, "-F", CLIENT_CONTROL_MODE_FORMAT),
         capture_output=True,
         text=True,
         check=False,
+        **tmux_env(tmux_bin),
     )
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or "tmux list-clients failed")
@@ -2293,21 +2295,15 @@ async def serve_identity(request: web.Request) -> web.Response:
 
 def launch_ghostty(tmux_bin: str, session: str) -> None:
     """Launch a detached Ghostty client attached to the requested tmux session."""
+    require_target(tmux_bin, "attach", session=session)
     subprocess.Popen(
-        [
-            GHOSTTY_BIN,
-            f"--title={session}",
-            "-e",
-            tmux_bin,
-            "attach",
-            "-t",
-            session,
-        ],
+        [GHOSTTY_BIN, f"--title={session}", "-e", *tmux_argv(tmux_bin, "attach", "-t", "=" + session)],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
         close_fds=True,
+        **tmux_env(tmux_bin),
     )
 
 
@@ -2326,9 +2322,11 @@ def launch_windows_terminal(tmux_bin: str, session: str) -> None:
         raise OSError(problem)
     if WT_UNSAFE_SESSION_RE.search(session):
         raise OSError(f"session name {session!r} cannot be passed through wt.exe")
+    require_target(tmux_bin, "attach", session=session)
     run_opener([
         "wt.exe", "-w", "0", "new-tab", "--title", session,
-        "wsl.exe", "-d", wsl_distro(), "--exec", tmux_bin, "attach", "-t", session,
+        "wsl.exe", "-d", wsl_distro(), "--exec", "env", "-u", "TMUX", "-u", "TMUX_PANE",
+        *tmux_argv(tmux_bin, "attach", "-t", "=" + session),
     ])
 
 
@@ -2881,7 +2879,9 @@ async def open_ghostty(request: web.Request) -> web.Response:
 
     try:
         await asyncio.to_thread(launch_terminal, tmux_bin, session)
-    except OSError as exc:
+    except (OSError, TargetRefused) as exc:
+        if isinstance(exc, TargetRefused):
+            return web.json_response({"ok":False,"error":str(exc)}, status=409)
         label = host_platform()["terminal"]["label"]
         return web.json_response(
             {"ok": False, "error": f"failed to open {label}: {exc}"},
@@ -3293,7 +3293,7 @@ async def serve_sessions(request: web.Request) -> web.Response:
         _warn_tmux_gone(tmux_bin, exc)
         # 503 rather than [] so the UI can tell "broken" from "idle".
         return web.json_response(
-            {"error": "tmux_unavailable", "tmux_bin": tmux_bin, "detail": str(exc)},
+            {"error": "tmux_unavailable", "tmux_bin": str(tmux_bin), "detail": str(exc)},
             status=503,
         )
     except OSError:
@@ -3366,7 +3366,7 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
                     await send_error(
                         peer,
                         session if isinstance(session, str) else None,
-                        f"request failed: {type(exc).__name__}",
+                        str(exc) if isinstance(exc, TargetRefused) else f"request failed: {type(exc).__name__}",
                     )
             elif message.type in {
                 WSMsgType.CLOSE,
@@ -3416,7 +3416,7 @@ async def revalidate_static(request: web.Request, handler):
 
 def create_app(tmux_bin: str = "tmux") -> web.Application:
     app = web.Application(middlewares=[revalidate_static])
-    app[TMUX_BIN_KEY] = tmux_bin
+    app[TMUX_BIN_KEY] = tmux_bin if isinstance(tmux_bin, LegacyTargetBoundary) else LegacyTargetBoundary(tmux_bin)
     app[USAGE_CACHE_KEY] = UsageCache()
     app[USAGE_LOCKS_KEY] = {}
     app[PREFS_LOCK_KEY] = asyncio.Lock()

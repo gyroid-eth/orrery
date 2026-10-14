@@ -65,6 +65,7 @@ def run(scenario, dashboard: FakeDashboard, upstream_timeout: float = 6):
         old_url, ob.DASHBOARD_URL = ob.DASHBOARD_URL, up_url
         ob._annotations_cache = (0.0, {})
         backend = web.Application()
+        backend[ob.TMUX_BIN_KEY] = ob.LegacyTargetBoundary("tmux")
         backend[ob.HTTP_SESSION_KEY] = ClientSession(timeout=ClientTimeout(total=upstream_timeout))
         backend[ob.PROXY_INFLIGHT_KEY] = {}
         for path in ob.PROXY_ROUTES:

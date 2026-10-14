@@ -28,6 +28,8 @@ from typing import Any
 import pyte
 import websockets
 
+from runtime_target import LegacyTargetBoundary, admit_creation, admit_command, require_target, tmux_argv, tmux_env
+
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8780
 DEFAULT_TEST_SESSION = "orrery-control-test"
@@ -123,7 +125,7 @@ class ControlConfig:
     host: str
     port: int
     session: str
-    tmux_bin: str
+    tmux_bin: str | LegacyTargetBoundary
     session_created: int | None = None
     history_dir: Path | None = None
 
@@ -269,10 +271,11 @@ def prune_history_files(
 
 def tmux_session_exists(tmux_bin: str, session: str) -> bool:
     result = subprocess.run(
-        [tmux_bin, "has-session", "-t", f"={session}"],
+        tmux_argv(tmux_bin, "has-session", "-t", "=" + session),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         check=False,
+        **tmux_env(tmux_bin),
     )
     return result.returncode == 0
 
@@ -287,11 +290,12 @@ def tmux_session_gone(tmux_bin: str, session: str) -> bool | None:
     """
     try:
         result = subprocess.run(
-            [tmux_bin, "has-session", "-t", f"={session}"],
+            tmux_argv(tmux_bin, "has-session", "-t", f"={session}"),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,
             timeout=1,
+            **tmux_env(tmux_bin),
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -302,12 +306,13 @@ def tmux_session_gone(tmux_bin: str, session: str) -> bool | None:
 
     try:
         roster = subprocess.run(
-            [tmux_bin, "list-sessions", "-F", "#{session_name}"],
+            tmux_argv(tmux_bin, "list-sessions", "-F", "#{session_name}"),
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
             check=False,
             timeout=1,
+            **tmux_env(tmux_bin),
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -321,11 +326,12 @@ def tmux_session_gone(tmux_bin: str, session: str) -> bool | None:
     # option query needs no session and distinguishes those two cases.
     try:
         server_probe = subprocess.run(
-            [tmux_bin, "show-options", "-gqv", "exit-empty"],
+            tmux_argv(tmux_bin, "show-options", "-gqv", "exit-empty"),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,
             timeout=1,
+            **tmux_env(tmux_bin),
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -342,14 +348,17 @@ def ensure_tmux_session(tmux_bin: str, session: str, *, create: bool) -> None:
             f"to let this bridge create {DEFAULT_TEST_SESSION!r}."
         )
 
+    admit_creation(tmux_bin)
+
     # -e CLAUDECODE=1: guard the test session's interactive shell against a
     # destructive zsh/bash exit hook (e.g. a ~/.zshrc zshexit that kills tmux
     # sessions). Without it, exiting this throwaway session can cascade-kill the
     # whole tmux server. Requires tmux >= 3.0.
     subprocess.run(
-        [tmux_bin, "new-session", "-d", "-s", session, "-e", "CLAUDECODE=1"], check=True
+        tmux_argv(tmux_bin, "new-session", "-d", "-s", session, "-e", "CLAUDECODE=1"), check=True, **tmux_env(tmux_bin)
     )
-    subprocess.run([tmux_bin, "split-window", "-h", "-t", f"{session}:0"], check=True)
+    require_target(tmux_bin, "split", session=session)
+    subprocess.run(tmux_argv(tmux_bin, "split-window", "-h", "-t", f"={session}:0"), check=True, **tmux_env(tmux_bin))
 
 
 def quote_tmux_arg(value: str) -> str:
@@ -475,6 +484,7 @@ class TmuxControlBridge:
         await self.broadcast(payload)
 
     async def start(self) -> None:
+        await asyncio.to_thread(require_target, self.config.tmux_bin, "attach", session=self.config.session)
         self._loop = asyncio.get_running_loop()
         master_fd, slave_fd = pty.openpty()
         tty.setraw(slave_fd)
@@ -492,7 +502,7 @@ class TmuxControlBridge:
                     sys.executable,
                     str(Path(__file__).with_name("control_client_guard.py")),
                     str(lifetime_read),
-                    self.config.tmux_bin, "-CC", "attach", "-t", self.config.session,
+                    *tmux_argv(self.config.tmux_bin, "-CC", "attach", "-t", "=" + self.config.session),
                 ],
                 stdin=slave_fd,
                 stdout=slave_fd,
@@ -500,6 +510,7 @@ class TmuxControlBridge:
                 close_fds=True,
                 pass_fds=(lifetime_read,),
                 start_new_session=True,
+                **tmux_env(self.config.tmux_bin),
             )
             self._lifetime_fd = lifetime_write
         except BaseException:
@@ -869,6 +880,7 @@ class TmuxControlBridge:
 
         command = make_tmux_command(args) + "\n"
         async with self._write_lock:
+            await asyncio.to_thread(admit_command, self.config.tmux_bin, args, session=self.config.session)
             self._pending_blocks.append(future)
             await self._write_master(command.encode("utf-8"))
 
@@ -1377,12 +1389,13 @@ def main(argv: list[str]) -> int:
         raise SystemExit("This control-mode bridge is restricted to 127.0.0.1.")
 
     session = args.session or DEFAULT_TEST_SESSION
-    ensure_tmux_session(args.tmux_bin, session, create=args.session is None)
+    target = LegacyTargetBoundary(args.tmux_bin)
+    ensure_tmux_session(target, session, create=args.session is None)
     config = ControlConfig(
         host=args.host,
         port=args.port,
         session=session,
-        tmux_bin=args.tmux_bin,
+        tmux_bin=target,
     )
     try:
         asyncio.run(run_server(config))

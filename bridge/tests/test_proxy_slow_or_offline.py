@@ -32,6 +32,7 @@ def ask(dashboard_url: str, path: str, upstream_timeout: float) -> tuple[int, ob
         old, ob.DASHBOARD_URL = ob.DASHBOARD_URL, dashboard_url
         ob._annotations_cache = (0.0, {})
         backend = web.Application()
+        backend[ob.TMUX_BIN_KEY] = ob.LegacyTargetBoundary("tmux")
         backend[ob.HTTP_SESSION_KEY] = ClientSession(timeout=ClientTimeout(total=upstream_timeout))
         backend[ob.PROXY_INFLIGHT_KEY] = {}
         for route in ob.PROXY_ROUTES:

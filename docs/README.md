@@ -33,6 +33,7 @@
 
 - [アーキテクチャ概要](ARCHITECTURE_OVERVIEW.md) — tmux、Codex App、network、履歴と肖像画像の境界。
 - [実装アーキテクチャ](ARCHITECTURE.md) — backend の HTTP/WebSocket、tmux 制御、Mail 連携を読む。
+- [旧 tmux 対象の保護](runtime-target.md) — 接続先の固定、共有 admission と修復。
 - [デザイン言語](DESIGN.md) — 視覚・motion・色・typography の実装基準。
 - [Roster findability 設計メモ（discussion draft）](DESIGN_roster_findability.md) — 過去の計測と設計案。現行操作の手順書とは区別して読む。
 - [開発への入口](../app/README.md) — desktop app の開発用起動と、hotkey の表示・非表示の確認。
