@@ -12,6 +12,7 @@ import asyncio
 import base64
 import json
 import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -434,10 +435,92 @@ def test_a_hung_powershell_is_unavailable_and_is_killed(windows_clipboard, monke
     more with every retry."""
     monkeypatch.setattr(ob, "WINDOWS_CLIPBOARD_TIMEOUT", 0.5)
     pidfile = tmp_path / "ps.pid"
-    body = windows_clipboard(b"S\t1\n", FAKE_PS_SLEEP="30", FAKE_PS_PIDFILE=str(pidfile))
-    assert body["error"] == "clipboard_unavailable"
-    with pytest.raises(ProcessLookupError):      # killed and reaped, not a zombie
-        os.kill(int(pidfile.read_text()), 0)
+    spawn = ob.asyncio.create_subprocess_exec
+    run_reader = ob._run_reader
+    processes = []
+    ready_pids = []
+    reader_timeouts = []
+
+    async def observe_reader_timeout(argv, timeout):
+        try:
+            return await run_reader(argv, timeout)
+        except asyncio.TimeoutError:
+            reader_timeouts.append(timeout)
+            raise
+
+    async def spawn_started_helper(*args, **kwargs):
+        proc = await spawn(*args, **kwargs)
+        processes.append(proc)
+
+        async def ready():
+            # The helper writes its PID immediately before the 30s sleep.
+            # Startup under load must not consume the hung-reader timeout.
+            while True:
+                try:
+                    recorded = int(pidfile.read_text())
+                except (FileNotFoundError, ValueError):
+                    assert proc.returncode is None, "fake PowerShell exited before readiness"
+                    await asyncio.sleep(0.01)
+                else:
+                    assert recorded == proc.pid
+                    ready_pids.append(proc.pid)
+                    return
+
+        try:
+            await asyncio.wait_for(ready(), timeout=10)
+        except BaseException as exc:
+            if proc.returncode is None:
+                proc.kill()
+            await proc.wait()
+            if isinstance(exc, asyncio.TimeoutError):
+                pytest.fail("fake PowerShell did not become ready; reader timeout was not reached")
+            raise
+        return proc
+
+    monkeypatch.setattr(ob, "_run_reader", observe_reader_timeout)
+    monkeypatch.setattr(ob.asyncio, "create_subprocess_exec", spawn_started_helper)
+    try:
+        body = windows_clipboard(b"S\t1\n", FAKE_PS_SLEEP="30", FAKE_PS_PIDFILE=str(pidfile))
+        [proc] = processes
+        assert ready_pids == [proc.pid], "the product timeout was never reached"
+        assert reader_timeouts == [0.5], "the hung-reader timeout must actually expire"
+        assert body["error"] == "clipboard_unavailable"
+        assert proc.returncode == -signal.SIGKILL
+        with pytest.raises(ProcessLookupError):  # killed and reaped, not a zombie
+            os.kill(proc.pid, 0)
+    finally:
+        # Do not leave the 30s sleeper behind if kill/reap itself regresses.
+        for proc in processes:
+            if proc.returncode is None:
+                try:
+                    os.kill(proc.pid, signal.SIGKILL)
+                    os.waitpid(proc.pid, 0)
+                except (ProcessLookupError, ChildProcessError):
+                    pass
+
+
+def test_hung_reader_check_rejects_startup_timeout(windows_clipboard, monkeypatch, tmp_path):
+    """Negative control: missing readiness must fail, never mimic reader cleanup."""
+    wait_for = ob.asyncio.wait_for
+    reader_timeouts = []
+
+    async def short_startup_wait(awaitable, timeout):
+        code = getattr(awaitable, "cr_code", None)
+        if code is not None and code.co_name == "ready":
+            return await wait_for(awaitable, timeout=1)
+        reader_timeouts.append(timeout)
+        return await wait_for(awaitable, timeout=timeout)
+
+    def missing_readiness(stdout, **env):
+        env["FAKE_PS_PIDFILE"] = str(tmp_path / "different.pid")
+        return windows_clipboard(stdout, **env)
+
+    monkeypatch.setattr(ob.asyncio, "wait_for", short_startup_wait)
+    with pytest.raises(pytest.fail.Exception, match="fake PowerShell did not become ready"):
+        test_a_hung_powershell_is_unavailable_and_is_killed(
+            missing_readiness, monkeypatch, tmp_path,
+        )
+    assert reader_timeouts == [], "the reader timeout must not start without readiness"
 
 
 def test_windows_paths_wslpath_cannot_convert_are_reported(windows_clipboard):
