@@ -254,6 +254,7 @@ The Japanese documents are the source of truth. The English versions are in READ
 | [Troubleshooting](docs/en/troubleshooting.md) | Startup, ports, `:8770`, `pyte`, tmux, CDN |
 | [Architecture overview](docs/en/ARCHITECTURE_OVERVIEW.md) | tmux, Codex App, network, data retention, handling of portrait images |
 | [Implementation architecture](docs/en/ARCHITECTURE.md) | Details of the backend, HTTP / WebSocket, and tmux control |
+| [Legacy tmux target protection](docs/en/runtime-target.md) | Pinned endpoints, global pane refusals and repair |
 | [Design language](docs/en/DESIGN.md) | The cockpit's visuals, motion, color, and typography |
 
 ## Structure

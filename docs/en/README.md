@@ -33,6 +33,7 @@ Start with **Your first flight → help map → Full tour** on screen, from cock
 
 - [Architecture overview](ARCHITECTURE_OVERVIEW.md) — tmux, Codex App, network, history, and portrait boundaries.
 - [Implementation architecture](ARCHITECTURE.md) — Read backend HTTP/WebSocket, tmux control, and Mail integration.
+- [Legacy tmux target protection](runtime-target.md) — Pinned endpoints, shared admission and repair.
 - [Design language](DESIGN.md) — The implementation reference for visuals, motion, color, and typography.
 - [Roster findability design (discussion draft)](DESIGN_roster_findability.md) — Historical measurements and proposals, distinct from current operating instructions.
 - [Development entry](../../app/README.md) — Start the desktop app in development mode and check its show/hide hotkey.

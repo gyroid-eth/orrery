@@ -66,6 +66,11 @@ class FakeBridge(TmuxControlBridge):
         self._screen = screen
         self._state = state
         self.sent: list[list[str]] = []
+        self.master_fd = 123  # _write_master above records bytes, never touches an OS fd
+
+    async def _write_master(self, payload):
+        import shlex
+        self.sent.append(shlex.split(payload.decode().strip()))
 
     async def send_command(self, args: list[str], **_: Any) -> CommandResult | None:
         if args[0] == "capture-pane":

@@ -129,8 +129,8 @@ def test_wsl_opens_a_windows_terminal_tab_back_into_the_distro(monkeypatch, open
     ob.launch_terminal("/usr/bin/tmux", "orrery-AmberYukawa")
     assert opened == [([
         "wt.exe", "-w", "0", "new-tab", "--title", "orrery-AmberYukawa",
-        "wsl.exe", "-d", "Ubuntu", "--exec", "/usr/bin/tmux", "attach", "-t",
-        "orrery-AmberYukawa",
+        "wsl.exe", "-d", "Ubuntu", "--exec", "env", "-u", "TMUX", "-u", "TMUX_PANE", "/usr/bin/tmux", "attach", "-t",
+        "=orrery-AmberYukawa",
     ], True)]
 
 
@@ -156,7 +156,7 @@ def test_mac_and_linux_still_launch_ghostty(monkeypatch, kind):
     monkeypatch.setattr(ob.subprocess, "Popen", lambda argv, **kw: launched.append(argv))
     ob.launch_terminal("/opt/homebrew/bin/tmux", "s1")
     assert launched == [[ob.GHOSTTY_BIN, "--title=s1", "-e",
-                         "/opt/homebrew/bin/tmux", "attach", "-t", "s1"]]
+                         "/opt/homebrew/bin/tmux", "attach", "-t", "=s1"]]
 
 
 def test_the_endpoint_names_windows_terminal_in_its_error(monkeypatch):

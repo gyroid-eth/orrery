@@ -18,6 +18,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Shared target contract: deploy actual Telemetry payload in fixtures.
+      - uses: actions/checkout@v4
+        with:
+          repository: gyroid-eth/orrery-telemetry
+          ref: a83e5947c8196c3ed0fe361f5bc6056ba7db8af6
+          fetch-depth: 0
+          path: .telemetry-contract
+      - name: Place contract fixtures outside the cockpit checkout
+        run: |
+          mv .telemetry-contract "$RUNNER_TEMP/telemetry-contract"
+          echo "ORRERY_TEST_TELEMETRY_ROOT=$RUNNER_TEMP/telemetry-contract" >> "$GITHUB_ENV"
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -33,7 +45,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y tmux
 
       - name: Install Python dependencies
-        run: python -m pip install -r bridge/requirements.txt pytest
+        run: python -m pip install -r bridge/requirements.txt pytest pytest-asyncio -e "$ORRERY_TEST_TELEMETRY_ROOT/packages/agentstack_mail"
 
       - name: bridge tests
         working-directory: bridge

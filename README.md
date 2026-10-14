@@ -254,6 +254,7 @@ rm -rf ~/orrery ~/orrery-telemetry
 | [トラブルシューティング](docs/troubleshooting.md) | 起動、port、`:8770`、`pyte`、tmux、CDN |
 | [アーキテクチャ概要](docs/ARCHITECTURE_OVERVIEW.md) | tmux、Codex App、network、データ保持、肖像画像の扱い |
 | [実装アーキテクチャ](docs/ARCHITECTURE.md) | backend、HTTP / WebSocket、tmux 制御の詳細 |
+| [旧 tmux 対象の保護](docs/runtime-target.md) | 接続先の固定、global pane の拒否と修復 |
 | [デザイン言語](docs/DESIGN.md) | cockpit の視覚・motion・色・typography |
 
 ## 構成

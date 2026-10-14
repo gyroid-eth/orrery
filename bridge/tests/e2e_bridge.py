@@ -387,6 +387,7 @@ class ManagedServer:
         self._log_file = tempfile.TemporaryFile()
         self._last_log = ""
         self._state_dir: tempfile.TemporaryDirectory[str] | None = None
+        self._transport_session: str | None = None
 
     def start(self) -> None:
         assert_port_available()
@@ -395,6 +396,22 @@ class ManagedServer:
         merged_env.update(self.isolated_state_env())
         if self.env:
             merged_env.update(self.env)
+        # --tmux-bin remains a binary, not a hidden transport contract. Give
+        # the consumer the harness's actual endpoint to prove and pin; its
+        # later explicit -S must not override our old -L wrapper with default.
+        endpoint = tmux("display-message", "-p", "#{socket_path}\t#{pid}", check=False)
+        if endpoint.returncode:
+            # HTTP-only cases need no application session. Own one throwaway
+            # session solely to provide the same custom endpoint proof; stop()
+            # removes it after the backend, so the private server can exit.
+            self._transport_session = random_session("orrery-qa-endpoint")
+            create_test_session(self._transport_session)
+            endpoint = tmux("display-message", "-p", "#{socket_path}\t#{pid}")
+        proof = endpoint.stdout.strip().split("\t")
+        if len(proof) != 2 or not proof[1].isdigit():
+            raise AssertionError("QA server did not provide endpoint proof")
+        merged_env["TMUX"] = proof[0] + "," + proof[1] + ",0"
+        merged_env.pop("TMUX_PANE", None)
         assert_not_real_state(merged_env)
         self.process = subprocess.Popen(
             self.command,
@@ -450,6 +467,9 @@ class ManagedServer:
         if self._state_dir is not None:
             self._state_dir.cleanup()
             self._state_dir = None
+        if self._transport_session is not None:
+            kill_test_session(self._transport_session)
+            self._transport_session = None
 
 
 async def recv_json(websocket: Any, timeout: float = EVENT_TIMEOUT) -> dict[str, Any]:
