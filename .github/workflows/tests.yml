@@ -12,8 +12,6 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      ORRERY_TEST_TELEMETRY_ROOT: ${{ runner.temp }}/telemetry-contract
     steps:
       # Full history: the identifier test reads the commits this run adds.
       - uses: actions/checkout@v4
@@ -28,7 +26,9 @@ jobs:
           fetch-depth: 0
           path: .telemetry-contract
       - name: Place contract fixtures outside the cockpit checkout
-        run: mv .telemetry-contract "$RUNNER_TEMP/telemetry-contract"
+        run: |
+          mv .telemetry-contract "$RUNNER_TEMP/telemetry-contract"
+          echo "ORRERY_TEST_TELEMETRY_ROOT=$RUNNER_TEMP/telemetry-contract" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v5
         with:
