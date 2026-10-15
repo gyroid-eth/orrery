@@ -8509,6 +8509,10 @@ function renderPaneOutChip(session){
 function returnPaneSession(session,{close=true}={}){
   const entry=paneWindows.get(session);if(!entry)return;
   paneWindows.delete(session);
+  if(paneWindowSelection===session){
+    paneWindowSelection=null;
+    if(!availableSessions.has(session)){resetHead();renderStage();}
+  }
   clearInterval(entry.timer);
   if(entry.el)entry.el.remove();
   if(entry.chip)entry.chip.remove();

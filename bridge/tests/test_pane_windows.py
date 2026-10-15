@@ -388,3 +388,62 @@ console.log(JSON.stringify({activeId,focused}));
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == {"activeId": None, "focused": []}
+
+
+def test_closing_an_ended_external_selection_releases_the_blank_stage():
+    _check_external_window_close('WindowAgent', {
+        'selection': None, 'empty': 'grid', 'activeId': 'main-pane',
+        'focused': ['MainAgent'], 'remaining': ['OtherWindow'], 'headReset': True,
+    })
+
+
+def test_closing_another_window_preserves_the_external_selection():
+    _check_external_window_close('OtherWindow', {
+        'selection': 'WindowAgent', 'empty': 'none', 'activeId': None,
+        'focused': [], 'remaining': ['WindowAgent'], 'headReset': False,
+    })
+
+
+def _check_external_window_close(closed_session, expected):
+    functions = '\n'.join(
+        'function ' + name + '(' + args + '){\n' + _function_body(name) + '\n}'
+        for name, args in [('returnPaneSession', 'session,{close=true}={}'),
+                           ('resetSession', 'msg'), ('refreshHeaderStats', '')]
+    )
+    script = r"""
+let activeId=null,pendingJump=null,splitVisible=false,focusedSplitSession=null;
+let paneWindowSelection='WindowAgent';
+const paneWindows=new Map([['WindowAgent',{}],['OtherWindow',{}]]);
+const availableSessions=new Set(['MainAgent']),manualDetached=new Set();
+const requestedSessions=new Set(),attachedSessions=new Set();
+const stageEmpty={style:{display:'none'}},focused=[];
+const panes=new Map(),sessionGroups=new Map(),splitSessions=[];
+const paneCountEl=null,sessChip=null,tabsEmpty={style:{}};
+const splitChip={classList:{toggle(){}}},layoutChip={};
+let terminalLessAgent=null,emptyAtClose,headReset=false;
+function currentSplitPreset(){return 'auto';}
+function splitPresetsForCount(){return [];}
+function splitPresetLabel(){return 'auto';}
+function closeLayoutPicker(){}
+function queueTabOverflow(){}
+function resetHead(){headReset=true;}
+function takeBackPaneDraft(){}
+function activeSession(){return null;}
+function closeSessionPanes(){}
+function ensureSessionGroup(){return {};}
+function setGroupState(){}
+function createPane(){}
+function refreshSessionGroup(){}
+function focusSession(name){focused.push(name);activeId='main-pane';}
+function focusSplitSession(){throw Error('split must stay hidden');}
+function renderStage(){}
+FUNCTIONS
+returnPaneSession(CLOSED,{close:false});
+emptyAtClose=stageEmpty.style.display;
+resetSession({session:'MainAgent',panes:[{paneId:'main-pane'}]});
+console.log(JSON.stringify({selection:paneWindowSelection,empty:emptyAtClose,
+  activeId,focused,remaining:[...paneWindows.keys()],headReset}));
+""".replace('FUNCTIONS', functions).replace('CLOSED', json.dumps(closed_session))
+    result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == expected
