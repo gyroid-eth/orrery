@@ -3076,6 +3076,11 @@
             "value": "var(--bg)"
           },
           {
+            "property": "stroke",
+            "selector": ".mini-selection-ring",
+            "value": "var(--ink)"
+          },
+          {
             "property": "background",
             "selector": ".mailfilters",
             "value": "linear-gradient(180deg,var(--panel) 76%,rgba(17,20,25,.86))"
@@ -4463,9 +4468,9 @@
       }
     }
   },
-  "inventory_digest": "5a2fafd6793a81dc10fcdef65d7757315d226d70b5a7578ce1cad8357d06a996",
+  "inventory_digest": "55da54f5bfff454268fcb4dbdd4c9e37813b609e96559508c2a4855c758ed507",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "f2a19c0244fd215f1e8c443b0f6b64e685db086a8b53fac21aba4c4c9e508ac6",
+  "source_digest": "4d4f493d807cfc126180798b918fdd7d42455ed425571289c6ec78cc5b79b4c3",
   "surface": "cockpit",
   "version": 1
 }
@@ -7570,6 +7575,8 @@ function renderStage({fit=true}={}){
      members.every(session=>splitCells.get(session)?.querySelector('.termhost.on'))){
     fullTourSplitPending=false;emitFullTourAction('full-split');
   }
+  // Includes the empty-center paths, which do not emit oc:focus-agent.
+  document.dispatchEvent(new CustomEvent('oc:stage-agent',{detail:{name:activeSession()||''}}));
 }
 function paintPendingSession(session){
   scrName.textContent=session;scrPath.textContent='waiting for terminal panes';

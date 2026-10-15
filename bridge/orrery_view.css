@@ -205,3 +205,8 @@
 @media(prefers-reduced-motion:reduce){
   .orrery-agent.is-working .orrery-motion-ring{animation:none;stroke-dasharray:2 3}
 }
+
+/* Center-pane selection: a static hairline outside the working arc. */
+.mini-selection-ring{
+  fill:none;stroke:var(--ink);stroke-width:.75;pointer-events:none;
+}
