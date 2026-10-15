@@ -5162,6 +5162,8 @@ const stageEmpty=document.getElementById('stageEmpty');
    that state even though panes are still open, otherwise the previous agent's
    terminal keeps the screen under the new agent's name. */
 let terminalLessAgent=null;
+// A selected external terminal leaves the central stage deliberately blank.
+let paneWindowSelection=null;
 const splitChip=document.getElementById('splitChip');
 const layoutChip=document.getElementById('layoutChip');
 const layoutPicker=document.getElementById('layoutPicker');
@@ -6795,7 +6797,7 @@ function resetHead(){
 }
 function refreshHeaderStats(){
   if(paneCountEl)paneCountEl.textContent=panes.size;
-  stageEmpty.style.display=(!terminalLessAgent&&(panes.size||(splitVisible&&splitSessions.length)))?'none':'grid';
+  stageEmpty.style.display=(paneWindowSelection||(!terminalLessAgent&&(panes.size||(splitVisible&&splitSessions.length))))?'none':'grid';
   tabsEmpty.style.display=sessionGroups.size?'none':'block';
   if(sessChip&&!activeId)sessChip.textContent=`${attachedSessions.size}/${availableSessions.size}`;
   splitChip.hidden=!splitSessions.length;
@@ -7944,6 +7946,7 @@ function paintHead(meta){
 function setActive(paneId,mode='auto',{forceFocus=false}={}){
   const p=panes.get(paneId);if(!p)return false;
   terminalLessAgent=null;
+  paneWindowSelection=null;
   const scrollState=captureHostScrollState(p.host);
   const alreadyVisibleInSplit=splitVisible&&splitSessions.includes(p.session)&&
     p.host.classList.contains('on')&&splitCells.get(p.session)?.contains(p.host);
@@ -8057,7 +8060,7 @@ function resetSession(msg){
   refreshSessionGroup(session);
   if(pendingJump===session){pendingJump=null;focusSession(session);}
   else if(wasSplitFocus)focusSplitSession(session);
-  else if(!splitVisible&&(wasActive||activeId===null))focusSession(session);
+  else if(!splitVisible&&(wasActive||(activeId===null&&!paneWindowSelection)))focusSession(session);
   else renderStage();
 }
 function handleSessions(items){
@@ -8142,7 +8145,16 @@ function agentHasNoTerminal(name){
   return /^codex-app/.test(String(rec.cmd||''));
 }
 function jumpToSessionTarget(name,{forceFocus=false}={}){
-  if(paneWindows.has(name)){pendingJump=null;focusPaneWindow(name);return;}
+  if(paneWindows.has(name)){
+    pendingJump=null;terminalLessAgent=null;paneWindowSelection=name;
+    activeId=null;splitVisible=false;blurTerminalFocus();
+    renderStage({fit:false});resetHead();
+    scrName.textContent=name;scrPath.textContent='';scrBadge.textContent='';
+    promptTarget.textContent='—';promptAva.hidden=true;
+    refreshComposerVocabulary();refreshHeaderStats();
+    focusPaneWindow(name);return;
+  }
+  paneWindowSelection=null;
   const decision=resolveJump(
     name,[...availableSessions.keys()],[...attachedSessions],[...requestedSessions],
     panesInSession(name).map(p=>p.meta),agentHasNoTerminal(name));
