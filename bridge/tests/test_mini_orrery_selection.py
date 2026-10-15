@@ -95,16 +95,19 @@ def test_roster_refresh_preserves_the_actual_center_selection(mini_browser):
         'selected': ['Helper'], 'active': 'Helper', 'roster': 'Watcher'}
 
 
-def test_separate_window_selection_does_not_mark_the_external_session(mini_browser):
+def test_separate_window_selection_clears_the_center_ring_and_local_focus_restores_it(mini_browser):
     _, evaluate = mini_browser
     assert evaluate("""(()=>{
       takeSessionOut('Helper');
       registerPaneWindow('Helper',{kind:'window',win:{closed:false,focus(){}}});
       jumpToAgent('Helper');
-      // On this master, focusing another window leaves the center pane intact.
-      return {selected:SELECTED,active:OC.activeAgent(),roster:selectedAgent};
+      const external={selected:SELECTED,active:OC.activeAgent(),roster:selectedAgent,
+        visible:document.querySelectorAll('#termstage .termhost.on').length};
+      focusSession('Pilot');
+      return {external,restored:SELECTED,active:OC.activeAgent()};
     })()""".replace('SELECTED', SELECTED)) == {
-        'selected': ['Pilot'], 'active': 'Pilot', 'roster': 'Helper'}
+        'external': {'selected': [], 'active': None, 'roster': 'Helper', 'visible': 0},
+        'restored': ['Pilot'], 'active': 'Pilot'}
 
 
 def test_network_and_planetarium_do_not_get_the_selection_ring(mini_browser):
@@ -145,3 +148,43 @@ def test_theme_static_ring_and_working_arc_coexist(mini_browser, theme, reduced)
         'width': '0.75px', 'animation': 'none', 'animations': 0, 'radius': 19.5,
         'arcRadius': 13.7, 'arcWidth': '1.6px',
         'arcAnimation': 'none' if reduced else 'orrery-spin', 'hit': 'none'}
+
+
+@pytest.mark.parametrize('shape', ['chain', 'fan-left', 'fan-right'])
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_deep_and_wide_layouts_keep_the_whole_selected_ring_visible(mini_browser, shape, theme):
+    client, evaluate = mini_browser
+    # Settle the layout immediately; this does not change node coordinates.
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    evaluate('OrreryColorTheme.setPreference(' + json.dumps(theme) + ')')
+    result = evaluate("""(()=>{
+      const shape=SHAPE;
+      const names=shape==='chain'?['Pilot','StepTwo','StepThree','StepFour','Helper']:
+        ['Pilot','Helper',...Array.from({length:10},(_,i)=>(shape==='fan-left'?'Z':'A')+i)];
+      currentAgents=names.map(name=>({name,category:'agent',running:true,
+        act_state:'work',provider:'openai',model:'sol'}));
+      OC.lineageParent.clear();
+      names.slice(1).forEach((name,i)=>OC.lineageParent.set(name,shape==='chain'?names[i]:'Pilot'));
+      document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      focusSession('Helper');
+      const svg=document.getElementById('orrery'),ring=svg.querySelector('.mini-selection-ring');
+      const matrix=ring.getScreenCTM(),radius=Number(ring.getAttribute('r'))+
+        parseFloat(getComputedStyle(ring).strokeWidth)/2;
+      const center=new DOMPoint(Number(ring.getAttribute('cx')),Number(ring.getAttribute('cy'))).matrixTransform(matrix);
+      const bounds={left:center.x-radius*matrix.a,right:center.x+radius*matrix.a,
+        top:center.y-radius*matrix.d,bottom:center.y+radius*matrix.d};
+      const rect=e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};
+      return {bounds,viewport:rect(svg),rail:rect(svg.closest('.col')),
+        x:Number(ring.getAttribute('cx')),y:Number(ring.getAttribute('cy')),
+        workRadius:Number(ring.parentElement.querySelector('.orrery-motion-ring').getAttribute('r'))};
+    })()""".replace('SHAPE', json.dumps(shape)))
+    for clip in ['viewport', 'rail']:
+        for side in ['left', 'top']:
+            assert result['bounds'][side] >= result[clip][side], (shape, theme, clip, result)
+        for side in ['right', 'bottom']:
+            assert result['bounds'][side] <= result[clip][side], (shape, theme, clip, result)
+    assert result['workRadius'] == 13.7
+    # Preserve the layout rather than moving edge nodes to fit the marker.
+    assert (result['x'], result['y']) == {
+        'chain': (140, 186), 'fan-left': (17, 130), 'fan-right': (263, 130)}[shape]

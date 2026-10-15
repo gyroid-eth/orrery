@@ -4468,9 +4468,9 @@
       }
     }
   },
-  "inventory_digest": "55da54f5bfff454268fcb4dbdd4c9e37813b609e96559508c2a4855c758ed507",
+  "inventory_digest": "c54892465e20914f24c19b41329157b0a5e82a28f859c2e398a3590bc66991aa",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "4d4f493d807cfc126180798b918fdd7d42455ed425571289c6ec78cc5b79b4c3",
+  "source_digest": "d5110021d278d0305600513d90aed4ed0f82a133e78b18ea90e4c284a4c529ea",
   "surface": "cockpit",
   "version": 1
 }
@@ -5167,6 +5167,8 @@ const stageEmpty=document.getElementById('stageEmpty');
    that state even though panes are still open, otherwise the previous agent's
    terminal keeps the screen under the new agent's name. */
 let terminalLessAgent=null;
+// A selected external terminal leaves the central stage deliberately blank.
+let paneWindowSelection=null;
 const splitChip=document.getElementById('splitChip');
 const layoutChip=document.getElementById('layoutChip');
 const layoutPicker=document.getElementById('layoutPicker');
@@ -6800,7 +6802,7 @@ function resetHead(){
 }
 function refreshHeaderStats(){
   if(paneCountEl)paneCountEl.textContent=panes.size;
-  stageEmpty.style.display=(!terminalLessAgent&&(panes.size||(splitVisible&&splitSessions.length)))?'none':'grid';
+  stageEmpty.style.display=(paneWindowSelection||(!terminalLessAgent&&(panes.size||(splitVisible&&splitSessions.length))))?'none':'grid';
   tabsEmpty.style.display=sessionGroups.size?'none':'block';
   if(sessChip&&!activeId)sessChip.textContent=`${attachedSessions.size}/${availableSessions.size}`;
   splitChip.hidden=!splitSessions.length;
@@ -7951,6 +7953,7 @@ function paintHead(meta){
 function setActive(paneId,mode='auto',{forceFocus=false}={}){
   const p=panes.get(paneId);if(!p)return false;
   terminalLessAgent=null;
+  paneWindowSelection=null;
   const scrollState=captureHostScrollState(p.host);
   const alreadyVisibleInSplit=splitVisible&&splitSessions.includes(p.session)&&
     p.host.classList.contains('on')&&splitCells.get(p.session)?.contains(p.host);
@@ -8064,7 +8067,7 @@ function resetSession(msg){
   refreshSessionGroup(session);
   if(pendingJump===session){pendingJump=null;focusSession(session);}
   else if(wasSplitFocus)focusSplitSession(session);
-  else if(!splitVisible&&(wasActive||activeId===null))focusSession(session);
+  else if(!splitVisible&&(wasActive||(activeId===null&&!paneWindowSelection)))focusSession(session);
   else renderStage();
 }
 function handleSessions(items){
@@ -8149,7 +8152,16 @@ function agentHasNoTerminal(name){
   return /^codex-app/.test(String(rec.cmd||''));
 }
 function jumpToSessionTarget(name,{forceFocus=false}={}){
-  if(paneWindows.has(name)){pendingJump=null;focusPaneWindow(name);return;}
+  if(paneWindows.has(name)){
+    pendingJump=null;terminalLessAgent=null;paneWindowSelection=name;
+    activeId=null;splitVisible=false;blurTerminalFocus();
+    renderStage({fit:false});resetHead();
+    scrName.textContent=name;scrPath.textContent='';scrBadge.textContent='';
+    promptTarget.textContent='—';promptAva.hidden=true;
+    refreshComposerVocabulary();refreshHeaderStats();
+    focusPaneWindow(name);return;
+  }
+  paneWindowSelection=null;
   const decision=resolveJump(
     name,[...availableSessions.keys()],[...attachedSessions],[...requestedSessions],
     panesInSession(name).map(p=>p.meta),agentHasNoTerminal(name));
@@ -8504,6 +8516,10 @@ function renderPaneOutChip(session){
 function returnPaneSession(session,{close=true}={}){
   const entry=paneWindows.get(session);if(!entry)return;
   paneWindows.delete(session);
+  if(paneWindowSelection===session){
+    paneWindowSelection=null;
+    if(!availableSessions.has(session)){resetHead();renderStage();}
+  }
   clearInterval(entry.timer);
   if(entry.el)entry.el.remove();
   if(entry.chip)entry.chip.remove();

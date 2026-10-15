@@ -332,3 +332,118 @@ def test_the_apps_closed_event_is_matched_to_this_backend():
     assert "paneScopeFromPageUrl(payload.url)!==paneScope" in listener
     lib = (APP / "src" / "lib.rs").read_text(encoding="utf-8")
     assert 'serde_json::json!({ "session": session, "url": url.as_str() })' in lib
+
+
+def test_selecting_an_outside_session_clears_the_previous_central_terminal():
+    body = _function_body("jumpToSessionTarget")
+    script = r"""
+let activeId='main-pane',pendingJump='old-jump',splitVisible=true;
+let terminalLessAgent=null,paneWindowSelection=null;
+const paneWindows=new Map([['WindowAgent',{kind:'window'}]]);
+const scrName={},scrPath={},scrBadge={},promptTarget={textContent:'MainAgent'},promptAva={hidden:false};
+const stageEmpty={style:{display:'none'}};
+let visible=['main-pane'],blurred=false,focused=[];
+const document={activeElement:{blur(){blurred=true;}}};
+function blurTerminalFocus(){blurred=true;}
+function renderStage(){visible=activeId?[activeId]:[];}
+function resetHead(){}
+function refreshHeaderStats(){}
+function refreshComposerVocabulary(){}
+function focusPaneWindow(name){focused.push(name);}
+function resolveJump(){throw Error('must not attach a session in another window');}
+FUNCTION
+jumpToSessionTarget('WindowAgent');
+console.log(JSON.stringify({activeId,pendingJump,splitVisible,visible,blurred,focused,
+  prompt:promptTarget.textContent,avatarHidden:promptAva.hidden}));
+""".replace("FUNCTION", "function jumpToSessionTarget(name,{forceFocus=false}={}){\n" + body + "\n}")
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "activeId": None, "pendingJump": None, "splitVisible": False,
+        "visible": [], "blurred": True, "focused": ["WindowAgent"],
+        "prompt": "—", "avatarHidden": True,
+    }
+
+
+def test_another_sessions_reset_does_not_fill_a_selected_outside_sessions_stage():
+    body = _function_body("resetSession")
+    script = r"""
+let activeId=null,pendingJump=null,splitVisible=false,focusedSplitSession=null;
+let paneWindowSelection='WindowAgent';
+const requestedSessions=new Set(),attachedSessions=new Set();
+const focused=[];
+function activeSession(){return null;}
+function closeSessionPanes(){}
+function ensureSessionGroup(){return {};}
+function setGroupState(){}
+function createPane(){}
+function refreshSessionGroup(){}
+function focusSession(name){focused.push(name);activeId='main-pane';}
+function focusSplitSession(){throw Error('split must stay hidden');}
+function renderStage(){}
+FUNCTION
+resetSession({session:'MainAgent',panes:[{paneId:'main-pane'}]});
+console.log(JSON.stringify({activeId,focused}));
+""".replace("FUNCTION", "function resetSession(msg){\n" + body + "\n}")
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {"activeId": None, "focused": []}
+
+
+def test_closing_an_ended_external_selection_releases_the_blank_stage():
+    _check_external_window_close('WindowAgent', {
+        'selection': None, 'empty': 'grid', 'activeId': 'main-pane',
+        'focused': ['MainAgent'], 'remaining': ['OtherWindow'], 'headReset': True,
+    })
+
+
+def test_closing_another_window_preserves_the_external_selection():
+    _check_external_window_close('OtherWindow', {
+        'selection': 'WindowAgent', 'empty': 'none', 'activeId': None,
+        'focused': [], 'remaining': ['WindowAgent'], 'headReset': False,
+    })
+
+
+def _check_external_window_close(closed_session, expected):
+    functions = '\n'.join(
+        'function ' + name + '(' + args + '){\n' + _function_body(name) + '\n}'
+        for name, args in [('returnPaneSession', 'session,{close=true}={}'),
+                           ('resetSession', 'msg'), ('refreshHeaderStats', '')]
+    )
+    script = r"""
+let activeId=null,pendingJump=null,splitVisible=false,focusedSplitSession=null;
+let paneWindowSelection='WindowAgent';
+const paneWindows=new Map([['WindowAgent',{}],['OtherWindow',{}]]);
+const availableSessions=new Set(['MainAgent']),manualDetached=new Set();
+const requestedSessions=new Set(),attachedSessions=new Set();
+const stageEmpty={style:{display:'none'}},focused=[];
+const panes=new Map(),sessionGroups=new Map(),splitSessions=[];
+const paneCountEl=null,sessChip=null,tabsEmpty={style:{}};
+const splitChip={classList:{toggle(){}}},layoutChip={};
+let terminalLessAgent=null,emptyAtClose,headReset=false;
+function currentSplitPreset(){return 'auto';}
+function splitPresetsForCount(){return [];}
+function splitPresetLabel(){return 'auto';}
+function closeLayoutPicker(){}
+function queueTabOverflow(){}
+function resetHead(){headReset=true;}
+function takeBackPaneDraft(){}
+function activeSession(){return null;}
+function closeSessionPanes(){}
+function ensureSessionGroup(){return {};}
+function setGroupState(){}
+function createPane(){}
+function refreshSessionGroup(){}
+function focusSession(name){focused.push(name);activeId='main-pane';}
+function focusSplitSession(){throw Error('split must stay hidden');}
+function renderStage(){}
+FUNCTIONS
+returnPaneSession(CLOSED,{close:false});
+emptyAtClose=stageEmpty.style.display;
+resetSession({session:'MainAgent',panes:[{paneId:'main-pane'}]});
+console.log(JSON.stringify({selection:paneWindowSelection,empty:emptyAtClose,
+  activeId,focused,remaining:[...paneWindows.keys()],headReset}));
+""".replace('FUNCTIONS', functions).replace('CLOSED', json.dumps(closed_session))
+    result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == expected

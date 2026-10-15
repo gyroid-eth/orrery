@@ -784,7 +784,11 @@ function renderMini(){
     ?telemetryMiniLayout(liveAgents,miniFocusName,miniNetworkDepth,MINI)
     :layoutAgents(liveAgents,MINI);
   prepareMotion(miniMotion,layout);
-  miniSvg.setAttribute('viewBox',`0 0 ${MINI.width} ${MINI.height}`);
+  // Expand the clipping viewport, not the layout. The matching CSS uses the
+  // rail's existing margins, preserving node positions and the mail boundary.
+  const padding=miniMode==='orrery'?8:0;
+  miniSvg.setAttribute('viewBox',`${-padding} 0 ${MINI.width+padding*2} ${MINI.height+padding}`);
+  miniSvg.classList.toggle('orrery-mode',miniMode==='orrery');
   miniSvg.classList.toggle('telemetry-network',Boolean(layout.networkFocus));
   miniSvg.setAttribute('aria-label',layout.networkFocus
     ?`Telemetry network for ${layout.networkFocus}, ${miniNetworkDepth} hops`
