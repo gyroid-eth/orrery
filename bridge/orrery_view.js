@@ -764,6 +764,19 @@ function preservedFlights(target){
   return [...target.children].filter(child=>
     child.classList.contains('orrery-comet-flight'));
 }
+function syncMiniSelection(){
+  miniSvg.querySelectorAll('.mini-selection-ring').forEach(ring=>ring.remove());
+  if(miniMode!=='orrery')return;
+  // The roster can point to a separate window or a terminal-less agent.
+  // Only the pane actually displayed in the center owns this marker.
+  const name=OC.activeAgent&&OC.activeAgent();
+  const group=miniMotion.nodes.get(name);
+  if(!group)return;
+  const hit=group.querySelector('.orrery-hit');
+  group.appendChild(svgEl('circle',{
+    class:'mini-selection-ring',cx:hit.getAttribute('cx'),cy:hit.getAttribute('cy'),r:19.5,
+  }));
+}
 function renderMini(){
   const flights=preservedFlights(miniSvg);
   miniSvg.replaceChildren();
@@ -771,7 +784,11 @@ function renderMini(){
     ?telemetryMiniLayout(liveAgents,miniFocusName,miniNetworkDepth,MINI)
     :layoutAgents(liveAgents,MINI);
   prepareMotion(miniMotion,layout);
-  miniSvg.setAttribute('viewBox',`0 0 ${MINI.width} ${MINI.height}`);
+  // Expand the clipping viewport, not the layout. The matching CSS uses the
+  // rail's existing margins, preserving node positions and the mail boundary.
+  const padding=miniMode==='orrery'?8:0;
+  miniSvg.setAttribute('viewBox',`${-padding} 0 ${MINI.width+padding*2} ${MINI.height+padding}`);
+  miniSvg.classList.toggle('orrery-mode',miniMode==='orrery');
   miniSvg.classList.toggle('telemetry-network',Boolean(layout.networkFocus));
   miniSvg.setAttribute('aria-label',layout.networkFocus
     ?`Telemetry network for ${layout.networkFocus}, ${miniNetworkDepth} hops`
@@ -793,6 +810,7 @@ function renderMini(){
   addExpandAffordance(miniSvg,MINI,false);
   flights.forEach(flight=>miniSvg.appendChild(flight));
   miniMotion.spawnEdges=[...spawnLayer.children];
+  syncMiniSelection();
   refreshCommEdges();
   updateSurfaceGeometry(miniMotion);
   syncMotionLoop();
@@ -1194,6 +1212,7 @@ document.addEventListener('oc:focus-agent',event=>{
   miniFocusName=event.detail&&event.detail.name||'';
   if(miniMode==='network')renderMini();
 });
+document.addEventListener('oc:stage-agent',syncMiniSelection);
 document.addEventListener('oc:mini-view',event=>{
   const detail=event.detail||{};
   miniMode=detail.mode==='network'?'network':'orrery';

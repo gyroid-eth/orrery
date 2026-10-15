@@ -2,8 +2,8 @@
   "axes": {
     "background": {
       "effect": {
-        "digest": "9aded0fbbaee59611bba49086541515320c515726bbe7db2b68577a53ff25bae",
-        "expected": 361,
+        "digest": "4a75702668caf22837094c1035069211b35cb4a27ecd315ff7eca2e3ce61710c",
+        "expected": 362,
         "records": [
           {
             "property": "background",
@@ -1544,6 +1544,11 @@
             "property": "stroke",
             "selector": ".planet-agent-state",
             "value": "var(--bg)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".mini-selection-ring",
+            "value": "var(--ink)"
           },
           {
             "property": "background",
@@ -4587,7 +4592,7 @@
       }
     }
   },
-  "inventory_digest": "7c1410fb83297c4be34c2042a3121a5671f46b2f163921923dc617e1535d08a4",
+  "inventory_digest": "c54892465e20914f24c19b41329157b0a5e82a28f859c2e398a3590bc66991aa",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -4599,11 +4604,11 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "ba223f7b5053127516ddbc3003d53565f9be0f46d00ff91d9d318ec5ddbd4a93",
+  "source_digest": "d5110021d278d0305600513d90aed4ed0f82a133e78b18ea90e4c284a4c529ea",
   "source_files": {
-    "bridge/cockpit.html": "cd390707c6f6eb751d11592e9a6b9d2d7b6337a3e999cd9f24f76a30b22c82b7",
+    "bridge/cockpit.html": "3180d575cd867f9f4c0902aac27ff1088a34fdabd4848fd2aa60dcf8d63e3f8a",
     "bridge/mail_view.css": "4c65a93dd1b338a3f4304651173a53a7ed489860ecec2bc86014d253bbcde898",
-    "bridge/orrery_view.css": "38d2f9c82d92ddc026bfa0da5da23c9b69e9a7da1cde7feaf999641b02c06a4e"
+    "bridge/orrery_view.css": "9fce9d39b503063e09b5e9a9ada7d2863858010973568ce855c208362f9b0efd"
   },
   "surface": "cockpit",
   "validation": {

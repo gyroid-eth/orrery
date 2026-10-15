@@ -205,3 +205,14 @@
 @media(prefers-reduced-motion:reduce){
   .orrery-agent.is-working .orrery-motion-ring{animation:none;stroke-dasharray:2 3}
 }
+
+/* Center-pane selection: a static hairline outside the working arc. */
+.mini-selection-ring{
+  fill:none;stroke:var(--ink);stroke-width:.75;pointer-events:none;
+}
+/* Fit the static ring at the layout edges without moving nodes or mail.
+   With viewBox -8 0 296 208, the existing 6px side / 10px bottom margins
+   become drawable space; the plot keeps its original scale and center. */
+.miniorrery.orrery-mode{
+  width:100%;height:208px;flex-basis:208px;margin:4px 0 2px;
+}

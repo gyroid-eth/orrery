@@ -103,6 +103,7 @@ spawn forest を topology、最近の mail を一時的な edge / comet とし�
 - node motion は state
 - node click は agent jump
 - mini は常時把握、Planetarium は探索
+- Orrery 表示の細い静止輪（`--ink`）は、中央 pane に表示中の session を示す。split では focus のある pane に追従し、中央が空なら表示しない。作業中の回転リングとは間を空ける
 - Telemetry network mode は active agent から1〜3 hop
 
 多数 node で label が重なる場合は、常時 label を増やすのではなく hover / focus で詳細を開示します。

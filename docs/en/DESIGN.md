@@ -103,6 +103,7 @@ The spawn forest is shown as the topology, and recent mail as temporary edges / 
 - Node motion is state
 - Clicking a node jumps to the agent
 - The mini is for constant awareness, and the Planetarium is for exploration
+- In Orrery mode, a thin static ring (`--ink`) marks the session displayed in the center pane. It follows the focused pane in a split and disappears when the center is empty, with space separating it from the rotating work ring
 - Telemetry network mode shows 1 to 3 hops from an active agent
 
 When labels overlap with many nodes, disclose details on hover / focus instead of adding always-on labels.
