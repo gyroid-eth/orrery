@@ -442,44 +442,75 @@ def _answer_time(probe, payload) -> float:
     return _timed(lambda: ob.merge_agent_annotations(payload, {}, probe.boundary))
 
 
-def test_a_roster_of_thirteen_waiting_agents_costs_no_more_than_p0(probe, monkeypatch):
-    """Probes run one after another inside one roster answer. Compared on the
-    whole answer: P0's reads, P6 reading everyone, P6 reusing everyone, and P6
-    with a listing that never answers (one timeout for the whole answer, then
-    P0's reads for the rest). The margins leave room for a loaded machine."""
+def _waiting_roster(probe, asking=()):
     for name in WAITING:
-        probe.answer_shown(probe.new_session(name))
+        pane = probe.new_session(name)
+        (probe.ask if name in asking else probe.answer_shown)(pane)
     next_second()
-    payload = _roster(WAITING)
-    real_target = ob._question_target
+    return _roster(WAITING)
+
+
+def test_a_roster_reads_or_reuses_by_pane_with_room_in_the_budget(probe, monkeypatch):
+    """Which path each probe took, with a listing budget large enough that a
+    loaded machine cannot spend it: everyone read by id, then everyone reused."""
+    monkeypatch.setattr(ob, "_QUESTION_LISTING_TIMEOUT", 5.0)
+    payload = _waiting_roster(probe, asking={"Wait03"})
+    ob._question_probe_cache.clear()
+    first = json.loads(ob.merge_agent_annotations(payload, {}, probe.boundary))
+    assert [a["name"] for a in first["agents"] if a["act_state"] == "question"] == ["Wait03"]
+    assert len(probe.captures) == len(WAITING) and all(c[-4:-2][1].startswith("%") for c in probe.captures)
+    probe.captures.clear()
+    probe.listings = 0
+    ob._question_probe_cache.clear()
+    second = json.loads(ob.merge_agent_annotations(payload, {}, probe.boundary))
+    assert second == first
+    assert probe.captures == [] and probe.listings == len(WAITING)
+
+
+def test_a_roster_of_thirteen_waiting_agents_costs_no_more_than_p0(probe, monkeypatch):
+    """Time of the whole roster answer (probes run one after another), with the
+    default budget, against P0's reads at the same time: P6 reading everyone,
+    P6 reusing everyone, a listing that never answers, and listings that each
+    succeed just under the per-listing limit. The margins leave room for a
+    loaded machine; which path ran is checked by what was called."""
+    payload = _waiting_roster(probe)
+    real_target, real_argv, real_run = ob._question_target, ob.tmux_argv, ob.subprocess.run
 
     monkeypatch.setattr(ob, "_question_target", lambda *a, **k: None)
     p0 = min(_answer_time(probe, payload) for _ in range(2))      # P0: session admission + capture each
     monkeypatch.setattr(ob, "_question_target", real_target)
 
     ob._question_proofs.clear()
-    read_all = _answer_time(probe, payload)                       # P6: listing + pane admission + capture each
-    probe.captures.clear()
-    probe.listings = 0
-    reuse_all = _answer_time(probe, payload)                      # P6: listing each, nothing else
-    assert probe.captures == [] and probe.listings == len(WAITING)
+    read_all = _answer_time(probe, payload)
+    reuse_all = _answer_time(probe, payload)
 
-    real_argv = ob.tmux_argv
+    shell = []
+
+    def run(argv, *a, **k):
+        if argv[:2] == ["/bin/sh", "-c"]:
+            shell.append(argv)
+        return real_run(argv, *a, **k)
+
+    monkeypatch.setattr(ob.subprocess, "run", run)
     monkeypatch.setattr(ob, "tmux_argv",
                         lambda b, *a: ["/bin/sh", "-c", "sleep 5"] if a and a[0] == "list-panes" else real_argv(b, *a))
     ob._question_proofs.clear()
-    probe.listings = 0
-    calls = []
-    real_run = ob.subprocess.run
-    monkeypatch.setattr(ob.subprocess, "run",
-                        lambda argv, *a, **k: (calls.append(argv) if argv[:2] == ["/bin/sh", "-c"] else None)
-                        or real_run(argv, *a, **k))
-    slow = _answer_time(probe, payload)
-    assert len(calls) == 1                                        # one listing timed out; the rest read as P0
+    hung = _answer_time(probe, payload)
+    assert len(shell) == 1                                        # one listing; the rest read as P0
 
+    shell.clear()
+    monkeypatch.setattr(ob, "tmux_argv",
+                        lambda b, *a: ["/bin/sh", "-c", 'sleep 0.29; exec "$@"', "sh", *real_argv(b, *a)]
+                        if a and a[0] == "list-panes" else real_argv(b, *a))
+    ob._question_proofs.clear()
+    slow_success = _answer_time(probe, payload)
+    assert len(shell) <= 2                                        # the budget, not one limit per listing
+
+    budget = ob._QUESTION_LISTING_TIMEOUT
     assert reuse_all <= p0 + 0.5, (reuse_all, p0)
-    assert read_all <= p0 + 1.0, (read_all, p0)
-    assert slow <= p0 + ob._QUESTION_LISTING_TIMEOUT + 1.0, (slow, p0)
+    assert read_all <= p0 + budget + 1.0, (read_all, p0)
+    assert hung <= p0 + budget + 1.0, (hung, p0)
+    assert slow_success <= p0 + budget + 1.0, (slow_success, p0)
 
 
 def test_a_timed_out_listing_does_not_carry_into_the_next_answer(probe, monkeypatch):
@@ -499,6 +530,7 @@ def test_a_timed_out_listing_does_not_carry_into_the_next_answer(probe, monkeypa
     assert [a["act_state"] for a in first["agents"]] == ["question"] * 3
     assert all(c[-4:-2][1].startswith("=") for c in probe.captures)   # all read as P0
     slow["on"] = False
+    monkeypatch.setattr(ob, "_QUESTION_LISTING_TIMEOUT", 5.0)  # room on a loaded machine: check the path
     probe.captures.clear()
     probe.listings = 0
     ob._question_probe_cache.clear()

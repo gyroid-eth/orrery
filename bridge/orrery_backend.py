@@ -175,8 +175,9 @@ _question_probe_cache: dict[str, tuple[float, bool]] = {}
 # _unchanged_since_read. Taken per probe, not shared over time, so a reused
 # answer reflects the pane as of that listing. The listing adds one process
 # per probe; it is given _QUESTION_LISTING_TIMEOUT and, if slower, the probe
-# reads the session as before -- and so does the rest of that roster answer
-# (roster_pass), so a slow listing adds at most one timeout per answer.
+# reads the session as before. The listings of one roster answer share that
+# time as one budget (roster_pass): once spent, or after a failure, the rest of
+# the answer reads as before, so listing adds at most the budget per answer.
 _QUESTION_PROOF_MAX_AGE = 30.0
 _QUESTION_LISTING_TIMEOUT = 0.3
 _question_proofs: dict[str, dict[str, Any]] = {}
@@ -352,19 +353,29 @@ def _question_target(session: str, tmux_bin, roster_pass: dict[str, Any] | None 
     pane cannot be told exactly, or the listing takes longer than
     _QUESTION_LISTING_TIMEOUT: the caller then reads the session as before.
 
-    roster_pass is shared by the probes of one roster answer. Once a listing
-    there fails or times out, the rest of that answer reads as before without
-    listing, so a slow tmux adds at most one timeout to the whole answer, not
-    one per waiting agent (the probes run one after another)."""
-    if roster_pass is not None and roster_pass.get("listing_failed"):
-        return None
+    roster_pass is shared by the probes of one roster answer (they run one
+    after another). The listings of one answer share one time budget,
+    _QUESTION_LISTING_TIMEOUT in total, whether they succeed or not. Once it
+    is spent, or a listing fails, the rest of that answer reads as before
+    without listing: listing adds at most that budget to the whole answer."""
+    timeout = _QUESTION_LISTING_TIMEOUT
+    if roster_pass is not None:
+        if roster_pass.get("listing_failed"):
+            return None
+        timeout -= roster_pass.get("listing_spent", 0.0)
+        if timeout <= 0:
+            roster_pass["listing_failed"] = True
+            return None
+    started = time.monotonic()
     try:
         result = subprocess.run(
             tmux_argv(tmux_bin, "list-panes", "-a", "-F", _QUESTION_LISTING_FORMAT),
-            capture_output=True, text=True, timeout=_QUESTION_LISTING_TIMEOUT, **tmux_env(tmux_bin),
+            capture_output=True, text=True, timeout=timeout, **tmux_env(tmux_bin),
         )
     except (OSError, subprocess.SubprocessError):
         result = None
+    if roster_pass is not None:
+        roster_pass["listing_spent"] = roster_pass.get("listing_spent", 0.0) + time.monotonic() - started
     if result is None or result.returncode != 0:
         if roster_pass is not None:
             roster_pass["listing_failed"] = True
