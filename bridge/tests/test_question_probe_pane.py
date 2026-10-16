@@ -378,3 +378,45 @@ def test_pure_legacy_admission_keeps_the_old_read(endpoint, monkeypatch):  # noq
     assert p.run("Legacy") is True
     assert captured[-1][-4:-2] == ["-t", "=Legacy:"]
     assert "Legacy" not in ob._question_proofs
+
+
+# ------------------------------------------------- time a probe adds over P0
+
+def _timed(fn) -> float:
+    started = time.perf_counter()
+    fn()
+    return time.perf_counter() - started
+
+
+def test_a_slow_listing_adds_at_most_its_timeout_over_the_old_read(probe, monkeypatch):
+    """The listing hangs (here: never answers); the probe gives up after
+    _QUESTION_LISTING_TIMEOUT and reads the session as P0 does. Wall clock,
+    measured against P0's own read of the same pane at the same time."""
+    pane = probe.new_session("SlowList")
+    probe.ask(pane)
+    real = ob.tmux_argv
+    monkeypatch.setattr(ob, "tmux_argv",
+                        lambda b, *a: ["/bin/sh", "-c", "sleep 5"] if a and a[0] == "list-panes" else real(b, *a))
+    p0 = min(_timed(lambda: ob._read_session_as_before("SlowList", probe.boundary)) for _ in range(3))
+    results = []
+    took = min(_timed(lambda: results.append(probe.run("SlowList"))) for _ in range(3))
+    assert results == [True, True, True]             # still read, as before
+    assert probe.captures[-1][-4:-2] == ["-t", "=SlowList:"]
+    assert took - p0 <= ob._QUESTION_LISTING_TIMEOUT + 0.2, (took, p0)
+
+
+def test_a_normal_probe_takes_no_longer_than_the_old_read(probe):
+    """Real listing: a probe that reads (pane admission + capture) or reuses
+    costs about what P0's session admission + capture costs, or less."""
+    pane = probe.new_session("Normal")
+    probe.answer_shown(pane)
+    next_second()
+    p0 = sorted(_timed(lambda: ob._read_session_as_before("Normal", probe.boundary)) for _ in range(5))[2]
+    reads = []
+    for _ in range(5):
+        ob._question_proofs.pop("Normal", None)      # force a read each time
+        reads.append(_timed(lambda: probe.run("Normal")))
+    reuses = [_timed(lambda: probe.run("Normal")) for _ in range(5)]
+    read, reuse = sorted(reads)[2], sorted(reuses)[2]
+    assert read - p0 <= ob._QUESTION_LISTING_TIMEOUT, (read, p0)
+    assert reuse <= p0, (reuse, p0)                  # one listing, no admission, no capture

@@ -170,11 +170,14 @@ _question_probe_cache: dict[str, tuple[float, bool]] = {}
 # A pane that has not changed since it was read needs no new capture-pane.
 # Agents waiting for a reply cost a capture-pane and its admission (ps,
 # list-panes, display-message) each, about every other roster poll, for
-# screens that never change. One list-panes -a, taken by each probe at the
-# moment it decides, says whether the pane changed: see _question_target and
+# screens that never change. One list-panes -a, taken by each probe when it
+# decides, says whether the pane changed: see _question_target and
 # _unchanged_since_read. Taken per probe, not shared over time, so a reused
-# answer is never older than the one a capture at the same moment would give.
+# answer reflects the pane as of that listing. The listing adds one process
+# per probe; it is given _QUESTION_LISTING_TIMEOUT and, if slower, the probe
+# reads the session as before, so a slow listing adds at most that much.
 _QUESTION_PROOF_MAX_AGE = 30.0
+_QUESTION_LISTING_TIMEOUT = 0.3
 _question_proofs: dict[str, dict[str, Any]] = {}
 # The last reason a pane probe was refused, per session (tests read it; the
 # probe itself shows "no question", as any failed probe always has).
@@ -345,11 +348,12 @@ def _pending_question_in(text: str) -> bool:
 def _question_target(session: str, tmux_bin) -> dict[str, Any] | None:
     """The pane a session-targeted capture reads now (the active pane of the
     active window), from a list-panes -a taken at this moment. None when that
-    pane cannot be told exactly: the caller then reads the session as before."""
+    pane cannot be told exactly, or the listing takes longer than
+    _QUESTION_LISTING_TIMEOUT: the caller then reads the session as before."""
     try:
         result = subprocess.run(
             tmux_argv(tmux_bin, "list-panes", "-a", "-F", _QUESTION_LISTING_FORMAT),
-            capture_output=True, text=True, timeout=2, **tmux_env(tmux_bin),
+            capture_output=True, text=True, timeout=_QUESTION_LISTING_TIMEOUT, **tmux_env(tmux_bin),
         )
     except (OSError, subprocess.SubprocessError):
         return None
