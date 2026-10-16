@@ -58,7 +58,7 @@ The unified backend keeps browser traffic same-origin:
 | route | source |
 | --- | --- |
 | `/ws` | tmux control-mode sessions, WS protocol v2 |
-| `/telemetry/agents` | `:8770/api/agents` |
+| `/telemetry/agents?scope=` | `:8770/api/agents` (`scope=live`: the live rows and the retired names, which the roster poll asks for) |
 | `/telemetry/messages?since=&limit=` | `:8770/api/messages-since` |
 | `/telemetry/graph?all=&days=` | `:8770/api/graph` (spawn lineage) |
 | `POST /telemetry/spawn` | JSON object proxy to `:8770/api/spawn`; dashboard response passes through |
