@@ -323,8 +323,11 @@ def pane_has_pending_user_question(session: str, tmux_bin="tmux") -> bool:
     pending = False
     try:
         require_target(tmux_bin, "capture", session=session)
+        # "=name:" (exact session, its active pane). capture-pane takes a
+        # target pane, and tmux 3.6 does not resolve a bare "=name" as one
+        # ("can't find pane"), so the probe always read nothing.
         result = subprocess.run(
-            tmux_argv(tmux_bin, "capture-pane", "-p", "-J", "-t", "=" + session, "-S", "-36"),
+            tmux_argv(tmux_bin, "capture-pane", "-p", "-J", "-t", "=" + session + ":", "-S", "-36"),
             capture_output=True, text=True, timeout=2, **tmux_env(tmux_bin),
         )
         tail = "\n".join(result.stdout.splitlines()[-32:]) if result.returncode == 0 else ""
