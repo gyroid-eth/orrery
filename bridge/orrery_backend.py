@@ -175,7 +175,8 @@ _question_probe_cache: dict[str, tuple[float, bool]] = {}
 # _unchanged_since_read. Taken per probe, not shared over time, so a reused
 # answer reflects the pane as of that listing. The listing adds one process
 # per probe; it is given _QUESTION_LISTING_TIMEOUT and, if slower, the probe
-# reads the session as before, so a slow listing adds at most that much.
+# reads the session as before -- and so does the rest of that roster answer
+# (roster_pass), so a slow listing adds at most one timeout per answer.
 _QUESTION_PROOF_MAX_AGE = 30.0
 _QUESTION_LISTING_TIMEOUT = 0.3
 _question_proofs: dict[str, dict[str, Any]] = {}
@@ -345,19 +346,28 @@ def _pending_question_in(text: str) -> bool:
     return False
 
 
-def _question_target(session: str, tmux_bin) -> dict[str, Any] | None:
+def _question_target(session: str, tmux_bin, roster_pass: dict[str, Any] | None = None) -> dict[str, Any] | None:
     """The pane a session-targeted capture reads now (the active pane of the
     active window), from a list-panes -a taken at this moment. None when that
     pane cannot be told exactly, or the listing takes longer than
-    _QUESTION_LISTING_TIMEOUT: the caller then reads the session as before."""
+    _QUESTION_LISTING_TIMEOUT: the caller then reads the session as before.
+
+    roster_pass is shared by the probes of one roster answer. Once a listing
+    there fails or times out, the rest of that answer reads as before without
+    listing, so a slow tmux adds at most one timeout to the whole answer, not
+    one per waiting agent (the probes run one after another)."""
+    if roster_pass is not None and roster_pass.get("listing_failed"):
+        return None
     try:
         result = subprocess.run(
             tmux_argv(tmux_bin, "list-panes", "-a", "-F", _QUESTION_LISTING_FORMAT),
             capture_output=True, text=True, timeout=_QUESTION_LISTING_TIMEOUT, **tmux_env(tmux_bin),
         )
     except (OSError, subprocess.SubprocessError):
-        return None
-    if result.returncode != 0:
+        result = None
+    if result is None or result.returncode != 0:
+        if roster_pass is not None:
+            roster_pass["listing_failed"] = True
         return None
     rows = [line.split("\t") for line in result.stdout.splitlines()]
     active = [r for r in rows if len(r) == 7 and r[1] == session and r[3] == "1" and r[4] == "1"]
@@ -403,13 +413,14 @@ def _read_session_as_before(session: str, tmux_bin) -> bool:
     return _pending_question_in(result.stdout) if result.returncode == 0 else False
 
 
-def pane_has_pending_user_question(session: str, tmux_bin="tmux") -> bool:
+def pane_has_pending_user_question(session: str, tmux_bin="tmux",
+                                   roster_pass: dict[str, Any] | None = None) -> bool:
     """Detect a recent prose question followed by Claude's idle prompt."""
     now = time.monotonic()
     cached = _question_probe_cache.get(session)
     if cached and now - cached[0] < _QUESTION_PROBE_TTL:
         return cached[1]
-    target = _question_target(session, tmux_bin)
+    target = _question_target(session, tmux_bin, roster_pass)
     proof = _question_proofs.get(session)
     if _unchanged_since_read(target, proof):
         _question_probe_cache[session] = (now, proof["pending"])
@@ -466,6 +477,7 @@ def merge_agent_annotations(
     if not isinstance(agents, list):
         return payload
     changed = False
+    roster_pass: dict[str, Any] = {}  # shared by this answer's question probes
     for agent in agents:
         if isinstance(agent, dict) and isinstance(agent.get("name"), str):
             annot = labels.get(agent["name"])
@@ -473,7 +485,7 @@ def merge_agent_annotations(
                 agent["annot"] = annot
                 changed = True
             if agent.get("running") and agent.get("act_state") == "wait" \
-                    and pane_has_pending_user_question(agent["name"], tmux_bin):
+                    and pane_has_pending_user_question(agent["name"], tmux_bin, roster_pass):
                 agent["act_state"] = "question"
                 changed = True
     return json.dumps(data, ensure_ascii=False).encode("utf-8") if changed else payload

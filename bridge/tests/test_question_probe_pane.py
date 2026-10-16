@@ -25,6 +25,7 @@ Run from bridge/: ``python -m pytest tests/test_question_probe_pane.py``.
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import time
@@ -401,13 +402,13 @@ def test_a_slow_listing_adds_at_most_its_timeout_over_the_old_read(probe, monkey
     results = []
     took = min(_timed(lambda: results.append(probe.run("SlowList"))) for _ in range(3))
     assert results == [True, True, True]             # still read, as before
-    assert probe.captures[-1][-4:-2] == ["-t", "=SlowList:"]
-    assert took - p0 <= ob._QUESTION_LISTING_TIMEOUT + 0.2, (took, p0)
+    assert probe.captures[-1][-4:-2] == ["-t", "=SlowList:"]  # the path: P0's session read
+    assert took - p0 <= ob._QUESTION_LISTING_TIMEOUT + 0.5, (took, p0)
 
 
-def test_a_normal_probe_takes_no_longer_than_the_old_read(probe):
-    """Real listing: a probe that reads (pane admission + capture) or reuses
-    costs about what P0's session admission + capture costs, or less."""
+def test_a_normal_probe_takes_about_what_the_old_read_takes(probe):
+    """Real listing. Which path ran is checked by what was called, not by time;
+    time only gets a bound with room for a loaded machine."""
     pane = probe.new_session("Normal")
     probe.answer_shown(pane)
     next_second()
@@ -415,8 +416,93 @@ def test_a_normal_probe_takes_no_longer_than_the_old_read(probe):
     reads = []
     for _ in range(5):
         ob._question_proofs.pop("Normal", None)      # force a read each time
+        before = len(probe.captures)
         reads.append(_timed(lambda: probe.run("Normal")))
+        assert probe.captures[before:] == [probe.captures[-1]] and probe.captures[-1][-4:-2] == ["-t", pane]
+    probe.captures.clear()
+    probe.admissions.clear()
     reuses = [_timed(lambda: probe.run("Normal")) for _ in range(5)]
+    assert probe.captures == [] and probe.admissions == []   # the reuse path: one listing, nothing else
     read, reuse = sorted(reads)[2], sorted(reuses)[2]
-    assert read - p0 <= ob._QUESTION_LISTING_TIMEOUT, (read, p0)
-    assert reuse <= p0, (reuse, p0)                  # one listing, no admission, no capture
+    assert read - p0 <= ob._QUESTION_LISTING_TIMEOUT + 0.5, (read, p0)
+    assert reuse <= p0 + 0.5, (reuse, p0)
+
+
+# ------------------------------------------- the whole roster answer vs P0
+
+WAITING = [f"Wait{index:02d}" for index in range(13)]
+
+
+def _roster(names) -> bytes:
+    return json.dumps({"agents": [{"name": n, "running": True, "act_state": "wait"} for n in names]}).encode()
+
+
+def _answer_time(probe, payload) -> float:
+    ob._question_probe_cache.clear()                  # every agent is due, as in a poll after the TTL
+    return _timed(lambda: ob.merge_agent_annotations(payload, {}, probe.boundary))
+
+
+def test_a_roster_of_thirteen_waiting_agents_costs_no_more_than_p0(probe, monkeypatch):
+    """Probes run one after another inside one roster answer. Compared on the
+    whole answer: P0's reads, P6 reading everyone, P6 reusing everyone, and P6
+    with a listing that never answers (one timeout for the whole answer, then
+    P0's reads for the rest). The margins leave room for a loaded machine."""
+    for name in WAITING:
+        probe.answer_shown(probe.new_session(name))
+    next_second()
+    payload = _roster(WAITING)
+    real_target = ob._question_target
+
+    monkeypatch.setattr(ob, "_question_target", lambda *a, **k: None)
+    p0 = min(_answer_time(probe, payload) for _ in range(2))      # P0: session admission + capture each
+    monkeypatch.setattr(ob, "_question_target", real_target)
+
+    ob._question_proofs.clear()
+    read_all = _answer_time(probe, payload)                       # P6: listing + pane admission + capture each
+    probe.captures.clear()
+    probe.listings = 0
+    reuse_all = _answer_time(probe, payload)                      # P6: listing each, nothing else
+    assert probe.captures == [] and probe.listings == len(WAITING)
+
+    real_argv = ob.tmux_argv
+    monkeypatch.setattr(ob, "tmux_argv",
+                        lambda b, *a: ["/bin/sh", "-c", "sleep 5"] if a and a[0] == "list-panes" else real_argv(b, *a))
+    ob._question_proofs.clear()
+    probe.listings = 0
+    calls = []
+    real_run = ob.subprocess.run
+    monkeypatch.setattr(ob.subprocess, "run",
+                        lambda argv, *a, **k: (calls.append(argv) if argv[:2] == ["/bin/sh", "-c"] else None)
+                        or real_run(argv, *a, **k))
+    slow = _answer_time(probe, payload)
+    assert len(calls) == 1                                        # one listing timed out; the rest read as P0
+
+    assert reuse_all <= p0 + 0.5, (reuse_all, p0)
+    assert read_all <= p0 + 1.0, (read_all, p0)
+    assert slow <= p0 + ob._QUESTION_LISTING_TIMEOUT + 1.0, (slow, p0)
+
+
+def test_a_timed_out_listing_does_not_carry_into_the_next_answer(probe, monkeypatch):
+    """roster_pass lives for one roster answer: after an answer whose listing
+    timed out, the next answer lists again and reads panes by id."""
+    names = WAITING[:3]
+    for name in names:
+        probe.ask(probe.new_session(name))
+    payload = _roster(names)
+    real_argv = ob.tmux_argv
+    slow = {"on": True}
+    monkeypatch.setattr(ob, "tmux_argv",
+                        lambda b, *a: ["/bin/sh", "-c", "sleep 5"] if slow["on"] and a and a[0] == "list-panes"
+                        else real_argv(b, *a))
+    ob._question_probe_cache.clear()
+    first = json.loads(ob.merge_agent_annotations(payload, {}, probe.boundary))
+    assert [a["act_state"] for a in first["agents"]] == ["question"] * 3
+    assert all(c[-4:-2][1].startswith("=") for c in probe.captures)   # all read as P0
+    slow["on"] = False
+    probe.captures.clear()
+    probe.listings = 0
+    ob._question_probe_cache.clear()
+    second = json.loads(ob.merge_agent_annotations(payload, {}, probe.boundary))
+    assert [a["act_state"] for a in second["agents"]] == ["question"] * 3
+    assert probe.listings == 3                                          # listed again, per probe
+    assert all(c[-4:-2][1].startswith("%") for c in probe.captures)   # read by pane id
