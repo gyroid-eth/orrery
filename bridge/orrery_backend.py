@@ -167,6 +167,19 @@ _SUBSTANTIVE_LINE_RE = re.compile(r"[0-9A-Za-z぀-ヿ一-鿿]")
 _IDLE_PROMPT_RE = re.compile(r"(?m)^\s*[❯>]\s*$")
 _QUESTION_PROBE_TTL = 4.0
 _question_probe_cache: dict[str, tuple[float, bool]] = {}
+# A pane that has not changed since it was read needs no new capture-pane.
+# Thirteen agents waiting for a reply cost a capture-pane (and its admission's
+# ps/list-panes) each, about every other roster poll, for screens that never
+# change. One list-panes -a per poll says which panes changed; see
+# _question_target and _unchanged_since_read for what counts as unchanged.
+_QUESTION_PROOF_MAX_AGE = 30.0
+_QUESTION_LISTING_TTL = 1.0
+_question_proofs: dict[str, dict[str, Any]] = {}
+_question_listing: dict[str, Any] = {"at": -1e9, "rows": None}
+_QUESTION_LISTING_FORMAT = "\t".join((
+    "#{session_id}", "#{session_name}", "#{session_created}",
+    "#{window_active}", "#{pane_active}", "#{pane_id}", "#{window_activity}",
+))
 
 SCIENTIST_PORTRAITS = tuple(
     sorted(
@@ -314,31 +327,114 @@ async def annotations_by_agent(
     return labels
 
 
+def _pending_question_in(text: str) -> bool:
+    tail = "\n".join(text.splitlines()[-32:])
+    prompts = list(_IDLE_PROMPT_RE.finditer(tail))
+    if prompts:
+        before_prompt = tail[: prompts[-1].start()].splitlines()
+        for line in reversed(before_prompt):
+            if not _SUBSTANTIVE_LINE_RE.search(line):
+                continue  # skip blanks / box-drawing chrome
+            return bool(_PENDING_QUESTION_LINE_RE.match(line))
+    return False
+
+
+def _question_target(session: str, tmux_bin) -> dict[str, Any] | None:
+    """The pane a session-targeted capture reads (the active pane of the active
+    window), from one list-panes -a shared by the probes of one roster poll.
+    None when that pane cannot be told exactly: the caller reads as before."""
+    now = time.monotonic()
+    if now - _question_listing["at"] >= _QUESTION_LISTING_TTL:
+        rows = None
+        try:
+            result = subprocess.run(
+                tmux_argv(tmux_bin, "list-panes", "-a", "-F", _QUESTION_LISTING_FORMAT),
+                capture_output=True, text=True, timeout=2, **tmux_env(tmux_bin),
+            )
+            if result.returncode == 0:
+                rows = [line.split("\t") for line in result.stdout.splitlines()]
+        except (OSError, subprocess.SubprocessError):
+            rows = None
+        _question_listing.update(at=now, rows=rows)
+    rows = _question_listing["rows"]
+    if rows is None:
+        return None
+    active = [r for r in rows if len(r) == 7 and r[1] == session and r[3] == "1" and r[4] == "1"]
+    if len(active) != 1:
+        return None
+    session_id, _name, created, _w, _p, pane_id, activity = active[0]
+    if not (re.fullmatch(r"\$[0-9]+", session_id) and re.fullmatch(r"%[0-9]+", pane_id)
+            and created.isdigit() and activity.isdigit()):
+        return None
+    return {"session_id": session_id, "created": created, "pane_id": pane_id, "activity": int(activity)}
+
+
+def _unchanged_since_read(target: dict[str, Any] | None, proof: dict[str, Any] | None) -> bool:
+    """True only when the pane is provably the one read and unchanged since.
+
+    tmux keeps window_activity in whole seconds. A read that began in the same
+    second as the last activity may have missed output written later in that
+    second, so the read must have begun in a strictly later second."""
+    return (target is not None and proof is not None
+            and all(target[k] == proof[k] for k in ("session_id", "created", "pane_id", "activity"))
+            and int(proof["read_started"]) > target["activity"]
+            and time.time() - proof["read_started"] < _QUESTION_PROOF_MAX_AGE)
+
+
+def _admitted_pane(value: Any, session: str, target: dict[str, Any]) -> bool:
+    """The pane-only admission proof belongs to the session the listing chose."""
+    rows = value.get("panes") if isinstance(value, dict) else None
+    return (isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], dict)
+            and rows[0].get("pane_id") == target["pane_id"]
+            and rows[0].get("session_id") == target["session_id"]
+            and rows[0].get("session") == session)
+
+
 def pane_has_pending_user_question(session: str, tmux_bin="tmux") -> bool:
     """Detect a recent prose question followed by Claude's idle prompt."""
     now = time.monotonic()
     cached = _question_probe_cache.get(session)
     if cached and now - cached[0] < _QUESTION_PROBE_TTL:
         return cached[1]
+    target = _question_target(session, tmux_bin)
+    proof = _question_proofs.get(session)
+    if _unchanged_since_read(target, proof):
+        _question_probe_cache[session] = (now, proof["pending"])
+        return proof["pending"]
+    _question_proofs.pop(session, None)
     pending = False
     try:
-        require_target(tmux_bin, "capture", session=session)
-        # "=name:" (exact session, its active pane). capture-pane takes a
-        # target pane, and tmux 3.6 does not resolve a bare "=name" as one
-        # ("can't find pane"), so the probe always read nothing.
-        result = subprocess.run(
-            tmux_argv(tmux_bin, "capture-pane", "-p", "-J", "-t", "=" + session + ":", "-S", "-36"),
-            capture_output=True, text=True, timeout=2, **tmux_env(tmux_bin),
-        )
-        tail = "\n".join(result.stdout.splitlines()[-32:]) if result.returncode == 0 else ""
-        prompts = list(_IDLE_PROMPT_RE.finditer(tail))
-        if prompts:
-            before_prompt = tail[: prompts[-1].start()].splitlines()
-            for line in reversed(before_prompt):
-                if not _SUBSTANTIVE_LINE_RE.search(line):
-                    continue  # skip blanks / box-drawing chrome
-                pending = bool(_PENDING_QUESTION_LINE_RE.match(line))
-                break
+        value = None
+        if target is not None:
+            # The shared admission takes exactly one selector: the pane alone.
+            # Refused (the pane moved or went away since the listing): read the
+            # session as before, which runs its own admission.
+            try:
+                value = require_target(tmux_bin, "capture", pane=target["pane_id"])
+            except RuntimeError:
+                value = None
+        if target is not None and value is not None and _admitted_pane(value, session, target):
+            read_started = time.time()
+            result = subprocess.run(
+                tmux_argv(tmux_bin, "capture-pane", "-p", "-J", "-t", target["pane_id"], "-S", "-36"),
+                capture_output=True, text=True, timeout=2, **tmux_env(tmux_bin),
+            )
+            if result.returncode == 0:
+                pending = _pending_question_in(result.stdout)
+                _question_proofs[session] = {**target, "read_started": read_started, "pending": pending}
+        else:
+            # The pane is not known exactly, the admission is the pure legacy
+            # one (no proof), or the proof names another pane: read the session
+            # as before and keep nothing for reuse.
+            require_target(tmux_bin, "capture", session=session)
+            # "=name:" (exact session, its active pane). capture-pane takes a
+            # target pane, and tmux 3.6 does not resolve a bare "=name" as one
+            # ("can't find pane"), so the probe always read nothing.
+            result = subprocess.run(
+                tmux_argv(tmux_bin, "capture-pane", "-p", "-J", "-t", "=" + session + ":", "-S", "-36"),
+                capture_output=True, text=True, timeout=2, **tmux_env(tmux_bin),
+            )
+            pending = _pending_question_in(result.stdout) if result.returncode == 0 else False
     except (OSError, RuntimeError, subprocess.SubprocessError):
         pending = False
     _question_probe_cache[session] = (now, pending)
