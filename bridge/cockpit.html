@@ -9459,11 +9459,16 @@ function handlePinToggle(name,event){
   reorderRoster(currentAgents);
   showToast(`${pinnedAgents.has(name)?'PINNED':'UNPINNED'} · ${name}`);
 }
-function pruneRetiredPins(agentRecords){
+/* The live roster (scope=live) carries the retired names on their own; a
+   dashboard without scope support answers the full roster instead, whose
+   rows say which are retired. */
+function retiredNamesOf(roster){
+  if(roster&&Array.isArray(roster.retired))return roster.retired.filter(name=>typeof name==='string');
+  return ((roster&&roster.agents)||[]).filter(agent=>agent&&agent.category==='retired').map(agent=>agent.name);
+}
+function pruneRetiredPins(roster){
   let dirty=false;
-  (agentRecords||[]).forEach(agent=>{
-    if(agent&&agent.category==='retired'&&pinnedAgents.delete(agent.name))dirty=true;
-  });
+  retiredNamesOf(roster).forEach(name=>{if(pinnedAgents.delete(name))dirty=true;});
   if(dirty)persistPinnedAgents();
 }
 
@@ -9573,7 +9578,9 @@ function reorderRoster(live){
 }
 async function pollAgents(){
   try{
-    const response=await fetch('/telemetry/agents',{cache:'no-store'});
+    // only the live rows and the retired names: the full 30-day roster is
+    // ~30x larger and every non-live row was filtered out below anyway
+    const response=await fetch('/telemetry/agents?scope=live',{cache:'no-store'});
     noteBackendBoot(response.headers.get('X-Orrery-Boot'));
     // a 502/503 is no roster: keep the tiles. Slow is not offline: the backend
     // gave up after 6 s ("dashboard slow"), or the dashboard itself said it is
@@ -9585,7 +9592,7 @@ async function pollAgents(){
       throw new Error(String(response.status));
     }
     const d=await response.json();
-    pruneRetiredPins(d.agents);
+    pruneRetiredPins(d);
     // warmup(warm-*/pending-*) はプール予熱でありエージェントではない。
     // 従来は名前順で最下部に沈んで見えなかったが、recency ソート導入で
     // 浮上するようになったため明示除外（claim され改名された時点で現れる）。

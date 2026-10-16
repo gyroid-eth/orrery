@@ -239,7 +239,7 @@ BODY_HEAD_STRIP_RE = re.compile(r"^[#>*\-\s`]+")
 
 # telemetry path -> (dashboard path, allowed query keys)
 PROXY_ROUTES = {
-    "/telemetry/agents": ("/api/agents", ()),
+    "/telemetry/agents": ("/api/agents", ("scope",)),
     "/telemetry/messages": ("/api/messages-since", ("since", "limit")),
     "/telemetry/graph": ("/api/graph", ("all", "days", "spawn_only")),
     "/telemetry/spawn-catalog": ("/api/spawn-names", ()),
