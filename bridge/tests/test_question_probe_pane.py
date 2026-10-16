@@ -439,7 +439,7 @@ def _roster(names) -> bytes:
 
 def _answer_time(probe, payload) -> float:
     ob._question_probe_cache.clear()                  # every agent is due, as in a poll after the TTL
-    return _timed(lambda: ob.merge_agent_annotations(payload, {}, probe.boundary))
+    return _timed(lambda: ob.prepare_agents_payload(payload, {}, probe.boundary))
 
 
 def _waiting_roster(probe, asking=()):
@@ -456,13 +456,13 @@ def test_a_roster_reads_or_reuses_by_pane_with_room_in_the_budget(probe, monkeyp
     monkeypatch.setattr(ob, "_QUESTION_LISTING_TIMEOUT", 5.0)
     payload = _waiting_roster(probe, asking={"Wait03"})
     ob._question_probe_cache.clear()
-    first = json.loads(ob.merge_agent_annotations(payload, {}, probe.boundary))
+    first = json.loads(ob.prepare_agents_payload(payload, {}, probe.boundary))
     assert [a["name"] for a in first["agents"] if a["act_state"] == "question"] == ["Wait03"]
     assert len(probe.captures) == len(WAITING) and all(c[-4:-2][1].startswith("%") for c in probe.captures)
     probe.captures.clear()
     probe.listings = 0
     ob._question_probe_cache.clear()
-    second = json.loads(ob.merge_agent_annotations(payload, {}, probe.boundary))
+    second = json.loads(ob.prepare_agents_payload(payload, {}, probe.boundary))
     assert second == first
     assert probe.captures == [] and probe.listings == len(WAITING)
 
@@ -526,7 +526,7 @@ def test_a_timed_out_listing_does_not_carry_into_the_next_answer(probe, monkeypa
                         lambda b, *a: ["/bin/sh", "-c", "sleep 5"] if slow["on"] and a and a[0] == "list-panes"
                         else real_argv(b, *a))
     ob._question_probe_cache.clear()
-    first = json.loads(ob.merge_agent_annotations(payload, {}, probe.boundary))
+    first = json.loads(ob.prepare_agents_payload(payload, {}, probe.boundary))
     assert [a["act_state"] for a in first["agents"]] == ["question"] * 3
     assert all(c[-4:-2][1].startswith("=") for c in probe.captures)   # all read as P0
     slow["on"] = False
@@ -534,7 +534,7 @@ def test_a_timed_out_listing_does_not_carry_into_the_next_answer(probe, monkeypa
     probe.captures.clear()
     probe.listings = 0
     ob._question_probe_cache.clear()
-    second = json.loads(ob.merge_agent_annotations(payload, {}, probe.boundary))
+    second = json.loads(ob.prepare_agents_payload(payload, {}, probe.boundary))
     assert [a["act_state"] for a in second["agents"]] == ["question"] * 3
     assert probe.listings == 3                                          # listed again, per probe
     assert all(c[-4:-2][1].startswith("%") for c in probe.captures)   # read by pane id

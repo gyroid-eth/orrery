@@ -474,22 +474,29 @@ def pane_has_pending_user_question(session: str, tmux_bin="tmux",
     return pending
 
 
-def merge_agent_annotations(
+def prepare_agents_payload(
     payload: bytes,
     labels: dict[str, dict[str, str]],
     tmux_bin="tmux",
 ) -> bytes:
-    """Add cockpit annotations and conservative prose-question state."""
+    """The roster as the cockpit shows it: self-test agents dropped, cockpit
+    annotations and conservative prose-question state added.
+
+    One parse and at most one serialization per dashboard answer. The answer
+    is about half a megabyte every 3 s; dropping the self-test rows used to
+    parse and write it a second time, once for every waiting tab.
+    """
     try:
         data = json.loads(payload)
-    except (TypeError, json.JSONDecodeError):
+    except (TypeError, ValueError):
         return payload
     agents = data.get("agents") if isinstance(data, dict) else None
     if not isinstance(agents, list):
         return payload
-    changed = False
+    kept = [agent for agent in agents if not is_selftest_entry(agent)]
+    changed = len(kept) != len(agents)
     roster_pass: dict[str, Any] = {}  # shared by this answer's question probes
-    for agent in agents:
+    for agent in kept:
         if isinstance(agent, dict) and isinstance(agent.get("name"), str):
             annot = labels.get(agent["name"])
             if annot:
@@ -499,7 +506,10 @@ def merge_agent_annotations(
                     and pane_has_pending_user_question(agent["name"], tmux_bin, roster_pass):
                 agent["act_state"] = "question"
                 changed = True
-    return json.dumps(data, ensure_ascii=False).encode("utf-8") if changed else payload
+    if not changed:
+        return payload
+    data["agents"] = kept
+    return json.dumps(data, ensure_ascii=False).encode("utf-8")
 
 
 def normalize_spawn_catalog(remote: Any) -> dict[str, Any] | None:
@@ -1531,7 +1541,7 @@ async def fetch_proxied(
         content_type = response.headers.get("Content-Type", "application/octet-stream")
     if path == "/telemetry/agents" and status == 200:
         labels = await annotations_by_agent(http_session)
-        body = await asyncio.to_thread(merge_agent_annotations, body, labels, tmux_bin)
+        body = await asyncio.to_thread(prepare_agents_payload, body, labels, tmux_bin)
     if path == "/telemetry/spawn-catalog" and status == 200:
         body = merge_spawn_catalog(body)
     return body, status, content_type
@@ -1568,32 +1578,28 @@ def shared_fetch(
 SELFTEST_PROGRAM = "agentstack-selftest"
 
 
-def hide_selftest_agents(path: str, body: bytes) -> bytes:
-    """Drop the self-test's agents (and links touching them) from a proxied answer."""
+def is_selftest_entry(entry: Any) -> bool:
+    return isinstance(entry, dict) and entry.get("program") == SELFTEST_PROGRAM
+
+
+def hide_selftest_nodes(body: bytes) -> bytes:
+    """Drop the self-test's nodes (and links touching them) from a proxied graph.
+
+    The roster's self-test rows are dropped in prepare_agents_payload, in the
+    same pass that adds the annotations."""
     try:
         payload = json.loads(body)
     except (ValueError, UnicodeDecodeError):
         return body
     if not isinstance(payload, dict):
         return body
-
-    def is_selftest(entry: Any) -> bool:
-        return isinstance(entry, dict) and entry.get("program") == SELFTEST_PROGRAM
-
-    if path == "/telemetry/agents":
-        agents = payload.get("agents")
-        if not isinstance(agents, list) or not any(is_selftest(a) for a in agents):
-            return body
-        payload["agents"] = [a for a in agents if not is_selftest(a)]
-        return json.dumps(payload).encode()
-
     nodes = payload.get("nodes")
     if not isinstance(nodes, list):
         return body
-    hidden = {n.get("name") for n in nodes if is_selftest(n)}
+    hidden = {n.get("name") for n in nodes if is_selftest_entry(n)}
     if not hidden:
         return body
-    payload["nodes"] = [n for n in nodes if not is_selftest(n)]
+    payload["nodes"] = [n for n in nodes if not is_selftest_entry(n)]
     for key in ("edges", "spawn"):
         links = payload.get(key)
         if isinstance(links, list):
@@ -1626,8 +1632,8 @@ async def proxy_dashboard(request: web.Request) -> web.Response:
             body, status, content_type = await asyncio.shield(task)
         else:
             body, status, content_type = await fetch_proxied(http_session, request.path, url, request.app[TMUX_BIN_KEY])
-        if status == 200 and request.path in ("/telemetry/agents", "/telemetry/graph"):
-            body = hide_selftest_agents(request.path, body)
+        if status == 200 and request.path == "/telemetry/graph":
+            body = hide_selftest_nodes(body)
         return web.Response(
             body=body,
             status=status,
