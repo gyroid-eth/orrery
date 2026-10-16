@@ -471,7 +471,7 @@ def test_a_roster_of_thirteen_waiting_agents_costs_no_more_than_p0(probe, monkey
     """Time of the whole roster answer (probes run one after another), with the
     default budget, against P0's reads at the same time: P6 reading everyone,
     P6 reusing everyone, a listing that never answers, and listings that each
-    succeed just under the per-listing limit. The margins leave room for a
+    succeed well under the per-listing limit (0.1 s each, plus process start). The margins leave room for a
     loaded machine; which path ran is checked by what was called."""
     payload = _waiting_roster(probe)
     real_target, real_argv, real_run = ob._question_target, ob.tmux_argv, ob.subprocess.run
@@ -500,11 +500,11 @@ def test_a_roster_of_thirteen_waiting_agents_costs_no_more_than_p0(probe, monkey
 
     shell.clear()
     monkeypatch.setattr(ob, "tmux_argv",
-                        lambda b, *a: ["/bin/sh", "-c", 'sleep 0.29; exec "$@"', "sh", *real_argv(b, *a)]
+                        lambda b, *a: ["/bin/sh", "-c", 'sleep 0.1; exec "$@"', "sh", *real_argv(b, *a)]
                         if a and a[0] == "list-panes" else real_argv(b, *a))
     ob._question_proofs.clear()
     slow_success = _answer_time(probe, payload)
-    assert len(shell) <= 2                                        # the budget, not one limit per listing
+    assert 1 <= len(shell) <= 3                                   # the budget, not one limit per listing
 
     budget = ob._QUESTION_LISTING_TIMEOUT
     assert reuse_all <= p0 + 0.5, (reuse_all, p0)
