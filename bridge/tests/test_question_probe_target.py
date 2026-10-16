@@ -52,15 +52,19 @@ def test_a_question_before_the_idle_prompt_is_seen(endpoint, helper):  # noqa: F
     assert (boundary.shared is not None) is (helper == "actual")
     session(endpoint, "Asker", "I updated the parser.", QUESTION, "", "❯")
     session(endpoint, "Ask", "Done.", "", "❯")          # a prefix of Asker: exact match only
-    ob._question_probe_cache.clear()
     assert ob.pane_has_pending_user_question("Asker", boundary) is True
     assert ob.pane_has_pending_user_question("Ask", boundary) is False
 
 
-def test_the_capture_target_is_the_exact_session_pane(endpoint, monkeypatch):  # noqa: F811
-    deploy(endpoint["home"])
+@pytest.mark.parametrize("helper", ["actual", "missing"])
+def test_the_capture_reads_the_exact_session_pane(endpoint, monkeypatch, helper):  # noqa: F811
+    """With the shared helper the probe captures the session's active pane by
+    its id (proof first); pure legacy reads "=name:". Both succeed."""
+    if helper == "actual":
+        deploy(endpoint["home"])
     boundary = LegacyTargetBoundary(endpoint["binary"], home=endpoint["home"], environ=endpoint["env"])
     session(endpoint, "Target", QUESTION, "❯")
+    pane = tmux(endpoint, "list-panes", "-t", "=Target", "-F", "#{pane_id}").splitlines()[0]
     seen = []
     real = ob.subprocess.run
 
@@ -71,6 +75,13 @@ def test_the_capture_target_is_the_exact_session_pane(endpoint, monkeypatch):  #
         return result
 
     monkeypatch.setattr(ob.subprocess, "run", spy)
-    ob._question_probe_cache.clear()
-    ob.pane_has_pending_user_question("Target", boundary)
-    assert seen == [("=Target:", 0)]
+    assert ob.pane_has_pending_user_question("Target", boundary) is True
+    assert seen == [(pane if helper == "actual" else "=Target:", 0)]
+
+
+@pytest.fixture(autouse=True)
+def _fresh_probe_state():
+    for name in ("_question_probe_cache", "_question_proofs", "_question_refusals"):
+        cache = getattr(ob, name, None)
+        if cache is not None:
+            cache.clear()
