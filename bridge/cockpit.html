@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="spawn_picker.css">
 <script src="spawn_picker.js"></script>
 <script src="effort_slider.js"></script>
+<script src="spawn_catalog_loader.js"></script>
 <script src="prefs_sync.js"></script>
 <script src="theme_core.js"></script>
 <script src="theme_controller.js"></script>
@@ -1515,7 +1516,7 @@
         <section class="spawn-column"><div class="spawn-column-head"><h3>Model</h3><p>Choose a family</p></div>
           <div class="spawn-column-body"><div class="provider-tabs" id="providerTabs" aria-label="Model families"></div>
             <p class="spawn-family-note">Choose a model, then its Harness.</p></div></section>
-        <section class="spawn-column"><div class="spawn-column-head"><h3 id="spawnModelsTitle">Models</h3><p id="spawnModelsHint">Available from your catalog</p></div>
+        <section class="spawn-column"><div class="spawn-column-head"><div class="spawn-model-heading"><h3 id="spawnModelsTitle">Models</h3><span class="spawn-catalog-state" id="spawnCatalogState" role="status" hidden></span></div><p id="spawnModelsHint">Available from your catalog</p></div>
           <div class="spawn-column-body"><input class="spawn-search" id="spawnModelSearch" type="search" placeholder="Search models or servers" aria-label="Search local models" hidden>
             <div class="spawn-model-scroll"><div class="model-choices" id="modelChoices"></div></div></div></section>
         <section class="spawn-column"><div class="spawn-column-head"><h3>Harness</h3><p id="spawnHarnessHint">For the selected model</p></div>
@@ -10120,21 +10121,31 @@ const ncName=document.getElementById('ncName');
 const ncHint=document.getElementById('ncHint');
 const ncAdjWrap=document.getElementById('ncAdjWrap');
 
-async function loadSpawnCatalog(){
-  try{
-    const r=await fetch('/telemetry/spawn-catalog');
+let spawnCatalogSignature=null;
+const spawnCatalogLoader=SpawnCatalogLoader.create({
+  isOpen:()=>spawnOverlay.classList.contains('on'),
+  fetchCatalog:async signal=>{
+    const r=await fetch('/telemetry/spawn-catalog',{signal,cache:'no-store'});
     if(!r.ok)throw new Error('catalog unavailable');
-    const j=await r.json();
-    if(!j||j.ok===false||!Array.isArray(j.providers))throw new Error('bad catalog');
-    spawnCatalog=j;
-    spawnTaken=new Set(((j.naming||{}).taken||[]).map(n=>String(n).toLowerCase()));
-  }catch(_){
-    // A failed catalog cannot tell us which models can actually launch.
-    spawnCatalog={providers:[],unavailable:true,dirs:[],naming:{adjectives:[],scientists:[],taken:[]}};
-    spawnTaken=new Set();
-  }
-  if(!spawnBusy)spawnStatus.textContent=spawnCatalog.unavailable?'Telemetry unavailable':'ready';
-  renderProviderTabs();renderAgentStrip();renderDirs();
+    return r.json();
+  },
+  onState:({catalog,status})=>{
+    const data=catalog||{providers:[],dirs:[],naming:{adjectives:[],scientists:[],taken:[]}};
+    spawnCatalog={...data,stale:status==='stale',loading:status==='loading',unavailable:status==='unavailable'};
+    const badge=document.getElementById('spawnCatalogState');
+    badge.hidden=status!=='stale'&&status!=='loading';badge.textContent=status==='stale'?'stale':'Loading…';
+    const signature=(catalog?'':status)+JSON.stringify(data);
+    if(!spawnBusy)spawnStatus.textContent=spawnCatalog.unavailable?'Telemetry unavailable':spawnCatalog.loading?'Loading model catalog…':'ready';
+    if(signature===spawnCatalogSignature){updateSpawnAvailability();return;}
+    spawnCatalogSignature=signature;
+    spawnTaken=new Set(((data.naming||{}).taken||[]).map(n=>String(n).toLowerCase()));
+    renderProviderTabs();renderAgentStrip();
+    if(catalog)renderDirs();
+  },
+});
+function loadSpawnCatalog(){
+  spawnCatalogSignature=null;
+  return spawnCatalogLoader.refresh();
 }
 function providerById(id){return (spawnCatalog&&spawnCatalog.providers||[]).find(p=>p.id===id)||null;}
 function renderProviderTabs(){
@@ -10244,7 +10255,7 @@ function updateSpawnAvailability(){
   const p=spawnCatalog&&providerById(selProvider),model=selectedSpawnModel();
   const ready=Boolean(p&&model&&SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available));
   spawnSubmit.disabled=spawnBusy||!ready;
-  if(!spawnBusy&&['ready','Choose a model','Coming soon for this model','Telemetry unavailable'].includes(spawnStatus.textContent))spawnStatus.textContent=spawnCatalog&&spawnCatalog.unavailable?'Telemetry unavailable':ready?'ready':model?'Coming soon for this model':'Choose a model';
+  if(!spawnBusy&&['ready','Choose a model','Coming soon for this model','Telemetry unavailable','Loading model catalog…'].includes(spawnStatus.textContent))spawnStatus.textContent=spawnCatalog&&spawnCatalog.loading?'Loading model catalog…':spawnCatalog&&spawnCatalog.unavailable?'Telemetry unavailable':ready?'ready':model?'Coming soon for this model':'Choose a model';
 }
 function renderSpawnSummary(){
   const p=providerById(selProvider),model=selectedSpawnModel(),summary=document.getElementById('spawnSummary');
@@ -10330,7 +10341,9 @@ function renderModels(){
     fold.append(summary,into);modelChoices.appendChild(fold);
     older.forEach(addModel);
   }
-  if(!models.length&&spawnCatalog.unavailable){
+  if(!models.length&&spawnCatalog.loading){
+    const loading=document.createElement('p');loading.className='spawn-empty';loading.textContent='Loading model catalog…';modelChoices.append(loading);
+  }else if(!models.length&&spawnCatalog.unavailable){
     const error=document.createElement('div');error.className='spawn-empty';error.setAttribute('role','alert');
     error.textContent='Telemetry unavailable';
     const retry=document.createElement('button');retry.type='button';retry.className='modal-btn';retry.textContent='Retry';
@@ -10527,12 +10540,13 @@ function openSpawnModal(){
   selScientist='';selProvider=null;selModel=null;selEffort=null;selFamily=null;selHarness=null;
   try{spawnModelSearch.value=spawnViewerStorage?.getItem(SPAWN_SEARCH_STORAGE_KEY)||'';}catch(_){spawnModelSearch.value='';}
   populateSpawnParents();
-  loadSpawnCatalog().then(updateNameCard);
   spawnOverlay.classList.add('on');spawnOverlay.setAttribute('aria-hidden','false');
+  loadSpawnCatalog().then(updateNameCard);
   requestAnimationFrame(()=>spawnForm.querySelector('.spawn-identity-options summary').focus({preventScroll:true}));
 }
 function closeSpawnModal(force=false){
   if(spawnBusy&&!force)return;
+  spawnCatalogLoader.stop();
   closeSpawnDirPicker();
   spawnOverlay.classList.remove('on');spawnOverlay.setAttribute('aria-hidden','true');
   if(spawnLastFocus&&spawnLastFocus.isConnected)spawnLastFocus.focus();
