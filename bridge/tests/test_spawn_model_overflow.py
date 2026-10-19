@@ -2,8 +2,10 @@
 
 The dashboard's /api/spawn-names names each provider's less-used models in
 ``overflow_models``; the backend marks them and the cockpit puts them under a
-closed "more models · N" fold, open only when the selected model is one of
-them. Without the list every model is shown as before. The local
+closed "More models · N" fold, open only when the selected model is one of
+them. Numeric versions also move superseded family members into the fold;
+unknown naming schemes remain visible. An older default stays selectable in
+the open fold. The local
 spawn_catalog.json only decorates what the telemetry sent: the telemetry's
 models, default, overflow list, efforts and errors are never replaced.
 
@@ -60,6 +62,8 @@ def test_a_catalog_without_the_list_is_unchanged():
 # --- cockpit: the real renderModels over a small DOM stand-in -----------------------
 
 BLOCKS = (
+    r"function modelVersionIdentity\(model\)\{.*?\n\}\n",
+    r"function compareModelVersions\(left,right\)\{.*?\n\}\n",
     r"function splitOverflowModels\(provider\)\{.*?\n\}\n",
     r"function renderModels\(\)\{.*?\n\}\n",
     r"function effortsForModel\(provider,model\)\{.*?\n\}\n",
@@ -78,7 +82,8 @@ class El{
 }
 const document={createElement:t=>new El(t)};
 const modelChoices=new El('div'),effortChoices=new El('div'),effortRow=new El('div'),effortCaption=new El('div');
-function renderEffortCaption(){}
+let effortOptions={levels:[]};
+const EffortSlider={mount:(host,options)=>{effortOptions=options;}};
 let selProvider='claude',selModel=null,selEffort=null,spawnCatalog;
 function providerById(id){return spawnCatalog.providers.find(p=>p.id===id);}
 function names(el){return el.children.filter(c=>c.tag==='label')
@@ -88,7 +93,7 @@ function shape(){
   const fold=modelChoices.children.find(c=>c.tag==='details');
   return {current:names(modelChoices),
     fold:fold?{open:fold.open,summary:fold.children[0].textContent,models:names(fold.children[1])}:null,
-    selected:selModel,effortShown:!effortRow.hidden,efforts:names(effortChoices),effort:selEffort,
+    selected:selModel,effortShown:!effortRow.hidden,efforts:effortOptions.levels||[],effort:selEffort,
     error:(modelChoices.children.find(c=>c.className==='model-error')||{}).textContent||null};
 }
 function render(catalog,selected=null){spawnCatalog=catalog;selModel=selected;renderModels();return shape();}
@@ -117,15 +122,15 @@ def test_previous_models_fold_closed_under_the_current_ones():
     r = _run(f"return render({_catalog(overflow_models=OVERFLOW)});")
     assert r["current"] == ["claude-sonnet-5", "claude-opus-5-5",
                             "claude-haiku-4-5-20251001", "claude-fable-5-1"]
-    assert r["fold"] == {"open": False, "summary": "more models · 3", "models": OVERFLOW}
+    assert r["fold"] == {"open": False, "summary": "More models · 3", "models": OVERFLOW}
     assert r["selected"] == "claude-opus-5-5"
 
 
-def test_without_the_list_every_model_is_shown_as_before():
+def test_without_an_overflow_list_old_family_versions_are_still_folded():
     for extra in ({}, {"overflow_models": []}):
         r = _run(f"return render({_catalog(**extra)});")
-        assert r["current"] == MODELS
-        assert r["fold"] is None
+        assert r["current"] == MODELS[:4]
+        assert r["fold"]["models"] == OVERFLOW
 
 
 def test_the_fold_is_open_when_the_selected_model_is_a_previous_one():
@@ -203,7 +208,7 @@ def test_an_older_telemetry_shows_every_model_unfolded():
     catalog = json.dumps(_merged(old))
     r = _run(f"selProvider='codex';return render({catalog});")
     assert r["current"] == ["gpt-5.6-sol", "gpt-6-astra"] and r["fold"] is None
-    assert r["efforts"] == ["low", "high"] and r["effort"] == "high"
+    assert r["efforts"] == ["low", "high"] and r["effort"] is None
 
 
 def test_codex_folds_and_follows_the_per_model_efforts():
@@ -213,11 +218,11 @@ def test_codex_folds_and_follows_the_per_model_efforts():
       out.older=render({catalog},'gpt-5.6-sol');return out;""")
     first = r["first"]
     assert first["current"] == ["gpt-6-sol", "gpt-6-astra", "gpt-5.6-luna"]
-    assert first["fold"] == {"open": False, "summary": "more models · 1", "models": ["gpt-5.6-sol"]}
+    assert first["fold"] == {"open": False, "summary": "More models · 1", "models": ["gpt-5.6-sol"]}
     assert first["selected"] == "gpt-6-sol"
-    assert first["efforts"] == ["low", "medium", "high", "xhigh"] and first["effort"] == "xhigh"
-    assert r["astra"]["efforts"] == ["high", "max"] and r["astra"]["effort"] == "max"
-    # Non-supported levels stay visible but disabled; no effort is sent.
+    assert first["efforts"] == ["low", "medium", "high", "xhigh"] and first["effort"] is None
+    assert r["astra"]["efforts"] == ["high", "max"] and r["astra"]["effort"] is None
+    # Unsupported models show a status without an effort input.
     assert r["luna"]["effortShown"] is True and r["luna"]["effort"] is None
     assert r["older"]["fold"]["open"] is True
     assert r["older"]["efforts"] == ["low", "high"]
@@ -252,9 +257,31 @@ def test_a_missing_or_broken_local_file_still_serves_the_normalized_telemetry(mo
     r = _run(f"selProvider='codex';return render({catalog});")
     assert r["current"] == ["gpt-6-sol", "gpt-6-astra", "gpt-5.6-luna"]
     assert r["selected"] == "gpt-6-sol"
-    assert r["fold"] == {"open": False, "summary": "more models · 1", "models": ["gpt-5.6-sol"]}
+    assert r["fold"] == {"open": False, "summary": "More models · 1", "models": ["gpt-5.6-sol"]}
 
 
 def test_a_payload_that_is_not_a_catalog_is_passed_through():
     assert ob.merge_spawn_catalog(b"not json") == b"not json"
     assert ob.merge_spawn_catalog(b"[1,2]") == b"[1,2]"
+
+
+def test_semantic_versions_fold_old_siblings_without_a_release_list():
+    models=['gpt-6-sol','gpt-6.2-sol','gpt-6.10-sol','gpt-6-luna','gpt-6.1-luna',
+            'claude-3-5-sonnet-20240620','claude-sonnet-4-5','claude-sonnet-5',
+            'claude-opus-4-8','claude-opus-5-5','unversioned-alpha','unversioned-beta']
+    raw={'providers':[{'id':'codex','models':[{'id':m} for m in models]}]}
+    result=_run(f"selProvider='codex';return render({json.dumps(raw)});")
+    assert result['current'] == ['gpt-6.10-sol','gpt-6.1-luna','claude-sonnet-5','claude-opus-5-5','unversioned-alpha','unversioned-beta']
+    assert result['fold']['models'] == ['gpt-6-sol','gpt-6.2-sol','gpt-6-luna','claude-3-5-sonnet-20240620','claude-sonnet-4-5','claude-opus-4-8']
+
+
+def test_structured_versions_and_deprecation_win_and_old_default_remains_selectable():
+    raw={'providers':[{'id':'claude','models':[
+        {'id':'custom-a','family':'custom','version':'2.9','default':True},
+        {'id':'custom-b','family':'custom','version':'2.10'},
+        {'id':'retired','deprecated':True},
+        {'id':'future-retired','family':'custom','version':'3.0','deprecated':True}]}]}
+    result=_run(f"return render({json.dumps(raw)});")
+    assert result['current'] == ['custom-b']
+    assert result['fold']['models'] == ['custom-a','retired','future-retired']
+    assert result['fold']['open'] and result['selected'] == 'custom-a'

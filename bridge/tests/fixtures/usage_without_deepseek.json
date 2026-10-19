@@ -1,0 +1,48 @@
+{
+  "payload": {
+    "ts": 1792370000,
+    "providers": [
+      {
+        "provider": "claude",
+        "status": "ok",
+        "observed_at": 1792370000,
+        "windows": [
+          {
+            "id": "five_hour",
+            "label": "5h",
+            "remaining_percent": 64.0,
+            "window_seconds": 18000,
+            "resets_at": null,
+            "extra": false,
+            "limit": ""
+          }
+        ],
+        "reason": "",
+        "retry_after_seconds": 0
+      },
+      {
+        "provider": "codex",
+        "status": "ok",
+        "observed_at": 1792370000,
+        "windows": [
+          {
+            "id": "weekly",
+            "label": "7d",
+            "remaining_percent": 47.0,
+            "window_seconds": 604800,
+            "resets_at": null,
+            "extra": false,
+            "limit": ""
+          }
+        ],
+        "reason": "",
+        "retry_after_seconds": 0
+      }
+    ]
+  },
+  "dom": {
+    "pill": "<button class=\"new-agent header-utility usage-pill\" id=\"usageBtn\" type=\"button\" popovertarget=\"usagePopover\" aria-haspopup=\"dialog\" aria-label=\"Account usage: percent left for Claude and Codex\" title=\"Percent of each account window still left — click for every window\">\n      <span class=\"up-k\">LEFT</span><span class=\"up-p\" data-provider=\"claude\" title=\"Claude 5h: 64% left\"><img class=\"up-logo\" src=\"assets/anthropic.svg\" alt=\"Claude\"><b>64%</b></span><span class=\"up-p warn\" data-provider=\"codex\" title=\"Codex 7d: 47% left\"><img class=\"up-logo\" src=\"assets/openai.svg\" alt=\"Codex\"><b>47%</b></span></button>",
+    "kicker": "observed 12:00 · numbers are % left",
+    "body": "<section class=\"up-prov\"><div class=\"up-head\"><span class=\"up-name\"><img class=\"up-logo\" src=\"assets/anthropic.svg\" alt=\"\">Claude</span><span class=\"up-reset\"></span></div><div class=\"up-dials\"><div class=\"dial\" title=\"5h: 64% left\"><svg viewBox=\"0 0 62 62\" aria-hidden=\"true\">\n    <g transform=\"rotate(-90 31 31)\"><circle class=\"t\" cx=\"31\" cy=\"31\" r=\"25\"></circle>\n    <circle class=\"f\" cx=\"31\" cy=\"31\" r=\"25\" stroke-dasharray=\"100.53 157.08\"></circle></g>\n    <text class=\"n\" x=\"31\" y=\"31\" text-anchor=\"middle\" dominant-baseline=\"central\">64<tspan class=\"u\" dy=\"-.35em\">%</tspan></text>\n  </svg><span class=\"lab\" title=\"5h\">5H</span><span class=\"rs\">reset unknown</span></div></div></section><section class=\"up-prov\"><div class=\"up-head\"><span class=\"up-name\"><img class=\"up-logo\" src=\"assets/openai.svg\" alt=\"\">Codex</span><span class=\"up-reset\"></span></div><div class=\"up-dials\"><div class=\"dial warn\" title=\"7d: 47% left\"><svg viewBox=\"0 0 62 62\" aria-hidden=\"true\">\n    <g transform=\"rotate(-90 31 31)\"><circle class=\"t\" cx=\"31\" cy=\"31\" r=\"25\"></circle>\n    <circle class=\"f\" cx=\"31\" cy=\"31\" r=\"25\" stroke-dasharray=\"73.83 157.08\"></circle></g>\n    <text class=\"n\" x=\"31\" y=\"31\" text-anchor=\"middle\" dominant-baseline=\"central\">47<tspan class=\"u\" dy=\"-.35em\">%</tspan></text>\n  </svg><span class=\"lab\" title=\"7d\">7D</span><span class=\"rs\">reset unknown</span></div></div></section><div class=\"up-foot\">Claude from the OAuth usage endpoint with the token Claude Code keeps · Codex from the app server. Read-only; refreshed every minute.</div>"
+  }
+}

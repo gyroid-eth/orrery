@@ -119,7 +119,7 @@ def test_picker_defaults_local_search_and_capability_updates_in_browser(tour_bro
       providerTabs.querySelector('[data-family="codex"]').click();
       return {initial,unavailable,empty,visible,available,localPayload,searchSaved:localStorage.getItem(SPAWN_SEARCH_STORAGE_KEY),
         codex:{provider:selProvider,model:selModel,effort:selEffort,payload:spawnPayloadFromForm()},
-        disabledEfforts:effortChoices.querySelectorAll('button:disabled').length};
+        rangeMax:effortChoices.querySelector('input[type=range]').max};
     })()''')
     assert result['initial']['provider'] == 'claude'
     assert result['initial']['order'][:4] == ['claude','codex','deepseek','local']
@@ -128,9 +128,10 @@ def test_picker_defaults_local_search_and_capability_updates_in_browser(tour_bro
     assert result['visible'] == 2
     assert result['searchSaved'] == 'test-server'
     assert result['localPayload']['harness'] == 'hermes'
-    assert result['codex']['provider'] == 'codex' and result['codex']['effort'] == 'high'
+    assert result['codex']['provider'] == 'codex' and result['codex']['effort'] is None
     assert 'harness' not in result['codex']['payload']
-    assert result['disabledEfforts'] > 0
+    assert result['rangeMax'] == '1'
+    assert 'effort' not in result['codex']['payload']
 
 
 def test_submit_cloud_defaults_and_optional_local_parameters_without_real_spawn(tour_browser):
@@ -161,8 +162,8 @@ def test_submit_cloud_defaults_and_optional_local_parameters_without_real_spawn(
     })()''')
     claude,codex,local=result['posted']
     assert result['cloudModels'] == ['claude-fixture']
-    assert claude['provider'] == 'claude' and claude['effort'] is None
-    assert codex['provider'] == 'codex' and codex['effort'] == 'high'
+    assert claude['provider'] == 'claude' and 'effort' not in claude
+    assert codex['provider'] == 'codex' and 'effort' not in codex
     assert 'harness' not in claude and 'helper_model' not in claude
     assert 'harness' not in codex and 'helper_model' not in codex
     assert local['provider'] == 'local-fixture' and local['harness'] == 'example-tool' and local['helper_model'] == 'small'
@@ -198,3 +199,105 @@ def test_picker_controls_fit_a_small_viewport_and_footer_stays_visible(tour_brow
     assert result['pickerRight'] <= result['width']
     assert result['footerBottom'] <= result['height']
     assert result['helperWidth'] > 0
+
+
+@pytest.mark.parametrize('width', [1600, 390])
+def test_effort_slider_fits_and_scientists_open_on_each_modal_open(tour_browser, width):
+    client,evaluate=tour_browser
+    client.call('Emulation.setDeviceMetricsOverride',width=width,height=844,deviceScaleFactor=1,mobile=False)
+    result=evaluate('''(async()=>{
+      const originalFetch=window.fetch;
+      const catalog={providers:[{id:'codex',program:'codex-cli',models:[{id:'gpt-fixture-with-an-intentionally-long-model-identifier',default:true}],
+        efforts:['low','medium','high','xhigh','max','ultra'],effort_default:'xhigh'}],naming:{scientists:['Curie','Noether'],adjectives:['Calm']},dirs:[]};
+      window.fetch=async(url)=>({ok:true,json:async()=>url.startsWith('/telemetry/fs/dirs')?{path:'/workspace',dirs:[]}:catalog});
+      try{
+        openSpawnModal();await new Promise(r=>setTimeout(r,30));
+        const details=spawnForm.querySelector('.spawn-identity-options');
+        const initiallyOpen=details.open;details.open=false;spawnAdvanced.open=true;closeSpawnModal(true);
+        openSpawnModal();await new Promise(r=>setTimeout(r,30));
+        effortChoices.scrollIntoView({block:'center'});
+        const range=effortChoices.querySelector('input[type=range]');
+        const slider={max:Number(range.max),value:range.getAttribute('aria-valuetext'),
+          height:effortRow.getBoundingClientRect().height,
+          client:effortChoices.clientWidth,scroll:effortChoices.scrollWidth,
+          stops:effortChoices.querySelectorAll('.effort-stop').length,modelFits:modelChoices.scrollWidth<=modelChoices.clientWidth,
+          columns:[...document.querySelectorAll('.spawn-column')].map(el=>el.getBoundingClientRect().width),
+          contentFits:document.querySelector('.spawn-picker').scrollHeight<=document.querySelector('.spawn-picker').clientHeight+1,
+          noOverlap:document.querySelector('.spawn-context').getBoundingClientRect().top>=document.querySelector('.spawn-picker').getBoundingClientRect().bottom};
+        const body=spawnForm.querySelector('.spawn-grid'),head=spawnForm.querySelector('.modal-head'),foot=spawnForm.querySelector('.modal-foot');
+        const before={head:head.getBoundingClientRect().top,foot:foot.getBoundingClientRect().bottom};
+        body.scrollTop=body.scrollHeight;
+        const pathBox=spawnDirButton.getBoundingClientRect(),taskBox=spawnTask.getBoundingClientRect();
+        return {initiallyOpen,reopened:details.open,advancedClosed:!spawnAdvanced.open,contextAligned:Math.abs(pathBox.left-taskBox.left)<1&&Math.abs(pathBox.width-taskBox.width)<1,slider,
+          fixed:head.getBoundingClientRect().top===before.head&&foot.getBoundingClientRect().bottom===before.foot,
+          footer:foot.getBoundingClientRect().bottom,height:innerHeight};
+      }finally{window.fetch=originalFetch;}
+    })()''')
+    assert result['initiallyOpen'] and result['reopened'] and result['advancedClosed'] and result['contextAligned']
+    assert result['slider']['max'] == 5 and result['slider']['stops'] == 6
+    assert result['slider']['value'] == 'Default' and result['slider']['height'] <= 120
+    assert result['slider']['scroll'] == result['slider']['client'] and result['slider']['modelFits'] and result['slider']['contentFits'] and result['slider']['noOverlap']
+    if width==1600:
+        assert result['slider']['columns'][2] >= 330 and result['slider']['columns'][1] >= 280
+    assert result['fixed'] and result['footer'] <= result['height']
+
+
+def test_directory_dialog_commits_only_on_confirmation_and_escape_keeps_parent(tour_browser):
+    _,evaluate=tour_browser
+    result=evaluate('''(async()=>{
+      const originalFetch=window.fetch;
+      window.fetch=async(url)=>({ok:true,json:async()=>url.startsWith('/telemetry/fs/dirs')?
+        {path:decodeURIComponent(url.split('path=')[1]),dirs:[]}:{providers:[],naming:{},dirs:[]}});
+      try{
+        spawnDirPath='/workspace';renderSpawnDirPath();spawnOverlay.classList.add('on');
+        openSpawnDirPicker();await browseDir('/workspace/docs');
+        const before=spawnDirPath;document.getElementById('spawnDirCancel').click();
+        const cancelled=spawnDirPath;
+        openSpawnDirPicker();await browseDir('/workspace/tools');spawnDirUse.click();
+        const confirmed=spawnDirPath,label=document.getElementById('spawnDirSelected').textContent;
+        openSpawnDirPicker();window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+        return {before,cancelled,confirmed,label,closed:!spawnDirDialog.open,parent:spawnOverlay.classList.contains('on'),payload:spawnPayloadFromForm().dir};
+      }finally{window.fetch=originalFetch;}
+    })()''')
+    assert result['before'] == result['cancelled'] == '/workspace'
+    assert result['confirmed'] == result['label'] == result['payload'] == '/workspace/tools'
+    assert result['closed'] and result['parent']
+
+
+@pytest.mark.parametrize('provider,levels', [
+    ('codex',['off','low','medium','high','xhigh','max','ultra']),
+    ('claude',['low','medium','high','xhigh','max']),
+])
+def test_effort_is_omitted_until_keyboard_choice_and_reset_restores_settings(tour_browser,provider,levels):
+    client,evaluate=tour_browser
+    catalog=dict(providers=[dict(id=provider,program='claude-code' if provider=='claude' else 'codex-cli',
+        models=[dict(id='fixture',default=True),dict(id='unsupported',efforts=[])],
+        efforts=levels,effort_default='low')],naming={},dirs=[])
+    evaluate('''(()=>{
+      spawnCatalog=CATALOG;selFamily=null;selProvider=null;selModel=null;selHarness=null;selEffort=null;
+      renderProviderTabs();spawnOverlay.classList.add('on');spawnTask.value='Fixture task';spawnDirPath='/workspace';
+    })()'''.replace('CATALOG',json.dumps(catalog)))
+    assert evaluate("({specified:Object.hasOwn(spawnPayloadFromForm(),'effort'),label:effortChoices.querySelector('input').getAttribute('aria-valuetext')})") == dict(specified=False,label='Default')
+    evaluate("effortChoices.querySelector('input').focus()")
+    def key(name,code):
+        for event in ('keyDown','keyUp'):
+            client.call('Input.dispatchKeyEvent',type=event,key=name,code=name,windowsVirtualKeyCode=code)
+    key('End',35)
+    assert evaluate('spawnPayloadFromForm().effort') == levels[-1]
+    for _ in range(len(levels)-1-levels.index('high')):
+        key('ArrowLeft',37)
+    assert evaluate('spawnPayloadFromForm().effort') == 'high'
+    # Returning to the starting neutral position still sends an explicit effort.
+    assert evaluate("effortChoices.querySelector('.effort-reset').hidden") is False
+    evaluate("effortChoices.querySelector('.effort-reset').click()")
+    assert evaluate("({specified:Object.hasOwn(spawnPayloadFromForm(),'effort'),label:effortChoices.querySelector('input').getAttribute('aria-valuetext'),focused:document.activeElement.type})") == dict(specified=False,label='Default',focused='range')
+    center=evaluate("(()=>{const r=effortChoices.querySelector('input').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()")
+    client.call('Input.dispatchMouseEvent',type='mousePressed',button='left',buttons=1,clickCount=1,**center)
+    client.call('Input.dispatchMouseEvent',type='mouseReleased',button='left',buttons=0,clickCount=1,**center)
+    assert evaluate('spawnPayloadFromForm().effort') == 'high'
+    key('Home',36)
+    assert evaluate('spawnPayloadFromForm().effort') == levels[0]
+    evaluate("modelChoices.querySelector('input[value=unsupported]').click()")
+    assert evaluate("({specified:Object.hasOwn(spawnPayloadFromForm(),'effort'),inputs:effortChoices.querySelectorAll('input').length,text:effortChoices.textContent})") == dict(specified=False,inputs=0,text='Not supported')
+    evaluate("modelChoices.querySelector('input[value=fixture]').click()")
+    assert evaluate("Object.hasOwn(spawnPayloadFromForm(),'effort')") is False

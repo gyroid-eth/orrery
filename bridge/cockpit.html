@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="mail_view.css">
 <link rel="stylesheet" href="spawn_picker.css">
 <script src="spawn_picker.js"></script>
+<script src="effort_slider.js"></script>
 <script src="prefs_sync.js"></script>
 <script src="theme_core.js"></script>
 <script src="theme_controller.js"></script>
@@ -395,6 +396,7 @@
   .usage-pill .up-k{color:var(--ink-faint);letter-spacing:.18em;font-size:9px;margin-right:2px}
   .usage-pill .up-p{display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
   .usage-pill .up-p+.up-p{margin-left:12px}
+  .usage-pill .up-p[hidden]{display:none}
   /* the provider is named by its logo (bridge/assets: CC0 marks from Simple Icons and SVG Logos; see CREDITS.md) */
   .up-logo{width:16px;height:16px;object-fit:contain;flex:none}
   .usage-pill .up-p.none .up-logo{opacity:.5}
@@ -1151,6 +1153,8 @@
   .local-provider-rim polygon{fill:rgba(17,19,25,.9);stroke:#c3d77b;stroke-width:7;stroke-linejoin:round}
   .local-provider-badge .provider-logo{position:relative;height:13px;max-width:17px}
   .local-provider-badge .provider-logo[hidden]{display:none}
+  .usage-popover .up-balance-warning{color:var(--amber)}
+  .usage-popover .up-balance-low{color:var(--theme-status-alert,#d2685e)}
 </style>
 <link rel="stylesheet" href="theme_light.css">
 <link rel="stylesheet" href="cockpit_tour.css">
@@ -1316,6 +1320,11 @@
                placeholder="a name, another name" aria-describedby="demoMaskWordsHelp">
         <div class="settings-help" id="demoMaskWordsHelp">Comma-separated, kept in this browser. A word of Latin letters is masked as a whole word in any case; a word in another script (日本語) wherever it appears. In demo mode this field shows its own words masked too.</div>
       </div>
+    </section>
+    <section aria-labelledby="usageSettingsTitle">
+      <div class="settings-section-title" id="usageSettingsTitle">Usage</div>
+      <div class="settings-help">Choose providers shown in LEFT and Usage left. Saved in this browser.</div>
+      <div id="usageProviderRows"></div>
     </section>
     <section aria-labelledby="themeAbTitle">
       <div class="settings-section-title" id="themeAbTitle">Vision profile · small text + tracking</div>
@@ -1498,7 +1507,7 @@
             <button type="button" class="nc-dice" id="adjDice" title="re-roll adjective">🎲</button>
           </div>
         </div>
-        <details class="spawn-identity-options"><summary>Choose a scientist</summary>
+        <details class="spawn-identity-options" open><summary>Choose a scientist</summary>
           <div class="agent-strip" id="agentStrip" role="listbox" aria-label="Choose a scientist"></div></details>
       </div>
       <div class="spawn-picker" aria-label="Model and Harness">
@@ -1514,15 +1523,14 @@
               <select class="spawn-helper" id="spawnHelper"><option value="same">Same as main</option></select>
               <p class="spawn-default-note" id="spawnHelperNote">Default: Same as main</p>
               <div class="effort-row" id="effortRow"><span class="effort-lab">Effort</span>
-                <div><div class="model-choices effort-choices" id="effortChoices"></div><p class="effort-caption" id="effortCaption"></p></div></div></div>
+                <div id="effortChoices"></div></div></div>
             <div class="spawn-summary" id="spawnSummary" aria-live="polite"></div></div></section>
       </div>
       <div class="spawn-context">
       <!-- WHERE -->
       <div class="field full"><span class="field-label">Launch directory</span>
-        <div class="dir-presets" id="dirPresets"></div>
-        <div class="dir-crumbs" id="dirCrumbs" aria-label="Current directory"></div>
-        <div class="dir-list" id="dirList" role="listbox" aria-label="Subdirectories"></div>
+        <button type="button" class="spawn-dir-trigger" id="spawnDirButton" aria-haspopup="dialog" aria-controls="spawnDirDialog">
+          <span id="spawnDirSelected">Choose a folder</span><span aria-hidden="true">▾</span></button>
       </div>
       <div class="field full"><label for="spawnTask">Task description</label>
         <textarea id="spawnTask" maxlength="4000" required
@@ -1567,6 +1575,15 @@
       <button class="modal-btn" id="spawnCancel" type="button">Cancel</button>
       <button class="modal-btn primary" id="spawnSubmit" type="submit">Spawn Agent</button>
     </div>
+    <dialog id="spawnDirDialog" aria-labelledby="spawnDirTitle">
+      <div class="spawn-dir-head"><h2 id="spawnDirTitle">Choose launch directory</h2>
+        <button type="button" class="modal-close" id="spawnDirClose" aria-label="Close directory picker">×</button></div>
+      <div class="dir-presets" id="dirPresets"></div>
+      <div class="dir-crumbs" id="dirCrumbs" aria-label="Current directory"></div>
+      <div class="dir-list" id="dirList" role="listbox" aria-label="Subdirectories"></div>
+      <div class="spawn-dir-foot"><button type="button" class="modal-btn" id="spawnDirCancel">Cancel</button>
+        <button type="button" class="modal-btn primary" id="spawnDirUse">Use this folder</button></div>
+    </dialog>
   </form>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -4522,9 +4539,9 @@
       }
     }
   },
-  "inventory_digest": "9cb65ee640c10d69c03f620376243f0716ee0b85ac9e4024790a411066904ad7",
+  "inventory_digest": "e90c9a9255073656628aa75b0d9af5280c112bfa5025a520364e4718c01268bc",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "83c093d18562fe2fef214ef285231ed61c7cf6b1b0b8cff088d0eb7abecc6d97",
+  "source_digest": "862711fb0998218af4922e68e1696ecc8db3a9b198909fa5eb38b6552e954bee",
   "surface": "cockpit",
   "version": 1
 }
@@ -4661,7 +4678,7 @@ function buildSpawnPayload(values){
     ...(source.harness?{harness:String(source.harness)}:{}),
     ...(source.helper_model&&source.helper_model!=='same'?{helper_model:String(source.helper_model)}:{}),
     model:String(source.model||'claude-sonnet-4-6').trim(),
-    effort:String(source.effort||'').trim()||null,
+    ...(String(source.effort||'').trim()?{effort:String(source.effort).trim()}:{}),
     dir:String(source.dir||'').trim()||null,
     role:String(source.role||'').trim(),
     emoji:String(source.emoji||'').trim(),
@@ -9005,10 +9022,56 @@ function tick(){const d=new Date();
 tick();setInterval(tick,1000);
 
 /* ── usage pill (account windows; /telemetry/usage) ── */
+const USAGE_BALANCE_LOW=5;
 const USAGE_WARN=50,USAGE_LOW=20; /* % left: > warn emerald, ≤ warn amber, ≤ low alert red */
 function usageTier(pct){return pct<=USAGE_LOW?'low':pct<=USAGE_WARN?'warn':'ok';}
 const USAGE_POLL_MS=60000;
 let usageData=null;
+// Store hidden providers so providers added later are shown by default.
+const USAGE_PREF_KEY='orrery.usageHidden';
+function usageReadHidden(){
+  try{const v=JSON.parse(localStorage.getItem(USAGE_PREF_KEY)||'[]');
+    return new Set(Array.isArray(v)?v.filter(p=>typeof p==='string'):[]);
+  }catch(_){return new Set();}
+}
+let usageHidden=usageReadHidden();
+function usageShown(p){return !usageHidden.has(p.provider);}
+function renderUsageSettings(){
+  const box=document.getElementById('usageProviderRows');
+  const providers=usageData?usageData.providers:[];
+  box.replaceChildren();
+  if(!providers.length){
+    const note=document.createElement('div');note.className='settings-help';
+    note.textContent='Waiting for providers';box.appendChild(note);return;
+  }
+  for(const prov of providers){
+    const row=document.createElement('div');row.className='settings-row';
+    const label=document.createElement('label');label.className='settings-toggle-row';
+    const copy=document.createElement('span');copy.className='settings-toggle-copy';
+    const name=document.createElement('span');name.className='settings-row-name';
+    name.textContent=usageProviderName(prov.provider);
+    const hint=document.createElement('span');hint.className='settings-help';
+    hint.textContent=prov.measurement_kind==='balance'?'Account balance':'Account windows';
+    copy.append(name,hint);
+    const holder=document.createElement('span');holder.className='settings-switch';
+    const cb=document.createElement('input');cb.type='checkbox';cb.role='switch';
+    cb.dataset.provider=prov.provider;cb.checked=usageShown(prov);
+    cb.setAttribute('aria-checked',String(cb.checked));
+    cb.addEventListener('change',()=>{
+      if(cb.checked)usageHidden.delete(prov.provider);else usageHidden.add(prov.provider);
+      cb.setAttribute('aria-checked',String(cb.checked));
+      try{localStorage.setItem(USAGE_PREF_KEY,JSON.stringify([...usageHidden]));}catch(_){}
+      renderUsagePill();renderUsagePopover();
+    });
+    holder.appendChild(cb);label.append(copy,holder);row.appendChild(label);box.appendChild(row);
+  }
+}
+window.addEventListener('storage',e=>{
+  if(e.key===USAGE_PREF_KEY||e.key===null){
+    usageHidden=usageReadHidden();renderUsageSettings();renderUsagePill();renderUsagePopover();
+  }
+});
+
 function usageUntil(ts){          /* "6m" / "3d 11h" until a unix reset, '' when unknown */
   if(!ts)return'';const s=Math.max(0,Math.floor(ts-Date.now()/1000));
   const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);
@@ -9017,17 +9080,44 @@ function usageClock(ts){if(!ts)return'';const d=new Date(ts*1000);
   return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 const USAGE_REASON={sign_in_required:'sign in to Claude Code',codex_not_found:'codex not on PATH',
   probe_failed:'not reachable',rate_limited:'rate limited · retrying later',no_windows_returned:'no windows returned'};
-function usageProviderName(p){return p==='claude'?'Claude':p==='codex'?'Codex':p;}
-const USAGE_LOGO={claude:'assets/anthropic.svg',codex:'assets/openai.svg'};
+// Slice the decimal text: binary floats can lose cents or round balances up.
+// The always-visible pill uses whole dollars; the open ledger uses cents.
+function usageUsd(value,digits=2){
+  const [dollars,cents='']=String(value).split('.');
+  return dollars+(digits?'.'+cents.padEnd(digits,'0').slice(0,digits):'');
+}
+function usageBalanceLow(prov){
+  return prov.status==='ok'&&prov.balance&&prov.balance.total_balance!==null
+    &&Number(usageUsd(prov.balance.total_balance,0))<USAGE_BALANCE_LOW;
+}
+function usageProviderName(p){return p==='claude'?'Claude':p==='codex'?'Codex':p==='dsh'?'DeepSeek':p;}
+const USAGE_LOGO={claude:'assets/anthropic.svg',codex:'assets/openai.svg',dsh:'cockpit-assets/deepseek.svg'};
 function usageMainWindows(prov){return prov.windows.filter(w=>!w.extra);}
 function usageBinding(prov){      /* the ordinary window with the least left: what actually limits the next task */
   return usageMainWindows(prov).slice().sort((a,b)=>a.remaining_percent-b.remaining_percent)[0]||null;}
 function renderUsagePill(){
   const pill=document.getElementById('usageBtn');
-  pill.classList.toggle('stale',!!usageData&&usageData.providers.some(p=>p.status==='stale'));
+  pill.classList.toggle('stale',!!usageData&&usageData.providers.filter(usageShown).some(p=>p.status==='stale'));
+  const balanceProvider=usageData&&usageData.providers.find(p=>p.provider==='dsh'&&p.measurement_kind==='balance');
+  let balanceSlot=pill.querySelector('[data-provider="dsh"]');
+  if(balanceProvider&&!balanceSlot){
+    balanceSlot=document.createElement('span');balanceSlot.className='up-p';balanceSlot.dataset.provider='dsh';
+    const logo=document.createElement('img');logo.className='up-logo';logo.src=USAGE_LOGO.dsh;logo.alt='DeepSeek';
+    balanceSlot.append(logo,document.createElement('b'));pill.appendChild(balanceSlot);
+  }else if(!balanceProvider&&balanceSlot)balanceSlot.remove();
   for(const slot of pill.querySelectorAll('.up-p')){
     const prov=usageData&&usageData.providers.find(p=>p.provider===slot.dataset.provider);
-    const b=slot.querySelector('b'),bind=prov?usageBinding(prov):null;
+    slot.hidden=usageHidden.has(slot.dataset.provider);
+    const b=slot.querySelector('b');
+    if(prov&&prov.measurement_kind==='balance'){
+      const balance=prov.status==='ok'&&prov.balance;
+      slot.classList.toggle('none',!balance);slot.classList.toggle('warn',!!balance&&!balance.is_available);slot.classList.toggle('low',!!usageBalanceLow(prov));
+      b.textContent=balance?(balance.total_balance===null?'No USD':'$'+usageUsd(balance.total_balance,0)):'$?';
+      slot.title='DeepSeek: '+(balance?(balance.total_balance===null?'no USD balance':'$'+usageUsd(balance.total_balance))
+        +' · account '+(balance.is_available?'available':'unavailable'):'balance unknown');
+      continue;
+    }
+    const bind=prov?usageBinding(prov):null;
     slot.classList.toggle('none',!bind);
     for(const t of ['warn','low'])slot.classList.toggle(t,!!bind&&usageTier(bind.remaining_percent)===t);
     b.textContent=bind?Math.round(bind.remaining_percent)+'%':'—';
@@ -9052,9 +9142,11 @@ function usageDial(w){
 function renderUsagePopover(){
   const body=document.getElementById('usageDials'),kicker=document.getElementById('usageKicker');
   if(!usageData){body.textContent='';kicker.textContent='waiting for update';return;}
-  const observed=Math.max(0,...usageData.providers.map(p=>p.observed_at||0));
-  kicker.textContent=(observed?'observed '+usageClock(observed):'not observed')+' · numbers are % left';
-  body.replaceChildren(...usageData.providers.map(prov=>{
+  const providers=usageData.providers.filter(usageShown);
+  if(!providers.length){body.textContent='All providers hidden · choose providers in Settings';kicker.textContent='no providers shown';return;}
+  const observed=Math.max(0,...providers.map(p=>p.observed_at||0));
+  kicker.textContent=(observed?'observed '+usageClock(observed):'not observed')+' · numbers are % left'+(providers.some(p=>p.measurement_kind==='balance')?'; balances in dollars':'');
+  body.replaceChildren(...providers.map(prov=>{
     const sec=document.createElement('section');sec.className='up-prov';
     const head=document.createElement('div');head.className='up-head';
     head.innerHTML=`<span class="up-name"></span><span class="up-reset"></span>`;
@@ -9062,6 +9154,16 @@ function renderUsagePopover(){
     head.querySelector('.up-name').textContent=usageProviderName(prov.provider)+(prov.status==='stale'?' · stale':'');
     if(logo){const img=document.createElement('img');img.className='up-logo';img.src=logo;img.alt='';
       head.querySelector('.up-name').prepend(img);}
+    if(prov.measurement_kind==='balance'){
+      head.querySelector('.up-reset').textContent=prov.observed_at?'observed '+usageClock(prov.observed_at):'not observed';
+      sec.appendChild(head);
+      const balance=prov.status==='ok'&&prov.balance;
+      const amount=document.createElement('div');amount.className='up-name'+(balance&&!balance.is_available?' up-balance-warning':'')+(usageBalanceLow(prov)?' up-balance-low':'');
+      amount.textContent=balance?(balance.total_balance===null?'No USD balance':'$'+usageUsd(balance.total_balance)):'$?';
+      const note=document.createElement('div');note.className='up-empty';
+      note.textContent=balance?'Account '+(balance.is_available?'available':'unavailable'):'Balance unavailable';
+      sec.append(amount,note);return sec;
+    }
     const soon=(usageMainWindows(prov).some(w=>w.resets_at)?usageMainWindows(prov):prov.windows).filter(w=>w.resets_at).sort((a,b)=>a.resets_at-b.resets_at)[0];
     head.querySelector('.up-reset').textContent=prov.status==='unavailable'?(USAGE_REASON[prov.reason]||'unavailable')
       :soon?`next reset ${soon.label} · ${usageClock(soon.resets_at)}`:'';
@@ -9085,7 +9187,7 @@ function renderUsagePopover(){
       ws.forEach(w=>d.appendChild(usageDial(w)));sec.appendChild(d);}
     return sec;}));
   const foot=document.createElement('div');foot.className='up-foot';
-  foot.textContent='Claude from the OAuth usage endpoint with the token Claude Code keeps · Codex from the app server. Read-only; refreshed every minute.';
+  foot.textContent='Claude from the OAuth usage endpoint with the token Claude Code keeps · Codex from the app server. Read-only; refreshed every minute.'+(providers.some(p=>p.measurement_kind==='balance')?' DeepSeek account balance from ORRERY Telemetry.':'');
   body.appendChild(foot);
 }
 async function pollUsage(force){
@@ -9093,10 +9195,18 @@ async function pollUsage(force){
     const r=await fetch('/telemetry/usage'+(force?'?refresh=1':''),{cache:'no-store'});
     if(!r.ok)throw new Error(String(r.status));
     usageData=await r.json();
-  }catch(e){ /* keep the last snapshot; the pill keeps its last numbers, dimmed if stale */ }
-  renderUsagePill();
+  }catch(e){ /* Window snapshots retain their existing behaviour; a failed balance read is unknown. */
+    if(usageData&&usageData.providers.some(p=>p.measurement_kind==='balance')){
+      usageData={...usageData,providers:usageData.providers.map(p=>p.measurement_kind==='balance'
+        ?{...p,status:'unavailable',balance:null,reason:'telemetry_unavailable'}:p)};
+    }
+  }
+  renderUsageSettings();renderUsagePill();
   if(document.getElementById('usagePopover').matches(':popover-open'))renderUsagePopover();
 }
+document.getElementById('settingsPopover').addEventListener('toggle',e=>{
+  if(e.newState==='open')renderUsageSettings();
+});
 document.getElementById('usagePopover').addEventListener('toggle',e=>{
   // Read what is left checks off once the numbers were open and are closed again.
   if(e.newState==='open'){renderUsagePopover();pollUsage(false);}
@@ -9520,7 +9630,7 @@ function paintTile(el,a){
   el.querySelector('.face').style.removeProperty('--lineage-ring');
   el.querySelector('.ini').textContent=(a.name[0]||'?');
   const img=el.querySelector('.face img');
-  const src='/telemetry/portrait?v=3&name='+encodeURIComponent(a.name)+'&hi=1';
+  const src='/telemetry/portrait?v=4&name='+encodeURIComponent(a.name)+'&hi=1';
   if(img.getAttribute('src')!==src){img.style.display='';img.src=src;img.onerror=()=>{img.style.display='none';};}
   el.querySelector('.cname').textContent=a.name;
   paintRosterProvider(el,a);paintRosterHarness(el,a);
@@ -9963,7 +10073,31 @@ let spawnViewerStorage=null;try{spawnViewerStorage=window.localStorage;}catch(_)
 const dirPresets=document.getElementById('dirPresets');
 const dirCrumbs=document.getElementById('dirCrumbs');
 const dirList=document.getElementById('dirList');
-let spawnDirPath='';
+const spawnDirDialog=document.getElementById('spawnDirDialog');
+const spawnDirButton=document.getElementById('spawnDirButton');
+const spawnDirUse=document.getElementById('spawnDirUse');
+let spawnDirPath='',spawnDirBrowsePath='',spawnDirBrowseEpoch=0;
+function renderSpawnDirPath(){
+  const label=document.getElementById('spawnDirSelected');
+  label.textContent=spawnDirPath||'Choose a folder';label.title=spawnDirPath;
+}
+function openSpawnDirPicker(){
+  if(!spawnDirDialog.open)spawnDirDialog.showModal();
+  browseDir(spawnDirPath||'~');
+}
+function closeSpawnDirPicker(){
+  ++spawnDirBrowseEpoch;
+  if(spawnDirDialog.open)spawnDirDialog.close();
+}
+spawnDirButton.addEventListener('click',openSpawnDirPicker);
+document.getElementById('spawnDirClose').addEventListener('click',closeSpawnDirPicker);
+document.getElementById('spawnDirCancel').addEventListener('click',closeSpawnDirPicker);
+spawnDirDialog.addEventListener('cancel',event=>{event.preventDefault();closeSpawnDirPicker();});
+spawnDirDialog.addEventListener('close',()=>{if(spawnOverlay.classList.contains('on'))spawnDirButton.focus({preventScroll:true});});
+spawnDirUse.addEventListener('click',()=>{
+  if(spawnDirUse.disabled||!spawnDirBrowsePath)return;
+  spawnDirPath=spawnDirBrowsePath;renderSpawnDirPath();closeSpawnDirPicker();
+});
 const spawnAdjective=document.getElementById('spawnAdjective');
 const adjOptions=document.getElementById('adjOptions');
 const agentStrip=document.getElementById('agentStrip');
@@ -9971,7 +10105,6 @@ const providerTabs=document.getElementById('providerTabs');
 const modelChoices=document.getElementById('modelChoices');
 const effortRow=document.getElementById('effortRow');
 const effortChoices=document.getElementById('effortChoices');
-const effortCaption=document.getElementById('effortCaption');
 const spawnModelSearch=document.getElementById('spawnModelSearch');
 const spawnHelper=document.getElementById('spawnHelper');
 const spawnHarnesses=document.getElementById('spawnHarnesses');
@@ -10123,7 +10256,7 @@ function renderSpawnSummary(){
   summary.replaceChildren();if(!p||!model)return;
   const title=document.createElement('strong');title.textContent=model.label||model.id;summary.append(title);
   const h=SpawnPicker.harnesses(p,model).find(h=>h.id===selHarness);
-  const details=[SpawnPicker.metadata(p,model),h?(h.default?'':'Harness: '+h.label):'Harness: Coming soon',selEffort?'Effort: '+selEffort:'Effort: Not supported',
+  const details=[SpawnPicker.metadata(p,model),h?(h.default?'':'Harness: '+h.label):'Harness: Coming soon',selEffort?'Effort: '+selEffort:effortsForModel(p,selModel).efforts?'Effort: Default':'Effort: Not supported',
     !spawnHelper.disabled?'Helper: '+spawnHelper.selectedOptions[0].textContent:'',
     SpawnPicker.isManaged(p,model,selHarness)?'Server-reported context: not yet available. Uses the runner’s configured context.':''];
   details.filter(Boolean).forEach(text=>{const line=document.createElement('span');line.textContent=text;summary.append(line);});
@@ -10133,15 +10266,42 @@ spawnModelSearch.addEventListener('input',()=>{
   renderLocalModels();
 });
 spawnHelper.addEventListener('change',renderSpawnSummary);
-/* The dashboard names each provider's less-used models (overflow_models —
-   not necessarily older ones); they fold under "more models" so the main
-   ones are not lost among them. The default model is never folded, and a
-   provider without the list (an older telemetry) shows every model. */
+/* Prefer structured catalog versions when present. Current Telemetry supplies
+   model IDs, so parse the two cloud naming schemes without a release list.
+   Unknown names stay visible rather than being guessed into a family. */
+function modelVersionIdentity(model){
+  const explicit=String(model.version??'').trim();
+  if(model.family&&/^\d+(?:[.-]\d+)*$/.test(explicit)){
+    return {family:String(model.family).toLowerCase(),version:explicit.split(/[.-]/).map(Number)};
+  }
+  const id=String(model.id||'').toLowerCase().replace(/-\d{8}$/,'');
+  let match=id.match(/^gpt-(\d+(?:\.\d+)*)(?:-([a-z][a-z0-9-]*))?$/);
+  if(match)return {family:match[2]||'gpt',version:match[1].split('.').map(Number)};
+  match=id.match(/^claude-([a-z]+)-(\d+(?:[.-]\d+)*)$/);
+  if(match)return {family:match[1],version:match[2].split(/[.-]/).map(Number)};
+  match=id.match(/^claude-(\d+(?:[.-]\d+)*)-([a-z]+)$/);
+  return match?{family:match[2],version:match[1].split(/[.-]/).map(Number)}:null;
+}
+function compareModelVersions(left,right){
+  for(let i=0;i<Math.max(left.length,right.length);i++){
+    const delta=(left[i]||0)-(right[i]||0);if(delta)return delta;
+  }
+  return 0;
+}
 function splitOverflowModels(provider){
   const models=(provider&&Array.isArray(provider.models))?provider.models:[];
   const listed=new Set((provider&&Array.isArray(provider.overflow_models)?provider.overflow_models:[])
     .map(id=>String(id||'')));
-  const older=m=>!m.default&&(m.overflow===true||listed.has(m.id));
+  const identities=new Map(models.map(model=>[model,modelVersionIdentity(model)])),latest=new Map();
+  for(const [model,identity] of identities){
+    if(model.deprecated===true)continue;
+    if(identity&&(!latest.has(identity.family)||compareModelVersions(identity.version,latest.get(identity.family))>0))latest.set(identity.family,identity.version);
+  }
+  const older=model=>{
+    const identity=identities.get(model);
+    return model.deprecated===true||Boolean(identity&&compareModelVersions(identity.version,latest.get(identity.family))<0)||
+      (!model.default&&(model.overflow===true||listed.has(model.id)));
+  };
   return {current:models.filter(m=>!older(m)),older:models.filter(older)};
 }
 function renderModels(){
@@ -10171,7 +10331,7 @@ function renderModels(){
   if(older.length){
     const fold=document.createElement('details');fold.className='model-overflow';
     fold.open=older.some(m=>m.id===selModel);
-    const summary=document.createElement('summary');summary.textContent=`more models · ${older.length}`;
+    const summary=document.createElement('summary');summary.textContent=`More models · ${older.length}`;
     into=document.createElement('div');into.className='model-choices';
     fold.append(summary,into);modelChoices.appendChild(fold);
     older.forEach(addModel);
@@ -10197,25 +10357,14 @@ function effortsForModel(provider,model){
   return {efforts:list,fallback:provider&&provider.effort_default||null};
 }
 function renderEfforts(p){
-  const {efforts,fallback}=effortsForModel(p,selModel);
-  effortRow.hidden=false;effortChoices.innerHTML='';
-  if(efforts){if(!selEffort||!efforts.includes(selEffort))selEffort=efforts.includes(fallback)?fallback:efforts[0];}
-  else selEffort=null;
-  const levels=[...new Set(['off','low','medium','high','xhigh','max','ultra',...(efforts||[])])]
-    .filter(e=>!['xhigh','ultra'].includes(e)||(efforts||[]).includes(e));
-  levels.forEach(e=>{
-    const supported=Boolean(efforts&&efforts.includes(e));
-    if(!supported){const button=document.createElement('button');button.type='button';button.className='effort-unavailable';button.disabled=true;button.textContent=e[0].toUpperCase()+e.slice(1);effortChoices.appendChild(button);return;}
-    const lab=document.createElement('label');lab.className='effort-choice';
-    const input=document.createElement('input');input.type='radio';input.name='spawnEffort';input.value=e;input.checked=e===selEffort;
-    input.addEventListener('change',()=>{selEffort=e;renderEffortCaption(p);renderSpawnSummary();});
-    lab.appendChild(input);lab.append(e[0].toUpperCase()+e.slice(1));effortChoices.appendChild(lab);
-  });
-  renderEffortCaption(p);
-}
-function renderEffortCaption(provider){
-  const {fallback}=effortsForModel(provider,selModel);
-  effortCaption.textContent=selEffort?'Default: '+(fallback||selEffort):'Not supported by this model';
+  const {efforts}=effortsForModel(p,selModel);
+  effortRow.hidden=false;
+  // Null means untouched/reset. Catalog defaults are not the user's effective
+  // CLI settings, so never infer an explicit effort from effort_default.
+  if(!efforts||!efforts.includes(selEffort))selEffort=null;
+  EffortSlider.mount(effortChoices,{levels:efforts,value:selEffort,onChange:value=>{
+    selEffort=value;renderSpawnSummary();
+  }});
 }
 /* directory browser — navigate like a file manager instead of typing paths.
    Presets jump, crumbs ascend, the list descends; the chosen dir is simply
@@ -10234,25 +10383,31 @@ function renderDirs(){
   else browseDir(spawnDirPath);
 }
 async function browseDir(path){
+  const epoch=++spawnDirBrowseEpoch,selecting=spawnDirDialog.open;
+  if(selecting)spawnDirUse.disabled=true;
   let payload=null;
   try{
     const r=await fetch('/telemetry/fs/dirs?path='+encodeURIComponent(path));
     payload=await r.json();
     if(!r.ok)throw new Error(payload.error||'browse failed');
   }catch(err){
+    if(epoch!==spawnDirBrowseEpoch)return;
     dirList.innerHTML='';
     const row=document.createElement('div');row.className='dir-err';
     row.textContent=String(err&&err.message||err);
     dirList.appendChild(row);return;
   }
-  spawnDirPath=payload.path;
+  if(epoch!==spawnDirBrowseEpoch)return;
+  const currentPath=payload.path;spawnDirBrowsePath=currentPath;
+  if(!selecting){spawnDirPath=currentPath;renderSpawnDirPath();}
+  if(selecting&&spawnDirDialog.open)spawnDirUse.disabled=false;
   [...dirPresets.children].forEach(chip=>
     chip.classList.toggle('sel',chip.dataset.path&&
-      chip.dataset.path.replace(/^~/,'')&&spawnDirPath===chip.dataset.path||
-      spawnDirPath===chip.dataset.path));
+      chip.dataset.path.replace(/^~/,'')&&currentPath===chip.dataset.path||
+      currentPath===chip.dataset.path));
   // Render the selected directory as clickable path segments.
   dirCrumbs.innerHTML='';
-  const segments=spawnDirPath.split('/').filter(Boolean);
+  const segments=currentPath.split('/').filter(Boolean);
   const rootBtn=document.createElement('button');rootBtn.type='button';
   rootBtn.className='crumb';rootBtn.textContent='/';
   rootBtn.addEventListener('click',()=>browseDir('/'));
@@ -10282,7 +10437,7 @@ async function browseDir(path){
   });
   if(!(payload.dirs||[]).length){
     const empty=document.createElement('div');empty.className='dir-err';
-    empty.textContent='no subdirectories — this folder will be the launch dir';
+    empty.textContent='No subdirectories. Choose “Use this folder” to select this directory.';
     dirList.appendChild(empty);
   }
 }
@@ -10366,16 +10521,19 @@ document.getElementById('adjDice').addEventListener('click',()=>{
 
 function openSpawnModal(){
   closePalette(false);spawnLastFocus=document.activeElement;spawnForm.reset();
+  spawnForm.querySelector('.spawn-identity-options').open=true;
+  spawnAdvanced.open=false;
   spawnWorktreeBaseWrap.classList.remove('on');spawnStatus.textContent='ready';
   selScientist='';selProvider=null;selModel=null;selEffort=null;selFamily=null;selHarness=null;
   try{spawnModelSearch.value=spawnViewerStorage?.getItem(SPAWN_SEARCH_STORAGE_KEY)||'';}catch(_){spawnModelSearch.value='';}
   populateSpawnParents();
   loadSpawnCatalog().then(updateNameCard);
   spawnOverlay.classList.add('on');spawnOverlay.setAttribute('aria-hidden','false');
-  requestAnimationFrame(()=>spawnTask.focus());
+  requestAnimationFrame(()=>spawnForm.querySelector('.spawn-identity-options summary').focus({preventScroll:true}));
 }
 function closeSpawnModal(force=false){
   if(spawnBusy&&!force)return;
+  closeSpawnDirPicker();
   spawnOverlay.classList.remove('on');spawnOverlay.setAttribute('aria-hidden','true');
   if(spawnLastFocus&&spawnLastFocus.isConnected)spawnLastFocus.focus();
 }
@@ -10677,6 +10835,10 @@ spawnAdvanced.addEventListener('toggle',()=>{
 spawnForm.addEventListener('submit',submitSpawn);
 
 window.addEventListener('keydown',event=>{
+  if(spawnDirDialog.open){
+    if(event.key==='Escape'){event.preventDefault();closeSpawnDirPicker();}
+    return;
+  }
   if(isPaletteShortcut(event,hostPlatform)){
     event.preventDefault();openPalette();return;
   }
