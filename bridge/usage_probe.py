@@ -61,8 +61,14 @@ class ProviderUsage:
     reason: str = ""  # stable code, only when status != ok
     retry_after_seconds: int = 0  # > 0 when the provider asked us to back off (HTTP 429)
 
+    measurement_kind: str = ""  # absent on the existing percentage-window providers
+    balance: dict[str, Any] | None = None
+
     def to_json(self) -> dict[str, Any]:
         data = asdict(self)
+        if not self.measurement_kind:
+            data.pop("measurement_kind")
+            data.pop("balance")
         data["windows"] = [asdict(w) for w in self.windows]
         return data
 
@@ -380,13 +386,16 @@ def probe_codex(codex_bin: str | None, *, timeout: float = 20.0, now: float | No
 
 @dataclass
 class UsageCache:
-    """Per-provider memo with a TTL. A failed probe keeps the last good
-    snapshot (marked stale by ``observed_at``) instead of blanking the ledger."""
+    """Per-provider memo with a TTL. Window failures keep the last good
+    snapshot as stale; failed balance observations are explicitly unknown."""
     ttl_seconds: float = 60.0
     entries: dict[str, tuple[float, ProviderUsage]] = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     blocked_until: dict[str, float] = field(default_factory=dict)
+    # Optional rows most recently reported by the dashboard. A successful
+    # response without one removes it from the cached response as well.
+    reported_providers: tuple[str, ...] = ()
 
     def get(self, provider: str, now: float) -> ProviderUsage | None:
         with self.lock:
@@ -407,6 +416,9 @@ class UsageCache:
         if not hit:
             return None
         kept = hit[1]
+        if kept.measurement_kind == "balance":
+            return ProviderUsage(kept.provider, "unavailable", kept.observed_at,
+                                 reason="telemetry_unavailable", measurement_kind="balance")
         if kept.status == "ok" and kept.windows:
             return ProviderUsage(kept.provider, "stale", kept.observed_at, kept.windows,
                                  "telemetry_unavailable", kept.retry_after_seconds)
@@ -417,7 +429,7 @@ class UsageCache:
             previous = self.entries.get(snapshot.provider)
             if snapshot.retry_after_seconds > 0:
                 self.blocked_until[snapshot.provider] = now + snapshot.retry_after_seconds
-            if snapshot.status != "ok" and previous and previous[1].status in ("ok", "stale"):
+            if snapshot.measurement_kind != "balance" and snapshot.status != "ok" and previous and previous[1].status in ("ok", "stale"):
                 kept = ProviderUsage(snapshot.provider, "stale", previous[1].observed_at,
                                      previous[1].windows, snapshot.reason, snapshot.retry_after_seconds)
                 self.entries[snapshot.provider] = (now, kept)
@@ -465,6 +477,19 @@ def windows_from_quota_buckets(buckets: Any) -> tuple[UsageWindow, ...]:
 
 def provider_from_quota_payload(entry: Mapping[str, Any]) -> ProviderUsage:
     provider = str(entry.get("provider") or "").strip() or "unknown"
+    if entry.get("measurement_kind") == "balance":
+        raw = entry.get("balance")
+        valid = (isinstance(raw, Mapping) and raw.get("currency") == "USD"
+                 and (raw.get("total_balance") is None or isinstance(raw.get("total_balance"), str))
+                 and isinstance(raw.get("is_available"), bool))
+        ok = entry.get("status") == "ok" and valid
+        balance = ({key: raw.get(key) for key in ("currency", "total_balance", "is_available")}
+                   if ok else None)
+        observed = entry.get("observed_at")
+        return ProviderUsage(provider, "ok" if ok else "unavailable",
+                             observed if isinstance(observed, int) else None,
+                             reason="" if ok else str(entry.get("reason") or "balance_invalid_response"),
+                             measurement_kind="balance", balance=balance)
     buckets = entry.get("buckets")
     for bucket in buckets if isinstance(buckets, list) else []:
         if isinstance(bucket, Mapping):

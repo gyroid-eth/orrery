@@ -818,17 +818,19 @@ async def serve_usage(request: web.Request) -> web.Response:
     now = time.time()
     force = request.query.get("refresh") == "1"
 
-    cached = {p: cache.get(p, now) for p in USAGE_PROVIDERS}
+    providers = USAGE_PROVIDERS + cache.reported_providers
+    cached = {p: cache.get(p, now) for p in providers}
     if not force and all(hit is not None for hit in cached.values()):
-        snapshots = [cached[p] for p in USAGE_PROVIDERS]
+        snapshots = [cached[p] for p in providers]
     else:
         # single flight: a second page (the app and a browser tab, say) polling
         # at the same moment waits for the read in progress instead of opening
         # another one
         async with locks.setdefault("dashboard", asyncio.Lock()):
-            fresh = None if force else {p: cache.get(p, time.time()) for p in USAGE_PROVIDERS}
+            providers = USAGE_PROVIDERS + cache.reported_providers
+            fresh = None if force else {p: cache.get(p, time.time()) for p in providers}
             if fresh is not None and all(hit is not None for hit in fresh.values()):
-                snapshots = [fresh[p] for p in USAGE_PROVIDERS]
+                snapshots = [fresh[p] for p in providers]
             else:
                 snapshots = await _usage_from_dashboard(request, cache)
 
@@ -856,16 +858,22 @@ async def _usage_from_dashboard(request: web.Request, cache) -> list[ProviderUsa
         if isinstance(entry, Mapping)
     }
 
+    if isinstance(entries, list):
+        cache.reported_providers = tuple(p for p in ("dsh",) if p in by_provider)
     snapshots: list[ProviderUsage] = []
-    for provider in USAGE_PROVIDERS:
+    for provider in USAGE_PROVIDERS + cache.reported_providers:
         entry = by_provider.get(provider)
         if entry is not None:
             snapshots.append(cache.put(provider_from_quota_payload(entry), time.time()))
             continue
         last = cache.last(provider) if hasattr(cache, "last") else None
-        snapshots.append(last if last is not None else ProviderUsage(
+        snapshot = last if last is not None else ProviderUsage(
             provider, "unavailable", None,
-            reason="telemetry_unavailable" if payload is None else "provider_not_reported"))
+            reason="telemetry_unavailable" if payload is None else "provider_not_reported")
+        # A failed refresh must also replace a still-cached balance; otherwise
+        # the next ordinary request could revive the old amount as current.
+        snapshots.append(cache.put(snapshot, time.time())
+                         if snapshot.measurement_kind == "balance" else snapshot)
     return snapshots
 
 
