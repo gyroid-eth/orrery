@@ -1494,7 +1494,7 @@
             <button type="button" class="nc-dice" id="adjDice" title="re-roll adjective">🎲</button>
           </div>
         </div>
-        <details class="spawn-identity-options"><summary>Choose a scientist</summary>
+        <details class="spawn-identity-options" open><summary>Choose a scientist</summary>
           <div class="agent-strip" id="agentStrip" role="listbox" aria-label="Choose a scientist"></div></details>
       </div>
       <div class="spawn-picker" aria-label="Model and Harness">
@@ -1516,9 +1516,8 @@
       <div class="spawn-context">
       <!-- WHERE -->
       <div class="field full"><span class="field-label">Launch directory</span>
-        <div class="dir-presets" id="dirPresets"></div>
-        <div class="dir-crumbs" id="dirCrumbs" aria-label="Current directory"></div>
-        <div class="dir-list" id="dirList" role="listbox" aria-label="Subdirectories"></div>
+        <button type="button" class="spawn-dir-trigger" id="spawnDirButton" aria-haspopup="dialog" aria-controls="spawnDirDialog">
+          <span id="spawnDirSelected">Choose a folder</span><span aria-hidden="true">▾</span></button>
       </div>
       <div class="field full"><label for="spawnTask">Task description</label>
         <textarea id="spawnTask" maxlength="4000" required
@@ -1549,6 +1548,15 @@
       <button class="modal-btn" id="spawnCancel" type="button">Cancel</button>
       <button class="modal-btn primary" id="spawnSubmit" type="submit">Spawn Agent</button>
     </div>
+    <dialog id="spawnDirDialog" aria-labelledby="spawnDirTitle">
+      <div class="spawn-dir-head"><h2 id="spawnDirTitle">Choose launch directory</h2>
+        <button type="button" class="modal-close" id="spawnDirClose" aria-label="Close directory picker">×</button></div>
+      <div class="dir-presets" id="dirPresets"></div>
+      <div class="dir-crumbs" id="dirCrumbs" aria-label="Current directory"></div>
+      <div class="dir-list" id="dirList" role="listbox" aria-label="Subdirectories"></div>
+      <div class="spawn-dir-foot"><button type="button" class="modal-btn" id="spawnDirCancel">Cancel</button>
+        <button type="button" class="modal-btn primary" id="spawnDirUse">Use this folder</button></div>
+    </dialog>
   </form>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -9944,7 +9952,31 @@ let spawnViewerStorage=null;try{spawnViewerStorage=window.localStorage;}catch(_)
 const dirPresets=document.getElementById('dirPresets');
 const dirCrumbs=document.getElementById('dirCrumbs');
 const dirList=document.getElementById('dirList');
-let spawnDirPath='';
+const spawnDirDialog=document.getElementById('spawnDirDialog');
+const spawnDirButton=document.getElementById('spawnDirButton');
+const spawnDirUse=document.getElementById('spawnDirUse');
+let spawnDirPath='',spawnDirBrowsePath='',spawnDirBrowseEpoch=0;
+function renderSpawnDirPath(){
+  const label=document.getElementById('spawnDirSelected');
+  label.textContent=spawnDirPath||'Choose a folder';label.title=spawnDirPath;
+}
+function openSpawnDirPicker(){
+  if(!spawnDirDialog.open)spawnDirDialog.showModal();
+  browseDir(spawnDirPath||'~');
+}
+function closeSpawnDirPicker(){
+  ++spawnDirBrowseEpoch;
+  if(spawnDirDialog.open)spawnDirDialog.close();
+}
+spawnDirButton.addEventListener('click',openSpawnDirPicker);
+document.getElementById('spawnDirClose').addEventListener('click',closeSpawnDirPicker);
+document.getElementById('spawnDirCancel').addEventListener('click',closeSpawnDirPicker);
+spawnDirDialog.addEventListener('cancel',event=>{event.preventDefault();closeSpawnDirPicker();});
+spawnDirDialog.addEventListener('close',()=>{if(spawnOverlay.classList.contains('on'))spawnDirButton.focus({preventScroll:true});});
+spawnDirUse.addEventListener('click',()=>{
+  if(spawnDirUse.disabled||!spawnDirBrowsePath)return;
+  spawnDirPath=spawnDirBrowsePath;renderSpawnDirPath();closeSpawnDirPicker();
+});
 const spawnAdjective=document.getElementById('spawnAdjective');
 const adjOptions=document.getElementById('adjOptions');
 const agentStrip=document.getElementById('agentStrip');
@@ -10102,15 +10134,42 @@ spawnModelSearch.addEventListener('input',()=>{
   renderLocalModels();
 });
 spawnHelper.addEventListener('change',renderSpawnSummary);
-/* The dashboard names each provider's less-used models (overflow_models —
-   not necessarily older ones); they fold under "more models" so the main
-   ones are not lost among them. The default model is never folded, and a
-   provider without the list (an older telemetry) shows every model. */
+/* Prefer structured catalog versions when present. Current Telemetry supplies
+   model IDs, so parse the two cloud naming schemes without a release list.
+   Unknown names stay visible rather than being guessed into a family. */
+function modelVersionIdentity(model){
+  const explicit=String(model.version??'').trim();
+  if(model.family&&/^\d+(?:[.-]\d+)*$/.test(explicit)){
+    return {family:String(model.family).toLowerCase(),version:explicit.split(/[.-]/).map(Number)};
+  }
+  const id=String(model.id||'').toLowerCase().replace(/-\d{8}$/,'');
+  let match=id.match(/^gpt-(\d+(?:\.\d+)*)(?:-([a-z][a-z0-9-]*))?$/);
+  if(match)return {family:match[2]||'gpt',version:match[1].split('.').map(Number)};
+  match=id.match(/^claude-([a-z]+)-(\d+(?:[.-]\d+)*)$/);
+  if(match)return {family:match[1],version:match[2].split(/[.-]/).map(Number)};
+  match=id.match(/^claude-(\d+(?:[.-]\d+)*)-([a-z]+)$/);
+  return match?{family:match[2],version:match[1].split(/[.-]/).map(Number)}:null;
+}
+function compareModelVersions(left,right){
+  for(let i=0;i<Math.max(left.length,right.length);i++){
+    const delta=(left[i]||0)-(right[i]||0);if(delta)return delta;
+  }
+  return 0;
+}
 function splitOverflowModels(provider){
   const models=(provider&&Array.isArray(provider.models))?provider.models:[];
   const listed=new Set((provider&&Array.isArray(provider.overflow_models)?provider.overflow_models:[])
     .map(id=>String(id||'')));
-  const older=m=>!m.default&&(m.overflow===true||listed.has(m.id));
+  const identities=new Map(models.map(model=>[model,modelVersionIdentity(model)])),latest=new Map();
+  for(const [model,identity] of identities){
+    if(model.deprecated===true)continue;
+    if(identity&&(!latest.has(identity.family)||compareModelVersions(identity.version,latest.get(identity.family))>0))latest.set(identity.family,identity.version);
+  }
+  const older=model=>{
+    const identity=identities.get(model);
+    return model.deprecated===true||Boolean(identity&&compareModelVersions(identity.version,latest.get(identity.family))<0)||
+      (!model.default&&(model.overflow===true||listed.has(model.id)));
+  };
   return {current:models.filter(m=>!older(m)),older:models.filter(older)};
 }
 function renderModels(){
@@ -10140,7 +10199,7 @@ function renderModels(){
   if(older.length){
     const fold=document.createElement('details');fold.className='model-overflow';
     fold.open=older.some(m=>m.id===selModel);
-    const summary=document.createElement('summary');summary.textContent=`more models · ${older.length}`;
+    const summary=document.createElement('summary');summary.textContent=`More models · ${older.length}`;
     into=document.createElement('div');into.className='model-choices';
     fold.append(summary,into);modelChoices.appendChild(fold);
     older.forEach(addModel);
@@ -10203,25 +10262,31 @@ function renderDirs(){
   else browseDir(spawnDirPath);
 }
 async function browseDir(path){
+  const epoch=++spawnDirBrowseEpoch,selecting=spawnDirDialog.open;
+  if(selecting)spawnDirUse.disabled=true;
   let payload=null;
   try{
     const r=await fetch('/telemetry/fs/dirs?path='+encodeURIComponent(path));
     payload=await r.json();
     if(!r.ok)throw new Error(payload.error||'browse failed');
   }catch(err){
+    if(epoch!==spawnDirBrowseEpoch)return;
     dirList.innerHTML='';
     const row=document.createElement('div');row.className='dir-err';
     row.textContent=String(err&&err.message||err);
     dirList.appendChild(row);return;
   }
-  spawnDirPath=payload.path;
+  if(epoch!==spawnDirBrowseEpoch)return;
+  const currentPath=payload.path;spawnDirBrowsePath=currentPath;
+  if(!selecting){spawnDirPath=currentPath;renderSpawnDirPath();}
+  if(selecting&&spawnDirDialog.open)spawnDirUse.disabled=false;
   [...dirPresets.children].forEach(chip=>
     chip.classList.toggle('sel',chip.dataset.path&&
-      chip.dataset.path.replace(/^~/,'')&&spawnDirPath===chip.dataset.path||
-      spawnDirPath===chip.dataset.path));
+      chip.dataset.path.replace(/^~/,'')&&currentPath===chip.dataset.path||
+      currentPath===chip.dataset.path));
   // Render the selected directory as clickable path segments.
   dirCrumbs.innerHTML='';
-  const segments=spawnDirPath.split('/').filter(Boolean);
+  const segments=currentPath.split('/').filter(Boolean);
   const rootBtn=document.createElement('button');rootBtn.type='button';
   rootBtn.className='crumb';rootBtn.textContent='/';
   rootBtn.addEventListener('click',()=>browseDir('/'));
@@ -10251,7 +10316,7 @@ async function browseDir(path){
   });
   if(!(payload.dirs||[]).length){
     const empty=document.createElement('div');empty.className='dir-err';
-    empty.textContent='no subdirectories — this folder will be the launch dir';
+    empty.textContent='No subdirectories. Choose “Use this folder” to select this directory.';
     dirList.appendChild(empty);
   }
 }
@@ -10328,16 +10393,19 @@ document.getElementById('adjDice').addEventListener('click',()=>{
 
 function openSpawnModal(){
   closePalette(false);spawnLastFocus=document.activeElement;spawnForm.reset();
+  spawnForm.querySelector('.spawn-identity-options').open=true;
+  spawnAdvanced.open=false;
   spawnWorktreeBaseWrap.classList.remove('on');spawnStatus.textContent='ready';
   selScientist='';selProvider=null;selModel=null;selEffort=null;selFamily=null;selHarness=null;
   try{spawnModelSearch.value=spawnViewerStorage?.getItem(SPAWN_SEARCH_STORAGE_KEY)||'';}catch(_){spawnModelSearch.value='';}
   populateSpawnParents();
   loadSpawnCatalog().then(updateNameCard);
   spawnOverlay.classList.add('on');spawnOverlay.setAttribute('aria-hidden','false');
-  requestAnimationFrame(()=>spawnTask.focus());
+  requestAnimationFrame(()=>spawnForm.querySelector('.spawn-identity-options summary').focus({preventScroll:true}));
 }
 function closeSpawnModal(force=false){
   if(spawnBusy&&!force)return;
+  closeSpawnDirPicker();
   spawnOverlay.classList.remove('on');spawnOverlay.setAttribute('aria-hidden','true');
   if(spawnLastFocus&&spawnLastFocus.isConnected)spawnLastFocus.focus();
 }
@@ -10542,6 +10610,10 @@ spawnAdvanced.addEventListener('toggle',()=>{
 spawnForm.addEventListener('submit',submitSpawn);
 
 window.addEventListener('keydown',event=>{
+  if(spawnDirDialog.open){
+    if(event.key==='Escape'){event.preventDefault();closeSpawnDirPicker();}
+    return;
+  }
   if(isPaletteShortcut(event,hostPlatform)){
     event.preventDefault();openPalette();return;
   }
