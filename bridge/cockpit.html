@@ -734,6 +734,11 @@
   .termhost::-webkit-scrollbar{display:none}
   .termhost.on{opacity:1;visibility:visible;pointer-events:auto}
   .termhost .xterm{height:100%}
+  /* In an alternate-screen app the wheel scrolls the app (mouse reports or
+     PageUp/Down), not xterm history. A late viewer can still have a normal
+     local buffer, so use the remote mode rather than the local buffer type. */
+  .termhost.app-scroll .xterm-viewport{scrollbar-width:none}
+  .termhost.app-scroll .xterm-viewport::-webkit-scrollbar{display:none}
   .pane-bottom-jump{
     position:absolute;z-index:4;right:34px;bottom:12px;padding:5px 9px;
     border:1px solid rgba(255,255,255,.1);border-radius:999px;
@@ -7770,12 +7775,18 @@ function codexWheelPages(state,event,now){
 function setCodexWheelModes(p,meta){
   p._wheelAlternate=typeof meta.alternateOn==='boolean'?meta.alternateOn:null;
   p._wheelMouse=[0,1,2].map(()=>meta.mouseTracking===false?false:null);
+  syncPaneScrollbar(p);
+}
+function syncPaneScrollbar(p){
+  if(p.host)p.host.classList.toggle('app-scroll',p._wheelAlternate===true);
 }
 function installCodexWheel(p){
   const state={amount:0,pages:0,last:-Infinity,direction:0};
   for(const final of ['h','l'])p.term.parser.registerCsiHandler({prefix:'?',final},params=>{
     for(const mode of params){
-      if([47,1047,1049].includes(mode))p._wheelAlternate=final==='h';
+      if([47,1047,1049].includes(mode)){
+        p._wheelAlternate=final==='h';syncPaneScrollbar(p);
+      }
       const index=[1000,1002,1003].indexOf(mode);
       if(index>=0)p._wheelMouse[index]=final==='h';
     }

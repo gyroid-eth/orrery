@@ -3340,7 +3340,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "617501b677a815908d787deb0edc1b4cfb7f60fddb01e60ec54ab04271b644e5",
+        "digest": "d61a544611d293c04cbf4231402ee5f0c7aac3b051c98ca73c3c06fbf9ff69e6",
         "expected": 137,
         "records": [
           {
@@ -3715,399 +3715,399 @@
             "value": "10px"
           },
           {
-            "line": 761,
+            "line": 766,
             "property": "font-size",
             "selector": ".rosterempty",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 762,
+            "line": 767,
             "property": "font-size",
             "selector": ".legend",
             "source": "bridge/cockpit.html",
             "value": "10px"
           },
           {
-            "line": 794,
+            "line": 799,
             "property": "font-size",
             "selector": ".keycap",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 803,
+            "line": 808,
             "property": "font-size",
             "selector": ".palette-kind",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 805,
+            "line": 810,
             "property": "font-size",
             "selector": ".palette-meta",
             "source": "bridge/cockpit.html",
             "value": "9.5px"
           },
           {
-            "line": 806,
+            "line": 811,
             "property": "font-size",
             "selector": ".palette-empty",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 813,
+            "line": 818,
             "property": "font-size",
             "selector": ".modal-sub",
             "source": "bridge/cockpit.html",
             "value": "9.5px"
           },
           {
-            "line": 819,
+            "line": 824,
             "property": "font-size",
             "selector": ".field label,.field .field-label",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 826,
+            "line": 831,
             "property": "font-size",
             "selector": ".spawn-advanced summary",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 830,
+            "line": 835,
             "property": "font-size",
             "selector": ".spawn-advanced summary small",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 846,
+            "line": 851,
             "property": "font-size",
             "selector": ".nc-hint",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 850,
+            "line": 855,
             "property": "font-size",
             "selector": ".nc-adj input",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 862,
+            "line": 867,
             "property": "font-size",
             "selector": ".dir-chip",
             "source": "bridge/cockpit.html",
             "value": "9.5px"
           },
           {
-            "line": 868,
+            "line": 873,
             "property": "font-size",
             "selector": ".dir-crumbs",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 870,
+            "line": 875,
             "property": "font-size",
             "selector": ".crumb",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 879,
+            "line": 884,
             "property": "font-size",
             "selector": ".dir-row",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 881,
+            "line": 886,
             "property": "font-size",
             "selector": ".dir-row .dr-arrow",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 882,
+            "line": 887,
             "property": "font-size",
             "selector": ".dir-err",
             "source": "bridge/cockpit.html",
             "value": "10px"
           },
           {
-            "line": 891,
+            "line": 896,
             "property": "font-size",
             "selector": ".agent-pick .cp-lab",
             "source": "bridge/cockpit.html",
             "value": "7px"
           },
           {
-            "line": 896,
+            "line": 901,
             "property": "font-size",
             "selector": ".provider-tabs button",
             "source": "bridge/cockpit.html",
             "value": "10px"
           },
           {
-            "line": 903,
+            "line": 908,
             "property": "font-size",
             "selector": ".effort-lab",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 904,
+            "line": 909,
             "property": "font-size",
             "selector": ".model-badge",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 915,
+            "line": 920,
             "property": "font-size",
             "selector": ".model-choice-name",
             "source": "bridge/cockpit.html",
             "value": "10.5px"
           },
           {
-            "line": 916,
+            "line": 921,
             "property": "font-size",
             "selector": ".model-choice-note",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 920,
+            "line": 925,
             "property": "font-size",
             "selector": ".model-overflow>summary",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 922,
+            "line": 927,
             "property": "font-size",
             "selector": ".model-overflow>summary::before",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 927,
+            "line": 932,
             "property": "font-size",
             "selector": ".model-error",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 928,
+            "line": 933,
             "property": "font-size",
             "selector": ".model-choices .effort-choice",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 929,
+            "line": 934,
             "property": "font-size",
             "selector": ".effort-caption",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 931,
+            "line": 936,
             "property": "font-size",
             "selector": ".worktree-line",
             "source": "bridge/cockpit.html",
             "value": "10.5px"
           },
           {
-            "line": 936,
+            "line": 941,
             "property": "font-size",
             "selector": ".spawn-status",
             "source": "bridge/cockpit.html",
             "value": "9.5px"
           },
           {
-            "line": 939,
+            "line": 944,
             "property": "font-size",
             "selector": ".modal-btn",
             "source": "bridge/cockpit.html",
             "value": "9.5px"
           },
           {
-            "line": 957,
+            "line": 962,
             "property": "font-size",
             "selector": ".settings-kicker",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 960,
+            "line": 965,
             "property": "font-size",
             "selector": ".settings-section-title",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 964,
+            "line": 969,
             "property": "font-size",
             "selector": ".settings-row-name",
             "source": "bridge/cockpit.html",
             "value": "9.5px"
           },
           {
-            "line": 965,
+            "line": 970,
             "property": "font-size",
             "selector": ".settings-value",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 966,
+            "line": 971,
             "property": "font-size",
             "selector": ".settings-help",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 999,
+            "line": 1004,
             "property": "font-size",
             "selector": ".settings-choice",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 1002,
+            "line": 1007,
             "property": "font-size",
             "selector": ".settings-select",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 1007,
+            "line": 1012,
             "property": "font-size",
             "selector": ".theme-ab-current",
             "source": "bridge/cockpit.html",
             "value": "10px"
           },
           {
-            "line": 1008,
+            "line": 1013,
             "property": "font-size",
             "selector": ".theme-ab-since",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 1018,
+            "line": 1023,
             "property": "font-size",
             "selector": ".theme-axis-badge",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 1020,
+            "line": 1025,
             "property": "font-size",
             "selector": ".theme-axis-name",
             "source": "bridge/cockpit.html",
             "value": "9.5px"
           },
           {
-            "line": 1021,
+            "line": 1026,
             "property": "font-size",
             "selector": ".theme-axis-note",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 1022,
+            "line": 1027,
             "property": "font-size",
             "selector": ".theme-axis-count",
             "source": "bridge/cockpit.html",
             "value": "7.5px"
           },
           {
-            "line": 1032,
+            "line": 1037,
             "property": "font-size",
             "selector": ".theme-axis-level",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 1038,
+            "line": 1043,
             "property": "font-size",
             "selector": ".theme-axis-legacy summary",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1042,
+            "line": 1047,
             "property": "font-size",
             "selector": ".theme-ab-log summary",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1044,
+            "line": 1049,
             "property": "font-size",
             "selector": ".theme-ab-log-list li",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 1051,
+            "line": 1056,
             "property": "font-size",
             "selector": ".toast",
             "source": "bridge/cockpit.html",
             "value": "10.5px"
           },
           {
-            "line": 1082,
+            "line": 1087,
             "property": "font-size",
             "selector": ".pane-return,.pane-popout",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1095,
+            "line": 1100,
             "property": "font-size",
             "selector": ".pane-drag-ghost small",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1106,
+            "line": 1111,
             "property": "font-size",
             "selector": ".pane-float-bar .hint",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1107,
+            "line": 1112,
             "property": "font-size",
             "selector": ".pane-float-bar button",
             "source": "bridge/cockpit.html",
             "value": "10px"
           },
           {
-            "line": 1116,
+            "line": 1121,
             "property": "font-size",
             "selector": ".pane-out-chip",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 1121,
+            "line": 1126,
             "property": "font-size",
             "selector": ".pane-out-chip .where",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 1122,
+            "line": 1127,
             "property": "font-size",
             "selector": ".pane-out-chip .back",
             "source": "bridge/cockpit.html",
@@ -4316,7 +4316,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "610747346cb725b3e4f1ea9404f3fb545add63f5ff55ba40665e7ba9801fda63",
+        "digest": "f5b78a420d9a89306d27096f4714a00bf4e8c376140ca2446d14b693e2441e3b",
         "expected": 40,
         "records": [
           {
@@ -4439,112 +4439,112 @@
             "value": ".2em"
           },
           {
-            "line": 739,
+            "line": 744,
             "property": "letter-spacing",
             "selector": ".pane-bottom-jump",
             "source": "bridge/cockpit.html",
             "value": ".12em"
           },
           {
-            "line": 803,
+            "line": 808,
             "property": "letter-spacing",
             "selector": ".palette-kind",
             "source": "bridge/cockpit.html",
             "value": ".15em"
           },
           {
-            "line": 813,
+            "line": 818,
             "property": "letter-spacing",
             "selector": ".modal-sub",
             "source": "bridge/cockpit.html",
             "value": ".12em"
           },
           {
-            "line": 819,
+            "line": 824,
             "property": "letter-spacing",
             "selector": ".field label,.field .field-label",
             "source": "bridge/cockpit.html",
             "value": ".14em"
           },
           {
-            "line": 826,
+            "line": 831,
             "property": "letter-spacing",
             "selector": ".spawn-advanced summary",
             "source": "bridge/cockpit.html",
             "value": ".16em"
           },
           {
-            "line": 897,
+            "line": 902,
             "property": "letter-spacing",
             "selector": ".provider-tabs button",
             "source": "bridge/cockpit.html",
             "value": ".14em"
           },
           {
-            "line": 903,
+            "line": 908,
             "property": "letter-spacing",
             "selector": ".effort-lab",
             "source": "bridge/cockpit.html",
             "value": ".2em"
           },
           {
-            "line": 916,
+            "line": 921,
             "property": "letter-spacing",
             "selector": ".model-choice-note",
             "source": "bridge/cockpit.html",
             "value": ".09em"
           },
           {
-            "line": 920,
+            "line": 925,
             "property": "letter-spacing",
             "selector": ".model-overflow>summary",
             "source": "bridge/cockpit.html",
             "value": ".16em"
           },
           {
-            "line": 930,
+            "line": 935,
             "property": "letter-spacing",
             "selector": ".effort-caption b",
             "source": "bridge/cockpit.html",
             "value": ".1em"
           },
           {
-            "line": 939,
+            "line": 944,
             "property": "letter-spacing",
             "selector": ".modal-btn",
             "source": "bridge/cockpit.html",
             "value": ".1em"
           },
           {
-            "line": 957,
+            "line": 962,
             "property": "letter-spacing",
             "selector": ".settings-kicker",
             "source": "bridge/cockpit.html",
             "value": ".18em"
           },
           {
-            "line": 960,
+            "line": 965,
             "property": "letter-spacing",
             "selector": ".settings-section-title",
             "source": "bridge/cockpit.html",
             "value": ".24em"
           },
           {
-            "line": 964,
+            "line": 969,
             "property": "letter-spacing",
             "selector": ".settings-row-name",
             "source": "bridge/cockpit.html",
             "value": ".13em"
           },
           {
-            "line": 1095,
+            "line": 1100,
             "property": "letter-spacing",
             "selector": ".pane-drag-ghost small",
             "source": "bridge/cockpit.html",
             "value": ".1em"
           },
           {
-            "line": 1121,
+            "line": 1126,
             "property": "letter-spacing",
             "selector": ".pane-out-chip .where",
             "source": "bridge/cockpit.html",
@@ -4604,7 +4604,7 @@
       }
     }
   },
-  "inventory_digest": "9cb65ee640c10d69c03f620376243f0716ee0b85ac9e4024790a411066904ad7",
+  "inventory_digest": "bdcc83ff1824bd6d793c68b9f75ac8afddce31be9a1d323fee46c6301ebf5db4",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -4616,9 +4616,9 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "83c093d18562fe2fef214ef285231ed61c7cf6b1b0b8cff088d0eb7abecc6d97",
+  "source_digest": "1bf3b69c810ddbafad78c11637de74ca5f17fa1889e817d61dc9711cc9cb057e",
   "source_files": {
-    "bridge/cockpit.html": "f68a62e5d5dfa98774633811b0287c47a16590139094661b1a2efbccd55590a9",
+    "bridge/cockpit.html": "b949afd6ee2a64f11d1e36f6efccd8706dc952446a9d5a8693e5b4fb9a1629b3",
     "bridge/mail_view.css": "4c65a93dd1b338a3f4304651173a53a7ed489860ecec2bc86014d253bbcde898",
     "bridge/orrery_view.css": "ad0adcc4a4bc1867240ea68bb37c36d1bdd73b8e198c7e5ebba92343c78c26cd"
   },
