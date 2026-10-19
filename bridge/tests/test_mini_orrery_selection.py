@@ -188,3 +188,16 @@ def test_deep_and_wide_layouts_keep_the_whole_selected_ring_visible(mini_browser
     # Preserve the layout rather than moving edge nodes to fit the marker.
     assert (result['x'], result['y']) == {
         'chain': (140, 186), 'fan-left': (17, 130), 'fan-right': (263, 130)}[shape]
+
+
+def test_orrery_model_labels_keep_the_raw_id_instead_of_shortening_it(mini_browser):
+    _,evaluate=mini_browser
+    result=evaluate("""(()=>{
+      currentAgents[0].model='Friendly display';currentAgents[0].model_raw='gpt-fixture-long-model-id';
+      document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      OrreryRail.openPlanetarium();
+      return {mini:document.querySelector('#orrery [data-agent=Pilot]').getAttribute('aria-label'),
+        planet:document.querySelector('.planetarium-svg [data-agent=Pilot]').getAttribute('aria-label')};
+    })()""")
+    assert 'gpt-fixture-long-model-id' in result['mini'] and 'gpt-fixture-long-model-id' in result['planet']
+    assert 'Friendly display' not in str(result)

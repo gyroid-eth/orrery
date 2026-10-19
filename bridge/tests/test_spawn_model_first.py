@@ -301,3 +301,58 @@ def test_effort_is_omitted_until_keyboard_choice_and_reset_restores_settings(tou
     assert evaluate("({specified:Object.hasOwn(spawnPayloadFromForm(),'effort'),inputs:effortChoices.querySelectorAll('input').length,text:effortChoices.textContent})") == dict(specified=False,inputs=0,text='Not supported')
     evaluate("modelChoices.querySelector('input[value=fixture]').click()")
     assert evaluate("Object.hasOwn(spawnPayloadFromForm(),'effort')") is False
+
+
+@pytest.mark.parametrize('failure',['offline','http','malformed'])
+def test_catalog_failure_has_no_fabricated_models_and_retry_recovers(tour_browser,failure):
+    _,evaluate=tour_browser
+    result=evaluate('''(async()=>{
+      const originalFetch=window.fetch;let recovered=false,posts=0;
+      const catalog={providers:[{id:'codex',program:'codex-cli',models:[{id:'telemetry-current',default:true}]}],naming:{},dirs:[]};
+      window.fetch=async(url,options)=>{
+        if(url==='/telemetry/spawn'){posts++;return {ok:true,json:async()=>({ok:true,child_name:'FixtureOnly'})};}
+        if(url==='/telemetry/spawn-catalog'){
+          if(recovered)return {ok:true,json:async()=>catalog};
+          if(FAILURE==='offline')throw Error('fixture offline');
+          if(FAILURE==='http')return {ok:false,json:async()=>catalog};
+          return {ok:true,json:async()=>({not:'a catalog'})};
+        }
+        if(url.startsWith('/telemetry/fs/dirs'))return {ok:true,json:async()=>({path:'/workspace',dirs:[]})};
+        return originalFetch(url,options);
+      };
+      try{
+        await loadSpawnCatalog();
+        const failed={count:modelChoices.querySelectorAll('input[name=spawnModel]').length,
+          providers:spawnCatalog.providers.length,message:modelChoices.textContent,disabled:spawnSubmit.disabled,
+          model:spawnPayloadFromForm().model,status:spawnStatus.textContent};
+        await submitSpawn(new Event('submit',{cancelable:true}));
+        recovered=true;modelChoices.querySelector('button').click();
+        await new Promise(r=>setTimeout(r,30));
+        return {failed,posts,recovered:{model:selModel,disabled:spawnSubmit.disabled,status:spawnStatus.textContent,
+          labels:[...modelChoices.querySelectorAll('.model-choice-name')].map(e=>e.textContent),
+          notes:modelChoices.querySelectorAll('.model-choice-note').length}};
+      }finally{window.fetch=originalFetch;}
+    })()'''.replace('FAILURE',json.dumps(failure)))
+    assert result['failed']['count'] == result['failed']['providers'] == result['posts'] == 0
+    assert result['failed']['disabled'] and result['failed']['model'] == ''
+    assert 'Telemetry unavailable' in result['failed']['message'] and 'Retry' in result['failed']['message']
+    assert result['recovered'] == dict(model='telemetry-current',disabled=False,status='ready',labels=['telemetry-current'],notes=0)
+
+
+def test_model_ids_are_used_in_picker_summary_harness_helper_and_roster(tour_browser):
+    _,evaluate=tour_browser
+    result=evaluate('''(()=>{
+      spawnCatalog={providers:[{id:'codex',label:'Codex from telemetry',program:'codex-cli',
+        models:[{id:'raw-model-id',label:'Handwritten display',hint:'Legacy description',title:'Legacy tooltip',default:true}],
+        helper_models:[{id:'raw-helper-id',label:'Friendly helper'}]}],naming:{},dirs:[]};
+      selFamily=null;selProvider=null;selModel=null;selHarness=null;renderProviderTabs();
+      const a={name:'FixtureModel',category:'agent',running:true,provider:'openai',model:'Friendly display',model_raw:'raw-model-id'};
+      currentAgents=[a];rosterEl.append(tileFor(a));
+      return {notes:modelChoices.querySelectorAll('.model-choice-note').length,tooltip:modelChoices.querySelector('.model-choice').title,name:modelChoices.querySelector('.model-choice-name').textContent,harness:document.getElementById('spawnHarnessHint').textContent,
+        summary:document.getElementById('spawnSummary').querySelector('strong').textContent,
+        helper:[...spawnHelper.options].map(o=>o.textContent),provider:providerTabs.querySelector('[data-family=codex] .spawn-family-copy>span').textContent,
+        case:getComputedStyle(document.querySelector('[data-agent="FixtureModel"] .pill.model')).textTransform,roster:document.querySelector('[data-agent="FixtureModel"] .pill.model')?.textContent};
+    })()''')
+    assert result['name']==result['summary']==result['roster']=='raw-model-id'
+    assert result['harness']=='For raw-model-id' and result['helper']==['Same as main','raw-helper-id']
+    assert result['provider']=='Codex from telemetry' and result['notes']==0 and result['tooltip']=='' and result['case']=='none'
