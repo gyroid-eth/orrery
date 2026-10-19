@@ -1,0 +1,103 @@
+[
+  {
+    "presentation": {
+      "provider": {
+        "asset": "anthropic",
+        "label": "Claude"
+      },
+      "text": "claude",
+      "compactText": "CL",
+      "cls": "eng-claude"
+    },
+    "roster": "<span class=\"provider-badge\" title=\"Claude\"><img class=\"provider-logo\" alt=\"Claude\" title=\"Claude\" src=\"cockpit-assets/anthropic.svg\"></span>",
+    "pill": "<span class=\"pill eng eng-claude\" hidden=\"\">claude</span>",
+    "mini": "<g class=\"mini-provider-badge\" role=\"img\" aria-label=\"Claude\"><title>Claude</title><circle class=\"mini-provider-seat\" r=\"7\"></circle><image class=\"mini-provider-logo\" x=\"-4.06\" y=\"-4.06\" width=\"8.12\" height=\"8.12\" href=\"cockpit-assets/anthropic.svg\" aria-label=\"Claude\" preserveAspectRatio=\"xMidYMid meet\"></image></g>",
+    "planet": "<g class=\"mini-provider-badge planet-provider-badge\" role=\"img\" aria-label=\"Claude\"><title>Claude</title><circle class=\"mini-provider-seat\" r=\"13\"></circle><image class=\"mini-provider-logo\" x=\"-7.539999999999999\" y=\"-7.539999999999999\" width=\"15.079999999999998\" height=\"15.079999999999998\" href=\"cockpit-assets/anthropic.svg\" aria-label=\"Claude\" preserveAspectRatio=\"xMidYMid meet\"></image></g>"
+  },
+  {
+    "presentation": {
+      "provider": {
+        "asset": "openai",
+        "label": "Codex (OpenAI)"
+      },
+      "text": "codex",
+      "compactText": "CO",
+      "cls": "eng-codex"
+    },
+    "roster": "<span class=\"provider-badge\" title=\"Codex (OpenAI)\"><img class=\"provider-logo\" alt=\"Codex (OpenAI)\" title=\"Codex (OpenAI)\" src=\"cockpit-assets/openai.svg\"></span>",
+    "pill": "<span class=\"pill eng eng-codex\" hidden=\"\">codex</span>",
+    "mini": "<g class=\"mini-provider-badge\" role=\"img\" aria-label=\"Codex (OpenAI)\"><title>Codex (OpenAI)</title><circle class=\"mini-provider-seat\" r=\"7\"></circle><image class=\"mini-provider-logo\" x=\"-3.9975384615384613\" y=\"-4.06\" width=\"7.9950769230769225\" height=\"8.12\" href=\"cockpit-assets/openai.svg\" aria-label=\"Codex (OpenAI)\" preserveAspectRatio=\"xMidYMid meet\"></image></g>",
+    "planet": "<g class=\"mini-provider-badge planet-provider-badge\" role=\"img\" aria-label=\"Codex (OpenAI)\"><title>Codex (OpenAI)</title><circle class=\"mini-provider-seat\" r=\"13\"></circle><image class=\"mini-provider-logo\" x=\"-7.4239999999999995\" y=\"-7.539999999999999\" width=\"14.847999999999999\" height=\"15.079999999999998\" href=\"cockpit-assets/openai.svg\" aria-label=\"Codex (OpenAI)\" preserveAspectRatio=\"xMidYMid meet\"></image></g>"
+  },
+  {
+    "presentation": {
+      "provider": {
+        "asset": "google",
+        "label": "Gemini"
+      },
+      "text": "gemini",
+      "compactText": "GE",
+      "cls": "eng-gemini"
+    },
+    "roster": "<span class=\"provider-badge\" title=\"Gemini\"><img class=\"provider-logo\" alt=\"Gemini\" title=\"Gemini\" src=\"cockpit-assets/google.svg\"></span>",
+    "pill": "<span class=\"pill eng eng-gemini\" hidden=\"\">gemini</span>",
+    "mini": "<g class=\"mini-provider-badge\" role=\"img\" aria-label=\"Gemini\"><title>Gemini</title><circle class=\"mini-provider-seat\" r=\"7\"></circle><image class=\"mini-provider-logo\" x=\"-4.06\" y=\"-4.06\" width=\"8.12\" height=\"8.12\" href=\"cockpit-assets/google.svg\" aria-label=\"Gemini\" preserveAspectRatio=\"xMidYMid meet\"></image></g>",
+    "planet": "<g class=\"mini-provider-badge planet-provider-badge\" role=\"img\" aria-label=\"Gemini\"><title>Gemini</title><circle class=\"mini-provider-seat\" r=\"13\"></circle><image class=\"mini-provider-logo\" x=\"-7.539999999999999\" y=\"-7.539999999999999\" width=\"15.079999999999998\" height=\"15.079999999999998\" href=\"cockpit-assets/google.svg\" aria-label=\"Gemini\" preserveAspectRatio=\"xMidYMid meet\"></image></g>"
+  },
+  {
+    "presentation": {
+      "provider": {
+        "asset": "deepseek",
+        "label": "DeepSeek"
+      },
+      "text": "deepseek",
+      "compactText": "DE",
+      "cls": ""
+    },
+    "roster": "<span class=\"provider-badge\" title=\"DeepSeek\"><img class=\"provider-logo\" alt=\"DeepSeek\" title=\"DeepSeek\" src=\"cockpit-assets/deepseek.svg\"></span>",
+    "pill": "<span class=\"pill eng \" hidden=\"\">deepseek</span>",
+    "mini": "<g class=\"mini-provider-badge\" role=\"img\" aria-label=\"DeepSeek\"><title>DeepSeek</title><circle class=\"mini-provider-seat\" r=\"7\"></circle><image class=\"mini-provider-logo\" x=\"-5.516705837755875\" y=\"-4.06\" width=\"11.03341167551175\" height=\"8.12\" href=\"cockpit-assets/deepseek.svg\" aria-label=\"DeepSeek\" preserveAspectRatio=\"xMidYMid meet\"></image></g>",
+    "planet": "<g class=\"mini-provider-badge planet-provider-badge\" role=\"img\" aria-label=\"DeepSeek\"><title>DeepSeek</title><circle class=\"mini-provider-seat\" r=\"13\"></circle><image class=\"mini-provider-logo\" x=\"-10.245310841546626\" y=\"-7.539999999999999\" width=\"20.490621683093252\" height=\"15.079999999999998\" href=\"cockpit-assets/deepseek.svg\" aria-label=\"DeepSeek\" preserveAspectRatio=\"xMidYMid meet\"></image></g>"
+  },
+  {
+    "presentation": {
+      "text": "custom-cli",
+      "compactText": "CU",
+      "cls": ""
+    },
+    "roster": "<span class=\"provider-badge\" hidden=\"\"><img class=\"provider-logo\" alt=\"\"></span>",
+    "pill": "<span class=\"pill eng \">custom-cli</span>",
+    "mini": "<g class=\"mini-provider-badge\" role=\"img\" aria-label=\"custom-cli\"><title>custom-cli</title><circle class=\"mini-provider-seat\" r=\"7\"></circle><text class=\"mini-provider-fallback\" x=\"0\" y=\"0\" text-anchor=\"middle\" dominant-baseline=\"central\" transform=\"scale(1)\">CU</text></g>",
+    "planet": "<g class=\"mini-provider-badge planet-provider-badge\" role=\"img\" aria-label=\"custom-cli\"><title>custom-cli</title><circle class=\"mini-provider-seat\" r=\"13\"></circle><text class=\"mini-provider-fallback\" x=\"0\" y=\"0\" text-anchor=\"middle\" dominant-baseline=\"central\" transform=\"scale(1.8571428571428572)\">CU</text></g>"
+  },
+  {
+    "presentation": {
+      "provider": {
+        "asset": "openai",
+        "label": "Codex (OpenAI)"
+      },
+      "text": "codex",
+      "compactText": "CO",
+      "cls": ""
+    },
+    "roster": "<span class=\"provider-badge\" title=\"Codex (OpenAI)\"><img class=\"provider-logo\" alt=\"Codex (OpenAI)\" title=\"Codex (OpenAI)\" src=\"cockpit-assets/openai.svg\"></span>",
+    "pill": "<span class=\"pill eng \" hidden=\"\">codex</span>",
+    "mini": "<g class=\"mini-provider-badge\" role=\"img\" aria-label=\"Codex (OpenAI)\"><title>Codex (OpenAI)</title><circle class=\"mini-provider-seat\" r=\"7\"></circle><image class=\"mini-provider-logo\" x=\"-3.9975384615384613\" y=\"-4.06\" width=\"7.9950769230769225\" height=\"8.12\" href=\"cockpit-assets/openai.svg\" aria-label=\"Codex (OpenAI)\" preserveAspectRatio=\"xMidYMid meet\"></image></g>",
+    "planet": "<g class=\"mini-provider-badge planet-provider-badge\" role=\"img\" aria-label=\"Codex (OpenAI)\"><title>Codex (OpenAI)</title><circle class=\"mini-provider-seat\" r=\"13\"></circle><image class=\"mini-provider-logo\" x=\"-7.4239999999999995\" y=\"-7.539999999999999\" width=\"14.847999999999999\" height=\"15.079999999999998\" href=\"cockpit-assets/openai.svg\" aria-label=\"Codex (OpenAI)\" preserveAspectRatio=\"xMidYMid meet\"></image></g>"
+  },
+  {
+    "presentation": {
+      "provider": {
+        "asset": "deepseek",
+        "label": "DeepSeek"
+      },
+      "text": "agent",
+      "compactText": "AG",
+      "cls": ""
+    },
+    "roster": "<span class=\"provider-badge\" title=\"DeepSeek\"><img class=\"provider-logo\" alt=\"DeepSeek\" title=\"DeepSeek\" src=\"cockpit-assets/deepseek.svg\"></span>",
+    "pill": "<span class=\"pill eng \" hidden=\"\">agent</span>",
+    "mini": "<g class=\"mini-provider-badge\" role=\"img\" aria-label=\"DeepSeek\"><title>DeepSeek</title><circle class=\"mini-provider-seat\" r=\"7\"></circle><image class=\"mini-provider-logo\" x=\"-5.516705837755875\" y=\"-4.06\" width=\"11.03341167551175\" height=\"8.12\" href=\"cockpit-assets/deepseek.svg\" aria-label=\"DeepSeek\" preserveAspectRatio=\"xMidYMid meet\"></image></g>",
+    "planet": "<g class=\"mini-provider-badge planet-provider-badge\" role=\"img\" aria-label=\"DeepSeek\"><title>DeepSeek</title><circle class=\"mini-provider-seat\" r=\"13\"></circle><image class=\"mini-provider-logo\" x=\"-10.245310841546626\" y=\"-7.539999999999999\" width=\"20.490621683093252\" height=\"15.079999999999998\" href=\"cockpit-assets/deepseek.svg\" aria-label=\"DeepSeek\" preserveAspectRatio=\"xMidYMid meet\"></image></g>"
+  }
+]

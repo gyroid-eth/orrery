@@ -269,3 +269,7 @@ html[data-color-theme="light"] .provider-badge{background:var(--panel);border-co
 html[data-color-theme="light"] .provider-logo{filter:brightness(0)}
 html[data-color-theme="light"] .mini-provider-seat{fill:var(--panel);stroke:var(--hair)}
 html[data-color-theme="light"] .mini-provider-logo{filter:brightness(0)}
+
+html[data-color-theme="light"] .provider-badge.local-provider-badge{background:none;border:0}
+html[data-color-theme="light"] .local-provider-rim polygon{fill:var(--panel);stroke:#667d18}
+html[data-color-theme="light"] .local-provider-badge .mini-provider-seat{stroke:#667d18}

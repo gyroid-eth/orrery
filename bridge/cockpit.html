@@ -1138,6 +1138,12 @@
   .provider-badge[hidden]{display:none}
   .provider-badge .provider-logo{height:14px;width:auto;max-width:20px;object-fit:contain;opacity:.82}
   .agent.working .provider-logo{opacity:.96}
+  /* Local-profile seats keep maker marks inside a separate lime hexagon. */
+  .provider-badge.local-provider-badge{background:none;border:0;border-radius:0}
+  .local-provider-rim{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+  .local-provider-rim polygon{fill:rgba(17,19,25,.9);stroke:#c3d77b;stroke-width:7;stroke-linejoin:round}
+  .local-provider-badge .provider-logo{position:relative;height:13px;max-width:17px}
+  .local-provider-badge .provider-logo[hidden]{display:none}
 </style>
 <link rel="stylesheet" href="theme_light.css">
 <link rel="stylesheet" href="cockpit_tour.css">
@@ -4482,9 +4488,9 @@
       }
     }
   },
-  "inventory_digest": "3e38b542bd504ecb28fdceab687a3704d8e79ebe6021389f37aa583983afa830",
+  "inventory_digest": "9cb65ee640c10d69c03f620376243f0716ee0b85ac9e4024790a411066904ad7",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "ca1b92c0d8a3fe646ec84729e06dfb414b251cd19d60745e9463f92b0f9351fb",
+  "source_digest": "83c093d18562fe2fef214ef285231ed61c7cf6b1b0b8cff088d0eb7abecc6d97",
   "surface": "cockpit",
   "version": 1
 }
@@ -9077,12 +9083,21 @@ const ROSTER_PROVIDER={
   openai:{asset:'openai',label:'Codex (OpenAI)'},
   google:{asset:'google',label:'Gemini'},
   deepseek:{asset:'deepseek',label:'DeepSeek'},
+  qwen:{asset:'qwen',label:'Qwen'},
 };
 function rosterProviderKey(agent){
   const alias={anthropic:'anthropic',claude:'anthropic','claude-code':'anthropic',
     openai:'openai',codex:'openai',google:'google',gemini:'google',antigravity:'google',
     deepseek:'deepseek',dsh:'deepseek','dsh-tui':'deepseek'};
   const provider=String(agent.provider||'').trim().toLowerCase();
+  // Only an explicit local provider selects the local-profile presentation.
+  // Use the resolved model ID, never the adapter/program or profile nickname.
+  if(provider==='local'){
+    const model=String(agent.model_raw||agent.model||'').toLowerCase();
+    if(/deepseek/.test(model))return 'deepseek';
+    if(/qwen/.test(model))return 'qwen';
+    return '';
+  }
   if(Object.hasOwn(alias,provider))return alias[provider];
   const model=String(agent.model||'').toLowerCase();
   if(/deepseek/.test(model))return 'deepseek';
@@ -9094,16 +9109,38 @@ function rosterProviderKey(agent){
 }
 function providerPresentation(agent){
   const key=rosterProviderKey(agent),provider=ROSTER_PROVIDER[key];
+  if(String(agent.provider||'').trim().toLowerCase()==='local'){
+    return {provider,text:(provider?provider.label:'Unknown maker')+' · Local',
+      compactText:'',cls:'',local:true};
+  }
   const eng=Object.hasOwn(ENG,agent.provider)?ENG[agent.provider]:ENG[''];
   const text=agent.provider&&Object.hasOwn(ENG,agent.provider)?eng.lbl:
     (String(agent.program||'').trim()||String(agent.provider||'').trim()||eng.lbl);
   return {provider,text,compactText:Array.from(text).slice(0,2).join('').toUpperCase(),cls:eng.cls};
 }
 function paintRosterProvider(el,agent){
-  const {provider,text,cls}=providerPresentation(agent);
+  const {provider,text,cls,local}=providerPresentation(agent);
   const pill=el.querySelector('.pill.eng'),badge=el.querySelector('.provider-badge');
   const image=badge.querySelector('.provider-logo');
+  badge.classList.toggle('local-provider-badge',!!local);
+  let rim=badge.querySelector('.local-provider-rim');
+  if(local&&!rim){
+    rim=svgEl('svg',{class:'local-provider-rim',viewBox:'0 0 100 100','aria-hidden':'true'});
+    rim.appendChild(svgEl('polygon',{points:'50,4 90,27 90,73 50,96 10,73 10,27'}));
+    badge.prepend(rim);
+  }else if(!local&&rim){rim.remove();image.hidden=false;}
   pill.className='pill eng '+cls;pill.textContent=text;
+  if(local){
+    badge.hidden=false;pill.hidden=true;badge.title=text;image.hidden=!provider;
+    if(!provider){image.onload=null;image.onerror=null;image.removeAttribute('src');image.alt='';image.removeAttribute('title');return;}
+    image.alt=text;image.title=text;
+    image.onload=()=>{image.hidden=false;};
+    image.onerror=()=>{image.hidden=true;};
+    const src='cockpit-assets/'+provider.asset+'.svg';
+    if(image.getAttribute('src')!==src)image.src=src;
+    else if(image.complete&&!image.naturalWidth)image.hidden=true;
+    return;
+  }
   badge.hidden=!provider;pill.hidden=!!provider;
   if(!provider){image.onload=null;image.onerror=null;image.removeAttribute('src');image.alt='';image.removeAttribute('title');badge.removeAttribute('title');return;}
   badge.title=provider.label;image.alt=provider.label;image.title=provider.label;
