@@ -153,6 +153,8 @@ header の Settings の左にある `LEFT  CLAUDE 41%  CODEX 47%` の pill は�
 
 pill をクリックすると `Usage left` が開き、provider が返した window を円弧の dial で、reset までの時間つきで並べます。
 
+Settings の `Usage` で、Claude・Codex・DeepSeekなどのproviderごとに表示を切り替えられます。`LEFT` pillと`Usage left`の両方に反映され、非表示の選択はこのbrowserに保存されます。後から追加されたproviderは既定で表示されます。DeepSeekの残高が$5未満の場合は、pillと残高行を低残量と同じ赤で表示します。$5以上や残高不明時の色は変えません。
+
 ![Usage left。Claude は 5H 64%・7D 41%・FABLE 18%、Codex は 5H 88%・7D 47%。Codex の追加枠 Spark は untouched](images/cockpit_usage_popover.png)
 
 - **Claude**: `5h`（5 時間の枠）、`7d`（週の枠）、モデル別の週の枠（`FABLE` など。サーバーが返したときだけ）
