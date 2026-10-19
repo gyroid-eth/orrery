@@ -2,8 +2,8 @@
   "axes": {
     "background": {
       "effect": {
-        "digest": "4a75702668caf22837094c1035069211b35cb4a27ecd315ff7eca2e3ce61710c",
-        "expected": 362,
+        "digest": "eaf3871113a5dec1cae687f3903f32b45c0190b5ab554131cd296ded496626cc",
+        "expected": 363,
         "records": [
           {
             "property": "background",
@@ -1548,6 +1548,11 @@
           {
             "property": "stroke",
             "selector": ".mini-selection-ring",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "fill",
+            "selector": ".mini-provider-fallback",
             "value": "var(--ink)"
           },
           {
@@ -3335,8 +3340,8 @@
         "unit": "element"
       },
       "source": {
-        "digest": "4f4cee192584c0dfb34eaed68f81209aab7a4b73c7412ee61689eed91b1c31cd",
-        "expected": 136,
+        "digest": "617501b677a815908d787deb0edc1b4cfb7f60fddb01e60ec54ab04271b644e5",
+        "expected": 137,
         "records": [
           {
             "line": 185,
@@ -4165,6 +4170,13 @@
             "value": "8px"
           },
           {
+            "line": 224,
+            "property": "font-size",
+            "selector": ".mini-provider-fallback",
+            "source": "bridge/orrery_view.css",
+            "value": "6px"
+          },
+          {
             "line": 18,
             "property": "font-size",
             "selector": ".mailchip",
@@ -4592,7 +4604,7 @@
       }
     }
   },
-  "inventory_digest": "0b6978d94989153fec15c7970bfda4f70725eb036b631afd957d4d25643c16f8",
+  "inventory_digest": "3e38b542bd504ecb28fdceab687a3704d8e79ebe6021389f37aa583983afa830",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -4604,11 +4616,11 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "8c34b7f77a7edcd1fca7fd189a5914936c1cdee1b0b84e40d7e9f78219fd5d0a",
+  "source_digest": "ca1b92c0d8a3fe646ec84729e06dfb414b251cd19d60745e9463f92b0f9351fb",
   "source_files": {
-    "bridge/cockpit.html": "33624de50fd4a80f8b6ad1d1f79c2d4dde43f830a9ace09938ff1b62fe7f4abb",
+    "bridge/cockpit.html": "f2c73594df1716a4659b7f268928d64fe58daad78718ca61f57be796e64047bf",
     "bridge/mail_view.css": "4c65a93dd1b338a3f4304651173a53a7ed489860ecec2bc86014d253bbcde898",
-    "bridge/orrery_view.css": "9fce9d39b503063e09b5e9a9ada7d2863858010973568ce855c208362f9b0efd"
+    "bridge/orrery_view.css": "37fd46225d5ce1b4a42465ab7611f664af9083b8ddfea4a01355d086c7a6c7e6"
   },
   "surface": "cockpit",
   "validation": {

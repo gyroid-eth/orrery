@@ -371,7 +371,7 @@
 
   .cbody{min-width:0;display:flex;flex-direction:column;gap:6px}
   .crow1{display:flex;align-items:baseline;gap:8px}
-  .cname{font-family:var(--serif);font-size:16px;font-weight:500;letter-spacing:.01em;line-height:1;color:var(--ink)}
+  .cname{font-family:var(--serif);font-size:16px;font-weight:500;letter-spacing:.01em;line-height:1;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .cmeta{display:flex;gap:6px;flex-wrap:wrap;margin-top:1px}
   .pill{font-size:9.5px;letter-spacing:.07em;padding:2px 6px;border-radius:4px;border:1px solid var(--hair);color:var(--ink-dim);text-transform:uppercase;white-space:nowrap}
   .pill.eng-claude{color:var(--ln-local);border-color:rgb(var(--theme-local-rgb) / .3)}
@@ -1130,6 +1130,14 @@
     .grid{grid-template-columns:1fr}.col.roster,.col.mail{display:none}
     .spawn-grid,.advanced-grid{grid-template-columns:1fr}.field.full{grid-column:auto}
   }
+  /* Same bottom-right seat geometry as the telemetry provider badge,
+     scaled from a 26px network portrait to this 46px medallion. */
+  .provider-badge{position:absolute;right:-6px;bottom:-6px;width:24px;height:24px;
+    border-radius:50%;border:1px solid rgba(255,255,255,.14);
+    background:rgba(17,19,25,.9);display:grid;place-items:center;z-index:4}
+  .provider-badge[hidden]{display:none}
+  .provider-badge .provider-logo{height:14px;width:auto;max-width:20px;object-fit:contain;opacity:.82}
+  .agent.working .provider-logo{opacity:.96}
 </style>
 <link rel="stylesheet" href="theme_light.css">
 <link rel="stylesheet" href="cockpit_tour.css">
@@ -3081,6 +3089,11 @@
             "value": "var(--ink)"
           },
           {
+            "property": "fill",
+            "selector": ".mini-provider-fallback",
+            "value": "var(--ink)"
+          },
+          {
             "property": "background",
             "selector": ".mailfilters",
             "value": "linear-gradient(180deg,var(--panel) 76%,rgba(17,20,25,.86))"
@@ -4270,7 +4283,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "4f4cee192584c0dfb34eaed68f81209aab7a4b73c7412ee61689eed91b1c31cd",
+        "digest": "617501b677a815908d787deb0edc1b4cfb7f60fddb01e60ec54ab04271b644e5",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4390,6 +4403,7 @@
           ".planet-agent-role\u0000font-size",
           ".planet-agent-model\u0000font-size",
           ".planet-agent-state\u0000font-size",
+          ".mini-provider-fallback\u0000font-size",
           ".mailchip\u0000font-size",
           ".msg .arrow\u0000font-size",
           ".msg .to\u0000font-size",
@@ -4468,9 +4482,9 @@
       }
     }
   },
-  "inventory_digest": "0b6978d94989153fec15c7970bfda4f70725eb036b631afd957d4d25643c16f8",
+  "inventory_digest": "3e38b542bd504ecb28fdceab687a3704d8e79ebe6021389f37aa583983afa830",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "8c34b7f77a7edcd1fca7fd189a5914936c1cdee1b0b84e40d7e9f78219fd5d0a",
+  "source_digest": "ca1b92c0d8a3fe646ec84729e06dfb414b251cd19d60745e9463f92b0f9351fb",
   "surface": "cockpit",
   "version": 1
 }
@@ -9056,6 +9070,49 @@ const ENG={
   xai:{lbl:"grok",cls:"eng-grok",hue:"#9a9384"},
   "":{lbl:"agent",cls:"",hue:"#b58be0"},
 };
+// Resolve the provider independently of the process label: harnesses can
+// run models from another vendor. Explicit provider wins, then model, then program.
+const ROSTER_PROVIDER={
+  anthropic:{asset:'anthropic',label:'Claude'},
+  openai:{asset:'openai',label:'Codex (OpenAI)'},
+  google:{asset:'google',label:'Gemini'},
+  deepseek:{asset:'deepseek',label:'DeepSeek'},
+};
+function rosterProviderKey(agent){
+  const alias={anthropic:'anthropic',claude:'anthropic','claude-code':'anthropic',
+    openai:'openai',codex:'openai',google:'google',gemini:'google',antigravity:'google',
+    deepseek:'deepseek',dsh:'deepseek','dsh-tui':'deepseek'};
+  const provider=String(agent.provider||'').trim().toLowerCase();
+  if(Object.hasOwn(alias,provider))return alias[provider];
+  const model=String(agent.model||'').toLowerCase();
+  if(/deepseek/.test(model))return 'deepseek';
+  if(/claude|opus|sonnet|haiku|fable|mythos/.test(model))return 'anthropic';
+  if(/codex|gpt/.test(model))return 'openai';
+  if(/gemini/.test(model))return 'google';
+  const program=String(agent.program||agent.cmd||'').trim().split(/\s+/)[0].split('/').pop().toLowerCase();
+  return Object.hasOwn(alias,program)?alias[program]:'';
+}
+function providerPresentation(agent){
+  const key=rosterProviderKey(agent),provider=ROSTER_PROVIDER[key];
+  const eng=Object.hasOwn(ENG,agent.provider)?ENG[agent.provider]:ENG[''];
+  const text=agent.provider&&Object.hasOwn(ENG,agent.provider)?eng.lbl:
+    (String(agent.program||'').trim()||String(agent.provider||'').trim()||eng.lbl);
+  return {provider,text,compactText:Array.from(text).slice(0,2).join('').toUpperCase(),cls:eng.cls};
+}
+function paintRosterProvider(el,agent){
+  const {provider,text,cls}=providerPresentation(agent);
+  const pill=el.querySelector('.pill.eng'),badge=el.querySelector('.provider-badge');
+  const image=badge.querySelector('.provider-logo');
+  pill.className='pill eng '+cls;pill.textContent=text;
+  badge.hidden=!provider;pill.hidden=!!provider;
+  if(!provider){image.onload=null;image.onerror=null;image.removeAttribute('src');image.alt='';image.removeAttribute('title');badge.removeAttribute('title');return;}
+  badge.title=provider.label;image.alt=provider.label;image.title=provider.label;
+  const src='cockpit-assets/'+provider.asset+'.svg';
+  image.onload=()=>{badge.hidden=false;pill.hidden=true;};
+  image.onerror=()=>{badge.hidden=true;pill.hidden=false;};
+  if(image.getAttribute('src')!==src)image.src=src;
+  else if(image.complete&&!image.naturalWidth){badge.hidden=true;pill.hidden=false;}
+}
 const ACT={work:{cls:"working",glyph:"◇"},ask:{cls:"ask",glyph:"⏎"},question:{cls:"question",glyph:"?"},wait:{cls:"",glyph:"·"}};
 // spawn-lineage palette — muted instrument hues, one per spawn-tree root.
 const LINEAGE_PALETTE=["#5fb3a3","#b58be0","#83b06a","#e0a45f","#6f9bd1","#cf7f9c",
@@ -9342,7 +9399,7 @@ function tileFor(a){
     el.style.animation='rise .6s cubic-bezier(.2,.7,.2,1) forwards';
     el.innerHTML=`
       <div class="medal"><div class="ring"></div>
-        <div class="face"><span class="ini"></span><img alt="" referrerpolicy="no-referrer"></div></div>
+        <div class="face"><span class="ini"></span><img alt="" referrerpolicy="no-referrer"></div><span class="provider-badge" hidden><img class="provider-logo" alt=""></span></div>
       <div class="cbody">
         <div class="crow1"><span class="cname"></span><button class="name-copy" type="button">
           <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/></svg>
@@ -9369,7 +9426,6 @@ function tileFor(a){
 }
 
 function paintTile(el,a){
-  const eng=ENG[a.provider]||ENG[''];
   const act=ACT[a.act_state]||ACT.wait;
   el.className='agent '+(a.running?act.cls:'')+(a.name===selectedAgent?' sel':'');
   // Roster rings are neutral (2026-07-30 product decision: lineage hue in a flat list
@@ -9377,11 +9433,11 @@ function paintTile(el,a){
   // where the tree gives it meaning).
   el.querySelector('.face').style.removeProperty('--lineage-ring');
   el.querySelector('.ini').textContent=(a.name[0]||'?');
-  const img=el.querySelector('img');
+  const img=el.querySelector('.face img');
   const src='/telemetry/portrait?v=3&name='+encodeURIComponent(a.name)+'&hi=1';
   if(img.getAttribute('src')!==src){img.style.display='';img.src=src;img.onerror=()=>{img.style.display='none';};}
   el.querySelector('.cname').textContent=a.name;
-  const engPill=el.querySelector('.pill.eng');engPill.className='pill eng '+eng.cls;engPill.textContent=eng.lbl;
+  paintRosterProvider(el,a);
   el.querySelector('.pill.model').textContent=(a.model||a.cmd||'—')+(a.ctx_window?(' · '+a.ctx_window):'');
   const descriptor=a.descriptor||RosterDescriptor.deriveRosterDescriptor(a,currentAgents);
   const secondary=descriptor.secondary;
@@ -9679,7 +9735,7 @@ function assignLineageHues(live){
    this script and read the live cockpit state through this frozen surface.
    They subscribe to 'oc:agents' / 'oc:mail' document events for updates. */
 window.OC=Object.freeze({
-  esc,relTime,jumpToAgent,rootOf,
+  esc,relTime,jumpToAgent,rootOf,providerPresentation,
   lineageHue,                       // Map: agent name -> lineage hex
   get lineageParent(){return lineageParent;},  // Map: child -> parent
   agents:()=>currentAgents,
