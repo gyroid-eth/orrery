@@ -10426,7 +10426,7 @@ function renderManagedAttempts(){
     const details=document.createElement('details'),label=document.createElement('summary'),code=document.createElement('code');
     label.textContent='Attempt details';code.textContent=`Attempt: ${record.attempt_id}${record.phase?'\nPhase: '+record.phase:''}${record.runtime_attempt_id?'\nRuntime attempt: '+record.runtime_attempt_id:''}${record.state_path?'\nState: '+record.state_path:''}`;details.append(label,code);row.append(details);
     const actions=document.createElement('div');actions.className='spawn-launch-actions';
-    const check=document.createElement('button');check.type='button';check.textContent='Check status';check.onclick=()=>watchManagedSpawn(record.attempt_id);actions.append(check);
+    if(!record.rejected){const check=document.createElement('button');check.type='button';check.textContent='Check status';check.onclick=()=>watchManagedSpawn(record.attempt_id);actions.append(check);}
     if(record.state==='failed'||record.finished){const dismiss=document.createElement('button');dismiss.type='button';dismiss.textContent='Dismiss';dismiss.onclick=()=>{managedAttempts.delete(record.attempt_id);saveManagedAttempts();};actions.append(dismiss);}
     row.append(actions);rows.append(row);
   });
@@ -10469,8 +10469,9 @@ async function submitManagedSpawn(base){
     const response=await fetch('/telemetry/spawn',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     let result={};try{result=await response.json();}catch(_){/* preserve attempt after transport ambiguity */}
     if(!response.ok||!result.ok){
-      if(response.status>=400&&response.status<500){
-        Object.assign(managedAttempts.get(attemptId),{state:'failed',finished:true,error:result.error||`HTTP ${response.status}`});saveManagedAttempts();return;
+      if(result.error_code==='profile_busy'||response.status>=400&&response.status<500){
+        const reason=result.error_code==='profile_busy'?'A Hermes child is already using this backend profile. Try again after it stops.':result.error||result.error_code?.replace(/_/g,' ')||`HTTP ${response.status}`;
+        Object.assign(managedAttempts.get(attemptId),{state:'failed',phase:'rejected',finished:true,rejected:true,error_code:result.error_code,error:reason});saveManagedAttempts();return;
       }
       throw new Error(result.error||`HTTP ${response.status}; checking the same attempt`);
     }

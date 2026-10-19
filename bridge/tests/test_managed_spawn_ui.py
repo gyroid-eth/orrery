@@ -160,3 +160,30 @@ def test_three_existing_provider_payloads_do_not_enter_managed_dispatch(tour_bro
     assert [row['provider'] for row in result] == ['claude','codex','gemini']
     assert all(not {'attempt_id','allowed_paths','expected','helper_model','harness'} & row.keys() for row in result)
     assert all(row['standalone'] is True for row in result)
+
+
+@pytest.mark.parametrize('http_status', [200,409])
+def test_profile_busy_is_a_rejection_not_a_queue_or_status_poll(tour_browser,http_status):
+    _, evaluate = tour_browser
+    result=evaluate('''(async()=>{
+      const original=window.fetch;let posts=0,polls=0;
+      window.fetch=async(url,options)=>{
+        if(url==='/telemetry/spawn'){posts++;return {ok:STATUS===200,status:STATUS,json:async()=>({ok:false,error_code:'profile_busy'})};}
+        if(String(url).startsWith('/telemetry/spawn-status?')){polls++;throw Error('Rejected job must not be polled');}
+        return original(url,options);
+      };
+      try{
+        spawnCatalog={providers:[{id:'strata',managed:true,locality:'local',models:[{id:'configured-model'}],harnesses:[{id:'hermes',available:true}]}],naming:{},dirs:[]};
+        currentAgents=[{name:'OfflineParent',provider:'openai',running:true,category:'agent'}];
+        selFamily=null;selProvider=null;selModel=null;selHarness=null;selScientist='';populateSpawnParents();renderProviderTabs();spawnParent.value='OfflineParent';
+        spawnDirPath='/workspace';spawnTask.value='Scoped fixture';spawnAllowedPaths.value='result.txt';spawnExpectedPath.value='result.txt';spawnExpectedValue.value='done';
+        await submitSpawn(new Event('submit',{cancelable:true}));await new Promise(r=>setTimeout(r,20));
+        return {posts,polls,record:[...managedAttempts.values()][0],text:document.getElementById('spawnLaunchRows').textContent};
+      }finally{window.fetch=original;}
+    })()'''.replace('STATUS',str(http_status)))
+    assert result['posts']==1 and result['polls']==0
+    assert result['record']['state']=='failed' and result['record']['rejected'] is True
+    assert result['record']['error_code']=='profile_busy'
+    assert result['record']['phase']=='rejected'
+    assert 'already using this backend profile' in result['text']
+    assert 'Check status' not in result['text'] and 'Dismiss' in result['text']
