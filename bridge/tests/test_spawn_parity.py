@@ -89,7 +89,7 @@ def test_harness_effort_and_helper_capabilities_do_not_fall_back_to_trial_defaul
       const explicit=spawnPayloadFromForm().effort;
       spawnHarnesses.querySelector('[data-harness=hermes]').click();
       return {a,explicit,unknown:{levels:effortsForModel(p,selModel),hasEffort:Object.hasOwn(spawnPayloadFromForm(),'effort'),
-        text:effortChoices.textContent,helperHidden:document.getElementById('spawnHelperField').hidden}};
+        text:effortChoices.textContent,summary:document.getElementById('spawnSummary').textContent,helperHidden:document.getElementById('spawnHelperField').hidden}};
     })()'''.replace('CATALOG',json.dumps(catalog())).replace('HELPERS',json.dumps(['same','strata-model']+([] if main_only else ['small']))))
     assert result['a']['levels']['efforts']==['low','high'] and result['a']['hasEffort'] is False
     assert result['a']['helpers']==(['same'] if main_only else ['same','small'])
@@ -97,15 +97,18 @@ def test_harness_effort_and_helper_capabilities_do_not_fall_back_to_trial_defaul
     assert result['explicit']=='high'
     assert result['unknown']['levels']['efforts'] is None and result['unknown']['hasEffort'] is False
     assert result['unknown']['text']=='Uses harness default' and result['unknown']['helperHidden']
+    assert 'Effort: Default' in result['unknown']['summary']
+    assert 'Not supported' not in result['unknown']['summary']
 
 
 @pytest.mark.parametrize('verdict',['ready','failed'])
 def test_standard_async_status_is_queried_by_child_name(tour_browser,verdict):
     _,evaluate=tour_browser
     result=evaluate('''(async()=>{
-      const original=window.fetch,queries=[];let posts=0;
+      const original=window.fetch,originalWatch=watchSpawnLaunch,queries=[];let posts=0,deadline=null;
+      watchSpawnLaunch=(name,seconds)=>{deadline=seconds;return originalWatch(name,seconds);};
       window.fetch=async(url,options)=>{
-        if(url==='/telemetry/spawn'){posts++;return {ok:true,json:async()=>({ok:true,child_name:'StandardChild',tmux_session:'StandardChild',pending:true})};}
+        if(url==='/telemetry/spawn'){posts++;return {ok:true,json:async()=>({ok:true,child_name:'StandardChild',tmux_session:'StandardChild',pending:true,verdict_deadline_seconds:170})};}
         if(String(url).startsWith('/telemetry/spawn-status?')){queries.push(String(url));return {ok:true,json:async()=>({ok:true,state:VERDICT,error:VERDICT==='failed'?'Fixture failed':null})};}
         return original(url,options);
       };
@@ -113,11 +116,32 @@ def test_standard_async_status_is_queried_by_child_name(tour_browser,verdict):
         spawnCatalog=CATALOG;selFamily='deepseek';selProvider='deepseek';selModel='deepseek-model';selHarness='dsh';selScientist='';renderProviderTabs();
         spawnParent.value='';spawnTask.value='Initial task';spawnDirPath='/source';
         await submitSpawn(new Event('submit',{cancelable:true}));await new Promise(r=>setTimeout(r,2200));
-        return {posts,queries,toast:toastEl.textContent};
-      }finally{window.fetch=original;}
+        return {posts,queries,deadline,toast:toastEl.textContent};
+      }finally{window.fetch=original;watchSpawnLaunch=originalWatch;}
     })()'''.replace('CATALOG',json.dumps(catalog())).replace('VERDICT',json.dumps(verdict)))
     assert result['posts']==1 and result['queries']==['/telemetry/spawn-status?name=StandardChild']
+    assert result['deadline']==170
     assert ('SPAWNED' if verdict=='ready' else 'SPAWN FAILED') in result['toast']
+
+
+@pytest.mark.parametrize('deadline,ready_at,expected_ms',[(170,160000,160000),(170,None,170000),(None,None,140000)])
+def test_standard_status_waits_for_server_deadline_or_legacy_default(deadline,ready_at,expected_ms):
+    import re
+    from pathlib import Path
+    source=(Path(__file__).resolve().parents[1]/'cockpit.html').read_text()
+    watch=re.search(r'async function watchSpawnLaunch\([^)]*\)\{.*?(?=\nasync function submitSpawn)',source,re.S).group()
+    result=node('const events=[],toasts=[];let now=0;Date.now=()=>now;'
+        'function setTimeout(cb,ms){now+=ms;cb();}'
+        'const document={dispatchEvent:e=>events.push(e.detail.id)};'
+        'class CustomEvent{constructor(_,v){this.detail=v.detail;}}'
+        'function showToast(t){toasts.push(t);}'
+        'async function fetch(){return {json:async()=>({ok:true,state:'+
+        ('now>=160000?"ready":"launching"' if ready_at else '"launching"')+'})};}'
+        +watch+';watchSpawnLaunch("Fixture",'+json.dumps(deadline)+')'
+        '.then(()=>console.log(JSON.stringify({now,events,toasts})));')
+    assert result['now']==expected_ms
+    assert bool(result['events']) is bool(ready_at)
+    assert ('SPAWNED' if ready_at else f'after {deadline or 140}s') in result['toasts'][0]
 
 
 @pytest.mark.parametrize('harness,model', [('dsh','GPT-model'),('hermes','GPT-model'),('dsh','Claude-model'),('codex-cli','Claude-model'),('claude-code','GPT-model'),('gemini','GPT-model')])

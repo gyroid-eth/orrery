@@ -10230,7 +10230,8 @@ function renderSpawnSummary(){
   summary.replaceChildren();if(!p||!model)return;
   const title=document.createElement('strong');title.textContent=model.id;summary.append(title);
   const h=SpawnPicker.harnesses(p,model).find(h=>h.id===selHarness);
-  const details=[SpawnPicker.metadata(p,model),h?(h.default?'':'Harness: '+h.label):'Harness: Coming soon',selEffort?'Effort: '+selEffort:effortsForModel(p,selModel).efforts?'Effort: Default':'Effort: Not supported',
+  const effort=effortsForModel(p,selModel);
+  const details=[SpawnPicker.metadata(p,model),h?(h.default?'':'Harness: '+h.label):'Harness: Coming soon',selEffort?'Effort: '+selEffort:effort.efforts||effort.source==='unknown'?'Effort: Default':'Effort: Not supported',
     !spawnHelper.disabled?'Helper: '+spawnHelper.selectedOptions[0].textContent:''];
   details.filter(Boolean).forEach(text=>{const line=document.createElement('span');line.textContent=text;summary.append(line);});
 }
@@ -10539,9 +10540,10 @@ function spawnPayloadFromForm(){
   });
 }
 // Poll the dashboard's background verdict for an async spawn.
-async function watchSpawnLaunch(name){
+async function watchSpawnLaunch(name,deadlineSeconds){
+  const waitSeconds=Number.isFinite(deadlineSeconds)&&deadlineSeconds>0?deadlineSeconds:140;
   const started=Date.now();
-  while(Date.now()-started<140000){
+  while(Date.now()-started<waitSeconds*1000){
     await new Promise(r=>setTimeout(r,2000));
     let status=null;
     try{
@@ -10555,7 +10557,7 @@ async function watchSpawnLaunch(name){
     else showToast(`SPAWN FAILED · ${name} · ${status.error||'launcher failed'}`,true,20000);
     return;
   }
-  showToast(`SPAWN · ${name} · no verdict after 140s`,true);
+  showToast(`SPAWN · ${name} · no verdict after ${waitSeconds}s`,true);
 }
 async function submitSpawn(event){
   event.preventDefault();if(spawnBusy)return;
@@ -10583,7 +10585,7 @@ async function submitSpawn(event){
     const childName=result.child_name||result.tmux_session||'new agent';
     if(result.pending){
       showToast(`LAUNCHING · ${childName}`);
-      watchSpawnLaunch(childName);
+      watchSpawnLaunch(childName,result.verdict_deadline_seconds);
     }else{
       showToast(`SPAWNED · ${childName}`);
       document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}));
