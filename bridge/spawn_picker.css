@@ -133,3 +133,6 @@
 .spawn-managed-checks select{width:100%;background:var(--panel);color:var(--ink);border:1px solid var(--hair);padding:6px}
 #spawnExpectedValue{margin-top:8px}
 @media(max-width:620px){.spawn-managed-checks{grid-template-columns:1fr}}
+
+.spawn-model-heading{display:flex;align-items:baseline;gap:8px}
+.spawn-catalog-state{font:10px var(--sans);color:var(--ink-dim)}

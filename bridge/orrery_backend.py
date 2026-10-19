@@ -1476,7 +1476,8 @@ async def send_error(
 # computation there (the dashboard computes these in seconds, and computations
 # that overlap slow each other down). Nothing is kept once the answer is in:
 # a request that comes after it goes to the dashboard as before.
-COALESCED_ROUTES = frozenset({"/telemetry/agents", "/telemetry/graph", "/telemetry/messages"})
+CATALOG_PROXY_TIMEOUT = 20.0
+COALESCED_ROUTES = frozenset({"/telemetry/agents", "/telemetry/graph", "/telemetry/messages", "/telemetry/spawn-catalog"})
 
 
 async def fetch_proxied(
@@ -1484,7 +1485,9 @@ async def fetch_proxied(
 ) -> tuple[bytes, int, str]:
     """One upstream GET for proxy_dashboard: (body, status, content type).
     Raises ClientError / asyncio.TimeoutError when the dashboard does not answer."""
-    async with http_session.get(url) as response:
+    # Catalog construction can outlast ordinary six-second dashboard polls.
+    options = {"timeout": ClientTimeout(total=CATALOG_PROXY_TIMEOUT)} if path == "/telemetry/spawn-catalog" else {}
+    async with http_session.get(url, **options) as response:
         body = await response.read()
         status = response.status
         content_type = response.headers.get("Content-Type", "application/octet-stream")
