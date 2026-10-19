@@ -84,8 +84,9 @@ const document={createElement:t=>new El(t)};
 const modelChoices=new El('div'),effortChoices=new El('div'),effortRow=new El('div'),effortCaption=new El('div');
 let effortOptions={levels:[]};
 const EffortSlider={mount:(host,options)=>{effortOptions=options;}};
-let selProvider='claude',selModel=null,selEffort=null,spawnCatalog;
+let selProvider='claude',selModel=null,selEffort=null,selHarness=null,spawnCatalog;
 function providerById(id){return spawnCatalog.providers.find(p=>p.id===id);}
+function selectedSpawnModel(){return providerById(selProvider)?.models.find(m=>m.id===selModel);}
 function names(el){return el.children.filter(c=>c.tag==='label')
   .map(l=>l.children[0].value);}
 function pick(id){selModel=id;renderEfforts(providerById(selProvider));return shape();}
@@ -108,7 +109,8 @@ def _run(body: str) -> dict:
         match = re.search(pattern, html, re.DOTALL)
         assert match, f"missing block in cockpit.html: {pattern}"
         parts.append(match.group(0))
-    script = "\n".join([f"function run(){{\n{body}\n}}", *parts, HARNESS])
+    picker = f'const SpawnPicker=require({json.dumps(str(SOURCES / "spawn_picker.js"))});'
+    script = "\n".join([picker, f"function run(){{\n{body}\n}}", *parts, HARNESS])
     done = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)

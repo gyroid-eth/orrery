@@ -111,6 +111,11 @@
 /* Managed attempts stay inspectable after the Spawn dialog closes. */
 .spawn-launches{border-bottom:1px solid var(--hair);padding:10px 12px;max-height:260px;overflow:auto;flex:0 0 auto}
 .spawn-launches[hidden]{display:none}
+.spawn-managed-checks[hidden]{display:none}
+.managed-pane-status{position:absolute;top:40px;left:0;right:0;z-index:2;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 16px;padding:8px 14px;min-height:34px;border-bottom:1px solid var(--hair);background:var(--panel);color:var(--ink-dim);font:10px/1.5 var(--mono);overflow-wrap:anywhere}
+.managed-pane-status[hidden]{display:none}
+.screen.has-managed-status .termstage{top:var(--managed-status-bottom,74px)}
+.managed-pane-capability{font-size:9px;color:var(--ink-dim)}
 .spawn-launches>summary{cursor:pointer;font-size:10px;color:var(--ink-dim)}
 #spawnLaunchCount{float:right;color:var(--amber)}
 .spawn-launch-row{border-top:1px solid var(--hair);padding:9px 0;font-size:10px;line-height:1.5}

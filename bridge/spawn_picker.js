@@ -35,24 +35,50 @@
     for(const id of ['hermes','dsh'])if(!result.some(h=>harnessKey(h.id)===id))result.push({id,label:HARNESS[id].label,available:false,default:false});
     return result;
   }
-  // Stage1 contract: the managed dispatch owns registration and the private worktree.
+  // Managed registration belongs to the server; a report never ends the session.
   function isManaged(provider,model,harness){
     return value(provider,model,'managed')===true||['deepseek','strata'].includes(provider.id)||['dsh','hermes'].includes(harnessKey(harness));
   }
-  function managedPayload(base,attemptId,allowedPaths,expected){
-    const {name,headless,worktree_base,...rest}=base;
-    return {...rest,attempt_id:attemptId,standalone:false,worktree:true,helper_model:'same',
-      allowed_paths:allowedPaths,expected,async:true};
+  function taskModes(provider,model,harness){
+    const selected=harnesses(provider,model).find(h=>h.id===harness);
+    return Object.fromEntries(['conversation','assignment'].map(mode=>{
+      const supplied=selected?.task_modes,entry=supplied?.[mode];
+      return [mode,supplied?{available:entry?.available===true,reason:entry?.reason||null,requires_parent:entry?.requires_parent===true,requires_scope:entry?.requires_scope===true,requires_expected:entry?.requires_expected===true,report_policies:entry?.report_policies||[]}:
+        {available:selected?.available===true,reason:null,requires_parent:false,requires_scope:false,requires_expected:false,report_policies:['pane','mail']}];
+    }));
   }
-  function managedError(payload){
-    if(!payload.parent)return 'Choose a parent for this managed launch.';
-    if(!payload.allowed_paths.length)return 'List the files this child may edit.';
-    if(payload.allowed_paths.some(path=>path.startsWith('/')||path.includes('\\')||/[?*\[\]]/.test(path)||path.split('/').some(part=>!part||['.','..','.git'].includes(part))))
+  function managedModeError(provider,model,harness,payload){
+    const capability=taskModes(provider,model,harness)[payload.task_mode];
+    const label=harnesses(provider,model).find(h=>h.id===harness)?.label||harness;
+    const mode=payload.task_mode==='conversation'?'Conversation':'Assignments';
+    if(!capability?.available)return capability?.reason==='interactive_not_ready'?`${mode} for ${label} is not ready yet`:`${mode} for ${label} is unavailable`;
+    if(capability.requires_parent&&!payload.parent)return 'Choose a parent in Advanced for this assignment';
+    if(!capability.report_policies.includes(payload.report_policy))return 'This report policy is not available for the selected mode';
+    return '';
+  }
+  function managedPayload(base,attemptId,allowedPaths=[],expected=[],assignment=expected.length>0){
+    const {name,headless,worktree_base,...rest}=base;
+    const parent=base.parent||null;
+    return {...rest,attempt_id:attemptId,parent,standalone:!parent,worktree:true,helper_model:'same',
+      task_mode:assignment?'assignment':'conversation',report_policy:assignment&&parent?'mail':'pane',
+      ...(assignment?{allowed_paths:allowedPaths,expected}:{}),async:true};
+  }
+  function managedError(payload,capability={}){
+    if(!payload.dir||!payload.dir.startsWith('/'))return 'Choose an absolute source folder.';
+    if(payload.task_mode==='conversation')return '';
+    if(!payload.task?.trim())return 'Describe the assignment to verify.';
+    const paths=payload.allowed_paths||[],expected=payload.expected||[];
+    const invalid=path=>!path||path.startsWith('/')||path.includes('\\')||/[?*\[\]]/.test(path)||path.split('/').some(part=>!part||['.','..','.git'].includes(part));
+    if(capability.requires_scope&&!paths.length)return 'List the files this child may edit.';
+    if(paths.some(invalid))
       return 'Use relative file names without globs, parent directories or .git.';
-    const check=payload.expected[0];
-    if(!check||!payload.allowed_paths.includes(check.path))return 'The expected file must be in the allowed files list.';
-    if(Object.hasOwn(check,'sha256')&&!/^[a-f0-9]{64}$/i.test(check.sha256))return 'Enter the expected SHA256 (64 hexadecimal characters).';
-    if(Object.hasOwn(check,'contains')&&!check.contains)return 'Enter text that the expected file must contain.';
+    if(capability.requires_expected&&!expected.length)return 'Add an expected output check for this mode.';
+    for(const check of expected){
+      if(invalid(check.path))return 'Use a relative expected file path inside the working directory.';
+      if(paths.length&&!paths.includes(check.path))return 'The expected file must be in the allowed files list.';
+      if(Object.hasOwn(check,'sha256')&&!/^[a-f0-9]{64}$/i.test(check.sha256))return 'Enter the expected SHA256 (64 hexadecimal characters).';
+      if(Object.hasOwn(check,'contains')&&!check.contains)return 'Enter text that the expected file must contain.';
+    }
     return '';
   }
   function helperModels(provider,model){
@@ -78,5 +104,5 @@
     if(!id||agent.category&&agent.category!=='agent')return null;
     return {id:key,...harnessInfo(id)};
   }
-  return {isManaged,managedPayload,managedError,harnessKey,harnessInfo,locality,family,entries,value,harnesses,helperModels,metadata,recent,remember,rosterHarness};
+  return {isManaged,taskModes,managedModeError,managedPayload,managedError,harnessKey,harnessInfo,locality,family,entries,value,harnesses,helperModels,metadata,recent,remember,rosterHarness};
 });

@@ -38,6 +38,7 @@ def test_four_managed_pairs_keep_scope_parent_identity_and_readiness_separate(to
         currentAgents=[{name:'OfflineParent',provider:HARNESS==='hermes'?'openai':'anthropic',program:HARNESS==='hermes'?'codex-cli':'claude-code',running:true,category:'agent'}];
         selFamily=null;selProvider=null;selModel=null;selHarness=null;selScientist='';populateSpawnParents();renderProviderTabs();spawnParent.value='OfflineParent';
         spawnDirPath='/workspace';spawnTask.value='Write result.txt with done and report.';
+        spawnAssignment.checked=true;spawnAssignment.dispatchEvent(new Event('change'));
         spawnAllowedPaths.value='result.txt';spawnExpectedPath.value='result.txt';spawnExpectedKind.value='contains';spawnExpectedValue.value='done';
         const controls={name:ncName.textContent,helper:spawnHelper.value,disabled:spawnHelper.disabled,options:[...spawnHelper.options].map(o=>o.value),note:document.getElementById('spawnSummary').textContent};
         await submitSpawn(new Event('submit',{cancelable:true}));await new Promise(r=>setTimeout(r,25));
@@ -101,7 +102,8 @@ def test_managed_rejection_and_scope_validation_do_not_claim_ready():
         outside:picker.managedError(make(['x'],[{path:'y',contains:'ok'}])),
         valid:picker.managedError(make(['x'],[{path:'x',sha256:'a'.repeat(64)}]))}));
     ''')
-    assert result['missingParent'] and result['glob'] and result['outside']
+    assert not result['missingParent']
+    assert result['glob'] and result['outside']
     assert result['valid'] == ''
 
 
