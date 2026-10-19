@@ -223,3 +223,6 @@
 .mini-provider-logo{opacity:.82}
 .mini-agent.is-working .mini-provider-logo{opacity:.96}
 .mini-provider-fallback{fill:var(--ink);font-family:var(--mono);font-size:6px}
+
+/* Local-profile shape and colour are independent of activity/lineage rings. */
+.local-provider-badge .mini-provider-seat{stroke:#c3d77b;stroke-width:1;stroke-linejoin:round}

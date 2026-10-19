@@ -587,13 +587,18 @@ function drawSpawnEdges(target,layout,large){
 // Compact fallback text is shared with the roster; hover keeps it whole.
 function drawProviderBadge(group,agent,x,y,portraitRadius,size=14){
   const presentation=OC.providerPresentation(agent);
-  const {provider,text,compactText}=presentation;
-  const label=provider?provider.label:text;
-  const seat=svgEl('g',{class:'mini-provider-badge'+(size>14?' planet-provider-badge':''),role:'img','aria-label':label,
+  const {provider,text,compactText,local}=presentation;
+  const label=local?text:(provider?provider.label:text);
+  const seat=svgEl('g',{class:'mini-provider-badge'+(size>14?' planet-provider-badge':'')+(local?' local-provider-badge':''),role:'img','aria-label':label,
     transform:`translate(${x+portraitRadius*.72} ${y+portraitRadius*.72})`});
   const title=svgEl('title');title.textContent=label;seat.appendChild(title);
-  seat.appendChild(svgEl('circle',{class:'mini-provider-seat',r:size/2}));
+  if(local){
+    const r=size/2;
+    seat.appendChild(svgEl('polygon',{class:'mini-provider-seat',
+      points:`0,${-r*.92} ${r*.8},${-r*.46} ${r*.8},${r*.46} 0,${r*.92} ${-r*.8},${r*.46} ${-r*.8},${-r*.46}`}));
+  }else seat.appendChild(svgEl('circle',{class:'mini-provider-seat',r:size/2}));
   const fallback=()=>{
+    if(local)return; // Unknown local maker keeps the hexagon without an adapter mark.
     const mark=svgEl('text',{class:'mini-provider-fallback',x:0,y:0,
       'text-anchor':'middle','dominant-baseline':'central',transform:`scale(${size/14})`});
     mark.textContent=compactText;seat.appendChild(mark);
