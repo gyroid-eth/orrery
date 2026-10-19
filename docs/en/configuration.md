@@ -208,3 +208,31 @@ The backend refuses to bind to anything other than `127.0.0.1`, but there is no 
 - [Troubleshooting](troubleshooting.md)
 - [Architecture overview](ARCHITECTURE_OVERVIEW.md)
 - [Implementation architecture](ARCHITECTURE.md)
+
+### Model-first Spawn Agent catalog
+
+The cockpit reads `/telemetry/spawn-catalog` from Telemetry's `/api/spawn-names`.
+Only catalog models appear; the picker does not probe or invent local servers.
+The following optional fields may be set on a provider or an individual model.
+A model field overrides the provider field; an omitted model field inherits it.
+
+| Field | Meaning |
+| --- | --- |
+| `locality` | `cloud` (default) or `local`. Local models share the searchable Local models list. |
+| `harnesses` | Array of `{id, label, available, default}`. Only `available: true` is selectable; unavailable entries show “Coming soon”. Without this array, the existing provider `program` is the single available, default Harness. |
+| `efforts`, `effort_default` | Supported effort IDs and default. An empty list sends no effort. Existing `model_efforts` / `model_effort_defaults` remain supported. Unsupported levels are dimmed. |
+| `helper_models` | Optional list of model ID strings or `{id, label}` objects. “Same as main” omits `helper_model` in the request. An explicit `none` choice must be supplied by the catalog. |
+| `server`, `context`, `vision` | Optional display metadata; `vision: true` adds a Vision label. `quantization` may also describe a local variant. |
+
+Existing requests keep their provider, model and effort. Selecting a different
+Harness adds its catalog `id` as `harness`; selecting a helper adds its catalog
+`id` as `helper_model`. These combinations need corresponding Telemetry launch
+support before the catalog declares them available. Hermes and dsh placeholders
+stay disabled until an available catalog entry supplies that combination.
+
+Local “Recently used” stores at most eight successful model selections in the
+viewer's browser localStorage (`orrery.spawn-local-recent.v1`). Entries removed
+from the catalog are not displayed. The search query uses `orrery.spawn-local-search.v1`. Both keys stay out of shared preferences; search and history are private to that viewer.
+The roster shows the model maker on the portrait; a Harness chip appears beneath
+the name except for cloud Claude with Claude Code and cloud GPT with Codex.
+Local models keep their Harness chip even when that Harness is the default.

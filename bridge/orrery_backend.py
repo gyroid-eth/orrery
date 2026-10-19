@@ -525,6 +525,16 @@ def normalize_spawn_catalog(remote: Any) -> dict[str, Any] | None:
                 normalized_providers.append(provider)
                 continue
             normalized = dict(provider)
+            # Optional picker capabilities inherit from provider to model. Old
+            # catalogs still describe the same single, available launch path.
+            normalized.setdefault("locality", "cloud")
+            program = provider.get("program") or {
+                "claude": "claude-code", "codex": "codex-cli",
+            }.get(provider.get("id"), provider.get("id"))
+            normalized.setdefault("harnesses", [{
+                "id": program, "label": {"claude-code": "Claude Code", "codex-cli": "Codex"}.get(program, program),
+                "available": True, "default": True,
+            }] if program else [])
             models = provider.get("models")
             default_model = provider.get("default_model")
             # Previous models the dashboard names from the Claude catalog; the

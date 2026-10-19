@@ -217,8 +217,8 @@ def test_codex_folds_and_follows_the_per_model_efforts():
     assert first["selected"] == "gpt-6-sol"
     assert first["efforts"] == ["low", "medium", "high", "xhigh"] and first["effort"] == "xhigh"
     assert r["astra"]["efforts"] == ["high", "max"] and r["astra"]["effort"] == "max"
-    # an empty per-model list: no effort row, no effort sent
-    assert r["luna"]["effortShown"] is False and r["luna"]["effort"] is None
+    # Non-supported levels stay visible but disabled; no effort is sent.
+    assert r["luna"]["effortShown"] is True and r["luna"]["effort"] is None
     assert r["older"]["fold"]["open"] is True
     assert r["older"]["efforts"] == ["low", "high"]
 
