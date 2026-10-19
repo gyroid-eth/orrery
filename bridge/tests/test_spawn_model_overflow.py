@@ -82,7 +82,8 @@ class El{
 }
 const document={createElement:t=>new El(t)};
 const modelChoices=new El('div'),effortChoices=new El('div'),effortRow=new El('div'),effortCaption=new El('div');
-function renderEffortCaption(){}
+let effortOptions={levels:[]};
+const EffortSlider={mount:(host,options)=>{effortOptions=options;}};
 let selProvider='claude',selModel=null,selEffort=null,spawnCatalog;
 function providerById(id){return spawnCatalog.providers.find(p=>p.id===id);}
 function names(el){return el.children.filter(c=>c.tag==='label')
@@ -92,7 +93,7 @@ function shape(){
   const fold=modelChoices.children.find(c=>c.tag==='details');
   return {current:names(modelChoices),
     fold:fold?{open:fold.open,summary:fold.children[0].textContent,models:names(fold.children[1])}:null,
-    selected:selModel,effortShown:!effortRow.hidden,efforts:names(effortChoices),effort:selEffort,
+    selected:selModel,effortShown:!effortRow.hidden,efforts:effortOptions.levels||[],effort:selEffort,
     error:(modelChoices.children.find(c=>c.className==='model-error')||{}).textContent||null};
 }
 function render(catalog,selected=null){spawnCatalog=catalog;selModel=selected;renderModels();return shape();}
@@ -207,7 +208,7 @@ def test_an_older_telemetry_shows_every_model_unfolded():
     catalog = json.dumps(_merged(old))
     r = _run(f"selProvider='codex';return render({catalog});")
     assert r["current"] == ["gpt-5.6-sol", "gpt-6-astra"] and r["fold"] is None
-    assert r["efforts"] == ["low", "high"] and r["effort"] == "high"
+    assert r["efforts"] == ["low", "high"] and r["effort"] is None
 
 
 def test_codex_folds_and_follows_the_per_model_efforts():
@@ -219,9 +220,9 @@ def test_codex_folds_and_follows_the_per_model_efforts():
     assert first["current"] == ["gpt-6-sol", "gpt-6-astra", "gpt-5.6-luna"]
     assert first["fold"] == {"open": False, "summary": "More models · 1", "models": ["gpt-5.6-sol"]}
     assert first["selected"] == "gpt-6-sol"
-    assert first["efforts"] == ["low", "medium", "high", "xhigh"] and first["effort"] == "xhigh"
-    assert r["astra"]["efforts"] == ["high", "max"] and r["astra"]["effort"] == "max"
-    # Non-supported levels stay visible but disabled; no effort is sent.
+    assert first["efforts"] == ["low", "medium", "high", "xhigh"] and first["effort"] is None
+    assert r["astra"]["efforts"] == ["high", "max"] and r["astra"]["effort"] is None
+    # Unsupported models show a status without an effort input.
     assert r["luna"]["effortShown"] is True and r["luna"]["effort"] is None
     assert r["older"]["fold"]["open"] is True
     assert r["older"]["efforts"] == ["low", "high"]
