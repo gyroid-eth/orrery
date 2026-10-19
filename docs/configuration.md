@@ -208,3 +208,29 @@ backend は `127.0.0.1` 以外への bind を拒否しますが、localhost 内�
 - [トラブルシューティング](troubleshooting.md)
 - [アーキテクチャ概要](ARCHITECTURE_OVERVIEW.md)
 - [実装アーキテクチャ](ARCHITECTURE.md)
+
+### モデルから選ぶ Spawn Agent catalog
+
+cockpit は Telemetry の `/api/spawn-names` を `/telemetry/spawn-catalog` 経由で読みます。
+候補は catalog 内のモデルだけです。ローカルサーバーの探索や候補の自動追加は行いません。
+次の任意 field を provider または各 model に設定できます。
+model に指定すると provider の値を上書きし、省略すると provider の値を引き継ぎます。
+
+| Field | 意味 |
+| --- | --- |
+| `locality` | `cloud`（既定）または `local`。local のモデルは検索できる Local models 一覧に集まります。 |
+| `harnesses` | `{id, label, available, default}` の配列。`available: true` だけ選択でき、未対応は「Coming soon」です。配列がなければ既存 provider の `program` を選択可能な既定 Harness にします。 |
+| `efforts`, `effort_default` | 対応する effort の ID と既定値。空配列なら effort は送信しません。従来の `model_efforts` / `model_effort_defaults` も有効です。非対応の段は薄く表示します。 |
+| `helper_models` | 任意の model ID の配列、または `{id, label}` の配列。「Same as main」は request の `helper_model` を省略します。明示的な `none` 候補も catalog 側の指定が必要です。 |
+| `server`, `context`, `vision` | 任意の表示情報。`vision: true` なら Vision を表示します。ローカルの量子化情報には `quantization` も使えます。 |
+
+既存 request の provider・model・effort は維持します。異なる Harness を選ぶと
+catalog の `id` を `harness` に、Helper を選ぶとその `id` を `helper_model` に追加します。
+対応する起動経路を Telemetry 側に実装してから catalog を available にしてください。
+Hermes・dsh の仮のボタンは、その組を catalog が選択可能として返すまで disabled です。
+
+Local の「Recently used」は、起動が受理されたモデルの組を最大8件、閲覧者の browser の
+localStorage（`orrery.spawn-local-recent.v1`）に保存します。catalog から消えた候補は表示せず、
+検索語は `orrery.spawn-local-search.v1` に保存します。どちらも共有 preference には同期せず、検索や履歴は閲覧者ごとのものです。roster の肖像にはモデルの作り手の座金だけを置き、
+名前の下に Harness の札を出します。cloud の Claude＋Claude Code／GPT＋Codex は省略し、
+local は default な Harness でも札を出します。

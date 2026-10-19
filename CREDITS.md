@@ -521,3 +521,16 @@ The same files ship in orrery-telemetry as `dashboard/assets/`.
 
 Changes: fill colour set to `#ece2cc`.
 Each logo is a trademark of its company and is used only to identify the provider.
+
+## Harness logos
+
+The Spawn Agent picker and non-default roster Harness chips identify launch tools
+with these official marks. Files are reused unchanged from the official sources.
+
+| File | Mark | Official source | Terms |
+| --- | --- | --- | --- |
+| `bridge/assets/hermes.png` | Hermes / Nous Research | [Nous Research favicon](https://nousresearch.com/assets/nous-web/favicon.png), [official website](https://nousresearch.com/) | The website lists MIT; no separate logo license accompanies the image. No trademark license is claimed. |
+| `bridge/assets/dsh.svg` | DeepSeek Harness | [Official repository asset](https://raw.githubusercontent.com/deepseek-ai/deepseek-harness/master/apps/desktop/resources/icon.svg), [repository](https://github.com/deepseek-ai/deepseek-harness) | Repository: MIT. Brand and trademark rights remain with the owner. |
+
+Claude Code and Codex reuse the provider marks credited above. Marks identify
+software and do not imply endorsement.
