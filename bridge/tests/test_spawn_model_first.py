@@ -147,7 +147,7 @@ def test_submit_cloud_defaults_and_optional_local_parameters_without_real_spawn(
           {id:'claude',program:'claude-code',models:[{id:'claude-fixture',default:true},{id:'local-override',locality:'local'}]},
           {id:'codex',program:'codex-cli',models:[{id:'gpt-fixture',default:true}],efforts:['low','high'],effort_default:'high'},
           {id:'local-fixture',locality:'local',program:'codex-cli',models:[{id:'local-one',default:true}],
-            harnesses:[{id:'hermes',default:true,available:true}],helper_models:['small']}],naming:{},dirs:[]};
+            harnesses:[{id:'example-tool',default:true,available:true}],helper_models:['small']}],naming:{},dirs:[]};
         selFamily=null;selProvider=null;selModel=null;selHarness=null;selScientist='';
         spawnDirPath='/workspace';spawnTask.value='Test accepted launch';populateSpawnParents();renderProviderTabs();
         const cloudModels=[...modelChoices.querySelectorAll('input[name="spawnModel"]')].map(i=>i.value);
@@ -166,7 +166,7 @@ def test_submit_cloud_defaults_and_optional_local_parameters_without_real_spawn(
     assert codex['provider'] == 'codex' and 'effort' not in codex
     assert 'harness' not in claude and 'helper_model' not in claude
     assert 'harness' not in codex and 'helper_model' not in codex
-    assert local['provider'] == 'local-fixture' and local['harness'] == 'hermes' and local['helper_model'] == 'small'
+    assert local['provider'] == 'local-fixture' and local['harness'] == 'example-tool' and local['helper_model'] == 'small'
     assert result['recent'][0] == json.dumps(['local-fixture','local-one'],separators=(',',':'))
 
 
