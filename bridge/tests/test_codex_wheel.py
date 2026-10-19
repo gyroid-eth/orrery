@@ -61,6 +61,30 @@ def test_node_wrapper_requires_registered_codex_program_not_provider_guess():
     assert result == [False, True, True, False]
 
 
+@pytest.mark.parametrize('mode', [47, 1047, 1049])
+def test_scrollbar_follows_remote_snapshot_and_live_modes_for_any_program(mode):
+    # A cold viewer can have a normal local buffer for a remote alternate TUI.
+    # Scrollbar visibility belongs to that remote mode, not wheel eligibility.
+    result = js("""
+      const states=[],handlers={};
+      const p={host:{classList:{toggle:(name,on)=>states.push([name,on])}},
+        term:{buffer:{active:{type:'normal'}},
+          parser:{registerCsiHandler:({final},handler)=>{handlers[final]=handler;}},
+          attachCustomWheelEventHandler:()=>{}}};
+      setCodexWheelModes(p,{alternateOn:true});
+      setCodexWheelModes(p,{alternateOn:false});
+      setCodexWheelModes(p,{});
+      installCodexWheel(p);
+      const handled=[handlers.h([MODE]),handlers.l([MODE])];
+      handlers.h([1003]); // Mouse tracking must not hide a normal history bar.
+      return {states,handled};
+    """.replace('MODE', str(mode)))
+    assert result == {
+        'states': [['app-scroll', value] for value in (True, False, False, True, False)],
+        'handled': [False, False],
+    }
+
+
 def pane(state='1\t0\t0\t0'):
     return parse_pane_line('%1\t@1\t$1\t0\t0\t80\t18\t1\tprobe\tcodex\t' + state)
 
