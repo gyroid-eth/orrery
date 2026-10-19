@@ -1,10 +1,10 @@
 /* The approved model-first picker uses the cockpit's existing theme tokens. */
-#spawnForm{--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;flex-direction:column;width:min(1000px,100%);max-height:calc(100dvh - 48px)}
+#spawnForm{--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;flex-direction:column;width:min(1000px,100%);max-height:calc(100dvh - 48px);overflow:hidden}
 #spawnForm .modal-title{font-size:26px;letter-spacing:0}
 #spawnForm .modal-head{align-items:center}
 #spawnForm .spawn-grid{gap:16px;min-height:0;overflow-y:auto}
 #spawnForm .namecard{border:0;background:transparent;padding:0;margin:0 0 8px}
-#spawnForm .agent-strip{max-height:62px}
+#spawnForm .agent-strip{max-height:none;min-height:78px;padding-bottom:20px}
 #spawnForm .field-label,#spawnForm .field>label{font-family:var(--sans);font-size:11px;letter-spacing:0;text-transform:none;color:var(--ink-dim)}
 .spawn-picker{display:grid;grid-template-columns:152px minmax(0,1fr) 254px;border:1px solid var(--hair);border-radius:5px;overflow:hidden;grid-column:1/-1;font-family:var(--sans);min-height:490px;background:var(--panel-2)}
 .spawn-column{min-width:0}
@@ -48,9 +48,8 @@
 .spawn-default-note{font:10px/1.5 var(--sans);color:var(--ink-dim);margin:7px 0 0}
 #effortRow{display:block;margin:16px 0 0}
 #effortRow .effort-lab{display:block;padding:0;margin-bottom:8px;font:12px var(--sans);letter-spacing:0;color:var(--ink)}
-#effortChoices{display:flex;gap:0;flex-wrap:nowrap;border:1px solid var(--hair);border-radius:4px;overflow:hidden}
-#effortChoices .effort-choice,#effortChoices .effort-unavailable{display:flex;align-items:center;justify-content:center;flex:1;min-width:0;padding:0 2px;height:32px;border:0;border-radius:0;background:var(--bg);font:10px var(--sans);letter-spacing:0;color:var(--ink-dim)}
-#effortChoices>*+*{border-left:1px solid var(--hair)!important}
+#effortChoices{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,64px),1fr));gap:5px}
+#effortChoices .effort-choice,#effortChoices .effort-unavailable{display:flex;align-items:center;justify-content:center;min-width:0;padding:7px 6px;min-height:36px;border:1px solid var(--hair);border-radius:4px;background:var(--bg);font:12px/1.3 var(--sans);letter-spacing:0;white-space:nowrap;color:var(--ink-dim)}
 #effortChoices .effort-choice input{position:absolute;opacity:0;width:1px;height:1px;margin:0}
 #effortChoices .effort-choice:has(input:checked){background:rgb(var(--theme-accent-rgb) / .1);color:var(--amber);font-weight:600}
 #effortChoices .effort-choice:has(input:focus-visible){outline:2px solid var(--amber);outline-offset:-2px}
@@ -58,9 +57,22 @@
 .spawn-summary{margin-top:18px;border-top:1px solid var(--hair);padding-top:12px;font:11px/1.7 var(--sans);color:var(--ink-dim)}
 .spawn-summary strong{display:block;font-size:12px;font-weight:500;color:var(--ink);margin-bottom:4px}
 .spawn-summary span{display:block}
-#spawnForm .spawn-context{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+#spawnForm .spawn-context{grid-column:1/-1;display:grid;grid-template-columns:1fr;gap:16px}
 #spawnForm .spawn-context .field.full{grid-column:auto}
-#spawnForm .dir-list{max-height:82px}
+.spawn-dir-trigger{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:42px;padding:10px 12px;border:1px solid var(--hair);border-radius:5px;background:var(--bg);color:var(--ink);text-align:left;cursor:pointer;font:12px var(--mono)}
+#spawnDirSelected{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#spawnDirDialog{width:min(680px,calc(100vw - 32px));max-height:calc(100dvh - 48px);box-sizing:border-box;margin:auto;padding:20px;border:1px solid var(--hair);border-radius:8px;background:var(--panel);color:var(--ink);box-shadow:0 24px 100px #0008;font-family:var(--sans)}
+#spawnDirDialog[open]{display:flex;flex-direction:column;gap:14px}
+#spawnDirDialog::backdrop{background:rgba(0,0,0,.42)}
+.spawn-dir-head{display:flex;align-items:center;gap:14px}
+.spawn-dir-head h2{margin:0;font:23px var(--serif)}
+#spawnDirDialog .dir-list{min-height:180px;height:min(42dvh,340px);max-height:none;flex:1 1 auto;border:1px solid var(--hair);border-radius:5px}
+#spawnDirDialog .dir-crumbs{flex:0 0 auto;border:1px solid var(--hair);border-radius:5px;min-height:38px}
+#spawnDirDialog .dir-row{padding:10px 12px;min-height:40px;font-size:13px}
+#spawnDirDialog .dir-presets{flex:0 0 auto}
+.spawn-dir-foot{display:flex;justify-content:flex-end;gap:10px;flex:0 0 auto}
+.spawn-dir-foot .modal-btn{font:12px var(--sans);letter-spacing:0;text-transform:none;min-height:38px}
+@media(max-width:420px){#spawnDirDialog{padding:14px}.spawn-dir-head h2{font-size:20px}}
 #spawnForm .field textarea{min-height:112px}
 #spawnForm .dir-crumbs{flex-wrap:nowrap;overflow-x:auto}
 .roster-harness{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--hair);border-radius:4px;padding:2px 4px;font:9px system-ui,sans-serif;color:var(--ink);max-width:100%}

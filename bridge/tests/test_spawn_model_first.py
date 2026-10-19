@@ -198,3 +198,61 @@ def test_picker_controls_fit_a_small_viewport_and_footer_stays_visible(tour_brow
     assert result['pickerRight'] <= result['width']
     assert result['footerBottom'] <= result['height']
     assert result['helperWidth'] > 0
+
+
+@pytest.mark.parametrize('width', [1600, 390])
+def test_maximum_effort_labels_fit_and_scientists_open_on_each_modal_open(tour_browser, width):
+    client,evaluate=tour_browser
+    client.call('Emulation.setDeviceMetricsOverride',width=width,height=844,deviceScaleFactor=1,mobile=False)
+    result=evaluate('''(async()=>{
+      const originalFetch=window.fetch;
+      const catalog={providers:[{id:'codex',program:'codex-cli',models:[{id:'maximum-efforts',default:true}],
+        efforts:['low','medium','high','xhigh','max','ultra'],effort_default:'xhigh'}],naming:{scientists:['Curie','Noether'],adjectives:['Calm']},dirs:[]};
+      window.fetch=async(url)=>({ok:true,json:async()=>url.startsWith('/telemetry/fs/dirs')?{path:'/workspace',dirs:[]}:catalog});
+      try{
+        openSpawnModal();await new Promise(r=>setTimeout(r,30));
+        const details=spawnForm.querySelector('.spawn-identity-options');
+        const initiallyOpen=details.open;details.open=false;spawnAdvanced.open=true;closeSpawnModal(true);
+        openSpawnModal();await new Promise(r=>setTimeout(r,30));
+        effortChoices.scrollIntoView({block:'center'});
+        const labels=[...effortChoices.children].map(el=>{
+          const text=[...el.childNodes].find(n=>n.nodeType===Node.TEXT_NODE);
+          const range=document.createRange();range.selectNodeContents(text);
+          const ink=range.getBoundingClientRect(),box=el.getBoundingClientRect(),style=getComputedStyle(el);
+          return {label:el.textContent,width:box.width,inkLeft:ink.left-box.left,inkRight:box.right-ink.right,font:parseFloat(style.fontSize),row:Math.round(box.top)};
+        });
+        const body=spawnForm.querySelector('.spawn-grid'),head=spawnForm.querySelector('.modal-head'),foot=spawnForm.querySelector('.modal-foot');
+        const before={head:head.getBoundingClientRect().top,foot:foot.getBoundingClientRect().bottom};
+        body.scrollTop=body.scrollHeight;
+        const pathBox=spawnDirButton.getBoundingClientRect(),taskBox=spawnTask.getBoundingClientRect();
+        return {initiallyOpen,reopened:details.open,advancedClosed:!spawnAdvanced.open,contextAligned:Math.abs(pathBox.left-taskBox.left)<1&&Math.abs(pathBox.width-taskBox.width)<1,labels,rows:new Set(labels.map(l=>l.row)).size,
+          fixed:head.getBoundingClientRect().top===before.head&&foot.getBoundingClientRect().bottom===before.foot,
+          footer:foot.getBoundingClientRect().bottom,height:innerHeight};
+      }finally{window.fetch=originalFetch;}
+    })()''')
+    assert result['initiallyOpen'] and result['reopened'] and result['advancedClosed'] and result['contextAligned']
+    assert len(result['labels']) == 7 and result['rows'] >= 2
+    assert all(label['font'] >= 12 and label['inkLeft'] >= 5 and label['inkRight'] >= 5 for label in result['labels']),result
+    assert result['fixed'] and result['footer'] <= result['height']
+
+
+def test_directory_dialog_commits_only_on_confirmation_and_escape_keeps_parent(tour_browser):
+    _,evaluate=tour_browser
+    result=evaluate('''(async()=>{
+      const originalFetch=window.fetch;
+      window.fetch=async(url)=>({ok:true,json:async()=>url.startsWith('/telemetry/fs/dirs')?
+        {path:decodeURIComponent(url.split('path=')[1]),dirs:[]}:{providers:[],naming:{},dirs:[]}});
+      try{
+        spawnDirPath='/workspace';renderSpawnDirPath();spawnOverlay.classList.add('on');
+        openSpawnDirPicker();await browseDir('/workspace/docs');
+        const before=spawnDirPath;document.getElementById('spawnDirCancel').click();
+        const cancelled=spawnDirPath;
+        openSpawnDirPicker();await browseDir('/workspace/tools');spawnDirUse.click();
+        const confirmed=spawnDirPath,label=document.getElementById('spawnDirSelected').textContent;
+        openSpawnDirPicker();window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+        return {before,cancelled,confirmed,label,closed:!spawnDirDialog.open,parent:spawnOverlay.classList.contains('on'),payload:spawnPayloadFromForm().dir};
+      }finally{window.fetch=originalFetch;}
+    })()''')
+    assert result['before'] == result['cancelled'] == '/workspace'
+    assert result['confirmed'] == result['label'] == result['payload'] == '/workspace/tools'
+    assert result['closed'] and result['parent']
