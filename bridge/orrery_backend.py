@@ -556,6 +556,7 @@ def normalize_spawn_catalog(remote: Any) -> dict[str, Any] | None:
                         **({"overflow": True} if model in overflow_ids else {}),
                     }
                     if isinstance(model, str)
+                    else {**model, "label": model["id"]} if isinstance(model, dict) and model.get("id")
                     else model
                     for model in models
                 ]
@@ -598,84 +599,14 @@ def normalize_spawn_catalog(remote: Any) -> dict[str, Any] | None:
     return remote
 
 
-# What the local spawn_catalog.json may contribute: how a provider, a model or
-# an effort level is *shown*. Which models exist, which is the default, which
-# efforts a model takes and any configuration error belong to the telemetry.
-LOCAL_PROVIDER_ANNOTATIONS = ("label",)
-LOCAL_MODEL_ANNOTATIONS = ("label", "hint", "title", "badge")
-
-
 def merge_spawn_catalog(payload: bytes) -> bytes:
-    """Decorate the dashboard's spawn catalog with the cockpit's own wording.
-
-    The dashboard (/api/spawn-names) is authoritative for providers, models,
-    the default model, overflow_models, efforts and model errors. The local
-    file used to replace whole providers, so the telemetry's Codex default,
-    efforts and overflow list never reached the cockpit (2026-09-28 review).
-    It now only annotates ids the telemetry already sent: it never adds or
-    removes a provider or a model, and never fills an empty or failed list.
-    """
+    """Normalize telemetry data without local model or provider name overrides."""
     try:
         remote = normalize_spawn_catalog(json.loads(payload))
     except (json.JSONDecodeError, UnicodeDecodeError):
         return payload
     if remote is None:
         return payload
-    # From here the normalized telemetry is what the cockpit gets: a missing
-    # or broken local file only means "no annotations", never the raw
-    # payload whose bare-string models the page cannot render.
-    normalized = json.dumps(remote, ensure_ascii=False).encode("utf-8")
-    try:
-        local = json.loads(SPAWN_CATALOG_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-        print(f"[spawn-catalog] local annotations unavailable: {exc}", file=sys.stderr, flush=True)
-        return normalized
-    remote_providers = remote.get("providers")
-    local_providers = local.get("providers") if isinstance(local, dict) else None
-    if not isinstance(remote_providers, list) or not isinstance(local_providers, list):
-        return normalized
-    notes = {
-        provider.get("id"): provider
-        for provider in local_providers
-        if isinstance(provider, dict) and isinstance(provider.get("id"), str)
-    }
-    for provider in remote_providers:
-        if not isinstance(provider, dict):
-            continue
-        note = notes.get(provider.get("id"))
-        if not note:
-            continue
-        for key in LOCAL_PROVIDER_ANNOTATIONS:
-            if isinstance(note.get(key), str) and note[key]:
-                provider[key] = note[key]
-        model_notes = {
-            model.get("id"): model
-            for model in note.get("models") or []
-            if isinstance(model, dict) and isinstance(model.get("id"), str)
-        }
-        for model in provider.get("models") or []:
-            if not isinstance(model, dict):
-                continue
-            model_note = model_notes.get(model.get("id"))
-            if not model_note:
-                continue
-            for key in LOCAL_MODEL_ANNOTATIONS:
-                if isinstance(model_note.get(key), str) and model_note[key]:
-                    model[key] = model_note[key]
-        hints = note.get("effort_hints")
-        if isinstance(hints, dict):
-            offered = set(provider.get("efforts") or [])
-            for efforts in (provider.get("model_efforts") or {}).values():
-                if isinstance(efforts, list):
-                    offered.update(efforts)
-            merged_hints = {
-                effort: hint for effort, hint in hints.items()
-                if effort in offered and isinstance(hint, str)
-            }
-            if isinstance(provider.get("effort_hints"), dict):
-                merged_hints.update(provider["effort_hints"])
-            if merged_hints:
-                provider["effort_hints"] = merged_hints
     return json.dumps(remote, ensure_ascii=False).encode("utf-8")
 
 

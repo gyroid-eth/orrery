@@ -6,8 +6,8 @@ closed "More models · N" fold, open only when the selected model is one of
 them. Numeric versions also move superseded family members into the fold;
 unknown naming schemes remain visible. An older default stays selectable in
 the open fold. The local
-spawn_catalog.json only decorates what the telemetry sent: the telemetry's
-models, default, overflow list, efforts and errors are never replaced.
+Only telemetry supplies model IDs, provider labels, defaults, effort levels
+and errors. The cockpit adds no release-specific catalog annotations.
 
 Run from bridge/: ``python -m pytest tests/test_spawn_model_overflow.py``.
 """
@@ -169,7 +169,7 @@ def _merged(*providers, names=True):
     return json.loads(ob.merge_spawn_catalog(json.dumps(raw).encode("utf-8")))
 
 
-def test_the_telemetrys_codex_catalog_survives_the_local_file():
+def test_the_telemetrys_codex_catalog_has_no_local_wording():
     provider = _merged(CODEX_TELEMETRY)["providers"][0]
     assert [m["id"] for m in provider["models"]] == CODEX_TELEMETRY["models"]
     assert [m["id"] for m in provider["models"] if m.get("default")] == ["gpt-6-sol"]
@@ -180,11 +180,11 @@ def test_the_telemetrys_codex_catalog_survives_the_local_file():
     assert provider["model_efforts"] == CODEX_TELEMETRY["model_efforts"]
     assert provider["model_effort_defaults"] == CODEX_TELEMETRY["model_effort_defaults"]
     assert provider["program"] == "codex-cli"
-    # ...and the local file still names what it knows
+    # Bundled wording is provider-only; every model name comes from telemetry.
     astra = next(m for m in provider["models"] if m["id"] == "gpt-6-astra")
-    assert astra["label"] == "GPT-6 Astra" and astra["hint"]
-    assert provider["label"] == "Codex · GPT"
-    assert set(provider["effort_hints"]) <= {"low", "medium", "high", "xhigh", "max"}
+    assert astra == {"id": "gpt-6-astra", "label": "gpt-6-astra"}
+    assert provider["label"] == CODEX_TELEMETRY["label"]
+    assert "effort_hints" not in provider
     unknown = next(m for m in provider["models"] if m["id"] == "gpt-6-sol")
     assert unknown == {"id": "gpt-6-sol", "label": "gpt-6-sol", "default": True}
 
@@ -241,7 +241,7 @@ import pytest  # noqa: E402
 
 @pytest.mark.parametrize("local", [None, "{not json", "{}", '{"providers": "x"}'])
 def test_a_missing_or_broken_local_file_still_serves_the_normalized_telemetry(monkeypatch, tmp_path, local):
-    """The local file only annotates; without it the telemetry must still
+    """Local wording is ignored; the telemetry must still
     arrive normalized (review of 04729de: the raw payload came back and the
     page rendered nameless radios, no selection and no fold)."""
     path = tmp_path / "spawn_catalog.json"
@@ -285,3 +285,15 @@ def test_structured_versions_and_deprecation_win_and_old_default_remains_selecta
     assert result['current'] == ['custom-b']
     assert result['fold']['models'] == ['custom-a','retired','future-retired']
     assert result['fold']['open'] and result['selected'] == 'custom-a'
+
+
+def test_bundled_annotations_have_no_model_or_effort_release_lists():
+    local=json.loads(ob.SPAWN_CATALOG_PATH.read_text())
+    assert local == {"schema":1,"providers":[]}
+
+
+def test_catalog_labels_are_telemetry_provider_names_and_raw_model_ids():
+    provider=ob.normalize_spawn_catalog({'providers':[{'id':'codex','label':'Codex from telemetry',
+        'models':[{'id':'model-id','label':'Handwritten display'}]}]})['providers'][0]
+    assert provider['label']=='Codex from telemetry'
+    assert provider['models'][0]['label']=='model-id'

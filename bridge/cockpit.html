@@ -377,6 +377,7 @@
   .cname{font-family:var(--serif);font-size:16px;font-weight:500;letter-spacing:.01em;line-height:1;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .cmeta{display:flex;gap:6px;flex-wrap:wrap;margin-top:1px}
   .pill{font-size:9.5px;letter-spacing:.07em;padding:2px 6px;border-radius:4px;border:1px solid var(--hair);color:var(--ink-dim);text-transform:uppercase;white-space:nowrap}
+  .pill.model{text-transform:none;letter-spacing:.02em}
   .pill.eng-claude{color:var(--ln-local);border-color:rgb(var(--theme-local-rgb) / .3)}
   .pill.eng-codex{color:var(--ln-delegate);border-color:rgb(var(--theme-delegate-rgb) / .3)}
   .pill.eng-gemini{color:var(--eng-google);border-color:rgb(var(--theme-google-rgb) / .3)}
@@ -4677,7 +4678,7 @@ function buildSpawnPayload(values){
     provider:String(source.provider||'claude').trim(),
     ...(source.harness?{harness:String(source.harness)}:{}),
     ...(source.helper_model&&source.helper_model!=='same'?{helper_model:String(source.helper_model)}:{}),
-    model:String(source.model||'claude-sonnet-4-6').trim(),
+    model:String(source.model||'').trim(),
     ...(String(source.effort||'').trim()?{effort:String(source.effort).trim()}:{}),
     dir:String(source.dir||'').trim()||null,
     role:String(source.role||'').trim(),
@@ -9634,7 +9635,7 @@ function paintTile(el,a){
   if(img.getAttribute('src')!==src){img.style.display='';img.src=src;img.onerror=()=>{img.style.display='none';};}
   el.querySelector('.cname').textContent=a.name;
   paintRosterProvider(el,a);paintRosterHarness(el,a);
-  el.querySelector('.pill.model').textContent=(a.model||a.cmd||'—')+(a.ctx_window?(' · '+a.ctx_window):'');
+  el.querySelector('.pill.model').textContent=(a.model_raw||a.model||a.cmd||'—')+(a.ctx_window?(' · '+a.ctx_window):'');
   const descriptor=a.descriptor||RosterDescriptor.deriveRosterDescriptor(a,currentAgents);
   const secondary=descriptor.secondary;
   const rolePill=el.querySelector('.pill.role');rolePill.hidden=!secondary;rolePill.textContent=secondary;
@@ -10122,36 +10123,30 @@ const ncAdjWrap=document.getElementById('ncAdjWrap');
 async function loadSpawnCatalog(){
   try{
     const r=await fetch('/telemetry/spawn-catalog');
+    if(!r.ok)throw new Error('catalog unavailable');
     const j=await r.json();
-    if(!Array.isArray(j.providers))throw new Error('bad catalog');
+    if(!j||j.ok===false||!Array.isArray(j.providers))throw new Error('bad catalog');
     spawnCatalog=j;
     spawnTaken=new Set(((j.naming||{}).taken||[]).map(n=>String(n).toLowerCase()));
   }catch(_){
-    // catalog offline → minimal fallback so the modal still works
-    spawnCatalog={providers:[{id:'claude',label:'Claude',models:[
-      {id:'claude-sonnet-4-6',label:'Sonnet 4.6',default:true}],efforts:null},
-      {id:'codex',label:'Codex · GPT',models:[
-        {id:'gpt-5.6-sol',label:'GPT-5.6 Sol',hint:'DEEP REASONING · HARD PROBLEMS',title:'数理・根本原因・重要判断',default:true},
-        {id:'gpt-6-astra',label:'GPT-6 Astra',hint:'MOST CAPABLE · DEMANDING WORK',title:'最難関・長い自律作業（max / ultra 可）'},
-        {id:'gpt-5.6-terra',label:'GPT-5.6 Terra',hint:'EVERYDAY IMPLEMENTATION',title:'通常の実装'},
-        {id:'gpt-5.6-luna',label:'GPT-5.6 Luna',hint:'FAST & LIGHT',title:'定型・可逆な軽作業'}],
-        efforts:['low','medium','high','xhigh','max','ultra'],effort_default:'xhigh',
-        effort_hints:{low:'定型',medium:'通常',high:'複雑',xhigh:'最難関・研究判断',max:'astra のみ・xhigh 超',ultra:'astra のみ・最大'}}],
-      dirs:[],naming:{adjectives:[],scientists:[],taken:[]}};
+    // A failed catalog cannot tell us which models can actually launch.
+    spawnCatalog={providers:[],unavailable:true,dirs:[],naming:{adjectives:[],scientists:[],taken:[]}};
     spawnTaken=new Set();
   }
+  if(!spawnBusy)spawnStatus.textContent=spawnCatalog.unavailable?'Telemetry unavailable':'ready';
   renderProviderTabs();renderAgentStrip();renderDirs();
 }
 function providerById(id){return (spawnCatalog&&spawnCatalog.providers||[]).find(p=>p.id===id)||null;}
 function renderProviderTabs(){
   const entries=SpawnPicker.entries(spawnCatalog);
-  const families=[{id:'claude',label:'Claude',asset:'anthropic.svg'},
-    {id:'codex',label:'Codex',asset:'openai.svg'},
-    {id:'deepseek',label:'DeepSeek',asset:'deepseek.svg'},
+  const families=[{id:'claude',asset:'anthropic.svg'},
+    {id:'codex',asset:'openai.svg'},
+    {id:'deepseek',asset:'deepseek.svg'},
     {id:'local',label:'Local models'}];
   for(const entry of entries)if(!families.some(f=>f.id===entry.family))families.push({id:entry.family,label:entry.provider.label||entry.family});
+  families.forEach(f=>{const p=(spawnCatalog.providers||[]).find(p=>SpawnPicker.family(p,{})===f.id);if(f.id!=='local')f.label=p&&(p.label||p.id)||f.id;});
   const hasFamily=id=>entries.some(e=>e.family===id)||(spawnCatalog.providers||[]).some(p=>SpawnPicker.family(p,{})===id);
-  if(!selFamily)selFamily=(families.find(f=>hasFamily(f.id))||families[0]).id;
+  if(!selFamily||!hasFamily(selFamily))selFamily=(families.find(f=>hasFamily(f.id))||families[0]).id;
   providerTabs.replaceChildren();
   families.forEach(f=>{
     const b=document.createElement('button');b.type='button';b.dataset.family=f.id;
@@ -10179,7 +10174,7 @@ function renderProviderTabs(){
 function renderLocalModels(){
   const entries=SpawnPicker.entries(spawnCatalog).filter(e=>e.family==='local');
   const query=spawnModelSearch.value.trim().toLowerCase();
-  const matches=entries.filter(e=>`${e.model.label||e.model.id} ${SpawnPicker.metadata(e.provider,e.model)}`.toLowerCase().includes(query));
+  const matches=entries.filter(e=>`${e.model.id} ${SpawnPicker.metadata(e.provider,e.model)}`.toLowerCase().includes(query));
   modelChoices.replaceChildren();
   const add=entry=>{
     const label=document.createElement('label');label.className='model-choice';
@@ -10188,7 +10183,7 @@ function renderLocalModels(){
     input.checked=selProvider===entry.provider.id&&selModel===entry.model.id;
     input.addEventListener('change',()=>{selProvider=entry.provider.id;selModel=entry.model.id;selEffort=null;selHarness=null;renderLocalModels();renderHarnesses();});
     const copy=document.createElement('span');copy.className='model-choice-copy';
-    const name=document.createElement('span');name.className='model-choice-name';name.textContent=entry.model.label||entry.model.id;
+    const name=document.createElement('span');name.className='model-choice-name';name.textContent=entry.model.id;
     const note=document.createElement('span');note.className='model-choice-note';note.textContent=SpawnPicker.metadata(entry.provider,entry.model);
     copy.append(name,note);label.append(input,copy);
     if(SpawnPicker.value(entry.provider,entry.model,'vision')===true){const vision=document.createElement('span');vision.className='model-badge';vision.textContent='Vision';label.append(vision);}
@@ -10206,7 +10201,7 @@ function renderHarnesses(){
   spawnHarnesses.replaceChildren();
   const choices=p&&model?SpawnPicker.harnesses(p,model):[];
   if(!choices.some(h=>h.id===selHarness&&h.available))selHarness=(choices.find(h=>h.default&&h.available)||choices.find(h=>h.available)||{}).id||null;
-  document.getElementById('spawnHarnessHint').textContent=model?'For '+(model.label||model.id):'Choose a model first';
+  document.getElementById('spawnHarnessHint').textContent=model?'For '+model.id:'Choose a model first';
   choices.forEach(h=>{
     const button=document.createElement('button');button.type='button';button.className='spawn-harness';
     button.dataset.harness=h.id;button.disabled=!h.available;button.classList.toggle('sel',h.id===selHarness);
@@ -10226,7 +10221,7 @@ function renderHarnesses(){
   const previous=spawnHelper.value,helpers=p&&model&&!managed?SpawnPicker.helperModels(p,model):[];
   spawnHelper.replaceChildren();
   const same=document.createElement('option');same.value='same';same.textContent='Same as main';spawnHelper.append(same);
-  helpers.forEach(h=>{if(h.id==='same')return;const option=document.createElement('option');option.value=h.id;option.textContent=h.label||h.id;spawnHelper.append(option);});
+  helpers.forEach(h=>{if(h.id==='same')return;const option=document.createElement('option');option.value=h.id;option.textContent=h.id;spawnHelper.append(option);});
   spawnHelper.disabled=!helpers.length;
   if([...spawnHelper.options].some(o=>o.value===previous))spawnHelper.value=previous;
   document.getElementById('spawnHelperNote').textContent=managed?'Same as main only for managed launches':helpers.length?'Default: Same as main':'Not supported by this model';
@@ -10249,12 +10244,12 @@ function updateSpawnAvailability(){
   const p=spawnCatalog&&providerById(selProvider),model=selectedSpawnModel();
   const ready=Boolean(p&&model&&SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available));
   spawnSubmit.disabled=spawnBusy||!ready;
-  if(!spawnBusy&&['ready','Choose a model','Coming soon for this model'].includes(spawnStatus.textContent))spawnStatus.textContent=ready?'ready':model?'Coming soon for this model':'Choose a model';
+  if(!spawnBusy&&['ready','Choose a model','Coming soon for this model','Telemetry unavailable'].includes(spawnStatus.textContent))spawnStatus.textContent=spawnCatalog&&spawnCatalog.unavailable?'Telemetry unavailable':ready?'ready':model?'Coming soon for this model':'Choose a model';
 }
 function renderSpawnSummary(){
   const p=providerById(selProvider),model=selectedSpawnModel(),summary=document.getElementById('spawnSummary');
   summary.replaceChildren();if(!p||!model)return;
-  const title=document.createElement('strong');title.textContent=model.label||model.id;summary.append(title);
+  const title=document.createElement('strong');title.textContent=model.id;summary.append(title);
   const h=SpawnPicker.harnesses(p,model).find(h=>h.id===selHarness);
   const details=[SpawnPicker.metadata(p,model),h?(h.default?'':'Harness: '+h.label):'Harness: Coming soon',selEffort?'Effort: '+selEffort:effortsForModel(p,selModel).efforts?'Effort: Default':'Effort: Not supported',
     !spawnHelper.disabled?'Helper: '+spawnHelper.selectedOptions[0].textContent:'',
@@ -10318,11 +10313,10 @@ function renderModels(){
     const input=document.createElement('input');
     input.type='radio';input.name='spawnModel';input.value=m.id;input.checked=m.id===selModel;
     input.addEventListener('change',()=>{selModel=m.id;selHarness=null;renderHarnesses();});
-    lab.className='model-choice';lab.title=m.title||'';
+    lab.className='model-choice';
     const copy=document.createElement('span');copy.className='model-choice-copy';
-    const name=document.createElement('span');name.className='model-choice-name';name.textContent=m.label||m.id;
+    const name=document.createElement('span');name.className='model-choice-name';name.textContent=m.id;
     copy.appendChild(name);
-    if(m.hint){const note=document.createElement('span');note.className='model-choice-note';note.textContent=m.hint;copy.appendChild(note);}
     lab.append(input,copy);
     if(m.badge){const b=document.createElement('span');b.className='model-badge';b.textContent=m.badge;lab.appendChild(b);}
     into.appendChild(lab);
@@ -10336,7 +10330,13 @@ function renderModels(){
     fold.append(summary,into);modelChoices.appendChild(fold);
     older.forEach(addModel);
   }
-  if(!models.length&&p.model_error){
+  if(!models.length&&spawnCatalog.unavailable){
+    const error=document.createElement('div');error.className='spawn-empty';error.setAttribute('role','alert');
+    error.textContent='Telemetry unavailable';
+    const retry=document.createElement('button');retry.type='button';retry.className='modal-btn';retry.textContent='Retry';
+    retry.addEventListener('click',()=>{retry.disabled=true;loadSpawnCatalog();});
+    modelChoices.append(error,retry);
+  }else if(!models.length&&p.model_error){
     const error=document.createElement('div');error.className='model-error';error.setAttribute('role','alert');
     error.textContent=`CONFIGURATION ERROR · ${p.model_error}`;
     modelChoices.appendChild(error);

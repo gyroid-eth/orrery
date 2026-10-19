@@ -63,12 +63,7 @@ function roleOf(agent){
   return String(agent&&agent.annot&&agent.annot.role||'').trim();
 }
 function modelOf(agent){
-  const raw=String(agent&&agent.model||agent&&agent.cmd||'agent').trim();
-  const normalized=raw.toUpperCase();
-  if(/^GPT-?5\.6/.test(normalized))return 'GPT 5.6';
-  const claude=normalized.match(/^CLAUDE-(OPUS|FABLE|SONNET|HAIKU)-(\d+)(?:-(\d+))?/);
-  if(claude)return `${claude[1]} ${claude[2]}${claude[3]?'.'+claude[3]:''}`;
-  return normalized.replace(/[-_]/g,' ').replace(/\s+/g,' ').slice(0,22);
+  return String(agent&&(agent.model_raw||agent.model||agent.cmd)||'agent').trim();
 }
 function stateGlyph(agent){
   const state=String(agent&&agent.act_state||'').toLowerCase();
