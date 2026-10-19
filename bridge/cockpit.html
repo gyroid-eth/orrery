@@ -10,6 +10,8 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
 <link rel="stylesheet" href="orrery_view.css">
 <link rel="stylesheet" href="mail_view.css">
+<link rel="stylesheet" href="spawn_picker.css">
+<script src="spawn_picker.js"></script>
 <script src="prefs_sync.js"></script>
 <script src="theme_core.js"></script>
 <script src="theme_controller.js"></script>
@@ -1476,10 +1478,11 @@
     <div class="spawn-grid">
       <!-- WHO — pick the scientist, the adjective rolls itself -->
       <div class="field full agentpick">
-        <span class="field-label">Agent</span>
+        <span class="field-label">Agent name</span>
         <div class="namecard">
-          <img class="nc-portrait" id="ncPortrait" alt="" hidden>
-          <div class="nc-dice-face" id="ncDiceFace">🎲</div>
+          <span class="spawn-identity-face"><img class="nc-portrait" id="ncPortrait" alt="" hidden>
+            <span class="nc-dice-face" id="ncDiceFace">🎲</span>
+            <span class="provider-badge" id="spawnMakerBadge" hidden><img class="provider-logo" alt=""></span></span>
           <div class="nc-name-wrap">
             <div class="nc-name" id="ncName">auto-generated name</div>
             <div class="nc-hint" id="ncHint">pick a scientist below, or leave it to fate</div>
@@ -1491,19 +1494,26 @@
             <button type="button" class="nc-dice" id="adjDice" title="re-roll adjective">🎲</button>
           </div>
         </div>
-        <div class="agent-strip" id="agentStrip" role="listbox" aria-label="Choose a scientist"></div>
+        <details class="spawn-identity-options"><summary>Choose a scientist</summary>
+          <div class="agent-strip" id="agentStrip" role="listbox" aria-label="Choose a scientist"></div></details>
       </div>
-      <!-- ENGINE — provider tabs + model + effort, all from the catalog -->
-      <div class="field full">
-        <span class="field-label">Engine</span>
-        <div class="provider-tabs" id="providerTabs"></div>
-        <div class="model-choices" id="modelChoices"></div>
-        <div class="effort-row" id="effortRow" hidden>
-          <span class="effort-lab">EFFORT</span>
-          <div><div class="model-choices effort-choices" id="effortChoices"></div>
-            <p class="effort-caption" id="effortCaption"></p></div>
-        </div>
+      <div class="spawn-picker" aria-label="Model and Harness">
+        <section class="spawn-column"><div class="spawn-column-head"><h3>Model</h3><p>Choose a family</p></div>
+          <div class="spawn-column-body"><div class="provider-tabs" id="providerTabs" aria-label="Model families"></div>
+            <p class="spawn-family-note">Choose a model, then its Harness.</p></div></section>
+        <section class="spawn-column"><div class="spawn-column-head"><h3 id="spawnModelsTitle">Models</h3><p id="spawnModelsHint">Available from your catalog</p></div>
+          <div class="spawn-column-body"><input class="spawn-search" id="spawnModelSearch" type="search" placeholder="Search models or servers" aria-label="Search local models" hidden>
+            <div class="spawn-model-scroll"><div class="model-choices" id="modelChoices"></div></div></div></section>
+        <section class="spawn-column"><div class="spawn-column-head"><h3>Harness</h3><p id="spawnHarnessHint">For the selected model</p></div>
+          <div class="spawn-column-body"><div id="spawnHarnesses" aria-label="Harness choices"></div>
+            <div><label class="spawn-settings-label" for="spawnHelper">Helper model</label>
+              <select class="spawn-helper" id="spawnHelper"><option value="same">Same as main</option></select>
+              <p class="spawn-default-note" id="spawnHelperNote">Default: Same as main</p>
+              <div class="effort-row" id="effortRow"><span class="effort-lab">Effort</span>
+                <div><div class="model-choices effort-choices" id="effortChoices"></div><p class="effort-caption" id="effortCaption"></p></div></div></div>
+            <div class="spawn-summary" id="spawnSummary" aria-live="polite"></div></div></section>
       </div>
+      <div class="spawn-context">
       <!-- WHERE -->
       <div class="field full"><span class="field-label">Launch directory</span>
         <div class="dir-presets" id="dirPresets"></div>
@@ -1513,6 +1523,7 @@
       <div class="field full"><label for="spawnTask">Task description</label>
         <textarea id="spawnTask" maxlength="4000" required
                   placeholder="What should the agent do?"></textarea></div>
+      </div>
       <details class="spawn-advanced" id="spawnAdvanced">
         <summary>Advanced <small>lineage · labels · isolation · terminal</small></summary>
         <div class="advanced-grid">
@@ -1536,7 +1547,7 @@
     <div class="modal-foot">
       <span class="spawn-status" id="spawnStatus">ready</span>
       <button class="modal-btn" id="spawnCancel" type="button">Cancel</button>
-      <button class="modal-btn primary" id="spawnSubmit" type="submit">▸ Spawn</button>
+      <button class="modal-btn primary" id="spawnSubmit" type="submit">Spawn Agent</button>
     </div>
   </form>
 </div>
@@ -4629,6 +4640,8 @@ function buildSpawnPayload(values){
     parent:parent||null,
     name:String(source.name||'').trim()||null,
     provider:String(source.provider||'claude').trim(),
+    ...(source.harness?{harness:String(source.harness)}:{}),
+    ...(source.helper_model&&source.helper_model!=='same'?{helper_model:String(source.helper_model)}:{}),
     model:String(source.model||'claude-sonnet-4-6').trim(),
     effort:String(source.effort||'').trim()||null,
     dir:String(source.dir||'').trim()||null,
@@ -9161,6 +9174,13 @@ function paintRosterProvider(el,agent){
   if(image.getAttribute('src')!==src)image.src=src;
   else if(image.complete&&!image.naturalWidth){badge.hidden=true;pill.hidden=false;}
 }
+function paintRosterHarness(el,agent){
+  const chip=el.querySelector('.roster-harness');if(!chip)return;
+  const h=SpawnPicker.rosterHarness(agent);chip.replaceChildren();chip.hidden=!h;if(!h)return;
+  if(h.asset){const image=document.createElement('img');image.src='cockpit-assets/'+h.asset;image.alt='';
+    if(['hermes','dsh'].includes(h.id))image.className='harness-art';chip.append(image);}
+  chip.append(document.createTextNode(h.label));chip.title='Harness: '+h.label;
+}
 const ACT={work:{cls:"working",glyph:"◇"},ask:{cls:"ask",glyph:"⏎"},question:{cls:"question",glyph:"?"},wait:{cls:"",glyph:"·"}};
 // spawn-lineage palette — muted instrument hues, one per spawn-tree root.
 const LINEAGE_PALETTE=["#5fb3a3","#b58be0","#83b06a","#e0a45f","#6f9bd1","#cf7f9c",
@@ -9452,7 +9472,7 @@ function tileFor(a){
         <div class="crow1"><span class="cname"></span><button class="name-copy" type="button">
           <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/></svg>
         </button></div>
-        <div class="cmeta"><span class="pill eng"></span><span class="pill model"></span><span class="pill role" hidden></span></div>
+        <div class="cmeta"><span class="roster-harness" hidden></span><span class="pill eng"></span><span class="pill model"></span><span class="pill role" hidden></span></div>
         <div class="ctx"><span class="lab">CTX</span><div class="track"><div class="fill"></div></div><span class="pct"></span></div>
         <div class="cstate"><span class="glyph"></span><span class="statetext"></span><span class="descriptor-updated" hidden></span></div>
       </div>
@@ -9485,7 +9505,7 @@ function paintTile(el,a){
   const src='/telemetry/portrait?v=3&name='+encodeURIComponent(a.name)+'&hi=1';
   if(img.getAttribute('src')!==src){img.style.display='';img.src=src;img.onerror=()=>{img.style.display='none';};}
   el.querySelector('.cname').textContent=a.name;
-  paintRosterProvider(el,a);
+  paintRosterProvider(el,a);paintRosterHarness(el,a);
   el.querySelector('.pill.model').textContent=(a.model||a.cmd||'—')+(a.ctx_window?(' · '+a.ctx_window):'');
   const descriptor=a.descriptor||RosterDescriptor.deriveRosterDescriptor(a,currentAgents);
   const secondary=descriptor.secondary;
@@ -9909,7 +9929,7 @@ function populateSpawnParents(){
     option.textContent=`child of ${agent.name} · ${agent.act_state||'live'}`;spawnParent.appendChild(option);
   });
   if(previous&&parents.some(agent=>agent.name===previous))spawnParent.value=previous;
-  spawnSubmit.disabled=spawnBusy;
+  updateSpawnAvailability();
 }
 
 /* ── spawn catalog: providers/models/efforts/dirs/naming, all declarative ──
@@ -9917,6 +9937,10 @@ function populateSpawnParents(){
    in spawn_child.sh; this UI renders whatever the catalog says. */
 let spawnCatalog=null,spawnTaken=new Set();
 let selProvider=null,selModel=null,selEffort=null,selScientist='';
+let selFamily=null,selHarness=null;
+const SPAWN_RECENT_STORAGE_KEY='orrery.spawn-local-recent.v1';
+const SPAWN_SEARCH_STORAGE_KEY='orrery.spawn-local-search.v1';
+let spawnViewerStorage=null;try{spawnViewerStorage=window.localStorage;}catch(_){/* viewer history is optional */}
 const dirPresets=document.getElementById('dirPresets');
 const dirCrumbs=document.getElementById('dirCrumbs');
 const dirList=document.getElementById('dirList');
@@ -9929,6 +9953,9 @@ const modelChoices=document.getElementById('modelChoices');
 const effortRow=document.getElementById('effortRow');
 const effortChoices=document.getElementById('effortChoices');
 const effortCaption=document.getElementById('effortCaption');
+const spawnModelSearch=document.getElementById('spawnModelSearch');
+const spawnHelper=document.getElementById('spawnHelper');
+const spawnHarnesses=document.getElementById('spawnHarnesses');
 const ncPortrait=document.getElementById('ncPortrait');
 const ncDiceFace=document.getElementById('ncDiceFace');
 const ncName=document.getElementById('ncName');
@@ -9958,19 +9985,123 @@ async function loadSpawnCatalog(){
   }
   renderProviderTabs();renderAgentStrip();renderDirs();
 }
-function providerById(id){return (spawnCatalog.providers||[]).find(p=>p.id===id)||null;}
+function providerById(id){return (spawnCatalog&&spawnCatalog.providers||[]).find(p=>p.id===id)||null;}
 function renderProviderTabs(){
-  const providers=spawnCatalog.providers||[];
-  if(!selProvider||!providerById(selProvider))selProvider=(providers[0]||{}).id||null;
-  providerTabs.innerHTML='';
-  providers.forEach(p=>{
-    const b=document.createElement('button');b.type='button';
-    b.textContent=p.label||p.id;b.classList.toggle('sel',p.id===selProvider);
-    b.addEventListener('click',()=>{selProvider=p.id;selModel=null;selEffort=null;renderProviderTabs();});
-    providerTabs.appendChild(b);
+  const entries=SpawnPicker.entries(spawnCatalog);
+  const families=[{id:'claude',label:'Claude',asset:'anthropic.svg'},
+    {id:'codex',label:'Codex',asset:'openai.svg'},
+    {id:'deepseek',label:'DeepSeek',asset:'deepseek.svg'},
+    {id:'local',label:'Local models'}];
+  for(const entry of entries)if(!families.some(f=>f.id===entry.family))families.push({id:entry.family,label:entry.provider.label||entry.family});
+  const hasFamily=id=>entries.some(e=>e.family===id)||(spawnCatalog.providers||[]).some(p=>SpawnPicker.family(p,{})===id);
+  if(!selFamily)selFamily=(families.find(f=>hasFamily(f.id))||families[0]).id;
+  providerTabs.replaceChildren();
+  families.forEach(f=>{
+    const b=document.createElement('button');b.type='button';b.dataset.family=f.id;
+    b.classList.toggle('sel',f.id===selFamily);b.setAttribute('aria-pressed',String(f.id===selFamily));
+    b.disabled=!hasFamily(f.id);
+    if(f.asset){const img=document.createElement('img');img.className='spawn-brand';img.src='cockpit-assets/'+f.asset;img.alt='';b.append(img);}
+    else if(f.id==='local'){const hex=document.createElement('span');hex.className='spawn-local-symbol';hex.textContent='⬡';b.append(hex);}
+    const copy=document.createElement('span');copy.className='spawn-family-copy';
+    const name=document.createElement('span');name.textContent=f.label;
+    const origin=document.createElement('small');origin.textContent=f.id==='local'?'LOCAL':'CLOUD';origin.classList.toggle('local-label',f.id==='local');
+    copy.append(name,origin);b.append(copy);
+    b.addEventListener('click',()=>{selFamily=f.id;selProvider=null;selModel=null;selEffort=null;selHarness=null;renderProviderTabs();});
+    providerTabs.append(b);
   });
-  renderModels();
+  const local=selFamily==='local';spawnModelSearch.hidden=!local;
+  const choices=entries.filter(e=>e.family===selFamily);
+  let selected=choices.find(e=>e.provider.id===selProvider&&e.model.id===selModel);
+  if(!selected)selected=choices.find(e=>e.model.default)||choices[0];
+  selProvider=selected?selected.provider.id:((spawnCatalog.providers||[]).find(p=>SpawnPicker.family(p,{})===selFamily)||{}).id||null;selModel=selected?selected.model.id:null;
+  document.getElementById('spawnModelsTitle').textContent=local?'Local models':(families.find(f=>f.id===selFamily)||{}).label||'Models';
+  document.getElementById('spawnModelsHint').textContent=local?'Find a model on your servers':'Choose a model';
+  if(local)renderLocalModels();else renderModels();
+  renderHarnesses();
 }
+function renderLocalModels(){
+  const entries=SpawnPicker.entries(spawnCatalog).filter(e=>e.family==='local');
+  const query=spawnModelSearch.value.trim().toLowerCase();
+  const matches=entries.filter(e=>`${e.model.label||e.model.id} ${SpawnPicker.metadata(e.provider,e.model)}`.toLowerCase().includes(query));
+  modelChoices.replaceChildren();
+  const add=entry=>{
+    const label=document.createElement('label');label.className='model-choice';
+    label.classList.toggle('sel',selProvider===entry.provider.id&&selModel===entry.model.id);
+    const input=document.createElement('input');input.type='radio';input.name='spawnModel';input.value=entry.model.id;
+    input.checked=selProvider===entry.provider.id&&selModel===entry.model.id;
+    input.addEventListener('change',()=>{selProvider=entry.provider.id;selModel=entry.model.id;selEffort=null;selHarness=null;renderLocalModels();renderHarnesses();});
+    const copy=document.createElement('span');copy.className='model-choice-copy';
+    const name=document.createElement('span');name.className='model-choice-name';name.textContent=entry.model.label||entry.model.id;
+    const note=document.createElement('span');note.className='model-choice-note';note.textContent=SpawnPicker.metadata(entry.provider,entry.model);
+    copy.append(name,note);label.append(input,copy);
+    if(SpawnPicker.value(entry.provider,entry.model,'vision')===true){const vision=document.createElement('span');vision.className='model-badge';vision.textContent='Vision';label.append(vision);}
+    modelChoices.append(label);
+  };
+  const recent=SpawnPicker.recent(spawnViewerStorage,SPAWN_RECENT_STORAGE_KEY).map(key=>matches.find(e=>e.key===key)).filter(Boolean);
+  const heading=text=>{const title=document.createElement('div');title.className='spawn-model-group';title.textContent=text;modelChoices.append(title);};
+  if(recent.length){heading('Recently used');recent.forEach(add);}
+  heading(`All models · ${matches.length} available`);matches.forEach(add);
+  if(!matches.length){const empty=document.createElement('p');empty.className='spawn-empty';empty.textContent=query?'No models match your search.':'No local models are available in your catalog.';modelChoices.append(empty);}
+}
+function selectedSpawnModel(){const p=providerById(selProvider);return p&&(p.models||[]).find(m=>m.id===selModel)||null;}
+function renderHarnesses(){
+  const p=providerById(selProvider),model=selectedSpawnModel();
+  spawnHarnesses.replaceChildren();
+  const choices=p&&model?SpawnPicker.harnesses(p,model):[];
+  if(!choices.some(h=>h.id===selHarness&&h.available))selHarness=(choices.find(h=>h.default&&h.available)||choices.find(h=>h.available)||{}).id||null;
+  document.getElementById('spawnHarnessHint').textContent=model?'For '+(model.label||model.id):'Choose a model first';
+  choices.forEach(h=>{
+    const button=document.createElement('button');button.type='button';button.className='spawn-harness';
+    button.dataset.harness=h.id;button.disabled=!h.available;button.classList.toggle('sel',h.id===selHarness);
+    button.setAttribute('aria-pressed',String(h.id===selHarness));
+    const info=SpawnPicker.harnessInfo(h.id);
+    if(info.asset){const img=document.createElement('img');img.src='cockpit-assets/'+info.asset;img.alt='';img.className='spawn-brand'+(['hermes','dsh'].includes(SpawnPicker.harnessKey(h.id))?' harness-art':'');button.append(img);}
+    const label=document.createElement('span');label.textContent=(h.default?'Default: ':'')+h.label;button.append(label);
+    if(!h.available){const soon=document.createElement('small');soon.textContent='Coming soon';button.append(soon);}
+    button.addEventListener('click',()=>{selHarness=h.id;renderHarnesses();});spawnHarnesses.append(button);
+  });
+  const previous=spawnHelper.value,helpers=p&&model?SpawnPicker.helperModels(p,model):[];
+  spawnHelper.replaceChildren();
+  const same=document.createElement('option');same.value='same';same.textContent='Same as main';spawnHelper.append(same);
+  helpers.forEach(h=>{if(h.id==='same')return;const option=document.createElement('option');option.value=h.id;option.textContent=h.label||h.id;spawnHelper.append(option);});
+  spawnHelper.disabled=!helpers.length;
+  if([...spawnHelper.options].some(o=>o.value===previous))spawnHelper.value=previous;
+  document.getElementById('spawnHelperNote').textContent=helpers.length?'Default: Same as main':'Not supported by this model';
+  renderEfforts(p);renderSpawnSummary();paintSpawnMaker(p,model);updateSpawnAvailability();
+}
+function paintSpawnMaker(provider,model){
+  const badge=document.getElementById('spawnMakerBadge'),image=badge.querySelector('img');
+  const local=Boolean(provider&&model&&SpawnPicker.locality(provider,model)==='local');
+  const key=provider&&model?rosterProviderKey({provider:local?'local':provider.id,model:model.id}):'';
+  const maker=ROSTER_PROVIDER[key];badge.hidden=!maker&&!local;
+  badge.classList.toggle('local-provider-badge',local);
+  let rim=badge.querySelector('.local-provider-rim');
+  if(local&&!rim){rim=svgEl('svg',{class:'local-provider-rim',viewBox:'0 0 100 100','aria-hidden':'true'});
+    rim.appendChild(svgEl('polygon',{points:'50,4 90,27 90,73 50,96 10,73 10,27'}));badge.prepend(rim);}
+  if(!local&&rim)rim.remove();
+  image.hidden=!maker;if(maker){image.src='cockpit-assets/'+maker.asset+'.svg';image.alt=maker.label;badge.title=maker.label+(local?' · Local':'');}
+  else{image.removeAttribute('src');image.alt='';badge.title=local?'Local model':'';}
+}
+function updateSpawnAvailability(){
+  const p=spawnCatalog&&providerById(selProvider),model=selectedSpawnModel();
+  const ready=Boolean(p&&model&&SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available));
+  spawnSubmit.disabled=spawnBusy||!ready;
+  if(!spawnBusy&&['ready','Choose a model','Coming soon for this model'].includes(spawnStatus.textContent))spawnStatus.textContent=ready?'ready':model?'Coming soon for this model':'Choose a model';
+}
+function renderSpawnSummary(){
+  const p=providerById(selProvider),model=selectedSpawnModel(),summary=document.getElementById('spawnSummary');
+  summary.replaceChildren();if(!p||!model)return;
+  const title=document.createElement('strong');title.textContent=model.label||model.id;summary.append(title);
+  const h=SpawnPicker.harnesses(p,model).find(h=>h.id===selHarness);
+  const details=[SpawnPicker.metadata(p,model),h?(h.default?'':'Harness: '+h.label):'Harness: Coming soon',selEffort?'Effort: '+selEffort:'Effort: Not supported',
+    !spawnHelper.disabled?'Helper: '+spawnHelper.selectedOptions[0].textContent:''];
+  details.filter(Boolean).forEach(text=>{const line=document.createElement('span');line.textContent=text;summary.append(line);});
+}
+spawnModelSearch.addEventListener('input',()=>{
+  try{spawnViewerStorage?.setItem(SPAWN_SEARCH_STORAGE_KEY,spawnModelSearch.value);}catch(_){}
+  renderLocalModels();
+});
+spawnHelper.addEventListener('change',renderSpawnSummary);
 /* The dashboard names each provider's less-used models (overflow_models —
    not necessarily older ones); they fold under "more models" so the main
    ones are not lost among them. The default model is never folded, and a
@@ -9984,18 +10115,18 @@ function splitOverflowModels(provider){
 }
 function renderModels(){
   const p=providerById(selProvider)||{models:[]};
-  const models=p.models||[];
+  const models=(p.models||[]).filter(m=>(m.locality||p.locality||'cloud')!=='local');
   if(!selModel||!models.some(m=>m.id===selModel)){
     selModel=((models.find(m=>m.default)||models[0])||{}).id||null;
   }
   modelChoices.innerHTML='';
-  const {current,older}=splitOverflowModels(p);
+  const {current,older}=splitOverflowModels({...p,models});
   let into=modelChoices;
   const addModel=m=>{
     const lab=document.createElement('label');
     const input=document.createElement('input');
     input.type='radio';input.name='spawnModel';input.value=m.id;input.checked=m.id===selModel;
-    input.addEventListener('change',()=>{selModel=m.id;renderEfforts(p);});
+    input.addEventListener('change',()=>{selModel=m.id;selHarness=null;renderHarnesses();});
     lab.className='model-choice';lab.title=m.title||'';
     const copy=document.createElement('span');copy.className='model-choice-copy';
     const name=document.createElement('span');name.className='model-choice-name';name.textContent=m.label||m.id;
@@ -10024,6 +10155,8 @@ function renderModels(){
 /* The telemetry's per-model effort list wins over the provider's; an empty
    per-model list means "send no effort, let the CLI decide". */
 function effortsForModel(provider,model){
+  const selected=provider&&(provider.models||[]).find(m=>m.id===model);
+  if(selected&&Array.isArray(selected.efforts))return {efforts:selected.efforts.length?selected.efforts:null,fallback:selected.effort_default||provider.effort_default||null};
   const perModel=provider&&provider.model_efforts;
   if(perModel&&typeof perModel==='object'&&Array.isArray(perModel[model])){
     const defaults=provider.model_effort_defaults||{};
@@ -10034,28 +10167,24 @@ function effortsForModel(provider,model){
 }
 function renderEfforts(p){
   const {efforts,fallback}=effortsForModel(p,selModel);
-  effortRow.hidden=!efforts;
-  effortChoices.innerHTML='';
-  if(efforts){
-    if(!selEffort||!efforts.includes(selEffort))selEffort=efforts.includes(fallback)?fallback:efforts[0];
-    efforts.forEach(e=>{
-      const lab=document.createElement('label');
-      lab.className='effort-choice';lab.title=(p.effort_hints||{})[e]||'';
-      const input=document.createElement('input');
-      input.type='radio';input.name='spawnEffort';input.value=e;input.checked=e===selEffort;
-      input.addEventListener('change',()=>{selEffort=e;renderEffortCaption(p);});
-      lab.appendChild(input);lab.append(e);
-      effortChoices.appendChild(lab);
-    });
-    renderEffortCaption(p);
-  }else{selEffort=null;effortCaption.textContent='';}
+  effortRow.hidden=false;effortChoices.innerHTML='';
+  if(efforts){if(!selEffort||!efforts.includes(selEffort))selEffort=efforts.includes(fallback)?fallback:efforts[0];}
+  else selEffort=null;
+  const levels=[...new Set(['off','low','medium','high','xhigh','max','ultra',...(efforts||[])])]
+    .filter(e=>!['xhigh','ultra'].includes(e)||(efforts||[]).includes(e));
+  levels.forEach(e=>{
+    const supported=Boolean(efforts&&efforts.includes(e));
+    if(!supported){const button=document.createElement('button');button.type='button';button.className='effort-unavailable';button.disabled=true;button.textContent=e[0].toUpperCase()+e.slice(1);effortChoices.appendChild(button);return;}
+    const lab=document.createElement('label');lab.className='effort-choice';
+    const input=document.createElement('input');input.type='radio';input.name='spawnEffort';input.value=e;input.checked=e===selEffort;
+    input.addEventListener('change',()=>{selEffort=e;renderEffortCaption(p);renderSpawnSummary();});
+    lab.appendChild(input);lab.append(e[0].toUpperCase()+e.slice(1));effortChoices.appendChild(lab);
+  });
+  renderEffortCaption(p);
 }
 function renderEffortCaption(provider){
-  const hint=(provider.effort_hints||{})[selEffort]||'';
-  effortCaption.replaceChildren();
-  if(!selEffort)return;
-  const level=document.createElement('b');level.textContent=selEffort;
-  effortCaption.append(level,document.createTextNode(hint?` · ${hint}`:''));
+  const {fallback}=effortsForModel(provider,selModel);
+  effortCaption.textContent=selEffort?'Default: '+(fallback||selEffort):'Not supported by this model';
 }
 /* directory browser — navigate like a file manager instead of typing paths.
    Presets jump, crumbs ascend, the list descends; the chosen dir is simply
@@ -10200,7 +10329,8 @@ document.getElementById('adjDice').addEventListener('click',()=>{
 function openSpawnModal(){
   closePalette(false);spawnLastFocus=document.activeElement;spawnForm.reset();
   spawnWorktreeBaseWrap.classList.remove('on');spawnStatus.textContent='ready';
-  selScientist='';selProvider=null;selModel=null;selEffort=null;
+  selScientist='';selProvider=null;selModel=null;selEffort=null;selFamily=null;selHarness=null;
+  try{spawnModelSearch.value=spawnViewerStorage?.getItem(SPAWN_SEARCH_STORAGE_KEY)||'';}catch(_){spawnModelSearch.value='';}
   populateSpawnParents();
   loadSpawnCatalog().then(updateNameCard);
   spawnOverlay.classList.add('on');spawnOverlay.setAttribute('aria-hidden','false');
@@ -10223,6 +10353,8 @@ function spawnPayloadFromForm(){
     group:spawnGroup.value,
     name:composedName(),
     provider:selProvider,
+    harness:selHarness&&SpawnPicker.harnessKey(selHarness)!==SpawnPicker.harnessKey((providerById(selProvider)||{}).program||selProvider)?selHarness:null,
+    helper_model:!spawnHelper.disabled?spawnHelper.value:null,
     model:selModel||(spawnForm.querySelector('input[name="spawnModel"]:checked')||{}).value,
     effort:selEffort,
     dir,
@@ -10251,6 +10383,8 @@ async function watchSpawnLaunch(name){
 }
 async function submitSpawn(event){
   event.preventDefault();if(spawnBusy)return;
+  const p=providerById(selProvider),model=selectedSpawnModel();
+  if(!p||!model||!SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available)){spawnStatus.textContent='Choose an available model and Harness';return;}
   const payload=spawnPayloadFromForm();
   const validationError=validateSpawnPayload(payload,spawnTaken);
   if(validationError){
@@ -10268,6 +10402,7 @@ async function submitSpawn(event){
     let result={};
     try{result=await response.json();}catch(_){/* HTTP status is still useful */}
     if(!response.ok||!result.ok)throw new Error(result.error||`HTTP ${response.status}`);
+    if(SpawnPicker.locality(p,model)==='local')SpawnPicker.remember(spawnViewerStorage,SPAWN_RECENT_STORAGE_KEY,JSON.stringify([p.id,model.id]));
     spawnBusy=false;closeSpawnModal(true);
     const childName=result.child_name||result.tmux_session||'new agent';
     if(result.pending){
