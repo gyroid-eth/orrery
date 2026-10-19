@@ -74,12 +74,13 @@ def test_all_families_use_the_same_form_payload_and_parent_candidates(tour_brows
     assert controls['harnesses']==(['dsh','hermes'] if provider in ('deepseek','strata') else [harness])
 
 
-def test_harness_effort_and_helper_capabilities_do_not_fall_back_to_trial_defaults(tour_browser):
+@pytest.mark.parametrize('main_only',[False,True])
+def test_harness_effort_and_helper_capabilities_do_not_fall_back_to_trial_defaults(tour_browser,main_only):
     _,evaluate=tour_browser
     result=evaluate('''(()=>{
       spawnCatalog=CATALOG;const p=spawnCatalog.providers.find(p=>p.id==='strata');
       p.efforts=['trial-only'];p.helper_models=['trial-helper'];
-      p.models[0].harnesses[0].helper_models=['small'];
+      p.models[0].harnesses[0].helper_models=HELPERS;
       p.models[0].harnesses[1].efforts=null;p.models[0].harnesses[1].effort_source='unknown';
       selFamily='local';selProvider='strata';selModel='strata-model';selHarness='dsh';selEffort=null;renderProviderTabs();
       const a={levels:effortsForModel(p,selModel),hasEffort:Object.hasOwn(spawnPayloadFromForm(),'effort'),
@@ -89,9 +90,10 @@ def test_harness_effort_and_helper_capabilities_do_not_fall_back_to_trial_defaul
       spawnHarnesses.querySelector('[data-harness=hermes]').click();
       return {a,explicit,unknown:{levels:effortsForModel(p,selModel),hasEffort:Object.hasOwn(spawnPayloadFromForm(),'effort'),
         text:effortChoices.textContent,helperHidden:document.getElementById('spawnHelperField').hidden}};
-    })()'''.replace('CATALOG',json.dumps(catalog())))
+    })()'''.replace('CATALOG',json.dumps(catalog())).replace('HELPERS',json.dumps(['same','strata-model']+([] if main_only else ['small']))))
     assert result['a']['levels']['efforts']==['low','high'] and result['a']['hasEffort'] is False
-    assert result['a']['helpers']==['same','small'] and result['a']['helperHidden'] is False
+    assert result['a']['helpers']==(['same'] if main_only else ['same','small'])
+    assert result['a']['helperHidden'] is main_only
     assert result['explicit']=='high'
     assert result['unknown']['levels']['efforts'] is None and result['unknown']['hasEffort'] is False
     assert result['unknown']['text']=='Uses harness default' and result['unknown']['helperHidden']

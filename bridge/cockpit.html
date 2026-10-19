@@ -10199,8 +10199,8 @@ function renderHarnesses(){
   const previous=spawnHelper.value,helpers=p&&model?SpawnPicker.helperModels(p,model,selHarness):[];
   spawnHelper.replaceChildren();
   const same=document.createElement('option');same.value='same';same.textContent='Same as main';spawnHelper.append(same);
-  helpers.forEach(h=>{if(h.id==='same')return;const option=document.createElement('option');option.value=h.id;option.textContent=h.id;spawnHelper.append(option);});
-  const hasHelpers=helpers.some(h=>h.id!=='same');
+  helpers.forEach(h=>{if(h.id==='same'||h.id===model?.id)return;const option=document.createElement('option');option.value=h.id;option.textContent=h.id;spawnHelper.append(option);});
+  const hasHelpers=helpers.some(h=>h.id!=='same'&&h.id!==model?.id);
   spawnHelper.disabled=!hasHelpers;document.getElementById('spawnHelperField').hidden=!hasHelpers;
   if([...spawnHelper.options].some(o=>o.value===previous))spawnHelper.value=previous;
   document.getElementById('spawnHelperNote').textContent='Default: Same as main';
