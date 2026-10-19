@@ -583,23 +583,23 @@ function drawSpawnEdges(target,layout,large){
   return layer;
 }
 
-// Keep provider choice and unknown labels identical to the roster. The
-// compact view only abbreviates the shared fallback text; hover keeps it whole.
-function drawMiniProvider(group,agent,x,y,portraitRadius){
+// Keep provider choice and unknown labels identical across portrait views.
+// Compact fallback text is shared with the roster; hover keeps it whole.
+function drawProviderBadge(group,agent,x,y,portraitRadius,size=14){
   const presentation=OC.providerPresentation(agent);
   const {provider,text,compactText}=presentation;
   const label=provider?provider.label:text;
-  const seat=svgEl('g',{class:'mini-provider-badge',role:'img','aria-label':label,
+  const seat=svgEl('g',{class:'mini-provider-badge'+(size>14?' planet-provider-badge':''),role:'img','aria-label':label,
     transform:`translate(${x+portraitRadius*.72} ${y+portraitRadius*.72})`});
   const title=svgEl('title');title.textContent=label;seat.appendChild(title);
-  seat.appendChild(svgEl('circle',{class:'mini-provider-seat',r:7}));
+  seat.appendChild(svgEl('circle',{class:'mini-provider-seat',r:size/2}));
   const fallback=()=>{
     const mark=svgEl('text',{class:'mini-provider-fallback',x:0,y:0,
-      'text-anchor':'middle','dominant-baseline':'central'});
+      'text-anchor':'middle','dominant-baseline':'central',transform:`scale(${size/14})`});
     mark.textContent=compactText;seat.appendChild(mark);
   };
   if(provider){
-    const h=14*.58;
+    const h=size*.58;
     const aspect={anthropic:1,openai:256/260,google:1,deepseek:71.69/52.76};
     const w=h*(aspect[provider.asset]||1);
     const mark=svgEl('image',{class:'mini-provider-logo',x:-w/2,y:-h/2,width:w,height:h,
@@ -658,7 +658,7 @@ function drawMiniAgent(target,defs,position,index,dimensions){
   // Last, so the portrait cannot bury it: SVG has no z-index — paint order is
   // DOM order. Drawn before the <image>, "someone is waiting on you" was
   // silently painted over by the face (2026-08-06).
-  const providerLabel=drawMiniProvider(group,agent,x,y,portraitRadius);
+  const providerLabel=drawProviderBadge(group,agent,x,y,portraitRadius);
   drawStateGlyph(group,agent,x,y,false);
   const rightSide=x<=dimensions.width/2;
   const below=y<28;
@@ -724,6 +724,8 @@ function drawPlanetAgent(target,defs,position,index){
   }));
   // After the motion ring, not before: the rotating arc was painting over the
   // state orbit that sits just outside it.
+  const providerLabel=drawProviderBadge(group,agent,x,y,portraitRadius,26);
+  title.textContent+=` · ${providerLabel}`;
   drawStateGlyph(group,agent,x,y,true);
   const name=svgEl('text',{
     class:'planet-agent-name',x,y:y+radius+19,'text-anchor':'middle',
