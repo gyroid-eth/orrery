@@ -264,7 +264,7 @@ PROXY_ROUTES = {
     "/telemetry/messages": ("/api/messages-since", ("since", "limit")),
     "/telemetry/graph": ("/api/graph", ("all", "days", "spawn_only")),
     "/telemetry/spawn-catalog": ("/api/spawn-names", ()),
-    "/telemetry/spawn-status": ("/api/spawn-status", ("name",)),
+    "/telemetry/spawn-status": ("/api/spawn-status", ("name", "attempt_id")),
 }
 
 
