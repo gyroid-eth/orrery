@@ -236,3 +236,19 @@ from the catalog are not displayed. The search query uses `orrery.spawn-local-se
 The roster shows the model maker on the portrait; a Harness chip appears beneath
 the name except for cloud Claude with Claude Code and cloud GPT with Codex.
 Local models keep their Harness chip even when that Harness is the default.
+
+### Managed spawn (stage 1)
+
+The `deepseek` / `strata` × `dsh` / `hermes` combinations offered by Telemetry use managed launch.
+Select a parent and list the relative files the child may edit (one per line, no globs).
+Specify one expected output file and a contains-text or SHA256 check. Helper model is Same as main only.
+Server-reported context is not yet available; the runner uses its configured context.
+The server creates a private working directory and leaves outputs there; it does not automatically write them back to the source directory.
+
+Before POST, the browser saves a UUID `attempt_id` and queries the same attempt through
+`/telemetry/spawn-status?attempt_id=...`. HTTP 202, registration and a successful launcher wrapper do not mean Ready.
+Agent launches above the roster retains Pending / Ready / Failed, the attempt identity and diagnostic state path.
+Ready describes runtime readiness. Task success and cleanup completion are shown separately.
+A 90-second HTTP timeout or page reload never automatically sends a replacement spawn.
+If status is unavailable, Check status re-queries the same attempt.
+History is browser-local (`orrery.managed-spawn-attempts.v1`); task text is not stored in that history.

@@ -35,6 +35,26 @@
     for(const id of ['hermes','dsh'])if(!result.some(h=>harnessKey(h.id)===id))result.push({id,label:HARNESS[id].label,available:false,default:false});
     return result;
   }
+  // Stage1 contract: the managed dispatch owns registration and the private worktree.
+  function isManaged(provider,model,harness){
+    return value(provider,model,'managed')===true||['deepseek','strata'].includes(provider.id)||['dsh','hermes'].includes(harnessKey(harness));
+  }
+  function managedPayload(base,attemptId,allowedPaths,expected){
+    const {name,headless,worktree_base,...rest}=base;
+    return {...rest,attempt_id:attemptId,standalone:false,worktree:true,helper_model:'same',
+      allowed_paths:allowedPaths,expected,async:true};
+  }
+  function managedError(payload){
+    if(!payload.parent)return 'Choose a parent for this managed launch.';
+    if(!payload.allowed_paths.length)return 'List the files this child may edit.';
+    if(payload.allowed_paths.some(path=>path.startsWith('/')||path.includes('\\')||/[?*\[\]]/.test(path)||path.split('/').some(part=>!part||['.','..','.git'].includes(part))))
+      return 'Use relative file names without globs, parent directories or .git.';
+    const check=payload.expected[0];
+    if(!check||!payload.allowed_paths.includes(check.path))return 'The expected file must be in the allowed files list.';
+    if(Object.hasOwn(check,'sha256')&&!/^[a-f0-9]{64}$/i.test(check.sha256))return 'Enter the expected SHA256 (64 hexadecimal characters).';
+    if(Object.hasOwn(check,'contains')&&!check.contains)return 'Enter text that the expected file must contain.';
+    return '';
+  }
   function helperModels(provider,model){
     const list=value(provider,model,'helper_models');
     return Array.isArray(list)?list.filter(m=>typeof m==='string'||m&&m.id).map(m=>typeof m==='string'?{id:m,label:m}:m):[];
@@ -58,5 +78,5 @@
     if(!id||agent.category&&agent.category!=='agent')return null;
     return {id:key,...harnessInfo(id)};
   }
-  return {harnessKey,harnessInfo,locality,family,entries,value,harnesses,helperModels,metadata,recent,remember,rosterHarness};
+  return {isManaged,managedPayload,managedError,harnessKey,harnessInfo,locality,family,entries,value,harnesses,helperModels,metadata,recent,remember,rosterHarness};
 });

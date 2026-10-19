@@ -234,3 +234,19 @@ localStorage（`orrery.spawn-local-recent.v1`）に保存します。catalog か
 検索語は `orrery.spawn-local-search.v1` に保存します。どちらも共有 preference には同期せず、検索や履歴は閲覧者ごとのものです。roster の肖像にはモデルの作り手の座金だけを置き、
 名前の下に Harness の札を出します。cloud の Claude＋Claude Code／GPT＋Codex は省略し、
 local は default な Harness でも札を出します。
+
+### Managed spawn（段1）
+
+Telemetry が提供する `deepseek` / `strata` と `dsh` / `hermes` の組は managed 起動です。
+親を選び、編集を許可する相対ファイル名（1行1件、globなし）と、成果物1件の検査条件
+（含むべき文字列、または SHA256）を指定します。Helper は Same as main だけです。
+表示する context はまだ server 報告値ではなく、runner の既存設定を使用します。
+実行先は server が用意する私有作業ディレクトリで、成果物を元のディレクトリへ自動で書き戻しません。
+
+送信前に browser が `attempt_id`（UUID）を保存し、`/telemetry/spawn-status?attempt_id=...` で
+同じ要求の状態を照会します。HTTP 202、登録完了、起動 wrapper の終了は Ready を意味しません。
+roster 上の Agent launches に Pending / Ready / Failed と attempt・診断状態の path を残します。
+Ready は実起動後の準備完了であり、task の成功と後片付けの完了は別々に表示します。
+90秒の HTTP timeout やページの再読込でも新しい spawn を自動で送りません。
+状態を取得できない場合は同じ attempt の Check status で再確認できます。
+この履歴は閲覧者の localStorage（`orrery.managed-spawn-attempts.v1`）だけに保存し、task 本文は保存しません。
