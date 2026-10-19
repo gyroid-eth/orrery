@@ -4489,9 +4489,9 @@
       }
     }
   },
-  "inventory_digest": "e650a2033cc874dc97b4e5feeaf252e9192a0f48f03a80fb48cebef755a84aa3",
+  "inventory_digest": "e90c9a9255073656628aa75b0d9af5280c112bfa5025a520364e4718c01268bc",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "49f143c7a796eaec2c0ffc4abfe2144f4bddd9d10b57840e0f7b09b22bd64b60",
+  "source_digest": "862711fb0998218af4922e68e1696ecc8db3a9b198909fa5eb38b6552e954bee",
   "surface": "cockpit",
   "version": 1
 }
@@ -8976,6 +8976,12 @@ function usageClock(ts){if(!ts)return'';const d=new Date(ts*1000);
   return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 const USAGE_REASON={sign_in_required:'sign in to Claude Code',codex_not_found:'codex not on PATH',
   probe_failed:'not reachable',rate_limited:'rate limited · retrying later',no_windows_returned:'no windows returned'};
+// Slice the decimal text: binary floats can lose cents or round balances up.
+// The always-visible pill uses whole dollars; the open ledger uses cents.
+function usageUsd(value,digits=2){
+  const [dollars,cents='']=String(value).split('.');
+  return dollars+(digits?'.'+cents.padEnd(digits,'0').slice(0,digits):'');
+}
 function usageProviderName(p){return p==='claude'?'Claude':p==='codex'?'Codex':p==='dsh'?'DeepSeek':p;}
 const USAGE_LOGO={claude:'assets/anthropic.svg',codex:'assets/openai.svg',dsh:'cockpit-assets/deepseek.svg'};
 function usageMainWindows(prov){return prov.windows.filter(w=>!w.extra);}
@@ -8997,8 +9003,8 @@ function renderUsagePill(){
     if(prov&&prov.measurement_kind==='balance'){
       const balance=prov.status==='ok'&&prov.balance;
       slot.classList.toggle('none',!balance);slot.classList.toggle('warn',!!balance&&!balance.is_available);slot.classList.remove('low');
-      b.textContent=balance?(balance.total_balance===null?'USD —':'USD '+balance.total_balance):'USD ?';
-      slot.title='DeepSeek: '+(balance?(balance.total_balance===null?'no USD balance':'USD '+balance.total_balance)
+      b.textContent=balance?(balance.total_balance===null?'No USD':'$'+usageUsd(balance.total_balance,0)):'$?';
+      slot.title='DeepSeek: '+(balance?(balance.total_balance===null?'no USD balance':'$'+usageUsd(balance.total_balance))
         +' · account '+(balance.is_available?'available':'unavailable'):'balance unknown');
       continue;
     }
@@ -9028,7 +9034,7 @@ function renderUsagePopover(){
   const body=document.getElementById('usageDials'),kicker=document.getElementById('usageKicker');
   if(!usageData){body.textContent='';kicker.textContent='waiting for update';return;}
   const observed=Math.max(0,...usageData.providers.map(p=>p.observed_at||0));
-  kicker.textContent=(observed?'observed '+usageClock(observed):'not observed')+' · numbers are % left'+(usageData.providers.some(p=>p.measurement_kind==='balance')?'; balances in USD':'');
+  kicker.textContent=(observed?'observed '+usageClock(observed):'not observed')+' · numbers are % left'+(usageData.providers.some(p=>p.measurement_kind==='balance')?'; balances in dollars':'');
   body.replaceChildren(...usageData.providers.map(prov=>{
     const sec=document.createElement('section');sec.className='up-prov';
     const head=document.createElement('div');head.className='up-head';
@@ -9042,7 +9048,7 @@ function renderUsagePopover(){
       sec.appendChild(head);
       const balance=prov.status==='ok'&&prov.balance;
       const amount=document.createElement('div');amount.className='up-name'+(balance&&!balance.is_available?' up-balance-warning':'');
-      amount.textContent=balance?(balance.total_balance===null?'No USD balance':'USD '+balance.total_balance):'Unknown';
+      amount.textContent=balance?(balance.total_balance===null?'No USD balance':'$'+usageUsd(balance.total_balance)):'$?';
       const note=document.createElement('div');note.className='up-empty';
       note.textContent=balance?'Account '+(balance.is_available?'available':'unavailable'):'Balance unavailable';
       sec.append(amount,note);return sec;
@@ -9070,7 +9076,7 @@ function renderUsagePopover(){
       ws.forEach(w=>d.appendChild(usageDial(w)));sec.appendChild(d);}
     return sec;}));
   const foot=document.createElement('div');foot.className='up-foot';
-  foot.textContent='Claude from the OAuth usage endpoint with the token Claude Code keeps · Codex from the app server. Read-only; refreshed every minute.'+(usageData.providers.some(p=>p.measurement_kind==='balance')?' DeepSeek account balance from ORRERY Telemetry (USD).':'');
+  foot.textContent='Claude from the OAuth usage endpoint with the token Claude Code keeps · Codex from the app server. Read-only; refreshed every minute.'+(usageData.providers.some(p=>p.measurement_kind==='balance')?' DeepSeek account balance from ORRERY Telemetry.':'');
   body.appendChild(foot);
 }
 async function pollUsage(force){

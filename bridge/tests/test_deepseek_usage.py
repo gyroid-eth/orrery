@@ -151,10 +151,10 @@ def test_balance_dom_uses_currency_not_percentage_and_renders_unknown(tour_brows
     _, evaluate = tour_browser
     old = [up.provider_from_quota_payload(e).to_json() for e in QUOTAS]
     for entry, amount, note in [
-        (balance_entry(), 'USD 12.3400', 'Account available'),
-        (balance_entry('0.0000', False), 'USD 0.0000', 'Account unavailable'),
+        (balance_entry(), '$12.34', 'Account available'),
+        (balance_entry('0.0000', False), '$0.00', 'Account unavailable'),
         (balance_entry(None), 'No USD balance', 'Account available'),
-        (balance_entry(status='unavailable'), 'Unknown', 'Balance unavailable'),
+        (balance_entry(status='unavailable'), '$?', 'Balance unavailable'),
     ]:
         result = usage_dom(evaluate, dict(providers=old + [up.provider_from_quota_payload(entry).to_json()]))
         last = evaluate("""(()=>{const s=document.querySelector('#usageDials .up-prov:last-of-type');return {
@@ -180,3 +180,22 @@ def test_failed_cockpit_poll_clears_only_the_balance_amount(tour_browser):
     })()""")
     assert after[:2] == providers[:2]
     assert after[-1]['balance'] is None and after[-1]['status'] == 'unavailable'
+
+
+def test_usd_display_truncates_header_to_dollars_and_ledger_to_cents(tour_browser):
+    import usage_probe as up
+    _, evaluate = tour_browser
+    for raw, whole, cents in [('12.349', '12', '12.34'), ('12.3400', '12', '12.34'),
+                              ('0.009', '0', '0.00'), ('0.99', '0', '0.99'),
+                              ('12', '12', '12.00'), ('1.999', '1', '1.99')]:
+        wire = up.provider_from_quota_payload(balance_entry(raw)).to_json()
+        usage_dom(evaluate, dict(providers=[wire]))
+        result = evaluate("""(()=>({
+          header:document.querySelector('#usageBtn [data-provider="dsh"] b').textContent,
+          amount:document.querySelector('#usageDials .up-prov > .up-name').textContent,
+          raw:usageData.providers[0].balance.total_balance
+        }))()""")
+        assert result == dict(header='$'+whole, amount='$'+cents, raw=raw)
+        cache = up.UsageCache()
+        cache.put(up.provider_from_quota_payload(balance_entry(raw)), 1000)
+        assert cache.get('dsh', 1001).balance['total_balance'] == raw
