@@ -3372,21 +3372,24 @@ async def serve_portrait(request: web.Request) -> web.StreamResponse:
     if not name or "/" in name or "\\" in name or name.startswith("."):
         raise web.HTTPNotFound(text="no portrait")
 
-    base = PORTRAIT_DIR_PX if pixel else PORTRAIT_DIR_HI if hi else PORTRAIT_DIR
-    stem = portrait_stem(name, base)
-    if stem is not None:
-        return web.FileResponse(
-            base / f"{stem}.png",
-            headers={"Cache-Control": "public, max-age=3600"},
-        )
+    bases = ([PORTRAIT_DIR_PX, PORTRAIT_DIR, PORTRAIT_DIR_HI] if pixel
+             else [PORTRAIT_DIR_HI if hi else PORTRAIT_DIR])
+    for base in bases:
+        stem = portrait_stem(name, base)
+        if stem is not None:
+            return web.FileResponse(
+                base / f"{stem}.png",
+                headers={"Cache-Control": "public, max-age=3600"},
+            )
     # Not a bundled face: the telemetry dashboard owns the operator's private
     # overlay and custom map (AGENTSTACK_PORTRAITS_DIR / _CUSTOM_PORTRAITS),
     # so a persistent bot registered there gets the same face here instead of
     # initials on one screen and a portrait on the other.
-    if not pixel:
-        relayed = await relay_dashboard_portrait(request, name, hi)
-        if relayed is not None:
-            return relayed
+    # Mini and planetarium prefer pixel art, but a custom face need not have
+    # a pixel variant. Resolve it through the same source as the roster.
+    relayed = await relay_dashboard_portrait(request, name, hi and not pixel)
+    if relayed is not None:
+        return relayed
     return web.Response(
         body=portrait_fallback(name, hi and not pixel),
         content_type="image/svg+xml",
