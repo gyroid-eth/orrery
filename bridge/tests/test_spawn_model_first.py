@@ -186,7 +186,7 @@ def test_picker_controls_fit_a_small_viewport_and_footer_stays_visible(tour_brow
     client.call('Emulation.setDeviceMetricsOverride',width=390,height=844,deviceScaleFactor=1,mobile=False)
     result=evaluate('''(async()=>{
       spawnCatalog={providers:[{id:'local-one',locality:'local',program:'codex-cli',
-        models:[{id:'Qwen-fixture',default:true}],efforts:['low','medium','high']}],naming:{},dirs:[]};
+        models:[{id:'Qwen-fixture',default:true}],helper_models:['fixture-small'],efforts:['low','medium','high']}],naming:{},dirs:[]};
       selFamily=null;selProvider=null;selModel=null;selHarness=null;renderProviderTabs();
       spawnOverlay.classList.add('on');
       await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
