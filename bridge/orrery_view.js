@@ -583,6 +583,34 @@ function drawSpawnEdges(target,layout,large){
   return layer;
 }
 
+// Keep provider choice and unknown labels identical to the roster. The
+// compact view only abbreviates the shared fallback text; hover keeps it whole.
+function drawMiniProvider(group,agent,x,y,portraitRadius){
+  const presentation=OC.providerPresentation(agent);
+  const {provider,text,compactText}=presentation;
+  const label=provider?provider.label:text;
+  const seat=svgEl('g',{class:'mini-provider-badge',role:'img','aria-label':label,
+    transform:`translate(${x+portraitRadius*.72} ${y+portraitRadius*.72})`});
+  const title=svgEl('title');title.textContent=label;seat.appendChild(title);
+  seat.appendChild(svgEl('circle',{class:'mini-provider-seat',r:7}));
+  const fallback=()=>{
+    const mark=svgEl('text',{class:'mini-provider-fallback',x:0,y:0,
+      'text-anchor':'middle','dominant-baseline':'central'});
+    mark.textContent=compactText;seat.appendChild(mark);
+  };
+  if(provider){
+    const h=14*.58;
+    const aspect={anthropic:1,openai:256/260,google:1,deepseek:71.69/52.76};
+    const w=h*(aspect[provider.asset]||1);
+    const mark=svgEl('image',{class:'mini-provider-logo',x:-w/2,y:-h/2,width:w,height:h,
+      href:'cockpit-assets/'+provider.asset+'.svg','aria-label':label,
+      preserveAspectRatio:'xMidYMid meet'});
+    mark.addEventListener('error',()=>{mark.remove();fallback();},{once:true});
+    seat.appendChild(mark);
+  }else fallback();
+  group.appendChild(seat);
+  return label;
+}
 function drawMiniAgent(target,defs,position,index,dimensions){
   const {agent,x,y,hue,working}=position;
   const portraitRadius=8.5;
@@ -630,6 +658,7 @@ function drawMiniAgent(target,defs,position,index,dimensions){
   // Last, so the portrait cannot bury it: SVG has no z-index — paint order is
   // DOM order. Drawn before the <image>, "someone is waiting on you" was
   // silently painted over by the face (2026-08-06).
+  const providerLabel=drawMiniProvider(group,agent,x,y,portraitRadius);
   drawStateGlyph(group,agent,x,y,false);
   const rightSide=x<=dimensions.width/2;
   const below=y<28;
@@ -640,7 +669,7 @@ function drawMiniAgent(target,defs,position,index,dimensions){
     'text-anchor':rightSide?'start':'end',
   });
   const role=roleOf(agent),model=modelOf(agent);
-  label.textContent=`${agent.name}${role?` · ${role}`:''} · ${model}`;
+  label.textContent=`${agent.name}${role?` · ${role}`:''} · ${model} · ${providerLabel}`;
   group.appendChild(label);
   target.appendChild(group);
   return group;

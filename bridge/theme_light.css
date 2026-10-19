@@ -263,3 +263,9 @@ html[data-color-theme="light"] .planet-agent:focus-visible .planet-lineage-ring{
 /* The provider logos ship bone-coloured for the dark ground; on paper they
    need ink. The same rule the agent cards use in telemetry. */
 html[data-color-theme="light"] .up-logo{filter:brightness(0)}
+
+/* Provider seats retain the portrait overlap in the paper theme. */
+html[data-color-theme="light"] .provider-badge{background:var(--panel);border-color:var(--hair)}
+html[data-color-theme="light"] .provider-logo{filter:brightness(0)}
+html[data-color-theme="light"] .mini-provider-seat{fill:var(--panel);stroke:var(--hair)}
+html[data-color-theme="light"] .mini-provider-logo{filter:brightness(0)}

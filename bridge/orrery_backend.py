@@ -3591,6 +3591,8 @@ def create_app(tmux_bin: str = "tmux") -> web.Application:
     app.router.add_route("*", "/assets/{tail:.*}", proxy_dashboard_passthrough)
     app.router.add_get("/portrait", proxy_dashboard_passthrough)
     app.router.add_get("/ws", websocket_handler)
+    # Cockpit-owned logos must not depend on the dashboard asset proxy.
+    app.router.add_static("/cockpit-assets/", HERE / "assets")
     app.router.add_static("/", HERE, show_index=True)
     return app
 
