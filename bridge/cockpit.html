@@ -9510,7 +9510,7 @@ function paintTile(el,a){
   el.querySelector('.face').style.removeProperty('--lineage-ring');
   el.querySelector('.ini').textContent=(a.name[0]||'?');
   const img=el.querySelector('.face img');
-  const src='/telemetry/portrait?v=3&name='+encodeURIComponent(a.name)+'&hi=1';
+  const src='/telemetry/portrait?v=4&name='+encodeURIComponent(a.name)+'&hi=1';
   if(img.getAttribute('src')!==src){img.style.display='';img.src=src;img.onerror=()=>{img.style.display='none';};}
   el.querySelector('.cname').textContent=a.name;
   paintRosterProvider(el,a);paintRosterHarness(el,a);
