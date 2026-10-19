@@ -199,3 +199,97 @@ def test_usd_display_truncates_header_to_dollars_and_ledger_to_cents(tour_browse
         cache = up.UsageCache()
         cache.put(up.provider_from_quota_payload(balance_entry(raw)), 1000)
         assert cache.get('dsh', 1001).balance['total_balance'] == raw
+
+
+def test_usage_settings_hide_both_views_persist_and_default_new_providers_on(tour_browser):
+    import time
+    import usage_probe as up
+    client, evaluate = tour_browser
+    payload = dict(providers=[up.provider_from_quota_payload(e).to_json()
+                              for e in QUOTAS + [balance_entry()]])
+    usage_dom(evaluate, payload)
+    result = evaluate("""(()=>{
+      renderUsageSettings();
+      const toggle=p=>{
+        const cb=document.querySelector('#usageProviderRows input[data-provider="'+p+'"]');
+        cb.click();
+      };
+      toggle('dsh');toggle('claude');
+      return {
+        hidden:[...document.querySelectorAll('#usageBtn .up-p[hidden]')].map(e=>e.dataset.provider),
+        names:[...document.querySelectorAll('#usageDials .up-head .up-name')].map(e=>e.textContent),
+        saved:JSON.parse(localStorage.getItem(USAGE_PREF_KEY)),
+        switches:[...document.querySelectorAll('#usageProviderRows input')].map(e=>[e.dataset.provider,e.checked])
+      };
+    })()""")
+    assert set(result['hidden']) == {'dsh', 'claude'}
+    assert result['names'] == ['Codex']
+    assert set(result['saved']) == {'dsh', 'claude'}
+    assert result['switches'] == [['claude', False], ['codex', True], ['dsh', False]]
+
+    evaluate('window.__usageReloadMarker=true')
+    client.call('Page.reload')
+    for _ in range(100):
+        if evaluate("!window.__usageReloadMarker && document.readyState==='complete' && typeof renderUsageSettings==='function' && !!window.OrreryTour"):
+            break
+        time.sleep(.1)
+    else:
+        raise AssertionError('cockpit did not reload')
+    usage_dom(evaluate, payload)
+    result = evaluate("""(()=>{
+      renderUsageSettings();
+      const retained=!document.querySelector('#usageProviderRows input[data-provider="dsh"]').checked;
+      usageData.providers.push({provider:'future',status:'unavailable',windows:[],reason:'fixture'});
+      renderUsagePill();renderUsagePopover();renderUsageSettings();
+      const added=document.querySelector('#usageProviderRows input[data-provider="future"]').checked;
+      const hiddenSlot=document.querySelector('#usageBtn [data-provider="dsh"]');
+      const hiddenStyle=getComputedStyle(hiddenSlot).display;
+      document.querySelector('#usageProviderRows input[data-provider="dsh"]').click();
+      return {retained,added,hiddenStyle,shown:!hiddenSlot.hidden,
+        body:document.getElementById('usageDials').textContent};
+    })()""")
+    assert result['retained'] and result['added'] and result['shown']
+    assert result['hiddenStyle'] == 'none'
+    assert 'DeepSeek' in result['body'] and '$12.34' in result['body']
+
+
+def test_usage_settings_can_restore_all_hidden_providers(tour_browser):
+    import usage_probe as up
+    _, evaluate = tour_browser
+    usage_dom(evaluate, dict(providers=[up.provider_from_quota_payload(e).to_json()
+                                       for e in QUOTAS + [balance_entry()]]))
+    result = evaluate("""(()=>{
+      renderUsageSettings();
+      document.querySelectorAll('#usageProviderRows input').forEach(cb=>cb.click());
+      const empty=document.getElementById('usageDials').textContent;
+      const hidden=[...document.querySelectorAll('#usageBtn .up-p')].every(e=>getComputedStyle(e).display==='none');
+      const stillAvailable=document.querySelectorAll('#usageProviderRows input').length;
+      document.querySelector('#usageProviderRows input[data-provider="dsh"]').click();
+      return {empty,hidden,stillAvailable,restored:document.getElementById('usageDials').textContent};
+    })()""")
+    assert result['hidden'] and result['stillAvailable'] == 3
+    assert 'All providers hidden' in result['empty']
+    assert 'DeepSeek' in result['restored']
+
+
+def test_balance_alert_boundary_matches_existing_quota_alert_color(tour_browser):
+    import usage_probe as up
+    _, evaluate = tour_browser
+    for entry, low in [(balance_entry('4.99'), True), (balance_entry('5.00'), False),
+                       (balance_entry('4.999999999999999999'), True),
+                       (balance_entry(status='unavailable'), False)]:
+        wire = up.provider_from_quota_payload(entry).to_json()
+        usage_dom(evaluate, dict(providers=[wire]))
+        result = evaluate("""(()=>{
+          const slot=document.querySelector('#usageBtn [data-provider="dsh"]');
+          const amount=document.querySelector('#usageDials .up-balance-low');
+          const probe=document.createElement('span');
+          probe.style.color='var(--theme-status-alert,#d2685e)';document.body.appendChild(probe);
+          const alert=getComputedStyle(probe).color;probe.remove();
+          return {low:slot.classList.contains('low'),row:!!amount,
+            pillColor:getComputedStyle(slot.querySelector('b')).color,
+            rowColor:amount&&getComputedStyle(amount).color,alert};
+        })()""")
+        assert result['low'] == result['row'] == low
+        if low:
+            assert result['pillColor'] == result['rowColor'] == result['alert']

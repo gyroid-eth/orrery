@@ -153,6 +153,8 @@ The `LEFT  CLAUDE 41%  CODEX 47%` pill to the left of Settings in the header sho
 
 Clicking the pill opens `Usage left`, which lays out the windows returned by the provider as arc dials, each with the time until reset.
 
+In Settings, `Usage` lets you show or hide each provider, including Claude, Codex, and DeepSeek. The choice applies to both the `LEFT` pill and `Usage left` and is saved in this browser. Providers that appear later are shown by default. A DeepSeek balance below $5 uses the same alert red as a low quota in both the pill and balance row. At $5 or above, or when the balance is unknown, its color is unchanged.
+
 ![Usage left. Claude shows 5H 64%, 7D 41%, FABLE 18%; Codex shows 5H 88%, 7D 47%. Codex's additional limit Spark is untouched](../images/cockpit_usage_popover.png)
 
 - **Claude**: `5h` (the 5-hour quota), `7d` (the weekly quota), and per-model weekly quotas (such as `FABLE`; only when the server returns them)
