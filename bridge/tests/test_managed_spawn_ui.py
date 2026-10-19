@@ -26,7 +26,7 @@ def test_four_managed_pairs_keep_scope_parent_identity_and_readiness_separate(to
         if(String(url).startsWith('/telemetry/spawn-status?')){
           queries.push(String(url));const id=new URL(url,location.origin).searchParams.get('attempt_id');
           return {ok:true,json:async()=>({ok:true,managed:true,attempt_id:id,name:'OfflineChild',state:verdict,phase:verdict==='failed'?'retiring':verdict==='ready'?'running':'registered',
-            task_success:verdict==='failed'?true:null,runtime_success:verdict==='failed'?false:null,finished:verdict==='failed',state_path:'/fixture/state',error:verdict==='failed'?'Cleanup failed':null})};
+            task_success:verdict==='failed'?true:null,runtime_success:verdict==='failed'?false:null,cleanup_success:verdict==='failed'?false:null,finished:verdict==='failed',state_path:'/fixture/state',error:verdict==='failed'?'Cleanup failed':null})};
         }
         return original(url,options);
       };
@@ -187,3 +187,32 @@ def test_profile_busy_is_a_rejection_not_a_queue_or_status_poll(tour_browser,htt
     assert result['record']['phase']=='rejected'
     assert 'already using this backend profile' in result['text']
     assert 'Check status' not in result['text'] and 'Dismiss' in result['text']
+
+
+@pytest.mark.parametrize('status,expected', [
+    ({'cleanup_success': False, 'phase': 'failed', 'error_phase': 'cleaning'}, 'failed'),
+    ({'cleanup_success': True, 'phase': 'cleaned'}, 'complete'),
+    ({'cleanup_success': None, 'phase': 'cleaned'}, 'unknown'),
+    ({'phase': 'cleaned'}, 'complete'),
+    ({'phase': 'cleaned_after_failure'}, 'complete'),
+    ({'phase': 'failed', 'error_phase': 'cleaning'}, 'failed'),
+    ({'phase': 'failed', 'error_phase': 'stopping'}, 'unknown'),
+])
+def test_cleanup_uses_clean_evidence_not_runtime_success(tour_browser,status,expected):
+    _, evaluate = tour_browser
+    result=evaluate('''(async()=>{
+      const original=window.fetch,id='eeeeeeee-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+      const status={ok:true,attempt_id:id,state:'failed',finished:true,task_success:true,runtime_success:true,...STATUS};
+      window.fetch=async(url,options)=>String(url).startsWith('/telemetry/spawn-status?')
+        ?{ok:true,json:async()=>status}:original(url,options);
+      try{
+        managedAttempts.set(id,{attempt_id:id,provider:'deepseek',harness:'dsh',state:'pending'});
+        await refreshManagedSpawn(id);
+        return {record:managedAttempts.get(id),text:document.querySelector('[data-attempt-id="'+id+'"]').textContent,
+          stored:JSON.parse(localStorage.getItem(SPAWN_ATTEMPTS_KEY)).find(r=>r.attempt_id===id)};
+      }finally{window.fetch=original;}
+    })()'''.replace('STATUS',json.dumps(status)))
+    assert 'Task: succeeded' in result['text']
+    assert f'Cleanup: {expected}' in result['text']
+    assert result['record']['runtime_success'] is True
+    assert result['stored']['cleanup_success'] == result['record']['cleanup_success']

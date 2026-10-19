@@ -10408,6 +10408,12 @@ function saveManagedAttempts(){
   try{localStorage.setItem(SPAWN_ATTEMPTS_KEY,JSON.stringify([...managedAttempts.values()]));}catch(_){/* viewer storage is optional */}
   renderManagedAttempts();
 }
+function managedCleanupSuccess(status){
+  if(Object.hasOwn(status,'cleanup_success'))return status.cleanup_success;
+  if(['cleaned','cleaned_after_failure'].includes(status.phase))return true;
+  if(status.error_phase==='cleaning')return false;
+  return null;
+}
 function renderManagedAttempts(){
   const box=document.getElementById('spawnLaunches'),rows=document.getElementById('spawnLaunchRows');
   box.hidden=!managedAttempts.size;document.getElementById('spawnLaunchCount').textContent=String(managedAttempts.size);
@@ -10420,8 +10426,9 @@ function renderManagedAttempts(){
     head.append(name,state);row.append(head);
     const note=document.createElement('p');note.textContent=record.error||record.notice||record.phase||'Waiting for readiness evidence';row.append(note);
     if(record.state==='ready'){const ready=document.createElement('p');ready.textContent='Readiness confirmed; task completion is separate.';row.append(ready);}
-    if(record.task_success!==undefined&&record.task_success!==null||record.runtime_success!==undefined&&record.runtime_success!==null){
-      const completion=document.createElement('p');completion.textContent=`Task: ${record.task_success===true?'succeeded':record.task_success===false?'failed':'pending'} · Cleanup: ${record.runtime_success===true?'complete':record.runtime_success===false?'failed':'pending'}`;row.append(completion);
+    const cleanup=managedCleanupSuccess(record);
+    if(record.task_success!==undefined&&record.task_success!==null||cleanup!==null||record.finished&&!record.rejected){
+      const completion=document.createElement('p');completion.textContent=`Task: ${record.task_success===true?'succeeded':record.task_success===false?'failed':'pending'} · Cleanup: ${cleanup===true?'complete':cleanup===false?'failed':record.finished?'unknown':'pending'}`;row.append(completion);
     }
     const details=document.createElement('details'),label=document.createElement('summary'),code=document.createElement('code');
     label.textContent='Attempt details';code.textContent=`Attempt: ${record.attempt_id}${record.phase?'\nPhase: '+record.phase:''}${record.runtime_attempt_id?'\nRuntime attempt: '+record.runtime_attempt_id:''}${record.state_path?'\nState: '+record.state_path:''}`;details.append(label,code);row.append(details);
@@ -10440,7 +10447,7 @@ async function refreshManagedSpawn(attemptId){
     if(status.attempt_id!==attemptId||!['pending','ready','failed'].includes(status.state))throw new Error('No readiness verdict for this attempt. Check status again.');
     const becameReady=record.state!=='ready'&&status.state==='ready';
     Object.assign(record,{name:status.name||record.name,state:status.state,phase:status.phase,finished:status.finished===true,
-      task_success:status.task_success,runtime_success:status.runtime_success,runtime_attempt_id:status.runtime_attempt_id,state_path:status.state_path,error:status.error,notice:''});
+      task_success:status.task_success,runtime_success:status.runtime_success,cleanup_success:managedCleanupSuccess(status),error_phase:status.error_phase,runtime_attempt_id:status.runtime_attempt_id,state_path:status.state_path,error:status.error,notice:''});
     saveManagedAttempts();
     if(becameReady){showToast(`READY · ${record.name||attemptId}`);document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}));}
     if(status.state==='failed')showToast(`SPAWN FAILED · ${record.name||record.provider} · ${status.error||'See attempt details'}`,true,20000);
