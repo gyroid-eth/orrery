@@ -4523,9 +4523,9 @@
       }
     }
   },
-  "inventory_digest": "99edfbc01b6d53e4f2b022c9372dbfa5e6f47f265120a0bcac7344b0a9906bb4",
+  "inventory_digest": "f5daf2e17ac6c6438c8b910911e837bcfc8d5fcd56f10fde2119f5b3b561dae8",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "6e53b5ca4b98891f8b9c034d58cedccd6ad7fa5f4b86196ad4064499f434756c",
+  "source_digest": "1d375b3b4338b0cb685faf8c285c55c2d84f9f56219e1201f088b681b8fb5667",
   "surface": "cockpit",
   "version": 1
 }
@@ -10225,9 +10225,10 @@ function paintSpawnMaker(provider,model){
 }
 function updateSpawnAvailability(){
   const p=spawnCatalog&&providerById(selProvider),model=selectedSpawnModel();
-  const ready=Boolean(p&&model&&SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available));
+  const missingEffort=p&&model&&spawnExplicitEffortMissing(p,selModel);
+  const ready=Boolean(p&&model&&SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available)&&!missingEffort);
   spawnSubmit.disabled=spawnBusy||!ready;
-  if(!spawnBusy&&['ready','Choose a model','Coming soon for this model','Telemetry unavailable','Loading model catalog…'].includes(spawnStatus.textContent))spawnStatus.textContent=spawnCatalog&&spawnCatalog.loading?'Loading model catalog…':spawnCatalog&&spawnCatalog.unavailable?'Telemetry unavailable':ready?'ready':model?'Coming soon for this model':'Choose a model';
+  if(!spawnBusy&&['ready','Choose an effort','Choose a model','Coming soon for this model','Telemetry unavailable','Loading model catalog…'].includes(spawnStatus.textContent))spawnStatus.textContent=spawnCatalog&&spawnCatalog.loading?'Loading model catalog…':spawnCatalog&&spawnCatalog.unavailable?'Telemetry unavailable':missingEffort?'Choose an effort':ready?'ready':model?'Coming soon for this model':'Choose a model';
 }
 function renderSpawnSummary(){
   const p=providerById(selProvider),model=selectedSpawnModel(),summary=document.getElementById('spawnSummary');
@@ -10235,7 +10236,7 @@ function renderSpawnSummary(){
   const title=document.createElement('strong');title.textContent=model.id;summary.append(title);
   const h=SpawnPicker.harnesses(p,model).find(h=>h.id===selHarness);
   const effort=effortsForModel(p,selModel);
-  const details=[SpawnPicker.metadata(p,model),h?(h.default?'':'Harness: '+h.label):'Harness: Coming soon',selEffort?'Effort: '+selEffort:effort.efforts||effort.source==='unknown'?'Effort: Default':'Effort: Not supported',
+  const details=[SpawnPicker.metadata(p,model),h?(h.default?'':'Harness: '+h.label):'Harness: Coming soon',selEffort?'Effort: '+selEffort:effectiveSpawnEffort(p,selModel)?'Effort: Default ('+effectiveSpawnEffort(p,selModel)+')':effort.efforts||effort.source==='unknown'?'Effort: Default':'Effort: Not supported',
     !spawnHelper.disabled?'Helper: '+spawnHelper.selectedOptions[0].textContent:''];
   details.filter(Boolean).forEach(text=>{const line=document.createElement('span');line.textContent=text;summary.append(line);});
 }
@@ -10336,24 +10337,50 @@ function effortsForModel(provider,model){
   if(harness&&Object.hasOwn(harness,'efforts'))return {
     efforts:Array.isArray(harness.efforts)&&harness.efforts.length?harness.efforts:null,
     fallback:harness.default_effort||null,source:harness.effort_source||'unknown'};
-  if(selected&&Array.isArray(selected.efforts))return {efforts:selected.efforts.length?selected.efforts:null,fallback:selected.effort_default||provider.effort_default||null};
+  const levels=value=>Array.isArray(value)&&value.length?value:null;
+  const providerDefault=provider&&provider.effort_default||null;
+  const ownDefault=selected&&Object.hasOwn(selected,'effort_default');
+  const modelDefault=ownDefault?selected.effort_default:providerDefault;
+  if(selected&&Object.hasOwn(selected,'efforts'))return {efforts:levels(selected.efforts),fallback:modelDefault};
   const perModel=provider&&provider.model_efforts;
-  if(perModel&&typeof perModel==='object'&&Array.isArray(perModel[model])){
+  if(perModel&&typeof perModel==='object'&&Object.hasOwn(perModel,model)){
     const defaults=provider.model_effort_defaults||{};
-    return {efforts:perModel[model].length?perModel[model]:null,fallback:defaults[model]||provider.effort_default||null};
+    return {efforts:levels(perModel[model]),fallback:ownDefault?selected.effort_default:Object.hasOwn(defaults,model)?defaults[model]:providerDefault};
   }
-  const list=provider&&Array.isArray(provider.efforts)&&provider.efforts.length?provider.efforts:null;
-  return {efforts:list,fallback:provider&&provider.effort_default||null};
+  return {efforts:levels(provider&&provider.efforts),fallback:modelDefault};
+}
+function resolveSpawnEffort(levels,value,fallback){
+  const allowed=Array.isArray(levels)?levels:[];
+  if(value!==null&&value!==undefined)return allowed.includes(value)?value:null;
+  return allowed.includes(fallback)?fallback:null;
+}
+function spawnExplicitEffortMissing(provider,model){
+  if(!(provider&&provider.capabilities&&provider.capabilities.effort_required))return false;
+  const levels=effortsForModel(provider,model).efforts;
+  return typeof selEffort!=='string'||!Array.isArray(levels)||!levels.includes(selEffort);
+}
+function effectiveSpawnEffort(provider,model){
+  if(spawnExplicitEffortMissing(provider,model))return null;
+  const info=effortsForModel(provider,model);
+  return resolveSpawnEffort(info.efforts,selEffort,info.fallback);
 }
 function renderEfforts(p){
-  const {efforts,source}=effortsForModel(p,selModel);
+  const {efforts,source,fallback}=effortsForModel(p,selModel);
   effortRow.hidden=false;
-  // Null means untouched/reset. Catalog defaults are not the user's effective
-  // CLI settings, so never infer an explicit effort from effort_default.
+  // Null keeps the control in Default mode. Send only a reported, supported
+  // catalog default; a missing default keeps the harness settings.
   if(!efforts||!efforts.includes(selEffort))selEffort=null;
   EffortSlider.mount(effortChoices,{levels:efforts,value:selEffort,onChange:value=>{
-    selEffort=value;renderSpawnSummary();
+    selEffort=value;
+    const caption=effortChoices.querySelector('.effort-caption');
+    if(caption&&value===null){const initial=effectiveSpawnEffort(p,selModel);caption.textContent=spawnExplicitEffortMissing(p,selModel)?'Choose an effort':initial?'Uses catalog default: '+initial:'Uses your settings';}
+    renderSpawnSummary();updateSpawnAvailability();
   }});
+  const caption=effortChoices.querySelector('.effort-caption');
+  if(caption&&selEffort===null){
+    const value=effectiveSpawnEffort(p,selModel);
+    caption.textContent=spawnExplicitEffortMissing(p,selModel)?'Choose an effort':value?'Uses catalog default: '+value:'Uses your settings';
+  }
   if(!efforts&&source==='unknown'&&effortChoices.firstChild)effortChoices.firstChild.textContent='Uses harness default';
 }
 /* directory browser — navigate like a file manager instead of typing paths.
@@ -10537,7 +10564,7 @@ function spawnPayloadFromForm(){
     harness:selHarness&&SpawnPicker.harnessKey(selHarness)!==legacyHarness?selHarness:null,
     helper_model:!spawnHelper.disabled?spawnHelper.value:null,
     model:selModel||(spawnForm.querySelector('input[name="spawnModel"]:checked')||{}).value,
-    effort:selEffort,
+    effort:effectiveSpawnEffort(providerById(selProvider),selModel),
     dir,
     worktree:spawnWorktree.checked,worktree_base:spawnWorktreeBase.value,
     open_ghostty:spawnGhostty.checked,
@@ -10567,6 +10594,7 @@ async function submitSpawn(event){
   event.preventDefault();if(spawnBusy)return;
   const p=providerById(selProvider),model=selectedSpawnModel();
   if(!p||!model||!SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available)){spawnStatus.textContent='Choose an available model and Harness';return;}
+  if(spawnExplicitEffortMissing(p,selModel)){spawnStatus.textContent='Choose an effort';return;}
   const payload=spawnPayloadFromForm();
   const validationError=validateSpawnPayload(payload,spawnTaken);
   if(validationError){

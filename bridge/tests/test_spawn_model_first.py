@@ -131,7 +131,7 @@ def test_picker_defaults_local_search_and_capability_updates_in_browser(tour_bro
     assert result['codex']['provider'] == 'codex' and result['codex']['effort'] is None
     assert 'harness' not in result['codex']['payload']
     assert result['rangeMax'] == '1'
-    assert 'effort' not in result['codex']['payload']
+    assert result['codex']['payload']['effort']=='high'
 
 
 def test_submit_cloud_defaults_and_optional_local_parameters_without_real_spawn(tour_browser):
@@ -163,7 +163,7 @@ def test_submit_cloud_defaults_and_optional_local_parameters_without_real_spawn(
     claude,codex,local=result['posted']
     assert result['cloudModels'] == ['claude-fixture']
     assert claude['provider'] == 'claude' and 'effort' not in claude
-    assert codex['provider'] == 'codex' and 'effort' not in codex
+    assert codex['provider'] == 'codex' and codex['effort']=='high'
     assert 'harness' not in claude and 'helper_model' not in claude
     assert 'harness' not in codex and 'helper_model' not in codex
     assert local['provider'] == 'local-fixture' and local['harness'] == 'example-tool' and local['helper_model'] == 'small'
@@ -268,7 +268,7 @@ def test_directory_dialog_commits_only_on_confirmation_and_escape_keeps_parent(t
     ('codex',['off','low','medium','high','xhigh','max','ultra']),
     ('claude',['low','medium','high','xhigh','max']),
 ])
-def test_effort_is_omitted_until_keyboard_choice_and_reset_restores_settings(tour_browser,provider,levels):
+def test_effort_sends_catalog_default_and_reset_restores_default(tour_browser,provider,levels):
     client,evaluate=tour_browser
     catalog=dict(providers=[dict(id=provider,program='claude-code' if provider=='claude' else 'codex-cli',
         models=[dict(id='fixture',default=True),dict(id='unsupported',efforts=[])],
@@ -277,7 +277,7 @@ def test_effort_is_omitted_until_keyboard_choice_and_reset_restores_settings(tou
       spawnCatalog=CATALOG;selFamily=null;selProvider=null;selModel=null;selHarness=null;selEffort=null;
       renderProviderTabs();spawnOverlay.classList.add('on');spawnTask.value='Fixture task';spawnDirPath='/workspace';
     })()'''.replace('CATALOG',json.dumps(catalog)))
-    assert evaluate("({specified:Object.hasOwn(spawnPayloadFromForm(),'effort'),label:effortChoices.querySelector('input').getAttribute('aria-valuetext')})") == dict(specified=False,label='Default')
+    assert evaluate("({specified:Object.hasOwn(spawnPayloadFromForm(),'effort'),label:effortChoices.querySelector('input').getAttribute('aria-valuetext')})") == dict(specified=True,label='Default')
     evaluate("effortChoices.querySelector('input').focus()")
     def key(name,code):
         for event in ('keyDown','keyUp'):
@@ -290,7 +290,7 @@ def test_effort_is_omitted_until_keyboard_choice_and_reset_restores_settings(tou
     # Returning to the starting neutral position still sends an explicit effort.
     assert evaluate("effortChoices.querySelector('.effort-reset').hidden") is False
     evaluate("effortChoices.querySelector('.effort-reset').click()")
-    assert evaluate("({specified:Object.hasOwn(spawnPayloadFromForm(),'effort'),label:effortChoices.querySelector('input').getAttribute('aria-valuetext'),focused:document.activeElement.type})") == dict(specified=False,label='Default',focused='range')
+    assert evaluate("({specified:Object.hasOwn(spawnPayloadFromForm(),'effort'),label:effortChoices.querySelector('input').getAttribute('aria-valuetext'),focused:document.activeElement.type})") == dict(specified=True,label='Default',focused='range')
     center=evaluate("(()=>{const r=effortChoices.querySelector('input').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()")
     client.call('Input.dispatchMouseEvent',type='mousePressed',button='left',buttons=1,clickCount=1,**center)
     client.call('Input.dispatchMouseEvent',type='mouseReleased',button='left',buttons=0,clickCount=1,**center)
@@ -300,7 +300,7 @@ def test_effort_is_omitted_until_keyboard_choice_and_reset_restores_settings(tou
     evaluate("modelChoices.querySelector('input[value=unsupported]').click()")
     assert evaluate("({specified:Object.hasOwn(spawnPayloadFromForm(),'effort'),inputs:effortChoices.querySelectorAll('input').length,text:effortChoices.textContent})") == dict(specified=False,inputs=0,text='Not supported')
     evaluate("modelChoices.querySelector('input[value=fixture]').click()")
-    assert evaluate("Object.hasOwn(spawnPayloadFromForm(),'effort')") is False
+    assert evaluate('spawnPayloadFromForm().effort') == 'low'
 
 
 @pytest.mark.parametrize('failure',['offline','http','malformed'])
@@ -356,3 +356,91 @@ def test_model_ids_are_used_in_picker_summary_harness_helper_and_roster(tour_bro
     assert result['name']==result['summary']==result['roster']=='raw-model-id'
     assert result['harness']=='For raw-model-id' and result['helper']==['Same as main','raw-helper-id']
     assert result['provider']=='Codex from telemetry' and result['notes']==0 and result['tooltip']=='' and result['case']=='none'
+
+
+@pytest.mark.parametrize('levels,value,fallback,expected', [
+    (['low','high'],None,'high','high'),
+    (['low','high'],None,None,None),
+    (['low','high'],None,'invalid',None),
+    (None,None,None,None),
+    ([],None,'high',None),
+    (['low','high'],'low','high','low'),
+    (['low','high'],'invalid','high',None),
+    (['none','high'],None,'none','none'),
+])
+def test_effective_effort_uses_only_supported_explicit_or_reported_default(levels,value,fallback,expected):
+    source=(BRIDGE/'cockpit.html').read_text()
+    function=re.search(r'function resolveSpawnEffort\(levels,value,fallback\)\{.*?\n\}',source,re.S).group()
+    run=subprocess.run(['node','-e',function+'\nconsole.log(JSON.stringify(resolveSpawnEffort('+','.join(json.dumps(v) for v in (levels,value,fallback))+')));'],capture_output=True,text=True,check=True)
+    assert json.loads(run.stdout)==expected
+
+
+@pytest.mark.parametrize('model,expected', [
+    ({'id':'fixture','efforts':['low','high'],'effort_default':None}, None),
+    ({'id':'fixture','efforts':['low','high'],'effort_default':'low'}, 'low'),
+    ({'id':'fixture','harnesses':[{'id':'hermes','available':True,'efforts':['low','high'],'default_effort':None,'effort_source':'harness'}]}, None),
+    ({'id':'fixture','harnesses':[{'id':'hermes','available':True,'efforts':None,'default_effort':None,'effort_source':'unknown'}]}, None),
+    ({'id':'fixture','efforts':[]}, None),
+    ({'id':'fixture'}, 'high'),
+])
+def test_model_or_harness_null_default_does_not_inherit_provider_guess(model,expected):
+    source=(BRIDGE/'cockpit.html').read_text()
+    names=['effortsForModel','resolveSpawnEffort','spawnExplicitEffortMissing','effectiveSpawnEffort']
+    functions='\n'.join(re.search(r'function '+name+r'\([^\n]*\)\{.*?\n\}',source,re.S).group() for name in names)
+    result=node('const SpawnPicker=picker;let selHarness="hermes",selEffort=null;'+functions+
+        '\nconst p='+json.dumps({'id':'deepseek','efforts':['low','high'],'effort_default':'high','models':[model]})+
+        ';console.log(JSON.stringify(effectiveSpawnEffort(p,"fixture")));')
+    assert result==expected
+
+
+@pytest.mark.parametrize('model,fields', [
+    ({'id':'fixture','efforts':None,'effort_default':None}, {}),
+    ({'id':'fixture'}, {'model_efforts':{'fixture':None}}),
+    ({'id':'fixture','effort_default':None}, {}),
+    ({'id':'fixture','efforts':[]}, {}),
+    ({'id':'fixture','efforts':{}}, {}),
+    ({'id':'fixture'}, {'model_efforts':{'fixture':'invalid'}}),
+    ({'id':'fixture'}, {'model_efforts':{'fixture':['low','high']},'model_effort_defaults':{'fixture':None}}),
+])
+def test_own_null_effort_metadata_keeps_provider_default_unresolved(model,fields):
+    source=(BRIDGE/'cockpit.html').read_text()
+    names=['effortsForModel','resolveSpawnEffort','spawnExplicitEffortMissing','effectiveSpawnEffort']
+    functions='\n'.join(re.search(r'function '+name+r'\([^\n]*\)\{.*?\n\}',source,re.S).group() for name in names)
+    provider={'id':'deepseek','efforts':['low','high'],'effort_default':'high','models':[model],**fields}
+    result=node('const SpawnPicker=picker;let selHarness="hermes",selEffort=null;'+functions+
+        '\nconst p='+json.dumps(provider)+';console.log(JSON.stringify(effectiveSpawnEffort(p,"fixture")));')
+    assert result is None
+
+
+def test_required_effort_requires_explicit_choice_before_button_and_post(tour_browser):
+    _,evaluate=tour_browser
+    result=evaluate('''(async()=>{
+      spawnCatalog={providers:[{id:'codex',program:'codex-cli',models:[{id:'fixture'}],
+        capabilities:{effort_required:true},efforts:['low','high'],effort_default:'high'}],naming:{},dirs:[]};
+      selFamily=null;selProvider=null;selModel=null;selHarness=null;selEffort=null;renderProviderTabs();
+      spawnTask.value='Fixture task';spawnDirPath='/fixture';
+      const original=window.fetch;let posts=0;
+      window.fetch=async(url,...args)=>{if(String(url)!=='/telemetry/spawn')return original(url,...args);posts++;return {ok:true,json:async()=>({ok:true,child_name:'Fixture'})};};
+      try{
+        const untouched={disabled:spawnSubmit.disabled,payload:spawnPayloadFromForm()};
+        await submitSpawn(new Event('submit',{cancelable:true}));untouched.posts=posts;
+        effortChoices.querySelector('input').value=0;effortChoices.querySelector('input').dispatchEvent(new Event('input'));
+        const explicit={disabled:spawnSubmit.disabled,payload:spawnPayloadFromForm()};
+        await submitSpawn(new Event('submit',{cancelable:true}));explicit.posts=posts;
+        effortChoices.querySelector('.effort-reset').click();
+        const reset={disabled:spawnSubmit.disabled,payload:spawnPayloadFromForm()};
+        await submitSpawn(new Event('submit',{cancelable:true}));reset.posts=posts;
+        selEffort='invented';updateSpawnAvailability();
+        const invalid={disabled:spawnSubmit.disabled,payload:spawnPayloadFromForm()};
+        await submitSpawn(new Event('submit',{cancelable:true}));invalid.posts=posts;
+        return {untouched,explicit,reset,invalid};
+      }finally{window.fetch=original;}
+    })()''')
+    assert result['untouched']['disabled'] and result['untouched']['posts']==0
+    assert 'effort' not in result['untouched']['payload']
+    assert result['explicit']['disabled'] is False and result['explicit']['posts']==1
+    assert result['explicit']['payload']['effort']=='low'
+    assert result['reset']['disabled'] and result['reset']['posts']==1
+    assert 'effort' not in result['reset']['payload']
+    assert result['invalid']['disabled'] and result['invalid']['posts']==1
+    assert 'effort' not in result['invalid']['payload']
