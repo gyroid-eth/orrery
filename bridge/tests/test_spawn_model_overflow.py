@@ -67,6 +67,9 @@ BLOCKS = (
     r"function splitOverflowModels\(provider\)\{.*?\n\}\n",
     r"function renderModels\(\)\{.*?\n\}\n",
     r"function effortsForModel\(provider,model\)\{.*?\n\}\n",
+    r"function resolveSpawnEffort\(levels,value,fallback\)\{.*?\n\}\n",
+    r"function spawnExplicitEffortMissing\(provider,model\)\{.*?\n\}\n",
+    r"function effectiveSpawnEffort\(provider,model\)\{.*?\n\}\n",
     r"function renderEfforts\(p\)\{.*?\n\}\n",
 )
 
@@ -79,11 +82,15 @@ class El{
   append(...cs){cs.forEach(c=>this.children.push(c));}
   addEventListener(t,f){this.listeners[t]=f;}
   setAttribute(k,v){this.attrs[k]=v;}
+  querySelector(selector){return this.children.find(c=>selector==='.'+c.className)||null;}
 }
 const document={createElement:t=>new El(t)};
 const modelChoices=new El('div'),effortChoices=new El('div'),effortRow=new El('div'),effortCaption=new El('div');
 let effortOptions={levels:[]};
-const EffortSlider={mount:(host,options)=>{effortOptions=options;}};
+const EffortSlider={mount:(host,options)=>{
+  effortOptions=options;host.innerHTML='';
+  if(options.levels?.length){const caption=new El('span');caption.className='effort-caption';host.append(caption);}
+}};
 let selProvider='claude',selModel=null,selEffort=null,selHarness=null,spawnCatalog;
 function providerById(id){return spawnCatalog.providers.find(p=>p.id===id);}
 function names(el){return el.children.filter(c=>c.tag==='label')
