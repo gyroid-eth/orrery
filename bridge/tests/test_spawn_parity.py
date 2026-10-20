@@ -156,6 +156,52 @@ def test_composer_uses_the_harness_not_the_model_vendor(tour_browser,harness,mod
     assert result==dict(program=expected,prefix='$' if expected=='codex' else '/')
 
 
+@pytest.mark.parametrize('program',['antigravity','antigravity-cli','Antigravity-agent'])
+def test_antigravity_composer_retains_gemini_destructive_confirmation(tour_browser,program):
+    _,evaluate=tour_browser
+    result=evaluate('''(()=>{
+      currentAgents=[{name:'GeminiFixture',program:PROGRAM,provider:'google',model:'gemini-fixture'}];
+      panes.set('fixture',{session:'GeminiFixture'});activeId='fixture';
+      return {program:targetProgram(),prefix:targetPrefix(),reason:inspectPrompt('/quit').reason};
+    })()'''.replace('PROGRAM',json.dumps(program)))
+    assert result['program']=='gemini' and result['prefix']=='/'
+    assert 'destructive builtin on gemini' in result['reason']
+
+
+@pytest.mark.parametrize('program',['antigravity','antigravity-cli','Antigravity-agent'])
+def test_antigravity_skills_http_uses_real_gemini_collection(monkeypatch,tmp_path,program):
+    from aiohttp import web
+    from aiohttp.test_utils import TestClient, TestServer
+    skill=tmp_path/'fixture-skill';skill.mkdir()
+    (skill/'SKILL.md').write_text('# Fixture skill\nRead only test description.\n')
+    monkeypatch.setitem(ob.SKILL_SOURCES,'gemini',dict(dir=str(tmp_path),prefix='/'))
+    monkeypatch.setattr(ob,'_skills_cache',{})
+    async def check():
+        app=web.Application();app.router.add_get('/api/skills',ob.serve_skills)
+        async with TestClient(TestServer(app)) as client:
+            response=await client.get('/api/skills',params={'program':program})
+            assert response.status==200
+            return await response.json()
+    result=asyncio.run(check())
+    assert result['program']=='gemini' and result['prefix']=='/'
+    assert any(skill['name']=='fixture-skill' for skill in result['skills'])
+
+
+def test_unknown_effort_tolerates_slider_mount_without_children(tour_browser):
+    _,evaluate=tour_browser
+    result=evaluate('''(()=>{
+      const original=EffortSlider.mount;
+      try{
+        spawnCatalog=CATALOG;const p=spawnCatalog.providers.find(p=>p.id==='strata');
+        p.models[0].harnesses[0].efforts=null;p.models[0].harnesses[0].effort_source='unknown';
+        selProvider='strata';selModel='strata-model';selHarness='dsh';selEffort=null;
+        EffortSlider.mount=host=>host.replaceChildren();renderEfforts(p);
+        return {children:effortChoices.childNodes.length,hasEffort:Object.hasOwn(spawnPayloadFromForm(),'effort')};
+      }finally{EffortSlider.mount=original;}
+    })()'''.replace('CATALOG',json.dumps(catalog())))
+    assert result==dict(children=0,hasEffort=False)
+
+
 @pytest.mark.parametrize('program',['dsh','hermes','dsh-tui','unknown'])
 def test_unexposed_native_skills_never_borrow_claude_files(monkeypatch,program):
     monkeypatch.setattr(ob,'_collect_skills',lambda *_:pytest.fail('must not collect another harness skills'))

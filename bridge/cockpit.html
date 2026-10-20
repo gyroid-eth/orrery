@@ -10350,7 +10350,7 @@ function renderEfforts(p){
   EffortSlider.mount(effortChoices,{levels:efforts,value:selEffort,onChange:value=>{
     selEffort=value;renderSpawnSummary();
   }});
-  if(!efforts&&source==='unknown')effortChoices.firstChild.textContent='Uses harness default';
+  if(!efforts&&source==='unknown'&&effortChoices.firstChild)effortChoices.firstChild.textContent='Uses harness default';
 }
 /* directory browser — navigate like a file manager instead of typing paths.
    Presets jump, crumbs ascend, the list descends; the chosen dir is simply
@@ -11046,7 +11046,7 @@ function targetProgram(){
   const p=panes.get(activeId);
   const rec=p?currentAgentNamed(p.session):null;
   const runtime=rec&&(rec.harness||rec.program||rec.cmd);
-  if(runtime){const key=SpawnPicker.harnessKey(String(runtime).split(/\s+/)[0]);return key==='claude-code'?'claude':key;}
+  if(runtime){const key=SpawnPicker.harnessKey(String(runtime).split(/\s+/)[0]);return key.startsWith('antigravity')?'gemini':key==='claude-code'?'claude':key;}
   const engine=normalizeSearchText(`${(rec&&rec.provider)||''} ${(rec&&rec.model)||''}`);
   if(engine.includes('openai')||engine.includes('codex')||engine.includes('gpt'))return 'codex';
   if(engine.includes('google')||engine.includes('gemini')||engine.includes('antigravity'))return 'gemini';

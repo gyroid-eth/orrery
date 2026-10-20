@@ -227,7 +227,7 @@ model に指定すると provider の値を上書きし、省略すると provid
 既存 request の provider・model・effort は維持します。異なる Harness を選ぶと
 catalog の `id` を `harness` に、Helper を選ぶとその `id` を `helper_model` に追加します。
 対応する起動経路を Telemetry 側に実装してから catalog を available にしてください。
-Hermes・dsh の仮のボタンは、その組を catalog が選択可能として返すまで disabled です。
+catalog に掲載された組だけを表示し、`available: false` の Harness は選択できません。
 
 Local の「Recently used」は、起動が受理されたモデルの組を最大8件、閲覧者の browser の
 localStorage（`orrery.spawn-local-recent.v1`）に保存します。catalog から消えた候補は表示せず、
@@ -235,18 +235,19 @@ localStorage（`orrery.spawn-local-recent.v1`）に保存します。catalog か
 名前の下に Harness の札を出します。cloud の Claude＋Claude Code／GPT＋Codex は省略し、
 local は default な Harness でも札を出します。
 
-### Managed spawn（段1）
+### DeepSeek・Local の標準 New Agent
 
-Telemetry が提供する `deepseek` / `strata` と `dsh` / `hermes` の組は managed 起動です。
-親を選び、編集を許可する相対ファイル名（1行1件、globなし）と、成果物1件の検査条件
-（含むべき文字列、または SHA256）を指定します。Helper は Same as main だけです。
-表示する context はまだ server 報告値ではなく、runner の既存設定を使用します。
-実行先は server が用意する私有作業ディレクトリで、成果物を元のディレクトリへ自動で書き戻しません。
+Telemetry API 23 の `deepseek` / `strata` × `dsh` / `hermes` は、Claude・Codex と
+同じ form から Model → Harness → Helper model → Effort の順に選びます。
+Local の送信 provider は `strata` です。名前・親（または standalone）・起動ディレクトリ・
+worktree・端末の選択も共通で、`/telemetry/spawn` 経由で標準の `/api/spawn` に送ります。
+親の候補は Claude に限らず、稼働中のすべての agent です。
 
-送信前に browser が `attempt_id`（UUID）を保存し、`/telemetry/spawn-status?attempt_id=...` で
-同じ要求の状態を照会します。HTTP 202、登録完了、起動 wrapper の終了は Ready を意味しません。
-roster 上の Agent launches に Pending / Ready / Failed と attempt・診断状態の path を残します。
-Ready は実起動後の準備完了であり、task の成功と後片付けの完了は別々に表示します。
-90秒の HTTP timeout やページの再読込でも新しい spawn を自動で送りません。
-状態を取得できない場合は同じ attempt の Check status で再確認できます。
-この履歴は閲覧者の localStorage（`orrery.managed-spawn-attempts.v1`）だけに保存し、task 本文は保存しません。
+Helper model は選択した model × harness の catalog にある候補だけを使い、
+候補が主の model だけなら欄を出しません。Effort は未操作なら送らず、ハーネスの既定を使います。
+能力が不明な場合も値を推測せず、操作欄に Uses harness default、要約に Effort: Default と表示します。
+
+async 起動の応答が `pending: true` なら、返された `child_name` を使い
+`/telemetry/spawn-status?name=...` で状態を確認します。待つ時間は dashboard の
+`verdict_deadline_seconds` に従い、値が無い場合は従来の140秒です。
+Ready は起動の準備完了を表し、task の完了を意味しません。子は通常の roster・pane で扱います。

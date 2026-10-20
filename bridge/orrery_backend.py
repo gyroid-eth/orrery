@@ -1927,6 +1927,8 @@ async def serve_skills(request: web.Request) -> web.Response:
     program = str(request.query.get("program") or "claude").lower()
     program = {"claude-code": "claude", "claudecode": "claude",
                "codex-cli": "codex", "dsh-tui": "dsh"}.get(program, program)
+    if program.startswith("antigravity"):
+        program = "gemini"
     if program not in SKILL_SOURCES:
         # dsh/Hermes own a native registry tied to their runtime HOME/cwd.
         # Until that registry is exposed, no completions are available here.
