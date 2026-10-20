@@ -4523,9 +4523,9 @@
       }
     }
   },
-  "inventory_digest": "c014c167944f2927544c8fb1bee0cc2ea35489078fa8f2e22cda305294600d5e",
+  "inventory_digest": "f5daf2e17ac6c6438c8b910911e837bcfc8d5fcd56f10fde2119f5b3b561dae8",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "698042fc39395328093629f88e740a7a8881d7e0ca55f3f10a2bb38aaa272331",
+  "source_digest": "1d375b3b4338b0cb685faf8c285c55c2d84f9f56219e1201f088b681b8fb5667",
   "surface": "cockpit",
   "version": 1
 }
@@ -9220,14 +9220,18 @@ const ROSTER_PROVIDER={
   deepseek:{asset:'deepseek',label:'DeepSeek'},
   qwen:{asset:'qwen',label:'Qwen'},
 };
+function rosterIsLocal(agent){
+  const provider=String(agent.provider||'').trim().toLowerCase();
+  return provider==='local'||provider==='strata'||String(agent.locality||'').trim().toLowerCase()==='local';
+}
 function rosterProviderKey(agent){
   const alias={anthropic:'anthropic',claude:'anthropic','claude-code':'anthropic',
     openai:'openai',codex:'openai',google:'google',gemini:'google',antigravity:'google',
     deepseek:'deepseek',dsh:'deepseek','dsh-tui':'deepseek'};
   const provider=String(agent.provider||'').trim().toLowerCase();
-  // Only an explicit local provider selects the local-profile presentation.
+  // Backend identity or explicit locality selects the local presentation.
   // Use the resolved model ID, never the adapter/program or profile nickname.
-  if(provider==='local'){
+  if(rosterIsLocal(agent)){
     const model=String(agent.model_raw||agent.model||'').toLowerCase();
     if(/deepseek/.test(model))return 'deepseek';
     if(/qwen/.test(model))return 'qwen';
@@ -9244,7 +9248,7 @@ function rosterProviderKey(agent){
 }
 function providerPresentation(agent){
   const key=rosterProviderKey(agent),provider=ROSTER_PROVIDER[key];
-  if(String(agent.provider||'').trim().toLowerCase()==='local'){
+  if(rosterIsLocal(agent)){
     return {provider,text:(provider?provider.label:'Unknown maker')+' · Local',
       compactText:'',cls:'',local:true};
   }
