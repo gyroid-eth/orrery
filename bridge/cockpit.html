@@ -3403,7 +3403,7 @@
         "unit": "computed-target"
       },
       "mutation": {
-        "digest": "7e5073b60f537ee41c3132be8cecfd4119025a8a9cac8d1d06882c13f38ae99e",
+        "digest": "2f4d9ea5b70a7dd450f9ecd56c5f16f45453cf18b75cbe21d0ed71d483dd3754",
         "records": [
           ":root[data-theme-axis=\"background\"]\u0000--bg",
           ":root[data-theme-axis=\"background\"]\u0000--panel",
@@ -3418,7 +3418,7 @@
         "unit": "token-write"
       },
       "source": {
-        "digest": "7e5073b60f537ee41c3132be8cecfd4119025a8a9cac8d1d06882c13f38ae99e",
+        "digest": "2f4d9ea5b70a7dd450f9ecd56c5f16f45453cf18b75cbe21d0ed71d483dd3754",
         "records": [
           ":root[data-theme-axis=\"background\"]\u0000--bg",
           ":root[data-theme-axis=\"background\"]\u0000--panel",
@@ -4135,7 +4135,7 @@
         "unit": "computed-target"
       },
       "mutation": {
-        "digest": "0c4d1a0ff90cbeb03459679ccfc39ff3933afe94f2443911da91ee3f644ff435",
+        "digest": "dd5980349433647efd14a9698c7337195efc517b9243646b12962503f536c3f7",
         "records": [
           ":root[data-theme-axis=\"dim-contrast\"]\u0000--ink-dim",
           ":root[data-theme-axis=\"dim-contrast\"]\u0000--ink-faint"
@@ -4143,7 +4143,7 @@
         "unit": "token-write"
       },
       "source": {
-        "digest": "0c4d1a0ff90cbeb03459679ccfc39ff3933afe94f2443911da91ee3f644ff435",
+        "digest": "dd5980349433647efd14a9698c7337195efc517b9243646b12962503f536c3f7",
         "records": [
           ":root[data-theme-axis=\"dim-contrast\"]\u0000--ink-dim",
           ":root[data-theme-axis=\"dim-contrast\"]\u0000--ink-faint"
@@ -4324,7 +4324,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "617501b677a815908d787deb0edc1b4cfb7f60fddb01e60ec54ab04271b644e5",
+        "digest": "1f95beb2c80726ff5f1a1c467d889b29e96b7355c6b9c4ca82ecb5be62baa0b1",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4476,7 +4476,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "610747346cb725b3e4f1ea9404f3fb545add63f5ff55ba40665e7ba9801fda63",
+        "digest": "d55a9bcbc1279c694e201c8c379adb1124fce57aa2ce3ef83255f38f379923ca",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4523,9 +4523,9 @@
       }
     }
   },
-  "inventory_digest": "e90c9a9255073656628aa75b0d9af5280c112bfa5025a520364e4718c01268bc",
+  "inventory_digest": "99edfbc01b6d53e4f2b022c9372dbfa5e6f47f265120a0bcac7344b0a9906bb4",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "862711fb0998218af4922e68e1696ecc8db3a9b198909fa5eb38b6552e954bee",
+  "source_digest": "6e53b5ca4b98891f8b9c034d58cedccd6ad7fa5f4b86196ad4064499f434756c",
   "surface": "cockpit",
   "version": 1
 }
@@ -9220,14 +9220,18 @@ const ROSTER_PROVIDER={
   deepseek:{asset:'deepseek',label:'DeepSeek'},
   qwen:{asset:'qwen',label:'Qwen'},
 };
+function rosterIsLocal(agent){
+  const provider=String(agent.provider||'').trim().toLowerCase();
+  return provider==='local'||provider==='strata'||String(agent.locality||'').trim().toLowerCase()==='local';
+}
 function rosterProviderKey(agent){
   const alias={anthropic:'anthropic',claude:'anthropic','claude-code':'anthropic',
     openai:'openai',codex:'openai',google:'google',gemini:'google',antigravity:'google',
     deepseek:'deepseek',dsh:'deepseek','dsh-tui':'deepseek'};
   const provider=String(agent.provider||'').trim().toLowerCase();
-  // Only an explicit local provider selects the local-profile presentation.
+  // Backend identity or explicit locality selects the local presentation.
   // Use the resolved model ID, never the adapter/program or profile nickname.
-  if(provider==='local'){
+  if(rosterIsLocal(agent)){
     const model=String(agent.model_raw||agent.model||'').toLowerCase();
     if(/deepseek/.test(model))return 'deepseek';
     if(/qwen/.test(model))return 'qwen';
@@ -9244,7 +9248,7 @@ function rosterProviderKey(agent){
 }
 function providerPresentation(agent){
   const key=rosterProviderKey(agent),provider=ROSTER_PROVIDER[key];
-  if(String(agent.provider||'').trim().toLowerCase()==='local'){
+  if(rosterIsLocal(agent)){
     return {provider,text:(provider?provider.label:'Unknown maker')+' · Local',
       compactText:'',cls:'',local:true};
   }
