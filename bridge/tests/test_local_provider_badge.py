@@ -98,3 +98,57 @@ def test_reconciled_roster_clears_local_shape_and_stale_maker(tour_browser):
     })()""")
     assert result['empty'] == dict(rim=1, src=None, hidden=True, pill=True)
     assert result['cloud'] == json.loads(FIXTURE.read_text())[1]['roster']
+
+
+def test_strata_and_locality_metadata_use_the_resolved_local_maker(tour_browser):
+    _, evaluate = tour_browser
+    cases = [
+        dict(provider='strata', locality='local', program='dsh', harness='dsh',
+             model='Qwen 3.8 flash', model_raw='qwen3.8-flash-next-iq3_xxs'),
+        dict(provider='strata', program='hermes', model='Qwen3'),
+        dict(provider='custom', locality='local', program='dsh', model='Qwen3'),
+        dict(provider=' STRATA ', locality=' LOCAL ', program='dsh',
+             model='DeepSeek display', model_raw='Qwen/Qwen3-8B'),
+        dict(provider='strata', locality='local', program='dsh',
+             model='Qwen display', model_raw='deepseek-ai/DeepSeek-R1'),
+        dict(provider='strata', locality='local', program='dsh', model='custom-7b'),
+        dict(provider='custom', locality='local', program='hermes', model='custom-7b'),
+    ]
+    actual = rendered_badges(evaluate, cases)
+    for result, asset in zip(actual, ['qwen', 'qwen', 'qwen', 'qwen', 'deepseek', None, None]):
+        assert result['presentation']['local'] is True
+        assert result['presentation']['compactText'] == ''
+        assert 'local-provider-badge' in result['roster']
+        assert 'local-provider-rim' in result['roster']
+        for surface in ['mini', 'planet']:
+            assert '<polygon ' in result[surface]
+            assert '<circle ' not in result[surface]
+            assert '<text ' not in result[surface]
+        if asset:
+            assert result['presentation']['provider']['asset'] == asset
+            assert result['presentation']['text'].endswith(' · Local')
+            for surface in ['roster', 'mini', 'planet']:
+                assert 'cockpit-assets/' + asset + '.svg' in result[surface]
+        else:
+            assert result['presentation']['text'] == 'Unknown maker · Local'
+            assert 'provider' not in result['presentation']
+            assert 'src=' not in result['roster']
+            assert '<image ' not in result['mini'] and '<image ' not in result['planet']
+
+
+def test_strata_roster_reconciliation_clears_local_shape_and_stale_maker(tour_browser):
+    _, evaluate = tour_browser
+    result = evaluate("""(()=>{
+      const el=document.createElement('div');
+      el.innerHTML='<span class="pill eng"></span><span class="provider-badge" hidden><img class="provider-logo" alt=""></span>';
+      paintRosterProvider(el,{provider:'strata',locality:'local',program:'dsh',model_raw:'qwen3.8-flash-next-iq3_xxs'});
+      const qwen={rim:el.querySelectorAll('polygon').length,src:el.querySelector('img').getAttribute('src')};
+      paintRosterProvider(el,{provider:'strata',locality:'local',program:'dsh',model_raw:'custom-7b'});
+      const empty={rim:el.querySelectorAll('polygon').length,src:el.querySelector('img').getAttribute('src'),
+        hidden:el.querySelector('img').hidden,pill:el.querySelector('.pill').hidden};
+      paintRosterProvider(el,{provider:'deepseek',locality:'cloud',program:'dsh',model:'deepseek-demo'});
+      return {qwen,empty,cloud:el.querySelector('.provider-badge').outerHTML};
+    })()""")
+    assert result['qwen'] == dict(rim=1, src='cockpit-assets/qwen.svg')
+    assert result['empty'] == dict(rim=1, src=None, hidden=True, pill=True)
+    assert result['cloud'] == json.loads(FIXTURE.read_text())[3]['roster']
