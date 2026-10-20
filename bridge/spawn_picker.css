@@ -108,31 +108,5 @@
 
 #spawnSubmit{font:12px var(--sans);letter-spacing:0;text-transform:none}
 
-/* Managed attempts stay inspectable after the Spawn dialog closes. */
-.spawn-launches{border-bottom:1px solid var(--hair);padding:10px 12px;max-height:260px;overflow:auto;flex:0 0 auto}
-.spawn-launches[hidden]{display:none}
-.spawn-launches>summary{cursor:pointer;font-size:10px;color:var(--ink-dim)}
-#spawnLaunchCount{float:right;color:var(--amber)}
-.spawn-launch-row{border-top:1px solid var(--hair);padding:9px 0;font-size:10px;line-height:1.5}
-.spawn-launch-heading{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-.spawn-launch-heading strong{font-size:11px;font-weight:500;overflow-wrap:anywhere;color:var(--ink)}
-.spawn-launch-state{color:var(--amber)}
-.spawn-launch-row[data-state="ready"] .spawn-launch-state{color:rgb(var(--theme-local-rgb))}
-.spawn-launch-row[data-state="failed"] .spawn-launch-state{color:var(--theme-status-alert,#d2685e)}
-.spawn-launch-row p{margin:4px 0;color:var(--ink-dim);overflow-wrap:anywhere}
-.spawn-launch-row details{color:var(--ink-dim);margin-top:5px}
-.spawn-launch-row code{display:block;white-space:pre-wrap;overflow-wrap:anywhere;font-size:9px}
-.spawn-launch-actions{display:flex;gap:8px;margin-top:7px}
-.spawn-launch-actions button{background:transparent;border:1px solid var(--hair);border-radius:4px;padding:3px 6px;font-size:9px;color:var(--ink-dim);cursor:pointer}
-.spawn-launch-actions button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
-
-#spawnForm .spawn-managed-fields{grid-column:1/-1}
-.spawn-managed-note{font-size:11px;line-height:1.6;color:var(--ink-dim);margin:0 0 12px}
-.spawn-managed-checks{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-#spawnForm .spawn-managed-checks textarea{min-height:96px}
-.spawn-managed-checks select{width:100%;background:var(--panel);color:var(--ink);border:1px solid var(--hair);padding:6px}
-#spawnExpectedValue{margin-top:8px}
-@media(max-width:620px){.spawn-managed-checks{grid-template-columns:1fr}}
-
 .spawn-model-heading{display:flex;align-items:baseline;gap:8px}
 .spawn-catalog-state{font:10px var(--sans);color:var(--ink-dim)}

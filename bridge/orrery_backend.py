@@ -1925,8 +1925,15 @@ async def serve_skills(request: web.Request) -> web.Response:
     CLI uses which sigil.
     """
     program = str(request.query.get("program") or "claude").lower()
+    program = {"claude-code": "claude", "claudecode": "claude",
+               "codex-cli": "codex", "dsh-tui": "dsh"}.get(program, program)
+    if program.startswith("antigravity"):
+        program = "gemini"
     if program not in SKILL_SOURCES:
-        program = "claude"
+        # dsh/Hermes own a native registry tied to their runtime HOME/cwd.
+        # Until that registry is exposed, no completions are available here.
+        # A model's vendor never makes Claude's skills valid for its harness.
+        return web.json_response({"program": program, "prefix": "/", "skills": []})
     source = SKILL_SOURCES[program]
     now = time.monotonic()
     cached = _skills_cache.get(program)

@@ -227,8 +227,8 @@ A model field overrides the provider field; an omitted model field inherits it.
 Existing requests keep their provider, model and effort. Selecting a different
 Harness adds its catalog `id` as `harness`; selecting a helper adds its catalog
 `id` as `helper_model`. These combinations need corresponding Telemetry launch
-support before the catalog declares them available. Hermes and dsh placeholders
-stay disabled until an available catalog entry supplies that combination.
+support before the catalog declares them available. Only combinations supplied
+by the catalog appear; a Harness with `available: false` cannot be selected.
 
 Local “Recently used” stores at most eight successful model selections in the
 viewer's browser localStorage (`orrery.spawn-local-recent.v1`). Entries removed
@@ -237,18 +237,22 @@ The roster shows the model maker on the portrait; a Harness chip appears beneath
 the name except for cloud Claude with Claude Code and cloud GPT with Codex.
 Local models keep their Harness chip even when that Harness is the default.
 
-### Managed spawn (stage 1)
+### Standard New Agent for DeepSeek and Local
 
-The `deepseek` / `strata` × `dsh` / `hermes` combinations offered by Telemetry use managed launch.
-Select a parent and list the relative files the child may edit (one per line, no globs).
-Specify one expected output file and a contains-text or SHA256 check. Helper model is Same as main only.
-Server-reported context is not yet available; the runner uses its configured context.
-The server creates a private working directory and leaves outputs there; it does not automatically write them back to the source directory.
+Telemetry API 23 offers `deepseek` / `strata` × `dsh` / `hermes` through the same
+form as Claude and Codex: Model → Harness → Helper model → Effort.
+Local sends `strata` as the provider. Name, parent (or standalone), launch
+directory, worktree and terminal controls are shared. The form sends the standard
+`/api/spawn` request through `/telemetry/spawn`.
+Parent choices include all running agents, rather than only Claude agents.
 
-Before POST, the browser saves a UUID `attempt_id` and queries the same attempt through
-`/telemetry/spawn-status?attempt_id=...`. HTTP 202, registration and a successful launcher wrapper do not mean Ready.
-Agent launches above the roster retains Pending / Ready / Failed, the attempt identity and diagnostic state path.
-Ready describes runtime readiness. Task success and cleanup completion are shown separately.
-A 90-second HTTP timeout or page reload never automatically sends a replacement spawn.
-If status is unavailable, Check status re-queries the same attempt.
-History is browser-local (`orrery.managed-spawn-attempts.v1`); task text is not stored in that history.
+Helper model uses only the choices in the selected model × harness catalog entry.
+The control is hidden when the main model is the only choice. Untouched Effort
+is omitted so the harness uses its default. Unknown capabilities are not guessed:
+the control shows Uses harness default and the summary shows Effort: Default.
+
+If an async response has `pending: true`, the browser uses the returned
+`child_name` to query `/telemetry/spawn-status?name=...`. It waits for the
+dashboard's `verdict_deadline_seconds`, or the previous 140 seconds if absent.
+Ready means launch readiness, not task completion. The child uses the ordinary
+roster and pane.

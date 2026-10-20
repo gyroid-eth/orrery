@@ -2031,11 +2031,14 @@ class V2UnifiedBackendContractTest(unittest.TestCase):
         claude = json_response(*http_response("/telemetry/skills?program=claude"))
         self.assertEqual(claude.get("prefix"), "/")
 
-        # An unknown program must not fall through to an empty vocabulary: a
-        # composer with no menu is recoverable, one with the wrong menu is not.
-        unknown = json_response(*http_response("/telemetry/skills?program=nope"))
-        self.assertEqual(unknown.get("program"), "claude")
-        self.assertEqual(unknown.get("prefix"), "/")
+        # No menu is preferable to another harness's wrong vocabulary.
+        # Unexposed native registries must not borrow Claude's skills either.
+        for program in ("nope", "dsh", "hermes"):
+            with self.subTest(program=program):
+                unknown = json_response(*http_response(
+                    f"/telemetry/skills?program={program}"))
+                self.assertEqual(unknown.get("program"), program)
+                self.assertEqual(unknown.get("skills"), [])
 
     def test_117_clipboard_files_endpoint(self) -> None:
         """Paths for a Finder copy — the browser only ever sees a name."""

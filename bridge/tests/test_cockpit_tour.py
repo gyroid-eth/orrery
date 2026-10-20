@@ -178,7 +178,7 @@ def test_talk_completes_only_for_a_sent_nonempty_unguarded_prompt():
 
 def test_pending_spawn_does_not_complete_until_ready():
     source = (BRIDGE / 'cockpit.html').read_text()
-    watch = re.search(r'async function watchSpawnLaunch\(name\)\{.*?(?=\nasync function submitSpawn)', source, re.S).group()
+    watch = re.search(r'async function watchSpawnLaunch\(name,deadlineSeconds\)\{.*?(?=\nasync function submitSpawn)', source, re.S).group()
     for verdict, expected in [('ready', ['start']), ('failed', [])]:
         actual = node("const events=[];const document={dispatchEvent:e=>events.push(e.detail.id)};"
                       "class CustomEvent{constructor(_,v){this.detail=v.detail;}}"
