@@ -381,12 +381,66 @@ def test_effective_effort_uses_only_supported_explicit_or_reported_default(level
     ({'id':'fixture','harnesses':[{'id':'hermes','available':True,'efforts':['low','high'],'default_effort':None,'effort_source':'harness'}]}, None),
     ({'id':'fixture','harnesses':[{'id':'hermes','available':True,'efforts':None,'default_effort':None,'effort_source':'unknown'}]}, None),
     ({'id':'fixture','efforts':[]}, None),
+    ({'id':'fixture'}, 'high'),
 ])
 def test_model_or_harness_null_default_does_not_inherit_provider_guess(model,expected):
     source=(BRIDGE/'cockpit.html').read_text()
-    names=['effortsForModel','resolveSpawnEffort','effectiveSpawnEffort']
+    names=['effortsForModel','resolveSpawnEffort','spawnExplicitEffortMissing','effectiveSpawnEffort']
     functions='\n'.join(re.search(r'function '+name+r'\([^\n]*\)\{.*?\n\}',source,re.S).group() for name in names)
     result=node('const SpawnPicker=picker;let selHarness="hermes",selEffort=null;'+functions+
         '\nconst p='+json.dumps({'id':'deepseek','efforts':['low','high'],'effort_default':'high','models':[model]})+
         ';console.log(JSON.stringify(effectiveSpawnEffort(p,"fixture")));')
     assert result==expected
+
+
+@pytest.mark.parametrize('model,fields', [
+    ({'id':'fixture','efforts':None,'effort_default':None}, {}),
+    ({'id':'fixture'}, {'model_efforts':{'fixture':None}}),
+    ({'id':'fixture','effort_default':None}, {}),
+    ({'id':'fixture','efforts':[]}, {}),
+    ({'id':'fixture','efforts':{}}, {}),
+    ({'id':'fixture'}, {'model_efforts':{'fixture':'invalid'}}),
+    ({'id':'fixture'}, {'model_efforts':{'fixture':['low','high']},'model_effort_defaults':{'fixture':None}}),
+])
+def test_own_null_effort_metadata_keeps_provider_default_unresolved(model,fields):
+    source=(BRIDGE/'cockpit.html').read_text()
+    names=['effortsForModel','resolveSpawnEffort','spawnExplicitEffortMissing','effectiveSpawnEffort']
+    functions='\n'.join(re.search(r'function '+name+r'\([^\n]*\)\{.*?\n\}',source,re.S).group() for name in names)
+    provider={'id':'deepseek','efforts':['low','high'],'effort_default':'high','models':[model],**fields}
+    result=node('const SpawnPicker=picker;let selHarness="hermes",selEffort=null;'+functions+
+        '\nconst p='+json.dumps(provider)+';console.log(JSON.stringify(effectiveSpawnEffort(p,"fixture")));')
+    assert result is None
+
+
+def test_required_effort_requires_explicit_choice_before_button_and_post(tour_browser):
+    _,evaluate=tour_browser
+    result=evaluate('''(async()=>{
+      spawnCatalog={providers:[{id:'codex',program:'codex-cli',models:[{id:'fixture'}],
+        capabilities:{effort_required:true},efforts:['low','high'],effort_default:'high'}],naming:{},dirs:[]};
+      selFamily=null;selProvider=null;selModel=null;selHarness=null;selEffort=null;renderProviderTabs();
+      spawnTask.value='Fixture task';spawnDirPath='/fixture';
+      const original=window.fetch;let posts=0;
+      window.fetch=async(url,...args)=>{if(String(url)!=='/telemetry/spawn')return original(url,...args);posts++;return {ok:true,json:async()=>({ok:true,child_name:'Fixture'})};};
+      try{
+        const untouched={disabled:spawnSubmit.disabled,payload:spawnPayloadFromForm()};
+        await submitSpawn(new Event('submit',{cancelable:true}));untouched.posts=posts;
+        effortChoices.querySelector('input').value=0;effortChoices.querySelector('input').dispatchEvent(new Event('input'));
+        const explicit={disabled:spawnSubmit.disabled,payload:spawnPayloadFromForm()};
+        await submitSpawn(new Event('submit',{cancelable:true}));explicit.posts=posts;
+        effortChoices.querySelector('.effort-reset').click();
+        const reset={disabled:spawnSubmit.disabled,payload:spawnPayloadFromForm()};
+        await submitSpawn(new Event('submit',{cancelable:true}));reset.posts=posts;
+        selEffort='invented';updateSpawnAvailability();
+        const invalid={disabled:spawnSubmit.disabled,payload:spawnPayloadFromForm()};
+        await submitSpawn(new Event('submit',{cancelable:true}));invalid.posts=posts;
+        return {untouched,explicit,reset,invalid};
+      }finally{window.fetch=original;}
+    })()''')
+    assert result['untouched']['disabled'] and result['untouched']['posts']==0
+    assert 'effort' not in result['untouched']['payload']
+    assert result['explicit']['disabled'] is False and result['explicit']['posts']==1
+    assert result['explicit']['payload']['effort']=='low'
+    assert result['reset']['disabled'] and result['reset']['posts']==1
+    assert 'effort' not in result['reset']['payload']
+    assert result['invalid']['disabled'] and result['invalid']['posts']==1
+    assert 'effort' not in result['invalid']['payload']

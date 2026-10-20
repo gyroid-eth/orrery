@@ -4523,9 +4523,9 @@
       }
     }
   },
-  "inventory_digest": "22af40990a543a668ea1256b64d93a99b9c135f366681d9923286ba961dc9c49",
+  "inventory_digest": "c014c167944f2927544c8fb1bee0cc2ea35489078fa8f2e22cda305294600d5e",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "5895a4a2d27eaaf1222846c3574f79e6ff80734857821abe684fa890b52cc3d5",
+  "source_digest": "698042fc39395328093629f88e740a7a8881d7e0ca55f3f10a2bb38aaa272331",
   "surface": "cockpit",
   "version": 1
 }
@@ -10221,9 +10221,10 @@ function paintSpawnMaker(provider,model){
 }
 function updateSpawnAvailability(){
   const p=spawnCatalog&&providerById(selProvider),model=selectedSpawnModel();
-  const ready=Boolean(p&&model&&SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available));
+  const missingEffort=p&&model&&spawnExplicitEffortMissing(p,selModel);
+  const ready=Boolean(p&&model&&SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available)&&!missingEffort);
   spawnSubmit.disabled=spawnBusy||!ready;
-  if(!spawnBusy&&['ready','Choose a model','Coming soon for this model','Telemetry unavailable','Loading model catalog…'].includes(spawnStatus.textContent))spawnStatus.textContent=spawnCatalog&&spawnCatalog.loading?'Loading model catalog…':spawnCatalog&&spawnCatalog.unavailable?'Telemetry unavailable':ready?'ready':model?'Coming soon for this model':'Choose a model';
+  if(!spawnBusy&&['ready','Choose an effort','Choose a model','Coming soon for this model','Telemetry unavailable','Loading model catalog…'].includes(spawnStatus.textContent))spawnStatus.textContent=spawnCatalog&&spawnCatalog.loading?'Loading model catalog…':spawnCatalog&&spawnCatalog.unavailable?'Telemetry unavailable':missingEffort?'Choose an effort':ready?'ready':model?'Coming soon for this model':'Choose a model';
 }
 function renderSpawnSummary(){
   const p=providerById(selProvider),model=selectedSpawnModel(),summary=document.getElementById('spawnSummary');
@@ -10332,21 +10333,30 @@ function effortsForModel(provider,model){
   if(harness&&Object.hasOwn(harness,'efforts'))return {
     efforts:Array.isArray(harness.efforts)&&harness.efforts.length?harness.efforts:null,
     fallback:harness.default_effort||null,source:harness.effort_source||'unknown'};
-  if(selected&&Array.isArray(selected.efforts))return {efforts:selected.efforts.length?selected.efforts:null,fallback:Object.hasOwn(selected,'effort_default')?selected.effort_default:provider.effort_default||null};
+  const levels=value=>Array.isArray(value)&&value.length?value:null;
+  const providerDefault=provider&&provider.effort_default||null;
+  const ownDefault=selected&&Object.hasOwn(selected,'effort_default');
+  const modelDefault=ownDefault?selected.effort_default:providerDefault;
+  if(selected&&Object.hasOwn(selected,'efforts'))return {efforts:levels(selected.efforts),fallback:modelDefault};
   const perModel=provider&&provider.model_efforts;
-  if(perModel&&typeof perModel==='object'&&Array.isArray(perModel[model])){
+  if(perModel&&typeof perModel==='object'&&Object.hasOwn(perModel,model)){
     const defaults=provider.model_effort_defaults||{};
-    return {efforts:perModel[model].length?perModel[model]:null,fallback:Object.hasOwn(defaults,model)?defaults[model]:provider.effort_default||null};
+    return {efforts:levels(perModel[model]),fallback:ownDefault?selected.effort_default:Object.hasOwn(defaults,model)?defaults[model]:providerDefault};
   }
-  const list=provider&&Array.isArray(provider.efforts)&&provider.efforts.length?provider.efforts:null;
-  return {efforts:list,fallback:provider&&provider.effort_default||null};
+  return {efforts:levels(provider&&provider.efforts),fallback:modelDefault};
 }
 function resolveSpawnEffort(levels,value,fallback){
   const allowed=Array.isArray(levels)?levels:[];
   if(value!==null&&value!==undefined)return allowed.includes(value)?value:null;
   return allowed.includes(fallback)?fallback:null;
 }
+function spawnExplicitEffortMissing(provider,model){
+  if(!(provider&&provider.capabilities&&provider.capabilities.effort_required))return false;
+  const levels=effortsForModel(provider,model).efforts;
+  return typeof selEffort!=='string'||!Array.isArray(levels)||!levels.includes(selEffort);
+}
 function effectiveSpawnEffort(provider,model){
+  if(spawnExplicitEffortMissing(provider,model))return null;
   const info=effortsForModel(provider,model);
   return resolveSpawnEffort(info.efforts,selEffort,info.fallback);
 }
@@ -10359,13 +10369,13 @@ function renderEfforts(p){
   EffortSlider.mount(effortChoices,{levels:efforts,value:selEffort,onChange:value=>{
     selEffort=value;
     const caption=effortChoices.querySelector('.effort-caption');
-    if(caption&&value===null){const initial=resolveSpawnEffort(efforts,null,fallback);caption.textContent=initial?'Uses catalog default: '+initial:'Uses your settings';}
-    renderSpawnSummary();
+    if(caption&&value===null){const initial=effectiveSpawnEffort(p,selModel);caption.textContent=spawnExplicitEffortMissing(p,selModel)?'Choose an effort':initial?'Uses catalog default: '+initial:'Uses your settings';}
+    renderSpawnSummary();updateSpawnAvailability();
   }});
   const caption=effortChoices.querySelector('.effort-caption');
   if(caption&&selEffort===null){
-    const value=resolveSpawnEffort(efforts,null,fallback);
-    caption.textContent=value?'Uses catalog default: '+value:'Uses your settings';
+    const value=effectiveSpawnEffort(p,selModel);
+    caption.textContent=spawnExplicitEffortMissing(p,selModel)?'Choose an effort':value?'Uses catalog default: '+value:'Uses your settings';
   }
   if(!efforts&&source==='unknown'&&effortChoices.firstChild)effortChoices.firstChild.textContent='Uses harness default';
 }
@@ -10580,6 +10590,7 @@ async function submitSpawn(event){
   event.preventDefault();if(spawnBusy)return;
   const p=providerById(selProvider),model=selectedSpawnModel();
   if(!p||!model||!SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available)){spawnStatus.textContent='Choose an available model and Harness';return;}
+  if(spawnExplicitEffortMissing(p,selModel)){spawnStatus.textContent='Choose an effort';return;}
   const payload=spawnPayloadFromForm();
   const validationError=validateSpawnPayload(payload,spawnTaken);
   if(validationError){

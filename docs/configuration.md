@@ -246,6 +246,7 @@ worktree・端末の選択も共通で、`/telemetry/spawn` 経由で標準の `
 Helper model は選択した model × harness の catalog にある候補だけを使い、
 候補が主の model だけなら欄を出しません。Effort は未操作・Use default へのリセット時にも、catalog が報告した有効な既定値があれば送ります。既定値が null・不明・候補外なら省略し、ハーネスの設定を使います。候補の先頭を既定値と推測しません。
 能力が不明な場合も値を推測せず、操作欄に Uses harness default、要約に Effort: Default と表示します。
+Effort の明示選択が必須の provider では、未操作・Use default では起動せず、候補内の値を選ぶ必要があります。
 
 async 起動の応答が `pending: true` なら、返された `child_name` を使い
 `/telemetry/spawn-status?name=...` で状態を確認します。待つ時間は dashboard の

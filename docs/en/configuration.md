@@ -250,6 +250,7 @@ Helper model uses only the choices in the selected model × harness catalog entr
 The control is hidden when the main model is the only choice. Untouched Effort and Use default send a supported default reported by the catalog.
 A null, unknown, or unsupported default is omitted to preserve harness settings; the first candidate is not guessed as a default. Unknown capabilities are not guessed:
 the control shows Uses harness default and the summary shows Effort: Default.
+Providers requiring an explicit Effort choice cannot launch while untouched or after Use default; select a supported value first.
 
 If an async response has `pending: true`, the browser uses the returned
 `child_name` to query `/telemetry/spawn-status?name=...`. It waits for the
