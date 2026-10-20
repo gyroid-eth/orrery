@@ -247,8 +247,8 @@ directory, worktree and terminal controls are shared. The form sends the standar
 Parent choices include all running agents, rather than only Claude agents.
 
 Helper model uses only the choices in the selected model × harness catalog entry.
-The control is hidden when the main model is the only choice. Untouched Effort
-is omitted so the harness uses its default. Unknown capabilities are not guessed:
+The control is hidden when the main model is the only choice. Untouched Effort and Use default send a supported default reported by the catalog.
+A null, unknown, or unsupported default is omitted to preserve harness settings; the first candidate is not guessed as a default. Unknown capabilities are not guessed:
 the control shows Uses harness default and the summary shows Effort: Default.
 
 If an async response has `pending: true`, the browser uses the returned

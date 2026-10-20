@@ -61,7 +61,8 @@ def test_all_families_use_the_same_form_payload_and_parent_candidates(tour_brows
     assert payload['worktree'] is bool(parent) and payload['headless'] is (not bool(parent))
     assert payload['dir']=='/source' and payload['role']=='research' and payload['emoji']=='🔭'
     assert payload['async'] is True
-    assert not {'attempt_id','managed','task_mode','report_policy','allowed_paths','expected','effort','family','locality'} & payload.keys()
+    assert payload['effort']=='high'
+    assert not {'attempt_id','managed','task_mode','report_policy','allowed_paths','expected','family','locality'} & payload.keys()
     if provider in ('deepseek','strata'):
         assert payload['harness']==harness
     else:
@@ -91,7 +92,7 @@ def test_harness_effort_and_helper_capabilities_do_not_fall_back_to_trial_defaul
       return {a,explicit,unknown:{levels:effortsForModel(p,selModel),hasEffort:Object.hasOwn(spawnPayloadFromForm(),'effort'),
         text:effortChoices.textContent,summary:document.getElementById('spawnSummary').textContent,helperHidden:document.getElementById('spawnHelperField').hidden}};
     })()'''.replace('CATALOG',json.dumps(catalog())).replace('HELPERS',json.dumps(['same','strata-model']+([] if main_only else ['small']))))
-    assert result['a']['levels']['efforts']==['low','high'] and result['a']['hasEffort'] is False
+    assert result['a']['levels']['efforts']==['low','high'] and result['a']['hasEffort'] is True
     assert result['a']['helpers']==(['same'] if main_only else ['same','small'])
     assert result['a']['helperHidden'] is main_only
     assert result['explicit']=='high'

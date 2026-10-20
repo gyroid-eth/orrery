@@ -244,7 +244,7 @@ worktree・端末の選択も共通で、`/telemetry/spawn` 経由で標準の `
 親の候補は Claude に限らず、稼働中のすべての agent です。
 
 Helper model は選択した model × harness の catalog にある候補だけを使い、
-候補が主の model だけなら欄を出しません。Effort は未操作なら送らず、ハーネスの既定を使います。
+候補が主の model だけなら欄を出しません。Effort は未操作・Use default へのリセット時にも、catalog が報告した有効な既定値があれば送ります。既定値が null・不明・候補外なら省略し、ハーネスの設定を使います。候補の先頭を既定値と推測しません。
 能力が不明な場合も値を推測せず、操作欄に Uses harness default、要約に Effort: Default と表示します。
 
 async 起動の応答が `pending: true` なら、返された `child_name` を使い
