@@ -156,3 +156,37 @@ def test_a_slot_freed_by_the_same_list_is_there_for_the_return(tour_browser):  #
     after = evaluate(STATE)
     evaluate(CLEANUP)
     assert after['attachB'] and 'C' in after['detached'], after
+
+
+@pytest.mark.parametrize('late_type', ['reset', 'add', 'update'])
+@pytest.mark.parametrize('close_from', ['session-tab', 'split-cell'])
+def test_manual_close_ignores_inflight_frames_until_explicit_reopen(
+    tour_browser, late_type, close_from
+):
+    _, evaluate = tour_browser
+    evaluate(SETUP)
+    try:
+        if close_from == 'session-tab':
+            evaluate("sessionGroups.get('B').detach.click()")
+        else:
+            evaluate("closeSplitCellPane('B')")
+        state = evaluate(f"""(()=>{{
+          const pane={{paneId:'%919191',paneTitle:'fixture',width:80,height:24}};
+          handle({{type:'{late_type}',session:'B',pane,panes:[pane]}});
+          handle({{type:'sessions',sessions:['A','B','C']}});
+          return {{tab:sessionGroups.has('B'),panes:panesInSession('B').length,
+            attached:attachedSessions.has('B'),requested:requestedSessions.has('B'),
+            manuallyClosed:manualDetached.has('B')}};
+        }})()""")
+        assert state == {'tab': False, 'panes': 0, 'attached': False,
+                         'requested': False, 'manuallyClosed': True}, state
+        reopened = evaluate("""(()=>{
+          const requested=requestAttach('B',true);
+          handle({type:'reset',session:'B',panes:[]});
+          return {requested,tab:sessionGroups.has('B'),attached:attachedSessions.has('B'),
+            manuallyClosed:manualDetached.has('B')};
+        })()""")
+        assert reopened == {'requested': True, 'tab': True, 'attached': True,
+                            'manuallyClosed': False}, reopened
+    finally:
+        evaluate(CLEANUP)
