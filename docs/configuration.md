@@ -219,7 +219,7 @@ model に指定すると provider の値を上書きし、省略すると provid
 | Field | 意味 |
 | --- | --- |
 | `locality` | `cloud`（既定）または `local`。local のモデルは検索できる Local models 一覧に集まります。 |
-| `harnesses` | `{id, label, available, default}` の配列。`available: true` だけ選択でき、未対応は「Coming soon」です。配列がなければ既存 provider の `program` を選択可能な既定 Harness にします。 |
+| `harnesses` | `{id, label, available, default, reason}` の配列。`available: true` だけ選択できます。利用不可なら固定の`reason`に応じた準備・対応条件の説明と設定ガイドを表示し、未知の理由は一般的な案内にします。配列がなければ既存 provider の `program` を選択可能な既定 Harness にします。 |
 | `efforts`, `effort_default` | 対応する effort の ID と既定値。空配列なら effort は送信しません。従来の `model_efforts` / `model_effort_defaults` も有効です。非対応の段は薄く表示します。 |
 | `helper_models` | 任意の model ID の配列、または `{id, label}` の配列。「Same as main」は request の `helper_model` を省略します。明示的な `none` 候補も catalog 側の指定が必要です。 |
 | `server`, `context`, `vision` | 任意の表示情報。`vision: true` なら Vision を表示します。ローカルの量子化情報には `quantization` も使えます。 |

@@ -21,7 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - The cockpit runs in a tmux server of its own (`tmux -L orrery-cockpit`), apart from the agents' tmux, so it never shows up as an agent. Its output: `tmux -L orrery-cockpit attach` (Ctrl-b, d to leave). Stop it: `tmux -L orrery-cockpit kill-server`. Start it again: the same line. On an update, a cockpit this setup started is restarted on the new version (any other cockpit is left running, with a note)
 - The 2 test agents the selftest makes are not shown in the cockpit's roster and network (the dashboard still lists them)
 - The doctor's exit status decides (anything but 0 is shown and is not ready). A run whose update failed is never ready either, even if you start what you have
-- At the end it shows, for each of the 4 changes, applied / already the same / skipped; whether Mail was set up or the running one kept; and the doctor and selftest results. When neither Claude Code nor Codex CLI is detected, it says the base is ready, agents are not yet. This check does not assess DeepSeek/Local setup; API users continue with the initial setup and launch check below
+- At the end it shows the results of the 4 settings changes, the Mail action, and doctor/selftest. When the shared checks pass, the final message starts with `ORRERY's base is ready`. It names a detected Claude/Codex CLI, but does not verify its sign-in or an API connection. DeepSeek/Local users continue with the initial setup and launch check below
 - If a cockpit of another version that this setup did not start is already running, it is not stopped; you are told to press Ctrl-C in its window and run the same line again
 - **When something fails**: a check that fails before you type yes means the setup changed nothing (what `get.sh` did before it stays, and the screen says so: a newly downloaded cockpit checkout, or git data fetched into an old one). After that, **nothing is rolled back**: you get a table of what changed since the first attempt and the line that carries on (the first attempt's record, in `~/.orrery-install/`, is kept until a run passes every check). There is no command to go back to the previous version
 - To uninstall a new install, use the printed `<orrery-telemetry checkout>/scripts/uninstall.sh` (the Mail database stays unless `--purge-data`; the 2 checkouts, uv and Python stay). To uninstall, see [Uninstall](../../README.en.md#uninstall) in the README. **Do not use it to undo an update**: it removes the whole install
@@ -31,7 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 The update above does not add missing API keys or connection settings. The cockpit has no API-key entry screen. Prepare the connection in ORRERY Telemetry, then select it in the cockpit.
 
 1. Open Telemetry's [initial setup guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) and add dsh, Hermes, or both from your Telemetry source folder.
-2. For DeepSeek, create an API key or use an existing one. If it is not already saved on this computer, follow the OS-specific steps to save it. For Local, prepare the server's connection details and its own API key if needed.
+2. For DeepSeek, create an API key or use an existing one. If it is not already saved on this computer, follow the OS-specific steps to save it. For Local, prepare a compatible server's connection details and its own access key. The current ORRERY path requires a key reference; Hermes also requires HTTPS. Check the compatibility requirements in the same setup guide.
 3. Review and enable the connection settings following the guide, then run the final install command yourself once to apply them to Telemetry.
 4. Return to the cockpit and select your configured `Model` and `Harness` in `+ NEW AGENT`.
 
@@ -80,7 +80,7 @@ This section takes you from installing ORRERY on your Mac or Windows 11 PC to op
 | Claude Code | Claude Code CLI and sign-in | [Mac](#mac) / [WSL](#windows-11) |
 | Codex CLI | Codex CLI and sign-in | [Mac](#mac) / [WSL](#windows-11) |
 | DeepSeek | An API key and API balance, dsh or Hermes, and connection settings | [API setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) |
-| Local models | Server URL, model ID, its own key if needed, dsh or Hermes, and connection settings | [API setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) |
+| Local models | Compatible API URL, model ID, server-specific key, dsh or Hermes, and connection settings | [API setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) |
 
 DeepSeek and Local do not require a Claude or ChatGPT login. Start with either dsh or Hermes. Node.js 24.2 or newer is needed for dsh; Hermes alone does not need `--dsh-node`. API launches currently support the DeepSeek/Local × dsh/Hermes combinations in Mail legacy mode, rather than arbitrary API and harness combinations.
 
@@ -400,7 +400,7 @@ git clone https://github.com/gyroid-eth/orrery.git orrery
 cd orrery
 ```
 
-Until the repository is made public, only a GitHub account that has been invited can fetch it.
+The repository is [public on GitHub](https://github.com/gyroid-eth/orrery). This HTTPS clone needs neither an invitation nor a GitHub sign-in.
 
 On Windows, type this **at the Ubuntu prompt (`user@PC:~$`)**. Put it under the Ubuntu home directory (for example `~/orrery`). Avoid placing it under `/mnt/c/...` (a Windows drive): it is slow and handles permissions differently.
 
@@ -502,7 +502,7 @@ To check the prerequisites and prepare the Python environment without starting t
 
 - Operation on WSL2 is still being verified on Windows 11 with WSL2 Ubuntu (as of 2026-09-28)
 - The "open in a window" button in the cockpit opens a Windows Terminal (`wt.exe`) tab instead of Ghostty on a Mac. If you do not have Windows Terminal, install it from the Microsoft Store
-- Pasting files and images does not work on WSL2. Pasting ordinary text does
+- Files and images can be pasted when WSL can read the Windows clipboard. The backend needs `powershell.exe` and `wslpath`, and must run in WSL within your logged-in Windows desktop. A backend started over SSH may not have access to that clipboard. See [pasting steps and error messages](usage.md#pasting-files-and-images-on-wsl)
 - Shortcuts such as `Cmd+K` become `Alt+K` and so on. For the list of differences, see ["Differences on Windows (WSL2)" in Usage](usage.md#differences-on-windows-wsl2)
 
 ## Requirements
@@ -510,6 +510,8 @@ To check the prerequisites and prepare the Python environment without starting t
 `ORRERY.app` is officially supported on macOS. The Python backend assumes Unix / tmux and has no macOS-only guard. Using it in a browser on Windows WSL2 (Ubuntu) is also still being verified ([For first-time installers](#for-first-time-installers-browser-mac--windows-wsl2)). Other operating systems are not guaranteed as a product.
 
 Required:
+
+The requirements below apply to the cockpit alone. The shared installation above and Telemetry require Python 3.11 or later. If no suitable Python is available, the shared installer uses uv to install 3.12. Meeting the standalone 3.10 minimum does not meet all requirements for the shared installation.
 
 - Python 3.10 or newer
 - `tmux`

@@ -15,6 +15,19 @@
     return ({claude:'claude-code',claudecode:'claude-code','codex-cli':'codex','dsh-tui':'dsh'})[key]||key;
   }
   function harnessInfo(id){return HARNESS[harnessKey(id)]||{label:id,asset:null};}
+  function unavailableReason(harness){
+    if(harness&&harness.available)return '';
+    const messages={
+      runtime_not_prepared:'Install or repair this harness',
+      credential_reader_unavailable:'Prepare the OS key store',
+      unsupported_mode:'Unavailable in this Mail mode',
+      unsupported_platform:'Unavailable on this OS',
+      harness_not_enabled:'Enable the connection settings',
+      model_mismatch:'Check the configured model',
+    };
+    const reason=harness&&harness.reason;
+    return Object.hasOwn(messages,reason)?messages[reason]:'Check setup and compatibility';
+  }
   function locality(provider,model){return (model&&model.locality||provider.locality)==='local'?'local':'cloud';}
   function family(provider,model){
     if(locality(provider,model)==='local')return 'local';
@@ -58,5 +71,5 @@
     if(!id||agent.category&&agent.category!=='agent')return null;
     return {id:key,...harnessInfo(id)};
   }
-  return {harnessKey,harnessInfo,locality,family,entries,value,harnesses,helperModels,metadata,recent,remember,rosterHarness};
+  return {harnessKey,harnessInfo,unavailableReason,locality,family,entries,value,harnesses,helperModels,metadata,recent,remember,rosterHarness};
 });

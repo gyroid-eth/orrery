@@ -14,22 +14,33 @@ ORRERY は 2 つでできています。**cockpit**（この repository。ター
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
 ```
 
-表示される計画を読んで承認し、doctorとMailのselftestが成功したことを確かめ、表示されたcockpitのURL（既定は`http://127.0.0.1:8791/cockpit.html`）を開きます。共通の導入後は、使う系統に応じて準備します。4系統すべてを使う必要はありません。
+表示される計画を読み、実行する場合は **`yes` と入力してEnterを押します**。`y`やEnterだけでは進みません。共通部分の確認が通ったときの出力例です（Claude/Codex CLIが未検出、既定ポートの場合の抜粋）。
+
+```text
+  ok    doctor: no problems
+  ok    selftest: Mail round trip, file reservation and dashboard all work
+  ORRERY's base is ready. Choose and prepare your provider below.
+    Open:          http://127.0.0.1:8791/cockpit.html
+```
+
+表示されたURLをブラウザで開きます。`WARN`や`NG`が出たら、その内容と[対処手順](docs/install.md#1-行で入れる更新する)を確認してください。共通の導入後は、使う系統に応じて準備します。4系統すべてを使う必要はありません。
 
 | 使う系統 | 準備するもの | 手順 |
 | --- | --- | --- |
 | Claude Code | Claude CodeのCLIとログイン | [Mac](docs/install.md#mac) / [WSL](docs/install.md#windows-11) |
 | Codex CLI | Codex CLIとログイン | [Mac](docs/install.md#mac) / [WSL](docs/install.md#windows-11) |
 | DeepSeek | APIキーとAPI利用残高、dshまたはHermes、接続設定 | [API初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
-| Local models | サーバーURL・model ID・必要な専用キー、dshまたはHermes、接続設定 | [API初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
+| Local models | 対応APIのURL・model ID・サーバー専用キー、dshまたはHermes、接続設定 | [API初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
 
 DeepSeek/Localだけを使う場合、ClaudeやChatGPTへのログインは不要です。dsh/Hermesはどちらか1つから始められます。Node.js 24.2以上が必要なのはdshを選ぶ場合で、Hermesだけなら`--dsh-node`の指定は不要です。API起動は現在、Mailのlegacy modeでのDeepSeek/Local × dsh/Hermesの対応組合せが対象です。任意のAPIとharnessの組合せを保証するものではありません。
 
-installerの「基盤のみ準備済み」やCLIなしの案内は、Claude Code/Codex CLIの検出結果に基づきます。DeepSeek/Localの準備と接続成功は、リンク先ガイドの実起動で確認します。共通基盤の導入と、選んだ接続先が使えることの確認を分けて進めてください。
+`ORRERY's base is ready`は共通部分の確認結果です。Claude/Codex CLIを検出した場合はその名前も出ますが、CLIのログインやDeepSeek/LocalのAPI接続を確認した表示ではありません。APIを使う人は接続設定を済ませ、キーが必要な接続先ではOSへの保存も行い、ガイドの実起動で確かめます。OSごとの前提と未確認の範囲は[対応組合せと制限](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/managed-catalog.md)を参照してください。
+
+選んだ系統の準備ができたら、右側の **Your first flight** で画面の操作を試します。見当たらなければ `Settings → Getting started → Your first flight` から開けます（[ガイドの説明](#画面のガイドで始める)）。最初の依頼は、たとえば「短い挨拶を1文で返してください。ファイルや設定は変更しないでください。」から始められます。
 
 cockpit から入れると、子の OS ターミナル窓は既定では自動で開きません（`AGENTSTACK_AUTO_OPEN_CHILD=0`）。選択済みの設定は引き継ぎ、必要な窓は `Open tmux` で開けます。自動表示を有効にする手順と、古い設定・同値の env の扱いは[子の窓の自動表示](docs/install.md#子の窓の自動表示)を参照してください。
 
-![cockpit は terminal を操作する画面、Telemetry は dashboard と agent graph の画面。cockpit は Telemetry の画面を埋め込める。agent は tmux の中で動き、両方の画面から見え、Mail で話す](docs/images/cockpit_telemetry_relation.svg)
+![cockpitとTelemetryは同じagentを見る2つの画面。Claude Code・Codexは各CLI、DeepSeek・LocalはdshかHermesで動き、tmuxとMailを使う](docs/images/cockpit_telemetry_relation.svg)
 
 ### 入るものと置き場所
 
@@ -42,7 +53,9 @@ cockpit から入れると、子の OS ターミナル窓は既定では自動�
 
 port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY.app` は、8791 の cockpit を開く窓です。作業 folder の変え方とアンインストールは[作業 folder とアンインストール](#作業-folder-とアンインストール)にあります。
 
-![ORRERY cockpit の全体。左に agent の roster、中央に3体のターミナルを並べた Split、右上に親子の木を描く mini-orrery、右下に ORRERY Mail の一覧](docs/images/cockpit_overview.png)
+![ORRERY cockpitの画面例。左にroster、中央に上段2つ・下段1つのターミナル、右上にmini-orrery、右下にMail一覧](docs/images/cockpit_overview.png)
+
+この画像はClaude/Codexのターミナル3つを分割した例です。DeepSeek/Localを選ぶ画面は、次のNEW AGENTのGIFで示します。
 
 左の roster で agent を選び、中央のターミナルで指示し、右の mini-orrery と Mail で親子関係とやり取りを追います。ターミナルだけなら ORRERY Telemetry が止まっていても使え、連携する機能は状態を表示して縮退します。
 
@@ -59,7 +72,7 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 **DeepSeek・dsh / Hermesを初めて使う人へ:** 通常の更新だけでは、APIキーや接続先は設定されません。cockpitにはAPIキーを入力する画面はありません。次の順で準備します。
 
 1. Telemetryの[初期設定ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md)を開き、TelemetryのソースフォルダーでdshかHermes（必要なら両方）を追加します。
-2. DeepSeekの場合はAPIキーを取得するか既存のキーを使い、このコンピューターに未保存ならOS別の手順で保存します。Localの場合は、サーバーの接続情報と、必要ならそのサーバー用のキーを用意します。
+2. DeepSeekの場合はAPIキーを取得するか既存のキーを使い、このコンピューターに未保存ならOS別の手順で保存します。Localの場合は、対応するサーバーの接続情報と専用キーを用意します。現在のORRERY経路はキーの参照が必須で、HermesではHTTPSも必要です。詳しくは同じ初期設定ガイドの対応条件を確認してください。
 3. ガイドに沿って接続設定を確認・有効化し、最後のinstallコマンドを自分で1回実行してTelemetryに反映します。
 4. cockpitに戻り、`+ NEW AGENT`で設定した`Model`と`Harness`を選びます。
 
@@ -86,6 +99,8 @@ cockpit 本体の実画面と実カタログです。Telemetry 単体の NEW AGE
 TELEMETRY でも同じく、質問待ちは `?`、承認待ちは赤い枠と `APPROVAL` で見分けられます。
 
 <img src="docs/images/deck_humanloop.png" alt="TELEMETRY の DECK。質問待ちは疑問符、承認待ちは赤枠と APPROVAL で示される" width="480">
+
+このDECK画像は旧名「AGENTSTACK · TELEMETRY」の表示例です。現在の名称はORRERY Telemetryです。
 
 → [使い方: 人の判断が要る agent](docs/usage.md#人の判断が要る-agent)・[介入待ちの見分け方（TELEMETRY）](docs/usage.md#介入待ちの見分け方)
 
@@ -215,7 +230,7 @@ WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同
 ## 動作要件
 
 - macOS、または Windows の WSL2（Ubuntu）。`ORRERY.app` とその installer、global hotkey は macOS だけ
-- Python 3.10 以上、`tmux`
+- 共通インストールはPython 3.11以上と`tmux`が必要です。適したPythonが無ければ、installerがuvでPython 3.12を用意します。cockpit単体の`start-cockpit.sh`は3.10以上で動きますが、Telemetryを含む共通導入の要件は3.11以上です
 - Node.js / npm、Rust / Cargo（desktop app の開発・build 時）
 - Homebrew で入れた `tmux` が見つからない Mac では、`brew shellenv` を shell に設定して `/opt/homebrew/bin` を PATH に通す（installer が `tmux` を「Missing」と言うのは、これが無いときです）
 - 稼働中の [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry)（全連携機能を使う場合）
@@ -264,13 +279,15 @@ rm -rf ~/orrery ~/orrery-telemetry
 2. **Show help map** — 同じ `Getting started` の `Show help map` を押し、主要な部品の注記を見ながら画面を見回します。`Esc` または画面のクリックで閉じられます。
 3. **Full tour** — 同じ場所の `Full tour` で16段の操作を順に試します。子とのしりとり、ターミナルの配置、Telemetry の EXIT / RESUME、NETWORK / REPLAY からターミナルへの帰還までを案内します。ゲームはガイドの ✓ が付いた後も3往復まで終えます。進行は最初のガイドとは別に保存されます（[Full tour の説明](docs/FULL_TOUR.md)）。
 
-普段の操作は、画面内のガイドと help map から始めてください。操作の詳しい参照は[使い方](docs/usage.md)、表示や接続が合わないときは[トラブルシューティング](docs/troubleshooting.md)へ進みます。ガイドで起動する agent は CLI のアカウント利用枠を消費します。
+普段の操作は、画面内のガイドと help map から始めてください。操作の詳しい参照は[使い方](docs/usage.md)、表示や接続が合わないときは[トラブルシューティング](docs/troubleshooting.md)へ進みます。ガイドで起動するagentにも、選んだCLIやAPI接続先の通常の利用枠・料金条件が適用されます。
 
 ![Your first flight から Settings の Show help map と Full tour の入口を開く](docs/images/cockpit-guide-entry.gif)
 
 ## 更新・手動導入
 
 更新も上の1行から行えます。cockpit の folder で `./scripts/update.sh` を実行する方法や再起動の条件は[更新手順](docs/install.md#5-更新する)を参照してください。
+
+**以前の版から更新する人へ:** 既存の設定とMailのDBを引き継ぎ、既定では動いているMailを切り替えません（`--mail keep`）。子のOSターミナル窓は自動で開かない設定が既定ですが、明示して選んだ設定は保持します。必要な窓は`Open tmux`で開けます。DeepSeek/Localの追加は任意で、通常更新だけではAPIキーや接続先は設定されません。Telemetry側の変更は[変更履歴](https://github.com/gyroid-eth/orrery-telemetry/blob/master/CHANGELOG.md)で確認できます。
 
 DeepSeek・dsh / Hermesを新しく追加する場合は、更新後に[初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md)も行ってください。Claude Code / Codexを使うための更新と、APIの接続準備は別の作業です。
 

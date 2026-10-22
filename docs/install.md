@@ -21,7 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - cockpit は専用の tmux server（`tmux -L orrery-cockpit`）で動きます。agent の tmux とは別なので、agent の一覧には出ません。出力を見る: `tmux -L orrery-cockpit attach`（Ctrl-b、d で戻る）。止める: `tmux -L orrery-cockpit kill-server`。もう一度起動する: 同じ 1 行。update のときは、自分が起動した cockpit なら新しい版で起動し直します（それ以外の cockpit は止めずに案内だけ）
 - 確認の selftest が作る試験用の agent 2 つは、cockpit の一覧と network には出しません（dashboard には残ります）
 - 確認は doctor の終了コードで判定します（0 以外なら、出力を画面に出して ready とは言いません）。更新が失敗して「今の版のまま起動」を選んだ run も ready とは言わず、最初の記録を残します
-- 最後に、4 項目が「適用した／すでに同じ／skip」のどれだったか、Mail を新しく入れたか動いているものを使い続けたか、doctor と selftest の結果を出します。Claude Code/Codex CLIを検出できない場合は「基盤のみ準備済み」と出ます。この検査はDeepSeek/Localの準備状況を判定しないので、APIを使う人は下の初回設定と実起動確認へ進みます
+- 最後に、4項目の適用結果、Mailの扱い、doctorとselftestの結果を出します。共通部分の確認が通ると`ORRERY's base is ready`で始まる案内が出ます。検出したClaude/Codex CLIの名前は表示しますが、ログインやAPI接続は検査していません。DeepSeek/Localを使う人は下の初回設定と実起動確認へ進みます
 - この setup が起動したのではない cockpit が別の版で動いているときは、止めずに「その窓で Ctrl-C して、同じ 1 行をもう一度」と案内します
 - **失敗したとき**: 承認の前の検査で止まったときは、setup は何も変えていません（ただし入口の `get.sh` がその前に行ったこと、つまり新しく取得した cockpit の checkout、または従来版の `.git` への取得は残り、画面にそう出ます）。承認の後に失敗したときは**巻き戻しません**。最初の試みの時点と今とで何が変わったかを表で出し、続きから進める 1 行を出します（その表の「最初」は、すべての確認が通るまで上書きされません。`~/.orrery-install/`）。前の版に戻すコマンドは用意していません
 - 新しく入れたものをアンインストールするときは、表示された `<orrery-telemetry の checkout>/scripts/uninstall.sh` を使います（Mail の DB は `--purge-data` を付けない限り残ります。2 つの checkout・uv・Python も残ります）。アンインストールの手順は README の[アンインストール](../README.md#アンインストール)です。**更新の取り消しには使わないでください**（既存の環境ごと取り除きます）
@@ -31,7 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 上の1行で更新しても、未設定のAPIキーや接続先は追加されません。cockpitにはAPIキーを入力する画面はありません。ORRERY Telemetry側で準備してから、cockpitで選びます。
 
 1. Telemetryの[初期設定ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md)を開き、TelemetryのソースフォルダーでdshかHermes（必要なら両方）を追加します。
-2. DeepSeekの場合はAPIキーを取得するか既存のキーを使い、このコンピューターに未保存ならOS別の手順で保存します。Localの場合は、サーバーの接続情報と、必要ならそのサーバー用のキーを用意します。
+2. DeepSeekの場合はAPIキーを取得するか既存のキーを使い、このコンピューターに未保存ならOS別の手順で保存します。Localの場合は、対応するサーバーの接続情報と専用キーを用意します。現在のORRERY経路はキーの参照が必須で、HermesではHTTPSも必要です。詳しくは同じ初期設定ガイドの対応条件を確認してください。
 3. ガイドに沿って接続設定を確認・有効化し、最後のinstallコマンドを自分で1回実行してTelemetryに反映します。
 4. cockpitに戻り、`+ NEW AGENT`で設定した`Model`と`Harness`を選びます。
 
@@ -80,7 +80,7 @@ cd ~/orrery-telemetry && AGENTSTACK_AUTO_OPEN_CHILD=1 ./scripts/install.sh
 | Claude Code | Claude CodeのCLIとログイン | [Mac](#mac) / [WSL](#windows-11) |
 | Codex CLI | Codex CLIとログイン | [Mac](#mac) / [WSL](#windows-11) |
 | DeepSeek | APIキーとAPI利用残高、dshまたはHermes、接続設定 | [API初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
-| Local models | サーバーURL・model ID・必要な専用キー、dshまたはHermes、接続設定 | [API初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
+| Local models | 対応APIのURL・model ID・サーバー専用キー、dshまたはHermes、接続設定 | [API初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
 
 DeepSeek/Localだけを使う場合、ClaudeやChatGPTへのログインは不要です。dsh/Hermesはどちらか1つから始められます。Node.js 24.2以上が必要なのはdshを選ぶ場合で、Hermesだけなら`--dsh-node`の指定は不要です。API起動は現在、Mailのlegacy modeでのDeepSeek/Local × dsh/Hermesの対応組合せが対象です。任意のAPIとharnessの組合せを保証するものではありません。
 
@@ -400,7 +400,7 @@ git clone https://github.com/gyroid-eth/orrery.git orrery
 cd orrery
 ```
 
-repository が公開される前は、招待を受けた GitHub アカウントでしか取得できません。
+repositoryは[GitHubで公開](https://github.com/gyroid-eth/orrery)されており、このHTTPSの取得に招待やGitHubへのログインは不要です。
 
 Windows では、**Ubuntu のプロンプト（`user@PC:~$`）で**打ちます。置き場所は Ubuntu の home の下（例: `~/orrery`）にします。`/mnt/c/...`（Windows のドライブ）の下は遅く、権限の扱いも違うので避けます。
 
@@ -502,7 +502,7 @@ script は前提をまとめて確かめ、足りないものを `NG` の行で�
 
 - WSL2 での動作は、Windows 11 と WSL2 の Ubuntu で確認中です（2026-09-28 時点）
 - cockpit の中の「窓を開く」ボタンは、Mac の Ghostty の代わりに Windows Terminal（`wt.exe`）のタブを開きます。Windows Terminal が無ければ Microsoft Store から入れます
-- ファイルや画像の貼り付けは WSL2 では使えません。通常のテキストの貼り付けは使えます
+- ファイルや画像は、Windowsのクリップボードを読めるWSL環境で貼り付けられます。backendから`powershell.exe`と`wslpath`が使え、WindowsにログインしたデスクトップのWSLで起動していることが前提です。SSHなどからの起動ではデスクトップのクリップボードを読めない場合があります。[貼り付けの手順とエラーの見方](usage.md#wsl-でのファイル画像の貼り付け)を参照してください
 - `Cmd+K` などの shortcut は `Alt+K` などに変わります。違いの一覧は [使い方の「Windows（WSL2）での違い」](usage.md#windowswsl2での違い) を参照してください
 
 ## 動作環境
@@ -510,6 +510,8 @@ script は前提をまとめて確かめ、足りないものを `NG` の行で�
 `ORRERY.app` の正式な利用対象は macOS です。Python backend は Unix / tmux を前提にしており、macOS 専用 guard はありません。ブラウザで開く使い方は Windows の WSL2（Ubuntu）でも確認中です（[はじめて入れる人へ](#はじめて入れる人へブラウザで使うmac--windows-wsl2)）。それ以外の OS は製品として保証していません。
 
 必須:
+
+以下はcockpit単体の起動要件です。上の共通インストールとTelemetryはPython 3.11以上が必要です。共通installerは適したPythonがなければuvで3.12を用意します。単体の3.10要件だけで共通導入の前提がそろうわけではありません。
 
 - Python 3.10 以上
 - `tmux`

@@ -41,6 +41,7 @@
 .spawn-harness small{margin-left:auto;color:var(--ink-faint);font-size:9px}
 .spawn-harness:disabled{cursor:default;color:var(--ink-faint)}
 .spawn-harness:disabled .spawn-brand{opacity:.4}
+.spawn-setup-help{display:block;padding:9px;color:var(--amber);font:11px var(--sans);text-decoration:underline;text-underline-offset:3px}
 .spawn-default-harness{color:var(--ink-dim);font-size:11px}
 .spawn-settings-label{display:block;font:12px var(--sans);margin:16px 0 8px}
 .spawn-helper{height:34px;width:100%;background:var(--bg);border:1px solid var(--hair);border-radius:4px;color:var(--ink);font:11px var(--sans);padding:0 7px}

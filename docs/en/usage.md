@@ -388,7 +388,7 @@ For your first DeepSeek, dsh, or Hermes setup, follow the guide in the order bel
 
 1. Select a portrait under `Choose a scientist`, or leave `AUTO` selected.
 2. Under `Model`, choose Claude, Codex, DeepSeek, or Local models, then select a model in the middle column. Local models can be searched.
-3. Choose a `Harness` on the right. DeepSeek and Local offer the dsh / Hermes entries in your catalog. Unavailable entries show `Coming soon` and cannot be selected.
+3. Choose a `Harness` on the right. DeepSeek and Local offer the dsh / Hermes entries in your catalog. Unavailable entries cannot be selected. They show a preparation or compatibility explanation, such as a missing runtime or key-store reader, with a setup-guide link.
 4. Check `Helper model` and `Effort` when shown, then set the launch directory and task below. See [Standard New Agent for DeepSeek and Local](configuration.md#standard-new-agent-for-deepseek-and-local) for details.
 
 ![The cockpit's NEW AGENT: Curie's portrait and name, all four families (Claude, Codex, DeepSeek, Local models), and DeepSeek's dsh and Hermes choices](../images/cockpit-native-spawn.png)
