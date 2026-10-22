@@ -414,7 +414,7 @@ Inside the repository:
 
 In one run, the script does the following.
 
-1. Checks the prerequisites (Python 3.10 or newer, tmux, the orrery-telemetry settings, the project key, and a response from the dashboard; an older orrery-telemetry only gets a warning)
+1. Checks the standalone cockpit prerequisites (Python 3.10 or newer, tmux, the orrery-telemetry settings, the project key, and a dashboard response; the shared installation and Telemetry separately need Python 3.11 or newer; an older orrery-telemetry only gets a warning)
 2. Creates a Python environment in `bridge/.venv` and installs the packages in `bridge/requirements.txt` (the first run takes a while; from the second run on it skips this if nothing changed)
 3. Takes over the orrery-telemetry settings (the project key, Mail DB, and dashboard port in `~/.agentstack/env.sh`). It does not rewrite settings files under `~/.agentstack` or `~/.orrery`
 4. Starts the backend **inside this window**, confirms it responds, and then prints the URL to open
@@ -500,7 +500,7 @@ To check the prerequisites and prepare the Python environment without starting t
 
 ### Differences on Windows (WSL2)
 
-- Operation on WSL2 is still being verified on Windows 11 with WSL2 Ubuntu (as of 2026-09-28)
+- On WSL2, run the backend inside Ubuntu and open it in a Windows browser. Shared installation, cockpit-specific controls, and API/keyring setup have different verification status; see the [requirements table](#requirements)
 - The "open in a window" button in the cockpit opens a Windows Terminal (`wt.exe`) tab instead of Ghostty on a Mac. If you do not have Windows Terminal, install it from the Microsoft Store
 - Files and images can be pasted when WSL can read the Windows clipboard. The backend needs `powershell.exe` and `wslpath`, and must run in WSL within your logged-in Windows desktop. A backend started over SSH may not have access to that clipboard. See [pasting steps and error messages](usage.md#pasting-files-and-images-on-wsl)
 - Shortcuts such as `Cmd+K` become `Alt+K` and so on. For the list of differences, see ["Differences on Windows (WSL2)" in Usage](usage.md#differences-on-windows-wsl2)
@@ -508,6 +508,17 @@ To check the prerequisites and prepare the Python environment without starting t
 ## Requirements
 
 `ORRERY.app` is officially supported on macOS. The Python backend assumes Unix / tmux and has no macOS-only guard. Using it in a browser on Windows WSL2 (Ubuntu) is also still being verified ([For first-time installers](#for-first-time-installers-browser-mac--windows-wsl2)). Other operating systems are not guaranteed as a product.
+
+| Environment / feature | Available path and verification status |
+| --- | --- |
+| macOS cockpit | `ORRERY.app` or a browser; the primary target |
+| Ubuntu WSL2 shared installation | Telemetry installation, Mail, dashboard and existing CLI launch paths have been checked. This does not verify every cockpit-specific control |
+| Ubuntu WSL2 cockpit | Browser-based path. WSL-specific controls such as Windows Terminal and clipboard access remain under verification |
+| WSL2 DeepSeek/Local and keyring | Implemented paths with setup instructions. Fresh-keyring setup and every provider/harness combination have not been verified end to end |
+| Native Windows | No cockpit or API launch path. Telemetry's experimental helper provides only parts of Mail/dashboard |
+| Other Linux / headless systems | There are reports of Telemetry use; cockpit and full service operation are not guaranteed as a product |
+
+See [Telemetry's compatibility table](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/managed-catalog.en.md) for API combinations and verification scope. Check the requirements for the features you plan to use before installing.
 
 Required:
 

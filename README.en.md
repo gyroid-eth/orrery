@@ -4,7 +4,7 @@
 
 <img src="app/icons-src/orrery-1024.png" alt="ORRERY icon" width="96">
 
-ORRERY is a cockpit for teams using Claude Code, Codex CLI, DeepSeek, or Local models. DeepSeek and Local agents use dsh or Hermes with a configured API connection. You do not have to hunt from window to window for the agent that is waiting for your reply. However many agents you run, only the ones waiting for a human decision blink in the roster so you can spot them at a glance, and you see every terminal, the traffic between agents, and your remaining usage quota on one screen while sending instructions from the same place. It runs on Mac (`ORRERY.app` and a browser) and on Windows (WSL2 and a browser), and works with [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry).
+ORRERY is a cockpit for teams using Claude Code, Codex CLI, DeepSeek, or Local models. DeepSeek and Local agents use dsh or Hermes with a configured API connection. You do not have to hunt from window to window for the agent that is waiting for your reply. However many agents you run, only the ones waiting for a human decision blink in the roster so you can spot them at a glance, and you see every terminal, the traffic between agents, and your remaining usage quota on one screen while sending instructions from the same place. It runs on Mac (`ORRERY.app` and a browser) and on Windows (WSL2 and a browser), and works with [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry). See the [verification status by OS and feature](docs/en/install.md#requirements).
 
 ## Quick start
 
@@ -34,7 +34,7 @@ Open the printed URL in your browser. If you see `WARN` or `NG`, read the messag
 
 DeepSeek and Local do not require a Claude or ChatGPT login. Start with either dsh or Hermes. Node.js 24.2 or newer is needed for dsh; Hermes alone does not need `--dsh-node`. API launches currently support the DeepSeek/Local × dsh/Hermes combinations in Mail legacy mode, rather than arbitrary API and harness combinations.
 
-`ORRERY's base is ready` reports the shared checks. It also names a detected Claude/Codex CLI, but it does not verify that CLI's sign-in or a DeepSeek/Local API connection. Configure your API connection, save a key in the OS secret store if required, and follow the guide's launch check. See [supported combinations and limits (Japanese)](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/managed-catalog.md) for OS prerequisites and areas still awaiting verification.
+`ORRERY's base is ready` reports the shared checks. It also names a detected Claude/Codex CLI, but it does not verify that CLI's sign-in or a DeepSeek/Local API connection. Configure your API connection and its stored-key reference, then follow the guide's launch check. See [supported combinations and limits](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/managed-catalog.en.md) for OS prerequisites and areas still awaiting verification.
 
 Once your chosen provider is prepared, use **Your first flight** on the right to learn the controls. If it is hidden, open `Settings → Getting started → Your first flight` ([guide details](#start-with-the-guides-on-screen)). A first task can be: “Reply with a short greeting in one sentence. Do not change files or settings.”
 

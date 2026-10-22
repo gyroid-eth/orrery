@@ -414,7 +414,7 @@ repository の中で:
 
 script は 1 回で次を行います。
 
-1. 前提の確認（Python 3.10 以上・tmux・orrery-telemetry の設定・project key・dashboard の応答。orrery-telemetry の版が古ければ警告だけ出す）
+1. cockpit単体の前提を確認（Python 3.10以上・tmux・orrery-telemetryの設定・project key・dashboardの応答。共通導入とTelemetryには別途Python 3.11以上が必要。orrery-telemetryの版が古ければ警告だけ出す）
 2. `bridge/.venv` に Python の環境を作り、`bridge/requirements.txt` の package を入れる（初回だけ時間がかかります。2 回目からは変更が無ければ飛ばします）
 3. orrery-telemetry の設定（`~/.agentstack/env.sh` の project key・Mail DB・dashboard の port）を引き継ぐ。`~/.agentstack` や `~/.orrery` の設定 file は書き換えません
 4. backend を**この窓の中で**起動し、応答を確かめてから開く URL を表示する
@@ -500,7 +500,7 @@ script は前提をまとめて確かめ、足りないものを `NG` の行で�
 
 ### Windows（WSL2）で違うところ
 
-- WSL2 での動作は、Windows 11 と WSL2 の Ubuntu で確認中です（2026-09-28 時点）
+- WSL2では、Ubuntu内のbackendをWindowsのブラウザで開きます。共通導入・cockpit固有の操作・APIと鍵束では確認状況が異なります。[動作環境の表](#動作環境)を参照してください
 - cockpit の中の「窓を開く」ボタンは、Mac の Ghostty の代わりに Windows Terminal（`wt.exe`）のタブを開きます。Windows Terminal が無ければ Microsoft Store から入れます
 - ファイルや画像は、Windowsのクリップボードを読めるWSL環境で貼り付けられます。backendから`powershell.exe`と`wslpath`が使え、WindowsにログインしたデスクトップのWSLで起動していることが前提です。SSHなどからの起動ではデスクトップのクリップボードを読めない場合があります。[貼り付けの手順とエラーの見方](usage.md#wsl-でのファイル画像の貼り付け)を参照してください
 - `Cmd+K` などの shortcut は `Alt+K` などに変わります。違いの一覧は [使い方の「Windows（WSL2）での違い」](usage.md#windowswsl2での違い) を参照してください
@@ -508,6 +508,17 @@ script は前提をまとめて確かめ、足りないものを `NG` の行で�
 ## 動作環境
 
 `ORRERY.app` の正式な利用対象は macOS です。Python backend は Unix / tmux を前提にしており、macOS 専用 guard はありません。ブラウザで開く使い方は Windows の WSL2（Ubuntu）でも確認中です（[はじめて入れる人へ](#はじめて入れる人へブラウザで使うmac--windows-wsl2)）。それ以外の OS は製品として保証していません。
+
+| 環境・機能 | 提供経路と確認状況 |
+| --- | --- |
+| macOSのcockpit | `ORRERY.app`またはブラウザ。主な利用対象 |
+| Ubuntu WSL2の共通導入 | Telemetryのinstall・Mail・dashboard・既存CLI起動の確認済み経路。cockpit固有の全操作を確認した意味ではない |
+| Ubuntu WSL2のcockpit | ブラウザで利用する経路。Windows TerminalやクリップボードなどWSL固有の操作は確認を継続 |
+| WSL2のDeepSeek/Localと鍵束 | 実装された経路があり、準備手順を案内。新規鍵束準備を含む全組合せの通し確認は未完了 |
+| Windowsネイティブ | cockpitとAPI起動は対象外。Telemetryの実験的helperはMail/dashboardの一部のみ |
+| その他のLinux・headless | Telemetryの利用報告はあるが、cockpitや全サービスの動作を製品として保証しない |
+
+APIの組合せと確認範囲は[Telemetryの対応表](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/managed-catalog.md)で確認できます。利用する機能の条件を確かめてから導入してください。
 
 必須:
 

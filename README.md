@@ -4,7 +4,7 @@
 
 <img src="app/icons-src/orrery-1024.png" alt="ORRERY icon" width="96">
 
-ORRERY は、Claude Code・Codex CLI・DeepSeek・Local modelsのagentをチームとして扱うcockpitです。DeepSeek・Local modelsは、設定した接続先のモデルをdshまたはHermesで動かします。どの agent が返事を待っているかを窓から窓へ探し回る必要はありません。何体動かしていても、人の判断を待っている agent だけが roster で点滅して一目で分かり、全員のターミナル・agent 同士のやり取り・残りの利用枠を一つの画面で見渡しながら、そのまま指示を送れます。Mac（`ORRERY.app` とブラウザ）と Windows（WSL2 とブラウザ）で使え、[ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) と連携します。
+ORRERY は、Claude Code・Codex CLI・DeepSeek・Local modelsのagentをチームとして扱うcockpitです。DeepSeek・Local modelsは、設定した接続先のモデルをdshまたはHermesで動かします。どの agent が返事を待っているかを窓から窓へ探し回る必要はありません。何体動かしていても、人の判断を待っている agent だけが roster で点滅して一目で分かり、全員のターミナル・agent 同士のやり取り・残りの利用枠を一つの画面で見渡しながら、そのまま指示を送れます。Mac（`ORRERY.app` とブラウザ）と Windows（WSL2 とブラウザ）で使え、[ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) と連携します。[OS・機能ごとの確認状況](docs/install.md#動作環境)も確認してください。
 
 ## クイックスタート
 
