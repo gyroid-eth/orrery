@@ -4,11 +4,11 @@
 
 <img src="app/icons-src/orrery-1024.png" alt="ORRERY icon" width="96">
 
-ORRERY は、複数の Claude Code / Codex の agent をチームとして動かす人のための cockpit です。どの agent が返事を待っているかを窓から窓へ探し回る必要はありません。何体動かしていても、人の判断を待っている agent だけが roster で点滅して一目で分かり、全員の端末・agent 同士のやり取り・残りの利用枠を一つの画面で見渡しながら、そのまま指示を送れます。Mac（`ORRERY.app` とブラウザ）と Windows（WSL2 とブラウザ）で使え、[ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) と連携します。
+ORRERY は、複数の Claude Code / Codex の agent をチームとして動かす人のための cockpit です。どの agent が返事を待っているかを窓から窓へ探し回る必要はありません。何体動かしていても、人の判断を待っている agent だけが roster で点滅して一目で分かり、全員のターミナル・agent 同士のやり取り・残りの利用枠を一つの画面で見渡しながら、そのまま指示を送れます。Mac（`ORRERY.app` とブラウザ）と Windows（WSL2 とブラウザ）で使え、[ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) と連携します。
 
 ## クイックスタート
 
-ORRERY は 2 つでできています。**cockpit**（この repository。端末を並べて操作する画面）と、裏で agent と Mail を動かし Telemetry 画面を出す [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) です。**次の 1 行で両方入ります。** Mac のターミナル、または Windows の WSL2 Ubuntu 内で実行します。
+ORRERY は 2 つでできています。**cockpit**（この repository。ターミナルを並べて操作する画面）と、裏で agent と Mail を動かし Telemetry 画面を出す [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) です。**次の 1 行で両方入ります。** Mac のターミナル、または Windows の WSL2 Ubuntu 内で実行します。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
@@ -31,9 +31,9 @@ cockpit から入れると、子の OS ターミナル窓は既定では自動�
 
 port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY.app` は、8791 の cockpit を開く窓です。作業 folder の変え方とアンインストールは[作業 folder とアンインストール](#作業-folder-とアンインストール)にあります。
 
-![ORRERY cockpit の全体。左に agent の roster、中央に3体の端末を並べた Split、右上に親子の木を描く mini-orrery、右下に ORRERY Mail の一覧](docs/images/cockpit_overview.png)
+![ORRERY cockpit の全体。左に agent の roster、中央に3体のターミナルを並べた Split、右上に親子の木を描く mini-orrery、右下に ORRERY Mail の一覧](docs/images/cockpit_overview.png)
 
-左の roster で agent を選び、中央の端末で指示し、右の mini-orrery と Mail で親子関係とやり取りを追います。端末だけなら ORRERY Telemetry が止まっていても使え、連携する機能は状態を表示して縮退します。
+左の roster で agent を選び、中央のターミナルで指示し、右の mini-orrery と Mail で親子関係とやり取りを追います。ターミナルだけなら ORRERY Telemetry が止まっていても使え、連携する機能は状態を表示して縮退します。
 
 **紹介動画**: 「Orrery」（約 90 秒・日本語）は、agent どうしが直接話すことで AI の間の仲介が要らなくなる、という ORRERY の考え方を図解で説明する動画です（実際の画面ではありません）。
 
@@ -45,6 +45,13 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 
 `+ NEW AGENT` で科学者の肖像を選ぶと名前が決まり、形容詞は調整できます。Claude・Codex・DeepSeek・Local models の4系統から model を、DeepSeek と Local では dsh / Hermes の Harness も選べます。利用できる model と Harness は導入済みの設定によって変わります。
 
+**DeepSeek・dsh / Hermesを初めて使う人へ:** 通常の更新だけでは、APIキーや接続先は設定されません。cockpitにはAPIキーを入力する画面はありません。次の順で準備します。
+
+1. Telemetryの[初期設定ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md)を開き、TelemetryのソースフォルダーでdshかHermes（必要なら両方）を追加します。
+2. DeepSeekの場合はAPIキーを取得するか既存のキーを使い、このコンピューターに未保存ならOS別の手順で保存します。Localの場合は、サーバーの接続情報と、必要ならそのサーバー用のキーを用意します。
+3. ガイドに沿って接続設定を確認・有効化し、最後のinstallコマンドを自分で1回実行してTelemetryに反映します。
+4. cockpitに戻り、`+ NEW AGENT`で設定した`Model`と`Harness`を選びます。
+
 ![cockpit 本体の NEW AGENT。科学者の肖像と4系統を保ったまま、Claude・Codex・DeepSeek・Local と Harness を切り替える。起動前の選択操作だけ](docs/images/cockpit-native-spawn.gif)
 
 cockpit 本体の実画面と実カタログです。Telemetry 単体の NEW AGENT は別の画面です。画像は起動前の選択までを示します。
@@ -53,15 +60,15 @@ cockpit 本体の実画面と実カタログです。Telemetry 単体の NEW AGE
 
 ### 打っている途中で流されない
 
-たくさんの agent を同時に動かしていると、親の agent の端末に指示を打っている途中で、他の agent からの通知が同じ端末に流れ込み、書きかけの文が埋もれてしまいます。cockpit では、指示は端末の下にある別の入力欄（composer）に打つので、端末に何が流れてきても書きかけはそのまま残ります。送り先は、roster や tab で agent をクリックするだけで切り替わり、文はそのまま持ち越されます。
+たくさんの agent を同時に動かしていると、親の agent のターミナルに指示を打っている途中で、他の agent からの通知が同じターミナルに流れ込み、書きかけの文が埋もれてしまいます。cockpit では、指示はターミナルの下にある別の入力欄（composer）に打つので、ターミナルに何が流れてきても書きかけはそのまま残ります。送り先は、roster や tab で agent をクリックするだけで切り替わり、文はそのまま持ち越されます。
 
-![CoralCurie への指示を composer に打っている間に、端末へ Mail の通知が3通流れてくる。書きかけは残ったまま、roster で OnyxDarwin をクリックして送り先を替え、送信すると OnyxDarwin が受け取る](docs/images/cockpit_composer_calm.gif)
+![CoralCurie への指示を composer に打っている間に、ターミナルへ Mail の通知が3通流れてくる。書きかけは残ったまま、roster で OnyxDarwin をクリックして送り先を替え、送信すると OnyxDarwin が受け取る](docs/images/cockpit_composer_calm.gif)
 
 → [使い方: Prompt composer](docs/usage.md#prompt-composer)
 
 ### 人の判断が要る agent が一目で分かる
 
-何体の agent を動かしていても、手が止まって人の判断を待っている agent だけが roster で光り（承認待ちは赤く点滅、質問待ちは水色でゆっくり明滅）、header に `N need you` が出ます。`need you` を押すとその agent だけに絞られ、tile をクリックすればその端末に入って質問を読めます。composer から答えを送れば点滅は消えます。人の判断が要る agent を探し回らず、止まった順に片付けられます。
+何体の agent を動かしていても、手が止まって人の判断を待っている agent だけが roster で光り（承認待ちは赤く点滅、質問待ちは水色でゆっくり明滅）、header に `N need you` が出ます。`need you` を押すとその agent だけに絞られ、tile をクリックすればそのターミナルに入って質問を読めます。composer から答えを送れば点滅は消えます。人の判断が要る agent を探し回らず、止まった順に片付けられます。
 
 ![7体が動いている roster の中で PearlFaraday だけが赤く点滅し、header に 1 need you が出る。need you を押して絞り込み、tile をクリックして承認の質問を読み、composer から 1 を送ると点滅が消える](docs/images/cockpit_need_you.gif)
 
@@ -73,7 +80,7 @@ TELEMETRY でも同じく、質問待ちは `?`、承認待ちは赤い枠と `A
 
 ### agent 同士が何を話しているかを、その場で読める
 
-agent は ORRERY Mail で互いに依頼し、報告し、指摘し合います。その Mail が右の rail に新しい順に流れてくるので、端末を一つずつ開かなくても、チームの会話をその場で読めます。card をクリックすると本文が、`thread` を押すとその話の往復が時系列で開きます。roster で agent を選ぶと、その agent が関わる Mail だけに絞られます。
+agent は ORRERY Mail で互いに依頼し、報告し、指摘し合います。その Mail が右の rail に新しい順に流れてくるので、ターミナルを一つずつ開かなくても、チームの会話をその場で読めます。card をクリックすると本文が、`thread` を押すとその話の往復が時系列で開きます。roster で agent を選ぶと、その agent が関わる Mail だけに絞られます。
 
 ![新しい Mail が2通流れてきて、mini-orrery に通信の線が走る。card をクリックして本文を読み、thread で4通の往復を時系列に読み、roster で PearlFaraday を選ぶとその Mail だけに絞られる](docs/images/cockpit_mail.gif)
 
@@ -87,17 +94,21 @@ agent は ORRERY Mail で互いに依頼し、報告し、指摘し合います�
 
 → [使い方: Pin](docs/usage.md#pin)
 
-### 複数の端末を並べる（Split）
+<a id="複数の端末を並べるsplit"></a>
 
-`Cmd` / `Ctrl` を押しながら agent を選ぶと、最大 12 体の端末を一つの画面に並べられます。名札を drag すると位置を入れ替え、境目を drag すると幅を変えられます。親の agent と、その子たちの進み具合を同時に見張れます。
+### 複数のターミナルを並べる（Split）
+
+`Cmd` / `Ctrl` を押しながら agent を選ぶと、最大 12 体のターミナルを一つの画面に並べられます。名札を drag すると位置を入れ替え、境目を drag すると幅を変えられます。親の agent と、その子たちの進み具合を同時に見張れます。
 
 ![3体を並べた Split で、名札を drag して入れ替え、境目を drag して幅を変える](docs/images/cockpit_split_drag.gif)
 
 → [使い方: Split](docs/usage.md#split)
 
-### 一つの端末を外に出す（独立の窓）
+<a id="一つの端末を外に出す独立の窓"></a>
 
-tab の名札を端末の上へ drag すると、cockpit の上に浮かぶ小さな窓になります（`FLOAT`）。そのまま cockpit の外へ出すか `↗` を押すと、独立の窓になり（`WINDOW`）、別のモニターに置いて大きく見られます。窓を閉じれば元の tab に戻ります。ORRERY.app でも、Mac と WSL のブラウザでも使えます。
+### 一つのターミナルを外に出す（独立の窓）
+
+tab の名札をターミナルの上へ drag すると、cockpit の上に浮かぶ小さな窓になります（`FLOAT`）。そのまま cockpit の外へ出すか `↗` を押すと、独立の窓になり（`WINDOW`）、別のモニターに置いて大きく見られます。窓を閉じれば元の tab に戻ります。ORRERY.app でも、Mac と WSL のブラウザでも使えます。
 
 ![名札を drag して浮かせ、動かし、↗ で独立の窓にし、閉じると tab に戻る](docs/images/cockpit_pane_float.gif)
 
@@ -105,17 +116,19 @@ tab の名札を端末の上へ drag すると、cockpit の上に浮かぶ小�
 
 → [使い方: 独立の窓](docs/usage.md#独立の窓)
 
-### 端末から開く・端末に渡す
+<a id="端末から開く端末に渡す"></a>
 
-agent が端末に出した URL はクリックで既定のブラウザに、ファイルのパスはクリックで Finder（Windows ではエクスプローラー）に開きます。逆に、Finder（Windows ではエクスプローラー）でコピーしたファイルを composer に貼ると、その絶対パスが入り、そのまま agent に渡せます。スクリーンショットの画像を貼ると、Mac では agent の CLI がそのまま受け取り、Windows（WSL2）では画像を保存してそのパスが入ります。
+### ターミナルから開く・ターミナルに渡す
 
-![端末の URL をクリックして browser で開き、パスをクリックして Finder で表示し、composer にファイルを貼るとパスが入る](docs/images/cockpit_open_paste.gif)
+agent がターミナルに出した URL はクリックで既定のブラウザに、ファイルのパスはクリックで Finder（Windows ではエクスプローラー）に開きます。逆に、Finder（Windows ではエクスプローラー）でコピーしたファイルを composer に貼ると、その絶対パスが入り、そのまま agent に渡せます。スクリーンショットの画像を貼ると、Mac では agent の CLI がそのまま受け取り、Windows（WSL2）では画像を保存してそのパスが入ります。
 
-→ [使い方: 端末から開く・端末に渡す](docs/usage.md#端末から開く端末に渡す)・[WSL でのファイル・画像の貼り付け](docs/usage.md#wsl-でのファイル画像の貼り付け)
+![ターミナルの URL をクリックして browser で開き、パスをクリックして Finder で表示し、composer にファイルを貼るとパスが入る](docs/images/cockpit_open_paste.gif)
+
+→ [使い方: ターミナルから開く・ターミナルに渡す](docs/usage.md#ターミナルから開くターミナルに渡す)・[WSL でのファイル・画像の貼り付け](docs/usage.md#wsl-でのファイル画像の貼り付け)
 
 ### 明るい配色（light mode）
 
-Settings の Color theme で、暗い配色（Dark）と、紙のような明るい配色（Light）を切り替えられます。端末の中の色や、埋め込みの TELEMETRY まで一緒に変わり、diff の赤と緑の背景の上でも文字が読める濃さに補正します。`System` にすると OS の外観に合わせます。
+Settings の Color theme で、暗い配色（Dark）と、紙のような明るい配色（Light）を切り替えられます。ターミナルの中の色や、埋め込みの TELEMETRY まで一緒に変わり、diff の赤と緑の背景の上でも文字が読める濃さに補正します。`System` にすると OS の外観に合わせます。
 
 ![Settings の Color theme を Light に替え、また Dark に戻す](docs/images/cockpit_theme_switch.gif)
 
@@ -123,7 +136,7 @@ Settings の Color theme で、暗い配色（Dark）と、紙のような明る
 
 ### 画面のユーザー名を伏せる（デモモード）
 
-録画・ライブのデモ・画面共有のために、画面に出るユーザー名と機体名を `********` のように伏せられます。Settings の Demo mode を入れるか、URL に `?demo=1` を付けます。roster・tooltip・Mail・Planetarium・埋め込みの TELEMETRY・端末の中身まで伏せ、画面の隅に `DEMO` と出ます。伏せるのは表示だけで、端末の中の path や URL をクリックしたときと、コピーした文字は本当の値です。Mail に書かれた人の名前なども伏せたいときは、Settings の「Also mask these words」に語を足します。
+録画・ライブのデモ・画面共有のために、画面に出るユーザー名と機体名を `********` のように伏せられます。Settings の Demo mode を入れるか、URL に `?demo=1` を付けます。roster・tooltip・Mail・Planetarium・埋め込みの TELEMETRY・ターミナルの中身まで伏せ、画面の隅に `DEMO` と出ます。伏せるのは表示だけで、ターミナルの中の path や URL をクリックしたときと、コピーした文字は本当の値です。Mail に書かれた人の名前なども伏せたいときは、Settings の「Also mask these words」に語を足します。
 
 → [設定: 保存データとプライバシー](docs/configuration.md#保存データとプライバシー)
 
@@ -145,17 +158,17 @@ roster の tile に mouse を乗せると、名前をコピーする icon が出
 
 ### 親子関係と通信を見渡す（Planetarium）
 
-header の `PLANETARIUM` で、誰が誰を起動したかの木を画面いっぱいに開きます。直近 90 秒に Mail が行き来した二者の間には線が光り、Mail が届くたびに彗星が飛ぶので、チームのどこで会話が起きているかが一目で分かります。node をクリックすると、その agent の端末へそのまま移ります。
+header の `PLANETARIUM` で、誰が誰を起動したかの木を画面いっぱいに開きます。直近 90 秒に Mail が行き来した二者の間には線が光り、Mail が届くたびに彗星が飛ぶので、チームのどこで会話が起きているかが一目で分かります。node をクリックすると、その agent のターミナルへそのまま移ります。
 
-![PLANETARIUM を押すと、CoralCurie を親に6体の子が並ぶ木が開き、Mail が届くたびに線が光る。JadeNoether の node をクリックすると、その端末に移る](docs/images/cockpit_planetarium.gif)
+![PLANETARIUM を押すと、CoralCurie を親に6体の子が並ぶ木が開き、Mail が届くたびに線が光る。JadeNoether の node をクリックすると、そのターミナルに移る](docs/images/cockpit_planetarium.gif)
 
 → [使い方: Planetarium](docs/usage.md#planetarium)
 
 ### チーム全体の状態を見る（TELEMETRY）
 
-header の `TELEMETRY` で、ORRERY Telemetry の dashboard を cockpit の中に開きます。`DECK` は agent ごとの card、`NETWORK` は agent 同士のつながりを node と線で見せ、agent を選べば会話と tool の履歴、成果物の一覧も読めます。`OPEN IN COCKPIT` を押すと、その agent の端末にそのまま戻ります。別の画面に行かずに、cockpit の中でチーム全体を見渡し、そのまま手元の端末へ戻れます。終了した agent の再開もここから行います。
+header の `TELEMETRY` で、ORRERY Telemetry の dashboard を cockpit の中に開きます。`DECK` は agent ごとの card、`NETWORK` は agent 同士のつながりを node と線で見せ、agent を選べば会話と tool の履歴、成果物の一覧も読めます。`OPEN IN COCKPIT` を押すと、その agent のターミナルにそのまま戻ります。別の画面に行かずに、cockpit の中でチーム全体を見渡し、そのまま手元のターミナルへ戻れます。終了した agent の再開もここから行います。
 
-![header の TELEMETRY を押すと cockpit の中に DECK が開き、NETWORK に切り替えて JadeNoether を選び、履歴を見てから OPEN IN COCKPIT で JadeNoether の端末に戻る](docs/images/cockpit_telemetry.gif)
+![header の TELEMETRY を押すと cockpit の中に DECK が開き、NETWORK に切り替えて JadeNoether を選び、履歴を見てから OPEN IN COCKPIT で JadeNoether のターミナルに戻る](docs/images/cockpit_telemetry.gif)
 
 **REPLAY**: 仕事が終わった後に、チームが何をどの順でやったかを、録画のように見直せます。NETWORK で `SELECT` を押して agent を選び `Replay` を押すと、選んだ agent の履歴が時間軸で再生され、誰が誰を起動し（spawn）、どんな Mail を送り合ったかが、件名つきで順に現れます。速さの目盛りで早送りし、下の時間軸をクリックすれば好きな時刻に飛べます。
 
@@ -165,7 +178,7 @@ header の `TELEMETRY` で、ORRERY Telemetry の dashboard を cockpit の中�
 
 ### Obsidian と一緒に使う
 
-Obsidian の vault の中で agent を動かすと、作業ログ・論文ノート・タスクがそのまま Markdown のノートになり、人は Obsidian の Daily Note と Kanban で見るだけで済みます。agent が端末に出したノートのパスは、cockpit でクリックすれば開けます。ORRERY は Obsidian が無くても使えます。これは便利な使い方の 1 つです。
+Obsidian の vault の中で agent を動かすと、作業ログ・論文ノート・タスクがそのまま Markdown のノートになり、人は Obsidian の Daily Note と Kanban で見るだけで済みます。agent がターミナルに出したノートのパスは、cockpit でクリックすれば開けます。ORRERY は Obsidian が無くても使えます。これは便利な使い方の 1 つです。
 
 ![WSL の Claude に /adddone 論文ノートを見直す と打つと、右の Obsidian の Daily Note で、そのタスクが「タスク」から消え「今日完了した」に出る](docs/images/cockpit_obsidian.gif)
 
@@ -175,7 +188,7 @@ Obsidian の vault の中で agent を動かすと、作業ログ・論文ノー
 
 ### Windows（WSL2）でも同じ画面で
 
-WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同じ画面を使えます。shortcut は `Alt+K` などに、外で開く端末は Windows Terminal に、リンクの開き先は Windows のブラウザとエクスプローラーに切り替わります。エクスプローラーでコピーしたファイルやスクリーンショットも、composer に貼ればパスとして agent に渡せます。
+WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同じ画面を使えます。shortcut は `Alt+K` などに、外で開くターミナルは Windows Terminal に、リンクの開き先は Windows のブラウザとエクスプローラーに切り替わります。エクスプローラーでコピーしたファイルやスクリーンショットも、composer に貼ればパスとして agent に渡せます。
 
 ![WSL で開いた Jump palette。左上に Alt+K と出る](docs/images/cockpit_palette_wsl.png)
 
@@ -183,7 +196,7 @@ WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同
 
 ### ほかにできること
 
-- agent と tmux session を検索して、その端末へ移る（`Cmd+K` / WSL は `Alt+K`）
+- agent と tmux session を検索して、そのターミナルへ移る（`Cmd+K` / WSL は `Alt+K`）
 - composer から送信。送信履歴、`/` か `$` で skill と command の候補、session を消す command や記号の取り違えを送る前に止める送信ガード（[Prompt composer](docs/usage.md#prompt-composer)）
 - cockpit から ORRERY Telemetry の NEW AGENT と一括 EXIT（[NEW AGENT](docs/usage.md#new-agent)）
 - 小さい文字と字間の調整（Vision profile。[配色テーマ](docs/usage.md#配色テーマlight-mode)）
@@ -238,7 +251,7 @@ rm -rf ~/orrery ~/orrery-telemetry
 
 1. **Your first flight** — 初回に右側へ出る7項目のガイドを通します。agent の起動、選択、入力など、画面の説明どおりに操作すると ✓ が付きます。Mail を読んだ項目は `Mark as read` で確認します。閉じたガイドは `Settings → Getting started → Your first flight` から開けます。
 2. **Show help map** — 同じ `Getting started` の `Show help map` を押し、主要な部品の注記を見ながら画面を見回します。`Esc` または画面のクリックで閉じられます。
-3. **Full tour** — 同じ場所の `Full tour` で16段の操作を順に試します。子とのしりとり、端末の配置、Telemetry の EXIT / RESUME、NETWORK / REPLAY から端末への帰還までを案内します。ゲームはガイドの ✓ が付いた後も3往復まで終えます。進行は最初のガイドとは別に保存されます（[Full tour の説明](docs/FULL_TOUR.md)）。
+3. **Full tour** — 同じ場所の `Full tour` で16段の操作を順に試します。子とのしりとり、ターミナルの配置、Telemetry の EXIT / RESUME、NETWORK / REPLAY からターミナルへの帰還までを案内します。ゲームはガイドの ✓ が付いた後も3往復まで終えます。進行は最初のガイドとは別に保存されます（[Full tour の説明](docs/FULL_TOUR.md)）。
 
 普段の操作は、画面内のガイドと help map から始めてください。操作の詳しい参照は[使い方](docs/usage.md)、表示や接続が合わないときは[トラブルシューティング](docs/troubleshooting.md)へ進みます。ガイドで起動する agent は CLI のアカウント利用枠を消費します。
 
@@ -247,6 +260,8 @@ rm -rf ~/orrery ~/orrery-telemetry
 ## 更新・手動導入
 
 更新も上の1行から行えます。cockpit の folder で `./scripts/update.sh` を実行する方法や再起動の条件は[更新手順](docs/install.md#5-更新する)を参照してください。
+
+DeepSeek・dsh / Hermesを新しく追加する場合は、更新後に[初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md)も行ってください。Claude Code / Codexを使うための更新と、APIの接続準備は別の作業です。
 
 手動での clone・venv・backend の起動、Telemetry と同じ project key / Mail DB の設定、desktop app の build と sidecar の設定は[インストール](docs/install.md)と[設定](docs/configuration.md)にまとめています。
 
@@ -279,7 +294,7 @@ ORRERY Python backend
   └─ HTTP proxy ───────── ORRERY Telemetry dashboard (:8770)
 ```
 
-ORRERY backend は ORRERY Telemetry の `server.py` を import せず、HTTP proxy と独自の tmux / mail / portrait handler で連携します。端末入力、window size の claim、spawn、EXIT は状態を変更する操作です。単なる read-only viewer ではありません。
+ORRERY backend は ORRERY Telemetry の `server.py` を import せず、HTTP proxy と独自の tmux / mail / portrait handler で連携します。ターミナル入力、window size の claim、spawn、EXIT は状態を変更する操作です。単なる read-only viewer ではありません。
 
 ## セキュリティとプライバシー
 

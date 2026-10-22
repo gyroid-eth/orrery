@@ -45,6 +45,13 @@ Pick an agent in the roster on the left, give instructions in the terminal in th
 
 Open `+ NEW AGENT` and select a scientist's portrait to generate a name; you can adjust its adjective. Choose a model from Claude, Codex, DeepSeek, or Local models. DeepSeek and Local also offer a dsh / Hermes Harness choice. Available models and harnesses depend on your installed configuration.
 
+**First-time setup for DeepSeek, dsh, and Hermes:** A normal update does not set up API keys or connections. The cockpit has no API-key entry screen. Prepare them in this order:
+
+1. Open Telemetry's [initial setup guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) and add dsh, Hermes, or both from your Telemetry source folder.
+2. For DeepSeek, create an API key or use an existing one. If it is not already saved on this computer, follow the OS-specific steps to save it. For Local, prepare the server's connection details and its own API key if needed.
+3. Review and enable the connection settings following the guide, then run the final install command yourself once to apply them to Telemetry.
+4. Return to the cockpit and select your configured `Model` and `Harness` in `+ NEW AGENT`.
+
 ![The cockpit's own NEW AGENT: scientist portraits and all four families stay visible while switching Claude, Codex, DeepSeek, Local, and Harness. Selection only, before launch](docs/images/cockpit-native-spawn.gif)
 
 This is the cockpit's actual screen and live catalog. Standalone Telemetry has a separate NEW AGENT screen. The animation stops at selection, before launch.
@@ -247,6 +254,8 @@ For everyday controls, start with the in-app guides and help map. [Usage](docs/e
 ## Update and manual setup
 
 The same one line also updates an existing install. See [Update](docs/en/install.md#5-update) for the alternative `./scripts/update.sh` command in the cockpit folder and when to restart.
+
+To add DeepSeek, dsh, or Hermes for the first time, follow the [initial setup guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) after updating. Updating an existing Claude Code / Codex setup does not configure an API connection.
 
 [Installation](docs/en/install.md) and [Configuration](docs/en/configuration.md) cover manual clone / venv / backend setup, matching Telemetry's project key and Mail DB, building the desktop app, and setting its sidecar path.
 

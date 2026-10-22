@@ -16,7 +16,7 @@ ORRERY cockpit は、左の roster、中央の terminal、右の ORRERY Mail rai
 | agent の terminal を開いて指示したい | roster / palette から session を開き、composer で送信 | [Terminal](#terminal)・[Prompt composer](#prompt-composer) |
 | 複数 agent を同時に見たい | `Cmd` / `Ctrl` を押しながら roster tile / session label / pane tab をクリック | [Split](#split) |
 | 一つの terminal を cockpit から出して、別の窓で見たい | session label を terminal の上へ drag すると浮く。cockpit の外（または端）へ drag すると独立の窓になる。pane header の `↗ WINDOW` でも開ける | [独立の窓](#独立の窓) |
-| agent が出した URL やパスを開きたい／手元のファイルを agent に渡したい | 端末の URL・パスをクリック／Finder でコピーしたファイルを composer に貼る | [端末から開く・端末に渡す](#端末から開く端末に渡す) |
+| agent が出した URL やパスを開きたい／手元のファイルを agent に渡したい | ターミナルの URL・パスをクリック／Finder でコピーしたファイルを composer に貼る | [ターミナルから開く・ターミナルに渡す](#ターミナルから開くターミナルに渡す) |
 | 画面を明るい配色にしたい | Settings › Color theme で `Light`（または `System`） | [配色テーマ（light mode）](#配色テーマlight-mode) |
 | Claude / Codex の利用枠の残りを知りたい | header の `LEFT` pill を見る。クリックで window ごとの残量 | [Usage（残量表示）](#usage残量表示) |
 | terminal の過去出力から末尾へ戻りたい | `↓ BOTTOM`、`Cmd+↓`、または active な session label / pane tab を再クリック | [Terminal](#terminal) |
@@ -58,8 +58,8 @@ ORRERY cockpit は、左の roster、中央の terminal、右の ORRERY Mail rai
 | session group の `×` は tmux を kill せず detach、pane tab の `×` は管理 pane の close request | 同じ `×` で意味が異なる | [Terminal](#terminal)・[Split](#split) |
 | composer の `Esc` interrupt、`↑` / `↓` history、`/` か `$` で skill 候補、画像 paste | composer 上部の短い hint のみ | [Prompt composer](#prompt-composer) |
 | session を終える built-in や記号の取り違えを、送信前に止める送信ガード | 該当する入力を送ったときだけ出る | [送信ガード](#送信ガード) |
-| 端末の URL をクリックで browser、パスをクリックで Finder／エクスプローラー | mouse を乗せると下線が出るだけ | [端末から開く・端末に渡す](#端末から開く端末に渡す) |
-| Finder でコピーしたファイルを composer に貼ると絶対パスが入る（drag & drop は無い） | 貼ったあとの toast のみ | [端末から開く・端末に渡す](#端末から開く端末に渡す) |
+| ターミナルの URL をクリックで browser、パスをクリックで Finder／エクスプローラー | mouse を乗せると下線が出るだけ | [ターミナルから開く・ターミナルに渡す](#ターミナルから開くターミナルに渡す) |
+| Finder でコピーしたファイルを composer に貼ると絶対パスが入る（drag & drop は無い） | 貼ったあとの toast のみ | [ターミナルから開く・ターミナルに渡す](#ターミナルから開くターミナルに渡す) |
 | `LEFT` pill のクリックで window ごとの残量と reset、取れないときの理由 | pill には最小の % だけ | [Usage（残量表示）](#usage残量表示) |
 | Settings の Color theme（Dark / Light / System）と Vision profile | Settings を開くまで見えない | [配色テーマ（light mode）](#配色テーマlight-mode) |
 | Split の cell の名札の `×` で、その session だけを外す | 名札に mouse を乗せたときだけ出る | [Split](#split) |
@@ -123,7 +123,7 @@ header の `working` / `waiting` は稼働中 agent の数です。
 - header に `N need you` が出る。クリックするとその agent だけに roster を絞り、もう一度押すと解除する（待っている agent がいなくなると自動で解除）
 - mini-orrery と Planetarium の node の右上に `?`（質問待ち）か `!`（承認待ち）が付く
 
-tile をクリックすればその端末に入り、質問を読んで composer から答えを送れます。答えて agent が動き出すと、点滅と `need you` は消えます。
+tile をクリックすればそのターミナルに入り、質問を読んで composer から答えを送れます。答えて agent が動き出すと、点滅と `need you` は消えます。
 
 ![7体の中で PearlFaraday だけが赤く点滅し、1 need you が出る。need you で絞り込み、tile をクリックして承認の質問を読み、composer から 1 を送ると点滅が消える](images/cockpit_need_you.gif)
 
@@ -212,16 +212,18 @@ backend は起動時に live tmux session ごとに recorder connection を一�
 
 上に scroll して過去の出力を読んでいる間は、新しい出力が来ても末尾へ引き戻しません。backend を再起動すると、cockpit は page を自動で読み直します（composer の下書きは残る）。
 
-## 端末から開く・端末に渡す
+<a id="端末から開く端末に渡す"></a>
 
-agent が端末に出した URL やファイルのパスは、そのままクリックで開けます。逆に、手元のファイルは貼り付けるだけで agent に渡せます。
+## ターミナルから開く・ターミナルに渡す
 
-![端末の URL をクリックすると browser で開き（URL の toast）、パスをクリックすると Finder で表示され（FINDER の toast）、composer にファイルを貼るとパスが入る](images/cockpit_open_paste.gif)
+agent がターミナルに出した URL やファイルのパスは、そのままクリックで開けます。逆に、手元のファイルは貼り付けるだけで agent に渡せます。
+
+![ターミナルの URL をクリックすると browser で開き（URL の toast）、パスをクリックすると Finder で表示され（FINDER の toast）、composer にファイルを貼るとパスが入る](images/cockpit_open_paste.gif)
 
 - **URL をクリック**: 既定の browser で開きます（`https://` と `http://` だけ）
 - **パスをクリック**: `/…` や `~/…` の絶対パスは、Finder（Windows ではエクスプローラー）で表示します。ファイルは選択した状態で、フォルダは開いた状態になります。空白を含むパスも、実在する範囲まで自動でリンクにします。`/compact` のような 1 語や相対パスはリンクになりません
 - **ファイルを貼る**: Finder でファイルをコピーし（`Cmd+C`）、composer で `Cmd+V` を押すと、カーソルの位置にファイルの**絶対パス**が入ります。複数ならスペースで区切り、空白や引用符を含むパスは `'…'` で囲みます。`path → composer`（複数なら `N paths → composer`）と出ます。「このファイルを読んで」と書き足して送れば、agent にファイルを渡せます
-- **画像を貼る**: スクリーンショットなど、ファイルではない画像のデータを貼ると、composer ではなく agent の端末に `Ctrl+V` を送り、CLI 自身に画像を読ませます（`image → <agent>` と出る）。WSL では、画像を PNG に保存してそのパスを composer に入れます
+- **画像を貼る**: スクリーンショットなど、ファイルではない画像のデータを貼ると、composer ではなく agent のターミナルに `Ctrl+V` を送り、CLI 自身に画像を読ませます（`image → <agent>` と出る）。WSL では、画像を PNG に保存してそのパスを composer に入れます
 
 ファイルや画像を cockpit に **drag & drop することはできません**。貼り付けを使います。
 
@@ -244,7 +246,7 @@ Split を一時的に離れて single session を表示しても、member list �
 
 tab strip の `SPLIT n` の右にある `⊞` chip（現在の layout 名を表示）を押すと、その人数で選べる layout の一覧が開きます。2件は ROW / COLUMN、3件は WIDE / MAIN-L / ROW / COLUMN、4件以上は GRID / ROW / COLUMN です。選んだ layout は人数ごとに記憶されます。Split に入っている session の tab には `⊞` の印が付きます。
 
-![3件の Split。SteelCurie、HazelBell、FoggyLavoisier の端末を横に3列並べた ROW layout](images/cockpit_split.png)
+![3件の Split。SteelCurie、HazelBell、FoggyLavoisier のターミナルを横に3列並べた ROW layout](images/cockpit_split.png)
 
 ![`⊞ WIDE` chip から開いた 3 pane layout の一覧](images/cockpit_split_layout.png)
 
@@ -306,7 +308,7 @@ active session を外部 Ghostty で開けます。実装は次の executable �
 
 ## Prompt composer
 
-composer は、端末とは別の入力欄です。端末に直接打つと、他の agent からの通知が同じ端末に流れ込んで書きかけが埋もれますが、composer に打っている文は、端末に何が流れてきてもそのまま残ります。
+composer は、ターミナルとは別の入力欄です。ターミナルに直接打つと、他の agent からの通知が同じターミナルに流れ込んで書きかけが埋もれますが、composer に打っている文は、ターミナルに何が流れてきてもそのまま残ります。
 
 送り先は、そのとき active な pane の agent です（composer の左に顔と名前が出る）。roster の tile や tab をクリックして別の agent を active にすると、送り先だけが切り替わり、打っている文はそのまま持ち越されます。
 
@@ -327,7 +329,7 @@ composer は active pane へ bracketed paste を送り、250 ms 後に carriage 
 
 IME composition 中の Enter は誤送信を避ける guard があります。送信履歴も `localStorage` に保存されます。
 
-`⎋ STOP` は `Esc` と同じ interrupt、`SEND ⏎` は `Enter` と同じ送信です。送ると `sent → <agent>` と出ます。composer の左には送信先の agent の顔と名前が出ます。ファイルを貼るとパスが入ります（[端末から開く・端末に渡す](#端末から開く端末に渡す)）。
+`⎋ STOP` は `Esc` と同じ interrupt、`SEND ⏎` は `Enter` と同じ送信です。送ると `sent → <agent>` と出ます。composer の左には送信先の agent の顔と名前が出ます。ファイルを貼るとパスが入ります（[ターミナルから開く・ターミナルに渡す](#ターミナルから開くターミナルに渡す)）。
 
 ### skill と command の候補
 
@@ -376,6 +378,15 @@ http://127.0.0.1:8791/cockpit.html?session=<session-name>
 `+ NEW AGENT` は ORRERY Telemetry dashboard の spawn API を使います。dashboard が offline の場合、catalog の一部を表示できても spawn は実行できません。
 
 操作するのは cockpit 本体の form です。Telemetry 単体の NEW AGENT とは別の画面です。
+
+DeepSeek・dsh / Hermesを初めて使う場合は、ガイドと同じ次の順で準備します。通常の更新だけではこの準備は完了せず、この画面にもAPIキーの入力欄はありません。
+
+1. Telemetryの[初期設定ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md)を開き、TelemetryのソースフォルダーでdshかHermes（必要なら両方）を追加します。
+2. DeepSeekの場合はAPIキーを取得するか既存のキーを使い、このコンピューターに未保存ならOS別の手順で保存します。Localの場合は、サーバーの接続情報と、必要ならそのサーバー用のキーを用意します。
+3. ガイドに沿って接続設定を確認・有効化し、最後のinstallコマンドを自分で1回実行してTelemetryに反映します。
+4. cockpitに戻り、`+ NEW AGENT`で設定した`Model`と`Harness`を選びます。
+
+**準備が済んだら、次の画面操作に進みます。**
 
 1. `Choose a scientist` の肖像を選ぶか、`AUTO` のままにします。
 2. `Model` で Claude・Codex・DeepSeek・Local models の系統を選び、中央で model を選びます。Local models は検索できます。
@@ -431,7 +442,7 @@ header の `PLANETARIUM`、または mini-orrery 右上の `⤢` で overlay を
 
 ![Planetarium。親の LuckyGoodall から子の BraveTuring と GreenMaxwell へ spawn の線が伸び、親を持たない LimeGalileo は別の木として並ぶ](images/cockpit_planetarium.png)
 
-![PLANETARIUM で木を開き、Mail が届くたびに線が光る。node をクリックするとその端末へ移る](images/cockpit_planetarium.gif)
+![PLANETARIUM で木を開き、Mail が届くたびに線が光る。node をクリックするとそのターミナルへ移る](images/cockpit_planetarium.gif)
 
 node をクリックすると、その agent の terminal へ移り、overlay を閉じます。`Esc`、外側の click、または右上の `⤢` でも閉じます。mini-orrery を Settings で Telemetry network 表示にしていても、Planetarium は常に spawn forest を描きます。Planetarium は cockpit 内の系譜探索です。ORRERY Telemetry dashboard の full NETWORK / DIGEST REPLAY とは役割が異なります。
 
@@ -502,7 +513,7 @@ embed 側で使える機能:
 
 NETWORK の node は agent の選択、edge はその二者間の ORRERY Mail drawer を開きます。gone / retired agent は native roster には出ないため、復活させる場合は TELEMETRY で選択して `RESUME` を実行します。複数 agent の `EXIT` / `RESUME` / `DIGEST REPLAY` も TELEMETRY の `SELECT` から実行できます。
 
-agent panel の `History` タブには、その agent の会話と tool の呼び出し（ファイルの編集 `Edit` の中身を含む。先頭 240 字まで）が時系列で並びます。`Output` タブには、その agent の成果物（作業ログ `LOG_*.md`。最大 25 件）が並び、Obsidian の vault の中のファイルならクリックで Obsidian で開けます。ほかの agent が何を編集したかは、この `History` か、その agent の端末（Split に並べると同時に見られる）で確かめます。
+agent panel の `History` タブには、その agent の会話と tool の呼び出し（ファイルの編集 `Edit` の中身を含む。先頭 240 字まで）が時系列で並びます。`Output` タブには、その agent の成果物（作業ログ `LOG_*.md`。最大 25 件）が並び、Obsidian の vault の中のファイルならクリックで Obsidian で開けます。ほかの agent が何を編集したかは、この `History` か、その agent のターミナル（Split に並べると同時に見られる）で確かめます。
 
 これらは ORRERY native UI の再実装ではなく、ORRERY Telemetry dashboard の機能です。`:8770` が不達の場合は利用できません。
 
@@ -525,7 +536,7 @@ cockpit から dashboard へは、overlay を閉じたときに更新停止（`n
 
 ### TELEMETRY から cockpit で開く
 
-![header の TELEMETRY で DECK を開き、NETWORK で agent を選び、OPEN IN COCKPIT でその端末に戻る](images/cockpit_telemetry.gif)
+![header の TELEMETRY で DECK を開き、NETWORK で agent を選び、OPEN IN COCKPIT でそのターミナルに戻る](images/cockpit_telemetry.gif)
 
 TELEMETRY の `DECK` で card をクリックすると、その agent の panel が開きます。右上の `OPEN IN COCKPIT` を押すと TELEMETRY が閉じ、cockpit でその agent の terminal が開きます。dashboard を単独で開いたとき（`http://127.0.0.1:8770/`）は同じ button が `OPEN TMUX` になり、dashboard の server が terminal の窓を開きます。
 
@@ -567,16 +578,16 @@ Settings で変更できる値:
 
 Settings の `Appearance` › `Color theme` で、`Dark`（既定）・`Light`・`System` を選べます。Light は、紙のような暖かい地の色に、濃い文字を載せた配色です。暗い部屋では Dark、明るい部屋や長時間の読み書きでは Light、というように使い分けられます。
 
-![同じ画面の Dark。2 体の端末を並べた Split と、左の roster、右の Mail](images/cockpit_theme_dark.png)
+![同じ画面の Dark。2 体のターミナルを並べた Split と、左の roster、右の Mail](images/cockpit_theme_dark.png)
 
-![同じ画面の Light。端末・roster・Mail・header がすべて明るい配色になる](images/cockpit_theme_light.png)
+![同じ画面の Light。ターミナル・roster・Mail・header がすべて明るい配色になる](images/cockpit_theme_light.png)
 
 ![Settings を開き、Color theme を Light に替え、また Dark に戻す](images/cockpit_theme_switch.gif)
 
 Light にすると、次がまとめて切り替わります。
 
-- cockpit の画面全体（roster・端末の枠・Mail・mini-orrery・Settings など）
-- **端末の中の配色**。暗い背景を前提に色を付けてくる CLI の出力（diff の赤と緑の背景など）も、文字が読める濃さに自動で補正します
+- cockpit の画面全体（roster・ターミナルの枠・Mail・mini-orrery・Settings など）
+- **ターミナルの中の配色**。暗い背景を前提に色を付けてくる CLI の出力（diff の赤と緑の背景など）も、文字が読める濃さに自動で補正します
 - 埋め込みの TELEMETRY（cockpit が同じ配色を送る）
 - ORRERY.app では、窓の外観と Dock のアイコン
 

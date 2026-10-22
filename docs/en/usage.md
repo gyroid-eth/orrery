@@ -377,6 +377,15 @@ Only during development, `?ws=ws://127.0.0.1:<port>/ws` can override the WebSock
 
 This is the cockpit's own form. Standalone Telemetry has a separate NEW AGENT screen.
 
+For your first DeepSeek, dsh, or Hermes setup, follow the guide in the order below. A normal update does not complete these steps, and this screen has no API-key field.
+
+1. Open Telemetry's [initial setup guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) and add dsh, Hermes, or both from your Telemetry source folder.
+2. For DeepSeek, create an API key or use an existing one. If it is not already saved on this computer, follow the OS-specific steps to save it. For Local, prepare the server's connection details and its own API key if needed.
+3. Review and enable the connection settings following the guide, then run the final install command yourself once to apply them to Telemetry.
+4. Return to the cockpit and select your configured `Model` and `Harness` in `+ NEW AGENT`.
+
+**Once setup is complete, use the form as follows.**
+
 1. Select a portrait under `Choose a scientist`, or leave `AUTO` selected.
 2. Under `Model`, choose Claude, Codex, DeepSeek, or Local models, then select a model in the middle column. Local models can be searched.
 3. Choose a `Harness` on the right. DeepSeek and Local offer the dsh / Hermes entries in your catalog. Unavailable entries show `Coming soon` and cannot be selected.

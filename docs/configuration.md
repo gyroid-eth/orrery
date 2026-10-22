@@ -189,9 +189,9 @@ prompt composer は browser `localStorage` に draft と最大50件の送信履�
 - mail rail と terminal を表示したまま画面共有しない
 - 画面共有や録画では、デモモードを使う
 
-デモモード（Settings の Demo mode、または URL の `?demo=1`。`?demo=0` はそのページだけ切る）は、画面に出るユーザー名と機体名を同じ文字数の `*` で伏せます。伏せるのは、home の path の中のユーザー名（`/Users/<名前>`、`/home/<名前>`、`C:\Users\<名前>`）、`<名前>@` の形、単語として出る機体名です。名前は backend の `GET /telemetry/identity` が `$HOME`・login 名・機体名（WSL では Windows のユーザー名も）から返し、推測はしません。ほかの単語の一部としての名前や、本文に書かれた人の名前は伏せません。伏せるのは表示だけで、agent・記録・Mail の中身は変わらず、端末の path と URL のクリックとコピーは本当の値で動きます。入力欄は本当の値を持ったまま、伏せた文字を重ねて表示します（送る内容・編集・コピーは本当の値）。名前が分かるまでは画面を出さず、backend が名前を返せないときは、画面を隠したまま理由と Retry を表示します（実名の画面に切り替えるには「Open without demo mode」を選ぶ）。Settings の switch は browser の `localStorage` に保存されます。
+デモモード（Settings の Demo mode、または URL の `?demo=1`。`?demo=0` はそのページだけ切る）は、画面に出るユーザー名と機体名を同じ文字数の `*` で伏せます。伏せるのは、home の path の中のユーザー名（`/Users/<名前>`、`/home/<名前>`、`C:\Users\<名前>`）、`<名前>@` の形、単語として出る機体名です。名前は backend の `GET /telemetry/identity` が `$HOME`・login 名・機体名（WSL では Windows のユーザー名も）から返し、推測はしません。ほかの単語の一部としての名前や、本文に書かれた人の名前は伏せません。伏せるのは表示だけで、agent・記録・Mail の中身は変わらず、ターミナルの path と URL のクリックとコピーは本当の値で動きます。入力欄は本当の値を持ったまま、伏せた文字を重ねて表示します（送る内容・編集・コピーは本当の値）。名前が分かるまでは画面を出さず、backend が名前を返せないときは、画面を隠したまま理由と Retry を表示します（実名の画面に切り替えるには「Open without demo mode」を選ぶ）。Settings の switch は browser の `localStorage` に保存されます。
 
-ほかに伏せたい語（Mail の本文に書かれた人の名前、案件の名前など）は、Settings の「Also mask these words」に `,` 区切りで足します（browser の `localStorage` に保存）。足した語もユーザー名と同じように、同じ幅の `*` で、端末の中身まで伏せ、クリックとコピーは本当の値に戻ります。英数字の語は、大文字小文字を区別せず、単語として出たときだけ伏せます（`Kobo` は `kobold` の中では伏せない）。日本語など、それ以外の文字を含む語は、単語の区切りが無いので、どこに出ても伏せます（`ミラノ` を足すと `ミラノさん` の `ミラノ` も伏せる）。1 文字の語は無視します。1 ページだけなら URL の `?mask=語,語` でも渡せますが、URL は履歴や共有に残るので、Settings の欄を使ってください。
+ほかに伏せたい語（Mail の本文に書かれた人の名前、案件の名前など）は、Settings の「Also mask these words」に `,` 区切りで足します（browser の `localStorage` に保存）。足した語もユーザー名と同じように、同じ幅の `*` で、ターミナルの中身まで伏せ、クリックとコピーは本当の値に戻ります。英数字の語は、大文字小文字を区別せず、単語として出たときだけ伏せます（`Kobo` は `kobold` の中では伏せない）。日本語など、それ以外の文字を含む語は、単語の区切りが無いので、どこに出ても伏せます（`ミラノ` を足すと `ミラノさん` の `ミラノ` も伏せる）。1 文字の語は無視します。1 ページだけなら URL の `?mask=語,語` でも渡せますが、URL は履歴や共有に残るので、Settings の欄を使ってください。
 
 保存先と削除後に残る状態は[インストールの「データの置き場所とアンインストール」](install.md#データの置き場所とアンインストール)も参照してください。
 
@@ -237,10 +237,17 @@ local は default な Harness でも札を出します。
 
 ### DeepSeek・Local の標準 New Agent
 
+初めてDeepSeek・dsh / Hermesを使う場合は、ガイドと同じ次の順で準備します。cockpitにAPIキーを入力する画面はなく、通常の更新だけでは未設定の接続先は使えるようになりません。
+
+1. Telemetryの[初期設定ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md)を開き、TelemetryのソースフォルダーでdshかHermes（必要なら両方）を追加します。
+2. DeepSeekの場合はAPIキーを取得するか既存のキーを使い、このコンピューターに未保存ならOS別の手順で保存します。Localの場合は、サーバーの接続情報と、必要ならそのサーバー用のキーを用意します。
+3. ガイドに沿って接続設定を確認・有効化し、最後のinstallコマンドを自分で1回実行してTelemetryに反映します。
+4. cockpitに戻り、`+ NEW AGENT`で設定した`Model`と`Harness`を選びます。
+
 Telemetry API 23 の `deepseek` / `strata` × `dsh` / `hermes` は、Claude・Codex と
 同じ form から Model → Harness → Helper model → Effort の順に選びます。
 Local の送信 provider は `strata` です。名前・親（または standalone）・起動ディレクトリ・
-worktree・端末の選択も共通で、`/telemetry/spawn` 経由で標準の `/api/spawn` に送ります。
+worktree・ターミナルの選択も共通で、`/telemetry/spawn` 経由で標準の `/api/spawn` に送ります。
 親の候補は Claude に限らず、稼働中のすべての agent です。
 
 Helper model は選択した model × harness の catalog にある候補だけを使い、

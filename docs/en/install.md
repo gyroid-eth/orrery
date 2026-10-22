@@ -26,6 +26,17 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - **When something fails**: a check that fails before you type yes means the setup changed nothing (what `get.sh` did before it stays, and the screen says so: a newly downloaded cockpit checkout, or git data fetched into an old one). After that, **nothing is rolled back**: you get a table of what changed since the first attempt and the line that carries on (the first attempt's record, in `~/.orrery-install/`, is kept until a run passes every check). There is no command to go back to the previous version
 - To uninstall a new install, use the printed `<orrery-telemetry checkout>/scripts/uninstall.sh` (the Mail database stays unless `--purge-data`; the 2 checkouts, uv and Python stay). To uninstall, see [Uninstall](../../README.en.md#uninstall) in the README. **Do not use it to undo an update**: it removes the whole install
 
+### First-time setup for DeepSeek, dsh, and Hermes
+
+The update above does not add missing API keys or connection settings. The cockpit has no API-key entry screen. Prepare the connection in ORRERY Telemetry, then select it in the cockpit.
+
+1. Open Telemetry's [initial setup guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) and add dsh, Hermes, or both from your Telemetry source folder.
+2. For DeepSeek, create an API key or use an existing one. If it is not already saved on this computer, follow the OS-specific steps to save it. For Local, prepare the server's connection details and its own API key if needed.
+3. Review and enable the connection settings following the guide, then run the final install command yourself once to apply them to Telemetry.
+4. Return to the cockpit and select your configured `Model` and `Harness` in `+ NEW AGENT`.
+
+On a Mac, run the guide's commands in your terminal application. On Windows, open Ubuntu in WSL and run them there. Use the guide's OS-specific instructions to save the key.
+
 ### Automatic child windows
 
 The one-line installer above, `scripts/setup.sh`, and `scripts/update.sh` default to `AGENTSTACK_AUTO_OPEN_CHILD=0`: child OS terminal windows do not open automatically. You can see children in the cockpit and use `Open tmux` when you need a window. `AGENTSTACK_TERMINAL` is kept. This applies to children started afterwards and does not close existing windows.
@@ -418,6 +429,8 @@ If no agents appear in the list on the left, start one from the cockpit's NEW AG
 - On Windows, agents, the dashboard, and Mail started from Windows Terminal keep running in the background after you close the Ubuntu windows. When you are done and want WSL to give its memory back to Windows, run `wsl --shutdown` in PowerShell. After that, or after restarting the PC, open Ubuntu and check the state with `~/.agentstack/bin/agentstack-doctor`. If something has stopped, start it with `~/.agentstack/dashboard/agentctl.sh start` and `~/.agentstack/bin/agentstack-mailctl start`, and then run `./scripts/start-cockpit.sh` again
 
 #### 5. Update
+
+To add DeepSeek, dsh, or Hermes for the first time, also complete the [initial setup](#first-time-setup-for-deepseek-dsh-and-hermes) after updating. An update alone does not configure API keys or connections.
 
 Run this in the cockpit folder. It brings orrery-telemetry and the cockpit up to date in one go.
 

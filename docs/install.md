@@ -26,6 +26,17 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - **失敗したとき**: 承認の前の検査で止まったときは、setup は何も変えていません（ただし入口の `get.sh` がその前に行ったこと、つまり新しく取得した cockpit の checkout、または従来版の `.git` への取得は残り、画面にそう出ます）。承認の後に失敗したときは**巻き戻しません**。最初の試みの時点と今とで何が変わったかを表で出し、続きから進める 1 行を出します（その表の「最初」は、すべての確認が通るまで上書きされません。`~/.orrery-install/`）。前の版に戻すコマンドは用意していません
 - 新しく入れたものをアンインストールするときは、表示された `<orrery-telemetry の checkout>/scripts/uninstall.sh` を使います（Mail の DB は `--purge-data` を付けない限り残ります。2 つの checkout・uv・Python も残ります）。アンインストールの手順は README の[アンインストール](../README.md#アンインストール)です。**更新の取り消しには使わないでください**（既存の環境ごと取り除きます）
 
+### DeepSeek・dsh / Hermes の初回設定
+
+上の1行で更新しても、未設定のAPIキーや接続先は追加されません。cockpitにはAPIキーを入力する画面はありません。ORRERY Telemetry側で準備してから、cockpitで選びます。
+
+1. Telemetryの[初期設定ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md)を開き、TelemetryのソースフォルダーでdshかHermes（必要なら両方）を追加します。
+2. DeepSeekの場合はAPIキーを取得するか既存のキーを使い、このコンピューターに未保存ならOS別の手順で保存します。Localの場合は、サーバーの接続情報と、必要ならそのサーバー用のキーを用意します。
+3. ガイドに沿って接続設定を確認・有効化し、最後のinstallコマンドを自分で1回実行してTelemetryに反映します。
+4. cockpitに戻り、`+ NEW AGENT`で設定した`Model`と`Harness`を選びます。
+
+ガイドのコマンドは、Macではターミナルアプリ、WindowsではWSLのUbuntuを開いた画面で実行します。キーの保存はガイドにあるOSごとの方法を使います。
+
 ### 子の窓の自動表示
 
 上の 1 行、`scripts/setup.sh`、`scripts/update.sh` では、子の OS ターミナル窓を自動で開く設定の既定を `AGENTSTACK_AUTO_OPEN_CHILD=0` にします。子は cockpit で見られ、必要な窓は `Open tmux` で開けます。`AGENTSTACK_TERMINAL` は変更しません。この設定は次に起動する子から効き、既に開いた窓は閉じません。
@@ -418,6 +429,8 @@ script は 1 回で次を行います。
 - Windows では、Windows Terminal から起動した agent・dashboard・Mail は、Ubuntu の窓を閉じても裏で動き続けます。使い終わって WSL のメモリを Windows に返したいときは、PowerShell で `wsl --shutdown` を打ちます。その後や PC の再起動の後に使うときは、Ubuntu を開き、`~/.agentstack/bin/agentstack-doctor` で状態を見て、止まっていれば `~/.agentstack/dashboard/agentctl.sh start` と `~/.agentstack/bin/agentstack-mailctl start` で起動してから、もう一度 `./scripts/start-cockpit.sh` を実行します
 
 #### 5. 更新する
+
+DeepSeek・dsh / Hermesを初めて追加する場合は、通常の更新後に[初回設定](#deepseekdsh--hermes-の初回設定)も必要です。更新だけではAPIキーや接続先は設定されません。
 
 cockpit の folder で次を実行します。orrery-telemetry と cockpit が 1 回で最新になります。
 
