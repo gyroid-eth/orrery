@@ -4523,9 +4523,9 @@
       }
     }
   },
-  "inventory_digest": "6cd57ab9fec363b6195be29474ffaeec93add3d4082fff09516285e70629e1db",
+  "inventory_digest": "91c07214e6b7fa67a9dd6a7623b91bccdd960bf9d479166999b7ef24155ed444",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "d47d149356d19c04cc7bc54556cf6cfc4bc2d3e66c1d25fba4f7d2f2fc4f7bca",
+  "source_digest": "d626f1620697ad11f280ae9cfbe8ce3b323e7a4491063cd06e23dac9cd6b43da",
   "surface": "cockpit",
   "version": 1
 }
@@ -10197,9 +10197,14 @@ function renderHarnesses(){
     const info=SpawnPicker.harnessInfo(h.id);
     if(info.asset){const img=document.createElement('img');img.src='cockpit-assets/'+info.asset;img.alt='';img.className='spawn-brand'+(['hermes','dsh'].includes(SpawnPicker.harnessKey(h.id))?' harness-art':'');button.append(img);}
     const label=document.createElement('span');label.textContent=(h.default?'Default: ':'')+h.label;button.append(label);
-    if(!h.available){const soon=document.createElement('small');soon.textContent='Coming soon';button.append(soon);}
+    if(!h.available){const note=document.createElement('small');note.textContent=SpawnPicker.unavailableReason(h);button.append(note);}
     button.addEventListener('click',()=>{selHarness=h.id;renderHarnesses();});spawnHarnesses.append(button);
   });
+  if(choices.some(h=>!h.available)){
+    const help=document.createElement('a');help.className='spawn-setup-help';help.textContent='Setup and compatibility guide';
+    help.href='https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md';
+    help.target='_blank';help.rel='noopener noreferrer';spawnHarnesses.append(help);
+  }
   const previous=spawnHelper.value,helpers=p&&model?SpawnPicker.helperModels(p,model,selHarness):[];
   spawnHelper.replaceChildren();
   const same=document.createElement('option');same.value='same';same.textContent='Same as main';spawnHelper.append(same);
@@ -10228,7 +10233,7 @@ function updateSpawnAvailability(){
   const missingEffort=p&&model&&spawnExplicitEffortMissing(p,selModel);
   const ready=Boolean(p&&model&&SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available)&&!missingEffort);
   spawnSubmit.disabled=spawnBusy||!ready;
-  if(!spawnBusy&&['ready','Choose an effort','Choose a model','Coming soon for this model','Telemetry unavailable','Loading model catalog…'].includes(spawnStatus.textContent))spawnStatus.textContent=spawnCatalog&&spawnCatalog.loading?'Loading model catalog…':spawnCatalog&&spawnCatalog.unavailable?'Telemetry unavailable':missingEffort?'Choose an effort':ready?'ready':model?'Coming soon for this model':'Choose a model';
+  if(!spawnBusy&&['ready','Choose an effort','Choose a model','No available harness for this model','Telemetry unavailable','Loading model catalog…'].includes(spawnStatus.textContent))spawnStatus.textContent=spawnCatalog&&spawnCatalog.loading?'Loading model catalog…':spawnCatalog&&spawnCatalog.unavailable?'Telemetry unavailable':missingEffort?'Choose an effort':ready?'ready':model?'No available harness for this model':'Choose a model';
 }
 function renderSpawnSummary(){
   const p=providerById(selProvider),model=selectedSpawnModel(),summary=document.getElementById('spawnSummary');
@@ -10236,7 +10241,7 @@ function renderSpawnSummary(){
   const title=document.createElement('strong');title.textContent=model.id;summary.append(title);
   const h=SpawnPicker.harnesses(p,model).find(h=>h.id===selHarness);
   const effort=effortsForModel(p,selModel);
-  const details=[SpawnPicker.metadata(p,model),h?(h.default?'':'Harness: '+h.label):'Harness: Coming soon',selEffort?'Effort: '+selEffort:effectiveSpawnEffort(p,selModel)?'Effort: Default ('+effectiveSpawnEffort(p,selModel)+')':effort.efforts||effort.source==='unknown'?'Effort: Default':'Effort: Not supported',
+  const details=[SpawnPicker.metadata(p,model),h?(h.default?'':'Harness: '+h.label):'Harness: Unavailable',selEffort?'Effort: '+selEffort:effectiveSpawnEffort(p,selModel)?'Effort: Default ('+effectiveSpawnEffort(p,selModel)+')':effort.efforts||effort.source==='unknown'?'Effort: Default':'Effort: Not supported',
     !spawnHelper.disabled?'Helper: '+spawnHelper.selectedOptions[0].textContent:''];
   details.filter(Boolean).forEach(text=>{const line=document.createElement('span');line.textContent=text;summary.append(line);});
 }

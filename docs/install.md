@@ -6,7 +6,7 @@
 
 ## 1 行で入れる・更新する
 
-Mac のターミナル、または Windows では WSL2 の Ubuntu の中で、次の 1 行を打ちます。orrery-telemetry と cockpit の両方が入り、動作の確認（doctor と、Mail の往復を試す selftest）まで済ませてから、cockpit を**裏で**起動して URL を出し、ブラウザで開きます。窓は返ってくるので、続けて Claude Code を入れる・ログインする、をその窓でできます。すでに入っている人では、同じ 1 行が更新になります（telemetry だけ・古い版・setup.sh の無い従来の版・detached でも）。
+Mac のターミナル、または Windows では WSL2 の Ubuntu の中で、次の 1 行を打ちます。orrery-telemetry と cockpit の両方が入り、動作の確認（doctor と、Mail の往復を試す selftest）まで済ませてから、cockpit を**裏で**起動して URL を出し、ブラウザで開きます。実行後は同じターミナルで、選んだ接続先の準備を続けられます。すでに入っている人では、同じ 1 行が更新になります（telemetry だけ・古い版・setup.sh の無い従来の版・detached でも）。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
@@ -21,7 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - cockpit は専用の tmux server（`tmux -L orrery-cockpit`）で動きます。agent の tmux とは別なので、agent の一覧には出ません。出力を見る: `tmux -L orrery-cockpit attach`（Ctrl-b、d で戻る）。止める: `tmux -L orrery-cockpit kill-server`。もう一度起動する: 同じ 1 行。update のときは、自分が起動した cockpit なら新しい版で起動し直します（それ以外の cockpit は止めずに案内だけ）
 - 確認の selftest が作る試験用の agent 2 つは、cockpit の一覧と network には出しません（dashboard には残ります）
 - 確認は doctor の終了コードで判定します（0 以外なら、出力を画面に出して ready とは言いません）。更新が失敗して「今の版のまま起動」を選んだ run も ready とは言わず、最初の記録を残します
-- 最後に、4 項目が「適用した／すでに同じ／skip」のどれだったか、Mail を新しく入れたか動いているものを使い続けたか、doctor と selftest の結果を出します。Claude Code か Codex が無ければ「基盤のみ準備済み」と出ます
+- 最後に、4項目の適用結果、Mailの扱い、doctorとselftestの結果を出します。共通部分の確認が通ると`ORRERY's base is ready`で始まる案内が出ます。検出したClaude/Codex CLIの名前は表示しますが、ログインやAPI接続は検査していません。DeepSeek/Localを使う人は下の初回設定と実起動確認へ進みます
 - この setup が起動したのではない cockpit が別の版で動いているときは、止めずに「その窓で Ctrl-C して、同じ 1 行をもう一度」と案内します
 - **失敗したとき**: 承認の前の検査で止まったときは、setup は何も変えていません（ただし入口の `get.sh` がその前に行ったこと、つまり新しく取得した cockpit の checkout、または従来版の `.git` への取得は残り、画面にそう出ます）。承認の後に失敗したときは**巻き戻しません**。最初の試みの時点と今とで何が変わったかを表で出し、続きから進める 1 行を出します（その表の「最初」は、すべての確認が通るまで上書きされません。`~/.orrery-install/`）。前の版に戻すコマンドは用意していません
 - 新しく入れたものをアンインストールするときは、表示された `<orrery-telemetry の checkout>/scripts/uninstall.sh` を使います（Mail の DB は `--purge-data` を付けない限り残ります。2 つの checkout・uv・Python も残ります）。アンインストールの手順は README の[アンインストール](../README.md#アンインストール)です。**更新の取り消しには使わないでください**（既存の環境ごと取り除きます）
@@ -31,7 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 上の1行で更新しても、未設定のAPIキーや接続先は追加されません。cockpitにはAPIキーを入力する画面はありません。ORRERY Telemetry側で準備してから、cockpitで選びます。
 
 1. Telemetryの[初期設定ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md)を開き、TelemetryのソースフォルダーでdshかHermes（必要なら両方）を追加します。
-2. DeepSeekの場合はAPIキーを取得するか既存のキーを使い、このコンピューターに未保存ならOS別の手順で保存します。Localの場合は、サーバーの接続情報と、必要ならそのサーバー用のキーを用意します。
+2. DeepSeekの場合はAPIキーを取得するか既存のキーを使い、このコンピューターに未保存ならOS別の手順で保存します。Localの場合は、対応するサーバーの接続情報と専用キーを用意します。現在のORRERY経路はキーの参照が必須で、HermesではHTTPSも必要です。詳しくは同じ初期設定ガイドの対応条件を確認してください。
 3. ガイドに沿って接続設定を確認・有効化し、最後のinstallコマンドを自分で1回実行してTelemetryに反映します。
 4. cockpitに戻り、`+ NEW AGENT`で設定した`Model`と`Harness`を選びます。
 
@@ -71,9 +71,20 @@ cd ~/orrery-telemetry && AGENTSTACK_AUTO_OPEN_CHILD=1 ./scripts/install.sh
 
 ## はじめて入れる人へ（ブラウザで使う・Mac / Windows WSL2）
 
-この節だけで、自分の Mac または Windows 11 の PC に ORRERY を入れ、ブラウザで cockpit を開くところまで進めます。コマンドは 1 つずつコードブロックに分けてあり、上から順にコピーして貼れば通ります。デスクトップアプリ（`ORRERY.app`）は使いません。Mac でもブラウザで開きます。アプリの build や常駐は、「動作環境」以降を参照してください。
+この節で、自分のMacまたはWindows 11のPCにORRERYを入れ、ブラウザでcockpitを開きます。共通の導入を終えたら、選んだ接続先の準備だけを進めます。コマンドは1つずつコードブロックに分けています。デスクトップアプリ（`ORRERY.app`）は使いません。Macでもブラウザで開きます。アプリのbuildや常駐は、「動作環境」以降を参照してください。
 
-**先に用意するもの**: agent を動かすには、Claude Code か Codex CLI にログインできるアカウントが要ります。Claude Code は Claude の有料 plan（Pro・Max・Team・Enterprise）か Console のアカウントが必要で、**無料の claude.ai の plan では使えません**（[公式の説明](https://code.claude.com/docs/en/setup)）。Codex は ChatGPT のアカウントでログインします（[公式の README](https://github.com/openai/codex)）。無料の ChatGPT の plan でも、軽い model の `gpt-6-luna` で agent どうしのしりとりが最後まで通ることを確かめています（使える量は少なめです）。agent の既定の model は、そのアカウントで使えるものから選ばれます。ChatGPT のアカウントは多くの人が持っているので、迷ったら Codex を使ってください。ログインの画面に進む前に、どれを使うか決めておいてください。
+**先に選ぶもの**: Claude Code・Codex CLI・DeepSeek・Local modelsから使う系統を選びます。必要なものは系統ごとに異なります。
+
+| 使う系統 | 準備するもの | 手順 |
+| --- | --- | --- |
+| Claude Code | Claude CodeのCLIとログイン | [Mac](#mac) / [WSL](#windows-11) |
+| Codex CLI | Codex CLIとログイン | [Mac](#mac) / [WSL](#windows-11) |
+| DeepSeek | APIキーとAPI利用残高、dshまたはHermes、接続設定 | [API初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
+| Local models | 対応APIのURL・model ID・サーバー専用キー、dshまたはHermes、接続設定 | [API初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
+
+DeepSeek/Localだけを使う場合、ClaudeやChatGPTへのログインは不要です。dsh/Hermesはどちらか1つから始められます。Node.js 24.2以上が必要なのはdshを選ぶ場合で、Hermesだけなら`--dsh-node`の指定は不要です。API起動は現在、Mailのlegacy modeでのDeepSeek/Local × dsh/Hermesの対応組合せが対象です。任意のAPIとharnessの組合せを保証するものではありません。
+
+**Claude Code / Codexを使う場合のアカウント**: そのCLIにログインできるアカウントを用意します。Claude Code は Claude の有料 plan（Pro・Max・Team・Enterprise）か Console のアカウントが必要で、**無料の claude.ai の plan では使えません**（[公式の説明](https://code.claude.com/docs/en/setup)）。Codex は ChatGPT のアカウントでログインします（[公式の README](https://github.com/openai/codex)）。無料の ChatGPT の plan でも、軽い model の `gpt-6-luna` で agent どうしのしりとりが最後まで通ることを確かめています（使える量は少なめです）。agent の既定の model は、そのアカウントで使えるものから選ばれます。Claude Code/Codexを選ぶ人は、どちらを使うか決めてからログインへ進んでください。
 
 ### 何が入り、どこが変わるか
 
@@ -160,7 +171,9 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 計画の画面が出るので、読んで `yes` と打ち、Enter を押します。数十秒から数分で終わり、ブラウザで cockpit が開きます。足りないもの（git・tmux・curl）があると、何も変えずに止まって入れる方法を表示します。止まったときは、表示された「続け方」の 1 行を打ち直してください。
 
-**3. Codex か Claude Code**（使う方を入れます。迷ったら Codex です。Claude Code だけの人は Codex の部分を、Codex だけの人は Claude Code の部分を飛ばします）
+**3. Claude Code / Codexを使う場合：CLIを入れてログインする**
+
+DeepSeek/Localだけを使う人は、このCLIの手順を飛ばして[API初期設定](#deepseekdsh--hermes-の初回設定)へ進みます。Claude/ChatGPTへのログインは不要です。以下はClaude CodeかCodexを使う人向けで、使う方だけをMacに入れます。
 
 **Codex**（コマンドは Codex の公式の README のものです）
 
@@ -202,7 +215,7 @@ claude
 
 ログインし、最初の質問（文字の見た目・Security notes・フォルダの信頼など）にすべて答えて、入力欄が出たら `/exit` と打ちます。途中で閉じると、cockpit の NEW AGENT で起動した Claude が最初の設定の画面で止まります。
 
-ここまでで、cockpit の `+ NEW AGENT` から agent を起動できます。続いて Obsidian と使う人は、「Obsidian と一緒に使う」へ進んでください。Codex を使う人は、そのあと（Obsidian を使わない人は今）「[Codex の plugin を入れる](#codex-の-plugin-を入れるcodex-を使う人)」も行います。
+Claude Code/Codexを選んだ人は、ここまででcockpitの`+ NEW AGENT`からそのagentを起動できます。続いて Obsidian と使う人は、「Obsidian と一緒に使う」へ進んでください。Codex を使う人は、そのあと（Obsidian を使わない人は今）「[Codex の plugin を入れる](#codex-の-plugin-を入れるcodex-を使う人)」も行います。
 
 ### Windows 11
 
@@ -250,7 +263,9 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 計画の画面が出るので、読んで `yes` と打ち、Enter を押します。数十秒から数分で終わり、cockpit の URL（`http://127.0.0.1:8791/cockpit.html`）が表示されます。Windows のブラウザが自動で開かなければ、その URL を Windows のブラウザに貼ります。足りないものがあると何も変えずに止まるので、表示された「続け方」の 1 行を打ち直してください。
 
-**3. Codex か Claude Code**（使う方を **Ubuntu の中に**入れます。迷ったら Codex です。Claude Code だけの人は Codex の部分を、Codex だけの人は Claude Code の部分を飛ばします。Windows 側に入れた Codex や Claude Code は使われず、その設定も変わりません）
+**3. Claude Code / Codexを使う場合：CLIを入れてログインする**
+
+DeepSeek/Localだけを使う人は、このCLIの手順を飛ばして[API初期設定](#deepseekdsh--hermes-の初回設定)へ進みます。Claude/ChatGPTへのログインは不要です。以下はClaude CodeかCodexを使う人向けで、使う方だけを**Ubuntuの中に**入れます。Windows側のCLIは使いません。
 
 **Codex**（コマンドは Codex の公式の README のものです。Windows 側の npm の `codex`（`/mnt/c/...`）は WSL では動きません）
 
@@ -298,7 +313,7 @@ claude
 
 ログインし（ブラウザが開かなければ、表示された URL を Windows のブラウザに貼ります）、最初の質問にすべて答えて、入力欄が出たら `/exit` と打ちます。
 
-ここまでで、cockpit の `+ NEW AGENT` から agent を起動できます。続いて Obsidian と使う人は、「Obsidian と一緒に使う」へ進んでください。Codex を使う人は、そのあと（Obsidian を使わない人は今）「[Codex の plugin を入れる](#codex-の-plugin-を入れるcodex-を使う人)」も行います。
+Claude Code/Codexを選んだ人は、ここまででcockpitの`+ NEW AGENT`からそのagentを起動できます。続いて Obsidian と使う人は、「Obsidian と一緒に使う」へ進んでください。Codex を使う人は、そのあと（Obsidian を使わない人は今）「[Codex の plugin を入れる](#codex-の-plugin-を入れるcodex-を使う人)」も行います。
 
 ### Obsidian と一緒に使う
 
@@ -364,7 +379,9 @@ cockpit は orrery-telemetry の最新の release に合わせて作っていま
 - `~/.agentstack/bin/agentstack-doctor` が問題を報告しない
 - ブラウザで `http://127.0.0.1:8770/` を開くと orrery-telemetry の dashboard が表示される
 - `curl -s http://127.0.0.1:8770/api/version` に `"api": 2` 以上がある。1 は、この仕組みより前のすべての版（`version` が [最新の release](https://github.com/gyroid-eth/orrery-telemetry/releases/latest) と同じならなおよい）
-- Claude Code の初回設定が済んでいる（`claude` を起動し、text style・ログイン・Security notes・フォルダの信頼まで進めて、通常の入力欄が出たら `/exit`。fullscreen renderer を試すかなど、ほかに一度だけ出る質問にも自分で答えておく）。または Codex CLI にログイン済み（`codex login`）。初回設定の途中で閉じると、NEW AGENT の Claude は初回設定の画面で止まり、起動しません。ORRERY はこれらの質問に代わりに答えません。Windows では **Ubuntu の中に入れたもの**にログインします。Windows 側に入れたものは使われません
+- **選んだ接続先の準備**: Claude Code/Codexを使う場合は、以下のCLI初回設定を終えていること。DeepSeek/Localを使う場合は、[API初期設定ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md)に沿ってdsh/Hermes・キーの保存・接続設定を準備し、実起動を確認します。
+
+Claude Code/Codexを使う場合の確認: Claude Code の初回設定が済んでいる（`claude` を起動し、text style・ログイン・Security notes・フォルダの信頼まで進めて、通常の入力欄が出たら `/exit`。fullscreen renderer を試すかなど、ほかに一度だけ出る質問にも自分で答えておく）。または Codex CLI にログイン済み（`codex login`）。初回設定の途中で閉じると、NEW AGENT の Claude は初回設定の画面で止まり、起動しません。ORRERY はこれらの質問に代わりに答えません。Windows では **Ubuntu の中に入れたもの**にログインします。Windows 側に入れたものは使われません
 
 #### 守ること: 同じマシン・同じユーザー・同じ tmux
 
@@ -383,7 +400,7 @@ git clone https://github.com/gyroid-eth/orrery.git orrery
 cd orrery
 ```
 
-repository が公開される前は、招待を受けた GitHub アカウントでしか取得できません。
+repositoryは[GitHubで公開](https://github.com/gyroid-eth/orrery)されており、このHTTPSの取得に招待やGitHubへのログインは不要です。
 
 Windows では、**Ubuntu のプロンプト（`user@PC:~$`）で**打ちます。置き場所は Ubuntu の home の下（例: `~/orrery`）にします。`/mnt/c/...`（Windows のドライブ）の下は遅く、権限の扱いも違うので避けます。
 
@@ -397,7 +414,7 @@ repository の中で:
 
 script は 1 回で次を行います。
 
-1. 前提の確認（Python 3.10 以上・tmux・orrery-telemetry の設定・project key・dashboard の応答。orrery-telemetry の版が古ければ警告だけ出す）
+1. cockpit単体の前提を確認（Python 3.10以上・tmux・orrery-telemetryの設定・project key・dashboardの応答。共通導入とTelemetryには別途Python 3.11以上が必要。orrery-telemetryの版が古ければ警告だけ出す）
 2. `bridge/.venv` に Python の環境を作り、`bridge/requirements.txt` の package を入れる（初回だけ時間がかかります。2 回目からは変更が無ければ飛ばします）
 3. orrery-telemetry の設定（`~/.agentstack/env.sh` の project key・Mail DB・dashboard の port）を引き継ぐ。`~/.agentstack` や `~/.orrery` の設定 file は書き換えません
 4. backend を**この窓の中で**起動し、応答を確かめてから開く URL を表示する
@@ -471,7 +488,7 @@ script は前提をまとめて確かめ、足りないものを `NG` の行で�
 | `cannot create a venv (ensurepip is missing)` | Ubuntu の Python に venv の部品が無い。表示どおり `sudo apt install python3.X-venv` を入れる（`uv` があれば script はそちらで作るので、この表示は出ません） |
 | `Installing the Python packages failed` | network を確かめて、もう一度実行する |
 
-`note` の行は止まる理由ではありません。たとえば `neither 'claude' nor 'codex' is on PATH` は、NEW AGENT でエージェントを起動できないという意味です。Claude Code か Codex CLI を入れてログインし、script を実行し直します。
+`note`の行だけを理由に止まる必要はありません。`neither 'claude' nor 'codex' is on PATH`は、Claude Code/CodexのCLIを検出できなかった案内です。この2系統を使う人はCLIを導入してログインします。DeepSeek/Localを使う人は[API初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md)と実起動確認へ進みます。doctorやselftestの失敗が表示された場合は、その内容に従って対処してください。
 
 すでに cockpit が同じ port で動いているときは、二重に起動せず、開く URL だけを表示して終わります。
 
@@ -483,16 +500,29 @@ script は前提をまとめて確かめ、足りないものを `NG` の行で�
 
 ### Windows（WSL2）で違うところ
 
-- WSL2 での動作は、Windows 11 と WSL2 の Ubuntu で確認中です（2026-09-28 時点）
+- WSL2では、Ubuntu内のbackendをWindowsのブラウザで開きます。共通導入・cockpit固有の操作・APIと鍵束では確認状況が異なります。[動作環境の表](#動作環境)を参照してください
 - cockpit の中の「窓を開く」ボタンは、Mac の Ghostty の代わりに Windows Terminal（`wt.exe`）のタブを開きます。Windows Terminal が無ければ Microsoft Store から入れます
-- ファイルや画像の貼り付けは WSL2 では使えません。通常のテキストの貼り付けは使えます
+- ファイルや画像は、Windowsのクリップボードを読めるWSL環境で貼り付けられます。backendから`powershell.exe`と`wslpath`が使え、WindowsにログインしたデスクトップのWSLで起動していることが前提です。SSHなどからの起動ではデスクトップのクリップボードを読めない場合があります。[貼り付けの手順とエラーの見方](usage.md#wsl-でのファイル画像の貼り付け)を参照してください
 - `Cmd+K` などの shortcut は `Alt+K` などに変わります。違いの一覧は [使い方の「Windows（WSL2）での違い」](usage.md#windowswsl2での違い) を参照してください
 
 ## 動作環境
 
 `ORRERY.app` の正式な利用対象は macOS です。Python backend は Unix / tmux を前提にしており、macOS 専用 guard はありません。ブラウザで開く使い方は Windows の WSL2（Ubuntu）でも確認中です（[はじめて入れる人へ](#はじめて入れる人へブラウザで使うmac--windows-wsl2)）。それ以外の OS は製品として保証していません。
 
+| 環境・機能 | 提供経路と確認状況 |
+| --- | --- |
+| macOSのcockpit | `ORRERY.app`またはブラウザ。主な利用対象 |
+| Ubuntu WSL2の共通導入 | Telemetryのinstall・Mail・dashboard・既存CLI起動の確認済み経路。cockpit固有の全操作を確認した意味ではない |
+| Ubuntu WSL2のcockpit | ブラウザで利用する経路。Windows TerminalやクリップボードなどWSL固有の操作は確認を継続 |
+| WSL2のDeepSeek/Localと鍵束 | 実装された経路があり、準備手順を案内。新規鍵束準備を含む全組合せの通し確認は未完了 |
+| Windowsネイティブ | cockpitとAPI起動は対象外。Telemetryの実験的helperはMail/dashboardの一部のみ |
+| その他のLinux・headless | Telemetryの利用報告はあるが、cockpitや全サービスの動作を製品として保証しない |
+
+APIの組合せと確認範囲は[Telemetryの対応表](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/managed-catalog.md)で確認できます。利用する機能の条件を確かめてから導入してください。
+
 必須:
+
+以下はcockpit単体の起動要件です。上の共通インストールとTelemetryはPython 3.11以上が必要です。共通installerは適したPythonがなければuvで3.12を用意します。単体の3.10要件だけで共通導入の前提がそろうわけではありません。
 
 - Python 3.10 以上
 - `tmux`
@@ -509,7 +539,7 @@ desktop app の開発・build 時:
 
 - [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry)
 - ORRERY Mail SQLite
-- Claude Code または Codex CLI を動かす tmux セッション
+- 操作するagentのtmuxセッション（Claude Code / Codex CLI / dsh / Hermes）
 
 Node / Rust の version は repository で pin されていません。組織の標準 toolchain を使い、`npm ci` と Cargo build が通る組み合わせを固定してください。
 

@@ -137,7 +137,7 @@ check "lock: says another is running" sh -c 'printf "%s" "$1" | grep -q "Another
 
 # ---------------------------------------------------------------- --mail update without support
 H="$(fresh_home mail)"
-git init --quiet "$WORK/fake-telemetry"
+git init --quiet --initial-branch=master "$WORK/fake-telemetry"
 mkdir -p "$WORK/fake-telemetry/scripts" && printf '#!/bin/sh\nexit 0\n' >"$WORK/fake-telemetry/scripts/install.sh"
 chmod +x "$WORK/fake-telemetry/scripts/install.sh"
 git -C "$WORK/fake-telemetry" add -A && git -C "$WORK/fake-telemetry" -c user.name=t -c user.email=t@t commit --quiet -m t
@@ -256,7 +256,8 @@ if args.kind == "risk":
     print("  Risk: STUB-CANONICAL-RISK can take minutes")
     print("  If one shows orrery-mail as failed afterwards, STUB-RECONNECT.")
 EOF
-git -C "$STUBTEL" init --quiet
+# setup.sh clones Telemetry's master; do not inherit the operator's Git default.
+git -C "$STUBTEL" init --quiet --initial-branch=master
 git -C "$STUBTEL" add -A && git -C "$STUBTEL" -c user.name=t -c user.email=t@t commit --quiet -m stub
 STUBTEL_URL="file://$STUBTEL"
 

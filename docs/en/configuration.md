@@ -219,7 +219,7 @@ A model field overrides the provider field; an omitted model field inherits it.
 | Field | Meaning |
 | --- | --- |
 | `locality` | `cloud` (default) or `local`. Local models share the searchable Local models list. |
-| `harnesses` | Array of `{id, label, available, default}`. Only `available: true` is selectable; unavailable entries show “Coming soon”. Without this array, the existing provider `program` is the single available, default Harness. |
+| `harnesses` | Array of `{id, label, available, default, reason}`. Only `available: true` is selectable. Unavailable entries show a preparation/compatibility explanation based on the fixed reason and a setup-guide link; unknown reasons receive generic guidance. Without this array, the existing provider `program` is the single available, default Harness. |
 | `efforts`, `effort_default` | Supported effort IDs and default. An empty list sends no effort. Existing `model_efforts` / `model_effort_defaults` remain supported. Unsupported levels are dimmed. |
 | `helper_models` | Optional list of model ID strings or `{id, label}` objects. “Same as main” omits `helper_model` in the request. An explicit `none` choice must be supplied by the catalog. |
 | `server`, `context`, `vision` | Optional display metadata; `vision: true` adds a Vision label. `quantization` may also describe a local variant. |

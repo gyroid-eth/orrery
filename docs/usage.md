@@ -390,7 +390,7 @@ DeepSeek・dsh / Hermesを初めて使う場合は、ガイドと同じ次の順
 
 1. `Choose a scientist` の肖像を選ぶか、`AUTO` のままにします。
 2. `Model` で Claude・Codex・DeepSeek・Local models の系統を選び、中央で model を選びます。Local models は検索できます。
-3. 右の `Harness` を選びます。DeepSeek・Local では、カタログにある dsh / Hermes から選びます。利用できない候補は `Coming soon` と表示され、選択できません。
+3. 右の `Harness` を選びます。DeepSeek・Local では、カタログにある dsh / Hermes から選びます。利用できない候補は選択できません。アプリやキー保存先の準備不足、OS・Mail方式の非対応などの案内と、設定ガイドへのリンクが表示されます。
 4. 表示される場合は `Helper model` と `Effort` を確認し、その下で起動先と task を指定します。詳しくは[DeepSeek・Local の標準 New Agent](configuration.md#deepseeklocal-の標準-new-agent)を参照してください。
 
 ![cockpit の NEW AGENT。Curie の肖像と名前、Claude・Codex・DeepSeek・Local models の4系統、DeepSeek の dsh・Hermes 選択肢](images/cockpit-native-spawn.png)

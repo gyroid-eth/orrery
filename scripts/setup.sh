@@ -468,7 +468,7 @@ if [ -n "$agent_cli" ]; then
   ok "agent CLI: ${agent_cli}"
 else
   note "neither 'claude' nor 'codex' runs here. The install works without them;"
-  note "      agents need one of them, installed and logged in (see the end)."
+  note "      choose Claude/Codex with its CLI login, or DeepSeek/Local with dsh/Hermes and API setup."
 fi
 
 if [ "$problems" -gt 0 ]; then
@@ -1177,7 +1177,7 @@ fi
 if [ -n "$agent_cli" ]; then
   ok "agent CLI: ${agent_cli}"
 else
-  note "agent CLI: none -> the base is ready, agents are not yet"
+  note "Claude/Codex CLI: none -> prepare your chosen provider after the shared install"
 fi
 # ORRERY Mail older than this install: the installer's notice (what is
 # missing, the risk, how to reconnect), else the doctor's block. Their wording
@@ -1368,9 +1368,9 @@ if [ "$update_failed" = true ]; then
   say "  you had. Fix what the update reported, then run the same command again."
 elif [ "$checks_ok" = true ]; then
   if [ -n "$agent_cli" ]; then
-    say "  ORRERY is ready."
+    say "  ORRERY's base is ready. Detected Claude/Codex CLI: ${agent_cli}."
   else
-    say "  ORRERY's base is ready. Agents need Claude Code or Codex CLI (next, below)."
+    say "  ORRERY's base is ready. Choose and prepare your provider below."
   fi
 else
   say "  Installed, but not every check passed (WARN above). If you need help,"
@@ -1403,8 +1403,12 @@ case "$action" in
     ;;
 esac
 say ""
+say "  DeepSeek / Local: install dsh or Hermes, save the provider key, and configure the connection:"
+say "    https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md"
+say "  This installer has not verified API credentials or a model connection."
+say ""
 if [ -z "$agent_cli" ]; then
-  say "  Next, in this window: install Claude Code and finish its first-run setup"
+  say "  If you choose Claude Code instead, install it and finish its first-run setup:"
   say "    curl -fsSL https://claude.ai/install.sh | bash"
   say "    claude"
   say "  In claude, go through text style, login, Security notes and trusting the"
