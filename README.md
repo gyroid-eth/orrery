@@ -4,7 +4,7 @@
 
 <img src="app/icons-src/orrery-1024.png" alt="ORRERY icon" width="96">
 
-ORRERY は、複数の Claude Code / Codex の agent をチームとして動かす人のための cockpit です。どの agent が返事を待っているかを窓から窓へ探し回る必要はありません。何体動かしていても、人の判断を待っている agent だけが roster で点滅して一目で分かり、全員のターミナル・agent 同士のやり取り・残りの利用枠を一つの画面で見渡しながら、そのまま指示を送れます。Mac（`ORRERY.app` とブラウザ）と Windows（WSL2 とブラウザ）で使え、[ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) と連携します。
+ORRERY は、Claude Code・Codex CLI・DeepSeek・Local modelsのagentをチームとして扱うcockpitです。DeepSeek・Local modelsは、設定した接続先のモデルをdshまたはHermesで動かします。どの agent が返事を待っているかを窓から窓へ探し回る必要はありません。何体動かしていても、人の判断を待っている agent だけが roster で点滅して一目で分かり、全員のターミナル・agent 同士のやり取り・残りの利用枠を一つの画面で見渡しながら、そのまま指示を送れます。Mac（`ORRERY.app` とブラウザ）と Windows（WSL2 とブラウザ）で使え、[ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) と連携します。
 
 ## クイックスタート
 
@@ -14,7 +14,18 @@ ORRERY は 2 つでできています。**cockpit**（この repository。ター
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
 ```
 
-表示される計画を読んで承認し、doctor と Mail の selftest が成功したことを確かめます。Claude Code か Codex CLI を同じ OS 環境でログイン済みにしてから、表示された cockpit の URL（既定は `http://127.0.0.1:8791/cockpit.html`）を開きます。CLI が無ければ installer の完了だけでは agent を動かせません。前提条件、変更する設定、手動での導入は[インストール](docs/install.md)を参照してください。
+表示される計画を読んで承認し、doctorとMailのselftestが成功したことを確かめ、表示されたcockpitのURL（既定は`http://127.0.0.1:8791/cockpit.html`）を開きます。共通の導入後は、使う系統に応じて準備します。4系統すべてを使う必要はありません。
+
+| 使う系統 | 準備するもの | 手順 |
+| --- | --- | --- |
+| Claude Code | Claude CodeのCLIとログイン | [Mac](docs/install.md#mac) / [WSL](docs/install.md#windows-11) |
+| Codex CLI | Codex CLIとログイン | [Mac](docs/install.md#mac) / [WSL](docs/install.md#windows-11) |
+| DeepSeek | APIキーとAPI利用残高、dshまたはHermes、接続設定 | [API初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
+| Local models | サーバーURL・model ID・必要な専用キー、dshまたはHermes、接続設定 | [API初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
+
+DeepSeek/Localだけを使う場合、ClaudeやChatGPTへのログインは不要です。dsh/Hermesはどちらか1つから始められます。Node.js 24.2以上が必要なのはdshを選ぶ場合で、Hermesだけなら`--dsh-node`の指定は不要です。API起動は現在、Mailのlegacy modeでのDeepSeek/Local × dsh/Hermesの対応組合せが対象です。任意のAPIとharnessの組合せを保証するものではありません。
+
+installerの「基盤のみ準備済み」やCLIなしの案内は、Claude Code/Codex CLIの検出結果に基づきます。DeepSeek/Localの準備と接続成功は、リンク先ガイドの実起動で確認します。共通基盤の導入と、選んだ接続先が使えることの確認を分けて進めてください。
 
 cockpit から入れると、子の OS ターミナル窓は既定では自動で開きません（`AGENTSTACK_AUTO_OPEN_CHILD=0`）。選択済みの設定は引き継ぎ、必要な窓は `Open tmux` で開けます。自動表示を有効にする手順と、古い設定・同値の env の扱いは[子の窓の自動表示](docs/install.md#子の窓の自動表示)を参照してください。
 

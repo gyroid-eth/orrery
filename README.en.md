@@ -4,7 +4,7 @@
 
 <img src="app/icons-src/orrery-1024.png" alt="ORRERY icon" width="96">
 
-ORRERY is a cockpit for people who run multiple Claude Code / Codex agents as a team. You do not have to hunt from window to window for the agent that is waiting for your reply. However many agents you run, only the ones waiting for a human decision blink in the roster so you can spot them at a glance, and you see every terminal, the traffic between agents, and your remaining usage quota on one screen while sending instructions from the same place. It runs on Mac (`ORRERY.app` and a browser) and on Windows (WSL2 and a browser), and works with [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry).
+ORRERY is a cockpit for teams using Claude Code, Codex CLI, DeepSeek, or Local models. DeepSeek and Local agents use dsh or Hermes with a configured API connection. You do not have to hunt from window to window for the agent that is waiting for your reply. However many agents you run, only the ones waiting for a human decision blink in the roster so you can spot them at a glance, and you see every terminal, the traffic between agents, and your remaining usage quota on one screen while sending instructions from the same place. It runs on Mac (`ORRERY.app` and a browser) and on Windows (WSL2 and a browser), and works with [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry).
 
 ## Quick start
 
@@ -14,7 +14,18 @@ ORRERY is made of two parts: the **cockpit** (this repository: the screen where 
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
 ```
 
-Read and confirm the plan, and check that doctor and the Mail selftest succeeded. Sign in to Claude Code or Codex CLI in the same OS environment, then open the printed cockpit URL (default: `http://127.0.0.1:8791/cockpit.html`). Without a CLI, completing the installer does not make agents available. See [Installation](docs/en/install.md) for prerequisites, settings changes, and manual setup.
+Read and confirm the plan, check that doctor and the Mail selftest succeeded, and open the printed cockpit URL (default: `http://127.0.0.1:8791/cockpit.html`). After the shared installation, prepare the provider family you want to use. You do not need all four.
+
+| Provider family | What to prepare | Steps |
+| --- | --- | --- |
+| Claude Code | Claude Code CLI and sign-in | [Mac](docs/en/install.md#mac) / [WSL](docs/en/install.md#windows-11) |
+| Codex CLI | Codex CLI and sign-in | [Mac](docs/en/install.md#mac) / [WSL](docs/en/install.md#windows-11) |
+| DeepSeek | An API key and API balance, dsh or Hermes, and connection settings | [API setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) |
+| Local models | Server URL, model ID, its own key if needed, dsh or Hermes, and connection settings | [API setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) |
+
+DeepSeek and Local do not require a Claude or ChatGPT login. Start with either dsh or Hermes. Node.js 24.2 or newer is needed for dsh; Hermes alone does not need `--dsh-node`. API launches currently support the DeepSeek/Local × dsh/Hermes combinations in Mail legacy mode, rather than arbitrary API and harness combinations.
+
+The installer's base-ready and missing-CLI messages come from its Claude Code/Codex CLI check. Use the linked guide's launch check to confirm that DeepSeek or Local is configured and connects successfully. Installing the shared base and verifying your chosen connection are separate steps.
 
 Installing through the cockpit defaults to keeping child OS terminal windows closed (`AGENTSTACK_AUTO_OPEN_CHILD=0`). Previously selected settings are kept, and `Open tmux` still opens a window when you need one. See [Automatic child windows](docs/en/install.md#automatic-child-windows) to enable automatic opening and for the treatment of older settings and equal environment values.
 

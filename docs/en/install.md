@@ -6,7 +6,7 @@
 
 ## Install or update with one line
 
-In a Mac terminal, or inside WSL2 Ubuntu on Windows, run this one line. It installs both orrery-telemetry and the cockpit, checks that they work (doctor, and a selftest that sends Mail both ways), then starts the cockpit **in the background**, prints its URL and opens the browser. The window comes back, so you can install Claude Code and log in right there. Where ORRERY is already (partly) installed, the same line updates it (telemetry only, an old version, an old checkout without setup.sh, a detached HEAD).
+In a Mac terminal, or inside WSL2 Ubuntu on Windows, run this one line. It installs both orrery-telemetry and the cockpit, checks that they work (doctor, and a selftest that sends Mail both ways), then starts the cockpit **in the background**, prints its URL and opens the browser. The command returns to the prompt, so you can continue preparing your chosen provider in the same terminal. Where ORRERY is already (partly) installed, the same line updates it (telemetry only, an old version, an old checkout without setup.sh, a detached HEAD).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
@@ -21,7 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - The cockpit runs in a tmux server of its own (`tmux -L orrery-cockpit`), apart from the agents' tmux, so it never shows up as an agent. Its output: `tmux -L orrery-cockpit attach` (Ctrl-b, d to leave). Stop it: `tmux -L orrery-cockpit kill-server`. Start it again: the same line. On an update, a cockpit this setup started is restarted on the new version (any other cockpit is left running, with a note)
 - The 2 test agents the selftest makes are not shown in the cockpit's roster and network (the dashboard still lists them)
 - The doctor's exit status decides (anything but 0 is shown and is not ready). A run whose update failed is never ready either, even if you start what you have
-- At the end it shows, for each of the 4 changes, applied / already the same / skipped; whether Mail was set up or the running one kept; and the doctor and selftest results. Without Claude Code or Codex it says the base is ready, agents are not yet
+- At the end it shows, for each of the 4 changes, applied / already the same / skipped; whether Mail was set up or the running one kept; and the doctor and selftest results. When neither Claude Code nor Codex CLI is detected, it says the base is ready, agents are not yet. This check does not assess DeepSeek/Local setup; API users continue with the initial setup and launch check below
 - If a cockpit of another version that this setup did not start is already running, it is not stopped; you are told to press Ctrl-C in its window and run the same line again
 - **When something fails**: a check that fails before you type yes means the setup changed nothing (what `get.sh` did before it stays, and the screen says so: a newly downloaded cockpit checkout, or git data fetched into an old one). After that, **nothing is rolled back**: you get a table of what changed since the first attempt and the line that carries on (the first attempt's record, in `~/.orrery-install/`, is kept until a run passes every check). There is no command to go back to the previous version
 - To uninstall a new install, use the printed `<orrery-telemetry checkout>/scripts/uninstall.sh` (the Mail database stays unless `--purge-data`; the 2 checkouts, uv and Python stay). To uninstall, see [Uninstall](../../README.en.md#uninstall) in the README. **Do not use it to undo an update**: it removes the whole install
@@ -71,9 +71,20 @@ The rest of this section installs step by step by hand.
 
 ## For first-time installers (browser, Mac / Windows WSL2)
 
-This section alone takes you from nothing to ORRERY installed on your own Mac or Windows 11 PC and the cockpit open in a browser. Each command is in its own code block, and copying and pasting them in order works. It does not use the desktop app (`ORRERY.app`). Even on a Mac, you open it in the browser. For building or keeping the app running, see "Requirements" and the sections after it.
+This section takes you from installing ORRERY on your Mac or Windows 11 PC to opening the cockpit in a browser. After the shared installation, follow only the preparation steps for your chosen provider. Each command is in its own code block. This procedure uses the browser, including on a Mac, rather than the desktop app (`ORRERY.app`). For building or keeping the app running, see "Requirements" and the sections after it.
 
-**Get this ready first**: to run agents you need an account that can sign in to Claude Code or Codex CLI. Claude Code needs a paid Claude plan (Pro, Max, Team, Enterprise) or a Console account, and **the free claude.ai plan does not include it** ([official setup page](https://code.claude.com/docs/en/setup)). Codex signs in with a ChatGPT account ([official README](https://github.com/openai/codex)). We have checked that even a free ChatGPT plan runs a full agent-to-agent word-chain game with the light model `gpt-6-luna` (its usage allowance is small). The agents' default model is chosen from the models that account can use. Most people already have a ChatGPT account, so if you are unsure, use Codex. Decide which one you will use before you reach the sign-in screen.
+**Choose a provider first**: choose Claude Code, Codex CLI, DeepSeek, or Local models. Each has its own requirements.
+
+| Provider family | What to prepare | Steps |
+| --- | --- | --- |
+| Claude Code | Claude Code CLI and sign-in | [Mac](#mac) / [WSL](#windows-11) |
+| Codex CLI | Codex CLI and sign-in | [Mac](#mac) / [WSL](#windows-11) |
+| DeepSeek | An API key and API balance, dsh or Hermes, and connection settings | [API setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) |
+| Local models | Server URL, model ID, its own key if needed, dsh or Hermes, and connection settings | [API setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) |
+
+DeepSeek and Local do not require a Claude or ChatGPT login. Start with either dsh or Hermes. Node.js 24.2 or newer is needed for dsh; Hermes alone does not need `--dsh-node`. API launches currently support the DeepSeek/Local × dsh/Hermes combinations in Mail legacy mode, rather than arbitrary API and harness combinations.
+
+**Accounts for Claude Code / Codex users**: prepare an account that can sign in to the CLI you choose. Claude Code needs a paid Claude plan (Pro, Max, Team, Enterprise) or a Console account, and **the free claude.ai plan does not include it** ([official setup page](https://code.claude.com/docs/en/setup)). Codex signs in with a ChatGPT account ([official README](https://github.com/openai/codex)). We have checked that even a free ChatGPT plan runs a full agent-to-agent word-chain game with the light model `gpt-6-luna` (its usage allowance is small). The agents' default model is chosen from the models that account can use. If you choose Claude Code or Codex, decide which CLI to use before continuing to sign-in.
 
 ### What is installed, and what changes
 
@@ -160,7 +171,9 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 A plan appears. Read it, type `yes`, and press Enter. It takes from tens of seconds to a few minutes, and the cockpit opens in your browser. If something is missing (git, tmux, curl), it changes nothing, stops, and shows how to install it. When it stops, run the one "how to continue" line it shows.
 
-**3. Codex or Claude Code** (install the one you will use; if unsure, Codex. If you use Claude Code only, skip the Codex part; if you use Codex only, skip the Claude Code part)
+**3. If you use Claude Code / Codex: install and sign in to your CLI**
+
+If you only use DeepSeek or Local, skip these CLI steps and follow [API setup](#first-time-setup-for-deepseek-dsh-and-hermes). No Claude or ChatGPT login is needed. The instructions below are for Claude Code/Codex users; install only the one you use on your Mac.
 
 **Codex** (the commands are from Codex's official README)
 
@@ -202,7 +215,7 @@ claude
 
 Sign in, answer every first-run question (text style, security notes, trusting the folder, and so on), and when the input prompt appears, type `/exit`. If you close it halfway, a Claude started from NEW AGENT in the cockpit stops at the first-run screen.
 
-From here, `+ NEW AGENT` in the cockpit starts agents. If you use Obsidian, continue with "Using it with Obsidian". If you use Codex, also do "[Install the Codex plugin](#install-the-codex-plugin-if-you-use-codex)" after that (now, if you do not use Obsidian).
+If you chose Claude Code or Codex, you can now start that agent from `+ NEW AGENT` in the cockpit. If you use Obsidian, continue with "Using it with Obsidian". If you use Codex, also do "[Install the Codex plugin](#install-the-codex-plugin-if-you-use-codex)" after that (now, if you do not use Obsidian).
 
 ### Windows 11
 
@@ -250,7 +263,9 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 A plan appears. Read it, type `yes`, and press Enter. It takes from tens of seconds to a few minutes, and the cockpit URL (`http://127.0.0.1:8791/cockpit.html`) is printed. If your Windows browser does not open by itself, paste that URL into it. If something is missing, it changes nothing and stops, so run the one "how to continue" line it shows.
 
-**3. Codex or Claude Code** (install the one you will use, **inside Ubuntu**; if unsure, Codex. If you use Claude Code only, skip the Codex part; if you use Codex only, skip the Claude Code part. A Codex or Claude Code installed on the Windows side is not used, and its settings do not change)
+**3. If you use Claude Code / Codex: install and sign in to your CLI**
+
+If you only use DeepSeek or Local, skip these CLI steps and follow [API setup](#first-time-setup-for-deepseek-dsh-and-hermes). No Claude or ChatGPT login is needed. The instructions below are for Claude Code/Codex users; install only the one you use **inside Ubuntu**. Do not use a Windows-side CLI.
 
 **Codex** (the commands are from Codex's official README. A `codex` from Windows' npm (`/mnt/c/...`) does not work from WSL)
 
@@ -298,7 +313,7 @@ claude
 
 Sign in (if no browser opens, paste the URL it shows into your Windows browser), answer every first-run question, and when the input prompt appears, type `/exit`.
 
-From here, `+ NEW AGENT` in the cockpit starts agents. If you use Obsidian, continue with "Using it with Obsidian". If you use Codex, also do "[Install the Codex plugin](#install-the-codex-plugin-if-you-use-codex)" after that (now, if you do not use Obsidian).
+If you chose Claude Code or Codex, you can now start that agent from `+ NEW AGENT` in the cockpit. If you use Obsidian, continue with "Using it with Obsidian". If you use Codex, also do "[Install the Codex plugin](#install-the-codex-plugin-if-you-use-codex)" after that (now, if you do not use Obsidian).
 
 ### Using it with Obsidian
 
@@ -364,7 +379,9 @@ You are ready when all four of these are true:
 - `~/.agentstack/bin/agentstack-doctor` reports no problems
 - Opening `http://127.0.0.1:8770/` in a browser shows the orrery-telemetry dashboard
 - `curl -s http://127.0.0.1:8770/api/version` reports `"api": 2` or higher; 1 means any release from before this scheme (ideally with the same `version` as the [latest release](https://github.com/gyroid-eth/orrery-telemetry/releases/latest))
-- Claude Code's first-run setup is finished (start `claude` and go through text style, login, Security notes and trusting the folder until the normal input prompt appears, answer any other one-time question it asks, such as trying the fullscreen renderer, then `/exit`), or you are logged in to Codex CLI (`codex login`). If the setup was left halfway, a Claude agent from NEW AGENT stops on the setup screen and does not start. ORRERY never answers these questions for you. On Windows, log in to the copy **installed inside Ubuntu**. A copy installed on the Windows side is not used
+- **Your chosen provider is prepared**: Claude Code/Codex users finish the CLI setup described below. DeepSeek/Local users follow [API setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) to prepare dsh/Hermes, key storage, and connection settings, then verify a launch.
+
+For Claude Code/Codex users: Claude Code's first-run setup is finished (start `claude` and go through text style, login, Security notes and trusting the folder until the normal input prompt appears, answer any other one-time question it asks, such as trying the fullscreen renderer, then `/exit`), or you are logged in to Codex CLI (`codex login`). If the setup was left halfway, a Claude agent from NEW AGENT stops on the setup screen and does not start. ORRERY never answers these questions for you. On Windows, log in to the copy **installed inside Ubuntu**. A copy installed on the Windows side is not used
 
 #### What to keep the same: same machine, same user, same tmux
 
@@ -471,7 +488,7 @@ The script checks the prerequisites all at once, shows what is missing on lines 
 | `cannot create a venv (ensurepip is missing)` | The Ubuntu Python lacks the venv components. Install `sudo apt install python3.X-venv` as shown (if `uv` is available the script uses it to create the environment, so this message does not appear) |
 | `Installing the Python packages failed` | Check your network and run it again |
 
-A line marked `note` is not a reason to stop. For example, `neither 'claude' nor 'codex' is on PATH` means agents cannot be started from NEW AGENT. Install Claude Code or Codex CLI, log in, and run the script again.
+A `note` line alone does not mean setup has failed. `neither 'claude' nor 'codex' is on PATH` reports that the Claude Code/Codex CLIs were not found. Users of those two families install their CLI and sign in. DeepSeek/Local users continue with [API setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) and a launch check. If doctor or the selftest reports a failure, address that failure as directed.
 
 If a cockpit is already running on the same port, the script does not start a second one; it only prints the URL to open and exits.
 
@@ -509,7 +526,7 @@ To use all features:
 
 - [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry)
 - ORRERY Mail SQLite
-- A tmux session running Claude Code or Codex CLI
+- A tmux session for the agent you operate (Claude Code, Codex CLI, dsh, or Hermes)
 
 The Node and Rust versions are not pinned in the repository. Use your organization's standard toolchain and fix a combination for which `npm ci` and the Cargo build both pass.
 
