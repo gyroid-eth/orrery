@@ -4523,9 +4523,9 @@
       }
     }
   },
-  "inventory_digest": "91c07214e6b7fa67a9dd6a7623b91bccdd960bf9d479166999b7ef24155ed444",
+  "inventory_digest": "97bf1919ecf0a33bb4d5c45707d14084df31b6b029c46b00bc863a8cb032cd64",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "d626f1620697ad11f280ae9cfbe8ce3b323e7a4491063cd06e23dac9cd6b43da",
+  "source_digest": "60f1e8d88411f01819aba70fbd1b0d66d009de8039e5e43b41fbd6e964e11326",
   "surface": "cockpit",
   "version": 1
 }
@@ -9073,21 +9073,24 @@ function usageBalanceLow(prov){
   return prov.status==='ok'&&prov.balance&&prov.balance.total_balance!==null
     &&Number(usageUsd(prov.balance.total_balance,0))<USAGE_BALANCE_LOW;
 }
-function usageProviderName(p){return p==='claude'?'Claude':p==='codex'?'Codex':p==='dsh'?'DeepSeek':p;}
-const USAGE_LOGO={claude:'assets/anthropic.svg',codex:'assets/openai.svg',dsh:'cockpit-assets/deepseek.svg'};
+function usageProviderName(p){return p==='claude'?'Claude':p==='codex'?'Codex':p==='antigravity'?'Antigravity (Gemini)':p==='dsh'?'DeepSeek':p;}
+const USAGE_LOGO={claude:'assets/anthropic.svg',codex:'assets/openai.svg',antigravity:'cockpit-assets/google.svg',dsh:'cockpit-assets/deepseek.svg'};
 function usageMainWindows(prov){return prov.windows.filter(w=>!w.extra);}
-function usageBinding(prov){      /* the ordinary window with the least left: what actually limits the next task */
-  return usageMainWindows(prov).slice().sort((a,b)=>a.remaining_percent-b.remaining_percent)[0]||null;}
+function usageBinding(prov){      /* Antigravity reports named pools only; use its tightest available quota. */
+  const windows=prov.provider==='antigravity'?prov.windows:usageMainWindows(prov);
+  return windows.slice().sort((a,b)=>a.remaining_percent-b.remaining_percent)[0]||null;}
 function renderUsagePill(){
   const pill=document.getElementById('usageBtn');
   pill.classList.toggle('stale',!!usageData&&usageData.providers.filter(usageShown).some(p=>p.status==='stale'));
-  const balanceProvider=usageData&&usageData.providers.find(p=>p.provider==='dsh'&&p.measurement_kind==='balance');
-  let balanceSlot=pill.querySelector('[data-provider="dsh"]');
-  if(balanceProvider&&!balanceSlot){
-    balanceSlot=document.createElement('span');balanceSlot.className='up-p';balanceSlot.dataset.provider='dsh';
-    const logo=document.createElement('img');logo.className='up-logo';logo.src=USAGE_LOGO.dsh;logo.alt='DeepSeek';
-    balanceSlot.append(logo,document.createElement('b'));pill.appendChild(balanceSlot);
-  }else if(!balanceProvider&&balanceSlot)balanceSlot.remove();
+  for(const provider of ['antigravity','dsh']){
+    const reported=usageData?.providers.some(p=>p.provider===provider);
+    let slot=pill.querySelector(`[data-provider="${provider}"]`);
+    if(reported&&!slot){
+      slot=document.createElement('span');slot.className='up-p';slot.dataset.provider=provider;
+      const logo=document.createElement('img');logo.className='up-logo';logo.src=USAGE_LOGO[provider];logo.alt=usageProviderName(provider);
+      slot.append(logo,document.createElement('b'));pill.appendChild(slot);
+    }else if(!reported&&slot)slot.remove();
+  }
   for(const slot of pill.querySelectorAll('.up-p')){
     const prov=usageData&&usageData.providers.find(p=>p.provider===slot.dataset.provider);
     slot.hidden=usageHidden.has(slot.dataset.provider);
@@ -9104,7 +9107,7 @@ function renderUsagePill(){
     slot.classList.toggle('none',!bind);
     for(const t of ['warn','low'])slot.classList.toggle(t,!!bind&&usageTier(bind.remaining_percent)===t);
     b.textContent=bind?Math.round(bind.remaining_percent)+'%':'—';
-    slot.title=bind?`${usageProviderName(prov.provider)} ${bind.label}: ${Math.round(bind.remaining_percent)}% left`
+    slot.title=bind?`${usageProviderName(prov.provider)} ${bind.limit?bind.limit+' · ':''}${bind.label}: ${Math.round(bind.remaining_percent)}% left`
       +(bind.resets_at?`, resets in ${usageUntil(bind.resets_at)}`:''):(prov?USAGE_REASON[prov.reason]||'unavailable':'waiting for update');
   }
 }
@@ -9162,6 +9165,7 @@ function renderUsagePopover(){
     for(const [name,ws] of groups){
       const sub=document.createElement('div');sub.className='up-sub';
       sub.innerHTML=`<span>ADDITIONAL LIMIT</span><span class="up-subname"></span>`;
+      if(prov.provider==='antigravity')sub.querySelector('span').textContent='MODEL GROUP';
       sub.querySelector('.up-subname').textContent=name;sec.appendChild(sub);
       if(ws.every(w=>w.remaining_percent>=100)){
         const u=document.createElement('div');u.className='up-untouched';
@@ -9170,7 +9174,7 @@ function renderUsagePopover(){
       ws.forEach(w=>d.appendChild(usageDial(w)));sec.appendChild(d);}
     return sec;}));
   const foot=document.createElement('div');foot.className='up-foot';
-  foot.textContent='Claude from the OAuth usage endpoint with the token Claude Code keeps · Codex from the app server. Read-only; refreshed every minute.'+(providers.some(p=>p.measurement_kind==='balance')?' DeepSeek account balance from ORRERY Telemetry.':'');
+  foot.textContent='Claude from the OAuth usage endpoint with the token Claude Code keeps · Codex from the app server. Read-only; refreshed every minute.'+(providers.some(p=>p.provider==='antigravity')?' Antigravity quotas from ORRERY Telemetry.':'')+(providers.some(p=>p.measurement_kind==='balance')?' DeepSeek account balance from ORRERY Telemetry.':'');
   body.appendChild(foot);
 }
 async function pollUsage(force){

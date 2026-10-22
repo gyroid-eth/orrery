@@ -153,12 +153,13 @@ header の Settings の左にある `LEFT  CLAUDE 41%  CODEX 47%` の pill は�
 
 pill をクリックすると `Usage left` が開き、provider が返した window を円弧の dial で、reset までの時間つきで並べます。
 
-Settings の `Usage` で、Claude・Codex・DeepSeekなどのproviderごとに表示を切り替えられます。`LEFT` pillと`Usage left`の両方に反映され、非表示の選択はこのbrowserに保存されます。後から追加されたproviderは既定で表示されます。DeepSeekの残高が$5未満の場合は、pillと残高行を低残量と同じ赤で表示します。$5以上や残高不明時の色は変えません。
+Settings の `Usage` で、Claude・Codex・Antigravity（Gemini を含む）・DeepSeekなどのproviderごとに表示を切り替えられます。`LEFT` pillと`Usage left`の両方に反映され、非表示の選択はこのbrowserに保存されます。後から追加されたproviderは既定で表示されます。DeepSeekの残高が$5未満の場合は、pillと残高行を低残量と同じ赤で表示します。$5以上や残高不明時の色は変えません。
 
 ![Usage left。Claude は 5H 64%・7D 41%・FABLE 18%、Codex は 5H 88%・7D 47%。Codex の追加枠 Spark は untouched](images/cockpit_usage_popover.png)
 
 - **Claude**: `5h`（5 時間の枠）、`7d`（週の枠）、モデル別の週の枠（`FABLE` など。サーバーが返したときだけ）
 - **Codex**: `5h`、`7d`。Spark などの名前付きの追加枠は `ADDITIONAL LIMIT` の下に分けて出し、pill の値には使いません。追加枠を全く使っていないときは `untouched · 5h / 7d at 100% left` の 1 行にまとめます
+- **Antigravity（Gemini）**: Telemetry が提供するときだけ表示します。`Gemini Models`、`Claude and GPT models`、`Gemini 4 Argon` などの独立した枠を `MODEL GROUP` ごとに表示し、pill は取得できた枠のうち最も残量が少ない割合です。どの枠が適用されるかは使うモデルによって異なります
 - 数字と輪の色: 50% より上は緑、50% 以下で黄、20% 以下で赤
 - 各 dial の下は reset までの時間（`in 2h 59m`、`in 3d`）。見出しの右は、いちばん早い reset の時刻
 
@@ -168,6 +169,7 @@ Settings の `Usage` で、Claude・Codex・DeepSeekなどのproviderごとに�
 
 - Claude: Claude Code が保持している OAuth token で、Anthropic の usage endpoint を読みます（token は読むだけで、更新や書き戻しはしない）
 - Codex: `codex app-server` の `account/rateLimits/read`
+- Antigravity: ORRERY Telemetry が読み取り専用の `agy -p /usage` で取得した枠を再利用します（cockpit 自身からの追加問い合わせなし）
 - cockpit は 1 分ごと（tab が見えている間）、pill を開いたとき、tab に戻ったときに読み直します。ORRERY backend は同じ値を 60 秒 cache します。provider への問い合わせの頻度は ORRERY Telemetry が決めます（Claude は約 10 分に 1 回）
 
 **古くなったとき・取れないとき**: 取得に失敗した間は、前回の値を残したまま、pill の数字を薄くし、`Usage left` の見出しに `· stale` を付けます。取れない理由は見出しの右に出ます。

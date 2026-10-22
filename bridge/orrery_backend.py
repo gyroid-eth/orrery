@@ -800,7 +800,7 @@ async def _usage_from_dashboard(request: web.Request, cache) -> list[ProviderUsa
     }
 
     if isinstance(entries, list):
-        cache.reported_providers = tuple(p for p in ("dsh",) if p in by_provider)
+        cache.reported_providers = tuple(p for p in ("antigravity", "dsh") if p in by_provider)
     snapshots: list[ProviderUsage] = []
     for provider in USAGE_PROVIDERS + cache.reported_providers:
         entry = by_provider.get(provider)
