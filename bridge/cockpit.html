@@ -4523,9 +4523,9 @@
       }
     }
   },
-  "inventory_digest": "f5daf2e17ac6c6438c8b910911e837bcfc8d5fcd56f10fde2119f5b3b561dae8",
+  "inventory_digest": "6cd57ab9fec363b6195be29474ffaeec93add3d4082fff09516285e70629e1db",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "1d375b3b4338b0cb685faf8c285c55c2d84f9f56219e1201f088b681b8fb5667",
+  "source_digest": "d47d149356d19c04cc7bc54556cf6cfc4bc2d3e66c1d25fba4f7d2f2fc4f7bca",
   "surface": "cockpit",
   "version": 1
 }
@@ -8910,10 +8910,10 @@ loadHostPlatform();
 
 function handle(msg){
   if(!msg||typeof msg.type!=='string')return;
-  /* a session that is out in its own window was detached here, but a resync
-     the backend scheduled before the detach can still arrive; drawing it
-     would bring the pane back under the window */
-  if(paneWindows.has(msg.session)&&(msg.type==='reset'||msg.type==='add'||msg.type==='update'))return;
+  /* A resync queued before detach may arrive after a tab was closed or moved
+     into its own window. Keep late frames from reopening a manually closed tab. */
+  if((manualDetached.has(msg.session)||paneWindows.has(msg.session))&&
+     (msg.type==='reset'||msg.type==='add'||msg.type==='update'))return;
   switch(msg.type){
     case "sessions":
       handleSessions(msg.sessions);
