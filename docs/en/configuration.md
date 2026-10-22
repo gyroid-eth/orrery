@@ -239,6 +239,13 @@ Local models keep their Harness chip even when that Harness is the default.
 
 ### Standard New Agent for DeepSeek and Local
 
+For your first DeepSeek, dsh, or Hermes setup, follow the guide in the order below. The cockpit has no API-key entry screen, and a normal update does not configure a missing connection.
+
+1. Open Telemetry's [initial setup guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) and add dsh, Hermes, or both from your Telemetry source folder.
+2. For DeepSeek, create an API key or use an existing one. If it is not already saved on this computer, follow the OS-specific steps to save it. For Local, prepare the server's connection details and its own API key if needed.
+3. Review and enable the connection settings following the guide, then run the final install command yourself once to apply them to Telemetry.
+4. Return to the cockpit and select your configured `Model` and `Harness` in `+ NEW AGENT`.
+
 Telemetry API 23 offers `deepseek` / `strata` × `dsh` / `hermes` through the same
 form as Claude and Codex: Model → Harness → Helper model → Effort.
 Local sends `strata` as the provider. Name, parent (or standalone), launch
