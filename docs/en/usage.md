@@ -375,10 +375,23 @@ Only during development, `?ws=ws://127.0.0.1:<port>/ws` can override the WebSock
 
 `+ NEW AGENT` uses the spawn API of the ORRERY Telemetry dashboard. When the dashboard is offline, part of the catalog may be shown but spawn cannot be run.
 
+This is the cockpit's own form. Standalone Telemetry has a separate NEW AGENT screen.
+
+1. Select a portrait under `Choose a scientist`, or leave `AUTO` selected.
+2. Under `Model`, choose Claude, Codex, DeepSeek, or Local models, then select a model in the middle column. Local models can be searched.
+3. Choose a `Harness` on the right. DeepSeek and Local offer the dsh / Hermes entries in your catalog. Unavailable entries show `Coming soon` and cannot be selected.
+4. Check `Helper model` and `Effort` when shown, then set the launch directory and task below. See [Standard New Agent for DeepSeek and Local](configuration.md#standard-new-agent-for-deepseek-and-local) for details.
+
+![The cockpit's NEW AGENT: Curie's portrait and name, all four families (Claude, Codex, DeepSeek, Local models), and DeepSeek's dsh and Hermes choices](../images/cockpit-native-spawn.png)
+
+![The same actual screen switches Claude → Codex → DeepSeek (dsh, Hermes) → Local models (dsh, Hermes)](../images/cockpit-native-spawn.gif)
+
+These captures use the actual screen and its live catalog, cropped to the name, portraits, model, and Harness controls. `Spawn` was not pressed. Available models and Harnesses depend on your installation. Portrait sources and licenses are in [CREDITS](../../CREDITS.md).
+
 Input fields:
 
 - Identity: Auto, or Scientist + Adjective
-- Claude / Codex provider, model, and reasoning effort
+- Claude / Codex / DeepSeek / Local models, Harness, and Helper model / reasoning effort when shown
 - Working directory
 - Task (required, up to 4000 characters)
 - Standalone or parent
@@ -386,7 +399,7 @@ Input fields:
 - Worktree / base revision
 - Headless or Ghostty
 
-Parent candidates are only live Claude agents. Auto sends `name:null`, and the final validation of name, model, effort, and directory is done by the ORRERY Telemetry server.
+Parent candidates are running agents. Auto sends `name:null`, and the final validation of name, model, effort, and directory is done by the ORRERY Telemetry server.
 
 When you press `Spawn`, progress appears at the bottom right. It is `LAUNCHING · <name>`, then `SPAWNED · <name>` if it launched, or `SPAWN FAILED · <name> · <reason>` if it failed. If no result comes back after 140 seconds, `no verdict after 140s` is shown (the agent may have started, so check the roster).
 
