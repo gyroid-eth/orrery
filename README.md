@@ -41,6 +41,16 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 
 ## できること
 
+### 科学者の顔とモデルを選んで起動する（NEW AGENT）
+
+`+ NEW AGENT` で科学者の肖像を選ぶと名前が決まり、形容詞は調整できます。Claude・Codex・DeepSeek・Local models の4系統から model を、DeepSeek と Local では dsh / Hermes の Harness も選べます。利用できる model と Harness は導入済みの設定によって変わります。
+
+![cockpit 本体の NEW AGENT。科学者の肖像と4系統を保ったまま、Claude・Codex・DeepSeek・Local と Harness を切り替える。起動前の選択操作だけ](docs/images/cockpit-native-spawn.gif)
+
+cockpit 本体の実画面と実カタログです。Telemetry 単体の NEW AGENT は別の画面です。画像は起動前の選択までを示します。
+
+→ [使い方: NEW AGENT](docs/usage.md#new-agent)・肖像の出典とライセンスは [CREDITS](CREDITS.md)
+
 ### 打っている途中で流されない
 
 たくさんの agent を同時に動かしていると、親の agent の端末に指示を打っている途中で、他の agent からの通知が同じ端末に流れ込み、書きかけの文が埋もれてしまいます。cockpit では、指示は端末の下にある別の入力欄（composer）に打つので、端末に何が流れてきても書きかけはそのまま残ります。送り先は、roster や tab で agent をクリックするだけで切り替わり、文はそのまま持ち越されます。

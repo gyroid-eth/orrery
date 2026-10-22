@@ -41,6 +41,16 @@ Pick an agent in the roster on the left, give instructions in the terminal in th
 
 ## What you can do
 
+### Choose a scientist's portrait and a model (NEW AGENT)
+
+Open `+ NEW AGENT` and select a scientist's portrait to generate a name; you can adjust its adjective. Choose a model from Claude, Codex, DeepSeek, or Local models. DeepSeek and Local also offer a dsh / Hermes Harness choice. Available models and harnesses depend on your installed configuration.
+
+![The cockpit's own NEW AGENT: scientist portraits and all four families stay visible while switching Claude, Codex, DeepSeek, Local, and Harness. Selection only, before launch](docs/images/cockpit-native-spawn.gif)
+
+This is the cockpit's actual screen and live catalog. Standalone Telemetry has a separate NEW AGENT screen. The animation stops at selection, before launch.
+
+→ [Usage: NEW AGENT](docs/en/usage.md#new-agent) · Portrait sources and licenses: [CREDITS](CREDITS.md)
+
 ### Your half-typed message is not swept away
 
 When many agents run at once, notifications from other agents can pour into the same terminal while you are typing an instruction to a parent agent, burying what you have written so far. In the cockpit you type instructions into a separate input box (the composer) below the terminal, so whatever scrolls through the terminal, your draft stays put. To change the recipient, just click an agent in the roster or on a tab; the text carries over.

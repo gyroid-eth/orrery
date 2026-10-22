@@ -375,10 +375,23 @@ http://127.0.0.1:8791/cockpit.html?session=<session-name>
 
 `+ NEW AGENT` は ORRERY Telemetry dashboard の spawn API を使います。dashboard が offline の場合、catalog の一部を表示できても spawn は実行できません。
 
+操作するのは cockpit 本体の form です。Telemetry 単体の NEW AGENT とは別の画面です。
+
+1. `Choose a scientist` の肖像を選ぶか、`AUTO` のままにします。
+2. `Model` で Claude・Codex・DeepSeek・Local models の系統を選び、中央で model を選びます。Local models は検索できます。
+3. 右の `Harness` を選びます。DeepSeek・Local では、カタログにある dsh / Hermes から選びます。利用できない候補は `Coming soon` と表示され、選択できません。
+4. 表示される場合は `Helper model` と `Effort` を確認し、その下で起動先と task を指定します。詳しくは[DeepSeek・Local の標準 New Agent](configuration.md#deepseeklocal-の標準-new-agent)を参照してください。
+
+![cockpit の NEW AGENT。Curie の肖像と名前、Claude・Codex・DeepSeek・Local models の4系統、DeepSeek の dsh・Hermes 選択肢](images/cockpit-native-spawn.png)
+
+![同じ実画面で Claude → Codex → DeepSeek（dsh・Hermes）→ Local models（dsh・Hermes）と切り替える](images/cockpit-native-spawn.gif)
+
+実画面と撮影時の正規カタログを使い、名前・肖像と model / Harness 部だけを切り出しています。`Spawn` は押していません。利用できる model と Harness は環境によって変わります。肖像の出典とライセンスは [CREDITS](../CREDITS.md) にあります。
+
 入力項目:
 
 - Auto または Scientist + Adjective の identity
-- Claude / Codex provider、model、reasoning effort
+- Claude / Codex / DeepSeek / Local models、Harness、表示される場合は Helper model・reasoning effort
 - working directory
 - task（必須、最大4000文字）
 - standalone または parent
@@ -386,7 +399,7 @@ http://127.0.0.1:8791/cockpit.html?session=<session-name>
 - worktree / base revision
 - headless または Ghostty
 
-parent 候補は live Claude agent だけです。Auto は `name:null` を送り、名前・model・effort・directory の最終検証は ORRERY Telemetry server が行います。
+parent 候補は稼働中の agent です。Auto は `name:null` を送り、名前・model・effort・directory の最終検証は ORRERY Telemetry server が行います。
 
 `Spawn` を押すと、右下に経過が出ます。`LAUNCHING · <名前>` のあと、起動できれば `SPAWNED · <名前>`、失敗すれば `SPAWN FAILED · <名前> · <理由>` です。140 秒たっても結果が返らないときは `no verdict after 140s` と出ます（agent は起動しているかもしれないので、roster を確かめる）。
 
