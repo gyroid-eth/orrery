@@ -19,11 +19,14 @@ def test_unavailable_explanations_hide_unknown_catalog_details():
     result = node('''console.log(JSON.stringify([
       picker.unavailableReason({available:false,reason:'runtime_not_prepared'}),
       picker.unavailableReason({available:false,reason:'unsupported_platform'}),
+      picker.unavailableReason({available:false,reason:'disabled_by_opt_in'}),
+      picker.unavailableReason({available:false,reason:'unsupported_credential_store'}),
       picker.unavailableReason({available:false,reason:'private-account-and-path'}),
       picker.unavailableReason({available:false,reason:'constructor'}),
       picker.unavailableReason({available:true,reason:'runtime_not_prepared'})
     ]));''')
     assert result == ['Install or repair this harness', 'Unavailable on this OS',
+                      'Enable this harness in setup', 'Use the supported OS key store',
                       'Check setup and compatibility', 'Check setup and compatibility', '']
 
 

@@ -20,6 +20,8 @@
     const messages={
       runtime_not_prepared:'Install or repair this harness',
       credential_reader_unavailable:'Prepare the OS key store',
+      disabled_by_opt_in:'Enable this harness in setup',
+      unsupported_credential_store:'Use the supported OS key store',
       unsupported_mode:'Unavailable in this Mail mode',
       unsupported_platform:'Unavailable on this OS',
       harness_not_enabled:'Enable the connection settings',
