@@ -475,7 +475,9 @@ command -v claude >/dev/null 2>&1 && agent_cli="${agent_cli} claude"
 if [ -n "$agent_cli" ]; then
   ok "agent CLI:${agent_cli} (once: run 'claude' and finish its setup up to the input prompt, or 'codex login')"
 else
-  note "neither 'claude' nor 'codex' is on PATH; NEW AGENT cannot start agents until one is installed and logged in."
+  note "neither 'claude' nor 'codex' is on PATH; these two choices need their CLI and login."
+  note "DeepSeek / Local use dsh or Hermes instead, with separate API connection setup:"
+  note "https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md"
 fi
 
 # ---------------------------------------------------------------- WSL helpers
