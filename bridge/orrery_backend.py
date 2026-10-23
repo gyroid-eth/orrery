@@ -3342,7 +3342,7 @@ async def serve_portrait(request: web.Request) -> web.StreamResponse:
     return web.Response(
         body=portrait_fallback(name, hi and not pixel),
         content_type="image/svg+xml",
-        headers={"Cache-Control": "public, max-age=3600"},
+        headers={"Cache-Control": "no-store"},
     )
 
 
