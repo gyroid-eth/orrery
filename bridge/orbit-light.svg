@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">ORRERY Orbit</title>
+  <desc id="desc">Two orbital paths around a warm sun, with one satellite.</desc>
+  <rect x="2" y="2" width="124" height="124" rx="28" fill="#e8dfcd"/>
+  <g fill="none" stroke="#010100" stroke-width="8">
+    <ellipse cx="64" cy="64" rx="46" ry="23" transform="rotate(-28 64 64)"/>
+    <ellipse cx="64" cy="64" rx="46" ry="23" transform="rotate(56 64 64)" opacity=".62"/>
+  </g>
+  <circle cx="64" cy="64" r="16" fill="#e8dfcd"/>
+  <circle cx="64" cy="64" r="11" fill="#704a00"/>
+  <circle cx="103" cy="42" r="9.5" fill="#e8dfcd"/>
+  <circle cx="103" cy="42" r="6.5" fill="#704a00"/>
+</svg>

@@ -179,7 +179,11 @@
     background:linear-gradient(180deg,var(--panel),rgba(17,20,25,.6));
     backdrop-filter:blur(6px);
   }
-  .brand{display:flex;align-items:baseline;gap:11px}
+  .brand{display:flex;align-items:center;gap:11px}
+  .brand-orbit{width:32px;height:32px;flex:none}
+  .brand-orbit-light{display:none}
+  html[data-color-theme="light"] .brand-orbit-dark{display:none}
+  html[data-color-theme="light"] .brand-orbit-light{display:block}
   .brand .mark{
     font-family:var(--serif);font-weight:600;font-size:22px;letter-spacing:.14em;
     color:var(--ink);
@@ -1135,7 +1139,7 @@
   .pane-out-chip .back:hover{color:var(--amber)}
   @media(max-width:1000px){
     .grid{grid-template-columns:250px 1fr}.col.mail{display:none}
-    header{gap:13px;padding:0 14px}.brand .sub,.topstat:nth-of-type(2){display:none}
+    header{gap:8px;padding:0 14px}.brand .sub,.topstat:nth-of-type(2){display:none}
   }
   @media(max-width:680px){
     .grid{grid-template-columns:1fr}.col.roster,.col.mail{display:none}
@@ -1165,6 +1169,8 @@
 <div class="app">
   <header>
     <div class="brand">
+      <img class="brand-orbit brand-orbit-dark" src="orbit.svg" alt="" width="32" height="32">
+      <img class="brand-orbit brand-orbit-light" src="orbit-light.svg" alt="" width="32" height="32">
       <span class="mark">ORR<b>E</b>RY</span>
       <span class="sub">agent cockpit</span>
     </div>
@@ -4324,7 +4330,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "1f95beb2c80726ff5f1a1c467d889b29e96b7355c6b9c4ca82ecb5be62baa0b1",
+        "digest": "4b4d2a6870b199fb78b37d298b9ec193afb181425d35e83f73e0c4cd971370b4",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4476,7 +4482,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "d55a9bcbc1279c694e201c8c379adb1124fce57aa2ce3ef83255f38f379923ca",
+        "digest": "0f6ebf570b1663846dc5bd320a000a22a9ba1150e59f5344c36288e521957cc1",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4523,9 +4529,9 @@
       }
     }
   },
-  "inventory_digest": "91c07214e6b7fa67a9dd6a7623b91bccdd960bf9d479166999b7ef24155ed444",
+  "inventory_digest": "e91e4282a2fea32e776cfc8b48b687f239cfa61ecc8a111ab8ab5278c6eb1a21",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "d626f1620697ad11f280ae9cfbe8ce3b323e7a4491063cd06e23dac9cd6b43da",
+  "source_digest": "08e644cc8a23513e28133be8994b570fcc075e940a10220e2db3ae2f0d831fff",
   "surface": "cockpit",
   "version": 1
 }
