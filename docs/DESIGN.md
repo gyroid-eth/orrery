@@ -17,6 +17,8 @@ ORRERY は scientist identity を持つ agent crew を操作する、暗い inst
 - display / agent name: `Fraunces`
 - telemetry / chrome / terminal: `IBM Plex Mono`
 
+アプリのロゴは2本の軌道・太陽・衛星からなる Orbit。正本は `app/icons-src/orrery.svg` と `orrery-light.svg` で、形を変えずに dark / light を切り替えます。header は32pxで ORRERY の左に配置し、文字や操作の役割は変えません。Tauri / Dock の画像はこの SVG から生成します。手順は [icon sources](../app/icons-src/README.md) を参照してください。
+
 agent name、wordmark、panel heading には editorial serif を使い、数値、path、label、terminal には mono を使います。font CDN が不達の場合は fallback を許容します。
 
 ## Color

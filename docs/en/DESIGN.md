@@ -17,6 +17,12 @@ It aims for a calm cockpit that holds up under long hours of monitoring and oper
 - display / agent name: `Fraunces`
 - telemetry / chrome / terminal: `IBM Plex Mono`
 
+The app logo is Orbit: two paths, a sun and a satellite. Its sources are
+`app/icons-src/orrery.svg` and `orrery-light.svg`, with identical geometry for
+dark and light. The header places it at 32px to the left of ORRERY; text and
+controls keep their roles. Tauri and Dock images are generated from these
+sources. See [icon sources](../../app/icons-src/README.md) for the recipe.
+
 Use an editorial serif for agent names, the wordmark, and panel headings, and mono for numbers, paths, labels, and the terminal. A fallback is acceptable when the font CDN is unreachable.
 
 ## Color
