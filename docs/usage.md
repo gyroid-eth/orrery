@@ -214,7 +214,7 @@ backend は起動時に live tmux session ごとに recorder connection を一�
 
 ### スマホのTerminal（別途有効化）
 
-別のTelemetry mobile readerで、短いpane画面を見ながら確認付きの1行を送れます。backend adapterは既定オフです。指定スマホの実効policyを受入した後に限り、backendの**既存起動手順**へ`--enable-mobile-terminal`を追加します。使用中のポートへ二重起動しません。reader側にもAPI31・対応する`orrery-mobile-pane-v1` capabilityと明示opt-inが必要です。[Telemetryのスマホ手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md)を参照してください。
+別のTelemetry mobile readerで、短いpane画面を見ながら確認付きの1行を送れます。backend adapterは既定オフです。[共有設定](configuration.md#スマホterminalを通常の起動で有効にする)の`enable_mobile_terminal`をJSONの`true`にし、現在の起動手順でbackendを明示的に再起動します。稼働中のbackendの再利用だけでは反映されません。reader側にもAPI31・対応する`orrery-mobile-pane-v1` capabilityと別の有効化が必要です。操作に使う自分の端末だけへのアクセス制限を推奨しますが、スマホ・タブレットを複数使えます。agentに任せる段と本人の段は[Telemetryのスマホ手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md)を参照してください。
 
 対象はPCの既存managerが扱うlegacy paneだけで、共有target guardとfreshなsocket/server/session/pane/kernel birthを照合します。agent別名からpaneを推測せず、agent起動・別socket/global対象への迂回・Codex起動recordの要求はしません。複数paneは自分で選び、不明はUnavailableです。sessionはreaderの現在のmetadata project外にある場合もあります。
 

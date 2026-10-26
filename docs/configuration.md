@@ -4,7 +4,7 @@
 
 [前: インストール](install.md) · [README に戻る](../README.md) · [次: 使い方](usage.md)
 
-ORRERY は `~/.orrery/config.json` と環境変数で設定します。共有設定 file は Finder 起動でも読まれ、環境変数は常に同じ項目の設定 file より優先されます。
+ORRERY は `~/.orrery/config.json` と環境変数で設定します。共有設定 file は Finder 起動でも読まれます。環境変数が用意されている項目では、環境変数が同じ項目の設定 file より優先されます。
 
 Codex の代替画面でマウス追跡が無いと確認できた active pane では、ホイールを PageUp / PageDown に変えて会話を遡れます。小さな移動はまとめ、1 回の連続操作は最大 3 ページまでです。Claude Code・通常の shell・マウスを要求する Codex の扱いは変わりません。
 
@@ -38,7 +38,8 @@ Finder から起動する desktop app と Python backend が同じ file を読�
   "orrery_root": "/absolute/path/to/orrery",
   "project_key": "/absolute/path/to/your/project",
   "mail_db": "~/.agentstack/mail/storage.sqlite3",
-  "annotations_path": "~/.agentstack/runtime/annotations.json"
+  "annotations_path": "~/.agentstack/runtime/annotations.json",
+  "enable_mobile_terminal": false
 }
 ```
 
@@ -48,8 +49,17 @@ Finder から起動する desktop app と Python backend が同じ file を読�
 | `project_key` | Python backend | ORRERY Mail の project human key |
 | `mail_db` | Python backend | read-only ORRERY Mail SQLite |
 | `annotations_path` | Python backend | dashboard 不達時の annotation fallback |
+| `enable_mobile_terminal` | Python backend | スマホTerminalの明示有効化。JSONの`true`または`false`のみ。既定`false` |
 
-トップレベル JSON object の任意 string key だけを受け付けます。空文字、非 string、未知 key は無視し、前後空白を除去して `~` を展開します。file の欠損、読取不能、不正 JSON は起動を停止せず未設定として扱います。path 情報を含むため file mode `0600` を推奨します。
+トップレベルJSON objectの上記4つのpath設定は文字列で指定します。空文字、非文字列、未知keyは無視し、前後空白を除去して`~`を展開します。`enable_mobile_terminal`を指定した場合だけは厳密なJSON booleanが必要で、`"true"`、`1`、`null`などではbackendの起動を止めます。fileの欠損、読取不能、不正JSONは従来どおり未設定として扱い、この設定の既定値はオフです。path情報を含むためfile mode`0600`を推奨します。
+
+### スマホTerminalを通常の起動で有効にする
+
+既存の設定を残し、`enable_mobile_terminal`だけを`true`にします。`scripts/start-cockpit.sh`、`get.sh`からのsetup、FinderからのORRERY.appは、いずれも新しく起動するPython backendでこの設定を読みます。独自にbackendを起動する場合は、既存の`--enable-mobile-terminal`も引き続き使えます。reader側にも別の有効化が必要です。
+
+**稼働中のbackendには設定が反映されません。** 現在の起動方法と管理元を確認し、その手順で明示的に停止・再起動してください。ORRERY.appを閉じても共有backendは残るため、appを開き直すだけでは反映されないことがあります。管理元が分からない場合は止まり、使用中のポートへの二重起動や一括killはしません。有効化後の送信を伴わない確認と、agent・本人それぞれの手順は[Telemetryのスマホガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md#スマホからpaneを確認して送る)を参照してください。
+
+戻すときは`false`にするか項目を除き、独自の起動引数に`--enable-mobile-terminal`があればそれも外して、同じ手順で再起動します。
 
 ### Desktop app の environment
 
