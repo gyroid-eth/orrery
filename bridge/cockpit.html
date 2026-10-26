@@ -10267,7 +10267,7 @@ function inspectPrompt(text){
     const name=word.slice(1);
     const known=skillNamed(name,program);
     return {
-      reason:`<code>${word}</code> is a destructive builtin on ${program} — `+
+      reason:`<code>${esc(word)}</code> is a destructive builtin on ${program} — `+
         `it ends or wipes the session, it does not run a skill.`,
       fix:known?right+name+first.slice(word.length):null,
       fixLabel:known?`run the skill ${right}${name}`:null,
