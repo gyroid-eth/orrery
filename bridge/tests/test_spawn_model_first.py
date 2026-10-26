@@ -95,6 +95,41 @@ def test_default_spawn_payload_is_byte_compatible_and_optional_controls_are_expl
     assert new == {**old, 'harness':'hermes', 'helper_model':'small'}
 
 
+def test_dynamic_same_id_per_url_survives_normalization_and_payload():
+    remote=dict(providers=[dict(id='workstation',kind='strata',locality='local',dynamic_models=True,
+        models=[dict(id='shared-model',display_name='Readable model',url_index=i) for i in range(3)])])
+    provider=ob.normalize_spawn_catalog(remote)['providers'][0]
+    result=node('const p='+json.dumps(provider)+''';console.log(JSON.stringify({keys:picker.entries({providers:[p]}).map(e=>e.key),
+      names:p.models.map(m=>m.display_name)}));''')
+    assert len(set(result['keys']))==3 and result['names']==['Readable model']*3
+    source=(BRIDGE/'cockpit.html').read_text()
+    function=re.search(r'function buildSpawnPayload\(values\)\{.*?\n\}',source,re.S).group()
+    value=subprocess.run(['node','-e',function+"console.log(JSON.stringify(buildSpawnPayload({provider:'workstation',harness:'hermes',model:'shared-model',url_index:2})));"],capture_output=True,text=True,check=True)
+    assert json.loads(value.stdout)['url_index']==2
+
+
+def test_dynamic_local_real_controls_keep_route_and_refuse_lost_selection(tour_browser):
+    _,evaluate=tour_browser
+    result=evaluate('''(()=>{
+      const row=(url_index,id='shared-model',model_state='available')=>({id,display_name:id,url_index,url_key:String(url_index).repeat(64),model_state,
+        context:64000,context_source:'default',harnesses:[{id:'hermes',available:model_state!=='unloaded',default:true,efforts:null,effort_source:'unknown'}]});
+      spawnCatalog={providers:[{id:'remote',kind:'strata',label:'Remote server',locality:'local',dynamic_models:true,models:[row(0)]},
+        {id:'workstation',kind:'strata',label:'Workstation',locality:'local',dynamic_models:true,
+         models:[row(0),row(1),row(2),row(2,'sleeping','unloaded')]}]};
+      selFamily='local';selProvider=null;selModel=null;selUrlIndex=null;selUrlKey=null;selHarness=null;spawnModelSearch.value='';renderProviderTabs();
+      modelChoices.querySelector('[data-connection=workstation][data-url-index="2"]').click();
+      const payload=spawnPayloadFromForm(),summary=document.getElementById('spawnSummary').textContent;
+      const disabled=[...modelChoices.querySelectorAll('input')].find(e=>e.value==='sleeping').disabled;
+      spawnCatalog.providers[1].models=spawnCatalog.providers[1].models.filter(m=>m.url_index!==2);
+      renderProviderTabs();renderProviderTabs();
+      return {payload,summary,disabled,lost:selModel===null,blocked:spawnSubmit.disabled};
+    })()''')
+    assert (result['payload']['provider'],result['payload']['model'],result['payload']['url_index'])==('workstation','shared-model',2)
+    assert result['payload']['url_key']=='2'*64
+    assert 'Workstation' in result['summary'] and 'URL 3' in result['summary']
+    assert result['disabled'] and result['lost'] and result['blocked']
+
+
 def test_picker_defaults_local_search_and_capability_updates_in_browser(tour_browser):
     _, evaluate = tour_browser
     result = evaluate('''(async()=>{
