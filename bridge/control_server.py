@@ -1474,7 +1474,10 @@ async def run_server(config: ControlConfig) -> None:
         await handle_websocket(websocket, bridge)
 
     try:
-        async with websockets.serve(handler, config.host, config.port):
+        # Browsers always send Origin on a WebSocket handshake; only this
+        # bridge's own loopback page may connect. Local tools send none.
+        origins = [None, *(f"http://{name}:{config.port}" for name in ("127.0.0.1", "localhost", "[::1]"))]
+        async with websockets.serve(handler, config.host, config.port, origins=origins):
             print(
                 f"ORRERY control bridge listening on ws://{config.host}:{config.port}/ws "
                 f"for tmux session {config.session!r}",

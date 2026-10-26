@@ -3515,8 +3515,54 @@ async def revalidate_static(request: web.Request, handler):
     return response
 
 
+LOOPBACK_NAMES = ("127.0.0.1", "localhost", "[::1]")
+
+
+def _local_port(request: web.Request) -> int | None:
+    sockname = request.transport.get_extra_info("sockname") if request.transport else None
+    if isinstance(sockname, tuple) and len(sockname) >= 2 and isinstance(sockname[1], int):
+        return sockname[1]
+    return None
+
+
+def request_from_own_page(request: web.Request) -> bool:
+    """Accept only requests addressed to this loopback port by its own pages.
+
+    The backend listens on 127.0.0.1 without credentials, so a web page from
+    anywhere could otherwise reach it through the user's browser: open /ws
+    and type into a pane, or read /telemetry/fs/dirs through DNS rebinding.
+    The Host must name this loopback port (a rebound attacker name fails),
+    and a browser-supplied Origin must be this same loopback origin
+    (cross-site WebSocket and fetch fail). Local processes that send no
+    Origin keep working, as the loopback trust model already allows them.
+    """
+    port = _local_port(request)
+    hosts = request.headers.getall("Host", [])
+    if port is None or len(hosts) != 1:
+        return False
+    allowed = {f"{name}:{port}" for name in LOOPBACK_NAMES}
+    if hosts[0].lower() not in allowed:
+        return False
+    # An <img>/<script> tag on another site sends no Origin but does send
+    # Sec-Fetch-Site; only a top-level navigation may come from elsewhere.
+    site = request.headers.get("Sec-Fetch-Site", "").lower()
+    if site == "cross-site" and request.headers.get("Sec-Fetch-Mode", "").lower() != "navigate":
+        return False
+    origins = request.headers.getall("Origin", [])
+    if not origins:
+        return True
+    return len(origins) == 1 and origins[0].lower() in {f"http://{host}" for host in allowed}
+
+
+@web.middleware
+async def own_page_only(request: web.Request, handler):
+    if not request_from_own_page(request):
+        return web.json_response({"ok": False, "error": "request_denied"}, status=403)
+    return await handler(request)
+
+
 def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False) -> web.Application:
-    app = web.Application(middlewares=[revalidate_static])
+    app = web.Application(middlewares=[own_page_only, revalidate_static])
     app[TMUX_BIN_KEY] = tmux_bin if isinstance(tmux_bin, LegacyTargetBoundary) else LegacyTargetBoundary(tmux_bin)
     app[USAGE_CACHE_KEY] = UsageCache()
     app[USAGE_LOCKS_KEY] = {}
