@@ -3566,8 +3566,38 @@ async def own_page_only(request: web.Request, handler):
     return await handler(request)
 
 
+@web.middleware
+async def json_writes_only(request: web.Request, handler):
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        if (len(request.headers.getall("Content-Type", [])) != 1
+                or request.content_type != "application/json"):
+            return web.json_response({"ok": False, "error": "json_required"}, status=415)
+    return await handler(request)
+
+
+PUBLIC_FILES = {"/" + name: name for name in (
+    "cockpit.html", "tour.html", "orbit.svg", "orbit-light.svg",
+    "orrery_view.css", "mail_view.css", "spawn_picker.css", "theme_light.css",
+    "cockpit_tour.css", "telemetry_light.css",
+    "spawn_picker.js", "effort_slider.js", "spawn_catalog_loader.js", "prefs_sync.js",
+    "theme_core.js", "theme_controller.js", "roster_descriptor.js", "demo_mask.js",
+    "demo_mode.js", "orrery_view.js", "mail_view.js", "cockpit_tour.js",
+    "cockpit_full_tour.js", "telemetry_light.js",
+    "vendor/xterm-5.5.0/xterm.js", "vendor/xterm-5.5.0/xterm.css",
+    "vendor/addon-fit-0.10.0/addon-fit.js",
+    "vendor/addon-web-links-0.11.0/addon-web-links.js",
+)}
+PUBLIC_FILES.update({"/cockpit-assets/" + name: "assets/" + name for name in (
+    "anthropic.svg", "openai.svg", "google.svg", "qwen.svg", "deepseek.svg", "dsh.svg", "hermes.png",
+)})
+
+
+async def serve_public_file(request: web.Request) -> web.FileResponse:
+    return web.FileResponse(HERE / PUBLIC_FILES[request.path])
+
+
 def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False) -> web.Application:
-    app = web.Application(middlewares=[own_page_only, revalidate_static])
+    app = web.Application(middlewares=[own_page_only, json_writes_only, revalidate_static])
     app[TMUX_BIN_KEY] = tmux_bin if isinstance(tmux_bin, LegacyTargetBoundary) else LegacyTargetBoundary(tmux_bin)
     app[USAGE_CACHE_KEY] = UsageCache()
     app[USAGE_LOCKS_KEY] = {}
@@ -3613,9 +3643,8 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False) ->
     app.router.add_route("*", "/assets/{tail:.*}", proxy_dashboard_passthrough)
     app.router.add_get("/portrait", proxy_dashboard_passthrough)
     app.router.add_get("/ws", websocket_handler)
-    # Cockpit-owned logos must not depend on the dashboard asset proxy.
-    app.router.add_static("/cockpit-assets/", HERE / "assets")
-    app.router.add_static("/", HERE, show_index=True)
+    for path in PUBLIC_FILES:
+        app.router.add_get(path, serve_public_file)
     return app
 
 

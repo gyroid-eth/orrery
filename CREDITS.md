@@ -534,3 +534,20 @@ with these official marks. Files are reused unchanged from the official sources.
 
 Claude Code and Codex reuse the provider marks credited above. Marks identify
 software and do not imply endorsement.
+
+
+## 同梱する端末ライブラリ
+
+xterm と addon は、以下の固定版の npm 配布物をそのまま同梱しています。外部 CDN からの実行時の取得は不要です。各パッケージの MIT ライセンス全文を同じディレクトリの `LICENSE` に保持しています。
+
+| ファイル | パッケージ / 版 | 出典 | SHA-256 |
+| --- | --- | --- | --- |
+| `bridge/vendor/xterm-5.5.0/xterm.js` | `@xterm/xterm@5.5.0` | [配布元](https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js) | `1f991ac3b4b283ebf96e60ae23a00a52765dd3a2e46fa6fdda9f1aab032f7495` |
+| `bridge/vendor/xterm-5.5.0/xterm.css` | `@xterm/xterm@5.5.0` | [配布元](https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css) | `ba8e6985669488981ccf40c0cefe3aba80722cb6c92de7ad628b0bd717faf2b6` |
+| `bridge/vendor/xterm-5.5.0/LICENSE` | `@xterm/xterm@5.5.0` | [配布元](https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/LICENSE) | `b569f629d00f2626a8100df2a1798210535621e42164dfd426a6fe5aac7b0ccd` |
+| `bridge/vendor/addon-fit-0.10.0/addon-fit.js` | `@xterm/addon-fit@0.10.0` | [配布元](https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js) | `bdaefa370b1bfc42ee88d46fe6072400902a4d4b2d45cd93438dda9b23c97089` |
+| `bridge/vendor/addon-fit-0.10.0/LICENSE` | `@xterm/addon-fit@0.10.0` | [配布元](https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/LICENSE) | `e256f01188af527e4d06d21d06fbf785ae9c50d4b328bf03cbe0ba7f0aa4228f` |
+| `bridge/vendor/addon-web-links-0.11.0/addon-web-links.js` | `@xterm/addon-web-links@0.11.0` | [配布元](https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.js) | `f230a6c8211ce4614dda5441f27b603c7c1ca95151a655bc0efac6377ee643f0` |
+| `bridge/vendor/addon-web-links-0.11.0/LICENSE` | `@xterm/addon-web-links@0.11.0` | [配布元](https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/LICENSE) | `689ceb10716bd7a87a804c14951d7c2b818cbd60aab83d540902470ce3b13444` |
+
+npm tarball の出典と integrity、ファイルサイズも [`bridge/vendor/manifest.json`](bridge/vendor/manifest.json) に記録しています。

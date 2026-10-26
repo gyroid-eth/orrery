@@ -33,6 +33,10 @@ python -m pip install -r requirements.txt
 `cockpit.html` is the integrated ORRERY cockpit. One unified backend serves the
 page, telemetry routes, and the WS protocol v2 endpoint from the same origin:
 
+Static responses are limited to the cockpit and tour pages and their bundled
+assets. Terminal libraries are pinned locally; versions, hashes and licenses
+are recorded in [CREDITS](../CREDITS.md). Write requests use `application/json`.
+
 - **Center terminal** — live `xterm.js` terminals from multiple lazily attached
   tmux sessions over `/ws`. Tabs are grouped by session (agent) name; selecting
   a tab fills the CRT screen with that pane. The group `×` detaches the cockpit
