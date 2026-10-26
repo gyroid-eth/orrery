@@ -70,7 +70,7 @@ CONFIG_KEYS = frozenset(
 )
 
 
-def load_user_config(path: Path = CONFIG_PATH) -> dict[str, str]:
+def load_user_config(path: Path = CONFIG_PATH) -> dict[str, Any]:
     """Read the optional shared ORRERY config without making startup fragile."""
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
@@ -78,11 +78,16 @@ def load_user_config(path: Path = CONFIG_PATH) -> dict[str, str]:
         return {}
     if not isinstance(raw, dict):
         return {}
-    return {
+    config = {
         key: value.strip()
         for key, value in raw.items()
         if key in CONFIG_KEYS and isinstance(value, str) and value.strip()
     }
+    # Keep the raw opt-in value for exact boolean validation by parse_args.
+    # Existing optional path settings retain their permissive loading rules.
+    if "enable_mobile_terminal" in raw:
+        config["enable_mobile_terminal"] = raw["enable_mobile_terminal"]
+    return config
 
 
 USER_CONFIG = load_user_config()
@@ -3623,8 +3628,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=int(os.environ.get("PORT", DEFAULT_PORT)),
     )
     parser.add_argument("--tmux-bin", default=os.environ.get("TMUX_BIN", "tmux"))
-    parser.add_argument('--enable-mobile-terminal', action='store_true',
-                        help='opt in only after designated-phone policy acceptance; reader opt-in is also required')
+    mobile_terminal = USER_CONFIG.get('enable_mobile_terminal', False)
+    if type(mobile_terminal) is not bool:
+        parser.error('config enable_mobile_terminal must be JSON true or false')
+    parser.add_argument('--enable-mobile-terminal', action='store_true', default=mobile_terminal,
+                        help='opt in to mobile Terminal (config: enable_mobile_terminal); reader opt-in is also required')
     return parser.parse_args(argv)
 
 

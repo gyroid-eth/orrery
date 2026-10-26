@@ -4,7 +4,7 @@
 
 [Previous: Installation](install.md) · [Back to README](../../README.en.md) · [Next: Usage](usage.md)
 
-ORRERY is configured with `~/.orrery/config.json` and environment variables. The shared settings file is also read when the app is launched from Finder, and an environment variable always takes precedence over the same item in the settings file.
+ORRERY is configured with `~/.orrery/config.json` and environment variables. The shared settings file is also read when the app is launched from Finder. Where a setting has an environment variable, that variable takes precedence over the same item in the file.
 
 In an active Codex pane verified to use the alternate screen without mouse tracking, the wheel sends PageUp / PageDown to scroll the conversation. Small movements accumulate, with at most three pages per continuous gesture; Claude Code, ordinary shells, and Codex panes requesting mouse tracking keep their existing behavior.
 
@@ -38,7 +38,8 @@ An example that specifies every item:
   "orrery_root": "/absolute/path/to/orrery",
   "project_key": "/absolute/path/to/your/project",
   "mail_db": "~/.agentstack/mail/storage.sqlite3",
-  "annotations_path": "~/.agentstack/runtime/annotations.json"
+  "annotations_path": "~/.agentstack/runtime/annotations.json",
+  "enable_mobile_terminal": false
 }
 ```
 
@@ -48,8 +49,17 @@ An example that specifies every item:
 | `project_key` | Python backend | The project human key of ORRERY Mail |
 | `mail_db` | Python backend | The read-only ORRERY Mail SQLite |
 | `annotations_path` | Python backend | The annotation fallback when the dashboard is unreachable |
+| `enable_mobile_terminal` | Python backend | Explicit mobile Terminal opt-in. JSON `true` or `false` only; default `false` |
 
-Only arbitrary string keys of a top-level JSON object are accepted. Empty strings, non-strings, and unknown keys are ignored; leading and trailing whitespace is removed and `~` is expanded. A missing, unreadable, or invalid-JSON file does not stop startup and is treated as unset. Because it contains path information, file mode `0600` is recommended.
+The four path settings above take strings in a top-level JSON object. Empty strings, non-strings and unknown keys are ignored; surrounding whitespace is removed and `~` is expanded. If present, `enable_mobile_terminal` must be an exact JSON boolean: values such as `"true"`, `1` or `null` stop backend startup. A missing, unreadable or invalid-JSON file is still treated as unset, leaving this setting off by default. File mode `0600` is recommended because the file contains paths.
+
+### Enable mobile Terminal through normal startup
+
+Keep the other settings and set only `enable_mobile_terminal` to `true`. `scripts/start-cockpit.sh`, setup reached through `get.sh`, and ORRERY.app launched from Finder all read this setting when they start a new Python backend. Custom backend launch commands can still use `--enable-mobile-terminal`. The reader needs its own separate opt-in.
+
+**An already running backend does not pick up the change.** Identify its current launch method and manager, then explicitly stop and restart it through that procedure. Closing ORRERY.app leaves the shared backend running, so reopening the app alone may not apply the setting. Stop if the manager is unknown; do not launch another backend on an occupied port or use blanket kill commands. The [Telemetry mobile guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md#inspect-a-pane-and-send-input-from-your-phone) separates agent and human steps and includes a check that sends no input.
+
+To revert, set the field to `false` or remove it, also remove any explicit `--enable-mobile-terminal` from custom launch arguments, and restart through the same procedure.
 
 ### Desktop app environment
 
