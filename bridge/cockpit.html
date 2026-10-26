@@ -4408,6 +4408,8 @@ function buildSpawnPayload(values){
     provider:String(source.provider||'claude').trim(),
     ...(source.harness?{harness:String(source.harness)}:{}),
     ...(source.helper_model&&source.helper_model!=='same'?{helper_model:String(source.helper_model)}:{}),
+    ...(Number.isInteger(source.url_index)?{url_index:source.url_index}:{}),
+    ...(typeof source.url_key==='string'?{url_key:source.url_key}:{}),
     model:String(source.model||'').trim(),
     ...(String(source.effort||'').trim()?{effort:String(source.effort).trim()}:{}),
     dir:String(source.dir||'').trim()||null,
@@ -9466,6 +9468,7 @@ function populateSpawnParents(){
 let spawnCatalog=null,spawnTaken=new Set();
 let selProvider=null,selModel=null,selEffort=null,selScientist='';
 let selFamily=null,selHarness=null;
+let selUrlIndex=null,selUrlKey=null;
 const SPAWN_RECENT_STORAGE_KEY='orrery.spawn-local-recent.v1';
 const SPAWN_SEARCH_STORAGE_KEY='orrery.spawn-local-search.v1';
 let spawnViewerStorage=null;try{spawnViewerStorage=window.localStorage;}catch(_){/* viewer history is optional */}
@@ -9560,14 +9563,18 @@ function renderProviderTabs(){
     const name=document.createElement('span');name.textContent=f.label;
     const origin=document.createElement('small');origin.textContent=f.id==='local'?'LOCAL':'CLOUD';origin.classList.toggle('local-label',f.id==='local');
     copy.append(name,origin);b.append(copy);
-    b.addEventListener('click',()=>{selFamily=f.id;selProvider=null;selModel=null;selEffort=null;selHarness=null;renderProviderTabs();});
+    b.addEventListener('click',()=>{selFamily=f.id;selProvider=null;selModel=null;selUrlIndex=null;selUrlKey=null;selEffort=null;selHarness=null;renderProviderTabs();});
     providerTabs.append(b);
   });
   const local=selFamily==='local';spawnModelSearch.hidden=!local;
   const choices=entries.filter(e=>e.family===selFamily);
-  let selected=choices.find(e=>e.provider.id===selProvider&&e.model.id===selModel);
-  if(!selected)selected=choices.find(e=>e.model.default)||choices[0];
+  const hadDynamicSelection=Number.isInteger(selUrlIndex);
+  let selected=choices.find(e=>e.provider.id===selProvider&&e.model.id===selModel&&
+    (!Number.isInteger(e.model.url_index)||e.model.url_index===selUrlIndex)&&(!e.model.url_key||e.model.url_key===selUrlKey));
+  if(!selected&&!hadDynamicSelection)selected=choices.find(e=>e.model.default&&SpawnPicker.harnesses(e.provider,e.model).some(h=>h.available))||choices.find(e=>SpawnPicker.harnesses(e.provider,e.model).some(h=>h.available))||choices.find(e=>!e.provider.dynamic_models);
   selProvider=selected?selected.provider.id:((spawnCatalog.providers||[]).find(p=>SpawnPicker.family(p,{})===selFamily)||{}).id||null;selModel=selected?selected.model.id:null;
+  selUrlIndex=selected&&Number.isInteger(selected.model.url_index)?selected.model.url_index:hadDynamicSelection?selUrlIndex:null;
+  selUrlKey=selected?selected.model.url_key??null:hadDynamicSelection?selUrlKey:null;
   document.getElementById('spawnModelsTitle').textContent=local?'Local models':(families.find(f=>f.id===selFamily)||{}).label||'Models';
   document.getElementById('spawnModelsHint').textContent=local?'Find a model on your servers':'Choose a model';
   if(local)renderLocalModels();else renderModels();
@@ -9576,28 +9583,40 @@ function renderProviderTabs(){
 function renderLocalModels(){
   const entries=SpawnPicker.entries(spawnCatalog).filter(e=>e.family==='local');
   const query=spawnModelSearch.value.trim().toLowerCase();
-  const matches=entries.filter(e=>`${e.model.id} ${SpawnPicker.metadata(e.provider,e.model)}`.toLowerCase().includes(query));
+  const matches=entries.filter(e=>`${e.model.display_name||''} ${e.model.id} ${SpawnPicker.metadata(e.provider,e.model)}`.toLowerCase().includes(query));
   modelChoices.replaceChildren();
   const add=entry=>{
     const label=document.createElement('label');label.className='model-choice';
-    label.classList.toggle('sel',selProvider===entry.provider.id&&selModel===entry.model.id);
+    const selected=selProvider===entry.provider.id&&selModel===entry.model.id&&
+      (!Number.isInteger(entry.model.url_index)||entry.model.url_index===selUrlIndex)&&(!entry.model.url_key||entry.model.url_key===selUrlKey);
+    label.classList.toggle('sel',selected);
     const input=document.createElement('input');input.type='radio';input.name='spawnModel';input.value=entry.model.id;
-    input.checked=selProvider===entry.provider.id&&selModel===entry.model.id;
-    input.addEventListener('change',()=>{selProvider=entry.provider.id;selModel=entry.model.id;selEffort=null;selHarness=null;renderLocalModels();renderHarnesses();});
+    input.dataset.connection=entry.provider.id;input.dataset.urlIndex=entry.model.url_index??'';
+    input.checked=selected;
+    input.disabled=!SpawnPicker.harnesses(entry.provider,entry.model).some(h=>h.available);
+    label.classList.toggle('unavailable',input.disabled);
+    input.addEventListener('change',()=>{selProvider=entry.provider.id;selModel=entry.model.id;selUrlIndex=entry.model.url_index??null;selUrlKey=entry.model.url_key??null;selEffort=null;selHarness=null;renderLocalModels();renderHarnesses();});
     const copy=document.createElement('span');copy.className='model-choice-copy';
-    const name=document.createElement('span');name.className='model-choice-name';name.textContent=entry.model.id;
+    const name=document.createElement('span');name.className='model-choice-name';name.textContent=entry.model.display_name||entry.model.id;
     const note=document.createElement('span');note.className='model-choice-note';note.textContent=SpawnPicker.metadata(entry.provider,entry.model);
     copy.append(name,note);label.append(input,copy);
+    if(entry.provider.dynamic_models){const state=document.createElement('span');state.className='spawn-model-state';state.textContent=entry.model.model_state==='unloaded'?'Not loaded':input.disabled?'Unavailable':entry.model.model_state==='loaded'?'Loaded':'Available';label.append(state);}
     if(SpawnPicker.value(entry.provider,entry.model,'vision')===true){const vision=document.createElement('span');vision.className='model-badge';vision.textContent='Vision';label.append(vision);}
     modelChoices.append(label);
   };
   const recent=SpawnPicker.recent(spawnViewerStorage,SPAWN_RECENT_STORAGE_KEY).map(key=>matches.find(e=>e.key===key)).filter(Boolean);
   const heading=text=>{const title=document.createElement('div');title.className='spawn-model-group';title.textContent=text;modelChoices.append(title);};
   if(recent.length){heading('Recently used');recent.forEach(add);}
-  heading(`All models · ${matches.length} available`);matches.forEach(add);
+  (spawnCatalog.providers||[]).filter(p=>SpawnPicker.family(p,{})==='local').forEach(provider=>{
+    const rows=matches.filter(e=>e.provider.id===provider.id);
+    if(query&&!rows.length)return;
+    heading(provider.label||provider.id);rows.forEach(add);
+    const failures=(provider.endpoints||[]).filter(e=>e.reason);
+    if(provider.model_error||failures.length){const message=document.createElement('p');message.className='spawn-empty';message.textContent=provider.model_error?'Unavailable · '+provider.model_error.replaceAll('_',' '):failures.map(e=>'URL '+(e.url_index+1)+' unavailable').join(' · ');modelChoices.append(message);}
+  });
   if(!matches.length){const empty=document.createElement('p');empty.className='spawn-empty';empty.textContent=query?'No models match your search.':'No local models are available in your catalog.';modelChoices.append(empty);}
 }
-function selectedSpawnModel(){const p=providerById(selProvider);return p&&(p.models||[]).find(m=>m.id===selModel)||null;}
+function selectedSpawnModel(){const p=providerById(selProvider);return p&&(p.models||[]).find(m=>m.id===selModel&&(!Number.isInteger(m.url_index)||m.url_index===selUrlIndex)&&(!m.url_key||m.url_key===selUrlKey))||null;}
 function renderHarnesses(){
   const p=providerById(selProvider),model=selectedSpawnModel();
   spawnHarnesses.replaceChildren();
@@ -9652,7 +9671,7 @@ function updateSpawnAvailability(){
 function renderSpawnSummary(){
   const p=providerById(selProvider),model=selectedSpawnModel(),summary=document.getElementById('spawnSummary');
   summary.replaceChildren();if(!p||!model)return;
-  const title=document.createElement('strong');title.textContent=model.id;summary.append(title);
+  const title=document.createElement('strong');title.textContent=model.display_name||model.id;summary.append(title);
   const h=SpawnPicker.harnesses(p,model).find(h=>h.id===selHarness);
   const effort=effortsForModel(p,selModel);
   const details=[SpawnPicker.metadata(p,model),h?(h.default?'':'Harness: '+h.label):'Harness: Unavailable',selEffort?'Effort: '+selEffort:effectiveSpawnEffort(p,selModel)?'Effort: Default ('+effectiveSpawnEffort(p,selModel)+')':effort.efforts||effort.source==='unknown'?'Effort: Default':'Effort: Not supported',
@@ -9751,7 +9770,7 @@ function renderModels(){
 /* The telemetry's per-model effort list wins over the provider's; an empty
    per-model list means "send no effort, let the CLI decide". */
 function effortsForModel(provider,model){
-  const selected=provider&&(provider.models||[]).find(m=>m.id===model);
+  const selected=provider&&(provider.models||[]).find(m=>m.id===model&&(!Number.isInteger(m.url_index)||m.url_index===selUrlIndex)&&(!m.url_key||m.url_key===selUrlKey));
   const harness=provider&&selected&&SpawnPicker.harnesses(provider,selected).find(h=>h.id===selHarness);
   if(harness&&Object.hasOwn(harness,'efforts'))return {
     efforts:Array.isArray(harness.efforts)&&harness.efforts.length?harness.efforts:null,
@@ -9954,6 +9973,8 @@ function openSpawnModal(){
   spawnAdvanced.open=false;
   spawnWorktreeBaseWrap.classList.remove('on');spawnStatus.textContent='ready';
   selScientist='';selProvider=null;selModel=null;selEffort=null;selFamily=null;selHarness=null;
+  selUrlIndex=null;
+  selUrlKey=null;
   try{spawnModelSearch.value=spawnViewerStorage?.getItem(SPAWN_SEARCH_STORAGE_KEY)||'';}catch(_){spawnModelSearch.value='';}
   populateSpawnParents();
   spawnOverlay.classList.add('on');spawnOverlay.setAttribute('aria-hidden','false');
@@ -9983,6 +10004,8 @@ function spawnPayloadFromForm(){
     harness:selHarness&&SpawnPicker.harnessKey(selHarness)!==legacyHarness?selHarness:null,
     helper_model:!spawnHelper.disabled?spawnHelper.value:null,
     model:selModel||(spawnForm.querySelector('input[name="spawnModel"]:checked')||{}).value,
+    url_index:selectedSpawnModel()?.url_index,
+    url_key:selectedSpawnModel()?.url_key,
     effort:effectiveSpawnEffort(providerById(selProvider),selModel),
     dir,
     worktree:spawnWorktree.checked,worktree_base:spawnWorktreeBase.value,
@@ -10031,7 +10054,8 @@ async function submitSpawn(event){
     let result={};
     try{result=await response.json();}catch(_){/* HTTP status is still useful */}
     if(!response.ok||!result.ok)throw new Error(result.error||`HTTP ${response.status}`);
-    if(SpawnPicker.locality(p,model)==='local')SpawnPicker.remember(spawnViewerStorage,SPAWN_RECENT_STORAGE_KEY,JSON.stringify([p.id,model.id]));
+    if(SpawnPicker.locality(p,model)==='local')SpawnPicker.remember(spawnViewerStorage,SPAWN_RECENT_STORAGE_KEY,
+      JSON.stringify([p.id,model.id,...(Number.isInteger(model.url_index)?[model.url_index]:[]),...(model.url_key?[model.url_key]:[])]));
     spawnBusy=false;closeSpawnModal(true);
     const childName=result.child_name||result.tmux_session||'new agent';
     if(result.pending){

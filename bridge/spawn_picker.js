@@ -40,7 +40,8 @@
     return key;
   }
   function entries(catalog){return (catalog.providers||[]).flatMap(provider=>(provider.models||[])
-    .filter(model=>model&&model.id).map(model=>({provider,model,key:JSON.stringify([provider.id,model.id]),family:family(provider,model)})));}
+    .filter(model=>model&&model.id).map(model=>({provider,model,key:JSON.stringify([provider.id,model.id,
+      ...(Number.isInteger(model.url_index)?[model.url_index]:[]),...(model.url_key?[model.url_key]:[])]),family:family(provider,model)})));}
   function value(provider,model,key){return model&&Object.hasOwn(model,key)?model[key]:provider[key];}
   function harnesses(provider,model){
     const supplied=value(provider,model,'harnesses');
@@ -55,6 +56,11 @@
     return Array.isArray(list)?list.filter(m=>typeof m==='string'||m&&m.id).map(m=>typeof m==='string'?{id:m,label:m}:m):[];
   }
   function metadata(provider,model){
+    if(provider.dynamic_models){
+      const source=model.context_source||'unreported';
+      return [provider.label||provider.id,Number.isInteger(model.url_index)?'URL '+(model.url_index+1):'',
+        model.context?Math.round(model.context/1000)+'K context ('+source+')':'Context unreported'].filter(Boolean).join(' · ');
+    }
     return ['server','quantization','context'].map(key=>value(provider,model,key)).filter(v=>v!==undefined&&v!==null&&v!=='').join(' / ');
   }
   function recent(storage,key){

@@ -7,6 +7,36 @@ import pytest
 
 from test_cockpit_tour import tour_browser  # noqa: F401
 from test_spawn_model_first import node
+
+
+def test_dynamic_tuple_survives_real_http_spawn_proxy(monkeypatch):
+    import asyncio
+    from aiohttp import ClientSession, web
+    from test_proxy_actions import _start, ob
+    received = []
+    payload = dict(provider='local-workstation', harness='hermes', model='shared-model',
+        url_index=2, url_key='a' * 64, standalone=True, task='Synthetic task')
+    async def check():
+        async def upstream(request):
+            received.append(await request.json())
+            return web.json_response({'ok': True})
+        upstream_app = web.Application(); upstream_app.router.add_post('/api/spawn', upstream)
+        up_runner, base = await _start(upstream_app)
+        relay_runner = None
+        try:
+            monkeypatch.setattr(ob, 'DASHBOARD_URL', base)
+            async with ClientSession() as session:
+                app = web.Application(); app[ob.HTTP_SESSION_KEY] = session
+                app.router.add_post('/telemetry/spawn', ob.proxy_spawn)
+                relay_runner, relay = await _start(app)
+                async with session.post(relay + '/telemetry/spawn', json=payload) as response:
+                    assert response.status == 200 and await response.json() == {'ok': True}
+        finally:
+            if relay_runner is not None:
+                await relay_runner.cleanup()
+            await up_runner.cleanup()
+    asyncio.run(check())
+    assert received == [payload]
 from test_spawn_model_overflow import ob
 
 

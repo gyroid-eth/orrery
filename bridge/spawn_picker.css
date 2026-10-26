@@ -111,3 +111,6 @@
 
 .spawn-model-heading{display:flex;align-items:baseline;gap:8px}
 .spawn-catalog-state{font:10px var(--sans);color:var(--ink-dim)}
+.spawn-model-state{font:9px var(--sans);color:var(--ink-dim);white-space:nowrap;margin-left:10px}
+#modelChoices .model-choice.unavailable{color:var(--ink-faint);cursor:default}
+#modelChoices .model-choice.unavailable .model-choice-copy{opacity:.6}
