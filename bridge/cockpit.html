@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+<link rel="stylesheet" href="vendor/xterm-5.5.0/xterm.css">
 <link rel="stylesheet" href="orrery_view.css">
 <link rel="stylesheet" href="mail_view.css">
 <link rel="stylesheet" href="spawn_picker.css">
@@ -1470,9 +1470,9 @@
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.js"></script>
+<script src="vendor/xterm-5.5.0/xterm.js"></script>
+<script src="vendor/addon-fit-0.10.0/addon-fit.js"></script>
+<script src="vendor/addon-web-links-0.11.0/addon-web-links.js"></script>
 <script src="roster_descriptor.js"></script>
 <script src="demo_mask.js"></script>
 <script src="demo_mode.js"></script>
@@ -4271,9 +4271,9 @@
       }
     }
   },
-  "inventory_digest": "5f1f263d2170181081e9ccb08ec49d3cf24bd2338b5e937e19246a2b9eb2a68d",
+  "inventory_digest": "dc073da39e67eaf0d85bf95aed46bb4d57f736ea5b02184c345b2e2b76d8088d",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "0ab6576649548b16fe9d02c4e837b0c470529dae5ea12956089816dec2469393",
+  "source_digest": "17a73e9054db8f6edc6d87e6a927d2b0e3ced10b133cb2f6ad29d720d98a6e6e",
   "surface": "cockpit",
   "version": 1
 }
@@ -10267,7 +10267,7 @@ function inspectPrompt(text){
     const name=word.slice(1);
     const known=skillNamed(name,program);
     return {
-      reason:`<code>${word}</code> is a destructive builtin on ${program} — `+
+      reason:`<code>${esc(word)}</code> is a destructive builtin on ${program} — `+
         `it ends or wipes the session, it does not run a skill.`,
       fix:known?right+name+first.slice(word.length):null,
       fixLabel:known?`run the skill ${right}${name}`:null,
