@@ -219,7 +219,6 @@ Run the backend in WSL2 and open it in a Windows browser to use the same screen 
 - Search agents and tmux sessions and jump to their terminals (`Cmd+K`; `Alt+K` on WSL)
 - Send from the composer. Send history, suggestions for skills and commands with `/` or `$`, and a send guard that stops commands that would delete a session, or mistyped symbols, before they are sent ([Prompt composer](docs/en/usage.md#prompt-composer))
 - NEW AGENT and bulk EXIT of ORRERY Telemetry from the cockpit ([NEW AGENT](docs/en/usage.md#new-agent))
-- Adjusting small text and letter spacing (Vision profile; [Color theme](docs/en/usage.md#color-theme-light-mode))
 
 ## Requirements
 

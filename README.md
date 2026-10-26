@@ -225,7 +225,6 @@ WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同
 - agent と tmux session を検索して、そのターミナルへ移る（`Cmd+K` / WSL は `Alt+K`）
 - composer から送信。送信履歴、`/` か `$` で skill と command の候補、session を消す command や記号の取り違えを送る前に止める送信ガード（[Prompt composer](docs/usage.md#prompt-composer)）
 - cockpit から ORRERY Telemetry の NEW AGENT と一括 EXIT（[NEW AGENT](docs/usage.md#new-agent)）
-- 小さい文字と字間の調整（Vision profile。[配色テーマ](docs/usage.md#配色テーマlight-mode)）
 
 ## 動作要件
 

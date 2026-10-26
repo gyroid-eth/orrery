@@ -1016,49 +1016,6 @@
   .settings-choice:has(input:checked){border-color:rgb(var(--theme-accent-rgb) / .45);color:var(--ink);background:rgb(var(--theme-accent-rgb) / .07)}
   .settings-choice input{accent-color:var(--amber);margin:0}
   .settings-select{min-width:86px;padding:6px 8px;border:1px solid var(--hair);border-radius:6px;background:var(--panel-2);color:var(--ink);font:inherit;font-size:9px;letter-spacing:.06em}
-  .theme-ab-summary{
-    display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px;
-    padding:8px 9px;border:1px solid var(--hair);border-radius:7px;background:var(--panel-2);
-  }
-  .theme-ab-current{font-size:10px;color:var(--ink);letter-spacing:.06em}
-  .theme-ab-since{font-size:8px;color:var(--ink-faint);letter-spacing:.05em;text-align:right}
-  .theme-ab-since[data-status="error"]{color:#d2685e}
-  .theme-axis-list{display:flex;flex-direction:column;gap:6px;margin-top:11px}
-  .theme-axis-choice{
-    width:100%;display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px;align-items:center;
-    padding:7px 8px;border:1px solid var(--hair);border-radius:7px;background:transparent;
-    color:var(--ink-dim);font:inherit;text-align:left;cursor:pointer;
-  }
-  .theme-axis-choice:hover,.theme-axis-choice:focus-visible{border-color:rgb(var(--theme-accent-rgb) / .38);outline:none}
-  .theme-axis-choice[aria-pressed="true"]{border-color:rgb(var(--theme-accent-rgb) / .48);background:rgb(var(--theme-accent-rgb) / .07);color:var(--ink)}
-  .theme-axis-badge{font-size:9px;font-weight:600;letter-spacing:.08em;color:var(--amber)}
-  .theme-axis-copy{display:flex;min-width:0;flex-direction:column;gap:2px}
-  .theme-axis-name{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase}
-  .theme-axis-note{font-size:8px;line-height:1.4;color:var(--ink-faint);letter-spacing:.02em}
-  .theme-axis-count{font-size:7.5px;line-height:1.35;color:var(--ink-faint);letter-spacing:.025em;white-space:pre-line}
-  .theme-axis-count[data-status="ok"]{color:var(--ln-local)}
-  .theme-axis-count[data-status="error"]{color:#d2685e}
-  .theme-profile-axis{
-    display:flex;flex-direction:column;gap:8px;padding:9px;border:1px solid var(--hair);border-radius:7px;
-  }
-  .theme-profile-axis-head{display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px;align-items:start}
-  .theme-axis-levels{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}
-  .theme-axis-level{
-    min-width:0;padding:6px 2px;border:1px solid var(--hair);border-radius:5px;background:transparent;
-    color:var(--ink-faint);font:inherit;font-size:8px;font-variant-numeric:tabular-nums;cursor:pointer;
-  }
-  .theme-axis-level:hover,.theme-axis-level:focus-visible{border-color:rgb(var(--theme-accent-rgb) / .38);color:var(--ink);outline:none}
-  .theme-axis-level[aria-pressed="true"]{border-color:rgb(var(--theme-accent-rgb) / .52);background:rgb(var(--theme-accent-rgb) / .09);color:var(--amber)}
-  .theme-axis-level:disabled,.theme-axis-choice:disabled,.theme-ab-reset:disabled{cursor:wait;opacity:.55}
-  .theme-axis-legacy{margin-top:10px;border-top:1px solid var(--hair-2);padding-top:9px}
-  .theme-axis-legacy summary{color:var(--ink-faint);font-size:8.5px;letter-spacing:.08em;cursor:pointer}
-  .theme-ab-actions{display:flex;align-items:center;gap:8px;margin-top:10px}
-  .theme-ab-reset{flex:1}
-  .theme-ab-log{margin-top:11px;border-top:1px solid var(--hair-2);padding-top:9px}
-  .theme-ab-log summary{color:var(--ink-faint);font-size:8.5px;letter-spacing:.08em;cursor:pointer}
-  .theme-ab-log-list{display:flex;flex-direction:column;gap:4px;margin-top:8px;list-style:none}
-  .theme-ab-log-list li{display:flex;justify-content:space-between;gap:9px;color:var(--ink-dim);font-size:8px;line-height:1.4}
-  .theme-ab-log-list time{flex:0 0 auto;color:var(--ink-faint);font-variant-numeric:tabular-nums}
   .settings-foot{display:flex;justify-content:flex-end;padding:11px 17px;border-top:1px solid var(--hair)}
   .toast{
     position:fixed;z-index:1250;right:20px;bottom:20px;max-width:min(430px,calc(100vw - 40px));
@@ -1329,71 +1286,6 @@
       <div class="settings-section-title" id="usageSettingsTitle">Usage</div>
       <div class="settings-help">Choose providers shown in LEFT and Usage left. Saved in this browser.</div>
       <div id="usageProviderRows"></div>
-    </section>
-    <section aria-labelledby="themeAbTitle">
-      <div class="settings-section-title" id="themeAbTitle">Vision profile · small text + tracking</div>
-      <div class="theme-ab-summary" role="status" aria-live="polite">
-        <span class="theme-ab-current" id="themeAbCurrent">A · Current</span>
-        <span class="theme-ab-since" id="themeAbSince">no visual overrides</span>
-      </div>
-      <div class="settings-help">Set each axis independently. A keeps the current value; intermediate levels and simultaneous small-text + tracking are applied as one guarded profile.</div>
-      <div class="theme-axis-list" aria-label="Vision profile treatments">
-        <section class="theme-profile-axis" data-theme-axis-card="small-text" aria-labelledby="themeSmallTextName">
-          <div class="theme-profile-axis-head">
-            <span class="theme-axis-badge">P1</span><span class="theme-axis-copy">
-            <span class="theme-axis-name" id="themeSmallTextName">Small text</span><span class="theme-axis-note">Raise UI type below 12 px by up to 2 px.</span><span class="theme-axis-count" data-theme-axis-count="small-text">checking manifest…</span>
-            </span>
-          </div>
-          <div class="theme-axis-levels" role="group" aria-label="Small text value">
-            <button class="theme-axis-level" type="button" data-theme-axis-level="small-text" data-theme-axis-value="null" aria-pressed="true">A</button>
-            <button class="theme-axis-level" type="button" data-theme-axis-level="small-text" data-theme-axis-value="0.25" aria-pressed="false">.25</button>
-            <button class="theme-axis-level" type="button" data-theme-axis-level="small-text" data-theme-axis-value="0.5" aria-pressed="false">.5</button>
-            <button class="theme-axis-level" type="button" data-theme-axis-level="small-text" data-theme-axis-value="0.75" aria-pressed="false">.75</button>
-            <button class="theme-axis-level" type="button" data-theme-axis-level="small-text" data-theme-axis-value="1" aria-pressed="false">1</button>
-          </div>
-        </section>
-        <section class="theme-profile-axis" data-theme-axis-card="tracking" aria-labelledby="themeTrackingName">
-          <div class="theme-profile-axis-head">
-            <span class="theme-axis-badge">P2</span><span class="theme-axis-copy">
-            <span class="theme-axis-name" id="themeTrackingName">Wide tracking</span><span class="theme-axis-note">Cap non-code spacing at 0.08 em.</span><span class="theme-axis-count" data-theme-axis-count="tracking">checking manifest…</span>
-            </span>
-          </div>
-          <div class="theme-axis-levels" role="group" aria-label="Wide tracking value">
-            <button class="theme-axis-level" type="button" data-theme-axis-level="tracking" data-theme-axis-value="null" aria-pressed="true">A</button>
-            <button class="theme-axis-level" type="button" data-theme-axis-level="tracking" data-theme-axis-value="0.25" aria-pressed="false">.25</button>
-            <button class="theme-axis-level" type="button" data-theme-axis-level="tracking" data-theme-axis-value="0.5" aria-pressed="false">.5</button>
-            <button class="theme-axis-level" type="button" data-theme-axis-level="tracking" data-theme-axis-value="0.75" aria-pressed="false">.75</button>
-            <button class="theme-axis-level" type="button" data-theme-axis-level="tracking" data-theme-axis-value="1" aria-pressed="false">1</button>
-          </div>
-        </section>
-      </div>
-      <details class="theme-axis-legacy">
-        <summary>Lower-priority single-axis experiments</summary>
-        <div class="theme-axis-list" role="group" aria-label="Legacy single-axis treatments">
-          <button class="theme-axis-choice" type="button" data-theme-axis-choice="dim-contrast" data-theme-axis-card="dim-contrast" aria-pressed="false">
-            <span class="theme-axis-badge">B1</span><span class="theme-axis-copy">
-              <span class="theme-axis-name">Muted contrast</span><span class="theme-axis-note">Lift dim and faint label ink.</span><span class="theme-axis-count" data-theme-axis-count="dim-contrast">checking manifest…</span>
-            </span>
-          </button>
-          <button class="theme-axis-choice" type="button" data-theme-axis-choice="glow" data-theme-axis-card="glow" aria-pressed="false">
-            <span class="theme-axis-badge">B4</span><span class="theme-axis-copy">
-              <span class="theme-axis-name">Glow and shadow</span><span class="theme-axis-note">Reduce colored glow; keep elevation and focus.</span><span class="theme-axis-count" data-theme-axis-count="glow">checking manifest…</span>
-            </span>
-          </button>
-          <button class="theme-axis-choice" type="button" data-theme-axis-choice="background" data-theme-axis-card="background" aria-pressed="false">
-            <span class="theme-axis-badge">B5</span><span class="theme-axis-copy">
-              <span class="theme-axis-name">Background</span><span class="theme-axis-note">Legacy wire compatibility; excluded from the default trial.</span><span class="theme-axis-count" data-theme-axis-count="background">checking manifest…</span>
-            </span>
-          </button>
-        </div>
-      </details>
-      <div class="theme-ab-actions">
-        <button class="modal-btn theme-ab-reset" id="themeAbReset" type="button">A · Current (no change)</button>
-      </div>
-      <details class="theme-ab-log">
-        <summary>Recent use log · stored on this device</summary>
-        <ol class="theme-ab-log-list" id="themeAbLog"></ol>
-      </details>
     </section>
     <section aria-labelledby="terminalSettingsTitle">
       <div class="settings-section-title" id="terminalSettingsTitle">Terminal</div>
@@ -2826,101 +2718,6 @@
             "value": "var(--ink)"
           },
           {
-            "property": "border",
-            "selector": ".theme-ab-summary",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "background",
-            "selector": ".theme-ab-summary",
-            "value": "var(--panel-2)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-current",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-since",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border",
-            "selector": ".theme-axis-choice",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-choice",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-choice[aria-pressed=\"true\"]",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-note",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-count",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border",
-            "selector": ".theme-profile-axis",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "border",
-            "selector": ".theme-axis-level",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-level",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-level:hover,.theme-axis-level:focus-visible",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "border-top",
-            "selector": ".theme-axis-legacy",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-legacy summary",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border-top",
-            "selector": ".theme-ab-log",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-log summary",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-log-list li",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-log-list time",
-            "value": "var(--ink-faint)"
-          },
-          {
             "property": "border-top",
             "selector": ".settings-foot",
             "value": "1px solid var(--hair)"
@@ -3939,51 +3736,6 @@
           },
           {
             "property": "color",
-            "selector": ".theme-ab-since",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-choice",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-note",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-count",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-level",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-legacy summary",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-log summary",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-log-list li",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-log-list time",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
             "selector": ".pane-return,.pane-popout",
             "value": "var(--ink-faint)"
           },
@@ -4330,7 +4082,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "4b4d2a6870b199fb78b37d298b9ec193afb181425d35e83f73e0c4cd971370b4",
+        "digest": "cc4db58522a18c6b48f026351ab1aedcff9c2fb38b5e45c82bc40af1ab99a48a",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4424,16 +4176,6 @@
           ".settings-help\u0000font-size",
           ".settings-choice\u0000font-size",
           ".settings-select\u0000font-size",
-          ".theme-ab-current\u0000font-size",
-          ".theme-ab-since\u0000font-size",
-          ".theme-axis-badge\u0000font-size",
-          ".theme-axis-name\u0000font-size",
-          ".theme-axis-note\u0000font-size",
-          ".theme-axis-count\u0000font-size",
-          ".theme-axis-level\u0000font-size",
-          ".theme-axis-legacy summary\u0000font-size",
-          ".theme-ab-log summary\u0000font-size",
-          ".theme-ab-log-list li\u0000font-size",
           ".toast\u0000font-size",
           ".pane-return,.pane-popout\u0000font-size",
           ".pane-drag-ghost small\u0000font-size",
@@ -4482,7 +4224,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "0f6ebf570b1663846dc5bd320a000a22a9ba1150e59f5344c36288e521957cc1",
+        "digest": "773a85f76c918372fb30e47ed7db8fc0c6548f273e8f9796651aa871ec6403c5",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4529,9 +4271,9 @@
       }
     }
   },
-  "inventory_digest": "e91e4282a2fea32e776cfc8b48b687f239cfa61ecc8a111ab8ab5278c6eb1a21",
+  "inventory_digest": "5f1f263d2170181081e9ccb08ec49d3cf24bd2338b5e937e19246a2b9eb2a68d",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "08e644cc8a23513e28133be8994b570fcc075e940a10220e2db3ae2f0d831fff",
+  "source_digest": "0ab6576649548b16fe9d02c4e837b0c470529dae5ea12956089816dec2469393",
   "surface": "cockpit",
   "version": 1
 }
@@ -5256,13 +4998,6 @@ const miniViewOrrery=document.getElementById('miniViewOrrery');
 const miniViewNetwork=document.getElementById('miniViewNetwork');
 const miniNetworkDepthSelect=document.getElementById('miniNetworkDepth');
 const settingsBtn=document.getElementById('settingsBtn');
-const themeAbCurrent=document.getElementById('themeAbCurrent');
-const themeAbSince=document.getElementById('themeAbSince');
-const themeAbReset=document.getElementById('themeAbReset');
-const themeAbLog=document.getElementById('themeAbLog');
-const themeAxisButtons=[...document.querySelectorAll('[data-theme-axis-choice]')];
-const themeAxisCards=[...document.querySelectorAll('[data-theme-axis-card]')];
-const themeAxisLevelButtons=[...document.querySelectorAll('[data-theme-axis-level]')];
 const tabsEmpty=document.createElement('span');
 tabsEmpty.className='empty';tabsEmpty.textContent='waiting for sessions…';tabsEl.appendChild(tabsEmpty);
 
@@ -5294,16 +5029,6 @@ const TERM_FONT_STORAGE_KEY='oc-term-font';
 const TERM_FONT_AUTOSHRINK_STORAGE_KEY='oc-term-autoshrink';
 const MINI_VIEW_STORAGE_KEY='oc-mini-view';
 const MINI_NETWORK_DEPTH_STORAGE_KEY='oc-mini-network-depth';
-const THEME_PROFILE_STORAGE_KEY='agentstack.theme-profile.v1.state';
-const THEME_PROFILE_HISTORY_STORAGE_KEY='agentstack.theme-profile.v1.history';
-const THEME_AXIS_LEGACY_STORAGE_KEY='oc-theme-axis-v1';
-const THEME_AXIS_LEGACY_HISTORY_STORAGE_KEY='oc-theme-axis-history-v1';
-/* Kept as fixture/API aliases while persisted records migrate to profile keys. */
-const THEME_AXIS_STORAGE_KEY=THEME_PROFILE_STORAGE_KEY;
-const THEME_AXIS_HISTORY_STORAGE_KEY=THEME_PROFILE_HISTORY_STORAGE_KEY;
-const THEME_AXIS_HISTORY_LIMIT=100;
-const THEME_PROFILE_ACK_TIMEOUT_MS=2500;
-const THEME_PROFILE_READY_TIMEOUT_MS=5000;
 const THEME_AXIS_LABELS={
   'dim-contrast':'Muted contrast',
   'small-text':'Small text',
@@ -5405,15 +5130,7 @@ let terminalFontSize=TERM_FONT_DEFAULT,terminalAutoShrink=true;
 let miniViewMode='orrery';
 let miniNetworkDepth=2;
 let themeAxisState=normalizeThemeAxisState(null);
-let themeAxisHistory=[];
-let themeAxisHistoryPaintKey='';
 let themeAxisTransactionActive=false;
-let themeProfilePending=null;
-let themeProfileRecovery=null;
-let themeProfileRequestSequence=0;
-let themeProfileLastCandidateMeasurement=null;
-let themeProfileLastTelemetryOutcome=null;
-let themeProfileLastProtocolError=null;
 const themeAxisReports=new Map();
 const telemetryThemeAxisReports=new Map();
 const themeAxisMutationSnapshots=new Map();
@@ -5431,27 +5148,6 @@ try{
   if(localStorage.getItem(MINI_VIEW_STORAGE_KEY)==='network')miniViewMode='network';
   const storedNetworkDepth=Number(localStorage.getItem(MINI_NETWORK_DEPTH_STORAGE_KEY));
   if([1,2,3].includes(storedNetworkDepth))miniNetworkDepth=storedNetworkDepth;
-  const storedProfile=localStorage.getItem(THEME_PROFILE_STORAGE_KEY)??
-    localStorage.getItem(THEME_AXIS_LEGACY_STORAGE_KEY);
-  themeAxisState=normalizeStoredThemeAxisState(JSON.parse(storedProfile||'null'));
-  const storedHistory=localStorage.getItem(THEME_PROFILE_HISTORY_STORAGE_KEY)??
-    localStorage.getItem(THEME_AXIS_LEGACY_HISTORY_STORAGE_KEY);
-  const storedThemeHistory=JSON.parse(storedHistory||'[]');
-  if(Array.isArray(storedThemeHistory)){
-    themeAxisHistory=storedThemeHistory.flatMap(entry=>{
-      const startedAt=entry&&(typeof entry.startedAt==='string'?entry.startedAt:entry.at);
-      if(typeof startedAt!=='string')return [];
-      const viewport=entry.viewport&&Number.isFinite(entry.viewport.width)&&Number.isFinite(entry.viewport.height)
-        ?entry.viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio};
-      const interval={startedAt,viewport,receiverStatus:'applied'};
-      if(typeof entry.endedAt==='string')interval.endedAt=entry.endedAt;
-      if(Number.isFinite(entry.durationMs)&&entry.durationMs>=0)interval.durationMs=entry.durationMs;
-      if(entry.values)return [{...interval,values:normalizeStoredThemeAxisState(entry).values}];
-      if(entry.axis===null&&entry.value===null)return [{...interval,values:emptyThemeAxisValues()}];
-      if(!THEME_AXIS_IDS.includes(entry.axis)||normalizeThemeAxisValue(entry.value)===null)return [];
-      const values=emptyThemeAxisValues();values[entry.axis]=entry.value;return [{...interval,values}];
-    }).slice(-THEME_AXIS_HISTORY_LIMIT);
-  }
 }catch(_){/* storage can be unavailable in private/restricted webviews */}
 let themeAxisCommittedState=normalizeThemeAxisState(themeAxisState);
 
@@ -6265,33 +5961,6 @@ function refreshThemeAxisReports(){
     }));
   });
 }
-function themeAxisSurfaceCountText(surface,report,active){
-  if(!report)return `${surface} · waiting`;
-  if(active){
-    const effect=report.effect;
-    if(effect)return `${surface} · reached ${effect.visibleReached??0} / expected ${effect.visibleExpected??0} ${effect.unit||'computed-target'}\n${surface} · changed ${effect.visibleChanged??0} · deferred ${effect.deferred??0}`;
-    const mutation=report.mutation||{};
-    return `${surface} · compiled ${mutation.applied??0} / expected ${mutation.expected??0} ${mutation.unit||'items'}`;
-  }
-  const source=report.source||{};
-  return `${surface} · source ${source.matched??0} / expected ${source.expected??0} ${source.unit||'items'}`;
-}
-function paintThemeAxisCounts(){
-  const active=new Set(activeThemeAxes());
-  themeAxisCards.forEach(card=>{
-    const axis=card.dataset.themeAxisCard;
-    const output=card.querySelector('[data-theme-axis-count]');
-    if(!output)return;
-    const selected=active.has(axis);
-    const cockpit=themeAxisReports.get(axis);
-    const telemetry=selected?telemetryThemeAxisReports.get(axis):null;
-    output.textContent=selected
-      ?`${themeAxisSurfaceCountText('cockpit',cockpit,true)}\n${themeAxisSurfaceCountText('telemetry',telemetry,true)}`
-      :themeAxisSurfaceCountText('cockpit',cockpit,false);
-    const failed=(cockpit&&!cockpit.ok)||(telemetry&&telemetry.ok===false);
-    output.dataset.status=failed?'error':cockpit&&cockpit.ok?'ok':'';
-  });
-}
 function formatThemeAxisTime(value){
   const date=new Date(value);
   if(!Number.isFinite(date.getTime()))return 'unknown time';
@@ -6304,85 +5973,7 @@ function themeAxisProfileLabel(values=themeAxisState.values){
   return axes.map(axis=>`${axis} ${formatThemeAxisValue(values[axis])}`).join(' / ');
 }
 function paintThemeAxisControls(){
-  const displayState=themeAxisTransactionActive?themeAxisCommittedState:themeAxisState;
-  const active=new Set(activeThemeAxes(displayState)),label=themeAxisProfileLabel(displayState.values);
-  themeAbCurrent.textContent=label;
-  if(themeProfileRecovery&&themeProfileRecovery.failed){
-    themeAbSince.textContent='recovery failed · telemetry not ready';themeAbSince.dataset.status='error';
-  }else{
-    themeAbSince.textContent=active.size&&displayState.changedAt
-      ?`since ${formatThemeAxisTime(displayState.changedAt)}`:'no visual overrides';
-    delete themeAbSince.dataset.status;
-  }
-  themeAxisButtons.forEach(button=>{
-    const selected=active.has(button.dataset.themeAxisChoice);
-    button.setAttribute('aria-pressed',String(selected));
-    button.title=selected?'Adjust this axis below':`Try ${THEME_AXIS_LABELS[button.dataset.themeAxisChoice]}`;
-  });
-  const profileBusy=Boolean(themeProfilePending||themeProfileRecovery);
-  themeAxisLevelButtons.forEach(button=>{
-    const axis=button.dataset.themeAxisLevel;
-    const value=button.dataset.themeAxisValue==='null'?null:Number(button.dataset.themeAxisValue);
-    button.setAttribute('aria-pressed',String((displayState.values[axis]??null)===value));
-    button.disabled=profileBusy;
-  });
-  themeAxisButtons.forEach(button=>{button.disabled=profileBusy;});
-  themeAbReset.disabled=!active.size||profileBusy;
-  settingsBtn.textContent='⚙ Settings';  /* the active theme profile is a tooltip, not a label: the header stays quiet */
-  settingsBtn.title=active.size?`Cockpit settings · theme profile: ${label}`:'Cockpit settings';
-  paintThemeAxisCounts();
-  const historyPaintKey=JSON.stringify(themeAxisHistory.slice(-12));
-  if(!themeAxisTransactionActive&&historyPaintKey!==themeAxisHistoryPaintKey){
-    themeAxisHistoryPaintKey=historyPaintKey;themeAbLog.replaceChildren();
-    const recent=themeAxisHistory.slice(-12).reverse();
-    if(!recent.length){
-      const empty=document.createElement('li');empty.textContent='No A/B switches recorded yet.';themeAbLog.appendChild(empty);
-    }else recent.forEach(entry=>{
-      const item=document.createElement('li');
-      const state=document.createElement('span');
-      state.textContent=entry.values?themeAxisProfileLabel(entry.values)
-        :(entry.axis?`${entry.axis} ${formatThemeAxisValue(entry.value)}`:'A · Current');
-      const time=document.createElement('time');time.dateTime=entry.startedAt;time.textContent=formatThemeAxisTime(entry.startedAt);
-      item.append(state,time);themeAbLog.appendChild(item);
-    });
-  }
-}
-function persistThemeAxisExperiment(){
-  try{
-    localStorage.setItem(THEME_PROFILE_STORAGE_KEY,JSON.stringify(themeAxisState));
-    localStorage.setItem(THEME_PROFILE_HISTORY_STORAGE_KEY,JSON.stringify(themeAxisHistory));
-    localStorage.removeItem(THEME_AXIS_LEGACY_STORAGE_KEY);
-    localStorage.removeItem(THEME_AXIS_LEGACY_HISTORY_STORAGE_KEY);
-  }catch(_){/* the current in-memory experiment still remains usable */}
-}
-function appendThemeAxisHistory(){
-  const startedAt=themeAxisState.changedAt||new Date().toISOString();
-  const previous=themeAxisHistory[themeAxisHistory.length-1];
-  if(previous&&!previous.endedAt){
-    previous.endedAt=startedAt;
-    previous.durationMs=Math.max(0,new Date(startedAt)-new Date(previous.startedAt));
-  }
-  themeAxisHistory.push({values:{...themeAxisState.values},startedAt,
-    viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio},receiverStatus:'applied'});
-  themeAxisHistory=themeAxisHistory.slice(-THEME_AXIS_HISTORY_LIMIT);
-}
-function nextThemeProfileRequestId(label='apply'){
-  themeProfileRequestSequence+=1;
-  return `cockpit-${label}-${Date.now().toString(36)}-${themeProfileRequestSequence}`;
-}
-function postThemeProfileToTelemetry(requestId,values){
-  const frame=document.getElementById('networkFrame');
-  if(!frame||!frame.contentWindow)return false;
-  const dispatch=()=>frame.contentWindow&&frame.contentWindow.postMessage({
-    type:'agentstack-theme-profile',version:1,requestId,values:{...values},
-  },location.origin);
-  if(!frame.getAttribute('src')){
-    frame.addEventListener('load',dispatch,{once:true});frame.src='/network/?embed=1';
-  }else dispatch();
-  return true;
-}
-function postThemeAxesToTelemetry(){
-  return postThemeProfileToTelemetry(nextThemeProfileRequestId('sync'),themeAxisCommittedState.values);
+  settingsBtn.textContent='⚙ Settings';settingsBtn.title='Cockpit settings';
 }
 function postThemeAxisToTelemetry(axis,value){
   const frame=document.getElementById('networkFrame');
@@ -6390,139 +5981,9 @@ function postThemeAxisToTelemetry(axis,value){
   frame.contentWindow.postMessage({type:'agentstack-theme-axis',version:1,axis,value},location.origin);
   return true;
 }
-const THEME_PROFILE_COUNT_UNITS=Object.freeze({
-  'dim-contrast':Object.freeze({source:'token-write',mutation:'token-write',effect:'computed-target'}),
-  'small-text':Object.freeze({source:'declaration',mutation:'element',effect:'computed-target'}),
-  tracking:Object.freeze({source:'declaration',mutation:'element',effect:'computed-target'}),
-  glow:Object.freeze({source:'declaration',mutation:'effect-component',effect:'effect-component'}),
-  background:Object.freeze({source:'token-write',mutation:'token-write',effect:'computed-target'}),
-});
-function themeProfileCountPasses(count,observedKey,expectedUnit){
-  return count&&count.unit===expectedUnit&&
-    Number.isInteger(count.expected)&&count.expected>0&&Number.isInteger(count[observedKey])&&
-    count[observedKey]===count.expected;
-}
-function validateTelemetryThemeProfileResult(result,pending){
-  if(!result||result.type!=='agentstack-theme-profile-result'||result.version!==1||
-      result.requestId!==pending.requestId||result.surface!=='telemetry'){
-    return {ok:false,reason:'telemetry-profile-envelope-mismatch'};
-  }
-  const requested=themeAxisStrictProfileValues(result.requested);
-  const applied=themeAxisStrictProfileValues(result.applied);
-  if(!requested||!applied||!themeAxisValuesEqual(requested,pending.values)){
-    return {ok:false,reason:'telemetry-profile-value-mismatch'};
-  }
-  if(result.status==='rejected'){
-    const rollbackVerified=themeAxisValuesEqual(applied,pending.previousValues);
-    return {ok:false,reason:rollbackVerified?(result.reason||'telemetry-profile-rejected'):
-      'telemetry-profile-rollback-mismatch',rollbackVerified};
-  }
-  if(result.status!=='applied'||!themeAxisValuesEqual(applied,pending.values)){
-    return {ok:false,reason:'telemetry-profile-value-mismatch'};
-  }
-  const active=THEME_AXIS_IDS.filter(axis=>pending.values[axis]!==null);
-  if(!result.axes||Array.isArray(result.axes)||typeof result.axes!=='object'||
-      Object.keys(result.axes).sort().join('\0')!==[...active].sort().join('\0')){
-    return {ok:false,reason:'telemetry-profile-axis-mismatch'};
-  }
-  const reports=new Map();
-  for(const axis of active){
-    const report=result.axes[axis];
-    const units=THEME_PROFILE_COUNT_UNITS[axis];
-    const verdict=themeAxisEffectVerdict(report&&report.effect);
-    if(!report||report.status!=='applied'||
-        !themeProfileCountPasses(report.source,'matched',units.source)||
-        !themeProfileCountPasses(report.mutation,'applied',units.mutation)||
-        !report.effect||report.effect.unit!==units.effect||!verdict.ok){
-      return {ok:false,reason:report&&report.reason||verdict.reason||'telemetry-profile-axis-failed'};
-    }
-    reports.set(axis,{axis,ok:true,reason:null,source:report.source,
-      mutation:report.mutation,effect:report.effect});
-  }
-  return {ok:true,reports};
-}
-function reportThemeProfileProtocolError(reason,error=null){
-  themeProfileLastProtocolError={reason,message:error?String(error&&error.message||error):reason,
-    at:new Date().toISOString()};
-  console.error('theme profile protocol error',themeProfileLastProtocolError);
-  document.dispatchEvent(new CustomEvent('oc:theme-profile-error',{
-    detail:{...themeProfileLastProtocolError},
-  }));
-}
-function handleTelemetryThemeProfileResult(result){
-  const pending=themeProfilePending;
-  if(!pending||!result||result.requestId!==pending.requestId)return false;
-  try{
-    pending.cancel(pending.timeoutHandle);themeProfilePending=null;
-    const validated=validateTelemetryThemeProfileResult(result,pending);
-    pending.resolve(validated);paintThemeAxisControls();return true;
-  }catch(error){
-    try{clearTimeout(pending.timeoutHandle);}catch(_){/* reporting below is the durable signal */}
-    themeProfilePending=null;reportThemeProfileProtocolError('telemetry-profile-handler-error',error);
-    pending.resolve({ok:false,reason:'telemetry-profile-handler-error'});paintThemeAxisControls();return true;
-  }
-}
-function requestTelemetryThemeProfile(values,previousValues,clock={},label='apply'){
-  const requestId=nextThemeProfileRequestId(label);
-  const schedule=typeof clock.schedule==='function'
-    ?(callback,delay)=>clock.schedule(callback,delay):(callback,delay)=>setTimeout(callback,delay);
-  const cancel=typeof clock.cancel==='function'
-    ?handle=>clock.cancel(handle):handle=>clearTimeout(handle);
-  return new Promise(resolve=>{
-    const pending={requestId,values:{...values},previousValues:{...previousValues},resolve,cancel,timeoutHandle:null};
-    pending.timeoutHandle=schedule(()=>{
-      if(themeProfilePending!==pending)return;
-      themeProfilePending=null;resolve({ok:false,reason:'telemetry-profile-timeout'});paintThemeAxisControls();
-    },THEME_PROFILE_ACK_TIMEOUT_MS);
-    themeProfilePending=pending;paintThemeAxisControls();
-    postThemeProfileToTelemetry(requestId,values);
-  });
-}
-function setTelemetryThemeProfileReports(result){
-  telemetryThemeAxisReports.clear();
-  result.reports&&result.reports.forEach((report,axis)=>telemetryThemeAxisReports.set(axis,report));
-}
-async function compensateTelemetryThemeProfile(values,clock={}){
-  const result=await requestTelemetryThemeProfile(values,values,clock,'rollback');
-  if(result.ok){setTelemetryThemeProfileReports(result);return true;}
-  beginTelemetryThemeProfileRecovery(values);return false;
-}
-function reloadTelemetryProfileReceiver(){
-  const frame=document.getElementById('networkFrame');if(!frame)return;
-  const source=new URL(frame.getAttribute('src')||'/network/?embed=1',location.href);
-  source.searchParams.set('profile-recovery',String(themeProfileRecovery&&themeProfileRecovery.attempt||1));
-  frame.src=source.pathname+source.search;
-}
-function armTelemetryProfileReadyTimeout(recovery){
-  recovery.cancelReady(recovery.readyTimeoutHandle);
-  recovery.readyTimeoutHandle=recovery.scheduleReady(()=>{
-    if(themeProfileRecovery!==recovery||recovery.running)return;
-    recovery.failed=true;
-    reportThemeProfileProtocolError('recovery-failed',new Error('telemetry-profile-ready-timeout'));
-    paintThemeAxisControls();
-  },THEME_PROFILE_READY_TIMEOUT_MS);
-}
-function beginTelemetryThemeProfileRecovery(values,clock={}){
-  if(themeProfileRecovery)return;
-  const scheduleReady=typeof clock.schedule==='function'
-    ?(callback,delay)=>clock.schedule(callback,delay):(callback,delay)=>setTimeout(callback,delay);
-  const cancelReady=typeof clock.cancel==='function'
-    ?handle=>clock.cancel(handle):handle=>clearTimeout(handle);
-  themeProfileRecovery={values:{...values},attempt:1,running:false,scheduleReady,cancelReady,
-    readyTimeoutHandle:null};
-  paintThemeAxisControls();reloadTelemetryProfileReceiver();armTelemetryProfileReadyTimeout(themeProfileRecovery);
-}
-async function acknowledgeTelemetryThemeProfileRecovery(){
-  const recovery=themeProfileRecovery;
-  if(!recovery||recovery.running||themeProfilePending)return;
-  recovery.cancelReady(recovery.readyTimeoutHandle);recovery.running=true;
-  const result=await requestTelemetryThemeProfile(recovery.values,recovery.values,{},'recovery');
-  if(themeProfileRecovery!==recovery)return;
-  recovery.running=false;
-  if(result.ok){setTelemetryThemeProfileReports(result);themeProfileRecovery=null;paintThemeAxisControls();return;}
-  recovery.attempt+=1;setTimeout(()=>{
-    if(themeProfileRecovery===recovery){reloadTelemetryProfileReceiver();armTelemetryProfileReadyTimeout(recovery);}
-  },Math.min(1000*recovery.attempt,5000));
+function postThemeAxesToTelemetry(){
+  const axis=activeThemeAxis()||THEME_AXIS_IDS[0];
+  return postThemeAxisToTelemetry(axis,activeThemeAxisValue(axis));
 }
 function applyThemeAxisState({broadcast=true,negativeTrackingBaseline=false}={}){
   const axes=activeThemeAxes(),axis=axes.length===1?axes[0]:null,value=axis?activeThemeAxisValue(axis):null;
@@ -6642,37 +6103,7 @@ function beginThemeValuesTransaction(values,{negativeTrackingBaseline=false}={})
 }
 function commitThemeValuesTransaction(transaction){
   themeAxisCommittedState=normalizeThemeAxisState(themeAxisState);
-  appendThemeAxisHistory();persistThemeAxisExperiment();
   themeAxisTransactionActive=false;finishThemeAxisSettledTransaction(transaction);paintThemeAxisControls();
-  // Provisional application and rollback also emit oc:theme-axis. Notify help
-  // only after the guarded transaction has committed successfully.
-  document.dispatchEvent(new CustomEvent('oc:theme-profile-committed',{
-    detail:{values:{...themeAxisCommittedState.values}},
-  }));
-}
-async function setThemeProfile(candidate,{clock={},localOptions={}}={}){
-  if(themeProfilePending||themeProfileRecovery)return false;
-  const values=themeAxisStrictProfileValues(candidate);
-  if(!values)return false;
-  if(themeAxisValuesEqual(themeAxisCommittedState.values,values))return true;
-  const local=beginThemeValuesTransaction(values,localOptions);
-  themeProfileLastCandidateMeasurement={ok:local.ok,reason:local.transaction.reason||null,
-    membership:local.transaction.membership||{},members:local.transaction.members||[]};
-  if(!local.ok){
-    showToast(`VISION PROFILE REJECTED · cockpit · ${local.transaction.reason}`,true);return false;
-  }
-  const previousValues={...local.transaction.previousState.values};
-  const telemetry=await requestTelemetryThemeProfile(values,previousValues,clock);
-  themeProfileLastTelemetryOutcome=telemetry;
-  if(!telemetry.ok){
-    restoreThemeValuesTransaction(local.transaction);
-    if(!telemetry.rollbackVerified)await compensateTelemetryThemeProfile(previousValues,clock);
-    showToast(`VISION PROFILE REJECTED · telemetry · ${telemetry.reason}`,true);return false;
-  }
-  setTelemetryThemeProfileReports(telemetry);
-  commitThemeValuesTransaction(local.transaction);
-  showToast(activeThemeAxes().length?`VISION PROFILE · ${themeAxisProfileLabel()}`:'VISION A · CURRENT');
-  return true;
 }
 function setThemeAxis(axis,value){
   const nextValue=normalizeThemeAxisValue(value);
@@ -6680,35 +6111,12 @@ function setThemeAxis(axis,value){
   const values=emptyThemeAxisValues();if(nextValue!==null)values[axis]=nextValue;
   if(themeAxisValuesEqual(themeAxisState.values,values))return true;
   const result=beginThemeValuesTransaction(values);
-  if(!result.ok){showToast(`VISION B REJECTED · ${THEME_AXIS_LABELS[axis]} · ${result.transaction.reason}`,true);return false;}
+  if(!result.ok)return false;
   commitThemeValuesTransaction(result.transaction);postThemeAxisToTelemetry(axis,nextValue);
-  showToast(activeThemeAxes().length?`VISION B · ${themeAxisProfileLabel()}`:'VISION A · CURRENT');
   return true;
 }
-themeAxisLevelButtons.forEach(button=>button.addEventListener('click',()=>{
-  const values={...themeAxisCommittedState.values};
-  const axis=button.dataset.themeAxisLevel;
-  const value=button.dataset.themeAxisValue==='null'?null:Number(button.dataset.themeAxisValue);
-  THEME_AXIS_IDS.filter(current=>!THEME_PROFILE_AXES.includes(current)).forEach(current=>{values[current]=null;});
-  values[axis]=value;void setThemeProfile(values);
-}));
-themeAxisButtons.forEach(button=>button.addEventListener('click',()=>{
-  const axis=button.dataset.themeAxisChoice;
-  const values=emptyThemeAxisValues();
-  if(!(themeAxisCommittedState.values[axis]!==null&&activeThemeAxes(themeAxisCommittedState).length===1))values[axis]=1;
-  void setThemeProfile(values);
-}));
-themeAbReset.addEventListener('click',()=>{if(activeThemeAxes(themeAxisCommittedState).length)void setThemeProfile(emptyThemeAxisValues());});
-
-const initialValues={...themeAxisState.values};
-const initial=beginThemeValuesTransaction(initialValues);
-if(initial.ok){
-  themeAxisCommittedState=normalizeThemeAxisState(themeAxisState);
-  themeAxisTransactionActive=false;finishThemeAxisSettledTransaction(initial.transaction);paintThemeAxisControls();
-}else{
-  themeAxisState=normalizeThemeAxisState(null);themeAxisCommittedState=normalizeThemeAxisState(null);
-  themeAxisMutationSnapshots.clear();themeAxisEffectSnapshots.clear();persistThemeAxisExperiment();applyThemeAxisState({broadcast:false});
-}
+// Stored profile and legacy axis values are deliberately not restored.
+applyThemeAxisState({broadcast:false});
 
 function setLink(state,label){linkDot.className='dot '+state;linkText.textContent=label;
   const stat=document.getElementById('linkStat');if(stat)stat.hidden=(state==='open');}
@@ -10687,7 +10095,7 @@ function openNetwork({focus=activeSession()}={}){
   if(loaded&&networkFrame.contentWindow){
     networkFrame.contentWindow.postMessage({type:'net-resume'},location.origin);
     if(focus)networkFrame.contentWindow.postMessage({type:'net-focus',name:focus},location.origin);
-    if(!themeProfilePending&&!themeProfileRecovery)postThemeAxesToTelemetry();
+    postThemeAxesToTelemetry();
   }
 }
 function closeNetwork(){
@@ -10709,14 +10117,11 @@ document.addEventListener('oc:open-telemetry',event=>openNetwork(event.detail||{
 document.getElementById('networkClose').addEventListener('click',closeNetwork);
 networkOverlay.addEventListener('mousedown',e=>{if(e.target===networkOverlay)closeNetwork();});
 networkFrame.addEventListener('load',()=>{
-  if(!themeProfilePending&&!themeProfileRecovery)postThemeAxesToTelemetry();
+  postThemeAxesToTelemetry();
 });
 window.addEventListener('message',e=>{
   if(e.origin!==location.origin)return;
   const d=e.data;
-  if(e.source===networkFrame.contentWindow&&d&&d.type==='agentstack-theme-profile-result'&&d.version===1){
-    handleTelemetryThemeProfileResult(d);return;
-  }
   if(e.source===networkFrame.contentWindow&&d&&d.type==='agentstack-theme-axis-result'&&d.version===1){
     const axis=d.requested&&d.requested.axis;
     if(THEME_AXIS_IDS.includes(axis)){
@@ -10728,13 +10133,8 @@ window.addEventListener('message',e=>{
     }
     return;
   }
-  if(e.source===networkFrame.contentWindow&&d&&d.type==='agentstack-theme-profile-ready'&&d.version===1){
-    if(themeProfileRecovery)void acknowledgeTelemetryThemeProfileRecovery();
-    else if(!themeProfilePending)postThemeAxesToTelemetry();
-    return;
-  }
   if(e.source===networkFrame.contentWindow&&d&&d.type==='agentstack-theme-axis-ready'&&d.version===1){
-    if(!themeProfileRecovery&&!themeProfilePending)postThemeAxesToTelemetry();
+    postThemeAxesToTelemetry();
     return;
   }
   if(e.source===networkFrame.contentWindow&&d&&d.type==='orrery-jump'&&typeof d.name==='string'&&d.name){

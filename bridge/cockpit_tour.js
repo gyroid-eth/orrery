@@ -772,7 +772,6 @@ function mount(){
   doc.addEventListener('keydown',event=>{
     if(event.key==='Escape'&&state.map){event.preventDefault();event.stopImmediatePropagation();hideMap();}
   },true);
-  doc.addEventListener('oc:theme-profile-committed',()=>flight.mark('settings'));
   doc.getElementById('mail').addEventListener('click',()=>flight.mark('mail'));
   settings.addEventListener('change',event=>{if(event.target.matches('input,select,textarea'))flight.mark('settings');});
   // Sliders apply on input rather than waiting for a change event.

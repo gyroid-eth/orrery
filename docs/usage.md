@@ -61,7 +61,7 @@ ORRERY cockpit は、左の roster、中央の terminal、右の ORRERY Mail rai
 | ターミナルの URL をクリックで browser、パスをクリックで Finder／エクスプローラー | mouse を乗せると下線が出るだけ | [ターミナルから開く・ターミナルに渡す](#ターミナルから開くターミナルに渡す) |
 | Finder でコピーしたファイルを composer に貼ると絶対パスが入る（drag & drop は無い） | 貼ったあとの toast のみ | [ターミナルから開く・ターミナルに渡す](#ターミナルから開くターミナルに渡す) |
 | `LEFT` pill のクリックで window ごとの残量と reset、取れないときの理由 | pill には最小の % だけ | [Usage（残量表示）](#usage残量表示) |
-| Settings の Color theme（Dark / Light / System）と Vision profile | Settings を開くまで見えない | [配色テーマ（light mode）](#配色テーマlight-mode) |
+| Settings の Color theme（Dark / Light / System） | Settings を開くまで見えない | [配色テーマ（light mode）](#配色テーマlight-mode) |
 | Split の cell の名札の `×` で、その session だけを外す | 名札に mouse を乗せたときだけ出る | [Split](#split) |
 | 独立の窓の書きかけの下書きが、窓を閉じると cockpit に戻る | 戻ったときの表示なし | [独立の窓](#独立の窓) |
 | roster の検索の件数 `N/M` と、0 件のときの `Clear` | 検索したときだけ出る | [Roster](#roster) |
@@ -582,7 +582,7 @@ Settings で変更できる値:
 
 値は browser の `localStorage` に置き、backend の `~/.orrery/prefs.json` と約 4 秒ごとに同期します。Reset が戻すのは font と auto-shrink だけで、すべての cockpit state を消す操作ではありません。
 
-配色（Dark / Light / System）と Vision profile も Settings にあります（[配色テーマ（light mode）](#配色テーマlight-mode)）。
+配色（Dark / Light / System）も Settings にあります（[配色テーマ（light mode）](#配色テーマlight-mode)）。
 
 ## 配色テーマ（light mode）
 
@@ -603,14 +603,6 @@ Light にすると、次がまとめて切り替わります。
 
 `System` は OS の外観（ライト / ダーク）に合わせ、OS 側が切り替わるとその場で追従します。選んだ配色は Settings と同じく、ORRERY.app と browser の他の窓にも数秒で反映されます。
 
-### Vision profile
-
-Settings の `Vision profile · small text + tracking` では、小さい文字と字間を調整できます。
-
-- `P1 Small text`: 12 px より小さい UI の文字を、最大 +2 px 大きくする
-- `P2 Wide tracking`: 字間の上限を 0.08 em にする（コードの部分は除く）
-
-どちらも `A`（変更なし）・`.25`・`.5`・`.75`・`1` の 5 段階で、2 つを同時に使えます。`A · Current (no change)` で元に戻ります。変更は埋め込みの TELEMETRY にも同時に当てるため、ORRERY Telemetry が止まっていると適用できません（`VISION PROFILE REJECTED` と出て元に戻る）。
 
 ## Windows（WSL2）での違い
 

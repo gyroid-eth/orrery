@@ -31,9 +31,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BRIDGE = ROOT / "bridge"
 FIXTURE = ROOT / "tools" / "fixtures" / "theme_axis_adversarial.js"
-PROFILE_FIXTURE = ROOT / "tools" / "fixtures" / "theme_axis_profile.js"
-IFRAME_FIXTURE = ROOT / "tools" / "fixtures" / "theme_axis_profile_iframe.js"
-RECEIVER_FIXTURE = ROOT / "tools" / "fixtures" / "theme_profile_receiver.html"
 
 
 class _QuietHandler(SimpleHTTPRequestHandler):
@@ -42,7 +39,7 @@ class _QuietHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if self.path.split("?", 1)[0] in {"/network", "/network/", "/network/index.html"}:
-            payload = RECEIVER_FIXTURE.read_bytes()
+            payload = b'<!doctype html><title>Theme axis fixture</title>'
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(payload)))
@@ -205,12 +202,8 @@ def run_browser_contract(chrome: str | None = None) -> dict[str, object]:
     return _run_browser_fixture(FIXTURE, chrome)
 
 
-def run_profile_contract(chrome: str | None = None) -> dict[str, object]:
-    return _run_browser_fixture(PROFILE_FIXTURE, chrome)
 
 
-def run_profile_iframe_contract(chrome: str | None = None) -> dict[str, object]:
-    return _run_browser_fixture(IFRAME_FIXTURE, chrome)
 
 
 def assert_browser_contract(result: dict[str, object]) -> None:
@@ -241,94 +234,8 @@ def assert_browser_contract(result: dict[str, object]) -> None:
     assert result["final"] == {"active": None, "runtimeStyle": False}
 
 
-def assert_profile_contract(result: dict[str, object]) -> None:
-    normal = result["normal"]
-    assert normal["ok"] is True and normal["staleIgnored"] is True
-    assert normal["values"]["small-text"] == .25
-    assert normal["values"]["tracking"] == .25
-    assert normal["stored"]["values"] == normal["values"]
-    assert normal["axes"] == ["small-text", "tracking"]
-    assert "small-text 0.25 / tracking 0.25" in normal["header"]
-    assert "small-text 0.25 / tracking 0.25" in normal["settingsHeader"]
-
-    handler_error = result["handlerError"]
-    assert handler_error["accepted"] is False
-    assert handler_error["reason"] == "telemetry-profile-handler-error"
-    assert handler_error["observable"] is True and handler_error["rolledBack"] is True
-    assert handler_error["elapsedMs"] < 2500
-    assert handler_error["timeoutCallbacksRun"] is False
-
-    order = result["order"]
-    assert len(order) == 16
-    for record in order:
-        assert all(record[key] is True for key in
-                   ("smallFirst", "smallFinal", "trackingFirst", "trackingFinal")), record
-        assert record["membershipEqual"] is True and record["computedEqual"] is True, record
-        assert record["members"] > 0, record
-
-    negative = result["negativeControl"]
-    assert negative["accepted"] is False
-    assert negative["comparatorDetected"] is True
-    assert negative["correctPairPassed"] is True
-    assert negative["reason"].startswith(("mutation coverage", "effect-count-mismatch"))
-
-    timeout = result["timeout"]
-    assert timeout["accepted"] is False
-    for key in ("candidateAppliedBeforeReplyLoss", "rollbackFreshId", "telemetryRolledBack",
-                "cockpitRolledBack", "storageUnchanged", "historyUnchanged",
-                "headerUnchanged", "lateIgnored", "recoveryIdle"):
-        assert timeout[key] is True, (key, timeout)
-    assert timeout["scheduledDelays"] and all(
-        delay == 2500 for delay in timeout["scheduledDelays"])
-
-    recovery = result["recovery"]
-    assert recovery["accepted"] is False and recovery["recoveryCandidateApplied"] is True
-    for key in ("recoveryCompleted", "busyBeforeReady", "telemetryRolledBack", "controlsEnabled"):
-        assert recovery[key] is True, (key, recovery)
-    assert recovery["reloads"] > 0
-
-    ready_failure = result["readyFailure"]
-    for key in ("busyWithoutReady", "observable", "bounded", "completedAfterReady"):
-        assert ready_failure[key] is True, (key, ready_failure)
-    assert result["aLevels"] == {"small-text": "true", "tracking": "true"}
-    assert all(value is None for value in result["final"]["values"].values())
-    assert result["final"]["pending"] is False
 
 
-def assert_profile_iframe_contract(result: dict[str, object]) -> None:
-    success = result["success"]
-    assert success["accepted"] is True and success["readyExact"] is True
-    assert success["receiver"] == success["cockpit"]
-    assert success["axes"] == ["small-text", "tracking"]
-
-    unit = result["unitMismatch"]
-    assert unit["accepted"] is False
-    assert unit["reason"] == "telemetry-profile-axis-failed"
-    assert unit["receiverRolledBack"] is True and unit["cockpitRolledBack"] is True
-    assert unit["recoveryIdle"] is True
-
-    handler = result["handlerError"]
-    assert handler["accepted"] is False
-    assert handler["reason"] == "telemetry-profile-handler-error"
-    assert handler["observable"] is True and handler["timedOut"] is False
-    assert handler["elapsedMs"] < 2500
-    assert handler["receiverRolledBack"] is True and handler["cockpitRolledBack"] is True
-
-    reply = result["replyLoss"]
-    assert reply["accepted"] is False and reply["appliedBeforeReplyLoss"] is True
-    assert reply["receiverRolledBack"] is True and reply["cockpitRolledBack"] is True
-    assert reply["recoveryIdle"] is True
-
-    recovery = result["recovery"]
-    assert recovery["accepted"] is False and recovery["profileReadyObserved"] is True
-    assert recovery["receiverRolledBack"] is True and recovery["cockpitRolledBack"] is True
-    assert recovery["controlsEnabled"] is True
-
-    ready_loss = result["readyLoss"]
-    for key in ("axisReadyObserved", "profileReadyNotSubstituted", "observable",
-                "controlsDisabled", "persistentStatus", "receiverRolledBack",
-                "cockpitRolledBack"):
-        assert ready_loss[key] is True, (key, ready_loss)
 
 
 if __name__ == "__main__":

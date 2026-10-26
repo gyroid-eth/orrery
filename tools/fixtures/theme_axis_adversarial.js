@@ -1,8 +1,6 @@
 (async()=>{
   const waitFrame=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
   await document.fonts.ready;await waitFrame();
-  localStorage.removeItem(THEME_AXIS_STORAGE_KEY);
-  localStorage.removeItem(THEME_AXIS_HISTORY_STORAGE_KEY);
   if(activeThemeAxis())setThemeAxis(activeThemeAxis(),null);
 
   const capture=(axis,value)=>{
@@ -16,9 +14,8 @@
     };
     let ok;
     try{ok=setThemeAxis(axis,value);}finally{themeAxisEffectVerdict=originalVerdict;}
-    const stored=JSON.parse(localStorage.getItem(THEME_AXIS_STORAGE_KEY)||'null');
     return {axis,value,ok,effect,reason:verdict&&verdict.reason,
-      preReachedVisible,active:activeThemeAxis(),stored};
+      preReachedVisible,active:activeThemeAxis()};
   };
   const reset=()=>{if(activeThemeAxis())setThemeAxis(activeThemeAxis(),null);};
   const result={normal:[],zero:[],minimum:[],adversarial:{}};
