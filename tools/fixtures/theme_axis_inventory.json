@@ -2,8 +2,8 @@
   "axes": {
     "background": {
       "effect": {
-        "digest": "eaf3871113a5dec1cae687f3903f32b45c0190b5ab554131cd296ded496626cc",
-        "expected": 363,
+        "digest": "618dae0a264b9ffc0edb3d20ea6cd3143f1303d6a1ea64e74bd69784a2a6c2b7",
+        "expected": 344,
         "records": [
           {
             "property": "background",
@@ -1241,101 +1241,6 @@
             "value": "var(--ink)"
           },
           {
-            "property": "border",
-            "selector": ".theme-ab-summary",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "background",
-            "selector": ".theme-ab-summary",
-            "value": "var(--panel-2)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-current",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-since",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border",
-            "selector": ".theme-axis-choice",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-choice",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-choice[aria-pressed=\"true\"]",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-note",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-count",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border",
-            "selector": ".theme-profile-axis",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "border",
-            "selector": ".theme-axis-level",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-level",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-level:hover,.theme-axis-level:focus-visible",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "border-top",
-            "selector": ".theme-axis-legacy",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-legacy summary",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border-top",
-            "selector": ".theme-ab-log",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-log summary",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-log-list li",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-log-list time",
-            "value": "var(--ink-faint)"
-          },
-          {
             "property": "border-top",
             "selector": ".settings-foot",
             "value": "1px solid var(--hair)"
@@ -1966,8 +1871,8 @@
     },
     "dim-contrast": {
       "effect": {
-        "digest": "875d3df4f89733ec07a03ac035197cc1401bffcd8e038d2e4e1a3cd029b581bd",
-        "expected": 139,
+        "digest": "6923486cc5a0c3c9f2462e5ae94352b31b108cab9582b9750426164062838822",
+        "expected": 130,
         "records": [
           {
             "property": "color",
@@ -2463,51 +2368,6 @@
             "property": "color",
             "selector": ".settings-choice",
             "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-since",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-choice",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-note",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-count",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-level",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-axis-legacy summary",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-log summary",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-log-list li",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".theme-ab-log-list time",
-            "value": "var(--ink-faint)"
           },
           {
             "property": "color",
@@ -3340,8 +3200,8 @@
         "unit": "element"
       },
       "source": {
-        "digest": "4b4d2a6870b199fb78b37d298b9ec193afb181425d35e83f73e0c4cd971370b4",
-        "expected": 137,
+        "digest": "cc4db58522a18c6b48f026351ab1aedcff9c2fb38b5e45c82bc40af1ab99a48a",
+        "expected": 127,
         "records": [
           {
             "line": 193,
@@ -3988,126 +3848,56 @@
             "value": "9px"
           },
           {
-            "line": 1022,
-            "property": "font-size",
-            "selector": ".theme-ab-current",
-            "source": "bridge/cockpit.html",
-            "value": "10px"
-          },
-          {
             "line": 1023,
-            "property": "font-size",
-            "selector": ".theme-ab-since",
-            "source": "bridge/cockpit.html",
-            "value": "8px"
-          },
-          {
-            "line": 1033,
-            "property": "font-size",
-            "selector": ".theme-axis-badge",
-            "source": "bridge/cockpit.html",
-            "value": "9px"
-          },
-          {
-            "line": 1035,
-            "property": "font-size",
-            "selector": ".theme-axis-name",
-            "source": "bridge/cockpit.html",
-            "value": "9.5px"
-          },
-          {
-            "line": 1036,
-            "property": "font-size",
-            "selector": ".theme-axis-note",
-            "source": "bridge/cockpit.html",
-            "value": "8px"
-          },
-          {
-            "line": 1037,
-            "property": "font-size",
-            "selector": ".theme-axis-count",
-            "source": "bridge/cockpit.html",
-            "value": "7.5px"
-          },
-          {
-            "line": 1047,
-            "property": "font-size",
-            "selector": ".theme-axis-level",
-            "source": "bridge/cockpit.html",
-            "value": "8px"
-          },
-          {
-            "line": 1053,
-            "property": "font-size",
-            "selector": ".theme-axis-legacy summary",
-            "source": "bridge/cockpit.html",
-            "value": "8.5px"
-          },
-          {
-            "line": 1057,
-            "property": "font-size",
-            "selector": ".theme-ab-log summary",
-            "source": "bridge/cockpit.html",
-            "value": "8.5px"
-          },
-          {
-            "line": 1059,
-            "property": "font-size",
-            "selector": ".theme-ab-log-list li",
-            "source": "bridge/cockpit.html",
-            "value": "8px"
-          },
-          {
-            "line": 1066,
             "property": "font-size",
             "selector": ".toast",
             "source": "bridge/cockpit.html",
             "value": "10.5px"
           },
           {
-            "line": 1097,
+            "line": 1054,
             "property": "font-size",
             "selector": ".pane-return,.pane-popout",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1110,
+            "line": 1067,
             "property": "font-size",
             "selector": ".pane-drag-ghost small",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1121,
+            "line": 1078,
             "property": "font-size",
             "selector": ".pane-float-bar .hint",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1122,
+            "line": 1079,
             "property": "font-size",
             "selector": ".pane-float-bar button",
             "source": "bridge/cockpit.html",
             "value": "10px"
           },
           {
-            "line": 1131,
+            "line": 1088,
             "property": "font-size",
             "selector": ".pane-out-chip",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 1136,
+            "line": 1093,
             "property": "font-size",
             "selector": ".pane-out-chip .where",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 1137,
+            "line": 1094,
             "property": "font-size",
             "selector": ".pane-out-chip .back",
             "source": "bridge/cockpit.html",
@@ -4316,7 +4106,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "0f6ebf570b1663846dc5bd320a000a22a9ba1150e59f5344c36288e521957cc1",
+        "digest": "773a85f76c918372fb30e47ed7db8fc0c6548f273e8f9796651aa871ec6403c5",
         "expected": 40,
         "records": [
           {
@@ -4537,14 +4327,14 @@
             "value": ".13em"
           },
           {
-            "line": 1110,
+            "line": 1067,
             "property": "letter-spacing",
             "selector": ".pane-drag-ghost small",
             "source": "bridge/cockpit.html",
             "value": ".1em"
           },
           {
-            "line": 1136,
+            "line": 1093,
             "property": "letter-spacing",
             "selector": ".pane-out-chip .where",
             "source": "bridge/cockpit.html",
@@ -4604,7 +4394,7 @@
       }
     }
   },
-  "inventory_digest": "e91e4282a2fea32e776cfc8b48b687f239cfa61ecc8a111ab8ab5278c6eb1a21",
+  "inventory_digest": "5f1f263d2170181081e9ccb08ec49d3cf24bd2338b5e937e19246a2b9eb2a68d",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -4616,9 +4406,9 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "08e644cc8a23513e28133be8994b570fcc075e940a10220e2db3ae2f0d831fff",
+  "source_digest": "0ab6576649548b16fe9d02c4e837b0c470529dae5ea12956089816dec2469393",
   "source_files": {
-    "bridge/cockpit.html": "73356fada59f9fc78851457cd1e22000b54907cfcb97c9e312b2ff7885324cef",
+    "bridge/cockpit.html": "cf6a231e0cf95c5be95cb8a500c414c7927138895fd4e5bfa5633b8e3e778166",
     "bridge/mail_view.css": "4c65a93dd1b338a3f4304651173a53a7ed489860ecec2bc86014d253bbcde898",
     "bridge/orrery_view.css": "ad0adcc4a4bc1867240ea68bb37c36d1bdd73b8e198c7e5ebba92343c78c26cd"
   },

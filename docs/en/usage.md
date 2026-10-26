@@ -61,7 +61,7 @@ The following are available in the implementation, but have no permanent on-scre
 | Click a URL in the terminal to open a browser; click a path to open Finder / Explorer | Only an underline appears when the mouse is over it | [Open from and hand to the terminal](#open-from-and-hand-to-the-terminal) |
 | Pasting a file copied in Finder into the composer inserts its absolute path (there is no drag & drop) | Only a toast after pasting | [Open from and hand to the terminal](#open-from-and-hand-to-the-terminal) |
 | Click the `LEFT` pill for the remaining amount and reset per window, and the reason when it cannot be read | The pill shows only the smallest % | [Usage (remaining quota)](#usage-remaining-quota) |
-| Color theme (Dark / Light / System) and Vision profile in Settings | Not visible until you open Settings | [Color theme (light mode)](#color-theme-light-mode) |
+| Color theme (Dark / Light / System) in Settings | Not visible until you open Settings | [Color theme (light mode)](#color-theme-light-mode) |
 | The `×` on a Split cell's name tag removes only that session | Appears only when the mouse is over the name tag | [Split](#split) |
 | An unsent draft in a standalone window returns to the cockpit when the window is closed | Nothing is shown when it returns | [Standalone window](#standalone-window) |
 | The roster search count `N/M`, and `Clear` when there are 0 matches | Appears only while searching | [Roster](#roster) |
@@ -580,7 +580,7 @@ Values you can change in Settings:
 
 Values are kept in the browser's `localStorage` and synchronized with the backend's `~/.orrery/prefs.json` about every 4 seconds. Reset restores only the font and auto-shrink; it is not an operation that clears all cockpit state.
 
-The color scheme (Dark / Light / System) and the Vision profile are also in Settings ([Color theme (light mode)](#color-theme-light-mode)).
+The color scheme (Dark / Light / System) is also in Settings ([Color theme (light mode)](#color-theme-light-mode)).
 
 ## Color theme (light mode)
 
@@ -601,14 +601,6 @@ When you choose Light, the following switch together.
 
 `System` follows the OS appearance (light / dark) and follows on the spot when the OS switches. The chosen scheme is reflected in the other ORRERY.app and browser windows within a few seconds, like Settings.
 
-### Vision profile
-
-In Settings, `Vision profile · small text + tracking` lets you adjust small text and letter spacing.
-
-- `P1 Small text`: makes UI text smaller than 12 px larger by up to +2 px
-- `P2 Wide tracking`: sets the upper limit of letter spacing to 0.08 em (code parts excluded)
-
-Each has five levels: `A` (no change), `.25`, `.5`, `.75`, and `1`, and the two can be used at the same time. `A · Current (no change)` restores the original. The change is also applied to the embedded TELEMETRY at the same time, so it cannot be applied while ORRERY Telemetry is stopped (`VISION PROFILE REJECTED` is shown and it reverts).
 
 ## Differences on Windows (WSL2)
 
