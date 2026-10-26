@@ -212,6 +212,16 @@ At startup, the backend connects one recorder connection for each live tmux sess
 
 While you are scrolled up reading past output, new output does not pull you back to the end. When the backend restarts, the cockpit reloads the page automatically (the composer draft is kept).
 
+### Optional Terminal on your phone
+
+The separate Telemetry mobile reader can show a short pane preview above a confirmed one-line input. This backend adapter is off by default. Enable `--enable-mobile-terminal` only in the backend's existing launch procedure, after accepting the designated phone's effective policy. Do not start a second backend on its occupied port. The reader also needs API 31, the matching `orrery-mobile-pane-v1` capability and its own explicit opt-in. See the [Telemetry phone guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md).
+
+The adapter uses only existing PC-managed legacy panes, with the shared target guard and fresh socket/server/session/pane/kernel-birth checks. It does not guess a pane from an agent alias, start an agent, use another socket/global target, or require Codex launch records. Multiple panes require a choice; unknown targets stay unavailable. Sessions may be outside the reader's current metadata project.
+
+Only the selected open foreground pane refreshes every 3 seconds. Preview is literal text, at most 40 lines/6 KiB, with 64 KiB collection, a 3 second capture deadline and a 16 KiB serialized response limit. Recorder/restored history is not forwarded. Capture overflow discards the body without shifting ACK correspondence; missing termination quarantines the stream. Text may contain secrets; the existing PC recorder/OS recording is not erased by closing the phone sheet.
+
+Every line (at most 4 KiB UTF-8) requires Review→Send once. Review fixes the pane, exact text, Enter and 30 second expiry; changing the pane or losing preview requires a new review. One write lock covers fresh validation and all chunks/Enter; all tmux ACKs are awaited after releasing it. Received means terminal acceptance, not agent execution/completion. Partial failure/timeout is unknown, with no replay or remaining-chunk compensation. The same pane can change programs or become a shell; existing input, other writers and changes after the final check remain outside the guarantee. Phone close/background clears the preview/draft/unsent confirmation; ordinary PC input and history behavior remain unchanged. Real phone policy, keyboard and real-target acceptance are separate from repository fixtures.
+
 ## Open from and hand to the terminal
 
 URLs and file paths that an agent printed in the terminal can be opened with a click. Conversely, you can hand a local file to an agent just by pasting it.

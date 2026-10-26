@@ -89,6 +89,7 @@ def pane_mode_sequences(fields: list[str]) -> str:
 class CommandResult:
     ok: bool
     lines: list[str]
+    overflow: bool = False
 
 
 @dataclass(frozen=True)
@@ -448,6 +449,14 @@ class TmuxControlBridge:
         self._resync_tasks: dict[str, asyncio.Task[None]] = {}
         self._current_block: list[str] | None = None
         self._pending_blocks: deque[asyncio.Future[CommandResult] | None] = deque()
+        # Only the opt-in finite mobile capture uses these limits. Ordinary
+        # recorder/PC commands retain their existing output behavior.
+        self._bounded_blocks: dict[asyncio.Future, int] = {}
+        self._block_limit: int | None = None
+        self._block_bytes = 0
+        self._block_overflow = False
+        self._block_boundary: bytes | None = None
+        self._discard_block_line = False
         self._write_lock = asyncio.Lock()
         self._refresh_lock = asyncio.Lock()
         self._history_flush_lock = asyncio.Lock()
@@ -754,12 +763,26 @@ class TmuxControlBridge:
                 self._schedule_closed()
                 return
 
+            if self._discard_block_line:
+                _, separator, chunk = chunk.partition(b"\n")
+                if not separator:
+                    continue
+                self._discard_block_line = False
             self._buffer += chunk
             while b"\n" in self._buffer:
                 raw_line, self._buffer = self._buffer.split(b"\n", 1)
                 self._handle_line(raw_line.rstrip(b"\r"))
                 if self._closed:
                     return
+            if (self._current_block is not None and self._block_limit is not None
+                    and len(self._buffer) + self._block_bytes > self._block_limit):
+                # A single unbounded output line must not bypass the cap while
+                # waiting for its newline. Discard that line, then continue to
+                # the matching ACK without changing the queue position.
+                self._block_overflow = True
+                self._current_block.clear()
+                self._buffer = b""
+                self._discard_block_line = True
 
     def _handle_line(self, line: str | bytes) -> None:
         raw_line = line.encode("utf-8") if isinstance(line, str) else line
@@ -770,15 +793,33 @@ class TmuxControlBridge:
         # like notifications) before dispatching raw pane output below.
         if self._current_block is not None:
             text = raw_line.decode("utf-8", "replace")
-            if text.startswith("%end") or text.startswith("%error"):
+            terminal = text.startswith("%end") or text.startswith("%error")
+            if self._block_limit is not None:
+                terminal = raw_line in (b"%end " + (self._block_boundary or b""),
+                                        b"%error " + (self._block_boundary or b""))
+            if terminal:
                 block = self._current_block
                 self._current_block = None
                 pending = self._pending_blocks.popleft() if self._pending_blocks else None
+                if pending is not None:
+                    self._bounded_blocks.pop(pending, None)
                 if pending is not None and not pending.done():
                     pending.set_result(
-                        CommandResult(ok=text.startswith("%end"), lines=block)
+                        CommandResult(ok=text.startswith("%end"), lines=block,
+                                      overflow=self._block_overflow)
                     )
+                self._block_limit = None
+                self._block_boundary = None
+                self._block_overflow = False
+                self._block_bytes = 0
                 return
+            if self._block_limit is not None:
+                self._block_bytes += len(raw_line) + 1
+                if self._block_bytes > self._block_limit:
+                    self._block_overflow = True
+                    self._current_block.clear()
+                if self._block_overflow:
+                    return
             self._current_block.append(text)
             return
 
@@ -801,6 +842,11 @@ class TmuxControlBridge:
 
         if line.startswith("%begin"):
             self._current_block = []
+            pending = self._pending_blocks[0] if self._pending_blocks else None
+            self._block_limit = self._bounded_blocks.get(pending)
+            self._block_bytes = 0
+            self._block_overflow = False
+            self._block_boundary = raw_line.partition(b" ")[2]
             return
 
         if line.startswith("%exit"):
@@ -906,6 +952,8 @@ class TmuxControlBridge:
             except BlockingIOError:
                 await asyncio.sleep(0.004)
                 continue
+            if written <= 0:
+                raise OSError('tmux control stream made no write progress')
             view = view[written:]
 
     def request_refresh(self) -> None:
@@ -1307,6 +1355,64 @@ class TmuxControlBridge:
             for args in commands:
                 self._pending_blocks.append(None)
                 await self._write_master((make_tmux_command(args) + '\n').encode('utf-8'))
+
+    async def capture_mobile_preview(self, pane_id: str, height: int, *, deadline: float) -> CommandResult:
+        """One finite raw capture; never recorder or restored-history output."""
+        from mobile_input import InputRefused, _deadline, MAX_CAPTURE_BYTES
+        if (not re.fullmatch(r'%[0-9]+', pane_id) or type(height) is not int
+                or not 1 <= height <= 10000 or deadline <= time.monotonic()
+                or deadline > time.monotonic() + 3.01):
+            raise InputRefused('preview_unavailable')
+        future = asyncio.get_running_loop().create_future()
+        args = ['capture-pane', '-p', '-J', '-t', pane_id,
+                '-S', str(height - 40), '-E', str(height - 1)]
+        started = False
+        try:
+            async with _deadline(deadline):
+                async with self._write_lock:
+                    if self.master_fd is None or self._closed:
+                        raise InputRefused('preview_unavailable')
+                    await asyncio.to_thread(admit_command, self.config.tmux_bin,
+                                            args, session=self.config.session)
+                    if deadline <= time.monotonic() or self.master_fd is None or self._closed:
+                        raise InputRefused('preview_unavailable')
+                    self._bounded_blocks[future] = MAX_CAPTURE_BYTES
+                    self._pending_blocks.append(future)
+                    started = True
+                    await self._write_master((make_tmux_command(args) + '\n').encode('ascii'))
+                result = await future
+        except (Exception, asyncio.CancelledError):
+            if started:
+                self._abort_mobile_stream()
+            raise InputRefused('preview_unavailable') from None
+        if not result.ok or result.overflow:
+            # Its matching ACK was consumed, so this complete stream is still
+            # synchronized. An overflow never becomes a partial successful view.
+            raise InputRefused('preview_unavailable')
+        return result
+
+    async def send_confirmed_input(self, pane_id: str, text: str, *, admission,
+                                   valid, claim, deadline=None) -> str:
+        from mobile_input import confirmed_batch
+        return await confirmed_batch(self, pane_id, text, admission=admission,
+                                     valid=valid, claim=claim, deadline=deadline)
+
+    def _abort_mobile_stream(self) -> None:
+        """Quarantine unknown ACK synchronization; no replay or agent exit."""
+        fd, self.master_fd = self.master_fd, None
+        if fd is not None:
+            if self._loop is not None:
+                with contextlib.suppress(Exception): self._loop.remove_reader(fd)
+            with contextlib.suppress(OSError): os.close(fd)
+        for pending in self._pending_blocks:
+            if pending is not None and not pending.done(): pending.cancel()
+        self._pending_blocks.clear()
+        self._bounded_blocks.clear()
+        self._current_block = None
+        self._buffer = b''
+        self._discard_block_line = False
+        self._block_limit = None
+        self._schedule_closed()
 
     async def broadcast(self, payload: dict[str, Any]) -> None:
         stale_clients = []

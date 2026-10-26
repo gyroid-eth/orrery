@@ -212,6 +212,16 @@ backend は起動時に live tmux session ごとに recorder connection を一�
 
 上に scroll して過去の出力を読んでいる間は、新しい出力が来ても末尾へ引き戻しません。backend を再起動すると、cockpit は page を自動で読み直します（composer の下書きは残る）。
 
+### スマホのTerminal（別途有効化）
+
+別のTelemetry mobile readerで、短いpane画面を見ながら確認付きの1行を送れます。backend adapterは既定オフです。指定スマホの実効policyを受入した後に限り、backendの**既存起動手順**へ`--enable-mobile-terminal`を追加します。使用中のポートへ二重起動しません。reader側にもAPI31・対応する`orrery-mobile-pane-v1` capabilityと明示opt-inが必要です。[Telemetryのスマホ手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md)を参照してください。
+
+対象はPCの既存managerが扱うlegacy paneだけで、共有target guardとfreshなsocket/server/session/pane/kernel birthを照合します。agent別名からpaneを推測せず、agent起動・別socket/global対象への迂回・Codex起動recordの要求はしません。複数paneは自分で選び、不明はUnavailableです。sessionはreaderの現在のmetadata project外にある場合もあります。
+
+前面で開いている選択1paneだけを約3秒ごとに更新します。previewは最大40行/6KiBの文字表示、収集64KiB/取得3秒/serialized応答16KiBで、recorder/復元historyは送りません。収集上限超過では本文を破棄してACKの対応を維持し、終端未着ならstreamを隔離します。秘密が画面に含まれる可能性があり、スマホ側を閉じても既存PC recorderやOSの記録まで消すわけではありません。
+
+1行（UTF-8最大4KiB）ごとにReview→Send onceが必要です。宛先pane・全文・Enter・30秒期限を固定し、pane交換やpreview失敗後は再確認します。同write lock内でfresh検査から全chunk/Enterまで送り、lock解放後に全tmux ACKを待ちます。Receivedはターミナル受理で、agentの実行・完了ではありません。部分失敗/timeoutはunknownとなり、再送や残chunk補送はしません。同pane内のprogram変更・shell化、既存buffer、他writer、最終検査後の変化は保証外です。スマホのclose/背景移行で表示・下書き・未送信確認を消します。通常のPC入力と履歴は不変で、実phone policy・keyboard・実targetの受入は隔離試験とは別です。
+
 <a id="端末から開く端末に渡す"></a>
 
 ## ターミナルから開く・ターミナルに渡す
