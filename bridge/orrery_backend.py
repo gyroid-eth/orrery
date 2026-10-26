@@ -3515,7 +3515,7 @@ async def revalidate_static(request: web.Request, handler):
     return response
 
 
-def create_app(tmux_bin: str = "tmux") -> web.Application:
+def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False) -> web.Application:
     app = web.Application(middlewares=[revalidate_static])
     app[TMUX_BIN_KEY] = tmux_bin if isinstance(tmux_bin, LegacyTargetBoundary) else LegacyTargetBoundary(tmux_bin)
     app[USAGE_CACHE_KEY] = UsageCache()
@@ -3523,6 +3523,15 @@ def create_app(tmux_bin: str = "tmux") -> web.Application:
     app[PREFS_LOCK_KEY] = asyncio.Lock()
     app[PROXY_INFLIGHT_KEY] = {}
     app.cleanup_ctx.append(app_resources)
+    from mobile_input import InputCoordinator, PaneResolver, install_routes
+    async def mobile_bridge(name):
+        # Only a bridge already managed by the PC. No agent/session creation,
+        # active-pane/name fallback or second transport for mobile operations.
+        manager = app.get(BRIDGE_MANAGER_KEY)
+        state = manager.states.get(name) if manager is not None else None
+        return state.bridge if state is not None and not state.bridge._closed else None
+    install_routes(app, InputCoordinator(PaneResolver(app[TMUX_BIN_KEY]), mobile_bridge,
+                                        enabled=mobile_input_enabled))
     app.router.add_get("/telemetry/agents", proxy_dashboard)
     app.router.add_get("/telemetry/messages", proxy_dashboard)
     app.router.add_get("/telemetry/graph", proxy_dashboard)
@@ -3568,6 +3577,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=int(os.environ.get("PORT", DEFAULT_PORT)),
     )
     parser.add_argument("--tmux-bin", default=os.environ.get("TMUX_BIN", "tmux"))
+    parser.add_argument('--enable-mobile-terminal', action='store_true',
+                        help='opt in only after designated-phone policy acceptance; reader opt-in is also required')
     return parser.parse_args(argv)
 
 
@@ -3579,7 +3590,7 @@ def main(argv: list[str]) -> int:
     tmux_bin = resolve_tmux_bin(args.tmux_bin)
     print(f"ORRERY: tmux resolved to {tmux_bin}", flush=True)
 
-    app = create_app(tmux_bin)
+    app = create_app(tmux_bin, mobile_input_enabled=args.enable_mobile_terminal)
     with contextlib.suppress(KeyboardInterrupt):
         web.run_app(
             app,
