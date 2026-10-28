@@ -333,6 +333,9 @@ def test_the_update_command_it_shows_can_be_pasted_even_from_a_folder_with_a_spa
     checkout = tmp_path / "my cockpit"
     (checkout / "scripts").mkdir(parents=True)
     shutil.copy2(SCRIPT, checkout / "scripts" / "start-cockpit.sh")
+    # The script reads the startup target through the real loader before reuse.
+    (checkout / "bridge").mkdir()
+    shutil.copy2(SCRIPT.parents[1] / "bridge" / "runtime_target.py", checkout / "bridge" / "runtime_target.py")
     dash, dash_url, _ = dashboard(version(CURRENT, api=MIN_API - 1))
     out = start(tmp_path, dash_url, script=checkout / "scripts" / "start-cockpit.sh")
     dash.shutdown()
