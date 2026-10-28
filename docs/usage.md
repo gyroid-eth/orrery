@@ -61,7 +61,7 @@ ORRERY cockpit は、左の roster、中央の terminal、右の ORRERY Mail rai
 | ターミナルの URL をクリックで browser、パスをクリックで Finder／エクスプローラー | mouse を乗せると下線が出るだけ | [ターミナルから開く・ターミナルに渡す](#ターミナルから開くターミナルに渡す) |
 | Finder でコピーしたファイルを composer に貼ると絶対パスが入る（drag & drop は無い） | 貼ったあとの toast のみ | [ターミナルから開く・ターミナルに渡す](#ターミナルから開くターミナルに渡す) |
 | `LEFT` pill のクリックで window ごとの残量と reset、取れないときの理由 | pill には最小の % だけ | [Usage（残量表示）](#usage残量表示) |
-| Settings の Color theme（Dark / Light / System）と Vision profile | Settings を開くまで見えない | [配色テーマ（light mode）](#配色テーマlight-mode) |
+| Settings の Color theme（Dark / Light / System） | Settings を開くまで見えない | [配色テーマ（light mode）](#配色テーマlight-mode) |
 | Split の cell の名札の `×` で、その session だけを外す | 名札に mouse を乗せたときだけ出る | [Split](#split) |
 | 独立の窓の書きかけの下書きが、窓を閉じると cockpit に戻る | 戻ったときの表示なし | [独立の窓](#独立の窓) |
 | roster の検索の件数 `N/M` と、0 件のときの `Clear` | 検索したときだけ出る | [Roster](#roster) |
@@ -213,6 +213,16 @@ active な session label / pane tab を再クリックしても末尾へ移動�
 backend は起動時に live tmux session ごとに recorder connection を一つ接続します。browser からの pane attach は tile / palette の操作時に遅延実行されます。
 
 上に scroll して過去の出力を読んでいる間は、新しい出力が来ても末尾へ引き戻しません。backend を再起動すると、cockpit は page を自動で読み直します（composer の下書きは残る）。
+
+### スマホのTerminal（別途有効化）
+
+別のTelemetry mobile readerで、短いpane画面を見ながら確認付きの1行を送れます。backend adapterは既定オフです。[共有設定](configuration.md#スマホterminalを通常の起動で有効にする)の`enable_mobile_terminal`をJSONの`true`にし、現在の起動手順でbackendを明示的に再起動します。稼働中のbackendの再利用だけでは反映されません。reader側にもAPI31・対応する`orrery-mobile-pane-v1` capabilityと別の有効化が必要です。操作に使う自分の端末だけへのアクセス制限を推奨しますが、スマホ・タブレットを複数使えます。agentに任せる段と本人の段は[Telemetryのスマホ手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md)を参照してください。
+
+対象はPCの既存managerが扱うlegacy paneだけで、共有target guardとfreshなsocket/server/session/pane/kernel birthを照合します。agent別名からpaneを推測せず、agent起動・別socket/global対象への迂回・Codex起動recordの要求はしません。複数paneは自分で選び、不明はUnavailableです。sessionはreaderの現在のmetadata project外にある場合もあります。
+
+前面で開いている選択1paneだけを約3秒ごとに更新します。previewは最大40行/6KiBの文字表示、収集64KiB/取得3秒/serialized応答16KiBで、recorder/復元historyは送りません。収集上限超過では本文を破棄してACKの対応を維持し、終端未着ならstreamを隔離します。秘密が画面に含まれる可能性があり、スマホ側を閉じても既存PC recorderやOSの記録まで消すわけではありません。
+
+1行（UTF-8最大4KiB）ごとにReview→Send onceが必要です。宛先pane・全文・Enter・30秒期限を固定し、pane交換やpreview失敗後は再確認します。同write lock内でfresh検査から全chunk/Enterまで送り、lock解放後に全tmux ACKを待ちます。Receivedはターミナル受理で、agentの実行・完了ではありません。部分失敗/timeoutはunknownとなり、再送や残chunk補送はしません。同pane内のprogram変更・shell化、既存buffer、他writer、最終検査後の変化は保証外です。スマホのclose/背景移行で表示・下書き・未送信確認を消します。通常のPC入力と履歴は不変で、実phone policy・keyboard・実targetの受入は隔離試験とは別です。
 
 <a id="端末から開く端末に渡す"></a>
 
@@ -574,7 +584,7 @@ Settings で変更できる値:
 
 値は browser の `localStorage` に置き、backend の `~/.orrery/prefs.json` と約 4 秒ごとに同期します。Reset が戻すのは font と auto-shrink だけで、すべての cockpit state を消す操作ではありません。
 
-配色（Dark / Light / System）と Vision profile も Settings にあります（[配色テーマ（light mode）](#配色テーマlight-mode)）。
+配色（Dark / Light / System）も Settings にあります（[配色テーマ（light mode）](#配色テーマlight-mode)）。
 
 ## 配色テーマ（light mode）
 
@@ -595,14 +605,6 @@ Light にすると、次がまとめて切り替わります。
 
 `System` は OS の外観（ライト / ダーク）に合わせ、OS 側が切り替わるとその場で追従します。選んだ配色は Settings と同じく、ORRERY.app と browser の他の窓にも数秒で反映されます。
 
-### Vision profile
-
-Settings の `Vision profile · small text + tracking` では、小さい文字と字間を調整できます。
-
-- `P1 Small text`: 12 px より小さい UI の文字を、最大 +2 px 大きくする
-- `P2 Wide tracking`: 字間の上限を 0.08 em にする（コードの部分は除く）
-
-どちらも `A`（変更なし）・`.25`・`.5`・`.75`・`1` の 5 段階で、2 つを同時に使えます。`A · Current (no change)` で元に戻ります。変更は埋め込みの TELEMETRY にも同時に当てるため、ORRERY Telemetry が止まっていると適用できません（`VISION PROFILE REJECTED` と出て元に戻る）。
 
 ## Windows（WSL2）での違い
 

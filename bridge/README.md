@@ -33,6 +33,10 @@ python -m pip install -r requirements.txt
 `cockpit.html` is the integrated ORRERY cockpit. One unified backend serves the
 page, telemetry routes, and the WS protocol v2 endpoint from the same origin:
 
+Static responses are limited to the cockpit and tour pages and their bundled
+assets. Terminal libraries are pinned locally; versions, hashes and licenses
+are recorded in [CREDITS](../CREDITS.md). Write requests use `application/json`.
+
 - **Center terminal** — live `xterm.js` terminals from multiple lazily attached
   tmux sessions over `/ws`. Tabs are grouped by session (agent) name; selecting
   a tab fills the CRT screen with that pane. The group `×` detaches the cockpit
@@ -52,6 +56,8 @@ page, telemetry routes, and the WS protocol v2 endpoint from the same origin:
   screen), and the mini-orrery clusters agents by lineage with a line drawn on
   each parent→child spawn edge. (Colour is reserved for lineage by convention;
   state is shown by motion, not colour.)
+
+The same-name active-pane jump and direct tmux inventory/Mail descriptions above are legacy behavior. With explicit `AGENTSTACK_RUNTIME_MODE=fresh`, the selected I/A resolves through the existing dashboard's protected host to its current native receipt and fixed pane. Opaque handles and history stay target-specific. Mail reads use finite APIs at the fixed dashboard upstream, without old project/SQLite fallback. See [fresh settings](../docs/en/configuration.md#explicit-fresh-settings-cutover-preparation) and [target protection](../docs/en/runtime-target.md#explicit-fresh-current-targets-and-expiry). Saved settings and private Mail/dashboard/Cockpit startup/shutdown are covered. Real OS managers/Finder GUI, real providers/installations and attended cutover remain unaccepted. Retired reactivation/resume and App GUI foregrounding are outside this cutover scope and remain unavailable.
 
 The unified backend keeps browser traffic same-origin:
 

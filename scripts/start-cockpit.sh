@@ -124,11 +124,14 @@ py_version_ok() {
 # script's environment.
 telemetry_value() {
   [ -r "$AGENTSTACK_ENV_FILE" ] || return 0
-  (
-    # shellcheck disable=SC1090
-    . "$AGENTSTACK_ENV_FILE" >/dev/null 2>&1 || true
-    eval "printf '%s' \"\${$1:-}\""
-  )
+  "${python_bin:-python3}" - "$AGENTSTACK_ENV_FILE" "$1" <<'PY_VALUE'
+import shlex,sys
+for line in open(sys.argv[1],encoding='utf-8'):
+    try: words=shlex.split(line,comments=True)
+    except ValueError: continue
+    if len(words)==2 and words[0]=='export' and words[1].startswith(sys.argv[2]+'='):
+        print(words[1].split('=',1)[1]);break
+PY_VALUE
 }
 
 python_bin=""
@@ -185,6 +188,24 @@ else
   fi
 fi
 
+# One loader is shared by shell, Finder and the backend. It reads literal
+# installed references and pins the current host before any reuse decision.
+startup_json='{"identity":{"runtime_mode":"legacy"}}'
+if [ -n "$python_bin" ]; then
+  startup_json="$("$python_bin" "$BRIDGE_DIR/runtime_target.py" --startup-json)" || exit 2
+  startup_exports="$("$python_bin" - "$startup_json" <<'PY_STARTUP'
+import json,shlex,sys
+value=json.loads(sys.argv[1])
+for key,text in value['env'].items():
+    if key not in ('AGENTSTACK_RUNTIME_MODE','AGENTSTACK_FRESH_CLIENT_CONTEXT','ORRERY_FRESH_MAIL_INSTANCE_ID','AGENTSTACK_HOME','AGENTSTACK_PYTHON','AGENTSTACK_CLIENT_CONFIG','AGENTSTACK_GLOBAL_SERVER_CONFIG','ORRERY_DASHBOARD_URL') or not isinstance(text,str):raise SystemExit(2)
+    print('export '+key+'='+shlex.quote(text))
+PY_STARTUP
+)" || exit 2
+  eval "$startup_exports"
+fi
+export ORRERY_STARTUP_IDENTITY="$("${python_bin:-python3}" -c 'import json,sys;print(json.dumps(json.loads(sys.argv[1])["identity"]))' "$startup_json")"
+AGENTSTACK_ENV_FILE="${AGENTSTACK_HOME:-${HOME}/.agentstack}/env.sh"
+
 # ---------------------------------------------------------------- orrery-telemetry
 telemetry_installed=false
 if [ -r "$AGENTSTACK_ENV_FILE" ]; then
@@ -198,6 +219,7 @@ else
     "See docs/install.md in orrery-telemetry (it has a WSL2 section)."
 fi
 
+if [ "${AGENTSTACK_RUNTIME_MODE:-legacy}" != fresh ]; then
 # Project key: explicit ORRERY_* > AGENTSTACK_* in this shell > orrery-telemetry
 # env.sh > ~/.orrery/config.json (the backend reads the last one by itself).
 project_key="${ORRERY_PROJECT_KEY:-${AGENTSTACK_PROJECT_KEY:-}}"
@@ -240,6 +262,12 @@ if [ -n "$mail_db" ]; then
   fi
 fi
 
+else
+  project_key=""
+  mail_db=""
+  ok "fresh host preparation verified"
+fi
+
 # Dashboard: explicit ORRERY_DASHBOARD_URL > port from env.sh > 8770.
 dashboard_port="$(telemetry_value AGENTSTACK_PORT)"
 dashboard_url="${ORRERY_DASHBOARD_URL:-http://127.0.0.1:${dashboard_port:-8770}}"
@@ -256,7 +284,7 @@ dashboard_url="${dashboard_url%/}"
 #   $3 = seconds to wait for the answer (default 3)
 probe() {
   "${probe_python}" - "$1" "$2" "${3:-3}" <<'PY' 2>/dev/null
-import json, sys, urllib.error, urllib.request
+import json, os, sys, urllib.error, urllib.request
 url, kind, wait = sys.argv[1], sys.argv[2], float(sys.argv[3])
 try:
     with urllib.request.urlopen(url, timeout=wait) as response:
@@ -273,6 +301,9 @@ if not isinstance(data, dict):
     sys.exit(2)
 if kind == "cockpit":
     good = data.get("backend") == "ok" and isinstance(data.get("boot"), str)
+    expected=json.loads(os.environ.get('ORRERY_STARTUP_IDENTITY','{}'))
+    if expected.get('runtime_mode')=='fresh':
+        good = good and data.get('runtime')==expected
 elif kind == "version":
     good = data.get("name") == "orrery-telemetry"
     if good:

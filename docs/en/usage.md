@@ -61,7 +61,7 @@ The following are available in the implementation, but have no permanent on-scre
 | Click a URL in the terminal to open a browser; click a path to open Finder / Explorer | Only an underline appears when the mouse is over it | [Open from and hand to the terminal](#open-from-and-hand-to-the-terminal) |
 | Pasting a file copied in Finder into the composer inserts its absolute path (there is no drag & drop) | Only a toast after pasting | [Open from and hand to the terminal](#open-from-and-hand-to-the-terminal) |
 | Click the `LEFT` pill for the remaining amount and reset per window, and the reason when it cannot be read | The pill shows only the smallest % | [Usage (remaining quota)](#usage-remaining-quota) |
-| Color theme (Dark / Light / System) and Vision profile in Settings | Not visible until you open Settings | [Color theme (light mode)](#color-theme-light-mode) |
+| Color theme (Dark / Light / System) in Settings | Not visible until you open Settings | [Color theme (light mode)](#color-theme-light-mode) |
 | The `×` on a Split cell's name tag removes only that session | Appears only when the mouse is over the name tag | [Split](#split) |
 | An unsent draft in a standalone window returns to the cockpit when the window is closed | Nothing is shown when it returns | [Standalone window](#standalone-window) |
 | The roster search count `N/M`, and `Clear` when there are 0 matches | Appears only while searching | [Roster](#roster) |
@@ -211,6 +211,16 @@ Clicking the active session label / pane tab again also jumps to the end. `Cmd+�
 At startup, the backend connects one recorder connection for each live tmux session. Pane attach from the browser is deferred until you act on a tile / the palette.
 
 While you are scrolled up reading past output, new output does not pull you back to the end. When the backend restarts, the cockpit reloads the page automatically (the composer draft is kept).
+
+### Optional Terminal on your phone
+
+The separate Telemetry mobile reader can show a short pane preview above a confirmed one-line input. This backend adapter is off by default. Set `enable_mobile_terminal` to JSON `true` in the [shared settings](configuration.md#enable-mobile-terminal-through-normal-startup), then explicitly restart the backend through its current launch procedure. Reusing an already running backend does not apply the setting. The reader also needs API 31, the matching `orrery-mobile-pane-v1` capability and its own opt-in. Restricting access to your operating devices is recommended; multiple personal phones and tablets are fine. The [Telemetry phone guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md) separates agent and human steps.
+
+The adapter uses only existing PC-managed legacy panes, with the shared target guard and fresh socket/server/session/pane/kernel-birth checks. It does not guess a pane from an agent alias, start an agent, use another socket/global target, or require Codex launch records. Multiple panes require a choice; unknown targets stay unavailable. Sessions may be outside the reader's current metadata project.
+
+Only the selected open foreground pane refreshes every 3 seconds. Preview is literal text, at most 40 lines/6 KiB, with 64 KiB collection, a 3 second capture deadline and a 16 KiB serialized response limit. Recorder/restored history is not forwarded. Capture overflow discards the body without shifting ACK correspondence; missing termination quarantines the stream. Text may contain secrets; the existing PC recorder/OS recording is not erased by closing the phone sheet.
+
+Every line (at most 4 KiB UTF-8) requires Review→Send once. Review fixes the pane, exact text, Enter and 30 second expiry; changing the pane or losing preview requires a new review. One write lock covers fresh validation and all chunks/Enter; all tmux ACKs are awaited after releasing it. Received means terminal acceptance, not agent execution/completion. Partial failure/timeout is unknown, with no replay or remaining-chunk compensation. The same pane can change programs or become a shell; existing input, other writers and changes after the final check remain outside the guarantee. Phone close/background clears the preview/draft/unsent confirmation; ordinary PC input and history behavior remain unchanged. Real phone policy, keyboard and real-target acceptance are separate from repository fixtures.
 
 ## Open from and hand to the terminal
 
@@ -570,7 +580,7 @@ Values you can change in Settings:
 
 Values are kept in the browser's `localStorage` and synchronized with the backend's `~/.orrery/prefs.json` about every 4 seconds. Reset restores only the font and auto-shrink; it is not an operation that clears all cockpit state.
 
-The color scheme (Dark / Light / System) and the Vision profile are also in Settings ([Color theme (light mode)](#color-theme-light-mode)).
+The color scheme (Dark / Light / System) is also in Settings ([Color theme (light mode)](#color-theme-light-mode)).
 
 ## Color theme (light mode)
 
@@ -591,14 +601,6 @@ When you choose Light, the following switch together.
 
 `System` follows the OS appearance (light / dark) and follows on the spot when the OS switches. The chosen scheme is reflected in the other ORRERY.app and browser windows within a few seconds, like Settings.
 
-### Vision profile
-
-In Settings, `Vision profile · small text + tracking` lets you adjust small text and letter spacing.
-
-- `P1 Small text`: makes UI text smaller than 12 px larger by up to +2 px
-- `P2 Wide tracking`: sets the upper limit of letter spacing to 0.08 em (code parts excluded)
-
-Each has five levels: `A` (no change), `.25`, `.5`, `.75`, and `1`, and the two can be used at the same time. `A · Current (no change)` restores the original. The change is also applied to the embedded TELEMETRY at the same time, so it cannot be applied while ORRERY Telemetry is stopped (`VISION PROFILE REJECTED` is shown and it reverts).
 
 ## Differences on Windows (WSL2)
 

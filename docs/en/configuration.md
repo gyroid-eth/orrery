@@ -4,9 +4,19 @@
 
 [Previous: Installation](install.md) · [Back to README](../../README.en.md) · [Next: Usage](usage.md)
 
-ORRERY is configured with `~/.orrery/config.json` and environment variables. The shared settings file is also read when the app is launched from Finder, and an environment variable always takes precedence over the same item in the settings file.
+ORRERY is configured with `~/.orrery/config.json` and environment variables. The shared settings file is also read when the app is launched from Finder. Where a setting has an environment variable, that variable takes precedence over the same item in the file.
 
 In an active Codex pane verified to use the alternate screen without mouse tracking, the wheel sends PageUp / PageDown to scroll the conversation. Small movements accumulate, with at most three pages per continuous gesture; Claude Code, ordinary shells, and Codex panes requesting mouse tracking keep their existing behavior.
+
+## Explicit fresh settings (cutover preparation)
+
+The project-key/direct-DB settings below describe legacy. For fresh, follow [Telemetry's migration guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/fresh-global-update.en.md) and start the dashboard first on the same host/UID.
+
+Pass `AGENTSTACK_RUNTIME_MODE=fresh`, the prepared `AGENTSTACK_FRESH_CLIENT_CONTEXT`, health-derived `ORRERY_FRESH_MAIL_INSTANCE_ID`, matching `AGENTSTACK_HOME`, an absolute approved `AGENTSTACK_PYTHON` able to use its Mail module, and fixed `ORRERY_DASHBOARD_URL` to the backend. Do not combine old `AGENTSTACK_CLIENT_CONFIG`/`AGENTSTACK_GLOBAL_SERVER_CONFIG`. Reference the context path; do not copy credential values or a DB reader into Cockpit. Mail uses finite APIs at the fixed dashboard upstream, without old project/SQLite fallback.
+
+`start-cockpit.sh`, Finder and the Python backend share one loader that reads Telemetry env.sh as literal data without executing it. The default installation is `~/.agentstack`; set the shared config key `telemetry_home` to an absolute path for a custom installation. Explicit environment values override saved settings. Fresh bypasses legacy project/DB diagnostics and refuses missing host preparation or invalid settings. An existing backend is reused only when health matches I, context digest and host epoch; another listener is never stopped or replaced. Finder does not inherit shell exports and does not load the HTTP page before this check. Real Finder/installation acceptance and the attended cutover decision are separate.
+
+A dashboard restart changes the host epoch: stop/restart Cockpit normally to reconnect. Before replacing/restoring the DB, stop all writers and restart sources, Cockpit consumers and the dashboard; restart Mail, then dashboard, then Cockpit. Do not bypass stop timeouts or unsafe sockets by deleting them manually. See [target protection](runtime-target.md).
 
 ## Minimum settings
 
@@ -38,7 +48,8 @@ An example that specifies every item:
   "orrery_root": "/absolute/path/to/orrery",
   "project_key": "/absolute/path/to/your/project",
   "mail_db": "~/.agentstack/mail/storage.sqlite3",
-  "annotations_path": "~/.agentstack/runtime/annotations.json"
+  "annotations_path": "~/.agentstack/runtime/annotations.json",
+  "enable_mobile_terminal": false
 }
 ```
 
@@ -48,8 +59,17 @@ An example that specifies every item:
 | `project_key` | Python backend | The project human key of ORRERY Mail |
 | `mail_db` | Python backend | The read-only ORRERY Mail SQLite |
 | `annotations_path` | Python backend | The annotation fallback when the dashboard is unreachable |
+| `enable_mobile_terminal` | Python backend | Explicit mobile Terminal opt-in. JSON `true` or `false` only; default `false` |
 
-Only arbitrary string keys of a top-level JSON object are accepted. Empty strings, non-strings, and unknown keys are ignored; leading and trailing whitespace is removed and `~` is expanded. A missing, unreadable, or invalid-JSON file does not stop startup and is treated as unset. Because it contains path information, file mode `0600` is recommended.
+The four path settings above take strings in a top-level JSON object. Empty strings, non-strings and unknown keys are ignored; surrounding whitespace is removed and `~` is expanded. If present, `enable_mobile_terminal` must be an exact JSON boolean: values such as `"true"`, `1` or `null` stop backend startup. A missing, unreadable or invalid-JSON file is still treated as unset, leaving this setting off by default. File mode `0600` is recommended because the file contains paths.
+
+### Enable mobile Terminal through normal startup
+
+Keep the other settings and set only `enable_mobile_terminal` to `true`. `scripts/start-cockpit.sh`, setup reached through `get.sh`, and ORRERY.app launched from Finder all read this setting when they start a new Python backend. Custom backend launch commands can still use `--enable-mobile-terminal`. The reader needs its own separate opt-in.
+
+**An already running backend does not pick up the change.** Identify its current launch method and manager, then explicitly stop and restart it through that procedure. Closing ORRERY.app leaves the shared backend running, so reopening the app alone may not apply the setting. Stop if the manager is unknown; do not launch another backend on an occupied port or use blanket kill commands. The [Telemetry mobile guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md#inspect-a-pane-and-send-input-from-your-phone) separates agent and human steps and includes a check that sends no input.
+
+To revert, set the field to `false` or remove it, also remove any explicit `--enable-mobile-terminal` from custom launch arguments, and restart through the same procedure.
 
 ### Desktop app environment
 

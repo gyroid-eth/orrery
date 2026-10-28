@@ -1931,7 +1931,9 @@ class V2UnifiedBackendContractTest(unittest.TestCase):
         self.assertIsInstance(payload, dict)
         # "boot" (11da62e) lets the cockpit reload after a backend restart;
         # "root" and "commit" (720a0e3) let setup.sh tell an old backend apart.
-        self.assertEqual(set(payload), {"backend", "boot", "dashboard", "root", "commit"})
+        # "runtime" lets the shell reuse a backend only for the same target.
+        self.assertEqual(set(payload), {"backend", "boot", "dashboard", "root", "commit", "runtime"})
+        self.assertEqual(payload["runtime"], {"runtime_mode": "legacy"})
         self.assertEqual(payload["backend"], "ok")
         self.assertIsInstance(payload["boot"], str)
         self.assertTrue(payload["boot"])
