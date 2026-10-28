@@ -153,12 +153,13 @@ The `LEFT  CLAUDE 41%  CODEX 47%` pill to the left of Settings in the header sho
 
 Clicking the pill opens `Usage left`, which lays out the windows returned by the provider as arc dials, each with the time until reset.
 
-In Settings, `Usage` lets you show or hide each provider, including Claude, Codex, and DeepSeek. The choice applies to both the `LEFT` pill and `Usage left` and is saved in this browser. Providers that appear later are shown by default. A DeepSeek balance below $5 uses the same alert red as a low quota in both the pill and balance row. At $5 or above, or when the balance is unknown, its color is unchanged.
+In Settings, `Usage` lets you show or hide each provider, including Claude, Codex, Antigravity (Gemini), and DeepSeek. The choice applies to both the `LEFT` pill and `Usage left` and is saved in this browser. Providers that appear later are shown by default. A DeepSeek balance below $5 uses the same alert red as a low quota in both the pill and balance row. At $5 or above, or when the balance is unknown, its color is unchanged.
 
 ![Usage left. Claude shows 5H 64%, 7D 41%, FABLE 18%; Codex shows 5H 88%, 7D 47%. Codex's additional limit Spark is untouched](../images/cockpit_usage_popover.png)
 
 - **Claude**: `5h` (the 5-hour quota), `7d` (the weekly quota), and per-model weekly quotas (such as `FABLE`; only when the server returns them)
 - **Codex**: `5h` and `7d`. Named additional quotas such as Spark are shown separately under `ADDITIONAL LIMIT` and are not used for the pill's value. When an additional quota has not been used at all, it is collapsed into one line: `untouched · 5h / 7d at 100% left`
+- **Antigravity (Gemini)**: shown only when Telemetry reports it. Independent quotas such as `Gemini Models`, `Claude and GPT models`, and `Gemini 4 Argon` are shown under `MODEL GROUP`. The pill shows the lowest remaining percentage among the reported quotas; the quota that applies depends on the model you use
 - Number and ring colors: green above 50%, yellow at 50% or below, red at 20% or below
 - Under each dial is the time until reset (`in 2h 59m`, `in 3d`). To the right of the heading is the time of the earliest reset
 
@@ -168,6 +169,7 @@ In Settings, `Usage` lets you show or hide each provider, including Claude, Code
 
 - Claude: reads Anthropic's usage endpoint with the OAuth token that Claude Code holds (the token is only read; it is never refreshed or written back)
 - Codex: `account/rateLimits/read` of `codex app-server`
+- Antigravity: reuses the quotas ORRERY Telemetry reads through `agy -p /usage`; the cockpit does not make an additional provider request
 - The cockpit re-reads every minute (while the tab is visible), when the pill is opened, and when you return to the tab. The ORRERY backend caches the same values for 60 seconds. ORRERY Telemetry decides how often the provider is queried (about once every 10 minutes for Claude)
 
 **When stale or unavailable**: while fetching fails, the previous values are kept, the pill's numbers are dimmed, and `· stale` is added to the `Usage left` heading. The reason it cannot be read is shown to the right of the heading.

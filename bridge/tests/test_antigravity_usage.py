@@ -2,7 +2,7 @@
 import json
 
 from test_cockpit_tour import tour_browser
-from test_deepseek_usage import QUOTAS, Dashboard, get_usage, request_for, usage_dom
+from test_deepseek_usage import QUOTAS, Dashboard, balance_entry, get_usage, request_for, usage_dom
 
 ANTIGRAVITY = {
     "provider": "antigravity", "status": "ok", "observed_at": 1792370000,
@@ -64,9 +64,79 @@ def test_antigravity_pill_groups_and_settings(tour_browser):
       const toggle=document.querySelector('#usageProviderRows [data-provider="antigravity"]');
       toggle.click();
       return {hidden:document.querySelector('#usageBtn [data-provider="antigravity"]').hidden,
-        shown:!!document.querySelector('#usageDials .up-name')?.textContent.includes('Antigravity')};
+        shown:[...document.querySelectorAll('#usageDials .up-head .up-name')].some(e=>e.textContent==='Antigravity (Gemini)')};
     })()""")
     assert result == {"hidden": True, "shown": False}
 
     usage_dom(evaluate, {"providers": payload["providers"][:2]})
     assert evaluate("document.querySelector('#usageBtn [data-provider=\"antigravity\"]')===null")
+
+
+def test_antigravity_dashboard_failure_keeps_last_windows_as_stale():
+    dashboard = Dashboard({"providers": QUOTAS + [ANTIGRAVITY]})
+    request = request_for(dashboard)
+    good = get_usage(request)[-1]
+    dashboard.payload = None
+    request.query = {"refresh": "1"}
+    failed = get_usage(request)[-1]
+    assert failed["provider"] == "antigravity"
+    assert failed["status"] == "stale"
+    assert failed["reason"] == "telemetry_unavailable"
+    assert failed["windows"] == good["windows"]
+    assert failed["observed_at"] == good["observed_at"]
+    assert len(dashboard.urls) == 2
+    assert all(url.endswith("/api/quotas") for url in dashboard.urls)
+
+
+def test_unavailable_antigravity_does_not_invent_windows():
+    entry = {"provider": "antigravity", "status": "unavailable",
+             "reason": "sign_in_required", "buckets": []}
+    providers = get_usage(request_for(Dashboard({"providers": QUOTAS + [entry]})))
+    assert providers[-1]["provider"] == "antigravity"
+    assert providers[-1]["status"] == "unavailable"
+    assert providers[-1]["reason"] == "sign_in_required"
+    assert providers[-1]["windows"] == []
+    assert providers[-1]["observed_at"] is None
+
+
+def test_antigravity_and_balance_slots_are_independent(tour_browser):
+    import usage_probe as up
+    _, evaluate = tour_browser
+    providers = [up.provider_from_quota_payload(e).to_json()
+                 for e in QUOTAS + [ANTIGRAVITY, balance_entry()]]
+    usage_dom(evaluate, {"providers": providers})
+    assert evaluate("""[...document.querySelectorAll('#usageBtn .up-p')]
+      .map(e=>[e.dataset.provider,e.querySelector('b').textContent])""") == [
+        ["claude", "64%"], ["codex", "47%"], ["antigravity", "70%"], ["dsh", "$12"]]
+    usage_dom(evaluate, {"providers": [p for p in providers if p["provider"] != "antigravity"]})
+    assert evaluate("""!document.querySelector('#usageBtn [data-provider="antigravity"]')
+      && document.querySelector('#usageBtn [data-provider="dsh"] b').textContent==='$12'""")
+
+
+def test_named_pool_binding_does_not_change_other_providers(tour_browser):
+    import usage_probe as up
+    _, evaluate = tour_browser
+    windows = up.provider_from_quota_payload(ANTIGRAVITY).to_json()["windows"]
+    expression = """(()=>{
+      const windows=WINDOWS;
+      const before=JSON.stringify(windows);
+      const ag=usageBinding({provider:'antigravity',windows});
+      const codex=usageBinding({provider:'codex',windows:[
+        {id:'main',remaining_percent:90,extra:false},...windows]});
+      return {ag:ag.id,codex:codex.id,unchanged:JSON.stringify(windows)===before};
+    })()""".replace('WINDOWS', json.dumps(windows))
+    assert evaluate(expression) == {"ag": "gemini-argon-weekly", "codex": "main", "unchanged": True}
+
+
+def test_antigravity_model_group_is_rendered_as_text(tour_browser):
+    import usage_probe as up
+    _, evaluate = tour_browser
+    name = '<img src=x onerror="window.__usageInjected=true">'
+    entry = {"provider": "antigravity", "status": "ok", "buckets": [
+        {"id": "named", "label": name + " · 7d", "remaining_percent": 42}]}
+    usage_dom(evaluate, {"providers": [up.provider_from_quota_payload(entry).to_json()]})
+    assert evaluate("""(()=>({
+      name:document.querySelector('#usageDials .up-subname').textContent,
+      markup:document.querySelector('#usageDials .up-subname').children.length,
+      executed:window.__usageInjected===true
+    }))()""") == {"name": name, "markup": 0, "executed": False}

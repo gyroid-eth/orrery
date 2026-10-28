@@ -4271,9 +4271,9 @@
       }
     }
   },
-  "inventory_digest": "ee44766a1863733762a26ecb6e4a33123b456bd24e04fed8c3467b15127e7dc0",
+  "inventory_digest": "0d045b1f6b39de330cb3bb9af106e0f5eb3888f0548d52b0ecd1b0881b8913d2",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "35e14af66c5ce9d78a8a5b15f3d51c906dc21b0c7dd449a602e1cde08c35b66d",
+  "source_digest": "501100f41b1ead8f255ea266f8eb9853a2cde3b4d0f2c7d3dcbedfb5c8869e31",
   "surface": "cockpit",
   "version": 1
 }
@@ -8514,7 +8514,7 @@ function renderUsagePill(){
   const pill=document.getElementById('usageBtn');
   pill.classList.toggle('stale',!!usageData&&usageData.providers.filter(usageShown).some(p=>p.status==='stale'));
   for(const provider of ['antigravity','dsh']){
-    const reported=usageData?.providers.some(p=>p.provider===provider);
+    const reported=usageData?.providers.some(p=>p.provider===provider&&(provider!=='dsh'||p.measurement_kind==='balance'));
     let slot=pill.querySelector(`[data-provider="${provider}"]`);
     if(reported&&!slot){
       slot=document.createElement('span');slot.className='up-p';slot.dataset.provider=provider;
