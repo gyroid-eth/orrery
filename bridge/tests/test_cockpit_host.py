@@ -264,3 +264,120 @@ def test_the_shortcuts_are_wired_to_the_page_and_the_terminal():
     # the old Cmd-only checks are gone, so nothing bypasses the host
     assert "event.metaKey&&!event.altKey&&!event.shiftKey&&key==='k'" not in html
     assert "/^[1-9]$/.test(event.key)){" not in html
+
+
+def test_fresh_output_gap_uses_actual_caller_to_stop_only_affected_session_and_reattach():
+    html = COCKPIT.read_text(encoding="utf-8")
+    names = ('setGroupState', 'forgetSession', 'freshOutputIncomplete',
+             'requestAttach', 'resetSession', 'handle', 'connect')
+    functions = []
+    for name in names:
+        match = re.search(r'function '+name+r'\([^\n]*\)\{.*?\n\}', html, re.DOTALL)
+        assert match, name
+        functions.append(match.group(0))
+    script = r'''
+const groups=new Map(),sessionGroups=groups,panes=new Map(),sent=[],toasts=[],links=[];
+const attachedSessions=new Set(),requestedSessions=new Set(),availableSessions=new Map([['Alpha',{}],['Beta',{}]]);
+const manualDetached=new Set(),paneWindows=new Set(),selectedPaneBySession=new Map();
+let pendingJump=null,activeId=null,splitVisible=false,focusedSplitSession=null,paneWindowSelection=null;
+function ensureSessionGroup(session){
+  if(!groups.has(session))groups.set(session,{incarnation:null,attachGeneration:null,
+    el:{classList:{toggle(){}}},state:{textContent:''},empty:{textContent:'',style:{}}});
+  return groups.get(session);
+}
+function closeSessionPanes(session){for(const [key,p] of panes)if(p.session===session)panes.delete(key);}
+function removeSplitSessionState(){} function removeSessionGroup(s){groups.delete(s);}
+function renderStage(){} function refreshHeaderStats(){} function refreshSessionGroup(){}
+function showToast(message,isError){toasts.push({message,isError});}
+function paneSessionAllowed(){return true;} function occupiedSessions(){return new Set([...attachedSessions,...requestedSessions]);}
+function activeSession(){return null;} function send(payload){sent.push(payload);return true;}
+function createPane(session,meta){panes.set(meta.paneId,{session});}
+function focusSession(){} function focusSplitSession(){} function applyAutoClaims(){}
+const MAX_ATTACHED_SESSIONS=12;
+const events={};let socket=null;const wsUrl='private';
+class WebSocket{addEventListener(name,fn){events[name]=fn;}}
+function setLink(...args){links.push(args);} function scheduleFit(){} function scheduleReconnect(){}
+function reset(session,generation){handle({type:'reset',session,incarnation:'i',attachGeneration:generation,panes:[{paneId:session+'-pane'}]});}
+function error(generation){handle({type:'error',session:'Alpha',incarnation:'i',attachGeneration:generation,
+  code:'FRESH_OUTPUT_INCOMPLETE',message:'Output incomplete'});}
+reset('Alpha','old');reset('Beta','other');error('old');
+if(attachedSessions.has('Alpha')||!attachedSessions.has('Beta')||panes.has('Alpha-pane')||!panes.has('Beta-pane'))throw Error('sink isolation');
+if(groups.get('Alpha').state.textContent!=='error'||!groups.get('Alpha').empty.textContent.includes('missing')||!toasts[0].isError)throw Error('gap invisible');
+if(!requestAttach('Alpha'))throw Error('reattach blocked');
+reset('Alpha','new');error('old');
+if(!attachedSessions.has('Alpha')||groups.get('Alpha').state.textContent!=='live'||toasts.length!==1)throw Error('old error applied');
+// Ordinary backend errors retain their existing behavior.
+handle({type:'error',session:'Beta',message:'legacy error'});
+if(!attachedSessions.has('Beta'))throw Error('legacy error changed');
+// If the server cannot send the error, it closes that WebSocket. Exercise
+// the real close callback: the surviving UI must not continue showing live.
+connect();events.close();
+if(attachedSessions.size||requestedSessions.size||groups.get('Alpha').state.textContent!=='closed'||links.at(-1)[1]!=='disconnected')throw Error('transport failure remained live');
+console.log(JSON.stringify({gapVisible:true,reattach:true,oldErrorIgnored:true,otherSessionPreserved:true,transportFailureClosed:true}));
+'''
+    done = subprocess.run(['/usr/local/bin/node', '-e', '\n'.join(functions)+'\n'+script],
+                          capture_output=True, text=True, check=False)
+    assert done.returncode == 0, done.stderr
+    assert all(json.loads(done.stdout).values())
+
+
+def startup_settings(tmp_path):
+    import shlex,shutil,sys
+    t=Path(os.environ['ORRERY_TEST_TELEMETRY_ROOT'])
+    home=tmp_path/'private-home';root=home/'telemetry';(root/'hooks').mkdir(parents=True)
+    shutil.copy2(t/'hooks/project-context.sh',root/'hooks/project-context.sh')
+    context=tmp_path/'prepared-context.json';context.write_text('{}');context.chmod(0o600)
+    values=dict(AGENTSTACK_RUNTIME_MODE='fresh',AGENTSTACK_HOME=str(root),
+        AGENTSTACK_FRESH_CLIENT_CONTEXT=str(context),AGENTSTACK_PYTHON=sys.executable,
+        ORRERY_FRESH_MAIL_INSTANCE_ID='a'*32,AGENTSTACK_PORT='19877')
+    path=root/'env.sh';path.write_text('\n'.join('export '+k+'='+shlex.quote(v) for k,v in values.items())+'\n');path.chmod(0o600)
+    return home,root,path,values
+
+
+def test_normal_startup_loader_saved_custom_root_is_literal_finite_and_refuses_conflicts(tmp_path,monkeypatch):
+    import pytest,runtime_target as rt
+    home,root,path,values=startup_settings(tmp_path)
+    marker=tmp_path/'should-not-execute'
+    with path.open('a') as stream:stream.write('touch '+str(marker)+'\n')
+    env={'HOME':str(home),'PATH':os.environ['PATH']}
+    loaded=rt.startup_environment(environ=env,config={'telemetry_home':str(root)})
+    assert loaded['AGENTSTACK_FRESH_CLIENT_CONTEXT']==values['AGENTSTACK_FRESH_CLIENT_CONTEXT']
+    assert loaded['AGENTSTACK_PYTHON']==values['AGENTSTACK_PYTHON']
+    assert loaded['ORRERY_DASHBOARD_URL']=='http://127.0.0.1:19877' and not marker.exists()
+    assert not {'registration_token','AGENTSTACK_MAIL_DB','AGENTSTACK_FRESH_SERVER_CONFIG'} & set(loaded)
+    for changed in ({'AGENTSTACK_CLIENT_CONFIG':'old'}, {'AGENTSTACK_GLOBAL_SERVER_CONFIG':'old'},
+                    {'AGENTSTACK_FRESH_CLIENT_CONTEXT':''}, {'ORRERY_FRESH_MAIL_INSTANCE_ID':'bad'}):
+        with pytest.raises(rt.TargetRefused):rt.startup_environment(environ=env|changed,config={'telemetry_home':str(root)})
+    class Host:
+        def __init__(self,*args,**kwargs):
+            assert kwargs['environ']['AGENTSTACK_HOME']==str(root)
+            self.instance='a'*32;self.host_pin={'context_digest':'d'*64,'epoch':'e'*32}
+        def call(self,args):assert args=={'operation':'catalog'}
+    monkeypatch.setattr(rt,'FreshTargetBoundary',Host)
+    plan=rt.startup_projection(environ=env,config={'telemetry_home':str(root)})
+    assert plan['identity']==dict(runtime_mode='fresh',mail_instance_id='a'*32,context_digest='d'*64,host_epoch='e'*32)
+    path.chmod(0o666)
+    with pytest.raises(rt.TargetRefused,match='SETTINGS_UNAVAILABLE'):rt.startup_environment(environ=env,config={'telemetry_home':str(root)})
+    assert rt.startup_environment(environ={'HOME':str(tmp_path/'empty')})=={'AGENTSTACK_RUNTIME_MODE':'legacy'}
+
+
+def test_normal_startup_health_exposes_exact_host_pin_without_context_or_credentials(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    import orrery_backend as ob,runtime_target as rt
+    async def scenario():
+        target=object.__new__(rt.FreshTargetBoundary);target.instance='a'*32
+        target.wrapper=Path(os.environ['ORRERY_TEST_TELEMETRY_ROOT'])/'bin/agentstack-runtime-client'
+        target.host_pin={'context_digest':'d'*64,'epoch':'e'*32}
+        class Reply:
+            async def __aenter__(self):return self
+            async def __aexit__(self,*args):pass
+        class Http:
+            def get(self,*args,**kwargs):return Reply()
+        app=ob.create_app(target)
+        app[ob.HTTP_SESSION_KEY]=Http()
+        response=await ob.serve_health(SimpleNamespace(app=app))
+        data=json.loads(response.body)
+        assert data['runtime']==dict(runtime_mode='fresh',mail_instance_id='a'*32,context_digest='d'*64,host_epoch='e'*32)
+        assert not {'registration_token','context_path','binding_path'} & set(data['runtime'])
+    asyncio.run(scenario())

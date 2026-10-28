@@ -15,6 +15,10 @@ Start with **Your first flight → help map → Full tour** on screen, from cock
 - [Usage](usage.md) — Start with in-app guides and help map; look up detailed controls as needed.
 - [Full tour](FULL_TOUR.md) — Sixteen real interactions, completion checks, the game, progress, and pop-out window.
 
+## Candidate explicit fresh cutover
+
+- [Telemetry fresh migration, shutdown and recovery](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/fresh-global-update.en.md) — Separate fixture coverage from production acceptance. Private startup/shutdown from saved settings is covered. Real OS managers/Finder GUI, real providers/trust/installation, final CI and an attended cutover remain unaccepted. Reactivation and App foregrounding are outside this cutover scope.
+
 ## Install and update
 
 - [Update](install.md#5-update) — Update while keeping existing settings.
@@ -33,7 +37,7 @@ Start with **Your first flight → help map → Full tour** on screen, from cock
 
 - [Architecture overview](ARCHITECTURE_OVERVIEW.md) — tmux, Codex App, network, history, and portrait boundaries.
 - [Implementation architecture](ARCHITECTURE.md) — Read backend HTTP/WebSocket, tmux control, and Mail integration.
-- [Legacy tmux target protection](runtime-target.md) — Pinned endpoints, shared admission and repair.
+- [Legacy/fresh tmux target protection](runtime-target.md) — Pinned endpoints, fresh selected I/A, expiry, gaps and shutdown.
 - [Design language](DESIGN.md) — The implementation reference for visuals, motion, color, and typography.
 - [Roster findability design (discussion draft)](DESIGN_roster_findability.md) — Historical measurements and proposals, distinct from current operating instructions.
 - [Development entry](../../app/README.md) — Start the desktop app in development mode and check its show/hide hotkey.

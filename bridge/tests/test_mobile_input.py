@@ -3,12 +3,16 @@ import asyncio
 from collections import deque
 import contextlib
 import importlib
+import importlib.util
+import json
 import fcntl
 import threading
 import os
+import shlex
 from pathlib import Path
 import sys
 import time
+from uuid import uuid4
 from types import SimpleNamespace
 
 import pytest
@@ -607,3 +611,215 @@ def test_real_create_app_routes_existing_manager_only_without_starting_recorders
                 async with client.post(f'http://127.0.0.1:{port}/_mobile/terminal/targets',data=json.dumps(payload),headers=headers) as response:assert response.status==403
         finally:await runner.cleanup()
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('case',['accepted','partial','current','kernel-birth','wrong-ref','disabled'])
+def test_fresh_r4_real_create_app_relay_choice_and_once_ack_keep_identity(tmp_path,monkeypatch,case):
+    """Actual host/ORM + HTTP relay/coordinator/batch; synthetic kernel/PTY only."""
+    import orrery_backend as ob
+    import mobile_input as mobile
+    from aiohttp import web
+    from dashboard import mobile_relay as relay
+    from dashboard.mobile_input import InputClient
+    import http.client
+    spec=importlib.util.spec_from_file_location('cockpit_fresh_r4_fixture',BRIDGE/'tests/test_fresh_targets.py')
+    fixture=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
+    async def scenario():
+        async with fixture.private_targets(tmp_path,monkeypatch) as (_,people,_,_,root,first,_,_):
+            writes=[];fixture.install_synthetic_control(monkeypatch,writes)
+            manager=ob.SessionBridgeManager(root,history_dir=tmp_path/'history')
+            state=await manager._ensure_bridge('Alpha');bridge=state.bridge
+            initial=(await asyncio.to_thread(root.resolve,'Alpha')).proof
+            facts={'birth':'one'};frames=[]
+            class Observer:
+                def process(self,pid):return dict(pid=pid,ppid=1,uid=os.getuid(),birth=f'kernel:{pid}:'+facts['birth'])
+            original=mobile.PaneResolver;resolvers=[]
+            class Resolver(original):
+                def __init__(self,boundary):
+                    super().__init__(boundary,Observer())
+                    identity=tuple(initial['route']['socket_identity'])
+                    class Transport:
+                        def __init__(self,path,**kwargs):self.identity=identity;self.path=path
+                        def command(self,*args,**kwargs):
+                            assert args==('display-message','-p','#{pid}')
+                            return SimpleNamespace(returncode=0,stdout='44\n')
+                    self.fresh_shared['Transport']=Transport
+                    self.fresh_shared['validate_socket']=lambda path:identity
+                    resolvers.append(self)
+            monkeypatch.setattr(mobile,'PaneResolver',Resolver)
+            async def writer(raw):
+                frames.append(raw)
+                if case=='partial' and b'send-keys' in raw:raise OSError('synthetic partial PTY')
+                future=bridge._pending_blocks.popleft()
+                if future is not None:
+                    from control_server import CommandResult
+                    future.set_result(CommandResult(True,['fresh selected output']))
+            bridge._write_master=writer
+            bridge._abort_mobile_stream=lambda:None  # Synthetic fd99 is never an OS descriptor.
+            app=ob.create_app(root,mobile_input_enabled=case!='disabled')
+            app.cleanup_ctx.clear();app[ob.BRIDGE_MANAGER_KEY]=manager
+            runner=web.AppRunner(app,access_log=None);await runner.setup();site=web.TCPSite(runner,'127.0.0.1',0);await site.start()
+            port=site._server.sockets[0].getsockname()[1]
+            client=InputClient(port,'fixture@example.invalid')
+            server=relay.make_server(relay.Config('fixture@example.invalid','https://fixture.example.ts.net',
+                input_enabled=True,phone_policy_reviewed=True),store=SimpleNamespace(),mail_store=SimpleNamespace(close=lambda:None),input_client=client,test_port=0)
+            worker=threading.Thread(target=server.serve_forever,daemon=True);worker.start()
+            def phone(operation=None,payload=None):
+                connection=http.client.HTTPConnection('127.0.0.1',server.server_address[1],timeout=10)
+                headers={'Host':'fixture.example.ts.net','Tailscale-User-Login':'fixture@example.invalid'}
+                if operation:headers.update(Origin='https://fixture.example.ts.net',**{'Content-Type':'application/json'})
+                try:
+                    connection.request('POST' if operation else 'GET','/view/terminal'+('/'+operation if operation else ''),
+                        body=json.dumps(payload).encode() if operation else None,headers=headers)
+                    response=connection.getresponse();return response.status,json.loads(response.read())
+                finally:connection.close()
+            try:
+                status,cap=await asyncio.to_thread(phone)
+                assert status==200 and (cap['api'],cap['supported'])==(34,'fresh-managed-pane')
+                assert cap['enabled'] is (case!='disabled')
+                ref=dict(mail_instance_id=root.instance,mail_agent_id=people[0]['agent_id'])
+                selector=dict(epoch=cap['epoch'],name='Alpha',**ref)
+                if case=='wrong-ref':selector['mail_agent_id']=people[1]['agent_id']
+                status,listed=await asyncio.to_thread(phone,'targets',selector)
+                if case in {'disabled','wrong-ref'}:
+                    assert status==503 and frames==[];return
+                assert status==200 and len(listed['targets'])==1
+                choice=listed['targets'][0];assert all(choice[k]==v for k,v in ref.items())
+                proof=await asyncio.to_thread(resolvers[0].read,bridge,'%2',time.monotonic()+3)
+                assert all(proof[k]==v for k,v in ref.items())
+                status,preview=await asyncio.to_thread(phone,'preview',dict(epoch=cap['epoch'],choice=choice['choice']))
+                assert status==200 and preview['text']=='fresh selected output'
+                assert all(preview['target'][k]==v for k,v in ref.items())
+                status,prepared=await asyncio.to_thread(phone,'prepare',dict(epoch=cap['epoch'],choice=choice['choice'],
+                    revision=preview['target']['revision'],text='literal fresh input'))
+                assert status==200 and all(prepared['target'][k]==v for k,v in ref.items())
+                if case=='current':fixture.helpers.replace(first[0].parent.parent/'current.json',dict(launch_id=str(uuid4())))
+                if case=='kernel-birth':facts['birth']='changed'
+                before=len(frames)
+                commit=dict(epoch=cap['epoch'],intent=prepared['intent'],confirmation=prepared['confirmation'])
+                status,result=await asyncio.to_thread(phone,'commit',commit)
+                assert status==200 and result['state']==('accepted' if case=='accepted' else 'unknown' if case=='partial' else 'refused')
+                assert all(result['target'][k]==v for k,v in ref.items())
+                sent=frames[before:]
+                assert len(sent)==(3 if case=='accepted' else 1 if case=='partial' else 0)
+                assert all(shlex.split(frame.decode())[:3]==['send-keys','-t','%2'] for frame in sent)
+                assert (await asyncio.to_thread(phone,'commit',commit))[1]==result
+                assert (await asyncio.to_thread(phone,'status',dict(epoch=cap['epoch'],intent=prepared['intent'])))[1]==result
+                assert frames[before:]==sent
+                assert not any(word in json.dumps(result) for word in ('registration_token','context_digest','socket_path'))
+                with pytest.raises(mobile.InputRefused):
+                    mobile.PaneResolver(root).read(bridge,'%9',time.monotonic()+1)
+            finally:
+                await asyncio.to_thread(server.shutdown);server.server_close();worker.join(3);assert not worker.is_alive()
+                await runner.cleanup();await manager.close()
+    asyncio.run(scenario())
+
+
+@pytest.mark.skipif(os.environ.get('ORRERY_EXTERNAL_FRESH_R4')!='1',reason='Parent-only private ps/tmux R4 acceptance')
+@pytest.mark.parametrize('provider',['claude','codex'])
+def test_external_fresh_r4_preview_and_confirmed_ack_on_private_control(tmp_path,monkeypatch,provider):
+    """Reuse A's private native/control lifecycle; add the actual R4 OS boundary."""
+    import orrery_backend as ob
+    import mobile_input as mobile
+    spec=importlib.util.spec_from_file_location('cockpit_external_r4_fixture',BRIDGE/'tests/test_fresh_targets.py')
+    fixture=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
+    original=ob.SessionBridgeManager.attach
+    async def attach(manager,*args,**kwargs):
+        result=await original(manager,*args,**kwargs)
+        import control_server as control
+        import runtime_target
+        diagnostics=[];diagnostic_lock=threading.Lock();started=time.monotonic();active_deadline=[None]
+        codes={'preview_unavailable','input_target_changed','input_process_unavailable',
+            'FRESH_TMUX_TARGET_CHANGED','FRESH_HOST_UNAVAILABLE','FRESH_TARGET_UNAVAILABLE',
+            'FRESH_TMUX_TARGET_ENDED','FRESH_TARGET_HAS_NO_PANE','INSTANCE_MISMATCH'}
+        def record(stage,event,error=None,deadline=None):
+            now=time.monotonic();deadline=active_deadline[0] if deadline is None else deadline
+            row=dict(stage=stage,event=event,elapsed=now-started,
+                remaining=None if deadline is None else deadline-now)
+            if error is not None:
+                row['exception_type']=type(error).__name__
+                if isinstance(error,(mobile.InputRefused,runtime_target.TargetRefused)) and str(error) in codes:
+                    row['code']=str(error)
+            with diagnostic_lock:
+                if len(diagnostics)<128:diagnostics.append(row)
+                (tmp_path/'preview-diagnostic.json').write_text(json.dumps(diagnostics,indent=2))
+        original_command=control.admit_command
+        def diagnostic_command(*a,**kw):
+            record('admit_command','begin')
+            try:value=original_command(*a,**kw)
+            except BaseException as error:record('admit_command','error',error);raise
+            record('admit_command','end');return value
+        diagnostic_command.benchmark_original=original_command
+        monkeypatch.setattr(control,'admit_command',diagnostic_command)
+        original_deadline=mobile._deadline
+        @contextlib.asynccontextmanager
+        async def diagnostic_deadline(deadline):
+            async with original_deadline(deadline):
+                try:yield
+                except BaseException as error:
+                    record('deadline_body','error',error,deadline);raise
+        monkeypatch.setattr(mobile,'_deadline',diagnostic_deadline)
+        for state in manager.states.values():
+            bridge=state.bridge
+            def instrument(bridge):
+                original_capture=bridge.capture_mobile_preview;original_writer=bridge._write_master
+                target=bridge.config.tmux_bin;original_admit=target.admit
+                def diagnostic_admit(*a,**kw):
+                    record('target_admit','begin')
+                    try:value=original_admit(*a,**kw)
+                    except BaseException as error:record('target_admit','error',error);raise
+                    record('target_admit','end');return value
+                async def capture(*a,**kw):
+                    active_deadline[0]=kw['deadline'];record('capture','begin')
+                    try:value=await original_capture(*a,**kw)
+                    except BaseException as error:record('capture','error',error);raise
+                    record('capture','end');return value
+                async def writer(*a,**kw):
+                    record('pty_writer','begin')
+                    try:value=await original_writer(*a,**kw)
+                    except BaseException as error:record('pty_writer','error',error);raise
+                    record('pty_writer','end');return value
+                monkeypatch.setattr(target,'admit',diagnostic_admit)
+                monkeypatch.setattr(bridge,'capture_mobile_preview',capture)
+                monkeypatch.setattr(bridge,'_write_master',writer)
+            instrument(bridge)
+        async def get_bridge(name,ref):
+            target=await asyncio.to_thread(manager.tmux_bin.resolve,name,ref)
+            state=manager.states.get(target.key)
+            return state.bridge if state is not None and not state.bridge._closed else None
+        c=mobile.InputCoordinator(mobile.PaneResolver(manager.tmux_bin),get_bridge,enabled=True)
+        original_read=c.resolver.read
+        def diagnostic_read(*a,**kw):
+            active_deadline[0]=a[2];record('resolver_read','begin')
+            try:value=original_read(*a,**kw)
+            except BaseException as error:record('resolver_read','error',error);raise
+            record('resolver_read','end');return value
+        monkeypatch.setattr(c.resolver,'read',diagnostic_read)
+        scope=dict(contract=mobile.CONTRACT,owner='fixture@example.invalid',reader_epoch='9'*32)
+        try:
+            cap=await c.request('capability',scope);scope['epoch']=cap['epoch']
+            assert (cap['api'],cap['supported'])==(34,'fresh-managed-pane')
+            listed=await c.request('targets',dict(scope,name='Alpha'))
+            assert len(listed['targets'])==1
+            chosen=listed['targets'][0];ref={k:chosen[k] for k in ('mail_instance_id','mail_agent_id')}
+            preview=await c.request('preview',dict(scope,choice=chosen['choice']))
+            assert all(preview['target'][k]==v for k,v in ref.items())
+            prepared=await c.request('prepare',dict(scope,choice=chosen['choice'],revision=preview['target']['revision'],text='r4-confirmed-fixture'))
+            commit=dict(scope,intent=prepared['intent'],confirmation=prepared['confirmation'])
+            accepted=await c.request('commit',commit)
+            assert accepted['state']=='accepted' and all(accepted['target'][k]==v for k,v in ref.items())
+            assert await c.request('commit',commit)==accepted
+            assert await c.request('status',dict(scope,intent=prepared['intent']))==accepted
+            # Keep A's later distinct input assertion independent: its fixture
+            # waits for a new file, not for this R4 input's earlier receipt.
+            received=tmp_path/'received.jsonl';deadline=time.monotonic()+5
+            while not received.exists() or 'r4-confirmed-fixture' not in received.read_text():
+                assert time.monotonic()<deadline;await asyncio.sleep(.05)
+            received.unlink()
+            (tmp_path/'external-r4-proof.json').write_text(json.dumps(dict(provider=provider,**ref,preview=True,
+                accepted=True,repeated_commit_same_receipt=True,max_preview_bytes=6144,synthetic_provider=True)))
+        finally:c.close()
+        return result
+    attach.benchmark_original=original
+    monkeypatch.setattr(ob.SessionBridgeManager,'attach',attach)
+    fixture.test_external_control_bridge_and_same_native_resume_gate(tmp_path,monkeypatch,provider)

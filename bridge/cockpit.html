@@ -7507,6 +7507,19 @@ function forgetSession(session,{removeGroup=true}={}){
   if(pendingJump===session)pendingJump=null;
   renderStage();
 }
+function freshOutputIncomplete(msg){
+  if(msg.code!=='FRESH_OUTPUT_INCOMPLETE'||!msg.session)return false;
+  const group=sessionGroups.get(msg.session);if(!group)return true;
+  if(group.incarnation&&msg.incarnation!==group.incarnation)return true;
+  if(!requestedSessions.has(msg.session)&&group.attachGeneration!==msg.attachGeneration)return true;
+  forgetSession(msg.session,{removeGroup:false});
+  setGroupState(msg.session,'error');
+  group.empty.textContent='Output stopped; some output or history may be missing. Select this session to reattach.';
+  group.empty.style.display='block';
+  showToast('Output interrupted; some output or history may be missing. Reattach to continue.',true);
+  refreshHeaderStats();
+  return true;
+}
 function detachSession(session,remember=false,{keepTab=false}={}){
   if(attachedSessions.has(session)||requestedSessions.has(session)){
     releaseSessionClaim(session,{resize:false});
@@ -7539,6 +7552,7 @@ function resetSession(msg){
   closeSessionPanes(session);
   const group=ensureSessionGroup(session);
   group.incarnation=typeof msg.incarnation==='string'?msg.incarnation:null;
+  group.attachGeneration=typeof msg.attachGeneration==='string'?msg.attachGeneration:null;
   requestedSessions.delete(session);attachedSessions.add(session);
   setGroupState(session,'live');
   (Array.isArray(msg.panes)?msg.panes:[]).forEach(meta=>createPane(session,meta));
@@ -8373,6 +8387,7 @@ function handle(msg){
       }
       break;
     case "error":
+      if(freshOutputIncomplete(msg))break;
       if(msg.session){
         const wasRequesting=requestedSessions.delete(msg.session);
         if(wasRequesting)setGroupState(msg.session,'error');

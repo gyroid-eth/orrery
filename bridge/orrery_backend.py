@@ -41,7 +41,8 @@ from control_server import (
     prune_history_files,
     tmux_session_exists,
 )
-from runtime_target import LegacyTargetBoundary, TargetRefused, require_target, tmux_argv, tmux_env
+from runtime_target import (LegacyTargetBoundary, FreshTargetBoundary, FreshPaneBoundary,
+                            TargetRefused, require_target, tmux_argv, tmux_env, startup_environment)
 from usage_probe import (
     ProviderUsage,
     UsageCache,
@@ -66,7 +67,7 @@ CLIENT_CONTROL_MODE_FORMAT = "#{client_control_mode}"
 
 CONFIG_PATH = Path(os.path.expanduser("~/.orrery/config.json"))
 CONFIG_KEYS = frozenset(
-    {"project_key", "mail_db", "annotations_path", "orrery_root"}
+    {"project_key", "mail_db", "annotations_path", "orrery_root", "telemetry_home"}
 )
 
 
@@ -87,10 +88,14 @@ def load_user_config(path: Path = CONFIG_PATH) -> dict[str, Any]:
     # Existing optional path settings retain their permissive loading rules.
     if "enable_mobile_terminal" in raw:
         config["enable_mobile_terminal"] = raw["enable_mobile_terminal"]
+    if 'telemetry_home' in raw:config['telemetry_home']=raw['telemetry_home']
     return config
 
 
 USER_CONFIG = load_user_config()
+STARTUP_ENV = startup_environment(config=USER_CONFIG)
+os.environ.update(STARTUP_ENV)
+DASHBOARD_URL = os.environ.get('ORRERY_DASHBOARD_URL',DASHBOARD_URL).rstrip('/')
 
 
 def configured_value(env_names: tuple[str, ...], config_key: str) -> str | None:
@@ -269,7 +274,7 @@ PROXY_ROUTES = {
     "/telemetry/messages": ("/api/messages-since", ("since", "limit")),
     "/telemetry/graph": ("/api/graph", ("all", "days", "spawn_only")),
     "/telemetry/spawn-catalog": ("/api/spawn-names", ()),
-    "/telemetry/spawn-status": ("/api/spawn-status", ("name", "attempt_id")),
+    "/telemetry/spawn-status": ("/api/spawn-status", ("name", "attempt_id", "mail_instance_id", "mail_agent_id")),
 }
 
 
@@ -881,6 +886,14 @@ def resolve_tmux_bin(preferred: str) -> str:
 
 def list_tmux_sessions(tmux_bin: str) -> list[dict[str, Any]]:
     """Return the protocol-v2 session roster from tmux."""
+    if isinstance(tmux_bin,FreshTargetBoundary):
+        sessions=[]
+        for row in tmux_bin.catalog():
+            try:target=tmux_bin.resolve(row['session'],{k:row[k] for k in ('mail_instance_id','mail_agent_id')})
+            except TargetRefused:continue
+            sessions.append(dict(session=target.name,attached=False,interactive=False,windows=1,created=0,
+                catalog_truncated=tmux_bin.truncated,**target.ref))
+        return sessions
     result = subprocess.run(
         tmux_argv(tmux_bin, "list-sessions", "-F", SESSION_FORMAT),
         capture_output=True,
@@ -968,10 +981,10 @@ class SessionTmuxBridge(TmuxControlBridge):
         event.setdefault("session", self.config.session)
         await super().broadcast(event)
 
-    async def send_json(self, websocket: Any, payload: dict[str, Any]) -> None:
+    async def send_json(self, websocket: Any, payload: dict[str, Any], *, proof=None, attach_generation=None) -> None:
         event = dict(payload)
         event.setdefault("session", self.config.session)
-        await super().send_json(websocket, event)
+        await super().send_json(websocket, event, proof=proof,attach_generation=attach_generation)
 
     async def capture_window_size(self, window_id: str) -> WindowSizeSnapshot | None:
         """Capture local policy presence/value and exact grid before a claim."""
@@ -1078,6 +1091,13 @@ class SessionBridgeManager:
                 self._roster_task = asyncio.create_task(self._roster_loop())
 
     async def _prune_history(self) -> None:
+        if isinstance(self.tmux_bin,FreshTargetBoundary):
+            # Fresh histories live below per-current directories. Never prune
+            # them against a legacy display-name roster.
+            for folder in list(self.history_dir.glob('fresh-*'))[:5000]:
+                if folder.is_dir() and not folder.is_symlink():
+                    await asyncio.to_thread(prune_history_files,folder,None)
+            return
         live_sessions: set[str] | None
         try:
             sessions = await asyncio.to_thread(list_tmux_sessions, self.tmux_bin)
@@ -1104,6 +1124,8 @@ class SessionBridgeManager:
             await self._reconcile_sessions()
 
     async def _reconcile_sessions(self) -> None:
+        if isinstance(self.tmux_bin,FreshTargetBoundary):
+            await self._reconcile_fresh();return
         try:
             sessions = await asyncio.to_thread(list_tmux_sessions, self.tmux_bin)
         except (OSError, RuntimeError):
@@ -1145,7 +1167,11 @@ class SessionBridgeManager:
         self,
         session: str,
         session_created: int | None = None,
+        *, ref=None,
     ) -> SessionState | None:
+        if isinstance(self.tmux_bin,FreshTargetBoundary):
+            target=await asyncio.to_thread(self.tmux_bin.resolve,session,ref)
+            return await self._ensure_fresh_bridge(target)
         async with self._lock:
             if self._closed:
                 return None
@@ -1172,12 +1198,96 @@ class SessionBridgeManager:
             self.states[session] = state
             return state
 
+    async def _ensure_fresh_bridge(self,target):
+        async with self._lock:
+            if self._closed:return None
+            state=self.states.get(target.key)
+            if state is not None:return state
+            bridge=SessionTmuxBridge(ControlConfig(host=DEFAULT_HOST,port=0,session=target.name,
+                tmux_bin=target,history_dir=self.history_dir))
+            try:await bridge.start()
+            except BaseException:
+                await bridge.stop();raise
+            state=SessionState(bridge=bridge);self.states[target.key]=state
+            return state
+
+    async def _reconcile_fresh(self):
+        targets={}
+        try:
+            rows=await asyncio.to_thread(self.tmux_bin.catalog)
+            for row in rows:
+                try:
+                    target=await asyncio.to_thread(self.tmux_bin.resolve,row['session'],
+                        {k:row[k] for k in ('mail_instance_id','mail_agent_id')})
+                    targets[target.key]=target
+                except TargetRefused:continue
+            if self.tmux_bin.truncated:
+                # A bounded catalog is not evidence that a manually attached
+                # owner disappeared. Revalidate existing targets explicitly.
+                for state in list(self.states.values()):
+                    old=state.bridge.config.tmux_bin
+                    try:
+                        target=await asyncio.to_thread(self.tmux_bin.resolve,old.name,old.ref)
+                        targets[target.key]=target
+                    except TargetRefused:pass
+        except TargetRefused:pass
+        async with self._lock:
+            if self._closed:return
+            stale=[self.states.pop(key) for key in list(self.states) if key not in targets]
+        for state in stale:await self._stop_bridge(state)
+        for target in targets.values():
+            if getattr(target,'proof',{}).get('ended') is True:
+                # Finished recorders have no automatic lifetime after the
+                # final viewer leaves. Explicit attach can still inspect history.
+                async with self._lock:
+                    state=self.states.get(target.key)
+                    if state is not None and not state.bridge.clients:
+                        self.states.pop(target.key)
+                        await self._stop_bridge(state)
+                continue
+            try:await self._ensure_fresh_bridge(target)
+            except (OSError,RuntimeError):continue
+
+    def _fresh_attached_key(self,attached,session,ref=None):
+        if session in attached and session in self.states:
+            return session if ref is None or self.states[session].bridge.config.tmux_bin.ref==ref else None
+        matches=[key for key in attached if key in self.states
+            and self.states[key].bridge.config.session==session
+            and (ref is None or self.states[key].bridge.config.tmux_bin.ref==ref)]
+        return matches[0] if len(matches)==1 else None
+
+    async def _attach_fresh(self,peer,attached,session,ref=None):
+        target=await asyncio.to_thread(self.tmux_bin.resolve,session,ref)
+        attached.intersection_update(self.states)
+        # The old UI groups by display name. Never merge two distinct same-name
+        # owners in one peer; an explicit selector may be used in another view.
+        for key in attached:
+            old=self.states.get(key)
+            if old is not None and old.bridge.config.session==session and key!=target.key:
+                raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
+        state=await self._ensure_fresh_bridge(target)
+        if state is None:raise TargetRefused('FRESH_TARGET_UNAVAILABLE')
+        if len(attached)>=MAX_CLIENT_SESSIONS and target.key not in attached:
+            raise TargetRefused('FRESH_TARGET_VIEW_LIMIT')
+        async with self._lock:
+            if self._closed or self.states.get(target.key) is not state or state.bridge._closed:
+                raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
+            generation=await state.bridge.attach_fresh_peer(peer)
+        attached.add(target.key)
+        try:await state.bridge.send_snapshot(peer,attach_generation=generation)
+        except BaseException:
+            if state.bridge._fresh_peer_generations.get(peer)==generation:
+                await self.detach(peer,attached,target.key)
+            raise
+
     async def attach(
         self,
         peer: WebSocketPeer,
         attached: set[str],
         session: str,
     ) -> None:
+        if isinstance(self.tmux_bin,FreshTargetBoundary):
+            await self._attach_fresh(peer,attached,session);return
         try:
             await asyncio.to_thread(require_target, self.tmux_bin, "attach", session=session)
         except TargetRefused as exc:
@@ -1241,6 +1351,10 @@ class SessionBridgeManager:
         attached: set[str],
         session: str,
     ) -> None:
+        if isinstance(self.tmux_bin,FreshTargetBoundary):
+            key=self._fresh_attached_key(attached,session)
+            if key is None:return
+            session=key
         # The recorder survives browser detach, so restore only windows that
         # this ORRERY session actually claimed before removing its final peer.
         async with self._lock:
@@ -1253,8 +1367,26 @@ class SessionBridgeManager:
             await self._restore_claimed_windows(state)
 
         attached.discard(session)
+        if state is not None and isinstance(self.tmux_bin,FreshTargetBoundary):
+            await state.bridge.detach_fresh_peer(peer)
+            # Resolve outside the manager lock. Only a fresh host observation
+            # of the same ended run can end this manager-owned consumer.
+            old=state.bridge.config.tmux_bin
+            try:current=await asyncio.to_thread(self.tmux_bin.resolve,old.name,old.ref)
+            except (TargetRefused,OSError,RuntimeError):return
+            fields=('mail_instance_id','mail_agent_id','credential_generation','context_digest',
+                    'current','native_session_id','route')
+            if getattr(current,'proof',{}).get('ended') is not True or any(current.proof.get(k)!=old.proof.get(k) for k in fields):return
+            async with self._lock:
+                if self.states.get(session) is state and not state.bridge.clients:
+                    self.states.pop(session)
+                    await self._stop_bridge(state)
+            return
         async with self._lock:
             if state is not None and self.states.get(session) is state:
+                proofs=state.bridge._fresh_peer_proofs.pop(peer,None)
+                if proofs is not None:
+                    for proof in proofs:proof.close()
                 state.bridge.clients.discard(peer)
                 state.bridge.client_locks.pop(peer, None)
 
@@ -1273,6 +1405,21 @@ class SessionBridgeManager:
         payload: dict[str, Any],
     ) -> None:
         message_type = payload.get("type")
+
+        if isinstance(self.tmux_bin,FreshTargetBoundary) and message_type in {'attach','detach','refresh'}:
+            if set(payload)-{'type','session','mail_instance_id','mail_agent_id'}:raise TargetRefused('FRESH_TARGET_QUERY_INVALID')
+            session=payload.get('session')
+            if not isinstance(session,str) or not session:raise TargetRefused('FRESH_TARGET_QUERY_INVALID')
+            fields={'mail_instance_id','mail_agent_id'};provided=fields&set(payload)
+            if provided and provided!=fields:raise TargetRefused('FRESH_TARGET_QUERY_INVALID')
+            ref={k:payload[k] for k in fields} if provided else None
+            if message_type=='attach':await self._attach_fresh(peer,attached,session,ref)
+            else:
+                key=self._fresh_attached_key(attached,session,ref)
+                if key is None:raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
+                if message_type=='detach':await self.detach(peer,attached,key)
+                else:await self.states[key].bridge.refresh_panes(send_captures=True)
+            return
 
         if message_type in {"attach", "detach", "refresh"}:
             session = payload.get("session")
@@ -1306,6 +1453,17 @@ class SessionBridgeManager:
             return
 
         session = state.bridge.config.session
+        if isinstance(state.bridge.config.tmux_bin,FreshPaneBoundary):
+            target=state.bridge.config.tmux_bin
+            if any(k in payload and payload[k]!=v for k,v in target.ref.items()):raise TargetRefused('FRESH_TMUX_TARGET_CHANGED')
+            payload=dict(payload,paneId=target.pane_id);pane_id=target.pane_id
+            if message_type in {'split','close'}:raise TargetRefused('FRESH_TARGET_OPERATION_UNAVAILABLE')
+            if message_type=='input':
+                proofs=state.bridge._fresh_peer_proofs.get(peer)
+                if proofs is None:raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
+                data=payload.get('data')
+                if isinstance(data,str):await state.bridge.send_input(pane_id,data,binary=payload.get('binary') is True,proof=proofs[0])
+                return
         if message_type in {"split", "close"}:
             try:
                 current_session = await asyncio.to_thread(
@@ -1424,11 +1582,16 @@ class SessionBridgeManager:
         attached: set[str],
         pane_id: str,
     ) -> SessionState | None:
+        matches=[]
         for session in attached:
             state = self.states.get(session)
+            if state is not None and isinstance(state.bridge.config.tmux_bin,FreshPaneBoundary):
+                target=state.bridge.config.tmux_bin
+                if pane_id==target.wire_pane and target.pane_id in state.bridge.panes:matches.append(state)
+                continue
             if state is not None and pane_id in state.bridge.panes:
-                return state
-        return None
+                matches.append(state)
+        return matches[0] if len(matches)==1 else None
 
     @staticmethod
     async def _stop_bridge(state: SessionState) -> None:
@@ -2953,6 +3116,30 @@ async def open_ghostty(request: web.Request) -> web.Response:
         )
 
     tmux_bin = request.app[TMUX_BIN_KEY]
+    if isinstance(tmux_bin,FreshTargetBoundary):
+        from urllib.parse import urlsplit
+        fields={'mail_instance_id','mail_agent_id'}
+        if set(payload)-{'session',*fields} or fields&set(payload) and fields&set(payload)!=fields:
+            return web.json_response(dict(ok=False,error='FRESH_TARGET_QUERY_INVALID'),status=400)
+        try:
+            ref={k:payload[k] for k in fields} if fields<=set(payload) else None
+            target=await asyncio.to_thread(tmux_bin.resolve,session,ref)
+            endpoint=os.environ.get('ORRERY_DASHBOARD_URL','').rstrip('/');url=urlsplit(endpoint)
+            if (url.scheme!='http' or url.hostname not in {'127.0.0.1','::1'} or not url.port
+                    or url.username is not None or url.password is not None or url.path or url.query or url.fragment):raise ValueError
+            async with request.app[HTTP_SESSION_KEY].post(endpoint+'/api/jump',
+                    json=dict(session=target.name,open=True,**target.ref),allow_redirects=False) as response:
+                raw=await response.content.read(16385)
+                if response.content_type!='application/json' or len(raw)>16384:raise ValueError
+                value=json.loads(raw)
+                if not isinstance(value,dict) or value.get('ok') is not True:
+                    reason=value.get('error') if isinstance(value,dict) else None
+                    raise TargetRefused(reason if isinstance(reason,str) and re.fullmatch(r'[A-Z][A-Z0-9_]{0,95}',reason) else 'FRESH_TERMINAL_OPEN_FAILED')
+                if any(value.get(k)!=v for k,v in target.ref.items()):raise ValueError
+                return web.json_response(dict(ok=True,already=False,**target.ref))
+        except TargetRefused as exc:return web.json_response(dict(ok=False,error=str(exc)),status=409)
+        except (OSError,ValueError,ClientError,asyncio.TimeoutError):
+            return web.json_response(dict(ok=False,error='FRESH_TERMINAL_OUTCOME_UNKNOWN'),status=503)
     try:
         exists = await asyncio.to_thread(tmux_session_exists, tmux_bin, session)
     except OSError as exc:
@@ -3003,6 +3190,12 @@ async def serve_health(request: web.Request) -> web.Response:
             dashboard_online = True
     except (ClientError, asyncio.TimeoutError):
         dashboard_online = False
+    target=request.app[TMUX_BIN_KEY]
+    runtime={'runtime_mode':'legacy'}
+    if isinstance(target,FreshTargetBoundary):
+        runtime={'runtime_mode':'fresh','mail_instance_id':target.instance}
+        if target.host_pin is not None:
+            runtime.update(context_digest=target.host_pin['context_digest'],host_epoch=target.host_pin['epoch'])
     return web.json_response(
         {
             "backend": "ok",
@@ -3010,6 +3203,7 @@ async def serve_health(request: web.Request) -> web.Response:
             "dashboard": dashboard_online,
             "root": BACKEND_ROOT,
             "commit": BACKEND_COMMIT,
+            "runtime": runtime,
         }
     )
 
@@ -3224,7 +3418,76 @@ def mail_project_not_configured(*, include_messages: bool) -> web.Response:
     return web.json_response(payload)
 
 
+async def fresh_mail(request: web.Request, route: str) -> web.Response:
+    """Fixed loopback Telemetry reader; never open a legacy Mail database.
+
+    Deployment pins the non-secret Mail instance beside the upstream URL.
+    Browser query values can select a public object, never a transport/owner.
+    """
+    from urllib.parse import urlsplit, urlencode
+    try:
+        if route in {'recent','thread'}:parse_mail_limit(request,40 if route=='recent' else 50)
+        elif int(request.query.get('id','0'))<=0:raise ValueError('invalid_message_id')
+        if route=='thread' and not request.query.get('thread_id'):raise ValueError('thread_id_required')
+    except ValueError:
+        return web.json_response({'ok':False,'error':'invalid_fresh_mail_query'},status=400)
+    try:
+        instance = os.environ.get('ORRERY_FRESH_MAIL_INSTANCE_ID', '')
+        endpoint = os.environ.get('ORRERY_DASHBOARD_URL', '').rstrip('/')
+        url = urlsplit(endpoint)
+        if (not re.fullmatch(r'[a-f0-9]{32}', instance) or url.scheme != 'http' or
+                url.hostname not in {'127.0.0.1', '::1'} or not url.port or
+                url.username is not None or url.password is not None or
+                url.path or url.query or url.fragment):
+            raise ValueError('fresh_upstream_not_prepared')
+        allowed = {'limit','agent','mail_agent_id'} if route == 'recent' else {'id'} if route == 'message' else {'thread_id','limit'}
+        if (set(request.query)-allowed-{'mail_instance_id'} or
+                any(len(request.query.getall(k)) != 1 for k in request.query) or
+                request.query.get('mail_instance_id',instance) != instance):
+            return web.json_response({'ok':False,'error':'invalid_fresh_mail_query'},status=400)
+        query = dict(request.query)
+        query['mail_instance_id'] = instance
+        async with request.app[HTTP_SESSION_KEY].get(endpoint+'/api/mail/'+route+'?'+urlencode(query),
+                allow_redirects=False) as response:
+            if response.status != 200:
+                return web.json_response({'ok':False,'error':'fresh_mail_upstream_refused'},status=response.status if response.status in {400,404,409,410} else 502)
+            if response.content_type != 'application/json':raise ValueError('fresh_upstream_schema')
+            body = bytearray()
+            async for chunk in response.content.iter_chunked(65536):
+                body.extend(chunk)
+                if len(body)>16*1024*1024:raise ValueError('fresh_upstream_bounds')
+            payload = json.loads(body)
+        if (not isinstance(payload,dict) or payload.get('ok') is not True or payload.get('mail_instance_id') != instance):
+            raise ValueError('fresh_upstream_schema')
+        messages = [payload.get('message')] if route == 'message' else payload.get('messages')
+        if not isinstance(messages,list) or len(messages)>200:raise ValueError('fresh_upstream_bounds')
+        for message in messages:
+            if (not isinstance(message,dict) or message.get('mail_instance_id')!=instance or
+                    type(message.get('id')) is not int or type(message.get('sender_agent_id')) is not int or
+                    not isinstance(message.get('sender'),str) or not isinstance(message.get('recipients'),list) or
+                    len(message['recipients'])>5000 or
+                    not isinstance(message.get('subject'),str) or len(message['subject'])>512 or
+                    not isinstance(message.get('body_md' if route=='message' else 'excerpt'),str) or
+                    len(message.get('body_md','').encode())>65536):
+                raise ValueError('fresh_upstream_schema')
+            # The reader already emits the existing Mail renderer shape.
+            # Project a finite public allow-list rather than proxy authority fields.
+            message_keys={'id','ts','sender','sender_agent_id','recipients','subject','importance','thread_id',
+                          'body_md','excerpt','body_truncated','subject_truncated','mail_instance_id'}
+            if set(message)-message_keys:raise ValueError('fresh_upstream_schema')
+            for recipient in message['recipients']:
+                if (not isinstance(recipient,dict) or set(recipient)!={'name','kind','mail_agent_id','mail_instance_id'} or
+                        recipient['mail_instance_id']!=instance or type(recipient['mail_agent_id']) is not int or
+                        recipient['kind'] not in {'to','cc','bcc'} or not isinstance(recipient['name'],str)):
+                    raise ValueError('fresh_upstream_schema')
+        return web.json_response(payload)
+    except (ClientError, asyncio.TimeoutError, OSError, ValueError, TypeError, KeyError):
+        return web.json_response({'ok':False,'error':'fresh_mail_unavailable'},status=503)
+
+
 async def serve_mail_recent(request: web.Request) -> web.Response:
+    if os.environ.get('AGENTSTACK_RUNTIME_MODE') == 'fresh':
+        return await fresh_mail(request, 'recent')
     try:
         limit = parse_mail_limit(request, 40)
     except ValueError as exc:
@@ -3241,6 +3504,8 @@ async def serve_mail_recent(request: web.Request) -> web.Response:
 
 
 async def serve_mail_message(request: web.Request) -> web.Response:
+    if os.environ.get('AGENTSTACK_RUNTIME_MODE') == 'fresh':
+        return await fresh_mail(request, 'message')
     raw_message_id = request.query.get("id")
     try:
         message_id = int(raw_message_id or "")
@@ -3264,6 +3529,8 @@ async def serve_mail_message(request: web.Request) -> web.Response:
 
 
 async def serve_mail_thread(request: web.Request) -> web.Response:
+    if os.environ.get('AGENTSTACK_RUNTIME_MODE') == 'fresh':
+        return await fresh_mail(request, 'thread')
     thread_id = request.query.get("thread_id")
     if not thread_id:
         return web.json_response(
@@ -3395,6 +3662,8 @@ async def serve_sessions(request: web.Request) -> web.Response:
     tmux_bin = request.app[TMUX_BIN_KEY]
     try:
         sessions = await asyncio.to_thread(list_tmux_sessions, tmux_bin)
+    except TargetRefused as exc:
+        return web.json_response({'ok':False,'error':str(exc)},status=503)
     except FileNotFoundError as exc:
         _warn_tmux_gone(tmux_bin, exc)
         # 503 rather than [] so the UI can tell "broken" from "idle".
@@ -3426,7 +3695,7 @@ async def _session_list_refresher(
         await asyncio.sleep(SESSIONS_REFRESH_SECONDS)
         try:
             sessions = await asyncio.to_thread(list_tmux_sessions, tmux_bin)
-        except OSError as exc:
+        except (OSError,TargetRefused) as exc:
             _warn_tmux_gone(tmux_bin, exc)
             continue
         if sessions != last:
@@ -3598,18 +3867,23 @@ async def serve_public_file(request: web.Request) -> web.FileResponse:
 
 def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False) -> web.Application:
     app = web.Application(middlewares=[own_page_only, json_writes_only, revalidate_static])
-    app[TMUX_BIN_KEY] = tmux_bin if isinstance(tmux_bin, LegacyTargetBoundary) else LegacyTargetBoundary(tmux_bin)
+    app[TMUX_BIN_KEY] = (tmux_bin if isinstance(tmux_bin,(LegacyTargetBoundary,FreshTargetBoundary)) else
+        FreshTargetBoundary(tmux_bin) if os.environ.get('AGENTSTACK_RUNTIME_MODE')=='fresh' else LegacyTargetBoundary(tmux_bin))
     app[USAGE_CACHE_KEY] = UsageCache()
     app[USAGE_LOCKS_KEY] = {}
     app[PREFS_LOCK_KEY] = asyncio.Lock()
     app[PROXY_INFLIGHT_KEY] = {}
     app.cleanup_ctx.append(app_resources)
     from mobile_input import InputCoordinator, PaneResolver, install_routes
-    async def mobile_bridge(name):
+    async def mobile_bridge(name,ref=None):
         # Only a bridge already managed by the PC. No agent/session creation,
         # active-pane/name fallback or second transport for mobile operations.
         manager = app.get(BRIDGE_MANAGER_KEY)
-        state = manager.states.get(name) if manager is not None else None
+        if isinstance(app[TMUX_BIN_KEY],FreshTargetBoundary):
+            if manager is None:return None
+            target=await asyncio.to_thread(app[TMUX_BIN_KEY].resolve,name,ref)
+            state=manager.states.get(target.key)
+        else:state = manager.states.get(name) if manager is not None else None
         return state.bridge if state is not None and not state.bridge._closed else None
     install_routes(app, InputCoordinator(PaneResolver(app[TMUX_BIN_KEY]), mobile_bridge,
                                         enabled=mobile_input_enabled))

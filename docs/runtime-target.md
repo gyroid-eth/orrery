@@ -46,3 +46,13 @@ admission と tmux の副作用は OS の原子的 transaction ではありま�
 配置不明の間は attach 済み pane の capture/refresh も期限切れ後に止まり、roster の一覧だけ継続します。修復後に再接続してください。
 
 `@window` と `refresh-client -C @window:WxH` は元の bridge session へ読み替えず、共有 helper で現在の window の全 pane を照合します。window 操作では5秒の証明を再利用しません。別の global session に移した窓は disconnect の復元も拒否し、寸法と未復元の claim を保持します。
+
+## 明示freshの現在対象と期限
+
+legacy/globalの上記境界と別に、freshは保護hostで選択I/A→current/native→固定socket/session/pane/PID birthへ解決します。hostは既存dashboard内にあり、Cockpitへ資格/DB readerを追加しません。名前やactive/最後paneで対象を代用せず、opaque pane handleと対象別historyを使います。準備は[設定](configuration.md#明示freshの設定切替準備)と[Telemetry手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/fresh-global-update.md)を参照してください。
+
+PC入力・各peer出力・recorderは独立proofです。full確認開始から最大5秒、期限約2秒前に独立single-flight refreshを開始します。idle中もfull負荷が発生し、close/失敗時はtimerを止めます。各effectは同じcontrol接続で固定socket/session/pane/PID membership、期限・世代・接続を直前確認し、期限超過・失敗・観測済み交換/切断で停止します。遅いrefreshで旧対象を復活させません。未観測の資格/current/context/epoch/birth変更やinodeが残るhost停止は、最大5秒＋check→effectの競合まで検出が遅れます。これは入力・表示・履歴に及び、即時失効の保証ではありません。
+
+peerごとに出力順序とsend lockを維持し、別peerのproofを借りません。sink上限/照合拒否では該当sessionにgapを表示してattachedを解除し再attach可能にします。旧世代通知は新attachへ適用せず、通知送信失敗は当WSを閉じます。recorder gapはstderrへ別に残し、別peer/bridgeは止めません。
+
+R4・window/resize・resume/exit・終了済み整理は従来のfull確認です。終了済みでpeer0の所有consumerだけを正常停止し、全clientを再観測して残clientは拒否します。人のterminalを除外・強制detachせず、killは確認済み同paneだけです。未知/部分成功は保存結果を確認し、自動再送しません。退役済み復帰とApp GUI前面化は未接続です。

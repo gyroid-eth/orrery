@@ -351,3 +351,20 @@ def test_the_docs_the_hint_names_have_a_step_5_about_update_sh():
         text = (root / rel).read_text(encoding="utf-8")
         section = text.split(heading, 1)[1].split("\n### ", 1)[0]
         assert "./scripts/update.sh" in section and "./scripts/start-cockpit.sh" in section, rel
+
+
+def test_shell_backend_reuse_requires_same_fresh_context_and_epoch(tmp_path):
+    function=re.search(r'^probe\(\) \{\n.*?^\}',SCRIPT.read_text(),re.M|re.S).group(0)
+    identity=dict(runtime_mode='fresh',mail_instance_id='a'*32,context_digest='d'*64,host_epoch='e'*32)
+    def check(runtime):
+        server,url,_=serve({'/telemetry/health':(200,json.dumps(dict(backend='ok',boot='B',runtime=runtime)).encode())})
+        try:
+            env=dict(HOME=str(tmp_path),PATH=os.environ['PATH'],ORRERY_STARTUP_IDENTITY=json.dumps(identity))
+            import sys
+            result=subprocess.run([BASH,'-c','probe_python='+repr(sys.executable)+'\n'+function+'\nprobe "$1/telemetry/health" cockpit','test',url],env=env,capture_output=True,text=True,timeout=8)
+            return result.returncode
+        finally:server.shutdown();server.server_close()
+    assert check(identity)==0
+    for key in ('mail_instance_id','context_digest','host_epoch'):
+        assert check(identity|{key:'other'})==2
+    assert check({'runtime_mode':'legacy'})==2

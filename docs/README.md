@@ -15,6 +15,10 @@
 - [使い方](usage.md) — 画面の guide/help map を入口に、必要な操作を詳しく調べる。
 - [Full tour](FULL_TOUR.md) — 16段の実操作とチェックの条件、ゲーム・保存・別窓の仕様。
 
+## 明示freshの切替候補
+
+- [Telemetryのfresh移行・停止復旧](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/fresh-global-update.md) — 限定fixture確認と本番受入を分離。通常設定からの私有起動・停止は確認済み。実OS manager/Finder GUI・実provider/trust/導入・最終CIと本人在席の切替は未受入。復帰・App前面化は今回の対象外。
+
 ## install・update
 
 - [Update](install.md#5-更新する) — 既存設定を引き継いで更新する手順。
@@ -33,7 +37,7 @@
 
 - [アーキテクチャ概要](ARCHITECTURE_OVERVIEW.md) — tmux、Codex App、network、履歴と肖像画像の境界。
 - [実装アーキテクチャ](ARCHITECTURE.md) — backend の HTTP/WebSocket、tmux 制御、Mail 連携を読む。
-- [旧 tmux 対象の保護](runtime-target.md) — 接続先の固定、共有 admission と修復。
+- [legacy/fresh tmux対象の保護](runtime-target.md) — 固定接続先、freshの選択I/A・期限・gapと停止。
 - [デザイン言語](DESIGN.md) — 視覚・motion・色・typography の実装基準。
 - [Roster findability 設計メモ（discussion draft）](DESIGN_roster_findability.md) — 過去の計測と設計案。現行操作の手順書とは区別して読む。
 - [開発への入口](../app/README.md) — desktop app の開発用起動と、hotkey の表示・非表示の確認。
