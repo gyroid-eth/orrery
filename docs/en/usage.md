@@ -159,7 +159,7 @@ In Settings, `Usage` lets you show or hide each provider, including Claude, Code
 
 - **Claude**: `5h` (the 5-hour quota), `7d` (the weekly quota), and per-model weekly quotas (such as `FABLE`; only when the server returns them)
 - **Codex**: `5h` and `7d`. Named additional quotas such as Spark are shown separately under `ADDITIONAL LIMIT` and are not used for the pill's value. When an additional quota has not been used at all, it is collapsed into one line: `untouched · 5h / 7d at 100% left`
-- **Antigravity (Gemini)**: shown only when Telemetry reports it. Independent quotas such as `Gemini Models`, `Claude and GPT models`, and `Gemini 4 Argon` are shown under `MODEL GROUP`. The pill shows the lowest remaining percentage among the reported quotas; the quota that applies depends on the model you use
+- **Antigravity (Gemini)**: shown only when Telemetry reports it. `Gemini Models` (5H / 7D) and model-specific quotas such as `ARGON` appear as regular dials, matching the other providers. The `Claude and GPT models` group is omitted from the Antigravity display without changing the Telemetry response. The pill shows the lowest remaining percentage among the displayed Gemini quotas; the applicable quota depends on the model.
 - Number and ring colors: green above 50%, yellow at 50% or below, red at 20% or below
 - Under each dial is the time until reset (`in 2h 59m`, `in 3d`). To the right of the heading is the time of the earliest reset
 

@@ -4271,9 +4271,9 @@
       }
     }
   },
-  "inventory_digest": "0d045b1f6b39de330cb3bb9af106e0f5eb3888f0548d52b0ecd1b0881b8913d2",
+  "inventory_digest": "6462f6fdda53f8e4e409ce24a041cecaeb0e97e13ff2ed00e09b448259322c54",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "501100f41b1ead8f255ea266f8eb9853a2cde3b4d0f2c7d3dcbedfb5c8869e31",
+  "source_digest": "c1942e9ee8960d6961d81f9c4479fe5f3e4d0207339b6d568b91121985b70274",
   "surface": "cockpit",
   "version": 1
 }
@@ -8506,9 +8506,16 @@ function usageBalanceLow(prov){
 }
 function usageProviderName(p){return p==='claude'?'Claude':p==='codex'?'Codex':p==='antigravity'?'Antigravity (Gemini)':p==='dsh'?'DeepSeek':p;}
 const USAGE_LOGO={claude:'assets/anthropic.svg',codex:'assets/openai.svg',antigravity:'cockpit-assets/google.svg',dsh:'cockpit-assets/deepseek.svg'};
-function usageMainWindows(prov){return prov.windows.filter(w=>!w.extra);}
-function usageBinding(prov){      /* Antigravity reports named pools only; use its tightest available quota. */
-  const windows=prov.provider==='antigravity'?prov.windows:usageMainWindows(prov);
+function usageVisibleWindows(prov){
+  return prov.provider==='antigravity'
+    ?prov.windows.filter(w=>w.limit!=='Claude and GPT models')
+    :prov.windows;
+}
+function usageMainWindows(prov){
+  return usageVisibleWindows(prov).filter(w=>!w.extra||(prov.provider==='antigravity'&&w.limit==='Gemini Models'));
+}
+function usageBinding(prov){
+  const windows=prov.provider==='antigravity'?usageVisibleWindows(prov):usageMainWindows(prov);
   return windows.slice().sort((a,b)=>a.remaining_percent-b.remaining_percent)[0]||null;}
 function renderUsagePill(){
   const pill=document.getElementById('usageBtn');
@@ -8542,7 +8549,7 @@ function renderUsagePill(){
       +(bind.resets_at?`, resets in ${usageUntil(bind.resets_at)}`:''):(prov?USAGE_REASON[prov.reason]||'unavailable':'waiting for update');
   }
 }
-function usageDial(w){
+function usageDial(w,label=w.label){
   const R=25,C=2*Math.PI*R,tier=usageTier(w.remaining_percent);
   const el=document.createElement('div');el.className='dial'+(tier==='ok'?'':' '+tier);
   /* the ring is rotated so the arc starts at 12 o'clock; the number stays
@@ -8552,9 +8559,10 @@ function usageDial(w){
     <circle class="f" cx="31" cy="31" r="${R}" stroke-dasharray="${(C*w.remaining_percent/100).toFixed(2)} ${C.toFixed(2)}"/></g>
     <text class="n" x="31" y="31" text-anchor="middle" dominant-baseline="central">${Math.round(w.remaining_percent)}<tspan class="u" dy="-.35em">%</tspan></text>
   </svg><span class="lab"></span><span class="rs"></span>`;
-  el.querySelector('.lab').textContent=w.label.toUpperCase();el.querySelector('.lab').title=w.label;
+  const fullLabel=w.limit?`${w.limit} · ${w.label}`:w.label;
+  el.querySelector('.lab').textContent=label.toUpperCase();el.querySelector('.lab').title=fullLabel;
   el.querySelector('.rs').textContent=w.resets_at?'in '+usageUntil(w.resets_at):'reset unknown';
-  el.title=`${w.label}: ${Math.round(w.remaining_percent)}% left`+(w.resets_at?`, resets ${usageClock(w.resets_at)}`:'');
+  el.title=`${fullLabel}: ${Math.round(w.remaining_percent)}% left`+(w.resets_at?`, resets ${usageClock(w.resets_at)}`:'');
   return el;}
 function renderUsagePopover(){
   const body=document.getElementById('usageDials'),kicker=document.getElementById('usageKicker');
@@ -8581,14 +8589,25 @@ function renderUsagePopover(){
       note.textContent=balance?'Account '+(balance.is_available?'available':'unavailable'):'Balance unavailable';
       sec.append(amount,note);return sec;
     }
-    const soon=(usageMainWindows(prov).some(w=>w.resets_at)?usageMainWindows(prov):prov.windows).filter(w=>w.resets_at).sort((a,b)=>a.resets_at-b.resets_at)[0];
+    const windows=usageVisibleWindows(prov);
+    const main=usageMainWindows(prov);
+    const soon=(main.some(w=>w.resets_at)?main:windows).filter(w=>w.resets_at).sort((a,b)=>a.resets_at-b.resets_at)[0];
     head.querySelector('.up-reset').textContent=prov.status==='unavailable'?(USAGE_REASON[prov.reason]||'unavailable')
       :soon?`next reset ${soon.label} · ${usageClock(soon.resets_at)}`:'';
     sec.appendChild(head);
-    if(!prov.windows.length){const e=document.createElement('div');e.className='up-empty';
+    if(!windows.length){const e=document.createElement('div');e.className='up-empty';
       e.textContent='no windows';sec.appendChild(e);return sec;}
     const dials=document.createElement('div');dials.className='up-dials';
-    usageMainWindows(prov).forEach(w=>dials.appendChild(usageDial(w)));sec.appendChild(dials);
+    if(prov.provider==='antigravity'){
+      const ordered=main.slice().sort((a,b)=>(a.window_seconds||Infinity)-(b.window_seconds||Infinity));
+      for(const w of [...ordered,...windows.filter(w=>!main.includes(w))]){
+        const label=w.limit&&w.limit!=='Gemini Models'
+          ?w.limit.replace(/^Gemini(?:\s+\d+)?\s+/i,''):w.label;
+        dials.appendChild(usageDial(w,label));
+      }
+      sec.appendChild(dials);return sec;
+    }
+    main.forEach(w=>dials.appendChild(usageDial(w)));sec.appendChild(dials);
     /* named additional limits (Codex Spark …) are a separate pool: show them
        under their own name, and as one line when nothing has drawn on them */
     const groups=new Map();
@@ -8596,7 +8615,6 @@ function renderUsagePopover(){
     for(const [name,ws] of groups){
       const sub=document.createElement('div');sub.className='up-sub';
       sub.innerHTML=`<span>ADDITIONAL LIMIT</span><span class="up-subname"></span>`;
-      if(prov.provider==='antigravity')sub.querySelector('span').textContent='MODEL GROUP';
       sub.querySelector('.up-subname').textContent=name;sec.appendChild(sub);
       if(ws.every(w=>w.remaining_percent>=100)){
         const u=document.createElement('div');u.className='up-untouched';

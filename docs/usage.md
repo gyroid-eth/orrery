@@ -159,7 +159,7 @@ Settings の `Usage` で、Claude・Codex・Antigravity（Gemini を含む）・
 
 - **Claude**: `5h`（5 時間の枠）、`7d`（週の枠）、モデル別の週の枠（`FABLE` など。サーバーが返したときだけ）
 - **Codex**: `5h`、`7d`。Spark などの名前付きの追加枠は `ADDITIONAL LIMIT` の下に分けて出し、pill の値には使いません。追加枠を全く使っていないときは `untouched · 5h / 7d at 100% left` の 1 行にまとめます
-- **Antigravity（Gemini）**: Telemetry が提供するときだけ表示します。`Gemini Models`、`Claude and GPT models`、`Gemini 4 Argon` などの独立した枠を `MODEL GROUP` ごとに表示し、pill は取得できた枠のうち最も残量が少ない割合です。どの枠が適用されるかは使うモデルによって異なります
+- **Antigravity（Gemini）**: Telemetry が提供するときだけ表示します。`Gemini Models` の `5H` / `7D` とモデル固有の `ARGON` など、Gemini の枠をほかの provider と同じ円弧 dial で並べます。`Claude and GPT models` は Antigravity の表示から除外します（Telemetry の取得結果は変更しません）。pill は表示対象の Gemini 枠の中で最も残量が少ない割合です。適用される枠は使うモデルにより異なります
 - 数字と輪の色: 50% より上は緑、50% 以下で黄、20% 以下で赤
 - 各 dial の下は reset までの時間（`in 2h 59m`、`in 3d`）。見出しの右は、いちばん早い reset の時刻
 
