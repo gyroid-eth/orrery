@@ -8,6 +8,16 @@ ORRERY is configured with `~/.orrery/config.json` and environment variables. The
 
 In an active Codex pane verified to use the alternate screen without mouse tracking, the wheel sends PageUp / PageDown to scroll the conversation. Small movements accumulate, with at most three pages per continuous gesture; Claude Code, ordinary shells, and Codex panes requesting mouse tracking keep their existing behavior.
 
+## Explicit fresh settings (cutover preparation)
+
+The project-key/direct-DB settings below describe legacy. For fresh, follow [Telemetry's migration guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/fresh-global-update.en.md) and start the dashboard first on the same host/UID.
+
+Pass `AGENTSTACK_RUNTIME_MODE=fresh`, the prepared `AGENTSTACK_FRESH_CLIENT_CONTEXT`, health-derived `ORRERY_FRESH_MAIL_INSTANCE_ID`, matching `AGENTSTACK_HOME`, an absolute approved `AGENTSTACK_PYTHON` able to use its Mail module, and fixed `ORRERY_DASHBOARD_URL` to the backend. Do not combine old `AGENTSTACK_CLIENT_CONFIG`/`AGENTSTACK_GLOBAL_SERVER_CONFIG`. Reference the context path; do not copy credential values or a DB reader into Cockpit. Mail uses finite APIs at the fixed dashboard upstream, without old project/SQLite fallback.
+
+`start-cockpit.sh`, Finder and the Python backend share one loader that reads Telemetry env.sh as literal data without executing it. The default installation is `~/.agentstack`; set the shared config key `telemetry_home` to an absolute path for a custom installation. Explicit environment values override saved settings. Fresh bypasses legacy project/DB diagnostics and refuses missing host preparation or invalid settings. An existing backend is reused only when health matches I, context digest and host epoch; another listener is never stopped or replaced. Finder does not inherit shell exports and does not load the HTTP page before this check. Real Finder/installation acceptance and the attended cutover decision are separate.
+
+A dashboard restart changes the host epoch: stop/restart Cockpit normally to reconnect. Before replacing/restoring the DB, stop all writers and restart sources, Cockpit consumers and the dashboard; restart Mail, then dashboard, then Cockpit. Do not bypass stop timeouts or unsafe sockets by deleting them manually. See [target protection](runtime-target.md).
+
 ## Minimum settings
 
 A minimal example for using all the integrated features:

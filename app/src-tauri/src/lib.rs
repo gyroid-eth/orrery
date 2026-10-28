@@ -44,31 +44,80 @@ fn hotkey_candidates() -> [(&'static str, Shortcut); 4] {
     ]
 }
 
-fn backend_online() -> bool {
-    let address = SocketAddr::from(([127, 0, 0, 1], 8791));
-    let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(500)) else {
-        return false;
-    };
-
-    let _ = stream.set_read_timeout(Some(Duration::from_millis(700)));
-    let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
-
-    if stream
-        .write_all(
-            b"GET /cockpit.html HTTP/1.0\r\nHost: 127.0.0.1:8791\r\nConnection: close\r\n\r\n",
-        )
-        .is_err()
-    {
-        return false;
+fn startup_plan() -> Result<serde_json::Value, String> {
+    let (python, script) = backend_sidecar_paths()?;
+    let loader = script.parent().ok_or("FRESH_STARTUP_UNAVAILABLE")?.join("runtime_target.py");
+    let output = std::process::Command::new(python)
+        .arg(loader).arg("--startup-json").output()
+        .map_err(|_| "FRESH_STARTUP_UNAVAILABLE".to_owned())?;
+    if !output.status.success() || output.stdout.len() > 65536 {
+        return Err("FRESH_STARTUP_UNAVAILABLE".to_owned());
     }
+    parse_startup_plan(&output.stdout)
+}
 
-    let mut response = [0_u8; 64];
-    let Ok(bytes_read) = stream.read(&mut response) else {
-        return false;
+fn parse_startup_plan(bytes: &[u8]) -> Result<serde_json::Value, String> {
+    let plan: serde_json::Value = serde_json::from_slice(bytes)
+        .map_err(|_| "FRESH_STARTUP_UNAVAILABLE".to_owned())?;
+    let values = plan["env"].as_object().ok_or("FRESH_STARTUP_UNAVAILABLE")?;
+    let allowed = ["AGENTSTACK_RUNTIME_MODE", "AGENTSTACK_FRESH_CLIENT_CONTEXT",
+        "ORRERY_FRESH_MAIL_INSTANCE_ID", "AGENTSTACK_HOME", "AGENTSTACK_PYTHON",
+        "AGENTSTACK_CLIENT_CONFIG", "AGENTSTACK_GLOBAL_SERVER_CONFIG", "ORRERY_DASHBOARD_URL"];
+    if values.iter().any(|(k,v)| !allowed.contains(&k.as_str()) || !v.is_string())
+        || !plan["identity"].is_object()
+        || !matches!(plan["identity"]["runtime_mode"].as_str(), Some("legacy" | "global" | "fresh"))
+        || plan["env"]["AGENTSTACK_RUNTIME_MODE"] != plan["identity"]["runtime_mode"] {
+        return Err("FRESH_STARTUP_UNAVAILABLE".to_owned());
+    }
+    if plan["identity"]["runtime_mode"] == "fresh" {
+        for key in ["mail_instance_id", "context_digest", "host_epoch"] {
+            if plan["identity"][key].as_str().unwrap_or("").is_empty() {
+                return Err("FRESH_STARTUP_UNAVAILABLE".to_owned());
+            }
+        }
+    }
+    Ok(plan)
+}
+
+fn backend_response_matches(response: &[u8], plan: &serde_json::Value) -> bool {
+    if plan["identity"]["runtime_mode"] != "fresh" {
+        let status = String::from_utf8_lossy(response);
+        return status.starts_with("HTTP/1.0 200") || status.starts_with("HTTP/1.1 200");
+    }
+    let Some(end) = response.windows(4).position(|w| w == b"\r\n\r\n") else { return false; };
+    let status = String::from_utf8_lossy(&response[..end]);
+    if !status.starts_with("HTTP/1.0 200") && !status.starts_with("HTTP/1.1 200") { return false; }
+    let Ok(body) = serde_json::from_slice::<serde_json::Value>(&response[end+4..]) else { return false; };
+    body["backend"] == "ok" && body["boot"].is_string() && body["runtime"] == plan["identity"]
+}
+
+fn backend_online() -> Result<bool, String> {
+    let plan = startup_plan()?;
+    let address = SocketAddr::from(([127, 0, 0, 1], 8791));
+    let mut stream = match TcpStream::connect_timeout(&address, Duration::from_millis(500)) {
+        Ok(stream) => stream,
+        Err(error) if error.kind() == std::io::ErrorKind::ConnectionRefused => return Ok(false),
+        Err(_) => return Err("FRESH_BACKEND_UNAVAILABLE".to_owned()),
     };
-    let status_line = String::from_utf8_lossy(&response[..bytes_read]);
-
-    status_line.starts_with("HTTP/1.0 200") || status_line.starts_with("HTTP/1.1 200")
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
+    let path = if plan["identity"]["runtime_mode"] == "fresh" { "/telemetry/health" } else { "/cockpit.html" };
+    stream.write_all(format!("GET {path} HTTP/1.0\r\nHost: 127.0.0.1:8791\r\nConnection: close\r\n\r\n").as_bytes())
+        .map_err(|_| "FRESH_BACKEND_UNAVAILABLE".to_owned())?;
+    if plan["identity"]["runtime_mode"] != "fresh" {
+        // Keep the legacy header-only probe: cockpit.html is much larger
+        // than the bounded fresh JSON health response.
+        let mut response = [0_u8;64];
+        let count = stream.read(&mut response).map_err(|_| "FRESH_BACKEND_UNAVAILABLE".to_owned())?;
+        return if backend_response_matches(&response[..count], &plan) { Ok(true) }
+            else { Err("FRESH_BACKEND_IDENTITY_MISMATCH".to_owned()) };
+    }
+    let mut response = Vec::new();
+    stream.take(65537).read_to_end(&mut response).map_err(|_| "FRESH_BACKEND_UNAVAILABLE".to_owned())?;
+    if response.len() > 65536 || !backend_response_matches(&response, &plan) {
+        return Err("FRESH_BACKEND_IDENTITY_MISMATCH".to_owned());
+    }
+    Ok(true)
 }
 
 fn navigate(window: &WebviewWindow, url: &str) -> Result<(), String> {
@@ -78,7 +127,7 @@ fn navigate(window: &WebviewWindow, url: &str) -> Result<(), String> {
 
 #[tauri::command]
 fn retry_backend(window: WebviewWindow) -> Result<bool, String> {
-    if !backend_online() {
+    if !backend_online()? {
         return Ok(false);
     }
 
@@ -671,9 +720,13 @@ fn spawn_backend_sidecar() -> Result<(), String> {
     // The sidecar's own diagnostics (opener and pasteboard failures) used to go
     // to /dev/null, so a sidecar that had lost the window server left no trace.
     // It prints only on errors; append them to a per-user log.
+    let plan = startup_plan()?;
     let (stdout, stderr) = backend_log_stdio();
-    match std::process::Command::new(&python)
-        .arg(&script)
+    let mut command = std::process::Command::new(&python);
+    for (key,value) in plan["env"].as_object().ok_or("FRESH_STARTUP_UNAVAILABLE")? {
+        command.env(key, value.as_str().ok_or("FRESH_STARTUP_UNAVAILABLE")?);
+    }
+    match command.arg(&script)
         .stdin(std::process::Stdio::null())
         .stdout(stdout)
         .stderr(stderr)
@@ -710,6 +763,12 @@ fn toggle_window(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Start on the bundled offline page. No configured HTTP page is loaded
+    // until the selected backend identity has been checked.
+    let mut context = tauri::generate_context!();
+    for window in &mut context.config_mut().app.windows {
+        if window.label == "main" { window.url = WebviewUrl::App(PathBuf::from("index.html")); }
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
@@ -731,11 +790,19 @@ pub fn run() {
             }
             app.manage(HotkeyBinding(active_hotkey.to_owned()));
 
-            if !backend_online() {
+            let online = backend_online();
+            if matches!(online, Ok(true)) {
+                let window = app.get_webview_window("main").ok_or("ORRERY main window was not created")?;
+                navigate(&window, BACKEND_URL)?;
+            } else {
                 // Offline page keeps retrying every 3 s and auto-navigates to
                 // the cockpit once the sidecar is up.
-                if let Err(reason) = spawn_backend_sidecar() {
-                    eprintln!("ORRERY remains offline: {reason}");
+                match online {
+                    Ok(false) => if let Err(reason) = spawn_backend_sidecar() {
+                        eprintln!("ORRERY remains offline: {reason}");
+                    },
+                    Err(reason) => eprintln!("ORRERY remains offline: {reason}"),
+                    Ok(true) => {},
                 }
                 let window = app
                     .get_webview_window("main")
@@ -758,13 +825,32 @@ pub fn run() {
             close_tour_window,
             tour_window_exists
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fresh_startup_matches_exact_host_pin_and_rejects_extra_environment() {
+        let plan = serde_json::json!({"env":{"AGENTSTACK_RUNTIME_MODE":"fresh"},
+            "identity":{"runtime_mode":"fresh","mail_instance_id":"I","context_digest":"D","host_epoch":"E"}});
+        assert!(parse_startup_plan(&serde_json::to_vec(&plan).unwrap()).is_ok());
+        let body = serde_json::json!({"backend":"ok","boot":"B","runtime":plan["identity"]});
+        let response = format!("HTTP/1.0 200 OK\r\n\r\n{body}");
+        assert!(backend_response_matches(response.as_bytes(), &plan));
+        for key in ["mail_instance_id","context_digest","host_epoch"] {
+            let mut changed = body.clone(); changed["runtime"][key] = serde_json::json!("other");
+            assert!(!backend_response_matches(format!("HTTP/1.0 200 OK\r\n\r\n{changed}").as_bytes(), &plan));
+        }
+        assert!(!backend_response_matches(b"HTTP/1.0 200 OK\r\n\r\n<html>", &plan));
+        let mut secret = plan.clone(); secret["env"]["registration_token"] = serde_json::json!("forbidden");
+        assert!(parse_startup_plan(&serde_json::to_vec(&secret).unwrap()).is_err());
+        let legacy = serde_json::json!({"identity":{"runtime_mode":"legacy"}});
+        assert!(backend_response_matches(b"HTTP/1.0 200 OK\r\n\r\n<html>", &legacy));
+    }
 
     #[test]
     fn url_opener_accepts_only_web_urls() {

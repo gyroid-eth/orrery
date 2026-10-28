@@ -20,6 +20,7 @@ import tempfile
 import time
 import tty
 import uuid
+import weakref
 from collections import deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -28,7 +29,7 @@ from typing import Any
 import pyte
 import websockets
 
-from runtime_target import LegacyTargetBoundary, admit_creation, admit_command, require_target, tmux_argv, tmux_env
+from runtime_target import LegacyTargetBoundary, FreshPaneBoundary, FreshEffectProof, TargetRefused, admit_creation, admit_command, require_target, tmux_argv, tmux_env
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8780
@@ -271,6 +272,9 @@ def prune_history_files(
 
 
 def tmux_session_exists(tmux_bin: str, session: str) -> bool:
+    if isinstance(tmux_bin,FreshPaneBoundary):
+        try:tmux_bin.admit('attach',session=session);return True
+        except TargetRefused:return False
     result = subprocess.run(
         tmux_argv(tmux_bin, "has-session", "-t", "=" + session),
         stdout=subprocess.DEVNULL,
@@ -289,6 +293,7 @@ def tmux_session_gone(tmux_bin: str, session: str) -> bool | None:
     server can list sessions before calling the session gone.  ``None`` keeps
     the cockpit's closed group when tmux itself cannot answer reliably.
     """
+    if isinstance(tmux_bin,FreshPaneBoundary):return None
     try:
         result = subprocess.run(
             tmux_argv(tmux_bin, "has-session", "-t", f"={session}"),
@@ -465,8 +470,17 @@ class TmuxControlBridge:
         self._closed_task: asyncio.Task[None] | None = None
         self._closed = False
         self._history_dir = config.history_dir or history_directory()
+        if isinstance(config.tmux_bin,FreshPaneBoundary):self._history_dir=self._history_dir/config.tmux_bin.history_key
         self._session_created = config.session_created
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._fresh_output=[]
+        self._fresh_output_bytes=0
+        self._fresh_output_task=None
+        self._fresh_peer_proofs={}
+        self._fresh_peer_locks=weakref.WeakKeyDictionary()
+        self._fresh_peer_generations=weakref.WeakKeyDictionary()
+        self._fresh_recorder_proof=(FreshEffectProof(config.tmux_bin,'capture',membership=self._fresh_control_membership) if isinstance(config.tmux_bin,FreshPaneBoundary) else None)
+        self._fresh_sink_tasks=set();self._fresh_recorder_tasks=set();self._fresh_sink_locks={};self._fresh_sink_bytes={};self._fresh_sink_counts={}
 
     def _schedule_closed(self) -> None:
         if self._closed:
@@ -511,7 +525,8 @@ class TmuxControlBridge:
                     sys.executable,
                     str(Path(__file__).with_name("control_client_guard.py")),
                     str(lifetime_read),
-                    *tmux_argv(self.config.tmux_bin, "-CC", "attach", "-t", "=" + self.config.session),
+                    *tmux_argv(self.config.tmux_bin, "-CC", "attach", "-t",
+                        self.config.tmux_bin.session_id if isinstance(self.config.tmux_bin,FreshPaneBoundary) else "="+self.config.session),
                 ],
                 stdin=slave_fd,
                 stdout=slave_fd,
@@ -540,7 +555,21 @@ class TmuxControlBridge:
         self._history_flush_task = asyncio.create_task(self._history_flush_loop())
 
     async def stop(self) -> None:
+        if self._fresh_recorder_proof is not None:self._fresh_recorder_proof.close()
+        for proofs in self._fresh_peer_proofs.values():
+            for proof in proofs:proof.close()
+        self._fresh_peer_proofs.clear()
         self._closed = True
+        task=self._fresh_output_task;self._fresh_output_task=None
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError,RuntimeError):await task
+        sinks=list(self._fresh_sink_tasks)
+        for sink in sinks:sink.cancel()
+        if sinks:await asyncio.gather(*sinks,return_exceptions=True)
+        self._fresh_sink_tasks.clear();self._fresh_recorder_tasks.clear();self._fresh_sink_locks.clear();self._fresh_sink_bytes.clear();self._fresh_sink_counts.clear()
+        self._fresh_peer_locks.clear();self._fresh_peer_generations.clear()
+        self._fresh_output.clear();self._fresh_output_bytes=0
         closed_task = self._closed_task
         self._closed_task = None
         if closed_task is not None:
@@ -634,6 +663,8 @@ class TmuxControlBridge:
                 log_history_error("periodic flush", self._history_dir, exc)
 
     async def flush_history(self) -> None:
+        pending=[task for task in self._fresh_recorder_tasks if task is not asyncio.current_task()]
+        if pending:await asyncio.gather(*pending,return_exceptions=True)
         async with self._history_flush_lock:
             if self._session_created is None and self.master_fd is not None:
                 await self._resolve_session_created()
@@ -884,6 +915,7 @@ class TmuxControlBridge:
             return
         _, raw_pane_id, escaped = parts
         pane_id = raw_pane_id.decode("ascii", "replace")
+        if isinstance(self.config.tmux_bin,FreshPaneBoundary) and pane_id!=self.config.tmux_bin.pane_id:return
         data = self._decode_pane_output(pane_id, escaped)
         if data:
             self._record_and_broadcast(pane_id, data)
@@ -898,17 +930,165 @@ class TmuxControlBridge:
         if not separator:
             return
         pane_id = raw_pane_id.decode("ascii", "replace")
+        if isinstance(self.config.tmux_bin,FreshPaneBoundary) and pane_id!=self.config.tmux_bin.pane_id:return
         data = self._decode_pane_output(pane_id, escaped)
         if data:
             self._record_and_broadcast(pane_id, data)
 
     def _record_and_broadcast(self, pane_id: str, data: str) -> None:
+        if isinstance(self.config.tmux_bin,FreshPaneBoundary):
+            if self._closed or pane_id!=self.config.tmux_bin.pane_id:return
+            self._fresh_output_bytes+=len(data.encode('utf-8'))
+            if self._fresh_output_bytes>262144:
+                self._fresh_output.clear();self._schedule_closed();return
+            self._fresh_output.append(data)
+            if self._fresh_output_task is None:
+                self._fresh_output_task=asyncio.create_task(self._publish_fresh_output())
+            return
         recorder = self._pane_recorders.get(pane_id)
         if recorder is not None:
             recorder.feed(data)
         self._schedule_broadcast(
             {"type": "output", "paneId": pane_id, "data": data}
         )
+
+    async def _publish_fresh_output(self):
+        try:
+            while self._fresh_output and not self._closed:
+                data=''.join(self._fresh_output);self._fresh_output.clear();self._fresh_output_bytes=0
+                pane_id=self.config.tmux_bin.pane_id
+                recorder=self._pane_recorders.get(pane_id)
+                if recorder is not None:
+                    self._schedule_fresh_sink(self._fresh_recorder_proof,data,recorder=recorder)
+                for peer in list(self.clients):
+                    proofs=self._fresh_peer_proofs.get(peer)
+                    if proofs is None:continue
+                    self._schedule_fresh_sink(proofs[1],data,peer=peer)
+        finally:
+            self._fresh_output_task=None
+            if self._closed:self._fresh_output.clear();self._fresh_output_bytes=0
+
+    def _schedule_fresh_sink(self,proof,data,*,peer=None,recorder=None):
+        size=len(data.encode('utf-8'));pending=self._fresh_sink_bytes.get(proof,0)
+        if pending+size>262144 or self._fresh_sink_counts.get(proof,0)>=256:
+            self._fail_fresh_sink(proof,peer=peer,recorder=recorder);return
+        self._fresh_sink_bytes[proof]=pending+size
+        self._fresh_sink_counts[proof]=self._fresh_sink_counts.get(proof,0)+1
+        lock=self._fresh_sink_locks.setdefault(proof,asyncio.Lock())
+        async def deliver():
+            try:
+                async with lock:
+                    if self._closed:return
+                    if recorder is not None:
+                        await proof.check()
+                        if not self._closed and self._fresh_recorder_proof is proof:recorder.feed(data)
+                    elif peer in self.clients and self._fresh_peer_proofs.get(peer,(None,None))[1] is proof:
+                        await self.send_json(peer,{'type':'output','paneId':self.config.tmux_bin.pane_id,'data':data},proof=proof)
+            except (OSError,RuntimeError) as exc:
+                self._fail_fresh_sink(proof,peer=peer,recorder=recorder)
+            finally:
+                left=self._fresh_sink_bytes.get(proof,0)-size
+                count=self._fresh_sink_counts.get(proof,0)-1
+                if count>0:self._fresh_sink_counts[proof]=count
+                else:self._fresh_sink_counts.pop(proof,None)
+                if left>0:self._fresh_sink_bytes[proof]=left
+                else:self._fresh_sink_bytes.pop(proof,None);self._fresh_sink_locks.pop(proof,None)
+        task=asyncio.create_task(deliver());self._fresh_sink_tasks.add(task)
+        task.add_done_callback(self._fresh_sink_tasks.discard)
+        if recorder is not None:
+            self._fresh_recorder_tasks.add(task);task.add_done_callback(self._fresh_recorder_tasks.discard)
+
+    def _fail_fresh_sink(self,proof,*,peer=None,recorder=None):
+        if proof.closed:return
+        proof.close()
+        if recorder is not None:
+            print('ORRERY: fresh recorder output incomplete; history may have a gap',file=sys.stderr,flush=True)
+        elif peer is not None:
+            proofs=self._fresh_peer_proofs.get(peer)
+            if proofs is None or proofs[1] is not proof:return
+            self._fresh_peer_proofs.pop(peer,None)
+            for item in proofs:item.close()
+            generation=self._fresh_peer_generations.get(peer)
+            self.clients.discard(peer)
+            async def notify():
+                try:
+                    await self.send_json(peer,{'type':'error','code':'FRESH_OUTPUT_INCOMPLETE',
+                        'attachGeneration':generation,'incarnation':self._incarnation,
+                        'message':'Output stopped; some output or history may be missing. Reattach to continue.'},
+                        attach_generation=generation)
+                except Exception:
+                    # A failed error frame cannot leave a live-looking socket.
+                    # Closing only this peer drives the existing UI disconnect path.
+                    async with self._fresh_peer_lock(peer):
+                        if self._fresh_peer_generations.get(peer)!=generation:return
+                        response=getattr(peer,'response',peer)
+                        close=getattr(response,'close',None)
+                        if close is not None:
+                            await close(code=1011,message=b'Output incomplete; reconnect may have a gap')
+            task=asyncio.create_task(notify());self._fresh_sink_tasks.add(task)
+            task.add_done_callback(self._fresh_sink_tasks.discard)
+
+    def _fresh_peer_lock(self,peer):
+        return self._fresh_peer_locks.setdefault(peer,asyncio.Lock())
+
+    async def attach_fresh_peer(self,peer):
+        async with self._fresh_peer_lock(peer):
+            if self._closed:raise TargetRefused('FRESH_TARGET_UNAVAILABLE')
+            old=self._fresh_peer_proofs.pop(peer,None)
+            if old is not None:
+                for proof in old:proof.close()
+            generation=uuid.uuid4().hex
+            self._fresh_peer_generations[peer]=generation
+            self._fresh_peer_proofs[peer]=(FreshEffectProof(self.config.tmux_bin,'input',membership=self._fresh_control_membership_locked),
+                FreshEffectProof(self.config.tmux_bin,'capture',membership=self._fresh_control_membership))
+            self.clients.add(peer)
+            return generation
+
+    async def detach_fresh_peer(self,peer,*,generation=None):
+        async with self._fresh_peer_lock(peer):
+            if generation is not None and self._fresh_peer_generations.get(peer)!=generation:return
+            self._fresh_peer_generations.pop(peer,None)
+            proofs=self._fresh_peer_proofs.pop(peer,None)
+            if proofs is not None:
+                for proof in proofs:proof.close()
+            self.clients.discard(peer)
+            self.client_locks.pop(peer,None)
+
+    async def _fresh_control_membership(self,*,deadline):
+        try:
+            async with asyncio.timeout(max(0,deadline-time.monotonic())):
+                async with self._write_lock:
+                    await self._fresh_control_membership_locked(deadline=deadline)
+        except TimeoutError:
+            raise TargetRefused('FRESH_TARGET_PROOF_EXPIRED') from None
+
+    async def _fresh_control_membership_locked(self,*,deadline):
+        """A fixed PC-only read on the existing stream, with its write lock held."""
+        target=self.config.tmux_bin
+        if not isinstance(target,FreshPaneBoundary) or not self._write_lock.locked():
+            raise TargetRefused('FRESH_TMUX_TARGET_CHANGED')
+        if self.master_fd is None or self._closed or deadline<=time.monotonic():
+            raise TargetRefused('FRESH_TARGET_PROOF_EXPIRED')
+        transport=target.control_membership_transport()
+        future=asyncio.get_running_loop().create_future();started=False
+        # No caller-supplied argv and no general admission bypass. The same
+        # parser/ACK queue used by normal control commands retains its order.
+        args=['display-message','-p','-t',target.pane_id,
+              '#{session_id}\t#{session_name}\t#{pane_id}\t#{pane_pid}']
+        try:
+            async with asyncio.timeout(max(0,deadline-time.monotonic())):
+                self._bounded_blocks[future]=16384
+                self._pending_blocks.append(future);started=True
+                await self._write_master((make_tmux_command(args)+'\n').encode('utf-8'))
+                result=await future
+        except (Exception,asyncio.CancelledError):
+            if started:self._abort_mobile_stream()
+            raise TargetRefused('FRESH_TARGET_UNAVAILABLE') from None
+        if not result.ok or result.overflow:
+            raise TargetRefused('FRESH_TMUX_TARGET_CHANGED')
+        target.check_control_membership(transport,result.lines)
+        if self._closed or self.master_fd is None or deadline<=time.monotonic():
+            raise TargetRefused('FRESH_TARGET_PROOF_EXPIRED')
 
     async def send_command(
         self,
@@ -924,6 +1104,12 @@ class TmuxControlBridge:
         if wait:
             future = asyncio.get_running_loop().create_future()
 
+        if isinstance(self.config.tmux_bin,FreshPaneBoundary):
+            args=list(args)
+            if '-t' in args:
+                index=args.index('-t')+1
+                if args[index] in {self.config.session,'='+self.config.session}:args[index]=self.config.tmux_bin.session_id
+                if args[0]=='list-panes' and args[index]==self.config.tmux_bin.session_id:args[index]=self.config.tmux_bin.pane_id
         command = make_tmux_command(args) + "\n"
         async with self._write_lock:
             await asyncio.to_thread(admit_command, self.config.tmux_bin, args, session=self.config.session)
@@ -987,6 +1173,7 @@ class TmuxControlBridge:
             next_panes: dict[str, PaneInfo] = {}
             for line in result.lines:
                 pane = parse_pane_line(line)
+                if isinstance(self.config.tmux_bin,FreshPaneBoundary) and (pane is None or pane.pane_id!=self.config.tmux_bin.pane_id):continue
                 if pane is not None:
                     next_panes[pane.pane_id] = pane
 
@@ -1094,15 +1281,19 @@ class TmuxControlBridge:
                 pass
         return text + suffix
 
-    async def send_snapshot(self, websocket: Any) -> None:
+    async def send_snapshot(self, websocket: Any, *, attach_generation=None) -> None:
+        if isinstance(self.config.tmux_bin,FreshPaneBoundary):
+            await asyncio.to_thread(self.config.tmux_bin.admit,'capture')
         await self.send_json(
             websocket,
             {
                 "type": "reset",
                 "session": self.config.session,
                 "incarnation": self._incarnation,
+                **({'attachGeneration':attach_generation} if attach_generation is not None else {}),
                 "panes": [pane.to_json() for pane in sorted(self.panes.values(), key=pane_key)],
             },
+            **({'attach_generation':attach_generation} if attach_generation is not None else {}),
         )
         for pane in sorted(self.panes.values(), key=pane_key):
             capture = await self.capture_pane(pane.pane_id)
@@ -1120,6 +1311,7 @@ class TmuxControlBridge:
                         "data": capture,
                         "snapshot": True,
                     },
+                    **({'attach_generation':attach_generation} if attach_generation is not None else {}),
                 )
 
     async def handle_client_message(self, payload: dict[str, Any]) -> None:
@@ -1328,7 +1520,7 @@ class TmuxControlBridge:
         await self.send_input(pane_id, ("\x1b[5~" if direction == "up" else "\x1b[6~") * count)
 
     async def send_input(
-        self, pane_id: str, data: str, *, binary: bool = False
+        self, pane_id: str, data: str, *, binary: bool = False, proof=None
     ) -> None:
         # xterm hands classic (non-SGR) mouse reports to onBinary as a string
         # of byte values 0-255; UTF-8 would turn a coordinate byte >= 0x80
@@ -1351,7 +1543,13 @@ class TmuxControlBridge:
         # One input intent, one admission, one lock. No other command can
         # interleave between the proof and any chunk of this paste.
         async with self._write_lock:
-            await asyncio.to_thread(admit_command, self.config.tmux_bin, commands[0], session=self.config.session)
+            if proof is None:
+                await asyncio.to_thread(admit_command, self.config.tmux_bin, commands[0], session=self.config.session)
+            else:
+                if not isinstance(self.config.tmux_bin,FreshPaneBoundary) or pane_id!=self.config.tmux_bin.pane_id or proof.target is not self.config.tmux_bin or proof.purpose!='input':
+                    raise TargetRefused('FRESH_TMUX_TARGET_CHANGED')
+                await proof.check()
+                if proof.closed:raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
             for args in commands:
                 self._pending_blocks.append(None)
                 await self._write_master((make_tmux_command(args) + '\n').encode('utf-8'))
@@ -1428,9 +1626,28 @@ class TmuxControlBridge:
     def _schedule_broadcast(self, payload: dict[str, Any]) -> None:
         asyncio.create_task(self.broadcast(payload))
 
-    async def send_json(self, websocket: Any, payload: dict[str, Any]) -> None:
-        lock = self.client_locks.setdefault(websocket, asyncio.Lock())
+    async def send_json(self, websocket: Any, payload: dict[str, Any], *, proof=None, attach_generation=None) -> None:
+        if isinstance(self.config.tmux_bin,FreshPaneBoundary):
+            target=self.config.tmux_bin;payload=dict(payload,**target.ref)
+            if 'paneId' in payload:
+                if payload['paneId']!=target.pane_id:return
+                payload['paneId']=target.wire_pane
+            if 'panes' in payload:
+                payload['panes']=[dict(row,paneId=target.wire_pane) for row in payload['panes'] if row.get('paneId')==target.pane_id]
+            if 'pane' in payload:
+                if payload['pane'].get('paneId')!=target.pane_id:return
+                payload['pane']=dict(payload['pane'],paneId=target.wire_pane)
+        lock = (self._fresh_peer_lock(websocket) if isinstance(self.config.tmux_bin,FreshPaneBoundary)
+                else self.client_locks.setdefault(websocket, asyncio.Lock()))
         async with lock:
+            if attach_generation is not None and self._fresh_peer_generations.get(websocket)!=attach_generation:
+                return
+            if attach_generation is not None and payload.get('type')!='error' and websocket not in self.clients:
+                return
+            if proof is not None:
+                await proof.check()
+                if self._closed or websocket not in self.clients or self._fresh_peer_proofs.get(websocket,(None,None))[1] is not proof:
+                    raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
             await websocket.send(json.dumps(payload, ensure_ascii=False))
 
 

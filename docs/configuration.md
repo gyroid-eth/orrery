@@ -8,6 +8,16 @@ ORRERY は `~/.orrery/config.json` と環境変数で設定します。共有設
 
 Codex の代替画面でマウス追跡が無いと確認できた active pane では、ホイールを PageUp / PageDown に変えて会話を遡れます。小さな移動はまとめ、1 回の連続操作は最大 3 ページまでです。Claude Code・通常の shell・マウスを要求する Codex の扱いは変わりません。
 
+## 明示freshの設定（切替準備）
+
+下記のproject key/直接DB読取はlegacy向けです。freshは[Telemetryの移行手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/fresh-global-update.md)に従い、同host/UIDでdashboardを先に起動します。
+
+backendへ`AGENTSTACK_RUNTIME_MODE=fresh`、prepare由来の`AGENTSTACK_FRESH_CLIENT_CONTEXT`、health由来の`ORRERY_FRESH_MAIL_INSTANCE_ID`、対応配布先`AGENTSTACK_HOME`、そのMail moduleを使える絶対`AGENTSTACK_PYTHON`、固定`ORRERY_DASHBOARD_URL`を明示します。旧`AGENTSTACK_CLIENT_CONFIG`/`AGENTSTACK_GLOBAL_SERVER_CONFIG`と併用しません。context pathを参照するだけで、資格の値やDB readerをCockpitへコピーしません。Mailは固定dashboard upstreamの有限APIを使い、旧project/SQLiteへfallbackしません。
+
+`start-cockpit.sh`・Finder・Python backendは同じloaderでTelemetryの保存済みenv.shをliteralとして読みます（実行しません）。標準は`~/.agentstack`、別配布先は共有configの`telemetry_home`へ絶対pathを設定します。明示環境が保存値より優先です。freshでは旧project/DB診断を使わず、hostの準備不足・不正設定は拒否します。既存backendは同じI/context digest/host epochのhealth一致時だけ再利用し、別listenerは停止・置換しません。Finderはshellのexportを継承せず、初期画面も照合前に接続先を読み込みません。実Finder/導入の受入は別段で、本人在席の切替判断が必要です。
+
+dashboard再起動ではhost epochが変わるためCockpitも正常停止・再起動して接続し直します。DBの交換/復旧は全writerと再起動元、Cockpit consumer、dashboardを停止してから行い、Mail→dashboard→Cockpitの順で再開します。停止timeoutやunsafe socketを手で削除して回避しません。[対象保護](runtime-target.md)も確認してください。
+
 ## 最小設定
 
 全連携機能を使う最小例:

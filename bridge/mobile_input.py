@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import re
+import runpy
 import secrets
 import sys
 import threading
@@ -228,8 +229,49 @@ class PaneResolver:
     """Fresh shared-helper admission plus kernel birth; no pure-legacy fallback."""
     def __init__(self,boundary,observer=None):
         self.boundary=boundary;self.observer=OSObserver() if observer is None else observer
+        from runtime_target import FreshTargetBoundary
+        self.fresh=isinstance(boundary,FreshTargetBoundary)
+        self.fresh_shared=(runpy.run_path(str(boundary.wrapper.parent/'lib/runtime_tmux.py')) if self.fresh else None)
+
+    def _fresh_read(self,bridge,pane_id,deadline):
+        from runtime_target import FreshPaneBoundary
+        target=bridge.config.tmux_bin;shared=self.fresh_shared
+        if (not isinstance(target,FreshPaneBoundary) or target.parent is not self.boundary
+                or pane_id!=target.pane_id or bridge._closed or bridge.master_fd is None
+                or shared.get('CONTRACT')!='orrery-tmux-target-v1'):
+            raise InputRefused('input_target_unavailable')
+        incarnation=bridge._incarnation
+        proof=target.admit('input',session=bridge.config.session,pane=pane_id)
+        transport=shared['Transport'](Path(target.prefix[2]),binary=target.binary)
+        before=transport.identity
+        if list(before)!=proof['route']['socket_identity']:raise InputRefused('input_target_changed')
+        def server_pid():
+            result=transport.command('display-message','-p','#{pid}',deadline=deadline)
+            if result.returncode or not re.fullmatch(r'[1-9][0-9]*\n?',result.stdout):raise InputRefused('input_process_unavailable')
+            return int(result.stdout)
+        def process(pid):
+            value=self.observer.process(pid)
+            if (not _integer(pid) or not isinstance(value,dict) or value.get('pid')!=pid
+                    or value.get('uid')!=os.getuid() or not isinstance(value.get('birth'),str)
+                    or not 1<=len(value['birth'])<=256):raise InputRefused('input_process_unavailable')
+            return value
+        server=process(server_pid());pane=process(proof['route']['pane']['pid'])
+        info=bridge.panes.get(pane_id)
+        if (info is None or info.session_id!=target.session_id or not _integer(info.height)
+                or info.height>10000):raise InputRefused('input_target_changed')
+        after=target.admit('input',session=bridge.config.session,pane=pane_id)
+        if (after!=proof or server_pid()!=server['pid'] or shared['validate_socket'](transport.path)!=before
+                or process(server['pid'])!=server or process(pane['pid'])!=pane
+                or bridge._incarnation!=incarnation or bridge._closed or bridge.master_fd is None
+                or time.monotonic()>=deadline):raise InputRefused('input_target_changed')
+        return dict(session=target.name,session_id=target.session_id,pane_id=pane_id,
+            pane_pid=pane['pid'],pane_birth=pane['birth'],server_pid=server['pid'],server_birth=server['birth'],
+            uid=os.getuid(),socket_identity=list(before),incarnation=incarnation,height=info.height,width=info.width,
+            mail_instance_id=target.ref['mail_instance_id'],mail_agent_id=target.ref['mail_agent_id'],
+            target_revision=target.revision,current=proof['current'],context_digest=proof['context_digest'])
 
     def read(self,bridge,pane_id,deadline):
+        if self.fresh:return self._fresh_read(bridge,pane_id,deadline)
         boundary=self.boundary;shared=boundary.shared;transport=boundary.transport
         if (shared is None or transport is None or shared.get('CONTRACT')!='orrery-tmux-target-v1'
                 or bridge._closed or bridge.master_fd is None):raise InputRefused('input_helper_unavailable')
@@ -275,6 +317,7 @@ class InputCoordinator:
     """One reader/owner scoped, bounded, memory-only pane/confirmation authority."""
     def __init__(self,resolver,get_bridge,*,enabled=False,clock=time.monotonic):
         self.resolver=resolver;self.get_bridge=get_bridge;self.enabled=enabled;self.clock=clock
+        self.fresh=getattr(resolver,'fresh',False)
         self.epoch=secrets.token_hex(16);self.choices={};self.intents={};self.busy=set();self.rates={};self.previews=set()
 
     def _finish(self,row,state):
@@ -310,14 +353,25 @@ class InputCoordinator:
     async def _choice(self,key,scope):
         row=self.choices.get(key) if _matches(REVISION,key) else None
         if row is None or row['scope']!=scope or self.clock()>=row['expires']:raise InputRefused('input_choice_unavailable')
-        bridge=await self.get_bridge(row['name'])
+        bridge=await self._bridge(row)
         if (bridge is not row['bridge'] or bridge._incarnation!=row['incarnation'] or bridge._closed
                 or row['pane_id'] not in bridge.panes):raise InputRefused('input_target_changed')
         return row
 
+    async def _bridge(self,row):
+        return await self.get_bridge(row['name'],row['ref']) if self.fresh else await self.get_bridge(row['name'])
+
+    async def _read(self,row,deadline):
+        return await asyncio.wait_for(asyncio.to_thread(self.resolver.read,row['bridge'],row['pane_id'],deadline),
+                                      max(.001,deadline-time.monotonic()))
+
     async def request(self,operation,payload):
         fields={'capability':set(),'targets':{'name'},'preview':{'choice'},'prepare':{'choice','revision','text'},
                 'commit':{'intent','confirmation'},'cancel':{'intent'},'status':{'intent'}}
+        if self.fresh and operation=='targets' and isinstance(payload,dict) and ('mail_instance_id' in payload or 'mail_agent_id' in payload):
+            fields['targets']|={'mail_instance_id','mail_agent_id'}
+            if not _matches(EPOCH,payload.get('mail_instance_id')) or not _integer(payload.get('mail_agent_id')):
+                raise InputRefused('input_target_invalid')
         common={'contract','owner','reader_epoch'}|({'epoch'} if operation!='capability' else set())
         if (operation not in fields or not isinstance(payload,dict) or set(payload)!=common|fields[operation]
                 or payload.get('contract')!=CONTRACT or not _matches(EPOCH,payload.get('reader_epoch'))):raise InputRefused('input_request_invalid')
@@ -325,13 +379,15 @@ class InputCoordinator:
         if (not isinstance(owner,str) or not 1<=len(owner)<=254 or not owner.isascii()
                 or any(ord(c)<=32 or ord(c)>=127 for c in owner)):raise InputRefused('input_request_invalid')
         self._prune();scope=(owner,payload['reader_epoch'])
-        if operation=='capability':return self._reply(api=31,enabled=self.enabled,supported='legacy-managed-pane',ack='tmux-command-accepted')
+        if operation=='capability':return self._reply(api=34 if self.fresh else 31,enabled=self.enabled,
+            supported='fresh-managed-pane' if self.fresh else 'legacy-managed-pane',ack='tmux-command-accepted')
         if payload['epoch']!=self.epoch:raise InputRefused('input_epoch_changed')
         if operation in {'targets','preview','prepare'} and not self.enabled:raise InputRefused('input_disabled')
         if operation=='targets':
             name=payload['name']
             if not _matches(NAME,name):raise InputRefused('input_target_invalid')
-            bridge=await self.get_bridge(name)
+            ref={k:payload[k] for k in ('mail_instance_id','mail_agent_id')} if 'mail_instance_id' in payload else None
+            bridge=await self.get_bridge(name,ref) if self.fresh else await self.get_bridge(name)
             if not self.enabled:raise InputRefused('input_disabled')
             if (bridge is None or bridge._closed or bridge.master_fd is None or bridge.config.session!=name):raise InputRefused('input_target_unavailable')
             # Old catalog handles for this reader are retired; prepared intents
@@ -346,9 +402,15 @@ class InputCoordinator:
                 # No paths, commands, process metadata or terminal content.
                 label,_,_=terminal_text([label]);label=label[:96]
                 target={'name':name,'pane_label':label,'choice':choice}
+                if self.fresh:
+                    from runtime_target import FreshPaneBoundary
+                    if not isinstance(bridge.config.tmux_bin,FreshPaneBoundary):raise InputRefused('input_target_unavailable')
+                    selected=bridge.config.tmux_bin
+                    if pane_id!=selected.pane_id or ref is not None and selected.ref!=ref:raise InputRefused('input_target_changed')
+                    target.update(selected.ref)
                 self.choices[choice]=dict(scope=scope,name=name,bridge=bridge,pane_id=pane_id,
                     height=info.height,incarnation=bridge._incarnation,expires=self.clock()+30,
-                    target=target,proof=None)
+                    target=target,proof=None,ref=dict(bridge.config.tmux_bin.ref) if self.fresh else None)
                 try:self._reply(targets=targets+[target],truncated=True)
                 except InputRefused:
                     del self.choices[choice];break
@@ -362,7 +424,7 @@ class InputCoordinator:
             deadline=time.monotonic()+3
             if operation=='preview':self.previews.add(preview_key)
             try:
-                proof=await asyncio.to_thread(self.resolver.read,row['bridge'],row['pane_id'],deadline)
+                proof=await self._read(row,deadline)
                 if (not self.enabled or self.clock()>=row['expires'] or self.choices.get(key) is not row
                         or row['proof'] is not None and row['proof']!=proof):raise InputRefused('input_target_changed')
                 target=dict(row['target'],revision=revision(proof))
@@ -372,9 +434,9 @@ class InputCoordinator:
             if operation=='preview':
                 try:
                     result=await row['bridge'].capture_mobile_preview(row['pane_id'],proof['height'],deadline=deadline)
-                    after=await asyncio.to_thread(self.resolver.read,row['bridge'],row['pane_id'],deadline)
+                    after=await self._read(row,deadline)
                     if (not self.enabled or after!=proof or self.choices.get(key) is not row or self.clock()>=row['expires']
-                            or await self.get_bridge(row['name']) is not row['bridge']):raise InputRefused('input_target_changed')
+                            or await self._bridge(row) is not row['bridge']):raise InputRefused('input_target_changed')
                     text,truncated,controls=terminal_text(result.lines)
                     value=self._reply(target=target,text=text,truncated=truncated,controls_removed=controls,
                         observed_at=int(time.time()),max_lines=40,max_bytes=MAX_PREVIEW_BYTES)
@@ -390,7 +452,7 @@ class InputCoordinator:
             self._prune()
             if len(self.intents)>=256 or sum(r['state'] in {'prepared','pending','dispatching'} for r in self.intents.values())>=16:raise InputRefused('input_capacity')
             intent=secrets.token_hex(32);confirmation=secrets.token_hex(32);now=self.clock()
-            descriptor={k:row[k] for k in ('bridge','pane_id','proof','name','incarnation')}
+            descriptor={k:row[k] for k in ('bridge','pane_id','proof','name','incarnation','ref')}
             pending=dict(intent=intent,confirmation=confirmation,epoch=self.epoch,scope=scope,target=target,
                 descriptor=descriptor,text=payload['text'],state='prepared',expires=now+30,cancelled=False,finished=now)
             self.intents[intent]=pending
@@ -420,7 +482,7 @@ class InputCoordinator:
             if len(times)>=6:return False
             claimed=True;self.rates[key]=times+[self.clock()];row['state']='dispatching';return True
         try:
-            bridge=await self.get_bridge(descriptor['name'])
+            bridge=await self._bridge(descriptor)
             if bridge is not descriptor['bridge'] or not valid():outcome='refused'
             else:
                 outcome=await bridge.send_confirmed_input(descriptor['pane_id'],row['text'],
