@@ -3,15 +3,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shlex
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from control_server import CommandResult, ControlConfig, TmuxControlBridge, parse_pane_line
+from orrery_backend import SessionBridgeManager, SessionState
+from runtime_target import FreshPaneBoundary, TargetRefused
 
 
 def wheel_source():
@@ -48,6 +52,65 @@ def test_small_deltas_accumulate_and_gesture_budget_survives_direction_changes()
         page(9000,40),page(-9000,50),page(-120,400),page(6,700,1),page(1,1000,2)];
     """)
     assert result == [0, 0, -1, 1, 1, 0, -1, 1, 1]
+
+
+def test_continuous_wheel_replenishes_its_budget_without_waiting_for_silence():
+    result = js("""
+      const s={amount:0,pages:0,last:-Infinity,direction:0};
+      return Array.from({length:13},(_,i)=>codexWheelPages(s,
+        {deltaY:-96,deltaMode:0},i*80));
+    """)
+    assert result == [-1] * 13
+
+
+def test_excess_delta_is_dropped_instead_of_becoming_a_delayed_page():
+    result = js("""
+      const s={amount:0,pages:0,last:-Infinity,direction:0};
+      const page=(delta,t)=>codexWheelPages(s,{deltaY:delta,deltaMode:0},t);
+      return [page(-9000,0),page(-9000,80),page(9000,160),
+        page(-1,240),page(-95,250),page(96,260)];
+    """)
+    assert result == [-3, 0, 0, 0, -1, 1]
+
+
+def test_wheel_hook_sends_only_during_input_and_resets_after_bypass():
+    result = js("""
+      let now=0,handler;const packets=[];
+      globalThis.performance={now:()=>now};
+      globalThis.activeId='%1';
+      globalThis.currentAgentNamed=()=>({program:'codex',category:'agent',running:true});
+      globalThis.send=packet=>packets.push({...packet,at:now});
+      globalThis.setTimeout=globalThis.requestAnimationFrame=()=>{throw Error('queued wheel work');};
+      const p={meta:{paneId:'%1',currentCommand:'codex'},session:'probe',
+        _wheelAlternate:true,_wheelMouse:[false,false,false],
+        term:{modes:{mouseTrackingMode:'none'},
+          parser:{registerCsiHandler:()=>{}},attachCustomWheelEventHandler:h=>handler=h}};
+      installCodexWheel(p);
+      const wheel=(delta,t,extras={})=>{now=t;let prevented=false;
+        const passed=handler({deltaY:delta,deltaMode:0,
+          preventDefault:()=>{prevented=true;},...extras});
+        return [passed,prevented];};
+      const tiny=wheel(-1,0),first=wheel(-95,16),burst=wheel(-9000,32);
+      // No event, no catch-up pages, even with a large discarded delta.
+      now=1000;const afterIdle=packets.length;
+      const resumed=wheel(-96,1001);
+      const bypass=['ctrlKey','metaKey','shiftKey','altKey'].map(key=>{
+        wheel(-1,1010);return wheel(-95,1011,{[key]:true});
+      });
+      const afterBypass=wheel(-1,1012);
+      p.term.modes.mouseTrackingMode='any';const mouse=wheel(-120,1013);
+      p.term.modes.mouseTrackingMode='none';p._wheelAlternate=false;
+      const normal=wheel(-120,1014);
+      return {packets,tiny,first,burst,afterIdle,resumed,bypass,afterBypass,mouse,normal};
+    """)
+    assert result == {
+        'packets': [dict(type='codex-page', paneId='%1', direction='up', count=n, at=t)
+                    for n, t in [(1, 16), (2, 32), (1, 1001)]],
+        'tiny': [False, True], 'first': [False, True], 'burst': [False, True],
+        'afterIdle': 2, 'resumed': [False, True],
+        'bypass': [[True, False]] * 4, 'afterBypass': [False, True],
+        'mouse': [True, False], 'normal': [True, False],
+    }
 
 
 def test_node_wrapper_requires_registered_codex_program_not_provider_guess():
@@ -155,3 +218,78 @@ def test_websocket_page_dispatch_rejects_missing_and_unknown_panes():
             'type': 'codex-page', 'paneId': pane_id, 'direction': 'up', 'count': 1,
         }))
     assert bridge.inputs == [('%1', '\x1b[5~')]
+
+
+class Peer:
+    def __init__(self):
+        self.messages = []
+
+    async def send(self, data):
+        self.messages.append(json.loads(data))
+
+    async def send_json(self, data):
+        self.messages.append(data)
+
+
+def test_unified_backend_delivers_pages_only_to_an_attached_pane(tmp_path):
+    async def scenario():
+        bridge = Bridge(CommandResult(ok=True, lines=['codex\t1\t0\t0\t0']))
+        manager = SessionBridgeManager('tmux', history_dir=tmp_path)
+        manager.states['probe'] = SessionState(bridge=bridge)
+        peer = Peer()
+        packet = {'type': 'codex-page', 'paneId': '%1', 'direction': 'up', 'count': 1}
+        await manager.handle_message(peer, set(), packet)
+        assert bridge.inputs == []
+        assert peer.messages[-1]['type'] == 'error'
+        peer.messages.clear()
+        await manager.handle_message(peer, {'probe'}, packet)
+        assert peer.messages == []
+        assert bridge.inputs == [('%1', '\x1b[5~')]
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('condition', ['valid', 'detached', 'raw-pane', 'wrong-agent', 'no-proof', 'expired', 'mouse-on'])
+def test_fresh_backend_pages_keep_wire_identity_and_input_proof(tmp_path, condition):
+    async def scenario():
+        target = object.__new__(FreshPaneBoundary)
+        target.pane_id = '%1'
+        target.wire_pane = 'fresh-wheel-1'
+        target.ref = {'mail_instance_id': '0' * 32, 'mail_agent_id': 1}
+        bridge = Bridge(CommandResult(ok=True, lines=[
+            'codex\t1\t0\t0\t' + ('1' if condition == 'mouse-on' else '0')]))
+        bridge.config = ControlConfig('127.0.0.1', 0, 'probe', target)
+        bridge.master_fd = 123  # All writes are captured below; no OS fd.
+        writes = []
+        checks = []
+
+        async def write(data):
+            writes.append(shlex.split(data.decode()))
+
+        async def check():
+            checks.append('input-proof')
+            if condition == 'expired':
+                raise TargetRefused('FRESH_TARGET_PROOF_EXPIRED')
+
+        proof = SimpleNamespace(target=target, purpose='input', closed=False, check=check)
+        peer = Peer()
+        bridge._fresh_peer_proofs = {} if condition == 'no-proof' else {peer: (proof, None)}
+        # Exercise the real input proof/lock/encoding, after the fake mode read.
+        bridge._write_master = write
+        bridge.send_input = TmuxControlBridge.send_input.__get__(bridge)
+        manager = SessionBridgeManager('tmux', history_dir=tmp_path)
+        manager.states['probe'] = SessionState(bridge=bridge)
+        packet = {'type': 'codex-page', 'paneId': target.wire_pane, 'direction': 'down', 'count': 1}
+        if condition == 'raw-pane':
+            packet['paneId'] = '%1'
+        if condition == 'wrong-agent':
+            packet['mail_agent_id'] = 2
+        attached = set() if condition == 'detached' else {'probe'}
+        if condition in {'wrong-agent', 'no-proof', 'expired'}:
+            with pytest.raises(TargetRefused):
+                await manager.handle_message(peer, attached, packet)
+        else:
+            await manager.handle_message(peer, attached, packet)
+        assert writes == ([['send-keys', '-t', '%1', '-H', '1b', '5b', '36', '7e']]
+                          if condition == 'valid' else [])
+        assert checks == (['input-proof'] if condition in {'valid', 'expired'} else [])
+    asyncio.run(scenario())

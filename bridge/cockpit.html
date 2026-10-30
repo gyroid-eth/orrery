@@ -7208,7 +7208,10 @@ function codexWheelEligible(p,active,agent){
 function codexWheelPages(state,event,now){
   const delta=Number(event.deltaY);
   if(!Number.isFinite(delta)||!delta)return 0;
-  if(now-state.last>240){state.amount=0;state.pages=0;state.direction=0;}
+  if(now-state.last>240){state.amount=0;state.pages=0;state.direction=0;state.started=now;}
+  // Bound bursts, not the whole gesture: trackpad events (including native
+  // inertia) may keep arriving without a 240 ms gap. Never queue catch-up work.
+  if(now-state.started>=240){state.pages=0;state.started=now;}
   const direction=Math.sign(delta);
   if(direction!==state.direction)state.amount=0;
   state.direction=direction;state.last=now;
