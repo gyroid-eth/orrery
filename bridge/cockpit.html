@@ -744,6 +744,29 @@
   .termhost::-webkit-scrollbar{display:none}
   .termhost.on{opacity:1;visibility:visible;pointer-events:auto}
   .termhost .xterm{height:100%}
+  /* Style xterm's actual viewport, so the native thumb describes only the
+     locally available scrollback and dragging uses xterm's existing path.
+     An explicit WebKit width keeps a persistent grab area on macOS too.
+     Leave the outer host chromeless: it pans oversized follow grids. */
+  .termhost .xterm-viewport{scrollbar-width:auto;scrollbar-color:auto}
+  .termhost .xterm-viewport::-webkit-scrollbar{width:14px}
+  /* The screen overlays the viewport in claimed/split layouts. Raise only
+     the 14px gutter for pointer hit-testing, not the terminal text area. */
+  @supports selector(::-webkit-scrollbar){
+    .termhost:not(.app-scroll) .xterm-viewport{
+      z-index:3;clip-path:inset(0 0 0 calc(100% - 14px))}
+  }
+  .termhost .xterm-viewport::-webkit-scrollbar-track{
+    background:rgb(var(--theme-ink-rgb) / .06)}
+  .termhost .xterm-viewport::-webkit-scrollbar-thumb{
+    min-height:24px;background:rgb(var(--theme-ink-rgb) / .4);
+    border:2px solid transparent;border-radius:7px;background-clip:padding-box}
+  .termhost .xterm-viewport::-webkit-scrollbar-thumb:hover{
+    background:rgb(var(--theme-ink-rgb) / .6);background-clip:padding-box}
+  @supports not selector(::-webkit-scrollbar){
+    .termhost .xterm-viewport{
+      scrollbar-color:rgb(var(--theme-ink-rgb) / .4) rgb(var(--theme-ink-rgb) / .06)}
+  }
   /* In an alternate-screen app the wheel scrolls the app (mouse reports or
      PageUp/Down), not xterm history. A late viewer can still have a normal
      local buffer, so use the remote mode rather than the local buffer type. */
