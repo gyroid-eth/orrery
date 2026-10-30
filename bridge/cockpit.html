@@ -744,6 +744,29 @@
   .termhost::-webkit-scrollbar{display:none}
   .termhost.on{opacity:1;visibility:visible;pointer-events:auto}
   .termhost .xterm{height:100%}
+  /* Style xterm's actual viewport, so the native thumb describes only the
+     locally available scrollback and dragging uses xterm's existing path.
+     An explicit WebKit width keeps a persistent grab area on macOS too.
+     Leave the outer host chromeless: it pans oversized follow grids. */
+  .termhost .xterm-viewport{scrollbar-width:auto;scrollbar-color:auto}
+  .termhost .xterm-viewport::-webkit-scrollbar{width:14px}
+  /* The screen overlays the viewport in claimed/split layouts. Raise only
+     the 14px gutter for pointer hit-testing, not the terminal text area. */
+  @supports selector(::-webkit-scrollbar){
+    .termhost:not(.app-scroll) .xterm-viewport{
+      z-index:3;clip-path:inset(0 0 0 calc(100% - 14px))}
+  }
+  .termhost .xterm-viewport::-webkit-scrollbar-track{
+    background:rgb(var(--theme-ink-rgb) / .06)}
+  .termhost .xterm-viewport::-webkit-scrollbar-thumb{
+    min-height:24px;background:rgb(var(--theme-ink-rgb) / .4);
+    border:2px solid transparent;border-radius:7px;background-clip:padding-box}
+  .termhost .xterm-viewport::-webkit-scrollbar-thumb:hover{
+    background:rgb(var(--theme-ink-rgb) / .6);background-clip:padding-box}
+  @supports not selector(::-webkit-scrollbar){
+    .termhost .xterm-viewport{
+      scrollbar-color:rgb(var(--theme-ink-rgb) / .4) rgb(var(--theme-ink-rgb) / .06)}
+  }
   /* In an alternate-screen app the wheel scrolls the app (mouse reports or
      PageUp/Down), not xterm history. A late viewer can still have a normal
      local buffer, so use the remote mode rather than the local buffer type. */
@@ -4082,7 +4105,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "cc4db58522a18c6b48f026351ab1aedcff9c2fb38b5e45c82bc40af1ab99a48a",
+        "digest": "85a1197c187b8b3576c6dd3336fd59450bf8d635bb5ba192f91b0bac69e714f5",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4224,7 +4247,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "773a85f76c918372fb30e47ed7db8fc0c6548f273e8f9796651aa871ec6403c5",
+        "digest": "a374c95391b414e315ef060f40d8ad0c66192e6096fc6307f85fab113a664430",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4271,9 +4294,9 @@
       }
     }
   },
-  "inventory_digest": "a1e215ed25486a1f2ac8336d2ba5ab71ec8fa55dffd796243f4583a31d94f5d2",
+  "inventory_digest": "df4fd0aed64da3c19b5146f05479fd531564326dda078c309c0f116d3d35d964",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "467a6749b9936f2d71573684ec45a585510976d6131b856a480ce1da1b20f167",
+  "source_digest": "ddfe5eaeedcf46ca517f509a8369e0c91bf01c9435cd0c0082af3f61a8117310",
   "surface": "cockpit",
   "version": 1
 }

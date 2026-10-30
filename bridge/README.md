@@ -4,6 +4,20 @@ The original standalone PTY and control-mode browser prototypes have been
 retired in favor of the unified backend and cockpit. `control_server.py`
 remains as the shared tmux control plumbing used by the backend and v1 smoke test.
 
+The normal-screen terminal has a visible, draggable native scrollbar on
+`.xterm-viewport`. Its thumb reflects that viewport's available scrollback
+(up to 6000 browser-side lines), not a provider's entire conversation. The
+outer host can pan an oversized Follow grid and stays chromeless.
+
+Alternate-screen TUIs keep the bar hidden, including a late viewer whose
+local xterm buffer is normal: tmux reports the remote alternate mode, but
+neither tmux nor the terminal stream exposes the TUI's conversation offset
+or total length. The recorder's saved rendered rows (up to 2000, with up to
+1000 replayed on attach) are also not a complete TUI transcript: redraws can
+replace text without scrolling it into history. A read-only history view
+would need to label that limited capture, or use a separate provider history
+source; it cannot supply an accurate live TUI scrollbar from these rows.
+
 Each control connection runs through `control_client_guard.py`. The guard owns
 one `tmux -CC attach` child and watches a private pipe whose writer belongs only
 to the backend. Backend exit (including SIGKILL) closes that pipe; the guard
