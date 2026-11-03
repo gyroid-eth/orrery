@@ -1,6 +1,8 @@
 """Antigravity quotas from Telemetry appear in the cockpit without a second probe."""
 import json
 
+import pytest
+
 from test_cockpit_tour import tour_browser
 from test_deepseek_usage import QUOTAS, Dashboard, balance_entry, get_usage, request_for, usage_dom
 
@@ -103,6 +105,86 @@ def test_antigravity_dashboard_failure_keeps_last_windows_as_stale():
     assert failed["observed_at"] == good["observed_at"]
     assert len(dashboard.urls) == 2
     assert all(url.endswith("/api/quotas") for url in dashboard.urls)
+
+
+@pytest.mark.parametrize("provider", ["claude", "codex", "antigravity"])
+@pytest.mark.parametrize("recovery", ["refresh", "ttl"])
+def test_failed_refresh_stays_stale_until_a_successful_read(monkeypatch, provider, recovery):
+    import orrery_backend as ob
+
+    clock = [1000.0]
+    monkeypatch.setattr(ob.time, "time", lambda: clock[0])
+    entries = QUOTAS + [ANTIGRAVITY]
+    dashboard = Dashboard({"providers": entries})
+    request = request_for(dashboard)
+
+    def read_provider():
+        return next(p for p in get_usage(request) if p["provider"] == provider)
+
+    good = read_provider()
+    assert good["status"] == "ok"
+    assert read_provider() == good
+    assert len(dashboard.urls) == 1
+
+    clock[0] += 1  # force a read while the successful cache is still within TTL
+    dashboard.payload = None
+    request.query = {"refresh": "1"}
+    failed = read_provider()
+    assert failed["status"] == "stale"
+    assert failed["reason"] == "telemetry_unavailable"
+    assert failed["windows"] == good["windows"]
+    assert failed["observed_at"] == good["observed_at"]
+    assert len(dashboard.urls) == 2
+
+    request.query = {}
+    assert read_provider() == failed
+    assert len(dashboard.urls) == 2
+
+    dashboard.payload = {"providers": [
+        {**entry, "observed_at": entry["observed_at"] + 10,
+         "buckets": [{**bucket, "remaining_percent": 23} for bucket in entry["buckets"]]}
+        for entry in entries
+    ]}
+    if recovery == "refresh":
+        request.query = {"refresh": "1"}
+    else:
+        clock[0] += 60  # a normal request retries at the cache TTL boundary
+    recovered = read_provider()
+    assert recovered["status"] == "ok"
+    assert recovered["reason"] == ""
+    assert recovered["observed_at"] == good["observed_at"] + 10
+    assert all(w["remaining_percent"] == 23 for w in recovered["windows"])
+    assert len(dashboard.urls) == 3
+    request.query = {}
+    assert read_provider() == recovered
+    assert len(dashboard.urls) == 3
+
+
+@pytest.mark.parametrize("payload, reason", [
+    (None, "telemetry_unavailable"),
+    ({"providers": []}, "provider_not_reported"),
+])
+def test_cold_failure_retries_on_the_next_normal_request(monkeypatch, payload, reason):
+    import orrery_backend as ob
+
+    clock = [1000.0]
+    monkeypatch.setattr(ob.time, "time", lambda: clock[0])
+    dashboard = Dashboard(payload)
+    request = request_for(dashboard)
+    failed = get_usage(request)
+    assert [p["provider"] for p in failed] == ["claude", "codex"]
+    assert all(p["status"] == "unavailable" and p["reason"] == reason for p in failed)
+    assert len(dashboard.urls) == 1
+
+    clock[0] += 1  # retry before the TTL when there was no old observation
+    dashboard.payload = {"providers": QUOTAS}
+    recovered = get_usage(request)
+    assert all(p["status"] == "ok" and p["reason"] == "" for p in recovered)
+    assert [p["observed_at"] for p in recovered] == [e["observed_at"] for e in QUOTAS]
+    assert all(p["windows"] for p in recovered)
+    assert len(dashboard.urls) == 2
+    assert get_usage(request) == recovered
+    assert len(dashboard.urls) == 2
 
 
 def test_unavailable_antigravity_does_not_invent_windows():

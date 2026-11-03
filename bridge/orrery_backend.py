@@ -821,10 +821,10 @@ async def _usage_from_dashboard(request: web.Request, cache) -> list[ProviderUsa
         snapshot = last if last is not None else ProviderUsage(
             provider, "unavailable", None,
             reason="telemetry_unavailable" if payload is None else "provider_not_reported")
-        # A failed refresh must also replace a still-cached balance; otherwise
-        # the next ordinary request could revive the old amount as current.
+        # Replace old observations so an ordinary request cannot revive them
+        # as current. With nothing observed yet, let the next request retry.
         snapshots.append(cache.put(snapshot, time.time())
-                         if snapshot.measurement_kind == "balance" else snapshot)
+                         if last is not None or snapshot.measurement_kind == "balance" else snapshot)
     return snapshots
 
 
