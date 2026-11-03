@@ -1496,7 +1496,7 @@ class TmuxControlBridge:
         parts.append(f"\x1b[{cy + 1};{cx + 1}H")
         return "".join(parts)
 
-    async def send_codex_page(self, pane_id: str, direction: Any, count: Any) -> None:
+    async def send_codex_page(self, pane_id: str, direction: Any, count: Any, *, proof=None) -> None:
         """Recheck live tmux state before a wheel becomes application keys.
 
         The viewer also requires the canonical agent record. This guard rejects
@@ -1517,7 +1517,7 @@ class TmuxControlBridge:
         fields = result.lines[0].split("\t")
         if len(fields) != 5 or fields[0] not in ("codex", "node") or fields[1:] != ["1", "0", "0", "0"]:
             return
-        await self.send_input(pane_id, ("\x1b[5~" if direction == "up" else "\x1b[6~") * count)
+        await self.send_input(pane_id, ("\x1b[5~" if direction == "up" else "\x1b[6~") * count, proof=proof)
 
     async def send_input(
         self, pane_id: str, data: str, *, binary: bool = False, proof=None

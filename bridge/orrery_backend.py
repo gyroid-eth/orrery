@@ -1438,7 +1438,7 @@ class SessionBridgeManager:
                 await state.bridge.refresh_panes(send_captures=True)
             return
 
-        if message_type not in {"input", "resize", "release", "split", "close"}:
+        if message_type not in {"input", "codex-page", "resize", "release", "split", "close"}:
             await send_error(peer, None, "unsupported message type")
             return
 
@@ -1463,6 +1463,11 @@ class SessionBridgeManager:
                 if proofs is None:raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
                 data=payload.get('data')
                 if isinstance(data,str):await state.bridge.send_input(pane_id,data,binary=payload.get('binary') is True,proof=proofs[0])
+                return
+            if message_type=='codex-page':
+                proofs=state.bridge._fresh_peer_proofs.get(peer)
+                if proofs is None:raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
+                await state.bridge.send_codex_page(pane_id,payload.get('direction'),payload.get('count'),proof=proofs[0])
                 return
         if message_type in {"split", "close"}:
             try:
