@@ -772,6 +772,47 @@
      local buffer, so use the remote mode rather than the local buffer type. */
   .termhost.app-scroll .xterm-viewport{scrollbar-width:none}
   .termhost.app-scroll .xterm-viewport::-webkit-scrollbar{display:none}
+
+  /* Alternate-screen history is independent of the live TUI position. */
+  .transcript-handle{
+    display:none;position:absolute;right:2px;top:40%;z-index:6;
+    writing-mode:vertical-rl;transform:translateY(-50%);padding:9px 4px;
+    border:1px solid rgb(var(--theme-accent-rgb) / .4);border-radius:7px;
+    background:rgba(12,15,20,.9);color:var(--amber);
+    font:9px/1 var(--mono);letter-spacing:.12em;cursor:pointer;
+  }
+  .termhost.app-scroll .transcript-handle{display:block}
+  .termhost.history-reading{overflow:hidden}
+  .transcript-handle:hover,.transcript-handle:focus-visible{
+    border-color:var(--amber);background:rgba(30,26,20,.98)}
+  .transcript-panel{
+    position:absolute;inset:8px;z-index:7;display:flex;flex-direction:column;
+    min-width:0;min-height:0;padding:12px 12px 0;
+    border:1px solid var(--hair);border-radius:8px;
+    color:var(--ink);background:#11151b}
+  .transcript-panel[hidden]{display:none}
+  .transcript-header{display:flex;align-items:center;justify-content:space-between;
+    gap:10px;color:var(--amber);font:10px var(--mono);letter-spacing:.1em}
+  .transcript-close,.transcript-older{
+    border:1px solid var(--hair);border-radius:5px;padding:6px 9px;
+    background:transparent;color:var(--ink);font:10px var(--mono);cursor:pointer}
+  .transcript-close:hover,.transcript-older:hover{border-color:var(--amber)}
+  .transcript-older[hidden]{display:none}
+  .transcript-hint{margin:7px 0;color:var(--ink-dim);font:10px/1.5 var(--mono)}
+  .transcript-status{padding:4px 0;color:var(--ink-dim);font:10px var(--mono)}
+  .transcript-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+    padding:10px 10px 15px 0;scrollbar-width:auto}
+  .transcript-scroll::-webkit-scrollbar{width:14px}
+  .transcript-scroll::-webkit-scrollbar-track{background:rgb(var(--theme-ink-rgb) / .07)}
+  .transcript-scroll::-webkit-scrollbar-thumb{background:rgb(var(--theme-ink-rgb) / .4);
+    border-radius:7px;border:2px solid transparent;background-clip:padding-box}
+  .transcript-older{display:block;margin:4px auto 14px}
+  .transcript-message{margin:0 0 16px;padding:0 0 14px;
+    border-bottom:1px solid var(--hair)}
+  .transcript-speaker{margin-bottom:5px;color:var(--amber);
+    font:10px var(--mono);letter-spacing:.09em}
+  .transcript-text{white-space:pre-wrap;overflow-wrap:anywhere;
+    color:var(--ink);font:12px/1.6 var(--mono)}
   .pane-bottom-jump{
     position:absolute;z-index:4;right:34px;bottom:12px;padding:5px 9px;
     border:1px solid rgba(255,255,255,.1);border-radius:999px;
@@ -2276,6 +2317,46 @@
             "value": "var(--hair)"
           },
           {
+            "property": "border",
+            "selector": ".transcript-panel",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".transcript-panel",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
+            "selector": ".transcript-close,.transcript-older",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".transcript-close,.transcript-older",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".transcript-hint",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".transcript-status",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".transcript-message",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".transcript-text",
+            "value": "var(--ink)"
+          },
+          {
             "property": "color",
             "selector": ".pane-bottom-jump",
             "value": "var(--ink-dim)"
@@ -3564,6 +3645,16 @@
           },
           {
             "property": "color",
+            "selector": ".transcript-hint",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".transcript-status",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
             "selector": ".pane-bottom-jump",
             "value": "var(--ink-dim)"
           },
@@ -4105,7 +4196,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "85a1197c187b8b3576c6dd3336fd59450bf8d635bb5ba192f91b0bac69e714f5",
+        "digest": "6ce273a5c45b3e43d9d2308dd72df36b1e15a8c5ab6934c4282ada293be98cdf",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4247,7 +4338,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "a374c95391b414e315ef060f40d8ad0c66192e6096fc6307f85fab113a664430",
+        "digest": "f826199d2687b0ecb29be2a15f2998317e9a1e373cf64560ca10a2c47d7d74d0",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4266,6 +4357,9 @@
           ".promptmeta .plab\u0000letter-spacing",
           ".slashmenu .sm-kind\u0000letter-spacing",
           ".network-note\u0000letter-spacing",
+          ".transcript-handle\u0000letter-spacing",
+          ".transcript-header\u0000letter-spacing",
+          ".transcript-speaker\u0000letter-spacing",
           ".pane-bottom-jump\u0000letter-spacing",
           ".palette-kind\u0000letter-spacing",
           ".modal-sub\u0000letter-spacing",
@@ -4294,9 +4388,9 @@
       }
     }
   },
-  "inventory_digest": "06c3db328796d2cb870064bbaddce544990698d49edd27fdc0172c184e364e0d",
+  "inventory_digest": "3dc9e9172a5564f3a866025eb2c055d8fd4ba7d315c4e0306486d50dfbf441b5",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "7fcb8b62839b45cb812ada390a94577e8765afab406d561829b2e0ea06b7b393",
+  "source_digest": "6363adc7f5ffbc878173ec5d39bc8ff07c814da9b6e7534fa9b24c97931883e4",
   "surface": "cockpit",
   "version": 1
 }
@@ -6847,6 +6941,7 @@ function editableElementOwnsFocus(){
 }
 function focusTerminalPreservingScroll(pane,scrollState=null,{forceFocus=false}={}){
   if(!pane)return;
+  if(pane.historyPanel&&!pane.historyPanel.hidden)return false;
   const preserved=scrollState||captureHostScrollState(pane.host);
   // Polls, WS reset/reattach and layout frames may all re-run this helper.
   // They must never steal a half-written browser-local prompt (or another
@@ -7280,6 +7375,119 @@ function installCodexWheel(p){
 }
 /* <<< codex-wheel */
 
+/* Alternate-screen apps own scrolling. This opens a read-only transcript. */
+function historyEntryElement(item){
+  const article=document.createElement('article');
+  article.className='transcript-message';
+  const heading=document.createElement('div');
+  heading.className='transcript-speaker';
+  heading.textContent=item.role==='user'?'USER':'ASSISTANT';
+  const content=document.createElement('div');
+  content.className='transcript-text';
+  content.textContent=String(item.text||'')+(item.clipped?'\n[long message abbreviated]':'');
+  article.append(heading,content);
+  return article;
+}
+async function loadPaneTranscript(p,{before=null,prepend=false}={}){
+  if(!p||p._historyLoading)return;
+  p._historyLoading=true;
+  p.historyOlder.disabled=true;
+  p.historyStatus.textContent='Loading transcript…';
+  const url='/telemetry/transcript?session='+encodeURIComponent(p.session)+
+    '&pane='+encodeURIComponent(p.meta.paneId)+(before===null?'':'&before='+before)+
+    (before===null||!p.historySource?'':'&source_id='+encodeURIComponent(p.historySource));
+  try{
+    const response=await fetch(url,{cache:'no-store'});
+    const page=await response.json();
+    if(!response.ok)throw new Error(page.error||'Transcript unavailable');
+    if(panes.get(p.meta.paneId)!==p||p.historyPanel.hidden)return;
+    const scroller=p.historyScroll;
+    const originalHeight=scroller.scrollHeight;
+    const originalTop=scroller.scrollTop;
+    const fragment=document.createDocumentFragment();
+    (page.items||[]).forEach(item=>fragment.appendChild(historyEntryElement(item)));
+    if(prepend)p.historyMessages.prepend(fragment);
+    else p.historyMessages.replaceChildren(fragment);
+    p.historyNext=page.older_before;
+    p.historySource=page.source_id;
+    p.historyOlder.hidden=!page.has_older;
+    p.historyOlder.disabled=false;
+    const count=p.historyMessages.children.length;
+    p.historyStatus.textContent=(page.provider||'Provider').toUpperCase()+
+      ' transcript · '+count+' text messages'+(page.has_older?' · earlier available':'');
+    requestAnimationFrame(()=>{
+      if(!p.historyPanel.isConnected||p.historyPanel.hidden)return;
+      if(prepend)scroller.scrollTop=originalTop+scroller.scrollHeight-originalHeight;
+      else scroller.scrollTop=scroller.scrollHeight;
+    });
+  }catch(error){
+    p.historyStatus.textContent='History unavailable: '+error.message;
+    p.historyOlder.disabled=false;
+    if(!prepend)p.historyMessages.replaceChildren();
+  }finally{p._historyLoading=false;}
+}
+function closePaneTranscript(p){
+  if(!p||p.historyPanel.hidden)return;
+  p.historyPanel.hidden=true;
+  p.host.classList.remove('history-reading');
+  p.historyHandle.setAttribute('aria-expanded','false');
+  if(panes.get(p.meta.paneId)===p)focusTerminalPreservingScroll(p);
+}
+function createPaneTranscript(p){
+  const handle=document.createElement('button');
+  handle.type='button';handle.className='transcript-handle';
+  handle.textContent='HISTORY';
+  handle.title='Open read-only provider transcript (not live TUI position)';
+  handle.setAttribute('aria-label','Browse '+p.session+' provider transcript');
+  handle.setAttribute('aria-expanded','false');
+  const panel=document.createElement('section');
+  panel.className='transcript-panel';panel.hidden=true;
+  panel.setAttribute('aria-label','Read-only history for '+p.session);
+  const header=document.createElement('div');
+  header.className='transcript-header';
+  const label=document.createElement('span');
+  label.textContent='TRANSCRIPT · READ ONLY';
+  const close=document.createElement('button');
+  close.type='button';close.className='transcript-close';
+  close.textContent='← LIVE';close.setAttribute('aria-label','Return to live terminal');
+  header.append(label,close);
+  const hint=document.createElement('p');
+  hint.className='transcript-hint';
+  hint.textContent='Provider text records, not the live TUI scroll position. Drag the bar to browse the loaded range.';
+  const status=document.createElement('div');status.className='transcript-status';
+  const scroll=document.createElement('div');scroll.className='transcript-scroll';
+  scroll.tabIndex=0;
+  const older=document.createElement('button');
+  older.type='button';older.className='transcript-older';
+  older.textContent='↑ LOAD EARLIER';older.hidden=true;
+  const messages=document.createElement('div');messages.className='transcript-messages';
+  scroll.append(older,messages);
+  panel.append(header,hint,status,scroll);
+  for(const kind of ['wheel','touchmove','mousedown','pointerdown','keydown']){
+    panel.addEventListener(kind,event=>event.stopPropagation());
+  }
+  panel.addEventListener('keydown',event=>{
+    if(event.key==='Escape'){event.preventDefault();closePaneTranscript(p);}
+  });
+  handle.addEventListener('click',event=>{
+    event.preventDefault();event.stopPropagation();
+    panel.hidden=false;
+    p.host.classList.add('history-reading');
+    p.historyNext=null;p.historySource=null;
+    handle.setAttribute('aria-expanded','true');
+    close.focus();
+    loadPaneTranscript(p);
+  });
+  close.addEventListener('click',()=>closePaneTranscript(p));
+  older.addEventListener('click',()=>{
+    if(p.historyNext!==null)loadPaneTranscript(p,{before:p.historyNext,prepend:true});
+  });
+  p.historyPanel=panel;p.historyHandle=handle;p.historyOlder=older;
+  p.historyStatus=status;p.historyScroll=scroll;p.historyMessages=messages;
+  p.historyNext=null;p.historySource=null;p._historyLoading=false;
+  p.host.append(handle,panel);
+}
+
 function createPane(session,meta){
   if(!session||!meta||!meta.paneId)return;
   const normalized={...meta,session};
@@ -7373,6 +7581,7 @@ function createPane(session,meta){
   group.paneTabs.appendChild(tab);
   const paneRec={session,meta:normalized,term,fit,host,tab,bottomJump,_xtermAtBottom:true};
   panes.set(meta.paneId,paneRec);
+  createPaneTranscript(paneRec);
   setCodexWheelModes(paneRec,normalized);installCodexWheel(paneRec);
   beginPaneSnapshot(paneRec);
   host.addEventListener('scroll',()=>{

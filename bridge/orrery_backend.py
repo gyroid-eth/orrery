@@ -43,6 +43,7 @@ from control_server import (
 )
 from runtime_target import (LegacyTargetBoundary, FreshTargetBoundary, FreshPaneBoundary,
                             TargetRefused, require_target, tmux_argv, tmux_env, startup_environment)
+from transcript_history import read_pane_history, TranscriptUnavailable
 from usage_probe import (
     ProviderUsage,
     UsageCache,
@@ -3681,6 +3682,29 @@ async def serve_sessions(request: web.Request) -> web.Response:
     return web.json_response(sessions)
 
 
+async def serve_transcript(request: web.Request) -> web.Response:
+    """Read only the transcript of the CLI currently running in a selected pane."""
+    raw = request.query.get("before")
+    if raw is not None and (not raw.isascii() or not raw.isdecimal() or len(raw) > 18):
+        return web.json_response({"error": "invalid cursor"}, status=400)
+    if raw is not None and not re.fullmatch(r"[a-f0-9]{16}", request.query.get("source_id", "")):
+        return web.json_response({"error": "invalid source identity"}, status=400)
+    tmux_bin = request.app[TMUX_BIN_KEY]
+    if isinstance(tmux_bin, FreshTargetBoundary):
+        return web.json_response({"error": "history not available for this runtime"}, status=501)
+    try:
+        page = await asyncio.to_thread(
+            read_pane_history, tmux_bin,
+            request.query.get("session", ""), request.query.get("pane", ""),
+            int(raw) if raw is not None else None,
+            request.query.get("source_id"),
+        )
+    except TranscriptUnavailable as exc:
+        return web.json_response(
+            {"error": str(exc)}, status=404, headers={"Cache-Control": "no-store"})
+    return web.json_response(page, headers={"Cache-Control": "no-store"})
+
+
 SESSIONS_REFRESH_SECONDS = 5
 
 
@@ -3911,6 +3935,7 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False) ->
     app.router.add_get("/telemetry/mail/thread", serve_mail_thread)
     app.router.add_get("/telemetry/portrait", serve_portrait)
     app.router.add_get("/telemetry/sessions", serve_sessions)
+    app.router.add_get("/telemetry/transcript", serve_transcript)
     app.router.add_get("/telemetry/spawn-catalog", proxy_dashboard)
     app.router.add_get("/telemetry/spawn-status", proxy_dashboard)
     app.router.add_get("/telemetry/skills", serve_skills)
