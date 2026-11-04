@@ -575,25 +575,26 @@
     background:repeating-linear-gradient(180deg,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.10) 3px);opacity:.45}
   .screen .glassglow{position:absolute;inset:0;pointer-events:none;z-index:2;
     background:radial-gradient(ellipse 70% 50% at 50% 0%, rgb(var(--theme-accent-rgb) / .04), transparent 60%)}
-  .scr-head{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--hair-2);position:relative;z-index:4;
+  .scr-head{display:flex;align-items:center;gap:8px;height:40px;padding:5px 12px;border-bottom:1px solid var(--hair-2);position:relative;z-index:4;
     background:rgba(10,12,16,.7)}
   .scr-head .name{font-family:var(--serif);font-size:14px;color:var(--ink)}
   .scr-head .path{color:var(--ink-faint);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .scr-head .badge{margin-left:auto;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);
-    border:1px solid rgb(var(--theme-accent-rgb) / .3);padding:3px 8px;border-radius:5px}
-  .scr-head .badge.live{animation:breathe 2.4s ease-in-out infinite}
-  .scr-head .badge.off{color:var(--ink-faint);border-color:var(--hair)}
-  .claim-toggle,.ghostty-action{
-    flex:0 0 auto;border:1px solid var(--hair);border-radius:10px;padding:3px 8px;
-    background:rgba(17,20,25,.72);color:var(--ink-faint);font-size:8.5px;letter-spacing:.08em;
-    cursor:pointer;transition:color .16s,border-color .16s,background .16s;
+  .scr-head .badge{margin-left:auto;cursor:default}
+  .cockpit-control,.scr-head .badge{
+    display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:0 0 auto;
+    height:28px;min-height:28px;padding:5px 9px;border:1px solid var(--hair);border-radius:6px;
+    background:var(--panel);color:var(--ink-dim);font:10px/1.2 var(--mono);letter-spacing:.06em;
+    text-transform:uppercase;vertical-align:middle;transition:color .16s,border-color .16s,background .16s;
   }
-  .claim-toggle:hover,.claim-toggle:focus-visible,.ghostty-action:hover,.ghostty-action:focus-visible{
-    color:var(--ink-dim);border-color:rgb(var(--theme-ink-rgb) / .18);outline:none}
-  .claim-toggle.claimed{
-    color:var(--amber);border-color:rgb(var(--theme-accent-rgb) / .38);background:rgb(var(--theme-accent-rgb) / .08);
+  button.cockpit-control{cursor:pointer}
+  .cockpit-control:hover{color:var(--ink);border-color:var(--amber);background:var(--panel-2)}
+  .cockpit-control:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-color:var(--amber)}
+  .cockpit-control:active,.cockpit-control[aria-pressed="true"],.cockpit-control[aria-expanded="true"],
+  .cockpit-control.claimed,.scr-head .badge.live{
+    color:var(--amber);border-color:var(--amber);background:rgb(var(--theme-accent-rgb) / .08);
   }
-  .claim-toggle.claimed:hover,.claim-toggle.claimed:focus-visible{color:var(--amber);border-color:var(--amber)}
+  .cockpit-control:disabled{opacity:.45;cursor:default}
+  .cockpit-control[hidden]{display:none}
   .claim-toggle[hidden],.ghostty-action[hidden]{display:none}
   .ghostty-action:disabled{opacity:.45;cursor:wait}
   /* terminal stage: existing termhosts move between single view and split cells */
@@ -1073,13 +1074,6 @@
   html.pane-window .grid{grid-template-columns:1fr}
   html.pane-window .screen{margin:0;border-radius:0;border:0}
   html.pane-window.pane-embedded .pane-return{display:none}
-  .pane-return,.pane-popout{
-    flex:0 0 auto;border:1px solid var(--hair);border-radius:10px;padding:3px 8px;
-    background:rgba(17,20,25,.72);color:var(--ink-faint);font:inherit;font-size:8.5px;letter-spacing:.08em;
-    cursor:pointer;transition:color .16s,border-color .16s;
-  }
-  .pane-return:hover,.pane-return:focus-visible,.pane-popout:hover,.pane-popout:focus-visible{
-    color:var(--ink-dim);border-color:rgb(var(--theme-ink-rgb) / .18);outline:none}
   .pane-return[hidden],.pane-popout[hidden]{display:none}
   /* dragging a tab out: a small card follows the pointer */
   .session-label.pane-dragging{opacity:.45}
@@ -1218,14 +1212,12 @@
           <span class="name" id="scrName">—</span>
           <span class="path" id="scrPath"></span>
           <span class="badge off" id="scrBadge">offline</span>
-          <button class="conversation-toggle" id="conversationToggle" type="button" hidden
+          <button class="cockpit-control conversation-toggle" id="conversationToggle" type="button" hidden
                   aria-expanded="false" aria-controls="conversationPanel">History</button>
-          <button class="claim-toggle" id="claimToggle" type="button" aria-pressed="false" hidden>FOLLOW ⇄ ⚓ CLAIMED</button>
-          <button class="ghostty-action" id="ghosttyAction" type="button" hidden>GHOSTTY</button>
-          <button class="pane-popout" id="panePopout" type="button" hidden
-                  title="Open this pane in its own window (or drag its tab out of the cockpit)">↗ WINDOW</button>
-          <button class="pane-return" id="paneReturn" type="button" hidden
-                  title="Close this window and put the pane back in the cockpit">⇤ COCKPIT</button>
+          <button class="cockpit-control pane-popout" id="panePopout" type="button" hidden
+                  title="Open this pane in its own window (or drag its tab out of the cockpit)">WINDOW</button>
+          <button class="cockpit-control pane-return" id="paneReturn" type="button" hidden
+                  title="Close this window and put the pane back in the cockpit" aria-label="Return this window to the cockpit">WINDOW</button>
         </div>
         <div class="termstage" id="termstage">
           <div class="stage-empty" id="stageEmpty">waiting for ORRERY backend…<br>start <b>orrery_backend.py</b> on :8791</div>
@@ -1323,6 +1315,13 @@
     </section>
     <section aria-labelledby="terminalSettingsTitle">
       <div class="settings-section-title" id="terminalSettingsTitle">Terminal</div>
+      <div class="settings-row">
+        <span class="settings-row-name">Selected pane actions</span>
+        <span class="settings-help" id="paneSettingsTarget">Select a pane to use terminal actions.</span>
+        <button class="cockpit-control claim-toggle" id="claimToggle" type="button" aria-pressed="false" hidden>FOLLOW ⇄ CLAIMED</button>
+        <span class="settings-help">Without an interactive terminal, ORRERY claims the grid automatically. An interactive terminal makes it follow; a manual choice takes priority.</span>
+        <button class="cockpit-control ghostty-action" id="ghosttyAction" type="button" hidden>GHOSTTY</button>
+      </div>
       <div class="settings-row">
         <div class="settings-row-head">
           <label class="settings-row-name" for="terminalFontSize">Terminal font size</label>
@@ -2107,29 +2106,29 @@
             "value": "var(--ink-faint)"
           },
           {
-            "property": "color",
-            "selector": ".scr-head .badge.off",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border-color",
-            "selector": ".scr-head .badge.off",
-            "value": "var(--hair)"
-          },
-          {
             "property": "border",
-            "selector": ".claim-toggle,.ghostty-action",
+            "selector": ".cockpit-control,.scr-head .badge",
             "value": "1px solid var(--hair)"
           },
           {
-            "property": "color",
-            "selector": ".claim-toggle,.ghostty-action",
-            "value": "var(--ink-faint)"
+            "property": "background",
+            "selector": ".cockpit-control,.scr-head .badge",
+            "value": "var(--panel)"
           },
           {
             "property": "color",
-            "selector": ".claim-toggle:hover,.claim-toggle:focus-visible,.ghostty-action:hover,.ghostty-action:focus-visible",
+            "selector": ".cockpit-control,.scr-head .badge",
             "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".cockpit-control:hover",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".cockpit-control:hover",
+            "value": "var(--panel-2)"
           },
           {
             "property": "border-top",
@@ -2760,21 +2759,6 @@
             "property": "color",
             "selector": ".toast",
             "value": "var(--ink)"
-          },
-          {
-            "property": "border",
-            "selector": ".pane-return,.pane-popout",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".pane-return,.pane-popout",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".pane-return:hover,.pane-return:focus-visible,.pane-popout:hover,.pane-popout:focus-visible",
-            "value": "var(--ink-dim)"
           },
           {
             "property": "background",
@@ -3515,17 +3499,7 @@
           },
           {
             "property": "color",
-            "selector": ".scr-head .badge.off",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".claim-toggle,.ghostty-action",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".claim-toggle:hover,.claim-toggle:focus-visible,.ghostty-action:hover,.ghostty-action:focus-visible",
+            "selector": ".cockpit-control,.scr-head .badge",
             "value": "var(--ink-dim)"
           },
           {
@@ -3766,16 +3740,6 @@
           {
             "property": "color",
             "selector": ".settings-choice",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".pane-return,.pane-popout",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".pane-return:hover,.pane-return:focus-visible,.pane-popout:hover,.pane-popout:focus-visible",
             "value": "var(--ink-dim)"
           },
           {
@@ -4116,7 +4080,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "85a1197c187b8b3576c6dd3336fd59450bf8d635bb5ba192f91b0bac69e714f5",
+        "digest": "dc6ba0a9e7dd59195ebe6361b681c7936b04bfd4873aa7da3ecc5c1bf3d557dc",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4159,8 +4123,6 @@
           ".tab\u0000font-size",
           ".tabs .empty\u0000font-size",
           ".scr-head .path\u0000font-size",
-          ".scr-head .badge\u0000font-size",
-          ".claim-toggle,.ghostty-action\u0000font-size",
           ".promptmeta .plab\u0000font-size",
           ".promptmeta .phint\u0000font-size",
           ".slashmenu .sm-kind\u0000font-size",
@@ -4211,7 +4173,6 @@
           ".settings-choice\u0000font-size",
           ".settings-select\u0000font-size",
           ".toast\u0000font-size",
-          ".pane-return,.pane-popout\u0000font-size",
           ".pane-drag-ghost small\u0000font-size",
           ".pane-float-bar .hint\u0000font-size",
           ".pane-float-bar button\u0000font-size",
@@ -4258,7 +4219,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "a374c95391b414e315ef060f40d8ad0c66192e6096fc6307f85fab113a664430",
+        "digest": "9f0ad6c1e11a324b6218f0e3f9a12d842015c99cb4106843251c29c821b5eb16",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4273,7 +4234,6 @@
           ".agent-detail-label\u0000letter-spacing",
           ".layout-picker-title\u0000letter-spacing",
           ".layout-option\u0000letter-spacing",
-          ".scr-head .badge\u0000letter-spacing",
           ".promptmeta .plab\u0000letter-spacing",
           ".slashmenu .sm-kind\u0000letter-spacing",
           ".network-note\u0000letter-spacing",
@@ -4305,9 +4265,9 @@
       }
     }
   },
-  "inventory_digest": "ca7682fad2b7ebb01a550591dd6ab6bbec771c57241dd7e3ff9ab29903a9be8e",
+  "inventory_digest": "84c9d784016cfce1b728fce12368ca2395bfaf50bb0f133eb6ca5b821c5f34c8",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "d3dc08c173309643f331ea526dfa8a2b27b6cc78e7c0292b8c4d622aebfeb7fc",
+  "source_digest": "19a846efc407f456c1e1e22d04db2da5f06294791c1226a93b9a3813a6cdf4dd",
   "surface": "cockpit",
   "version": 1
 }
@@ -6853,7 +6813,7 @@ function editableElementOwnsFocus(){
   if(!focused||focused===document.body||!focused.matches)return false;
   // xterm owns a hidden textarea. It is terminal input, not a browser form.
   if(focused.closest('.xterm'))return false;
-  if(focused.closest('.conversation-panel'))return true;
+  if(focused.closest('.conversation-panel,.settings-popover'))return true;
   return focused.matches('input,textarea,select,[contenteditable="true"]')||
     focused.isContentEditable;
 }
@@ -7438,6 +7398,8 @@ function paintClaimToggle(meta=null){
   claimToggle.hidden=!available;
   claimToggle.classList.toggle('claimed',claimed);
   claimToggle.setAttribute('aria-pressed',String(claimed));
+  claimToggle.textContent=claimed?'CLAIMED · Release to follow':'FOLLOW · Claim terminal size';
+  document.getElementById('paneSettingsTarget').textContent=available?meta.session+' · '+meta.paneId:'Select a pane to use terminal actions.';
   claimToggle.setAttribute(
     'aria-label',
     claimed?'Release terminal size and follow tmux pane':'Claim terminal size for this session',
@@ -7837,7 +7799,10 @@ function toggleActivePaneClaim(){
   }
   return true;
 }
-claimToggle.addEventListener('click',toggleActivePaneClaim);
+claimToggle.addEventListener('click',()=>{
+  toggleActivePaneClaim();
+  if(document.getElementById('settingsPopover').matches(':popover-open'))claimToggle.focus({preventScroll:true});
+});
 
 /* Inside the ORRERY app the app itself opens links: it is the GUI session, while
    the backend sidecar outlives it and can lose the window server (2026-09-25: a

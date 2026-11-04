@@ -13,15 +13,15 @@
     panel.setAttribute('aria-label','Read-only conversation history');
     panel.innerHTML='<div class="conversation-head"><div class="conversation-heading">'+
       '<h2 class="conversation-title">Conversation</h2><div class="conversation-subtitle"></div></div>'+
-      '<button class="conversation-action conversation-expand" type="button" aria-pressed="false">↔ Full width</button>'+
-      '<button class="conversation-action conversation-close" type="button" aria-label="Close conversation history">× Close</button></div>'+
+      '<button class="cockpit-control conversation-action conversation-expand" type="button" aria-pressed="false">Full width</button>'+
+      '<button class="cockpit-control conversation-action conversation-close" type="button" aria-label="Close conversation history">Close</button></div>'+
       '<div class="conversation-toolbar"><span class="conversation-status" role="status"></span>'+
-      '<button class="conversation-action conversation-retry" type="button" hidden>Retry</button></div>'+
+      '<button class="cockpit-control conversation-action conversation-retry" type="button" hidden>Retry</button></div>'+
       '<div class="conversation-body"><div class="conversation-thread"><div class="conversation-scroll" tabindex="0" aria-label="Conversation messages">'+
-      '<button class="conversation-action conversation-older" type="button" hidden>↑ Load earlier</button>'+
+      '<button class="cockpit-control conversation-action conversation-older" type="button" hidden>Load earlier</button>'+
       '<div class="conversation-events"></div><div class="conversation-empty"></div></div>'+
       '<div class="conversation-bottom"><span class="conversation-status conversation-position"></span>'+
-      '<button class="conversation-action conversation-latest" type="button">↓ Latest</button></div></div>'+
+      '<button class="cockpit-control conversation-action conversation-latest" type="button">Latest</button></div></div>'+
       '<aside class="conversation-preview" aria-label="Selected file preview" hidden></aside></div>';
     screen.appendChild(panel);
     const el=selector=>panel.querySelector(selector);
@@ -40,7 +40,7 @@
     function expand(value){
       fullWidth=value;screen.classList.toggle('conversation-full',value);
       el('.conversation-expand').setAttribute('aria-pressed',String(value));
-      el('.conversation-expand').textContent=value?'↙ Side panel':'↔ Full width';
+      el('.conversation-expand').textContent=value?'Side panel':'Full width';
     }
     const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onActivate:()=>expand(true)});
     let enabled=false,opened=false,agent='',generation=0,controller=null,timer=0,busy=false;
@@ -54,7 +54,7 @@
       const atBottom=nearBottom();
       if(atBottom)newCount=0;
       el('.conversation-position').textContent=events.size+' loaded · '+(mode==='fresh_tail'?'recent window':'loaded portion');
-      latest.textContent=paused?'↓ Latest · resume':newCount?'↓ '+newCount+' new':'↓ Latest';
+      latest.textContent=paused?'Latest · resume':newCount?newCount+' new':'Latest';
     }
     function message(text){status.textContent=text;}
     function stop(){clearTimeout(timer);timer=0;if(controller)controller.abort();controller=null;generation++;busy=false;}

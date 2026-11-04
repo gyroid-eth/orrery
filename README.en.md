@@ -83,6 +83,12 @@ The original prompt composer remains below full-width History, including on
 phones. Check its target and use Enter or SEND explicitly; reading keys stay in
 the history view. Existing send guards, IME handling and the input route apply.
 
+The pane header keeps its status (such as ACTIVE), HISTORY and WINDOW. Find
+FOLLOW/CLAIMED and the external-terminal action in **Settings → Terminal →
+Selected pane actions**. The existing default remains: automatically claim a
+session with no interactive client, follow one with an interactive client,
+and let a manual choice take priority.
+
 Codex is supported first; Claude Code is planned for the next phase. Legacy can
 **Load earlier**. Fresh uses the protected API's recent text snapshot (up to 200
 messages, subject to upstream byte limits); older pages and tool summaries are

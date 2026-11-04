@@ -73,6 +73,8 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 
 全幅の履歴の下でも、既存のprompt入力欄から選択中のpaneに送れます。スマホ幅でも宛先・入力欄・SENDを表示します。履歴を読むキーは端末へ送られず、入力欄のEnterまたはSENDで明示的に送ります。
 
+paneの見出しは状態表示（ACTIVE等）・HISTORY・WINDOWに整理しています。端末サイズのFOLLOW／CLAIMEDとGhostty等で開く操作は **Settings → Terminal → Selected pane actions** にあります。対話clientがいないsessionを自動CLAIMEDにし、いる場合はFOLLOWにする既定は同じです。手動の選択が優先されます。
+
 まず Codex のみ対応し、Claude Code は次の段です。legacy は **Load earlier** で遡れます。fresh は保護された API の直近の本文 snapshot（最大200件。量の制限で短くなる場合あり）で、過去ページと tool 要約には未対応です。保持量に達して読む位置で更新が止まった場合は **Latest** で最新へ戻り、再開できます。[操作と上限の詳細](bridge/README.md)も確認してください。
 
 ### 科学者の顔とモデルを選んで起動する（NEW AGENT）

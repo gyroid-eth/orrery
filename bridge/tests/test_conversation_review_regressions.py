@@ -279,3 +279,38 @@ def test_full_history_keeps_original_composer_usable_and_guarded(cockpit):
         wait("document.querySelector('.screen').style.getPropertyValue('--conversation-viewport-height')==='600px'")
         assert js("""(()=>{const p=document.querySelector('.conversation-panel').getBoundingClientRect(),r=promptInput.getBoundingClientRect();
           return p.top>=0&&p.height>150&&r.bottom<=visualViewport.height;})()""")
+
+
+@pytest.mark.parametrize('cockpit',[False,True],indirect=True,ids=['desktop','phone'])
+def test_header_and_history_use_one_control_style_and_settings_keep_actions(cockpit):
+    js,wait,client,requests,enable=cockpit
+    enable(claimed=True,count=3)
+    assert js("[...document.querySelectorAll('.scr-head button')].filter(e=>!e.hidden&&getComputedStyle(e).display!=='none').map(e=>e.id)")==['conversationToggle','panePopout']
+    assert js("claimToggle.closest('#settingsPopover')!==null&&ghosttyAction.closest('#settingsPopover')!==null")
+    assert not js("claimToggle.hidden||ghosttyAction.hidden")
+    # Dialog remains a keyboard destination when a fit/poll occurs.
+    js("paintClaimToggle(panes.get('%901').meta);document.querySelector('#settingsPopover').showPopover();claimToggle.focus();packets.length=0")
+    assert js('document.activeElement===claimToggle')
+    client.call('Input.dispatchKeyEvent',type='keyDown',key=' ',code='Space',text=' ',windowsVirtualKeyCode=32)
+    client.call('Input.dispatchKeyEvent',type='keyUp',key=' ',code='Space',windowsVirtualKeyCode=32)
+    wait("claimToggle.getAttribute('aria-pressed')==='false'")
+    js("focusTerminalPreservingScroll(panes.get('%901'))")
+    assert js("document.activeElement===claimToggle")
+    assert js("packets.filter(p=>p.type==='release')")==[dict(type='release',paneId='%901')]
+    assert not js("packets.some(p=>p.type==='input')")
+    js("""window.settingsOpens=[];window.settingsFetch=window.fetch;
+      window.fetch=async(url,options)=>url==='/telemetry/open-ghostty'?
+        (settingsOpens.push({url,body:JSON.parse(options.body)}),{ok:true,json:async()=>({ok:true,already:true})}):settingsFetch(url,options);
+      ghosttyAction.click();""")
+    wait("settingsOpens.length===1&&!ghosttyAction.disabled")
+    assert js('settingsOpens')==[dict(url='/telemetry/open-ghostty',body=dict(session='ReviewFixture'))]
+    js('window.fetch=settingsFetch')
+    js("document.querySelector('#settingsPopover').hidePopover()")
+    for theme in ['dark','light']:
+        js("document.documentElement.setAttribute('data-color-theme',"+json.dumps(theme)+")")
+        styles=js("""(()=>{const selectors=['#scrBadge','#conversationToggle','#panePopout','.conversation-expand','.conversation-close','.conversation-latest'];
+          return selectors.map(selector=>{const s=getComputedStyle(document.querySelector(selector));return {
+            padding:s.padding,borderRadius:s.borderRadius,font:s.font,height:s.height,borderWidth:s.borderWidth};});})()""")
+        assert all(style==styles[0] for style in styles)
+    js("document.querySelector('.conversation-expand').focus()")
+    assert js("getComputedStyle(document.activeElement).outlineStyle!=='none'")

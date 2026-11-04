@@ -1,7 +1,4 @@
 .conversation-toggle[hidden],.conversation-panel[hidden]{display:none}
-.conversation-toggle{flex:none;border:1px solid var(--hair);border-radius:7px;padding:4px 9px;
-  background:var(--panel);color:var(--ink-dim);font:10px var(--mono);cursor:pointer}
-.conversation-toggle[aria-expanded="true"]{color:var(--amber);border-color:var(--amber)}
 .screen.conversation-open{--conversation-width:min(46%,460px)}
 .screen.conversation-open .termstage{clip-path:inset(0 var(--conversation-width) 0 0)}
 .screen.conversation-open .promptbar{right:var(--conversation-width)}
@@ -13,9 +10,6 @@
 .conversation-heading{flex:1;min-width:0}
 .conversation-title{font:16px var(--serif);margin:0 0 5px}
 .conversation-subtitle{font:10px/1.5 var(--mono);color:var(--ink-dim);overflow-wrap:anywhere}
-.conversation-action{border:1px solid var(--hair);border-radius:6px;padding:6px 9px;
-  background:transparent;color:var(--ink-dim);font:10px var(--mono);cursor:pointer}
-.conversation-action:hover,.conversation-action:focus-visible{color:var(--amber);border-color:var(--amber)}
 .conversation-toolbar{display:flex;gap:8px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--hair-2)}
 .conversation-status{font:10px/1.6 var(--mono);color:var(--ink-dim);flex:1;overflow-wrap:anywhere}
 .conversation-scroll{flex:1;min-height:0;overflow-y:scroll;overscroll-behavior:contain;
@@ -35,7 +29,7 @@
 .conversation-tool-name{color:var(--ink-dim);font:11px/1.6 var(--mono);overflow-wrap:anywhere}
 .conversation-truncated{font:10px var(--mono);color:var(--ink-faint);padding-top:8px}
 .conversation-bottom{display:flex;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--hair);background:var(--panel-2)}
-.conversation-bottom .conversation-action{flex:none;color:var(--amber)}
+.conversation-bottom .conversation-action{flex:none}
 .conversation-panel [hidden]{display:none}
 .screen.conversation-open.conversation-full{--conversation-width:100%}
 /* Keep the original composer and every existing send/IME/target guard. The
@@ -47,7 +41,7 @@
 .conversation-full .conversation-scroll{padding-left:24px;padding-right:24px}
 .conversation-full .conversation-events{max-width:960px;margin:0 auto}
 .conversation-files{display:flex;flex-wrap:wrap;gap:6px;padding-top:10px}
-.conversation-file{color:var(--amber);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.conversation-file{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;text-transform:none}
 .conversation-diff{margin-top:10px;border:1px solid var(--hair);border-radius:6px;overflow:hidden}
 .conversation-diff-summary{padding:9px;cursor:pointer;font:10px/1.6 var(--mono);color:var(--ink-dim)}
 .conversation-diff-code{font:11px/1.65 var(--mono);tab-size:2;overflow:auto;max-height:340px;margin:0;padding:8px 0;background:var(--panel-2)}
@@ -78,8 +72,10 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .col.term:has(.screen.conversation-enabled){min-width:0}
   /* The existing cockpit header/composer can overflow a phone viewport. Keep
      this reader attached to the actual viewport, not that wider grid. */
-  .conversation-panel{position:fixed;left:0;right:0;top:calc(var(--conversation-viewport-top,0px) + 54px);bottom:auto;width:100vw;
-    height:calc(var(--conversation-viewport-height,100dvh) - 54px - 132px);z-index:1090}
+  .conversation-panel{position:fixed;left:0;right:0;top:calc(var(--conversation-viewport-top,0px) + 94px);bottom:auto;width:100vw;
+    height:calc(var(--conversation-viewport-height,100dvh) - 94px - 132px);z-index:1090}
+  .screen.conversation-open .scr-head{position:fixed;left:0;right:auto;
+    top:calc(var(--conversation-viewport-top,0px) + 54px);width:100vw;z-index:1092;background:var(--panel)}
   .screen.conversation-open .termstage{visibility:hidden}
   .screen.conversation-open .promptbar{position:fixed;left:0;right:auto;bottom:auto;
     top:calc(var(--conversation-viewport-top,0px) + var(--conversation-viewport-height,100dvh) - 132px);width:100vw;height:132px;
@@ -101,8 +97,7 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .conversation-scroll{padding-left:14px;padding-right:12px}
   .conversation-toolbar,.conversation-bottom{padding:8px 10px}
   .conversation-text{font-size:12px;line-height:1.75}
-  .screen.conversation-enabled .scr-head .path,.screen.conversation-enabled .scr-head .badge,
-  .screen.conversation-enabled .scr-head .claim-toggle,.screen.conversation-enabled .scr-head .ghostty-action,
-  .screen.conversation-enabled .scr-head .pane-popout{display:none}
-  .conversation-toggle{margin-left:auto}
+  .scr-head{gap:6px;padding-left:10px;padding-right:10px}
+  .scr-head .path{display:none}
+  .scr-head .name{min-width:0;max-width:55px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
 }

@@ -5,11 +5,12 @@
   function mount({host,source,onActivate=()=>{}}){
     let request=null,generation=0,objectUrl=null,selected=null;
     const create=(tag,cls,text)=>{const el=document.createElement(tag);el.className=cls;if(text!==undefined)el.textContent=text;return el;};
-    const button=(cls,text,action)=>{const el=create('button','conversation-action '+cls,text);el.type='button';el.addEventListener('click',action);return el;};
+    const button=(cls,text,action)=>{const el=create('button','cockpit-control conversation-action '+cls,text);el.type='button';el.addEventListener('click',action);return el;};
     function cancel(){generation++;if(request)request.abort();request=null;if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl=null;}
-    function close(){cancel();selected=null;host.hidden=true;host.replaceChildren();host.parentElement.classList.remove('conversation-has-preview');}
+    function markSelected(){host.closest('.conversation-panel').querySelectorAll('.conversation-file').forEach(chip=>chip.setAttribute('aria-pressed',String(chip.dataset.refId===selected?.id)));}
+    function close(){cancel();selected=null;markSelected();host.hidden=true;host.replaceChildren();host.parentElement.classList.remove('conversation-has-preview');}
     async function open(ref){
-      cancel();selected=ref;const token=generation;request=new AbortController();
+      cancel();selected=ref;markSelected();const token=generation;request=new AbortController();
       host.hidden=false;host.parentElement.classList.add('conversation-has-preview');onActivate(ref);
       const head=create('div','conversation-preview-head'),title=create('h3','conversation-preview-title',ref.label);
       const closeButton=button('conversation-preview-close','× Preview',()=>{close();document.querySelector('.conversation-scroll')?.focus();});
@@ -46,6 +47,7 @@
           if(!ref||!/^[A-Za-z0-9_-]{32}$/.test(ref.id)||typeof ref.label!=='string')continue;
           const chip=button('conversation-file',(ref.kind==='image'?'▧ ':'▤ ')+ref.label,()=>open(ref));
           chip.title='Preview current '+(ref.kind==='image'?'image':'file');chip.dataset.refId=ref.id;chips.appendChild(chip);
+          chip.setAttribute('aria-pressed',String(selected?.id===ref.id));
         }
         article.appendChild(chips);
       }

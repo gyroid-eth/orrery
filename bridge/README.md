@@ -77,6 +77,15 @@ WebSocket input route as the terminal composer. Reading/preview keys do not
 send input. Enter in the composer or an explicit SEND sends, and the normal
 history poll picks up the resulting conversation without resetting the reader.
 
+The header keeps the existing status display (ACTIVE/LIVE/offline), HISTORY
+when enabled, and WINDOW. In a separate pane window, WINDOW returns it to the
+cockpit. Terminal-size claim/follow and opening in the external terminal moved
+to **Settings → Terminal → Selected pane actions**; the selected session/pane
+is shown there, and the same handlers apply. Their defaults did not change:
+`applyAutoClaims` claims sessions without an interactive client, follows when
+an interactive client appears, and respects the in-memory manual override.
+Settings buttons retain keyboard focus during background fit/poll updates.
+
 `conversation_artifacts.py` provides a bounded inert projection;
 `conversation_preview.py` issues process-local opaque references;
 `conversation_source.js` handles requests; `conversation_preview.js` is the
