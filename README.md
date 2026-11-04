@@ -67,22 +67,41 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 
 ### 会話を読み返す（Conversation history）
 
-**Settings → Appearance → Conversation history** をオンにし、pane の **History** を押すと、agent の会話をスクロールバー付きの読み取り専用パネルで読めます。既定はオフです。閉じると表示領域が戻り、設定をオフにするとボタンと履歴の通信が止まります。端末のグリッドを変えずに右側を隠して表示するため、履歴の開閉は CLAIMED 端末を resize しません。
+代替画面を使う agent の会話は、端末のスクロールバックだけでは遡れません。Conversation history は、記録された会話を読み取り専用で表示します。**Settings → Appearance → Conversation history** をオンにし、pane の **HISTORY** を押してください。既定はオフです。オフに戻すとパネルとボタンが消え、履歴の読み込みも止まります。
 
-**Full width** で履歴を全幅にできます。legacy の構造化された tool 記録から file チップと編集要求の差分を表示し、チップを押すと隣に現在の text・画像を preview します。差分は記録の内容、preview は現在の file と区別して表示します。**Reveal in file manager** は明示的に押したときだけ Finder・Explorer で選択します。
+![架空の会話を履歴パネルで開く](docs/images/cockpit_history.png)
 
-split中は各区画の **History** から独立して開けます。全幅表示・file／画像previewもその区画内に収まり、複数の履歴を同時に開けます。履歴を操作した区画が下のprompt欄の送り先になります。
+履歴は端末の横に開き、**Full width** で pane 全体に広げられます。狭い画面では pane 全体に表示します。スクロールしている間は新しい記録が来ても読んでいる位置を保ち、**Load earlier** がある場合は過去へ遡れます。**Latest** で最新に戻れます。開閉時に CLAIMED 端末のサイズは変わりません。分割中は各 pane の **HISTORY** で独立して開き、全幅や preview もその区画内に収まります。履歴を操作した pane が下の prompt 欄の送り先になります。別の pane を閉じても、残った pane の履歴の表示幅・読み位置・開いた Mail や preview は保たれます。幅が変わると読み位置が1〜2行ずれることがあります。
 
-全幅の履歴の下でも、既存のprompt入力欄から選択中のpaneに送れます。スマホ幅でも宛先・入力欄・SENDを表示します。履歴を読むキーは端末へ送られず、入力欄のEnterまたはSENDで明示的に送ります。
-送信すると、そのpaneの履歴はpreviewを閉じて最新へ戻り、記録の追記を追従します。本文とEnterは送信開始時の同じpaneへ送り、待ち時間中に端末が消失・置換・再接続した場合はEnterを送らず通知します。
+![2分割の各 pane で履歴を開く](docs/images/cockpit_history_split.png)
 
-発言やtoolの本文をクリックすると、同じpaneのxtermに残っている文字を探します。一意に一致したときだけ端末の該当行を表示します。狭い区画ではその履歴だけを閉じます。文字の選択・コピーやfileチップは別の操作です。一致なし・複数一致は案内を表示し、代替画面の消えた過去の描画は復元しません。
+全幅でも入力欄から送信できます。履歴を読むキーは端末に送られず、Enter または **SEND** で明示的に送ります。送信すると対象 pane の preview を閉じ、履歴は最新を追います。送信中に対象の端末や接続が変わった場合は中止して知らせます。送信後は、対象の履歴の末尾に「送信 → agent 名・記録待ち」の仮の行が現れ、対応する発言が記録されると置き換わります。これは agent が処理を確認したことを示すものではありません。照合できない場合は「送信済み（記録の照合はできず）」と表示します。
 
-記録内のORRERY Mail通知と送信要求は、**ORRERY MAIL** のカードで表示し、押すと記録された文面を展開します。preview通知は「続きはMailに」と区別します。Mail serverからの本文取得・既読操作は行わず、送信要求を配信完了とは表示しません。
+![送信後に履歴へ表示される記録待ちの行](docs/images/cockpit_history_pending.png)
 
-paneの見出しは状態表示（ACTIVE等）・HISTORY・WINDOWに整理しています。端末サイズのFOLLOW／CLAIMEDとGhostty等で開く操作は **Settings → Terminal → Selected pane actions** にあります。対話clientがいないsessionを自動CLAIMEDにし、いる場合はFOLLOWにする既定は同じです。手動の選択が優先されます。
+agent の発言にある Markdown の表は表として表示し、横にスクロールできます。**Copy Markdown** で元の表をコピーできます。
 
-legacy は Codex に加え、Telemetry API 35以降で本人の記録と確認された Claude・dsh・Hermes に対応します。古いdashboardではCodexのみです。staleは「前の会話」と理由を表示し、本文は読みません。Claude・Codex・dsh は **Load earlier** で遡れます。dshは記録されたappendの時系列、Hermesはboundなsegmentのactiveな直近snapshot（最大200件）で、圧縮前のsegmentは含みません。fresh は保護された API の直近の本文 snapshot（最大200件。量の制限で短くなる場合あり）で、過去ページと tool 要約には未対応です。保持量に達して読む位置で更新が止まった場合は **Latest** で最新へ戻り、再開できます。[操作と上限の詳細](bridge/README.md)も確認してください。
+![agent の発言に含まれる表と Copy Markdown](docs/images/cockpit_history_table.png)
+
+記録に file の参照や編集要求の差分があれば、file チップや差分を表示します。Claude の SendUserFile で渡された file もチップから preview できます。チップを押すと現在の text や画像を preview できます。記録された差分と現在の file は別物です。**Reveal in file manager** を押すと Finder や Explorer で選択します。
+
+![file チップから現在の text を preview](docs/images/cockpit_history_text.png)
+
+![画像の file チップから preview](docs/images/cockpit_history_image.png)
+
+![SendUserFile の file チップから画像を preview](docs/images/cockpit_history_sendfile.png)
+
+発言や tool の本文を押すと、同じ pane の端末に残る文字列を探し、一意に一致した場合だけその行へ移ります。見つからない、複数一致する、または検索上限に達した場合は移動せずに知らせます。文字の選択・コピーや file チップはそれぞれの操作のままです。
+
+![発言を押して端末の該当行へ移る](docs/images/cockpit_history_jump.gif)
+
+記録内の ORRERY Mail 通知と送信要求は、向き・相手・件名のカードとして表示します。押すと記録された本文が開きます。通知が preview の場合は続きが Mail にあると示します。Mail server から本文を取得したり既読にしたりせず、送信要求を配信完了とは扱いません。
+
+![架空の会話で履歴を全幅にし Mail カードを開く](docs/images/cockpit_history_mail.gif)
+
+表示できない場合は、パネルに理由と次の操作が表示されます。起動直後や最初の発言前なら少し待って再試行し、古い会話や紐付けを確認できない場合は新しい子を開いてください。Codex の記録が観測されない場合は ORRERY plugin を有効にして `/hooks` で確認し、新しく起動します。記録が無効・書き込み不可の場合は provider の記録設定や保存先を確認します。古い dashboard、未対応の形式、dsh の依存関係不足なども画面に案内されます。
+
+legacy では Codex と、Telemetry API 35 以降で紐付けを確認した Claude Code・dsh・Hermes を読めます。古い dashboard では Codex のみです。Claude・Codex・dsh は過去ページを読めます。dsh は記録された append の時系列、Hermes は現在の bound segment の直近 snapshot（最大200件）で、圧縮前の segment は含みません。fresh は保護された API の直近の本文 snapshot（最大200件、量の制限あり）で、過去ページと tool の要約には未対応です。保持上限で更新が止まったときは **Latest** で再開できます。端末から消えた代替画面の描画は復元できません。[操作と上限の詳細](bridge/README.md)
 
 ### 科学者の顔とモデルを選んで起動する（NEW AGENT）
 

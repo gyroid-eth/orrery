@@ -67,53 +67,41 @@ Pick an agent in the roster on the left, give instructions in the terminal in th
 
 ### Read a conversation (Conversation history)
 
-Turn on **Settings → Appearance → Conversation history**, then press **History**
-in a pane header to read agent messages in a read-only panel with a scrollbar.
-It is off by default. Closing restores the visible terminal area; switching the
-setting off removes the button and stops history requests. The terminal grid is
-preserved and clipped, so opening/closing History does not resize a CLAIMED pane.
+An agent using an alternate-screen TUI cannot be reviewed with terminal scrollback alone. Conversation history displays its recorded conversation in a read-only panel. Turn on **Settings → Appearance → Conversation history** and press **HISTORY** in the pane. The setting is off by default; turning it off closes the panel, removes the button, and stops history reads.
 
-Use **Full width** to expand the reader. In legacy mode, structured tool records
-provide file chips and recorded edit-request diffs. Selecting a chip opens a
-split preview of the current text or raster image, clearly distinguished from
-the recorded diff. **Reveal in file manager** explicitly selects that file in
-Finder or Explorer; it never opens automatically.
+![History panel with a fictional conversation](docs/images/cockpit_history.png)
 
-Each desktop split cell has its own **History** button; several readers can
-stay open, and full-width history/file previews stay inside their cell.
-Interacting with a reader selects that cell as the existing composer target.
+The reader opens beside the terminal; **Full width** expands it across the pane. On narrow screens it fills the pane. While you scroll, new records do not move your reading position. Use **Load earlier** where available to go back, and **Latest** to return to the newest records. Opening or closing History does not resize a CLAIMED terminal. In a split, each pane's **HISTORY** opens an independent reader; full width and previews stay within that pane. Interacting with a reader selects its pane as the prompt composer target. Closing another pane preserves the surviving reader’s width mode, position, expanded Mail, and preview. A width change can shift the reading position by one or two lines.
 
-The original prompt composer remains below full-width History, including on
-phones. Check its target and use Enter or SEND explicitly; reading keys stay in
-the history view. Existing send guards, IME handling and the input route apply.
-Submitting closes that pane's preview and resumes following its newest recorded
-messages. Paste and Enter keep the original target; if its pane or connection
-changes before Enter, submission is cancelled with a notice.
+![Independent history readers in two split panes](docs/images/cockpit_history_split.png)
 
-Click a message or tool summary to find its retained text in that pane's xterm
-buffer. A unique match reveals the terminal line; a narrow cell closes only its
-own reader. Selection/copy and file chips keep their own actions. Missing or
-ambiguous matches show a notice. Lost alternate-screen frames cannot be restored.
+The composer remains available in full-width view. Reading keys stay in the reader; use Enter or **SEND** to submit explicitly. Submission closes that pane's preview and resumes following its newest history. If the target terminal or connection changes during submission, the send is cancelled with a notice. After sending, a temporary “sent → agent · awaiting record” row appears at the end of that pane’s history and is replaced when the matching user message is recorded. It does not mean the agent has acknowledged the prompt. If the record cannot be matched confidently, the row says so.
 
-Recorded ORRERY Mail notifications and send requests appear as **ORRERY MAIL**
-cards. Click to expand the recorded body. Preview notifications say to continue
-in Mail. This does not fetch Mail bodies or mark messages read, and a send
-request is not presented as confirmed delivery.
+![A pending record row after sending a prompt](docs/images/cockpit_history_pending.png)
 
-The pane header keeps its status (such as ACTIVE), HISTORY and WINDOW. Find
-FOLLOW/CLAIMED and the external-terminal action in **Settings → Terminal →
-Selected pane actions**. The existing default remains: automatically claim a
-session with no interactive client, follow one with an interactive client,
-and let a manual choice take priority.
+Markdown tables in assistant messages render as tables and can be scrolled horizontally. **Copy Markdown** copies the original table.
 
-Legacy supports Codex, plus bound Claude, dsh and Hermes records with Telemetry
-API 35 or later. Older dashboards support Codex only. Stale bindings show
-“Previous conversation” and a reason without reading a body. Claude, Codex and
-dsh can **Load earlier**. dsh shows a recorded append timeline; Hermes shows a
-bounded active-segment snapshot (up to 200 events), excluding earlier segments. Fresh uses the protected API's recent text snapshot (up to 200
-messages, subject to upstream byte limits); older pages and tool summaries are
-unavailable there. If updates pause at the reader's retention limit, **Latest**
-reloads the newest window and resumes. See [operation and limits](bridge/README.md).
+![A table in an agent message with Copy Markdown](docs/images/cockpit_history_table.png)
+
+When records contain file references or edit-request diffs, the reader shows file chips and diffs. Files delivered with Claude’s SendUserFile also have chips for preview. Select a chip to preview the current text or image. A recorded diff and the current file are distinct. **Reveal in file manager** selects the file in Finder or Explorer when pressed.
+
+![Previewing the current text from a file chip](docs/images/cockpit_history_text.png)
+
+![Previewing an image from a file chip](docs/images/cockpit_history_image.png)
+
+![Previewing an image from a SendUserFile chip](docs/images/cockpit_history_sendfile.png)
+
+Select a message or tool text to search for it in the same pane's retained terminal text. The reader moves to the line only for a unique match; it shows a notice and stays put if there is no match, more than one match, or the search limit is reached. Text selection, copying, and file chips retain their own actions.
+
+![Clicking a message to reveal its line in the terminal](docs/images/cockpit_history_jump.gif)
+
+Recorded ORRERY Mail notifications and send requests appear as cards with direction, correspondent, and subject. Select a card to expand the recorded body. A preview notification indicates that the rest is in Mail. The reader does not fetch bodies from the Mail server or mark messages read, and a send request does not confirm delivery.
+
+![Opening history, expanding it, and opening a Mail card using fictional conversations](docs/images/cockpit_history_mail.gif)
+
+When history is unavailable, the panel shows a reason and next step. Shortly after launch or before the first message, wait and retry; for an old conversation or an unverified binding, open a newly launched child. If Codex recording was not observed, enable the ORRERY plugin, review its hooks in `/hooks`, and start a new process. For disabled recording or a write failure, check the provider's recording settings or storage permissions. The panel also identifies older dashboards, unsupported formats, and missing dsh dependencies.
+
+Legacy mode reads Codex and, with Telemetry API 35 or later, bound Claude Code, dsh, and Hermes records. Older dashboards support Codex only. Claude, Codex, and dsh offer older pages. dsh shows a recorded append timeline; Hermes shows a recent snapshot of the active bound segment (up to 200 events), excluding segments before compaction. Fresh mode uses the protected API's recent text snapshot (up to 200 messages, subject to size limits) and does not offer older pages or tool summaries. If updates pause at the retention limit, **Latest** resumes them. Alternate-screen frames no longer retained by the terminal cannot be restored. See [operation and limits](bridge/README.md).
 
 ### Choose a scientist's portrait and a model (NEW AGENT)
 
