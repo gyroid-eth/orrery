@@ -65,6 +65,14 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 
 ## できること
 
+### Codex の会話を読み返す（Conversation history）
+
+**Settings → Appearance → Conversation history** をオンにし、pane の **History** を押すと、Codex の会話をスクロールバー付きの読み取り専用パネルで読めます。既定はオフです。閉じると表示領域が戻り、設定をオフにするとボタンと履歴の通信が止まります。端末のグリッドを変えずに右側を隠して表示するため、履歴の開閉は CLAIMED 端末を resize しません。
+
+**Full width** で履歴を全幅にできます。legacy の構造化された tool 記録から file チップと編集要求の差分を表示し、チップを押すと隣に現在の text・画像を preview します。差分は記録の内容、preview は現在の file と区別して表示します。**Reveal in file manager** は明示的に押したときだけ Finder・Explorer で選択します。
+
+まず Codex のみ対応し、Claude Code は次の段です。legacy は **Load earlier** で遡れます。fresh は保護された API の直近の本文 snapshot（最大200件。量の制限で短くなる場合あり）で、過去ページと tool 要約には未対応です。保持量に達して読む位置で更新が止まった場合は **Latest** で最新へ戻り、再開できます。[操作と上限の詳細](bridge/README.md)も確認してください。
+
 ### 科学者の顔とモデルを選んで起動する（NEW AGENT）
 
 `+ NEW AGENT` で科学者の肖像を選ぶと名前が決まり、形容詞は調整できます。Claude・Codex・DeepSeek・Local models の4系統から model を、DeepSeek と Local では dsh / Hermes の Harness も選べます。利用できる model と Harness は導入済みの設定によって変わります。

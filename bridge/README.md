@@ -24,27 +24,93 @@ the terminal; on narrow screens it fills the pane until closed. The scrollbar
 describes the loaded messages, not the live TUI position. `Load earlier` reads
 older records, and new output follows only while the reader is at the bottom.
 Turn the setting off to remove the button, close the panel and stop its reads.
+Conversation scripts/styles are loaded only after opting in. Reading keys stay
+in the reader, and opening/closing it does not resize a CLAIMED terminal: the
+terminal grid is preserved and its right portion is clipped until History is
+closed.
 The single preference uses the existing shared preference mechanism; transcript
 contents and reading position are never saved as preferences.
 
 The additive `GET /telemetry/conversation?agent=<name>` endpoint accepts an
 agent and optional byte cursors (`before` or `after`), never a filesystem path.
 In legacy mode only a dashboard `history_binding=bound` Codex row can select
-the file; the binding is checked again before returning it. Provider reasoning,
-tool arguments and tool results are omitted; tool names are shown as summaries.
+the file; every path component rejects symlinks, and the descriptor stays pinned
+through the authoritative binding recheck and a final path/descriptor identity
+check. Native rollout filenames must also match their session header. Provider reasoning,
+raw tool arguments and raw tool results are omitted; tool names are shown as summaries.
 Each read scans at most 4 MiB, returns at most 200 events (80 by default), and
 shortens individual messages beyond 64 Ki characters. It never sends terminal
 input. Claude Code support is planned for a separate change.
 
 In explicit fresh mode the same endpoint uses the existing protected dashboard
 history route and its public text projection, with the bound I/A and current
-target rechecked. This mode reads the latest 200 text messages, labels that
-limited window, and does not offer older pages or tool summaries. Full cursor
+target rechecked. This mode replaces a recent snapshot of up to 200 text messages,
+labels upstream truncation, and does not offer older pages or tool summaries. Full cursor
 support there requires extending Telemetry's protected history API rather than
 opening raw transcript paths in cockpit. Data acquisition lives in
 `conversation_history.py` / `conversation_source.js`, and presentation in
 `conversation_view.js` / `conversation_view.css`; the view's optional
 `renderEvent(event, defaultRenderer)` adapter allows future reference/preview UI.
+
+### Recorded edits and file preview
+
+**Full width** expands History within the pane. Structured `apply_patch`,
+`view_image`, `read_file`, `write_file`, `Read` and `Edit` arguments produce file
+chips when permitted. Codex's static `functions.exec` literal wrappers are also
+supported, without evaluating JavaScript. Computed calls, shell-command paths,
+free-form Markdown, tool-result discovery and embedded/remote attachments are
+not reference sources in this version. Claude's binding still needs Telemetry
+support; parsing an Edit shape does not enable Claude history.
+
+Diffs show the **recorded edit request**, with **outcome unconfirmed**, never a
+diff recomputed from disk or a claim that the tool succeeded. Expand the diff
+to see colored added/removed lines. Selecting a file chip expands History and
+opens a split preview; **× Preview** returns to the full-width reader. On a
+phone the preview takes the reader area until closed. The preview is labeled
+**Current file · may differ from the recorded edit**. Reveal is an explicit
+button using the existing file-manager adapter.
+
+`conversation_artifacts.py` provides a bounded inert projection;
+`conversation_preview.py` issues process-local opaque references;
+`conversation_source.js` handles requests; `conversation_preview.js` is the
+replaceable renderer/outlet. No Markdown/HTML is executed and no referenced URL
+is fetched. Fresh retains its protected recent-text view: its current API has
+no structured tool projection, so chips/diffs/preview require a future
+Telemetry API extension, not local transcript discovery.
+
+`GET /telemetry/conversation/preview?ref=<id>` and JSON
+`POST /telemetry/conversation/reveal` with only `{"ref":"<id>"}` accept no path.
+References expire after 15 minutes, are capped at 4096 and are revalidated
+against the live binding, pinned transcript inode and original record digest
+for every read. Browser input cannot register a reference or broaden a root.
+
+The default preview root is the bound Codex `session_meta.payload.cwd`.
+`--conversation-workspace-root /absolute/project` adds an operator-selected
+workspace (for example after moving a session to another worktree); it permits
+recorded text/raster references under that directory. Repeat
+`--conversation-image-root /absolute/images` to permit only recorded raster
+references there, not arbitrary text. Both lists are empty by default; neither
+option permits scanning or choosing files from the browser. Broad roots such
+as `/`, the home directory and `/private/tmp` are rejected. A missing/invalid
+root grants nothing. Only exact references from the transcript can be read.
+
+Every preview rechecks canonical containment, rejects symlinks in every path
+component, requires a single-link regular file, denies credential-like paths,
+and verifies descriptor identity before returning. Text is strict UTF-8 and
+at most 128 KiB; SVG/HTML/XML are inert text. PNG/JPEG/GIF/WebP input is at most
+8 MiB, 8192 pixels per dimension and 16 million pixels. Only the first frame is
+decoded and re-encoded to PNG without original metadata, with an 8 MiB output
+limit. Structured extraction is capped at 1 MiB per record, 24 references and
+48 Ki characters of diff. Known credential patterns are redacted server-side;
+this is a bounded preview, not a guarantee that arbitrary user prose contains
+no secrets. Nothing is indexed or stored to disk by these modules.
+
+The reader retains at most 400 events / 2 MiB of serialized event data (fresh:
+at most 200). Legacy releases older events while following the bottom; Load
+earlier reads them again with per-event cursors. At the limit while reading,
+updates pause without moving the reading position; Latest reloads the newest
+window and resumes. Loading older pages may release newer ones and pause updates
+until Latest. This is a bounded reader, not an archival export.
 
 Each control connection runs through `control_client_guard.py`. The guard owns
 one `tmux -CC attach` child and watches a private pipe whose writer belongs only

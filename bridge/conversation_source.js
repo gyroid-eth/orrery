@@ -11,6 +11,12 @@
     record_too_large:'A provider record exceeds the reader byte limit. Close and reopen History to resume from the latest messages.',
     history_unavailable:'The provider history is unavailable.',
     dashboard_unavailable:'The telemetry dashboard could not answer. Retry in a moment.',
+    reference_expired:'This reference expired or its conversation changed. Reload History and select it again.',
+    preview_path_denied:'This file is outside the permitted preview folders.',
+    preview_type_denied:'This file type cannot be previewed safely.',
+    preview_too_large:'This file exceeds the preview size or pixel limit.',
+    preview_changed:'The file changed during this read. Select it again.',
+    preview_unavailable:'This recorded reference cannot be previewed.',
   };
   class Source {
     constructor(fetcher=root.fetch.bind(root)){this.fetcher=fetcher;}
@@ -25,6 +31,14 @@
         error.code=payload.error;throw error;
       }
       if(payload.agent!==agent||!Array.isArray(payload.events))throw new Error('Invalid conversation response.');
+      return payload;
+    }
+    async reference(ref,{signal,reveal=false}={}){
+      const options={cache:'no-store',signal};
+      let url='/telemetry/conversation/preview?'+new URLSearchParams({ref});
+      if(reveal){url='/telemetry/conversation/reveal';Object.assign(options,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ref})});}
+      const response=await this.fetcher(url,options),payload=await response.json();
+      if(!response.ok||payload.ok!==true){const error=new Error(MESSAGES[payload.error]||'Preview is unavailable.');error.code=payload.error;throw error;}
       return payload;
     }
   }
