@@ -11,6 +11,7 @@ import json
 import os
 import re
 import sqlite3
+import stat
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -145,7 +146,7 @@ def artifact_item(item,p,index):
 class Reader:
     def __init__(self,row,stream):
         self.row,self.stream,self.path=row,stream,row['transcript_path']
-        self.provider=provider(row);self.sid=row.get('history_session_id');self.cwd=None;self.db=None;self.frames={}
+        self.provider=provider(row);self.sid=row.get('history_session_id');self.cwd=None;self.db=None;self.frames={};self.data_start=(0,0,0)
         st=os.fstat(stream.fileno())
         self.file_id=hashlib.sha256(json.dumps([self.path,st.st_dev,st.st_ino,self.sid,
              row.get('history_receipt_ts'),self.provider]).encode()).hexdigest()[:24]
@@ -166,11 +167,27 @@ class Reader:
         if match[1]!=self.file_id or pos>self.size:raise HistoryUnavailable('history_changed')
         return pos,line,block
 
+    def assert_source_path(self):
+        """Current regular pathname and no-follow walk must match the pinned FD."""
+        try:
+            pinned=os.fstat(self.fileno());current=os.lstat(self.path)
+            if (not stat.S_ISREG(current.st_mode) or
+                    (pinned.st_dev,pinned.st_ino)!=(current.st_dev,current.st_ino)):
+                raise HistoryUnavailable('history_unconfirmed')
+            with open_bound_transcript(self.path) as stream:
+                walked=os.fstat(stream.fileno())
+                if (pinned.st_dev,pinned.st_ino)!=(walked.st_dev,walked.st_ino):
+                    raise HistoryUnavailable('history_unconfirmed')
+        except (OSError,HistoryUnavailable):
+            raise HistoryUnavailable('history_unconfirmed') from None
+
     def assert_identity(self):
-        # Avoid the Codex filename/header check for other native providers.
-        with open_bound_transcript(self.path) as current:
-            a,b=os.fstat(self.fileno()),os.fstat(current.fileno())
-            if (a.st_dev,a.st_ino)!=(b.st_dev,b.st_ino):raise HistoryUnavailable('history_changed')
+        if self.provider=='hermes':self.assert_source_path()
+        else:
+            # Avoid the Codex filename/header check for other native providers.
+            with open_bound_transcript(self.path) as current:
+                a,b=os.fstat(self.fileno()),os.fstat(current.fileno())
+                if (a.st_dev,a.st_ino)!=(b.st_dev,b.st_ino):raise HistoryUnavailable('history_changed')
         if self.provider=='codex':assert_transcript_identity(self.path,self.stream)
         elif self.provider!='hermes':self.check_header()
         elif not self.db.execute('SELECT 1 FROM sessions WHERE id=? AND source=?',(self.sid,'cli')).fetchone():
@@ -215,9 +232,11 @@ class Reader:
 
     def check_header(self):
         if self.provider=='dsh' and self.path.endswith('.zstd'):
-            frame=self.frame(0,data=os.pread(self.fileno(),65536,0))
+            frame=self.frame(0)
             if frame is None:raise HistoryUnavailable('history_pending')
             raw=frame[0][:MAX_RECORD].split(b'\n',1)[0];header=parse(raw)
+            first_line=frame[0].find(b'\n')+1
+            self.data_start=(0,first_line,0) if first_line<len(frame[0]) else (frame[1],0,0)
             if header.get('type')!='session' or header.get('version')!=4:raise HistoryUnavailable('history_format_unsupported')
             if header.get('id')!=self.sid:raise HistoryUnavailable('history_changed')
         else:
@@ -234,6 +253,7 @@ class Reader:
             else:
                 if header.get('type')!='session' or header.get('version')!=4:raise HistoryUnavailable('history_format_unsupported')
                 if header.get('id')!=self.sid:raise HistoryUnavailable('history_changed')
+                self.data_start=(data.find(b'\n')+1,0,0)
         self.cwd=header.get('cwd')
 
     def open_db(self):
@@ -243,8 +263,12 @@ class Reader:
             side=self.path+suffix
             if os.path.lexists(side):
                 with open_bound_transcript(side):pass
+        # A same-UID process already able to read the DB can hide an ABA inside
+        # connect. These path checks do not claim to prevent that case.
+        self.assert_source_path()
         self.db=sqlite3.connect('file:'+quote(self.path,safe='/')+'?mode=ro',uri=True,timeout=.15,check_same_thread=False)
         try:
+            self.assert_source_path()
             self.db.execute('PRAGMA query_only=ON');self.db.execute('PRAGMA trusted_schema=OFF')
             self.db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH,MAX_SCAN)
             deadline=time.monotonic()+.5;steps=[0]
@@ -262,8 +286,10 @@ class Reader:
         except BaseException:
             self.db.close();self.db=None;raise
 
-    def json_records(self,start,end):
+    def json_records(self,start,end,forward=False):
         data=os.pread(self.fileno(),max(0,end-start),start)
+        if forward and len(data)>=MAX_SCAN and b'\n' not in data:
+            raise HistoryUnavailable('record_too_large')
         if start and os.pread(self.fileno(),1,start-1)!=b'\n':
             n=data.find(b'\n')
             if n<0:return [],start,start
@@ -338,15 +364,21 @@ class Reader:
         if self.provider=='codex':return read_codex_page(self.path,before=before,after=after,limit=limit,stream=self.stream)
         if self.provider=='hermes':return self.snapshot(before,after,limit)
         b,a=self.location(before),self.location(after)
+        compressed=self.provider=='dsh' and self.path.endswith('.zstd')
         end=self.size if b is None else min(self.size,b[0]+MAX_SCAN if b[1:]!=(0,0) else b[0])
+        if compressed and b is not None and b[1:]!=(0,0):
+            # Spend the reverse page's frame/decode budget only on the cursor's
+            # frame and its predecessors, never later appended frames.
+            frame_end=self.frame(b[0],decode=False)
+            if frame_end is None:raise HistoryUnavailable('history_changed')
+            end=frame_end
         start=a[0] if a else max(0,end-MAX_SCAN)
         end=min(end,start+MAX_SCAN)
-        compressed=self.provider=='dsh' and self.path.endswith('.zstd')
         if not compressed:
             for loc in (a,b):
                 if loc and (loc[1] or loc[0] and os.pread(self.fileno(),1,loc[0]-1)!=b'\n'):
                     raise HistoryUnavailable('invalid_cursor')
-        records,first,last=self.zstd_records(start,end,a is not None) if compressed else self.json_records(start,end)
+        records,first,last=self.zstd_records(start,end,a is not None) if compressed else self.json_records(start,end,a is not None)
         entries=[]
         for n,(pos,line,raw,nxt) in enumerate(records):
             item=parse(raw);events=normalize(item,self.provider,self.sid)
@@ -362,7 +394,7 @@ class Reader:
         oldest=chosen[0]['cursor_before'] if chosen else self.cursor((first,0,0))
         newest=(chosen[-1]['cursor_after'] if len(entries)>limit and a is not None else self.cursor((last,0,0)))
         self.assert_identity()
-        return dict(events=chosen,before=oldest,after=newest,has_older=self.location(oldest)!=(0,0,0),
+        return dict(events=chosen,before=oldest,after=newest,has_older=self.location(oldest)>self.data_start,
                     has_newer=a is not None and self.location(newest)[0]<self.size and newest!=after,
                     skipped_large_record=False,mode='cursor',notice='Recorded append timeline · not the current model context' if self.provider=='dsh' else '')
 

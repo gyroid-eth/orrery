@@ -69,6 +69,10 @@ or failure summaries. Messages are shortened beyond 64 Ki characters.
 Other cursor pages return up to 200 events (80 by default), with a 4 MiB scan
 window. No reader sends terminal input. SQLite can use its normal read-only
 WAL/SHM coordination; the reader does not promise immutable sidecar lock bytes.
+Hermes checks the regular path against its pinned no-follow descriptor immediately
+before/after SQLite connect and after reading. A same-UID process can hide a fully
+restored ABA inside connect; this local reader does not defend against a process
+that already has direct access to the original provider database.
 
 In explicit fresh mode the same endpoint uses the existing protected dashboard
 history route and its public text projection, with the bound I/A and current
