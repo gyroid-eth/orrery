@@ -3,7 +3,8 @@
   background:var(--panel);color:var(--ink-dim);font:10px var(--mono);cursor:pointer}
 .conversation-toggle[aria-expanded="true"]{color:var(--amber);border-color:var(--amber)}
 .screen.conversation-open{--conversation-width:min(46%,460px)}
-.screen.conversation-open .termstage,.screen.conversation-open .promptbar{right:var(--conversation-width)}
+.screen.conversation-open .termstage{clip-path:inset(0 var(--conversation-width) 0 0)}
+.screen.conversation-open .promptbar{right:var(--conversation-width)}
 .screen.conversation-open .promptmeta .phint{display:none}
 .conversation-panel{position:absolute;right:0;top:40px;bottom:0;z-index:5;
   width:var(--conversation-width);display:flex;flex-direction:column;min-height:0;

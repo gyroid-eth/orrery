@@ -11,6 +11,8 @@ import json
 import os
 import re
 import stat
+from contextlib import contextmanager, nullcontext
+from pathlib import Path
 
 MAX_SCAN = 4 * 1024 * 1024
 MAX_TEXT = 64 * 1024
@@ -20,6 +22,61 @@ CURSOR = re.compile(r"([a-f0-9]{24}):([0-9]{1,20})\Z")
 
 class HistoryUnavailable(ValueError):
     """A stable public error code, never a local path or provider content."""
+
+
+@contextmanager
+def open_bound_transcript(path: str):
+    """Pin a regular file without following symlinks in any path component."""
+    if (not isinstance(path, str) or not os.path.isabs(path) or not path.endswith('.jsonl')
+            or '..' in Path(path).parts or not hasattr(os, 'O_NOFOLLOW')):
+        raise HistoryUnavailable('invalid_binding')
+    parent = descriptor = None
+    stream = None
+    try:
+        parent = os.open('/', os.O_RDONLY | os.O_DIRECTORY)
+        for component in Path(path).parts[1:-1]:
+            child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+            os.close(parent)
+            parent = child
+        descriptor = os.open(Path(path).name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise HistoryUnavailable('invalid_binding')
+        stream = os.fdopen(descriptor, 'rb')
+        descriptor = None
+        yield stream
+    except OSError:
+        raise HistoryUnavailable('history_unreadable') from None
+    finally:
+        if stream is not None:
+            stream.close()
+        if descriptor is not None:
+            os.close(descriptor)
+        if parent is not None:
+            os.close(parent)
+
+
+def assert_transcript_identity(path: str, stream) -> None:
+    """Bind the actual descriptor to the path inspected by the dashboard.
+
+    Keep the descriptor alive across the authoritative recheck, then compare it
+    with a new no-follow path walk. A regular-file ABA replacement cannot return
+    another file's content just because the path string was restored.
+    """
+    pinned = os.fstat(stream.fileno())
+    with open_bound_transcript(path) as current:
+        actual = os.fstat(current.fileno())
+        if (pinned.st_dev, pinned.st_ino) != (actual.st_dev, actual.st_ino):
+            raise HistoryUnavailable('history_changed')
+    native = re.search(r'([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})\.jsonl$', path)
+    if native:
+        try:
+            first = json.loads(os.pread(stream.fileno(), 65536, 0).split(b'\n', 1)[0])
+            matches = (first.get('type') == 'session_meta'
+                       and str(first.get('payload', {}).get('id', '')).lower() == native[1].lower())
+        except (ValueError, AttributeError, TypeError):
+            matches = False
+        if not matches:
+            raise HistoryUnavailable('history_changed')
 
 
 def codex_event(raw: bytes, offset: int) -> dict | None:
@@ -81,7 +138,7 @@ def _offset(cursor: str | None, file_id: str, size: int) -> int | None:
 
 
 def read_codex_page(path: str, *, before: str | None = None,
-                    after: str | None = None, limit: int = PAGE_SIZE) -> dict:
+                    after: str | None = None, limit: int = PAGE_SIZE, stream=None) -> dict:
     if before is not None and after is not None:
         raise HistoryUnavailable("invalid_cursor")
     if not isinstance(path, str) or not os.path.isabs(path) or not path.endswith(".jsonl"):
@@ -90,7 +147,8 @@ def read_codex_page(path: str, *, before: str | None = None,
         raise HistoryUnavailable("invalid_limit")
     try:
         # The descriptor pins this read to one file even if its path is replaced.
-        with open(path, "rb") as stream:
+        with (nullcontext(stream) if stream is not None else open_bound_transcript(path)) as stream:
+            assert_transcript_identity(path, stream)
             info = os.fstat(stream.fileno())
             if not stat.S_ISREG(info.st_mode):
                 raise HistoryUnavailable("invalid_binding")
@@ -105,6 +163,7 @@ def read_codex_page(path: str, *, before: str | None = None,
                 raise HistoryUnavailable("invalid_cursor")
             stream.seek(start)
             data = stream.read(min(MAX_SCAN, size - start) if after is not None else end - start)
+            assert_transcript_identity(path, stream)
     except OSError:
         raise HistoryUnavailable("history_unreadable") from None
 
@@ -137,6 +196,9 @@ def read_codex_page(path: str, *, before: str | None = None,
         oldest = int(entries[0][0]["id"]) if entries else window_start
     else:
         oldest = int(entries[0][0]["id"]) if entries else start
+    for event, next_offset in entries:
+        event['cursor_before'] = f"{file_id}:{event['id']}"
+        event['cursor_after'] = f"{file_id}:{next_offset}"
     return dict(events=[event for event, _ in entries],
                 before=f"{file_id}:{oldest}", after=f"{file_id}:{complete_end}",
                 has_older=oldest > 0, has_newer=after is not None and complete_end < size

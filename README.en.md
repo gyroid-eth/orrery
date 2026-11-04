@@ -65,6 +65,20 @@ Pick an agent in the roster on the left, give instructions in the terminal in th
 
 ## What you can do
 
+### Read a Codex conversation (Conversation history)
+
+Turn on **Settings → Appearance → Conversation history**, then press **History**
+in a pane header to read Codex messages in a read-only panel with a scrollbar.
+It is off by default. Closing restores the visible terminal area; switching the
+setting off removes the button and stops history requests. The terminal grid is
+preserved and clipped, so opening/closing History does not resize a CLAIMED pane.
+
+Codex is supported first; Claude Code is planned for the next phase. Legacy can
+**Load earlier**. Fresh uses the protected API's recent text snapshot (up to 200
+messages, subject to upstream byte limits); older pages and tool summaries are
+unavailable there. If updates pause at the reader's retention limit, **Latest**
+reloads the newest window and resumes. See [operation and limits](bridge/README.md).
+
 ### Choose a scientist's portrait and a model (NEW AGENT)
 
 Open `+ NEW AGENT` and select a scientist's portrait to generate a name; you can adjust its adjective. Choose a model from Claude, Codex, DeepSeek, or Local models. DeepSeek and Local also offer a dsh / Hermes Harness choice. Available models and harnesses depend on your installed configuration.

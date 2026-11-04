@@ -1144,7 +1144,6 @@
 </style>
 <link rel="stylesheet" href="theme_light.css">
 <link rel="stylesheet" href="cockpit_tour.css">
-<link rel="stylesheet" href="conversation_view.css">
 </head>
 <body>
 <div class="app">
@@ -4306,9 +4305,9 @@
       }
     }
   },
-  "inventory_digest": "d4b9b517f8d56754d511bbe5d7cece7400a2a8ed51db043171e8daa0d0ebb933",
+  "inventory_digest": "f4452d1de85d562b68356d0ebe7ee891000bb685944c2c68be27a394228a99d5",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "b8f518a6bd72b92db62df5bfe6b8fd7464ff21bb502c2ac65013be98c3314f4c",
+  "source_digest": "049d59c2bb6912921abb9514f2c687caef519730b21aacb6d11dce51c74ccaa0",
   "surface": "cockpit",
   "version": 1
 }
@@ -6845,7 +6844,7 @@ function bottomJumpShortcutBlocked(event){
   return targets.some(target=>{
     if(!target.closest||target.closest('.xterm'))return false;
     return Boolean(target.closest(
-      '.promptbar,.overlay,.settings-popover,[contenteditable="true"],input,textarea,select',
+      '.promptbar,.overlay,.settings-popover,.conversation-panel,[contenteditable="true"],input,textarea,select',
     ));
   });
 }
@@ -6854,6 +6853,7 @@ function editableElementOwnsFocus(){
   if(!focused||focused===document.body||!focused.matches)return false;
   // xterm owns a hidden textarea. It is terminal input, not a browser form.
   if(focused.closest('.xterm'))return false;
+  if(focused.closest('.conversation-panel'))return true;
   return focused.matches('input,textarea,select,[contenteditable="true"]')||
     focused.isContentEditable;
 }
@@ -10762,13 +10762,45 @@ kickPolls();
 <script src="mail_view.js"></script>
 <script src="cockpit_tour.js"></script>
 <script src="cockpit_full_tour.js"></script>
-<script src="conversation_source.js"></script>
-<script src="conversation_view.js"></script>
 <script>
-const conversationView=OrreryConversation.mount({
-  getContext:()=>{const name=activeSession();return currentAgents.find(a=>a.name===name)||{name};},
-  onLayout:()=>queueStageFit(),
-});
+/* Opt-in bootstrap: no conversation assets or API calls while disabled. */
+const conversationView=(()=>{
+  const key='oc-term-conversation-enabled',setting=document.getElementById('conversationEnabled');
+  let instance=null,loading=null;
+  const enabled=()=>{try{return localStorage.getItem(key)==='1';}catch(_){return false;}};
+  function asset(tag,attribute,url){return new Promise((resolve,reject)=>{
+    const el=document.createElement(tag);el[attribute]=url;
+    if(tag==='link')el.rel='stylesheet';
+    el.onload=resolve;el.onerror=()=>{el.remove();reject(new Error('Conversation history could not be loaded.'));};
+    document.head.appendChild(el);
+  });}
+  async function ensure(){
+    if(instance)return instance;
+    if(!enabled())return null;
+    if(loading)return loading;
+    loading=(async()=>{
+      await asset('link','href','conversation_view.css');
+      await asset('script','src','conversation_source.js');
+      await asset('script','src','conversation_view.js');
+      instance=OrreryConversation.mount({
+        getContext:()=>{const name=activeSession();return currentAgents.find(a=>a.name===name)||{name};},
+      });
+      return instance;
+    })().catch(error=>{loading=null;showToast(error.message,true);return null;});
+    return loading;
+  }
+  setting.checked=enabled();
+  setting.addEventListener('change',()=>{
+    if(instance)return;
+    try{localStorage.setItem(key,setting.checked?'1':'0');}catch(_){}
+    if(setting.checked)ensure();
+  });
+  document.addEventListener('oc:prefs-changed',()=>{if(enabled())ensure();});
+  window.addEventListener('storage',event=>{if(event.key===key&&enabled())ensure();});
+  if(enabled())ensure();
+  return Object.freeze({ready:ensure,open:async()=>{const view=await ensure();if(view&&enabled())view.open();},
+    close:()=>instance&&instance.close(),refresh:()=>instance&&instance.refresh()});
+})();
 </script>
 </body>
 </html>

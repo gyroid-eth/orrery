@@ -75,6 +75,24 @@ def test_file_replacement_foreign_cursor_and_truncation_fail_closed(tmp_path):
         history.read_codex_page(str(one), after=cursor)
 
 
+def test_bound_reader_rejects_symlink_and_pins_file_across_binding_recheck(tmp_path):
+    good = tmp_path / "good.jsonl"
+    other = tmp_path / "other.jsonl"
+    link = tmp_path / "link.jsonl"
+    good.write_bytes(record("BOUND_FIXTURE"))
+    other.write_bytes(record("UNBOUND_FIXTURE"))
+    link.symlink_to(good)
+    with pytest.raises(history.HistoryUnavailable):
+        history.read_codex_page(str(link))
+    with history.open_bound_transcript(str(good)) as stream:
+        moved = tmp_path / "moved.jsonl"
+        good.rename(moved)
+        other.rename(good)
+        # Read only the pinned original, or reject the identity change.
+        with pytest.raises(history.HistoryUnavailable, match="history_changed"):
+            history.read_codex_page(str(good), stream=stream)
+
+
 def test_scan_budget_paginates_past_non_message_records(tmp_path, monkeypatch):
     file = tmp_path / "rollout.jsonl"
     data = b"".join(record(str(i)) for i in range(10))

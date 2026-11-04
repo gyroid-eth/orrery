@@ -49,7 +49,8 @@ from usage_probe import (
     UsageCache,
     provider_from_quota_payload,
 )
-from conversation_history import HistoryUnavailable, bound_codex_agent, read_codex_page
+from conversation_history import (HistoryUnavailable, bound_codex_agent, read_codex_page,
+                                  open_bound_transcript, assert_transcript_identity)
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8791
@@ -1854,11 +1855,13 @@ async def serve_conversation(request: web.Request) -> web.Response:
                           mode="fresh_tail")
         else:
             row = await bound_row()
-            result = await asyncio.to_thread(read_codex_page, row["transcript_path"],
-                before=query.get("before"), after=query.get("after"), limit=limit)
-            current = await bound_row()
-            if current["transcript_path"] != row["transcript_path"]:
-                raise HistoryUnavailable("history_changed")
+            with open_bound_transcript(row['transcript_path']) as stream:
+                result = await asyncio.to_thread(read_codex_page, row["transcript_path"], stream=stream,
+                    before=query.get("before"), after=query.get("after"), limit=limit)
+                current = await bound_row()
+                if current["transcript_path"] != row["transcript_path"]:
+                    raise HistoryUnavailable("history_changed")
+                await asyncio.to_thread(assert_transcript_identity, row['transcript_path'], stream)
             result["mode"] = "cursor"
         return web.json_response(dict(result, ok=True, agent=name, provider="codex"),
                                  headers={"Cache-Control": "no-store"})
