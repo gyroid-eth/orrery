@@ -2,8 +2,13 @@
 (function(root){
   'use strict';
   const MESSAGES={
-    claude_next_phase:'Claude Code history is planned for the next phase.',
-    provider_unavailable:'Conversation history currently supports Codex.',
+    claude_next_phase:'Claude history is unavailable through this protected fresh projection.',
+    provider_unavailable:'This provider has no supported conversation reader.',
+    dashboard_upgrade_required:'This dashboard supports Codex history only. Claude, dsh and Hermes need telemetry API 35 or later.',
+    history_stale:'Previous conversation · this record predates the current launch. Its contents are hidden.',
+    dsh_decoder_unavailable:'dsh is unsupported on this cockpit: install the pinned zstandard dependency.',
+    history_format_unsupported:'This native history format is not supported.',
+    history_pending:'The provider has not completed its conversation header yet.',
     history_unconfirmed:'This agent has no confirmed conversation binding yet.',
     agent_unavailable:'This agent is no longer available in the live roster.',
     history_changed:'The conversation changed. Reopen History to read the current session.',
@@ -27,7 +32,7 @@
       const response=await this.fetcher('/telemetry/conversation?'+query,{cache:'no-store',signal});
       const payload=await response.json();
       if(!response.ok||payload.ok!==true){
-        const error=new Error(MESSAGES[payload.error]||'Conversation history could not be loaded.');
+        const error=new Error((MESSAGES[payload.error]||'Conversation history could not be loaded.')+(typeof payload.reason==='string'&&payload.reason?' '+payload.reason:''));
         error.code=payload.error;throw error;
       }
       if(payload.agent!==agent||!Array.isArray(payload.events))throw new Error('Invalid conversation response.');

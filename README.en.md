@@ -65,10 +65,10 @@ Pick an agent in the roster on the left, give instructions in the terminal in th
 
 ## What you can do
 
-### Read a Codex conversation (Conversation history)
+### Read a conversation (Conversation history)
 
 Turn on **Settings → Appearance → Conversation history**, then press **History**
-in a pane header to read Codex messages in a read-only panel with a scrollbar.
+in a pane header to read agent messages in a read-only panel with a scrollbar.
 It is off by default. Closing restores the visible terminal area; switching the
 setting off removes the button and stops history requests. The terminal grid is
 preserved and clipped, so opening/closing History does not resize a CLAIMED pane.
@@ -89,8 +89,11 @@ Selected pane actions**. The existing default remains: automatically claim a
 session with no interactive client, follow one with an interactive client,
 and let a manual choice take priority.
 
-Codex is supported first; Claude Code is planned for the next phase. Legacy can
-**Load earlier**. Fresh uses the protected API's recent text snapshot (up to 200
+Legacy supports Codex, plus bound Claude, dsh and Hermes records with Telemetry
+API 35 or later. Older dashboards support Codex only. Stale bindings show
+“Previous conversation” and a reason without reading a body. Claude, Codex and
+dsh can **Load earlier**. dsh shows a recorded append timeline; Hermes shows a
+bounded active-segment snapshot (up to 200 events), excluding earlier segments. Fresh uses the protected API's recent text snapshot (up to 200
 messages, subject to upstream byte limits); older pages and tool summaries are
 unavailable there. If updates pause at the reader's retention limit, **Latest**
 reloads the newest window and resumes. See [operation and limits](bridge/README.md).

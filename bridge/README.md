@@ -19,7 +19,7 @@ would need to label that limited capture, or use a separate provider history
 source; it cannot supply an accurate live TUI scrollbar from these rows.
 
 **Settings → Appearance → Conversation history** adds a `History` button to
-the pane header (off by default). It opens a read-only Codex transcript next to
+the pane header (off by default). It opens a read-only provider conversation next to
 the terminal; on narrow screens it fills the pane until closed. The scrollbar
 describes the loaded messages, not the live TUI position. `Load earlier` reads
 older records, and new output follows only while the reader is at the bottom.
@@ -32,15 +32,43 @@ The single preference uses the existing shared preference mechanism; transcript
 contents and reading position are never saved as preferences.
 
 The additive `GET /telemetry/conversation?agent=<name>` endpoint accepts an
-agent and optional byte cursors (`before` or `after`), never a filesystem path.
-In legacy mode only a dashboard `history_binding=bound` Codex row can select
-the file; every path component rejects symlinks, and the descriptor stays pinned
+agent and optional opaque cursors (`before` or `after`), never a filesystem path.
+In legacy mode only a dashboard `history_binding=bound` row can select a source.
+API 35 or later adds Claude Code JSONL, dsh V4 JSONL/concatenated Zstd frames and
+Hermes SQLite alongside Codex. An older dashboard retains Codex support and
+explicitly reports the other readers as unsupported. Stale bindings show
+**Previous conversation**, with the reason and no body; unbound records also
+show a reason without reading a source. Native session ID and receipt timestamp
+participate in context resets, cursor fingerprints and binding rechecks.
+
+Every source path component rejects symlinks, and the descriptor stays pinned
 through the authoritative binding recheck and a final path/descriptor identity
-check. Native rollout filenames must also match their session header. Provider reasoning,
-raw tool arguments and raw tool results are omitted; tool names are shown as summaries.
-Each read scans at most 4 MiB, returns at most 200 events (80 by default), and
-shortens individual messages beyond 64 Ki characters. It never sends terminal
-input. Claude Code support is planned for a separate change.
+check. Native metadata must match the bound session. Provider reasoning and raw
+tool arguments/results are omitted. Calls show names; results show completion
+or failure summaries. Messages are shortened beyond 64 Ki characters.
+
+- **Codex:** existing byte cursor behavior and protected fresh projection remain.
+- **Claude:** complete JSONL record/block cursors; native `sessionId` is checked.
+  Sidechain/meta records and thinking blocks are excluded. `Read`, `Write` and
+  `Edit` calls can produce confined file chips and recorded edit-request diffs.
+- **dsh:** V4 only, human-source user messages and assembled assistant text.
+  This is a **recorded append timeline**, not reconstruction of the model's
+  current context: replacement/compaction/injection events are excluded.
+  Independent frames have frame/line/block cursors. Each request bounds compressed
+  input and decoded output to 4 MiB and 512 frames; an unfinished final frame
+  stays pending. Invalid complete frames fail explicitly. `zstandard==0.23.0`
+  is pinned in requirements; if missing, dsh reports unsupported without a
+  guessed decoder or provider executable. Recorded fs-result hunks are supported.
+- **Hermes:** exact `history_session_id` on every message query, `mode=ro`,
+  query-only SQL, no migrations, writes or WAL checkpoints. Committed WAL rows
+  remain visible. The reader replaces a bounded **active bound-segment snapshot**
+  (up to 200 events / 4 MiB scanned), reflecting edits/rewinds. It excludes hidden,
+  model-only, inactive and summary rows; it does not follow compression ancestry
+  or claim full Hermes display fidelity. There are no earlier pages in this mode.
+
+Other cursor pages return up to 200 events (80 by default), with a 4 MiB scan
+window. No reader sends terminal input. SQLite can use its normal read-only
+WAL/SHM coordination; the reader does not promise immutable sidecar lock bytes.
 
 In explicit fresh mode the same endpoint uses the existing protected dashboard
 history route and its public text projection, with the bound I/A and current
@@ -48,7 +76,7 @@ target rechecked. This mode replaces a recent snapshot of up to 200 text message
 labels upstream truncation, and does not offer older pages or tool summaries. Full cursor
 support there requires extending Telemetry's protected history API rather than
 opening raw transcript paths in cockpit. Data acquisition lives in
-`conversation_history.py` / `conversation_source.js`, and presentation in
+`conversation_history.py` / `conversation_readers.py` / `conversation_source.js`, and presentation in
 `conversation_view.js` / `conversation_view.css`; the view's optional
 `renderEvent(event, defaultRenderer)` adapter allows future reference/preview UI.
 
@@ -58,12 +86,13 @@ opening raw transcript paths in cockpit. Data acquisition lives in
 `view_image`, `read_file`, `write_file`, `Read` and `Edit` arguments produce file
 chips when permitted. Codex's static `functions.exec` literal wrappers are also
 supported, without evaluating JavaScript. Computed calls, shell-command paths,
-free-form Markdown, tool-result discovery and embedded/remote attachments are
-not reference sources in this version. Claude's binding still needs Telemetry
-support; parsing an Edit shape does not enable Claude history.
+free-form Markdown and embedded/remote attachments are not reference sources.
+Only structured calls and dsh's known filesystem result-hunk metadata grant
+references; generic result bodies never grant file access.
 
-Diffs show the **recorded edit request**, with **outcome unconfirmed**, never a
-diff recomputed from disk or a claim that the tool succeeded. Expand the diff
+Call diffs show the **recorded edit request**, with **outcome unconfirmed**.
+dsh filesystem-result diffs are labeled **Recorded file tool result · contextual
+hunk**. Neither is recomputed from disk or treated as proof of the current file. Expand the diff
 to see colored added/removed lines. Selecting a file chip expands History and
 opens a split preview; **× Preview** returns to the full-width reader. On a
 phone the preview takes the reader area until closed. The preview is labeled
@@ -101,7 +130,9 @@ References expire after 15 minutes, are capped at 4096 and are revalidated
 against the live binding, pinned transcript inode and original record digest
 for every read. Browser input cannot register a reference or broaden a root.
 
-The default preview root is the bound Codex `session_meta.payload.cwd`.
+The default preview root is the bound native workspace: Codex's
+`session_meta.payload.cwd`, Claude's first native message `cwd`, dsh's session
+header `cwd`, or Hermes's exact `sessions.cwd`. A missing cwd grants no default root.
 `--conversation-workspace-root /absolute/project` adds an operator-selected
 workspace (for example after moving a session to another worktree); it permits
 recorded text/raster references under that directory. Repeat
@@ -190,7 +221,7 @@ The unified backend keeps browser traffic same-origin:
 | --- | --- |
 | `/ws` | tmux control-mode sessions, WS protocol v2 |
 | `/telemetry/agents?scope=` | `:8770/api/agents` (`scope=live`: the live rows and the retired names, which the roster poll asks for) |
-| `/telemetry/conversation?agent=&before=&after=&limit=` | read-only bound Codex history; `before` and `after` are mutually exclusive |
+| `/telemetry/conversation?agent=&before=&after=&limit=` | read-only bound provider history; `before` and `after` are mutually exclusive |
 | `/telemetry/messages?since=&limit=` | `:8770/api/messages-since` |
 | `/telemetry/graph?all=&days=` | `:8770/api/graph` (spawn lineage) |
 | `POST /telemetry/spawn` | JSON object proxy to `:8770/api/spawn`; dashboard response passes through |

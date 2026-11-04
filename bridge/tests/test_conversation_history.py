@@ -208,8 +208,8 @@ def test_api_rejects_browser_paths_and_bad_selectors_before_reading(tmp_path, mo
     ({"history_binding": "pending"}, "history_unconfirmed"),
     ({"history_binding": "unconfirmed"}, "history_unconfirmed"),
     ({"transcript_path": None}, "history_unconfirmed"),
-    ({"program": "claude-code"}, "claude_next_phase"),
-    ({"program": "hermes"}, "provider_unavailable"),
+    ({"program": "claude-code"}, "dashboard_upgrade_required"),
+    ({"program": "hermes"}, "dashboard_upgrade_required"),
 ])
 def test_api_does_not_fall_back_to_other_provider_or_unconfirmed_file(tmp_path, monkeypatch, row_update, error):
     async def scenario(client, url, reads):
@@ -230,7 +230,7 @@ def test_binding_change_during_read_returns_no_events(tmp_path, monkeypatch):
 def test_fresh_uses_protected_projected_history_without_raw_file_reads(tmp_path, monkeypatch):
     def forbidden(*args, **kwargs):
         raise AssertionError("Fresh must not read a raw transcript")
-    monkeypatch.setattr(backend, "read_codex_page", forbidden)
+    monkeypatch.setattr(backend, "open_reader", forbidden)
     async def scenario(client, url, reads):
         async with client.get(url + "/telemetry/conversation?agent=BoundAgent") as response:
             payload = await response.json()

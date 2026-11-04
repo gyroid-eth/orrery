@@ -143,7 +143,7 @@ def test_same_name_provider_and_binding_changes_clear_previous_records(cockpit):
     assert js("document.querySelectorAll('.conversation-event').length") == 0
     js("currentAgents[0].program='claude-code';document.dispatchEvent(new Event('oc:agents'))")
     assert js("document.querySelectorAll('.conversation-event').length") == 0
-    assert js("document.querySelector('.conversation-toolbar .conversation-status').textContent.includes('next phase')")
+    assert js("document.querySelector('.conversation-subtitle').textContent.includes('ReviewFixture')")
 
 
 def test_fresh_is_a_bounded_snapshot_and_legacy_retention_has_a_byte_cap(cockpit):
@@ -332,3 +332,30 @@ def test_pane_status_is_noninteractive_text_separate_from_buttons(cockpit):
     assert js("getComputedStyle(scrBadge).cssText+getComputedStyle(scrBadge).color+getComputedStyle(scrBadge).backgroundColor+getComputedStyle(scrBadge).borderTopWidth")==before
     js("document.querySelector('.conversation-scroll').focus();scrBadge.focus()")
     assert not js('document.activeElement===scrBadge')
+
+
+def test_provider_labels_snapshot_rewrite_and_receipt_changes_clear(cockpit):
+    js,wait,client,requests,enable=cockpit
+    enable(mode='snapshot',count=1)
+    js("""OrreryConversationSource.Source.prototype.read=async()=>({ok:true,agent:'ReviewFixture',provider:'hermes',mode:'snapshot',events:[{id:'same',kind:'text',role:'assistant',text:'first'}],after:'snapshot',notice:'Active segment'});conversationView.refresh()""")
+    wait("document.querySelector('.conversation-text').textContent==='first'")
+    assert js("document.querySelector('.conversation-role').textContent")== 'Hermes'
+    js("""OrreryConversationSource.Source.prototype.read=async()=>({ok:true,agent:'ReviewFixture',provider:'hermes',mode:'snapshot',events:[{id:'same',kind:'text',role:'assistant',text:'rewritten'}],after:'snapshot'});conversationView.refresh()""")
+    wait("document.querySelector('.conversation-text').textContent==='rewritten'")
+    js("OrreryConversationSource.Source.prototype.read=()=>new Promise(()=>{});currentAgents[0].history_session_id='changed';document.dispatchEvent(new Event('oc:agents'))")
+    assert js("document.querySelectorAll('.conversation-event').length")==0
+    for program,label in [('claude-code','Claude'),('dsh','dsh')]:
+        js("OrreryConversationSource.Source.prototype.read=async()=>({events:[{id:'x',kind:'text',role:'assistant',text:'visible'}]});currentAgents[0].program="+json.dumps(program)+";document.dispatchEvent(new Event('oc:agents'))")
+        wait("document.querySelector('.conversation-event')!==null")
+        assert js("document.querySelector('.conversation-role').textContent")==label
+        js("OrreryConversationSource.Source.prototype.read=()=>new Promise(()=>{});currentAgents[0].history_receipt_ts=String(Date.now());document.dispatchEvent(new Event('oc:agents'))")
+        assert js("document.querySelectorAll('.conversation-event').length")==0
+
+
+def test_stale_removes_previous_body_and_explains_previous_conversation(cockpit):
+    js,wait,client,requests,enable=cockpit
+    enable(count=2)
+    js("OrreryConversationSource.Source.prototype.read=async()=>{const e=new Error('Previous conversation · fixture reason');e.code='history_stale';throw e};conversationView.refresh()")
+    wait("document.querySelectorAll('.conversation-event').length===0")
+    assert js("document.querySelector('.conversation-empty').textContent.includes('Previous conversation')")
+    assert js("document.querySelector('.conversation-toolbar .conversation-status').textContent.includes('fixture reason')")

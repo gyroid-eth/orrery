@@ -22,7 +22,7 @@ from pathlib import Path
 
 from PIL import Image
 from conversation_artifacts import extract_artifacts, secret_path, redact
-from conversation_history import open_bound_transcript, assert_transcript_identity, HistoryUnavailable
+from conversation_history import open_bound_transcript, assert_transcript_identity, HistoryUnavailable, open_reader
 
 MAX_RECORD=1024*1024
 MAX_TEXT=128*1024
@@ -37,7 +37,7 @@ class PreviewUnavailable(ValueError): pass
 
 
 def binding(row):
-    keys=('name','program','history_binding','transcript_path','native_session_id','created','mail_instance_id','mail_agent_id')
+    keys=('name','program','history_binding','transcript_path','native_session_id','history_session_id','history_receipt_ts','created','mail_instance_id','mail_agent_id')
     return tuple(row.get(key) for key in keys)
 
 
@@ -46,6 +46,9 @@ def identity(stream):
 
 
 def record_at(stream,offset):
+    if hasattr(stream,'provider'):
+        if stream.provider!='codex':return stream.record_at(str(offset))
+        stream=stream.stream
     if offset<0:raise PreviewUnavailable('reference_expired')
     if offset and os.pread(stream.fileno(),1,offset-1)!=b'\n':raise PreviewUnavailable('reference_expired')
     data=os.pread(stream.fileno(),MAX_RECORD+1,offset)
@@ -56,6 +59,9 @@ def record_at(stream,offset):
 
 
 def workspace(stream):
+    if hasattr(stream,'provider'):
+        if stream.provider!='codex':return root_path(stream.cwd) if isinstance(stream.cwd,str) else None
+        stream=stream.stream
     try:
         first=json.loads(os.pread(stream.fileno(),65536,0).split(b'\n',1)[0])
         cwd=first['payload']['cwd'] if first.get('type')=='session_meta' else None
@@ -127,7 +133,7 @@ class ReferenceStore:
     def decorate(self,row,stream,event):
         """Only called on selected events from an already pinned bound transcript."""
         try:
-            item,digest=record_at(stream,int(event['id']));projection=extract_artifacts(item);cwd=workspace(stream)
+            item,digest=record_at(stream,event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id']));projection=extract_artifacts(item);cwd=workspace(stream)
         except (PreviewUnavailable,ValueError):return
         if projection['diff']:
             event['diff']=projection['diff'];event['diff_status']=projection['diff_status']
@@ -140,7 +146,7 @@ class ReferenceStore:
                 key=(binding(row),identity(stream),event['id'],digest,index,str(path))
                 ref=next((id_ for id_,data in self.refs.items() if data['key']==key),None)
                 if ref is None:ref=secrets.token_urlsafe(24)
-                self.refs[ref]=dict(key=key,row=binding(row),inode=identity(stream),offset=int(event['id']),digest=digest,index=index,expires=self.clock()+self.ttl)
+                self.refs[ref]=dict(key=key,row=binding(row),inode=identity(stream),offset=event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id']),digest=digest,index=index,expires=self.clock()+self.ttl)
                 self.refs.move_to_end(ref)
                 refs.append(dict(id=ref,label=redact(path.name)[:160],kind='image' if path.suffix.lower() in IMAGE_EXT else 'file'))
             self.prune()
@@ -152,8 +158,8 @@ class ReferenceStore:
             if not entry or binding(row)!=entry['row']:raise PreviewUnavailable('reference_expired')
             entry=dict(entry)
         try:
-            with open_bound_transcript(row['transcript_path']) as stream:
-                assert_transcript_identity(row['transcript_path'],stream)
+            with open_reader(row) as stream:
+                stream.assert_identity()
                 if identity(stream)!=entry['inode']:raise PreviewUnavailable('reference_expired')
                 item,digest=record_at(stream,entry['offset'])
                 if digest!=entry['digest']:raise PreviewUnavailable('reference_expired')
@@ -166,7 +172,7 @@ class ReferenceStore:
                 # before publishing; append-only transcript growth is allowed.
                 if record_at(stream,entry['offset'])[1]!=entry['digest']:raise PreviewUnavailable('reference_expired')
                 if self.policy(paths[entry['index']],workspace(stream))!=path:raise PreviewUnavailable('reference_expired')
-                assert_transcript_identity(row['transcript_path'],stream)
+                stream.assert_identity()
             return path if reveal else result
         except (HistoryUnavailable,OSError,ValueError,KeyError,TypeError) as exc:
             if isinstance(exc,PreviewUnavailable):raise

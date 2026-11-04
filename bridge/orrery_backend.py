@@ -49,8 +49,7 @@ from usage_probe import (
     UsageCache,
     provider_from_quota_payload,
 )
-from conversation_history import (HistoryUnavailable, bound_codex_agent, read_codex_page,
-                                  open_bound_transcript, assert_transcript_identity)
+from conversation_history import (HistoryUnavailable, bound_agent, open_reader)
 from conversation_artifacts import redact
 from conversation_preview import ReferenceStore, PreviewUnavailable, binding as conversation_binding
 
@@ -1788,10 +1787,21 @@ async def proxy_dashboard(request: web.Request) -> web.Response:
 
 
 async def conversation_bound_row(request: web.Request, name: str) -> dict:
-    async with request.app[HTTP_SESSION_KEY].get(DASHBOARD_URL + '/api/agents?scope=live') as response:
+    session=request.app[HTTP_SESSION_KEY]
+    async with session.get(DASHBOARD_URL + '/api/agents?scope=live') as response:
         if response.status != 200:
             raise HistoryUnavailable('dashboard_unavailable')
-        return bound_codex_agent(await response.json(), name)
+        payload=await response.json()
+    rows=payload.get('agents',[]) if isinstance(payload,dict) else []
+    other=any(isinstance(row,dict) and row.get('name')==name
+              and row.get('program') not in {'codex','codex-cli'} for row in rows)
+    api=34
+    if other:
+        async with session.get(DASHBOARD_URL+'/api/version') as response:
+            version=await response.json() if response.status==200 else {}
+        value=version.get('api') if isinstance(version,dict) else None
+        if isinstance(value,int) and not isinstance(value,bool):api=value
+    return bound_agent(payload,name,api_generation=api)
 
 
 async def serve_conversation(request: web.Request) -> web.Response:
@@ -1821,6 +1831,7 @@ async def serve_conversation(request: web.Request) -> web.Response:
     async def bound_row():
         return await conversation_bound_row(request, name)
 
+    provider="codex"
     try:
         if isinstance(boundary, FreshTargetBoundary):
             target = await asyncio.to_thread(boundary.resolve, name)
@@ -1862,26 +1873,34 @@ async def serve_conversation(request: web.Request) -> web.Response:
                           mode="fresh_tail")
         else:
             row = await bound_row()
-            with open_bound_transcript(row['transcript_path']) as stream:
-                result = await asyncio.to_thread(read_codex_page, row["transcript_path"], stream=stream,
-                    before=query.get("before"), after=query.get("after"), limit=limit)
-                store = request.app.get(CONVERSATION_REFERENCES_KEY)
+            # Keep the no-follow descriptor pinned across the authoritative
+            # recheck. Operations on this request's private reader are serial.
+            manager=open_reader(row)
+            reader=await asyncio.to_thread(manager.__enter__)
+            try:
+                provider=reader.provider
+                result=await asyncio.to_thread(reader.read_page,
+                    before=query.get('before'),after=query.get('after'),limit=limit)
+                store=request.app.get(CONVERSATION_REFERENCES_KEY)
                 if store is not None:
                     for event in result['events']:
-                        if event['kind']=='tool':
-                            await asyncio.to_thread(store.decorate, row, stream, event)
-                current = await bound_row()
-                if conversation_binding(current) != conversation_binding(row):
-                    raise HistoryUnavailable("history_changed")
-                await asyncio.to_thread(assert_transcript_identity, row['transcript_path'], stream)
-            result["mode"] = "cursor"
+                        if event['kind'] in {'tool','tool_result'}:
+                            await asyncio.to_thread(store.decorate,row,reader,event)
+                current=await bound_row()
+                if conversation_binding(current)!=conversation_binding(row):raise HistoryUnavailable('history_changed')
+                await asyncio.to_thread(reader.assert_identity)
+            finally:
+                await asyncio.to_thread(manager.__exit__,None,None,None)
+            result.setdefault('mode','cursor')
         for event in result['events']:
             event['text'] = redact(event['text'])
-        return web.json_response(dict(result, ok=True, agent=name, provider="codex"),
+        return web.json_response(dict(result, ok=True, agent=name, provider=provider),
                                  headers={"Cache-Control": "no-store"})
     except HistoryUnavailable as exc:
-        return web.json_response({"ok": False, "error": str(exc)}, status=409 if str(exc) == "history_changed" else 400,
+        return web.json_response(dict(ok=False,error=str(exc),**({"reason":exc.reason} if getattr(exc,"reason","") else {})), status=409 if str(exc) == "history_changed" else 400,
                                  headers={"Cache-Control": "no-store"})
+    except sqlite3.Error:
+        return web.json_response({"ok":False,"error":"history_unreadable"},status=400,headers={"Cache-Control":"no-store"})
     except TargetRefused:
         return web.json_response({"ok": False, "error": "history_unconfirmed"}, status=409,
                                  headers={"Cache-Control": "no-store"})
@@ -1922,7 +1941,7 @@ async def conversation_reference(request: web.Request, *, reveal: bool = False) 
         return web.json_response({'ok':False,'error':str(exc)},status=400,headers=headers)
     except (ClientError,asyncio.TimeoutError):
         return web.json_response({'ok':False,'error':'dashboard_unavailable'},status=502,headers=headers)
-    except (ValueError,TypeError,OSError,RevealUnavailable):
+    except (ValueError,TypeError,OSError,sqlite3.Error,RevealUnavailable):
         return web.json_response({'ok':False,'error':'preview_unavailable'},status=400,headers=headers)
 
 

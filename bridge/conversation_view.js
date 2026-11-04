@@ -45,15 +45,15 @@
     const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onActivate:()=>expand(true)});
     let enabled=false,opened=false,agent='',generation=0,controller=null,timer=0,busy=false;
     let before=null,after=null,hasOlder=false,mode='',newCount=0,events=new Map();
-    let contextKey='',paused=false,retainedBytes=0;
+    let contextKey='',paused=false,retainedBytes=0,providerLabel='Codex';
     const byteSize=event=>new TextEncoder().encode(JSON.stringify(event)).byteLength;
     const fingerprint=current=>JSON.stringify(['name','program','provider','history_binding','transcript_path',
-      'native_session_id','created','mail_instance_id','mail_agent_id'].map(key=>current[key]??null));
+      'native_session_id','history_session_id','history_receipt_ts','created','mail_instance_id','mail_agent_id'].map(key=>current[key]??null));
     function nearBottom(){return scroll.scrollHeight-scroll.clientHeight-scroll.scrollTop<45;}
     function position(){
       const atBottom=nearBottom();
       if(atBottom)newCount=0;
-      el('.conversation-position').textContent=events.size+' loaded · '+(mode==='fresh_tail'?'recent window':'loaded portion');
+      el('.conversation-position').textContent=events.size+' loaded · '+(['fresh_tail','snapshot'].includes(mode)?'recent window':'loaded portion');
       latest.textContent=paused?'Latest · resume':newCount?newCount+' new':'Latest';
     }
     function message(text){status.textContent=text;}
@@ -78,7 +78,7 @@
         const child=fromStart?eventsEl.firstElementChild:eventsEl.lastElementChild;
         if(child)child.remove();removed=true;
       }
-      if(removed&&mode!=='fresh_tail'){
+      if(removed&&!['fresh_tail','snapshot'].includes(mode)){
         const kept=[...events.values()];
         before=kept[0]?.cursor_before||before;
         if(!fromStart){after=kept[kept.length-1]?.cursor_after||after;paused=true;}
@@ -91,15 +91,15 @@
       article.dataset.eventId=event.id;article.dataset.role=event.role;article.dataset.kind=event.kind;
       const byline=document.createElement('div');byline.className='conversation-byline';
       const role=document.createElement('span');role.className='conversation-role';
-      role.textContent=event.kind==='tool'?'Tool':event.role==='user'?'You':'Codex';byline.appendChild(role);
-      if(event.kind==='tool'){
+      role.textContent=event.kind==='tool'?'Tool':event.kind==='tool_result'?'Tool result':event.role==='user'?'You':providerLabel;byline.appendChild(role);
+      if(['tool','tool_result'].includes(event.kind)){
         const tool=document.createElement('span');tool.className='conversation-tool-name';tool.textContent=event.text;byline.appendChild(tool);
       }
       const time=document.createElement('time');time.className='conversation-time';
       const date=new Date(event.ts);
       if(Number.isFinite(date.getTime())){time.dateTime=event.ts;time.textContent=date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});time.title=date.toLocaleString();}
       byline.appendChild(time);article.appendChild(byline);
-      if(event.kind!=='tool'){
+      if(!['tool','tool_result'].includes(event.kind)){
         const text=document.createElement('p');text.className='conversation-text';text.textContent=event.text;article.appendChild(text);
       }
       if(event.truncated){const note=document.createElement('div');note.className='conversation-truncated';note.textContent='Long message shortened in this reader.';article.appendChild(note);}
@@ -123,7 +123,8 @@
         const atBottom=nearBottom(),oldHeight=scroll.scrollHeight,oldTop=scroll.scrollTop,saved=anchor();
         const incoming=page.events.filter(event=>event&&typeof event.id==='string'&&typeof event.text==='string');
         mode=page.mode||'cursor';
-        const fresh=mode==='fresh_tail';
+        providerLabel=({codex:'Codex',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[page.provider]||providerLabel;
+        const fresh=['fresh_tail','snapshot'].includes(mode);
         const additions=incoming.filter(event=>!events.has(event.id));
         if(!fresh&&direction==='newer'&&!atBottom&&
           (events.size+additions.length>MAX_EVENTS||retainedBytes+additions.reduce((n,event)=>n+byteSize(event),0)>MAX_BYTES)){
@@ -133,11 +134,12 @@
         if(fresh){
           const existing=new Map([...eventsEl.children].map(child=>[child.dataset.eventId,child]));
           const previous=events;
+          if([...previous].some(([id,event])=>JSON.stringify(event)!==JSON.stringify(incoming.find(next=>next.id===id))))preview?.close();
           events=new Map();retainedBytes=0;
           for(const event of incoming.slice(-200)){
             if(events.has(event.id))continue;
             events.set(event.id,event);retainedBytes+=byteSize(event);
-            fragment.appendChild(existing.get(event.id)||draw(event));if(!previous.has(event.id))added++;
+            fragment.appendChild(existing.has(event.id)&&JSON.stringify(previous.get(event.id))===JSON.stringify(event)?existing.get(event.id):draw(event));if(!previous.has(event.id))added++;
           }
           eventsEl.replaceChildren(fragment);
         }else{
@@ -157,9 +159,10 @@
         else if(direction==='older')restoreAnchor(saved,Math.max(0,oldTop+scroll.scrollHeight-oldHeight));
         else{restoreAnchor(saved,oldTop);newCount+=added;}
         message(paused?'Reader window is bounded. Latest resumes at the newest messages.':
+          mode==='snapshot'?page.notice||'Read-only · recent provider snapshot':
           fresh?(page.limited||trimmed?'Fresh · limited recent snapshot; earlier history and tools need telemetry support.':'Fresh · recent snapshot (up to 200 messages).'):
           trimmed?'Older loaded messages were released. Load earlier to read them again.':
-          page.skipped_large_record?'A large record was skipped. Load earlier to continue.':'Read-only · updates while open');
+          page.skipped_large_record?'A large record was skipped. Load earlier to continue.':page.notice||'Read-only · updates while open');
         position();
         if(page.has_newer&&direction!=='older'){
           // A bounded page per request. Continue in the next poll without
@@ -168,14 +171,14 @@
         }
       }catch(error){
         if(token!==generation||error.name==='AbortError')return;
-        pollAgain=!['history_changed','record_too_large','provider_unavailable','claude_next_phase'].includes(error.code);
+        pollAgain=!['history_changed','record_too_large','provider_unavailable','claude_next_phase','dashboard_upgrade_required','dsh_decoder_unavailable','history_format_unsupported'].includes(error.code);
         message(error.message);retry.hidden=false;
-        if(!events.size){empty.hidden=false;empty.textContent=error.code==='claude_next_phase'?
-          'Claude Code support comes in the next phase. Codex history is available now.':'History is unavailable for this agent.';}
-        if(['history_changed','history_unconfirmed','agent_unavailable','claude_next_phase','provider_unavailable'].includes(error.code)){
-          // Never combine different provider sessions under one agent name.
-          clear();retry.hidden=false;
-          empty.hidden=false;empty.textContent='Session changed. Retry to load the current conversation.';position();
+        if(['history_changed','history_unconfirmed','history_stale','agent_unavailable','claude_next_phase','provider_unavailable','dashboard_upgrade_required','dsh_decoder_unavailable','history_format_unsupported','history_unreadable','history_pending'].includes(error.code)){
+          // Never retain content from a stale, unbound or different native session.
+          clear();retry.hidden=false;empty.hidden=false;
+          empty.textContent=error.code==='history_stale'?'Previous conversation · contents hidden.':
+            error.code==='history_changed'?'Session changed. Retry to load the current conversation.':'History is unavailable for this agent.';
+          position();
         }
       }finally{
         if(token===generation){busy=false;controller=null;earlier.disabled=false;if(pollAgain)schedule();}
@@ -188,10 +191,7 @@
       stop();agent=name;contextKey=key;clear();
       el('.conversation-subtitle').textContent=(agent||'No pane selected')+' · read-only';
       if(!agent){empty.textContent='Select an agent pane to read its conversation.';message('No agent selected');return;}
-      if(/^claude/.test(current.program||'')){
-        empty.textContent='Claude Code support comes in the next phase. Codex history is available now.';
-        message('Claude Code · next phase');return;
-      }
+      providerLabel=({'claude-code':'Claude',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[current.program]||'Codex';
       load();
     }
     function close({focus=true}={}){

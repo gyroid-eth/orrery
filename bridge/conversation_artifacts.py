@@ -125,7 +125,23 @@ def static_calls(text):
 
 def extract_artifacts(item: dict) -> dict:
     result=dict(paths=[],diff='',diff_status='Recorded edit request · outcome unconfirmed')
-    if not isinstance(item,dict) or item.get('type')!='response_item':return result
+    if not isinstance(item,dict):return result
+    if item.get('type')=='recorded_fs_result':
+        # dsh-tool-fs stores contextual before/after hunks at result time.
+        paths=[];diffs=[]
+        values=item.get('diffs')
+        for value in values[:MAX_REFS] if isinstance(values,list) else []:
+            if not isinstance(value,dict):continue
+            path=value.get('path');old=value.get('oldText');new=value.get('newText')
+            if (not isinstance(path,str) or secret_path(path) or len(path)>4096
+                    or not (old is None or isinstance(old,str)) or not isinstance(new,str)):continue
+            paths.append(path)
+            diffs.extend(['--- '+redact(PurePath(path).name),'+++ '+redact(PurePath(path).name),'@@ recorded result hunk @@'])
+            diffs.extend('-'+redact(x) for x in (old or '')[:MAX_DIFF].splitlines())
+            diffs.extend('+'+redact(x) for x in new[:MAX_DIFF].splitlines())
+            if sum(map(len,diffs))>=MAX_DIFF:break
+        return dict(paths=paths,diff='\n'.join(diffs)[:MAX_DIFF],diff_status='Recorded file tool result · contextual hunk')
+    if item.get('type')!='response_item':return result
     p=item.get('payload')
     if not isinstance(p,dict) or p.get('type') not in {'function_call','custom_tool_call'}:return result
     if not isinstance(p.get('name'),str):return result
@@ -169,11 +185,31 @@ def extract_artifacts(item: dict) -> dict:
                 elif safe and (line.startswith(('+','-',' ','@@')) or line=='*** End of File'):
                     diff(redact(line))
                 if diff_bytes>=MAX_DIFF:break
-        elif isinstance(value,dict) and name in {'view_image','read_file','write_file','Read','Edit'}:
+        elif isinstance(value,dict) and name in {'view_image','read_file','write_file','Read','Write','Edit','read','write','edit','patch'}:
             path(value.get('path',value.get('file_path')))
-            if name=='Edit':
+            if name in {'Edit','edit','patch'}:
                 old,new=value.get('old_string'),value.get('new_string')
-                if isinstance(old,str) and isinstance(new,str) and not secret_path(str(value.get('file_path',''))):
+                filename=value.get('file_path',value.get('path'))
+                if isinstance(filename,str) and filename and isinstance(old,str) and isinstance(new,str) and not secret_path(filename):
                     for line in ['@@ recorded replacement @@']+['-'+redact(x) for x in old[:MAX_DIFF].splitlines()]+['+'+redact(x) for x in new[:MAX_DIFF].splitlines()]:diff(line)
+            if name=='patch' and isinstance(value.get('patch'),str):
+                # Hermes unified patch request. Only explicit file headers grant
+                # paths; omit sensitive file hunks and all arbitrary prose.
+                safe=False;previous=None
+                for line in value['patch'][:MAX_INPUT].splitlines()[:4000]:
+                    if line.startswith(('--- ','+++ ')):
+                        target=line[4:].split('\t',1)[0]
+                        if target.startswith(('a/','b/')):target=target[2:]
+                        allowed=target=='/dev/null' or not secret_path(target)
+                        if line.startswith('--- '):
+                            previous=(target,allowed);safe=False
+                        else:
+                            safe=previous is not None and previous[1] and allowed
+                            if safe:
+                                for prefix,filename in [('--- ',previous[0]),('+++ ',target)]:
+                                    if filename!='/dev/null':path(filename)
+                                    diff(prefix+redact(PurePath(filename).name))
+                            else:diff('[sensitive or incomplete file edit omitted]')
+                    elif safe and line.startswith(('+','-',' ','@@')):diff(redact(line))
     result['diff']='\n'.join(diffs)[:MAX_DIFF]
     return result

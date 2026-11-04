@@ -1,4 +1,4 @@
-"""Bound Codex conversation records, independent of HTTP and presentation.
+"""Bound conversation records, independent of HTTP and presentation.
 
 The caller resolves the provider binding. This module never discovers sessions,
 accepts browser paths, or writes provider files. Cursors address complete JSONL
@@ -27,7 +27,7 @@ class HistoryUnavailable(ValueError):
 @contextmanager
 def open_bound_transcript(path: str):
     """Pin a regular file without following symlinks in any path component."""
-    if (not isinstance(path, str) or not os.path.isabs(path) or not path.endswith('.jsonl')
+    if (not isinstance(path, str) or not os.path.isabs(path) or not path.endswith(('.jsonl','.jsonl.zstd','/state.db','/state.db-wal','/state.db-shm'))
             or '..' in Path(path).parts or not hasattr(os, 'O_NOFOLLOW')):
         raise HistoryUnavailable('invalid_binding')
     parent = descriptor = None
@@ -205,17 +205,33 @@ def read_codex_page(path: str, *, before: str | None = None,
                 and complete_end > start, skipped_large_record=False)
 
 
-def bound_codex_agent(payload: object, name: str) -> dict:
-    """Select only an authoritative, bound Codex record; never guess a path."""
+def bound_agent(payload: object, name: str, *, api_generation: int = 34) -> dict:
+    """Only an authoritative bound provider row; no candidate/path guessing."""
     rows = payload.get("agents") if isinstance(payload, dict) else None
     matches = [row for row in rows or [] if isinstance(row, dict) and row.get("name") == name]
     if len(matches) != 1:
         raise HistoryUnavailable("agent_unavailable")
     row = matches[0]
-    if str(row.get("program", "")).startswith("claude"):
-        raise HistoryUnavailable("claude_next_phase")
-    if row.get("program") not in {"codex", "codex-cli"}:
-        raise HistoryUnavailable("provider_unavailable")
-    if row.get("history_binding") != "bound" or not isinstance(row.get("transcript_path"), str):
-        raise HistoryUnavailable("history_unconfirmed")
+    program = row.get('program')
+    if program not in {'codex','codex-cli','claude','claude-code','dsh','hermes'}:
+        raise HistoryUnavailable('provider_unavailable')
+    if program not in {'codex','codex-cli'} and api_generation < 35:
+        raise HistoryUnavailable('dashboard_upgrade_required')
+    if row.get('history_binding') != 'bound' or not isinstance(row.get('transcript_path'),str):
+        from conversation_artifacts import redact
+        error=HistoryUnavailable('history_stale' if row.get('history_binding')=='stale' else 'history_unconfirmed')
+        error.reason=redact(str(row.get('history_binding_reason') or ''))[:512]
+        raise error
+    if program not in {'codex','codex-cli'} and not row.get('history_session_id'):
+        raise HistoryUnavailable('invalid_binding')
     return row
+
+
+def bound_codex_agent(payload: object, name: str) -> dict:
+    """Compatibility selector for callers using the pre-35 contract."""
+    return bound_agent(payload,name)
+
+
+def open_reader(row):
+    from conversation_readers import open_reader as native_reader
+    return native_reader(row)
