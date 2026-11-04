@@ -696,7 +696,7 @@
   .split-cell-status{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-faint);font:9px var(--mono);text-transform:uppercase;cursor:default}
   .split-cell-status::before{content:'●';font-size:7px;margin-right:5px}
   .split-cell-status.live{color:var(--amber)}
-  .split-cell.focused>.split-cell-head{box-shadow:inset 3px 0 var(--amber)}
+  .split-cell.focused > .split-cell-head{box-shadow:inset 3px 0 var(--amber)}
   .pane-action-short,.pane-action-icon{display:none}
   @container split-pane (max-width:320px){
     .split-pane-headers .split-cell-head{gap:4px;padding:5px 6px}
@@ -2296,6 +2296,21 @@
             "value": "var(--hair-2)"
           },
           {
+            "property": "background",
+            "selector": ".split-pane-headers .split-cell-head",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".split-pane-headers .split-cell-head",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".split-cell-status",
+            "value": "var(--ink-faint)"
+          },
+          {
             "property": "color",
             "selector": ".split-cell-label",
             "value": "var(--ink)"
@@ -3589,6 +3604,11 @@
           },
           {
             "property": "color",
+            "selector": ".split-cell-status",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
             "selector": ".split-cell-label .scl-role",
             "value": "var(--ink-dim)"
           },
@@ -4074,7 +4094,7 @@
         "unit": "effect-component"
       },
       "source": {
-        "digest": "d23d31764c892a874dc5f7fc2f7c162d5ffbbf3d8504a166e0d7d12fef958ca1",
+        "digest": "37547ded6be1c92c5abf017d46a7d19c166a5344d1b443aae01362d1711e7cf2",
         "records": [
           ":root\u0000--amber-glow",
           ".miniorrery.telemetry-network\u0000background",
@@ -4104,7 +4124,9 @@
           ".sendguard\u0000box-shadow",
           ".network-panel\u0000box-shadow",
           ".split-cell.focused\u0000box-shadow",
+          ".split-cell.focused > .split-cell-head\u0000box-shadow",
           ".split-cell-label\u0000box-shadow",
+          ".split-pane-headers .split-cell-label\u0000box-shadow",
           ".split-cell.drop-target\u0000box-shadow",
           ".split-drag-ghost\u0000box-shadow",
           ".split-divider:hover::after,.split-divider.dragging::after\u0000box-shadow",
@@ -4135,7 +4157,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "3e17d31cdbcd66277b745e6bddb3cf21be4ef94cb1293d3ae8eaa3364d9e9a83",
+        "digest": "6afbaf1c646834d042c3ddcfa99469f72aafa466ee714355d06ba8803df70134",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4184,6 +4206,8 @@
           ".slashmenu .sm-desc\u0000font-size",
           ".sendguard .sg-msg\u0000font-size",
           ".network-note\u0000font-size",
+          ".split-cell-status::before\u0000font-size",
+          ".split-cell-actions .cockpit-control\u0000font-size",
           ".split-cell-label\u0000font-size",
           ".split-cell-label .scl-role\u0000font-size",
           ".split-drag-ghost\u0000font-size",
@@ -4274,7 +4298,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "6962e218560441f46e357232da0b523d6a20e828142b47fb159eaeeee7dabd8d",
+        "digest": "4141ef875c25c5212541d51cdd46a851ae1efd9b976c7d358fb10ccf5d077c0a",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4320,9 +4344,9 @@
       }
     }
   },
-  "inventory_digest": "9a355b3a128e6217c9fb7c9fe7358f60a2c37104c156d43bc40fc19e66cdf609",
+  "inventory_digest": "9ae41ec5d34089e330e5ea0b1d9db0303f9302b3d9e20747785eab5fbbd970c1",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "adc61fae9b71d133854d77ca93e6393a634758296b44a07fad3927a924563d2f",
+  "source_digest": "fcfe89859249e628ba719986f7d332cd1c32409b7b573603642cf6f606e5177b",
   "surface": "cockpit",
   "version": 1
 }
@@ -5155,7 +5179,9 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   ['.sendguard','box-shadow',['state','elevation'],'preserve'],
   ['.network-panel','box-shadow',['elevation'],'preserve'],
   ['.split-cell.focused','box-shadow',['focus'],'preserve'],
+  ['.split-cell.focused > .split-cell-head','box-shadow',['focus'],'preserve'],
   ['.split-cell-label','box-shadow',['elevation'],'preserve'],
+  ['.split-pane-headers .split-cell-label','box-shadow',['elevation'],'preserve'],
   ['.split-cell.drop-target','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .split-cell.drop-target'],
   ['.split-drag-ghost','box-shadow',['elevation','emissive'],'scale','html[data-theme-axis="glow"] .split-drag-ghost'],
   ['.split-divider:hover::after, .split-divider.dragging::after','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .split-divider:hover::after, html[data-theme-axis="glow"] .split-divider.dragging::after'],
@@ -10464,6 +10490,7 @@ function composerTargetPresent(target){
   showToast(`send cancelled → ${target.session}: terminal changed; select the target and retry`,true);
   return false;
 }
+let promptSubmissionSequence=0;
 function sendPrompt(opts){
   const bypass=opts&&opts.bypassGuard;
   const text=promptInput.value;
@@ -10478,11 +10505,12 @@ function sendPrompt(opts){
   // one bracketed paste (multiline stays one block in the TUI input box),
   // then a separate CR to submit — same shape the pty expects from a human.
   if(!send({type:"input",paneId:target.paneId,data:"\x1b[200~"+text+"\x1b[201~"})){showToast('not connected — try again');return;}
+  const submittedAt=Date.now();
   setTimeout(()=>{
     if(!composerTargetPresent(target))return;
     if(send({type:"input",paneId:target.paneId,data:"\r"})){
       document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'talk',name:p.session}}));
-      document.dispatchEvent(new CustomEvent('oc:prompt-submitted',{detail:{name:target.session}}));
+      document.dispatchEvent(new CustomEvent('oc:prompt-submitted',{detail:{name:target.session,text,submittedAt,id:submittedAt+':'+(++promptSubmissionSequence)}}));
     }else showToast(`send cancelled → ${target.session}: disconnected before Enter; reconnect and retry`,true);
   },250);
   pushPromptHistory(text);
@@ -10853,10 +10881,12 @@ const conversationView=(()=>{
       await asset('script','src','conversation_preview.js');
       await asset('script','src','conversation_mail.js');
       await asset('script','src','conversation_terminal.js');
+      await asset('script','src','conversation_markdown.js');
       await asset('script','src','conversation_view.js');
       instance=OrreryConversation.mountWorkspace({
         getContext:(selected)=>{const name=selected||activeSession();return {...(currentAgents.find(a=>a.name===name)||{name}),terminalPaneId:paneIdForSession(name)};},
         getSlots:()=>splitVisible?splitSessions.map(name=>({name,host:splitCells.get(name),controlHost:splitCells.get(name)?._actions})).filter(slot=>slot.host?.isConnected):[],
+        getOwner:name=>panes.get(paneIdForSession(name)),
         activate:name=>focusSplitSession(name),
         jumpToEvent:jumpConversationEvent,
       });

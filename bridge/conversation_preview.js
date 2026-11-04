@@ -2,15 +2,15 @@
    URLs are accepted here. Only server reference IDs cross the data boundary. */
 (function(root){
   'use strict';
-  function mount({host,source,onActivate=()=>{}}){
+  function mount({host,source,onActivate=()=>{},onBeforeOpen=()=>{},onClose=()=>{}}){
     let request=null,generation=0,objectUrl=null,selected=null;
     const create=(tag,cls,text)=>{const el=document.createElement(tag);el.className=cls;if(text!==undefined)el.textContent=text;return el;};
     const button=(cls,text,action)=>{const el=create('button','cockpit-control conversation-action '+cls,text);el.type='button';el.addEventListener('click',action);return el;};
     function cancel(){generation++;if(request)request.abort();request=null;if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl=null;}
     function markSelected(){host.closest('.conversation-panel').querySelectorAll('.conversation-file').forEach(chip=>chip.setAttribute('aria-pressed',String(chip.dataset.refId===selected?.id)));}
-    function close(){cancel();selected=null;markSelected();host.hidden=true;host.replaceChildren();host.parentElement.classList.remove('conversation-has-preview');}
+    function close(){cancel();selected=null;markSelected();host.hidden=true;host.replaceChildren();host.parentElement.classList.remove('conversation-has-preview');onClose();}
     async function open(ref){
-      cancel();selected=ref;markSelected();const token=generation;request=new AbortController();
+      onBeforeOpen();cancel();selected=ref;markSelected();const token=generation;request=new AbortController();
       host.hidden=false;host.parentElement.classList.add('conversation-has-preview');onActivate(ref);
       const head=create('div','conversation-preview-head'),title=create('h3','conversation-preview-title',ref.label);
       const closeButton=button('conversation-preview-close','× Preview',()=>{close();host.closest('.conversation-panel').querySelector('.conversation-scroll')?.focus();});

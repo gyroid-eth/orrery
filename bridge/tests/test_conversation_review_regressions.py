@@ -22,6 +22,29 @@ from tools.theme_axis_browser_test import _WebSocket
 CDP = os.environ.get("ORRERY_CDP_URL")
 
 
+def wait_reading_layout(js, timeout=1):
+    """Bound renderer completion; CDP transport latency is measured separately."""
+    started=time.monotonic()
+    result=js("""new Promise(resolve=>{
+      const started=performance.now(),limit="""+str(timeout*1000)+""";
+      const active=()=>[...document.querySelectorAll('.conversation-panel')].filter(p=>!p.hidden&&p.isConnected);
+      const check=()=>{
+        const panels=active(),pending=panels.some(p=>p.dataset.conversationLayout==='pending');
+        if(!pending)return resolve({ok:true,wait:performance.now()-started,durations:panels.map(p=>Number(p.dataset.conversationLayoutMs||0))});
+        if(performance.now()-started>=limit)return resolve({ok:false,wait:performance.now()-started});
+        setTimeout(check,10);
+      };
+      requestAnimationFrame(()=>requestAnimationFrame(check));
+    })""")
+    if os.environ.get('ORRERY_LAYOUT_TIMINGS'):
+        with Path(os.environ['ORRERY_LAYOUT_TIMINGS']).open('a') as output:
+            output.write(json.dumps({'case':os.environ.get('PYTEST_CURRENT_TEST'),'result':result,'cdp_wall_ms':(time.monotonic()-started)*1000})+'\n')
+    assert result['ok'], ('reading restoration exceeded 1s in renderer',result)
+    assert result['wait']<timeout*1000, result
+    assert all(value<timeout*1000 for value in result['durations']),result
+    print('reading-layout-complete',result,'CDP-wall-ms',round((time.monotonic()-started)*1000,1))
+
+
 @pytest.fixture
 def cockpit(request):
     if not CDP:
@@ -77,6 +100,9 @@ def cockpit(request):
     try:
         client.call("Page.navigate", url=f"http://127.0.0.1:{server.server_port}/cockpit.html")
         wait("typeof conversationView!=='undefined'&&typeof createPane==='function'")
+        # HTTP-only fixture: keep a generated paste/Enter on the same socket.
+        # Explicit connection-loss regressions still replace socket themselves.
+        js("clearTimeout(reconnectTimer);scheduleReconnect=()=>{}")
         def enable(*, claimed=False, mode="cursor", count=80, text_size=120):
             js("conversationEnabled.checked=true;conversationEnabled.dispatchEvent(new Event('change'))")
             wait("typeof OrreryConversationSource!=='undefined'&&typeof OrreryConversation!=='undefined'")
@@ -388,7 +414,7 @@ def test_split_history_is_per_cell_and_focus_keeps_existing_prompt_route(cockpit
     assert js("document.querySelectorAll('.split-cell .split-history-toggle').length")==count
     js("window.splitBefore=[...document.querySelectorAll('.split-cell .termhost.on')].map(e=>({w:e.clientWidth,h:e.clientHeight}));packets.length=0;document.querySelector('.split-cell .split-history-toggle').click()")
     wait("document.querySelector('.split-cell .conversation-event')!==null")
-    js("document.querySelector('.split-cell .conversation-expand').click()")
+    js("{const button=document.querySelector('.split-cell .conversation-expand');if(button.getAttribute('aria-pressed')!=='true')button.click()}")
     assert js("""(()=>{const cell=document.querySelector('.split-cell'),panel=cell.querySelector('.conversation-panel'),a=cell.getBoundingClientRect(),b=panel.getBoundingClientRect();
       return b.left>=a.left&&b.right<=a.right&&b.top>=a.top&&b.bottom<=a.bottom&&b.width>a.width-4})()""")
     js("document.querySelectorAll('.split-cell .split-history-toggle')[1].click()")
@@ -471,7 +497,8 @@ def test_submitted_prompt_resumes_reader_paused_at_retention_limit(cockpit):
 def test_other_pane_and_guarded_prompt_preserve_reader_position(cockpit):
     js, wait, client, requests, enable = cockpit
     enable()
-    js("document.querySelector('.conversation-scroll').scrollTop=120;document.dispatchEvent(new CustomEvent('oc:prompt-submitted',{detail:{name:'AnotherFixture'}}));promptInput.value='/logout';sendPrompt()")
+    wait_reading_layout(js)
+    js("document.querySelector('.conversation-scroll').dispatchEvent(new WheelEvent('wheel'));document.querySelector('.conversation-scroll').scrollTop=120;document.dispatchEvent(new CustomEvent('oc:prompt-submitted',{detail:{name:'AnotherFixture'}}));promptInput.value='/logout';sendPrompt()")
     time.sleep(.4)
     assert js("document.querySelector('.conversation-scroll').scrollTop") == 120
     assert js("packets.filter(p=>p.type==='input')") == []

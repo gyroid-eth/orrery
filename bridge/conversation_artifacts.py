@@ -100,7 +100,7 @@ class Literal:
         self.pos+=len(match[0]);return json.loads(match[0])
 
 
-def static_calls(text,names=('apply_patch','view_image','read_file','write_file','Edit','Read')):
+def static_calls(text,names=('apply_patch','view_image','read_file','write_file','Edit','Read','SendUserFile')):
     reader=Literal(text)
     pattern=r'tools\.('+ '|'.join(re.escape(name) for name in names)+r')\s*\('
     while reader.pos<len(text):
@@ -166,7 +166,12 @@ def extract_artifacts(item: dict) -> dict:
                 and not re.search(r'[\x00-\x1f\x7f]|://|^~',value) and len(result['paths'])<MAX_REFS
                 and value not in result['paths']):result['paths'].append(value)
     for name,value in calls[:MAX_REFS]:
-        if name=='apply_patch' and isinstance(value,str):
+        if name=='SendUserFile' and isinstance(value,dict):
+            # Claude's native delivery call records files: string[]. Caption,
+            # status and tool-result prose never grant additional references.
+            files=value.get('files')
+            for filename in files[:MAX_REFS] if isinstance(files,list) else []:path(filename)
+        elif name=='apply_patch' and isinstance(value,str):
             safe=False
             for line in value.splitlines()[:4000]:
                 match=re.match(r'\*\*\* (Add|Update|Delete) File: (.+)$',line)

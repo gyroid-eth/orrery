@@ -93,8 +93,12 @@ Interacting with a reader selects its cell through the existing pane focus
 route, so the original composer below the grid shows that pane as its target.
 Its send guards and API are unchanged. A narrow reader replaces its thread
 with the selected preview until closed. Closing one history leaves the grid
-and other histories intact. Leaving split mode releases its readers; single
-pane and phone history keep the existing layout.
+and other histories intact. Readers belong to their live pane, so closing a
+different pane or rebuilding the split layout keeps the surviving reader,
+full/side mode, expanded Mail and selected preview. Hidden tabs retain bounded
+reader state while suspending reads; removed/replaced panes and Settings OFF
+dispose their readers. Width changes may shift the reading position by one or
+two lines.
 
 Submitting through the original composer closes only the target reader's preview
 and resumes Latest, including a reader paused at its retention limit. Messages
@@ -140,6 +144,11 @@ setup). It does not offer rebinding or infer a transcript path.
 
 ### Recorded edits and file preview
 
+Claude `SendUserFile` creates chips from its explicit `files: string[]`.
+Caption, status and result prose grant no paths. These chips use the same
+workspace/image roots, canonical-path, secret-file, byte and pixel limits as
+other recorded references; delivery does not expand the readable roots.
+
 **Full width** expands History within the pane. Structured `apply_patch`,
 `view_image`, `read_file`, `write_file`, `Read` and `Edit` arguments produce file
 chips when permitted. Codex's static `functions.exec` literal wrappers are also
@@ -163,6 +172,24 @@ This is the same DOM element, draft, target, IME handling, send guard and
 WebSocket input route as the terminal composer. Reading/preview keys do not
 send input. Enter in the composer or an explicit SEND sends, and the normal
 history poll picks up the resulting conversation without resetting the reader.
+An open reader also shows a separate, in-memory **送信 → target · 記録待ち**
+receipt after the existing paste and Enter path succeeds. It stays visible until
+a matching new user record arrives; after 60 seconds its label becomes **記録はまだ**.
+It is not provider acknowledgement.
+記録の時刻が秒単位の provider で、送信と同じ秒に記録が書かれた場合は「照合できず」と表示することがある。 Repeated prompts match one record each;
+old loaded records and older pages cannot consume a new receipt. Whitespace is
+normalized; a sufficiently long truncated prefix can match an unambiguous send. Closing and
+reopening History retains receipts; changing binding, closing the pane or
+turning History off discards them. If a new user record cannot be associated confidently, the receipt says
+**送信済み（記録の照合はできず）** rather than claiming the record is still absent. The receipt displays at most 1,000 characters; exact
+matching is available for prompts up to the reader's 64 KiB text limit.
+
+Assistant text supports a small inert projection of GFM tables: a matching
+header/delimiter row is required, malformed row widths and fenced/indented code
+stay text. Cells render as text only, including HTML and link syntax. A following fence, heading, quote or list ends the table. Wide
+tables retain their horizontal position across polling and pane relocation; **Copy Markdown** copies the original table.
+Terminal jump still searches the original complete provider message. Tables
+have a 64-column / 500-row projection limit; larger shapes remain text.
 
 The header shows the status (ACTIVE/LIVE/offline) as a dot and noninteractive
 text beside the pane name, with HISTORY (when enabled) and WINDOW on the right.

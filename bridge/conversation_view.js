@@ -6,7 +6,8 @@
   const KEY='oc-term-conversation-enabled';
   const MAX_EVENTS=400,MAX_BYTES=2*1024*1024;
   function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null}){
-    const screen=host||document.querySelector('.screen'),toggle=control||document.getElementById('conversationToggle');
+    let screen=host||document.querySelector('.screen');
+    const toggle=control||document.getElementById('conversationToggle');
     const listeners=[];
     function listen(target,type,handler,options){if(!target)return;target.addEventListener(type,handler,options);listeners.push(()=>target.removeEventListener(type,handler,options));}
     const setting=document.getElementById('conversationEnabled');
@@ -21,7 +22,7 @@
       '<button class="cockpit-control conversation-action conversation-retry" type="button" hidden>Retry</button></div>'+
       '<div class="conversation-body"><div class="conversation-thread"><div class="conversation-scroll" tabindex="0" aria-label="Conversation messages">'+
       '<button class="cockpit-control conversation-action conversation-older" type="button" hidden>Load earlier</button>'+
-      '<div class="conversation-events"></div><div class="conversation-empty"></div></div>'+
+      '<div class="conversation-events"></div><div class="conversation-pending" role="status" aria-live="polite"></div><div class="conversation-empty"></div></div>'+
       '<div class="conversation-bottom"><span class="conversation-status conversation-position"></span>'+
       '<button class="cockpit-control conversation-action conversation-latest" type="button">Latest</button></div></div>'+
       '<aside class="conversation-preview" aria-label="Selected file preview" hidden></aside></div>';
@@ -30,9 +31,72 @@
     const scroll=el('.conversation-scroll'),eventsEl=el('.conversation-events');
     const status=el('.conversation-toolbar .conversation-status'),empty=el('.conversation-empty');
     const earlier=el('.conversation-older'),retry=el('.conversation-retry'),latest=el('.conversation-latest');
-    let fullWidth=false;
+    let fullWidth=false,tableMutating=false,tableFrame=0;
+    const tablePositions=new Map();
+    let submissions=[],submissionTimer=0,flashTimer=0,readSequence=0;
+    const observedIds=new Set(),matchedSubmissions=new Set(),pendingEl=el('.conversation-pending');
+    const normalizePrompt=text=>text.replace(/\s+/gu,' ').trim();
+    function renderSubmissions(){
+      clearTimeout(submissionTimer);submissionTimer=0;pendingEl.replaceChildren();
+      let next=Infinity;
+      for(const item of submissions){
+        const row=document.createElement('article');row.className='conversation-submission';row.dataset.submissionId=item.id;
+        const label=document.createElement('div');label.className='conversation-byline';
+        const elapsed=Date.now()-item.at;
+        label.textContent='送信 → '+item.name+' · '+(item.unmatched?'送信済み（記録の照合はできず）':elapsed>=60000?'記録はまだ':'記録待ち');
+        const text=document.createElement('p');text.className='conversation-text';text.textContent=item.preview;
+        const note=document.createElement('div');note.className='conversation-submission-note';
+        note.textContent=item.unmatched?'送信後の user 記録が届きましたが、この本文との対応は確認できません。下の会話も確認してください。':'端末へ送信しました。agent の処理待ちの場合があります。会話の記録に現れるまでここに表示します。';
+        row.append(label,text,note);pendingEl.appendChild(row);
+        if(!item.unmatched&&elapsed<60000)next=Math.min(next,60000-elapsed);
+      }
+      if(Number.isFinite(next))submissionTimer=setTimeout(renderSubmissions,Math.max(1,next));
+    }
+    function clearSubmissions(){
+      submissions=[];observedIds.clear();matchedSubmissions.clear();clearTimeout(submissionTimer);clearTimeout(flashTimer);
+      flashTimer=0;screen.classList.remove('conversation-just-submitted');renderSubmissions();
+    }
+    function reconcileSubmissions(incoming,direction,sequence){
+      if(!submissions.length)return;
+      for(const event of incoming){
+        if(event.role!=='user'||event.kind!=='text'||matchedSubmissions.has(event.id))continue;
+        const ts=Date.parse(event.ts),text=normalizePrompt(event.text);
+        const fraction=/\.(\d+)(?:Z|[+-]\d\d:\d\d)$/.exec(event.ts||'');
+        const secondsOnly=!fraction||!/[1-9]/.test(fraction[1]);
+        for(const item of submissions){
+          // A response begun before this send cannot later promote its old
+          // user IDs just because Hermes repeats them in a newer snapshot.
+          if(direction==='older')item.known.add(event.id);
+          else if(sequence<item.nextRead&&!item.known.has(event.id)){
+            const ambiguous=secondsOnly&&Number.isFinite(ts)&&ts===Math.floor(item.at/1000)*1000;
+            if(ambiguous){
+              item.uncertain.add(event.id);
+              if(item.text===text||event.truncated&&text.length>=256&&item.text.startsWith(text))item.unmatched=true;
+            }else if(!(Number.isFinite(ts)&&ts>=item.at))item.known.add(event.id);
+          }
+        }
+        if(direction==='older')continue;
+        const eligible=submissions.filter(item=>!item.known.has(event.id)&&!item.uncertain.has(event.id)&&
+          (Number.isFinite(ts)?ts>=item.at||ts>=(secondsOnly?Math.floor(item.at/1000)*1000:item.at)&&sequence>=item.nextRead:
+            sequence>=item.nextRead&&direction==='newer'));
+        let candidates=eligible.filter(item=>item.matchable&&!event.truncated&&item.text===text);
+        if(!candidates.length&&event.truncated&&text.length>=256){
+          candidates=eligible.filter(item=>item.text.startsWith(text));
+          // A shared prefix cannot distinguish two different pending prompts.
+          if(candidates.some(item=>item.text!==candidates[0].text||item.length!==candidates[0].length))candidates=[];
+        }
+        if(candidates.length){
+          submissions.splice(submissions.indexOf(candidates[0]),1);matchedSubmissions.add(event.id);
+        }else if(eligible.length){
+          // A new user record exists, but we cannot assert which send it is.
+          // Keep the receipt without claiming that no record has arrived.
+          eligible[0].unmatched=true;matchedSubmissions.add(event.id);
+        }
+      }
+      renderSubmissions();
+    }
     function viewport(){
-      if(!opened||!enabled)return;
+      if(!opened||!enabled||!presented)return;
       const view=root.visualViewport;
       screen.style.setProperty('--conversation-viewport-height',(view?view.height:root.innerHeight)+'px');
       screen.style.setProperty('--conversation-viewport-top',(view?view.offsetTop:0)+'px');
@@ -44,9 +108,12 @@
       el('.conversation-expand').setAttribute('aria-pressed',String(value));
       el('.conversation-expand').textContent=value?'Side panel':'Full width';
     }
-    const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onActivate:()=>expand(true)});
+    const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onBeforeOpen:layoutChanged,onClose:layoutChanged,onActivate:()=>expand(true)});
     let enabled=false,opened=false,agent='',generation=0,controller=null,timer=0,busy=false;
     let before=null,after=null,hasOlder=false,mode='',newCount=0,events=new Map();
+    let presented=true,lastPosition=null,lastWidth=0,lastHeight=0,lastFocused=null;
+    let layoutTimer=0,layoutFrame=0,layoutPending=false,restoring=false,userScrolling=false,layoutStarted=0;
+    panel.dataset.conversationLayout="idle";
     let contextKey='',boundContext={},paused=false,retainedBytes=0,providerLabel='Codex',followPending=false,jumpTimer=0;
     const byteSize=event=>new TextEncoder().encode(JSON.stringify(event)).byteLength;
     const fingerprint=current=>JSON.stringify(['name','program','provider','history_binding','transcript_path',
@@ -59,18 +126,134 @@
       latest.textContent=paused?'Latest · resume':newCount?newCount+' new':'Latest';
     }
     function message(text){status.textContent=text;}
-    function stop(){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;if(controller)controller.abort();controller=null;generation++;busy=false;followPending=false;}
-    function clear(){clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
-    function draw(event){const article=renderEvent?renderEvent(event,node):node(event);return preview?preview.render(event,article):article;}
+    function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;if(controller)controller.abort();controller=null;generation++;busy=false;if(!keepFollow)followPending=false;}
+    function clear({keepSubmissions=false}={}){tablePositions.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
+    const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
+    function saveTables(){
+      if(tableMutating)return;
+      for(const article of eventsEl.children)article.querySelectorAll('.conversation-table-scroll').forEach((table,index)=>{
+        if(table.isConnected&&table.getClientRects().length)tablePositions.set(tableKey(article,index),table.scrollLeft);
+      });
+    }
+    function restoreTables(){
+      tableMutating=true;cancelAnimationFrame(tableFrame);
+      const apply=()=>{for(const article of eventsEl.children)article.querySelectorAll('.conversation-table-scroll').forEach((table,index)=>{
+        const key=tableKey(article,index);if(tablePositions.has(key))table.scrollLeft=tablePositions.get(key);
+      });};
+      apply();tableFrame=requestAnimationFrame(()=>{tableFrame=0;apply();tableMutating=false;});
+    }
+    function draw(event){
+      const article=renderEvent?renderEvent(event,node):node(event);
+      article.querySelectorAll('.conversation-table-scroll').forEach((table,index)=>{
+        table.addEventListener('scroll',()=>{
+          if(!tableMutating&&table.isConnected&&table.getClientRects().length)tablePositions.set(tableKey(article,index),table.scrollLeft);
+        },{passive:true});
+      });
+      return preview?preview.render(event,article):article;
+    }
     function anchor(){
       const top=scroll.getBoundingClientRect().top;
       const first=[...eventsEl.children].find(child=>child.getBoundingClientRect().bottom>top);
-      return first?{id:first.dataset.eventId,offset:first.getBoundingClientRect().top-top}:null;
+      const next=first?.nextElementSibling;
+      return first?{id:first.dataset.eventId,offset:first.getBoundingClientRect().top-top,
+        next:next?{id:next.dataset.eventId,offset:next.getBoundingClientRect().top-top}:null}:null;
     }
     function restoreAnchor(saved,fallback){
-      const target=saved&&[...eventsEl.children].find(child=>child.dataset.eventId===saved.id);
-      if(target)scroll.scrollTop+=target.getBoundingClientRect().top-scroll.getBoundingClientRect().top-saved.offset;
+      let target=saved&&[...eventsEl.children].find(child=>child.dataset.eventId===saved.id),offset=saved?.offset;
+      // Rewrapping can make the former tail offset longer than the whole
+      // event. Keep its next visible boundary instead of skipping past it.
+      if(target&&offset<0&&-offset>=target.getBoundingClientRect().height&&saved.next){
+        const next=[...eventsEl.children].find(child=>child.dataset.eventId===saved.next.id);
+        if(next){target=next;offset=saved.next.offset;}
+      }
+      if(target)scroll.scrollTop+=target.getBoundingClientRect().top-scroll.getBoundingClientRect().top-offset;
       else scroll.scrollTop=fallback;
+    }
+    function textNodes(article){
+      const walker=document.createTreeWalker(article,NodeFilter.SHOW_TEXT),nodes=[];
+      while(walker.nextNode())nodes.push(walker.currentNode);return nodes;
+    }
+    function remember(force=false){
+      if(!opened||!presented||!panel.isConnected||!scroll.getClientRects().length)return;
+      const rect=screen.getBoundingClientRect();
+      if(!force&&(layoutPending||restoring||rect.width!==lastWidth||rect.height!==lastHeight))return;
+      if(nearBottom()){lastPosition={bottom:true};return;}
+      const bounds=scroll.getBoundingClientRect(),top=bounds.top;
+      const article=[...eventsEl.children].find(child=>child.getBoundingClientRect().bottom>top+1);
+      if(!article)return;
+      const point=document.caretPositionFromPoint?.(bounds.left+parseFloat(getComputedStyle(scroll).paddingLeft)+2,top+2);
+      let caret=point?{node:point.offsetNode,offset:point.offset}:null;
+      if(!caret&&document.caretRangeFromPoint){const r=document.caretRangeFromPoint(bounds.left+20,top+2);if(r)caret={node:r.startContainer,offset:r.startOffset};}
+      const nodes=textNodes(article);let offset=0,node=null,local=0;
+      if(caret&&article.contains(caret.node)&&caret.node.nodeType===Node.TEXT_NODE){
+        node=caret.node;local=Math.min(caret.offset,node.length);
+        for(const value of nodes){if(value===node)break;offset+=value.length;}
+        offset+=local;
+      }else{
+        // A padded message boundary: store its next text character, never a
+        // distance from the end of the previous wrapping paragraph.
+        node=nodes.find(value=>{const r=document.createRange();r.selectNodeContents(value);return r.getBoundingClientRect().bottom>top;})||nodes[0];
+        if(node)for(const value of nodes){if(value===node)break;offset+=value.length;}
+      }
+      if(!node)return;
+      const range=document.createRange();range.setStart(node,Math.min(local,node.length));range.setEnd(node,Math.min(local+1,node.length));
+      const r=range.getBoundingClientRect();
+      lastPosition={id:article.dataset.eventId,offset,top:r.top-top,bottom:false};
+    }
+    function restoreReading(){
+      if(!opened||!presented||!lastPosition||!scroll.getClientRects().length)return;
+      if(lastPosition.bottom){scroll.scrollTop=scroll.scrollHeight;return;}
+      const article=[...eventsEl.children].find(child=>child.dataset.eventId===lastPosition.id);
+      if(!article)return;
+      let remaining=lastPosition.offset;
+      for(const node of textNodes(article)){
+        if(remaining>node.length){remaining-=node.length;continue;}
+        const range=document.createRange();range.setStart(node,remaining);range.setEnd(node,Math.min(remaining+1,node.length));
+        const rect=range.getBoundingClientRect();if(rect.height)scroll.scrollTop+=rect.top-scroll.getBoundingClientRect().top-lastPosition.top;
+        break;
+      }
+    }
+    function layoutChanged(){
+      if(!opened||!presented)return;
+      userScrolling=false;layoutPending=true;layoutStarted=performance.now();
+      panel.dataset.conversationLayout='pending';
+      clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);
+      layoutTimer=setTimeout(()=>{layoutTimer=0;layoutFrame=requestAnimationFrame(()=>{layoutFrame=requestAnimationFrame(()=>{
+        layoutFrame=0;restoring=true;restoreReading();
+        const r=screen.getBoundingClientRect();lastWidth=r.width;lastHeight=r.height;
+        layoutFrame=requestAnimationFrame(()=>{
+          layoutFrame=0;restoring=false;layoutPending=false;
+          // A layout completion signal lets callers wait for the restored
+          // character rather than assuming a fixed animation-frame duration.
+          panel.dataset.conversationLayoutMs=String(performance.now()-layoutStarted);
+          panel.dataset.conversationLayout='settled';
+        });
+      });});},32);
+    }
+    function relocate(target,{visible=true,suspend=true,focus=false}={}){
+      const changed=screen!==target||presented!==visible||panel.parentElement!==target;
+      if(changed){
+        saveTables();tableMutating=true;layoutPending=true;
+        screen.classList.remove('conversation-open','conversation-full','conversation-enabled','conversation-just-submitted');
+        screen.style.removeProperty('--conversation-viewport-height');screen.style.removeProperty('--conversation-viewport-top');
+        if(!visible&&presented&&suspend)stop(true);
+        screen=target;presented=visible;
+        if(panel.parentElement!==target)target.appendChild(panel);
+      }
+      panel.hidden=!opened||!presented;
+      screen.classList.toggle('conversation-enabled',enabled);
+      screen.classList.toggle('conversation-just-submitted',Boolean(flashTimer));
+      screen.classList.toggle('conversation-open',opened&&presented);
+      screen.classList.toggle('conversation-full',opened&&presented&&fullWidth);
+      if(!presented||!opened)return;
+      viewport();restoreTables();
+      const rect=screen.getBoundingClientRect(),resized=rect.width!==lastWidth||rect.height!==lastHeight;
+      if(changed||resized)layoutChanged();
+      if(focus&&lastFocused?.isConnected&&document.activeElement===document.body){
+        lastFocused.focus({preventScroll:true});layoutChanged();
+      }
+      if(followPending&&!busy){followPending=false;followSubmitted();}
+      else if(changed&&!busy){if(!events.size)load();else schedule();}
     }
     function trim(fromStart){
       let removed=false;
@@ -103,7 +286,9 @@
       if(Number.isFinite(date.getTime())){time.dateTime=event.ts;time.textContent=date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});time.title=date.toLocaleString();}
       byline.appendChild(time);article.appendChild(byline);
       if(!['tool','tool_result'].includes(event.kind)){
-        const text=document.createElement('p');text.className='conversation-text';text.textContent=event.text;article.appendChild(text);
+        const text=document.createElement('div');text.className='conversation-text';
+        if(event.role==='assistant'&&root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.render(event.text,text);
+        else text.textContent=event.text;article.appendChild(text);
       }
       if(event.truncated){const note=document.createElement('div');note.className='conversation-truncated';note.textContent='Long message shortened in this reader.';article.appendChild(note);}
       const target=article.querySelector('.conversation-text')||byline;
@@ -114,7 +299,7 @@
         target.addEventListener('pointerdown',e=>{press={x:e.clientX,y:e.clientY,selected:!root.getSelection()?.isCollapsed};});
         target.addEventListener('click',e=>{
           clearTimeout(jumpTimer);
-          if(e.detail>1||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||press?.selected||!root.getSelection()?.isCollapsed)return;
+          if(e.target.closest('button')||e.detail>1||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||press?.selected||!root.getSelection()?.isCollapsed)return;
           if(press&&Math.hypot(e.clientX-press.x,e.clientY-press.y)>5)return;
           const token=generation;
           // Give double click and drag selection their native copy behaviour.
@@ -141,11 +326,11 @@
     }
     function schedule(){
       clearTimeout(timer);
-      if(opened&&enabled&&!paused&&!document.hidden)timer=setTimeout(()=>load('newer'),pollMs);
+      if(opened&&presented&&enabled&&!paused&&!document.hidden)timer=setTimeout(()=>load('newer'),pollMs);
     }
     async function load(direction='initial'){
-      if(!opened||!enabled||busy||!agent||paused&&direction==='newer')return;
-      const token=generation,name=agent;
+      if(!opened||!presented||!enabled||busy||!agent||paused&&direction==='newer')return;
+      const token=generation,name=agent,sequence=++readSequence;
       let pollAgain=true;
       controller=new AbortController();busy=true;earlier.disabled=true;retry.hidden=true;
       const options={signal:controller.signal};
@@ -156,6 +341,7 @@
         if(token!==generation||!opened||!enabled)return;
         const atBottom=nearBottom(),oldHeight=scroll.scrollHeight,oldTop=scroll.scrollTop,saved=anchor();
         const incoming=page.events.filter(event=>event&&typeof event.id==='string'&&typeof event.text==='string');
+        for(const event of incoming)observedIds.add(event.id);
         mode=page.mode||'cursor';
         providerLabel=({codex:'Codex',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[page.provider]||providerLabel;
         const fresh=['fresh_tail','snapshot'].includes(mode);
@@ -164,6 +350,7 @@
           (events.size+additions.length>MAX_EVENTS||retainedBytes+additions.reduce((n,event)=>n+byteSize(event),0)>MAX_BYTES)){
           paused=true;message('Updates paused at reader limit. Latest resumes at the newest messages.');position();return;
         }
+        saveTables();tableMutating=true;
         const fragment=document.createDocumentFragment();let added=0;
         if(fresh){
           const existing=new Map([...eventsEl.children].map(child=>[child.dataset.eventId,child]));
@@ -188,7 +375,10 @@
         if(direction!=='newer'){before=page.before;hasOlder=page.has_older===true;}
         if(direction!=='older')after=page.after;
         const trimmed=trim(direction!=='older');earlier.hidden=!hasOlder;
-        empty.hidden=events.size>0;empty.textContent='No conversation messages in this portion yet.';
+        for(const key of tablePositions.keys())if(!events.has(JSON.parse(key)[0]))tablePositions.delete(key);
+        restoreTables();
+        reconcileSubmissions(incoming,direction,sequence);
+        empty.hidden=events.size>0||submissions.length>0;empty.textContent='No conversation messages in this portion yet.';
         if(direction==='initial'||direction==='newer'&&atBottom)scroll.scrollTop=scroll.scrollHeight;
         else if(direction==='older')restoreAnchor(saved,Math.max(0,oldTop+scroll.scrollHeight-oldHeight));
         else{restoreAnchor(saved,oldTop);newCount+=added;}
@@ -197,7 +387,7 @@
           fresh?(page.limited||trimmed?'Fresh · limited recent snapshot; earlier history and tools need telemetry support.':'Fresh · recent snapshot (up to 200 messages).'):
           trimmed?'Older loaded messages were released. Load earlier to read them again.':
           page.skipped_large_record?'A large record was skipped. Load earlier to continue.':page.notice||'Read-only · updates while open');
-        position();
+        position();if(direction==='initial'||direction==='newer'&&atBottom)remember(true);
         if(page.has_newer&&direction!=='older'){
           // A bounded page per request. Continue in the next poll without
           // sending overlapping reads during a fast provider burst.
@@ -209,7 +399,7 @@
         message(error.message);retry.hidden=false;
         if(['history_changed','history_unconfirmed','history_stale','agent_unavailable','claude_next_phase','provider_unavailable','dashboard_upgrade_required','dsh_decoder_unavailable','history_format_unsupported','history_unreadable','history_pending'].includes(error.code)){
           // Never retain content from a stale, unbound or different native session.
-          clear();retry.hidden=false;empty.hidden=false;
+          clear({keepSubmissions:error.code==='history_pending'});retry.hidden=false;empty.hidden=false;
           empty.textContent=error.code==='history_changed'?'Session changed. Retry to load the current conversation.':error.message;
           position();
         }
@@ -225,7 +415,8 @@
       const current=getContext()||{};const name=String(current.name||''),key=fingerprint(current);
       if(!opened)return;
       if(name===agent&&key===contextKey)return;
-      stop();agent=name;contextKey=key;clear();boundContext={...current};
+      const sameBinding=key===contextKey;
+      stop();agent=name;contextKey=key;clear({keepSubmissions:sameBinding});boundContext={...current};
       el('.conversation-subtitle').textContent=(agent||'No pane selected')+' · read-only';
       if(!agent){empty.textContent='Select an agent pane to read its conversation.';message('No agent selected');return;}
       providerLabel=({'claude-code':'Claude',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[current.program]||'Codex';
@@ -235,13 +426,14 @@
       if(!opened)return;
       stop();opened=false;agent='';panel.hidden=true;screen.classList.remove('conversation-open','conversation-full');
       screen.style.removeProperty('--conversation-viewport-height');screen.style.removeProperty('--conversation-viewport-top');
-      toggle.setAttribute('aria-expanded','false');clear();onState();const target=typeof focusControl==='function'?focusControl():focusControl||toggle;
+      toggle.setAttribute('aria-expanded','false');clear({keepSubmissions:true});onState();const target=typeof focusControl==='function'?focusControl():focusControl||toggle;
       if(focus&&target&&!target.hidden&&target.getClientRects().length)target.focus();
     }
     function open(){
       if(!enabled)return;
+      if(opened){onActivate();return;}
       onActivate();opened=true;panel.hidden=false;screen.classList.add('conversation-open');screen.classList.toggle('conversation-full',fullWidth);
-      viewport();
+      viewport();const rect=screen.getBoundingClientRect();lastWidth=rect.width;lastHeight=rect.height;
       toggle.setAttribute('aria-expanded','true');agent=null;context();scroll.focus();onState();
     }
     function preference(){
@@ -257,7 +449,7 @@
     listen(el('.conversation-close'),'click',()=>close());
     listen(el('.conversation-expand'),'click',()=>{if(fullWidth)preview?.close();expand(!fullWidth);});
     listen(panel,'pointerdown',()=>onActivate());
-    listen(panel,'focusin',()=>onActivate());
+    listen(panel,'focusin',event=>{lastFocused=event.target;onActivate();});
     listen(panel,'mousedown',event=>event.stopPropagation());
     listen(panel,'keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();if(preview?.selected){preview.close();scroll.focus();}else close();}});
     // Arrow/Page keys and wheels belong only to the browser scroll container;
@@ -265,72 +457,121 @@
     listen(earlier,'click',()=>load('older'));
     listen(retry,'click',()=>load(events.size?'newer':'initial'));
     listen(latest,'click',()=>{
-      if(paused){stop();clear();load('initial');return;}
-      scroll.scrollTop=scroll.scrollHeight;newCount=0;position();
+      if(paused){stop();clear({keepSubmissions:true});load('initial');return;}
+      scroll.scrollTop=scroll.scrollHeight;newCount=0;position();remember(true);
     });
     // Submission remains owned by the existing composer/input guards. This
-    // notification changes only the matching reader's viewport; the provider
-    // recording is still the sole source of message text.
+    // notification adds an ephemeral delivery receipt, never a provider event.
+    // Only a subsequent exact user record replaces it (FIFO for repeated text).
     function followSubmitted(){
-      if(paused){stop();clear();load('initial');}
-      else{scroll.scrollTop=scroll.scrollHeight;newCount=0;position();load('newer');}
+      if(paused){stop();clear({keepSubmissions:true});load('initial');}
+      else{scroll.scrollTop=scroll.scrollHeight;newCount=0;position();remember(true);load('newer');}
     }
     listen(document,'oc:prompt-submitted',event=>{
       if(!opened||!enabled||event.detail?.name!==agent)return;
+      const detail=event.detail;
+      if(typeof detail.text==='string'&&typeof detail.id==='string'&&!submissions.some(item=>item.id===detail.id)){
+        const text=normalizePrompt(detail.text);
+        submissions.push({id:detail.id,name:agent,at:Number.isFinite(detail.submittedAt)?detail.submittedAt:Date.now(),
+          text:text.slice(0,65536),length:text.length,matchable:text.length<=65536,preview:detail.text.slice(0,1000)+(detail.text.length>1000?'…':''),
+          known:new Set(observedIds),uncertain:new Set(),nextRead:readSequence+1});
+        renderSubmissions();empty.hidden=true;
+        screen.classList.add('conversation-just-submitted');clearTimeout(flashTimer);
+        flashTimer=setTimeout(()=>{flashTimer=0;screen.classList.remove('conversation-just-submitted');},1800);
+      }
+      if(!presented){followPending=true;return;}
       preview?.close();
       // Finish the in-flight page first; an older page may trim the newest
       // events and pause polling. Its finally must still honour this request.
       if(busy){followPending=true;return;}
       followSubmitted();
     });
-    listen(scroll,'scroll',position,{passive:true});
+    function userScroll(){clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);layoutTimer=layoutFrame=0;layoutPending=restoring=false;panel.dataset.conversationLayout='settled';userScrolling=true;const r=screen.getBoundingClientRect();lastWidth=r.width;lastHeight=r.height;}
+    listen(scroll,'wheel',userScroll,{passive:true});listen(scroll,'touchstart',userScroll,{passive:true});listen(scroll,'pointerdown',userScroll,{passive:true});
+    listen(scroll,'keydown',event=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key))userScroll();});
+    listen(scroll,'scroll',()=>{if(presented){position();if(userScrolling)remember();}},{passive:true});
+    listen(window,'resize',layoutChanged);
+    const layoutObserver=new ResizeObserver(layoutChanged);
+    layoutObserver.observe(panel);layoutObserver.observe(scroll);layoutObserver.observe(eventsEl);
     listen(document,'oc:stage-agent',context);
     listen(document,'oc:focus-agent',context);
     listen(document,'oc:agents',context);
     listen(document,'visibilitychange',()=>{if(document.hidden)clearTimeout(timer);else if(opened)load(events.size?'newer':'initial');});
     preference();
-    return Object.freeze({open,close,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
-      dispose(){close({focus:false});stop();listeners.forEach(remove=>remove());panel.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
+    return Object.freeze({open,close,relocate,reconcile:context,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
+      dispose(){cancelAnimationFrame(tableFrame);layoutObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
   }
-  function mountWorkspace({getContext,getSlots,activate,...options}){
+  function mountWorkspace({getContext,getSlots,getOwner=name=>getContext(name)?.terminalPaneId,activate,...options}){
     const screen=document.querySelector('.screen'),toggle=document.getElementById('conversationToggle');
-    const views=new Map();let sequence=0,syncing=false;
+    // Keep one reader per live pane. A split cell is only a display destination.
+    // Detached readers retain bounded DOM/cursors; inactive readers do not poll.
+    const views=new Map();let sequence=0,syncing=false,lastCurrent='';
     const enabled=()=>{try{return localStorage.getItem(KEY)==='1';}catch(_){return false;}};
-    const slots=()=>enabled()?getSlots():[];
-    const current=()=>{const name=(getContext()||{}).name;return slots().length?views.get(name)?.view:single;};
-    function paint(){const view=current();toggle.hidden=!enabled();toggle.setAttribute('aria-expanded',String(Boolean(view?.opened)));toggle.setAttribute('aria-controls',view?.panel.id||'conversationPanel');}
-    const proxy=document.createElement('button');
-    const single=mount({...options,getContext:()=>slots().length?{}:getContext(),control:proxy,bindToggle:false,focusControl:toggle,onState:paint});
+    const current=()=>views.get((getContext()||{}).name)?.view||views.get(lastCurrent)?.view;
+    function paint(){
+      const view=current();screen.classList.toggle('conversation-enabled',enabled());
+      toggle.hidden=!enabled();toggle.setAttribute('aria-expanded',String(Boolean(view?.opened)));
+      toggle.setAttribute('aria-controls',view?.panel.id||'conversationPanel');
+    }
+    function create(name,owner){
+      const park=document.createElement('div'),control=document.createElement('button');
+      control.type='button';control.className='cockpit-control split-history-toggle';
+      control.innerHTML='<span class="pane-action-wide" aria-hidden="true">HISTORY</span><span class="pane-action-short" aria-hidden="true">HIST</span><span class="pane-action-icon" aria-hidden="true">◷</span>';
+      control.title='Read history for '+name;control.setAttribute('aria-label','Read history for '+name);control.setAttribute('aria-expanded','false');
+      const id='conversationPanel-'+(++sequence);control.setAttribute('aria-controls',id);park.appendChild(control);
+      control.addEventListener('mousedown',event=>event.stopPropagation());control.addEventListener('pointerdown',event=>event.stopPropagation());
+      const view=mount({...options,host:park,control,panelId:id,getContext:()=>getContext(name),
+        focusControl:()=>control.getClientRects().length?control:toggle,
+        onActivate:()=>{if((getContext()||{}).name!==name)activate(name);},onState:paint});
+      view.relocate(park,{visible:false});
+      const entry={name,owner,view,park,host:park,control,visible:false};views.set(name,entry);return entry;
+    }
     function sync(){
       if(syncing)return;syncing=true;
       try{
-        const layout=slots(),names=new Set(layout.map(slot=>slot.name));
-        if(layout.length)single.close({focus:false});
+        const active=enabled(),layout=active?getSlots():[];
         for(const [name,entry] of views){
-          if(names.has(name)&&layout.find(slot=>slot.name===name)?.host===entry.host)continue;
+          if(active&&getOwner(name)===entry.owner){entry.view.reconcile();continue;}
           entry.view.dispose();entry.control.remove();entry.host.classList.remove('conversation-cell');views.delete(name);
         }
-        for(const slot of layout){
-          if(views.has(slot.name))continue;
-          const control=document.createElement('button');control.type='button';control.className='cockpit-control split-history-toggle';control.innerHTML='<span class="pane-action-wide" aria-hidden="true">HISTORY</span><span class="pane-action-short" aria-hidden="true">HIST</span><span class="pane-action-icon" aria-hidden="true">◷</span>';
-          control.title='Read history for '+slot.name;
-          control.setAttribute('aria-label','Read history for '+slot.name);control.setAttribute('aria-expanded','false');
-          const id='conversationPanel-'+(++sequence);control.setAttribute('aria-controls',id);
-          slot.host.classList.add('conversation-cell');
-          const controls=slot.controlHost||slot.host;controls.insertBefore(control,controls.firstChild);
-          control.addEventListener('mousedown',event=>event.stopPropagation());
-          control.addEventListener('pointerdown',event=>event.stopPropagation());
-          const view=mount({...options,host:slot.host,control,panelId:id,getContext:()=>getContext(slot.name),
-            focusControl:()=>control.getClientRects().length?control:toggle,
-            onActivate:()=>{if((getContext()||{}).name!==slot.name)activate(slot.name);},onState:paint});
-          views.set(slot.name,{view,host:slot.host,control});
+        let selected=String((getContext()||{}).name||'');
+        if(!getOwner(selected))selected=views.has(lastCurrent)?lastCurrent:
+          [...views.values()].find(entry=>entry.view.opened)?.name||[...views.keys()][0]||'';
+        if(active){
+          for(const name of new Set([...layout.map(slot=>slot.name),selected].filter(Boolean))){
+            const owner=getOwner(name);if(owner&&!views.has(name))create(name,owner);
+          }
+        }
+        lastCurrent=selected;
+        const targets=new Map(layout.map(slot=>[slot.name,slot]));
+        if(active&&!layout.length&&views.has(selected))targets.set(selected,{host:screen});
+        // Remove old host decorations before any reader enters the shared screen.
+        // A visible-to-visible move must not abort its in-flight read/preview.
+        for(const [name,entry] of views){
+          const target=targets.get(name);
+          if(target&&entry.host===target.host&&entry.view.panel.parentElement===target.host)continue;
+          entry.host.classList.remove('conversation-cell');
+          entry.view.relocate(entry.park,{visible:false,suspend:!target});
+          if(entry.control.parentElement!==entry.park)entry.park.appendChild(entry.control);
+          entry.host=entry.park;entry.visible=false;
+        }
+        screen.classList.toggle('conversation-enabled',active);
+        for(const [name,target] of targets){
+          const entry=views.get(name);if(!entry)continue;
+          if(target.host!==screen){
+            target.host.classList.add('conversation-cell');const controls=target.controlHost||target.host;
+            if(entry.control.parentElement!==controls)controls.insertBefore(entry.control,controls.firstChild);
+          }
+          entry.view.relocate(target.host,{visible:true,focus:name===selected});entry.host=target.host;entry.visible=true;
         }
         paint();
       }finally{syncing=false;}
     }
-    toggle.addEventListener('click',()=>{const view=current();if(view)view.opened?view.close():view.open();});
+    toggle.addEventListener('click',()=>{sync();const view=current();if(view)view.opened?view.close():view.open();});
     for(const event of ['oc:stage-agent','oc:focus-agent','oc:agents','oc:prefs-changed'])document.addEventListener(event,sync);
-    document.getElementById('conversationEnabled').addEventListener('change',sync);
+    document.getElementById('conversationEnabled').addEventListener('change',event=>{
+      try{localStorage.setItem(KEY,event.target.checked?'1':'0');}catch(_){}sync();
+    });
     window.addEventListener('storage',event=>{if(event.key===KEY)sync();});window.addEventListener('resize',sync);
     sync();
     return Object.freeze({open:()=>{sync();current()?.open();},close:()=>current()?.close(),refresh:()=>current()?.refresh()});

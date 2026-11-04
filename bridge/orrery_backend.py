@@ -4032,7 +4032,7 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "demo_mode.js", "orrery_view.js", "mail_view.js", "cockpit_tour.js",
     "cockpit_full_tour.js", "telemetry_light.js",
     "conversation_source.js", "conversation_view.js", "conversation_view.css", "conversation_preview.js",
-    "conversation_mail.js", "conversation_terminal.js",
+    "conversation_mail.js", "conversation_terminal.js", "conversation_markdown.js",
     "vendor/xterm-5.5.0/xterm.js", "vendor/xterm-5.5.0/xterm.css",
     "vendor/addon-fit-0.10.0/addon-fit.js",
     "vendor/addon-web-links-0.11.0/addon-web-links.js",
