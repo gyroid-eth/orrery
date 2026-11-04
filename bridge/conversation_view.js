@@ -29,6 +29,14 @@
     const status=el('.conversation-toolbar .conversation-status'),empty=el('.conversation-empty');
     const earlier=el('.conversation-older'),retry=el('.conversation-retry'),latest=el('.conversation-latest');
     let fullWidth=false;
+    function viewport(){
+      if(!opened||!enabled)return;
+      const view=root.visualViewport;
+      screen.style.setProperty('--conversation-viewport-height',(view?view.height:root.innerHeight)+'px');
+      screen.style.setProperty('--conversation-viewport-top',(view?view.offsetTop:0)+'px');
+    }
+    root.visualViewport?.addEventListener('resize',viewport);
+    root.visualViewport?.addEventListener('scroll',viewport);
     function expand(value){
       fullWidth=value;screen.classList.toggle('conversation-full',value);
       el('.conversation-expand').setAttribute('aria-pressed',String(value));
@@ -189,11 +197,13 @@
     function close({focus=true}={}){
       if(!opened)return;
       stop();opened=false;agent='';panel.hidden=true;screen.classList.remove('conversation-open');
+      screen.style.removeProperty('--conversation-viewport-height');screen.style.removeProperty('--conversation-viewport-top');
       toggle.setAttribute('aria-expanded','false');clear();if(focus&&!toggle.hidden)toggle.focus();
     }
     function open(){
       if(!enabled)return;
       opened=true;panel.hidden=false;screen.classList.add('conversation-open');
+      viewport();
       toggle.setAttribute('aria-expanded','true');agent=null;context();scroll.focus();
     }
     function preference(){

@@ -38,6 +38,10 @@
 .conversation-bottom .conversation-action{flex:none;color:var(--amber)}
 .conversation-panel [hidden]{display:none}
 .screen.conversation-open.conversation-full{--conversation-width:100%}
+/* Keep the original composer and every existing send/IME/target guard. The
+   reader reserves its space instead of covering it or cloning its controls. */
+.screen.conversation-open.conversation-full .conversation-panel{bottom:84px}
+.screen.conversation-open.conversation-full .promptbar{right:0;z-index:6}
 .conversation-body{display:flex;flex:1;min-height:0;min-width:0}
 .conversation-thread{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
 .conversation-full .conversation-scroll{padding-left:24px;padding-right:24px}
@@ -64,6 +68,8 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 @media(max-width:1200px){
   .screen.conversation-open{--conversation-width:100%}
   .screen.conversation-open .termstage,.screen.conversation-open .promptbar{right:0}
+  .screen.conversation-open .conversation-panel{bottom:84px}
+  .screen.conversation-open .promptbar{z-index:6}
   .conversation-panel{border-left:0}
   .conversation-title{font-size:16px}
 }
@@ -72,8 +78,21 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .col.term:has(.screen.conversation-enabled){min-width:0}
   /* The existing cockpit header/composer can overflow a phone viewport. Keep
      this reader attached to the actual viewport, not that wider grid. */
-  .conversation-panel{position:fixed;left:0;right:0;top:54px;bottom:auto;width:100vw;height:calc(100dvh - 54px);z-index:1090}
-  .screen.conversation-open .termstage,.screen.conversation-open .promptbar{visibility:hidden}
+  .conversation-panel{position:fixed;left:0;right:0;top:calc(var(--conversation-viewport-top,0px) + 54px);bottom:auto;width:100vw;
+    height:calc(var(--conversation-viewport-height,100dvh) - 54px - 132px);z-index:1090}
+  .screen.conversation-open .termstage{visibility:hidden}
+  .screen.conversation-open .promptbar{position:fixed;left:0;right:auto;bottom:auto;
+    top:calc(var(--conversation-viewport-top,0px) + var(--conversation-viewport-height,100dvh) - 132px);width:100vw;height:132px;
+    z-index:1091;display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-rows:22px minmax(0,1fr);
+    gap:6px;padding:8px 10px;visibility:visible}
+  .screen.conversation-open .promptmeta{grid-column:1/-1;grid-row:1;display:block;max-width:none;min-width:0}
+  .screen.conversation-open .promptmeta .plab{display:none}
+  .screen.conversation-open .prompt-ava{width:18px;height:18px}
+  .screen.conversation-open #promptInput{grid-row:2;grid-column:1;min-width:0;width:100%;font-size:16px}
+  .screen.conversation-open #promptStop{grid-row:2;grid-column:2}
+  .screen.conversation-open #promptSend{grid-row:2;grid-column:3}
+  .screen.conversation-open .slashmenu,.screen.conversation-open .sendguard{left:10px;right:10px;bottom:calc(100% + 6px)}
+  .screen.conversation-open .sendguard{flex-wrap:wrap}
   .conversation-head{padding:12px}
   .conversation-head{flex-wrap:wrap}
   .conversation-heading{flex-basis:100%}

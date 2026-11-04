@@ -23,7 +23,7 @@ CDP = os.environ.get("ORRERY_CDP_URL")
 
 
 @pytest.fixture
-def cockpit():
+def cockpit(request):
     if not CDP:
         pytest.skip("set ORRERY_CDP_URL to an existing private/shared CDP browser")
     requests = []
@@ -59,7 +59,8 @@ def cockpit():
     client.call("Runtime.enable")
     client.call("Network.enable")
     client.call("Network.setCacheDisabled", cacheDisabled=True)
-    client.call("Emulation.setDeviceMetricsOverride", width=1600, height=1000, deviceScaleFactor=1, mobile=False)
+    mobile=getattr(request,'param',False)
+    client.call("Emulation.setDeviceMetricsOverride", width=390 if mobile else 1600, height=844 if mobile else 1000, deviceScaleFactor=1, mobile=mobile)
     client.call("Page.addScriptToEvaluateOnNewDocument", source="localStorage.clear();localStorage.setItem('oc-first-flight-v1',JSON.stringify({seen:true,open:false}));")
     def js(expression):
         result = client.call("Runtime.evaluate", expression=expression, returnByValue=True, awaitPromise=True)
@@ -232,3 +233,49 @@ def test_preview_request_cancels_and_cannot_restore_after_close(cockpit):
     time.sleep(.1)
     assert js("document.querySelector('.conversation-preview').hidden")
     assert not js("document.querySelector('.conversation-panel').textContent.includes('STALE_CONTENT')")
+
+
+@pytest.mark.parametrize('cockpit',[False,True],indirect=True,ids=['desktop','phone'])
+def test_full_history_keeps_original_composer_usable_and_guarded(cockpit):
+    js,wait,client,requests,enable=cockpit
+    enable(claimed=True,count=6)
+    js("document.querySelector('.conversation-expand').click();packets.length=0")
+    hit=js("""(()=>{const input=document.getElementById('promptInput'),r=input.getBoundingClientRect();
+      const panel=document.querySelector('.conversation-panel').getBoundingClientRect();
+      return {visible:r.width>50&&r.left>=0&&r.right<=(visualViewport?.width||innerWidth)&&r.bottom<=(visualViewport?.height||innerHeight),
+        hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===input,
+        separate:panel.bottom<=document.querySelector('.promptbar').getBoundingClientRect().top+1,
+        count:document.querySelectorAll('#promptInput').length};})()""")
+    assert hit==dict(visible=True,hit=True,separate=True,count=1)
+    # Reading/selection keys remain inert. Only the existing composer's
+    # explicit send path may write to the selected pane.
+    js("document.querySelector('.conversation-scroll').focus()")
+    client.call('Input.dispatchKeyEvent',type='keyDown',key='Enter',windowsVirtualKeyCode=13)
+    client.call('Input.dispatchKeyEvent',type='keyUp',key='Enter',windowsVirtualKeyCode=13)
+    assert not js("packets.some(p=>p.type==='input')")
+    js("promptInput.focus();promptInput.value='/logout';promptSend.click()")
+    assert js("!sendGuard.hidden")
+    assert not js("packets.some(p=>p.type==='input')")
+    # IME confirmation must not submit; Shift+Enter remains a newline.
+    js("sendGuardCancel.click();promptInput.value='fixture prompt';promptInput.focus();promptInput.dispatchEvent(new CompositionEvent('compositionstart'))")
+    client.call('Input.dispatchKeyEvent',type='keyDown',key='Enter',windowsVirtualKeyCode=13)
+    assert not js("packets.some(p=>p.type==='input')")
+    js("promptInput.dispatchEvent(new CompositionEvent('compositionend'))")
+    time.sleep(.1)
+    client.call('Input.dispatchKeyEvent',type='keyDown',key='Enter',windowsVirtualKeyCode=13,modifiers=8)
+    assert not js("packets.some(p=>p.type==='input')")
+    js("promptInput.value='fixture prompt';promptSend.click()")
+    wait("packets.filter(p=>p.type==='input').length===2")
+    assert js("packets.filter(p=>p.type==='input')")==[
+        dict(type='input',paneId='%901',data='\x1b[200~fixture prompt\x1b[201~'),
+        dict(type='input',paneId='%901',data='\r')]
+    assert js("document.querySelector('.screen').classList.contains('conversation-full')")
+    assert not js("packets.some(p=>p.type==='resize')")
+    assert js("promptInput.value")==''
+    assert js("""(()=>{const r=document.querySelector('.conversation-panel').getBoundingClientRect(),v=visualViewport;
+      return r.height>200&&r.top>=v.offsetTop&&r.bottom<=v.offsetTop+v.height-80;})()""")
+    if js('visualViewport.width<600'):
+        client.call('Emulation.setDeviceMetricsOverride',width=390,height=600,deviceScaleFactor=1,mobile=True)
+        wait("document.querySelector('.screen').style.getPropertyValue('--conversation-viewport-height')==='600px'")
+        assert js("""(()=>{const p=document.querySelector('.conversation-panel').getBoundingClientRect(),r=promptInput.getBoundingClientRect();
+          return p.top>=0&&p.height>150&&r.bottom<=visualViewport.height;})()""")

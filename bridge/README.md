@@ -70,6 +70,13 @@ phone the preview takes the reader area until closed. The preview is labeled
 **Current file · may differ from the recorded edit**. Reveal is an explicit
 button using the existing file-manager adapter.
 
+Full-width History reserves space for the original prompt composer below it;
+on phones it places the target above the textarea and STOP/SEND controls.
+This is the same DOM element, draft, target, IME handling, send guard and
+WebSocket input route as the terminal composer. Reading/preview keys do not
+send input. Enter in the composer or an explicit SEND sends, and the normal
+history poll picks up the resulting conversation without resetting the reader.
+
 `conversation_artifacts.py` provides a bounded inert projection;
 `conversation_preview.py` issues process-local opaque references;
 `conversation_source.js` handles requests; `conversation_preview.js` is the

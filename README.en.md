@@ -79,6 +79,10 @@ split preview of the current text or raster image, clearly distinguished from
 the recorded diff. **Reveal in file manager** explicitly selects that file in
 Finder or Explorer; it never opens automatically.
 
+The original prompt composer remains below full-width History, including on
+phones. Check its target and use Enter or SEND explicitly; reading keys stay in
+the history view. Existing send guards, IME handling and the input route apply.
+
 Codex is supported first; Claude Code is planned for the next phase. Legacy can
 **Load earlier**. Fresh uses the protected API's recent text snapshot (up to 200
 messages, subject to upstream byte limits); older pages and tool summaries are
