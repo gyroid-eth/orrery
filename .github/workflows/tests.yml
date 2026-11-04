@@ -49,7 +49,7 @@ jobs:
 
       - name: bridge tests
         working-directory: bridge
-        run: python -m pytest -q -rs tests
+        run: python -m pytest -vv -rs tests
 
       # Not named test_*, so the step above does not collect it. Its v2
       # contract suite needs ORRERY_E2E_V2=1; the two spawn cases stay off
