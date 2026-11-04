@@ -100,8 +100,9 @@ class Literal:
         self.pos+=len(match[0]);return json.loads(match[0])
 
 
-def static_calls(text):
+def static_calls(text,names=('apply_patch','view_image','read_file','write_file','Edit','Read')):
     reader=Literal(text)
+    pattern=r'tools\.('+ '|'.join(re.escape(name) for name in names)+r')\s*\('
     while reader.pos<len(text):
         try:
             reader.space()
@@ -111,7 +112,7 @@ def static_calls(text):
             # contents are not calls) or an expression. Refuse the ambiguous
             # remainder rather than parsing code-like text inside a regexp.
             if text[reader.pos]=='/':return
-            match=(re.match(r'tools\.(apply_patch|view_image|read_file|write_file|Edit|Read)\s*\(',text[reader.pos:])
+            match=(re.match(pattern,text[reader.pos:])
                    if reader.pos==0 or not re.match(r'[\w$.]',text[reader.pos-1]) else None)
             if match:
                 reader.pos+=len(match[0]);value=reader.value();reader.space()

@@ -102,6 +102,38 @@ still come solely from provider records. Paste and delayed Enter use the same
 captured pane/session; removal, replacement or connection change cancels Enter
 with a visible notice. Deferred image paste also keeps its original target.
 
+### Find a recorded message in its terminal
+
+Click message text or a tool summary (or focus it and press Enter/Space) to
+search only that pane's current xterm buffer. Soft-wrapped rows are joined and
+whitespace is normalized. A unique literal match scrolls to and selects the
+physical rows, without input, resize, claim or tmux copy-mode. Wide readers
+return to side mode; narrow readers close only their own history. Bottom restores
+normal terminal following. No-match and multiple-match notices leave History
+open. Native text selection, double click and file/diff controls keep their own
+actions. The search scans at most 6500 rows / 2 MiB; removed rows and old
+alternate-screen frames are unavailable. Markdown rendering, truncation and
+redaction can prevent a literal match.
+
+### Recorded Mail cards
+
+`conversation_mail.py` projects exact notification prefixes in user text and
+qualified ORRERY `send_message` calls from Codex, Claude, dsh and Hermes. It emits
+`kind: mail`, a bounded `mail` list and the existing event ID/cursors. Each item
+contains direction, sender/recipients, subject, importance, recorded body,
+coverage (`complete`, `preview`, `unavailable`, `request`) and a truncation flag.
+Only these named fields leave tool arguments; auth and raw results are omitted.
+Static literal calls inside Codex `functions.exec` are supported without eval;
+computed arguments and unrelated services remain ordinary tool summaries.
+
+`conversation_mail.js` renders collapsible text-only cards. A notification is
+recorded text, not authenticated delivery evidence; send requests say delivery
+is unconfirmed. Body text is capped at 64 Ki characters each / 128 Ki per tool
+record, at most eight sends. Preview and missing-body notices direct the reader
+to Mail. No Mail API/DB access, inbox/ack consumption, attachment loading or new
+send API is added. Fresh can classify notifications in its protected text
+projection; outgoing tools still need a protected tool projection there.
+
 Unbound/stale responses carry the dashboard reason code to the source module,
 which renders a short next action (new child, wait/retry, or Codex plugin/hooks
 setup). It does not offer rebinding or infer a transcript path.
@@ -353,3 +385,18 @@ provide the same tracked-only restore safety net. A failed restore retains its
 snapshot for a later retry, and an incomplete teardown logs the session and
 remaining window IDs. See [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md#recorder-と復元)
 for the full ownership and restore contract.
+
+J1 stops without moving when either its row/character search budget or query
+length limit prevents checking the entire retained buffer. A partial search
+cannot prove a unique match. Mail calls inside a composite `functions.exec`
+add cards while retaining the original tool, file references and recorded diff.
+The fixed ORRERY aliases include the bound `agentstack` proxy's send tool;
+arbitrary services named `send_message` remain ordinary tools.
+
+Split panes have their own title bars: the name and status identify the pane,
+HISTORY reads that pane, and WINDOW moves that session into its own window.
+The shared upper header is hidden while two or more splits are visible. A
+single pane retains the existing header. Pane names still support drag reordering
+and closing; their keyboard focus action uses Enter or Space. Title bars stay 40px high at every width. Names and status ellipsize; narrow
+panes use HIST/WIN labels and the smallest panes use labelled icons.
+Turning conversation history off removes HISTORY while keeping WINDOW available.

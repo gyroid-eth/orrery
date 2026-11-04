@@ -90,6 +90,16 @@ Submitting closes that pane's preview and resumes following its newest recorded
 messages. Paste and Enter keep the original target; if its pane or connection
 changes before Enter, submission is cancelled with a notice.
 
+Click a message or tool summary to find its retained text in that pane's xterm
+buffer. A unique match reveals the terminal line; a narrow cell closes only its
+own reader. Selection/copy and file chips keep their own actions. Missing or
+ambiguous matches show a notice. Lost alternate-screen frames cannot be restored.
+
+Recorded ORRERY Mail notifications and send requests appear as **ORRERY MAIL**
+cards. Click to expand the recorded body. Preview notifications say to continue
+in Mail. This does not fetch Mail bodies or mark messages read, and a send
+request is not presented as confirmed delivery.
+
 The pane header keeps its status (such as ACTIVE), HISTORY and WINDOW. Find
 FOLLOW/CLAIMED and the external-terminal action in **Settings → Terminal →
 Selected pane actions**. The existing default remains: automatically claim a
@@ -380,3 +390,6 @@ This repository is under the **PolyForm Perimeter License 1.0.1** (except the po
 ## Reporting problems
 
 Report problems in the GitHub repository's Issues. Including the task name, the steps to reproduce, the startup logs of ORRERY / ORRERY Telemetry, and the result of `/telemetry/health` will speed up isolating the cause.
+
+In split view, each pane's title bar owns its name, status, HISTORY and WINDOW
+actions. Each action targets that pane; the single-pane header stays unchanged.

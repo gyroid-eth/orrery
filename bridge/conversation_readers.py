@@ -16,6 +16,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from urllib.parse import quote
+from conversation_mail import received, sent
 
 from conversation_history import (HistoryUnavailable, MAX_SCAN, MAX_TEXT, PAGE_SIZE,
     open_bound_transcript, assert_transcript_identity, read_codex_page)
@@ -53,7 +54,7 @@ def epoch(value, divisor=1):
 
 def text_event(text,role,ts):
     if not isinstance(text,str) or not text.strip():return None
-    return dict(kind='text',role=role,text=text[:MAX_TEXT],truncated=len(text)>MAX_TEXT,ts=ts)
+    return received(dict(kind='text',role=role,text=text[:MAX_TEXT],truncated=len(text)>MAX_TEXT,ts=ts))
 
 
 def tool_event(name,ts,*,result=False,failed=False):
@@ -84,7 +85,7 @@ def normalize(item,p,sid):
             for i,b in enumerate(content[:MAX_BLOCKS]):
                 if not isinstance(b,dict):continue
                 if b.get('type')=='text':add(i,text_event(b.get('text'),role,ts))
-                elif b.get('type')=='tool_use' and role=='assistant':add(i,tool_event(b.get('name'),ts))
+                elif b.get('type')=='tool_use' and role=='assistant':add(i,sent(tool_event(b.get('name'),ts),b.get('name'),b.get('input')))
                 elif b.get('type')=='tool_result' and role=='user':
                     add(i,tool_event('Tool result',ts,result=True,failed=bool(b.get('is_error'))))
                 elif b.get('type') in {'image','document'}:add(i,text_event('[attachment]',role,ts))
@@ -96,7 +97,7 @@ def normalize(item,p,sid):
             add(0,text_event(blocks_text(data.get('content')),'user',ts))
         elif kind=='assistant/message' and isinstance(data.get('message'),dict):
             add(0,text_event(blocks_text(data['message'].get('content')),'assistant',ts))
-        elif kind=='tool/call':add(0,tool_event(data.get('name'),ts))
+        elif kind=='tool/call':add(0,sent(tool_event(data.get('name'),ts),data.get('name'),data.get('arguments')))
         elif kind=='tool/result' and isinstance(data.get('message'),dict):
             add(0,tool_event('Tool result',ts,result=True,failed=bool(data['message'].get('isError'))))
     elif p=='hermes':
@@ -109,7 +110,7 @@ def normalize(item,p,sid):
                 except ValueError:calls=[]
             for i,call in enumerate(calls[:MAX_BLOCKS] if isinstance(calls,list) else []):
                 if isinstance(call,dict) and isinstance(call.get('function'),dict):
-                    add(i+1,tool_event(call['function'].get('name'),ts))
+                    add(i+1,sent(tool_event(call['function'].get('name'),ts),call['function'].get('name'),call['function'].get('arguments')))
         elif role=='tool':
             result=parse(item.get('content') or '{}')
             add(0,tool_event(item.get('tool_name') or 'Tool result',ts,result=True,failed=bool(result.get('error') or result.get('is_error') or result.get('success') is False)))

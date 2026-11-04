@@ -76,6 +76,10 @@ split中は各区画の **History** から独立して開けます。全幅表�
 全幅の履歴の下でも、既存のprompt入力欄から選択中のpaneに送れます。スマホ幅でも宛先・入力欄・SENDを表示します。履歴を読むキーは端末へ送られず、入力欄のEnterまたはSENDで明示的に送ります。
 送信すると、そのpaneの履歴はpreviewを閉じて最新へ戻り、記録の追記を追従します。本文とEnterは送信開始時の同じpaneへ送り、待ち時間中に端末が消失・置換・再接続した場合はEnterを送らず通知します。
 
+発言やtoolの本文をクリックすると、同じpaneのxtermに残っている文字を探します。一意に一致したときだけ端末の該当行を表示します。狭い区画ではその履歴だけを閉じます。文字の選択・コピーやfileチップは別の操作です。一致なし・複数一致は案内を表示し、代替画面の消えた過去の描画は復元しません。
+
+記録内のORRERY Mail通知と送信要求は、**ORRERY MAIL** のカードで表示し、押すと記録された文面を展開します。preview通知は「続きはMailに」と区別します。Mail serverからの本文取得・既読操作は行わず、送信要求を配信完了とは表示しません。
+
 paneの見出しは状態表示（ACTIVE等）・HISTORY・WINDOWに整理しています。端末サイズのFOLLOW／CLAIMEDとGhostty等で開く操作は **Settings → Terminal → Selected pane actions** にあります。対話clientがいないsessionを自動CLAIMEDにし、いる場合はFOLLOWにする既定は同じです。手動の選択が優先されます。
 
 legacy は Codex に加え、Telemetry API 35以降で本人の記録と確認された Claude・dsh・Hermes に対応します。古いdashboardではCodexのみです。staleは「前の会話」と理由を表示し、本文は読みません。Claude・Codex・dsh は **Load earlier** で遡れます。dshは記録されたappendの時系列、Hermesはboundなsegmentのactiveな直近snapshot（最大200件）で、圧縮前のsegmentは含みません。fresh は保護された API の直近の本文 snapshot（最大200件。量の制限で短くなる場合あり）で、過去ページと tool 要約には未対応です。保持量に達して読む位置で更新が止まった場合は **Latest** で最新へ戻り、再開できます。[操作と上限の詳細](bridge/README.md)も確認してください。
@@ -361,3 +365,6 @@ ORRERY は ORRERY Telemetry、`tmux`、`xterm.js` などと連携します。こ
 ## 不具合の報告
 
 不具合は GitHub repository の Issues へ報告してください。task 名、再現手順、ORRERY / ORRERY Telemetry の起動 log、`/telemetry/health` の結果を添えると切り分けが早くなります。
+
+split 中は各 pane の見出しに名前・状態と HISTORY / WINDOW をまとめます。
+ボタンはその見出しの pane が対象で、1 pane は従来の見出しのままです。

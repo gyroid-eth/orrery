@@ -13,6 +13,7 @@ import re
 import stat
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
+from conversation_mail import received, sent
 
 MAX_SCAN = 4 * 1024 * 1024
 MAX_TEXT = 64 * 1024
@@ -115,14 +116,15 @@ def codex_event(raw: bytes, offset: int) -> dict | None:
             return None
         if not text.strip():
             return None
-        return dict(base, kind="text", role=payload["role"], text=text[:MAX_TEXT],
-                    truncated=len(text) > MAX_TEXT)
+        return received(dict(base, kind="text", role=payload["role"], text=text[:MAX_TEXT],
+                    truncated=len(text) > MAX_TEXT))
     if kind in {"function_call", "custom_tool_call"}:
         # Arguments/results can contain credentials. The initial reader shows
         # only the call's name, rather than interpolating arbitrary tool input.
         name = payload.get("name")
         if isinstance(name, str):
-            return dict(base, kind="tool", role="assistant", text=name[:160])
+            return sent(dict(base, kind="tool", role="assistant", text=name[:160]),name,
+                        payload.get('input',payload.get('arguments')))
     return None
 
 

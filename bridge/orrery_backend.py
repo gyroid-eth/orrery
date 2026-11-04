@@ -51,6 +51,7 @@ from usage_probe import (
 )
 from conversation_history import (HistoryUnavailable, bound_agent, open_reader)
 from conversation_artifacts import redact
+from conversation_mail import received as recorded_mail
 from conversation_preview import ReferenceStore, PreviewUnavailable, binding as conversation_binding
 
 DEFAULT_HOST = "127.0.0.1"
@@ -1892,7 +1893,8 @@ async def serve_conversation(request: web.Request) -> web.Response:
             finally:
                 await asyncio.to_thread(manager.__exit__,None,None,None)
             result.setdefault('mode','cursor')
-        for event in result['events']:
+        for index,event in enumerate(result['events']):
+            event=recorded_mail(event);result['events'][index]=event
             event['text'] = redact(event['text'])
         return web.json_response(dict(result, ok=True, agent=name, provider=provider),
                                  headers={"Cache-Control": "no-store"})
@@ -4030,6 +4032,7 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "demo_mode.js", "orrery_view.js", "mail_view.js", "cockpit_tour.js",
     "cockpit_full_tour.js", "telemetry_light.js",
     "conversation_source.js", "conversation_view.js", "conversation_view.css", "conversation_preview.js",
+    "conversation_mail.js", "conversation_terminal.js",
     "vendor/xterm-5.5.0/xterm.js", "vendor/xterm-5.5.0/xterm.css",
     "vendor/addon-fit-0.10.0/addon-fit.js",
     "vendor/addon-web-links-0.11.0/addon-web-links.js",

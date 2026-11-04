@@ -5,7 +5,7 @@
   'use strict';
   const KEY='oc-term-conversation-enabled';
   const MAX_EVENTS=400,MAX_BYTES=2*1024*1024;
-  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null}){
+  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null}){
     const screen=host||document.querySelector('.screen'),toggle=control||document.getElementById('conversationToggle');
     const listeners=[];
     function listen(target,type,handler,options){if(!target)return;target.addEventListener(type,handler,options);listeners.push(()=>target.removeEventListener(type,handler,options));}
@@ -47,10 +47,10 @@
     const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onActivate:()=>expand(true)});
     let enabled=false,opened=false,agent='',generation=0,controller=null,timer=0,busy=false;
     let before=null,after=null,hasOlder=false,mode='',newCount=0,events=new Map();
-    let contextKey='',paused=false,retainedBytes=0,providerLabel='Codex',followPending=false;
+    let contextKey='',boundContext={},paused=false,retainedBytes=0,providerLabel='Codex',followPending=false,jumpTimer=0;
     const byteSize=event=>new TextEncoder().encode(JSON.stringify(event)).byteLength;
     const fingerprint=current=>JSON.stringify(['name','program','provider','history_binding','transcript_path',
-      'native_session_id','history_session_id','history_receipt_ts','created','mail_instance_id','mail_agent_id'].map(key=>current[key]??null));
+      'native_session_id','history_session_id','history_receipt_ts','created','mail_instance_id','mail_agent_id','terminalPaneId'].map(key=>current[key]??null));
     function nearBottom(){return scroll.scrollHeight-scroll.clientHeight-scroll.scrollTop<45;}
     function position(){
       const atBottom=nearBottom();
@@ -59,8 +59,8 @@
       latest.textContent=paused?'Latest · resume':newCount?newCount+' new':'Latest';
     }
     function message(text){status.textContent=text;}
-    function stop(){clearTimeout(timer);timer=0;if(controller)controller.abort();controller=null;generation++;busy=false;followPending=false;}
-    function clear(){preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
+    function stop(){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;if(controller)controller.abort();controller=null;generation++;busy=false;followPending=false;}
+    function clear(){clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     function draw(event){const article=renderEvent?renderEvent(event,node):node(event);return preview?preview.render(event,article):article;}
     function anchor(){
       const top=scroll.getBoundingClientRect().top;
@@ -91,6 +91,7 @@
     function node(event){
       const article=document.createElement('article');article.className='conversation-event';
       article.dataset.eventId=event.id;article.dataset.role=event.role;article.dataset.kind=event.kind;
+      if(event.kind==='mail'&&Array.isArray(event.mail)&&root.OrreryConversationMail)return root.OrreryConversationMail.render(event,article);
       const byline=document.createElement('div');byline.className='conversation-byline';
       const role=document.createElement('span');role.className='conversation-role';
       role.textContent=event.kind==='tool'?'Tool':event.kind==='tool_result'?'Tool result':event.role==='user'?'You':providerLabel;byline.appendChild(role);
@@ -105,7 +106,38 @@
         const text=document.createElement('p');text.className='conversation-text';text.textContent=event.text;article.appendChild(text);
       }
       if(event.truncated){const note=document.createElement('div');note.className='conversation-truncated';note.textContent='Long message shortened in this reader.';article.appendChild(note);}
+      const target=article.querySelector('.conversation-text')||byline;
+      if(jumpToEvent){
+        target.classList.add('conversation-jumpable');target.tabIndex=0;target.setAttribute('role','button');
+        target.setAttribute('aria-label','Show this message in its terminal');target.title='Click to find this message in the terminal';
+        let press=null;
+        target.addEventListener('pointerdown',e=>{press={x:e.clientX,y:e.clientY,selected:!root.getSelection()?.isCollapsed};});
+        target.addEventListener('click',e=>{
+          clearTimeout(jumpTimer);
+          if(e.detail>1||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||press?.selected||!root.getSelection()?.isCollapsed)return;
+          if(press&&Math.hypot(e.clientX-press.x,e.clientY-press.y)>5)return;
+          const token=generation;
+          // Give double click and drag selection their native copy behaviour.
+          jumpTimer=setTimeout(()=>{if(token===generation&&opened&&root.getSelection()?.isCollapsed)jump(event);},600);
+        });
+        target.addEventListener('keydown',e=>{if(!['Enter',' '].includes(e.key)||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey)return;e.preventDefault();e.stopPropagation();clearTimeout(jumpTimer);if(root.getSelection()?.isCollapsed)jump(event);});
+      }
+      if(Array.isArray(event.mail)&&root.OrreryConversationMail)root.OrreryConversationMail.render(event,article);
       return article;
+    }
+    function jump(event){
+      const result=fingerprint(getContext()||{})!==contextKey?{state:'changed'}:
+        jumpToEvent({agent,event,context:boundContext})||{state:'changed'};
+      if(result.state==='unique'){
+        preview?.close();
+        if(screen.getBoundingClientRect().width<800||root.innerWidth<=1200)close({focus:false});
+        else expand(false);
+        message('Matching message shown in this terminal.');
+      }else if(result.state==='limited')message('端末の保存行が探索上限を超え、一意に確認できません。ここで履歴を続けて読めます。');
+      else if(result.state==='multiple')message('同じ内容が'+result.count+'か所'+(result.limited?'以上':'')+'あります。ここで履歴を続けて読めます。');
+      else if(result.state==='alternate')message('この画面の過去の描画は端末に保存されません。ここで履歴を続けて読めます。');
+      else if(result.state==='changed')message('端末が切り替わりました。もう一度探してください。');
+      else message('この内容は端末の保存行に見つかりません。ここで履歴を続けて読めます。');
     }
     function schedule(){
       clearTimeout(timer);
@@ -193,7 +225,7 @@
       const current=getContext()||{};const name=String(current.name||''),key=fingerprint(current);
       if(!opened)return;
       if(name===agent&&key===contextKey)return;
-      stop();agent=name;contextKey=key;clear();
+      stop();agent=name;contextKey=key;clear();boundContext={...current};
       el('.conversation-subtitle').textContent=(agent||'No pane selected')+' · read-only';
       if(!agent){empty.textContent='Select an agent pane to read its conversation.';message('No agent selected');return;}
       providerLabel=({'claude-code':'Claude',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[current.program]||'Codex';
@@ -203,7 +235,8 @@
       if(!opened)return;
       stop();opened=false;agent='';panel.hidden=true;screen.classList.remove('conversation-open','conversation-full');
       screen.style.removeProperty('--conversation-viewport-height');screen.style.removeProperty('--conversation-viewport-top');
-      toggle.setAttribute('aria-expanded','false');clear();onState();if(focus&&!toggle.hidden)(focusControl||toggle).focus();
+      toggle.setAttribute('aria-expanded','false');clear();onState();const target=typeof focusControl==='function'?focusControl():focusControl||toggle;
+      if(focus&&target&&!target.hidden&&target.getClientRects().length)target.focus();
     }
     function open(){
       if(!enabled)return;
@@ -263,7 +296,7 @@
     const screen=document.querySelector('.screen'),toggle=document.getElementById('conversationToggle');
     const views=new Map();let sequence=0,syncing=false;
     const enabled=()=>{try{return localStorage.getItem(KEY)==='1';}catch(_){return false;}};
-    const slots=()=>enabled()&&innerWidth>600?getSlots():[];
+    const slots=()=>enabled()?getSlots():[];
     const current=()=>{const name=(getContext()||{}).name;return slots().length?views.get(name)?.view:single;};
     function paint(){const view=current();toggle.hidden=!enabled();toggle.setAttribute('aria-expanded',String(Boolean(view?.opened)));toggle.setAttribute('aria-controls',view?.panel.id||'conversationPanel');}
     const proxy=document.createElement('button');
@@ -279,13 +312,16 @@
         }
         for(const slot of layout){
           if(views.has(slot.name))continue;
-          const control=document.createElement('button');control.type='button';control.className='cockpit-control split-history-toggle';control.textContent='History';
+          const control=document.createElement('button');control.type='button';control.className='cockpit-control split-history-toggle';control.innerHTML='<span class="pane-action-wide" aria-hidden="true">HISTORY</span><span class="pane-action-short" aria-hidden="true">HIST</span><span class="pane-action-icon" aria-hidden="true">◷</span>';
+          control.title='Read history for '+slot.name;
           control.setAttribute('aria-label','Read history for '+slot.name);control.setAttribute('aria-expanded','false');
           const id='conversationPanel-'+(++sequence);control.setAttribute('aria-controls',id);
-          slot.host.classList.add('conversation-cell');slot.host.appendChild(control);
+          slot.host.classList.add('conversation-cell');
+          const controls=slot.controlHost||slot.host;controls.insertBefore(control,controls.firstChild);
           control.addEventListener('mousedown',event=>event.stopPropagation());
           control.addEventListener('pointerdown',event=>event.stopPropagation());
           const view=mount({...options,host:slot.host,control,panelId:id,getContext:()=>getContext(slot.name),
+            focusControl:()=>control.getClientRects().length?control:toggle,
             onActivate:()=>{if((getContext()||{}).name!==slot.name)activate(slot.name);},onState:paint});
           views.set(slot.name,{view,host:slot.host,control});
         }

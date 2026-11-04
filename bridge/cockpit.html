@@ -675,6 +675,44 @@
     border:1px solid transparent;
   }
   .split-cell.focused{border-color:var(--amber);box-shadow:inset 0 0 0 1px rgb(var(--theme-accent-rgb) / .16)}
+  /* Each split owns its title and actions; the single-pane header is unchanged. */
+  .screen.split-pane-headers>.scr-head{display:none}
+  .screen.split-pane-headers>.termstage{top:0}
+  .split-cell{container:split-pane / inline-size}
+  .split-cell-head{display:none}
+  .split-pane-headers .split-cell-head{position:absolute;inset:0 0 auto;height:40px;z-index:5;
+    display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--panel);
+    border-bottom:1px solid var(--hair);min-width:0}
+  .split-pane-headers .split-cell>.termhost{top:40px}
+  .split-pane-headers .split-cell-label{position:static;flex:1;min-width:0;max-width:none;
+    padding:0;border:0;border-radius:0;background:transparent;backdrop-filter:none;
+    -webkit-backdrop-filter:none;box-shadow:none;gap:6px}
+  .split-pane-headers .split-cell-label .scl-name{min-width:0;flex:0 1 auto;cursor:pointer}
+  .split-pane-headers .split-cell-label .scl-name:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  .split-pane-headers .split-cell-label .scl-close{position:static;flex:0 0 22px;width:22px;height:22px;
+    opacity:.6;pointer-events:auto;transform:none;font-size:14px}
+  .split-pane-headers .split-cell-label .scl-role{display:none}
+  .split-cell-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto;margin-left:auto}
+  .split-cell-status{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-faint);font:9px var(--mono);text-transform:uppercase;cursor:default}
+  .split-cell-status::before{content:'●';font-size:7px;margin-right:5px}
+  .split-cell-status.live{color:var(--amber)}
+  .split-cell.focused>.split-cell-head{box-shadow:inset 3px 0 var(--amber)}
+  .pane-action-short,.pane-action-icon{display:none}
+  @container split-pane (max-width:320px){
+    .split-pane-headers .split-cell-head{gap:4px;padding:5px 6px}
+    .split-pane-headers .split-cell-label{gap:4px}
+    .split-pane-headers .split-cell-label img{display:none}
+    .split-pane-headers .split-cell-label .scl-close{flex-basis:18px;width:18px}
+    .split-cell-actions{gap:4px}
+    .split-cell-actions .cockpit-control{font-size:9px;padding:5px}
+    .split-cell-actions .pane-action-wide{display:none}
+    .split-cell-actions .pane-action-short{display:inline}
+  }
+  @container split-pane (max-width:140px){
+    .split-cell-actions .pane-action-short{display:none}
+    .split-cell-actions .pane-action-icon{display:inline;font-size:14px}
+    .split-cell-actions .cockpit-control{width:28px;padding:4px}
+  }
   .split-cell.bottom-span{grid-column:1/-1}
   .split-cell.main-span{grid-row:1/-1}
   /* identity chip: floats over live terminal text, so it carries its own
@@ -6699,6 +6737,23 @@ function jumpPaneToBottom(paneId,{focus=true}={}){
   if(focus)pane.term.focus();
   return true;
 }
+function jumpConversationEvent({agent,event,context}){
+  const paneId=context.terminalPaneId,pane=panes.get(paneId);
+  if(!pane||pane.session!==agent||!pane.host.isConnected||hostSnapshotPending(pane.host)||!window.OrreryConversationTerminal)return {state:'changed'};
+  const buffer=pane.term.buffer.active;
+  let result;
+  try{result=OrreryConversationTerminal.find(buffer,event.text,{alternate:Boolean(pane.meta.alternateOn||pane._wheelAlternate)});}
+  catch(_){return {state:'not_retained',count:0};}
+  if(result.state!=='unique')return result;
+  // Search and movement are synchronous and local to the same retained buffer.
+  // Do not focus the terminal, send keys, resize, claim, or enter tmux copy-mode.
+  if(panes.get(paneId)!==pane||pane.term.buffer.active!==buffer)return {state:'changed'};
+  pane._followStick=false;pane._readerScrolled=true;pane._xtermAtBottom=false;
+  pane.term.scrollToLine(Math.max(0,result.line-3));
+  pane.term.selectLines(result.line,result.endLine);
+  pane.host.scrollTop=0;pane.host.scrollLeft=0;paintPaneBottomJump(pane);
+  return result;
+}
 /* While a pane is "pending" its scroll position is not preserved — see
    captureHostScrollState. The window is opened when the pane is created (the
    snapshot is on its way) and again, exactly, around the write of the output
@@ -6821,7 +6876,7 @@ function bottomJumpShortcutBlocked(event){
   return targets.some(target=>{
     if(!target.closest||target.closest('.xterm'))return false;
     return Boolean(target.closest(
-      '.promptbar,.overlay,.settings-popover,.conversation-panel,[contenteditable="true"],input,textarea,select',
+      '.promptbar,.overlay,.settings-popover,.conversation-panel,.split-cell-head,[contenteditable="true"],input,textarea,select',
     ));
   });
 }
@@ -6830,7 +6885,7 @@ function editableElementOwnsFocus(){
   if(!focused||focused===document.body||!focused.matches)return false;
   // xterm owns a hidden textarea. It is terminal input, not a browser form.
   if(focused.closest('.xterm'))return false;
-  if(focused.closest('.conversation-panel,.settings-popover'))return true;
+  if(focused.closest('.conversation-panel,.settings-popover,.split-cell-head'))return true;
   return focused.matches('input,textarea,select,[contenteditable="true"]')||
     focused.isContentEditable;
 }
@@ -6955,11 +7010,14 @@ function beginSplitLabelPointer(event,session,label){
 function ensureSplitCell(session){
   let cell=splitCells.get(session);if(cell)return cell;
   cell=document.createElement('div');cell.className='split-cell';cell.dataset.session=session;
+  const head=document.createElement('div');head.className='split-cell-head';head.setAttribute('role','group');head.setAttribute('aria-label','Pane '+session);
   const label=document.createElement('span');label.className='split-cell-label';
   const lava=document.createElement('img');lava.alt='';
   lava.src='/telemetry/portrait?v=3&name='+encodeURIComponent(session);
   lava.onerror=()=>lava.remove();
   const lname=document.createElement('span');lname.className='scl-name';lname.textContent=session;
+  lname.tabIndex=0;lname.setAttribute('role','button');lname.setAttribute('aria-label','Focus pane '+session);lname.title=session;
+  lname.addEventListener('keydown',event=>{if(!['Enter',' '].includes(event.key))return;event.preventDefault();event.stopPropagation();focusSplitSession(session);});
   const lrole=document.createElement('span');lrole.className='scl-role';
   const agent=currentAgents.find(item=>item&&item.name===session);
   const role=String(agent&&agent.annot&&agent.annot.role||'').trim();
@@ -6969,7 +7027,14 @@ function ensureSplitCell(session){
   close.setAttribute('aria-label',`Close ${session} pane`);
   label.append(lava,lname,lrole,close);
   const empty=document.createElement('span');empty.className='split-cell-empty';empty.textContent='connecting…';
-  cell.append(label,empty);
+  const state=document.createElement('span');state.className='split-cell-status';state.setAttribute('role','status');
+  const actions=document.createElement('div');actions.className='split-cell-actions';
+  const windowButton=document.createElement('button');windowButton.type='button';windowButton.className='cockpit-control split-pane-window';windowButton.innerHTML='<span class="pane-action-wide" aria-hidden="true">WINDOW</span><span class="pane-action-short" aria-hidden="true">WIN</span><span class="pane-action-icon" aria-hidden="true">↗</span>';
+  windowButton.title='Move '+session+' into its own window';windowButton.setAttribute('aria-label','Open '+session+' in its own window');
+  windowButton.addEventListener('click',()=>popPaneSessionToWindow(session));
+  for(const type of ['pointerdown','mousedown'])head.addEventListener(type,event=>event.stopPropagation());
+  head.addEventListener('keydown',event=>event.stopPropagation());
+  label.insertBefore(state,lrole);actions.append(windowButton);head.append(label,actions);cell.append(head,empty);
   label.addEventListener('pointerdown',event=>beginSplitLabelPointer(event,session,label));
   label.addEventListener('pointermove',updateSplitLabelDrag);
   label.addEventListener('pointerup',event=>finishSplitLabelDrag(event));
@@ -6989,7 +7054,7 @@ function ensureSplitCell(session){
     }
     focusSplitSession(session,null,{forceFocus:true});
   });
-  cell._empty=empty;cell._close=close;cell._role=lrole;
+  cell._empty=empty;cell._close=close;cell._role=lrole;cell._actions=actions;cell._status=state;cell._window=windowButton;
   splitCells.set(session,cell);return cell;
 }
 let fullTourSplitPending=false;
@@ -6998,6 +7063,7 @@ function emitFullTourAction(id){
 }
 function renderStage({fit=true}={}){
   const members=splitVisible?splitSessions.slice():[];
+  document.querySelector('.screen').classList.toggle('split-pane-headers',members.length>1);
   const oldCountClasses=[...stageEl.classList].filter(name=>name.startsWith('split-count-'));
   stageEl.classList.remove('split-grid',...oldCountClasses);
   if(!members.length){
@@ -7038,6 +7104,10 @@ function renderStage({fit=true}={}){
         if(host.dataset.paneId!==paneId)moveHostPreservingScroll(host,stageEl);
       });
       const p=panes.get(paneId);
+      cell._window.disabled=!p;
+      cell._status.textContent=p?(p.meta.active?'active':'live'):'connecting';
+      cell._status.title=cell._status.textContent;
+      cell._status.classList.toggle('live',Boolean(p));
       if(p){
         moveHostPreservingScroll(p.host,cell);
         visible.add(paneId);cell._empty.style.display='none';
@@ -8145,13 +8215,16 @@ function popSessionToWindow(session,geometry){
   }
   return true;
 }
-function popActivePaneToWindow(){
-  const p=panes.get(activeId);if(!p)return;
-  const ok=popSessionToWindow(p.session,{
+function popPaneSessionToWindow(session){
+  // The title owns its session even while another split has keyboard focus.
+  const paneId=paneIdForSession(session),pane=panes.get(paneId);
+  if(!pane||pane.session!==session)return;
+  const ok=popSessionToWindow(session,{
     screenX:window.screenX+window.outerWidth/2,screenY:window.screenY+120,width:820,height:560,
   });
   if(!ok)showToast('POPUP BLOCKED · allow popups for the cockpit, or drag the tab onto the cockpit to float it',true);
 }
+function popActivePaneToWindow(){const pane=panes.get(activeId);if(pane)popPaneSessionToWindow(pane.session);}
 panePopoutBtn.addEventListener('click',popActivePaneToWindow);
 
 /* floating pane over the cockpit */
@@ -10778,11 +10851,14 @@ const conversationView=(()=>{
       await asset('link','href','conversation_view.css');
       await asset('script','src','conversation_source.js');
       await asset('script','src','conversation_preview.js');
+      await asset('script','src','conversation_mail.js');
+      await asset('script','src','conversation_terminal.js');
       await asset('script','src','conversation_view.js');
       instance=OrreryConversation.mountWorkspace({
-        getContext:(selected)=>{const name=selected||activeSession();return currentAgents.find(a=>a.name===name)||{name};},
-        getSlots:()=>splitVisible?splitSessions.map(name=>({name,host:splitCells.get(name)})).filter(slot=>slot.host?.isConnected):[],
+        getContext:(selected)=>{const name=selected||activeSession();return {...(currentAgents.find(a=>a.name===name)||{name}),terminalPaneId:paneIdForSession(name)};},
+        getSlots:()=>splitVisible?splitSessions.map(name=>({name,host:splitCells.get(name),controlHost:splitCells.get(name)?._actions})).filter(slot=>slot.host?.isConnected):[],
         activate:name=>focusSplitSession(name),
+        jumpToEvent:jumpConversationEvent,
       });
       return instance;
     })().catch(error=>{loading=null;showToast(error.message,true);return null;});

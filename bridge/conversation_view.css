@@ -77,18 +77,20 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .screen.conversation-open .scr-head{position:fixed;left:0;right:auto;
     top:calc(var(--conversation-viewport-top,0px) + 54px);width:100vw;z-index:1092;background:var(--panel)}
   .screen.conversation-open .termstage{visibility:hidden}
-  .screen.conversation-open .promptbar{position:fixed;left:0;right:auto;bottom:auto;
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .promptbar{position:fixed;left:0;right:auto;bottom:auto;
     top:calc(var(--conversation-viewport-top,0px) + var(--conversation-viewport-height,100dvh) - 132px);width:100vw;height:132px;
     z-index:1091;display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-rows:22px minmax(0,1fr);
     gap:6px;padding:8px 10px;visibility:visible}
-  .screen.conversation-open .promptmeta{grid-column:1/-1;grid-row:1;display:block;max-width:none;min-width:0}
-  .screen.conversation-open .promptmeta .plab{display:none}
-  .screen.conversation-open .prompt-ava{width:18px;height:18px}
-  .screen.conversation-open #promptInput{grid-row:2;grid-column:1;min-width:0;width:100%;font-size:16px}
-  .screen.conversation-open #promptStop{grid-row:2;grid-column:2}
-  .screen.conversation-open #promptSend{grid-row:2;grid-column:3}
-  .screen.conversation-open .slashmenu,.screen.conversation-open .sendguard{left:10px;right:10px;bottom:calc(100% + 6px)}
-  .screen.conversation-open .sendguard{flex-wrap:wrap}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .promptmeta{grid-column:1/-1;grid-row:1;display:block;max-width:none;min-width:0}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .promptmeta .plab{display:none}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .prompt-ava{width:18px;height:18px}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) #promptInput{grid-row:2;grid-column:1;min-width:0;width:100%;font-size:16px}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) #promptStop{grid-row:2;grid-column:2}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) #promptSend{grid-row:2;grid-column:3}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .slashmenu,.screen:is(.conversation-open,:has(.split-cell.conversation-open)) .sendguard{left:10px;right:10px;bottom:calc(100% + 6px)}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .sendguard{flex-wrap:wrap}
+  .screen:has(.split-cell.conversation-open) .promptbar{position:absolute;left:0;right:0;top:auto;bottom:0;width:auto;z-index:6}
+  .screen:has(.split-cell.conversation-open) .termstage{bottom:132px}
   .conversation-head{padding:12px}
   .conversation-head{flex-wrap:wrap}
   .conversation-heading{flex-basis:100%}
@@ -105,6 +107,7 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
    PTY grid and every neighbouring cell. The original composer stays below Grid. */
 .split-cell.conversation-cell{--conversation-width:min(100%,max(240px,55%))}
 .split-history-toggle{position:absolute;top:6px;left:8px;z-index:4}
+.split-cell-actions .split-history-toggle{position:static}
 .split-cell.conversation-open>.termhost{clip-path:inset(0 var(--conversation-width) 0 0)}
 .split-cell.conversation-full{--conversation-width:100%}
 .split-cell.conversation-cell>.conversation-panel{position:absolute;left:auto;right:0;top:40px;bottom:0;
@@ -119,5 +122,25 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .conversation-toolbar,.conversation-bottom{padding:7px 10px}
 }
 /* Pressed controls float over live terminal pixels, so their fill stays opaque. */
-.conversation-cell>.split-history-toggle{background:var(--panel)}
+.split-cell-actions .split-history-toggle{background:var(--panel)}
+.screen:not(.split-pane-headers) .split-count-1 .conversation-cell>.conversation-panel{top:0}
 .screen:has(.split-cell.conversation-open) .promptmeta .phint{display:none}
+/* Recorded Mail is a collapsible source of its own, never a human prompt. */
+.conversation-mail-event{padding:12px 0}
+.conversation-mail{border:1px solid var(--hair);border-left:2px solid var(--amber);border-radius:6px;background:var(--panel-2)}
+.conversation-mail+.conversation-mail{margin-top:8px}
+.conversation-mail-summary{cursor:pointer;padding:12px 14px;list-style:none}
+.conversation-mail-summary::-webkit-details-marker{display:none}
+.conversation-mail-head{display:flex;gap:10px;align-items:center;font:9px/1.6 var(--mono);color:var(--ink-dim)}
+.conversation-mail-label{letter-spacing:.1em;color:var(--amber)}
+.conversation-mail-importance{font-size:9px;color:var(--ink-faint)}
+.conversation-mail-importance[data-importance="high"],.conversation-mail-importance[data-importance="urgent"]{color:var(--amber)}
+.conversation-mail-route{display:block;font:10px/1.7 var(--mono);color:var(--ink-dim);margin-top:5px;overflow-wrap:anywhere}
+.conversation-mail-subject{display:block;font:12px/1.8 var(--mono);color:var(--ink);overflow-wrap:anywhere}
+.conversation-mail-subject:after{content:' ＋';color:var(--amber)}
+.conversation-mail[open] .conversation-mail-subject:after{content:' −'}
+.conversation-mail-content{border-top:1px solid var(--hair-2);padding:10px 14px}
+.conversation-mail-notice{margin:0 0 9px;font:10px/1.7 var(--mono);color:var(--ink-dim)}
+.conversation-mail-text{margin:0;white-space:pre-wrap;font:12px/1.8 var(--mono);overflow-wrap:anywhere;tab-size:2}
+.conversation-jumpable{cursor:pointer;outline-offset:3px}
+.conversation-jumpable:hover{background:rgb(var(--theme-ink-rgb) / .035)}
