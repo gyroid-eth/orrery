@@ -9,14 +9,28 @@ The normal-screen terminal has a visible, draggable native scrollbar on
 (up to 6000 browser-side lines), not a provider's entire conversation. The
 outer host can pan an oversized Follow grid and stays chromeless.
 
-Alternate-screen TUIs keep the bar hidden, including a late viewer whose
-local xterm buffer is normal: tmux reports the remote alternate mode, but
-neither tmux nor the terminal stream exposes the TUI's conversation offset
-or total length. The recorder's saved rendered rows (up to 2000, with up to
-1000 replayed on attach) are also not a complete TUI transcript: redraws can
-replace text without scrolling it into history. A read-only history view
-would need to label that limited capture, or use a separate provider history
-source; it cannot supply an accurate live TUI scrollbar from these rows.
+Alternate-screen TUIs still hide the xterm bar: tmux does not expose their
+internal scroll offset or total length. A narrow HISTORY handle at the right
+edge of the central pane instead opens a separate read-only provider text
+transcript with its own draggable native scrollbar and an UP LOAD EARLIER
+control for older pages. LEFT LIVE returns to the untouched TUI. This is a
+history reader, not a live TUI scrollbar and not an exact replay of
+tool output, terminal layout, or collapsed sections. The displayed scrollbar
+describes only loaded text messages; more history may be available above.
+
+The GET /telemetry/transcript endpoint binds the requested pane to its running
+CLI process before reading anything. On macOS, Codex must have exactly one
+matching JSONL open in its file descriptors; Claude Code must expose a session
+UUID in its CLI invocation. Both require matching pane cwd metadata. No
+browser-supplied path is accepted. Pages carry a file identity to prevent
+mixing different CLI sessions; content is served no-store on the existing
+same-origin loopback route. Unsupported CLI launches, absent logs, and the
+fresh runtime target boundary return unavailable rather than guessing.
+
+The existing recorder's rendered rows (up to 2000; up to 1000 replayed on
+attach) are intentionally not used: redraws can replace text without adding
+it to terminal scrollback. Native in-TUI position-linked dragging remains an
+open design requirement in Issue #90.
 
 Each control connection runs through `control_client_guard.py`. The guard owns
 one `tmux -CC attach` child and watches a private pipe whose writer belongs only
