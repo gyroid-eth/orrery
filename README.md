@@ -71,6 +71,8 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 
 **Full width** で履歴を全幅にできます。legacy の構造化された tool 記録から file チップと編集要求の差分を表示し、チップを押すと隣に現在の text・画像を preview します。差分は記録の内容、preview は現在の file と区別して表示します。**Reveal in file manager** は明示的に押したときだけ Finder・Explorer で選択します。
 
+split中は各区画の **History** から独立して開けます。全幅表示・file／画像previewもその区画内に収まり、複数の履歴を同時に開けます。履歴を操作した区画が下のprompt欄の送り先になります。
+
 全幅の履歴の下でも、既存のprompt入力欄から選択中のpaneに送れます。スマホ幅でも宛先・入力欄・SENDを表示します。履歴を読むキーは端末へ送られず、入力欄のEnterまたはSENDで明示的に送ります。
 
 paneの見出しは状態表示（ACTIVE等）・HISTORY・WINDOWに整理しています。端末サイズのFOLLOW／CLAIMEDとGhostty等で開く操作は **Settings → Terminal → Selected pane actions** にあります。対話clientがいないsessionを自動CLAIMEDにし、いる場合はFOLLOWにする既定は同じです。手動の選択が優先されます。

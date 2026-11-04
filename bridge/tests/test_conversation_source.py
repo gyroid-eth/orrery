@@ -35,3 +35,28 @@ const {Source}=require(process.argv[1]);
     assert data["requests"] == [dict(url="/telemetry/conversation?agent=CodexAgent&before=abc%3A123", cache="no-store", sameSignal=True)]
     assert data["rejected"]
     assert data["error"]["code"] == "history_unconfirmed"
+
+
+@pytest.mark.skipif(shutil.which('node') is None,reason='node is not installed')
+def test_unbound_reasons_offer_next_action_without_raw_technical_text():
+    script=r"""
+const {Source,REASONS,bindingMessage}=require(process.argv[1]);
+(async()=>{
+ for(const [reason_code,text] of Object.entries(REASONS)){
+   const source=new Source(async()=>({ok:false,json:async()=>({error:'history_unconfirmed',reason_code,reason:'RAW_TECHNICAL_TEXT'})}));
+   try{await source.read('Agent');throw Error('must reject')}catch(e){
+     if(e.reasonCode!==reason_code||e.message!==text||e.message.includes('RAW_'))throw e;
+   }
+ }
+ console.log(JSON.stringify({count:Object.keys(REASONS).length,receipt:REASONS.receipt_unavailable,
+   codex:REASONS.hook_not_observed,stale:bindingMessage({error:'history_stale'}),unknown:bindingMessage({error:'history_unconfirmed',reason_code:'new-code'})}));
+})();
+"""
+    result=subprocess.run(['node','-e',script,str(SOURCE)],capture_output=True,text=True,timeout=20)
+    assert result.returncode==0,result.stderr
+    data=json.loads(result.stdout)
+    assert data['count']>=23
+    assert 'newly launched child' in data['receipt']
+    assert '/hooks' in data['codex'] and 'new Codex process' in data['codex']
+    assert data['stale'].startswith('Previous conversation')
+    assert 'retry' in data['unknown']

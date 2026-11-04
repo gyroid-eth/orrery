@@ -212,9 +212,9 @@ def test_api_bound_provider_and_mid_read_native_id_switch(tmp_path,monkeypatch,p
                     async with client.get(base+'/telemetry/conversation?agent=FixtureAgent') as response:
                         data=await response.json();assert data==dict(ok=False,error='history_changed')
                     for state in ['stale','unbound']:
-                        current.update(history_binding=state,transcript_path=None,history_binding_reason='fixture reason');switch[0]=False
+                        current.update(history_binding=state,transcript_path=None,history_binding_reason='fixture reason',history_binding_reason_code='receipt_unavailable');switch[0]=False
                         async with client.get(base+'/telemetry/conversation?agent=FixtureAgent') as response:
-                            data=await response.json();assert not data['ok'] and 'events' not in data and data['reason']=='fixture reason'
+                            data=await response.json();assert not data['ok'] and 'events' not in data and data['reason']=='fixture reason' and data['reason_code']=='receipt_unavailable'
                 finally:await runner.cleanup()
         finally:await up.cleanup()
     asyncio.run(scenario())

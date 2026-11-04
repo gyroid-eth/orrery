@@ -13,7 +13,7 @@
       cancel();selected=ref;markSelected();const token=generation;request=new AbortController();
       host.hidden=false;host.parentElement.classList.add('conversation-has-preview');onActivate(ref);
       const head=create('div','conversation-preview-head'),title=create('h3','conversation-preview-title',ref.label);
-      const closeButton=button('conversation-preview-close','× Preview',()=>{close();document.querySelector('.conversation-scroll')?.focus();});
+      const closeButton=button('conversation-preview-close','× Preview',()=>{close();host.closest('.conversation-panel').querySelector('.conversation-scroll')?.focus();});
       head.append(title,closeButton);
       const notice=create('div','conversation-preview-notice','Current file · may differ from the recorded edit');
       const body=create('div','conversation-preview-content','Loading preview…');body.tabIndex=0;

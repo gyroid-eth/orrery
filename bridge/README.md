@@ -84,6 +84,22 @@ opening raw transcript paths in cockpit. Data acquisition lives in
 `conversation_view.js` / `conversation_view.css`; the view's optional
 `renderEvent(event, defaultRenderer)` adapter allows future reference/preview UI.
 
+### Split terminals
+
+Each desktop split cell has its own HISTORY button and independent reader.
+Side panel, Full width and file/image preview stay inside that cell; other
+cells retain their terminal grids. Several histories can remain open at once.
+Interacting with a reader selects its cell through the existing pane focus
+route, so the original composer below the grid shows that pane as its target.
+Its send guards and API are unchanged. A narrow reader replaces its thread
+with the selected preview until closed. Closing one history leaves the grid
+and other histories intact. Leaving split mode releases its readers; single
+pane and phone history keep the existing layout.
+
+Unbound/stale responses carry the dashboard reason code to the source module,
+which renders a short next action (new child, wait/retry, or Codex plugin/hooks
+setup). It does not offer rebinding or infer a transcript path.
+
 ### Recorded edits and file preview
 
 **Full width** expands History within the pane. Structured `apply_patch`,

@@ -359,3 +359,77 @@ def test_stale_removes_previous_body_and_explains_previous_conversation(cockpit)
     wait("document.querySelectorAll('.conversation-event').length===0")
     assert js("document.querySelector('.conversation-empty').textContent.includes('Previous conversation')")
     assert js("document.querySelector('.conversation-toolbar .conversation-status').textContent.includes('fixture reason')")
+
+
+@pytest.mark.parametrize('count',[2,4],ids=['two-split','four-split'])
+def test_split_history_is_per_cell_and_focus_keeps_existing_prompt_route(cockpit,count):
+    js,wait,client,requests,enable=cockpit
+    client.call('Emulation.setFocusEmulationEnabled',enabled=True)
+    enable(claimed=True,count=3);js("document.querySelector('.conversation-expand').click();conversationView.close()")
+    assert not js("document.querySelector('.screen').classList.contains('conversation-full')")
+    names=['ReviewFixture']+[f'ReviewCell{i}' for i in range(1,count)]
+    js("""window.splitNames="""+json.dumps(names)+""";
+      for(let i=1;i<splitNames.length;i++){
+        const name=splitNames[i];currentAgents.push({name,program:'codex',history_binding:'bound'});
+        createPane(name,{paneId:'%'+String(901+i),windowId:'@'+String(901+i),width:80,height:20,alternateOn:true,mouseTracking:false});
+        claimedSessions.add(name);
+      }
+      OrreryConversationSource.Source.prototype.read=async(name)=>({agent:name,provider:'codex',mode:'cursor',events:[
+        {id:'one',kind:'text',role:'assistant',text:'History for '+name},
+        {id:'file',kind:'tool',role:'assistant',text:'Read',references:[{id:'B'.repeat(32),label:'example.txt',kind:'file'}]}
+      ],has_older:false});
+      OrreryConversationSource.Source.prototype.reference=async()=>({kind:'text',text:'Generated preview'});
+      replaceSplitSessions(splitNames);splitVisible=true;focusSplitSession(splitNames[0]);
+    """)
+    wait(f"document.querySelectorAll('.split-cell').length==={count}")
+    wait("stageFitFrame===null")
+    time.sleep(.15)
+    assert js("document.querySelectorAll('.split-cell .split-history-toggle').length")==count
+    js("window.splitBefore=[...document.querySelectorAll('.split-cell .termhost.on')].map(e=>({w:e.clientWidth,h:e.clientHeight}));packets.length=0;document.querySelector('.split-cell .split-history-toggle').click()")
+    wait("document.querySelector('.split-cell .conversation-event')!==null")
+    js("document.querySelector('.split-cell .conversation-expand').click()")
+    assert js("""(()=>{const cell=document.querySelector('.split-cell'),panel=cell.querySelector('.conversation-panel'),a=cell.getBoundingClientRect(),b=panel.getBoundingClientRect();
+      return b.left>=a.left&&b.right<=a.right&&b.top>=a.top&&b.bottom<=a.bottom&&b.width>a.width-4})()""")
+    js("document.querySelectorAll('.split-cell .split-history-toggle')[1].click()")
+    wait("document.querySelectorAll('.split-cell .conversation-panel:not([hidden])').length===2")
+    assert js('promptTarget.textContent')==names[1]
+    assert js('activeId')=='%902'
+    js("document.querySelector('.split-cell .conversation-scroll').focus()")
+    assert js('promptTarget.textContent')==names[0],js("({id:activeId,focus:document.activeElement.outerHTML,panels:[...document.querySelectorAll('.split-cell .conversation-panel')].map(e=>({id:e.id,hidden:e.hidden,owner:e.parentElement.dataset.session}))})")
+    client.call('Input.dispatchKeyEvent',type='keyDown',key='ArrowUp',windowsVirtualKeyCode=38)
+    client.call('Input.dispatchKeyEvent',type='keyUp',key='ArrowUp',windowsVirtualKeyCode=38)
+    assert not js("packets.some(p=>p.type==='input')")
+    js("promptInput.focus();promptInput.value='split fixture prompt';promptSend.click()")
+    wait("packets.filter(p=>p.type==='input').length===2")
+    assert js("packets.filter(p=>p.type==='input').map(p=>p.paneId)")==['%901','%901']
+    js("document.querySelector('.split-cell .conversation-close').click();document.querySelectorAll('.split-cell')[1].querySelector('.conversation-file').click()")
+    wait("document.querySelectorAll('.split-cell')[1].querySelector('.conversation-preview-text')!==null")
+    assert js('promptTarget.textContent')==names[1]
+    assert js("document.querySelector('.screen').classList.contains('conversation-open')")==False
+    assert js("document.querySelectorAll('.split-cell .conversation-panel:not([hidden])').length")==1
+    assert js("""(()=>{const cell=document.querySelectorAll('.split-cell')[1],p=cell.querySelector('.conversation-preview'),r=p.getBoundingClientRect(),c=cell.getBoundingClientRect();
+      return r.left>=c.left&&r.right<=c.right&&r.top>=c.top&&r.bottom<=c.bottom&&getComputedStyle(cell.querySelector('.conversation-thread')).display==='none'})()""")
+    js("document.querySelectorAll('.split-cell')[1].querySelector('.conversation-preview-close').click()")
+    assert js("document.activeElement===document.querySelectorAll('.split-cell')[1].querySelector('.conversation-scroll')")
+    assert js("[...document.querySelectorAll('.split-cell .termhost.on')].map(e=>({w:e.clientWidth,h:e.clientHeight}))")==js('splitBefore')
+    assert not js("packets.some(p=>p.type==='resize')")
+
+
+def test_disabling_split_readers_aborts_each_request_and_removes_local_controls(cockpit):
+    js,wait,client,requests,enable=cockpit
+    enable(count=1);js('conversationView.close()')
+    js("""currentAgents.push({name:'OtherCell',program:'codex'});
+      createPane('OtherCell',{paneId:'%902',windowId:'@902',width:80,height:20});
+      window.pendingHistory=[];
+      OrreryConversationSource.Source.prototype.read=(name,options)=>new Promise(resolve=>pendingHistory.push({name,signal:options.signal,resolve}));
+      replaceSplitSessions(['ReviewFixture','OtherCell']);splitVisible=true;focusSplitSession('ReviewFixture');
+      document.querySelectorAll('.split-history-toggle').forEach(button=>button.click());
+    """)
+    assert js('pendingHistory.length')==2
+    js("conversationEnabled.checked=false;conversationEnabled.dispatchEvent(new Event('change'))")
+    assert js('pendingHistory.every(request=>request.signal.aborted)')
+    assert js("document.querySelectorAll('.split-history-toggle,.split-cell .conversation-panel,.split-cell.conversation-cell').length")==0
+    js("pendingHistory.forEach(request=>request.resolve({events:[{id:'stale',kind:'text',role:'assistant',text:'STALE_SPLIT_BODY'}]}))")
+    time.sleep(.05)
+    assert not js("document.querySelector('.screen').textContent.includes('STALE_SPLIT_BODY')")
+    assert js('conversationToggle.hidden')

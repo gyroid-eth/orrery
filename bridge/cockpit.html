@@ -4282,9 +4282,9 @@
       }
     }
   },
-  "inventory_digest": "19a883862ae9d6be79517a7fd2b485f38a2329dc221cc44d016e920c23e4e1e6",
+  "inventory_digest": "9a355b3a128e6217c9fb7c9fe7358f60a2c37104c156d43bc40fc19e66cdf609",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "1f3b77aa6b408dd1a68964b4aef5396bf5e08139e11bd0bfd4e9249cfbd2eabd",
+  "source_digest": "adc61fae9b71d133854d77ca93e6393a634758296b44a07fad3927a924563d2f",
   "surface": "cockpit",
   "version": 1
 }
@@ -10765,8 +10765,10 @@ const conversationView=(()=>{
       await asset('script','src','conversation_source.js');
       await asset('script','src','conversation_preview.js');
       await asset('script','src','conversation_view.js');
-      instance=OrreryConversation.mount({
-        getContext:()=>{const name=activeSession();return currentAgents.find(a=>a.name===name)||{name};},
+      instance=OrreryConversation.mountWorkspace({
+        getContext:(selected)=>{const name=selected||activeSession();return currentAgents.find(a=>a.name===name)||{name};},
+        getSlots:()=>splitVisible?splitSessions.map(name=>({name,host:splitCells.get(name)})).filter(slot=>slot.host?.isConnected):[],
+        activate:name=>focusSplitSession(name),
       });
       return instance;
     })().catch(error=>{loading=null;showToast(error.message,true);return null;});

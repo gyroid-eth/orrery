@@ -1897,7 +1897,7 @@ async def serve_conversation(request: web.Request) -> web.Response:
         return web.json_response(dict(result, ok=True, agent=name, provider=provider),
                                  headers={"Cache-Control": "no-store"})
     except HistoryUnavailable as exc:
-        return web.json_response(dict(ok=False,error=str(exc),**({"reason":exc.reason} if getattr(exc,"reason","") else {})), status=409 if str(exc) == "history_changed" else 400,
+        return web.json_response(dict(ok=False,error=str(exc),**({"reason":exc.reason} if getattr(exc,"reason","") else {}),**({"reason_code":exc.reason_code} if getattr(exc,"reason_code","") else {})), status=409 if str(exc) == "history_changed" else 400,
                                  headers={"Cache-Control": "no-store"})
     except sqlite3.Error:
         return web.json_response({"ok":False,"error":"history_unreadable"},status=400,headers={"Cache-Control":"no-store"})

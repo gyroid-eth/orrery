@@ -23,6 +23,25 @@
     preview_changed:'The file changed during this read. Select it again.',
     preview_unavailable:'This recorded reference cannot be previewed.',
   };
+  const REASONS={};
+  function reasons(codes,text){for(const code of codes.split(' '))REASONS[code]=text;}
+  reasons('receipt_unavailable receipt_missing binding_missing','This launch has no saved history link; open a newly launched child to read its history.');
+  reasons('awaiting_hook launch_transition','This child is still preparing its history link; leave it running and retry shortly.');
+  reasons('hook_not_observed','Codex has not recorded this run; enable the ORRERY plugin, review its hooks in /hooks, then start a new Codex process.');
+  reasons('receipt_predates_session','Previous conversation · this recording belongs to an earlier launch; open history for a newly launched child instead.');
+  reasons('no_transcript native_session_missing','The provider has not saved a usable conversation yet; retry after its first message or use a newly launched child.');
+  reasons('invalid_binding identity_mismatch id_mismatch session_mismatch launch_mismatch ambiguous_binding session_conflict unsupported_source','This recording cannot be matched safely to the selected child; open a newly launched child instead.');
+  reasons('artifact_changed','The saved recording changed; close and reopen History or use a newly launched child if it remains unavailable.');
+  reasons('history_unavailable','The saved conversation is unavailable; retry after startup or use a newly launched child.');
+  reasons('registration_missing','This child is no longer registered; refresh the roster or open a newly launched child.');
+  reasons('write_failed','The child could not save its history link; check that its recording folder is writable, then start a new child.');
+  reasons('disabled','This provider has history recording disabled; enable its recording setting and start a new child.');
+  reasons('protected_history_required fresh_history_provider_unavailable','This runtime cannot expose this provider history yet; use a supported Codex conversation until telemetry adds support.');
+  function bindingMessage(payload){
+    if(!['history_unconfirmed','history_stale'].includes(payload.error))return MESSAGES[payload.error]||'Conversation history could not be loaded.';
+    return REASONS[payload.reason_code]||(payload.error==='history_stale'?REASONS.receipt_predates_session:
+      'History has no verified recording for this launch; retry after startup or use a newly launched child.');
+  }
   class Source {
     constructor(fetcher=root.fetch.bind(root)){this.fetcher=fetcher;}
     async read(agent,{before=null,after=null,signal}={}){
@@ -32,8 +51,8 @@
       const response=await this.fetcher('/telemetry/conversation?'+query,{cache:'no-store',signal});
       const payload=await response.json();
       if(!response.ok||payload.ok!==true){
-        const error=new Error((MESSAGES[payload.error]||'Conversation history could not be loaded.')+(typeof payload.reason==='string'&&payload.reason?' '+payload.reason:''));
-        error.code=payload.error;throw error;
+        const error=new Error(bindingMessage(payload));
+        error.code=payload.error;error.reasonCode=payload.reason_code;throw error;
       }
       if(payload.agent!==agent||!Array.isArray(payload.events))throw new Error('Invalid conversation response.');
       return payload;
@@ -47,6 +66,6 @@
       return payload;
     }
   }
-  root.OrreryConversationSource=Object.freeze({Source,MESSAGES});
-  if(typeof module!=='undefined')module.exports={Source,MESSAGES};
+  root.OrreryConversationSource=Object.freeze({Source,MESSAGES,REASONS,bindingMessage});
+  if(typeof module!=='undefined')module.exports={Source,MESSAGES,REASONS,bindingMessage};
 })(typeof window==='undefined'?globalThis:window);

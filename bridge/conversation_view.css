@@ -101,3 +101,23 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .scr-head .path{display:none}
   .scr-head .name{min-width:0;max-width:55px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
 }
+/* Each split owns its reader. Clip only that terminal's pixels, preserving its
+   PTY grid and every neighbouring cell. The original composer stays below Grid. */
+.split-cell.conversation-cell{--conversation-width:min(100%,max(240px,55%))}
+.split-history-toggle{position:absolute;top:6px;left:8px;z-index:4}
+.split-cell.conversation-open>.termhost{clip-path:inset(0 var(--conversation-width) 0 0)}
+.split-cell.conversation-full{--conversation-width:100%}
+.split-cell.conversation-cell>.conversation-panel{position:absolute;left:auto;right:0;top:40px;bottom:0;
+  width:var(--conversation-width);height:auto;z-index:4;border-left:1px solid var(--hair)}
+.conversation-cell>.conversation-panel{container:conversation-reader / inline-size}
+@container conversation-reader (max-width:600px){
+  .conversation-head{flex-wrap:wrap;padding:10px}
+  .conversation-heading{flex-basis:100%}
+  .conversation-has-preview .conversation-thread{display:none}
+  .conversation-preview{width:100%;border:0}
+  .conversation-scroll{padding-left:12px;padding-right:10px}
+  .conversation-toolbar,.conversation-bottom{padding:7px 10px}
+}
+/* Pressed controls float over live terminal pixels, so their fill stays opaque. */
+.conversation-cell>.split-history-toggle{background:var(--panel)}
+.screen:has(.split-cell.conversation-open) .promptmeta .phint{display:none}

@@ -5,11 +5,13 @@
   'use strict';
   const KEY='oc-term-conversation-enabled';
   const MAX_EVENTS=400,MAX_BYTES=2*1024*1024;
-  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null}){
-    const screen=document.querySelector('.screen'),toggle=document.getElementById('conversationToggle');
+  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null}){
+    const screen=host||document.querySelector('.screen'),toggle=control||document.getElementById('conversationToggle');
+    const listeners=[];
+    function listen(target,type,handler,options){if(!target)return;target.addEventListener(type,handler,options);listeners.push(()=>target.removeEventListener(type,handler,options));}
     const setting=document.getElementById('conversationEnabled');
     const panel=document.createElement('section');
-    panel.className='conversation-panel';panel.id='conversationPanel';panel.hidden=true;
+    panel.className='conversation-panel';panel.id=panelId;panel.hidden=true;
     panel.setAttribute('aria-label','Read-only conversation history');
     panel.innerHTML='<div class="conversation-head"><div class="conversation-heading">'+
       '<h2 class="conversation-title">Conversation</h2><div class="conversation-subtitle"></div></div>'+
@@ -35,8 +37,8 @@
       screen.style.setProperty('--conversation-viewport-height',(view?view.height:root.innerHeight)+'px');
       screen.style.setProperty('--conversation-viewport-top',(view?view.offsetTop:0)+'px');
     }
-    root.visualViewport?.addEventListener('resize',viewport);
-    root.visualViewport?.addEventListener('scroll',viewport);
+    listen(root.visualViewport,'resize',viewport);
+    listen(root.visualViewport,'scroll',viewport);
     function expand(value){
       fullWidth=value;screen.classList.toggle('conversation-full',value);
       el('.conversation-expand').setAttribute('aria-pressed',String(value));
@@ -176,8 +178,7 @@
         if(['history_changed','history_unconfirmed','history_stale','agent_unavailable','claude_next_phase','provider_unavailable','dashboard_upgrade_required','dsh_decoder_unavailable','history_format_unsupported','history_unreadable','history_pending'].includes(error.code)){
           // Never retain content from a stale, unbound or different native session.
           clear();retry.hidden=false;empty.hidden=false;
-          empty.textContent=error.code==='history_stale'?'Previous conversation · contents hidden.':
-            error.code==='history_changed'?'Session changed. Retry to load the current conversation.':'History is unavailable for this agent.';
+          empty.textContent=error.code==='history_changed'?'Session changed. Retry to load the current conversation.':error.message;
           position();
         }
       }finally{
@@ -196,15 +197,15 @@
     }
     function close({focus=true}={}){
       if(!opened)return;
-      stop();opened=false;agent='';panel.hidden=true;screen.classList.remove('conversation-open');
+      stop();opened=false;agent='';panel.hidden=true;screen.classList.remove('conversation-open','conversation-full');
       screen.style.removeProperty('--conversation-viewport-height');screen.style.removeProperty('--conversation-viewport-top');
-      toggle.setAttribute('aria-expanded','false');clear();if(focus&&!toggle.hidden)toggle.focus();
+      toggle.setAttribute('aria-expanded','false');clear();onState();if(focus&&!toggle.hidden)(focusControl||toggle).focus();
     }
     function open(){
       if(!enabled)return;
-      opened=true;panel.hidden=false;screen.classList.add('conversation-open');
+      onActivate();opened=true;panel.hidden=false;screen.classList.add('conversation-open');screen.classList.toggle('conversation-full',fullWidth);
       viewport();
-      toggle.setAttribute('aria-expanded','true');agent=null;context();scroll.focus();
+      toggle.setAttribute('aria-expanded','true');agent=null;context();scroll.focus();onState();
     }
     function preference(){
       try{enabled=localStorage.getItem(KEY)==='1';}catch(_){enabled=false;}
@@ -212,28 +213,72 @@
       screen.classList.toggle('conversation-enabled',enabled);
       if(!enabled)close({focus:false});
     }
-    setting.addEventListener('change',()=>{try{localStorage.setItem(KEY,setting.checked?'1':'0');}catch(_){}preference();});
-    document.addEventListener('oc:prefs-changed',preference);
-    window.addEventListener('storage',event=>{if(event.key===KEY)preference();});
-    toggle.addEventListener('click',()=>opened?close():open());
-    el('.conversation-close').addEventListener('click',()=>close());
-    el('.conversation-expand').addEventListener('click',()=>{if(fullWidth)preview?.close();expand(!fullWidth);});
-    panel.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();if(preview?.selected){preview.close();scroll.focus();}else close();}});
+    listen(setting,'change',()=>{try{localStorage.setItem(KEY,setting.checked?'1':'0');}catch(_){}preference();});
+    listen(document,'oc:prefs-changed',preference);
+    listen(window,'storage',event=>{if(event.key===KEY)preference();});
+    if(bindToggle)listen(toggle,'click',()=>opened?close():open());
+    listen(el('.conversation-close'),'click',()=>close());
+    listen(el('.conversation-expand'),'click',()=>{if(fullWidth)preview?.close();expand(!fullWidth);});
+    listen(panel,'pointerdown',()=>onActivate());
+    listen(panel,'focusin',()=>onActivate());
+    listen(panel,'mousedown',event=>event.stopPropagation());
+    listen(panel,'keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();if(preview?.selected){preview.close();scroll.focus();}else close();}});
     // Arrow/Page keys and wheels belong only to the browser scroll container;
     // there is no path from this module to xterm or tmux input.
-    earlier.addEventListener('click',()=>load('older'));
-    retry.addEventListener('click',()=>load(events.size?'newer':'initial'));
-    latest.addEventListener('click',()=>{
+    listen(earlier,'click',()=>load('older'));
+    listen(retry,'click',()=>load(events.size?'newer':'initial'));
+    listen(latest,'click',()=>{
       if(paused){stop();clear();load('initial');return;}
       scroll.scrollTop=scroll.scrollHeight;newCount=0;position();
     });
-    scroll.addEventListener('scroll',position,{passive:true});
-    document.addEventListener('oc:stage-agent',context);
-    document.addEventListener('oc:focus-agent',context);
-    document.addEventListener('oc:agents',context);
-    document.addEventListener('visibilitychange',()=>{if(document.hidden)clearTimeout(timer);else if(opened)load(events.size?'newer':'initial');});
+    listen(scroll,'scroll',position,{passive:true});
+    listen(document,'oc:stage-agent',context);
+    listen(document,'oc:focus-agent',context);
+    listen(document,'oc:agents',context);
+    listen(document,'visibilitychange',()=>{if(document.hidden)clearTimeout(timer);else if(opened)load(events.size?'newer':'initial');});
     preference();
-    return Object.freeze({open,close,refresh:()=>load(events.size?'newer':'initial')});
+    return Object.freeze({open,close,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
+      dispose(){close({focus:false});stop();listeners.forEach(remove=>remove());panel.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
   }
-  root.OrreryConversation=Object.freeze({mount,KEY});
+  function mountWorkspace({getContext,getSlots,activate,...options}){
+    const screen=document.querySelector('.screen'),toggle=document.getElementById('conversationToggle');
+    const views=new Map();let sequence=0,syncing=false;
+    const enabled=()=>{try{return localStorage.getItem(KEY)==='1';}catch(_){return false;}};
+    const slots=()=>enabled()&&innerWidth>600?getSlots():[];
+    const current=()=>{const name=(getContext()||{}).name;return slots().length?views.get(name)?.view:single;};
+    function paint(){const view=current();toggle.hidden=!enabled();toggle.setAttribute('aria-expanded',String(Boolean(view?.opened)));toggle.setAttribute('aria-controls',view?.panel.id||'conversationPanel');}
+    const proxy=document.createElement('button');
+    const single=mount({...options,getContext:()=>slots().length?{}:getContext(),control:proxy,bindToggle:false,focusControl:toggle,onState:paint});
+    function sync(){
+      if(syncing)return;syncing=true;
+      try{
+        const layout=slots(),names=new Set(layout.map(slot=>slot.name));
+        if(layout.length)single.close({focus:false});
+        for(const [name,entry] of views){
+          if(names.has(name)&&layout.find(slot=>slot.name===name)?.host===entry.host)continue;
+          entry.view.dispose();entry.control.remove();entry.host.classList.remove('conversation-cell');views.delete(name);
+        }
+        for(const slot of layout){
+          if(views.has(slot.name))continue;
+          const control=document.createElement('button');control.type='button';control.className='cockpit-control split-history-toggle';control.textContent='History';
+          control.setAttribute('aria-label','Read history for '+slot.name);control.setAttribute('aria-expanded','false');
+          const id='conversationPanel-'+(++sequence);control.setAttribute('aria-controls',id);
+          slot.host.classList.add('conversation-cell');slot.host.appendChild(control);
+          control.addEventListener('mousedown',event=>event.stopPropagation());
+          control.addEventListener('pointerdown',event=>event.stopPropagation());
+          const view=mount({...options,host:slot.host,control,panelId:id,getContext:()=>getContext(slot.name),
+            onActivate:()=>{if((getContext()||{}).name!==slot.name)activate(slot.name);},onState:paint});
+          views.set(slot.name,{view,host:slot.host,control});
+        }
+        paint();
+      }finally{syncing=false;}
+    }
+    toggle.addEventListener('click',()=>{const view=current();if(view)view.opened?view.close():view.open();});
+    for(const event of ['oc:stage-agent','oc:focus-agent','oc:agents','oc:prefs-changed'])document.addEventListener(event,sync);
+    document.getElementById('conversationEnabled').addEventListener('change',sync);
+    window.addEventListener('storage',event=>{if(event.key===KEY)sync();});window.addEventListener('resize',sync);
+    sync();
+    return Object.freeze({open:()=>{sync();current()?.open();},close:()=>current()?.close(),refresh:()=>current()?.refresh()});
+  }
+  root.OrreryConversation=Object.freeze({mount,mountWorkspace,KEY});
 })(window);

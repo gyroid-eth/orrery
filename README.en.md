@@ -79,6 +79,10 @@ split preview of the current text or raster image, clearly distinguished from
 the recorded diff. **Reveal in file manager** explicitly selects that file in
 Finder or Explorer; it never opens automatically.
 
+Each desktop split cell has its own **History** button; several readers can
+stay open, and full-width history/file previews stay inside their cell.
+Interacting with a reader selects that cell as the existing composer target.
+
 The original prompt composer remains below full-width History, including on
 phones. Check its target and use Enter or SEND explicitly; reading keys stay in
 the history view. Existing send guards, IME handling and the input route apply.
