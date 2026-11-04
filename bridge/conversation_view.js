@@ -157,7 +157,7 @@
           'Claude Code support comes in the next phase. Codex history is available now.':'History is unavailable for this agent.';}
         if(['history_changed','history_unconfirmed','agent_unavailable','claude_next_phase','provider_unavailable'].includes(error.code)){
           // Never combine different provider sessions under one agent name.
-          events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;earlier.hidden=true;
+          clear();retry.hidden=false;
           empty.hidden=false;empty.textContent='Session changed. Retry to load the current conversation.';position();
         }
       }finally{
