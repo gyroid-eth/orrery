@@ -1,0 +1,61 @@
+.conversation-toggle[hidden],.conversation-panel[hidden]{display:none}
+.conversation-toggle{flex:none;border:1px solid var(--hair);border-radius:7px;padding:4px 9px;
+  background:var(--panel);color:var(--ink-dim);font:10px var(--mono);cursor:pointer}
+.conversation-toggle[aria-expanded="true"]{color:var(--amber);border-color:var(--amber)}
+.screen.conversation-open{--conversation-width:min(46%,460px)}
+.screen.conversation-open .termstage,.screen.conversation-open .promptbar{right:var(--conversation-width)}
+.screen.conversation-open .promptmeta .phint{display:none}
+.conversation-panel{position:absolute;right:0;top:40px;bottom:0;z-index:5;
+  width:var(--conversation-width);display:flex;flex-direction:column;min-height:0;
+  border-left:1px solid var(--hair);background:var(--panel);color:var(--ink)}
+.conversation-head{display:flex;align-items:flex-start;gap:8px;padding:15px 16px 12px;border-bottom:1px solid var(--hair-2)}
+.conversation-heading{flex:1;min-width:0}
+.conversation-title{font:16px var(--serif);margin:0 0 5px}
+.conversation-subtitle{font:10px/1.5 var(--mono);color:var(--ink-dim);overflow-wrap:anywhere}
+.conversation-action{border:1px solid var(--hair);border-radius:6px;padding:6px 9px;
+  background:transparent;color:var(--ink-dim);font:10px var(--mono);cursor:pointer}
+.conversation-action:hover,.conversation-action:focus-visible{color:var(--amber);border-color:var(--amber)}
+.conversation-toolbar{display:flex;gap:8px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--hair-2)}
+.conversation-status{font:10px/1.6 var(--mono);color:var(--ink-dim);flex:1;overflow-wrap:anywhere}
+.conversation-scroll{flex:1;min-height:0;overflow-y:scroll;overscroll-behavior:contain;
+  scrollbar-gutter:stable;scrollbar-width:auto;overflow-anchor:none;padding:4px 18px 16px;outline-offset:-3px}
+.conversation-scroll::-webkit-scrollbar{width:13px}
+.conversation-scroll::-webkit-scrollbar-track{background:rgb(var(--theme-ink-rgb) / .05)}
+.conversation-scroll::-webkit-scrollbar-thumb{background:rgb(var(--theme-ink-rgb) / .4);border:3px solid transparent;border-radius:8px;background-clip:padding-box}
+.conversation-scroll::-webkit-scrollbar-thumb:hover{background-color:rgb(var(--theme-ink-rgb) / .6)}
+.conversation-event{padding:17px 0;border-bottom:1px solid var(--hair-2);overflow-wrap:anywhere}
+.conversation-byline{display:flex;gap:10px;align-items:center;margin-bottom:9px;font:10px var(--mono);color:var(--ink-dim)}
+.conversation-role{color:var(--amber);font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+.conversation-event[data-role="user"] .conversation-role{color:var(--ink)}
+.conversation-time{margin-left:auto;color:var(--ink-faint);font-variant-numeric:tabular-nums}
+.conversation-text{margin:0;white-space:pre-wrap;font:12px/1.85 var(--mono);color:var(--ink);tab-size:2}
+.conversation-event[data-kind="tool"]{padding:11px 0}
+.conversation-event[data-kind="tool"] .conversation-byline{margin:0}
+.conversation-tool-name{color:var(--ink-dim);font:11px/1.6 var(--mono);overflow-wrap:anywhere}
+.conversation-truncated{font:10px var(--mono);color:var(--ink-faint);padding-top:8px}
+.conversation-bottom{display:flex;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--hair);background:var(--panel-2)}
+.conversation-bottom .conversation-action{flex:none;color:var(--amber)}
+.conversation-panel [hidden]{display:none}
+.conversation-empty{padding:25px 0;color:var(--ink-dim);font:12px/1.8 var(--mono)}
+@media(max-width:1200px){
+  .screen.conversation-open{--conversation-width:100%}
+  .screen.conversation-open .termstage,.screen.conversation-open .promptbar{right:0}
+  .conversation-panel{border-left:0}
+  .conversation-title{font-size:16px}
+}
+@media(max-width:600px){
+  .app:has(.screen.conversation-enabled){grid-template-columns:minmax(0,1fr)}
+  .col.term:has(.screen.conversation-enabled){min-width:0}
+  /* The existing cockpit header/composer can overflow a phone viewport. Keep
+     this reader attached to the actual viewport, not that wider grid. */
+  .conversation-panel{position:fixed;left:0;right:0;top:54px;bottom:auto;width:100vw;height:calc(100dvh - 54px);z-index:1090}
+  .screen.conversation-open .termstage,.screen.conversation-open .promptbar{visibility:hidden}
+  .conversation-head{padding:12px}
+  .conversation-scroll{padding-left:14px;padding-right:12px}
+  .conversation-toolbar,.conversation-bottom{padding:8px 10px}
+  .conversation-text{font-size:12px;line-height:1.75}
+  .screen.conversation-enabled .scr-head .path,.screen.conversation-enabled .scr-head .badge,
+  .screen.conversation-enabled .scr-head .claim-toggle,.screen.conversation-enabled .scr-head .ghostty-action,
+  .screen.conversation-enabled .scr-head .pane-popout{display:none}
+  .conversation-toggle{margin-left:auto}
+}

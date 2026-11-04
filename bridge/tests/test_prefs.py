@@ -16,6 +16,7 @@ import orrery_backend as ob  # noqa: E402
 def test_whitelist_keeps_preferences_and_drops_drafts_and_histories():
     assert ob.prefs_key_ok("oc-mini-view")
     assert ob.prefs_key_ok("oc-term-font")
+    assert ob.prefs_key_ok("oc-term-conversation-enabled")
     assert ob.prefs_key_ok("oc-split-ratio-3-row")
     assert ob.prefs_key_ok("orrery.color-theme.v1")
     assert ob.prefs_key_ok("agentstack.theme-profile.v1.state")

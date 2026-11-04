@@ -1144,6 +1144,7 @@
 </style>
 <link rel="stylesheet" href="theme_light.css">
 <link rel="stylesheet" href="cockpit_tour.css">
+<link rel="stylesheet" href="conversation_view.css">
 </head>
 <body>
 <div class="app">
@@ -1218,6 +1219,8 @@
           <span class="name" id="scrName">—</span>
           <span class="path" id="scrPath"></span>
           <span class="badge off" id="scrBadge">offline</span>
+          <button class="conversation-toggle" id="conversationToggle" type="button" hidden
+                  aria-expanded="false" aria-controls="conversationPanel">History</button>
           <button class="claim-toggle" id="claimToggle" type="button" aria-pressed="false" hidden>FOLLOW ⇄ ⚓ CLAIMED</button>
           <button class="ghostty-action" id="ghosttyAction" type="button" hidden>GHOSTTY</button>
           <button class="pane-popout" id="panePopout" type="button" hidden
@@ -1274,6 +1277,15 @@
   <div class="settings-body">
     <section aria-labelledby="colorThemeTitle">
       <div class="settings-section-title" id="colorThemeTitle">Appearance</div>
+      <div class="settings-row">
+        <label class="settings-toggle-row" for="conversationEnabled">
+          <span class="settings-toggle-copy">
+            <span class="settings-row-name">Conversation history</span>
+            <span class="settings-help">Adds a read-only History panel for Codex. Claude Code is planned for the next phase. Off by default.</span>
+          </span>
+          <span class="settings-switch"><input id="conversationEnabled" type="checkbox"></span>
+        </label>
+      </div>
       <div class="settings-row">
         <label class="settings-toggle-row" for="colorThemePreference">
           <span class="settings-toggle-copy">
@@ -4294,9 +4306,9 @@
       }
     }
   },
-  "inventory_digest": "06c3db328796d2cb870064bbaddce544990698d49edd27fdc0172c184e364e0d",
+  "inventory_digest": "d4b9b517f8d56754d511bbe5d7cece7400a2a8ed51db043171e8daa0d0ebb933",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "7fcb8b62839b45cb812ada390a94577e8765afab406d561829b2e0ea06b7b393",
+  "source_digest": "b8f518a6bd72b92db62df5bfe6b8fd7464ff21bb502c2ac65013be98c3314f4c",
   "surface": "cockpit",
   "version": 1
 }
@@ -10750,5 +10762,13 @@ kickPolls();
 <script src="mail_view.js"></script>
 <script src="cockpit_tour.js"></script>
 <script src="cockpit_full_tour.js"></script>
+<script src="conversation_source.js"></script>
+<script src="conversation_view.js"></script>
+<script>
+const conversationView=OrreryConversation.mount({
+  getContext:()=>{const name=activeSession();return currentAgents.find(a=>a.name===name)||{name};},
+  onLayout:()=>queueStageFit(),
+});
+</script>
 </body>
 </html>

@@ -7,6 +7,7 @@ import argparse
 import asyncio
 import base64
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -48,6 +49,7 @@ from usage_probe import (
     UsageCache,
     provider_from_quota_payload,
 )
+from conversation_history import HistoryUnavailable, bound_codex_agent, read_codex_page
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8791
@@ -1779,6 +1781,96 @@ async def proxy_dashboard(request: web.Request) -> web.Response:
             {"error": "dashboard offline"},
             status=502,
         )
+
+
+async def serve_conversation(request: web.Request) -> web.Response:
+    """A read-only provider view. Browser input can select an agent, never a path.
+
+    Legacy resolves a bound dashboard row on each read and rechecks it before
+    publishing. Fresh keeps its existing protected history route and its public
+    text projection; it deliberately cannot expose raw paths or byte cursors.
+    """
+    query = request.query
+    if (set(query) - {"agent", "before", "after", "limit"}
+            or any(len(query.getall(key)) != 1 for key in query)
+            or "before" in query and "after" in query):
+        return web.json_response({"ok": False, "error": "invalid_query"}, status=400)
+    name = query.get("agent", "")
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,95}", name):
+        return web.json_response({"ok": False, "error": "invalid_agent"}, status=400)
+    try:
+        limit = int(query.get("limit", "80"))
+        if not 1 <= limit <= 200:
+            raise ValueError
+    except ValueError:
+        return web.json_response({"ok": False, "error": "invalid_limit"}, status=400)
+    session = request.app[HTTP_SESSION_KEY]
+    boundary = request.app[TMUX_BIN_KEY]
+
+    async def bound_row():
+        async with session.get(DASHBOARD_URL + "/api/agents?scope=live") as response:
+            if response.status != 200:
+                raise HistoryUnavailable("dashboard_unavailable")
+            return bound_codex_agent(await response.json(), name)
+
+    try:
+        if isinstance(boundary, FreshTargetBoundary):
+            target = await asyncio.to_thread(boundary.resolve, name)
+            marker = "window:" + target.revision
+            if "before" in query or query.get("after", marker) != marker:
+                raise HistoryUnavailable("history_changed")
+            selectors = dict(target.ref, session=name, limit="200")
+            async with session.get(DASHBOARD_URL + "/api/history", params=selectors) as response:
+                if response.status != 200:
+                    raise HistoryUnavailable("history_unavailable")
+                payload = await response.json()
+            # The same bound host must still select the same I/A/current/route.
+            current = await asyncio.to_thread(boundary.resolve, name, target.ref)
+            if current.revision != target.revision or current.ref != target.ref:
+                raise HistoryUnavailable("history_changed")
+            if not isinstance(payload, dict) or payload.get("ok") is not True:
+                raise HistoryUnavailable("history_unavailable")
+            if payload.get("source") == "claude":
+                raise HistoryUnavailable("claude_next_phase")
+            if (payload.get("source") != "codex" or payload.get("history_binding") != "bound"
+                    or any(payload.get(key) != value for key, value in target.ref.items())):
+                raise HistoryUnavailable("history_unconfirmed")
+            events = []
+            occurrences: dict[str, int] = {}
+            for event in payload.get("events", []):
+                if (not isinstance(event, dict) or event.get("kind") != "text"
+                        or event.get("role") not in {"user", "assistant"}
+                        or not isinstance(event.get("text"), str)):
+                    continue
+                key = json.dumps([event.get("ts"), event["role"], event["text"]], ensure_ascii=False)
+                digest = hashlib.sha256(key.encode()).hexdigest()
+                occurrence = occurrences.get(digest, 0)
+                occurrences[digest] = occurrence + 1
+                event_id = f"window:{digest}:{occurrence}"
+                events.append(dict(id=event_id, role=event["role"], kind="text",
+                                   text=event["text"][:65536], ts=str(event.get("ts") or "")[:128]))
+            result = dict(events=events, before=None, after=marker, has_older=False,
+                          has_newer=False, limited=bool(payload.get("has_more") or payload.get("truncated")),
+                          mode="fresh_tail")
+        else:
+            row = await bound_row()
+            result = await asyncio.to_thread(read_codex_page, row["transcript_path"],
+                before=query.get("before"), after=query.get("after"), limit=limit)
+            current = await bound_row()
+            if current["transcript_path"] != row["transcript_path"]:
+                raise HistoryUnavailable("history_changed")
+            result["mode"] = "cursor"
+        return web.json_response(dict(result, ok=True, agent=name, provider="codex"),
+                                 headers={"Cache-Control": "no-store"})
+    except HistoryUnavailable as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=409 if str(exc) == "history_changed" else 400,
+                                 headers={"Cache-Control": "no-store"})
+    except TargetRefused:
+        return web.json_response({"ok": False, "error": "history_unconfirmed"}, status=409,
+                                 headers={"Cache-Control": "no-store"})
+    except (ClientError, asyncio.TimeoutError, ValueError, TypeError):
+        return web.json_response({"ok": False, "error": "dashboard_unavailable"}, status=502,
+                                 headers={"Cache-Control": "no-store"})
 
 
 async def proxy_spawn(request: web.Request) -> web.Response:
@@ -3857,6 +3949,7 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "theme_core.js", "theme_controller.js", "roster_descriptor.js", "demo_mask.js",
     "demo_mode.js", "orrery_view.js", "mail_view.js", "cockpit_tour.js",
     "cockpit_full_tour.js", "telemetry_light.js",
+    "conversation_source.js", "conversation_view.js", "conversation_view.css",
     "vendor/xterm-5.5.0/xterm.js", "vendor/xterm-5.5.0/xterm.css",
     "vendor/addon-fit-0.10.0/addon-fit.js",
     "vendor/addon-web-links-0.11.0/addon-web-links.js",
@@ -3893,6 +3986,7 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False) ->
     install_routes(app, InputCoordinator(PaneResolver(app[TMUX_BIN_KEY]), mobile_bridge,
                                         enabled=mobile_input_enabled))
     app.router.add_get("/telemetry/agents", proxy_dashboard)
+    app.router.add_get("/telemetry/conversation", serve_conversation)
     app.router.add_get("/telemetry/messages", proxy_dashboard)
     app.router.add_get("/telemetry/graph", proxy_dashboard)
     app.router.add_post("/telemetry/spawn", proxy_spawn)

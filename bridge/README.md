@@ -18,6 +18,34 @@ replace text without scrolling it into history. A read-only history view
 would need to label that limited capture, or use a separate provider history
 source; it cannot supply an accurate live TUI scrollbar from these rows.
 
+**Settings → Appearance → Conversation history** adds a `History` button to
+the pane header (off by default). It opens a read-only Codex transcript next to
+the terminal; on narrow screens it fills the pane until closed. The scrollbar
+describes the loaded messages, not the live TUI position. `Load earlier` reads
+older records, and new output follows only while the reader is at the bottom.
+Turn the setting off to remove the button, close the panel and stop its reads.
+The single preference uses the existing shared preference mechanism; transcript
+contents and reading position are never saved as preferences.
+
+The additive `GET /telemetry/conversation?agent=<name>` endpoint accepts an
+agent and optional byte cursors (`before` or `after`), never a filesystem path.
+In legacy mode only a dashboard `history_binding=bound` Codex row can select
+the file; the binding is checked again before returning it. Provider reasoning,
+tool arguments and tool results are omitted; tool names are shown as summaries.
+Each read scans at most 4 MiB, returns at most 200 events (80 by default), and
+shortens individual messages beyond 64 Ki characters. It never sends terminal
+input. Claude Code support is planned for a separate change.
+
+In explicit fresh mode the same endpoint uses the existing protected dashboard
+history route and its public text projection, with the bound I/A and current
+target rechecked. This mode reads the latest 200 text messages, labels that
+limited window, and does not offer older pages or tool summaries. Full cursor
+support there requires extending Telemetry's protected history API rather than
+opening raw transcript paths in cockpit. Data acquisition lives in
+`conversation_history.py` / `conversation_source.js`, and presentation in
+`conversation_view.js` / `conversation_view.css`; the view's optional
+`renderEvent(event, defaultRenderer)` adapter allows future reference/preview UI.
+
 Each control connection runs through `control_client_guard.py`. The guard owns
 one `tmux -CC attach` child and watches a private pipe whose writer belongs only
 to the backend. Backend exit (including SIGKILL) closes that pipe; the guard
@@ -79,6 +107,7 @@ The unified backend keeps browser traffic same-origin:
 | --- | --- |
 | `/ws` | tmux control-mode sessions, WS protocol v2 |
 | `/telemetry/agents?scope=` | `:8770/api/agents` (`scope=live`: the live rows and the retired names, which the roster poll asks for) |
+| `/telemetry/conversation?agent=&before=&after=&limit=` | read-only bound Codex history; `before` and `after` are mutually exclusive |
 | `/telemetry/messages?since=&limit=` | `:8770/api/messages-since` |
 | `/telemetry/graph?all=&days=` | `:8770/api/graph` (spawn lineage) |
 | `POST /telemetry/spawn` | JSON object proxy to `:8770/api/spawn`; dashboard response passes through |

@@ -1,0 +1,160 @@
+/* Presentation only: source.read is replaceable for another provider/layout.
+   This view renders inert text. Future file/preview navigation belongs in an
+   explicit renderer/activation adapter, never arbitrary HTML or browser paths. */
+(function(root){
+  'use strict';
+  const KEY='oc-term-conversation-enabled';
+  function mount({getContext,onLayout=()=>{},source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null}){
+    const screen=document.querySelector('.screen'),toggle=document.getElementById('conversationToggle');
+    const setting=document.getElementById('conversationEnabled');
+    const panel=document.createElement('section');
+    panel.className='conversation-panel';panel.id='conversationPanel';panel.hidden=true;
+    panel.setAttribute('aria-label','Read-only conversation history');
+    panel.innerHTML='<div class="conversation-head"><div class="conversation-heading">'+
+      '<h2 class="conversation-title">Conversation</h2><div class="conversation-subtitle"></div></div>'+
+      '<button class="conversation-action conversation-close" type="button" aria-label="Close conversation history">× Close</button></div>'+
+      '<div class="conversation-toolbar"><span class="conversation-status" role="status"></span>'+
+      '<button class="conversation-action conversation-retry" type="button" hidden>Retry</button></div>'+
+      '<div class="conversation-scroll" tabindex="0" aria-label="Conversation messages">'+
+      '<button class="conversation-action conversation-older" type="button" hidden>↑ Load earlier</button>'+
+      '<div class="conversation-events"></div><div class="conversation-empty"></div></div>'+
+      '<div class="conversation-bottom"><span class="conversation-status conversation-position"></span>'+
+      '<button class="conversation-action conversation-latest" type="button">↓ Latest</button></div>';
+    screen.appendChild(panel);
+    const el=selector=>panel.querySelector(selector);
+    const scroll=el('.conversation-scroll'),eventsEl=el('.conversation-events');
+    const status=el('.conversation-toolbar .conversation-status'),empty=el('.conversation-empty');
+    const earlier=el('.conversation-older'),retry=el('.conversation-retry'),latest=el('.conversation-latest');
+    let enabled=false,opened=false,agent='',generation=0,controller=null,timer=0,busy=false;
+    let before=null,after=null,hasOlder=false,mode='',newCount=0,events=new Map();
+    function nearBottom(){return scroll.scrollHeight-scroll.clientHeight-scroll.scrollTop<45;}
+    function position(){
+      const atBottom=nearBottom();
+      if(atBottom)newCount=0;
+      el('.conversation-position').textContent=events.size+' loaded · '+(mode==='fresh_tail'?'recent window':'loaded portion');
+      latest.textContent=newCount?'↓ '+newCount+' new':'↓ Latest';
+    }
+    function message(text){status.textContent=text;}
+    function stop(){clearTimeout(timer);timer=0;if(controller)controller.abort();controller=null;generation++;busy=false;}
+    function clear(){events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
+    function node(event){
+      const article=document.createElement('article');article.className='conversation-event';
+      article.dataset.eventId=event.id;article.dataset.role=event.role;article.dataset.kind=event.kind;
+      const byline=document.createElement('div');byline.className='conversation-byline';
+      const role=document.createElement('span');role.className='conversation-role';
+      role.textContent=event.kind==='tool'?'Tool':event.role==='user'?'You':'Codex';byline.appendChild(role);
+      if(event.kind==='tool'){
+        const tool=document.createElement('span');tool.className='conversation-tool-name';tool.textContent=event.text;byline.appendChild(tool);
+      }
+      const time=document.createElement('time');time.className='conversation-time';
+      const date=new Date(event.ts);
+      if(Number.isFinite(date.getTime())){time.dateTime=event.ts;time.textContent=date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});time.title=date.toLocaleString();}
+      byline.appendChild(time);article.appendChild(byline);
+      if(event.kind!=='tool'){
+        const text=document.createElement('p');text.className='conversation-text';text.textContent=event.text;article.appendChild(text);
+      }
+      if(event.truncated){const note=document.createElement('div');note.className='conversation-truncated';note.textContent='Long message shortened in this reader.';article.appendChild(note);}
+      return article;
+    }
+    function schedule(){
+      clearTimeout(timer);
+      if(opened&&enabled&&!document.hidden)timer=setTimeout(()=>load('newer'),pollMs);
+    }
+    async function load(direction='initial'){
+      if(!opened||!enabled||busy||!agent)return;
+      const token=generation,name=agent;
+      let pollAgain=true;
+      controller=new AbortController();busy=true;earlier.disabled=true;retry.hidden=true;
+      const options={signal:controller.signal};
+      if(direction==='older')options.before=before;
+      if(direction==='newer')options.after=after;
+      try{
+        const page=await source.read(name,options);
+        if(token!==generation||!opened||!enabled)return;
+        const atBottom=nearBottom(),oldHeight=scroll.scrollHeight,oldTop=scroll.scrollTop;
+        const fragment=document.createDocumentFragment();let added=0;
+        for(const event of page.events){
+          if(!event||typeof event.id!=='string'||typeof event.text!=='string'||events.has(event.id))continue;
+          events.set(event.id,event);fragment.appendChild(renderEvent?renderEvent(event,node):node(event));added++;
+        }
+        if(direction==='older')eventsEl.prepend(fragment);else eventsEl.appendChild(fragment);
+        if(direction!=='newer'){before=page.before;hasOlder=page.has_older===true;}
+        if(direction!=='older')after=page.after;
+        mode=page.mode||'cursor';earlier.hidden=!hasOlder;
+        empty.hidden=events.size>0;empty.textContent='No conversation messages in this portion yet.';
+        if(direction==='initial'||direction==='newer'&&atBottom)scroll.scrollTop=scroll.scrollHeight;
+        else if(direction==='older')scroll.scrollTop=oldTop+scroll.scrollHeight-oldHeight;
+        else{scroll.scrollTop=oldTop;newCount+=added;}
+        message(mode==='fresh_tail'?'Fresh · latest 200 messages; earlier history and tools need telemetry support.':
+          page.skipped_large_record?'A large record was skipped. Load earlier to continue.':'Read-only · updates while open');
+        position();
+        if(page.has_newer&&direction!=='older'){
+          // A bounded page per request. Continue in the next poll without
+          // sending overlapping reads during a fast provider burst.
+          message('Read-only · catching up with new messages…');
+        }
+      }catch(error){
+        if(token!==generation||error.name==='AbortError')return;
+        pollAgain=!['history_changed','record_too_large','provider_unavailable','claude_next_phase'].includes(error.code);
+        message(error.message);retry.hidden=false;
+        if(!events.size){empty.hidden=false;empty.textContent=error.code==='claude_next_phase'?
+          'Claude Code support comes in the next phase. Codex history is available now.':'History is unavailable for this agent.';}
+        if(['history_changed','history_unconfirmed','agent_unavailable'].includes(error.code)){
+          // Never combine different provider sessions under one agent name.
+          events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;earlier.hidden=true;
+          empty.hidden=false;empty.textContent='Session changed. Retry to load the current conversation.';position();
+        }
+      }finally{
+        if(token===generation){busy=false;controller=null;earlier.disabled=false;if(pollAgain)schedule();}
+      }
+    }
+    function context(){
+      const current=getContext()||{};const name=String(current.name||'');
+      if(!opened)return;
+      if(name===agent)return;
+      stop();agent=name;clear();
+      el('.conversation-subtitle').textContent=(agent||'No pane selected')+' · read-only';
+      if(!agent){empty.textContent='Select an agent pane to read its conversation.';message('No agent selected');return;}
+      if(/^claude/.test(current.program||'')){
+        empty.textContent='Claude Code support comes in the next phase. Codex history is available now.';
+        message('Claude Code · next phase');return;
+      }
+      load();
+    }
+    function close({focus=true}={}){
+      if(!opened)return;
+      stop();opened=false;agent='';panel.hidden=true;screen.classList.remove('conversation-open');
+      toggle.setAttribute('aria-expanded','false');clear();onLayout();if(focus&&!toggle.hidden)toggle.focus();
+    }
+    function open(){
+      if(!enabled)return;
+      opened=true;panel.hidden=false;screen.classList.add('conversation-open');
+      toggle.setAttribute('aria-expanded','true');agent=null;context();onLayout();scroll.focus();
+    }
+    function preference(){
+      try{enabled=localStorage.getItem(KEY)==='1';}catch(_){enabled=false;}
+      setting.checked=enabled;toggle.hidden=!enabled;
+      screen.classList.toggle('conversation-enabled',enabled);
+      if(!enabled)close({focus:false});
+    }
+    setting.addEventListener('change',()=>{try{localStorage.setItem(KEY,setting.checked?'1':'0');}catch(_){}preference();});
+    document.addEventListener('oc:prefs-changed',preference);
+    window.addEventListener('storage',event=>{if(event.key===KEY)preference();});
+    toggle.addEventListener('click',()=>opened?close():open());
+    el('.conversation-close').addEventListener('click',()=>close());
+    panel.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close();}});
+    // Arrow/Page keys and wheels belong only to the browser scroll container;
+    // there is no path from this module to xterm or tmux input.
+    earlier.addEventListener('click',()=>load('older'));
+    retry.addEventListener('click',()=>load(events.size?'newer':'initial'));
+    latest.addEventListener('click',()=>{scroll.scrollTop=scroll.scrollHeight;newCount=0;position();});
+    scroll.addEventListener('scroll',position,{passive:true});
+    document.addEventListener('oc:stage-agent',context);
+    document.addEventListener('oc:focus-agent',context);
+    document.addEventListener('oc:agents',context);
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)clearTimeout(timer);else if(opened)load(events.size?'newer':'initial');});
+    preference();
+    return Object.freeze({open,close,refresh:()=>load(events.size?'newer':'initial')});
+  }
+  root.OrreryConversation=Object.freeze({mount,KEY});
+})(window);
