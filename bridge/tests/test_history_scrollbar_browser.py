@@ -16,7 +16,8 @@ pytestmark = pytest.mark.skipif(CHROME is None, reason='no Chromium (set ORRERY_
 def history_browser():
     with browser() as (go, js):
         go('')
-        assert wait(js, "typeof createPane==='function'&&Boolean(window.OrreryTour)")
+        # OrreryTour exists once its script runs; .state only after mount() on DOMContentLoaded.
+        assert wait(js, "typeof createPane==='function'&&Boolean(window.OrreryTour?.state)")
         js("""OrreryTour.state.close();window.packets=[];
           window.send=m=>{packets.push(m);return true;};
           window.settle=()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
