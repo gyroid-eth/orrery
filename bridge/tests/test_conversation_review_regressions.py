@@ -308,9 +308,27 @@ def test_header_and_history_use_one_control_style_and_settings_keep_actions(cock
     js("document.querySelector('#settingsPopover').hidePopover()")
     for theme in ['dark','light']:
         js("document.documentElement.setAttribute('data-color-theme',"+json.dumps(theme)+")")
-        styles=js("""(()=>{const selectors=['#scrBadge','#conversationToggle','#panePopout','.conversation-expand','.conversation-close','.conversation-latest'];
+        styles=js("""(()=>{const selectors=['#conversationToggle','#panePopout','.conversation-expand','.conversation-close','.conversation-latest'];
           return selectors.map(selector=>{const s=getComputedStyle(document.querySelector(selector));return {
             padding:s.padding,borderRadius:s.borderRadius,font:s.font,height:s.height,borderWidth:s.borderWidth};});})()""")
         assert all(style==styles[0] for style in styles)
     js("document.querySelector('.conversation-expand').focus()")
     assert js("getComputedStyle(document.activeElement).outlineStyle!=='none'")
+
+
+@pytest.mark.parametrize('cockpit',[False,True],indirect=True,ids=['desktop','phone'])
+def test_pane_status_is_noninteractive_text_separate_from_buttons(cockpit):
+    js,wait,client,requests,enable=cockpit
+    enable(count=2)
+    state=js("""(()=>{const e=document.getElementById('scrBadge'),s=getComputedStyle(e),name=document.getElementById('scrName');return {
+      role:e.getAttribute('role'),atomic:e.getAttribute('aria-atomic'),buttonClass:e.classList.contains('cockpit-control'),
+      border:s.borderTopWidth,background:s.backgroundColor,cursor:s.cursor,tabIndex:e.tabIndex,
+      leftOfAction:e.getBoundingClientRect().right<document.getElementById('conversationToggle').getBoundingClientRect().left,
+      nextToName:name.nextElementSibling===e};})()""")
+    assert state==dict(role='status',atomic='true',buttonClass=False,border='0px',background='rgba(0, 0, 0, 0)',cursor='default',tabIndex=-1,leftOfAction=True,nextToName=True)
+    before=js("getComputedStyle(scrBadge).cssText+getComputedStyle(scrBadge).color+getComputedStyle(scrBadge).backgroundColor+getComputedStyle(scrBadge).borderTopWidth")
+    rect=js("(()=>{const r=scrBadge.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()")
+    client.call('Input.dispatchMouseEvent',type='mouseMoved',**rect)
+    assert js("getComputedStyle(scrBadge).cssText+getComputedStyle(scrBadge).color+getComputedStyle(scrBadge).backgroundColor+getComputedStyle(scrBadge).borderTopWidth")==before
+    js("document.querySelector('.conversation-scroll').focus();scrBadge.focus()")
+    assert not js('document.activeElement===scrBadge')

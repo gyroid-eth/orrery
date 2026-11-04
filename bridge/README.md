@@ -77,8 +77,9 @@ WebSocket input route as the terminal composer. Reading/preview keys do not
 send input. Enter in the composer or an explicit SEND sends, and the normal
 history poll picks up the resulting conversation without resetting the reader.
 
-The header keeps the existing status display (ACTIVE/LIVE/offline), HISTORY
-when enabled, and WINDOW. In a separate pane window, WINDOW returns it to the
+The header shows the status (ACTIVE/LIVE/offline) as a dot and noninteractive
+text beside the pane name, with HISTORY (when enabled) and WINDOW on the right.
+In a separate pane window, WINDOW returns it to the
 cockpit. Terminal-size claim/follow and opening in the external terminal moved
 to **Settings → Terminal → Selected pane actions**; the selected session/pane
 is shown there, and the same handlers apply. Their defaults did not change:

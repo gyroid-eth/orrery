@@ -578,9 +578,16 @@
   .scr-head{display:flex;align-items:center;gap:8px;height:40px;padding:5px 12px;border-bottom:1px solid var(--hair-2);position:relative;z-index:4;
     background:rgba(10,12,16,.7)}
   .scr-head .name{font-family:var(--serif);font-size:14px;color:var(--ink)}
-  .scr-head .path{color:var(--ink-faint);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .scr-head .badge{margin-left:auto;cursor:default}
-  .cockpit-control,.scr-head .badge{
+  .scr-head .path{flex:1;min-width:0;color:var(--ink-faint);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .scr-head .badge{
+    display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;margin-right:auto;
+    border:0;padding:0;background:transparent;color:var(--ink-faint);
+    font:9.5px/1.2 var(--mono);letter-spacing:.06em;text-transform:uppercase;cursor:default;
+  }
+  .scr-head .badge::before{content:"";width:5px;height:5px;flex:0 0 auto;border-radius:50%;background:currentColor}
+  .scr-head .badge:empty{display:none}
+  .scr-head .badge.live{color:var(--amber)}
+  .cockpit-control{
     display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:0 0 auto;
     height:28px;min-height:28px;padding:5px 9px;border:1px solid var(--hair);border-radius:6px;
     background:var(--panel);color:var(--ink-dim);font:10px/1.2 var(--mono);letter-spacing:.06em;
@@ -590,7 +597,7 @@
   .cockpit-control:hover{color:var(--ink);border-color:var(--amber);background:var(--panel-2)}
   .cockpit-control:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-color:var(--amber)}
   .cockpit-control:active,.cockpit-control[aria-pressed="true"],.cockpit-control[aria-expanded="true"],
-  .cockpit-control.claimed,.scr-head .badge.live{
+  .cockpit-control.claimed{
     color:var(--amber);border-color:var(--amber);background:rgb(var(--theme-accent-rgb) / .08);
   }
   .cockpit-control:disabled{opacity:.45;cursor:default}
@@ -1210,8 +1217,8 @@
         <div class="glassglow"></div>
         <div class="scr-head">
           <span class="name" id="scrName">—</span>
+          <span class="badge off" id="scrBadge" role="status" aria-live="polite" aria-atomic="true">offline</span>
           <span class="path" id="scrPath"></span>
-          <span class="badge off" id="scrBadge">offline</span>
           <button class="cockpit-control conversation-toggle" id="conversationToggle" type="button" hidden
                   aria-expanded="false" aria-controls="conversationPanel">History</button>
           <button class="cockpit-control pane-popout" id="panePopout" type="button" hidden
@@ -2106,18 +2113,23 @@
             "value": "var(--ink-faint)"
           },
           {
+            "property": "color",
+            "selector": ".scr-head .badge",
+            "value": "var(--ink-faint)"
+          },
+          {
             "property": "border",
-            "selector": ".cockpit-control,.scr-head .badge",
+            "selector": ".cockpit-control",
             "value": "1px solid var(--hair)"
           },
           {
             "property": "background",
-            "selector": ".cockpit-control,.scr-head .badge",
+            "selector": ".cockpit-control",
             "value": "var(--panel)"
           },
           {
             "property": "color",
-            "selector": ".cockpit-control,.scr-head .badge",
+            "selector": ".cockpit-control",
             "value": "var(--ink-dim)"
           },
           {
@@ -3499,7 +3511,12 @@
           },
           {
             "property": "color",
-            "selector": ".cockpit-control,.scr-head .badge",
+            "selector": ".scr-head .badge",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".cockpit-control",
             "value": "var(--ink-dim)"
           },
           {
@@ -4080,7 +4097,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "dc6ba0a9e7dd59195ebe6361b681c7936b04bfd4873aa7da3ecc5c1bf3d557dc",
+        "digest": "3e17d31cdbcd66277b745e6bddb3cf21be4ef94cb1293d3ae8eaa3364d9e9a83",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4219,7 +4236,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "9f0ad6c1e11a324b6218f0e3f9a12d842015c99cb4106843251c29c821b5eb16",
+        "digest": "6962e218560441f46e357232da0b523d6a20e828142b47fb159eaeeee7dabd8d",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4265,9 +4282,9 @@
       }
     }
   },
-  "inventory_digest": "84c9d784016cfce1b728fce12368ca2395bfaf50bb0f133eb6ca5b821c5f34c8",
+  "inventory_digest": "f063d9b374ef4248aed826138d57906d4cda96a4090d86da8e3f0d2859bd84ae",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "19a846efc407f456c1e1e22d04db2da5f06294791c1226a93b9a3813a6cdf4dd",
+  "source_digest": "5811fed369fb87971686c8de097dd6d5dab7beb9b9964e421cd288ff105415d7",
   "surface": "cockpit",
   "version": 1
 }
