@@ -26,13 +26,16 @@ COCKPIT = SOURCES / "cockpit.html"
 BLOCKS = (
     r"/\* ── host: Mac, WSL or plain Linux.*?(?=/\* COCKPIT_PURE_LOGIC_END \*/)",
     r"function quotePath\(path\)\{.*?\n\}\n",
+    # The paste fixes its target pane when it starts (captureComposerTarget).
+    r"function captureComposerTarget\(\)\{.*?\n\}\n",
+    r"function composerTargetPresent\(target\)\{.*?\n\}\n",
     r"function handleComposerPaste\(e\)\{.*?\n\}\n",
 )
 
 HARNESS = r"""
-const toasts=[],sent=[],reads=[];let drafts=0;
+const toasts=[],sent=[],reads=[];let drafts=0;const socket={};
 function showToast(message,isError=false){toasts.push({message,isError});}
-function send(msg){sent.push(msg);}
+function send(msg){sent.push(msg);return true;}  // connected, as the real send() reports
 function saveDraft(){drafts++;}
 let clipboardAnswer={files:[]};
 function readClipboardFiles(){reads.push(1);return Promise.resolve(clipboardAnswer);}

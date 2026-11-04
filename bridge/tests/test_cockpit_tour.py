@@ -153,12 +153,14 @@ def test_any_tour_keeps_its_own_steps_key_and_fold():
 
 def prompt(connected=True, pane=True, text='Hello', guarded=False):
     source = (BRIDGE / 'cockpit.html').read_text()
-    fn = re.search(r'function sendPrompt\(opts\)\{.*?(?=\nfunction sendInterrupt)', source, re.S).group()
-    return node("const events=[];let cleared=false;const activeId='pane';"
+    # sendPrompt fixes its target pane when it starts; take those helpers as they are.
+    fn = re.search(r'function captureComposerTarget\(\)\{.*?(?=\nfunction sendInterrupt)', source, re.S).group()
+    return node("const events=[];let cleared=false;const activeId='pane';const socket={};"
                 f"const promptInput={{value:{json.dumps(text)}}};"
                 f"const panes=new Map({json.dumps([['pane', {'session': 'Test'}]] if pane else [])});"
-                "const document={dispatchEvent:e=>events.push(e.detail.id)};"
-                "class CustomEvent{constructor(_,v){this.detail=v.detail;}}"
+                # Only the tour step counts here; oc:prompt-submitted is for the history reader.
+                "const document={dispatchEvent:e=>{if(e.type==='oc:tour-action')events.push(e.detail.id);}};"
+                "class CustomEvent{constructor(type,v){this.type=type;this.detail=v.detail;}}"
                 f"function send(){{return {str(connected).lower()};}}"
                 f"function inspectPrompt(){{return {'{}' if guarded else 'null'};}}"
                 "function showToast(){}function showSendGuard(){}function hideSendGuard(){}"
