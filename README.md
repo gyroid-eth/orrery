@@ -65,6 +65,44 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 
 ## できること
 
+### 会話を読み返す（Conversation history）
+
+代替画面を使う agent の会話は、端末のスクロールバックだけでは遡れません。Conversation history は、記録された会話を読み取り専用で表示します。**Settings → Appearance → Conversation history** をオンにし、pane の **HISTORY** を押してください。既定はオフです。オフに戻すとパネルとボタンが消え、履歴の読み込みも止まります。
+
+![架空の会話を履歴パネルで開く](docs/images/cockpit_history.png)
+
+履歴は端末の横に開き、**Full width** で pane 全体に広げられます。狭い画面では pane 全体に表示します。スクロールしている間は新しい記録が来ても読んでいる位置を保ち、**Load earlier** がある場合は過去へ遡れます。**Latest** で最新に戻れます。開閉時に CLAIMED 端末のサイズは変わりません。分割中は各 pane の **HISTORY** で独立して開き、全幅や preview もその区画内に収まります。履歴を操作した pane が下の prompt 欄の送り先になります。別の pane を閉じても、残った pane の履歴の表示幅・読み位置・開いた Mail や preview は保たれます。幅が変わると読み位置が1〜2行ずれることがあります。
+
+![2分割の各 pane で履歴を開く](docs/images/cockpit_history_split.png)
+
+全幅でも入力欄から送信できます。履歴を読むキーは端末に送られず、Enter または **SEND** で明示的に送ります。送信すると対象 pane の preview を閉じ、履歴は最新を追います。送信中に対象の端末や接続が変わった場合は中止して知らせます。送信後は、対象の履歴の末尾に「送信 → agent 名・記録待ち」の仮の行が現れ、対応する発言が記録されると置き換わります。これは agent が処理を確認したことを示すものではありません。照合できない場合は「送信済み（記録の照合はできず）」と表示します。
+
+![送信後に履歴へ表示される記録待ちの行](docs/images/cockpit_history_pending.png)
+
+agent の発言にある Markdown の表は表として表示し、横にスクロールできます。**Copy Markdown** で元の表をコピーできます。
+
+![agent の発言に含まれる表と Copy Markdown](docs/images/cockpit_history_table.png)
+
+記録に file の参照や編集要求の差分があれば、file チップや差分を表示します。Claude の SendUserFile で渡された file もチップから preview できます。チップを押すと現在の text や画像を preview できます。記録された差分と現在の file は別物です。**Reveal in file manager** を押すと Finder や Explorer で選択します。
+
+![file チップから現在の text を preview](docs/images/cockpit_history_text.png)
+
+![画像の file チップから preview](docs/images/cockpit_history_image.png)
+
+![SendUserFile の file チップから画像を preview](docs/images/cockpit_history_sendfile.png)
+
+発言や tool の本文を押すと、同じ pane の端末に残る文字列を探し、一意に一致した場合だけその行へ移ります。見つからない、複数一致する、または検索上限に達した場合は移動せずに知らせます。文字の選択・コピーや file チップはそれぞれの操作のままです。
+
+![発言を押して端末の該当行へ移る](docs/images/cockpit_history_jump.gif)
+
+記録内の ORRERY Mail 通知と送信要求は、向き・相手・件名のカードとして表示します。押すと記録された本文が開きます。通知が preview の場合は続きが Mail にあると示します。Mail server から本文を取得したり既読にしたりせず、送信要求を配信完了とは扱いません。
+
+![架空の会話で履歴を全幅にし Mail カードを開く](docs/images/cockpit_history_mail.gif)
+
+表示できない場合は、パネルに理由と次の操作が表示されます。起動直後や最初の発言前なら少し待って再試行し、古い会話や紐付けを確認できない場合は新しい子を開いてください。Codex の記録が観測されない場合は ORRERY plugin を有効にして `/hooks` で確認し、新しく起動します。記録が無効・書き込み不可の場合は provider の記録設定や保存先を確認します。古い dashboard、未対応の形式、dsh の依存関係不足なども画面に案内されます。
+
+legacy では Codex と、Telemetry API 35 以降で紐付けを確認した Claude Code・dsh・Hermes を読めます。古い dashboard では Codex のみです。Claude・Codex・dsh は過去ページを読めます。dsh は記録された append の時系列、Hermes は現在の bound segment の直近 snapshot（最大200件）で、圧縮前の segment は含みません。fresh は保護された API の直近の本文 snapshot（最大200件、量の制限あり）で、過去ページと tool の要約には未対応です。保持上限で更新が止まったときは **Latest** で再開できます。端末から消えた代替画面の描画は復元できません。[操作と上限の詳細](bridge/README.md)
+
 ### 科学者の顔とモデルを選んで起動する（NEW AGENT）
 
 `+ NEW AGENT` で科学者の肖像を選ぶと名前が決まり、形容詞は調整できます。Claude・Codex・DeepSeek・Local models の4系統から model を、DeepSeek と Local では dsh / Hermes の Harness も選べます。利用できる model と Harness は導入済みの設定によって変わります。
@@ -346,3 +384,6 @@ ORRERY は ORRERY Telemetry、`tmux`、`xterm.js` などと連携します。こ
 ## 不具合の報告
 
 不具合は GitHub repository の Issues へ報告してください。task 名、再現手順、ORRERY / ORRERY Telemetry の起動 log、`/telemetry/health` の結果を添えると切り分けが早くなります。
+
+split 中は各 pane の見出しに名前・状態と HISTORY / WINDOW をまとめます。
+ボタンはその見出しの pane が対象で、1 pane は従来の見出しのままです。

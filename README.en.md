@@ -65,6 +65,44 @@ Pick an agent in the roster on the left, give instructions in the terminal in th
 
 ## What you can do
 
+### Read a conversation (Conversation history)
+
+An agent using an alternate-screen TUI cannot be reviewed with terminal scrollback alone. Conversation history displays its recorded conversation in a read-only panel. Turn on **Settings → Appearance → Conversation history** and press **HISTORY** in the pane. The setting is off by default; turning it off closes the panel, removes the button, and stops history reads.
+
+![History panel with a fictional conversation](docs/images/cockpit_history.png)
+
+The reader opens beside the terminal; **Full width** expands it across the pane. On narrow screens it fills the pane. While you scroll, new records do not move your reading position. Use **Load earlier** where available to go back, and **Latest** to return to the newest records. Opening or closing History does not resize a CLAIMED terminal. In a split, each pane's **HISTORY** opens an independent reader; full width and previews stay within that pane. Interacting with a reader selects its pane as the prompt composer target. Closing another pane preserves the surviving reader’s width mode, position, expanded Mail, and preview. A width change can shift the reading position by one or two lines.
+
+![Independent history readers in two split panes](docs/images/cockpit_history_split.png)
+
+The composer remains available in full-width view. Reading keys stay in the reader; use Enter or **SEND** to submit explicitly. Submission closes that pane's preview and resumes following its newest history. If the target terminal or connection changes during submission, the send is cancelled with a notice. After sending, a temporary “sent → agent · awaiting record” row appears at the end of that pane’s history and is replaced when the matching user message is recorded. It does not mean the agent has acknowledged the prompt. If the record cannot be matched confidently, the row says so.
+
+![A pending record row after sending a prompt](docs/images/cockpit_history_pending.png)
+
+Markdown tables in assistant messages render as tables and can be scrolled horizontally. **Copy Markdown** copies the original table.
+
+![A table in an agent message with Copy Markdown](docs/images/cockpit_history_table.png)
+
+When records contain file references or edit-request diffs, the reader shows file chips and diffs. Files delivered with Claude’s SendUserFile also have chips for preview. Select a chip to preview the current text or image. A recorded diff and the current file are distinct. **Reveal in file manager** selects the file in Finder or Explorer when pressed.
+
+![Previewing the current text from a file chip](docs/images/cockpit_history_text.png)
+
+![Previewing an image from a file chip](docs/images/cockpit_history_image.png)
+
+![Previewing an image from a SendUserFile chip](docs/images/cockpit_history_sendfile.png)
+
+Select a message or tool text to search for it in the same pane's retained terminal text. The reader moves to the line only for a unique match; it shows a notice and stays put if there is no match, more than one match, or the search limit is reached. Text selection, copying, and file chips retain their own actions.
+
+![Clicking a message to reveal its line in the terminal](docs/images/cockpit_history_jump.gif)
+
+Recorded ORRERY Mail notifications and send requests appear as cards with direction, correspondent, and subject. Select a card to expand the recorded body. A preview notification indicates that the rest is in Mail. The reader does not fetch bodies from the Mail server or mark messages read, and a send request does not confirm delivery.
+
+![Opening history, expanding it, and opening a Mail card using fictional conversations](docs/images/cockpit_history_mail.gif)
+
+When history is unavailable, the panel shows a reason and next step. Shortly after launch or before the first message, wait and retry; for an old conversation or an unverified binding, open a newly launched child. If Codex recording was not observed, enable the ORRERY plugin, review its hooks in `/hooks`, and start a new process. For disabled recording or a write failure, check the provider's recording settings or storage permissions. The panel also identifies older dashboards, unsupported formats, and missing dsh dependencies.
+
+Legacy mode reads Codex and, with Telemetry API 35 or later, bound Claude Code, dsh, and Hermes records. Older dashboards support Codex only. Claude, Codex, and dsh offer older pages. dsh shows a recorded append timeline; Hermes shows a recent snapshot of the active bound segment (up to 200 events), excluding segments before compaction. Fresh mode uses the protected API's recent text snapshot (up to 200 messages, subject to size limits) and does not offer older pages or tool summaries. If updates pause at the retention limit, **Latest** resumes them. Alternate-screen frames no longer retained by the terminal cannot be restored. See [operation and limits](bridge/README.md).
+
 ### Choose a scientist's portrait and a model (NEW AGENT)
 
 Open `+ NEW AGENT` and select a scientist's portrait to generate a name; you can adjust its adjective. Choose a model from Claude, Codex, DeepSeek, or Local models. DeepSeek and Local also offer a dsh / Hermes Harness choice. Available models and harnesses depend on your installed configuration.
@@ -340,3 +378,6 @@ This repository is under the **PolyForm Perimeter License 1.0.1** (except the po
 ## Reporting problems
 
 Report problems in the GitHub repository's Issues. Including the task name, the steps to reproduce, the startup logs of ORRERY / ORRERY Telemetry, and the result of `/telemetry/health` will speed up isolating the cause.
+
+In split view, each pane's title bar owns its name, status, HISTORY and WINDOW
+actions. Each action targets that pane; the single-pane header stays unchanged.

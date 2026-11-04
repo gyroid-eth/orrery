@@ -1,0 +1,160 @@
+.conversation-toggle[hidden],.conversation-panel[hidden]{display:none}
+.screen.conversation-open{--conversation-width:min(46%,460px)}
+.screen.conversation-open .termstage{clip-path:inset(0 var(--conversation-width) 0 0)}
+.screen.conversation-open .promptbar{right:var(--conversation-width)}
+.screen.conversation-open .promptmeta .phint{display:none}
+.conversation-panel{position:absolute;right:0;top:40px;bottom:0;z-index:5;
+  width:var(--conversation-width);display:flex;flex-direction:column;min-height:0;
+  border-left:1px solid var(--hair);background:var(--panel);color:var(--ink)}
+.conversation-head{display:flex;align-items:flex-start;gap:8px;padding:15px 16px 12px;border-bottom:1px solid var(--hair-2)}
+.conversation-heading{flex:1;min-width:0}
+.conversation-title{font:16px var(--serif);margin:0 0 5px}
+.conversation-subtitle{font:10px/1.5 var(--mono);color:var(--ink-dim);overflow-wrap:anywhere}
+.conversation-toolbar{display:flex;gap:8px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--hair-2)}
+.conversation-status{font:10px/1.6 var(--mono);color:var(--ink-dim);flex:1;overflow-wrap:anywhere}
+.conversation-scroll{flex:1;min-height:0;overflow-y:scroll;overscroll-behavior:contain;
+  scrollbar-gutter:stable;scrollbar-width:auto;overflow-anchor:none;padding:4px 18px 16px;outline-offset:-3px}
+.conversation-scroll::-webkit-scrollbar{width:13px}
+.conversation-scroll::-webkit-scrollbar-track{background:rgb(var(--theme-ink-rgb) / .05)}
+.conversation-scroll::-webkit-scrollbar-thumb{background:rgb(var(--theme-ink-rgb) / .4);border:3px solid transparent;border-radius:8px;background-clip:padding-box}
+.conversation-scroll::-webkit-scrollbar-thumb:hover{background-color:rgb(var(--theme-ink-rgb) / .6)}
+.conversation-event{padding:17px 0;border-bottom:1px solid var(--hair-2);overflow-wrap:anywhere}
+.conversation-byline{display:flex;gap:10px;align-items:center;margin-bottom:9px;font:10px var(--mono);color:var(--ink-dim)}
+.conversation-role{color:var(--amber);font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+.conversation-event[data-role="user"] .conversation-role{color:var(--ink)}
+.conversation-time{margin-left:auto;color:var(--ink-faint);font-variant-numeric:tabular-nums}
+.conversation-text{margin:0;white-space:pre-wrap;font:12px/1.85 var(--mono);color:var(--ink);tab-size:2}
+.conversation-event[data-kind="tool"]{padding:11px 0}
+.conversation-event[data-kind="tool"] .conversation-byline{margin:0}
+.conversation-tool-name{color:var(--ink-dim);font:11px/1.6 var(--mono);overflow-wrap:anywhere}
+.conversation-truncated{font:10px var(--mono);color:var(--ink-faint);padding-top:8px}
+.conversation-bottom{display:flex;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--hair);background:var(--panel-2)}
+.conversation-bottom .conversation-action{flex:none}
+.conversation-panel [hidden]{display:none}
+.screen.conversation-open.conversation-full{--conversation-width:100%}
+/* Keep the original composer and every existing send/IME/target guard. The
+   reader reserves its space instead of covering it or cloning its controls. */
+.screen.conversation-open.conversation-full .conversation-panel{bottom:84px}
+.screen.conversation-open.conversation-full .promptbar{right:0;z-index:6}
+.conversation-body{display:flex;flex:1;min-height:0;min-width:0}
+.conversation-thread{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
+.conversation-full .conversation-scroll{padding-left:24px;padding-right:24px}
+.conversation-full .conversation-events{max-width:960px;margin:0 auto}
+.conversation-files{display:flex;flex-wrap:wrap;gap:6px;padding-top:10px}
+.conversation-file{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;text-transform:none}
+.conversation-diff{margin-top:10px;border:1px solid var(--hair);border-radius:6px;overflow:hidden}
+.conversation-diff-summary{padding:9px;cursor:pointer;font:10px/1.6 var(--mono);color:var(--ink-dim)}
+.conversation-diff-code{font:11px/1.65 var(--mono);tab-size:2;overflow:auto;max-height:340px;margin:0;padding:8px 0;background:var(--panel-2)}
+.conversation-diff-line{display:block;min-width:max-content;padding:0 10px;white-space:pre}
+.conversation-diff-add{color:#76ccab;background:#1b8d5e20}
+.conversation-diff-remove{color:#e5a09c;background:#ce594520}
+.conversation-diff-hunk,.conversation-diff-file{color:var(--amber)}
+html[data-color-theme="light"] .conversation-diff-add{color:#17633b}
+html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
+.conversation-preview{display:flex;flex-direction:column;min-width:0;width:48%;border-left:1px solid var(--hair);background:var(--panel-2)}
+.conversation-preview-head{display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding:12px;border-bottom:1px solid var(--hair)}
+.conversation-preview-title{font:12px var(--mono);margin:0;flex:1;min-width:100px;overflow-wrap:anywhere}
+.conversation-preview-notice{font:10px/1.6 var(--mono);padding:10px 12px;color:var(--ink-dim)}
+.conversation-preview-content{flex:1;min-height:0;overflow:auto;padding:12px;font:12px/1.7 var(--mono);overflow-wrap:anywhere;overscroll-behavior:contain}
+.conversation-preview-text{margin:0;white-space:pre-wrap;font:inherit;tab-size:2}
+.conversation-preview-image{display:block;max-width:100%;height:auto;margin:auto;background:repeating-conic-gradient(#8882 0% 25%,transparent 0% 50%) 50% / 16px 16px}
+.conversation-empty{padding:25px 0;color:var(--ink-dim);font:12px/1.8 var(--mono)}
+@media(max-width:1200px){
+  .screen.conversation-open{--conversation-width:100%}
+  .screen.conversation-open .termstage,.screen.conversation-open .promptbar{right:0}
+  .screen.conversation-open .conversation-panel{bottom:84px}
+  .screen.conversation-open .promptbar{z-index:6}
+  .conversation-panel{border-left:0}
+  .conversation-title{font-size:16px}
+}
+@media(max-width:600px){
+  .app:has(.screen.conversation-enabled){grid-template-columns:minmax(0,1fr)}
+  .col.term:has(.screen.conversation-enabled){min-width:0}
+  /* The existing cockpit header/composer can overflow a phone viewport. Keep
+     this reader attached to the actual viewport, not that wider grid. */
+  .conversation-panel{position:fixed;left:0;right:0;top:calc(var(--conversation-viewport-top,0px) + 94px);bottom:auto;width:100vw;
+    height:calc(var(--conversation-viewport-height,100dvh) - 94px - 132px);z-index:1090}
+  .screen.conversation-open .scr-head{position:fixed;left:0;right:auto;
+    top:calc(var(--conversation-viewport-top,0px) + 54px);width:100vw;z-index:1092;background:var(--panel)}
+  .screen.conversation-open .termstage{visibility:hidden}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .promptbar{position:fixed;left:0;right:auto;bottom:auto;
+    top:calc(var(--conversation-viewport-top,0px) + var(--conversation-viewport-height,100dvh) - 132px);width:100vw;height:132px;
+    z-index:1091;display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-rows:22px minmax(0,1fr);
+    gap:6px;padding:8px 10px;visibility:visible}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .promptmeta{grid-column:1/-1;grid-row:1;display:block;max-width:none;min-width:0}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .promptmeta .plab{display:none}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .prompt-ava{width:18px;height:18px}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) #promptInput{grid-row:2;grid-column:1;min-width:0;width:100%;font-size:16px}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) #promptStop{grid-row:2;grid-column:2}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) #promptSend{grid-row:2;grid-column:3}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .slashmenu,.screen:is(.conversation-open,:has(.split-cell.conversation-open)) .sendguard{left:10px;right:10px;bottom:calc(100% + 6px)}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .sendguard{flex-wrap:wrap}
+  .screen:has(.split-cell.conversation-open) .promptbar{position:absolute;left:0;right:0;top:auto;bottom:0;width:auto;z-index:6}
+  .screen:has(.split-cell.conversation-open) .termstage{bottom:132px}
+  .conversation-head{padding:12px}
+  .conversation-head{flex-wrap:wrap}
+  .conversation-heading{flex-basis:100%}
+  .conversation-has-preview .conversation-thread{display:none}
+  .conversation-preview{width:100%;border:0}
+  .conversation-scroll{padding-left:14px;padding-right:12px}
+  .conversation-toolbar,.conversation-bottom{padding:8px 10px}
+  .conversation-text{font-size:12px;line-height:1.75}
+  .scr-head{gap:6px;padding-left:10px;padding-right:10px}
+  .scr-head .path{display:none}
+  .scr-head .name{min-width:0;max-width:55px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+}
+/* Each split owns its reader. Clip only that terminal's pixels, preserving its
+   PTY grid and every neighbouring cell. The original composer stays below Grid. */
+.split-cell.conversation-cell{--conversation-width:min(100%,max(240px,55%))}
+.split-history-toggle{position:absolute;top:6px;left:8px;z-index:4}
+.split-cell-actions .split-history-toggle{position:static}
+.split-cell.conversation-open>.termhost{clip-path:inset(0 var(--conversation-width) 0 0)}
+.split-cell.conversation-full{--conversation-width:100%}
+.split-cell.conversation-cell>.conversation-panel{position:absolute;left:auto;right:0;top:40px;bottom:0;
+  width:var(--conversation-width);height:auto;z-index:4;border-left:1px solid var(--hair)}
+.conversation-cell>.conversation-panel{container:conversation-reader / inline-size}
+@container conversation-reader (max-width:600px){
+  .conversation-head{flex-wrap:wrap;padding:10px}
+  .conversation-heading{flex-basis:100%}
+  .conversation-has-preview .conversation-thread{display:none}
+  .conversation-preview{width:100%;border:0}
+  .conversation-scroll{padding-left:12px;padding-right:10px}
+  .conversation-toolbar,.conversation-bottom{padding:7px 10px}
+}
+/* Pressed controls float over live terminal pixels, so their fill stays opaque. */
+.split-cell-actions .split-history-toggle{background:var(--panel)}
+.screen:not(.split-pane-headers) .split-count-1 .conversation-cell>.conversation-panel{top:0}
+.screen:has(.split-cell.conversation-open) .promptmeta .phint{display:none}
+/* Recorded Mail is a collapsible source of its own, never a human prompt. */
+.conversation-mail-event{padding:12px 0}
+.conversation-mail{border:1px solid var(--hair);border-left:2px solid var(--amber);border-radius:6px;background:var(--panel-2)}
+.conversation-mail+.conversation-mail{margin-top:8px}
+.conversation-mail-summary{cursor:pointer;padding:12px 14px;list-style:none}
+.conversation-mail-summary::-webkit-details-marker{display:none}
+.conversation-mail-head{display:flex;gap:10px;align-items:center;font:9px/1.6 var(--mono);color:var(--ink-dim)}
+.conversation-mail-label{letter-spacing:.1em;color:var(--amber)}
+.conversation-mail-importance{font-size:9px;color:var(--ink-faint)}
+.conversation-mail-importance[data-importance="high"],.conversation-mail-importance[data-importance="urgent"]{color:var(--amber)}
+.conversation-mail-route{display:block;font:10px/1.7 var(--mono);color:var(--ink-dim);margin-top:5px;overflow-wrap:anywhere}
+.conversation-mail-subject{display:block;font:12px/1.8 var(--mono);color:var(--ink);overflow-wrap:anywhere}
+.conversation-mail-subject:after{content:' ＋';color:var(--amber)}
+.conversation-mail[open] .conversation-mail-subject:after{content:' −'}
+.conversation-mail-content{border-top:1px solid var(--hair-2);padding:10px 14px}
+.conversation-mail-notice{margin:0 0 9px;font:10px/1.7 var(--mono);color:var(--ink-dim)}
+.conversation-mail-text{margin:0;white-space:pre-wrap;font:12px/1.8 var(--mono);overflow-wrap:anywhere;tab-size:2}
+.conversation-jumpable{cursor:pointer;outline-offset:3px}
+.conversation-jumpable:hover{background:rgb(var(--theme-ink-rgb) / .035)}
+
+/* Ephemeral composer receipts are separate from provider events and cursors. */
+.conversation-pending{max-width:960px;margin:0 auto}
+.conversation-submission{margin:12px 0;padding:14px;border:1px dashed var(--amber);border-radius:6px;background:var(--panel-2)}
+.conversation-submission .conversation-byline{color:var(--amber)}
+.conversation-submission-note{font:10px/1.7 var(--mono);color:var(--ink-dim);margin-top:8px}
+.conversation-just-submitted>.split-cell-head,.conversation-just-submitted>.scr-head{box-shadow:inset 0 -2px var(--amber)}
+
+.conversation-table{margin:10px 0;white-space:normal;max-width:100%;min-width:0}
+.conversation-table-copy{margin-bottom:6px}
+.conversation-table-scroll{overflow-x:auto;max-width:100%;overscroll-behavior-x:contain;border:1px solid var(--hair);border-radius:4px}
+.conversation-table table{border-collapse:collapse;width:max-content;min-width:100%;font:12px/1.75 var(--mono)}
+.conversation-table th,.conversation-table td{border:1px solid var(--hair);padding:8px 12px;white-space:pre-wrap;min-width:80px;max-width:42ch;overflow-wrap:anywhere}
+.conversation-table th{background:var(--panel-2);font-weight:600}

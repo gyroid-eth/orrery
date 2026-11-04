@@ -7,6 +7,7 @@ import argparse
 import asyncio
 import base64
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -48,6 +49,10 @@ from usage_probe import (
     UsageCache,
     provider_from_quota_payload,
 )
+from conversation_history import (HistoryUnavailable, bound_agent, open_reader)
+from conversation_artifacts import redact
+from conversation_mail import received as recorded_mail
+from conversation_preview import ReferenceStore, PreviewUnavailable, binding as conversation_binding
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8791
@@ -621,6 +626,7 @@ def merge_spawn_catalog(payload: bytes) -> bytes:
 
 
 HTTP_SESSION_KEY = web.AppKey("http_session", ClientSession)
+CONVERSATION_REFERENCES_KEY = web.AppKey("conversation_references", ReferenceStore)
 TMUX_BIN_KEY = web.AppKey("tmux_bin", LegacyTargetBoundary)
 USAGE_CACHE_KEY = web.AppKey("usage_cache", UsageCache)
 USAGE_LOCKS_KEY = web.AppKey("usage_locks", dict)
@@ -1779,6 +1785,174 @@ async def proxy_dashboard(request: web.Request) -> web.Response:
             {"error": "dashboard offline"},
             status=502,
         )
+
+
+async def conversation_bound_row(request: web.Request, name: str) -> dict:
+    session=request.app[HTTP_SESSION_KEY]
+    async with session.get(DASHBOARD_URL + '/api/agents?scope=live') as response:
+        if response.status != 200:
+            raise HistoryUnavailable('dashboard_unavailable')
+        payload=await response.json()
+    rows=payload.get('agents',[]) if isinstance(payload,dict) else []
+    other=any(isinstance(row,dict) and row.get('name')==name
+              and row.get('program') not in {'codex','codex-cli'} for row in rows)
+    api=34
+    if other:
+        async with session.get(DASHBOARD_URL+'/api/version') as response:
+            version=await response.json() if response.status==200 else {}
+        value=version.get('api') if isinstance(version,dict) else None
+        if isinstance(value,int) and not isinstance(value,bool):api=value
+    return bound_agent(payload,name,api_generation=api)
+
+
+async def serve_conversation(request: web.Request) -> web.Response:
+    """A read-only provider view. Browser input can select an agent, never a path.
+
+    Legacy resolves a bound dashboard row on each read and rechecks it before
+    publishing. Fresh keeps its existing protected history route and its public
+    text projection; it deliberately cannot expose raw paths or byte cursors.
+    """
+    query = request.query
+    if (set(query) - {"agent", "before", "after", "limit"}
+            or any(len(query.getall(key)) != 1 for key in query)
+            or "before" in query and "after" in query):
+        return web.json_response({"ok": False, "error": "invalid_query"}, status=400)
+    name = query.get("agent", "")
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,95}", name):
+        return web.json_response({"ok": False, "error": "invalid_agent"}, status=400)
+    try:
+        limit = int(query.get("limit", "80"))
+        if not 1 <= limit <= 200:
+            raise ValueError
+    except ValueError:
+        return web.json_response({"ok": False, "error": "invalid_limit"}, status=400)
+    session = request.app[HTTP_SESSION_KEY]
+    boundary = request.app[TMUX_BIN_KEY]
+
+    async def bound_row():
+        return await conversation_bound_row(request, name)
+
+    provider="codex"
+    try:
+        if isinstance(boundary, FreshTargetBoundary):
+            target = await asyncio.to_thread(boundary.resolve, name)
+            marker = "window:" + target.revision
+            if "before" in query or query.get("after", marker) != marker:
+                raise HistoryUnavailable("history_changed")
+            selectors = dict(target.ref, session=name, limit="200")
+            async with session.get(DASHBOARD_URL + "/api/history", params=selectors) as response:
+                if response.status != 200:
+                    raise HistoryUnavailable("history_unavailable")
+                payload = await response.json()
+            # The same bound host must still select the same I/A/current/route.
+            current = await asyncio.to_thread(boundary.resolve, name, target.ref)
+            if current.revision != target.revision or current.ref != target.ref:
+                raise HistoryUnavailable("history_changed")
+            if not isinstance(payload, dict) or payload.get("ok") is not True:
+                raise HistoryUnavailable("history_unavailable")
+            if payload.get("source") == "claude":
+                raise HistoryUnavailable("claude_next_phase")
+            if (payload.get("source") != "codex" or payload.get("history_binding") != "bound"
+                    or any(payload.get(key) != value for key, value in target.ref.items())):
+                raise HistoryUnavailable("history_unconfirmed")
+            events = []
+            occurrences: dict[str, int] = {}
+            for event in payload.get("events", []):
+                if (not isinstance(event, dict) or event.get("kind") != "text"
+                        or event.get("role") not in {"user", "assistant"}
+                        or not isinstance(event.get("text"), str)):
+                    continue
+                key = json.dumps([event.get("ts"), event["role"], event["text"]], ensure_ascii=False)
+                digest = hashlib.sha256(key.encode()).hexdigest()
+                occurrence = occurrences.get(digest, 0)
+                occurrences[digest] = occurrence + 1
+                event_id = f"window:{digest}:{occurrence}"
+                events.append(dict(id=event_id, role=event["role"], kind="text",
+                                   text=event["text"][:65536], ts=str(event.get("ts") or "")[:128]))
+            result = dict(events=events, before=None, after=marker, has_older=False,
+                          has_newer=False, limited=bool(payload.get("has_more") or payload.get("truncated")),
+                          mode="fresh_tail")
+        else:
+            row = await bound_row()
+            # Keep the no-follow descriptor pinned across the authoritative
+            # recheck. Operations on this request's private reader are serial.
+            manager=open_reader(row)
+            reader=await asyncio.to_thread(manager.__enter__)
+            try:
+                provider=reader.provider
+                result=await asyncio.to_thread(reader.read_page,
+                    before=query.get('before'),after=query.get('after'),limit=limit)
+                store=request.app.get(CONVERSATION_REFERENCES_KEY)
+                if store is not None:
+                    for event in result['events']:
+                        if event['kind'] in {'tool','tool_result'}:
+                            await asyncio.to_thread(store.decorate,row,reader,event)
+                current=await bound_row()
+                if conversation_binding(current)!=conversation_binding(row):raise HistoryUnavailable('history_changed')
+                await asyncio.to_thread(reader.assert_identity)
+            finally:
+                await asyncio.to_thread(manager.__exit__,None,None,None)
+            result.setdefault('mode','cursor')
+        for index,event in enumerate(result['events']):
+            event=recorded_mail(event);result['events'][index]=event
+            event['text'] = redact(event['text'])
+        return web.json_response(dict(result, ok=True, agent=name, provider=provider),
+                                 headers={"Cache-Control": "no-store"})
+    except HistoryUnavailable as exc:
+        return web.json_response(dict(ok=False,error=str(exc),**({"reason":exc.reason} if getattr(exc,"reason","") else {}),**({"reason_code":exc.reason_code} if getattr(exc,"reason_code","") else {})), status=409 if str(exc) == "history_changed" else 400,
+                                 headers={"Cache-Control": "no-store"})
+    except sqlite3.Error:
+        return web.json_response({"ok":False,"error":"history_unreadable"},status=400,headers={"Cache-Control":"no-store"})
+    except TargetRefused:
+        return web.json_response({"ok": False, "error": "history_unconfirmed"}, status=409,
+                                 headers={"Cache-Control": "no-store"})
+    except (ClientError, asyncio.TimeoutError, ValueError, TypeError):
+        return web.json_response({"ok": False, "error": "dashboard_unavailable"}, status=502,
+                                 headers={"Cache-Control": "no-store"})
+
+
+async def conversation_reference(request: web.Request, *, reveal: bool = False) -> web.Response:
+    headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
+             'Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"}
+    try:
+        if reveal:
+            if request.query:raise PreviewUnavailable('invalid_query')
+            payload=await request.json()
+            if not isinstance(payload,dict) or set(payload)!={'ref'}:raise PreviewUnavailable('invalid_query')
+            ref=payload['ref']
+        else:
+            if set(request.query)!={'ref'} or len(request.query.getall('ref'))!=1:raise PreviewUnavailable('invalid_query')
+            ref=request.query['ref']
+        if not isinstance(ref,str) or not re.fullmatch(r'[A-Za-z0-9_-]{32}',ref):raise PreviewUnavailable('invalid_reference')
+        # Fresh has only a public text projection. Never bypass it by discovering
+        # provider paths through another runtime route.
+        if isinstance(request.app[TMUX_BIN_KEY],FreshTargetBoundary):raise PreviewUnavailable('preview_unavailable')
+        store=request.app[CONVERSATION_REFERENCES_KEY]
+        name=store.owner(ref)
+        row=await conversation_bound_row(request,name)
+        result=await asyncio.to_thread(store.read,ref,row,reveal=reveal)
+        current=await conversation_bound_row(request,name)
+        if conversation_binding(row)!=conversation_binding(current):raise PreviewUnavailable('reference_expired')
+        if reveal:
+            # Same file-manager adapter as existing reveal-path, never serves
+            # bytes and never accepts a browser path. Explicit click only.
+            await asyncio.to_thread(reveal_in_finder,result)
+            return web.json_response({'ok':True},headers=headers)
+        return web.json_response(dict(result,ok=True),headers=headers)
+    except (PreviewUnavailable,HistoryUnavailable) as exc:
+        return web.json_response({'ok':False,'error':str(exc)},status=400,headers=headers)
+    except (ClientError,asyncio.TimeoutError):
+        return web.json_response({'ok':False,'error':'dashboard_unavailable'},status=502,headers=headers)
+    except (ValueError,TypeError,OSError,sqlite3.Error,RevealUnavailable):
+        return web.json_response({'ok':False,'error':'preview_unavailable'},status=400,headers=headers)
+
+
+async def serve_conversation_preview(request: web.Request) -> web.Response:
+    return await conversation_reference(request)
+
+
+async def reveal_conversation_reference(request: web.Request) -> web.Response:
+    return await conversation_reference(request,reveal=True)
 
 
 async def proxy_spawn(request: web.Request) -> web.Response:
@@ -3857,6 +4031,8 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "theme_core.js", "theme_controller.js", "roster_descriptor.js", "demo_mask.js",
     "demo_mode.js", "orrery_view.js", "mail_view.js", "cockpit_tour.js",
     "cockpit_full_tour.js", "telemetry_light.js",
+    "conversation_source.js", "conversation_view.js", "conversation_view.css", "conversation_preview.js",
+    "conversation_mail.js", "conversation_terminal.js", "conversation_markdown.js",
     "vendor/xterm-5.5.0/xterm.js", "vendor/xterm-5.5.0/xterm.css",
     "vendor/addon-fit-0.10.0/addon-fit.js",
     "vendor/addon-web-links-0.11.0/addon-web-links.js",
@@ -3870,7 +4046,8 @@ async def serve_public_file(request: web.Request) -> web.FileResponse:
     return web.FileResponse(HERE / PUBLIC_FILES[request.path])
 
 
-def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False) -> web.Application:
+def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
+               conversation_image_roots=(), conversation_workspace_roots=()) -> web.Application:
     app = web.Application(middlewares=[own_page_only, json_writes_only, revalidate_static])
     app[TMUX_BIN_KEY] = (tmux_bin if isinstance(tmux_bin,(LegacyTargetBoundary,FreshTargetBoundary)) else
         FreshTargetBoundary(tmux_bin) if os.environ.get('AGENTSTACK_RUNTIME_MODE')=='fresh' else LegacyTargetBoundary(tmux_bin))
@@ -3878,6 +4055,8 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False) ->
     app[USAGE_LOCKS_KEY] = {}
     app[PREFS_LOCK_KEY] = asyncio.Lock()
     app[PROXY_INFLIGHT_KEY] = {}
+    app[CONVERSATION_REFERENCES_KEY] = ReferenceStore(image_roots=conversation_image_roots,
+                                                    workspace_roots=conversation_workspace_roots)
     app.cleanup_ctx.append(app_resources)
     from mobile_input import InputCoordinator, PaneResolver, install_routes
     async def mobile_bridge(name,ref=None):
@@ -3893,6 +4072,9 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False) ->
     install_routes(app, InputCoordinator(PaneResolver(app[TMUX_BIN_KEY]), mobile_bridge,
                                         enabled=mobile_input_enabled))
     app.router.add_get("/telemetry/agents", proxy_dashboard)
+    app.router.add_get("/telemetry/conversation", serve_conversation)
+    app.router.add_get('/telemetry/conversation/preview', serve_conversation_preview)
+    app.router.add_post('/telemetry/conversation/reveal', reveal_conversation_reference)
     app.router.add_get("/telemetry/messages", proxy_dashboard)
     app.router.add_get("/telemetry/graph", proxy_dashboard)
     app.router.add_post("/telemetry/spawn", proxy_spawn)
@@ -3936,6 +4118,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=int(os.environ.get("PORT", DEFAULT_PORT)),
     )
     parser.add_argument("--tmux-bin", default=os.environ.get("TMUX_BIN", "tmux"))
+    parser.add_argument('--conversation-image-root',action='append',default=[],metavar='DIRECTORY',
+                        help='explicit additional raster-image root for recorded references only')
+    parser.add_argument('--conversation-workspace-root',action='append',default=[],metavar='DIRECTORY',
+                        help='explicit additional workspace root (e.g. a session moved to a new worktree)')
     mobile_terminal = USER_CONFIG.get('enable_mobile_terminal', False)
     if type(mobile_terminal) is not bool:
         parser.error('config enable_mobile_terminal must be JSON true or false')
@@ -3952,7 +4138,9 @@ def main(argv: list[str]) -> int:
     tmux_bin = resolve_tmux_bin(args.tmux_bin)
     print(f"ORRERY: tmux resolved to {tmux_bin}", flush=True)
 
-    app = create_app(tmux_bin, mobile_input_enabled=args.enable_mobile_terminal)
+    app = create_app(tmux_bin, mobile_input_enabled=args.enable_mobile_terminal,
+                     conversation_image_roots=args.conversation_image_root,
+                     conversation_workspace_roots=args.conversation_workspace_root)
     with contextlib.suppress(KeyboardInterrupt):
         web.run_app(
             app,

@@ -575,25 +575,33 @@
     background:repeating-linear-gradient(180deg,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.10) 3px);opacity:.45}
   .screen .glassglow{position:absolute;inset:0;pointer-events:none;z-index:2;
     background:radial-gradient(ellipse 70% 50% at 50% 0%, rgb(var(--theme-accent-rgb) / .04), transparent 60%)}
-  .scr-head{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--hair-2);position:relative;z-index:4;
+  .scr-head{display:flex;align-items:center;gap:8px;height:40px;padding:5px 12px;border-bottom:1px solid var(--hair-2);position:relative;z-index:4;
     background:rgba(10,12,16,.7)}
   .scr-head .name{font-family:var(--serif);font-size:14px;color:var(--ink)}
-  .scr-head .path{color:var(--ink-faint);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .scr-head .badge{margin-left:auto;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);
-    border:1px solid rgb(var(--theme-accent-rgb) / .3);padding:3px 8px;border-radius:5px}
-  .scr-head .badge.live{animation:breathe 2.4s ease-in-out infinite}
-  .scr-head .badge.off{color:var(--ink-faint);border-color:var(--hair)}
-  .claim-toggle,.ghostty-action{
-    flex:0 0 auto;border:1px solid var(--hair);border-radius:10px;padding:3px 8px;
-    background:rgba(17,20,25,.72);color:var(--ink-faint);font-size:8.5px;letter-spacing:.08em;
-    cursor:pointer;transition:color .16s,border-color .16s,background .16s;
+  .scr-head .path{flex:1;min-width:0;color:var(--ink-faint);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .scr-head .badge{
+    display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;margin-right:auto;
+    border:0;padding:0;background:transparent;color:var(--ink-faint);
+    font:9.5px/1.2 var(--mono);letter-spacing:.06em;text-transform:uppercase;cursor:default;
   }
-  .claim-toggle:hover,.claim-toggle:focus-visible,.ghostty-action:hover,.ghostty-action:focus-visible{
-    color:var(--ink-dim);border-color:rgb(var(--theme-ink-rgb) / .18);outline:none}
-  .claim-toggle.claimed{
-    color:var(--amber);border-color:rgb(var(--theme-accent-rgb) / .38);background:rgb(var(--theme-accent-rgb) / .08);
+  .scr-head .badge::before{content:"";width:5px;height:5px;flex:0 0 auto;border-radius:50%;background:currentColor}
+  .scr-head .badge:empty{display:none}
+  .scr-head .badge.live{color:var(--amber)}
+  .cockpit-control{
+    display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:0 0 auto;
+    height:28px;min-height:28px;padding:5px 9px;border:1px solid var(--hair);border-radius:6px;
+    background:var(--panel);color:var(--ink-dim);font:10px/1.2 var(--mono);letter-spacing:.06em;
+    text-transform:uppercase;vertical-align:middle;transition:color .16s,border-color .16s,background .16s;
   }
-  .claim-toggle.claimed:hover,.claim-toggle.claimed:focus-visible{color:var(--amber);border-color:var(--amber)}
+  button.cockpit-control{cursor:pointer}
+  .cockpit-control:hover{color:var(--ink);border-color:var(--amber);background:var(--panel-2)}
+  .cockpit-control:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-color:var(--amber)}
+  .cockpit-control:active,.cockpit-control[aria-pressed="true"],.cockpit-control[aria-expanded="true"],
+  .cockpit-control.claimed{
+    color:var(--amber);border-color:var(--amber);background:rgb(var(--theme-accent-rgb) / .08);
+  }
+  .cockpit-control:disabled{opacity:.45;cursor:default}
+  .cockpit-control[hidden]{display:none}
   .claim-toggle[hidden],.ghostty-action[hidden]{display:none}
   .ghostty-action:disabled{opacity:.45;cursor:wait}
   /* terminal stage: existing termhosts move between single view and split cells */
@@ -667,6 +675,44 @@
     border:1px solid transparent;
   }
   .split-cell.focused{border-color:var(--amber);box-shadow:inset 0 0 0 1px rgb(var(--theme-accent-rgb) / .16)}
+  /* Each split owns its title and actions; the single-pane header is unchanged. */
+  .screen.split-pane-headers>.scr-head{display:none}
+  .screen.split-pane-headers>.termstage{top:0}
+  .split-cell{container:split-pane / inline-size}
+  .split-cell-head{display:none}
+  .split-pane-headers .split-cell-head{position:absolute;inset:0 0 auto;height:40px;z-index:5;
+    display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--panel);
+    border-bottom:1px solid var(--hair);min-width:0}
+  .split-pane-headers .split-cell>.termhost{top:40px}
+  .split-pane-headers .split-cell-label{position:static;flex:1;min-width:0;max-width:none;
+    padding:0;border:0;border-radius:0;background:transparent;backdrop-filter:none;
+    -webkit-backdrop-filter:none;box-shadow:none;gap:6px}
+  .split-pane-headers .split-cell-label .scl-name{min-width:0;flex:0 1 auto;cursor:pointer}
+  .split-pane-headers .split-cell-label .scl-name:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  .split-pane-headers .split-cell-label .scl-close{position:static;flex:0 0 22px;width:22px;height:22px;
+    opacity:.6;pointer-events:auto;transform:none;font-size:14px}
+  .split-pane-headers .split-cell-label .scl-role{display:none}
+  .split-cell-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto;margin-left:auto}
+  .split-cell-status{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-faint);font:9px var(--mono);text-transform:uppercase;cursor:default}
+  .split-cell-status::before{content:'●';font-size:7px;margin-right:5px}
+  .split-cell-status.live{color:var(--amber)}
+  .split-cell.focused > .split-cell-head{box-shadow:inset 3px 0 var(--amber)}
+  .pane-action-short,.pane-action-icon{display:none}
+  @container split-pane (max-width:320px){
+    .split-pane-headers .split-cell-head{gap:4px;padding:5px 6px}
+    .split-pane-headers .split-cell-label{gap:4px}
+    .split-pane-headers .split-cell-label img{display:none}
+    .split-pane-headers .split-cell-label .scl-close{flex-basis:18px;width:18px}
+    .split-cell-actions{gap:4px}
+    .split-cell-actions .cockpit-control{font-size:9px;padding:5px}
+    .split-cell-actions .pane-action-wide{display:none}
+    .split-cell-actions .pane-action-short{display:inline}
+  }
+  @container split-pane (max-width:140px){
+    .split-cell-actions .pane-action-short{display:none}
+    .split-cell-actions .pane-action-icon{display:inline;font-size:14px}
+    .split-cell-actions .cockpit-control{width:28px;padding:4px}
+  }
   .split-cell.bottom-span{grid-column:1/-1}
   .split-cell.main-span{grid-row:1/-1}
   /* identity chip: floats over live terminal text, so it carries its own
@@ -1073,13 +1119,6 @@
   html.pane-window .grid{grid-template-columns:1fr}
   html.pane-window .screen{margin:0;border-radius:0;border:0}
   html.pane-window.pane-embedded .pane-return{display:none}
-  .pane-return,.pane-popout{
-    flex:0 0 auto;border:1px solid var(--hair);border-radius:10px;padding:3px 8px;
-    background:rgba(17,20,25,.72);color:var(--ink-faint);font:inherit;font-size:8.5px;letter-spacing:.08em;
-    cursor:pointer;transition:color .16s,border-color .16s;
-  }
-  .pane-return:hover,.pane-return:focus-visible,.pane-popout:hover,.pane-popout:focus-visible{
-    color:var(--ink-dim);border-color:rgb(var(--theme-ink-rgb) / .18);outline:none}
   .pane-return[hidden],.pane-popout[hidden]{display:none}
   /* dragging a tab out: a small card follows the pointer */
   .session-label.pane-dragging{opacity:.45}
@@ -1216,14 +1255,14 @@
         <div class="glassglow"></div>
         <div class="scr-head">
           <span class="name" id="scrName">—</span>
+          <span class="badge off" id="scrBadge" role="status" aria-live="polite" aria-atomic="true">offline</span>
           <span class="path" id="scrPath"></span>
-          <span class="badge off" id="scrBadge">offline</span>
-          <button class="claim-toggle" id="claimToggle" type="button" aria-pressed="false" hidden>FOLLOW ⇄ ⚓ CLAIMED</button>
-          <button class="ghostty-action" id="ghosttyAction" type="button" hidden>GHOSTTY</button>
-          <button class="pane-popout" id="panePopout" type="button" hidden
-                  title="Open this pane in its own window (or drag its tab out of the cockpit)">↗ WINDOW</button>
-          <button class="pane-return" id="paneReturn" type="button" hidden
-                  title="Close this window and put the pane back in the cockpit">⇤ COCKPIT</button>
+          <button class="cockpit-control conversation-toggle" id="conversationToggle" type="button" hidden
+                  aria-expanded="false" aria-controls="conversationPanel">History</button>
+          <button class="cockpit-control pane-popout" id="panePopout" type="button" hidden
+                  title="Open this pane in its own window (or drag its tab out of the cockpit)">WINDOW</button>
+          <button class="cockpit-control pane-return" id="paneReturn" type="button" hidden
+                  title="Close this window and put the pane back in the cockpit" aria-label="Return this window to the cockpit">WINDOW</button>
         </div>
         <div class="termstage" id="termstage">
           <div class="stage-empty" id="stageEmpty">waiting for ORRERY backend…<br>start <b>orrery_backend.py</b> on :8791</div>
@@ -1275,6 +1314,15 @@
     <section aria-labelledby="colorThemeTitle">
       <div class="settings-section-title" id="colorThemeTitle">Appearance</div>
       <div class="settings-row">
+        <label class="settings-toggle-row" for="conversationEnabled">
+          <span class="settings-toggle-copy">
+            <span class="settings-row-name">Conversation history</span>
+            <span class="settings-help">Adds a read-only History panel. Claude, dsh and Hermes require Telemetry API 35 or later. Off by default.</span>
+          </span>
+          <span class="settings-switch"><input id="conversationEnabled" type="checkbox"></span>
+        </label>
+      </div>
+      <div class="settings-row">
         <label class="settings-toggle-row" for="colorThemePreference">
           <span class="settings-toggle-copy">
             <span class="settings-row-name">Color theme</span>
@@ -1312,6 +1360,13 @@
     </section>
     <section aria-labelledby="terminalSettingsTitle">
       <div class="settings-section-title" id="terminalSettingsTitle">Terminal</div>
+      <div class="settings-row">
+        <span class="settings-row-name">Selected pane actions</span>
+        <span class="settings-help" id="paneSettingsTarget">Select a pane to use terminal actions.</span>
+        <button class="cockpit-control claim-toggle" id="claimToggle" type="button" aria-pressed="false" hidden>FOLLOW ⇄ CLAIMED</button>
+        <span class="settings-help">Without an interactive terminal, ORRERY claims the grid automatically. An interactive terminal makes it follow; a manual choice takes priority.</span>
+        <button class="cockpit-control ghostty-action" id="ghosttyAction" type="button" hidden>GHOSTTY</button>
+      </div>
       <div class="settings-row">
         <div class="settings-row-head">
           <label class="settings-row-name" for="terminalFontSize">Terminal font size</label>
@@ -2097,28 +2152,33 @@
           },
           {
             "property": "color",
-            "selector": ".scr-head .badge.off",
+            "selector": ".scr-head .badge",
             "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border-color",
-            "selector": ".scr-head .badge.off",
-            "value": "var(--hair)"
           },
           {
             "property": "border",
-            "selector": ".claim-toggle,.ghostty-action",
+            "selector": ".cockpit-control",
             "value": "1px solid var(--hair)"
           },
           {
-            "property": "color",
-            "selector": ".claim-toggle,.ghostty-action",
-            "value": "var(--ink-faint)"
+            "property": "background",
+            "selector": ".cockpit-control",
+            "value": "var(--panel)"
           },
           {
             "property": "color",
-            "selector": ".claim-toggle:hover,.claim-toggle:focus-visible,.ghostty-action:hover,.ghostty-action:focus-visible",
+            "selector": ".cockpit-control",
             "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".cockpit-control:hover",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".cockpit-control:hover",
+            "value": "var(--panel-2)"
           },
           {
             "property": "border-top",
@@ -2234,6 +2294,21 @@
             "property": "background",
             "selector": ".termstage.split-grid",
             "value": "var(--hair-2)"
+          },
+          {
+            "property": "background",
+            "selector": ".split-pane-headers .split-cell-head",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".split-pane-headers .split-cell-head",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".split-cell-status",
+            "value": "var(--ink-faint)"
           },
           {
             "property": "color",
@@ -2749,21 +2824,6 @@
             "property": "color",
             "selector": ".toast",
             "value": "var(--ink)"
-          },
-          {
-            "property": "border",
-            "selector": ".pane-return,.pane-popout",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".pane-return,.pane-popout",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".pane-return:hover,.pane-return:focus-visible,.pane-popout:hover,.pane-popout:focus-visible",
-            "value": "var(--ink-dim)"
           },
           {
             "property": "background",
@@ -3504,17 +3564,12 @@
           },
           {
             "property": "color",
-            "selector": ".scr-head .badge.off",
+            "selector": ".scr-head .badge",
             "value": "var(--ink-faint)"
           },
           {
             "property": "color",
-            "selector": ".claim-toggle,.ghostty-action",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".claim-toggle:hover,.claim-toggle:focus-visible,.ghostty-action:hover,.ghostty-action:focus-visible",
+            "selector": ".cockpit-control",
             "value": "var(--ink-dim)"
           },
           {
@@ -3545,6 +3600,11 @@
           {
             "property": "color",
             "selector": ".network-note",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".split-cell-status",
             "value": "var(--ink-faint)"
           },
           {
@@ -3755,16 +3815,6 @@
           {
             "property": "color",
             "selector": ".settings-choice",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".pane-return,.pane-popout",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".pane-return:hover,.pane-return:focus-visible,.pane-popout:hover,.pane-popout:focus-visible",
             "value": "var(--ink-dim)"
           },
           {
@@ -4044,7 +4094,7 @@
         "unit": "effect-component"
       },
       "source": {
-        "digest": "d23d31764c892a874dc5f7fc2f7c162d5ffbbf3d8504a166e0d7d12fef958ca1",
+        "digest": "37547ded6be1c92c5abf017d46a7d19c166a5344d1b443aae01362d1711e7cf2",
         "records": [
           ":root\u0000--amber-glow",
           ".miniorrery.telemetry-network\u0000background",
@@ -4074,7 +4124,9 @@
           ".sendguard\u0000box-shadow",
           ".network-panel\u0000box-shadow",
           ".split-cell.focused\u0000box-shadow",
+          ".split-cell.focused > .split-cell-head\u0000box-shadow",
           ".split-cell-label\u0000box-shadow",
+          ".split-pane-headers .split-cell-label\u0000box-shadow",
           ".split-cell.drop-target\u0000box-shadow",
           ".split-drag-ghost\u0000box-shadow",
           ".split-divider:hover::after,.split-divider.dragging::after\u0000box-shadow",
@@ -4105,7 +4157,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "85a1197c187b8b3576c6dd3336fd59450bf8d635bb5ba192f91b0bac69e714f5",
+        "digest": "6afbaf1c646834d042c3ddcfa99469f72aafa466ee714355d06ba8803df70134",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4148,14 +4200,14 @@
           ".tab\u0000font-size",
           ".tabs .empty\u0000font-size",
           ".scr-head .path\u0000font-size",
-          ".scr-head .badge\u0000font-size",
-          ".claim-toggle,.ghostty-action\u0000font-size",
           ".promptmeta .plab\u0000font-size",
           ".promptmeta .phint\u0000font-size",
           ".slashmenu .sm-kind\u0000font-size",
           ".slashmenu .sm-desc\u0000font-size",
           ".sendguard .sg-msg\u0000font-size",
           ".network-note\u0000font-size",
+          ".split-cell-status::before\u0000font-size",
+          ".split-cell-actions .cockpit-control\u0000font-size",
           ".split-cell-label\u0000font-size",
           ".split-cell-label .scl-role\u0000font-size",
           ".split-drag-ghost\u0000font-size",
@@ -4200,7 +4252,6 @@
           ".settings-choice\u0000font-size",
           ".settings-select\u0000font-size",
           ".toast\u0000font-size",
-          ".pane-return,.pane-popout\u0000font-size",
           ".pane-drag-ghost small\u0000font-size",
           ".pane-float-bar .hint\u0000font-size",
           ".pane-float-bar button\u0000font-size",
@@ -4247,7 +4298,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "a374c95391b414e315ef060f40d8ad0c66192e6096fc6307f85fab113a664430",
+        "digest": "4141ef875c25c5212541d51cdd46a851ae1efd9b976c7d358fb10ccf5d077c0a",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4262,7 +4313,6 @@
           ".agent-detail-label\u0000letter-spacing",
           ".layout-picker-title\u0000letter-spacing",
           ".layout-option\u0000letter-spacing",
-          ".scr-head .badge\u0000letter-spacing",
           ".promptmeta .plab\u0000letter-spacing",
           ".slashmenu .sm-kind\u0000letter-spacing",
           ".network-note\u0000letter-spacing",
@@ -4294,9 +4344,9 @@
       }
     }
   },
-  "inventory_digest": "06c3db328796d2cb870064bbaddce544990698d49edd27fdc0172c184e364e0d",
+  "inventory_digest": "9ae41ec5d34089e330e5ea0b1d9db0303f9302b3d9e20747785eab5fbbd970c1",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "7fcb8b62839b45cb812ada390a94577e8765afab406d561829b2e0ea06b7b393",
+  "source_digest": "fcfe89859249e628ba719986f7d332cd1c32409b7b573603642cf6f606e5177b",
   "surface": "cockpit",
   "version": 1
 }
@@ -5129,7 +5179,9 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   ['.sendguard','box-shadow',['state','elevation'],'preserve'],
   ['.network-panel','box-shadow',['elevation'],'preserve'],
   ['.split-cell.focused','box-shadow',['focus'],'preserve'],
+  ['.split-cell.focused > .split-cell-head','box-shadow',['focus'],'preserve'],
   ['.split-cell-label','box-shadow',['elevation'],'preserve'],
+  ['.split-pane-headers .split-cell-label','box-shadow',['elevation'],'preserve'],
   ['.split-cell.drop-target','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .split-cell.drop-target'],
   ['.split-drag-ghost','box-shadow',['elevation','emissive'],'scale','html[data-theme-axis="glow"] .split-drag-ghost'],
   ['.split-divider:hover::after, .split-divider.dragging::after','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .split-divider:hover::after, html[data-theme-axis="glow"] .split-divider.dragging::after'],
@@ -6711,6 +6763,23 @@ function jumpPaneToBottom(paneId,{focus=true}={}){
   if(focus)pane.term.focus();
   return true;
 }
+function jumpConversationEvent({agent,event,context}){
+  const paneId=context.terminalPaneId,pane=panes.get(paneId);
+  if(!pane||pane.session!==agent||!pane.host.isConnected||hostSnapshotPending(pane.host)||!window.OrreryConversationTerminal)return {state:'changed'};
+  const buffer=pane.term.buffer.active;
+  let result;
+  try{result=OrreryConversationTerminal.find(buffer,event.text,{alternate:Boolean(pane.meta.alternateOn||pane._wheelAlternate)});}
+  catch(_){return {state:'not_retained',count:0};}
+  if(result.state!=='unique')return result;
+  // Search and movement are synchronous and local to the same retained buffer.
+  // Do not focus the terminal, send keys, resize, claim, or enter tmux copy-mode.
+  if(panes.get(paneId)!==pane||pane.term.buffer.active!==buffer)return {state:'changed'};
+  pane._followStick=false;pane._readerScrolled=true;pane._xtermAtBottom=false;
+  pane.term.scrollToLine(Math.max(0,result.line-3));
+  pane.term.selectLines(result.line,result.endLine);
+  pane.host.scrollTop=0;pane.host.scrollLeft=0;paintPaneBottomJump(pane);
+  return result;
+}
 /* While a pane is "pending" its scroll position is not preserved — see
    captureHostScrollState. The window is opened when the pane is created (the
    snapshot is on its way) and again, exactly, around the write of the output
@@ -6833,7 +6902,7 @@ function bottomJumpShortcutBlocked(event){
   return targets.some(target=>{
     if(!target.closest||target.closest('.xterm'))return false;
     return Boolean(target.closest(
-      '.promptbar,.overlay,.settings-popover,[contenteditable="true"],input,textarea,select',
+      '.promptbar,.overlay,.settings-popover,.conversation-panel,.split-cell-head,[contenteditable="true"],input,textarea,select',
     ));
   });
 }
@@ -6842,6 +6911,7 @@ function editableElementOwnsFocus(){
   if(!focused||focused===document.body||!focused.matches)return false;
   // xterm owns a hidden textarea. It is terminal input, not a browser form.
   if(focused.closest('.xterm'))return false;
+  if(focused.closest('.conversation-panel,.settings-popover,.split-cell-head'))return true;
   return focused.matches('input,textarea,select,[contenteditable="true"]')||
     focused.isContentEditable;
 }
@@ -6966,11 +7036,14 @@ function beginSplitLabelPointer(event,session,label){
 function ensureSplitCell(session){
   let cell=splitCells.get(session);if(cell)return cell;
   cell=document.createElement('div');cell.className='split-cell';cell.dataset.session=session;
+  const head=document.createElement('div');head.className='split-cell-head';head.setAttribute('role','group');head.setAttribute('aria-label','Pane '+session);
   const label=document.createElement('span');label.className='split-cell-label';
   const lava=document.createElement('img');lava.alt='';
   lava.src='/telemetry/portrait?v=3&name='+encodeURIComponent(session);
   lava.onerror=()=>lava.remove();
   const lname=document.createElement('span');lname.className='scl-name';lname.textContent=session;
+  lname.tabIndex=0;lname.setAttribute('role','button');lname.setAttribute('aria-label','Focus pane '+session);lname.title=session;
+  lname.addEventListener('keydown',event=>{if(!['Enter',' '].includes(event.key))return;event.preventDefault();event.stopPropagation();focusSplitSession(session);});
   const lrole=document.createElement('span');lrole.className='scl-role';
   const agent=currentAgents.find(item=>item&&item.name===session);
   const role=String(agent&&agent.annot&&agent.annot.role||'').trim();
@@ -6980,7 +7053,14 @@ function ensureSplitCell(session){
   close.setAttribute('aria-label',`Close ${session} pane`);
   label.append(lava,lname,lrole,close);
   const empty=document.createElement('span');empty.className='split-cell-empty';empty.textContent='connecting…';
-  cell.append(label,empty);
+  const state=document.createElement('span');state.className='split-cell-status';state.setAttribute('role','status');
+  const actions=document.createElement('div');actions.className='split-cell-actions';
+  const windowButton=document.createElement('button');windowButton.type='button';windowButton.className='cockpit-control split-pane-window';windowButton.innerHTML='<span class="pane-action-wide" aria-hidden="true">WINDOW</span><span class="pane-action-short" aria-hidden="true">WIN</span><span class="pane-action-icon" aria-hidden="true">↗</span>';
+  windowButton.title='Move '+session+' into its own window';windowButton.setAttribute('aria-label','Open '+session+' in its own window');
+  windowButton.addEventListener('click',()=>popPaneSessionToWindow(session));
+  for(const type of ['pointerdown','mousedown'])head.addEventListener(type,event=>event.stopPropagation());
+  head.addEventListener('keydown',event=>event.stopPropagation());
+  label.insertBefore(state,lrole);actions.append(windowButton);head.append(label,actions);cell.append(head,empty);
   label.addEventListener('pointerdown',event=>beginSplitLabelPointer(event,session,label));
   label.addEventListener('pointermove',updateSplitLabelDrag);
   label.addEventListener('pointerup',event=>finishSplitLabelDrag(event));
@@ -7000,7 +7080,7 @@ function ensureSplitCell(session){
     }
     focusSplitSession(session,null,{forceFocus:true});
   });
-  cell._empty=empty;cell._close=close;cell._role=lrole;
+  cell._empty=empty;cell._close=close;cell._role=lrole;cell._actions=actions;cell._status=state;cell._window=windowButton;
   splitCells.set(session,cell);return cell;
 }
 let fullTourSplitPending=false;
@@ -7009,6 +7089,7 @@ function emitFullTourAction(id){
 }
 function renderStage({fit=true}={}){
   const members=splitVisible?splitSessions.slice():[];
+  document.querySelector('.screen').classList.toggle('split-pane-headers',members.length>1);
   const oldCountClasses=[...stageEl.classList].filter(name=>name.startsWith('split-count-'));
   stageEl.classList.remove('split-grid',...oldCountClasses);
   if(!members.length){
@@ -7049,6 +7130,10 @@ function renderStage({fit=true}={}){
         if(host.dataset.paneId!==paneId)moveHostPreservingScroll(host,stageEl);
       });
       const p=panes.get(paneId);
+      cell._window.disabled=!p;
+      cell._status.textContent=p?(p.meta.active?'active':'live'):'connecting';
+      cell._status.title=cell._status.textContent;
+      cell._status.classList.toggle('live',Boolean(p));
       if(p){
         moveHostPreservingScroll(p.host,cell);
         visible.add(paneId);cell._empty.style.display='none';
@@ -7426,6 +7511,8 @@ function paintClaimToggle(meta=null){
   claimToggle.hidden=!available;
   claimToggle.classList.toggle('claimed',claimed);
   claimToggle.setAttribute('aria-pressed',String(claimed));
+  claimToggle.textContent=claimed?'CLAIMED · Release to follow':'FOLLOW · Claim terminal size';
+  document.getElementById('paneSettingsTarget').textContent=available?meta.session+' · '+meta.paneId:'Select a pane to use terminal actions.';
   claimToggle.setAttribute(
     'aria-label',
     claimed?'Release terminal size and follow tmux pane':'Claim terminal size for this session',
@@ -7825,7 +7912,10 @@ function toggleActivePaneClaim(){
   }
   return true;
 }
-claimToggle.addEventListener('click',toggleActivePaneClaim);
+claimToggle.addEventListener('click',()=>{
+  toggleActivePaneClaim();
+  if(document.getElementById('settingsPopover').matches(':popover-open'))claimToggle.focus({preventScroll:true});
+});
 
 /* Inside the ORRERY app the app itself opens links: it is the GUI session, while
    the backend sidecar outlives it and can lose the window server (2026-09-25: a
@@ -8151,13 +8241,16 @@ function popSessionToWindow(session,geometry){
   }
   return true;
 }
-function popActivePaneToWindow(){
-  const p=panes.get(activeId);if(!p)return;
-  const ok=popSessionToWindow(p.session,{
+function popPaneSessionToWindow(session){
+  // The title owns its session even while another split has keyboard focus.
+  const paneId=paneIdForSession(session),pane=panes.get(paneId);
+  if(!pane||pane.session!==session)return;
+  const ok=popSessionToWindow(session,{
     screenX:window.screenX+window.outerWidth/2,screenY:window.screenY+120,width:820,height:560,
   });
   if(!ok)showToast('POPUP BLOCKED · allow popups for the cockpit, or drag the tab onto the cockpit to float it',true);
 }
+function popActivePaneToWindow(){const pane=panes.get(activeId);if(pane)popPaneSessionToWindow(pane.session);}
 panePopoutBtn.addEventListener('click',popActivePaneToWindow);
 
 /* floating pane over the cockpit */
@@ -10388,12 +10481,22 @@ function showSendGuard(verdict){
   if(verdict.fix)sendGuardFix.textContent=verdict.fixLabel;
   sendGuard.hidden=false;
 }
+function captureComposerTarget(){
+  const paneId=activeId,pane=panes.get(paneId);
+  return pane?{paneId,pane,session:pane.session,socket}:null;
+}
+function composerTargetPresent(target){
+  if(panes.get(target.paneId)===target.pane&&target.pane.session===target.session&&socket===target.socket)return true;
+  showToast(`send cancelled → ${target.session}: terminal changed; select the target and retry`,true);
+  return false;
+}
+let promptSubmissionSequence=0;
 function sendPrompt(opts){
   const bypass=opts&&opts.bypassGuard;
   const text=promptInput.value;
   if(!text.trim())return;
-  const p=panes.get(activeId);
-  if(!p){showToast('no pane focused — click an agent first');return;}
+  const target=captureComposerTarget(),p=target?.pane;
+  if(!target){showToast('no pane focused — click an agent first');return;}
   if(!bypass){
     const verdict=inspectPrompt(text);
     if(verdict){showSendGuard(verdict);return;}
@@ -10401,10 +10504,14 @@ function sendPrompt(opts){
   hideSendGuard();
   // one bracketed paste (multiline stays one block in the TUI input box),
   // then a separate CR to submit — same shape the pty expects from a human.
-  if(!send({type:"input",paneId:activeId,data:"\x1b[200~"+text+"\x1b[201~"})){showToast('not connected — try again');return;}
+  if(!send({type:"input",paneId:target.paneId,data:"\x1b[200~"+text+"\x1b[201~"})){showToast('not connected — try again');return;}
+  const submittedAt=Date.now();
   setTimeout(()=>{
-    if(send({type:"input",paneId:activeId,data:"\r"}))
+    if(!composerTargetPresent(target))return;
+    if(send({type:"input",paneId:target.paneId,data:"\r"})){
       document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'talk',name:p.session}}));
+      document.dispatchEvent(new CustomEvent('oc:prompt-submitted',{detail:{name:target.session,text,submittedAt,id:submittedAt+':'+(++promptSubmissionSequence)}}));
+    }else showToast(`send cancelled → ${target.session}: disconnected before Enter; reconnect and retry`,true);
   },250);
   pushPromptHistory(text);
   promptInput.value='';saveDraft();closeSlashMenu();
@@ -10498,8 +10605,8 @@ function handleComposerPaste(e){
     .map(u=>{try{return decodeURIComponent(u.slice(7).replace(/^localhost/,''));}
              catch(_){return '';}})
     .filter(Boolean);
-  const p=panes.get(activeId);
-  if(!p){showToast('no pane focused — click an agent first');return;}
+  const target=captureComposerTarget(),p=target?.pane;
+  if(!target){showToast('no pane focused — click an agent first');return;}
   // The DOM knows a file was pasted but never where it lives, so ask the
   // backend — it shares the pasteboard with the Finder that copied it.
   const caret=promptInput.selectionStart==null?promptInput.value.length:promptInput.selectionStart;
@@ -10550,14 +10657,16 @@ function handleComposerPaste(e){
     // No file URL on the pasteboard: this is image *data* (a screenshot), not
     // a file copy. The TUI can read that itself — forward a literal ^V.
     if(hasImage){
-      send({type:"input",paneId:activeId,data:"\x16"});
+      if(!composerTargetPresent(target))return;
+      if(!send({type:"input",paneId:target.paneId,data:"\x16"})){showToast('not connected — try again');return;}
       showToast(`image → ${p.session} (TUI clipboard paste)`);
       return;
     }
     showToast('nothing on the clipboard the composer can use');
   }).catch(()=>{
     if(hasImage&&!onWsl){
-      send({type:"input",paneId:activeId,data:"\x16"});
+      if(!composerTargetPresent(target))return;
+      if(!send({type:"input",paneId:target.paneId,data:"\x16"})){showToast('not connected — try again');return;}
       showToast(`image → ${p.session} (TUI clipboard paste)`);
     }else showToast('could not read the clipboard');
   });
@@ -10750,5 +10859,53 @@ kickPolls();
 <script src="mail_view.js"></script>
 <script src="cockpit_tour.js"></script>
 <script src="cockpit_full_tour.js"></script>
+<script>
+/* Opt-in bootstrap: no conversation assets or API calls while disabled. */
+const conversationView=(()=>{
+  const key='oc-term-conversation-enabled',setting=document.getElementById('conversationEnabled');
+  let instance=null,loading=null;
+  const enabled=()=>{try{return localStorage.getItem(key)==='1';}catch(_){return false;}};
+  function asset(tag,attribute,url){return new Promise((resolve,reject)=>{
+    const el=document.createElement(tag);el[attribute]=url;
+    if(tag==='link')el.rel='stylesheet';
+    el.onload=resolve;el.onerror=()=>{el.remove();reject(new Error('Conversation history could not be loaded.'));};
+    document.head.appendChild(el);
+  });}
+  async function ensure(){
+    if(instance)return instance;
+    if(!enabled())return null;
+    if(loading)return loading;
+    loading=(async()=>{
+      await asset('link','href','conversation_view.css');
+      await asset('script','src','conversation_source.js');
+      await asset('script','src','conversation_preview.js');
+      await asset('script','src','conversation_mail.js');
+      await asset('script','src','conversation_terminal.js');
+      await asset('script','src','conversation_markdown.js');
+      await asset('script','src','conversation_view.js');
+      instance=OrreryConversation.mountWorkspace({
+        getContext:(selected)=>{const name=selected||activeSession();return {...(currentAgents.find(a=>a.name===name)||{name}),terminalPaneId:paneIdForSession(name)};},
+        getSlots:()=>splitVisible?splitSessions.map(name=>({name,host:splitCells.get(name),controlHost:splitCells.get(name)?._actions})).filter(slot=>slot.host?.isConnected):[],
+        getOwner:name=>panes.get(paneIdForSession(name)),
+        activate:name=>focusSplitSession(name),
+        jumpToEvent:jumpConversationEvent,
+      });
+      return instance;
+    })().catch(error=>{loading=null;showToast(error.message,true);return null;});
+    return loading;
+  }
+  setting.checked=enabled();
+  setting.addEventListener('change',()=>{
+    if(instance)return;
+    try{localStorage.setItem(key,setting.checked?'1':'0');}catch(_){}
+    if(setting.checked)ensure();
+  });
+  document.addEventListener('oc:prefs-changed',()=>{if(enabled())ensure();});
+  window.addEventListener('storage',event=>{if(event.key===key&&enabled())ensure();});
+  if(enabled())ensure();
+  return Object.freeze({ready:ensure,open:async()=>{const view=await ensure();if(view&&enabled())view.open();},
+    close:()=>instance&&instance.close(),refresh:()=>instance&&instance.refresh()});
+})();
+</script>
 </body>
 </html>

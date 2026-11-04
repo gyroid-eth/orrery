@@ -16,7 +16,7 @@ PROBE = f"""import json,sys
 sys.path.insert(0,{str(BRIDGE)!r})
 import orrery_backend as backend
 backend.resolve_tmux_bin=lambda value: 'isolated-unused-tmux'
-def app(tmux_bin,*,mobile_input_enabled):
+def app(tmux_bin,*,mobile_input_enabled,**_other_settings):
     return {{'enabled':mobile_input_enabled,'project':backend.configured_value((), 'project_key')}}
 backend.create_app=app
 backend.web.run_app=lambda app,**kwargs: print(json.dumps(app))
