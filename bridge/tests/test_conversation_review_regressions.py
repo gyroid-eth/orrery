@@ -57,6 +57,7 @@ def cockpit(request):
     client = _WebSocket(tab["webSocketDebuggerUrl"])
     client.call("Page.enable")
     client.call("Runtime.enable")
+    client.call("Emulation.setFocusEmulationEnabled", enabled=True)
     client.call("Network.enable")
     client.call("Network.setCacheDisabled", cacheDisabled=True)
     mobile=getattr(request,'param',False)
@@ -433,3 +434,153 @@ def test_disabling_split_readers_aborts_each_request_and_removes_local_controls(
     time.sleep(.05)
     assert not js("document.querySelector('.screen').textContent.includes('STALE_SPLIT_BODY')")
     assert js('conversationToggle.hidden')
+
+
+@pytest.mark.parametrize('mode', ['cursor', 'snapshot'])
+def test_submitted_prompt_resumes_following_from_older_position(cockpit, mode):
+    js, wait, client, requests, enable = cockpit
+    stable_roster(js)
+    enable(mode=mode)
+    js("document.querySelector('.conversation-expand').click()")
+    time.sleep(.2)
+    js("document.querySelector('.conversation-scroll').scrollTop=120")
+    assert js("(()=>{const s=document.querySelector('.conversation-scroll');return s.scrollHeight-s.clientHeight-s.scrollTop>45})()")
+    js("promptInput.value='Generated prompt for follow regression';sendPrompt()")
+    wait("packets.some(p=>p.type==='input'&&p.data==='\\r')")
+    wait("pageNumber>=2")
+    assert js("(()=>{const s=document.querySelector('.conversation-scroll');return s.scrollHeight-s.clientHeight-s.scrollTop<45})()")
+    assert js("document.querySelector('.conversation-latest').textContent") == 'Latest'
+
+
+def test_submitted_prompt_resumes_reader_paused_at_retention_limit(cockpit):
+    js, wait, client, requests, enable = cockpit
+    stable_roster(js)
+    enable(count=180, text_size=12000)
+    time.sleep(.2)
+    js("document.querySelector('.conversation-scroll').scrollTop=120;conversationView.refresh()")
+    wait("document.querySelector('.conversation-latest').textContent.includes('resume')")
+    old_page = js('pageNumber')
+    js("promptInput.value='Generated prompt after reader limit';sendPrompt()")
+    wait("packets.some(p=>p.type==='input'&&p.data==='\\r')")
+    wait('pageNumber>'+str(old_page))
+    assert js("document.querySelector('.conversation-latest').textContent") == 'Latest'
+    assert js("document.querySelectorAll('.conversation-event').length>0")
+    assert js("(()=>{const s=document.querySelector('.conversation-scroll');return s.scrollHeight-s.clientHeight-s.scrollTop<45})()")
+
+
+def test_other_pane_and_guarded_prompt_preserve_reader_position(cockpit):
+    js, wait, client, requests, enable = cockpit
+    enable()
+    js("document.querySelector('.conversation-scroll').scrollTop=120;document.dispatchEvent(new CustomEvent('oc:prompt-submitted',{detail:{name:'AnotherFixture'}}));promptInput.value='/logout';sendPrompt()")
+    time.sleep(.4)
+    assert js("document.querySelector('.conversation-scroll').scrollTop") == 120
+    assert js("packets.filter(p=>p.type==='input')") == []
+    assert js('pageNumber') == 1
+
+
+def stable_roster(js):
+    # Retain the generated binding during the 3s cockpit roster poll; otherwise
+    # an empty HTTP fixture resets history and falsely masks follow regressions.
+    js("""window.originalFetch=window.fetch;window.fetch=(url,...args)=>String(url).startsWith('/telemetry/agents')
+      ?Promise.resolve(new Response(JSON.stringify({agents:currentAgents.map(a=>({...a,running:true}))}),{headers:{'Content-Type':'application/json'}}))
+      :originalFetch(url,...args)""")
+
+
+def test_prompt_enter_keeps_original_target_after_focus_moves(cockpit):
+    js, wait, client, requests, enable = cockpit
+    enable()
+    js("createPane('OtherFixture',{paneId:'%902',windowId:'@902',width:80,height:20});setActive('%901');packets.length=0;promptInput.value='Generated target regression';sendPrompt();setActive('%902')")
+    wait("packets.filter(p=>p.type==='input').length===2")
+    assert js("packets.filter(p=>p.type==='input').map(p=>p.paneId)") == ['%901', '%901']
+
+
+@pytest.mark.parametrize('change', ['removed', 'replaced', 'session', 'connection'])
+def test_prompt_enter_cancels_when_original_target_changes(cockpit, change):
+    js, wait, client, requests, enable = cockpit
+    enable()
+    action = {'removed':"panes.delete('%901')", 'replaced':"panes.set('%901',{...panes.get('%901')})",
+              'session':"panes.get('%901').session='ReplacementFixture'", 'connection':"socket=null"}[change]
+    js("packets.length=0;promptInput.value='Generated cancelled regression';sendPrompt();"+action)
+    time.sleep(.4)
+    assert js("packets.filter(p=>p.type==='input').length") == 1
+    assert js("toastEl.textContent.includes('send cancelled')")
+
+
+@pytest.mark.parametrize('reject', [False, True])
+def test_deferred_image_paste_keeps_original_target(cockpit, reject):
+    js, wait, client, requests, enable = cockpit
+    enable()
+    js("""createPane('OtherFixture',{paneId:'%902',windowId:'@902',width:80,height:20});setActive('%901');
+      hostPlatform={...hostPlatform,host:'mac',file_paste:true};window.readClipboardFiles=()=>new Promise((resolve,reject)=>{window.resolveClipboard=resolve;window.rejectClipboard=reject});
+      packets.length=0;handleComposerPaste({clipboardData:{items:[{kind:'file',type:'image/png'}],files:[],getData:()=>''},preventDefault(){}});setActive('%902');""")
+    js("rejectClipboard(new Error('generated'))" if reject else "resolveClipboard({files:[]})")
+    wait("packets.some(p=>p.type==='input')")
+    assert js("packets.filter(p=>p.type==='input').map(p=>p.paneId)") == ['%901']
+
+
+def test_submitted_prompt_returns_from_preview_to_history(cockpit):
+    js, wait, client, requests, enable = cockpit
+    stable_roster(js)
+    enable()
+    js("""conversationView.close();OrreryConversationSource.Source.prototype.reference=async()=>({kind:'text',text:'Generated preview'});
+      OrreryConversationSource.Source.prototype.read=async()=>({events:[{id:'file-event',kind:'text',role:'assistant',text:'Generated event',references:[{id:'A'.repeat(32),label:'example.py',kind:'file'}]}],before:null,after:'fixture:1',has_older:false});
+      conversationView.open();""")
+    wait("document.querySelector('.conversation-file')!==null")
+    js("document.querySelector('.conversation-file').click()")
+    wait("document.querySelector('.conversation-preview-text')!==null")
+    js("promptInput.value='Generated prompt from preview';sendPrompt()")
+    wait("document.querySelector('.conversation-preview').hidden")
+    assert not js("document.querySelector('.conversation-body').classList.contains('conversation-has-preview')")
+
+
+def test_submit_in_split_follows_only_original_history_after_focus_moves(cockpit):
+    js, wait, client, requests, enable = cockpit
+    stable_roster(js)
+    enable(count=80,text_size=400)
+    js("""conversationView.close();currentAgents.push({name:'OtherFixture',program:'codex',history_binding:'bound'});
+      createPane('OtherFixture',{paneId:'%902',windowId:'@902',width:80,height:20});
+      OrreryConversationSource.Source.prototype.read=async name=>({agent:name,mode:'cursor',events:Array.from({length:80},(_,i)=>({id:name+i,kind:'text',role:'assistant',text:'Generated split paragraph. '.repeat(20)})),before:null,after:'fixture:1',has_older:false});
+      replaceSplitSessions(['ReviewFixture','OtherFixture']);splitVisible=true;focusSplitSession('ReviewFixture');""")
+    wait("document.querySelectorAll('.split-history-toggle').length===2")
+    js("document.querySelectorAll('.split-history-toggle').forEach(button=>button.click())")
+    wait("[...document.querySelectorAll('.split-cell')].every(cell=>cell.querySelectorAll('.conversation-event').length===80)")
+    time.sleep(.2)
+    js("""document.querySelectorAll('.split-cell .conversation-scroll').forEach(s=>s.scrollTop=120);
+      focusSplitSession('ReviewFixture');packets.length=0;promptInput.value='Generated split send';sendPrompt();
+      document.querySelectorAll('.split-cell .conversation-scroll')[1].dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));""")
+    assert js('activeSession()') == 'OtherFixture'
+    wait("packets.filter(p=>p.type==='input').length===2")
+    assert js("packets.filter(p=>p.type==='input').map(p=>p.paneId)") == ['%901','%901']
+    assert js("(()=>{const s=document.querySelectorAll('.split-cell .conversation-scroll')[0];return s.scrollHeight-s.clientHeight-s.scrollTop<45})()")
+    assert js("document.querySelectorAll('.split-cell .conversation-scroll')[1].scrollTop") == 120
+
+
+def test_submit_while_older_request_pending_must_not_repause(cockpit):
+    js, wait, client, requests, enable = cockpit
+    stable_roster(js)
+    enable(count=80, text_size=1000)
+    # Fill the existing 400-event window using ordinary 80-event responses.
+    for n in range(2, 6):
+        js('conversationView.refresh()')
+        wait('pageNumber===' + str(n))
+        wait('document.querySelectorAll(".conversation-event").length===' + str(n * 80))
+    js("""window.afterSubmitReads=0;
+      OrreryConversationSource.Source.prototype.read=(name,options)=>{
+        if(options.before)return new Promise(resolve=>window.resolveOlder=resolve);
+        afterSubmitReads++;
+        return Promise.resolve({events:[{id:'submitted',kind:'text',role:'user',text:'Submitted prompt'}],after:'new-tail',has_older:true});
+      };
+      document.querySelector('.conversation-scroll').scrollTop=120;
+      document.querySelector('.conversation-older').click();
+      promptInput.value='Generated send during older read';sendPrompt();
+    """)
+    wait("packets.some(p=>p.type==='input'&&p.data==='\\r')")
+    # A slow older response arrives after submission and causes retention trim.
+    js("""resolveOlder({events:Array.from({length:80},(_,i)=>({id:'old-'+i,kind:'text',role:'assistant',text:'old'.repeat(300),cursor_before:'old:'+i,cursor_after:'old:'+(i+1)})),before:'older-start',after:'older-end',has_older:true});""")
+    time.sleep(.2)
+    observed = js("""({latest:document.querySelector('.conversation-latest').textContent,
+      status:document.querySelector('.conversation-toolbar .conversation-status').textContent,
+      count:document.querySelectorAll('.conversation-event').length,afterSubmitReads,
+      submittedVisible:document.querySelector('.conversation-events').textContent.includes('Submitted prompt')})""")
+    assert 'resume' not in observed['latest'], observed
+    assert observed['afterSubmitReads'] > 0, observed

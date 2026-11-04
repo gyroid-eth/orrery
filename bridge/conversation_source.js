@@ -23,7 +23,7 @@
     preview_changed:'The file changed during this read. Select it again.',
     preview_unavailable:'This recorded reference cannot be previewed.',
   };
-  const REASONS={};
+  const REASONS=Object.create(null);
   function reasons(codes,text){for(const code of codes.split(' '))REASONS[code]=text;}
   reasons('receipt_unavailable receipt_missing binding_missing','This launch has no saved history link; open a newly launched child to read its history.');
   reasons('awaiting_hook launch_transition','This child is still preparing its history link; leave it running and retry shortly.');
@@ -32,14 +32,16 @@
   reasons('no_transcript native_session_missing','The provider has not saved a usable conversation yet; retry after its first message or use a newly launched child.');
   reasons('invalid_binding identity_mismatch id_mismatch session_mismatch launch_mismatch ambiguous_binding session_conflict unsupported_source','This recording cannot be matched safely to the selected child; open a newly launched child instead.');
   reasons('artifact_changed','The saved recording changed; close and reopen History or use a newly launched child if it remains unavailable.');
+  reasons('invalid_receipt','This launch has an invalid saved history link; start a new child to create a verified recording.');
   reasons('history_unavailable','The saved conversation is unavailable; retry after startup or use a newly launched child.');
   reasons('registration_missing','This child is no longer registered; refresh the roster or open a newly launched child.');
   reasons('write_failed','The child could not save its history link; check that its recording folder is writable, then start a new child.');
   reasons('disabled','This provider has history recording disabled; enable its recording setting and start a new child.');
   reasons('protected_history_required fresh_history_provider_unavailable','This runtime cannot expose this provider history yet; use a supported Codex conversation until telemetry adds support.');
   function bindingMessage(payload){
-    if(!['history_unconfirmed','history_stale'].includes(payload.error))return MESSAGES[payload.error]||'Conversation history could not be loaded.';
-    return REASONS[payload.reason_code]||(payload.error==='history_stale'?REASONS.receipt_predates_session:
+    const own=(values,key)=>Object.prototype.hasOwnProperty.call(values,key)?values[key]:null;
+    if(!['history_unconfirmed','history_stale'].includes(payload.error))return own(MESSAGES,payload.error)||'Conversation history could not be loaded.';
+    return own(REASONS,payload.reason_code)||(payload.error==='history_stale'?REASONS.receipt_predates_session:
       'History has no verified recording for this launch; retry after startup or use a newly launched child.');
   }
   class Source {

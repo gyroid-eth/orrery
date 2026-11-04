@@ -10382,12 +10382,21 @@ function showSendGuard(verdict){
   if(verdict.fix)sendGuardFix.textContent=verdict.fixLabel;
   sendGuard.hidden=false;
 }
+function captureComposerTarget(){
+  const paneId=activeId,pane=panes.get(paneId);
+  return pane?{paneId,pane,session:pane.session,socket}:null;
+}
+function composerTargetPresent(target){
+  if(panes.get(target.paneId)===target.pane&&target.pane.session===target.session&&socket===target.socket)return true;
+  showToast(`send cancelled → ${target.session}: terminal changed; select the target and retry`,true);
+  return false;
+}
 function sendPrompt(opts){
   const bypass=opts&&opts.bypassGuard;
   const text=promptInput.value;
   if(!text.trim())return;
-  const p=panes.get(activeId);
-  if(!p){showToast('no pane focused — click an agent first');return;}
+  const target=captureComposerTarget(),p=target?.pane;
+  if(!target){showToast('no pane focused — click an agent first');return;}
   if(!bypass){
     const verdict=inspectPrompt(text);
     if(verdict){showSendGuard(verdict);return;}
@@ -10395,10 +10404,13 @@ function sendPrompt(opts){
   hideSendGuard();
   // one bracketed paste (multiline stays one block in the TUI input box),
   // then a separate CR to submit — same shape the pty expects from a human.
-  if(!send({type:"input",paneId:activeId,data:"\x1b[200~"+text+"\x1b[201~"})){showToast('not connected — try again');return;}
+  if(!send({type:"input",paneId:target.paneId,data:"\x1b[200~"+text+"\x1b[201~"})){showToast('not connected — try again');return;}
   setTimeout(()=>{
-    if(send({type:"input",paneId:activeId,data:"\r"}))
+    if(!composerTargetPresent(target))return;
+    if(send({type:"input",paneId:target.paneId,data:"\r"})){
       document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'talk',name:p.session}}));
+      document.dispatchEvent(new CustomEvent('oc:prompt-submitted',{detail:{name:target.session}}));
+    }else showToast(`send cancelled → ${target.session}: disconnected before Enter; reconnect and retry`,true);
   },250);
   pushPromptHistory(text);
   promptInput.value='';saveDraft();closeSlashMenu();
@@ -10492,8 +10504,8 @@ function handleComposerPaste(e){
     .map(u=>{try{return decodeURIComponent(u.slice(7).replace(/^localhost/,''));}
              catch(_){return '';}})
     .filter(Boolean);
-  const p=panes.get(activeId);
-  if(!p){showToast('no pane focused — click an agent first');return;}
+  const target=captureComposerTarget(),p=target?.pane;
+  if(!target){showToast('no pane focused — click an agent first');return;}
   // The DOM knows a file was pasted but never where it lives, so ask the
   // backend — it shares the pasteboard with the Finder that copied it.
   const caret=promptInput.selectionStart==null?promptInput.value.length:promptInput.selectionStart;
@@ -10544,14 +10556,16 @@ function handleComposerPaste(e){
     // No file URL on the pasteboard: this is image *data* (a screenshot), not
     // a file copy. The TUI can read that itself — forward a literal ^V.
     if(hasImage){
-      send({type:"input",paneId:activeId,data:"\x16"});
+      if(!composerTargetPresent(target))return;
+      if(!send({type:"input",paneId:target.paneId,data:"\x16"})){showToast('not connected — try again');return;}
       showToast(`image → ${p.session} (TUI clipboard paste)`);
       return;
     }
     showToast('nothing on the clipboard the composer can use');
   }).catch(()=>{
     if(hasImage&&!onWsl){
-      send({type:"input",paneId:activeId,data:"\x16"});
+      if(!composerTargetPresent(target))return;
+      if(!send({type:"input",paneId:target.paneId,data:"\x16"})){showToast('not connected — try again');return;}
       showToast(`image → ${p.session} (TUI clipboard paste)`);
     }else showToast('could not read the clipboard');
   });

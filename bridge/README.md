@@ -96,6 +96,12 @@ with the selected preview until closed. Closing one history leaves the grid
 and other histories intact. Leaving split mode releases its readers; single
 pane and phone history keep the existing layout.
 
+Submitting through the original composer closes only the target reader's preview
+and resumes Latest, including a reader paused at its retention limit. Messages
+still come solely from provider records. Paste and delayed Enter use the same
+captured pane/session; removal, replacement or connection change cancels Enter
+with a visible notice. Deferred image paste also keeps its original target.
+
 Unbound/stale responses carry the dashboard reason code to the source module,
 which renders a short next action (new child, wait/retry, or Codex plugin/hooks
 setup). It does not offer rebinding or infer a transcript path.

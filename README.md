@@ -74,6 +74,7 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 split中は各区画の **History** から独立して開けます。全幅表示・file／画像previewもその区画内に収まり、複数の履歴を同時に開けます。履歴を操作した区画が下のprompt欄の送り先になります。
 
 全幅の履歴の下でも、既存のprompt入力欄から選択中のpaneに送れます。スマホ幅でも宛先・入力欄・SENDを表示します。履歴を読むキーは端末へ送られず、入力欄のEnterまたはSENDで明示的に送ります。
+送信すると、そのpaneの履歴はpreviewを閉じて最新へ戻り、記録の追記を追従します。本文とEnterは送信開始時の同じpaneへ送り、待ち時間中に端末が消失・置換・再接続した場合はEnterを送らず通知します。
 
 paneの見出しは状態表示（ACTIVE等）・HISTORY・WINDOWに整理しています。端末サイズのFOLLOW／CLAIMEDとGhostty等で開く操作は **Settings → Terminal → Selected pane actions** にあります。対話clientがいないsessionを自動CLAIMEDにし、いる場合はFOLLOWにする既定は同じです。手動の選択が優先されます。
 

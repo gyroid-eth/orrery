@@ -60,3 +60,22 @@ const {Source,REASONS,bindingMessage}=require(process.argv[1]);
     assert '/hooks' in data['codex'] and 'new Codex process' in data['codex']
     assert data['stale'].startswith('Previous conversation')
     assert 'retry' in data['unknown']
+
+
+@pytest.mark.skipif(shutil.which('node') is None,reason='node is not installed')
+def test_reason_and_error_lookup_accepts_only_own_string_properties():
+    script=r"""
+const assert=require('assert');const {bindingMessage,REASONS}=require(process.argv[1]);
+const generic=bindingMessage({error:'history_unconfirmed',reason_code:'unknown-code'});
+const stale=bindingMessage({error:'history_stale',reason_code:'unknown-code'});
+for(const key of ['constructor','__proto__','toString','hasOwnProperty','valueOf']){
+ assert.strictEqual(bindingMessage({error:'history_unconfirmed',reason_code:key}),generic,key);
+ assert.strictEqual(bindingMessage({error:'history_stale',reason_code:key}),stale,key);
+ assert.strictEqual(bindingMessage({error:key}),'Conversation history could not be loaded.',key);
+}
+assert.strictEqual(typeof REASONS.invalid_receipt,'string');
+assert.ok(bindingMessage({error:'history_unconfirmed',reason_code:'invalid_receipt'}).includes('new child'));
+console.log('own property fallback and invalid receipt: OK');
+"""
+    result=subprocess.run(['node','-e',script,str(SOURCE)],capture_output=True,text=True,timeout=20)
+    assert result.returncode==0,result.stderr

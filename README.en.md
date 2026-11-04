@@ -86,6 +86,9 @@ Interacting with a reader selects that cell as the existing composer target.
 The original prompt composer remains below full-width History, including on
 phones. Check its target and use Enter or SEND explicitly; reading keys stay in
 the history view. Existing send guards, IME handling and the input route apply.
+Submitting closes that pane's preview and resumes following its newest recorded
+messages. Paste and Enter keep the original target; if its pane or connection
+changes before Enter, submission is cancelled with a notice.
 
 The pane header keeps its status (such as ACTIVE), HISTORY and WINDOW. Find
 FOLLOW/CLAIMED and the external-terminal action in **Settings → Terminal →

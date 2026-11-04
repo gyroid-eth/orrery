@@ -47,7 +47,7 @@
     const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onActivate:()=>expand(true)});
     let enabled=false,opened=false,agent='',generation=0,controller=null,timer=0,busy=false;
     let before=null,after=null,hasOlder=false,mode='',newCount=0,events=new Map();
-    let contextKey='',paused=false,retainedBytes=0,providerLabel='Codex';
+    let contextKey='',paused=false,retainedBytes=0,providerLabel='Codex',followPending=false;
     const byteSize=event=>new TextEncoder().encode(JSON.stringify(event)).byteLength;
     const fingerprint=current=>JSON.stringify(['name','program','provider','history_binding','transcript_path',
       'native_session_id','history_session_id','history_receipt_ts','created','mail_instance_id','mail_agent_id'].map(key=>current[key]??null));
@@ -59,8 +59,8 @@
       latest.textContent=paused?'Latest · resume':newCount?newCount+' new':'Latest';
     }
     function message(text){status.textContent=text;}
-    function stop(){clearTimeout(timer);timer=0;if(controller)controller.abort();controller=null;generation++;busy=false;}
-    function clear(){preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';paused=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
+    function stop(){clearTimeout(timer);timer=0;if(controller)controller.abort();controller=null;generation++;busy=false;followPending=false;}
+    function clear(){preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     function draw(event){const article=renderEvent?renderEvent(event,node):node(event);return preview?preview.render(event,article):article;}
     function anchor(){
       const top=scroll.getBoundingClientRect().top;
@@ -182,7 +182,11 @@
           position();
         }
       }finally{
-        if(token===generation){busy=false;controller=null;earlier.disabled=false;if(pollAgain)schedule();}
+        if(token===generation){
+          busy=false;controller=null;earlier.disabled=false;
+          if(followPending){followPending=false;followSubmitted();}
+          else if(pollAgain)schedule();
+        }
       }
     }
     function context(){
@@ -230,6 +234,21 @@
     listen(latest,'click',()=>{
       if(paused){stop();clear();load('initial');return;}
       scroll.scrollTop=scroll.scrollHeight;newCount=0;position();
+    });
+    // Submission remains owned by the existing composer/input guards. This
+    // notification changes only the matching reader's viewport; the provider
+    // recording is still the sole source of message text.
+    function followSubmitted(){
+      if(paused){stop();clear();load('initial');}
+      else{scroll.scrollTop=scroll.scrollHeight;newCount=0;position();load('newer');}
+    }
+    listen(document,'oc:prompt-submitted',event=>{
+      if(!opened||!enabled||event.detail?.name!==agent)return;
+      preview?.close();
+      // Finish the in-flight page first; an older page may trim the newest
+      // events and pause polling. Its finally must still honour this request.
+      if(busy){followPending=true;return;}
+      followSubmitted();
     });
     listen(scroll,'scroll',position,{passive:true});
     listen(document,'oc:stage-agent',context);
