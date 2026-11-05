@@ -129,6 +129,7 @@
   function switchNote(s,named,reviewed,manual){
     var words='';
     if(!named&&hint==='demo')words='Turn off demo mode to set up phone access (once). After that you can switch it on and off in demo mode.';
+    else if(!named&&hint==='signin')words='Not on yet: sign in to Tailscale on this computer first (step 1 below), then press Phone access again.';
     else if(!named&&hint==='first')words='Not on yet: check the owner and address in step 2 below, then press Confirm and turn on.';
     else if(s.settings.access&&named&&!reviewed&&!manual)words='On, but Conversation and Send from phone stay off until step 4 below (I reviewed the policy).';
     if(!words)return null;
@@ -167,7 +168,15 @@
     var main=el('div','settings-row');
     main.append(toggle('phoneAccess','Phone access','Read the cockpit from your phone over Tailscale: agents, Graph, Mail, conversation, files and images. Images cannot be redacted.',
       set.access,manual,function(on){
-        if(on&&!named){setupOpen=true;hint=demo()?'demo':'first';render();if(hint==='first')showStepTwo();return;}
+        if(on&&!named){
+          var box=document.getElementById('phoneAccess');if(box)box.checked=false;
+          /* pressed again while step 2 is open: keep what was typed there */
+          if(hint==='first'&&!demo()){showStepTwo();return;}
+          setupOpen=true;
+          hint=demo()?'demo':!(ts.found&&ts.signed_in)?'signin':'first';
+          if(hint==='signin'){refresh();return;}  /* re-reads Tailscale, so the next press sees a new sign-in */
+          render();if(hint==='first')showStepTwo();return;
+        }
         change({access:on});
       }));
     var note=switchNote(s,named,reviewed,manual);
@@ -206,6 +215,6 @@
     if(busy)root.append(el('div','settings-help','Applying…'));
   }
 
-  if(popover)popover.addEventListener('toggle',function(event){if(event.newState==='open'){message='';hint='';refresh();}});
+  if(popover)popover.addEventListener('toggle',function(event){if(event.newState==='open'){message='';hint='';setupOpen=false;refresh();}});
   window.OrreryPhoneSettings=Object.freeze({refresh:refresh});
 })();

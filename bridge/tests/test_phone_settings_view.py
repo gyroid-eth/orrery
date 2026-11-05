@@ -63,6 +63,8 @@ require(SCRIPT);
   const missing=[];
   for(const step of STEPS){
     const all=byId.phoneSettings.all();
+    if(step==='@open'){byId.settingsPopover.listeners.toggle({newState:'open'});await tick();continue;}
+    if(step[0]==='='){const [id,...v]=step.slice(1).split('=');all.find(n=>n.id===id).value=v.join('=');continue;}
     if(step[0]==='#'){const input=all.find(n=>n.id===step.slice(1));input.checked=!input.checked;input.listeners.change();await tick();continue;}
     const button=all.find(n=>n.tagName==='button'&&n.textContent===step);
     if(button){button.listeners.click();await tick();}else missing.push(step);
@@ -172,6 +174,33 @@ def test_demo_mode_first_press_says_to_turn_off_demo_mode_right_under_the_switch
     assert pressed["reloads"] == [False] and pressed["missing"] == []
 
 
+def test_demo_mode_first_press_does_not_move_the_page_or_the_cursor():
+    assert draw(state(settings=FIRST), demo=True, steps=("#phoneAccess",))["events"] == []
+
+
+def test_reopening_settings_drops_the_note_and_the_steps_it_opened():
+    for demo in (False, True):
+        view = draw(state(settings=FIRST), demo=demo, steps=("#phoneAccess", "@open"))
+        assert view["note"] is None
+        assert "Tailscale signed in" not in view["text"]
+
+
+def test_second_press_keeps_what_was_typed_in_step_two():
+    typed = "https://other.example.ts.net:9443"
+    view = draw(state(settings=FIRST), steps=("#phoneAccess", "=phoneAddress=" + typed, "#phoneAccess"))
+    assert typed in view["fields"]
+    assert view["events"] == ["scroll:phoneStepOwner", "focus:phoneOwner"] * 2
+    assert view["puts"] == [] and view["inputs"]["phoneAccess"]["checked"] is False
+
+
+def test_first_press_without_tailscale_sign_in_points_to_step_one():
+    view = draw(state(settings=FIRST, tailscale={"signed_in": False}), steps=("#phoneAccess",))
+    assert "sign in to Tailscale" in view["note"] and "step 1 below" in view["note"]
+    assert "step 2" not in view["note"]
+    assert view["events"] == [] and view["puts"] == []
+    assert "Tailscale is installed but not signed in" in view["text"]
+
+
 def test_nothing_is_said_under_the_switch_before_it_is_pressed():
     assert draw(state(settings=FIRST), demo=True)["note"] is None
     assert draw(state(settings=FIRST))["note"] is None
@@ -204,7 +233,7 @@ def test_on_before_the_policy_review_says_conversation_and_send_are_off():
 def test_no_policy_line_when_it_would_not_be_true(case):
     value = {"reviewed": state(),
              "off": state(settings={"access": False, "policy_reviewed_at": None}),
-             "manual": state(settings={"access": False, "policy_reviewed_at": None},
+             "manual": state(settings={"policy_reviewed_at": None},
                              relay={"job": "absent", "listening": True, "manual": True})}[case]
     assert draw(value)["note"] is None
 
