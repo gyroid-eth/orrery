@@ -5,6 +5,90 @@
   'use strict';
   const KEY='oc-term-conversation-enabled';
   const MAX_EVENTS=400,MAX_BYTES=2*1024*1024;
+  // A held poll keeps one browser connection busy; HTTP/1.1 allows about six
+  // per host, which the rest of the cockpit also needs. Four, the same as the
+  // server's cap, lets every pane of a 4-way split hold (measured with the
+  // roster and graph polls, 2026-11-05: History waited <=4 ms for a
+  // connection). Panes beyond it, or beyond the server's cap shared by every
+  // tab, keep the plain interval.
+  const WAIT_SECONDS=25,MAX_WAITING=4,waiting=new Set();
+  // After a server-slot answer with new rows, the next read starts after this
+  // gap: a record that changes all the time costs a few reads a second at most.
+  const CONTENT_GAP_MS=250;
+  // A held poll is background work. While any user operation is in flight in
+  // this tab or another cockpit tab (BroadcastChannel), no poll is held: its
+  // start ends every held poll, so the operation gets a browser connection,
+  // and when the last one ends every reader plans again (plan() below).
+  // What counts as a user operation is decided in one place, userRequest().
+  // The longest an operation counts, ours or another tab's: the backend allows
+  // a spawn 90 s (other actions 60 s). Past it an operation that never settled
+  // (a closed tab, a frame navigated mid-request) stops holding History back.
+  const OP_MAX_MS=90000;
+  const ops={own:new Map(),foreign:new Map(),planners:new Set(),seq:0,tab:Math.random().toString(36).slice(2)};
+  function yieldLocal(){for(const holder of waiting)holder.yield?.();}
+  let holdChannel=null;
+  function post(message){try{holdChannel?.postMessage(message);}catch(_){}}
+  function opsActive(){
+    const now=Date.now();
+    for(const [id,at] of ops.foreign)if(now-at>OP_MAX_MS)ops.foreign.delete(id);
+    for(const [id,at] of ops.own)if(now-at>OP_MAX_MS){ops.own.delete(id);post({type:'end',id});}
+    return ops.own.size>0||ops.foreign.size>0;
+  }
+  function replanAll(){if(!opsActive())for(const plan of ops.planners)plan();}
+  function beginOp(){
+    const id=ops.tab+':'+(++ops.seq);ops.own.set(id,Date.now());yieldLocal();post({type:'begin',id});
+    setTimeout(()=>endOp(id),OP_MAX_MS+50);  // one that never settles expires
+    return id;
+  }
+  function endOp(id){if(id&&ops.own.delete(id)){post({type:'end',id});replanAll();}}
+  try{
+    holdChannel=new root.BroadcastChannel('orrery-history-holds');
+    holdChannel.onmessage=({data})=>{
+      if(data?.type==='begin'&&typeof data.id==='string'){
+        ops.foreign.set(data.id,Date.now());yieldLocal();
+        setTimeout(replanAll,OP_MAX_MS+50);  // a closed tab's operation expires
+      }else if(data?.type==='end'&&typeof data.id==='string'){ops.foreign.delete(data.id);replanAll();}
+      else if(data?.type==='who'){for(const id of ops.own.keys())post({type:'begin',id});}
+    };
+    // A tab opened later asks once for the operations already in flight.
+    post({type:'who'});
+  }catch(_){holdChannel=null;}
+  // A closing tab ends its operations for the other tabs.
+  root.addEventListener?.('pagehide',()=>{for(const id of ops.own.keys())post({type:'end',id});});
+  // The user operations (README: History, "user operations"), by name. Same
+  // origin only. Not History's own polls, not the terminal hover's path
+  // probe, and not the dashboard frame's automatic error report (/api/jserr):
+  // nobody asked for those. From the NETWORK frame: the dashboard's actions.
+  const USER_POSTS=new Set(['/telemetry/open-url','/telemetry/reveal-path','/telemetry/open-ghostty',
+    '/telemetry/spawn','/api/exit','/telemetry/conversation/reveal']);
+  const FRAME_POSTS=new Set(['/api/jump','/api/kill','/api/exit','/api/annotate','/api/spawn','/api/reactivate']);
+  const USER_GETS=new Set(['/telemetry/clipboard/files','/telemetry/conversation/preview']);
+  function userRequest(input,init,{frame=false,origin=root.location?.origin}={}){
+    try{
+      const url=new URL(typeof input==='string'?input:input.url,root.location.href);
+      const method=String(init?.method||(typeof input==='string'?'GET':input.method)||'GET').toUpperCase();
+      if(url.origin!==origin)return false;
+      if(method==='GET')return USER_GETS.has(url.pathname);
+      return (frame?FRAME_POSTS:USER_POSTS).has(url.pathname);
+    }catch(_){return false;}
+  }
+  // fetch for a page (the cockpit, the NETWORK frame): a user operation is
+  // counted from its start until it settles, failed or aborted alike.
+  // `endAll()` ends this wrapper's operations at once: a frame whose document
+  // navigates away mid-request never settles its fetch.
+  function trackFetch(nativeFetch,options={}){
+    const mine=new Set();
+    const end=id=>{mine.delete(id);endOp(id);};
+    const tracked=(input,init)=>{
+      if(!userRequest(input,init,options))return nativeFetch(input,init);
+      const id=beginOp();mine.add(id);
+      try{return Promise.resolve(nativeFetch(input,init)).finally(()=>end(id));}
+      catch(error){end(id);throw error;}
+    };
+    tracked.endAll=()=>{for(const id of [...mine])end(id);};
+    return tracked;
+  }
+  function yieldHolds(){const id=beginOp();queueMicrotask(()=>endOp(id));}
   function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null}){
     let screen=host||document.querySelector('.screen');
     const toggle=control||document.getElementById('conversationToggle');
@@ -126,7 +210,7 @@
       latest.textContent=paused?'Latest · resume':newCount?newCount+' new':'Latest';
     }
     function message(text){status.textContent=text;}
-    function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;if(controller)controller.abort();controller=null;generation++;busy=false;if(!keepFollow)followPending=false;}
+    function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
     function clear({keepSubmissions=false}={}){tablePositions.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
@@ -253,7 +337,7 @@
         lastFocused.focus({preventScroll:true});layoutChanged();
       }
       if(followPending&&!busy){followPending=false;followSubmitted();}
-      else if(changed&&!busy){if(!events.size)load();else schedule();}
+      else if(changed&&!busy){if(!events.size)load();else plan();}
     }
     function trim(fromStart){
       let removed=false;
@@ -324,21 +408,66 @@
       else if(result.state==='changed')message('端末が切り替わりました。もう一度探してください。');
       else message('この内容は端末の保存行に見つかりません。ここで履歴を続けて読めます。');
     }
-    function schedule(){
-      clearTimeout(timer);
-      if(opened&&presented&&enabled&&!paused&&!document.hidden)timer=setTimeout(()=>load('newer'),pollMs);
+    let holding=false,pendingAction=null;
+    // A random id made in this page for this reader (pane); see orrery_backend.py
+    // conversation_legacy_read: the server lets it take over its own held slot.
+    const readerId=Array.from(root.crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
+    // What the last answer said, for plan().
+    const last={hold:false,slot:false,refused:false,rows:0,catchUp:false,failed:false};
+    // A user's own load (Load earlier, Retry) is a user operation: other
+    // panes' held polls give way, and this pane's held poll ends first.
+    function userLoad(direction){
+      if(busy&&!holding)return;
+      const op=beginOp();
+      if(busy){pendingAction={direction,op};controller?.abort();return;}
+      load(direction,op);
     }
-    async function load(direction='initial'){
-      if(!opened||!presented||!enabled||busy||!agent||paused&&direction==='newer')return;
+    /* The one place that decides when this reader asks next.
+       - nothing while it is closed, hidden, paused or already asking;
+       - while a user operation is in flight anywhere: no held poll, only the
+         plain one after pollMs; the last operation's end plans again
+         (replanAll), so holding resumes at once;
+       - at once (a held poll) when the server can hold, did not refuse last
+         time and this page's cap has room; after new rows, CONTENT_GAP_MS;
+       - at once for a catch-up page from a slot;
+       - otherwise, and after a failure, pollMs.
+       Planning again never postpones a read already planned sooner, so
+       frequent operations cannot starve a reader. */
+    let timerDue=0;
+    function plan(){
+      if(!opened||!presented||!enabled||paused||busy||!agent||document.hidden){clearTimeout(timer);timer=0;return;}
+      let delay=pollMs;
+      if(opsActive()||last.failed)delay=pollMs;
+      else if(last.catchUp&&last.slot)delay=0;
+      else if(last.hold&&!last.refused&&waiting.size<MAX_WAITING)delay=last.rows>0?CONTENT_GAP_MS:0;
+      const due=performance.now()+delay;
+      if(timer&&timerDue<=due)return;
+      clearTimeout(timer);timerDue=due;timer=setTimeout(()=>{timer=0;load('newer');},delay);
+    }
+    ops.planners.add(plan);
+    async function load(direction='initial',op=null){
+      if(!opened||!presented||!enabled||busy||!agent||paused&&direction==='newer'){endOp(op);return;}
       const token=generation,name=agent,sequence=++readSequence;
       let pollAgain=true;
-      controller=new AbortController();busy=true;earlier.disabled=true;retry.hidden=true;
-      const options={signal:controller.signal};
+      controller=new AbortController();busy=true;retry.hidden=true;
+      const options={signal:controller.signal},mine=controller;
       if(direction==='older')options.before=before;
       if(direction==='newer')options.after=after;
+      const holder={yield:()=>mine.abort()};
+      // A hidden tab never asks to be held: it keeps no connection open.
+      if(direction==='newer'&&after!==null&&!document.hidden&&!opsActive()&&waiting.size<MAX_WAITING){options.wait=WAIT_SECONDS;options.reader=readerId;waiting.add(holder);}
+      holding=Boolean(options.wait);
+      // Load earlier stays usable while the poll only waits in the background.
+      earlier.disabled=!holding;
       try{
         const page=await source.read(name,options);
+        holding=false;waiting.delete(holder);
+        if(page.hold===true)last.hold=true;
+        last.slot=page.slot===true;last.refused=Boolean(options.wait)&&!last.slot;
+        last.catchUp=page.has_newer===true&&direction!=='older';last.rows=0;last.failed=false;
         if(token!==generation||!opened||!enabled)return;
+        // The server saw no change since this cursor: keep every row as is.
+        if(page.unchanged===true&&direction==='newer'&&page.after===after)return;
         const atBottom=nearBottom(),oldHeight=scroll.scrollHeight,oldTop=scroll.scrollTop,saved=anchor();
         const incoming=page.events.filter(event=>event&&typeof event.id==='string'&&typeof event.text==='string');
         for(const event of incoming)observedIds.add(event.id);
@@ -388,13 +517,16 @@
           trimmed?'Older loaded messages were released. Load earlier to read them again.':
           page.skipped_large_record?'A large record was skipped. Load earlier to continue.':page.notice||'Read-only · updates while open');
         position();if(direction==='initial'||direction==='newer'&&atBottom)remember(true);
+        if(direction!=='older')last.rows=added;
         if(page.has_newer&&direction!=='older'){
           // A bounded page per request. Continue in the next poll without
           // sending overlapping reads during a fast provider burst.
           message('Read-only · catching up with new messages…');
         }
       }catch(error){
+        waiting.delete(holder);holding=false;
         if(token!==generation||error.name==='AbortError')return;
+        last.failed=true;
         pollAgain=!['history_changed','record_too_large','provider_unavailable','claude_next_phase','dashboard_upgrade_required','dsh_decoder_unavailable','history_format_unsupported'].includes(error.code);
         message(error.message);retry.hidden=false;
         if(['history_changed','history_unconfirmed','history_stale','agent_unavailable','claude_next_phase','provider_unavailable','dashboard_upgrade_required','dsh_decoder_unavailable','history_format_unsupported','history_unreadable','history_pending'].includes(error.code)){
@@ -407,8 +539,10 @@
         if(token===generation){
           busy=false;controller=null;earlier.disabled=false;
           if(followPending){followPending=false;followSubmitted();}
-          else if(pollAgain)schedule();
+          else if(pendingAction){const next=pendingAction;pendingAction=null;load(next.direction,next.op);}
+          else if(pollAgain)plan();
         }
+        endOp(op);
       }
     }
     function context(){
@@ -454,11 +588,12 @@
     listen(panel,'keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();if(preview?.selected){preview.close();scroll.focus();}else close();}});
     // Arrow/Page keys and wheels belong only to the browser scroll container;
     // there is no path from this module to xterm or tmux input.
-    listen(earlier,'click',()=>load('older'));
-    listen(retry,'click',()=>load(events.size?'newer':'initial'));
+    listen(earlier,'click',()=>userLoad('older'));
+    listen(retry,'click',()=>userLoad(events.size?'newer':'initial'));
     listen(latest,'click',()=>{
       if(paused){stop();clear({keepSubmissions:true});load('initial');return;}
       scroll.scrollTop=scroll.scrollHeight;newCount=0;position();remember(true);
+      if(!busy)plan();
     });
     // Submission remains owned by the existing composer/input guards. This
     // notification adds an ephemeral delivery receipt, never a provider event.
@@ -483,7 +618,9 @@
       preview?.close();
       // Finish the in-flight page first; an older page may trim the newest
       // events and pause polling. Its finally must still honour this request.
-      if(busy){followPending=true;return;}
+      // A held poll began before this send: end it, so the record of the send
+      // is read by a request that started after it.
+      if(busy){followPending=true;if(holding)controller?.abort();return;}
       followSubmitted();
     });
     function userScroll(){clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);layoutTimer=layoutFrame=0;layoutPending=restoring=false;panel.dataset.conversationLayout='settled';userScrolling=true;const r=screen.getBoundingClientRect();lastWidth=r.width;lastHeight=r.height;}
@@ -496,10 +633,12 @@
     listen(document,'oc:stage-agent',context);
     listen(document,'oc:focus-agent',context);
     listen(document,'oc:agents',context);
-    listen(document,'visibilitychange',()=>{if(document.hidden)clearTimeout(timer);else if(opened)load(events.size?'newer':'initial');});
+    // A hidden tab keeps no held poll: end one that is waiting, so its
+    // browser connection and the server's slot are returned at once.
+    listen(document,'visibilitychange',()=>{if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
     preference();
     return Object.freeze({open,close,relocate,reconcile:context,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
-      dispose(){cancelAnimationFrame(tableFrame);layoutObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
+      dispose(){ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
   }
   function mountWorkspace({getContext,getSlots,getOwner=name=>getContext(name)?.terminalPaneId,activate,...options}){
     const screen=document.querySelector('.screen'),toggle=document.getElementById('conversationToggle');
@@ -576,5 +715,5 @@
     sync();
     return Object.freeze({open:()=>{sync();current()?.open();},close:()=>current()?.close(),refresh:()=>current()?.refresh()});
   }
-  root.OrreryConversation=Object.freeze({mount,mountWorkspace,KEY});
+  root.OrreryConversation=Object.freeze({mount,mountWorkspace,KEY,yieldHolds,trackFetch,userRequest});
 })(window);

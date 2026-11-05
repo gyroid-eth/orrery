@@ -4487,9 +4487,9 @@
       }
     }
   },
-  "inventory_digest": "ddd980ab3f6e6b0dfb3e3bfb4412b227b80e1c531f23f0f5aad8549a530aad67",
+  "inventory_digest": "08027c3b04d7723be23f900bd9a20a8218fb615500ed4b262cdfcc8efafda7c3",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "714627152d47c08406d022c66d7af66142e8f0c62085dfe6e96413628b16e0d7",
+  "source_digest": "823a7711adf992273a3b37b26133e8576caacf50f5887ec466d6b89d10764dcf",
   "surface": "cockpit",
   "version": 1
 }
@@ -11030,6 +11030,29 @@ const conversationView=(()=>{
       await asset('script','src','conversation_terminal.js');
       await asset('script','src','conversation_markdown.js');
       await asset('script','src','conversation_view.js');
+      // A user operation (conversation_view.js userRequest: the named POSTs,
+      // the clipboard files, a file preview; from the NETWORK frame the
+      // dashboard's named actions) is never kept waiting behind History's held polls: no poll is
+      // held from its start until it settles. Periodic polls do not count.
+      if(!window.__orreryHoldsYield){
+        window.__orreryHoldsYield=true;
+        window.fetch=OrreryConversation.trackFetch(window.fetch.bind(window));
+        const frame=document.getElementById('networkFrame');
+        // The frame's operations end with its document (a navigation away
+        // never settles a fetch in flight).
+        let frameFetch=null;
+        const wrapFrame=()=>{try{
+          frameFetch?.endAll();frameFetch=null;
+          const view=frame?.contentWindow;
+          if(view&&view.location.origin===location.origin&&!view.__orreryHoldsYield){
+            view.__orreryHoldsYield=true;
+            const tracked=OrreryConversation.trackFetch(view.fetch.bind(view),{frame:true});
+            view.fetch=tracked;frameFetch=tracked;
+            view.addEventListener('pagehide',()=>tracked.endAll());
+          }
+        }catch(_){/* another origin: nothing to wrap */}};
+        frame?.addEventListener('load',wrapFrame);wrapFrame();
+      }
       instance=OrreryConversation.mountWorkspace({
         getContext:(selected)=>{const name=selected||activeSession();return {...(currentAgents.find(a=>a.name===name)||{name}),terminalPaneId:paneIdForSession(name)};},
         getSlots:()=>splitVisible?splitSessions.map(name=>({name,host:splitCells.get(name),controlHost:splitCells.get(name)?._actions})).filter(slot=>slot.host?.isConnected):[],

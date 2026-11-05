@@ -185,16 +185,29 @@ def read_codex_page(path: str, *, before: str | None = None,
     data = data[:complete]  # Never advance over an in-progress record.
     entries = []
     complete_end = position
-    for raw in data.splitlines(keepends=True):
-        event = codex_event(raw, position)
-        position += len(raw)
-        if event is not None:
-            entries.append((event, position))
-        complete_end = position
-        if after is not None and len(entries) >= limit:
-            break
     if after is None:
-        entries = entries[-limit:]
+        # Newest first, stopping at the page limit: the same page as parsing
+        # the whole window and keeping its last `limit` events.
+        complete_end = position + len(data)
+        cursor = complete_end
+        for raw in reversed(data.splitlines(keepends=True)):
+            cursor -= len(raw)
+            event = codex_event(raw, cursor)
+            if event is not None:
+                entries.append((event, cursor + len(raw)))
+                if len(entries) >= limit:
+                    break
+        entries.reverse()
+    else:
+        for raw in data.splitlines(keepends=True):
+            event = codex_event(raw, position)
+            position += len(raw)
+            if event is not None:
+                entries.append((event, position))
+            complete_end = position
+            if len(entries) >= limit:
+                break
+    if after is None:
         oldest = int(entries[0][0]["id"]) if entries else window_start
     else:
         oldest = int(entries[0][0]["id"]) if entries else start
@@ -235,6 +248,139 @@ def bound_codex_agent(payload: object, name: str) -> dict:
     return bound_agent(payload,name)
 
 
-def open_reader(row):
+def open_reader(row, expect_inode=None):
     from conversation_readers import open_reader as native_reader
-    return native_reader(row)
+    return native_reader(row, expect_inode=expect_inode)
+
+
+REVALIDATE_SECONDS = 30.0
+
+
+def bound_signature(path: str) -> tuple:
+    """(dev, inode, size, mtime) of a bound record, plus a Hermes WAL sidecar.
+
+    Read only through the same no-follow walk as a full read. Any change,
+    including a WAL appearing or a checkpoint, makes the next poll a full read.
+    """
+    paths = [path] + ([path + '-wal'] if path.endswith('/state.db') else [])
+    out = []
+    for item in paths:
+        if item != path and not os.path.lexists(item):
+            out.append(None)
+            continue
+        with open_bound_transcript(item) as stream:
+            info = os.fstat(stream.fileno())
+            out.append((info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns))
+    return tuple(out)
+
+
+class UnchangedPolls:
+    """Answers a repeated poll without reading the record or the dashboard.
+
+    An entry exists only after a full, dashboard-verified read returned that
+    `after` cursor. The answer carries no events or text, so it can never show
+    content that was not verified; the dashboard is asked again on the first
+    change or at the latest after `ttl` seconds (a held poll checks this at
+    every wait step, so it holds no longer than that plus one step).
+    """
+
+    def __init__(self, *, ttl: float = REVALIDATE_SECONDS, size: int = 256, clock=None):
+        import threading
+        import time
+        from collections import OrderedDict
+        self.ttl, self.size, self.clock = ttl, size, clock or time.monotonic
+        self.entries = OrderedDict()
+        self.rows = OrderedDict()  # name -> the last dashboard-verified binding
+        self.lock = threading.Lock()
+
+    def remember_row(self, name, row, inode, verified_at):
+        """A binding the dashboard confirmed after a read of the file `inode`."""
+        with self.lock:
+            self.rows[name] = dict(row=dict(row), inode=tuple(inode), verified=verified_at)
+            self.rows.move_to_end(name)
+            while len(self.rows) > self.size:
+                self.rows.popitem(last=False)
+
+    def recent_row(self, name):
+        """That binding while it is at most `ttl` old, else None.
+
+        A caller may skip the dashboard before a read with it, never after:
+        the read's content is published only after a new dashboard check, and
+        only from a file whose (dev, inode) equals the one recorded here.
+        """
+        with self.lock:
+            entry = self.rows.get(name)
+            if entry is None or self.clock() - entry['verified'] > self.ttl:
+                return None
+            return dict(entry, row=dict(entry['row']))
+
+    def forget_row(self, name):
+        with self.lock:
+            self.rows.pop(name, None)
+
+    def remember(self, name, row, result, signature, verified_at, digest=None, *, provider=None, fingerprint=None):
+        after = result.get('after')
+        reply = dict(events=[], before=None, after=after, has_older=False, has_newer=False, unchanged=True,
+                     mode=result.get('mode', 'cursor'), notice=result.get('notice', ''), provider=provider)
+        if not isinstance(after, str) or result.get('has_newer') or signature is None:
+            return reply
+        with self.lock:
+            self.entries[(name, after)] = dict(path=row['transcript_path'], signature=signature,
+                                               verified=verified_at, digest=digest, reply=reply,
+                                               fingerprint=fingerprint)
+            self.entries.move_to_end((name, after))
+            while len(self.entries) > self.size:
+                self.entries.popitem(last=False)
+        return reply
+
+    def same_session(self, name, after, fingerprint, signature):
+        """Hermes: the file changed but this session's rows did not.
+
+        Adopt the new signature and keep the entry (and its verification
+        time), so the poll stays unchanged without a full read.
+        """
+        with self.lock:
+            entry = self.entries.get((name, after))
+            if (entry is None or fingerprint is None or signature is None
+                    or entry.get('fingerprint') != fingerprint):
+                return False
+            entry['signature'] = signature
+            return True
+
+    def entry(self, name, after, *, fresh=True):
+        with self.lock:
+            entry = self.entries.get((name, after))
+            if entry is None or fresh and self.clock() - entry['verified'] > self.ttl:
+                return None
+            return entry
+
+    def quick(self, name, after):
+        """A cheap change hint while a poll is held: lstat of the stored files.
+
+        Only a trigger. The answer still comes from unchanged() (the no-follow
+        walk), run whenever this hint moves and again before replying.
+        """
+        entry = self.entries.get((name, after))
+        if entry is None:
+            return None
+        paths = [entry['path']] + ([entry['path'] + '-wal'] if entry['path'].endswith('/state.db') else [])
+        out = []
+        for item in paths:
+            try:
+                info = os.lstat(item)
+                out.append((info.st_ino, info.st_size, info.st_mtime_ns))
+            except OSError:
+                out.append(None)
+        return tuple(out)
+
+    def unchanged(self, name, after):
+        """The stored no-content reply, or None when a full read is needed."""
+        entry = self.entry(name, after) if isinstance(after, str) else None
+        if entry is None:
+            return None
+        try:
+            if bound_signature(entry['path']) != entry['signature']:
+                return None
+        except (HistoryUnavailable, OSError):
+            return None
+        return dict(entry['reply'])

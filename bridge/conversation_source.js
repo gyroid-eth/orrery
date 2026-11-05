@@ -46,10 +46,16 @@
   }
   class Source {
     constructor(fetcher=root.fetch.bind(root)){this.fetcher=fetcher;}
-    async read(agent,{before=null,after=null,signal}={}){
+    async read(agent,{before=null,after=null,signal,wait=0,reader=null}={}){
       const query=new URLSearchParams({agent});
       if(before!==null)query.set('before',before);
       if(after!==null)query.set('after',after);
+      // The server holds a poll of an unchanged record for up to `wait` s.
+      if(after!==null&&Number.isInteger(wait)&&wait>0){
+        query.set('wait',String(Math.min(wait,25)));
+        // This reader's id: its next held poll takes over this one's slot.
+        if(typeof reader==='string'&&/^[A-Za-z0-9_-]{16,64}$/.test(reader))query.set('reader',reader);
+      }
       const response=await this.fetcher('/telemetry/conversation?'+query,{cache:'no-store',signal});
       const payload=await response.json();
       if(!response.ok||payload.ok!==true){
