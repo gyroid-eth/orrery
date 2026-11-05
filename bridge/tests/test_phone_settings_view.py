@@ -36,17 +36,26 @@ class Node{constructor(tag){this.tagName=tag;this.children=[];this._text='';this
   set textContent(v){this._text=String(v);this.children=[];}
   get textContent(){return this._text+this.children.map(c=>c.textContent).join(' ');}
   addEventListener(t,f){this.listeners[t]=f;}
+  setAttribute(k,v){this[k]=String(v);}
+  scrollIntoView(){EVENTS.push('scroll:'+this.id);}
+  focus(){EVENTS.push('focus:'+this.id);}
   all(){return [this,...this.children.flatMap(c=>c.all())];}
   values(){return this.all().filter(n=>n.tagName==='input').map(n=>n.value+' '+n.placeholder).join(' ');}
 }
-const byId={};
+const byId={},EVENTS=[],PUTS=[];
 for(const id of ['phoneSettings','phoneBadge','settingsPopover'])byId[id]=new Node('div');
-global.document={getElementById:id=>byId[id]||null,createElement:t=>new Node(t)};
+global.document={getElementById:id=>byId[id]||byId.phoneSettings.all().find(n=>n.id===id)||null,createElement:t=>new Node(t)};
 global.window=global;
 """
 
 RUN = r"""
-global.fetch=async()=>({json:async()=>STATE});
+global.fetch=async(_,init)=>{
+  if(init.method==='PUT'){const body=JSON.parse(init.body);PUTS.push(body);
+    for(const k of ['access','send','owner_login','public_origin'])if(k in body)STATE.settings[k]=body[k];
+    if(body.policy_reviewed)STATE.settings.policy_reviewed_at='2026-11-05T01:02:03Z';}
+  return {json:async()=>JSON.parse(JSON.stringify(STATE))};
+};
+const tick=()=>new Promise(r=>setTimeout(r,5));
 global.navigator={clipboard:{writeText(){}}};
 require(SCRIPT);
 (async()=>{
@@ -54,12 +63,15 @@ require(SCRIPT);
   const missing=[];
   for(const step of STEPS){
     const all=byId.phoneSettings.all();
-    if(step[0]==='#'){const input=all.find(n=>n.id===step.slice(1));input.checked=!input.checked;input.listeners.change();continue;}
+    if(step[0]==='#'){const input=all.find(n=>n.id===step.slice(1));input.checked=!input.checked;input.listeners.change();await tick();continue;}
     const button=all.find(n=>n.tagName==='button'&&n.textContent===step);
-    if(button)button.listeners.click();else missing.push(step);
+    if(button){button.listeners.click();await tick();}else missing.push(step);
   }
   const root=byId.phoneSettings,inputs=Object.fromEntries(root.all().filter(n=>n.id).map(n=>[n.id,{disabled:n.disabled,checked:n.checked}]));
-  console.log(JSON.stringify({missing,badge:byId.phoneBadge.textContent,text:root.textContent,fields:root.values(),inputs}));
+  const order=root.all().map(n=>n.id||(n.className==='phone-note'?'note':'')).filter(Boolean);
+  const note=root.all().find(n=>n.className==='phone-note');
+  console.log(JSON.stringify({missing,badge:byId.phoneBadge.textContent,text:root.textContent,fields:root.values(),inputs,
+    order,note:note?note.textContent:null,events:EVENTS,puts:PUTS,reloads:global.RELOADS||[]}));
 })();
 """
 
@@ -77,10 +89,11 @@ def state(**over):
             "suggest": {"owner_login": OWNER, "public_origin": ORIGIN}, "cockpit": {"send": True}, **over}
 
 
-def draw(value, *, demo=False, steps=()):
+def draw(value, *, demo=False, steps=(), demo_reload=False):
     script = (DOM + f"const STATE={json.dumps(value)};const STEPS={json.dumps(list(steps))};"
               + f"const SCRIPT={json.dumps(str(ROOT / 'phone_settings.js'))};"
               + ("global.OrreryDemo={on:true};" if demo else "")
+              + ("global.RELOADS=[];global.OrreryDemo.reloadFor=v=>RELOADS.push(v);" if demo and demo_reload else "")
               + RUN)
     done = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=30)
     assert done.returncode == 0, done.stderr
@@ -137,6 +150,63 @@ def test_first_setup_in_demo_mode_offers_no_fields_to_fill():
 def test_editing_owner_after_review_says_the_review_is_asked_again():
     view = draw(state(), steps=("Change owner or address",))
     assert "step 4 again" in view["text"]
+
+
+# --- the line under the Phone access switch --------------------------------
+
+FIRST = {"access": False, "owner_login": "", "public_origin": "", "policy_reviewed_at": None}
+
+
+def under_the_switch(view):
+    order = view["order"]
+    return order.index("phoneAccess") < order.index("phoneSwitchNote") < order.index("phoneSend")
+
+
+def test_demo_mode_first_press_says_to_turn_off_demo_mode_right_under_the_switch():
+    view = draw(state(settings=FIRST), demo=True, steps=("#phoneAccess",), demo_reload=True)
+    assert "Turn off demo mode to set up phone access (once)" in view["note"]
+    assert "switch it on and off in demo mode" in view["note"]
+    assert under_the_switch(view)
+    assert view["puts"] == [] and view["badge"] == "OFF" and view["inputs"]["phoneAccess"]["checked"] is False
+    pressed = draw(state(settings=FIRST), demo=True, steps=("#phoneAccess", "Turn off demo mode"), demo_reload=True)
+    assert pressed["reloads"] == [False] and pressed["missing"] == []
+
+
+def test_nothing_is_said_under_the_switch_before_it_is_pressed():
+    assert draw(state(settings=FIRST), demo=True)["note"] is None
+    assert draw(state(settings=FIRST))["note"] is None
+
+
+def test_first_press_points_to_step_two_and_puts_the_cursor_there():
+    view = draw(state(settings=FIRST), steps=("#phoneAccess",))
+    assert "step 2 below" in view["note"] and "Confirm and turn on" in view["note"]
+    assert under_the_switch(view)
+    assert view["events"] == ["scroll:phoneStepOwner", "focus:phoneOwner"]
+    assert view["puts"] == [] and view["inputs"]["phoneAccess"]["checked"] is False
+    assert "Turn off demo mode" not in view["text"]
+
+
+def test_after_confirm_the_first_press_note_gives_way_to_what_is_still_off():
+    view = draw(state(settings=FIRST), steps=("#phoneAccess", "Confirm and turn on"))
+    assert view["puts"] and view["puts"][0]["access"] is True and view["missing"] == []
+    assert "step 2 below" not in view["note"]
+    assert "Conversation and Send from phone stay off until step 4" in view["note"]
+
+
+def test_on_before_the_policy_review_says_conversation_and_send_are_off():
+    view = draw(state(settings={"policy_reviewed_at": None}))
+    assert view["badge"] == "SETUP"
+    assert "Conversation and Send from phone stay off until step 4 below" in view["note"]
+    assert under_the_switch(view)
+
+
+@pytest.mark.parametrize("case", ["reviewed", "off", "manual"])
+def test_no_policy_line_when_it_would_not_be_true(case):
+    value = {"reviewed": state(),
+             "off": state(settings={"access": False, "policy_reviewed_at": None}),
+             "manual": state(settings={"access": False, "policy_reviewed_at": None},
+                             relay={"job": "absent", "listening": True, "manual": True})}[case]
+    assert draw(value)["note"] is None
 
 
 # --- desktop conversation history default, as cockpit.html runs it ----------
