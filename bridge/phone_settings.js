@@ -181,10 +181,13 @@
              again first, so a sign-in made since then is not told to sign in */
           hint='checking';render();
           refresh().then(function(){
+            if(hint!=='checking')return;  /* Settings was reopened, or a newer press answered first */
             var t=state&&state.tailscale,set2=state&&state.settings;
             if(!t||(set2&&set2.owner_login&&set2.public_origin)){hint='';render();return;}
             hint=t.found&&t.signed_in?'first':t.found?'signin':'install';
-            render();if(hint==='first')showStepTwo();
+            render();
+            var at=document.activeElement;  /* move the cursor only if it has not gone elsewhere meanwhile */
+            if(hint==='first'&&(!at||at===document.body||at.id==='phoneAccess'))showStepTwo();
           });
           return;
         }
