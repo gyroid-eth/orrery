@@ -129,6 +129,8 @@
   function switchNote(s,named,reviewed,manual){
     var words='';
     if(!named&&hint==='demo')words='Turn off demo mode to set up phone access (once). After that you can switch it on and off in demo mode.';
+    else if(!named&&hint==='checking')words='Checking Tailscale on this computer…';
+    else if(!named&&hint==='install')words='Not on yet: Tailscale was not found on this computer. Install it and sign in (step 1 below), then press Phone access again.';
     else if(!named&&hint==='signin')words='Not on yet: sign in to Tailscale on this computer first (step 1 below), then press Phone access again.';
     else if(!named&&hint==='first')words='Not on yet: check the owner and address in step 2 below, then press Confirm and turn on.';
     else if(s.settings.access&&named&&!reviewed&&!manual)words='On, but Conversation and Send from phone stay off until step 4 below (I reviewed the policy).';
@@ -173,9 +175,18 @@
           /* pressed again while step 2 is open: keep what was typed there */
           if(hint==='first'&&!demo()){showStepTwo();return;}
           setupOpen=true;
-          hint=demo()?'demo':!(ts.found&&ts.signed_in)?'signin':'first';
-          if(hint==='signin'){refresh();return;}  /* re-reads Tailscale, so the next press sees a new sign-in */
-          render();if(hint==='first')showStepTwo();return;
+          if(demo()){hint='demo';render();return;}
+          if(ts.found&&ts.signed_in){hint='first';render();showStepTwo();return;}
+          /* Tailscale looked missing or signed out when this was drawn: read it
+             again first, so a sign-in made since then is not told to sign in */
+          hint='checking';render();
+          refresh().then(function(){
+            var t=state&&state.tailscale,set2=state&&state.settings;
+            if(!t||(set2&&set2.owner_login&&set2.public_origin)){hint='';render();return;}
+            hint=t.found&&t.signed_in?'first':t.found?'signin':'install';
+            render();if(hint==='first')showStepTwo();
+          });
+          return;
         }
         change({access:on});
       }));

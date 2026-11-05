@@ -50,6 +50,7 @@ global.window=global;
 
 RUN = r"""
 global.fetch=async(_,init)=>{
+  if(global.HANG&&init.method==='GET')return new Promise(()=>{});
   if(init.method==='PUT'){const body=JSON.parse(init.body);PUTS.push(body);
     for(const k of ['access','send','owner_login','public_origin'])if(k in body)STATE.settings[k]=body[k];
     if(body.policy_reviewed)STATE.settings.policy_reviewed_at='2026-11-05T01:02:03Z';}
@@ -63,6 +64,8 @@ require(SCRIPT);
   const missing=[];
   for(const step of STEPS){
     const all=byId.phoneSettings.all();
+    if(step==='~hang'){global.HANG=true;continue;}
+    if(step[0]==='!'){eval('STATE.'+step.slice(1));continue;}
     if(step==='@open'){byId.settingsPopover.listeners.toggle({newState:'open'});await tick();continue;}
     if(step[0]==='='){const [id,...v]=step.slice(1).split('=');all.find(n=>n.id===id).value=v.join('=');continue;}
     if(step[0]==='#'){const input=all.find(n=>n.id===step.slice(1));input.checked=!input.checked;input.listeners.change();await tick();continue;}
@@ -199,6 +202,36 @@ def test_first_press_without_tailscale_sign_in_points_to_step_one():
     assert "step 2" not in view["note"]
     assert view["events"] == [] and view["puts"] == []
     assert "Tailscale is installed but not signed in" in view["text"]
+
+
+def test_sign_in_made_after_settings_opened_goes_straight_to_step_two():
+    view = draw(state(settings=FIRST, tailscale={"signed_in": False}),
+                steps=("!tailscale.signed_in=true", "#phoneAccess"))
+    assert "sign in" not in view["note"] and "step 2 below" in view["note"]
+    assert view["events"] == ["scroll:phoneStepOwner", "focus:phoneOwner"]
+    assert "not signed in" not in view["text"]
+
+
+def test_press_after_signing_in_goes_to_step_two_at_once():
+    # told to sign in, signs in in a terminal, presses again: the second press
+    # must already lead to step 2 (the switch's own view was drawn before)
+    view = draw(state(settings=FIRST, tailscale={"signed_in": False}),
+                steps=("#phoneAccess", "!tailscale.signed_in=true", "#phoneAccess"))
+    assert "step 2 below" in view["note"] and "sign in" not in view["note"]
+    assert view["events"] == ["scroll:phoneStepOwner", "focus:phoneOwner"]
+
+
+def test_while_tailscale_is_read_again_the_press_is_answered_at_once():
+    view = draw(state(settings=FIRST, tailscale={"signed_in": False}), steps=("~hang", "#phoneAccess"))
+    assert view["note"] == "Checking Tailscale on this computer…"
+    assert view["inputs"]["phoneAccess"]["checked"] is False
+
+
+def test_no_tailscale_on_this_computer_says_install_not_sign_in():
+    view = draw(state(settings=FIRST, tailscale={"found": False, "signed_in": False}), steps=("#phoneAccess",))
+    assert "not found on this computer" in view["note"] and "Install it" in view["note"]
+    assert "sign in to Tailscale" not in view["note"]
+    assert view["events"] == [] and view["puts"] == []
 
 
 def test_nothing_is_said_under_the_switch_before_it_is_pressed():
