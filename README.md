@@ -79,6 +79,8 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 
 ![送信後に履歴へ表示される記録待ちの行](docs/images/cockpit_history_pending.png)
 
+履歴の中身を見せる前には、必ず telemetry の dashboard でその agent の記録の対応を確かめます。記録が変わっていないという中身のない応答は、最後の確認から最大30秒、確かめずに返します。保持できるのは cockpit 全体で4本（1つのページでも最大4本）です。それを超えた pane は4秒ごとの読み込みになります（その後に通信・読み取り・描画の時間が加わります）。ただし、上限に達したときに記録が変わった pane は、2秒以上何も変わらずに保持している pane から枠を譲り受けます。譲った pane は4秒ごとの読み込みに戻ります。Hermes では、同じ state.db に別の session だけが書いた場合も記録が変わったと数えるので、中身の変わらない pane が枠を受け取ることがあります（そのとき、譲った pane は4秒ごとの読み込みになります）。利用者の操作の間は、どの tab でも保持をしません。操作がすべて終わった時点で保持に戻ります。操作として数えるのは、URL を開く・Finder や Explorer で表示する・Ghostty を開く・EXIT・spawn・記録の file の表示、clipboard の file の読み取り、file の preview、履歴の Load earlier と Retry、NETWORK の画面からの操作（jump・kill・EXIT・注記・spawn・再開）です。端末の path に mouse を重ねたときの確認、NETWORK の画面が自動で送る error 報告と、spawn の folder 一覧などの上に挙げていない GET は、利用者が押して始まったものでも数えません。操作は response の header が届いた時点で終わったと数えます（preview の本文を受け取っている間に保持が戻ることがあります）。操作は、自分の tab でも別の tab でも、90秒（dashboard が spawn に許す最長）を過ぎると数えるのをやめます。後から開いた tab は、開いたときに他の tab で進行中の操作を一度問い合わせます。NETWORK の画面が途中で移動したときは、その画面の操作をその時点で終わったと数えます。prompt の送信は WebSocket で送るので、保持とは接続を取り合いません。dashboard が API 36 以降なら、1人分を返す `/api/agents/<name>/history-binding` で確かめ、それより前の dashboard や、この route が使えないときは、従来どおり roster 全体で確かめます（[API](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/api.md)）。
+
 agent の発言にある Markdown の表は表として表示し、横にスクロールできます。**Copy Markdown** で元の表をコピーできます。
 
 ![agent の発言に含まれる表と Copy Markdown](docs/images/cockpit_history_table.png)

@@ -147,7 +147,7 @@ def artifact_item(item,p,index):
 class Reader:
     def __init__(self,row,stream):
         self.row,self.stream,self.path=row,stream,row['transcript_path']
-        self.provider=provider(row);self.sid=row.get('history_session_id');self.cwd=None;self.db=None;self.frames={};self.data_start=(0,0,0)
+        self.provider=provider(row);self.sid=row.get('history_session_id');self.cwd=None;self.db=None;self.frames={};self.data_start=(0,0,0);self.last_fingerprint=None
         st=os.fstat(stream.fileno())
         self.file_id=hashlib.sha256(json.dumps([self.path,st.st_dev,st.st_ino,self.sid,
              row.get('history_receipt_ts'),self.provider]).encode()).hexdigest()[:24]
@@ -358,6 +358,46 @@ class Reader:
                 offset+=len(line)
         return records,first,last
 
+    def zstd_backward(self,start,end,bounds):
+        """Records of the frame chain ending at `end`, newest first, decoded lazily.
+
+        The same chain walk and budgets as zstd_records(forward=False); a caller
+        that stops early leaves older frames undecoded. `bounds` receives the
+        oldest decoded frame and the chain end, as zstd_records returns them.
+        """
+        data=os.pread(self.fileno(),end-start,start);candidates=[];at=len(data)
+        bounds.update(first=start,last=start)
+        for _ in range(8192):
+            at=data.rfind(MAGIC,0,at)
+            if at<0:break
+            candidates.append(start+at)
+        chain_end=None;last=None;decoded_bytes=0;count=0;self.frames={}
+        for pos in candidates:
+            candidate=memoryview(data)[pos-start:]
+            try:nxt=self.frame(pos,data=candidate,decode=False)
+            except HistoryUnavailable:
+                continue  # Possible magic bytes inside a compressed block.
+            if nxt is None:
+                if chain_end is None:chain_end=pos;last=pos;bounds['last']=pos
+                continue
+            if chain_end is not None and nxt!=chain_end:continue
+            if chain_end is None and nxt!=end:
+                if self.frame(nxt,data=memoryview(data)[nxt-start:],decode=False) is not None:continue
+                chain_end=nxt;last=nxt;bounds['last']=nxt
+            raw,_=self.frame(pos,data=candidate)
+            if decoded_bytes+len(raw)>MAX_SCAN or count>=512:break
+            decoded_bytes+=len(raw);count+=1;chain_end=pos;bounds['first']=pos
+            if last is None:last=nxt;bounds['last']=nxt
+            self.frames[pos]=(raw,nxt)
+            lines=[];offset=0
+            for line in raw.splitlines(keepends=True):
+                if not line.endswith(b'\n'):raise HistoryUnavailable('history_format_unsupported')
+                lines.append((pos,offset,line,nxt));offset+=len(line)
+            yield from reversed(lines)
+        if last is None:
+            if start==0:self.frame(0)  # Explicit corruption/unsupported error.
+            bounds.update(first=start,last=start)
+
     def read_page(self,*,before=None,after=None,limit=PAGE_SIZE):
         if before is not None and after is not None:raise HistoryUnavailable('invalid_cursor')
         if not 1<=limit<=200:raise HistoryUnavailable('invalid_limit')
@@ -379,18 +419,41 @@ class Reader:
             for loc in (a,b):
                 if loc and (loc[1] or loc[0] and os.pread(self.fileno(),1,loc[0]-1)!=b'\n'):
                     raise HistoryUnavailable('invalid_cursor')
-        records,first,last=self.zstd_records(start,end,a is not None) if compressed else self.json_records(start,end,a is not None)
         entries=[]
-        for n,(pos,line,raw,nxt) in enumerate(records):
-            item=parse(raw);events=normalize(item,self.provider,self.sid)
-            for k,(index,event) in enumerate(events):
-                loc=(pos,line,index)
-                if k+1<len(events):next_loc=(pos,line,events[k+1][0])
-                elif compressed and n+1<len(records) and records[n+1][0]==pos:next_loc=(pos,records[n+1][1],0)
-                else:next_loc=(nxt,0,0)
-                if b is not None and loc>=b or a is not None and loc<a:continue
-                event=dict(event,id=':'.join(map(str,loc)),cursor_before=self.cursor(loc),cursor_after=self.cursor(next_loc))
-                entries.append(event)
+        if a is not None:
+            records,first,last=self.zstd_records(start,end,True) if compressed else self.json_records(start,end,True)
+            for n,(pos,line,raw,nxt) in enumerate(records):
+                item=parse(raw);events=normalize(item,self.provider,self.sid)
+                for k,(index,event) in enumerate(events):
+                    loc=(pos,line,index)
+                    if k+1<len(events):next_loc=(pos,line,events[k+1][0])
+                    elif compressed and n+1<len(records) and records[n+1][0]==pos:next_loc=(pos,records[n+1][1],0)
+                    else:next_loc=(nxt,0,0)
+                    if b is not None and loc>=b or loc<a:continue
+                    event=dict(event,id=':'.join(map(str,loc)),cursor_before=self.cursor(loc),cursor_after=self.cursor(next_loc))
+                    entries.append(event)
+        else:
+            # Newest first, stopping at the page limit: the same page as the
+            # whole window's last `limit` events, without parsing (or for
+            # dsh, decompressing) the older records of the window.
+            if compressed:
+                bounds={};newest=self.zstd_backward(start,end,bounds)
+            else:
+                records,first,last=self.json_records(start,end,False);newest=reversed(records)
+            later=None
+            for pos,line,raw,nxt in newest:
+                item=parse(raw);events=normalize(item,self.provider,self.sid)
+                for k in range(len(events)-1,-1,-1):
+                    index,event=events[k];loc=(pos,line,index)
+                    if k+1<len(events):next_loc=(pos,line,events[k+1][0])
+                    elif compressed and later is not None and later[0]==pos:next_loc=(pos,later[1],0)
+                    else:next_loc=(nxt,0,0)
+                    if b is not None and loc>=b:continue
+                    entries.append(dict(event,id=':'.join(map(str,loc)),cursor_before=self.cursor(loc),cursor_after=self.cursor(next_loc)))
+                later=(pos,line)
+                if len(entries)>=limit:break
+            entries.reverse()
+            if compressed:first,last=bounds['first'],bounds['last']
         chosen=entries[:limit] if a is not None else entries[-limit:]
         oldest=chosen[0]['cursor_before'] if chosen else self.cursor((first,0,0))
         newest=(chosen[-1]['cursor_after'] if len(entries)>limit and a is not None else self.cursor((last,0,0)))
@@ -399,9 +462,14 @@ class Reader:
                     has_newer=a is not None and self.location(newest)[0]<self.size and newest!=after,
                     skipped_large_record=False,mode='cursor',notice='Recorded append timeline · not the current model context' if self.provider=='dsh' else '')
 
-    def snapshot(self,before,after,limit):
-        marker=self.file_id+':snapshot'
-        if before is not None or after not in {None,marker}:raise HistoryUnavailable('history_changed')
+    def snapshot_rows(self):
+        """The rows a snapshot shows: (rows newest first, limited, boundary id).
+
+        The one scan behind both snapshot() and session_fingerprint(): the same
+        SQL, the same MAX_SCAN byte budget and 200-row cap, the same model_only
+        exclusion. Rows past the budget are never read, so a session with very
+        large rows costs what the snapshot costs.
+        """
         self.db.row_factory=sqlite3.Row
         rows=self.db.execute('''SELECT id,role,substr(content,1,65537) AS content,
             substr(tool_calls,1,1048576) AS tool_calls,tool_call_id,tool_name,timestamp,display_metadata
@@ -410,14 +478,30 @@ class Reader:
             AND CASE WHEN display_metadata IS NULL THEN 1 WHEN json_valid(display_metadata)
                 THEN COALESCE(json_extract(display_metadata,'$.model_only'),0)=0 ELSE 0 END
             ORDER BY id DESC LIMIT 201''',(self.sid,))
-        visible=[];budget=0;limited=False
+        visible=[];budget=0;limited=False;boundary=None
         for row in rows:
             item=dict(row);size=len(json.dumps(item).encode())
-            if budget+size>MAX_SCAN or len(visible)>=200:limited=True;break
+            if budget+size>MAX_SCAN or len(visible)>=200:limited=True;boundary=item['id'];break
             budget+=size
             metadata=parse(item.get('display_metadata') or '{}')
             if metadata.get('model_only'):continue
             visible.append(item)
+        return visible,limited,boundary
+
+    @staticmethod
+    def rows_digest(visible,limited,boundary):
+        """Digest of the shown rows and where the window stopped."""
+        digest=hashlib.sha256(json.dumps([limited,boundary]).encode())
+        for item in visible:
+            digest.update(json.dumps(item,sort_keys=True,default=str).encode());digest.update(b'\n')
+        return digest.hexdigest()
+
+    def snapshot(self,before,after,limit):
+        marker=self.file_id+':snapshot'
+        if before is not None or after not in {None,marker}:raise HistoryUnavailable('history_changed')
+        visible,limited,boundary=self.snapshot_rows()
+        # The same scan's digest: a full read needs no second query for it.
+        self.last_fingerprint=self.rows_digest(visible,limited,boundary)
         events=[]
         for item in reversed(visible):
             for index,event in normalize(item,'hermes',self.sid):
@@ -427,9 +511,36 @@ class Reader:
                     mode='snapshot',limited=limited or len(events)>200,
                     notice='Hermes · active bound segment snapshot (up to 200 events); earlier/compacted segments are not included')
 
-    def record_at(self,event_id):
+    def session_fingerprint(self):
+        """Hermes: the digest of exactly what a snapshot would show now.
+
+        Another session writing to the shared state.db changes the file but
+        not this; any change to a shown row of this session does (a same-length
+        edit, a role or tool change, the budget's boundary moving). A row past
+        the budget is not shown, so its change does not count. Never published:
+        it only lets a held poll tell "nothing new for this session" from
+        "read again".
+        """
+        if self.provider!='hermes':return None
+        return self.rows_digest(*self.snapshot_rows())
+
+    def record_at(self,event_id,cache=None):
+        """`cache` (one page's decoration only) shares a record among its blocks."""
         try:pos,line,index=map(int,event_id.split(':'))
         except (ValueError,AttributeError):raise HistoryUnavailable('reference_expired') from None
+        if cache is not None:
+            if (pos,line) not in cache:
+                try:cache[(pos,line)]=self.record((pos,line))
+                except HistoryUnavailable as exc:cache[(pos,line)]=exc
+            found=cache[(pos,line)]
+            if isinstance(found,HistoryUnavailable):raise HistoryUnavailable(str(found))
+            item,raw,indexes=found
+        else:item,raw,indexes=self.record((pos,line))
+        if index not in indexes:raise HistoryUnavailable('reference_expired')
+        return artifact_item(item,self.provider,index),hashlib.sha256(raw).digest()
+
+    def record(self,location):
+        pos,line=location
         if self.provider=='hermes':
             self.db.row_factory=sqlite3.Row
             found=self.db.execute('''SELECT id,role,substr(content,1,65537) AS content,
@@ -451,16 +562,20 @@ class Reader:
         else:
             if line or pos and os.pread(self.fileno(),1,pos-1)!=b'\n':raise HistoryUnavailable('reference_expired')
             raw=os.pread(self.fileno(),MAX_RECORD+1,pos).split(b'\n',1)[0];item=parse(raw)
-        if len(raw)>MAX_RECORD or index not in dict(normalize(item,self.provider,self.sid)):
-            raise HistoryUnavailable('reference_expired')
-        return artifact_item(item,self.provider,index),hashlib.sha256(raw).digest()
+        if len(raw)>MAX_RECORD:raise HistoryUnavailable('reference_expired')
+        return item,raw,frozenset(dict(normalize(item,self.provider,self.sid)))
 
     def close(self):
         if self.db is not None:self.db.close()
 
 
+class InodeMismatch(HistoryUnavailable):
+    """The opened file is not the (dev, inode) the caller confirmed; nothing was read."""
+
+
 @contextmanager
-def open_reader(row):
+def open_reader(row,expect_inode=None):
+    """`expect_inode`: compare the bare descriptor before the Reader reads a byte."""
     if row.get('history_binding')!='bound':
         raise HistoryUnavailable('history_stale' if row.get('history_binding')=='stale' else 'history_unconfirmed')
     p=provider(row);path=row.get('transcript_path')
@@ -471,6 +586,9 @@ def open_reader(row):
     reader=None
     try:
         with open_bound_transcript(path) as stream:
+            if expect_inode is not None:
+                info=os.fstat(stream.fileno())
+                if (info.st_dev,info.st_ino)!=tuple(expect_inode):raise InodeMismatch('history_changed')
             reader=Reader(row,stream);yield reader
     except sqlite3.Error:raise HistoryUnavailable('history_unreadable') from None
     finally:
