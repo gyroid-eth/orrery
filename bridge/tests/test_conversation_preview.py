@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from conversation_artifacts import extract_artifacts, redact
+from conversation_artifacts import extract_artifacts
 from conversation_preview import ReferenceStore, PreviewUnavailable
 
 
@@ -71,11 +71,13 @@ def test_reference_is_opaque_bound_and_rechecks_original_record(tmp_path):
     with pytest.raises(PreviewUnavailable): preview(store,row,event)
 
 
-@pytest.mark.parametrize('name',['.env','auth.json','token.txt','private.key','secrets/config.txt','id_rsa','storage.sqlite3'])
-def test_secret_files_denied_before_read(tmp_path,name):
-    path=tmp_path/name;path.parent.mkdir(exist_ok=True);path.write_text('DO_NOT_READ')
+@pytest.mark.parametrize('name',['auth.json','token.txt','api_key.md','secrets/config.txt','credentials.yaml','private/notes.txt'])
+def test_secret_like_names_are_previewed(tmp_path,name):
+    # The owner decides; names alone never hide a recorded workspace file.
+    path=tmp_path/name;path.parent.mkdir(exist_ok=True);path.write_text('fixture body')
     store,row,event=setup(tmp_path,call('read_file',{'path':name}))
-    assert not event.get('references')
+    assert event['references'][0]['label']==Path(name).name
+    assert preview(store,row,event)['text']=='fixture body'
 
 
 def test_containment_symlinks_hardlinks_fifo_and_late_swaps(tmp_path):
@@ -94,18 +96,17 @@ def test_containment_symlinks_hardlinks_fifo_and_late_swaps(tmp_path):
     with pytest.raises(PreviewUnavailable): preview(store,row,event)
 
 
-def test_text_limit_mime_redaction_and_recorded_diff_not_disk(tmp_path):
+def test_text_limit_mime_verbatim_text_and_recorded_diff_not_disk(tmp_path):
     (tmp_path/'a.txt').write_text('sk-proj-'+'x'*40+'\ncurrent disk')
     patch='*** Begin Patch\n*** Update File: a.txt\n@@\n-old recorded\n+new recorded\n*** End Patch'
     store,row,event=setup(tmp_path,call('apply_patch',input=patch))
     assert 'new recorded' in event['diff'] and 'current disk' not in event['diff']
     result=preview(store,row,event)
-    assert '[redacted]' in result['text'] and 'sk-proj-' not in result['text']
+    assert result['text']=='sk-proj-'+'x'*40+'\ncurrent disk'
     (tmp_path/'a.txt').write_text('x'*(128*1024+1))
     with pytest.raises(PreviewUnavailable): preview(store,row,event)
     (tmp_path/'a.txt').write_bytes(b'\x89PNG\x00not text')
     with pytest.raises(PreviewUnavailable): preview(store,row,event)
-    assert redact('Authorization: Bearer abcdefghijklmnopqrstuvwxyz')=='Authorization: Bearer [redacted]'
 
 
 def test_raster_reencoded_and_explicit_image_root_is_not_text_grant(tmp_path):
@@ -133,10 +134,10 @@ def test_oversized_pixels_and_expiring_bounded_reference_store(tmp_path):
     with pytest.raises(PreviewUnavailable): preview(store,row,event)
 
 
-def test_remote_html_and_secret_diff_stay_inert(tmp_path):
-    patch='*** Begin Patch\n*** Add File: .env\n+TOKEN=hidden\n*** End Patch'
+def test_remote_html_stays_inert_and_secret_named_diff_is_shown_verbatim(tmp_path):
+    patch='*** Begin Patch\n*** Add File: .env\n+NOTE=visible\n+api_key=hidden\n*** End Patch'
     result=extract_artifacts(call('apply_patch',input=patch))
-    assert not result['paths'] and 'hidden' not in result['diff']
+    assert result['paths']==['.env'] and '+NOTE=visible' in result['diff'] and '+api_key=hidden' in result['diff']
     store,row,event=setup(tmp_path,call('view_image',{'path':'https://example.test/image.png'}))
     assert not event.get('references')
 

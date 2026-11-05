@@ -233,9 +233,8 @@ def bound_agent(payload: object, name: str, *, api_generation: int = 34) -> dict
     if program not in {'codex','codex-cli'} and api_generation < 35:
         raise HistoryUnavailable('dashboard_upgrade_required')
     if row.get('history_binding') != 'bound' or not isinstance(row.get('transcript_path'),str):
-        from conversation_artifacts import redact
         error=HistoryUnavailable('history_stale' if row.get('history_binding')=='stale' else 'history_unconfirmed')
-        error.reason=redact(str(row.get('history_binding_reason') or ''))[:512]
+        error.reason=str(row.get('history_binding_reason') or '')[:512]
         error.reason_code=str(row.get('history_binding_reason_code') or '')[:128]
         raise error
     if program not in {'codex','codex-cli'} and not row.get('history_session_id'):

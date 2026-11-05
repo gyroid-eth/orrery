@@ -66,18 +66,18 @@ def test_codex_static_exec_mail_projection_rejects_quoted_and_computed_calls(tmp
     assert read('await tools.mcp__orrery_mail__send_message(dynamicArgs)')['kind']=='tool'
 
 
-def test_mail_projection_redacts_caps_and_never_exports_auth_or_results():
+def test_mail_projection_shows_body_verbatim_caps_and_never_exports_auth_or_results():
     from conversation_mail import sent,received,MAX_BODY
     event=dict(id='fixture',kind='tool',role='assistant',text=TOOL)
     value=dict(ARGS,importance=[],body_md='api_key=fixture-secret\n'+'z'*(MAX_BODY+100))
     result=sent(event,TOOL,value)
     mail=result['mail'][0]
     assert mail['importance']=='normal' and mail['truncated'] and len(mail['body'])<=MAX_BODY
-    assert 'fixture-secret' not in json.dumps(result) and 'HIDDEN_' not in json.dumps(result)
+    assert mail['body'].startswith('api_key=fixture-secret\n') and 'HIDDEN_' not in json.dumps(result)
     assert sent(event,['invalid'],value)==event
     assert sent(event,TOOL,[])==event
     user=dict(id='n',kind='text',role='user',text=NOTICE.replace('Generated full message','password=fixture-secret'))
-    assert 'fixture-secret' not in json.dumps(received(user))
+    assert 'password=fixture-secret' in json.dumps(received(user))
 
 
 def test_mail_static_batch_is_bounded_and_quoted_tool_text_is_not_a_send():

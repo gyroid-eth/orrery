@@ -51,7 +51,6 @@ from usage_probe import (
     provider_from_quota_payload,
 )
 from conversation_history import (HistoryUnavailable, UnchangedPolls, bound_agent, bound_signature, open_reader)
-from conversation_artifacts import redact
 from conversation_mail import received as recorded_mail
 from conversation_preview import ReferenceStore, PreviewUnavailable, binding as conversation_binding
 
@@ -2188,7 +2187,6 @@ async def conversation_full_read(request, name, query, cursor, limit, polls, sta
         polls.remember(name,row,result,signature,checked,digest,provider=provider,fingerprint=fingerprint)
     for index,event in enumerate(result['events']):
         event=recorded_mail(event);result['events'][index]=event
-        event['text'] = redact(event['text'])
     empty=(cursor is not None and query.get('before') is None and not result['events']
            and not result.get('has_newer'))
     return dict(result,provider=provider),empty
@@ -2275,7 +2273,6 @@ async def serve_conversation(request: web.Request) -> web.Response:
             return await conversation_legacy_read(request, name, query, limit, wait, polls, stats, bound_row)
         for index,event in enumerate(result['events']):
             event=recorded_mail(event);result['events'][index]=event
-            event['text'] = redact(event['text'])
         return web.json_response(dict(result, ok=True, agent=name, provider=provider),
                                  headers={"Cache-Control": "no-store"})
     except HistoryUnavailable as exc:

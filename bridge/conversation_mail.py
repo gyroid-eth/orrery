@@ -5,7 +5,7 @@ A recognized notification is recorded text, not proof of authenticated delivery.
 """
 import json
 import re
-from conversation_artifacts import MAX_INPUT,redact,static_calls
+from conversation_artifacts import MAX_INPUT,static_calls
 
 MAX_BODY=65536
 MAX_ITEMS=8
@@ -18,7 +18,7 @@ MARKERS=(('. Body (complete; no inbox fetch needed): ','complete'),('. Body prev
 
 
 def safe(value,limit):
-    return redact(value)[:limit] if isinstance(value,str) else ''
+    return value[:limit] if isinstance(value,str) else ''
 
 
 def received(event):
