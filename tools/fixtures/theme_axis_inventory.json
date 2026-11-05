@@ -2,8 +2,8 @@
   "axes": {
     "background": {
       "effect": {
-        "digest": "b4617490ccae5bf24d6a49df262afe0ad560993aca38b41446999374e83522ae",
-        "expected": 345,
+        "digest": "6376d2f435d1a89afd501c000084dd74177a40a11839628925b8d2085478f19c",
+        "expected": 358,
         "records": [
           {
             "property": "background",
@@ -1266,6 +1266,71 @@
             "value": "1px solid var(--hair)"
           },
           {
+            "property": "border",
+            "selector": ".phone-badge",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-badge",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border-left",
+            "selector": ".phone-sub",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-line",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-line .dot",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".phone-step+.phone-step",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "border",
+            "selector": ".phone-num",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-num",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-who",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".phone-code",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".phone-code",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-code",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-field span",
+            "value": "var(--ink-faint)"
+          },
+          {
             "property": "color",
             "selector": ".toast",
             "value": "var(--ink)"
@@ -1876,8 +1941,8 @@
     },
     "dim-contrast": {
       "effect": {
-        "digest": "386a65a97b17d2298f0534924a58fc327655f28a677d2691de2d0956f0c4a5cc",
-        "expected": 128,
+        "digest": "fca9e6149f8781fe5b6d23f412b80064f44098e78a6521c631bf32c08513b996",
+        "expected": 135,
         "records": [
           {
             "property": "color",
@@ -2373,6 +2438,41 @@
             "property": "color",
             "selector": ".settings-choice",
             "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-badge",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-line",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-line .dot",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-num",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-who",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-code",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-field span",
+            "value": "var(--ink-faint)"
           },
           {
             "property": "color",
@@ -3211,8 +3311,8 @@
         "unit": "element"
       },
       "source": {
-        "digest": "6afbaf1c646834d042c3ddcfa99469f72aafa466ee714355d06ba8803df70134",
-        "expected": 126,
+        "digest": "8e699619df4315056edf3b2f2e8032c651e29f863d239fe1bdc99dc048a3672b",
+        "expected": 135,
         "records": [
           {
             "line": 193,
@@ -3859,49 +3959,112 @@
             "value": "9px"
           },
           {
-            "line": 1092,
+            "line": 1088,
+            "property": "font-size",
+            "selector": ".phone-badge",
+            "source": "bridge/cockpit.html",
+            "value": "8px"
+          },
+          {
+            "line": 1096,
+            "property": "font-size",
+            "selector": ".phone-line",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 1097,
+            "property": "font-size",
+            "selector": ".phone-line .dot",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 1103,
+            "property": "font-size",
+            "selector": ".phone-num",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 1106,
+            "property": "font-size",
+            "selector": ".phone-who",
+            "source": "bridge/cockpit.html",
+            "value": "8px"
+          },
+          {
+            "line": 1107,
+            "property": "font-size",
+            "selector": ".phone-code",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 1110,
+            "property": "font-size",
+            "selector": ".phone-field span",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 1113,
+            "property": "font-size",
+            "selector": ".phone-actions .cockpit-control",
+            "source": "bridge/cockpit.html",
+            "value": "8.5px"
+          },
+          {
+            "line": 1114,
+            "property": "font-size",
+            "selector": ".phone-message",
+            "source": "bridge/cockpit.html",
+            "value": "9px"
+          },
+          {
+            "line": 1119,
             "property": "font-size",
             "selector": ".toast",
             "source": "bridge/cockpit.html",
             "value": "10.5px"
           },
           {
-            "line": 1129,
+            "line": 1156,
             "property": "font-size",
             "selector": ".pane-drag-ghost small",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1140,
+            "line": 1167,
             "property": "font-size",
             "selector": ".pane-float-bar .hint",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1141,
+            "line": 1168,
             "property": "font-size",
             "selector": ".pane-float-bar button",
             "source": "bridge/cockpit.html",
             "value": "10px"
           },
           {
-            "line": 1150,
+            "line": 1177,
             "property": "font-size",
             "selector": ".pane-out-chip",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 1155,
+            "line": 1182,
             "property": "font-size",
             "selector": ".pane-out-chip .where",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 1156,
+            "line": 1183,
             "property": "font-size",
             "selector": ".pane-out-chip .back",
             "source": "bridge/cockpit.html",
@@ -4110,8 +4273,8 @@
         "unit": "element"
       },
       "source": {
-        "digest": "4141ef875c25c5212541d51cdd46a851ae1efd9b976c7d358fb10ccf5d077c0a",
-        "expected": 39,
+        "digest": "ec9300175da2942b118cb91567ca07e7828da5328ddde97f5b6ad916ea4b22f2",
+        "expected": 42,
         "records": [
           {
             "line": 224,
@@ -4324,14 +4487,35 @@
             "value": ".13em"
           },
           {
-            "line": 1129,
+            "line": 1088,
+            "property": "letter-spacing",
+            "selector": ".phone-badge",
+            "source": "bridge/cockpit.html",
+            "value": ".14em"
+          },
+          {
+            "line": 1106,
+            "property": "letter-spacing",
+            "selector": ".phone-who",
+            "source": "bridge/cockpit.html",
+            "value": ".14em"
+          },
+          {
+            "line": 1110,
+            "property": "letter-spacing",
+            "selector": ".phone-field span",
+            "source": "bridge/cockpit.html",
+            "value": ".12em"
+          },
+          {
+            "line": 1156,
             "property": "letter-spacing",
             "selector": ".pane-drag-ghost small",
             "source": "bridge/cockpit.html",
             "value": ".1em"
           },
           {
-            "line": 1155,
+            "line": 1182,
             "property": "letter-spacing",
             "selector": ".pane-out-chip .where",
             "source": "bridge/cockpit.html",
@@ -4391,7 +4575,7 @@
       }
     }
   },
-  "inventory_digest": "045531cb1c7c7994086019c0feef6cef9ed563d9ebfc487910753e4cc6a2c9ee",
+  "inventory_digest": "08027c3b04d7723be23f900bd9a20a8218fb615500ed4b262cdfcc8efafda7c3",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -4403,9 +4587,9 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "255e2d147a74f7d1106a6003b743c668c08454c1bc4726bda92d8b38bf1ad3ac",
+  "source_digest": "823a7711adf992273a3b37b26133e8576caacf50f5887ec466d6b89d10764dcf",
   "source_files": {
-    "bridge/cockpit.html": "9cc2b7636d27972551fa0f9b67ac5e2c4617b1456986ae9a5dd680670ca1788c",
+    "bridge/cockpit.html": "185dc5cb4e9fcde79f2197801a7dd280e8313b3a840ded5818de0b0e18eb75eb",
     "bridge/mail_view.css": "4c65a93dd1b338a3f4304651173a53a7ed489860ecec2bc86014d253bbcde898",
     "bridge/orrery_view.css": "ad0adcc4a4bc1867240ea68bb37c36d1bdd73b8e198c7e5ebba92343c78c26cd"
   },

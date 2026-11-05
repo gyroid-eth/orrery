@@ -71,6 +71,14 @@ Finder から起動する desktop app と Python backend が同じ file を読�
 
 戻すときは`false`にするか項目を除き、独自の起動引数に`--enable-mobile-terminal`があればそれも外して、同じ手順で再起動します。
 
+### SettingsのPhone
+
+**Settings → Phone**の**Phone access**と**Send from phone**は、Telemetryの`agentstack-mobile`（既定`~/.agentstack/bin/agentstack-mobile`、`AGENTSTACK_HOME`に従う）を呼びます。cockpitはTelemetryのfileやlaunchdを直接操作しません。backendのroute `GET`・`PUT /telemetry/mobile`は、このcommandの結果を返すだけで、ほかのrouteと同じくloopbackの自分のpageとJSONの書き込みしか受け付けません。phoneからは届きません。
+
+**Send from phone**を切り替えると、このbackendのadapterがその場で切り替わり（再起動なし）、上の`enable_mobile_terminal`も同じ値に書き換えます。ほかのkeyはそのまま残します。fileがJSONとして読めないときは書き換えず、その実行中だけ切り替えます。terminalで`agentstack-mobile off`などを実行した場合は、次にSettingsを開いたときにadapterと`enable_mobile_terminal`が揃います。ただし、手で起動したreaderが8781で動いている間（節に**MANUAL**と出る）と、Settingsを一度も使っていない間は、今までどおり`enable_mobile_terminal`の値のまま変えません。手で起動したreaderでTerminalを使っている人は、更新しても何も変わりません。
+
+demo modeでは、Phoneの節はTailscaleのlogin・スマホで開くaddress・ServeのURLを画面に出しません（demo modeが隠すのはユーザー名と機械名だけです）。Telemetryが無いときは、節に「agentstack-mobile was not found」と出ます。手順と制限は[Telemetryのスマホ手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md#cockpitのsettingsからオンにする)を参照してください。
+
 ### Desktop app の environment
 
 `~/.zshrc` で export した `AGENTSTACK_ORRERY_ROOT` や `ORRERY_BACKEND_*` は Finder 起動には渡りません。通常の Finder 起動は `config.json` の `orrery_root` を使い、env override は `npm run dev` または app bundle 内 executable を同じ terminal から直接起動する場合に使います。

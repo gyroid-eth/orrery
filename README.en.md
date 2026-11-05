@@ -67,7 +67,7 @@ Pick an agent in the roster on the left, give instructions in the terminal in th
 
 ### Read a conversation (Conversation history)
 
-An agent using an alternate-screen TUI cannot be reviewed with terminal scrollback alone. Conversation history displays its recorded conversation in a read-only panel. Turn on **Settings → Appearance → Conversation history** and press **HISTORY** in the pane. The setting is off by default; turning it off closes the panel, removes the button, and stops history reads.
+An agent using an alternate-screen TUI cannot be reviewed with terminal scrollback alone. Conversation history displays its recorded conversation in a read-only panel. Press **HISTORY** in the pane. The setting is on by default; turning off **Settings → Appearance → Conversation history** closes the panel, removes the button, and stops history reads.
 
 ![History panel with a fictional conversation](docs/images/cockpit_history.png)
 
