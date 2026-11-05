@@ -77,7 +77,7 @@ Finder から起動する desktop app と Python backend が同じ file を読�
 
 **Send from phone**を切り替えると、このbackendのadapterがその場で切り替わり（再起動なし）、上の`enable_mobile_terminal`も同じ値に書き換えます。ほかのkeyはそのまま残します。fileがJSONとして読めないときは書き換えず、その実行中だけ切り替えます。terminalで`agentstack-mobile off`などを実行した場合は、次にSettingsを開いたときにadapterと`enable_mobile_terminal`が揃います。ただし、手で起動したreaderが8781で動いている間（節に**MANUAL**と出る）と、Settingsを一度も使っていない間は、今までどおり`enable_mobile_terminal`の値のまま変えません。手で起動したreaderでTerminalを使っている人は、更新しても何も変わりません。
 
-demo modeでは、Phoneの節はTailscaleのlogin・スマホで開くaddress・ServeのURLを画面に出しません（demo modeが隠すのはユーザー名と機械名だけです）。Telemetryが無いときは、節に「agentstack-mobile was not found」と出ます。手順と制限は[Telemetryのスマホ手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md#cockpitのsettingsからオンにする)を参照してください。
+demo modeでは、Phoneの節はTailscaleのlogin・スマホで開くaddress・ServeのURLを画面に出しません（demo modeが隠すのはユーザー名と機械名だけです）。そのためloginとaddressはdemo modeでは設定できず、未設定のまま**Phone access**を押すと、スイッチのすぐ下にdemo modeを切って1回設定するよう出ます（**Turn off demo mode**のボタン付き）。設定した後は、demo modeのままオン・オフできます。Telemetryが無いときは、節に「agentstack-mobile was not found」と出ます。手順と制限は[Telemetryのスマホ手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md#cockpitのsettingsからオンにする)を参照してください。
 
 ### Desktop app の environment
 

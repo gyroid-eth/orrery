@@ -25,7 +25,7 @@
   var badge=document.getElementById('phoneBadge');
   var popover=document.getElementById('settingsPopover');
   if(!root)return;
-  var state=null,busy=false,message='',editing=false,setupOpen=false;
+  var state=null,busy=false,message='',editing=false,setupOpen=false,hint='';
   var MESSAGES={
     telemetry_missing:'Phone access needs ORRERY Telemetry: agentstack-mobile was not found.',
     identity_invalid:'Check the login and address: the address must be https://<name>.ts.net:9443.',
@@ -74,7 +74,7 @@
     busy=true;message='';render();
     var value=await call('PUT',body);
     busy=false;
-    if(value.ok){state=value;editing=false;setupOpen=false;if(value.warning)message=text(value.warning);}
+    if(value.ok){state=value;editing=false;setupOpen=false;hint='';if(value.warning)message=text(value.warning);}
     else message=text(value.error);
     render();
   }
@@ -108,7 +108,8 @@
     else if(!named||editing){fields=identityFields(s);body.push(el('div','settings-help','Filled in from Tailscale. Only this login is let in.'+(set.policy_reviewed_at?' Changing them asks you to confirm step 4 again.':'')),fields.box);
       var act=el('div','phone-actions');act.append(button(set.access||!named?'Confirm and turn on':'Confirm',function(){var v=fields.value();v.access=true;change(v);},true));body.push(act);}
     else body.push(el('div','settings-help',demo()?'Set ('+HIDDEN+')':set.owner_login+' · '+set.public_origin));
-    list.append(step(named&&!editing,signed&&(!named||editing),2,'Owner and address','you · once',body));
+    var two=step(named&&!editing,signed&&(!named||editing),2,'Owner and address','you · once',body);two.id='phoneStepOwner';
+    list.append(two);
     var served=ts.serve==='ok';
     var serveBody=[el('div','settings-help',served?(demo()?'9443 → this computer (address '+HIDDEN+')':'https://'+ts.dns_name+':9443 → this computer'):'Run this once in a terminal; ORRERY only reads the result.')];
     if(!served){serveBody.push(el('div','phone-code','tailscale serve --https=9443 http://127.0.0.1:'+s.relay.port));
@@ -119,6 +120,32 @@
     if(!reviewed){var a3=el('div','phone-actions');a3.append(button('I reviewed the policy',function(){change({policy_reviewed:true});},true));policyBody.push(a3);}
     list.append(step(reviewed,named&&served&&!reviewed,4,'Who can reach it','you · admin console',policyBody));
     return list;
+  }
+
+  /* One line right under the Phone access switch, for the three places where
+     the switch alone said nothing: demo mode before the first setup, the first
+     press (the switch stays off until step 2 is confirmed), and ON before the
+     policy review (badge SETUP). */
+  function switchNote(s,named,reviewed,manual){
+    var words='';
+    if(!named&&hint==='demo')words='Turn off demo mode to set up phone access (once). After that you can switch it on and off in demo mode.';
+    else if(!named&&hint==='checking')words='Checking Tailscale on this computer…';
+    else if(!named&&hint==='install')words='Not on yet: Tailscale was not found on this computer. Install it and sign in (step 1 below), then press Phone access again.';
+    else if(!named&&hint==='signin')words='Not on yet: sign in to Tailscale on this computer first (step 1 below), then press Phone access again.';
+    else if(!named&&hint==='first')words='Not on yet: check the owner and address in step 2 below, then press Confirm and turn on.';
+    else if(s.settings.access&&named&&!reviewed&&!manual)words='On, but Conversation and Send from phone stay off until step 4 below (I reviewed the policy).';
+    if(!words)return null;
+    var box=el('div','phone-note');box.id='phoneSwitchNote';box.setAttribute('role','status');box.append(el('span','',words));
+    if(!named&&hint==='demo'&&window.OrreryDemo&&typeof window.OrreryDemo.reloadFor==='function'){
+      var a=el('div','phone-actions');a.append(button('Turn off demo mode',function(){window.OrreryDemo.reloadFor(false);}));box.append(a);
+    }
+    return box;
+  }
+  function showStepTwo(){
+    var two=document.getElementById('phoneStepOwner');
+    if(two&&typeof two.scrollIntoView==='function')two.scrollIntoView({block:'center',behavior:'smooth'});
+    var owner=document.getElementById('phoneOwner');
+    if(owner&&typeof owner.focus==='function')owner.focus({preventScroll:true});
   }
 
   function render(){
@@ -143,9 +170,31 @@
     var main=el('div','settings-row');
     main.append(toggle('phoneAccess','Phone access','Read the cockpit from your phone over Tailscale: agents, Graph, Mail, conversation, files and images. Images cannot be redacted.',
       set.access,manual,function(on){
-        if(on&&!named){setupOpen=true;render();return;}
+        if(on&&!named){
+          var box=document.getElementById('phoneAccess');if(box)box.checked=false;
+          /* pressed again while step 2 is open: keep what was typed there */
+          if(hint==='first'&&!demo()){showStepTwo();return;}
+          setupOpen=true;
+          if(demo()){hint='demo';render();return;}
+          if(ts.found&&ts.signed_in){hint='first';render();showStepTwo();return;}
+          /* Tailscale looked missing or signed out when this was drawn: read it
+             again first, so a sign-in made since then is not told to sign in */
+          hint='checking';render();
+          refresh().then(function(){
+            if(hint!=='checking')return;  /* Settings was reopened, or a newer press answered first */
+            var t=state&&state.tailscale,set2=state&&state.settings;
+            if(!t||(set2&&set2.owner_login&&set2.public_origin)){hint='';render();return;}
+            hint=t.found&&t.signed_in?'first':t.found?'signin':'install';
+            render();
+            var at=document.activeElement;  /* move the cursor only if it has not gone elsewhere meanwhile */
+            if(hint==='first'&&(!at||at===document.body||at.id==='phoneAccess'))showStepTwo();
+          });
+          return;
+        }
         change({access:on});
       }));
+    var note=switchNote(s,named,reviewed,manual);
+    if(note)main.append(note);
     var sub=el('div','phone-sub');
     sub.append(toggle('phoneSend','Send from phone','Send one confirmed line to a pane.'+(reviewed||manual?'':set.access?' Starts after step 4 below.':' Starts once Phone access is on and you have reviewed who can reach it.'),
       set.send,!set.access||!reviewed||manual,function(on){change({send:on});}));
@@ -180,6 +229,6 @@
     if(busy)root.append(el('div','settings-help','Applying…'));
   }
 
-  if(popover)popover.addEventListener('toggle',function(event){if(event.newState==='open'){message='';refresh();}});
+  if(popover)popover.addEventListener('toggle',function(event){if(event.newState==='open'){message='';hint='';setupOpen=false;refresh();}});
   window.OrreryPhoneSettings=Object.freeze({refresh:refresh});
 })();

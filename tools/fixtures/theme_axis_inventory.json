@@ -3311,8 +3311,8 @@
         "unit": "element"
       },
       "source": {
-        "digest": "8e699619df4315056edf3b2f2e8032c651e29f863d239fe1bdc99dc048a3672b",
-        "expected": 135,
+        "digest": "c07db2aba4f019f2c7a7ad03c9d0bcbd6e5cf802619fd201e6b7cdb982057ccd",
+        "expected": 136,
         "records": [
           {
             "line": 193,
@@ -4022,49 +4022,56 @@
             "value": "9px"
           },
           {
-            "line": 1119,
+            "line": 1115,
+            "property": "font-size",
+            "selector": ".phone-note",
+            "source": "bridge/cockpit.html",
+            "value": "9.5px"
+          },
+          {
+            "line": 1120,
             "property": "font-size",
             "selector": ".toast",
             "source": "bridge/cockpit.html",
             "value": "10.5px"
           },
           {
-            "line": 1156,
+            "line": 1157,
             "property": "font-size",
             "selector": ".pane-drag-ghost small",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1167,
+            "line": 1168,
             "property": "font-size",
             "selector": ".pane-float-bar .hint",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1168,
+            "line": 1169,
             "property": "font-size",
             "selector": ".pane-float-bar button",
             "source": "bridge/cockpit.html",
             "value": "10px"
           },
           {
-            "line": 1177,
+            "line": 1178,
             "property": "font-size",
             "selector": ".pane-out-chip",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 1182,
+            "line": 1183,
             "property": "font-size",
             "selector": ".pane-out-chip .where",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 1183,
+            "line": 1184,
             "property": "font-size",
             "selector": ".pane-out-chip .back",
             "source": "bridge/cockpit.html",
@@ -4273,7 +4280,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "ec9300175da2942b118cb91567ca07e7828da5328ddde97f5b6ad916ea4b22f2",
+        "digest": "ce24501fa76904ef659f5ac9a335c99cede5855a11d1e1d5f0c88181d0c430e0",
         "expected": 42,
         "records": [
           {
@@ -4508,14 +4515,14 @@
             "value": ".12em"
           },
           {
-            "line": 1156,
+            "line": 1157,
             "property": "letter-spacing",
             "selector": ".pane-drag-ghost small",
             "source": "bridge/cockpit.html",
             "value": ".1em"
           },
           {
-            "line": 1182,
+            "line": 1183,
             "property": "letter-spacing",
             "selector": ".pane-out-chip .where",
             "source": "bridge/cockpit.html",
@@ -4575,7 +4582,7 @@
       }
     }
   },
-  "inventory_digest": "08027c3b04d7723be23f900bd9a20a8218fb615500ed4b262cdfcc8efafda7c3",
+  "inventory_digest": "dfb6d6d2b881f679ca8498f812c8d93363ff0ad14dbbe86512971e2600abd06d",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -4587,9 +4594,9 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "823a7711adf992273a3b37b26133e8576caacf50f5887ec466d6b89d10764dcf",
+  "source_digest": "eada949235e7c9035d98b247c9af71613f9c3b2bf6a6bf598cc110f785be1c43",
   "source_files": {
-    "bridge/cockpit.html": "185dc5cb4e9fcde79f2197801a7dd280e8313b3a840ded5818de0b0e18eb75eb",
+    "bridge/cockpit.html": "831901d50a9b2338084f315584a7bc0992b5441ae92209ed00c52a7d8d01c2f4",
     "bridge/mail_view.css": "4c65a93dd1b338a3f4304651173a53a7ed489860ecec2bc86014d253bbcde898",
     "bridge/orrery_view.css": "ad0adcc4a4bc1867240ea68bb37c36d1bdd73b8e198c7e5ebba92343c78c26cd"
   },
