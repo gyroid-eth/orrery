@@ -10883,6 +10883,29 @@ const conversationView=(()=>{
       await asset('script','src','conversation_terminal.js');
       await asset('script','src','conversation_markdown.js');
       await asset('script','src','conversation_view.js');
+      // A user operation (conversation_view.js userRequest: the named POSTs,
+      // the clipboard files, a file preview; from the NETWORK frame the
+      // dashboard's named actions) is never kept waiting behind History's held polls: no poll is
+      // held from its start until it settles. Periodic polls do not count.
+      if(!window.__orreryHoldsYield){
+        window.__orreryHoldsYield=true;
+        window.fetch=OrreryConversation.trackFetch(window.fetch.bind(window));
+        const frame=document.getElementById('networkFrame');
+        // The frame's operations end with its document (a navigation away
+        // never settles a fetch in flight).
+        let frameFetch=null;
+        const wrapFrame=()=>{try{
+          frameFetch?.endAll();frameFetch=null;
+          const view=frame?.contentWindow;
+          if(view&&view.location.origin===location.origin&&!view.__orreryHoldsYield){
+            view.__orreryHoldsYield=true;
+            const tracked=OrreryConversation.trackFetch(view.fetch.bind(view),{frame:true});
+            view.fetch=tracked;frameFetch=tracked;
+            view.addEventListener('pagehide',()=>tracked.endAll());
+          }
+        }catch(_){/* another origin: nothing to wrap */}};
+        frame?.addEventListener('load',wrapFrame);wrapFrame();
+      }
       instance=OrreryConversation.mountWorkspace({
         getContext:(selected)=>{const name=selected||activeSession();return {...(currentAgents.find(a=>a.name===name)||{name}),terminalPaneId:paneIdForSession(name)};},
         getSlots:()=>splitVisible?splitSessions.map(name=>({name,host:splitCells.get(name),controlHost:splitCells.get(name)?._actions})).filter(slot=>slot.host?.isConnected):[],

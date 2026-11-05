@@ -45,9 +45,9 @@ def identity(stream):
     info=os.fstat(stream.fileno());return info.st_dev,info.st_ino
 
 
-def record_at(stream,offset):
+def record_at(stream,offset,cache=None):
     if hasattr(stream,'provider'):
-        if stream.provider!='codex':return stream.record_at(str(offset))
+        if stream.provider!='codex':return stream.record_at(str(offset),cache)
         stream=stream.stream
     if offset<0:raise PreviewUnavailable('reference_expired')
     if offset and os.pread(stream.fileno(),1,offset-1)!=b'\n':raise PreviewUnavailable('reference_expired')
@@ -102,13 +102,15 @@ class ReferenceStore:
         self.image_roots=tuple(root for value in image_roots if (root:=root_path(value)))
         self.workspace_roots=tuple(root for value in workspace_roots if (root:=root_path(value)))
         self.ttl,self.max_refs,self.clock,self.max_pixels=ttl,max_refs,clock,max_pixels
-        self.refs=OrderedDict();self.lock=threading.RLock()
+        self.refs=OrderedDict();self.by_key={};self.lock=threading.RLock()
 
     def prune(self):
         now=self.clock()
         for key,value in list(self.refs.items()):
             if value['expires']<=now:self.refs.pop(key)
         while len(self.refs)>self.max_refs:self.refs.popitem(last=False)
+        if len(self.by_key)>len(self.refs):
+            self.by_key={value['key']:ref for ref,value in self.refs.items()}
 
     def policy(self,value,cwd):
         if (not isinstance(value,str) or secret_path(value) or re.search(r'[\x00-\x1f\x7f]|://|^~',value)
@@ -130,10 +132,20 @@ class ReferenceStore:
             raise PreviewUnavailable('preview_type_denied')
         return path
 
-    def decorate(self,row,stream,event):
+    def decorate_all(self,row,stream,events):
+        """decorate() for one page: the workspace root is resolved once."""
+        missing=object();cwd=missing;records={}
+        for event in events:
+            if cwd is missing:
+                try:cwd=workspace(stream)
+                except (PreviewUnavailable,ValueError):cwd=None
+            self.decorate(row,stream,event,cwd=cwd,records=records)
+
+    def decorate(self,row,stream,event,*,cwd=False,records=None):
         """Only called on selected events from an already pinned bound transcript."""
         try:
-            item,digest=record_at(stream,event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id']));projection=extract_artifacts(item);cwd=workspace(stream)
+            item,digest=record_at(stream,event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id']),records);projection=extract_artifacts(item)
+            if cwd is False:cwd=workspace(stream)
         except (PreviewUnavailable,ValueError):return
         if projection['diff']:
             event['diff']=projection['diff'];event['diff_status']=projection['diff_status']
@@ -144,8 +156,9 @@ class ReferenceStore:
                 try:path=self.policy(value,cwd)
                 except (PreviewUnavailable,OSError,ValueError):continue
                 key=(binding(row),identity(stream),event['id'],digest,index,str(path))
-                ref=next((id_ for id_,data in self.refs.items() if data['key']==key),None)
-                if ref is None:ref=secrets.token_urlsafe(24)
+                ref=self.by_key.get(key)
+                if ref not in self.refs or self.refs[ref]['key']!=key:ref=secrets.token_urlsafe(24)
+                self.by_key[key]=ref
                 self.refs[ref]=dict(key=key,row=binding(row),inode=identity(stream),offset=event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id']),digest=digest,index=index,expires=self.clock()+self.ttl)
                 self.refs.move_to_end(ref)
                 refs.append(dict(id=ref,label=redact(path.name)[:160],kind='image' if path.suffix.lower() in IMAGE_EXT else 'file'))
