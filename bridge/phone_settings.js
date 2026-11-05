@@ -168,7 +168,7 @@
     if(manual){badge.className='phone-badge warn';badge.textContent='MANUAL';}
 
     var main=el('div','settings-row');
-    main.append(toggle('phoneAccess','Phone access','Read the cockpit from your phone over Tailscale: agents, Graph, Mail, conversation, files and images. Images cannot be redacted.',
+    main.append(toggle('phoneAccess','Phone access','Read the cockpit from your phone over Tailscale: agents, Graph, Mail, conversation, files and images.',
       set.access,manual,function(on){
         if(on&&!named){
           var box=document.getElementById('phoneAccess');if(box)box.checked=false;

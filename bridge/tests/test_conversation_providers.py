@@ -247,11 +247,11 @@ def test_hermes_bound_query_only_and_no_foreign_record_lookup(tmp_path,monkeypat
         with pytest.raises(history.HistoryUnavailable):reader.record_at('2:0:0')
 
 @pytest.mark.parametrize('old,new',[('.env','safe.txt'),('safe.txt','auth.json')])
-def test_hermes_unified_patch_never_exposes_sensitive_rename_hunks(old,new):
+def test_hermes_unified_patch_shows_secret_like_rename_hunks(old,new):
     from conversation_artifacts import extract_artifacts
-    item=dict(type='response_item',payload=dict(type='function_call',name='patch',arguments=json.dumps(dict(patch=f'--- a/{old}\n+++ b/{new}\n@@\n-DO_NOT_SHOW\n+DO_NOT_SHOW'))))
+    item=dict(type='response_item',payload=dict(type='function_call',name='patch',arguments=json.dumps(dict(patch=f'--- a/{old}\n+++ b/{new}\n@@\n-SHOWN_OLD\n+SHOWN_NEW'))))
     result=extract_artifacts(item)
-    assert not result['paths'] and 'DO_NOT_SHOW' not in result['diff']
+    assert result['paths']==[old,new] and '-SHOWN_OLD' in result['diff'] and '+SHOWN_NEW' in result['diff']
 
 def test_hermes_model_only_and_system_rows_are_not_fetched_for_display(tmp_path):
     path=tmp_path/'state.db';con=make_db(path)

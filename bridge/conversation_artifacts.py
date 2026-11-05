@@ -13,27 +13,6 @@ from pathlib import PurePath
 MAX_DIFF = 48 * 1024
 MAX_INPUT = 1024 * 1024
 MAX_REFS = 24
-SECRET_PART = re.compile(r'(^|[._-])(auth(?:entication)?|tokens?|secrets?|credentials?|passwords?|private|keys?)([._-]|$)', re.I)
-
-
-def secret_path(path: str) -> bool:
-    for index,part in enumerate(PurePath(path).parts):
-        if index==1 and part=='private' and path.startswith('/private/'):
-            continue  # macOS canonical /private/tmp and /private/var are roots.
-        lower=part.lower()
-        if (lower in {'.ssh','.aws','.gnupg','.env','env.sh','storage.sqlite3','id_rsa','id_ed25519'}
-                or lower.startswith('.env.') or lower.endswith(('.pem','.key','.p12','.pfx','.sqlite','.sqlite3'))
-                or SECRET_PART.search(lower)):
-            return True
-    return False
-
-
-def redact(text: str) -> str:
-    text=re.sub(r'\b(?:sk-(?:proj-|ant-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16})\b','[redacted]',text)
-    text=re.sub(r'(?im)(\bauthorization\s*[:=]\s*(?:bearer\s+)?)[^\s"\']+',r'\1[redacted]',text)
-    text=re.sub(r'(?im)((?:api[_-]?key|access[_-]?token|password|secret)\s*["\']?\s*[:=]\s*)[^\n,]+',r'\1[redacted]',text)
-    text=re.sub(r'-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?(?:-----END [^-]*PRIVATE KEY-----|$)','[redacted private key]',text)
-    return text
 
 
 class Literal:
@@ -134,12 +113,12 @@ def extract_artifacts(item: dict) -> dict:
         for value in values[:MAX_REFS] if isinstance(values,list) else []:
             if not isinstance(value,dict):continue
             path=value.get('path');old=value.get('oldText');new=value.get('newText')
-            if (not isinstance(path,str) or secret_path(path) or len(path)>4096
+            if (not isinstance(path,str) or len(path)>4096
                     or not (old is None or isinstance(old,str)) or not isinstance(new,str)):continue
             paths.append(path)
-            diffs.extend(['--- '+redact(PurePath(path).name),'+++ '+redact(PurePath(path).name),'@@ recorded result hunk @@'])
-            diffs.extend('-'+redact(x) for x in (old or '')[:MAX_DIFF].splitlines())
-            diffs.extend('+'+redact(x) for x in new[:MAX_DIFF].splitlines())
+            diffs.extend(['--- '+PurePath(path).name,'+++ '+PurePath(path).name,'@@ recorded result hunk @@'])
+            diffs.extend('-'+x for x in (old or '')[:MAX_DIFF].splitlines())
+            diffs.extend('+'+x for x in new[:MAX_DIFF].splitlines())
             if sum(map(len,diffs))>=MAX_DIFF:break
         return dict(paths=paths,diff='\n'.join(diffs)[:MAX_DIFF],diff_status='Recorded file tool result · contextual hunk')
     if item.get('type')!='response_item':return result
@@ -162,7 +141,7 @@ def extract_artifacts(item: dict) -> dict:
         line=line[:MAX_DIFF-diff_bytes]
         diffs.append(line);diff_bytes+=len(line)+1
     def path(value):
-        if (isinstance(value,str) and 0<len(value)<4096 and not secret_path(value)
+        if (isinstance(value,str) and 0<len(value)<4096
                 and not re.search(r'[\x00-\x1f\x7f]|://|^~',value) and len(result['paths'])<MAX_REFS
                 and value not in result['paths']):result['paths'].append(value)
     for name,value in calls[:MAX_REFS]:
@@ -176,46 +155,42 @@ def extract_artifacts(item: dict) -> dict:
             for line in value.splitlines()[:4000]:
                 match=re.match(r'\*\*\* (Add|Update|Delete) File: (.+)$',line)
                 if match:
-                    operation,filename=match[1],match[2];safe=not secret_path(filename)
-                    if safe:
-                        label=PurePath(filename).name if filename.startswith('/') else filename
-                        path(filename)
-                        diff('--- '+('/dev/null' if operation=='Add' else 'a/'+redact(label)))
-                        diff('+++ '+('/dev/null' if operation=='Delete' else 'b/'+redact(label)))
-                        if operation=='Delete':diff('[recorded deletion request; original content unavailable]')
-                    else:diff('[sensitive file edit omitted]')
+                    operation,filename=match[1],match[2];safe=True
+                    label=PurePath(filename).name if filename.startswith('/') else filename
+                    path(filename)
+                    diff('--- '+('/dev/null' if operation=='Add' else 'a/'+label))
+                    diff('+++ '+('/dev/null' if operation=='Delete' else 'b/'+label))
+                    if operation=='Delete':diff('[recorded deletion request; original content unavailable]')
                 elif line.startswith('*** Move to: '):
                     target=line[13:]
-                    if safe and not secret_path(target):path(target);diff('rename to '+redact(PurePath(target).name if target.startswith('/') else target))
-                    else:safe=False;diff('[sensitive file edit omitted]')
+                    if safe:path(target);diff('rename to '+(PurePath(target).name if target.startswith('/') else target))
                 elif safe and (line.startswith(('+','-',' ','@@')) or line=='*** End of File'):
-                    diff(redact(line))
+                    diff(line)
                 if diff_bytes>=MAX_DIFF:break
         elif isinstance(value,dict) and name in {'view_image','read_file','write_file','Read','Write','Edit','read','write','edit','patch'}:
             path(value.get('path',value.get('file_path')))
             if name in {'Edit','edit','patch'}:
                 old,new=value.get('old_string'),value.get('new_string')
                 filename=value.get('file_path',value.get('path'))
-                if isinstance(filename,str) and filename and isinstance(old,str) and isinstance(new,str) and not secret_path(filename):
-                    for line in ['@@ recorded replacement @@']+['-'+redact(x) for x in old[:MAX_DIFF].splitlines()]+['+'+redact(x) for x in new[:MAX_DIFF].splitlines()]:diff(line)
+                if isinstance(filename,str) and filename and isinstance(old,str) and isinstance(new,str):
+                    for line in ['@@ recorded replacement @@']+['-'+x for x in old[:MAX_DIFF].splitlines()]+['+'+x for x in new[:MAX_DIFF].splitlines()]:diff(line)
             if name=='patch' and isinstance(value.get('patch'),str):
                 # Hermes unified patch request. Only explicit file headers grant
-                # paths; omit sensitive file hunks and all arbitrary prose.
+                # paths; omit incomplete file hunks and all arbitrary prose.
                 safe=False;previous=None
                 for line in value['patch'][:MAX_INPUT].splitlines()[:4000]:
                     if line.startswith(('--- ','+++ ')):
                         target=line[4:].split('\t',1)[0]
                         if target.startswith(('a/','b/')):target=target[2:]
-                        allowed=target=='/dev/null' or not secret_path(target)
                         if line.startswith('--- '):
-                            previous=(target,allowed);safe=False
+                            previous=target;safe=False
                         else:
-                            safe=previous is not None and previous[1] and allowed
+                            safe=previous is not None
                             if safe:
-                                for prefix,filename in [('--- ',previous[0]),('+++ ',target)]:
+                                for prefix,filename in [('--- ',previous),('+++ ',target)]:
                                     if filename!='/dev/null':path(filename)
-                                    diff(prefix+redact(PurePath(filename).name))
-                            else:diff('[sensitive or incomplete file edit omitted]')
-                    elif safe and line.startswith(('+','-',' ','@@')):diff(redact(line))
+                                    diff(prefix+PurePath(filename).name)
+                            else:diff('[incomplete file edit omitted]')
+                    elif safe and line.startswith(('+','-',' ','@@')):diff(line)
     result['diff']='\n'.join(diffs)[:MAX_DIFF]
     return result

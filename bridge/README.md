@@ -116,8 +116,8 @@ return to side mode; narrow readers close only their own history. Bottom restore
 normal terminal following. No-match and multiple-match notices leave History
 open. Native text selection, double click and file/diff controls keep their own
 actions. The search scans at most 6500 rows / 2 MiB; removed rows and old
-alternate-screen frames are unavailable. Markdown rendering, truncation and
-redaction can prevent a literal match.
+alternate-screen frames are unavailable. Markdown rendering and truncation can
+prevent a literal match.
 
 ### Recorded Mail cards
 
@@ -228,15 +228,15 @@ as `/`, the home directory and `/private/tmp` are rejected. A missing/invalid
 root grants nothing. Only exact references from the transcript can be read.
 
 Every preview rechecks canonical containment, rejects symlinks in every path
-component, requires a single-link regular file, denies credential-like paths,
+component, requires a single-link regular file
 and verifies descriptor identity before returning. Text is strict UTF-8 and
 at most 128 KiB; SVG/HTML/XML are inert text. PNG/JPEG/GIF/WebP input is at most
 8 MiB, 8192 pixels per dimension and 16 million pixels. Only the first frame is
 decoded and re-encoded to PNG without original metadata, with an 8 MiB output
 limit. Structured extraction is capped at 1 MiB per record, 24 references and
-48 Ki characters of diff. Known credential patterns are redacted server-side;
-this is a bounded preview, not a guarantee that arbitrary user prose contains
-no secrets. Nothing is indexed or stored to disk by these modules.
+48 Ki characters of diff. File names and contents are shown as recorded, with
+no name-based hiding or content redaction: the owner decides. Nothing is
+indexed or stored to disk by these modules.
 
 The reader retains at most 400 events / 2 MiB of serialized event data (fresh:
 at most 200). Legacy releases older events while following the bottom; Load

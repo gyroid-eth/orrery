@@ -21,7 +21,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from PIL import Image
-from conversation_artifacts import extract_artifacts, secret_path, redact
+from conversation_artifacts import extract_artifacts
 from conversation_history import open_bound_transcript, assert_transcript_identity, HistoryUnavailable, open_reader
 
 MAX_RECORD=1024*1024
@@ -113,7 +113,7 @@ class ReferenceStore:
             self.by_key={value['key']:ref for ref,value in self.refs.items()}
 
     def policy(self,value,cwd):
-        if (not isinstance(value,str) or secret_path(value) or re.search(r'[\x00-\x1f\x7f]|://|^~',value)
+        if (not isinstance(value,str) or re.search(r'[\x00-\x1f\x7f]|://|^~',value)
                 or '..' in Path(value).parts):raise PreviewUnavailable('preview_path_denied')
         if not os.path.isabs(value):
             if cwd is None:raise PreviewUnavailable('preview_path_denied')
@@ -127,7 +127,7 @@ class ReferenceStore:
         is_image=path.suffix.lower() in IMAGE_EXT
         allowed=any(path.is_relative_to(root) for root in roots)
         if not allowed and is_image:allowed=any(path.is_relative_to(root) for root in self.image_roots)
-        if not allowed or secret_path(str(path)):raise PreviewUnavailable('preview_path_denied')
+        if not allowed:raise PreviewUnavailable('preview_path_denied')
         if not is_image and path.suffix.lower() not in TEXT_EXT and path.name not in {'Makefile','Dockerfile','LICENSE'}:
             raise PreviewUnavailable('preview_type_denied')
         return path
@@ -161,7 +161,7 @@ class ReferenceStore:
                 self.by_key[key]=ref
                 self.refs[ref]=dict(key=key,row=binding(row),inode=identity(stream),offset=event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id']),digest=digest,index=index,expires=self.clock()+self.ttl)
                 self.refs.move_to_end(ref)
-                refs.append(dict(id=ref,label=redact(path.name)[:160],kind='image' if path.suffix.lower() in IMAGE_EXT else 'file'))
+                refs.append(dict(id=ref,label=path.name[:160],kind='image' if path.suffix.lower() in IMAGE_EXT else 'file'))
             self.prune()
         if refs:event['references']=refs
 
@@ -209,12 +209,12 @@ class ReferenceStore:
                 try:text=data.decode('utf-8')
                 except UnicodeError:raise PreviewUnavailable('preview_type_denied') from None
                 if '\x00' in text or any(ord(c)<32 and c not in '\n\r\t' for c in text):raise PreviewUnavailable('preview_type_denied')
-                result=dict(kind='text',mime='text/plain',text=redact(text))
+                result=dict(kind='text',mime='text/plain',text=text)
             after=os.fstat(fd)
             with open_file(path) as (_,current):
                 signature=lambda st:(st.st_dev,st.st_ino,st.st_size,st.st_mtime_ns,st.st_ctime_ns)
                 if signature(info)!=signature(after) or signature(info)!=signature(current):raise PreviewUnavailable('preview_changed')
-        return dict(result,label=redact(path.name)[:160],notice='Current file · may differ from the recorded edit')
+        return dict(result,label=path.name[:160],notice='Current file · may differ from the recorded edit')
 
     def raster(self,data):
         try:

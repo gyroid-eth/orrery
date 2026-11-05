@@ -11,7 +11,7 @@ from conversation_preview import ReferenceStore,PreviewUnavailable
 
 
 def test_send_user_file_extracts_only_bounded_explicit_files():
-    value=dict(files=['plot.png','notes.txt','plot.png','auth.json','https://example.invalid/x.png',None,{'path':'never.txt'}],caption='do not grant caption.txt',status='done')
+    value=dict(files=['plot.png','notes.txt','plot.png','https://example.invalid/x.png',None,{'path':'never.txt'}],caption='do not grant caption.txt',status='done')
     result=extract_artifacts(call('SendUserFile',value))
     assert result['paths']==['plot.png','notes.txt']
     assert not result['diff']
@@ -40,16 +40,22 @@ def test_native_claude_delivery_yields_opaque_image_and_text_chips(tmp_path):
     assert 'caption' not in json.dumps(events) and 'Generated delivery result' not in json.dumps(events)
 
 
-@pytest.mark.parametrize('case',['outside','secret','url','symlink','pixels','bytes'])
+@pytest.mark.parametrize('case',['outside','url','symlink','pixels','bytes'])
 def test_send_user_file_keeps_existing_preview_policy(tmp_path,case):
     work=tmp_path/'work';work.mkdir();target=work/'plot.png';Image.new('RGB',(20,12)).save(target);name='plot.png';options={}
     if case=='outside':name=str(tmp_path/'outside.png');Image.new('RGB',(20,12)).save(name)
-    if case=='secret':name='auth.json';(work/name).write_text('Generated secret fixture')
     if case=='url':name='https://example.invalid/p.png'
     if case=='symlink':target.unlink();target.symlink_to(tmp_path/'outside.png');Image.new('RGB',(20,12)).save(tmp_path/'outside.png')
     if case=='pixels':options['max_pixels']=10
     if case=='bytes':target.write_bytes(b'\0'*(12*1024*1024+1))
     store,r,event=setup(work,call('SendUserFile',dict(files=[name])),**options)
-    if case in ['outside','secret','url','symlink']:assert not event.get('references')
+    if case in ['outside','url','symlink']:assert not event.get('references')
     else:
         with pytest.raises(PreviewUnavailable):preview(store,r,event)
+
+
+def test_send_user_file_secret_like_name_is_previewed(tmp_path):
+    work=tmp_path/'work';work.mkdir();(work/'auth.json').write_text('Generated named fixture')
+    store,r,event=setup(work,call('SendUserFile',dict(files=['auth.json'])))
+    assert [ref['label'] for ref in event['references']]==['auth.json']
+    assert preview(store,r,event)['text']=='Generated named fixture'
