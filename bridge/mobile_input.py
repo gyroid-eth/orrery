@@ -342,6 +342,13 @@ class InputCoordinator:
             row['cancelled']=True
             if row['state']=='prepared':self._finish(row,'cancelled')
 
+    def set_enabled(self,value):
+        """Settings turns "Send from phone" on or off without a restart; off
+        drops every pending choice and cancels prepared sends, as on shutdown."""
+        if type(value) is not bool:raise TypeError('enabled must be a bool')
+        if value:self.enabled=True
+        else:self.close()
+
     @staticmethod
     def _public(row):
         return dict(contract=CONTRACT,epoch=row['epoch'],intent=row['intent'],target=dict(row['target']),

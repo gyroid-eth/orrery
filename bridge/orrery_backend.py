@@ -4027,7 +4027,7 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "cockpit.html", "tour.html", "orbit.svg", "orbit-light.svg",
     "orrery_view.css", "mail_view.css", "spawn_picker.css", "theme_light.css",
     "cockpit_tour.css", "telemetry_light.css",
-    "spawn_picker.js", "effort_slider.js", "spawn_catalog_loader.js", "prefs_sync.js",
+    "spawn_picker.js", "effort_slider.js", "spawn_catalog_loader.js", "prefs_sync.js", "phone_settings.js",
     "theme_core.js", "theme_controller.js", "roster_descriptor.js", "demo_mask.js",
     "demo_mode.js", "orrery_view.js", "mail_view.js", "cockpit_tour.js",
     "cockpit_full_tour.js", "telemetry_light.js",
@@ -4069,8 +4069,10 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
             state=manager.states.get(target.key)
         else:state = manager.states.get(name) if manager is not None else None
         return state.bridge if state is not None and not state.bridge._closed else None
-    install_routes(app, InputCoordinator(PaneResolver(app[TMUX_BIN_KEY]), mobile_bridge,
-                                        enabled=mobile_input_enabled))
+    coordinator = install_routes(app, InputCoordinator(PaneResolver(app[TMUX_BIN_KEY]), mobile_bridge,
+                                                       enabled=mobile_input_enabled))
+    import mobile_access
+    mobile_access.install(app, coordinator, config_path=CONFIG_PATH)
     app.router.add_get("/telemetry/agents", proxy_dashboard)
     app.router.add_get("/telemetry/conversation", serve_conversation)
     app.router.add_get('/telemetry/conversation/preview', serve_conversation_preview)

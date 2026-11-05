@@ -1086,6 +1086,33 @@
   .settings-choice input{accent-color:var(--amber);margin:0}
   .settings-select{min-width:86px;padding:6px 8px;border:1px solid var(--hair);border-radius:6px;background:var(--panel-2);color:var(--ink);font:inherit;font-size:9px;letter-spacing:.06em}
   .settings-foot{display:flex;justify-content:flex-end;padding:11px 17px;border-top:1px solid var(--hair)}
+  /* ── Settings → Phone: the reader belongs to Telemetry; this only shows and switches it ── */
+  .phone-badge{margin-left:8px;padding:2px 6px;border:1px solid var(--hair);border-radius:4px;font-size:8px;letter-spacing:.14em;color:var(--ink-faint)}
+  .phone-badge.on{border-color:rgb(95 179 163 / .45);color:var(--ln-local)}
+  .phone-badge.warn{border-color:rgb(var(--theme-accent-rgb) / .5);color:var(--amber)}
+  .phone-sub{margin-left:12px;padding-left:12px;border-left:1px solid var(--hair)}
+  .phone-sub .settings-toggle-row{margin-top:8px}
+  .settings-switch input:disabled{opacity:.35;cursor:not-allowed}
+  .phone-lines{display:flex;flex-direction:column;gap:6px}
+  .phone-line{display:grid;grid-template-columns:12px 1fr auto;gap:8px;align-items:baseline;color:var(--ink-dim);font-size:9.5px;line-height:1.45}
+  .phone-line .dot{font-size:9px;color:var(--ink-faint)}
+  .phone-line.ok .dot{color:var(--ln-local)}
+  .phone-line.warn .dot{color:var(--amber)}
+  .phone-steps{display:flex;flex-direction:column}
+  .phone-step{display:grid;grid-template-columns:20px 1fr;gap:9px;padding:9px 0}
+  .phone-step+.phone-step{border-top:1px solid var(--hair-2)}
+  .phone-num{width:18px;height:18px;border-radius:50%;border:1px solid var(--hair);display:flex;align-items:center;justify-content:center;font-size:8.5px;color:var(--ink-faint)}
+  .phone-step.done .phone-num{border-color:rgb(95 179 163 / .5);color:var(--ln-local)}
+  .phone-step.now .phone-num{border-color:rgb(var(--theme-accent-rgb) / .6);color:var(--amber)}
+  .phone-who{margin-left:6px;font-size:8px;letter-spacing:.14em;color:var(--ink-faint);text-transform:uppercase}
+  .phone-code{margin:5px 0;padding:6px 8px;border:1px solid var(--hair);border-radius:5px;background:var(--panel-2);font-size:9px;color:var(--ink-dim);overflow-wrap:anywhere;user-select:all;-webkit-user-select:all}
+  .phone-fields{display:flex;flex-direction:column;gap:6px}
+  .phone-field{display:flex;flex-direction:column;gap:3px}
+  .phone-field span{color:var(--ink-faint);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase}
+  .phone-field input{width:100%}
+  .phone-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .phone-actions .cockpit-control{font-size:8.5px;padding:5px 9px}
+  .phone-message{color:var(--amber);font-size:9px;line-height:1.45}
   .toast{
     position:fixed;z-index:1250;right:20px;bottom:20px;max-width:min(430px,calc(100vw - 40px));
     padding:11px 14px;border:1px solid rgba(255,255,255,.09);border-radius:8px;
@@ -1317,7 +1344,7 @@
         <label class="settings-toggle-row" for="conversationEnabled">
           <span class="settings-toggle-copy">
             <span class="settings-row-name">Conversation history</span>
-            <span class="settings-help">Adds a read-only History panel. Claude, dsh and Hermes require Telemetry API 35 or later. Off by default.</span>
+            <span class="settings-help">Adds a read-only History panel. Claude, dsh and Hermes require Telemetry API 35 or later. On by default.</span>
           </span>
           <span class="settings-switch"><input id="conversationEnabled" type="checkbox"></span>
         </label>
@@ -1352,6 +1379,10 @@
                placeholder="a name, another name" aria-describedby="demoMaskWordsHelp">
         <div class="settings-help" id="demoMaskWordsHelp">Comma-separated, kept in this browser. A word of Latin letters is masked as a whole word in any case; a word in another script (日本語) wherever it appears. In demo mode this field shows its own words masked too.</div>
       </div>
+    </section>
+    <section aria-labelledby="phoneSettingsTitle">
+      <div class="settings-section-title" id="phoneSettingsTitle">Phone<span class="phone-badge" id="phoneBadge" hidden></span></div>
+      <div id="phoneSettings"><div class="settings-help">Checking phone access…</div></div>
     </section>
     <section aria-labelledby="usageSettingsTitle">
       <div class="settings-section-title" id="usageSettingsTitle">Usage</div>
@@ -2821,6 +2852,71 @@
             "value": "1px solid var(--hair)"
           },
           {
+            "property": "border",
+            "selector": ".phone-badge",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-badge",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border-left",
+            "selector": ".phone-sub",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-line",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-line .dot",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".phone-step+.phone-step",
+            "value": "1px solid var(--hair-2)"
+          },
+          {
+            "property": "border",
+            "selector": ".phone-num",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-num",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-who",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "border",
+            "selector": ".phone-code",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".phone-code",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-code",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-field span",
+            "value": "var(--ink-faint)"
+          },
+          {
             "property": "color",
             "selector": ".toast",
             "value": "var(--ink)"
@@ -3819,6 +3915,41 @@
           },
           {
             "property": "color",
+            "selector": ".phone-badge",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-line",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-line .dot",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-num",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-who",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-code",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".phone-field span",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
             "selector": ".pane-float-bar .hint",
             "value": "var(--ink-faint)"
           },
@@ -4157,7 +4288,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "6afbaf1c646834d042c3ddcfa99469f72aafa466ee714355d06ba8803df70134",
+        "digest": "8e699619df4315056edf3b2f2e8032c651e29f863d239fe1bdc99dc048a3672b",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4251,6 +4382,15 @@
           ".settings-help\u0000font-size",
           ".settings-choice\u0000font-size",
           ".settings-select\u0000font-size",
+          ".phone-badge\u0000font-size",
+          ".phone-line\u0000font-size",
+          ".phone-line .dot\u0000font-size",
+          ".phone-num\u0000font-size",
+          ".phone-who\u0000font-size",
+          ".phone-code\u0000font-size",
+          ".phone-field span\u0000font-size",
+          ".phone-actions .cockpit-control\u0000font-size",
+          ".phone-message\u0000font-size",
           ".toast\u0000font-size",
           ".pane-drag-ghost small\u0000font-size",
           ".pane-float-bar .hint\u0000font-size",
@@ -4298,7 +4438,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "4141ef875c25c5212541d51cdd46a851ae1efd9b976c7d358fb10ccf5d077c0a",
+        "digest": "ec9300175da2942b118cb91567ca07e7828da5328ddde97f5b6ad916ea4b22f2",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4330,6 +4470,9 @@
           ".settings-kicker\u0000letter-spacing",
           ".settings-section-title\u0000letter-spacing",
           ".settings-row-name\u0000letter-spacing",
+          ".phone-badge\u0000letter-spacing",
+          ".phone-who\u0000letter-spacing",
+          ".phone-field span\u0000letter-spacing",
           ".pane-drag-ghost small\u0000letter-spacing",
           ".pane-out-chip .where\u0000letter-spacing",
           ".planetarium-note\u0000letter-spacing",
@@ -4344,9 +4487,9 @@
       }
     }
   },
-  "inventory_digest": "9ae41ec5d34089e330e5ea0b1d9db0303f9302b3d9e20747785eab5fbbd970c1",
+  "inventory_digest": "ddd980ab3f6e6b0dfb3e3bfb4412b227b80e1c531f23f0f5aad8549a530aad67",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "fcfe89859249e628ba719986f7d332cd1c32409b7b573603642cf6f606e5177b",
+  "source_digest": "714627152d47c08406d022c66d7af66142e8f0c62085dfe6e96413628b16e0d7",
   "surface": "cockpit",
   "version": 1
 }
@@ -10859,11 +11002,15 @@ kickPolls();
 <script src="mail_view.js"></script>
 <script src="cockpit_tour.js"></script>
 <script src="cockpit_full_tour.js"></script>
+<script src="phone_settings.js"></script>
 <script>
 /* Opt-in bootstrap: no conversation assets or API calls while disabled. */
 const conversationView=(()=>{
   const key='oc-term-conversation-enabled',setting=document.getElementById('conversationEnabled');
   let instance=null,loading=null;
+  // On by default: a browser that never chose keeps the panel; an explicit
+  // "0" (also synced through prefs) stays off.
+  try{if(localStorage.getItem(key)===null)localStorage.setItem(key,'1');}catch(_){}
   const enabled=()=>{try{return localStorage.getItem(key)==='1';}catch(_){return false;}};
   function asset(tag,attribute,url){return new Promise((resolve,reject)=>{
     const el=document.createElement(tag);el[attribute]=url;

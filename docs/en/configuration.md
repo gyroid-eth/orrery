@@ -71,6 +71,14 @@ Keep the other settings and set only `enable_mobile_terminal` to `true`. `script
 
 To revert, set the field to `false` or remove it, also remove any explicit `--enable-mobile-terminal` from custom launch arguments, and restart through the same procedure.
 
+### Settings → Phone
+
+**Phone access** and **Send from phone** in **Settings → Phone** call Telemetry's `agentstack-mobile` command (by default `~/.agentstack/bin/agentstack-mobile`, following `AGENTSTACK_HOME`). The cockpit never touches Telemetry's files or launchd directly. The backend routes `GET` and `PUT /telemetry/mobile` only return that command's result and, like the other routes, accept only this loopback page and JSON writes. The phone cannot reach them.
+
+Switching **Send from phone** switches this backend's adapter at once (no restart) and writes the same value to `enable_mobile_terminal` above, keeping every other key. If the file cannot be read as JSON it is left untouched and the switch lasts for this run only. A change made in a terminal (`agentstack-mobile off`) reaches the adapter and `enable_mobile_terminal` the next time Settings is opened. While a reader started by hand holds 8781 (the section says **MANUAL**), and until Settings has been used once, `enable_mobile_terminal` stays as you set it, so people who use Terminal with a hand-started reader see no change after updating.
+
+In demo mode the Phone section does not put the Tailscale login, the phone address or the Serve URL on the page (demo mode itself hides only user and host names). Without Telemetry the section says that agentstack-mobile was not found. For the steps and limits see the [Telemetry phone guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md#turn-it-on-from-cockpit-settings).
+
 ### Desktop app environment
 
 `AGENTSTACK_ORRERY_ROOT` and `ORRERY_BACKEND_*` exported in `~/.zshrc` are not passed to a Finder launch. A normal Finder launch uses `orrery_root` in `config.json`; use the env override with `npm run dev`, or when you start the executable inside the app bundle directly from the same terminal.

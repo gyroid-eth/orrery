@@ -67,7 +67,7 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 
 ### 会話を読み返す（Conversation history）
 
-代替画面を使う agent の会話は、端末のスクロールバックだけでは遡れません。Conversation history は、記録された会話を読み取り専用で表示します。**Settings → Appearance → Conversation history** をオンにし、pane の **HISTORY** を押してください。既定はオフです。オフに戻すとパネルとボタンが消え、履歴の読み込みも止まります。
+代替画面を使う agent の会話は、端末のスクロールバックだけでは遡れません。Conversation history は、記録された会話を読み取り専用で表示します。pane の **HISTORY** を押してください。既定はオンです。**Settings → Appearance → Conversation history** をオフにするとパネルとボタンが消え、履歴の読み込みも止まります。
 
 ![架空の会話を履歴パネルで開く](docs/images/cockpit_history.png)
 
