@@ -194,8 +194,8 @@ def test_unchanged_panes_cost_one_listing_each_and_no_capture(probe):
 def test_a_question_written_in_the_second_of_the_read_is_not_missed(probe):
     """read (no question) -> question in the same second -> no more output."""
     pane = probe.new_session("SameSecond")
-    next_second(0.02)
     probe.answer_shown(pane)
+    next_second(0.02)
     assert probe.run("SameSecond") is False
     probe.ask(pane)                                 # same second, then silence
     started = ob._question_proofs["SameSecond"]["read_started"]
