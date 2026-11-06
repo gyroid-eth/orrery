@@ -80,7 +80,7 @@ class Literal:
 
 
 # ORRERY Mail's local show_files tool, as each harness records its name: Claude
-# `mcp__orrery-mail__show_files`; Codex, dsh and Hermes `mcp__orrery_mail__show_files`.
+# and dsh `mcp__orrery-mail__show_files`; Codex and Hermes `mcp__orrery_mail__show_files`.
 # Only this server's tool; a same-named tool of another server grants nothing.
 SHOW_FILES=re.compile(r'mcp__orrery[-_]mail__show_files')
 

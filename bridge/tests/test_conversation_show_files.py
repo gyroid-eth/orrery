@@ -19,7 +19,14 @@ def claude(name='mcp__orrery-mail__show_files', value=None):
     return extract_artifacts(artifact_item(item, 'claude', 0))
 
 
-def dsh(name='mcp__orrery_mail__show_files', value=None):
+# The recorded names follow each harness's own naming code:
+# - dsh (@deepseek-ai/dsh-mcp-client 0.2.1-rc.2, publicToolName): mcp__<server>__<tool>,
+#   with characters outside [A-Za-z0-9_-] replaced, so ORRERY's server "orrery-mail"
+#   keeps its hyphen: mcp__orrery-mail__show_files.
+# - Hermes (tools/mcp_tool_schema.py, mcp_prefixed_tool_name): the server is cut to
+#   [A-Za-z0-9_], so mcp__orrery_mail__show_files.
+# - Codex: the recorded exec calls tools.mcp__orrery_mail__<tool>(...).
+def dsh(name='mcp__orrery-mail__show_files', value=None):
     item = {'type': 'tool/call', 'data': {'name': name, 'arguments': value or {'paths': PATHS}}}
     return extract_artifacts(artifact_item(item, 'dsh', 0))
 
