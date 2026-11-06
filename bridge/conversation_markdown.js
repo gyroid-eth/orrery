@@ -70,45 +70,70 @@
   /* A document view for a file preview: headings, paragraphs, lists, tables,
      code, quotes, rules and inline marks. Raw HTML stays visible text. An
      image is a text label and is never fetched. Only http(s) and mailto links
-     are links (a new tab, no referrer); any other target is plain text. */
-  const MAX_DEPTH=8,SPAN=2000;
+     are links (a new tab, no referrer); any other target is plain text.
+     Every pattern runs in time linear in its line: a file of 128 KiB in one
+     line must not hold the page (review r1 measured 35 s for a backtracking
+     heading pattern). Lines longer than LONG_LINE are paragraphs. */
+  const MAX_DEPTH=8,SPAN=2000,LONG_LINE=4096;
   const el=(tag,cls)=>{const node=document.createElement(tag);if(cls)node.className=cls;return node;};
   function safeUrl(value){
     try{const url=new URL(value);return ['http:','https:','mailto:'].includes(url.protocol)?url.href:null;}catch(_){return null;}
   }
   const ESCAPE=/[\\`*_{}[\]()#+\-.!|~<>]/;
-  const IMAGE=/!\[([^\]\n]{0,500})\]\(([^()\s]{0,2000})(?:\s+"[^"\n]{0,500}")?\)/y;
-  const LINK=/\[([^\]\n]{1,1000})\]\(([^()\s]{0,2000})(?:\s+"[^"\n]{0,500}")?\)/y;
+  // The part after a link's or an image's label: ](target "title")
+  const TARGET=/\]\(([^()\s]{0,2000})(?:[ \t]+"[^"\n]{0,500}")?\)/y;
   const AUTOLINK=/<((?:https?:\/\/|mailto:)[^\s<>]{1,2000})>/iy;
   const STRONG=/(\*\*|__)(?=\S)([\s\S]{0,2000}?\S)\1/y;
   const STRIKE=/~~(?=\S)([\s\S]{0,2000}?\S)~~/y;
   const EMPHASIS=/([*_])(?=\S)([\s\S]{0,2000}?\S)\1/y;
   function at(pattern,text,i){pattern.lastIndex=i;return pattern.exec(text);}
-  function inline(text,host,depth=0){
+  function inline(text,host,depth=0,inLink=false){
     let plain='';
-    const flush=()=>{if(plain){host.appendChild(document.createTextNode(plain));plain='';}};
-    const wrap=(tag,inner,cls)=>{flush();const node=el(tag,cls);if(depth<MAX_DEPTH)inline(inner,node,depth+1);else node.textContent=inner;host.appendChild(node);return node;};
-    function link(label,target){
-      const href=safeUrl(target);
-      if(!href){const span=wrap('span',label,'markdown-link-text');if(target)span.title=target;return;}
-      const anchor=wrap('a',label);anchor.href=href;anchor.target='_blank';anchor.rel='noopener noreferrer';anchor.referrerPolicy='no-referrer';anchor.title=href;
+    // Next `]`, next newline, the `]` whose target already failed, and the
+    // next closing run per backtick count: each found once per position.
+    let close=-2,newline=-2,failed=-1;const runs=new Map();
+    const next=(cached,ch,from)=>cached>=from||cached===-1?cached:text.indexOf(ch,from);
+    // A bracketed label from `from`: [label start, `]` index, target match].
+    function bracket(from,max,empty){
+      close=next(close,']',from);if(close===-1)return null;
+      newline=next(newline,'\n',from);
+      if(close-from>max||(!empty&&close===from)||(newline!==-1&&newline<close)||close===failed)return null;
+      const target=at(TARGET,text,close);
+      if(!target){failed=close;return null;}
+      return {label:text.slice(from,close),target:target[1],end:close+target[0].length};
     }
+    const flush=()=>{if(plain){host.appendChild(document.createTextNode(plain));plain='';}};
+    const wrap=(tag,inner,cls)=>{flush();const node=el(tag,cls);if(depth<MAX_DEPTH)inline(inner,node,depth+1,inLink||tag==='a');else node.textContent=inner;host.appendChild(node);return node;};
+    const image=(alt,target)=>{const label=el('span','markdown-image');label.textContent='[image'+(alt?': '+alt:'')+']';label.title=target;return label;};
+    function link(target,fill){
+      flush();const href=safeUrl(target),node=el(href?'a':'span',href?'':'markdown-link-text');
+      if(href){node.href=href;node.target='_blank';node.rel='noopener noreferrer';node.referrerPolicy='no-referrer';node.title=href;}
+      else if(target)node.title=target;
+      fill(node);host.appendChild(node);
+    }
+    const label=text=>node=>{if(depth<MAX_DEPTH)inline(text,node,depth+1,true);else node.textContent=text;};
     for(let i=0;i<text.length;){
       const ch=text[i];let m;
       if(ch==='\\'&&ESCAPE.test(text[i+1]||'')){plain+=text[i+1];i+=2;continue;}
       if(ch==='`'){
         let run=1;while(text[i+run]==='`')run++;
-        const fence='`'.repeat(run),end=text.indexOf(fence,i+run);
+        let end=runs.get(run);
+        if(end===undefined||(end!==-1&&end<i+run)){end=text.indexOf('`'.repeat(run),i+run);runs.set(run,end);}
         if(end>0&&end-i<=SPAN&&text[end+run]!=='`'){
           flush();const code=el('code');code.textContent=text.slice(i+run,end).replace(/^ ([\s\S]*\S[\s\S]*) $/,'$1');host.appendChild(code);i=end+run;continue;
         }
-        plain+=fence;i+=run;continue;
+        plain+='`'.repeat(run);i+=run;continue;
       }
-      if(ch==='!'&&(m=at(IMAGE,text,i))){
-        flush();const label=el('span','markdown-image');label.textContent='[image'+(m[1]?': '+m[1]:'')+']';label.title=m[2];host.appendChild(label);i+=m[0].length;continue;
+      if(ch==='!'&&text[i+1]==='['&&(m=bracket(i+2,500,true))){flush();host.appendChild(image(m.label,m.target));i=m.end;continue;}
+      if(ch==='['&&!inLink){
+        // A badge: [![alt](image)](link) is a link whose label is the image's.
+        if(text[i+1]==='!'&&text[i+2]==='['){
+          const inner=bracket(i+3,500,true),outer=inner&&text[inner.end]===']'?at(TARGET,text,inner.end):null;
+          if(outer){link(outer[1],node=>node.appendChild(image(inner.label,inner.target)));i=inner.end+outer[0].length;continue;}
+        }
+        if((m=bracket(i+1,1000,false))){link(m.target,label(m.label));i=m.end;continue;}
       }
-      if(ch==='['&&(m=at(LINK,text,i))){link(m[1],m[2]);i+=m[0].length;continue;}
-      if(ch==='<'&&(m=at(AUTOLINK,text,i))){link(m[1],m[1]);i+=m[0].length;continue;}
+      if(ch==='<'&&!inLink&&(m=at(AUTOLINK,text,i))){link(m[1],label(m[1]));i+=m[0].length;continue;}
       if((ch==='*'||ch==='_')&&(m=at(STRONG,text,i))&&!(ch==='_'&&/\w/.test(text[i-1]||''))){wrap('strong',m[2]);i+=m[0].length;continue;}
       if(ch==='~'&&(m=at(STRIKE,text,i))){wrap('del',m[1]);i+=m[0].length;continue;}
       if((ch==='*'||ch==='_')&&(m=at(EMPHASIS,text,i))&&!(ch==='_'&&(/\w/.test(text[i-1]||'')||/\w/.test(text[i+m[0].length]||'')))){wrap('em',m[2]);i+=m[0].length;continue;}
@@ -116,14 +141,30 @@
     }
     flush();return host;
   }
-  const FENCE=/^ {0,3}(`{3,}|~{3,})\s*([^`\s]*)[^`]*$/,HEADING=/^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/;
+  // Block patterns match a prefix; the rest of the line is cut with string
+  // operations, never by a pattern that can backtrack over it.
+  const FENCE=/^ {0,3}(`{3,}|~{3,})(.*)$/,HEADING=/^ {0,3}(#{1,6})(?=[ \t]|$)/;
   const RULE=/^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/,QUOTE=/^ {0,3}> ?/,ITEM=/^( {0,3})([-+*]|\d{1,9}[.)])([ \t]+|$)/;
+  function fenceOf(line){
+    const m=FENCE.exec(line);if(!m)return null;
+    const info=m[2].trim();
+    if(m[1][0]==='`'&&info.includes('`'))return null;
+    return {mark:m[1],info,language:info.split(/[ \t]/)[0]};
+  }
+  function headingOf(line){
+    const m=HEADING.exec(line);if(!m)return null;
+    let text=line.slice(m[0].length).trim(),end=text.length;
+    while(end&&text[end-1]==='#')end--;
+    if(end===0)text='';else if(end<text.length&&(text[end-1]===' '||text[end-1]==='\t'))text=text.slice(0,end).trim();
+    return {level:m[1].length,text};
+  }
   const indentOf=line=>line.match(/^[ \t]*/)[0].replace(/\t/g,'    ').length;
   function dedent(line,width){let n=0,i=0;while(i<line.length&&n<width&&(line[i]===' '||line[i]==='\t')){n+=line[i]==='\t'?4:1;i++;}return line.slice(i);}
   function interrupts(line,next){
-    if(FENCE.test(line)||HEADING.test(line)||RULE.test(line)||QUOTE.test(line))return true;
+    if(line.length>LONG_LINE)return false;
+    if(fenceOf(line)||HEADING.test(line)||RULE.test(line)||QUOTE.test(line))return true;
     const item=ITEM.exec(line);if(item&&line.slice(item[0].length).trim()&&(/^[-+*]$/.test(item[2])||/^1[.)]$/.test(item[2])))return true;
-    return isDelimiter(cells(line),next===undefined?null:cells(next));
+    return isDelimiter(cells(line),next===undefined||next.length>LONG_LINE?null:cells(next));
   }
   function codeBlock(text,cls='markdown-code'){const pre=el('pre',cls),code=el('code');code.textContent=text;pre.appendChild(code);return pre;}
   // `tight`: a list item without blank lines; its text needs no paragraph.
@@ -132,19 +173,24 @@
       const line=lines[i];let m;
       if(!line.trim()){i++;continue;}
       if(depth>=MAX_DEPTH){host.appendChild(codeBlock(lines.slice(i).join('\n')));return;}
-      if((m=FENCE.exec(line))){
-        const mark=m[1],body=[];i++;
-        while(i<lines.length){const close=/^ {0,3}(`{3,}|~{3,})\s*$/.exec(lines[i]);if(close&&close[1][0]===mark[0]&&close[1].length>=mark.length){i++;break;}body.push(lines[i++]);}
-        const pre=codeBlock(body.join('\n'));if(m[2])pre.dataset.language=m[2].slice(0,40);host.appendChild(pre);continue;
+      const long=line.length>LONG_LINE;
+      if(!long&&(m=fenceOf(line))){
+        const body=[];i++;
+        while(i<lines.length){
+          const close=lines[i].length<=LONG_LINE?FENCE.exec(lines[i]):null;
+          if(close&&close[1][0]===m.mark[0]&&close[1].length>=m.mark.length&&!close[2].trim()){i++;break;}
+          body.push(lines[i++]);
+        }
+        const pre=codeBlock(body.join('\n'));if(m.language)pre.dataset.language=m.language.slice(0,40);host.appendChild(pre);continue;
       }
-      if((m=HEADING.exec(line))){const heading=el('h'+m[1].length,'markdown-heading');inline(m[2]||'',heading,depth);host.appendChild(heading);i++;continue;}
-      if(RULE.test(line)){host.appendChild(el('hr'));i++;continue;}
-      if(QUOTE.test(line)){
+      if(!long&&(m=headingOf(line))){const heading=el('h'+m.level,'markdown-heading');inline(m.text,heading,depth);host.appendChild(heading);i++;continue;}
+      if(!long&&RULE.test(line)){host.appendChild(el('hr'));i++;continue;}
+      if(!long&&QUOTE.test(line)){
         const inner=[];
         while(i<lines.length&&lines[i].trim()&&(QUOTE.test(lines[i])||inner.length&&!interrupts(lines[i],lines[i+1])))inner.push(lines[i++].replace(QUOTE,''));
         const quote=el('blockquote');blocks(inner,quote,depth+1);host.appendChild(quote);continue;
       }
-      if((m=ITEM.exec(line))){
+      if(!long&&(m=ITEM.exec(line))){
         const ordered=/\d/.test(m[2]),list=el(ordered?'ol':'ul'),base=m[1].length,kind=ordered?m[2].slice(-1):m[2];
         if(ordered&&Number(m[2].slice(0,-1))!==1)list.start=Number(m[2].slice(0,-1));
         while(i<lines.length){
@@ -179,7 +225,7 @@
         }
         host.appendChild(list);continue;
       }
-      if(isDelimiter(cells(line),i+1<lines.length?cells(lines[i+1]):null)){
+      if(!long&&isDelimiter(cells(line),i+1<lines.length&&lines[i+1].length<=LONG_LINE?cells(lines[i+1]):null)){
         const header=cells(line),align=cells(lines[i+1]).map(alignOf),rows=[],start=i;i+=2;
         while(i<lines.length&&lines[i].trim()&&!interrupts(lines[i])&&rows.length<500){
           const row=cells(lines[i]);if(!row)break;
@@ -187,7 +233,7 @@
         }
         host.appendChild(tableNode({header,rows,align,raw:lines.slice(start,i).join('\n')+'\n'},(cell,value)=>inline(value,cell,depth)));continue;
       }
-      if(/^( {4}|\t)/.test(line)){
+      if(!long&&/^( {4}|\t)/.test(line)){
         const body=[];
         while(i<lines.length&&(/^( {4}|\t)/.test(lines[i])||!lines[i].trim()))body.push(dedent(lines[i++],4));
         while(body.length&&!body[body.length-1].trim())body.pop();

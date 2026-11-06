@@ -31,8 +31,13 @@
             let doc=null;
             const toggle=button('conversation-preview-source','Source',()=>{sourceView=!sourceView;show();});
             const show=()=>{
-              if(!sourceView&&!doc)doc=markdown.renderDocument(data.text,create('div','conversation-preview-markdown'));
+              if(!sourceView&&!doc){
+                // A drawing failure shows the file's own text, never an error in its place.
+                try{doc=markdown.renderDocument(data.text,create('div','conversation-preview-markdown'));}
+                catch(_){doc=raw;toggle.disabled=true;toggle.title='Markdown view unavailable for this file';}
+              }
               body.replaceChildren(sourceView?raw:doc);body.scrollTop=0;
+              if(toggle.disabled)return;
               toggle.setAttribute('aria-pressed',String(sourceView));
               toggle.title=sourceView?'Show as Markdown':'Show the original text';
             };

@@ -41,7 +41,7 @@ const show=text=>md.renderDocument(text,new Element('div')).children.map(c=>c.ht
 def run(body, *args):
     if shutil.which('node') is None:
         pytest.skip('node is not installed')
-    result = subprocess.run(['node', '-e', DOM + body, str(MARKDOWN), *args], capture_output=True, text=True, timeout=60)
+    result = subprocess.run(['node', '-e', DOM + body, str(MARKDOWN), *args], capture_output=True, text=True, timeout=120)
     assert result.returncode == 0, result.stderr
     return result.stdout
 
@@ -210,3 +210,62 @@ def test_other_text_files_stay_plain_text(cockpit, label):  # noqa: F811
     assert js("document.querySelector('.conversation-preview-text').textContent.startsWith('# Generated note')")
     assert js("document.querySelector('.conversation-preview-source')") is None
     assert js("document.querySelectorAll('.conversation-preview-content h1,.conversation-preview-content img').length") == 0
+
+
+# Review r1: one long line must not make a block or inline pattern backtrack
+# over itself (a 128 KiB '#' line with spaces took 35.6 s and froze the tab).
+LONG_LINES = {
+    'heading-spaces': "'# a'+' '.repeat(N)+'b'",
+    'heading-after-paragraph': "'para\\n# a'+' '.repeat(N)+'b'",
+    'heading-tabs': "'# a'+'\\t'.repeat(N)+'b'",
+    'fence-backtick': "'```'+' '.repeat(N)+'`'",
+    'fence-tilde': "'~~~'+' '.repeat(N)+'`'",
+    'rule-spaces': "'- - -'+' '.repeat(N)+'x'",
+    'item-spaces': "'-'+' '.repeat(N)+'x'",
+    'quote-spaces': "'>'+' '.repeat(N)+'x'",
+    'table-pipes': "'|'.repeat(N)+'\\n|---|\\n'",
+    'brackets': "'['.repeat(N)",
+    'image-brackets': "'!['.repeat(N/2)",
+    'link-unclosed': "'[a]('.repeat(N/4)",
+    'stars': "'**'+'a '.repeat(N/2)",
+    'backticks': "'`a'.repeat(N/2)",
+    'autolink': "'<https://'.repeat(N/9)",
+}
+
+
+@pytest.mark.parametrize('name', list(LONG_LINES))
+def test_one_long_line_renders_in_linear_time(name):
+    result = json.loads(run(
+        'const N=131060;const text=(' + LONG_LINES[name] + ');'
+        'const s=process.hrtime.bigint();show(text);'
+        'console.log(JSON.stringify({chars:text.length,ms:Number(process.hrtime.bigint()-s)/1e6}));'))
+    assert result['chars'] > 60000
+    assert result['ms'] < 1000, (name, result)
+
+
+def test_a_badge_is_a_link_labelled_with_its_image():
+    out = html('[![CI](https://img.example/x.svg)](https://example.com/repo) after')
+    assert out == ('<p><a href="https://example.com/repo" target="_blank" rel="noopener noreferrer" title="https://example.com/repo">'
+                   '<span class="markdown-image" title="https://img.example/x.svg">[image: CI]</span></a> after</p>')
+
+
+def test_a_link_inside_a_link_label_stays_text():
+    out = html('[a <https://x.example> [b](https://z.example)](https://y.example)')
+    # A label ends at its first `]`; inside it an autolink stays text: one <a>, never nested.
+    assert out == ('<p><a href="https://z.example/" target="_blank" rel="noopener noreferrer" title="https://z.example/">'
+                   'a &lt;https://x.example&gt; [b</a>](https://y.example)</p>')
+
+
+def test_links_after_many_unmatched_brackets_still_work():
+    out = html('[' * 3000 + ' [x](https://a.example) ](nope) [y](https://b.example)')
+    assert out.count('<a ') == 2
+    assert 'href="https://a.example/"' in out and 'href="https://b.example/"' in out
+
+
+def test_a_heading_with_closing_hashes_and_a_hashtag():
+    assert html('## Title ##') == '<h2 class="markdown-heading">Title</h2>'
+    assert html('# C#') == '<h1 class="markdown-heading">C#</h1>'
+    assert html('#tag') == '<p>#tag</p>'
+    assert html('#') == '<h1 class="markdown-heading"></h1>'
+    assert html('```js title="x"\ncode\n```') == '<pre class="markdown-code" data-language="js"><code>code</code></pre>'
+    assert html('``` `not a fence`') == '<p>``` <code>not a fence</code></p>'
