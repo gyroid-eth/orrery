@@ -136,10 +136,10 @@
         const row=document.createElement('article');row.className='conversation-submission';row.dataset.submissionId=item.id;
         const label=document.createElement('div');label.className='conversation-byline';
         const elapsed=Date.now()-item.at;
-        label.textContent='送信 → '+item.name+' · '+(item.unmatched?'送信済み（記録の照合はできず）':elapsed>=60000?'記録はまだ':'記録待ち');
+        label.textContent='Sent → '+item.name+' · '+(item.unmatched?'Sent (record not matched)':elapsed>=60000?'Not recorded yet':'Awaiting record');
         const text=document.createElement('p');text.className='conversation-text';text.textContent=item.preview;
         const note=document.createElement('div');note.className='conversation-submission-note';
-        note.textContent=item.unmatched?'送信後の user 記録が届きましたが、この本文との対応は確認できません。下の会話も確認してください。':'端末へ送信しました。agent の処理待ちの場合があります。会話の記録に現れるまでここに表示します。';
+        note.textContent=item.unmatched?'A user record arrived after this send, but it cannot be matched to this text. Check the conversation below.':'Sent to the terminal. The agent may still be busy. Shown here until it appears in the conversation record.';
         row.append(label,text,note);pendingEl.appendChild(row);
         if(!item.unmatched&&elapsed<60000)next=Math.min(next,60000-elapsed);
       }
@@ -411,11 +411,11 @@
         if(screen.getBoundingClientRect().width<800||root.innerWidth<=1200)close({focus:false});
         else expand(false);
         message('Matching message shown in this terminal.');
-      }else if(result.state==='limited')message('端末の保存行が探索上限を超え、一意に確認できません。ここで履歴を続けて読めます。');
-      else if(result.state==='multiple')message('同じ内容が'+result.count+'か所'+(result.limited?'以上':'')+'あります。ここで履歴を続けて読めます。');
-      else if(result.state==='alternate')message('この画面の過去の描画は端末に保存されません。ここで履歴を続けて読めます。');
-      else if(result.state==='changed')message('端末が切り替わりました。もう一度探してください。');
-      else message('この内容は端末の保存行に見つかりません。ここで履歴を続けて読めます。');
+      }else if(result.state==='limited')message('Terminal scrollback exceeds the search limit; no unique match. Keep reading history here.');
+      else if(result.state==='multiple')message('Same text found in '+result.count+(result.limited?' or more':'')+' places in the terminal. Keep reading history here.');
+      else if(result.state==='alternate')message('Earlier output of this screen is not kept in the terminal. Keep reading history here.');
+      else if(result.state==='changed')message('Terminal changed. Search again.');
+      else message('Not found in terminal scrollback. Keep reading history here.');
     }
     let holding=false,pendingAction=null;
     // A random id made in this page for this reader (pane); see orrery_backend.py

@@ -172,16 +172,16 @@ This is the same DOM element, draft, target, IME handling, send guard and
 WebSocket input route as the terminal composer. Reading/preview keys do not
 send input. Enter in the composer or an explicit SEND sends, and the normal
 history poll picks up the resulting conversation without resetting the reader.
-An open reader also shows a separate, in-memory **送信 → target · 記録待ち**
+An open reader also shows a separate, in-memory **Sent → target · Awaiting record**
 receipt after the existing paste and Enter path succeeds. It stays visible until
-a matching new user record arrives; after 60 seconds its label becomes **記録はまだ**.
+a matching new user record arrives; after 60 seconds its label becomes **Not recorded yet**.
 It is not provider acknowledgement.
-記録の時刻が秒単位の provider で、送信と同じ秒に記録が書かれた場合は「照合できず」と表示することがある。 Repeated prompts match one record each;
+With a provider that records whole seconds, a record written in the same second as the send may show as not matched. Repeated prompts match one record each;
 old loaded records and older pages cannot consume a new receipt. Whitespace is
 normalized; a sufficiently long truncated prefix can match an unambiguous send. Closing and
 reopening History retains receipts; changing binding, closing the pane or
 turning History off discards them. If a new user record cannot be associated confidently, the receipt says
-**送信済み（記録の照合はできず）** rather than claiming the record is still absent. The receipt displays at most 1,000 characters; exact
+**Sent (record not matched)** rather than claiming the record is still absent. The receipt displays at most 1,000 characters; exact
 matching is available for prompts up to the reader's 64 KiB text limit.
 
 Assistant text supports a small inert projection of GFM tables: a matching

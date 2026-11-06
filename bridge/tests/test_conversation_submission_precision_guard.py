@@ -25,7 +25,7 @@ def test_presend_record_from_same_second_cannot_confirm_or_discredit_new_send(co
     print(provider,case,state)
     assert state['existingAt']<state['submittedAt']
     assert state['pending']==1,state
-    assert '照合はできず' not in state['label'],state
+    assert 'record not matched' not in state['label'],state
 
 @pytest.mark.parametrize('same',[True,False])
 def test_pre_send_snapshot_cannot_become_new_on_later_repeat(cockpit,same):
@@ -37,7 +37,7 @@ def test_pre_send_snapshot_cannot_become_new_on_later_repeat(cockpit,same):
     js("finishRepeat({mode:'snapshot',events:[oldRecord,precisionOld,{id:'progress',kind:'text',role:'assistant',text:'Generated progress'}],after:'next'})")
     wait("reader.querySelector('[data-event-id=progress]')!==null")
     assert js("reader.querySelectorAll('.conversation-submission').length")==1
-    assert js("reader.querySelector('.conversation-submission').textContent.includes('照合はできず')")==same
+    assert js("reader.querySelector('.conversation-submission').textContent.includes('record not matched')")==same
 
 
 def test_user_ids_seen_in_previous_snapshot_remain_excluded(cockpit):
@@ -50,7 +50,7 @@ def test_user_ids_seen_in_previous_snapshot_remain_excluded(cockpit):
     js('oldVisible=true;conversationView.refresh()')
     wait("reader.querySelector('[data-event-id=previous-user]')!==null")
     assert js("reader.querySelectorAll('.conversation-submission').length")==1
-    assert not js("reader.querySelector('.conversation-submission').textContent.includes('照合はできず')")
+    assert not js("reader.querySelector('.conversation-submission').textContent.includes('record not matched')")
 
 
 def test_hermes_user_ids_stay_stable_across_snapshot_changes(tmp_path):

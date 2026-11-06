@@ -75,7 +75,7 @@ The reader opens beside the terminal; **Full width** expands it across the pane.
 
 ![Independent history readers in two split panes](docs/images/cockpit_history_split.png)
 
-The composer remains available in full-width view. Reading keys stay in the reader; use Enter or **SEND** to submit explicitly. Submission closes that pane's preview and resumes following its newest history. If the target terminal or connection changes during submission, the send is cancelled with a notice. After sending, a temporary “sent → agent · awaiting record” row appears at the end of that pane’s history and is replaced when the matching user message is recorded. It does not mean the agent has acknowledged the prompt. If the record cannot be matched confidently, the row says so.
+The composer remains available in full-width view. Reading keys stay in the reader; use Enter or **SEND** to submit explicitly. Submission closes that pane's preview and resumes following its newest history. If the target terminal or connection changes during submission, the send is cancelled with a notice. After sending, a temporary “Sent → agent · Awaiting record” row appears at the end of that pane’s history and is replaced when the matching user message is recorded. It does not mean the agent has acknowledged the prompt. If the record cannot be matched confidently, the row says “Sent (record not matched)”.
 
 ![A pending record row after sending a prompt](docs/images/cockpit_history_pending.png)
 

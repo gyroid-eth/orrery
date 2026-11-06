@@ -38,7 +38,7 @@ def test_j1_click_searches_only_retained_same_pane_without_input(cockpit,case):
         assert not js("document.querySelector('.screen').classList.contains('conversation-full')")
         if case=='unique':assert js("panes.get('%901').term.buffer.active.viewportY")<before
     else:
-        needle={'absent':'見つかりません','multiple':'同じ内容が2か所','alternate':'過去の描画は端末に保存されません'}[case]
+        needle={'absent':'Not found in terminal scrollback','multiple':'Same text found in 2 places','alternate':'not kept in the terminal'}[case]
         wait("document.querySelector('.conversation-toolbar').textContent.includes("+json.dumps(needle)+")")
         assert js("panes.get('%901').term.buffer.active.viewportY")==before
         assert js("document.querySelector('.screen').classList.contains('conversation-full')")
@@ -95,7 +95,7 @@ def test_j1_keyboard_and_stale_pane_do_not_leak_input(cockpit):
     wait("panes.get('%901').term.getSelection().includes(jumpFixtureText)")
     assert js("packets.filter(p=>p.type==='input')")==[]
     js("panes.get('%901').term.clearSelection();panes.get('%901').session='ReplacementFixture';document.querySelector('.conversation-text').click()")
-    wait("document.querySelector('.conversation-toolbar').textContent.includes('端末が切り替わりました')")
+    wait("document.querySelector('.conversation-toolbar').textContent.includes('Terminal changed')")
     assert js("panes.get('%901').term.getSelection()")==''
 
 
