@@ -79,7 +79,14 @@ class Literal:
         self.pos+=len(match[0]);return json.loads(match[0])
 
 
-def static_calls(text,names=('apply_patch','view_image','read_file','write_file','Edit','Read','SendUserFile')):
+# ORRERY Mail's local show_files tool, as each harness records its name: Claude
+# `mcp__orrery-mail__show_files`; Codex, dsh and Hermes `mcp__orrery_mail__show_files`.
+# Only this server's tool; a same-named tool of another server grants nothing.
+SHOW_FILES=re.compile(r'mcp__orrery[-_]mail__show_files')
+
+
+def static_calls(text,names=('apply_patch','view_image','read_file','write_file','Edit','Read','SendUserFile',
+                             'mcp__orrery_mail__show_files')):
     reader=Literal(text)
     pattern=r'tools\.('+ '|'.join(re.escape(name) for name in names)+r')\s*\('
     while reader.pos<len(text):
@@ -145,7 +152,11 @@ def extract_artifacts(item: dict) -> dict:
                 and not re.search(r'[\x00-\x1f\x7f]|://|^~',value) and len(result['paths'])<MAX_REFS
                 and value not in result['paths']):result['paths'].append(value)
     for name,value in calls[:MAX_REFS]:
-        if name=='SendUserFile' and isinstance(value,dict):
+        if SHOW_FILES.fullmatch(name) and isinstance(value,dict):
+            # The agent names files to show; the preview's own checks decide.
+            paths=value.get('paths')
+            for filename in paths[:MAX_REFS] if isinstance(paths,list) else []:path(filename)
+        elif name=='SendUserFile' and isinstance(value,dict):
             # Claude's native delivery call records files: string[]. Caption,
             # status and tool-result prose never grant additional references.
             files=value.get('files')
