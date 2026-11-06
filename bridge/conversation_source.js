@@ -46,9 +46,11 @@
   }
   class Source {
     constructor(fetcher=root.fetch.bind(root)){this.fetcher=fetcher;}
-    async read(agent,{before=null,after=null,signal,wait=0,reader=null}={}){
+    async read(agent,{before=null,after=null,signal,wait=0,reader=null,limit=null}={}){
       const query=new URLSearchParams({agent});
       if(before!==null)query.set('before',before);
+      // Events per page; the server takes 1..200 and defaults to 80.
+      if(Number.isInteger(limit)&&limit>=1&&limit<=200)query.set('limit',String(limit));
       if(after!==null)query.set('after',after);
       // The server holds a poll of an unchanged record for up to `wait` s.
       if(after!==null&&Number.isInteger(wait)&&wait>0){

@@ -71,7 +71,7 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 
 ![架空の会話を履歴パネルで開く](docs/images/cockpit_history.png)
 
-履歴は端末の横に開き、**Full width** で pane 全体に広げられます。狭い画面では pane 全体に表示します。スクロールしている間は新しい記録が来ても読んでいる位置を保ち、**Load earlier** がある場合は過去へ遡れます。**Latest** で最新に戻れます。開閉時に CLAIMED 端末のサイズは変わりません。分割中は各 pane の **HISTORY** で独立して開き、全幅や preview もその区画内に収まります。履歴を操作した pane が下の prompt 欄の送り先になります。別の pane を閉じても、残った pane の履歴の表示幅・読み位置・開いた Mail や preview は保たれます。幅が変わると読み位置が1〜2行ずれることがあります。
+履歴は端末の横に開き、**Full width** で pane 全体に広げられます。狭い画面では pane 全体に表示します。スクロールしている間は新しい記録が来ても読んでいる位置を保ち、**Load earlier** がある場合は過去へ遡れます（1回で約300件。tool の呼び出しと結果も1件ずつ数えます。手元に置くのは800件までで、超えると新しい側から外します）。**Latest** で最新に戻れます。開閉時に CLAIMED 端末のサイズは変わりません。分割中は各 pane の **HISTORY** で独立して開き、全幅や preview もその区画内に収まります。履歴を操作した pane が下の prompt 欄の送り先になります。別の pane を閉じても、残った pane の履歴の表示幅・読み位置・開いた Mail や preview は保たれます。幅が変わると読み位置が1〜2行ずれることがあります。
 
 ![2分割の各 pane で履歴を開く](docs/images/cockpit_history_split.png)
 
