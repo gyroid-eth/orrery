@@ -158,3 +158,26 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 .conversation-table table{border-collapse:collapse;width:max-content;min-width:100%;font:12px/1.75 var(--mono)}
 .conversation-table th,.conversation-table td{border:1px solid var(--hair);padding:8px 12px;white-space:pre-wrap;min-width:80px;max-width:42ch;overflow-wrap:anywhere}
 .conversation-table th{background:var(--panel-2);font-weight:600}
+/* A .md preview drawn as a document (conversation_markdown.js renderDocument). */
+.conversation-preview-markdown{color:var(--ink);font:12px/1.75 var(--mono);max-width:88ch}
+.conversation-preview-markdown>:first-child{margin-top:0}
+.conversation-preview-markdown :is(p,ul,ol,blockquote,pre,.conversation-table){margin:0 0 12px}
+.conversation-preview-markdown p,.conversation-preview-markdown li{white-space:pre-line}
+.conversation-preview-markdown .markdown-heading{margin:20px 0 8px;font-weight:600;line-height:1.4;color:var(--ink)}
+.conversation-preview-markdown h1{font-size:17px;padding-bottom:6px;border-bottom:1px solid var(--hair)}
+.conversation-preview-markdown h2{font-size:15px;padding-bottom:4px;border-bottom:1px solid var(--hair)}
+.conversation-preview-markdown h3{font-size:13.5px}
+.conversation-preview-markdown :is(h4,h5,h6){font-size:12px;color:var(--ink-dim)}
+.conversation-preview-markdown :is(ul,ol){padding-left:22px}
+.conversation-preview-markdown li>:is(ul,ol,p,blockquote,pre){margin:2px 0 4px}
+.conversation-preview-markdown .markdown-task{list-style:none;margin-left:-16px}
+.conversation-preview-markdown .markdown-task-box{color:var(--ink-dim)}
+.conversation-preview-markdown blockquote{padding:2px 0 2px 12px;border-left:2px solid var(--hair-2);color:var(--ink-dim)}
+.conversation-preview-markdown code{padding:1px 4px;border-radius:3px;background:var(--panel);font:inherit}
+.conversation-preview-markdown pre{padding:10px 12px;overflow-x:auto;border:1px solid var(--hair);border-radius:4px;background:var(--panel);white-space:pre;tab-size:2}
+.conversation-preview-markdown pre code{padding:0;background:none}
+.conversation-preview-markdown .markdown-front-matter{color:var(--ink-dim)}
+.conversation-preview-markdown hr{margin:16px 0;border:0;border-top:1px solid var(--hair)}
+.conversation-preview-markdown a{color:var(--amber);text-decoration:underline;text-underline-offset:2px}
+.conversation-preview-markdown :is(.markdown-link-text,.markdown-image){color:var(--ink-dim);text-decoration:underline dotted;text-underline-offset:2px}
+.conversation-preview-source[aria-pressed="true"]{border-color:var(--amber);color:var(--amber)}
