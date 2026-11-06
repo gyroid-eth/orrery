@@ -318,7 +318,7 @@ connect();events.close();
 if(attachedSessions.size||requestedSessions.size||groups.get('Alpha').state.textContent!=='closed'||links.at(-1)[1]!=='disconnected')throw Error('transport failure remained live');
 console.log(JSON.stringify({gapVisible:true,reattach:true,oldErrorIgnored:true,otherSessionPreserved:true,transportFailureClosed:true}));
 '''
-    done = subprocess.run(['/usr/local/bin/node', '-e', '\n'.join(functions)+'\n'+script],
+    done = subprocess.run(['node', '-e', '\n'.join(functions)+'\n'+script],
                           capture_output=True, text=True, check=False)
     assert done.returncode == 0, done.stderr
     assert all(json.loads(done.stdout).values())
