@@ -85,7 +85,7 @@ Markdown tables in assistant messages render as tables and can be scrolled horiz
 
 ![A table in an agent message with Copy Markdown](docs/images/cockpit_history_table.png)
 
-When records contain file references or edit-request diffs, the reader shows file chips and diffs. Files delivered with Claude’s SendUserFile also have chips for preview. Select a chip to preview the current text or image. A `.md` file opens drawn as a document (headings, tables, lists, code and more); **Source** switches to its original text. Raw HTML stays text, images are never fetched, and only http(s) and mailto links open, in a new tab. A recorded diff and the current file are distinct. **Reveal in file manager** selects the file in Finder or Explorer when pressed.
+When records contain file references or edit-request diffs, the reader shows file chips and diffs. Files delivered with Claude’s SendUserFile, and files or images an agent shows with ORRERY Mail’s `show_files` (Claude, Codex, dsh or Hermes), also have chips for preview. Select a chip to preview the current text or image. A `.md` file opens drawn as a document (headings, tables, lists, code and more); **Source** switches to its original text. Raw HTML stays text, images are never fetched, and only http(s) and mailto links open, in a new tab. A recorded diff and the current file are distinct. **Reveal in file manager** selects the file in Finder or Explorer when pressed.
 
 ![Previewing the current text from a file chip](docs/images/cockpit_history_text.png)
 
