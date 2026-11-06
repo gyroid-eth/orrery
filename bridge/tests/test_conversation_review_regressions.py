@@ -198,11 +198,13 @@ def test_fresh_is_a_bounded_snapshot_and_legacy_retention_has_a_byte_cap(cockpit
 def test_legacy_limit_pauses_updates_while_reading_and_latest_reloads(cockpit):
     js, wait, client, requests, enable = cockpit
     enable(mode="cursor", count=200)
-    js("document.querySelector('.conversation-scroll').scrollTop=1e9;conversationView.refresh()")
-    wait("document.querySelectorAll('.conversation-event').length===400")
+    # Fill the 800-event window with 200-event pages read at the bottom.
+    for n in range(2, 5):
+        js("document.querySelector('.conversation-scroll').scrollTop=1e9;conversationView.refresh()")
+        wait("document.querySelectorAll('.conversation-event').length===" + str(n * 200))
     js("document.querySelector('.conversation-scroll').scrollTop=110;conversationView.refresh()")
     wait("document.querySelector('.conversation-latest').textContent.includes('resume')")
-    assert js("document.querySelectorAll('.conversation-event').length") == 400
+    assert js("document.querySelectorAll('.conversation-event').length") == 800
     assert js("document.querySelector('.conversation-scroll').scrollTop") == 110
     js("document.querySelector('.conversation-latest').click()")
     wait("document.querySelectorAll('.conversation-event').length===200")
@@ -586,8 +588,8 @@ def test_submit_while_older_request_pending_must_not_repause(cockpit):
     js, wait, client, requests, enable = cockpit
     stable_roster(js)
     enable(count=80, text_size=1000)
-    # Fill the existing 400-event window using ordinary 80-event responses.
-    for n in range(2, 6):
+    # Fill the existing 800-event window using ordinary 80-event responses.
+    for n in range(2, 11):
         js('conversationView.refresh()')
         wait('pageNumber===' + str(n))
         wait('document.querySelectorAll(".conversation-event").length===' + str(n * 80))
@@ -603,7 +605,8 @@ def test_submit_while_older_request_pending_must_not_repause(cockpit):
     """)
     wait("packets.some(p=>p.type==='input'&&p.data==='\\r')")
     # A slow older response arrives after submission and causes retention trim.
-    js("""resolveOlder({events:Array.from({length:80},(_,i)=>({id:'old-'+i,kind:'text',role:'assistant',text:'old'.repeat(300),cursor_before:'old:'+i,cursor_after:'old:'+(i+1)})),before:'older-start',after:'older-end',has_older:true});""")
+    # It is the record's start, so this Load earlier reads no further page.
+    js("""resolveOlder({events:Array.from({length:80},(_,i)=>({id:'old-'+i,kind:'text',role:'assistant',text:'old'.repeat(300),cursor_before:'old:'+i,cursor_after:'old:'+(i+1)})),before:'older-start',after:'older-end',has_older:false});""")
     time.sleep(.2)
     observed = js("""({latest:document.querySelector('.conversation-latest').textContent,
       status:document.querySelector('.conversation-toolbar .conversation-status').textContent,

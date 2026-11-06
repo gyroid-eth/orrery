@@ -4,7 +4,16 @@
 (function(root){
   'use strict';
   const KEY='oc-term-conversation-enabled';
-  const MAX_EVENTS=400,MAX_BYTES=2*1024*1024;
+  const MAX_EVENTS=800,MAX_BYTES=2*1024*1024;
+  // One Load earlier gathers about OLDER_EVENTS events with up to OLDER_READS
+  // pages of OLDER_LIMIT (the server's cap). Tool calls and results are one
+  // event each, and a page also stops at the server's scan window, so one
+  // 80-event page went back only a few exchanges. MAX_EVENTS keeps two such
+  // loads beside the first page before older rows are released.
+  const OLDER_LIMIT=200,OLDER_EVENTS=300,OLDER_READS=4;
+  // Failures about the record's binding: never keep content read with it.
+  const BINDING_ERRORS=['history_changed','history_unconfirmed','history_stale','agent_unavailable','claude_next_phase','provider_unavailable',
+    'dashboard_upgrade_required','dsh_decoder_unavailable','history_format_unsupported','history_unreadable','history_pending'];
   // A held poll keeps one browser connection busy; HTTP/1.1 allows about six
   // per host, which the rest of the cockpit also needs. Four, the same as the
   // server's cap, lets every pane of a 4-way split hold (measured with the
@@ -445,6 +454,30 @@
       clearTimeout(timer);timerDue=due;timer=setTimeout(()=>{timer=0;load('newer');},delay);
     }
     ops.planners.add(plan);
+    // Older pages, newest first, merged into one page in reading order.
+    // A later page that fails for a reason other than the binding (a record
+    // over the byte limit, a dashboard or network failure) ends this load
+    // with the pages already read; the next Load earlier continues from them.
+    async function readOlder(name,options,token){
+      const pages=[];let cursor=options.before,count=0;
+      for(let n=0;n<OLDER_READS;n++){
+        let page;
+        try{page=await source.read(name,{...options,before:cursor,limit:Math.min(OLDER_LIMIT,OLDER_EVENTS-count)});}
+        catch(error){
+          if(!pages.length||token!==generation||error?.name==='AbortError'||BINDING_ERRORS.includes(error?.code))throw error;
+          break;
+        }
+        pages.push(page);count+=page.events.length;
+        if(token!==generation||page.has_older!==true||(page.mode||'cursor')!=='cursor'||
+          typeof page.before!=='string'||page.before===cursor||count>=OLDER_EVENTS)break;
+        cursor=page.before;
+      }
+      const oldest=pages[pages.length-1],seen=new Set();
+      // Pages never overlap at the server's cursors; drop a repeated id anyway.
+      const events=pages.reverse().flatMap(page=>page.events).filter(event=>!(event?.id&&seen.has(event.id))&&(seen.add(event?.id),true));
+      return {...pages[pages.length-1],events,before:oldest.before,has_older:oldest.has_older,
+        skipped_large_record:pages.some(page=>page.skipped_large_record===true)};
+    }
     async function load(direction='initial',op=null){
       if(!opened||!presented||!enabled||busy||!agent||paused&&direction==='newer'){endOp(op);return;}
       const token=generation,name=agent,sequence=++readSequence;
@@ -460,7 +493,7 @@
       // Load earlier stays usable while the poll only waits in the background.
       earlier.disabled=!holding;
       try{
-        const page=await source.read(name,options);
+        const page=direction==='older'?await readOlder(name,options,token):await source.read(name,options);
         holding=false;waiting.delete(holder);
         if(page.hold===true)last.hold=true;
         last.slot=page.slot===true;last.refused=Boolean(options.wait)&&!last.slot;
@@ -529,7 +562,7 @@
         last.failed=true;
         pollAgain=!['history_changed','record_too_large','provider_unavailable','claude_next_phase','dashboard_upgrade_required','dsh_decoder_unavailable','history_format_unsupported'].includes(error.code);
         message(error.message);retry.hidden=false;
-        if(['history_changed','history_unconfirmed','history_stale','agent_unavailable','claude_next_phase','provider_unavailable','dashboard_upgrade_required','dsh_decoder_unavailable','history_format_unsupported','history_unreadable','history_pending'].includes(error.code)){
+        if(BINDING_ERRORS.includes(error.code)){
           // Never retain content from a stale, unbound or different native session.
           clear({keepSubmissions:error.code==='history_pending'});retry.hidden=false;empty.hidden=false;
           empty.textContent=error.code==='history_changed'?'Session changed. Retry to load the current conversation.':error.message;
