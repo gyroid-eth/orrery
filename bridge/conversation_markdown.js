@@ -1,4 +1,5 @@
-/* Small inert table projection. Never parse HTML, URLs, images or inline JS. */
+/* Small inert Markdown projection. Never parse HTML, load images or run inline
+   JS: every piece of text reaches the page as a text node. */
 (function(root){
   'use strict';
   function cells(line){
@@ -15,6 +16,8 @@
     return parts.map(value=>value.trim());
   }
   const blockStart=line=>/^ {0,3}(?:`{3,}|~{3,}|#{1,6}(?:\s|$)|>|[-+*]\s+|\d{1,9}[.)]\s+)/.test(line);
+  const isDelimiter=(header,delimiter)=>Boolean(header?.length&&header.length<=64&&delimiter&&header.length===delimiter.length&&delimiter.every(cell=>/^:?-{3,}:?$/.test(cell)));
+  const alignOf=cell=>cell.startsWith(':')&&cell.endsWith(':')?'center':cell.endsWith(':')?'right':'left';
   function parse(text){
     const lines=text.match(/[^\n]*\n|[^\n]+$/g)||[],blocks=[];let plain='',fence=null;
     const bare=line=>line.replace(/\r?\n$/,'');
@@ -27,7 +30,7 @@
       }
       if(mark){fence={char:mark[1][0],length:mark[1].length};plain+=lines[i++];continue;}
       const header=cells(line),delimiter=i+1<lines.length?cells(bare(lines[i+1])):null;
-      if(blockStart(line)||!header?.length||header.length>64||!delimiter||header.length!==delimiter.length||!delimiter.every(cell=>/^:?-{3,}:?$/.test(cell))){plain+=lines[i++];continue;}
+      if(blockStart(line)||!isDelimiter(header,delimiter)){plain+=lines[i++];continue;}
       const rows=[];let end=i+2,valid=true;
       while(end<lines.length){
         if(blockStart(bare(lines[end])))break;
@@ -38,26 +41,173 @@
       }
       if(!valid){plain+=lines.slice(i,end).join('');i=end;continue;}
       if(plain){blocks.push({kind:'text',text:plain});plain='';}
-      blocks.push({kind:'table',header,rows,align:delimiter.map(cell=>cell.startsWith(':')&&cell.endsWith(':')?'center':cell.endsWith(':')?'right':'left'),raw:lines.slice(i,end).join('')});i=end;
+      blocks.push({kind:'table',header,rows,align:delimiter.map(alignOf),raw:lines.slice(i,end).join('')});i=end;
     }
     if(plain)blocks.push({kind:'text',text:plain});return blocks;
+  }
+  // `fill(cell,value)` writes one cell; the conversation keeps cells as text.
+  function tableNode(block,fill=(cell,value)=>{cell.textContent=value;}){
+    const container=document.createElement('div');container.className='conversation-table';
+    const copy=document.createElement('button');copy.type='button';copy.className='cockpit-control conversation-table-copy';copy.textContent='Copy Markdown';
+    copy.addEventListener('click',async event=>{event.stopPropagation();try{await navigator.clipboard.writeText(block.raw);copy.textContent='Copied';}catch(_){copy.textContent='Copy unavailable';}});
+    copy.addEventListener('keydown',event=>event.stopPropagation());
+    const scroll=document.createElement('div');scroll.className='conversation-table-scroll';scroll.tabIndex=0;scroll.setAttribute('role','region');scroll.setAttribute('aria-label','Markdown table; scroll horizontally for more columns');
+    const table=document.createElement('table'),head=document.createElement('thead'),body=document.createElement('tbody');
+    function row(values,header){const tr=document.createElement('tr');values.forEach((value,i)=>{const cell=document.createElement(header?'th':'td');fill(cell,value);cell.style.textAlign=block.align[i];if(header)cell.scope='col';tr.appendChild(cell);});return tr;}
+    head.appendChild(row(block.header,true));for(const values of block.rows)body.appendChild(row(values,false));
+    table.append(head,body);scroll.appendChild(table);container.append(copy,scroll);return container;
   }
   function render(text,host){
     const blocks=parse(text);
     if(!blocks.some(block=>block.kind==='table')){host.textContent=text;return host;}
     for(const block of blocks){
       if(block.kind==='text'){const prose=document.createElement('span');prose.textContent=block.text;host.appendChild(prose);continue;}
-      const container=document.createElement('div');container.className='conversation-table';
-      const copy=document.createElement('button');copy.type='button';copy.className='cockpit-control conversation-table-copy';copy.textContent='Copy Markdown';
-      copy.addEventListener('click',async event=>{event.stopPropagation();try{await navigator.clipboard.writeText(block.raw);copy.textContent='Copied';}catch(_){copy.textContent='Copy unavailable';}});
-      copy.addEventListener('keydown',event=>event.stopPropagation());
-      const scroll=document.createElement('div');scroll.className='conversation-table-scroll';scroll.tabIndex=0;scroll.setAttribute('role','region');scroll.setAttribute('aria-label','Markdown table; scroll horizontally for more columns');
-      const table=document.createElement('table'),head=document.createElement('thead'),body=document.createElement('tbody');
-      function row(values,header){const tr=document.createElement('tr');values.forEach((value,i)=>{const cell=document.createElement(header?'th':'td');cell.textContent=value;cell.style.textAlign=block.align[i];if(header)cell.scope='col';tr.appendChild(cell);});return tr;}
-      head.appendChild(row(block.header,true));for(const values of block.rows)body.appendChild(row(values,false));
-      table.append(head,body);scroll.appendChild(table);container.append(copy,scroll);host.appendChild(container);
+      host.appendChild(tableNode(block));
     }
     return host;
   }
-  root.OrreryConversationMarkdown=Object.freeze({parse,render});
+
+  /* A document view for a file preview: headings, paragraphs, lists, tables,
+     code, quotes, rules and inline marks. Raw HTML stays visible text. An
+     image is a text label and is never fetched. Only http(s) and mailto links
+     are links (a new tab, no referrer); any other target is plain text. */
+  const MAX_DEPTH=8,SPAN=2000;
+  const el=(tag,cls)=>{const node=document.createElement(tag);if(cls)node.className=cls;return node;};
+  function safeUrl(value){
+    try{const url=new URL(value);return ['http:','https:','mailto:'].includes(url.protocol)?url.href:null;}catch(_){return null;}
+  }
+  const ESCAPE=/[\\`*_{}[\]()#+\-.!|~<>]/;
+  const IMAGE=/!\[([^\]\n]{0,500})\]\(([^()\s]{0,2000})(?:\s+"[^"\n]{0,500}")?\)/y;
+  const LINK=/\[([^\]\n]{1,1000})\]\(([^()\s]{0,2000})(?:\s+"[^"\n]{0,500}")?\)/y;
+  const AUTOLINK=/<((?:https?:\/\/|mailto:)[^\s<>]{1,2000})>/iy;
+  const STRONG=/(\*\*|__)(?=\S)([\s\S]{0,2000}?\S)\1/y;
+  const STRIKE=/~~(?=\S)([\s\S]{0,2000}?\S)~~/y;
+  const EMPHASIS=/([*_])(?=\S)([\s\S]{0,2000}?\S)\1/y;
+  function at(pattern,text,i){pattern.lastIndex=i;return pattern.exec(text);}
+  function inline(text,host,depth=0){
+    let plain='';
+    const flush=()=>{if(plain){host.appendChild(document.createTextNode(plain));plain='';}};
+    const wrap=(tag,inner,cls)=>{flush();const node=el(tag,cls);if(depth<MAX_DEPTH)inline(inner,node,depth+1);else node.textContent=inner;host.appendChild(node);return node;};
+    function link(label,target){
+      const href=safeUrl(target);
+      if(!href){const span=wrap('span',label,'markdown-link-text');if(target)span.title=target;return;}
+      const anchor=wrap('a',label);anchor.href=href;anchor.target='_blank';anchor.rel='noopener noreferrer';anchor.referrerPolicy='no-referrer';anchor.title=href;
+    }
+    for(let i=0;i<text.length;){
+      const ch=text[i];let m;
+      if(ch==='\\'&&ESCAPE.test(text[i+1]||'')){plain+=text[i+1];i+=2;continue;}
+      if(ch==='`'){
+        let run=1;while(text[i+run]==='`')run++;
+        const fence='`'.repeat(run),end=text.indexOf(fence,i+run);
+        if(end>0&&end-i<=SPAN&&text[end+run]!=='`'){
+          flush();const code=el('code');code.textContent=text.slice(i+run,end).replace(/^ ([\s\S]*\S[\s\S]*) $/,'$1');host.appendChild(code);i=end+run;continue;
+        }
+        plain+=fence;i+=run;continue;
+      }
+      if(ch==='!'&&(m=at(IMAGE,text,i))){
+        flush();const label=el('span','markdown-image');label.textContent='[image'+(m[1]?': '+m[1]:'')+']';label.title=m[2];host.appendChild(label);i+=m[0].length;continue;
+      }
+      if(ch==='['&&(m=at(LINK,text,i))){link(m[1],m[2]);i+=m[0].length;continue;}
+      if(ch==='<'&&(m=at(AUTOLINK,text,i))){link(m[1],m[1]);i+=m[0].length;continue;}
+      if((ch==='*'||ch==='_')&&(m=at(STRONG,text,i))&&!(ch==='_'&&/\w/.test(text[i-1]||''))){wrap('strong',m[2]);i+=m[0].length;continue;}
+      if(ch==='~'&&(m=at(STRIKE,text,i))){wrap('del',m[1]);i+=m[0].length;continue;}
+      if((ch==='*'||ch==='_')&&(m=at(EMPHASIS,text,i))&&!(ch==='_'&&(/\w/.test(text[i-1]||'')||/\w/.test(text[i+m[0].length]||'')))){wrap('em',m[2]);i+=m[0].length;continue;}
+      plain+=ch;i++;
+    }
+    flush();return host;
+  }
+  const FENCE=/^ {0,3}(`{3,}|~{3,})\s*([^`\s]*)[^`]*$/,HEADING=/^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/;
+  const RULE=/^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/,QUOTE=/^ {0,3}> ?/,ITEM=/^( {0,3})([-+*]|\d{1,9}[.)])([ \t]+|$)/;
+  const indentOf=line=>line.match(/^[ \t]*/)[0].replace(/\t/g,'    ').length;
+  function dedent(line,width){let n=0,i=0;while(i<line.length&&n<width&&(line[i]===' '||line[i]==='\t')){n+=line[i]==='\t'?4:1;i++;}return line.slice(i);}
+  function interrupts(line,next){
+    if(FENCE.test(line)||HEADING.test(line)||RULE.test(line)||QUOTE.test(line))return true;
+    const item=ITEM.exec(line);if(item&&line.slice(item[0].length).trim()&&(/^[-+*]$/.test(item[2])||/^1[.)]$/.test(item[2])))return true;
+    return isDelimiter(cells(line),next===undefined?null:cells(next));
+  }
+  function codeBlock(text,cls='markdown-code'){const pre=el('pre',cls),code=el('code');code.textContent=text;pre.appendChild(code);return pre;}
+  // `tight`: a list item without blank lines; its text needs no paragraph.
+  function blocks(lines,host,depth,tight=false){
+    for(let i=0;i<lines.length;){
+      const line=lines[i];let m;
+      if(!line.trim()){i++;continue;}
+      if(depth>=MAX_DEPTH){host.appendChild(codeBlock(lines.slice(i).join('\n')));return;}
+      if((m=FENCE.exec(line))){
+        const mark=m[1],body=[];i++;
+        while(i<lines.length){const close=/^ {0,3}(`{3,}|~{3,})\s*$/.exec(lines[i]);if(close&&close[1][0]===mark[0]&&close[1].length>=mark.length){i++;break;}body.push(lines[i++]);}
+        const pre=codeBlock(body.join('\n'));if(m[2])pre.dataset.language=m[2].slice(0,40);host.appendChild(pre);continue;
+      }
+      if((m=HEADING.exec(line))){const heading=el('h'+m[1].length,'markdown-heading');inline(m[2]||'',heading,depth);host.appendChild(heading);i++;continue;}
+      if(RULE.test(line)){host.appendChild(el('hr'));i++;continue;}
+      if(QUOTE.test(line)){
+        const inner=[];
+        while(i<lines.length&&lines[i].trim()&&(QUOTE.test(lines[i])||inner.length&&!interrupts(lines[i],lines[i+1])))inner.push(lines[i++].replace(QUOTE,''));
+        const quote=el('blockquote');blocks(inner,quote,depth+1);host.appendChild(quote);continue;
+      }
+      if((m=ITEM.exec(line))){
+        const ordered=/\d/.test(m[2]),list=el(ordered?'ol':'ul'),base=m[1].length,kind=ordered?m[2].slice(-1):m[2];
+        if(ordered&&Number(m[2].slice(0,-1))!==1)list.start=Number(m[2].slice(0,-1));
+        while(i<lines.length){
+          const head=ITEM.exec(lines[i]);
+          if(!head||head[1].length>base+1||(ordered?head[2].slice(-1):head[2])!==kind)break;
+          const width=lines[i].slice(head[0].length).trim()?head[0].length:head[1].length+head[2].length+1;
+          const item=[lines[i].slice(head[0].length)];i++;
+          while(i<lines.length){
+            const next=lines[i];
+            if(!next.trim()){
+              let k=i;while(k<lines.length&&!lines[k].trim())k++;
+              if(k<lines.length&&indentOf(lines[k])>=width){while(i<k){item.push('');i++;}continue;}
+              break;
+            }
+            if(indentOf(next)>=width){item.push(dedent(next,width));i++;continue;}
+            if(ITEM.test(next)||interrupts(next,lines[i+1]))break;
+            item.push(next.trim());i++;   // a lazy continuation of the item's paragraph
+          }
+          const li=el('li'),task=/^\[([ xX])\][ \t]+/.exec(item[0]);
+          if(task){
+            item[0]=item[0].slice(task[0].length);li.className='markdown-task';li.dataset.checked=String(task[1]!==' ');
+            const box=el('span','markdown-task-box');box.textContent=task[1]===' '?'☐ ':'☑ ';li.appendChild(box);
+          }
+          const loose=item.some((text,n)=>!text.trim()&&n<item.length-1);
+          if(!loose&&!item.slice(1).some(text=>interrupts(text)||ITEM.test(text)||/^( {4}|\t)/.test(text)))inline(item.join('\n'),li,depth);
+          else blocks(item,li,depth+1,!loose);
+          list.appendChild(li);
+          // Blank lines between items keep one list.
+          let k=i;while(k<lines.length&&!lines[k].trim())k++;
+          const again=k<lines.length?ITEM.exec(lines[k]):null;
+          if(k>i&&again&&again[1].length<=base+1)i=k;else if(k>i)break;
+        }
+        host.appendChild(list);continue;
+      }
+      if(isDelimiter(cells(line),i+1<lines.length?cells(lines[i+1]):null)){
+        const header=cells(line),align=cells(lines[i+1]).map(alignOf),rows=[],start=i;i+=2;
+        while(i<lines.length&&lines[i].trim()&&!interrupts(lines[i])&&rows.length<500){
+          const row=cells(lines[i]);if(!row)break;
+          rows.push(header.map((_,n)=>row[n]??''));i++;
+        }
+        host.appendChild(tableNode({header,rows,align,raw:lines.slice(start,i).join('\n')+'\n'},(cell,value)=>inline(value,cell,depth)));continue;
+      }
+      if(/^( {4}|\t)/.test(line)){
+        const body=[];
+        while(i<lines.length&&(/^( {4}|\t)/.test(lines[i])||!lines[i].trim()))body.push(dedent(lines[i++],4));
+        while(body.length&&!body[body.length-1].trim())body.pop();
+        host.appendChild(codeBlock(body.join('\n')));continue;
+      }
+      const paragraph=[line.trim()];i++;
+      while(i<lines.length&&lines[i].trim()&&!interrupts(lines[i],lines[i+1]))paragraph.push(lines[i++].trim());
+      if(tight)inline(paragraph.join('\n'),host,depth);
+      else{const p=el('p');inline(paragraph.join('\n'),p,depth);host.appendChild(p);}
+    }
+  }
+  function renderDocument(text,host){
+    const lines=String(text).replace(/\r\n?/g,'\n').split('\n');let start=0;
+    // YAML front matter (Obsidian notes) stays as text at the top.
+    if(lines[0]==='---'){
+      const close=lines.indexOf('---',1);
+      if(close>0&&close<=200){host.appendChild(codeBlock(lines.slice(0,close+1).join('\n'),'markdown-code markdown-front-matter'));start=close+1;}
+    }
+    blocks(lines.slice(start),host,0);
+    return host;
+  }
+  root.OrreryConversationMarkdown=Object.freeze({parse,render,renderDocument});
 })(typeof window==='undefined'?globalThis:window);

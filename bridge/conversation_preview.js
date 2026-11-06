@@ -3,7 +3,8 @@
 (function(root){
   'use strict';
   function mount({host,source,onActivate=()=>{},onBeforeOpen=()=>{},onClose=()=>{}}){
-    let request=null,generation=0,objectUrl=null,selected=null;
+    // sourceView: this reader's last Markdown/Source choice for .md previews.
+    let request=null,generation=0,objectUrl=null,selected=null,sourceView=false;
     const create=(tag,cls,text)=>{const el=document.createElement(tag);el.className=cls;if(text!==undefined)el.textContent=text;return el;};
     const button=(cls,text,action)=>{const el=create('button','cockpit-control conversation-action '+cls,text);el.type='button';el.addEventListener('click',action);return el;};
     function cancel(){generation++;if(request)request.abort();request=null;if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl=null;}
@@ -23,7 +24,20 @@
         if(token!==generation)return;
         body.replaceChildren();
         if(data.kind==='text'&&typeof data.text==='string'&&data.text.length<=131072){
-          body.appendChild(create('pre','conversation-preview-text',data.text));
+          const raw=create('pre','conversation-preview-text',data.text),markdown=root.OrreryConversationMarkdown;
+          if(/\.(?:md|markdown)$/i.test(ref.label)&&typeof markdown?.renderDocument==='function'){
+            // Drawn as a document by default; Source shows the file's own text.
+            // Both views are inert (text nodes only); see conversation_markdown.js.
+            let doc=null;
+            const toggle=button('conversation-preview-source','Source',()=>{sourceView=!sourceView;show();});
+            const show=()=>{
+              if(!sourceView&&!doc)doc=markdown.renderDocument(data.text,create('div','conversation-preview-markdown'));
+              body.replaceChildren(sourceView?raw:doc);body.scrollTop=0;
+              toggle.setAttribute('aria-pressed',String(sourceView));
+              toggle.title=sourceView?'Show as Markdown':'Show the original text';
+            };
+            show();head.insertBefore(toggle,closeButton);
+          }else body.appendChild(raw);
         }else if(data.kind==='image'&&data.mime==='image/png'&&typeof data.data==='string'&&data.data.length<12*1024*1024){
           const bytes=Uint8Array.from(atob(data.data),char=>char.charCodeAt(0));
           objectUrl=URL.createObjectURL(new Blob([bytes],{type:'image/png'}));
