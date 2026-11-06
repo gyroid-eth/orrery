@@ -28,10 +28,13 @@ def test_table_is_text_only_and_surrounding_paragraphs_stay(cockpit,provider):
 
 def test_strict_parser_rejects_malformed_fenced_indented_and_plain_pipe_text(cockpit):
     js,wait,client=prepare(cockpit)
-    cases=['a | b\nnot a delimiter\nx | y','| a | b |\n|---|---|\n| mismatch |','```md\n|a|b|\n|---|---|\n|x|y|\n```','~~~~\n|a|b|\n|---|---|\n~~~~','    |a|b|\n    |---|---|','|a|b|\n|--|---|']
+    cases=['a | b\nnot a delimiter\nx | y','| a | b |\n|---|---|\n| mismatch |','```md\n|a|b|\n|---|---|\n|x|y|\n```','~~~~\n|a|b|\n|---|---|\n~~~~','    |a|b|\n    |---|---|','|a|b|\n|:|:|']
     for text in cases:assert js('OrreryConversationMarkdown.parse('+json.dumps(text)+").every(b=>b.kind==='text')"),text
     assert js("OrreryConversationMarkdown.parse('|a|b|\\n|---|---|\\n|left\\\\|right|tail|')[0].rows[0][0]")=='left|right'
     assert js("OrreryConversationMarkdown.parse('|a|\\n|---|\\n|b|')[0].header")==['a']
+    # GFM: one hyphen is enough for a delimiter cell (with or without colons).
+    for text in ['|a|b|\n|--|---|\n|x|y|','|a|b|\n|:-|-:|\n|x|y|','a|b\n-|-\nx|y']:
+        assert js('OrreryConversationMarkdown.parse('+json.dumps(text)+").some(b=>b.kind==='table')"),text
 
 
 def test_copy_button_uses_original_markdown_without_terminal_jump(cockpit):

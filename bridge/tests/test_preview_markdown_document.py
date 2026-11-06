@@ -269,3 +269,10 @@ def test_a_heading_with_closing_hashes_and_a_hashtag():
     assert html('#') == '<h1 class="markdown-heading"></h1>'
     assert html('```js title="x"\ncode\n```') == '<pre class="markdown-code" data-language="js"><code>code</code></pre>'
     assert html('``` `not a fence`') == '<p>``` <code>not a fence</code></p>'
+
+
+def test_a_table_with_short_delimiter_cells_is_drawn():
+    # GFM: one or more hyphens per delimiter cell; |:--|--:| is common in hand-written tables.
+    out = html('| Month | Sales |\n|:--|-:|\n| Jan | 12 |\n')
+    assert '<th>Month</th><th>Sales</th>' in out and '<td>Jan</td><td>12</td>' in out
+    assert html('| a | b |\n|:|:|\n') == '<p>| a | b |\n|:|:|</p>'          # no hyphen, no table
