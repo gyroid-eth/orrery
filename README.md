@@ -85,7 +85,7 @@ agent の発言にある Markdown の表は表として表示し、横にスク�
 
 ![agent の発言に含まれる表と Copy Markdown](docs/images/cockpit_history_table.png)
 
-記録に file の参照や編集要求の差分があれば、file チップや差分を表示します。Claude の SendUserFile で渡された file と、agent が ORRERY Mail の `show_files` で見せた file や画像も、チップから preview できます（Claude・Codex・dsh・Hermes のどれでも同じです）。チップを押すと現在の text や画像を preview できます。記録された差分と現在の file は別物です。**Reveal in file manager** を押すと Finder や Explorer で選択します。
+記録に file の参照や編集要求の差分があれば、file チップや差分を表示します。Claude の SendUserFile で渡された file と、agent が ORRERY Mail の `show_files` で見せた file や画像も、チップから preview できます（Claude・Codex・dsh・Hermes のどれでも同じです）。チップを押すと現在の text や画像を preview できます。`.md` は見出し・表・箇条書き・code などを描いた形で開き、**Source** で元の文字に切り替えられます（生の HTML は文字のまま出し、画像は読みに行かず、リンクは http(s) と mailto だけを新しい tab で開きます）。記録された差分と現在の file は別物です。**Reveal in file manager** を押すと Finder や Explorer で選択します。
 
 ![file チップから現在の text を preview](docs/images/cockpit_history_text.png)
 
