@@ -9,6 +9,7 @@ import json
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -20,17 +21,24 @@ from test_conversation_submissions import cockpit, prepare  # noqa: F401,E402
 # A fake server: an older page ends at `before` and holds `limit` events
 # (or `R.cap`, a scan window that ends the page early). Cursor `f:N` means
 # event N; event 0 is the oldest. R.floor: no events before it.
-HARNESS = """window.R={reads:[],cap:200,floor:0,stall:false};
+# R.fail[k]: the k-th older read (1-based) fails with that code.
+# R.hold[k]: the k-th older read waits until R.release() (it ignores abort,
+# so only the reader's own generation check keeps its answer out).
+HARNESS = """window.R={reads:[],cap:200,floor:0,stall:false,fail:{},hold:{},older:0,release:null};
   window.row=n=>({id:'e'+n,kind:n%5?'tool':'text',role:'assistant',text:'event '+n,ts:new Date().toISOString(),
     cursor_before:'f:'+n,cursor_after:'f:'+(n+1)});
   OrreryConversationSource.Source.prototype.read=function(name,options){
     const r={before:options.before??null,after:options.after??null,limit:options.limit??null};R.reads.push(r);
     if(options.after)return new Promise(()=>{});
+    const k=options.before?++R.older:0;
+    if(R.fail[k])return Promise.reject(Object.assign(new Error('fixture '+R.fail[k]),{code:R.fail[k]}));
     const end=options.before?Number(options.before.slice(2)):R.top;
     const size=R.stall&&options.before?0:Math.min(options.limit??80,options.before?R.cap:Infinity,end-R.floor);
     const events=Array.from({length:size},(_,i)=>row(end-size+i));
-    return Promise.resolve({agent:name,provider:'claude',mode:'cursor',events,before:'f:'+(end-size),
-      after:'f:'+R.top,has_older:end-size>R.floor,has_newer:false});
+    const page={agent:name,provider:'claude',mode:'cursor',events,before:'f:'+(end-size),
+      after:'f:'+R.top,has_older:end-size>R.floor,has_newer:false};
+    if(R.hold[k])return new Promise(resolve=>{R.release=()=>resolve(page);});
+    return Promise.resolve(page);
   };0"""
 
 
@@ -99,6 +107,42 @@ def test_two_clicks_are_kept_and_the_third_releases_the_newest(cockpit):  # noqa
     click(js, wait)
     assert shown(js) == list(range(9020, 9820))       # 800 kept; the newest 180 released
     assert 'bounded' in js(status)                    # the existing notice; Latest reloads
+
+
+@pytest.mark.parametrize('code', ['record_too_large', 'dashboard_unavailable'])
+def test_a_later_failure_keeps_the_pages_already_read(cockpit, code):  # noqa: F811
+    js, wait, client = prepare(cockpit, 'claude')
+    reopen(js, wait, cap=50, fail={'2': code})
+    click(js, wait)
+    assert shown(js) == list(range(9870, 10000))      # the first page is shown
+    assert js("reader.querySelector('.conversation-retry').hidden")
+    assert not js("reader.querySelector('.conversation-older').hidden")
+    click(js, wait)                                   # the next click continues from it
+    assert older_reads(js)[2]['before'] == 'f:9870'
+    assert shown(js)[0] == 9670
+
+
+def test_a_binding_failure_on_a_later_page_keeps_nothing(cockpit):  # noqa: F811
+    js, wait, client = prepare(cockpit, 'claude')
+    reopen(js, wait, cap=50, fail={'2': 'history_changed'})
+    js("reader.querySelector('.conversation-older').click();0")
+    wait("!reader.querySelector('.conversation-retry').hidden")
+    assert shown(js) == []
+    assert len(older_reads(js)) == 2
+
+
+def test_a_conversation_switched_mid_click_reads_no_further_and_shows_nothing_old(cockpit):  # noqa: F811
+    js, wait, client = prepare(cockpit, 'claude')
+    reopen(js, wait, hold={'1': True})
+    js("reader.querySelector('.conversation-older').click();0")
+    wait('R.release!==null')
+    # Close and reopen while the first older page is still on its way.
+    js("conversationView.close();conversationView.open();0")
+    wait('reader.querySelectorAll(".conversation-event").length===80')
+    js('R.release();0')
+    time.sleep(.4)
+    assert len(older_reads(js)) == 1                  # no second page for the old click
+    assert shown(js) == list(range(9920, 10000))      # nothing from the released page
 
 
 @pytest.mark.skipif(shutil.which('node') is None, reason='node is not installed')
