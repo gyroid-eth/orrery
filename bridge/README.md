@@ -181,7 +181,7 @@ old loaded records and older pages cannot consume a new receipt. Whitespace is
 normalized; a sufficiently long truncated prefix can match an unambiguous send. Closing and
 reopening History retains receipts; changing binding, closing the pane or
 turning History off discards them. If a new user record cannot be associated confidently, the receipt says
-**Sent (record not matched)** rather than claiming the record is still absent. The receipt displays at most 1,000 characters; exact
+**Record not matched** rather than claiming the record is still absent. The receipt displays at most 1,000 characters; exact
 matching is available for prompts up to the reader's 64 KiB text limit.
 
 Assistant text supports a small inert projection of GFM tables: a matching

@@ -136,10 +136,10 @@
         const row=document.createElement('article');row.className='conversation-submission';row.dataset.submissionId=item.id;
         const label=document.createElement('div');label.className='conversation-byline';
         const elapsed=Date.now()-item.at;
-        label.textContent='Sent → '+item.name+' · '+(item.unmatched?'Sent (record not matched)':elapsed>=60000?'Not recorded yet':'Awaiting record');
+        label.textContent='Sent → '+item.name+' · '+(item.unmatched?'Record not matched':elapsed>=60000?'Not recorded yet':'Awaiting record');
         const text=document.createElement('p');text.className='conversation-text';text.textContent=item.preview;
         const note=document.createElement('div');note.className='conversation-submission-note';
-        note.textContent=item.unmatched?'A user record arrived after this send, but it cannot be matched to this text. Check the conversation below.':'Sent to the terminal. The agent may still be busy. Shown here until it appears in the conversation record.';
+        note.textContent=item.unmatched?'A user record arrived after this send, but it cannot be matched to this text. Check the conversation above.':'Sent to the terminal. The agent may still be busy. Shown here until it appears in the conversation record.';
         row.append(label,text,note);pendingEl.appendChild(row);
         if(!item.unmatched&&elapsed<60000)next=Math.min(next,60000-elapsed);
       }
@@ -411,7 +411,7 @@
         if(screen.getBoundingClientRect().width<800||root.innerWidth<=1200)close({focus:false});
         else expand(false);
         message('Matching message shown in this terminal.');
-      }else if(result.state==='limited')message('Terminal scrollback exceeds the search limit; no unique match. Keep reading history here.');
+      }else if(result.state==='limited')message('Terminal scrollback exceeds the search limit; cannot confirm a unique match. Keep reading history here.');
       else if(result.state==='multiple')message('Same text found in '+result.count+(result.limited?' or more':'')+' places in the terminal. Keep reading history here.');
       else if(result.state==='alternate')message('Earlier output of this screen is not kept in the terminal. Keep reading history here.');
       else if(result.state==='changed')message('Terminal changed. Search again.');

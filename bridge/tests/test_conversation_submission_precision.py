@@ -69,6 +69,6 @@ def test_reformatted_truncated_and_uncertain_receipts(cockpit,variant):
     if variant in ['whitespace','truncated']:assert js("reader.querySelectorAll('.conversation-submission').length")==0
     else:
         assert js("reader.querySelectorAll('.conversation-submission').length")== (2 if variant=='ambiguous-prefix' else 1)
-        assert js("reader.querySelector('.conversation-submission').textContent.includes('Sent (record not matched)')")
+        assert js("reader.querySelector('.conversation-submission').textContent.includes('Record not matched')")
         js('clock+=600000;receiptTimers.forEach(f=>f());conversationView.refresh()')
         assert not js("reader.querySelector('.conversation-submission').textContent.includes('Not recorded yet')")

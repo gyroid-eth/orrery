@@ -1,9 +1,9 @@
 """Cockpit UI text is English: no Japanese in user-visible strings.
 
-Covers the strings the operator sees after SEND, the History "find in
-terminal" results and the composer's slash-command descriptions. Code
-comments may stay Japanese, so a small scanner blanks comments but
-keeps string literals ("//" inside a string is still checked).
+Checks every bridge/*.js file, the bridge HTML pages and the composer's
+slash-command descriptions. Code comments may stay Japanese, so a small
+scanner blanks comments but keeps string literals ("//" inside a string
+is still checked). A few strings are Japanese on purpose; ALLOWED names them.
 """
 import pathlib
 import re
@@ -12,7 +12,8 @@ import sys
 BRIDGE = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BRIDGE))
 
-JAPANESE = re.compile(r"[぀-ヿ㐀-鿿！-｠]")
+# Kana, kanji, CJK punctuation (、。「」) and full-width forms.
+JAPANESE = re.compile(r"[\u3000-\u30ff\u3400-\u9fff\uff01-\uff60]")
 
 
 # Characters after which a "/" starts a regular expression, not a division.
@@ -110,12 +111,45 @@ def _strip_js_comments(source):
     return "".join(out)
 
 
-def _japanese_lines(source):
+def _strip_html_comments(source):
+    """Blank HTML comments, CSS comments in <style> and JS comments in <script>."""
+    blank = lambda text: re.sub(r"[^\n]", " ", text)
+    def one(m):
+        if m.group("script") is not None:
+            return m.group("open") + _strip_js_comments(m.group("script")) + m.group("close")
+        if m.group("style") is not None:
+            return m.group("sopen") + re.sub(r"/\*.*?\*/", lambda k: blank(k.group(0)), m.group("style"), flags=re.S) + m.group("sclose")
+        return blank(m.group(0))
+    return re.sub(
+        r"(?P<open><script\b[^>]*>)(?P<script>.*?)(?P<close></script>)"
+        r"|(?P<sopen><style\b[^>]*>)(?P<style>.*?)(?P<sclose></style>)"
+        r"|<!--.*?-->",
+        one, source, flags=re.S | re.I,
+    )
+
+
+def _japanese_lines(source, strip=None):
+    strip = strip or _strip_js_comments
     return [
-        f"{n}: {line.strip()[:120]}"
-        for n, line in enumerate(_strip_js_comments(source).splitlines(), 1)
+        f"{n}: {line.strip()}"
+        for n, line in enumerate(strip(source).splitlines(), 1)
         if JAPANESE.search(line)
     ]
+
+
+# Japanese on purpose (file -> pattern a whole offending line must match).
+ALLOWED = {
+    # Example of a non-Latin script in the demo-mask help text.
+    "cockpit.html": re.compile(r'id="demoMaskWordsHelp".*\(日本語\)'),
+    # The full tour asks agents to play shiritori; the words are the game.
+    "cockpit_full_tour.js": re.compile(r"\bconst SHIRITORI_PROMPT="),
+    # RELAY_JAPANESE: words stripped from Japanese relay text, never shown.
+    "roster_descriptor.js": re.compile(r"^\d+: ('[^']*',)+$"),
+}
+
+
+def _bridge_ui_files():
+    return sorted([*BRIDGE.glob("*.js"), *BRIDGE.glob("*.html")])
 
 
 def test_scanner_keeps_comment_markers_inside_strings():
@@ -131,8 +165,27 @@ def test_scanner_drops_real_comments():
     assert _strip_js_comments("a\n/* x\ny */b").splitlines()[2].strip() == "b"
 
 
-def test_conversation_view_strings_have_no_japanese():
-    assert _japanese_lines((BRIDGE / "conversation_view.js").read_text(encoding="utf-8")) == []
+def test_scanner_drops_html_and_css_comments_only():
+    page = "<!-- 日本語 -->\n<style>/* 日本語 */ a{}</style>\n<script>// 日本語\nx='日本語';</script>\n<p>日本語</p>"
+    assert _japanese_lines(page, _strip_html_comments) == ["4: x='日本語';</script>", "5: <p>日本語</p>"]
+
+
+def test_japanese_punctuation_counts():
+    assert _japanese_lines("x='、';y='「」';") != []
+
+
+def test_bridge_ui_files_have_no_japanese():
+    assert len(_bridge_ui_files()) > 20
+    hits = []
+    for path in _bridge_ui_files():
+        strip = _strip_html_comments if path.suffix == ".html" else _strip_js_comments
+        allowed = ALLOWED.get(path.name)
+        hits += [
+            f"{path.name}:{hit}"
+            for hit in _japanese_lines(path.read_text(encoding="utf-8"), strip)
+            if not (allowed and allowed.search(hit))
+        ]
+    assert hits == []
 
 
 def test_builtin_slash_descriptions_are_english():

@@ -43,7 +43,9 @@ def test_copy_button_uses_original_markdown_without_terminal_jump(cockpit):
     wait('copied!==null')
     assert js('copied')==TABLE[TABLE.index('|'):TABLE.index('\n\n後')+1]
     time.sleep(.65)
-    assert not js("document.querySelector('.conversation-toolbar').textContent.includes('見つかりません')")
+    # Any terminal search result (all six states) would show in the toolbar.
+    toolbar=js("document.querySelector('.conversation-toolbar').textContent")
+    assert 'Keep reading history here' not in toolbar and 'Terminal changed' not in toolbar and 'Matching message shown' not in toolbar,toolbar
     assert js("packets.filter(p=>p.type==='input')")==[]
 
 

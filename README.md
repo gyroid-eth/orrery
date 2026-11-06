@@ -75,7 +75,7 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 
 ![2分割の各 pane で履歴を開く](docs/images/cockpit_history_split.png)
 
-全幅でも入力欄から送信できます。履歴を読むキーは端末に送られず、Enter または **SEND** で明示的に送ります。送信すると対象 pane の preview を閉じ、履歴は最新を追います。送信中に対象の端末や接続が変わった場合は中止して知らせます。送信後は、対象の履歴の末尾に「Sent → agent 名 · Awaiting record」の仮の行が現れ、対応する発言が記録されると置き換わります。これは agent が処理を確認したことを示すものではありません。照合できない場合は「Sent (record not matched)」と表示します。
+全幅でも入力欄から送信できます。履歴を読むキーは端末に送られず、Enter または **SEND** で明示的に送ります。送信すると対象 pane の preview を閉じ、履歴は最新を追います。送信中に対象の端末や接続が変わった場合は中止して知らせます。送信後は、対象の履歴の末尾に「Sent → agent 名 · Awaiting record」の仮の行が現れ、対応する発言が記録されると置き換わります。これは agent が処理を確認したことを示すものではありません。照合できない場合は「Record not matched」と表示します。
 
 ![送信後に履歴へ表示される記録待ちの行](docs/images/cockpit_history_pending.png)
 
