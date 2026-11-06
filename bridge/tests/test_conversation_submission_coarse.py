@@ -34,6 +34,6 @@ def test_true_new_record_resolved_at_enter_is_not_permanently_excluded(cockpit,p
     if precision=='milliseconds':assert first['pending']==0 and after['pending']==0,(first,after)
     else:
         assert first['pending']==1 and after['pending']==1,(first,after)
-        assert '照合はできず' in after['label'] and '記録はまだ' not in after['label']
+        assert 'Record not matched' in after['label'] and 'Not recorded yet' not in after['label']
         js("OrreryConversationSource.Source.prototype.read=async()=>({mode:'snapshot',events:[oldRecord,currentCausalRecord,{...currentCausalRecord,id:'later-certain',ts:new Date(clock+1000).toISOString()}],after:'later'});conversationView.refresh()")
         wait("reader.querySelectorAll('.conversation-submission').length===0")

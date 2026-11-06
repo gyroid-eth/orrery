@@ -41,7 +41,7 @@ def test_queued_turn_keeps_receipt_until_exact_new_user_record(cockpit,provider)
     assert js("reader.parentElement.classList.contains('conversation-just-submitted')")
     assert js("reader.querySelector('.conversation-submission').getBoundingClientRect().bottom<=reader.querySelector('.conversation-scroll').getBoundingClientRect().bottom")
     js("clock+=60001;receiptTimers.forEach(f=>f());conversationView.refresh()")
-    assert js("reader.querySelector('.conversation-submission').textContent.includes('記録はまだ')")
+    assert js("reader.querySelector('.conversation-submission').textContent.includes('Not recorded yet')")
     js("clock+=600000;conversationView.refresh()")
     assert js("reader.querySelectorAll('.conversation-submission').length")==1
     js('turnDone=true;conversationView.refresh()')

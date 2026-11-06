@@ -34,7 +34,7 @@ def test_new_native_second_precision_record_replaces_receipt(cockpit,provider):
     wait("reader.querySelector('[data-event-id=new-second-precision]')!==null")
     js('clock+=60001;receiptTimers.forEach(f=>f());conversationView.refresh()')
     time.sleep(.1)
-    observed=js("({submittedAt:receipts[0].submittedAt,recordTimestamp:secondPrecisionRecord.ts,pending:reader.querySelectorAll('.conversation-submission').length,records:reader.querySelectorAll('[data-event-id=new-second-precision]').length,waiting:reader.querySelector('.conversation-submission')?.textContent.includes('記録はまだ')})")
+    observed=js("({submittedAt:receipts[0].submittedAt,recordTimestamp:secondPrecisionRecord.ts,pending:reader.querySelectorAll('.conversation-submission').length,records:reader.querySelectorAll('[data-event-id=new-second-precision]').length,waiting:reader.querySelector('.conversation-submission')?.textContent.includes('Not recorded yet')})")
     print(provider,observed)
     screenshot(client,provider+'-second-precision.png')
     assert observed['records']==1
@@ -69,6 +69,6 @@ def test_reformatted_truncated_and_uncertain_receipts(cockpit,variant):
     if variant in ['whitespace','truncated']:assert js("reader.querySelectorAll('.conversation-submission').length")==0
     else:
         assert js("reader.querySelectorAll('.conversation-submission').length")== (2 if variant=='ambiguous-prefix' else 1)
-        assert js("reader.querySelector('.conversation-submission').textContent.includes('送信済み（記録の照合はできず）')")
+        assert js("reader.querySelector('.conversation-submission').textContent.includes('Record not matched')")
         js('clock+=600000;receiptTimers.forEach(f=>f());conversationView.refresh()')
-        assert not js("reader.querySelector('.conversation-submission').textContent.includes('記録はまだ')")
+        assert not js("reader.querySelector('.conversation-submission').textContent.includes('Not recorded yet')")
