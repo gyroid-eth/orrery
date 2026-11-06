@@ -16,7 +16,8 @@
     return parts.map(value=>value.trim());
   }
   const blockStart=line=>/^ {0,3}(?:`{3,}|~{3,}|#{1,6}(?:\s|$)|>|[-+*]\s+|\d{1,9}[.)]\s+)/.test(line);
-  const isDelimiter=(header,delimiter)=>Boolean(header?.length&&header.length<=64&&delimiter&&header.length===delimiter.length&&delimiter.every(cell=>/^:?-{3,}:?$/.test(cell)));
+  // GFM: a delimiter cell is one or more hyphens, with optional colons for alignment.
+  const isDelimiter=(header,delimiter)=>Boolean(header?.length&&header.length<=64&&delimiter&&header.length===delimiter.length&&delimiter.every(cell=>/^:?-+:?$/.test(cell)));
   const alignOf=cell=>cell.startsWith(':')&&cell.endsWith(':')?'center':cell.endsWith(':')?'right':'left';
   function parse(text){
     const lines=text.match(/[^\n]*\n|[^\n]+$/g)||[],blocks=[];let plain='',fence=null;
