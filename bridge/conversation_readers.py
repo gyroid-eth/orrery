@@ -78,6 +78,17 @@ def normalize(item,p,sid):
     if p=='claude':
         if item.get('sessionId')!=sid or item.get('isSidechain') or item.get('isMeta'):return []
         role=item.get('type');message=item.get('message')
+        if role=='attachment':
+            queued=item.get('attachment')
+            # Mid-turn human prompts are recorded as consumed attachments,
+            # not user messages. Queue operations also cover ordinary turns;
+            # rendering those would duplicate their eventual user record.
+            if (not isinstance(queued,dict) or queued.get('type')!='queued_command'
+                    or queued.get('commandMode')!='prompt' or queued.get('isMeta')
+                    or not isinstance(queued.get('origin'),dict) or queued['origin'].get('kind')!='human'):
+                return []
+            role='user';message=dict(role=role,content=queued.get('prompt'))
+            item=dict(item,timestamp=queued.get('timestamp') or item.get('timestamp'))
         if role not in {'user','assistant'} or not isinstance(message,dict) or message.get('role')!=role:return []
         content=message.get('content');ts=str(item.get('timestamp') or '')[:128]
         if isinstance(content,str):add(0,text_event(content,role,ts))
