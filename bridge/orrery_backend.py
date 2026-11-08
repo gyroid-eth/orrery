@@ -4415,7 +4415,7 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "vendor/addon-web-links-0.11.0/addon-web-links.js",
 )}
 PUBLIC_FILES.update({"/cockpit-assets/" + name: "assets/" + name for name in (
-    "anthropic.svg", "openai.svg", "google.svg", "qwen.svg", "deepseek.svg", "dsh.svg", "hermes.png",
+    "anthropic.svg", "openai.svg", "google.svg", "qwen.svg", "glm.svg", "deepseek.svg", "dsh.svg", "hermes.png",
 )})
 
 

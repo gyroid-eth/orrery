@@ -16,3 +16,10 @@ These marks identify model providers; they do not imply endorsement.
 - [Official guidelines](https://github.com/deepseek-ai/awesome-deepseek-integration/blob/main/docs/_logo%20svg/guidelines.md) require accurate identification, no false endorsement, and respect for intellectual property; they restrict arbitrary modification and reserve revocation. They are not a blanket trademark license.
 
 For the pre-existing Claude and OpenAI marks, see the Provider logos section of the root `CREDITS.md`.
+
+## GLM (`glm.svg`)
+
+- Official source: the [Z.ai site](https://chat.z.ai/) and its [logo SVG](https://z-cdn.chatglm.cn/z-ai/static/logo.svg). The [official organization avatar](https://avatars.githubusercontent.com/u/223098841?v=4) has an opaque dark background, so the site's SVG is used instead.
+- Changes: the source SVG is embedded without tracing or redrawing. Only its separate background path (class `st194`, including its border) has opacity set to zero. The three foreground shapes retain their original geometry. As for Qwen, an SVG alpha filter sets the visible colour to bone `#ece2cc`; the light theme uses the existing black-logo filter. The original square viewBox is retained.
+- 利用は運営者の判断（2026-11-08）。
+- Terms checked: [Z.ai Terms of Use](https://chat.z.ai/legal-agreement/terms-of-service), last updated 2026-04-14, section V.2 restricts logo and other trademark use without prior written consent. No dedicated redistribution or recolouring permission was found in the official material inspected. The operator chose to use the bone-coloured official logo on 2026-11-08 with that restriction understood. This records the operator's decision and does not claim permission from the owner.

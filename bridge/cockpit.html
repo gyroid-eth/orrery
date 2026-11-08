@@ -8936,6 +8936,7 @@ const ROSTER_PROVIDER={
   google:{asset:'google',label:'Gemini'},
   deepseek:{asset:'deepseek',label:'DeepSeek'},
   qwen:{asset:'qwen',label:'Qwen'},
+  glm:{asset:'glm',label:'GLM'},
 };
 function rosterIsLocal(agent){
   const provider=String(agent.provider||'').trim().toLowerCase();
@@ -8952,6 +8953,7 @@ function rosterProviderKey(agent){
     const model=String(agent.model_raw||agent.model||'').toLowerCase();
     if(/deepseek/.test(model))return 'deepseek';
     if(/qwen/.test(model))return 'qwen';
+    if(/(?:^|[^a-z0-9])glm/.test(model))return 'glm';
     return '';
   }
   if(Object.hasOwn(alias,provider))return alias[provider];
