@@ -58,13 +58,19 @@ def test_explicit_local_uses_resolved_model_and_unknown_keeps_an_empty_hexagon(t
     _, evaluate = tour_browser
     cases = [
         dict(provider='local', program='codex', model='Qwen3-Coder-30B'),
+        dict(provider='local', program='hermes', model='glm-5.3-flash'),
+        dict(provider='local', program='hermes', model='facebook/xglm-7.5B'),
+        dict(provider='local', program='hermes', model='chatglm3-6b'),
+        dict(provider='local', program='hermes', model='zai-org/GLM-4.6'),
+        dict(provider='strata', locality='local', program='dsh', model='display', model_raw='zai-org/GLM-5.3-Flash'),
+        dict(provider='local', program='hermes', model='deepseek-v4.1-flash'),
         dict(provider='local', program='claude', model='display name', model_raw='deepseek-ai/DeepSeek-R1'),
         dict(provider='local', program='codex', model='custom-7b'),
         dict(provider=' LOCAL ', program='claude', model='DeepSeek display', model_raw='Qwen/Qwen3-8B-Q4_K_M'),
         dict(provider='local', program='codex', model='DeepSeek-R1-Distill-Qwen-7B'),
     ]
     actual = rendered_badges(evaluate, cases)
-    for result, asset in zip(actual, ['qwen', 'deepseek', None, 'qwen', 'deepseek']):
+    for result, asset in zip(actual, ['qwen', 'glm', None, None, 'glm', 'glm', 'deepseek', 'deepseek', None, 'qwen', 'deepseek']):
         assert result['presentation']['local'] is True
         assert result['presentation']['compactText'] == ''
         assert 'local-provider-badge' in result['roster']
@@ -74,6 +80,8 @@ def test_explicit_local_uses_resolved_model_and_unknown_keeps_an_empty_hexagon(t
             assert '<text ' not in result[surface]
         if asset:
             assert result['presentation']['provider']['asset'] == asset
+            if asset == 'glm':
+                assert result['presentation']['text'] == 'GLM · Local'
             for surface in ['roster', 'mini', 'planet']:
                 assert 'cockpit-assets/' + asset + '.svg' in result[surface]
         else:
@@ -152,3 +160,25 @@ def test_strata_roster_reconciliation_clears_local_shape_and_stale_maker(tour_br
     assert result['qwen'] == dict(rim=1, src='cockpit-assets/qwen.svg')
     assert result['empty'] == dict(rim=1, src=None, hidden=True, pill=True)
     assert result['cloud'] == json.loads(FIXTURE.read_text())[3]['roster']
+
+
+def test_picker_glm_and_deepseek_models_use_local_maker_badges(tour_browser):
+    _, evaluate = tour_browser
+    result = evaluate("""(()=>{
+      document.querySelectorAll('.flight-close').forEach(e=>e.click());
+      spawnCatalog={providers:[{id:'local-fixture',locality:'local',label:'Local fixture',
+        models:[{id:'glm-5.3-flash'},{id:'deepseek-v4.1-flash'}],
+        harnesses:[{id:'hermes',available:true,default:true}]}],naming:{},dirs:[]};
+      selFamily='local';selProvider=null;selModel=null;selHarness=null;
+      spawnModelSearch.value='';renderProviderTabs();
+      return ['glm-5.3-flash','deepseek-v4.1-flash'].map(model=>{
+        modelChoices.querySelector('input[value="'+model+'"]').click();
+        const badge=document.getElementById('spawnMakerBadge');
+        return {model,title:badge.title,src:badge.querySelector('img').getAttribute('src')};
+      });
+    })()""")
+    assert len(result) == 2
+    for row, model, asset in zip(result, ['glm-5.3-flash', 'deepseek-v4.1-flash'], ['glm', 'deepseek']):
+        assert row['model'] == model
+        assert row['title'] == ('GLM' if asset == 'glm' else 'DeepSeek') + ' · Local'
+        assert row['src'] == 'cockpit-assets/' + asset + '.svg'

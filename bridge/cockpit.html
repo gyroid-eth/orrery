@@ -4489,9 +4489,9 @@
       }
     }
   },
-  "inventory_digest": "dfb6d6d2b881f679ca8498f812c8d93363ff0ad14dbbe86512971e2600abd06d",
+  "inventory_digest": "71dd12b6878ea38e10082cd89688f9b292bc89f1bd5c71e20b3b6319d0e62905",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "eada949235e7c9035d98b247c9af71613f9c3b2bf6a6bf598cc110f785be1c43",
+  "source_digest": "fd460a3b4d7d4d3fbdcb5f0abad619892a3fb9d89000d138e066d742d8b8673c",
   "surface": "cockpit",
   "version": 1
 }
@@ -8936,6 +8936,7 @@ const ROSTER_PROVIDER={
   google:{asset:'google',label:'Gemini'},
   deepseek:{asset:'deepseek',label:'DeepSeek'},
   qwen:{asset:'qwen',label:'Qwen'},
+  glm:{asset:'glm',label:'GLM'},
 };
 function rosterIsLocal(agent){
   const provider=String(agent.provider||'').trim().toLowerCase();
@@ -8952,6 +8953,7 @@ function rosterProviderKey(agent){
     const model=String(agent.model_raw||agent.model||'').toLowerCase();
     if(/deepseek/.test(model))return 'deepseek';
     if(/qwen/.test(model))return 'qwen';
+    if(/(?:^|[^a-z0-9])glm/.test(model))return 'glm';
     return '';
   }
   if(Object.hasOwn(alias,provider))return alias[provider];
