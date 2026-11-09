@@ -32,6 +32,20 @@
 .conversation-event{padding:17px 0;border-bottom:1px solid var(--hair-2);overflow-wrap:anywhere}
 .conversation-byline{display:flex;gap:10px;align-items:center;margin-bottom:9px;font:10px var(--mono);color:var(--ink-dim)}
 .conversation-role{color:var(--amber);font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+.conversation-role.conversation-speaker{display:flex;align-items:center;gap:7px;min-width:0;flex:1;color:var(--ink);text-transform:none;letter-spacing:0;font-weight:400}
+.conversation-speaker-name{flex:0 0 auto;max-width:calc(100% - 35px);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 12px/1.6 var(--mono)}
+.conversation-speaker-name:last-child{max-width:calc(100% - 28px)}
+.conversation-speaker-name:first-child{max-width:100%}
+.conversation-speaker-model{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-dim);font:10px/1.6 var(--mono)}
+.conversation-speaker-model::before{content:"·";margin-right:7px;color:var(--ink-faint)}
+.conversation-speaker-model:only-child::before{content:none}
+.conversation-speaker+.conversation-time{flex:none;white-space:nowrap}
+.conversation-avatar.medal{flex:none;width:20px;height:20px;margin-right:1px;-webkit-user-select:none;user-select:none}
+.conversation-avatar .face{font-size:10px;box-shadow:0 0 0 1px var(--hair)}
+.conversation-avatar .provider-badge{right:-3px;bottom:-2px;width:10px;height:10px;border-width:1px}
+.conversation-avatar .provider-badge .provider-logo{height:7px;max-width:8px}
+.conversation-avatar .local-provider-badge .provider-logo{height:7px;max-width:8px}
+.conversation-avatar .pill.eng{display:none}
 .conversation-event[data-role="user"] .conversation-role{color:var(--ink)}
 .conversation-time{margin-left:auto;color:var(--ink-faint);font-variant-numeric:tabular-nums}
 .conversation-text{margin:0;white-space:pre-wrap;font:12px/1.85 var(--mono);color:var(--ink);tab-size:2}
@@ -180,19 +194,34 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 .conversation-expand[hidden]{display:none}
 /* Recorded Mail is a collapsible source of its own, never a human prompt. */
 .conversation-mail-event{padding:12px 0}
-.conversation-mail{border:1px solid var(--hair);border-left:2px solid var(--amber);border-radius:6px;background:var(--panel-2)}
+.conversation-mail{color:var(--ink)}
 .conversation-mail+.conversation-mail{margin-top:8px}
-.conversation-mail-summary{cursor:pointer;padding:12px 14px;list-style:none}
+.conversation-mail-summary{cursor:pointer;padding:2px 0 7px;list-style:none}
 .conversation-mail-summary::-webkit-details-marker{display:none}
-.conversation-mail-head{display:flex;gap:10px;align-items:center;font:9px/1.6 var(--mono);color:var(--ink-dim)}
-.conversation-mail-label{letter-spacing:.1em;color:var(--amber)}
-.conversation-mail-importance{font-size:9px;color:var(--ink-faint)}
-.conversation-mail-importance[data-importance="high"],.conversation-mail-importance[data-importance="urgent"]{color:var(--amber)}
-.conversation-mail-route{display:block;font:10px/1.7 var(--mono);color:var(--ink-dim);margin-top:5px;overflow-wrap:anywhere}
-.conversation-mail-subject{display:block;font:12px/1.8 var(--mono);color:var(--ink);overflow-wrap:anywhere}
-.conversation-mail-subject:after{content:' ＋';color:var(--amber)}
-.conversation-mail[open] .conversation-mail-subject:after{content:' −'}
-.conversation-mail-content{border-top:1px solid var(--hair-2);padding:10px 14px}
+.conversation-mail-head{display:flex;flex-wrap:wrap;gap:4px 7px;align-items:center;min-width:0;font:11px/1.6 var(--mono);color:var(--ink-dim)}
+.conversation-mail-head>.conversation-time{flex:none;margin-left:auto;font-size:9px;white-space:nowrap}
+.conversation-mail-label{display:block;font:9px/1.6 var(--mono);letter-spacing:.04em;color:var(--ink-dim);margin-bottom:5px}
+.conversation-mail-chevron{flex:none;font-size:9px;color:var(--ink-faint)}
+.conversation-mail[open] .conversation-mail-chevron{transform:rotate(90deg)}
+.conversation-mail-route{display:flex;flex-wrap:wrap;flex:1 1 min(155px,calc(100% - 13px));align-items:center;gap:6px;min-width:min(155px,calc(100% - 13px));}
+.conversation-mail-peer{display:inline-flex;align-items:center;gap:5px;min-width:0;max-width:100%;flex:0 1 auto}
+.conversation-mail-peer-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conversation-mail-sender{max-width:100%;font-size:13px;font-weight:650;color:var(--ink)}
+.conversation-mail-peer .conversation-avatar.medal{width:18px;height:18px;margin-right:0}
+.conversation-mail-recipients{display:contents}
+.conversation-mail-peer[hidden],.conversation-mail-more[hidden]{display:none}
+.conversation-mail-route.is-compact .conversation-mail-recipients{display:inline-flex;align-items:center;max-width:100%;padding-right:3px}
+.conversation-mail-route.is-compact .conversation-mail-recipients.is-wrap{flex-basis:100%}
+.conversation-mail-route.is-compact .conversation-mail-arrow{margin-right:6px}
+.conversation-mail-route.is-compact .conversation-mail-recipients .conversation-mail-peer{flex:none;isolation:isolate}
+.conversation-mail-route.is-compact .conversation-mail-recipients .conversation-mail-peer:not([hidden])~.conversation-mail-peer:not([hidden]){margin-left:-4px}
+.conversation-mail-arrow,.conversation-mail-more{flex:none;font-size:10px;color:var(--ink-dim)}
+.conversation-mail-subject-row{display:flex;align-items:baseline;gap:7px;margin-top:5px}
+.conversation-mail-importance{display:none;flex:none;width:4px;height:4px;border-radius:50%;position:relative;top:-2px}
+.conversation-mail-importance[data-importance="high"]{display:block;background:var(--amber)}
+.conversation-mail-importance[data-importance="urgent"]{display:block;background:var(--theme-status-alert,#d2685e)}
+.conversation-mail-subject{display:block;min-width:0;font:12px/1.8 var(--mono);color:var(--ink);overflow-wrap:anywhere}
+.conversation-mail-content{padding:0 0 2px 16px}
 .conversation-mail-notice{margin:0 0 9px;font:10px/1.7 var(--mono);color:var(--ink-dim)}
 .conversation-mail-text{margin:0;white-space:pre-wrap;font:12px/1.8 var(--mono);overflow-wrap:anywhere;tab-size:2}
 .conversation-jumpable{cursor:pointer;outline-offset:3px}

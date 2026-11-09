@@ -3280,6 +3280,11 @@
             "value": "var(--ink-dim)"
           },
           {
+            "property": "box-shadow",
+            "selector": ".msg .conversation-avatar .face",
+            "value": "0 0 0 1px var(--hair)"
+          },
+          {
             "property": "border",
             "selector": ".mailview-host .imp",
             "value": "1px solid var(--hair)"
@@ -4348,7 +4353,7 @@
         "unit": "effect-component"
       },
       "source": {
-        "digest": "37547ded6be1c92c5abf017d46a7d19c166a5344d1b443aae01362d1711e7cf2",
+        "digest": "5d50adc01bb98e3136d6d7e0e4170dbbcdcd73611913f6db4eda6642813796f4",
         "records": [
           ":root\u0000--amber-glow",
           ".miniorrery.telemetry-network\u0000background",
@@ -4364,6 +4369,7 @@
           ".agent.sel::before\u0000box-shadow",
           ".roster.select-mode .agent.bulk-selected\u0000box-shadow",
           ".medal .face\u0000box-shadow",
+          ".msg .conversation-avatar .face\u0000box-shadow",
           ".medal .face::after\u0000background",
           ".agent-detail\u0000box-shadow",
           ".term\u0000background",
@@ -4411,7 +4417,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "db8aa46f127d9ec394580b689fd5993fc402f6531c7ea463f269364327dd7d6f",
+        "digest": "b2e39210f4d259378a637873825f14b1234d3a2e8ae6f46b6dcec9b609d83db0",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4536,6 +4542,7 @@
           ".mailchip\u0000font-size",
           ".msg .arrow\u0000font-size",
           ".msg .to\u0000font-size",
+          ".msg .conversation-avatar .face\u0000font-size",
           ".mailview-host .imp\u0000font-size",
           ".msg .body\u0000font-size",
           ".msg .time\u0000font-size",
@@ -4564,7 +4571,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "53e6087621cc1aca44b50fcfa1fba6bfb71ede3fc4a6783b7291abda824d58ce",
+        "digest": "a3812f73187e7b1c4d32678680d1dd1f5ebc2a0b951bb9d23d3407109e61ccc3",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4613,9 +4620,9 @@
       }
     }
   },
-  "inventory_digest": "7d51b6d8cbf555c56c8b81faa415ef861cc15e5056d75b8d2c3366bc430beb92",
+  "inventory_digest": "d396cdc7537e9a5d84c03b7a5822d8dd0f3927645210fe036336f48cdd2d7e84",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "ebea11fccb319086cabe73d7194db0a14b4fb1c38b28e556275fa7cbb534368a",
+  "source_digest": "a853a46cbff8afbc9fe2e5b9b81eb0a3ae7f4d9e53f4bf7f835525eaddf221c5",
   "surface": "cockpit",
   "version": 1
 }
@@ -5434,6 +5441,7 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   ['.agent.sel::before','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .agent.sel::before'],
   ['.roster.select-mode .agent.bulk-selected','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .roster.select-mode .agent.bulk-selected'],
   ['.medal .face','box-shadow',['state'],'preserve'],
+  ['.msg .conversation-avatar .face','box-shadow',['state'],'preserve'],
   ['.medal .face::after','background',['elevation'],'preserve'],
   ['.agent-detail','box-shadow',['elevation'],'preserve'],
   ['.term','background',['elevation'],'preserve'],
@@ -9134,10 +9142,8 @@ function paneHeadingModel(agent){
   return {text:model,
     title:[...new Set([model,raw].filter(Boolean))].join(' · ')};
 }
-function paintPaneHeading(heading,session,status,active=false){
-  if(!heading)return;
-  const agent=currentAgentNamed(session),{provider,local}=providerPresentation(agent||{});
-  const logo=heading.querySelector('.pane-provider'),model=heading.querySelector('.pane-model');
+function paintProviderLogo(logo,agent){
+  const {provider,local}=providerPresentation(agent||{});
   const key=(provider?provider.asset:'')+':'+Boolean(local);
   if(logo.dataset.provider!==key){
     logo.dataset.provider=key;logo.replaceChildren();logo.classList.toggle('is-local',Boolean(local));
@@ -9152,6 +9158,41 @@ function paintPaneHeading(heading,session,status,active=false){
       rim.style.display='none';
     }
   }
+  return {provider,local};
+}
+function paintAgentPortrait(face,name){
+  face.querySelector('.ini').textContent=(name[0]||'?');
+  const img=face.querySelector('img');
+  const src='/telemetry/portrait?v=4&name='+encodeURIComponent(name)+'&hi=1';
+  if(img.getAttribute('src')!==src){img.style.display='';img.src=src;img.onerror=()=>{img.style.display='none';};}
+}
+function conversationAvatar(name,model,existing=null){
+  if(!name)return null;
+  const avatar=existing||document.createElement('span');
+  if(!existing){
+    avatar.className='medal conversation-avatar';avatar.setAttribute('aria-hidden','true');
+    const face=document.createElement('span');face.className='face';
+    const initial=document.createElement('span');initial.className='ini';
+    const image=document.createElement('img');image.alt='';image.referrerPolicy='no-referrer';face.append(initial,image);
+    const badge=document.createElement('span');badge.className='provider-badge';badge.hidden=true;
+    const logo=document.createElement('img');logo.className='provider-logo';logo.alt='';badge.appendChild(logo);
+    const pill=document.createElement('span');pill.className='pill eng';pill.hidden=true;avatar.append(face,badge,pill);
+  }
+  paintAgentPortrait(avatar.querySelector('.face'),name);
+  const roster=currentAgentNamed(name)||{name};
+  // A recorded model can belong to a different maker than today's roster.
+  const identity=model?{...roster,provider:rosterIsLocal(roster)?'local':'',model,model_raw:model}:roster;
+  paintRosterProvider(avatar,identity);avatar.querySelector('.pill.eng').hidden=true;
+  return avatar;
+}
+function conversationPeerAvatar(name,existing=null){
+  if(!currentAgentNamed(name))return null;
+  return conversationAvatar(name,'',existing);
+}
+function paintPaneHeading(heading,session,status,active=false){
+  if(!heading)return;
+  const agent=currentAgentNamed(session),logo=heading.querySelector('.pane-provider'),model=heading.querySelector('.pane-model');
+  const {provider,local}=paintProviderLogo(logo,agent);
   const working=Boolean(active&&agent&&agent.running===true&&agent.act_state==='work');
   logo.classList.toggle('is-working',working);
   const state=agent&&agent.running===true?agent.act_state:null;
@@ -9547,10 +9588,7 @@ function paintTile(el,a){
   // reads as random color noise — lineage color lives in the graph views,
   // where the tree gives it meaning).
   el.querySelector('.face').style.removeProperty('--lineage-ring');
-  el.querySelector('.ini').textContent=(a.name[0]||'?');
-  const img=el.querySelector('.face img');
-  const src='/telemetry/portrait?v=4&name='+encodeURIComponent(a.name)+'&hi=1';
-  if(img.getAttribute('src')!==src){img.style.display='';img.src=src;img.onerror=()=>{img.style.display='none';};}
+  paintAgentPortrait(el.querySelector('.face'),a.name);
   el.querySelector('.cname').textContent=a.name;
   paintRosterProvider(el,a);paintRosterHarness(el,a);
   const modelLabel=paneHeadingModel(a),modelPill=el.querySelector('.pill.model');
@@ -9854,6 +9892,7 @@ function assignLineageHues(live){
    They subscribe to 'oc:agents' / 'oc:mail' document events for updates. */
 window.OC=Object.freeze({
   esc,relTime,jumpToAgent,rootOf,providerPresentation,
+  renderPeerAvatar:(name,existing)=>currentAgentNamed(name)?conversationAvatar(name,'',existing):null,
   lineageHue,                       // Map: agent name -> lineage hex
   get lineageParent(){return lineageParent;},  // Map: child -> parent
   agents:()=>currentAgents,
@@ -11251,6 +11290,7 @@ const conversationView=(()=>{
       await asset('script','src','conversation_source.js');
       await asset('script','src','conversation_preview.js');
       await asset('script','src','conversation_mail.js');
+      await asset('script','src','conversation_speaker.js');
       await asset('script','src','conversation_terminal.js');
       await asset('script','src','conversation_markdown.js');
       await asset('script','src','conversation_view.js');
@@ -11284,6 +11324,8 @@ const conversationView=(()=>{
         activate:name=>focusSplitSession(name),
         jumpToEvent:jumpConversationEvent,
         openExternalUrl,
+        renderPeerAvatar:conversationPeerAvatar,
+        renderAvatar:conversationAvatar,
       });
       return instance;
     })().catch(error=>{loading=null;showToast(error.message,true);return null;});

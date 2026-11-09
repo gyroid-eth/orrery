@@ -436,7 +436,8 @@ def test_provider_labels_snapshot_rewrite_and_receipt_changes_clear(cockpit):
     enable(mode='snapshot',count=1)
     js("""OrreryConversationSource.Source.prototype.read=async()=>({ok:true,agent:'ReviewFixture',provider:'hermes',mode:'snapshot',events:[{id:'same',kind:'text',role:'assistant',text:'first'}],after:'snapshot',notice:'Active segment'});conversationView.refresh()""")
     wait("document.querySelector('.conversation-text').textContent==='first'")
-    assert js("document.querySelector('.conversation-role').textContent")== 'Hermes'
+    assert js("document.querySelector('.conversation-speaker-name').textContent")== 'ReviewFixture'
+    assert '(Hermes)' in js("document.querySelector('.conversation-role').ariaLabel")
     js("""OrreryConversationSource.Source.prototype.read=async()=>({ok:true,agent:'ReviewFixture',provider:'hermes',mode:'snapshot',events:[{id:'same',kind:'text',role:'assistant',text:'rewritten'}],after:'snapshot'});conversationView.refresh()""")
     wait("document.querySelector('.conversation-text').textContent==='rewritten'")
     js("OrreryConversationSource.Source.prototype.read=()=>new Promise(()=>{});currentAgents[0].history_session_id='changed';document.dispatchEvent(new Event('oc:agents'))")
@@ -444,7 +445,8 @@ def test_provider_labels_snapshot_rewrite_and_receipt_changes_clear(cockpit):
     for program,label in [('claude-code','Claude'),('dsh','dsh')]:
         js("OrreryConversationSource.Source.prototype.read=async()=>({events:[{id:'x',kind:'text',role:'assistant',text:'visible'}]});currentAgents[0].program="+json.dumps(program)+";document.dispatchEvent(new Event('oc:agents'))")
         wait("document.querySelector('.conversation-event')!==null")
-        assert js("document.querySelector('.conversation-role').textContent")==label
+        assert js("document.querySelector('.conversation-speaker-name').textContent")=='ReviewFixture'
+        assert '('+label+')' in js("document.querySelector('.conversation-role').ariaLabel")
         js("OrreryConversationSource.Source.prototype.read=()=>new Promise(()=>{});currentAgents[0].history_receipt_ts=String(Date.now());document.dispatchEvent(new Event('oc:agents'))")
         assert js("document.querySelectorAll('.conversation-event').length")==0
 

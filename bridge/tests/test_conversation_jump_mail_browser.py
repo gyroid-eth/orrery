@@ -72,9 +72,9 @@ def test_m1_received_and_sent_mail_expand_recorded_body_only(cockpit,tmp_path,pr
     js('conversationView.close();window.mailFixturePage='+json.dumps([received,sent])+';')
     js("OrreryConversationSource.Source.prototype.read=async()=>({events:mailFixturePage.map((e,i)=>({...e,id:String(i)})),provider:"+json.dumps(provider)+",after:'fixture:1',has_older:false});conversationView.open()")
     wait("document.querySelectorAll('.conversation-mail').length===2")
-    assert js("document.querySelector('.conversation-events').textContent.includes('ORRERY MAIL')")
-    assert js("document.querySelector('.conversation-events').textContent.includes('Received ← ParentFixture')")
-    assert js("document.querySelector('.conversation-events').textContent.includes('Sent → ParentFixture')")
+    assert js("[...document.querySelectorAll('.conversation-mail-label')].map(e=>e.textContent)") == ['Mail · Received','Mail · Sent']
+    assert js("[...document.querySelectorAll('.conversation-mail-route')].map(e=>e.title)") == ['ParentFixture → ReviewFixture','ReviewFixture → ParentFixture']
+    assert js("[...document.querySelectorAll('.conversation-mail-label')].every(e=>e.title.startsWith('ORRERY Mail'))")
     assert not js("document.querySelector('.conversation-role')?.textContent==='You'")
     js("document.querySelectorAll('.conversation-mail-summary').forEach(e=>e.click())")
     assert js("[...document.querySelectorAll('.conversation-mail')].every(e=>e.open)")
