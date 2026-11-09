@@ -173,8 +173,13 @@
     let submissions=[],submissionTimer=0,flashTimer=0,readSequence=0;
     const observedIds=new Set(),matchedSubmissions=new Set(),pendingEl=el('.conversation-pending');
     const normalizePrompt=text=>(root.OrreryConversationMarkdown?.submissionText(text)??text).replace(/\s+/gu,' ').trim();
+    function keepReaderFocus(container){
+      // A detached control leaves BODY focused, which terminal fitting may
+      // interpret as permission to focus xterm and send the next reading key.
+      if(opened&&presented&&container?.contains(document.activeElement))scroll.focus({preventScroll:true});
+    }
     function renderSubmissions(){
-      clearTimeout(submissionTimer);submissionTimer=0;pendingEl.replaceChildren();
+      clearTimeout(submissionTimer);submissionTimer=0;keepReaderFocus(pendingEl);pendingEl.replaceChildren();
       let next=Infinity;
       for(const item of submissions){
         const row=document.createElement('article');row.className='conversation-submission';row.dataset.submissionId=item.id;
@@ -328,7 +333,7 @@
     }
     function modeMessage(text){if(!text&&document.activeElement===modeInfo&&opened)scroll.focus({preventScroll:true});modeInfo.title=text;modeInfo.setAttribute('aria-label',text);paintStatus();}
     function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
-    function clear({keepSubmissions=false}={}){closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
+    function clear({keepSubmissions=false}={}){closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
       if(tableMutating)return;
@@ -359,7 +364,7 @@
     function setGroupOpen(group,open){
       saveTables();const top=group.button.getBoundingClientRect().top;
       group.open=open;group.button.setAttribute('aria-expanded',String(open));
-      for(const row of group.rows)row.hidden=!open;
+      for(const row of group.rows){if(!open)keepReaderFocus(row);row.hidden=!open;}
       restoreTables();scroll.scrollTop+=group.button.getBoundingClientRect().top-top;
       position();remember(true);
     }
@@ -400,7 +405,7 @@
         else{finish();row.hidden=false;}
       }
       finish();
-      for(const group of previous)if(!used.has(group))group.button.remove();
+      for(const group of previous)if(!used.has(group)){keepReaderFocus(group.button);group.button.remove();}
       toolGroups=groups;toolGroupFor.clear();
       for(const group of groups)for(const row of group.rows)toolGroupFor.set(row.dataset.eventId,group);
       // Keep native IDs and nodes as siblings for cursors and reading anchors,
@@ -413,7 +418,7 @@
         if(record.command!==null)shellStart=row;
         else if(shellStart){shellStart.classList.add('conversation-shell-start');row.classList.add('conversation-shell-continuation');}
       }
-      if(focused&&document.activeElement===document.body)(groups.includes(focused)?focused.button:scroll).focus({preventScroll:true});
+      if(focused&&(document.activeElement===document.body||document.activeElement===scroll))(groups.includes(focused)?focused.button:scroll).focus({preventScroll:true});
     }
     function anchor(){
       const top=scroll.getBoundingClientRect().top;
@@ -529,7 +534,7 @@
         const ids=[...events.keys()],id=fromStart?ids[0]:ids[ids.length-1];
         retainedBytes-=byteSize(events.get(id));events.delete(id);
         const child=rawRows().find(row=>row.dataset.eventId===id);
-        if(child)child.remove();removed=true;
+        if(child){keepReaderFocus(child);child.remove();}removed=true;
       }
       if(removed&&!['fresh_tail','snapshot'].includes(mode)){
         const kept=[...events.values()];
@@ -549,7 +554,7 @@
         const detail=document.createElement('div');detail.className='conversation-system-detail';detail.hidden=true;
         detail.id='conversation-system-'+(++toolSerial)+'-'+Math.random().toString(36).slice(2);toggle.setAttribute('aria-controls',detail.id);
         if(root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.renderText(event.system_detail||event.text,detail);else detail.textContent=event.system_detail||event.text;
-        toggle.addEventListener('click',()=>{detail.hidden=!detail.hidden;toggle.setAttribute('aria-expanded',String(!detail.hidden));});
+        toggle.addEventListener('click',()=>{if(!detail.hidden)keepReaderFocus(detail);detail.hidden=!detail.hidden;toggle.setAttribute('aria-expanded',String(!detail.hidden));});
         article.append(toggle,detail);return article;
       }
       if(event.kind==='mail'&&Array.isArray(event.mail)&&root.OrreryConversationMail)return root.OrreryConversationMail.render(event,article);
@@ -713,6 +718,7 @@
         saveTables();tableMutating=true;
         const fragment=document.createDocumentFragment(),focusedGroup=toolGroups.find(group=>group.button===document.activeElement);let added=0;
         if(fresh){
+          keepReaderFocus(eventsEl);
           const existing=new Map(rawRows().map(child=>[child.dataset.eventId,child]));
           const previous=events;
           if([...previous].some(([id,event])=>JSON.stringify(event)!==JSON.stringify(incoming.find(next=>next.id===id))))preview?.close();
