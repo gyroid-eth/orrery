@@ -247,7 +247,7 @@
       latest.setAttribute('aria-label',latest.title);
     }
     function paintStatus(){toolbar.hidden=!status.textContent&&retry.hidden;}
-    function message(text){status.textContent=text;paintStatus();}
+    function message(text){const bottom=nearBottom();status.textContent=text;paintStatus();if(bottom)scroll.scrollTop=scroll.scrollHeight;}
     function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
     function clear({keepSubmissions=false}={}){tablePositions.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
@@ -594,7 +594,7 @@
         if(token!==generation||error.name==='AbortError')return;
         last.failed=true;
         pollAgain=!['history_changed','record_too_large','provider_unavailable','claude_next_phase','dashboard_upgrade_required','dsh_decoder_unavailable','history_format_unsupported'].includes(error.code);
-        message(error.message);retry.hidden=false;
+        retry.hidden=false;message(error.message);
         if(BINDING_ERRORS.includes(error.code)){
           // Never retain content from a stale, unbound or different native session.
           clear({keepSubmissions:error.code==='history_pending'});retry.hidden=false;empty.hidden=false;
@@ -660,10 +660,12 @@
     listen(earlier,'click',()=>userLoad('older'));
     listen(retry,'click',()=>userLoad(events.size?'newer':'initial'));
     listen(latest,'click',()=>{
-      if(paused){stop();clear({keepSubmissions:true});load('initial');return;}
-      scroll.scrollTop=scroll.scrollHeight;newCount=0;position();remember(true);
+      if(paused){stop();clear({keepSubmissions:true});load('initial');}
+      else{
+        scroll.scrollTop=scroll.scrollHeight;newCount=0;position();remember(true);
+        if(!busy)plan();
+      }
       scroll.focus({preventScroll:true});
-      if(!busy)plan();
     });
     // Submission remains owned by the existing composer/input guards. This
     // notification adds an ephemeral delivery receipt, never a provider event.

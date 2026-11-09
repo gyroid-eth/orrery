@@ -6,7 +6,7 @@
 .conversation-panel{position:absolute;right:0;top:40px;bottom:0;z-index:5;
   width:var(--conversation-width);display:flex;flex-direction:column;min-height:0;
   border-left:1px solid var(--hair);background:var(--panel);color:var(--ink)}
-.conversation-toolbar{display:flex;gap:8px;align-items:center;margin:10px 0;padding:10px;border:1px solid var(--hair);border-radius:6px;background:var(--panel-2)}
+.conversation-toolbar{position:sticky;top:0;z-index:3;display:flex;gap:8px;align-items:center;margin:0 0 8px;padding:6px 8px;border:1px solid var(--hair);border-radius:6px;background:var(--panel-2)}
 .conversation-status{font:10px/1.6 var(--mono);color:var(--ink-dim);flex:1;overflow-wrap:anywhere}
 .conversation-scroll{flex:1;min-height:0;overflow-y:scroll;overscroll-behavior:contain;
   scrollbar-gutter:stable;scrollbar-width:auto;overflow-anchor:none;padding:4px 18px 56px;outline-offset:-3px}

@@ -3,7 +3,7 @@ import json
 import time
 
 import pytest
-from test_conversation_review_regressions import cockpit, stable_roster
+from test_conversation_review_regressions import cockpit, stable_roster, wait_reading_layout
 from test_split_pane_headers import setup
 
 
@@ -83,3 +83,64 @@ def test_split_reader_icons_and_expansion_belong_to_the_owner(cockpit):
     assert js('document.querySelector(".split-cell[data-session=ReviewFixture]").classList.contains("conversation-full")')
     assert not js('document.querySelector(".split-cell[data-session=OtherFixture]").classList.contains("conversation-full")')
     assert js('document.querySelectorAll(".split-pane-window svg").length') == 2
+
+
+def pause_at_reader_limit(js, wait):
+    for n in range(2, 5):
+        js("document.querySelector('.conversation-scroll').scrollTop=1e9;conversationView.refresh()")
+        wait("document.querySelectorAll('.conversation-event').length==="+str(n*200))
+    js("document.querySelector('.conversation-scroll').dispatchEvent(new WheelEvent('wheel'));document.querySelector('.conversation-scroll').scrollTop=110;conversationView.refresh()")
+    wait("document.querySelector('.conversation-latest').getAttribute('aria-label').includes('resume')")
+
+
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+@pytest.mark.parametrize('mode', ['fresh_tail', 'cursor'])
+def test_initial_long_reader_stops_at_the_tail_without_latest(cockpit, theme, mode):
+    js, wait, client, requests, enable = cockpit
+    stable_roster(js)
+    enable(mode=mode, count=200)
+    js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
+    wait_reading_layout(js)
+    assert js("(()=>{const s=document.querySelector('.conversation-scroll');return s.scrollHeight-s.clientHeight-s.scrollTop<1})()")
+    assert js("document.querySelector('.conversation-bottom').hidden")
+
+
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+@pytest.mark.parametrize('notice', ['fresh', 'error', 'paused'])
+def test_notices_and_retry_remain_visible_in_a_long_reader(cockpit, theme, notice):
+    js, wait, client, requests, enable = cockpit
+    stable_roster(js)
+    enable(mode='fresh_tail' if notice == 'fresh' else 'cursor', count=200)
+    js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
+    if notice == 'paused':
+        pause_at_reader_limit(js, wait)
+        assert js("document.querySelector('.conversation-scroll').scrollTop") == 110
+    elif notice == 'error':
+        js("OrreryConversationSource.Source.prototype.read=async()=>{throw new Error('Generated read failure')};conversationView.refresh()")
+        wait("!document.querySelector('.conversation-retry').hidden")
+    else:
+        wait("document.querySelector('.conversation-status').textContent.includes('Fresh')")
+    assert js("document.querySelector('.conversation-scroll').scrollTop>100")
+    assert js("""(()=>{const s=document.querySelector('.conversation-scroll').getBoundingClientRect(),t=document.querySelector('.conversation-toolbar').getBoundingClientRect();return t.height>0&&t.top>=s.top&&t.bottom<=s.bottom})()""")
+    if notice != 'paused':
+        assert js("(()=>{const s=document.querySelector('.conversation-scroll');return s.scrollHeight-s.clientHeight-s.scrollTop<1})()")
+    if notice == 'error':
+        assert js("""(()=>{const b=document.querySelector('.conversation-retry'),r=b.getBoundingClientRect();return document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===b})()""")
+
+
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_paused_latest_enter_keeps_focus_in_the_reader_after_fit(cockpit, theme):
+    js, wait, client, requests, enable = cockpit
+    stable_roster(js)
+    enable(count=200)
+    js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
+    pause_at_reader_limit(js, wait)
+    js("document.querySelector('.conversation-latest').focus();packets.length=0")
+    client.call('Input.dispatchKeyEvent', type='keyDown', key='Enter', code='Enter', text='\r', windowsVirtualKeyCode=13)
+    client.call('Input.dispatchKeyEvent', type='keyUp', key='Enter', windowsVirtualKeyCode=13)
+    wait("document.querySelectorAll('.conversation-event').length===200")
+    assert js("document.activeElement.classList.contains('conversation-scroll')")
+    js('queueStageFit(activeId)')
+    time.sleep(.2)
+    assert js("document.activeElement.classList.contains('conversation-scroll')")
+    assert js("packets.filter(p=>['input','codex-page'].includes(p.type))") == []
