@@ -85,17 +85,26 @@ def codex_event(raw: bytes, offset: int) -> dict | None:
         item = json.loads(raw)
     except (ValueError, UnicodeDecodeError):
         return None
-    if not isinstance(item, dict) or item.get("type") != "response_item":
+    if (not isinstance(item, dict) or not isinstance(item.get("type"), str)
+            or item["type"] not in {"response_item", "compacted"}):
         return None
     payload = item.get("payload")
     if not isinstance(payload, dict):
         return None
+    ts = str(item.get("timestamp") or "")[:128]
+    base = {"id": str(offset), "ts": ts}
+    if item["type"] == "compacted":
+        # Newer records retain only encrypted context. Never expose it or the
+        # replacement history; older records can include a readable summary.
+        detail = payload.get("message")
+        if not isinstance(detail, str) or not detail.strip():
+            detail = "The provider did not record a readable compaction summary."
+        return dict(base, kind="system", role="system", text="Context compacted",
+                    system_detail=detail[:MAX_TEXT], truncated=len(detail)>MAX_TEXT)
     kind = payload.get("type")
     if not isinstance(kind, str):
         return None
     role = payload.get("role")
-    ts = str(item.get("timestamp") or "")[:128]
-    base = {"id": str(offset), "ts": ts}
     if kind == "message" and isinstance(role, str) and role in {"user", "assistant"}:
         # Provider reasoning is separate from user-visible commentary/final.
         if payload.get("role") == "assistant" and payload.get("phase") == "analysis":

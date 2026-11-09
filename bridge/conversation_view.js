@@ -334,7 +334,7 @@
     }
     const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onBeforeOpen:layoutChanged,onClose:layoutChanged,onActivate:()=>expand(true)});
     const stopPathLinks=root.OrreryConversationMarkdown?.observePaths?.(panel,source);
-    let enabled=false,opened=false,agent='',generation=0,controller=null,timer=0,busy=false;
+    let enabled=false,opened=false,agent='',generation=0,controller=null,timer=0,busy=false,sessionReloadAttempted=false;
     let before=null,after=null,hasOlder=false,mode='',newCount=0,events=new Map();
     let presented=true,lastPosition=null,lastWidth=0,lastHeight=0,lastFocused=null;
     let layoutTimer=0,layoutFrame=0,layoutPending=false,restoring=false,userScrolling=false,layoutStarted=0;
@@ -402,7 +402,7 @@
       paintMessage();
     }
     function modeMessage(text){if(!text&&document.activeElement===modeInfo&&opened)scroll.focus({preventScroll:true});modeInfo.title=text;modeInfo.setAttribute('aria-label',text);paintStatus();}
-    function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
+    function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;sessionReloadAttempted=false;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
     function clear({keepSubmissions=false}={}){closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
@@ -711,15 +711,16 @@
        Planning again never postpones a read already planned sooner, so
        frequent operations cannot starve a reader. */
     let timerDue=0;
-    function plan(){
+    function plan(reloadDelay=null){
       if(!opened||!presented||!enabled||paused||busy||!agent||document.hidden){clearTimeout(timer);timer=0;return;}
       let delay=pollMs;
       if(opsActive()||last.failed)delay=pollMs;
       else if(last.catchUp&&last.slot)delay=0;
       else if(last.hold&&!last.refused&&waiting.size<MAX_WAITING)delay=last.rows>0?CONTENT_GAP_MS:0;
+      if(reloadDelay!==null&&!opsActive())delay=reloadDelay;
       const due=performance.now()+delay;
       if(timer&&timerDue<=due)return;
-      clearTimeout(timer);timerDue=due;timer=setTimeout(()=>{timer=0;load('newer');},delay);
+      clearTimeout(timer);timerDue=due;timer=setTimeout(()=>{timer=0;load(after===null?'initial':'newer');},delay);
     }
     ops.planners.add(plan);
     // Older pages, newest first, merged into one page in reading order.
@@ -749,7 +750,7 @@
     async function load(direction='initial',op=null){
       if(!opened||!presented||!enabled||busy||!agent||paused&&direction==='newer'){endOp(op);return;}
       const token=generation,name=agent,sequence=++readSequence;
-      let pollAgain=true;
+      let pollAgain=true,reloadDelay=null;
       if(document.activeElement===retry)scroll.focus({preventScroll:true});
       controller=new AbortController();busy=true;retry.hidden=true;paintStatus();
       const options={signal:controller.signal},mine=controller;
@@ -772,6 +773,7 @@
         last.slot=page.slot===true;last.refused=Boolean(options.wait)&&!last.slot;
         last.catchUp=page.has_newer===true&&direction!=='older';last.rows=0;last.failed=false;
         if(token!==generation||!opened||!enabled)return;
+        sessionReloadAttempted=false;
         // The server saw no change since this cursor: keep every row as is.
         if(page.unchanged===true&&direction==='newer'&&page.after===after){message('');return;}
         const atBottom=nearBottom(),oldHeight=scroll.scrollHeight,oldTop=scroll.scrollTop,saved=anchor();
@@ -783,7 +785,7 @@
         const additions=incoming.filter(event=>!events.has(event.id));
         if(!fresh&&direction==='newer'&&!atBottom&&
           (events.size+additions.length>MAX_EVENTS||retainedBytes+additions.reduce((n,event)=>n+byteSize(event),0)>MAX_BYTES)){
-          paused=true;message('Updates paused at reader limit. Latest resumes at the newest messages.','Updates paused');position();return;
+          paused=true;message('Updates paused at reader limit. Scroll to the bottom or select Latest to resume.','Updates paused');position();return;
         }
         saveTables();tableMutating=true;
         const fragment=document.createDocumentFragment(),focusedGroup=toolGroups.find(group=>group.button===document.activeElement);let added=0;
@@ -822,7 +824,7 @@
         modeMessage(mode==='snapshot'?page.notice||'Recent provider snapshot.':
           fresh?(page.limited||trimmed?'Fresh · limited recent snapshot; earlier history and tools need telemetry support.':'Fresh · recent snapshot (up to 200 messages).'):
           page.notice||'');
-        message(paused?'Reader window is bounded. Latest resumes at the newest messages.':
+        message(paused?'Reader window is bounded. Scroll to the bottom or select Latest to resume.':
           trimmed&&!fresh?'Older loaded messages were released. Load earlier to read them again.':
           page.skipped_large_record?'A large record was skipped. Load earlier to continue.':'',
           paused?'Updates paused':trimmed&&!fresh?'Older released':page.skipped_large_record?'Record skipped':'');
@@ -832,14 +834,23 @@
         waiting.delete(holder);holding=false;
         if(token!==generation||error.name==='AbortError')return;
         last.failed=true;
-        pollAgain=!['history_changed','record_too_large','provider_unavailable','claude_next_phase','dashboard_upgrade_required','dsh_decoder_unavailable','history_format_unsupported'].includes(error.code);
-        retry.hidden=false;message(error.message,'Read failed');
-        if(BINDING_ERRORS.includes(error.code)){
-          // Never retain content from a stale, unbound or different native session.
-          clear({keepSubmissions:error.code==='history_pending'});retry.hidden=false;empty.hidden=false;
-          empty.textContent=error.code==='history_changed'?'Session changed. Retry to load the current conversation.':error.message;
-          message(error.message,'Read failed');
+        if(error.code==='history_changed'){
+          // One short retry for a changed binding; repeated changes use the
+          // normal poll interval instead of spinning on an unsettled session.
+          clear();empty.textContent='New session';message('New session','New session',true);
+          if(pendingAction){endOp(pendingAction.op);pendingAction=null;}
+          if(!sessionReloadAttempted){sessionReloadAttempted=true;reloadDelay=250;}
           position();
+        }else{
+          pollAgain=!['record_too_large','provider_unavailable','claude_next_phase','dashboard_upgrade_required','dsh_decoder_unavailable','history_format_unsupported'].includes(error.code);
+          retry.hidden=false;message(error.message,'Read failed');
+          if(BINDING_ERRORS.includes(error.code)){
+            // Never retain content from a stale, unbound or different native session.
+            clear({keepSubmissions:error.code==='history_pending'});retry.hidden=false;empty.hidden=false;
+            empty.textContent=error.message;
+            message(error.message,'Read failed');
+            position();
+          }
         }
         paintStatus();
       }finally{
@@ -847,7 +858,7 @@
           busy=false;controller=null;earlier.disabled=false;paintStatus();
           if(followPending){followPending=false;followSubmitted();}
           else if(pendingAction){const next=pendingAction;pendingAction=null;load(next.direction,next.op);}
-          else if(pollAgain)plan();
+          else if(pollAgain)plan(reloadDelay);
         }
         endOp(op);
       }
@@ -910,9 +921,13 @@
     // there is no path from this module to xterm or tmux input.
     listen(earlier,'click',()=>{scroll.focus({preventScroll:true});userLoad('older');});
     listen(retry,'click',()=>{scroll.focus({preventScroll:true});userLoad(events.size?'newer':'initial');});
+    function resumePaused(){
+      if(!paused)return false;
+      stop();clear({keepSubmissions:true});load('initial');
+      return true;
+    }
     listen(latest,'click',()=>{
-      if(paused){stop();clear({keepSubmissions:true});load('initial');}
-      else{
+      if(!resumePaused()){
         scroll.scrollTop=scroll.scrollHeight;newCount=0;position();remember(true);
         if(!busy)plan();
       }
@@ -922,8 +937,7 @@
     // notification adds an ephemeral delivery receipt, never a provider event.
     // Only a subsequent exact user record replaces it (FIFO for repeated text).
     function followSubmitted(){
-      if(paused){stop();clear({keepSubmissions:true});load('initial');}
-      else{scroll.scrollTop=scroll.scrollHeight;newCount=0;position();remember(true);load('newer');}
+      if(!resumePaused()){scroll.scrollTop=scroll.scrollHeight;newCount=0;position();remember(true);load('newer');}
     }
     listen(document,'oc:prompt-sending',event=>{
       const detail=event.detail;
@@ -957,7 +971,20 @@
     function userScroll(){clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);layoutTimer=layoutFrame=0;layoutPending=restoring=false;panel.dataset.conversationLayout='settled';userScrolling=true;const r=screen.getBoundingClientRect();lastWidth=r.width;lastHeight=r.height;}
     listen(scroll,'wheel',userScroll,{passive:true});listen(scroll,'touchstart',userScroll,{passive:true});listen(scroll,'pointerdown',userScroll,{passive:true});
     listen(scroll,'keydown',event=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key))userScroll();});
-    listen(scroll,'scroll',()=>{if(presented){position();if(userScrolling)remember();}},{passive:true});
+    let previousScrollTop=scroll.scrollTop,previousScrollHeight=scroll.scrollHeight;
+    listen(scroll,'scroll',()=>{
+      const top=scroll.scrollTop,height=scroll.scrollHeight;
+      // Collapsing content can clamp the viewport to the end without the
+      // reader moving downward. Keep that retained window paused.
+      const movedDown=top>previousScrollTop&&height>=previousScrollHeight;
+      previousScrollTop=top;previousScrollHeight=height;
+      if(!presented)return;
+      position();
+      if(userScrolling){
+        remember();
+        if(opened&&enabled&&paused&&movedDown&&nearBottom())resumePaused();
+      }
+    },{passive:true});
     listen(window,'resize',()=>{closeNotice({focus:true});paintStatus();layoutChanged();});
     const layoutObserver=new ResizeObserver(layoutChanged);
     layoutObserver.observe(panel);layoutObserver.observe(scroll);layoutObserver.observe(eventsEl);

@@ -126,9 +126,13 @@ def test_a_binding_failure_on_a_later_page_keeps_nothing(cockpit):  # noqa: F811
     js, wait, client = prepare(cockpit, 'claude')
     reopen(js, wait, cap=50, fail={'2': 'history_changed'})
     js("reader.querySelector('.conversation-older').click();0")
-    wait("!reader.parentElement.querySelector('.conversation-retry').hidden")
+    wait("reader.querySelectorAll('.conversation-event').length===0")
     assert shown(js) == []
+    assert js("reader.parentElement.querySelector('.conversation-retry').hidden")
     assert len(older_reads(js)) == 2
+    js('R.top=20000')
+    wait("reader.querySelector('[data-event-id=e19920]')!==null")
+    assert shown(js) == list(range(19920, 20000))
 
 
 def test_a_conversation_switched_mid_click_reads_no_further_and_shows_nothing_old(cockpit):  # noqa: F811

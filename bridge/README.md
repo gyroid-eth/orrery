@@ -25,13 +25,21 @@ describes the loaded messages, not the live TUI position. `Load earlier` reads
 older records, and new output follows only while the reader is at the bottom.
 The small **↓ (Latest)** button appears over the lower-right corner only while
 reading earlier records. Its opaque background keeps it visible, and extra
-space at the end of the list keeps the last line clear.
+space at the end of the list keeps the last line clear. If the retention limit
+pauses updates while you read earlier messages, scrolling back to the bottom
+reloads the newest messages and resumes following, just like selecting Latest.
+Layout-driven scroll changes do not resume a paused reader.
 Turn the setting off to remove the button, close the panel and stop its reads.
 Conversation scripts/styles are loaded only while the setting is enabled. Reading keys stay
 in the reader. In CLAIMED mode, opening Reader beside the terminal fits the
 terminal to the remaining width; closing Reader restores its width. Full-width
 Reader overlays the terminal. FOLLOW keeps the external terminal’s grid, so
 Reader can cover part of it.
+Claude and Codex compaction records appear as a collapsible `Context compacted`
+system row, with the readable summary when available. Encrypted context is never
+displayed. A `history_changed` response clears the old session and shows `New session`,
+then retries once after 250 ms; repeated changes use the normal polling interval.
+Other permanent read failures retain the existing Retry control.
 The single preference uses the existing shared preference mechanism; transcript
 contents and reading position are never saved as preferences.
 
@@ -242,12 +250,13 @@ limit. Structured extraction is capped at 1 MiB per record, 24 references and
 no name-based hiding or content redaction: the owner decides. Nothing is
 indexed or stored to disk by these modules.
 
-The reader retains at most 400 events / 2 MiB of serialized event data (fresh:
+The reader retains at most 800 events / 2 MiB of serialized event data (fresh:
 at most 200). Legacy releases older events while following the bottom; Load
 earlier reads them again with per-event cursors. At the limit while reading,
-updates pause without moving the reading position; Latest reloads the newest
-window and resumes. Loading older pages may release newer ones and pause updates
-until Latest. This is a bounded reader, not an archival export.
+updates pause without moving the reading position; scrolling back to the bottom
+or selecting Latest reloads the newest window and resumes. Loading older pages may release newer ones and pause updates
+until you scroll back to the bottom or select Latest. This is a bounded reader,
+not an archival export.
 
 Each control connection runs through `control_client_guard.py`. The guard owns
 one `tmux -CC attach` child and watches a private pipe whose writer belongs only

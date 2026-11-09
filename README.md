@@ -83,7 +83,7 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 
 agent の発言は Markdown の見出し・太字・箇条書き・引用・inline code などを描きます。コードの塊は横にスクロールでき、**Copy** で改行や空白を含む中身をコピーできます。生の HTML は文字のまま表示し、Markdown の画像を取りには行きません。人が打った本文は文字のままです。表も横にスクロールでき、**Copy Markdown** で元の表をコピーできます。
 
-Claude の `!` の記録は **SHELL** と表示し、続くコマンドと出力を1つのまとまりにします。長い出力は短く表示し、**Show all** で開けます。slash command もコマンドと出力の塊として表示します。文字参照は認識した記録の中だけで戻し、コマンドもコピーできます。background task などの system 通知は、人の発言と区別した短い1行で表示し、押すと記録の詳細を開閉できます。
+Claude の `!` の記録は **SHELL** と表示し、続くコマンドと出力を1つのまとまりにします。長い出力は短く表示し、**Show all** で開けます。slash command もコマンドと出力の塊として表示します。文字参照は認識した記録の中だけで戻し、コマンドもコピーできます。background task などの system 通知は、人の発言と区別した短い1行で表示し、押すと記録の詳細を開閉できます。Claude・Codex の compact の記録も **Context compacted** の1行になり、記録に読める要約がある場合は開いて読めます。セッションが変わったときは前の表示を消し、**New session** と表示して自動で読み直します。変化が続く場合は通常の間隔で確認し、Retry は不要です。
 
 ![agent の発言に含まれる表と Copy Markdown](docs/images/cockpit_history_table.png)
 
@@ -105,7 +105,7 @@ Claude の `!` の記録は **SHELL** と表示し、続くコマンドと出力
 
 表示できない場合は、パネルに理由と次の操作が表示されます。起動直後や最初の発言前なら少し待って再試行し、古い会話や紐付けを確認できない場合は新しい子を開いてください。Codex の記録が観測されない場合は ORRERY plugin を有効にして `/hooks` で確認し、新しく起動します。記録が無効・書き込み不可の場合は provider の記録設定や保存先を確認します。古い dashboard、未対応の形式、dsh の依存関係不足なども画面に案内されます。
 
-legacy では Codex と、Telemetry API 35 以降で紐付けを確認した Claude Code・dsh・Hermes を読めます。古い dashboard では Codex のみです。Claude・Codex・dsh は過去ページを読めます。dsh は記録された append の時系列、Hermes は現在の bound segment の直近 snapshot（最大200件）で、圧縮前の segment は含みません。fresh は保護された API の直近の本文 snapshot（最大200件、量の制限あり）で、過去ページと tool の要約には未対応です。保持上限で更新が止まったときは **↓（最新へ）** で再開できます。端末から消えた代替画面の描画は復元できません。[操作と上限の詳細](bridge/README.md)
+legacy では Codex と、Telemetry API 35 以降で紐付けを確認した Claude Code・dsh・Hermes を読めます。古い dashboard では Codex のみです。Claude・Codex・dsh は過去ページを読めます。dsh は記録された append の時系列、Hermes は現在の bound segment の直近 snapshot（最大200件）で、圧縮前の segment は含みません。fresh は保護された API の直近の本文 snapshot（最大200件、量の制限あり）で、過去ページと tool の要約には未対応です。保持上限で更新が止まったときは、一番下までスクロールすると最新を読み直して追随を再開します。**↓（最新へ）** でも再開できます。端末から消えた代替画面の描画は復元できません。[操作と上限の詳細](bridge/README.md)
 
 ### 科学者の顔とモデルを選んで起動する（NEW AGENT）
 
