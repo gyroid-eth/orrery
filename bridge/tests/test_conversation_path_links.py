@@ -237,10 +237,13 @@ def path_backend():
     finally:loop.call_soon_threadsafe(stop.set);thread.join(timeout=10)
 
 
-def test_real_body_path_image_roundtrip_dark_light(cockpit,path_backend,tmp_path):
+def test_real_body_path_image_roundtrip_dark_light(cockpit,path_backend,tmp_path,monkeypatch):
     from PIL import ImageDraw
     js,wait,client,requests,enable=cockpit
     origin,reads=path_backend
+    fixture_home=tmp_path/'home';fixture_home.mkdir()
+    home_note=fixture_home/'note.txt';home_note.write_text('Generated reader path fixture.\n')
+    monkeypatch.setenv('HOME',str(fixture_home))
     client.call('Page.navigate',url=origin+'/cockpit.html')
     wait("typeof conversationView!=='undefined'&&typeof createPane==='function'")
     js('clearTimeout(reconnectTimer);scheduleReconnect=()=>{}')
@@ -254,13 +257,14 @@ def test_real_body_path_image_roundtrip_dark_light(cockpit,path_backend,tmp_path
         for index,height in enumerate([40,70,100,130,95,165]):
             x=35+index*68;draw.rectangle((x,215-height,x+42,215),fill='#51b9b1')
         raster.save(target)
-        home='~/'+str(Path(__file__).resolve().relative_to(Path.home()))
+        home='~/note.txt'
         text='Image: '+str(target)+'。\nHome: '+home+'。\nMissing: '+str(Path(folder)/'absent.png')
         event=dict(id='real-path',kind='text',role='assistant',text=text)
         js('conversationView.close();window.realPathEvent='+json.dumps(event)+';OrreryConversationSource.Source.prototype.read=async()=>({events:[realPathEvent],after:"real:1"});window.pathReader=OrreryConversation.mount({getContext:()=>({...currentAgents[0],terminalPaneId:"%901"}),bindToggle:false});pathReader.open()')
         wait('document.querySelectorAll("a[data-local-path]").length===2')
         assert reads==[]
         assert js('document.querySelectorAll("a[data-local-path]")[0].textContent')==str(target)
+        assert js('document.querySelectorAll("a[data-local-path]")[1].dataset.localPath')==str(home_note)
         output=Path(os.environ.get('ORRERY_PATH_SCREENSHOTS',tmp_path));output.mkdir(parents=True,exist_ok=True)
         for theme in ['dark','light']:
             js('OrreryColorTheme.setPreference('+json.dumps(theme)+');{const button=document.querySelector(".conversation-expand[aria-controls="+pathReader.panel.id+"]");if(button.getAttribute("aria-pressed")!=="true")button.click();}')
