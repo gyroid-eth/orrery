@@ -172,7 +172,7 @@
     const toolGroupFor=new Map();
     let submissions=[],submissionTimer=0,flashTimer=0,readSequence=0;
     const observedIds=new Set(),matchedSubmissions=new Set(),pendingEl=el('.conversation-pending');
-    const normalizePrompt=text=>text.replace(/\s+/gu,' ').trim();
+    const normalizePrompt=text=>(root.OrreryConversationMarkdown?.submissionText(text)??text).replace(/\s+/gu,' ').trim();
     function renderSubmissions(){
       clearTimeout(submissionTimer);submissionTimer=0;pendingEl.replaceChildren();
       let next=Infinity;
@@ -181,6 +181,10 @@
         const label=document.createElement('div');label.className='conversation-byline';
         const elapsed=Date.now()-item.at;
         label.textContent='Sent → '+item.name+' · '+(item.unmatched?'Record not matched':elapsed>=60000?'Not recorded yet':'Awaiting record');
+        if(item.unmatched){
+          const dismiss=document.createElement('button');dismiss.type='button';dismiss.className='cockpit-control conversation-submission-dismiss';dismiss.textContent='Dismiss';dismiss.setAttribute('aria-label','Dismiss unmatched send receipt');
+          dismiss.addEventListener('click',()=>{submissions=submissions.filter(entry=>entry.id!==item.id);renderSubmissions();});label.appendChild(dismiss);
+        }
         const text=document.createElement('p');text.className='conversation-text';
         if(root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.renderText(item.preview,text);else text.textContent=item.preview;
         const note=document.createElement('div');note.className='conversation-submission-note';
@@ -399,6 +403,16 @@
       for(const group of previous)if(!used.has(group))group.button.remove();
       toolGroups=groups;toolGroupFor.clear();
       for(const group of groups)for(const row of group.rows)toolGroupFor.set(row.dataset.eventId,group);
+      // Keep native IDs and nodes as siblings for cursors and reading anchors,
+      // while adjacent shell records share one visible heading and boundary.
+      let shellStart=null;
+      for(const row of rawRows()){
+        row.classList.remove('conversation-shell-start','conversation-shell-continuation');
+        const event=events.get(row.dataset.eventId),record=event?.role==='user'&&event.kind==='text'?root.OrreryConversationMarkdown?.commandRecord(event.text):null;
+        if(!record?.shell){shellStart=null;continue;}
+        if(record.command!==null)shellStart=row;
+        else if(shellStart){shellStart.classList.add('conversation-shell-start');row.classList.add('conversation-shell-continuation');}
+      }
       if(focused&&document.activeElement===document.body)(groups.includes(focused)?focused.button:scroll).focus({preventScroll:true});
     }
     function anchor(){
@@ -420,7 +434,7 @@
     }
     function textNodes(article){
       const walker=document.createTreeWalker(article,NodeFilter.SHOW_TEXT),nodes=[];
-      while(walker.nextNode())nodes.push(walker.currentNode);return nodes;
+      while(walker.nextNode())if(!walker.currentNode.parentElement?.closest('.conversation-code-head'))nodes.push(walker.currentNode);return nodes;
     }
     function remember(force=false){
       if(!opened||!presented||!panel.isConnected||!scroll.getClientRects().length)return;
@@ -528,10 +542,21 @@
     function node(event){
       const article=document.createElement('article');article.className='conversation-event';
       article.dataset.eventId=event.id;article.dataset.role=event.role;article.dataset.kind=event.kind;
+      if(event.kind==='system'){
+        const toggle=document.createElement('button');toggle.type='button';toggle.className='conversation-system-toggle';toggle.setAttribute('aria-expanded','false');
+        const arrow=document.createElement('span');arrow.className='conversation-tool-arrow';arrow.textContent='▸';arrow.setAttribute('aria-hidden','true');
+        const label=document.createElement('span');label.textContent=event.text;toggle.append(arrow,label);
+        const detail=document.createElement('div');detail.className='conversation-system-detail';detail.hidden=true;
+        detail.id='conversation-system-'+(++toolSerial)+'-'+Math.random().toString(36).slice(2);toggle.setAttribute('aria-controls',detail.id);
+        if(root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.renderText(event.system_detail||event.text,detail);else detail.textContent=event.system_detail||event.text;
+        toggle.addEventListener('click',()=>{detail.hidden=!detail.hidden;toggle.setAttribute('aria-expanded',String(!detail.hidden));});
+        article.append(toggle,detail);return article;
+      }
       if(event.kind==='mail'&&Array.isArray(event.mail)&&root.OrreryConversationMail)return root.OrreryConversationMail.render(event,article);
       const byline=document.createElement('div');byline.className='conversation-byline';
       const role=document.createElement('span');role.className='conversation-role';
-      role.textContent=event.kind==='tool'?'Tool':event.kind==='tool_result'?'Tool result':event.role==='user'?'You':providerLabel;byline.appendChild(role);
+      const shell=event.role==='user'&&root.OrreryConversationMarkdown?.commandRecord(event.text)?.shell;
+      role.textContent=event.kind==='tool'?'Tool':event.kind==='tool_result'?'Tool result':shell?'Shell':event.role==='user'?'You':providerLabel;byline.appendChild(role);
       if(['tool','tool_result'].includes(event.kind)){
         const tool=document.createElement('span');tool.className='conversation-tool-name';tool.textContent=event.text;byline.appendChild(tool);
       }
@@ -541,8 +566,12 @@
       byline.appendChild(time);article.appendChild(byline);
       if(!['tool','tool_result'].includes(event.kind)){
         const text=document.createElement('div');text.className='conversation-text';
-        if(event.role==='assistant'&&root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.render(event.text,text);
-        else if(root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.renderText(event.text,text);
+        if(event.role==='assistant'&&root.OrreryConversationMarkdown){
+          text.className+=' conversation-markdown';root.OrreryConversationMarkdown.renderDocument(event.text,text,{codeControls:true});
+          // A single paragraph needs no block wrapper in a conversation row.
+          if(text.childNodes.length===1&&text.firstChild.nodeName==='P')text.replaceChildren(...text.firstChild.childNodes);
+        }
+        else if(root.OrreryConversationMarkdown){if(!root.OrreryConversationMarkdown.renderCommand(event.text,text))root.OrreryConversationMarkdown.renderText(event.text,text);}
         else text.textContent=event.text;article.appendChild(text);
       }
       if(event.truncated){const note=document.createElement('div');note.className='conversation-truncated';note.textContent='Long message shortened in this reader.';article.appendChild(note);}

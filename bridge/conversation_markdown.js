@@ -291,29 +291,92 @@
     const item=ITEM.exec(line);if(item&&line.slice(item[0].length).trim()&&(/^[-+*]$/.test(item[2])||/^1[.)]$/.test(item[2])))return true;
     return isDelimiter(cells(line),next===undefined||next.length>LONG_LINE?null:cells(next));
   }
-  function codeBlock(text,cls='markdown-code'){const pre=el('pre',cls),code=el('code');renderText(text,code);pre.appendChild(code);return pre;}
+  function copyButton(text){
+    const button=el('button','cockpit-control conversation-code-copy');button.type='button';button.textContent='Copy';button.setAttribute('aria-label','Copy code');
+    let timer=0;
+    button.addEventListener('click',async event=>{
+      event.stopPropagation();clearTimeout(timer);
+      try{await navigator.clipboard.writeText(text);button.textContent='Copied';}
+      catch(_){button.textContent='Copy unavailable';}
+      timer=setTimeout(()=>{button.textContent='Copy';},1800);
+    });
+    button.addEventListener('keydown',event=>event.stopPropagation());return button;
+  }
+  function codeBlock(text,cls='markdown-code',controls=false,language='',copyText=text){
+    const pre=el('pre',cls),code=el('code');renderText(text,code);pre.appendChild(code);
+    if(!controls)return pre;
+    const box=el('div','conversation-code'),head=el('div','conversation-code-head'),label=el('span','conversation-code-language');label.textContent=language||'Code';
+    head.append(label,copyButton(copyText));pre.tabIndex=0;pre.setAttribute('role','region');pre.setAttribute('aria-label',language?language+' code':'Code');box.append(head,pre);return box;
+  }
+  const COMMAND_TAGS=['bash-input','bash-stdout','bash-stderr','command-name','command-message','command-args','local-command-stdout','local-command-stderr','local-command-caveat'];
+  // These entities are already present in native CLI records. Decode once,
+  // only inside complete known records; never parse their contents as HTML.
+  const decodeCommand=text=>text.replace(/&(?:gt|lt|amp|quot|#39);/g,value=>({'&gt;':'>','&lt;':'<','&amp;':'&','&quot;':'"','&#39;':"'"})[value]);
+  function commandRecord(text){
+    const values=Object.create(null);let i=0;
+    while(i<text.length){
+      while(i<text.length&&/\s/u.test(text[i]))i++;
+      if(i===text.length)break;
+      const tag=COMMAND_TAGS.find(tag=>text.startsWith('<'+tag+'>',i));
+      if(!tag||Object.prototype.hasOwnProperty.call(values,tag))return null;
+      const start=i+tag.length+2,end=text.indexOf('</'+tag+'>',start);if(end<0)return null;
+      values[tag]=decodeCommand(text.slice(start,end));i=end+tag.length+3;
+    }
+    const keys=Object.keys(values);if(!keys.length)return null;
+    const bash=keys.every(key=>key.startsWith('bash-')),slash=keys.every(key=>key.startsWith('command-'));
+    if(bash){
+      if('bash-input' in values&&keys.length!==1)return null;
+      return {shell:true,command:values['bash-input']??null,outputs:keys.filter(key=>key!=='bash-input').map(key=>({label:key.slice(5),text:values[key]}))};
+    }
+    if(slash&&values['command-name'])return {command:values['command-name']+(values['command-args']?' '+values['command-args']:''),outputs:[]};
+    if(keys.every(key=>['local-command-stdout','local-command-stderr'].includes(key)))return {command:null,outputs:keys.map(key=>({label:key==='local-command-stdout'?'output':'stderr',text:values[key]}))};
+    if(keys.length===1&&keys[0]==='local-command-caveat')return {command:null,notice:values[keys[0]],outputs:[]};
+    return null;
+  }
+  function submissionText(text){
+    const record=commandRecord(text);
+    return record?.command!==null&&record?.command!==undefined?(text.trimStart().startsWith('<bash-input>')?'! ':'')+record.command:text;
+  }
+  function renderCommand(text,host){
+    const record=commandRecord(text);if(!record)return false;
+    if(record.command!==null){const box=codeBlock('$ '+record.command,'markdown-code',true,'Command',record.command);box.className+=' conversation-command';host.appendChild(box);}
+    if(record.notice){const note=el('div','conversation-command-notice');renderText(record.notice,note);host.appendChild(note);}
+    for(const output of record.outputs)if(output.text){
+      const box=codeBlock(output.text,'markdown-code',true,output.label);
+      if(output.text.split('\n').length>8||output.text.length>1600){
+        const pre=box.querySelector('pre'),head=box.querySelector('.conversation-code-head'),toggle=el('button','cockpit-control conversation-output-toggle');
+        toggle.type='button';toggle.textContent='Show all';toggle.setAttribute('aria-expanded','false');pre.classList.add('conversation-output-collapsed');
+        pre.id='conversation-output-'+Math.random().toString(36).slice(2);toggle.setAttribute('aria-controls',pre.id);
+        toggle.addEventListener('click',event=>{event.stopPropagation();const open=toggle.getAttribute('aria-expanded')!=='true';toggle.setAttribute('aria-expanded',String(open));toggle.textContent=open?'Show less':'Show all';pre.classList.toggle('conversation-output-collapsed',!open);});
+        toggle.addEventListener('keydown',event=>event.stopPropagation());head.insertBefore(toggle,head.lastChild);
+      }
+      host.appendChild(box);
+    }
+    return true;
+  }
   // `tight`: a list item without blank lines; its text needs no paragraph.
-  function blocks(lines,host,depth,tight=false){
+  function blocks(lines,host,depth,tight=false,options={}){
     for(let i=0;i<lines.length;){
       const line=lines[i];let m;
       if(!line.trim()){i++;continue;}
-      if(depth>=MAX_DEPTH){host.appendChild(codeBlock(lines.slice(i).join('\n')));return;}
+      if(depth>=MAX_DEPTH){host.appendChild(codeBlock(lines.slice(i).join('\n'),'markdown-code',options.codeControls));return;}
       const long=line.length>LONG_LINE;
       if(!long&&(m=fenceOf(line))){
-        const body=[];i++;
+        const body=[];let closed=false;i++;
         while(i<lines.length){
           const close=lines[i].length<=LONG_LINE?FENCE.exec(lines[i]):null;
-          if(close&&close[1][0]===m.mark[0]&&close[1].length>=m.mark.length&&!close[2].trim()){i++;break;}
+          if(close&&close[1][0]===m.mark[0]&&close[1].length>=m.mark.length&&!close[2].trim()){closed=true;i++;break;}
           body.push(lines[i++]);
         }
-        const pre=codeBlock(body.join('\n'));if(m.language)pre.dataset.language=m.language.slice(0,40);host.appendChild(pre);continue;
+        const value=body.join('\n'),copyValue=value+(closed&&body.length?'\n':'');
+        const pre=codeBlock(options.codeControls?copyValue:value,'markdown-code',options.codeControls,m.language.slice(0,40),copyValue);if(m.language)pre.dataset.language=m.language.slice(0,40);host.appendChild(pre);continue;
       }
       if(!long&&(m=headingOf(line))){const heading=el('h'+m.level,'markdown-heading');inline(m.text,heading,depth);host.appendChild(heading);i++;continue;}
       if(!long&&RULE.test(line)){host.appendChild(el('hr'));i++;continue;}
       if(!long&&QUOTE.test(line)){
         const inner=[];
         while(i<lines.length&&lines[i].trim()&&(QUOTE.test(lines[i])||inner.length&&!interrupts(lines[i],lines[i+1])))inner.push(lines[i++].replace(QUOTE,''));
-        const quote=el('blockquote');blocks(inner,quote,depth+1);host.appendChild(quote);continue;
+        const quote=el('blockquote');blocks(inner,quote,depth+1,false,options);host.appendChild(quote);continue;
       }
       if(!long&&(m=ITEM.exec(line))){
         const ordered=/\d/.test(m[2]),list=el(ordered?'ol':'ul'),base=m[1].length,kind=ordered?m[2].slice(-1):m[2];
@@ -341,7 +404,7 @@
           }
           const loose=item.some((text,n)=>!text.trim()&&n<item.length-1);
           if(!loose&&!item.slice(1).some(text=>interrupts(text)||ITEM.test(text)||/^( {4}|\t)/.test(text)))inline(item.join('\n'),li,depth);
-          else blocks(item,li,depth+1,!loose);
+          else blocks(item,li,depth+1,!loose,options);
           list.appendChild(li);
           // Blank lines between items keep one list.
           let k=i;while(k<lines.length&&!lines[k].trim())k++;
@@ -362,7 +425,7 @@
         const body=[];
         while(i<lines.length&&(/^( {4}|\t)/.test(lines[i])||!lines[i].trim()))body.push(dedent(lines[i++],4));
         while(body.length&&!body[body.length-1].trim())body.pop();
-        host.appendChild(codeBlock(body.join('\n')));continue;
+        host.appendChild(codeBlock(body.join('\n'),'markdown-code',options.codeControls));continue;
       }
       const paragraph=[line.trim()];i++;
       while(i<lines.length&&lines[i].trim()&&!interrupts(lines[i],lines[i+1]))paragraph.push(lines[i++].trim());
@@ -370,15 +433,15 @@
       else{const p=el('p');inline(paragraph.join('\n'),p,depth);host.appendChild(p);}
     }
   }
-  function renderDocument(text,host){
+  function renderDocument(text,host,options={}){
     const lines=String(text).replace(/\r\n?/g,'\n').split('\n');let start=0;
     // YAML front matter (Obsidian notes) stays as text at the top.
     if(lines[0]==='---'){
       const close=lines.indexOf('---',1);
-      if(close>0&&close<=200){host.appendChild(codeBlock(lines.slice(0,close+1).join('\n'),'markdown-code markdown-front-matter'));start=close+1;}
+      if(close>0&&close<=200){host.appendChild(codeBlock(lines.slice(0,close+1).join('\n'),'markdown-code markdown-front-matter',options.codeControls));start=close+1;}
     }
-    blocks(lines.slice(start),host,0);
+    blocks(lines.slice(start),host,0,false,options);
     return host;
   }
-  root.OrreryConversationMarkdown=Object.freeze({parse,render,renderDocument,renderText,observePaths});
+  root.OrreryConversationMarkdown=Object.freeze({parse,render,renderDocument,renderText,observePaths,renderCommand,submissionText,commandRecord});
 })(typeof window==='undefined'?globalThis:window);
