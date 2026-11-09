@@ -48,16 +48,29 @@
 .msg:active{transform:translateY(1px)}
 .msg .mtop{display:flex;align-items:center;gap:7px;margin-bottom:5px;min-width:0}
 .msg .from{
-  min-width:0;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   font-family:var(--serif);font-size:12.5px;color:var(--ink);
 }
 .msg .arrow{flex:0 0 auto;color:var(--ink-faint);font-size:11px}
 .msg .to{
-  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  flex:1 1 0;min-width:0;padding-right:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   font-size:10.5px;color:var(--ink-dim);
 }
-.msg .mail-peer{display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:100%;vertical-align:middle}
+.msg .mail-peer{display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:100%;vertical-align:middle;padding:2px 0}
 .msg .mail-peer-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msg .mail-peer[hidden],.msg .mail-more[hidden]{display:none}
+.msg .to.is-stacked .mail-separator{display:none}
+.msg .to.is-stacked{display:flex;align-items:center}
+.msg .is-stacked .mail-peer{flex:none;max-width:none;margin-left:-4px}
+.msg .is-stacked .mail-peer.is-first{margin-left:0}
+.msg .is-stacked .mail-peer-name{display:none}
+.msg .mail-more{flex:none;margin-left:4px;font:10px var(--mono);white-space:nowrap}
+.msg .mail-more.is-only{margin-left:0}
+.msg .conversation-avatar.medal{flex:none;width:18px;height:18px;margin:0;-webkit-user-select:none;user-select:none}
+.msg .conversation-avatar .face{font-size:10px;box-shadow:0 0 0 1px var(--hair)}
+.msg .conversation-avatar .provider-badge{right:-3px;bottom:-2px;width:10px;height:10px;border-width:1px}
+.msg .conversation-avatar .provider-badge .provider-logo{height:7px;max-width:8px}
+.msg .conversation-avatar .pill.eng{display:none}
 .mailview-host .imp{
   flex:0 0 auto;margin-left:auto;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;
   padding:1px 5px;border-radius:3px;border:1px solid var(--hair);color:var(--ink-faint);

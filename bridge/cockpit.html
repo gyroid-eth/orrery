@@ -3280,6 +3280,11 @@
             "value": "var(--ink-dim)"
           },
           {
+            "property": "box-shadow",
+            "selector": ".msg .conversation-avatar .face",
+            "value": "0 0 0 1px var(--hair)"
+          },
+          {
             "property": "border",
             "selector": ".mailview-host .imp",
             "value": "1px solid var(--hair)"
@@ -4348,7 +4353,7 @@
         "unit": "effect-component"
       },
       "source": {
-        "digest": "37547ded6be1c92c5abf017d46a7d19c166a5344d1b443aae01362d1711e7cf2",
+        "digest": "5d50adc01bb98e3136d6d7e0e4170dbbcdcd73611913f6db4eda6642813796f4",
         "records": [
           ":root\u0000--amber-glow",
           ".miniorrery.telemetry-network\u0000background",
@@ -4364,6 +4369,7 @@
           ".agent.sel::before\u0000box-shadow",
           ".roster.select-mode .agent.bulk-selected\u0000box-shadow",
           ".medal .face\u0000box-shadow",
+          ".msg .conversation-avatar .face\u0000box-shadow",
           ".medal .face::after\u0000background",
           ".agent-detail\u0000box-shadow",
           ".term\u0000background",
@@ -4411,7 +4417,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "98ebc78c8e5129e39be6fd3fda22036a6664412b5f9c4b74933c8c481ed32ff3",
+        "digest": "b2e39210f4d259378a637873825f14b1234d3a2e8ae6f46b6dcec9b609d83db0",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4536,6 +4542,7 @@
           ".mailchip\u0000font-size",
           ".msg .arrow\u0000font-size",
           ".msg .to\u0000font-size",
+          ".msg .conversation-avatar .face\u0000font-size",
           ".mailview-host .imp\u0000font-size",
           ".msg .body\u0000font-size",
           ".msg .time\u0000font-size",
@@ -4564,7 +4571,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "9cf422d4eced16ca241dc360e1401233f7abe9b29fa561524cccc80b6616afb8",
+        "digest": "a3812f73187e7b1c4d32678680d1dd1f5ebc2a0b951bb9d23d3407109e61ccc3",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4613,9 +4620,9 @@
       }
     }
   },
-  "inventory_digest": "c590bb28066fdba7b82be469cc443180b12ec53cf60d82d109b879f269244911",
+  "inventory_digest": "492edc3581ec9693ac8905f4ab7d940cc80b1a27c64c8d89fbc668c1b190a4dc",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "91045208b19261782c6e3996fb7b4b36948131fee1d3ebc1811e0e44153fe178",
+  "source_digest": "3070eeaa7794035adec39226c78d5f21d85482bab2831ae92882cb2a502bd4ba",
   "surface": "cockpit",
   "version": 1
 }
@@ -5434,6 +5441,7 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   ['.agent.sel::before','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .agent.sel::before'],
   ['.roster.select-mode .agent.bulk-selected','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .roster.select-mode .agent.bulk-selected'],
   ['.medal .face','box-shadow',['state'],'preserve'],
+  ['.msg .conversation-avatar .face','box-shadow',['state'],'preserve'],
   ['.medal .face::after','background',['elevation'],'preserve'],
   ['.agent-detail','box-shadow',['elevation'],'preserve'],
   ['.term','background',['elevation'],'preserve'],
@@ -9888,6 +9896,7 @@ function assignLineageHues(live){
 window.OC=Object.freeze({
   esc,relTime,jumpToAgent,rootOf,providerPresentation,
   renderPeerLogo:conversationPeerLogo,
+  renderPeerAvatar:(name,existing)=>currentAgentNamed(name)?conversationAvatar(name,'',existing):null,
   lineageHue,                       // Map: agent name -> lineage hex
   get lineageParent(){return lineageParent;},  // Map: child -> parent
   agents:()=>currentAgents,

@@ -30,37 +30,37 @@ def prepare(cockpit,theme='dark',rail_width=320):
 @pytest.mark.parametrize('rail_width',[320,220])
 def test_sender_and_each_recipient_share_header_marks_and_keep_badges(cockpit,theme,rail_width):
     js,wait,_,_=prepare(cockpit,theme,rail_width)
-    assert js("document.querySelectorAll('#mail .mail-peer .pane-provider').length")==6
-    wait("[...document.querySelectorAll('#mail .mail-peer img')].every(i=>i.naturalWidth>0)")
+    assert js("document.querySelectorAll('#mail .mail-peer .conversation-avatar').length")==6
+    wait("[...document.querySelectorAll('#mail .mail-peer .provider-logo')].every(i=>i.naturalWidth>0)")
     assert js("[...document.querySelectorAll('#mail .msg[data-mid=\"101\"] .provider-logo')].map(i=>i.getAttribute('src'))")==['cockpit-assets/anthropic.svg','cockpit-assets/openai.svg']
-    assert js("document.querySelector('#mail .msg[data-mid=\"102\"] .from img').getAttribute('src')")=='cockpit-assets/glm.svg'
-    assert not js("[...document.querySelectorAll('#mail .mail-peer')].filter(p=>p.dataset.peerName==='MissingFixture').some(p=>p.querySelector('.pane-provider'))")
+    assert js("document.querySelector('#mail .msg[data-mid=\"102\"] .from .provider-logo').getAttribute('src')")=='cockpit-assets/glm.svg'
+    assert not js("[...document.querySelectorAll('#mail .mail-peer')].filter(p=>p.dataset.peerName==='MissingFixture').some(p=>p.querySelector('.conversation-avatar'))")
     assert js("[...document.querySelectorAll('#mail .imp')].map(p=>[p.textContent,p.className])")==[['high','imp hi'],['normal','imp '],['normal','imp ']]
     assert js("[...document.querySelectorAll('#mail .msg .mtop')].every(h=>{const r=h.getBoundingClientRect(),b=h.querySelector('.imp').getBoundingClientRect();return h.scrollWidth<=h.clientWidth+1&&b.right<=r.right+1&&b.left>=r.left})")
-    assert js("[...document.querySelectorAll('#mail .pane-provider')].every(p=>p.getBoundingClientRect().width===16&&!p.classList.contains('is-working'))")
-    assert js("document.querySelector('#mail .msg[data-mid=\"102\"] .to').textContent")=='SenderFixture, RecipientFixture, MissingFixture'
+    assert js("[...document.querySelectorAll('#mail .conversation-avatar')].filter(p=>p.getBoundingClientRect().width>0).every(p=>p.getBoundingClientRect().width===18&&!p.classList.contains('is-working'))")
+    assert js("document.querySelector('#mail .msg[data-mid=\"102\"] .to').getAttribute('aria-label')")=='SenderFixture, RecipientFixture, MissingFixture'
     assert not js("document.querySelector('#mail .body img')")
 
 
 def test_roster_refresh_updates_marks_without_rebuilding_focused_cards(cockpit):
     js,wait,_,_=prepare(cockpit)
     js("window.keptCard=document.querySelector('#mail .msg');keptCard.focus();currentAgents[0].provider='google';document.dispatchEvent(new Event('oc:agents'))")
-    wait("keptCard.querySelector('.from img')?.getAttribute('src')==='cockpit-assets/google.svg'")
+    wait("keptCard.querySelector('.from .provider-logo')?.getAttribute('src')==='cockpit-assets/google.svg'")
     assert js("document.activeElement===keptCard&&keptCard===document.querySelector('#mail .msg')")
-    assert 'Gemini' in js("keptCard.querySelector('.from .pane-provider').getAttribute('aria-label')")
+    assert 'Gemini' in js("keptCard.querySelector('.from .provider-badge').title")
     js("currentAgents=currentAgents.filter(a=>a.name!=='SenderFixture');document.dispatchEvent(new Event('oc:agents'))")
-    assert not js("keptCard.querySelector('.from .pane-provider')")
+    assert not js("keptCard.querySelector('.from .conversation-avatar')")
     assert js("keptCard.querySelector('.from').textContent")=='SenderFixture'
 
 
 def test_logo_click_and_keyboard_still_open_the_message(cockpit):
     js,wait,client,requests=prepare(cockpit)
     js("window.feedFetch=window.fetch;window.fetch=(url,...args)=>String(url).startsWith('/telemetry/mail/message')?Promise.resolve(new Response(JSON.stringify({message:{...feedMessages[0],body_md:'Generated detail body'}}))):feedFetch(url,...args)")
-    wait("document.querySelector('#mail .msg .pane-provider img')?.naturalWidth>0")
-    js("document.querySelector('#mail .msg .pane-provider').click()")
+    wait("document.querySelector('#mail .msg .conversation-avatar .provider-logo')?.naturalWidth>0")
+    js("document.querySelector('#mail .msg .conversation-avatar').click()")
     wait("document.querySelector('#mail .maildrawer').classList.contains('open')&&document.querySelector('#mail .mail-md')?.textContent.includes('Generated detail body')")
     js("document.querySelector('#mail [data-action=close]').click();document.querySelector('#mail .msg').focus()")
     client.call('Input.dispatchKeyEvent',type='keyDown',key='Enter',code='Enter',windowsVirtualKeyCode=13,text='\r')
     client.call('Input.dispatchKeyEvent',type='keyUp',key='Enter',code='Enter',windowsVirtualKeyCode=13)
     wait("document.querySelector('#mail .maildrawer').classList.contains('open')")
-    assert not js("document.querySelector('#mail .maildrawer .pane-provider')")
+    assert not js("document.querySelector('#mail .maildrawer .conversation-avatar')")

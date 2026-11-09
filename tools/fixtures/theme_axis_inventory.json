@@ -2,8 +2,8 @@
   "axes": {
     "background": {
       "effect": {
-        "digest": "411f87a3d87a1af6f040e432c2481fa89f402417b8d3018ce991a5d70c7f859d",
-        "expected": 372,
+        "digest": "24ab6c1b26508f6921a4ad3f4d1c4a5e77492bce2d10b71d84e695c3f0ac432a",
+        "expected": 373,
         "records": [
           {
             "property": "background",
@@ -1671,6 +1671,11 @@
             "value": "var(--ink-dim)"
           },
           {
+            "property": "box-shadow",
+            "selector": ".msg .conversation-avatar .face",
+            "value": "0 0 0 1px var(--hair)"
+          },
+          {
             "property": "border",
             "selector": ".mailview-host .imp",
             "value": "1px solid var(--hair)"
@@ -2975,8 +2980,8 @@
         "unit": "effect-component"
       },
       "source": {
-        "digest": "37547ded6be1c92c5abf017d46a7d19c166a5344d1b443aae01362d1711e7cf2",
-        "expected": 48,
+        "digest": "5d50adc01bb98e3136d6d7e0e4170dbbcdcd73611913f6db4eda6642813796f4",
+        "expected": 49,
         "records": [
           {
             "categories": [
@@ -3100,6 +3105,14 @@
             "mode": "preserve",
             "property": "box-shadow",
             "selector": ".medal .face"
+          },
+          {
+            "categories": [
+              "state"
+            ],
+            "mode": "preserve",
+            "property": "box-shadow",
+            "selector": ".msg .conversation-avatar .face"
           },
           {
             "categories": [
@@ -3411,8 +3424,8 @@
         "unit": "element"
       },
       "source": {
-        "digest": "98ebc78c8e5129e39be6fd3fda22036a6664412b5f9c4b74933c8c481ed32ff3",
-        "expected": 138,
+        "digest": "b2e39210f4d259378a637873825f14b1234d3a2e8ae6f46b6dcec9b609d83db0",
+        "expected": 139,
         "records": [
           {
             "line": 193,
@@ -4276,105 +4289,112 @@
             "value": "10.5px"
           },
           {
-            "line": 61,
+            "line": 69,
+            "property": "font-size",
+            "selector": ".msg .conversation-avatar .face",
+            "source": "bridge/mail_view.css",
+            "value": "10px"
+          },
+          {
+            "line": 74,
             "property": "font-size",
             "selector": ".mailview-host .imp",
             "source": "bridge/mail_view.css",
             "value": "8.5px"
           },
           {
-            "line": 66,
+            "line": 79,
             "property": "font-size",
             "selector": ".msg .body",
             "source": "bridge/mail_view.css",
             "value": "11.5px"
           },
           {
-            "line": 69,
+            "line": 82,
             "property": "font-size",
             "selector": ".msg .time",
             "source": "bridge/mail_view.css",
             "value": "9.5px"
           },
           {
-            "line": 70,
+            "line": 83,
             "property": "font-size",
             "selector": ".mailempty",
             "source": "bridge/mail_view.css",
             "value": "11px"
           },
           {
-            "line": 94,
+            "line": 107,
             "property": "font-size",
             "selector": ".drawer-mode",
             "source": "bridge/mail_view.css",
             "value": "8.5px"
           },
           {
-            "line": 100,
+            "line": 113,
             "property": "font-size",
             "selector": ".drawer-label",
             "source": "bridge/mail_view.css",
             "value": "8.5px"
           },
           {
-            "line": 104,
+            "line": 117,
             "property": "font-size",
             "selector": ".drawer-arrow",
             "source": "bridge/mail_view.css",
             "value": "11px"
           },
           {
-            "line": 106,
+            "line": 119,
             "property": "font-size",
             "selector": ".drawer-recipient",
             "source": "bridge/mail_view.css",
             "value": "10.5px"
           },
           {
-            "line": 108,
+            "line": 121,
             "property": "font-size",
             "selector": ".recipient-kind",
             "source": "bridge/mail_view.css",
             "value": "7.5px"
           },
           {
-            "line": 110,
+            "line": 123,
             "property": "font-size",
             "selector": ".drawer-meta",
             "source": "bridge/mail_view.css",
             "value": "8.5px"
           },
           {
-            "line": 116,
+            "line": 129,
             "property": "font-size",
             "selector": ".mail-md",
             "source": "bridge/mail_view.css",
             "value": "10.75px"
           },
           {
-            "line": 121,
+            "line": 134,
             "property": "font-size",
             "selector": ".mail-md h4",
             "source": "bridge/mail_view.css",
             "value": "11.5px"
           },
           {
-            "line": 136,
+            "line": 149,
             "property": "font-size",
             "selector": ".drawer-empty",
             "source": "bridge/mail_view.css",
             "value": "10.5px"
           },
           {
-            "line": 151,
+            "line": 164,
             "property": "font-size",
             "selector": ".thread-time",
             "source": "bridge/mail_view.css",
             "value": "8.5px"
           },
           {
-            "line": 153,
+            "line": 166,
             "property": "font-size",
             "selector": ".thread-excerpt",
             "source": "bridge/mail_view.css",
@@ -4394,7 +4414,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "9cf422d4eced16ca241dc360e1401233f7abe9b29fa561524cccc80b6616afb8",
+        "digest": "a3812f73187e7b1c4d32678680d1dd1f5ebc2a0b951bb9d23d3407109e61ccc3",
         "expected": 42,
         "records": [
           {
@@ -4671,21 +4691,21 @@
             "value": ".12em"
           },
           {
-            "line": 61,
+            "line": 74,
             "property": "letter-spacing",
             "selector": ".mailview-host .imp",
             "source": "bridge/mail_view.css",
             "value": ".1em"
           },
           {
-            "line": 100,
+            "line": 113,
             "property": "letter-spacing",
             "selector": ".drawer-label",
             "source": "bridge/mail_view.css",
             "value": ".22em"
           },
           {
-            "line": 108,
+            "line": 121,
             "property": "letter-spacing",
             "selector": ".recipient-kind",
             "source": "bridge/mail_view.css",
@@ -4696,7 +4716,7 @@
       }
     }
   },
-  "inventory_digest": "c590bb28066fdba7b82be469cc443180b12ec53cf60d82d109b879f269244911",
+  "inventory_digest": "492edc3581ec9693ac8905f4ab7d940cc80b1a27c64c8d89fbc668c1b190a4dc",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -4708,10 +4728,10 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "91045208b19261782c6e3996fb7b4b36948131fee1d3ebc1811e0e44153fe178",
+  "source_digest": "3070eeaa7794035adec39226c78d5f21d85482bab2831ae92882cb2a502bd4ba",
   "source_files": {
-    "bridge/cockpit.html": "461d2d885ad69cbcce16805a1accca46ddb45dd07685d4e7f8db26b1b4ef138c",
-    "bridge/mail_view.css": "8f8e0a41e9ebef7c54ad5f9464542d327600e9285f3877122a6a819a889aac32",
+    "bridge/cockpit.html": "1d3ba3f6b264ff493a74ba98a74dc7e4c4c537a592f6c8c1fbe0a1a04f7978e7",
+    "bridge/mail_view.css": "d52a28452c2c494c60f273750106737ac3b6180c7e6e088a5eef29e1dd2cd7ab",
     "bridge/orrery_view.css": "ad0adcc4a4bc1867240ea68bb37c36d1bdd73b8e198c7e5ebba92343c78c26cd"
   },
   "surface": "cockpit",

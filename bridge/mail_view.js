@@ -1,7 +1,7 @@
 /* ── agent-mail rail (right rail, below the orrery) ──
    Owns <div id="mail"> and everything rendered inside it.
    Inputs (read-only):
-     window.OC — { esc, relTime, jumpToAgent, renderPeerLogo, agents(), mailBacklog() }
+     window.OC — { esc, relTime, jumpToAgent, renderPeerAvatar, agents(), mailBacklog() }
      document event 'oc:mail' detail:{messages} — NEW, deduped live messages.
      document event 'oc:focus-agent' detail:{name} — follow active terminal pane.
    All API and event message fields are untrusted. Rendering is escape-first. */
@@ -198,17 +198,64 @@ function appendPeer(container,name){
   const label=document.createElement('span');label.className='mail-peer-name';label.textContent=name;
   peer.appendChild(label);container.appendChild(peer);
 }
-function refreshPeerLogos(){
-  if(typeof OC.renderPeerLogo!=='function')return;
+function refreshPeerAvatars(){
+  if(typeof OC.renderPeerAvatar!=='function')return;
   cardsEl.querySelectorAll('.mail-peer').forEach(peer=>{
-    const previous=peer.querySelector('.pane-provider'),logo=OC.renderPeerLogo(peer.dataset.peerName,previous);
-    if(logo===previous)return;
-    if(previous)previous.remove();
-    if(logo)peer.prepend(logo);
+    const previous=peer.querySelector('.conversation-avatar'),avatar=OC.renderPeerAvatar(peer.dataset.peerName,previous);
+    if(avatar!==previous){if(previous)previous.remove();if(avatar)peer.prepend(avatar);}
   });
+  layoutRecipients();
 }
 
+let recipientFrame=null;
+const recipientObserver=typeof ResizeObserver==='function'?new ResizeObserver(scheduleRecipientLayout):null;
+function scheduleRecipientLayout(){
+  if(recipientFrame!==null)return;
+  recipientFrame=requestAnimationFrame(()=>{recipientFrame=null;layoutRecipients();});
+}
+function layoutRecipients(){
+  for(const head of cardsEl.querySelectorAll('.mtop')){
+    const from=head.querySelector('.from'),to=head.querySelector('.to'),more=to.querySelector('.mail-more');
+    const peers=[...to.querySelectorAll('.mail-peer')],multiple=peers.length>1;
+    to.classList.remove('is-stacked');more.hidden=true;
+    peers.forEach(peer=>{peer.hidden=false;peer.classList.remove('is-first');});
+    const natural=peer=>{
+      const range=document.createRange();range.selectNodeContents(peer.querySelector('.mail-peer-name'));
+      return range.getBoundingClientRect().width+(peer.querySelector('.conversation-avatar')?22:0);
+    };
+    const gap=parseFloat(getComputedStyle(head).columnGap)||0;
+    const available=Math.max(0,head.clientWidth-head.querySelector('.arrow').offsetWidth-head.querySelector('.imp').offsetWidth-gap*3);
+    const sender=natural(from.querySelector('.mail-peer'));
+    const names=peers.reduce((sum,peer)=>sum+natural(peer),0)+
+      [...to.querySelectorAll('.mail-separator')].reduce((sum,part)=>sum+part.getBoundingClientRect().width,0);
+    if(multiple&&sender+names>available){
+      to.classList.add('is-stacked');more.hidden=false;more.textContent='+'+peers.length;
+      const counter=more.getBoundingClientRect().width;
+      from.style.maxWidth=Math.max(0,Math.min(sender,available-counter-3))+'px';
+      const room=Math.max(0,to.clientWidth-3),known=peers.filter(peer=>peer.querySelector('.conversation-avatar'));
+      const extent=n=>n?18+(n-1)*14+3:0;
+      let count=known.length;
+      if(count!==peers.length||extent(count)>room){
+        count=Math.max(0,Math.min(count,Math.floor((room-counter-4-21)/14)+1));
+      }
+      const shown=new Set(known.slice(0,count));
+      peers.forEach(peer=>{peer.hidden=!shown.has(peer);});
+      if(count)known[0].classList.add('is-first');
+      const hidden=peers.filter(peer=>!shown.has(peer));
+      more.hidden=!hidden.length;more.textContent='+'+hidden.length;
+      more.title=hidden.map(peer=>peer.dataset.peerName).join(', ');
+      more.classList.toggle('is-only',count===0);
+    }else{
+      const minimum=peers[0]?.querySelector('.conversation-avatar')?34:12;
+      from.style.maxWidth=Math.max(0,Math.min(sender,available-minimum-3))+'px';
+    }
+  }
+}
+document.fonts?.ready.then(scheduleRecipientLayout);
+document.fonts?.addEventListener('loadingdone',scheduleRecipientLayout);
+
 function renderCards(items){
+  recipientObserver?.disconnect();
   cardsEl.innerHTML='';
   const visible=items.filter(message=>messageIncludesAgent(message,activeFilter));
   if(!visible.length){
@@ -239,14 +286,17 @@ function renderCards(items){
       '<span class="time">'+E(relativeLabel(message.ts))+'</span>';
     appendPeer(card.querySelector('.from'),message.sender||'unknown');
     const to=card.querySelector('.to');
+    to.setAttribute('role','group');to.title=to.ariaLabel=recipients.join(', ')||'—';
     (recipients.length?recipients:['—']).forEach((name,index)=>{
-      if(index)to.appendChild(document.createTextNode(', '));
+      if(index){const separator=document.createElement('span');separator.className='mail-separator';separator.textContent=', ';to.appendChild(separator);}
       appendPeer(to,name);
     });
+    const more=document.createElement('span');more.className='mail-more';more.hidden=true;more.setAttribute('aria-hidden','true');to.appendChild(more);
     card.addEventListener('click',()=>openMessage(message.id,card));
     cardsEl.appendChild(card);
+    recipientObserver?.observe(card.querySelector('.mtop'));
   });
-  refreshPeerLogos();
+  refreshPeerAvatars();
 }
 
 let booted=false;
@@ -522,7 +572,7 @@ document.addEventListener('keydown',event=>{
 },true);
 
 document.addEventListener('oc:mail',event=>ingest(event.detail&&event.detail.messages));
-document.addEventListener('oc:agents',refreshPeerLogos);
+document.addEventListener('oc:agents',refreshPeerAvatars);
 document.addEventListener('oc:filter-agent',event=>{
   selectMailFilter(event.detail&&event.detail.agent);
 });
