@@ -116,7 +116,8 @@
     panel.innerHTML='<div class="conversation-body"><div class="conversation-thread">'+
       '<div class="conversation-scroll" tabindex="0" aria-label="Conversation messages">'+
       '<button class="cockpit-control conversation-action conversation-older" type="button" aria-label="Load earlier" hidden>Load earlier</button>'+
-      '<div class="conversation-events"></div><div class="conversation-pending" role="status" aria-live="polite"></div><div class="conversation-empty"></div></div>'+
+      '<div class="conversation-events"></div><div class="conversation-pending" role="status" aria-live="polite"></div>'+
+      '<div class="conversation-activity" hidden><span class="conversation-activity-mark" aria-hidden="true"><i></i><i></i><i></i></span><span class="conversation-activity-label" role="status" aria-live="polite"></span><span class="conversation-activity-time" aria-hidden="true"></span></div><div class="conversation-empty"></div></div>'+
       '<div class="conversation-bottom" hidden><button class="cockpit-control pane-icon conversation-latest" type="button" title="Latest" aria-label="Latest">'+latestIcon+'</button></div></div>'+
       '<aside class="conversation-preview" aria-label="Selected file preview" hidden></aside></div>';
     screen.appendChild(panel);
@@ -177,6 +178,24 @@
       // A detached control leaves BODY focused, which terminal fitting may
       // interpret as permission to focus xterm and send the next reading key.
       if(opened&&presented&&container?.contains(document.activeElement))scroll.focus({preventScroll:true});
+    }
+    const activityEl=el('.conversation-activity'),activityLabel=el('.conversation-activity-label'),activityTime=el('.conversation-activity-time');
+    function paintActivity(current=getContext()||{}){
+      const state=opened&&presented&&current.running===true&&['work','wait','ask','question'].includes(current.act_state)?
+        (current.act_state==='ask'?'question':current.act_state):'';
+      const label=state==='work'?'Working':state==='wait'?'Waiting':state?'Waiting for you':'';
+      const elapsed=state==='work'&&typeof current.work_disp==='string'?current.work_disp.trim():'';
+      activityEl.classList.toggle('activity-paused',document.hidden||!presented||!opened);
+      if(activityEl.hidden===!state&&activityEl.dataset.state===(state||'')&&activityTime.textContent===(elapsed?'· '+elapsed:''))return;
+      const atBottom=nearBottom();
+      activityEl.hidden=!state;activityEl.dataset.state=state;
+      if(activityLabel.textContent!==label)activityLabel.textContent=label;
+      activityTime.textContent=elapsed?'· '+elapsed:'';
+      activityEl.title=label+(elapsed?' · '+elapsed:'');
+      if(opened&&presented){
+        if(atBottom)scroll.scrollTop=scroll.scrollHeight;
+        position();if(atBottom)remember(true);
+      }
     }
     function renderSubmissions(){
       clearTimeout(submissionTimer);submissionTimer=0;keepReaderFocus(pendingEl);pendingEl.replaceChildren();
@@ -261,6 +280,7 @@
       expandButton.setAttribute('aria-pressed',String(fullWidth));
       expandButton.title=fullWidth?'Restore side panel':'Full width';expandButton.setAttribute('aria-label',expandButton.title);
       paintStatus();
+      paintActivity();
     }
     const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onBeforeOpen:layoutChanged,onClose:layoutChanged,onActivate:()=>expand(true)});
     const stopPathLinks=root.OrreryConversationMarkdown?.observePaths?.(panel,source);
@@ -785,9 +805,10 @@
     function context(){
       const current=getContext()||{};const name=String(current.name||''),key=fingerprint(current);
       if(!opened)return;
-      if(name===agent&&key===contextKey)return;
+      if(name===agent&&key===contextKey){paintActivity(current);return;}
       const sameBinding=key===contextKey;
       stop();agent=name;contextKey=key;clear({keepSubmissions:sameBinding});boundContext={...current};
+      paintActivity(current);
       panel.setAttribute('aria-label',agent?'Reader for '+agent:'Reader');message('');
       if(!agent){empty.textContent='Select an agent pane to read its conversation.';message('No agent selected');return;}
       providerLabel=({'claude-code':'Claude',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[current.program]||'Codex';
@@ -887,7 +908,7 @@
     listen(document,'oc:agents',context);
     // A hidden tab keeps no held poll: end one that is waiting, so its
     // browser connection and the server's slot are returned at once.
-    listen(document,'visibilitychange',()=>{if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
+    listen(document,'visibilitychange',()=>{paintActivity();if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
     preference();paintControls();
     return Object.freeze({open,close,relocate,reconcile:context,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
       dispose(){stopPathLinks?.();ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();noticeMenu.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});

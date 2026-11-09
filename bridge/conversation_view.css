@@ -188,6 +188,24 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 
 /* Ephemeral composer receipts are separate from provider events and cursors. */
 .conversation-pending{max-width:960px;margin:0 auto}
+.conversation-activity{display:flex;align-items:center;gap:8px;height:32px;margin:8px auto 0;max-width:960px;white-space:nowrap;font:11px/1.6 var(--mono);color:#75c8b1}
+html[data-color-theme="light"] .conversation-activity[data-state="work"]{color:#24765e}
+.conversation-activity[data-state="wait"]{color:var(--ink-dim)}
+.conversation-activity[data-state="question"]{color:var(--theme-status-alert,#d2685e)}
+.conversation-activity-mark{display:inline-flex;align-items:center;gap:4px;width:24px;flex:none}
+.conversation-activity-mark i{display:none;width:4px;height:4px;border-radius:50%;background:currentColor}
+.conversation-activity[data-state="work"] i{display:block}
+.conversation-activity-mark::before{font:12px/1 var(--mono)}
+.conversation-activity[data-state="question"] .conversation-activity-mark::before{content:'?';display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border:1px solid currentColor;border-radius:3px;font-weight:600}
+.conversation-activity[data-state="wait"] .conversation-activity-mark::before{content:'—'}
+.conversation-activity-label{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.conversation-activity-time{flex:0 1 auto;min-width:0;max-width:35%;overflow:hidden;text-overflow:ellipsis;color:var(--ink-dim);font-size:10px}
+@keyframes conversation-activity-dots{0%,65%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-2px)}}
+.conversation-activity:not([hidden])[data-state="work"] i{animation:conversation-activity-dots 1.4s ease-in-out infinite}
+.conversation-activity i:nth-child(2){animation-delay:.16s}
+.conversation-activity i:nth-child(3){animation-delay:.32s}
+.conversation-activity.activity-paused[data-state="work"] i{animation-play-state:paused}
+@media(prefers-reduced-motion:reduce){.conversation-activity:not([hidden])[data-state="work"] i{animation:none}}
 .conversation-submission{margin:12px 0;padding:14px;border:1px dashed var(--amber);border-radius:6px;background:var(--panel-2)}
 .conversation-submission .conversation-byline{color:var(--amber)}
 .conversation-submission-note{font:10px/1.7 var(--mono);color:var(--ink-dim);margin-top:8px}
