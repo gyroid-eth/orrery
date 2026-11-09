@@ -4613,9 +4613,9 @@
       }
     }
   },
-  "inventory_digest": "30147b48402ff840ac3b93631683c2aca6b9dcfda5c4a2f23747c4441610042b",
+  "inventory_digest": "2bfb2c9954db4daf0fae5268ef36f67914323a2b9994cc109371e46dd36b12cb",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "c9d1cb5912a4429400679267d2f0815e914ecc2a5663066a53417d6513556369",
+  "source_digest": "7510af1be748185294f7109abbdf717c0cd4c43e0a90d6d9303d5c321aa24f24",
   "surface": "cockpit",
   "version": 1
 }
@@ -9177,12 +9177,9 @@ function conversationAvatar(name,model,existing=null){
   paintRosterProvider(avatar,identity);avatar.querySelector('.pill.eng').hidden=true;
   return avatar;
 }
-function conversationPeerLogo(name,existing=null){
-  const agent=currentAgentNamed(name);if(!agent)return null;
-  const logo=existing||document.createElement('span');logo.classList.add('pane-provider');logo.setAttribute('role','img');
-  const {provider,local}=paintProviderLogo(logo,agent);
-  logo.title=logo.ariaLabel=[provider?provider.label:'Agent',local?'Local':''].filter(Boolean).join(' · ');
-  return logo;
+function conversationPeerAvatar(name,existing=null){
+  if(!currentAgentNamed(name))return null;
+  return conversationAvatar(name,'',existing);
 }
 function paintPaneHeading(heading,session,status,active=false){
   if(!heading)return;
@@ -11318,7 +11315,7 @@ const conversationView=(()=>{
         activate:name=>focusSplitSession(name),
         jumpToEvent:jumpConversationEvent,
         openExternalUrl,
-        renderPeerLogo:conversationPeerLogo,
+        renderPeerAvatar:conversationPeerAvatar,
         renderAvatar:conversationAvatar,
       });
       return instance;
