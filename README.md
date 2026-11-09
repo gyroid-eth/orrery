@@ -105,7 +105,7 @@ Claude の `!` の記録は **SHELL** と表示し、続くコマンドと出力
 
 表示できない場合は、パネルに理由と次の操作が表示されます。起動直後や最初の発言前なら少し待って再試行し、古い会話や紐付けを確認できない場合は新しい子を開いてください。Codex の記録が観測されない場合は ORRERY plugin を有効にして `/hooks` で確認し、新しく起動します。記録が無効・書き込み不可の場合は provider の記録設定や保存先を確認します。古い dashboard、未対応の形式、dsh の依存関係不足なども画面に案内されます。
 
-legacy では Codex と、Telemetry API 35 以降で紐付けを確認した Claude Code・dsh・Hermes を読めます。古い dashboard では Codex のみです。Claude・Codex・dsh は過去ページを読めます。dsh は記録された append の時系列、Hermes は現在の bound segment の直近 snapshot（最大200件）で、圧縮前の segment は含みません。fresh は保護された API の直近の本文 snapshot（最大200件、量の制限あり）で、過去ページと tool の要約には未対応です。保持上限で更新が止まったときは **↓（最新へ）** で再開できます。端末から消えた代替画面の描画は復元できません。[操作と上限の詳細](bridge/README.md)
+legacy では Codex と、Telemetry API 35 以降で紐付けを確認した Claude Code・dsh・Hermes を読めます。古い dashboard では Codex のみです。Claude・Codex・dsh は過去ページを読めます。dsh は記録された append の時系列、Hermes は現在の bound segment の直近 snapshot（最大200件）で、圧縮前の segment は含みません。fresh は保護された API の直近の本文 snapshot（最大200件、量の制限あり）で、過去ページと tool の要約には未対応です。保持上限で更新が止まったときは、一番下までスクロールすると最新を読み直して追随を再開します。**↓（最新へ）** でも再開できます。端末から消えた代替画面の描画は復元できません。[操作と上限の詳細](bridge/README.md)
 
 ### 科学者の顔とモデルを選んで起動する（NEW AGENT）
 

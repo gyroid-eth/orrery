@@ -785,7 +785,7 @@
         const additions=incoming.filter(event=>!events.has(event.id));
         if(!fresh&&direction==='newer'&&!atBottom&&
           (events.size+additions.length>MAX_EVENTS||retainedBytes+additions.reduce((n,event)=>n+byteSize(event),0)>MAX_BYTES)){
-          paused=true;message('Updates paused at reader limit. Latest resumes at the newest messages.','Updates paused');position();return;
+          paused=true;message('Updates paused at reader limit. Scroll to the bottom or select Latest to resume.','Updates paused');position();return;
         }
         saveTables();tableMutating=true;
         const fragment=document.createDocumentFragment(),focusedGroup=toolGroups.find(group=>group.button===document.activeElement);let added=0;
@@ -824,7 +824,7 @@
         modeMessage(mode==='snapshot'?page.notice||'Recent provider snapshot.':
           fresh?(page.limited||trimmed?'Fresh · limited recent snapshot; earlier history and tools need telemetry support.':'Fresh · recent snapshot (up to 200 messages).'):
           page.notice||'');
-        message(paused?'Reader window is bounded. Latest resumes at the newest messages.':
+        message(paused?'Reader window is bounded. Scroll to the bottom or select Latest to resume.':
           trimmed&&!fresh?'Older loaded messages were released. Load earlier to read them again.':
           page.skipped_large_record?'A large record was skipped. Load earlier to continue.':'',
           paused?'Updates paused':trimmed&&!fresh?'Older released':page.skipped_large_record?'Record skipped':'');
@@ -921,9 +921,13 @@
     // there is no path from this module to xterm or tmux input.
     listen(earlier,'click',()=>{scroll.focus({preventScroll:true});userLoad('older');});
     listen(retry,'click',()=>{scroll.focus({preventScroll:true});userLoad(events.size?'newer':'initial');});
+    function resumePaused(){
+      if(!paused)return false;
+      stop();clear({keepSubmissions:true});load('initial');
+      return true;
+    }
     listen(latest,'click',()=>{
-      if(paused){stop();clear({keepSubmissions:true});load('initial');}
-      else{
+      if(!resumePaused()){
         scroll.scrollTop=scroll.scrollHeight;newCount=0;position();remember(true);
         if(!busy)plan();
       }
@@ -933,8 +937,7 @@
     // notification adds an ephemeral delivery receipt, never a provider event.
     // Only a subsequent exact user record replaces it (FIFO for repeated text).
     function followSubmitted(){
-      if(paused){stop();clear({keepSubmissions:true});load('initial');}
-      else{scroll.scrollTop=scroll.scrollHeight;newCount=0;position();remember(true);load('newer');}
+      if(!resumePaused()){scroll.scrollTop=scroll.scrollHeight;newCount=0;position();remember(true);load('newer');}
     }
     listen(document,'oc:prompt-sending',event=>{
       const detail=event.detail;
@@ -968,7 +971,14 @@
     function userScroll(){clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);layoutTimer=layoutFrame=0;layoutPending=restoring=false;panel.dataset.conversationLayout='settled';userScrolling=true;const r=screen.getBoundingClientRect();lastWidth=r.width;lastHeight=r.height;}
     listen(scroll,'wheel',userScroll,{passive:true});listen(scroll,'touchstart',userScroll,{passive:true});listen(scroll,'pointerdown',userScroll,{passive:true});
     listen(scroll,'keydown',event=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key))userScroll();});
-    listen(scroll,'scroll',()=>{if(presented){position();if(userScrolling)remember();}},{passive:true});
+    listen(scroll,'scroll',()=>{
+      if(!presented)return;
+      position();
+      if(userScrolling){
+        remember();
+        if(opened&&enabled&&paused&&nearBottom())resumePaused();
+      }
+    },{passive:true});
     listen(window,'resize',()=>{closeNotice({focus:true});paintStatus();layoutChanged();});
     const layoutObserver=new ResizeObserver(layoutChanged);
     layoutObserver.observe(panel);layoutObserver.observe(scroll);layoutObserver.observe(eventsEl);
