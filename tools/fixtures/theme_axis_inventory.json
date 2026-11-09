@@ -3401,8 +3401,8 @@
         "unit": "element"
       },
       "source": {
-        "digest": "7a1c6e9ef13d174480dc7a9c73c7b6b222a37aef5654d09b7316c8d70d1bda91",
-        "expected": 139,
+        "digest": "c3c7f6d4f108292c5950ac01e91782d895d7dad9c82603944f5c4e47effc3580",
+        "expected": 138,
         "records": [
           {
             "line": 193,
@@ -3753,13 +3753,6 @@
             "selector": ".network-note",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
-          },
-          {
-            "line": 720,
-            "property": "font-size",
-            "selector": ".split-cell-status::before",
-            "source": "bridge/cockpit.html",
-            "value": "7px"
           },
           {
             "line": 730,
@@ -4693,7 +4686,7 @@
       }
     }
   },
-  "inventory_digest": "e8190420469d8cc477c62fc2f70868b3a8d0decc7350a062c6c45841ccc3702c",
+  "inventory_digest": "927ab19cdffb585d8d8f8902e8925c95464350b702fba88c253318ef025fcfa8",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -4705,9 +4698,9 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "2fa0c3da178ef67fb89f723fc3b07abeaa674d4ac00283ef285379efc6a7fca5",
+  "source_digest": "da05ea62b7c9f5f5b488576dff495b75a8a28bd9dcd35848a3d3f9ff8e765147",
   "source_files": {
-    "bridge/cockpit.html": "c84e0fb4d1e49823348f6c9c9f2f074aa3885dc5def6c2d155a8c2c082e3886d",
+    "bridge/cockpit.html": "ee6df274cde891a36b8165858aed2567b99e8ca43722f65a40860f636aabb7d0",
     "bridge/mail_view.css": "4c65a93dd1b338a3f4304651173a53a7ed489860ecec2bc86014d253bbcde898",
     "bridge/orrery_view.css": "ad0adcc4a4bc1867240ea68bb37c36d1bdd73b8e198c7e5ebba92343c78c26cd"
   },
