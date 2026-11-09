@@ -4613,9 +4613,9 @@
       }
     }
   },
-  "inventory_digest": "7d51b6d8cbf555c56c8b81faa415ef861cc15e5056d75b8d2c3366bc430beb92",
+  "inventory_digest": "1c2f57fff099b7c9cee74f77cd2ef4cd97da95a521cd12d053b61500a0bc088a",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "ebea11fccb319086cabe73d7194db0a14b4fb1c38b28e556275fa7cbb534368a",
+  "source_digest": "981b394d7814fe86c905b233737cfec4b842917de5e04cd604f538a09ab7e0cd",
   "surface": "cockpit",
   "version": 1
 }
@@ -9134,10 +9134,8 @@ function paneHeadingModel(agent){
   return {text:model,
     title:[...new Set([model,raw].filter(Boolean))].join(' · ')};
 }
-function paintPaneHeading(heading,session,status,active=false){
-  if(!heading)return;
-  const agent=currentAgentNamed(session),{provider,local}=providerPresentation(agent||{});
-  const logo=heading.querySelector('.pane-provider'),model=heading.querySelector('.pane-model');
+function paintProviderLogo(logo,agent){
+  const {provider,local}=providerPresentation(agent||{});
   const key=(provider?provider.asset:'')+':'+Boolean(local);
   if(logo.dataset.provider!==key){
     logo.dataset.provider=key;logo.replaceChildren();logo.classList.toggle('is-local',Boolean(local));
@@ -9152,6 +9150,19 @@ function paintPaneHeading(heading,session,status,active=false){
       rim.style.display='none';
     }
   }
+  return {provider,local};
+}
+function conversationPeerLogo(name,existing=null){
+  const agent=currentAgentNamed(name);if(!agent)return null;
+  const logo=existing||document.createElement('span');logo.classList.add('pane-provider');logo.setAttribute('role','img');
+  const {provider,local}=paintProviderLogo(logo,agent);
+  logo.title=logo.ariaLabel=[provider?provider.label:'Agent',local?'Local':''].filter(Boolean).join(' · ');
+  return logo;
+}
+function paintPaneHeading(heading,session,status,active=false){
+  if(!heading)return;
+  const agent=currentAgentNamed(session),logo=heading.querySelector('.pane-provider'),model=heading.querySelector('.pane-model');
+  const {provider,local}=paintProviderLogo(logo,agent);
   const working=Boolean(active&&agent&&agent.running===true&&agent.act_state==='work');
   logo.classList.toggle('is-working',working);
   const state=agent&&agent.running===true?agent.act_state:null;
@@ -11284,6 +11295,7 @@ const conversationView=(()=>{
         activate:name=>focusSplitSession(name),
         jumpToEvent:jumpConversationEvent,
         openExternalUrl,
+        renderPeerLogo:conversationPeerLogo,
       });
       return instance;
     })().catch(error=>{loading=null;showToast(error.message,true);return null;});

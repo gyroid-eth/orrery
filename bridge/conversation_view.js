@@ -104,7 +104,7 @@
   const warningIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5m0 3v.1"/></svg>';
   const retryIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10a8 8 0 1 0-1 7M20 4v6h-6"/></svg>';
   let closeActiveNotice=null;
-  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,expandControl=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null,openExternalUrl=null}){
+  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,expandControl=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null,openExternalUrl=null,renderPeerLogo=null}){
     let screen=host||document.querySelector('.screen');
     const toggle=control||document.getElementById('conversationToggle');
     const listeners=[];
@@ -627,7 +627,7 @@
         toggle.addEventListener('click',()=>{if(!detail.hidden)keepReaderFocus(detail);detail.hidden=!detail.hidden;toggle.setAttribute('aria-expanded',String(!detail.hidden));});
         article.append(toggle,detail);return article;
       }
-      if(event.kind==='mail'&&Array.isArray(event.mail)&&root.OrreryConversationMail)return root.OrreryConversationMail.render(event,article);
+      if(event.kind==='mail'&&Array.isArray(event.mail)&&root.OrreryConversationMail)return root.OrreryConversationMail.render(event,article,{name:agent,renderPeerLogo});
       const byline=document.createElement('div');byline.className='conversation-byline';
       const role=document.createElement('span');role.className='conversation-role';
       const shell=event.role==='user'&&root.OrreryConversationMarkdown?.commandRecord(event.text)?.shell;
@@ -666,7 +666,7 @@
         });
         target.addEventListener('keydown',e=>{if(e.target.closest('button,a')){clearTimeout(jumpTimer);return;}if(!['Enter',' '].includes(e.key)||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey)return;e.preventDefault();e.stopPropagation();clearTimeout(jumpTimer);if(root.getSelection()?.isCollapsed)jump(event);});
       }
-      if(Array.isArray(event.mail)&&root.OrreryConversationMail)root.OrreryConversationMail.render(event,article);
+      if(Array.isArray(event.mail)&&root.OrreryConversationMail)root.OrreryConversationMail.render(event,article,{name:agent,renderPeerLogo});
       return article;
     }
     function jump(event){
@@ -866,6 +866,7 @@
     function context(){
       const current=getContext()||{};const name=String(current.name||''),key=fingerprint(current);
       if(!opened)return;
+      root.OrreryConversationMail?.refreshPeers?.(panel,renderPeerLogo);
       if(name===agent&&key===contextKey){paintActivity(current);return;}
       const sameBinding=key===contextKey;
       stop();agent=name;contextKey=key;clear({keepSubmissions:sameBinding});boundContext={...current};

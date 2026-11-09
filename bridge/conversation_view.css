@@ -179,19 +179,26 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 .conversation-expand[hidden]{display:none}
 /* Recorded Mail is a collapsible source of its own, never a human prompt. */
 .conversation-mail-event{padding:12px 0}
-.conversation-mail{border:1px solid var(--hair);border-left:2px solid var(--amber);border-radius:6px;background:var(--panel-2)}
+.conversation-mail{color:var(--ink)}
 .conversation-mail+.conversation-mail{margin-top:8px}
-.conversation-mail-summary{cursor:pointer;padding:12px 14px;list-style:none}
+.conversation-mail-summary{cursor:pointer;padding:2px 0 7px;list-style:none}
 .conversation-mail-summary::-webkit-details-marker{display:none}
-.conversation-mail-head{display:flex;gap:10px;align-items:center;font:9px/1.6 var(--mono);color:var(--ink-dim)}
-.conversation-mail-label{letter-spacing:.1em;color:var(--amber)}
-.conversation-mail-importance{font-size:9px;color:var(--ink-faint)}
-.conversation-mail-importance[data-importance="high"],.conversation-mail-importance[data-importance="urgent"]{color:var(--amber)}
-.conversation-mail-route{display:block;font:10px/1.7 var(--mono);color:var(--ink-dim);margin-top:5px;overflow-wrap:anywhere}
-.conversation-mail-subject{display:block;font:12px/1.8 var(--mono);color:var(--ink);overflow-wrap:anywhere}
-.conversation-mail-subject:after{content:' ＋';color:var(--amber)}
-.conversation-mail[open] .conversation-mail-subject:after{content:' −'}
-.conversation-mail-content{border-top:1px solid var(--hair-2);padding:10px 14px}
+.conversation-mail-head{display:flex;gap:7px;align-items:center;min-width:0;font:11px/1.6 var(--mono);color:var(--ink-dim)}
+.conversation-mail-head>.conversation-time{flex:none;margin-left:auto;font-size:9px;white-space:nowrap}
+.conversation-mail-label{display:block;font:9px/1.6 var(--mono);letter-spacing:.04em;color:var(--ink-dim);margin-bottom:5px}
+.conversation-mail-chevron{flex:none;font-size:9px;color:var(--ink-faint)}
+.conversation-mail[open] .conversation-mail-chevron{transform:rotate(90deg)}
+.conversation-mail-route{display:flex;flex:1;align-items:center;gap:6px;min-width:0;overflow:hidden}
+.conversation-mail-peer{display:inline-flex;align-items:center;gap:5px;min-width:22px;flex:0 1 auto}
+.conversation-mail-peer-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conversation-mail-peer.is-counterpart{font-size:13px;font-weight:650;color:var(--ink)}
+.conversation-mail-arrow,.conversation-mail-more{flex:none;font-size:10px;color:var(--ink-dim)}
+.conversation-mail-subject-row{display:flex;align-items:baseline;gap:7px;margin-top:5px}
+.conversation-mail-importance{display:none;flex:none;width:4px;height:4px;border-radius:50%;position:relative;top:-2px}
+.conversation-mail-importance[data-importance="high"]{display:block;background:var(--amber)}
+.conversation-mail-importance[data-importance="urgent"]{display:block;background:var(--theme-status-alert,#d2685e)}
+.conversation-mail-subject{display:block;min-width:0;font:12px/1.8 var(--mono);color:var(--ink);overflow-wrap:anywhere}
+.conversation-mail-content{padding:0 0 2px 16px}
 .conversation-mail-notice{margin:0 0 9px;font:10px/1.7 var(--mono);color:var(--ink-dim)}
 .conversation-mail-text{margin:0;white-space:pre-wrap;font:12px/1.8 var(--mono);overflow-wrap:anywhere;tab-size:2}
 .conversation-jumpable{cursor:pointer;outline-offset:3px}
