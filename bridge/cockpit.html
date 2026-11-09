@@ -610,7 +610,6 @@
   .pane-provider{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;width:16px;height:18px;color:var(--ink);opacity:.9}
   .pane-provider .provider-logo{width:16px;height:16px;object-fit:contain;border:0;border-radius:0;background:none}
   .pane-provider svg{position:absolute;inset:1px 0;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5}
-  .pane-provider.is-local .provider-logo{width:11px;height:11px}
   .pane-provider.is-working{animation:pane-provider-breathe 3.2s ease-in-out infinite}
   @keyframes pane-provider-breathe{0%,100%{opacity:1}50%{opacity:.45}}
   @media(prefers-reduced-motion:reduce){.pane-provider.is-working{animation:none}}
@@ -4412,7 +4411,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "6c2d9a2c5a508466a88a49ae60d3905b3e0790db02e82a487aca98372e1ec83e",
+        "digest": "db8aa46f127d9ec394580b689fd5993fc402f6531c7ea463f269364327dd7d6f",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4565,7 +4564,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "22af0092ccc02122fe749c44fe33096e9cee5299b56b39c7cc73cf8f96f14355",
+        "digest": "53e6087621cc1aca44b50fcfa1fba6bfb71ede3fc4a6783b7291abda824d58ce",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4614,9 +4613,9 @@
       }
     }
   },
-  "inventory_digest": "388baaa5609bea222691d0e13314c7ff269dd57abd27ce9b6253a704d79ae17f",
+  "inventory_digest": "7d51b6d8cbf555c56c8b81faa415ef861cc15e5056d75b8d2c3366bc430beb92",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "01fe75e7e61dfe82ea88b48ab06ee67c21d5b85b4ffc44476a12ed3d117333e6",
+  "source_digest": "ebea11fccb319086cabe73d7194db0a14b4fb1c38b28e556275fa7cbb534368a",
   "surface": "cockpit",
   "version": 1
 }
@@ -9147,10 +9146,10 @@ function paintPaneHeading(heading,session,status,active=false){
     logo.appendChild(rim);
     if(provider){
       const image=document.createElement('img');image.className='provider-logo';image.alt='';
-      image.onload=()=>{image.hidden=false;rim.style.display=local?'':'none';};
+      image.onload=()=>{image.hidden=false;rim.style.display='none';};
       image.onerror=()=>{image.hidden=true;rim.style.display='';};
       image.src='cockpit-assets/'+provider.asset+'.svg';logo.appendChild(image);
-      rim.style.display=local?'':'none';
+      rim.style.display='none';
     }
   }
   const working=Boolean(active&&agent&&agent.running===true&&agent.act_state==='work');
