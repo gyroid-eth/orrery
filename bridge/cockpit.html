@@ -4411,7 +4411,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "db8aa46f127d9ec394580b689fd5993fc402f6531c7ea463f269364327dd7d6f",
+        "digest": "98ebc78c8e5129e39be6fd3fda22036a6664412b5f9c4b74933c8c481ed32ff3",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4564,7 +4564,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "53e6087621cc1aca44b50fcfa1fba6bfb71ede3fc4a6783b7291abda824d58ce",
+        "digest": "9cf422d4eced16ca241dc360e1401233f7abe9b29fa561524cccc80b6616afb8",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4613,9 +4613,9 @@
       }
     }
   },
-  "inventory_digest": "1c2f57fff099b7c9cee74f77cd2ef4cd97da95a521cd12d053b61500a0bc088a",
+  "inventory_digest": "37b66dde41ffc18293d4c75bb3b17a732ce8b4f1cabab12f178c47a3ec666d58",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "981b394d7814fe86c905b233737cfec4b842917de5e04cd604f538a09ab7e0cd",
+  "source_digest": "66f3322b2edfdff06d99e2c956cef69a3ca2adf3d3520781efac03af36b24905",
   "surface": "cockpit",
   "version": 1
 }
@@ -9865,6 +9865,7 @@ function assignLineageHues(live){
    They subscribe to 'oc:agents' / 'oc:mail' document events for updates. */
 window.OC=Object.freeze({
   esc,relTime,jumpToAgent,rootOf,providerPresentation,
+  renderPeerLogo:conversationPeerLogo,
   lineageHue,                       // Map: agent name -> lineage hex
   get lineageParent(){return lineageParent;},  // Map: child -> parent
   agents:()=>currentAgents,

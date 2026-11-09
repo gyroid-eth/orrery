@@ -3411,7 +3411,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "db8aa46f127d9ec394580b689fd5993fc402f6531c7ea463f269364327dd7d6f",
+        "digest": "98ebc78c8e5129e39be6fd3fda22036a6664412b5f9c4b74933c8c481ed32ff3",
         "expected": 138,
         "records": [
           {
@@ -4276,105 +4276,105 @@
             "value": "10.5px"
           },
           {
-            "line": 59,
+            "line": 61,
             "property": "font-size",
             "selector": ".mailview-host .imp",
             "source": "bridge/mail_view.css",
             "value": "8.5px"
           },
           {
-            "line": 64,
+            "line": 66,
             "property": "font-size",
             "selector": ".msg .body",
             "source": "bridge/mail_view.css",
             "value": "11.5px"
           },
           {
-            "line": 67,
+            "line": 69,
             "property": "font-size",
             "selector": ".msg .time",
             "source": "bridge/mail_view.css",
             "value": "9.5px"
           },
           {
-            "line": 68,
+            "line": 70,
             "property": "font-size",
             "selector": ".mailempty",
             "source": "bridge/mail_view.css",
             "value": "11px"
           },
           {
-            "line": 92,
+            "line": 94,
             "property": "font-size",
             "selector": ".drawer-mode",
             "source": "bridge/mail_view.css",
             "value": "8.5px"
           },
           {
-            "line": 98,
+            "line": 100,
             "property": "font-size",
             "selector": ".drawer-label",
             "source": "bridge/mail_view.css",
             "value": "8.5px"
           },
           {
-            "line": 102,
+            "line": 104,
             "property": "font-size",
             "selector": ".drawer-arrow",
             "source": "bridge/mail_view.css",
             "value": "11px"
           },
           {
-            "line": 104,
+            "line": 106,
             "property": "font-size",
             "selector": ".drawer-recipient",
             "source": "bridge/mail_view.css",
             "value": "10.5px"
           },
           {
-            "line": 106,
+            "line": 108,
             "property": "font-size",
             "selector": ".recipient-kind",
             "source": "bridge/mail_view.css",
             "value": "7.5px"
           },
           {
-            "line": 108,
+            "line": 110,
             "property": "font-size",
             "selector": ".drawer-meta",
             "source": "bridge/mail_view.css",
             "value": "8.5px"
           },
           {
-            "line": 114,
+            "line": 116,
             "property": "font-size",
             "selector": ".mail-md",
             "source": "bridge/mail_view.css",
             "value": "10.75px"
           },
           {
-            "line": 119,
+            "line": 121,
             "property": "font-size",
             "selector": ".mail-md h4",
             "source": "bridge/mail_view.css",
             "value": "11.5px"
           },
           {
-            "line": 134,
+            "line": 136,
             "property": "font-size",
             "selector": ".drawer-empty",
             "source": "bridge/mail_view.css",
             "value": "10.5px"
           },
           {
-            "line": 149,
+            "line": 151,
             "property": "font-size",
             "selector": ".thread-time",
             "source": "bridge/mail_view.css",
             "value": "8.5px"
           },
           {
-            "line": 151,
+            "line": 153,
             "property": "font-size",
             "selector": ".thread-excerpt",
             "source": "bridge/mail_view.css",
@@ -4394,7 +4394,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "53e6087621cc1aca44b50fcfa1fba6bfb71ede3fc4a6783b7291abda824d58ce",
+        "digest": "9cf422d4eced16ca241dc360e1401233f7abe9b29fa561524cccc80b6616afb8",
         "expected": 42,
         "records": [
           {
@@ -4671,21 +4671,21 @@
             "value": ".12em"
           },
           {
-            "line": 59,
+            "line": 61,
             "property": "letter-spacing",
             "selector": ".mailview-host .imp",
             "source": "bridge/mail_view.css",
             "value": ".1em"
           },
           {
-            "line": 98,
+            "line": 100,
             "property": "letter-spacing",
             "selector": ".drawer-label",
             "source": "bridge/mail_view.css",
             "value": ".22em"
           },
           {
-            "line": 106,
+            "line": 108,
             "property": "letter-spacing",
             "selector": ".recipient-kind",
             "source": "bridge/mail_view.css",
@@ -4696,7 +4696,7 @@
       }
     }
   },
-  "inventory_digest": "1c2f57fff099b7c9cee74f77cd2ef4cd97da95a521cd12d053b61500a0bc088a",
+  "inventory_digest": "37b66dde41ffc18293d4c75bb3b17a732ce8b4f1cabab12f178c47a3ec666d58",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -4708,10 +4708,10 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "981b394d7814fe86c905b233737cfec4b842917de5e04cd604f538a09ab7e0cd",
+  "source_digest": "66f3322b2edfdff06d99e2c956cef69a3ca2adf3d3520781efac03af36b24905",
   "source_files": {
-    "bridge/cockpit.html": "6e1e84314903849c5e253d99f9bb53befe7cda49129996993ade8e28b4c290cd",
-    "bridge/mail_view.css": "4c65a93dd1b338a3f4304651173a53a7ed489860ecec2bc86014d253bbcde898",
+    "bridge/cockpit.html": "e9e9a3bec4c2dccb6feb6b7f4b662e3e90f651f3b3cb106a2c4292cfe0bf4241",
+    "bridge/mail_view.css": "8f8e0a41e9ebef7c54ad5f9464542d327600e9285f3877122a6a819a889aac32",
     "bridge/orrery_view.css": "ad0adcc4a4bc1867240ea68bb37c36d1bdd73b8e198c7e5ebba92343c78c26cd"
   },
   "surface": "cockpit",

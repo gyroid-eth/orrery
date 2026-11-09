@@ -1,7 +1,7 @@
 /* ── agent-mail rail (right rail, below the orrery) ──
    Owns <div id="mail"> and everything rendered inside it.
    Inputs (read-only):
-     window.OC — { esc, relTime, jumpToAgent, agents(), mailBacklog() }
+     window.OC — { esc, relTime, jumpToAgent, renderPeerLogo, agents(), mailBacklog() }
      document event 'oc:mail' detail:{messages} — NEW, deduped live messages.
      document event 'oc:focus-agent' detail:{name} — follow active terminal pane.
    All API and event message fields are untrusted. Rendering is escape-first. */
@@ -193,6 +193,21 @@ function renderFilters(items){
   }
 }
 
+function appendPeer(container,name){
+  const peer=document.createElement('span');peer.className='mail-peer';peer.dataset.peerName=name;
+  const label=document.createElement('span');label.className='mail-peer-name';label.textContent=name;
+  peer.appendChild(label);container.appendChild(peer);
+}
+function refreshPeerLogos(){
+  if(typeof OC.renderPeerLogo!=='function')return;
+  cardsEl.querySelectorAll('.mail-peer').forEach(peer=>{
+    const previous=peer.querySelector('.pane-provider'),logo=OC.renderPeerLogo(peer.dataset.peerName,previous);
+    if(logo===previous)return;
+    if(previous)previous.remove();
+    if(logo)peer.prepend(logo);
+  });
+}
+
 function renderCards(items){
   cardsEl.innerHTML='';
   const visible=items.filter(message=>messageIncludesAgent(message,activeFilter));
@@ -206,7 +221,7 @@ function renderCards(items){
   }
   visible.forEach((message,index)=>{
     const card=document.createElement('button');
-    const recipients=recipientNames(message).join(', ')||'—';
+    const recipients=recipientNames(message);
     const importance=message.importance||'normal';
     card.type='button';
     // first paint: staggered rise for everything. After boot, only a card
@@ -217,14 +232,21 @@ function renderCards(items){
     card.className='msg '+(booted?(fresh?'landing':'settled'):'');
     card.dataset.mid=message.id;
     card.style.animationDelay=booted?'0s':(Math.min(index,12)*.03)+'s';
-    card.innerHTML='<span class="mtop"><span class="from">'+E(message.sender||'unknown')+'</span>'+
-      '<span class="arrow">→</span><span class="to">'+E(recipients)+'</span>'+
+    card.innerHTML='<span class="mtop"><span class="from"></span>'+
+      '<span class="arrow">→</span><span class="to"></span>'+
       '<span class="imp '+(highImportance(importance)?'hi':'')+'">'+E(importance)+'</span></span>'+
       '<span class="body">'+E(message.subject||message.excerpt||'(no subject)')+'</span>'+
       '<span class="time">'+E(relativeLabel(message.ts))+'</span>';
+    appendPeer(card.querySelector('.from'),message.sender||'unknown');
+    const to=card.querySelector('.to');
+    (recipients.length?recipients:['—']).forEach((name,index)=>{
+      if(index)to.appendChild(document.createTextNode(', '));
+      appendPeer(to,name);
+    });
     card.addEventListener('click',()=>openMessage(message.id,card));
     cardsEl.appendChild(card);
   });
+  refreshPeerLogos();
 }
 
 let booted=false;
@@ -500,6 +522,7 @@ document.addEventListener('keydown',event=>{
 },true);
 
 document.addEventListener('oc:mail',event=>ingest(event.detail&&event.detail.messages));
+document.addEventListener('oc:agents',refreshPeerLogos);
 document.addEventListener('oc:filter-agent',event=>{
   selectMailFilter(event.detail&&event.detail.agent);
 });
