@@ -70,7 +70,7 @@ def test_header_retry_is_visible_and_keyboard_focus_survives_success(cockpit, th
     for failure in ['Generated read failure', 'Generated failure with multiple paragraphs.\n\n'*30]:
         js('window.noticeFailure='+json.dumps(failure)+";OrreryConversationSource.Source.prototype.read=async()=>{const e=new Error(noticeFailure);e.code='record_too_large';throw e};conversationView.refresh()")
         wait("!readerHost.querySelector('.conversation-retry').hidden")
-        assert hit(js, '.conversation-retry') and hit(js, '.conversation-text')
+        assert hit(js, '.conversation-notice-toggle' if layout == 'split-phone' else '.conversation-retry') and hit(js, '.conversation-text')
         assert hit(js, '.conversation-expand')
         assert hit(js, '.split-pane-window' if layout.startswith('split') else '#panePopout')
         if layout.startswith('split'):
@@ -78,7 +78,11 @@ def test_header_retry_is_visible_and_keyboard_focus_survives_success(cockpit, th
             assert js("readerHost.querySelector('.scl-close').getBoundingClientRect().right<=readerHost.querySelector('.conversation-notices').getBoundingClientRect().left+1")
         assert js("readerHost.querySelector('.conversation-toolbar').title") == failure
         assert abs(js("reader.querySelector('.conversation-text').getBoundingClientRect().top")-before) <= 1
-    js("OrreryConversationSource.Source.prototype.read=()=>new Promise(resolve=>window.finishHeaderRead=resolve);readerHost.querySelector('.conversation-retry').focus();packets.length=0")
+    js("OrreryConversationSource.Source.prototype.read=()=>new Promise(resolve=>window.finishHeaderRead=resolve);packets.length=0")
+    if layout == 'split-phone':
+        js("readerHost.querySelector('.conversation-notice-toggle').click();document.getElementById(readerHost.querySelector('.conversation-notice-toggle').getAttribute('aria-controls')).querySelector('.conversation-menu-retry').focus()")
+    else:
+        js("readerHost.querySelector('.conversation-retry').focus()")
     client.call('Input.dispatchKeyEvent', type='keyDown', key='Enter', code='Enter', text='\r', windowsVirtualKeyCode=13)
     client.call('Input.dispatchKeyEvent', type='keyUp', key='Enter', windowsVirtualKeyCode=13)
     wait("typeof finishHeaderRead==='function'")

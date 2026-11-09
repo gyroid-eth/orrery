@@ -4497,9 +4497,9 @@
       }
     }
   },
-  "inventory_digest": "deab9907d03a44352e299ee5d31b2946d02087c57578630848eb2fb931f8717d",
+  "inventory_digest": "d689d00d29af443efaeed70859347372259b5616af5e63bf268daae9e4cbe511",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "7359d57443243266f09a490fb5afe7257b25540d8b75bb516df869968b8327ff",
+  "source_digest": "a2a5f6cc29260f24f23c34019d6504a5a9c898eec2954c0957bfbf720ef2d05a",
   "surface": "cockpit",
   "version": 1
 }
@@ -6496,7 +6496,7 @@ function focusAttachedSessionNumber(number){
 }
 
 function resetHead(){
-  scrName.textContent='—';scrPath.textContent='';
+  scrName.textContent='—';scrName.title='';scrPath.textContent='';
   scrBadge.textContent='offline';scrBadge.className='badge off';
   paintClaimToggle();paintGhosttyAction();
 }
@@ -7055,7 +7055,7 @@ function bottomJumpShortcutBlocked(event){
   return targets.some(target=>{
     if(!target.closest||target.closest('.xterm'))return false;
     return Boolean(target.closest(
-      '.promptbar,.overlay,.settings-popover,.conversation-panel,.split-cell-head,.scr-head,[contenteditable="true"],input,textarea,select',
+      '.promptbar,.overlay,.settings-popover,.conversation-panel,.conversation-notice-menu,.split-cell-head,.scr-head,[contenteditable="true"],input,textarea,select',
     ));
   });
 }
@@ -7064,7 +7064,7 @@ function editableElementOwnsFocus(){
   if(!focused||focused===document.body||!focused.matches)return false;
   // xterm owns a hidden textarea. It is terminal input, not a browser form.
   if(focused.closest('.xterm'))return false;
-  if(focused.closest('.conversation-panel,.settings-popover,.split-cell-head,.scr-head'))return true;
+  if(focused.closest('.conversation-panel,.conversation-notice-menu,.settings-popover,.split-cell-head,.scr-head'))return true;
   return focused.matches('input,textarea,select,[contenteditable="true"]')||
     focused.isContentEditable;
 }
@@ -7314,7 +7314,7 @@ function renderStage({fit=true}={}){
   document.dispatchEvent(new CustomEvent('oc:stage-agent',{detail:{name:activeSession()||''}}));
 }
 function paintPendingSession(session){
-  scrName.textContent=session;scrPath.textContent='waiting for terminal panes';
+  scrName.textContent=session;scrName.title=session;scrPath.textContent='';
   scrBadge.textContent='connecting';scrBadge.className='badge off';
   paintClaimToggle();paintGhosttyAction();
   if(sessChip)sessChip.textContent=session;
@@ -7689,7 +7689,7 @@ function paintGhosttyAction(meta=null){
   paintPaneWindowActions(available);
 }
 function paintHead(meta){
-  scrName.textContent=paneTitle(meta);scrPath.textContent=paneTag(meta);
+  scrName.textContent=meta.session;scrName.title=paneTag(meta);scrPath.textContent='';
   scrBadge.textContent=meta.active?'active':'live';scrBadge.className='badge live';
   paintClaimToggle(meta);paintGhosttyAction(meta);
   if(sessChip)sessChip.textContent=meta.session;
@@ -7939,7 +7939,7 @@ function jumpToSessionTarget(name,{forceFocus=false}={}){
     activeId=null;splitVisible=false;
     renderStage({fit:false});
     scrName.textContent=name;
-    scrPath.textContent='no terminal — runs in Codex App';
+    scrName.title=name;scrPath.textContent='';
     scrBadge.textContent='no terminal';scrBadge.className='badge off';
     stageEmpty.innerHTML=
       '<b>'+name+'</b> runs in the Codex App —<br>there is no terminal to attach to.'+

@@ -15,6 +15,11 @@
 .conversation-mode{display:inline-flex;align-items:center;justify-content:center;flex:none;width:18px;height:18px;padding:0;border:1px solid var(--hair);border-radius:50%;background:transparent;color:var(--ink-dim);font:12px Georgia,serif;cursor:help}
 .conversation-mode:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .conversation-toolbar .conversation-retry{height:24px;min-height:24px;padding:2px 6px;font-size:10px}
+.conversation-notice-toggle{display:none}
+.conversation-notice-menu[hidden]{display:none}
+.conversation-notice-menu{position:fixed;z-index:2100;width:min(300px,calc(100vw - 16px));box-sizing:border-box;padding:10px;border:1px solid var(--hair);border-radius:6px;background:var(--panel);color:var(--ink);box-shadow:0 8px 24px rgb(0 0 0 / .25)}
+.conversation-notice-copy{max-height:35vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.6 var(--mono)}
+.conversation-menu-retry{margin-top:8px}
 .conversation-older{margin:4px 0 2px}
 .conversation-scroll{flex:1;min-height:0;overflow-y:scroll;overscroll-behavior:contain;
   scrollbar-gutter:stable;scrollbar-width:auto;overflow-anchor:none;padding:4px 18px 56px;outline-offset:-3px}
@@ -131,9 +136,22 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .split-cell-head:has(.conversation-notices:not([hidden])) .pane-icon{width:24px;min-width:24px;height:24px;min-height:24px;padding:3px}
   .conversation-notices,.conversation-toolbar{gap:2px}
   .conversation-mode{width:16px;height:16px}
-  .conversation-warning{width:12px;height:12px}
-  .conversation-toolbar .conversation-retry{width:20px;min-width:20px;height:22px;min-height:22px;padding:2px}
-  .conversation-retry svg{width:14px;height:14px}
+  .conversation-toolbar .conversation-warning,.conversation-toolbar .conversation-retry{display:none}
+  .conversation-notice-toggle{display:inline-flex;width:20px;min-width:20px;height:24px;min-height:24px;padding:2px;color:var(--amber)}
+  .conversation-notice-toggle svg{width:14px;height:14px}
+  .conversation-notices:has(.conversation-toolbar:not([hidden])) .conversation-mode{display:none}
+  .split-pane-headers .split-cell-label .scl-name{min-width:16px}
+}
+@container split-pane (max-width:160px){
+  .split-pane-headers .split-cell-head{padding:5px 4px;gap:2px}
+  .split-pane-headers .split-cell-label{gap:2px}
+  .split-pane-headers .split-cell-label .scl-close{flex-basis:16px;width:16px;height:22px}
+  .split-cell-actions{gap:2px}
+  .split-cell-head .split-cell-actions .pane-icon,.split-cell-head:has(.conversation-notices:not([hidden])) .pane-icon,.split-cell-actions .conversation-notice-toggle{width:18px;min-width:18px;height:24px;min-height:24px;padding:1px}
+  .split-cell-actions .pane-icon svg{width:14px;height:14px}
+  .conversation-mode{width:18px;height:18px}
+  .split-cell-status{font-size:0}
+  .split-cell-status::before{margin-right:0}
 }
 /* Pressed controls float over live terminal pixels, so their fill stays opaque. */
 .split-cell-actions .split-history-toggle{background:var(--panel)}

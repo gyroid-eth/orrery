@@ -122,9 +122,15 @@
     const notices=document.createElement('span');notices.className='conversation-notices';notices.hidden=true;
     notices.innerHTML='<span class="conversation-toolbar" hidden><span class="conversation-status" role="status"></span>'+
       '<span class="conversation-status-label" aria-hidden="true"></span><span class="conversation-warning" aria-hidden="true">'+warningIcon+'</span>'+
-      '<button class="cockpit-control conversation-action conversation-retry" type="button" title="Retry" aria-label="Retry" hidden><span>Retry</span>'+retryIcon+'</button></span>'+
+      '<button class="cockpit-control conversation-action conversation-retry" type="button" title="Retry" aria-label="Retry" hidden><span>Retry</span>'+retryIcon+'</button>'+
+      '<button class="cockpit-control conversation-notice-toggle" type="button" aria-haspopup="dialog" aria-expanded="false">'+warningIcon+'</button></span>'+
       '<button class="conversation-mode" type="button" hidden>i</button>';
-    let noticeControl=toggle,noticeTimer=0,noticeTemporary=false;
+    const noticeMenu=document.createElement('div');noticeMenu.className='conversation-notice-menu';noticeMenu.id=panelId+'-status';noticeMenu.hidden=true;
+    noticeMenu.setAttribute('role','dialog');noticeMenu.setAttribute('aria-label','Reader status');noticeMenu.tabIndex=-1;
+    noticeMenu.innerHTML='<div class="conversation-notice-copy"></div><button class="cockpit-control conversation-menu-retry" type="button">Retry</button>';
+    document.body.appendChild(noticeMenu);
+    let noticeControl=toggle,noticeTimer=0,noticeTemporary=false,menuAnchor=null;
+    let noticeState={text:'',label:''},noticeOverlay=null;
     const expandButton=expandControl||document.createElement('button');
     expandButton.type='button';expandButton.className='cockpit-control pane-icon conversation-expand';expandButton.hidden=true;
     expandButton.innerHTML=expandIcon;expandButton.setAttribute('aria-controls',panelId);
@@ -151,6 +157,8 @@
     listen(panel,'click',activateLink);listen(panel,'auxclick',activateLink);
     const toolbar=notices.querySelector('.conversation-toolbar'),status=notices.querySelector('.conversation-status'),statusLabel=notices.querySelector('.conversation-status-label'),modeInfo=notices.querySelector('.conversation-mode'),empty=el('.conversation-empty');
     const earlier=el('.conversation-older'),retry=notices.querySelector('.conversation-retry'),latest=el('.conversation-latest');
+    const noticeToggle=notices.querySelector('.conversation-notice-toggle'),menuCopy=noticeMenu.querySelector('.conversation-notice-copy'),menuRetry=noticeMenu.querySelector('.conversation-menu-retry');
+    for(const button of [noticeToggle,modeInfo]){button.setAttribute('aria-controls',noticeMenu.id);button.setAttribute('aria-expanded','false');button.setAttribute('aria-haspopup','dialog');}
     let fullWidth=false,tableMutating=false,tableFrame=0;
     const tablePositions=new Map();
     let submissions=[],submissionTimer=0,flashTimer=0,readSequence=0;
@@ -256,20 +264,50 @@
       paintStatus();
     }
     function paintStatus(){
+      const focused=document.activeElement;
       toolbar.hidden=!status.textContent&&retry.hidden;
       modeInfo.hidden=!opened||!modeInfo.title;
       notices.hidden=!presented||!opened&&!noticeTemporary||toolbar.hidden&&modeInfo.hidden;
-      if(!presented){notices.remove();return;}
+      if(!presented){closeNotice();notices.remove();return;}
       if(noticeControl.parentElement&&(notices.parentElement!==noticeControl.parentElement||notices.nextElementSibling!==noticeControl))noticeControl.before(notices);
+      const full=[...new Set([noticeOverlay?.text,noticeState.text,modeInfo.title].filter(Boolean))].join('\n\n');
+      noticeToggle.title=full;noticeToggle.setAttribute('aria-label',full+(retry.hidden?'':' · Retry available'));
+      menuCopy.textContent=full;
+      if(focused===menuRetry&&retry.hidden&&opened)scroll.focus({preventScroll:true});
+      menuRetry.hidden=retry.hidden;
+      if(!noticeMenu.hidden&&(notices.hidden||!menuAnchor?.getClientRects().length))closeNotice({focus:true});
+      if([modeInfo,noticeToggle].includes(focused)&&!focused.getClientRects().length&&opened){
+        (noticeToggle.getClientRects().length?noticeToggle:scroll).focus({preventScroll:true});
+      }
     }
+    function closeNotice({focus=false}={}){
+      if(noticeMenu.hidden)return;
+      const owned=noticeMenu.contains(document.activeElement),anchor=menuAnchor;
+      noticeMenu.hidden=true;menuAnchor=null;
+      for(const button of [noticeToggle,modeInfo])button.setAttribute('aria-expanded','false');
+      if((focus||owned)&&opened&&presented)([anchor,noticeToggle,modeInfo,scroll].find(e=>e?.getClientRects().length)||scroll).focus({preventScroll:true});
+    }
+    function openNotice(anchor){
+      if(!noticeMenu.hidden){closeNotice({focus:true});return;}
+      menuAnchor=anchor;noticeMenu.hidden=false;anchor.setAttribute('aria-expanded','true');
+      const r=anchor.getBoundingClientRect(),box=noticeMenu.getBoundingClientRect();
+      noticeMenu.style.left=Math.max(8,Math.min(r.right-box.width,root.innerWidth-box.width-8))+'px';
+      noticeMenu.style.top=Math.max(8,Math.min(r.bottom+6,root.innerHeight-box.height-8))+'px';
+      (menuRetry.hidden?noticeMenu:menuRetry).focus({preventScroll:true});
+    }
+    function paintMessage(){
+      const value=noticeOverlay||noticeState;noticeTemporary=Boolean(noticeOverlay);
+      status.textContent=value.text;status.title=value.text;toolbar.title=value.text;statusLabel.textContent=value.label;paintStatus();
+    }
+    function endTemporary(){clearTimeout(noticeTimer);noticeTimer=0;noticeOverlay=null;paintMessage();}
     function message(text,label=text,temporary=false){
-      clearTimeout(noticeTimer);noticeTimer=0;noticeTemporary=temporary;
-      status.textContent=text;status.title=text;toolbar.title=text;statusLabel.textContent=label;paintStatus();
-      if(temporary)noticeTimer=setTimeout(()=>message(''),5000);
+      if(temporary){clearTimeout(noticeTimer);noticeOverlay={text,label};noticeTimer=setTimeout(endTemporary,5000);}
+      else noticeState={text,label};
+      paintMessage();
     }
     function modeMessage(text){if(!text&&document.activeElement===modeInfo&&opened)scroll.focus({preventScroll:true});modeInfo.title=text;modeInfo.setAttribute('aria-label',text);paintStatus();}
-    function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);clearTimeout(noticeTimer);timer=jumpTimer=noticeTimer=0;if(noticeTemporary)message('');if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
-    function clear({keepSubmissions=false}={}){tablePositions.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
+    function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
+    function clear({keepSubmissions=false}={}){closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
       if(tableMutating)return;
@@ -678,8 +716,15 @@
     listen(panel,'pointerdown',()=>onActivate());
     listen(panel,'focusin',event=>{lastFocused=event.target;onActivate();});
     listen(notices,'focusin',event=>{lastFocused=event.target;onActivate();});
+    listen(noticeMenu,'focusin',event=>{lastFocused=event.target;onActivate();});
     for(const type of ['pointerdown','mousedown'])listen(notices,type,event=>event.stopPropagation());
+    for(const type of ['pointerdown','mousedown'])listen(noticeMenu,type,event=>event.stopPropagation());
     listen(notices,'keydown',event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();close();}});
+    listen(noticeMenu,'keydown',event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();closeNotice({focus:true});}});
+    listen(document,'pointerdown',event=>{if(!noticeMenu.hidden&&!noticeMenu.contains(event.target)&&!notices.contains(event.target))closeNotice();});
+    listen(document,'scroll',event=>{if(!noticeMenu.hidden&&!noticeMenu.contains(event.target))closeNotice();},{capture:true,passive:true});
+    for(const button of [noticeToggle,modeInfo])listen(button,'click',event=>{event.stopPropagation();openNotice(button);});
+    listen(menuRetry,'click',()=>{scroll.focus({preventScroll:true});closeNotice();userLoad(events.size?'newer':'initial');});
     listen(panel,'mousedown',event=>event.stopPropagation());
     listen(panel,'keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();if(preview?.selected){preview.close();scroll.focus();}else close();}});
     // Arrow/Page keys and wheels belong only to the browser scroll container;
@@ -726,7 +771,7 @@
     listen(scroll,'wheel',userScroll,{passive:true});listen(scroll,'touchstart',userScroll,{passive:true});listen(scroll,'pointerdown',userScroll,{passive:true});
     listen(scroll,'keydown',event=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key))userScroll();});
     listen(scroll,'scroll',()=>{if(presented){position();if(userScrolling)remember();}},{passive:true});
-    listen(window,'resize',layoutChanged);
+    listen(window,'resize',()=>{closeNotice({focus:true});paintStatus();layoutChanged();});
     const layoutObserver=new ResizeObserver(layoutChanged);
     layoutObserver.observe(panel);layoutObserver.observe(scroll);layoutObserver.observe(eventsEl);
     listen(document,'oc:stage-agent',context);
@@ -737,7 +782,7 @@
     listen(document,'visibilitychange',()=>{if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
     preference();paintControls();
     return Object.freeze({open,close,relocate,reconcile:context,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
-      dispose(){ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
+      dispose(){ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();noticeMenu.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
   }
   function mountWorkspace({getContext,getSlots,getOwner=name=>getContext(name)?.terminalPaneId,activate,...options}){
     const screen=document.querySelector('.screen'),toggle=document.getElementById('conversationToggle');
