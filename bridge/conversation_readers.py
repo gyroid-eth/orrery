@@ -236,7 +236,7 @@ class Reader:
         if end>len(data):return None
         if not decode:return offset+end
         try:
-            with zstd.ZstdDecompressor(max_window_size=MAX_SCAN//1024).stream_reader(io.BytesIO(data[:end])) as reader:
+            with zstd.ZstdDecompressor(max_window_size=MAX_SCAN).stream_reader(io.BytesIO(data[:end])) as reader:
                 decoded=reader.read(MAX_SCAN+1)
             if len(decoded)>MAX_SCAN:raise HistoryUnavailable('record_too_large')
             return decoded,offset+end
