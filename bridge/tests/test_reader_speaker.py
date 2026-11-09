@@ -140,3 +140,13 @@ def test_recorded_model_reaches_the_reader_over_http(tmp_path,monkeypatch):
             assert payload['events'][0]['model']=='gpt-6.1-sol'
             assert 'DO_NOT_EXPORT' not in json.dumps(payload)
     run_api(tmp_path,monkeypatch,scenario)
+
+
+@pytest.mark.parametrize('theme',['dark','light'])
+def test_cross_message_selection_excludes_decorative_avatar_text(cockpit,theme):
+    js,wait,client,_=prepare_speaker(cockpit,theme=theme)
+    wait("speakerReader.querySelector('[data-event-id=second] .conversation-avatar .face img').style.display==='none'")
+    selected=js("""(()=>{const first=speakerReader.querySelector('[data-event-id=first] .conversation-text'),second=speakerReader.querySelector('[data-event-id=second] .conversation-text'),r=document.createRange();r.setStart(first.firstChild,0);r.setEnd(second.firstChild,second.firstChild.length);getSelection().removeAllRanges();getSelection().addRange(r);return getSelection().toString()})()""")
+    assert [line.strip() for line in selected.splitlines() if line.strip()]==[
+        'First model','ReviewFixture','GPT-6.1-Sol','Changed model'],selected
+    assert js("packets.filter(p=>p.type==='input')")==[]
