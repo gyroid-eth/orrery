@@ -285,6 +285,14 @@ PROXY_ROUTES = {
 
 _ANNOTATIONS_CACHE_SECONDS = 4.5
 _annotations_cache: tuple[float, dict[str, dict[str, str]]] = (0.0, {})
+_annotations_generation = 0
+
+
+def invalidate_annotations_cache() -> None:
+    """A completed annotation write fences every older compatibility read."""
+    global _annotations_cache, _annotations_generation
+    _annotations_generation += 1
+    _annotations_cache = (0.0, {})
 
 
 def normalize_annotations(raw: Any) -> dict[str, dict[str, str]]:
@@ -334,23 +342,29 @@ async def annotations_by_agent(
     but only use it when the dashboard cannot be reached.
     """
     global _annotations_cache
-    now = time.monotonic()
-    if now - _annotations_cache[0] < _ANNOTATIONS_CACHE_SECONDS:
-        return _annotations_cache[1]
-    try:
-        async with http_session.get(DASHBOARD_URL + "/api/annotations") as response:
-            body = await response.read()
-            if response.status == 200:
-                try:
-                    labels = normalize_annotations(json.loads(body))
-                except (TypeError, json.JSONDecodeError, UnicodeDecodeError):
+    while True:
+        now = time.monotonic()
+        if now - _annotations_cache[0] < _ANNOTATIONS_CACHE_SECONDS:
+            return _annotations_cache[1]
+        generation = _annotations_generation
+        try:
+            async with http_session.get(DASHBOARD_URL + "/api/annotations") as response:
+                body = await response.read()
+                if response.status == 200:
+                    try:
+                        labels = normalize_annotations(json.loads(body))
+                    except (TypeError, json.JSONDecodeError, UnicodeDecodeError):
+                        labels = {}
+                else:
                     labels = {}
-            else:
-                labels = {}
-    except (ClientError, asyncio.TimeoutError):
-        labels = annotations_from_file()
-    _annotations_cache = (time.monotonic(), labels)
-    return labels
+        except (ClientError, asyncio.TimeoutError):
+            labels = annotations_from_file()
+        if generation != _annotations_generation:
+            # A post-save poll may share this in-flight roster request. Read
+            # the current generation instead of returning its stale snapshot.
+            continue
+        _annotations_cache = (time.monotonic(), labels)
+        return labels
 
 
 def _pending_question_in(text: str) -> bool:
@@ -2504,6 +2518,8 @@ async def proxy_dashboard_passthrough(request: web.Request) -> web.Response:
             **({"timeout": ClientTimeout(total=ACTION_PROXY_TIMEOUT)} if action else {}),
         ) as response:
             payload = await response.read()
+            if action and request.path == '/api/annotate' and 200 <= response.status < 300:
+                invalidate_annotations_cache()
             content_type = response.headers.get(
                 "Content-Type", "application/octet-stream"
             )
