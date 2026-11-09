@@ -4620,9 +4620,9 @@
       }
     }
   },
-  "inventory_digest": "47ce11f755466c8c473b3f8f5eeb7a0abedfd93ae5c25e18d8c0234b542ec17d",
+  "inventory_digest": "d396cdc7537e9a5d84c03b7a5822d8dd0f3927645210fe036336f48cdd2d7e84",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "1ff653d66c9dfd3f033a53b7788211cf5e5c9b26b76b73429aff0bd8946a9cdb",
+  "source_digest": "a853a46cbff8afbc9fe2e5b9b81eb0a3ae7f4d9e53f4bf7f835525eaddf221c5",
   "surface": "cockpit",
   "version": 1
 }
@@ -9892,7 +9892,6 @@ function assignLineageHues(live){
    They subscribe to 'oc:agents' / 'oc:mail' document events for updates. */
 window.OC=Object.freeze({
   esc,relTime,jumpToAgent,rootOf,providerPresentation,
-  renderPeerLogo:conversationPeerLogo,
   renderPeerAvatar:(name,existing)=>currentAgentNamed(name)?conversationAvatar(name,'',existing):null,
   lineageHue,                       // Map: agent name -> lineage hex
   get lineageParent(){return lineageParent;},  // Map: child -> parent
