@@ -34,7 +34,7 @@ def open_reader(js,wait,name):
     wait('sequencePanels['+json.dumps(name)+'].querySelector(".conversation-mail")!==null')
 
 def full(js,name):
-    js('(()=>{const b=sequencePanels['+json.dumps(name)+'].querySelector(".conversation-expand");if(b.getAttribute("aria-pressed")!=="true")b.click()})()')
+    js('(()=>{const b=sequencePanels['+json.dumps(name)+'].parentElement.querySelector(".conversation-expand");if(b.getAttribute("aria-pressed")!=="true")b.click()})()')
 
 def anchor(js,name):return js('sequenceAnchor('+json.dumps(name)+')')
 def place(js,name,event):

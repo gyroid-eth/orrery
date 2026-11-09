@@ -83,15 +83,14 @@ def test_narrow_headers_stay_one_line_without_covering_terminal_or_losing_action
     client.call('Emulation.setDeviceMetricsOverride',width=width,height=844,deviceScaleFactor=1,mobile=False)
     time.sleep(.3)
     wait("document.querySelectorAll('.split-cell-head .split-history-toggle').length===2")
-    state=js("""[...document.querySelectorAll('.split-cell')].map(cell=>{const head=cell.querySelector('.split-cell-head'),h=head.getBoundingClientRect(),t=cell.querySelector('.termhost').getBoundingClientRect(),actions=[...head.querySelectorAll('.split-history-toggle,.split-pane-window')].map(e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,text:e.innerText,label:e.getAttribute('aria-label')}}),r=cell.getBoundingClientRect();return {left:r.left,right:r.right,bottom:h.bottom,top:h.top,height:h.height,termTop:t.top,actions}})""")
+    state=js("""[...document.querySelectorAll('.split-cell')].map(cell=>{const head=cell.querySelector('.split-cell-head'),h=head.getBoundingClientRect(),t=cell.querySelector('.termhost').getBoundingClientRect(),actions=[...head.querySelectorAll('.split-history-toggle,.split-pane-window')].map(e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,text:e.innerText,label:e.getAttribute('aria-label'),svg:!!e.querySelector('svg')}}),r=cell.getBoundingClientRect();return {left:r.left,right:r.right,bottom:h.bottom,top:h.top,height:h.height,termTop:t.top,actions}})""")
     for cell in state:
         assert cell['height']==40,cell
         assert cell['termTop']>=cell['bottom']-1,cell
         for action in cell['actions']:
-            assert action['label'] and 'Fixture' in action['label'],action
+            assert action['label'],action
             content_width=cell['right']-cell['left']-2
-            expected={'◷','↗'} if content_width<=140 else {'HIST','WIN'} if content_width<=320 else {'HISTORY','WINDOW'}
-            assert action['text'] in expected,action
+            assert action['svg'] and action['text']=='',action
             assert action['left']>=cell['left'] and action['right']<=cell['right'],cell
             assert action['bottom']<=cell['bottom'],cell
             assert abs((action['top']+action['bottom'])/2-(cell['top']+cell['bottom'])/2)<=1,cell
@@ -108,7 +107,7 @@ def test_last_split_uses_single_header_and_returns_keyboard_focus(cockpit):
     assert visible(js,'.scr-head')
     js("document.getElementById('conversationToggle').click()")
     wait("!document.querySelector('.screen>.conversation-panel').hidden")
-    js("document.querySelector('.screen>.conversation-panel .conversation-close').click()")
+    js("document.querySelector('#conversationToggle').click()")
     assert js("document.activeElement.id")=='conversationToggle'
     # A restored one-member split also keeps the single shared header.
     js("replaceSplitSessions(['ReviewFixture']);splitVisible=true;focusSplitSession('ReviewFixture')")
@@ -116,9 +115,9 @@ def test_last_split_uses_single_header_and_returns_keyboard_focus(cockpit):
     assert visible(js,'.scr-head') and not visible(js,'.split-cell-head')
     js("document.getElementById('conversationToggle').click()")
     wait("!document.querySelector('.split-cell .conversation-panel').hidden")
-    assert js("document.querySelector('.split-cell .conversation-subtitle').textContent.includes('ReviewFixture')")
+    assert js("document.querySelector('.split-cell .conversation-panel').getAttribute('aria-label').includes('ReviewFixture')")
     assert js("(()=>{const c=document.querySelector('.split-cell').getBoundingClientRect(),p=document.querySelector('.split-cell .conversation-panel').getBoundingClientRect();return Math.abs(c.top-p.top)<2})()")
-    js("document.querySelector('.split-cell .conversation-close').click()")
+    js("document.querySelector('#conversationToggle').click()")
     assert js("document.activeElement.id")=='conversationToggle'
 
 
@@ -149,5 +148,5 @@ def test_split_history_preserves_usable_mobile_composer(cockpit,count):
     assert not observed['globalOpen'] and observed['localOpen']==1
     assert observed['stageBottom']<=observed['barTop']+1,observed
     assert js('promptInput.value')=='Generated local draft'
-    js("document.querySelector('.split-cell.conversation-open .conversation-close').click()")
+    js("document.querySelector('.split-cell.conversation-open .split-history-toggle').click()")
     assert js("document.querySelector('.promptbar').getBoundingClientRect().height")==84

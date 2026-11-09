@@ -140,7 +140,7 @@ def prepare(cockpit):
     enable(count=1)
     js('conversationView.close();window.readerLinkText='+json.dumps(EXAMPLE)+';OrreryConversationSource.Source.prototype.read=async()=>({events:[{id:"assistant-links",kind:"text",role:"assistant",text:readerLinkText},{id:"user-links",kind:"text",role:"user",text:"（https://example.com/user）。"},{id:"mail-links",kind:"mail",role:"assistant",text:"Recorded Mail",mail:[{direction:"received",subject:"Links",body:"https://example.com/mail。",coverage:"complete"}]}],after:"one"});document.querySelectorAll(".conversation-panel").forEach(el=>el.remove());window.readerLinks=OrreryConversation.mount({getContext:()=>({...currentAgents[0],terminalPaneId:"%901"}),bindToggle:false,openExternalUrl:url=>openedLinks.push(url),jumpToEvent:event=>{jumps.push(event);return {state:"absent"}}});readerLinks.open()')
     wait('document.querySelector("[data-event-id=mail-links]")!==null')
-    js('document.querySelector(".conversation-expand").click();openedLinks.length=0;jumps.length=0')
+    js("""document.querySelector('.conversation-expand[aria-controls="'+readerLinks.panel.id+'"]').click();openedLinks.length=0;jumps.length=0""")
     return js, wait, client
 
 

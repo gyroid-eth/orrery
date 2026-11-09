@@ -28,7 +28,7 @@ def prepare(cockpit,count,mode):
       keptPanel.querySelector('.conversation-mail').open=true;
       window.keptMail=keptPanel.querySelector('.conversation-mail');
     """)
-    if mode=='full':js("keptPanel.querySelector('.conversation-expand').click()")
+    if mode=='full':js("keptPanel.parentElement.querySelector('.conversation-expand').click()")
     if mode=='preview':
         js("keptPanel.querySelector('.conversation-file').click()")
         wait("keptPanel.querySelector('.conversation-preview-text')!==null")

@@ -71,7 +71,7 @@ const stale=bindingMessage({error:'history_stale',reason_code:'unknown-code'});
 for(const key of ['constructor','__proto__','toString','hasOwnProperty','valueOf']){
  assert.strictEqual(bindingMessage({error:'history_unconfirmed',reason_code:key}),generic,key);
  assert.strictEqual(bindingMessage({error:'history_stale',reason_code:key}),stale,key);
- assert.strictEqual(bindingMessage({error:key}),'Conversation history could not be loaded.',key);
+ assert.strictEqual(bindingMessage({error:key}),'Reader could not be loaded.',key);
 }
 assert.strictEqual(typeof REASONS.invalid_receipt,'string');
 assert.ok(bindingMessage({error:'history_unconfirmed',reason_code:'invalid_receipt'}).includes('new child'));

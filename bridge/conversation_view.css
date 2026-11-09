@@ -6,14 +6,10 @@
 .conversation-panel{position:absolute;right:0;top:40px;bottom:0;z-index:5;
   width:var(--conversation-width);display:flex;flex-direction:column;min-height:0;
   border-left:1px solid var(--hair);background:var(--panel);color:var(--ink)}
-.conversation-head{display:flex;align-items:flex-start;gap:8px;padding:15px 16px 12px;border-bottom:1px solid var(--hair-2)}
-.conversation-heading{flex:1;min-width:0}
-.conversation-title{font:16px var(--serif);margin:0 0 5px}
-.conversation-subtitle{font:10px/1.5 var(--mono);color:var(--ink-dim);overflow-wrap:anywhere}
-.conversation-toolbar{display:flex;gap:8px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--hair-2)}
+.conversation-toolbar{display:flex;gap:8px;align-items:center;margin:10px 0;padding:10px;border:1px solid var(--hair);border-radius:6px;background:var(--panel-2)}
 .conversation-status{font:10px/1.6 var(--mono);color:var(--ink-dim);flex:1;overflow-wrap:anywhere}
 .conversation-scroll{flex:1;min-height:0;overflow-y:scroll;overscroll-behavior:contain;
-  scrollbar-gutter:stable;scrollbar-width:auto;overflow-anchor:none;padding:4px 18px 16px;outline-offset:-3px}
+  scrollbar-gutter:stable;scrollbar-width:auto;overflow-anchor:none;padding:4px 18px 56px;outline-offset:-3px}
 .conversation-scroll::-webkit-scrollbar{width:13px}
 .conversation-scroll::-webkit-scrollbar-track{background:rgb(var(--theme-ink-rgb) / .05)}
 .conversation-scroll::-webkit-scrollbar-thumb{background:rgb(var(--theme-ink-rgb) / .4);border:3px solid transparent;border-radius:8px;background-clip:padding-box}
@@ -28,8 +24,8 @@
 .conversation-event[data-kind="tool"] .conversation-byline{margin:0}
 .conversation-tool-name{color:var(--ink-dim);font:11px/1.6 var(--mono);overflow-wrap:anywhere}
 .conversation-truncated{font:10px var(--mono);color:var(--ink-faint);padding-top:8px}
-.conversation-bottom{display:flex;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--hair);background:var(--panel-2)}
-.conversation-bottom .conversation-action{flex:none}
+.conversation-bottom{position:absolute;right:18px;bottom:14px;z-index:2;padding:0}
+.conversation-bottom .conversation-latest{background:var(--panel)}
 .conversation-panel [hidden]{display:none}
 .screen.conversation-open.conversation-full{--conversation-width:100%}
 /* Keep the original composer and every existing send/IME/target guard. The
@@ -37,7 +33,7 @@
 .screen.conversation-open.conversation-full .conversation-panel{bottom:84px}
 .screen.conversation-open.conversation-full .promptbar{right:0;z-index:6}
 .conversation-body{display:flex;flex:1;min-height:0;min-width:0}
-.conversation-thread{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
+.conversation-thread{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
 .conversation-full .conversation-scroll{padding-left:24px;padding-right:24px}
 .conversation-full .conversation-events{max-width:960px;margin:0 auto}
 .conversation-files{display:flex;flex-wrap:wrap;gap:6px;padding-top:10px}
@@ -65,7 +61,6 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .screen.conversation-open .conversation-panel{bottom:84px}
   .screen.conversation-open .promptbar{z-index:6}
   .conversation-panel{border-left:0}
-  .conversation-title{font-size:16px}
 }
 @media(max-width:600px){
   .app:has(.screen.conversation-enabled){grid-template-columns:minmax(0,1fr)}
@@ -91,13 +86,10 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .sendguard{flex-wrap:wrap}
   .screen:has(.split-cell.conversation-open) .promptbar{position:absolute;left:0;right:0;top:auto;bottom:0;width:auto;z-index:6}
   .screen:has(.split-cell.conversation-open) .termstage{bottom:132px}
-  .conversation-head{padding:12px}
-  .conversation-head{flex-wrap:wrap}
-  .conversation-heading{flex-basis:100%}
   .conversation-has-preview .conversation-thread{display:none}
   .conversation-preview{width:100%;border:0}
   .conversation-scroll{padding-left:14px;padding-right:12px}
-  .conversation-toolbar,.conversation-bottom{padding:8px 10px}
+  .conversation-toolbar{padding:8px 10px}
   .conversation-text{font-size:12px;line-height:1.75}
   .scr-head{gap:6px;padding-left:10px;padding-right:10px}
   .scr-head .path{display:none}
@@ -114,17 +106,16 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   width:var(--conversation-width);height:auto;z-index:4;border-left:1px solid var(--hair)}
 .conversation-cell>.conversation-panel{container:conversation-reader / inline-size}
 @container conversation-reader (max-width:600px){
-  .conversation-head{flex-wrap:wrap;padding:10px}
-  .conversation-heading{flex-basis:100%}
   .conversation-has-preview .conversation-thread{display:none}
   .conversation-preview{width:100%;border:0}
   .conversation-scroll{padding-left:12px;padding-right:10px}
-  .conversation-toolbar,.conversation-bottom{padding:7px 10px}
+  .conversation-toolbar{padding:7px 10px}
 }
 /* Pressed controls float over live terminal pixels, so their fill stays opaque. */
 .split-cell-actions .split-history-toggle{background:var(--panel)}
 .screen:not(.split-pane-headers) .split-count-1 .conversation-cell>.conversation-panel{top:0}
 .screen:has(.split-cell.conversation-open) .promptmeta .phint{display:none}
+.conversation-expand[hidden]{display:none}
 /* Recorded Mail is a collapsible source of its own, never a human prompt. */
 .conversation-mail-event{padding:12px 0}
 .conversation-mail{border:1px solid var(--hair);border-left:2px solid var(--amber);border-radius:6px;background:var(--panel-2)}

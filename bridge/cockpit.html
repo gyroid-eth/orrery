@@ -713,6 +713,9 @@
     .split-cell-actions .pane-action-icon{display:inline;font-size:14px}
     .split-cell-actions .cockpit-control{width:28px;padding:4px}
   }
+  .cockpit-control.pane-icon{width:28px;min-width:28px;padding:4px;color:var(--ink)}
+  .cockpit-control.pane-icon[hidden]{display:none}
+  .pane-icon svg{display:block;width:18px;height:18px;flex:none}
   .split-cell.bottom-span{grid-column:1/-1}
   .split-cell.main-span{grid-row:1/-1}
   /* identity chip: floats over live terminal text, so it carries its own
@@ -1285,12 +1288,12 @@
           <span class="name" id="scrName">—</span>
           <span class="badge off" id="scrBadge" role="status" aria-live="polite" aria-atomic="true">offline</span>
           <span class="path" id="scrPath"></span>
-          <button class="cockpit-control conversation-toggle" id="conversationToggle" type="button" hidden
-                  aria-expanded="false" aria-controls="conversationPanel">History</button>
-          <button class="cockpit-control pane-popout" id="panePopout" type="button" hidden
-                  title="Open this pane in its own window (or drag its tab out of the cockpit)">WINDOW</button>
-          <button class="cockpit-control pane-return" id="paneReturn" type="button" hidden
-                  title="Close this window and put the pane back in the cockpit" aria-label="Return this window to the cockpit">WINDOW</button>
+          <button class="cockpit-control pane-icon conversation-toggle" id="conversationToggle" type="button" hidden
+                  aria-expanded="false" aria-pressed="false" aria-controls="conversationPanel" title="Reader" aria-label="Reader"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h6"/></svg></button>
+          <button class="cockpit-control pane-icon pane-popout" id="panePopout" type="button" hidden
+                  title="Open this pane in its own window (or drag its tab out of the cockpit)" aria-label="Open this pane in its own window"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7M21 3 11 13M10 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/></svg></button>
+          <button class="cockpit-control pane-icon pane-return" id="paneReturn" type="button" hidden
+                  title="Close this window and put the pane back in the cockpit" aria-label="Return this window to the cockpit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M21 3 10 14M10 8v6h6"/></svg></button>
         </div>
         <div class="termstage" id="termstage">
           <div class="stage-empty" id="stageEmpty">waiting for ORRERY backend…<br>start <b>orrery_backend.py</b> on :8791</div>
@@ -1344,8 +1347,8 @@
       <div class="settings-row">
         <label class="settings-toggle-row" for="conversationEnabled">
           <span class="settings-toggle-copy">
-            <span class="settings-row-name">Conversation history</span>
-            <span class="settings-help">Adds a read-only History panel. Claude, dsh and Hermes require Telemetry API 35 or later. On by default.</span>
+            <span class="settings-row-name">Reader</span>
+            <span class="settings-help">Adds a read-only Reader panel. Claude, dsh and Hermes require Telemetry API 35 or later. On by default.</span>
           </span>
           <span class="settings-switch"><input id="conversationEnabled" type="checkbox"></span>
         </label>
@@ -2341,6 +2344,11 @@
             "property": "color",
             "selector": ".split-cell-status",
             "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".cockpit-control.pane-icon",
+            "value": "var(--ink)"
           },
           {
             "property": "color",
@@ -4289,7 +4297,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "c07db2aba4f019f2c7a7ad03c9d0bcbd6e5cf802619fd201e6b7cdb982057ccd",
+        "digest": "effae69a82395e8222afbd6cc57c2c2aab0311b1db01b9bff8ef878472702f59",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4440,7 +4448,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "ce24501fa76904ef659f5ac9a335c99cede5855a11d1e1d5f0c88181d0c430e0",
+        "digest": "ea89a49deb0a68e899503ccec581a58f7013c7a6cebbc027a0a5be32dc08ee92",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4489,9 +4497,9 @@
       }
     }
   },
-  "inventory_digest": "661e32d0ad6ef3b38a3efd969dd3279d75b823b09798c9846e1022810e4dff94",
+  "inventory_digest": "deab9907d03a44352e299ee5d31b2946d02087c57578630848eb2fb931f8717d",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "d03498b23e911d6b5873c97cf63d8169c25355e233f3d231b6691c2b6f348e6a",
+  "source_digest": "7359d57443243266f09a490fb5afe7257b25540d8b75bb516df869968b8327ff",
   "surface": "cockpit",
   "version": 1
 }
@@ -7047,7 +7055,7 @@ function bottomJumpShortcutBlocked(event){
   return targets.some(target=>{
     if(!target.closest||target.closest('.xterm'))return false;
     return Boolean(target.closest(
-      '.promptbar,.overlay,.settings-popover,.conversation-panel,.split-cell-head,[contenteditable="true"],input,textarea,select',
+      '.promptbar,.overlay,.settings-popover,.conversation-panel,.split-cell-head,.scr-head,[contenteditable="true"],input,textarea,select',
     ));
   });
 }
@@ -7056,7 +7064,7 @@ function editableElementOwnsFocus(){
   if(!focused||focused===document.body||!focused.matches)return false;
   // xterm owns a hidden textarea. It is terminal input, not a browser form.
   if(focused.closest('.xterm'))return false;
-  if(focused.closest('.conversation-panel,.settings-popover,.split-cell-head'))return true;
+  if(focused.closest('.conversation-panel,.settings-popover,.split-cell-head,.scr-head'))return true;
   return focused.matches('input,textarea,select,[contenteditable="true"]')||
     focused.isContentEditable;
 }
@@ -7200,7 +7208,7 @@ function ensureSplitCell(session){
   const empty=document.createElement('span');empty.className='split-cell-empty';empty.textContent='connecting…';
   const state=document.createElement('span');state.className='split-cell-status';state.setAttribute('role','status');
   const actions=document.createElement('div');actions.className='split-cell-actions';
-  const windowButton=document.createElement('button');windowButton.type='button';windowButton.className='cockpit-control split-pane-window';windowButton.innerHTML='<span class="pane-action-wide" aria-hidden="true">WINDOW</span><span class="pane-action-short" aria-hidden="true">WIN</span><span class="pane-action-icon" aria-hidden="true">↗</span>';
+  const windowButton=document.createElement('button');windowButton.type='button';windowButton.className='cockpit-control pane-icon split-pane-window';windowButton.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7M21 3 11 13M10 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/></svg>';
   windowButton.title='Move '+session+' into its own window';windowButton.setAttribute('aria-label','Open '+session+' in its own window');
   windowButton.addEventListener('click',()=>popPaneSessionToWindow(session));
   for(const type of ['pointerdown','mousedown'])head.addEventListener(type,event=>event.stopPropagation());
@@ -11019,7 +11027,7 @@ const conversationView=(()=>{
   function asset(tag,attribute,url){return new Promise((resolve,reject)=>{
     const el=document.createElement(tag);el[attribute]=url;
     if(tag==='link')el.rel='stylesheet';
-    el.onload=resolve;el.onerror=()=>{el.remove();reject(new Error('Conversation history could not be loaded.'));};
+    el.onload=resolve;el.onerror=()=>{el.remove();reject(new Error('Reader could not be loaded.'));};
     document.head.appendChild(el);
   });}
   async function ensure(){

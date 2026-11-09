@@ -252,13 +252,13 @@ def test_after_confirm_the_first_press_note_gives_way_to_what_is_still_off():
     view = draw(state(settings=FIRST), steps=("#phoneAccess", "Confirm and turn on"))
     assert view["puts"] and view["puts"][0]["access"] is True and view["missing"] == []
     assert "step 2 below" not in view["note"]
-    assert "Conversation and Send from phone stay off until step 4" in view["note"]
+    assert "Reader and Send from phone stay off until step 4" in view["note"]
 
 
 def test_on_before_the_policy_review_says_conversation_and_send_are_off():
     view = draw(state(settings={"policy_reviewed_at": None}))
     assert view["badge"] == "SETUP"
-    assert "Conversation and Send from phone stay off until step 4 below" in view["note"]
+    assert "Reader and Send from phone stay off until step 4 below" in view["note"]
     assert under_the_switch(view)
 
 

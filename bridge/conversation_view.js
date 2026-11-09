@@ -64,7 +64,7 @@
   }catch(_){holdChannel=null;}
   // A closing tab ends its operations for the other tabs.
   root.addEventListener?.('pagehide',()=>{for(const id of ops.own.keys())post({type:'end',id});});
-  // The user operations (README: History, "user operations"), by name. Same
+  // The user operations (README: Reader, "user operations"), by name. Same
   // origin only. Not History's own polls, not the terminal hover's path
   // probe, and not the dashboard frame's automatic error report (/api/jserr):
   // nobody asked for those. From the NETWORK frame: the dashboard's actions.
@@ -98,7 +98,10 @@
     return tracked;
   }
   function yieldHolds(){const id=beginOp();queueMicrotask(()=>endOp(id));}
-  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null,openExternalUrl=null}){
+  const readerIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h6"/></svg>';
+  const expandIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6m0-6-6 6M10 20H4v-6m0 6 6-6"/></svg>';
+  const latestIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v14m-6-6 6 6 6-6M5 21h14"/></svg>';
+  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,expandControl=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null,openExternalUrl=null}){
     let screen=host||document.querySelector('.screen');
     const toggle=control||document.getElementById('conversationToggle');
     const listeners=[];
@@ -106,20 +109,19 @@
     const setting=document.getElementById('conversationEnabled');
     const panel=document.createElement('section');
     panel.className='conversation-panel';panel.id=panelId;panel.hidden=true;
-    panel.setAttribute('aria-label','Read-only conversation history');
-    panel.innerHTML='<div class="conversation-head"><div class="conversation-heading">'+
-      '<h2 class="conversation-title">Conversation</h2><div class="conversation-subtitle"></div></div>'+
-      '<button class="cockpit-control conversation-action conversation-expand" type="button" aria-pressed="false">Full width</button>'+
-      '<button class="cockpit-control conversation-action conversation-close" type="button" aria-label="Close conversation history">Close</button></div>'+
-      '<div class="conversation-toolbar"><span class="conversation-status" role="status"></span>'+
+    panel.setAttribute('aria-label','Reader');
+    panel.innerHTML='<div class="conversation-body"><div class="conversation-thread"><div class="conversation-scroll" tabindex="0" aria-label="Conversation messages">'+
+      '<div class="conversation-toolbar" hidden><span class="conversation-status" role="status"></span>'+
       '<button class="cockpit-control conversation-action conversation-retry" type="button" hidden>Retry</button></div>'+
-      '<div class="conversation-body"><div class="conversation-thread"><div class="conversation-scroll" tabindex="0" aria-label="Conversation messages">'+
       '<button class="cockpit-control conversation-action conversation-older" type="button" hidden>Load earlier</button>'+
       '<div class="conversation-events"></div><div class="conversation-pending" role="status" aria-live="polite"></div><div class="conversation-empty"></div></div>'+
-      '<div class="conversation-bottom"><span class="conversation-status conversation-position"></span>'+
-      '<button class="cockpit-control conversation-action conversation-latest" type="button">Latest</button></div></div>'+
+      '<div class="conversation-bottom" hidden><button class="cockpit-control pane-icon conversation-latest" type="button" title="Latest" aria-label="Latest">'+latestIcon+'</button></div></div>'+
       '<aside class="conversation-preview" aria-label="Selected file preview" hidden></aside></div>';
     screen.appendChild(panel);
+    const expandButton=expandControl||document.createElement('button');
+    expandButton.type='button';expandButton.className='cockpit-control pane-icon conversation-expand';expandButton.hidden=true;
+    expandButton.innerHTML=expandIcon;expandButton.setAttribute('aria-controls',panelId);
+    if(!expandControl)toggle.after(expandButton);
     const el=selector=>panel.querySelector(selector);
     const scroll=el('.conversation-scroll'),eventsEl=el('.conversation-events');
     let linkPress=null;
@@ -140,7 +142,7 @@
       else root.open(link.href,'_blank','noopener,noreferrer');
     }
     listen(panel,'click',activateLink);listen(panel,'auxclick',activateLink);
-    const status=el('.conversation-toolbar .conversation-status'),empty=el('.conversation-empty');
+    const toolbar=el('.conversation-toolbar'),status=el('.conversation-toolbar .conversation-status'),empty=el('.conversation-empty');
     const earlier=el('.conversation-older'),retry=el('.conversation-retry'),latest=el('.conversation-latest');
     let fullWidth=false,tableMutating=false,tableFrame=0;
     const tablePositions=new Map();
@@ -217,8 +219,14 @@
     listen(root.visualViewport,'scroll',viewport);
     function expand(value){
       fullWidth=value;screen.classList.toggle('conversation-full',value);
-      el('.conversation-expand').setAttribute('aria-pressed',String(value));
-      el('.conversation-expand').textContent=value?'Side panel':'Full width';
+      paintControls();onState();
+    }
+    function paintControls(){
+      toggle.setAttribute('aria-pressed',String(opened));
+      toggle.title=opened?'Close Reader':'Reader';toggle.setAttribute('aria-label',toggle.title);
+      expandButton.hidden=!opened||!presented;
+      expandButton.setAttribute('aria-pressed',String(fullWidth));
+      expandButton.title=fullWidth?'Restore side panel':'Full width';expandButton.setAttribute('aria-label',expandButton.title);
     }
     const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onBeforeOpen:layoutChanged,onClose:layoutChanged,onActivate:()=>expand(true)});
     let enabled=false,opened=false,agent='',generation=0,controller=null,timer=0,busy=false;
@@ -234,10 +242,12 @@
     function position(){
       const atBottom=nearBottom();
       if(atBottom)newCount=0;
-      el('.conversation-position').textContent=events.size+' loaded · '+(['fresh_tail','snapshot'].includes(mode)?'recent window':'loaded portion');
-      latest.textContent=paused?'Latest · resume':newCount?newCount+' new':'Latest';
+      el('.conversation-bottom').hidden=!events.size||atBottom&&!paused;
+      latest.title=paused?'Latest · resume':newCount?'Latest · '+newCount+' new messages':'Latest';
+      latest.setAttribute('aria-label',latest.title);
     }
-    function message(text){status.textContent=text;}
+    function paintStatus(){toolbar.hidden=!status.textContent&&retry.hidden;}
+    function message(text){status.textContent=text;paintStatus();}
     function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
     function clear({keepSubmissions=false}={}){tablePositions.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
@@ -355,6 +365,7 @@
         if(panel.parentElement!==target)target.appendChild(panel);
       }
       panel.hidden=!opened||!presented;
+      paintControls();
       screen.classList.toggle('conversation-enabled',enabled);
       screen.classList.toggle('conversation-just-submitted',Boolean(flashTimer));
       screen.classList.toggle('conversation-open',opened&&presented);
@@ -504,7 +515,7 @@
       if(!opened||!presented||!enabled||busy||!agent||paused&&direction==='newer'){endOp(op);return;}
       const token=generation,name=agent,sequence=++readSequence;
       let pollAgain=true;
-      controller=new AbortController();busy=true;retry.hidden=true;
+      controller=new AbortController();busy=true;retry.hidden=true;paintStatus();
       const options={signal:controller.signal},mine=controller;
       if(direction==='older')options.before=before;
       if(direction==='newer')options.after=after;
@@ -567,16 +578,16 @@
         else if(direction==='older')restoreAnchor(saved,Math.max(0,oldTop+scroll.scrollHeight-oldHeight));
         else{restoreAnchor(saved,oldTop);newCount+=added;}
         message(paused?'Reader window is bounded. Latest resumes at the newest messages.':
-          mode==='snapshot'?page.notice||'Read-only · recent provider snapshot':
+          mode==='snapshot'?page.notice||'Recent provider snapshot.':
           fresh?(page.limited||trimmed?'Fresh · limited recent snapshot; earlier history and tools need telemetry support.':'Fresh · recent snapshot (up to 200 messages).'):
           trimmed?'Older loaded messages were released. Load earlier to read them again.':
-          page.skipped_large_record?'A large record was skipped. Load earlier to continue.':page.notice||'Read-only · updates while open');
+          page.skipped_large_record?'A large record was skipped. Load earlier to continue.':page.notice||'');
         position();if(direction==='initial'||direction==='newer'&&atBottom)remember(true);
         if(direction!=='older')last.rows=added;
         if(page.has_newer&&direction!=='older'){
           // A bounded page per request. Continue in the next poll without
           // sending overlapping reads during a fast provider burst.
-          message('Read-only · catching up with new messages…');
+          message('Catching up with new messages…');
         }
       }catch(error){
         waiting.delete(holder);holding=false;
@@ -590,6 +601,7 @@
           empty.textContent=error.code==='history_changed'?'Session changed. Retry to load the current conversation.':error.message;
           position();
         }
+        paintStatus();
       }finally{
         if(token===generation){
           busy=false;controller=null;earlier.disabled=false;
@@ -606,7 +618,7 @@
       if(name===agent&&key===contextKey)return;
       const sameBinding=key===contextKey;
       stop();agent=name;contextKey=key;clear({keepSubmissions:sameBinding});boundContext={...current};
-      el('.conversation-subtitle').textContent=(agent||'No pane selected')+' · read-only';
+      panel.setAttribute('aria-label',agent?'Reader for '+agent:'Reader');message('');
       if(!agent){empty.textContent='Select an agent pane to read its conversation.';message('No agent selected');return;}
       providerLabel=({'claude-code':'Claude',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[current.program]||'Codex';
       load();
@@ -615,7 +627,7 @@
       if(!opened)return;
       stop();opened=false;agent='';panel.hidden=true;screen.classList.remove('conversation-open','conversation-full');
       screen.style.removeProperty('--conversation-viewport-height');screen.style.removeProperty('--conversation-viewport-top');
-      toggle.setAttribute('aria-expanded','false');clear({keepSubmissions:true});onState();const target=typeof focusControl==='function'?focusControl():focusControl||toggle;
+      toggle.setAttribute('aria-expanded','false');paintControls();clear({keepSubmissions:true});onState();const target=typeof focusControl==='function'?focusControl():focusControl||toggle;
       if(focus&&target&&!target.hidden&&target.getClientRects().length)target.focus();
     }
     function open(){
@@ -623,7 +635,7 @@
       if(opened){onActivate();return;}
       onActivate();opened=true;panel.hidden=false;screen.classList.add('conversation-open');screen.classList.toggle('conversation-full',fullWidth);
       viewport();const rect=screen.getBoundingClientRect();lastWidth=rect.width;lastHeight=rect.height;
-      toggle.setAttribute('aria-expanded','true');agent=null;context();scroll.focus();onState();
+      toggle.setAttribute('aria-expanded','true');paintControls();agent=null;context();scroll.focus();onState();
     }
     function preference(){
       try{enabled=localStorage.getItem(KEY)==='1';}catch(_){enabled=false;}
@@ -635,8 +647,10 @@
     listen(document,'oc:prefs-changed',preference);
     listen(window,'storage',event=>{if(event.key===KEY)preference();});
     if(bindToggle)listen(toggle,'click',()=>opened?close():open());
-    listen(el('.conversation-close'),'click',()=>close());
-    listen(el('.conversation-expand'),'click',()=>{if(fullWidth)preview?.close();expand(!fullWidth);});
+    listen(expandButton,'click',event=>{event.stopPropagation();onActivate();if(fullWidth)preview?.close();expand(!fullWidth);});
+    for(const type of ['pointerdown','mousedown'])listen(expandButton,type,event=>event.stopPropagation());
+    listen(expandButton,'keydown',event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();close();}});
+    listen(expandButton,'focus',()=>onActivate());
     listen(panel,'pointerdown',()=>onActivate());
     listen(panel,'focusin',event=>{lastFocused=event.target;onActivate();});
     listen(panel,'mousedown',event=>event.stopPropagation());
@@ -648,6 +662,7 @@
     listen(latest,'click',()=>{
       if(paused){stop();clear({keepSubmissions:true});load('initial');return;}
       scroll.scrollTop=scroll.scrollHeight;newCount=0;position();remember(true);
+      scroll.focus({preventScroll:true});
       if(!busy)plan();
     });
     // Submission remains owned by the existing composer/input guards. This
@@ -691,9 +706,9 @@
     // A hidden tab keeps no held poll: end one that is waiting, so its
     // browser connection and the server's slot are returned at once.
     listen(document,'visibilitychange',()=>{if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
-    preference();
+    preference();paintControls();
     return Object.freeze({open,close,relocate,reconcile:context,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
-      dispose(){ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
+      dispose(){ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
   }
   function mountWorkspace({getContext,getSlots,getOwner=name=>getContext(name)?.terminalPaneId,activate,...options}){
     const screen=document.querySelector('.screen'),toggle=document.getElementById('conversationToggle');
@@ -705,20 +720,22 @@
     function paint(){
       const view=current();screen.classList.toggle('conversation-enabled',enabled());
       toggle.hidden=!enabled();toggle.setAttribute('aria-expanded',String(Boolean(view?.opened)));
+      toggle.setAttribute('aria-pressed',String(Boolean(view?.opened)));
+      toggle.title=view?.opened?'Close Reader':'Reader';toggle.setAttribute('aria-label',toggle.title);
       toggle.setAttribute('aria-controls',view?.panel.id||'conversationPanel');
     }
     function create(name,owner){
-      const park=document.createElement('div'),control=document.createElement('button');
-      control.type='button';control.className='cockpit-control split-history-toggle';
-      control.innerHTML='<span class="pane-action-wide" aria-hidden="true">HISTORY</span><span class="pane-action-short" aria-hidden="true">HIST</span><span class="pane-action-icon" aria-hidden="true">◷</span>';
-      control.title='Read history for '+name;control.setAttribute('aria-label','Read history for '+name);control.setAttribute('aria-expanded','false');
-      const id='conversationPanel-'+(++sequence);control.setAttribute('aria-controls',id);park.appendChild(control);
+      const park=document.createElement('div'),control=document.createElement('button'),expandControl=document.createElement('button');
+      control.type='button';control.className='cockpit-control pane-icon split-history-toggle';
+      control.innerHTML=readerIcon;
+      control.title='Reader';control.setAttribute('aria-label','Reader');control.setAttribute('aria-expanded','false');
+      const id='conversationPanel-'+(++sequence);control.setAttribute('aria-controls',id);park.append(control,expandControl);
       control.addEventListener('mousedown',event=>event.stopPropagation());control.addEventListener('pointerdown',event=>event.stopPropagation());
-      const view=mount({...options,host:park,control,panelId:id,getContext:()=>getContext(name),
+      const view=mount({...options,host:park,control,expandControl,panelId:id,getContext:()=>getContext(name),
         focusControl:()=>control.getClientRects().length?control:toggle,
         onActivate:()=>{if((getContext()||{}).name!==name)activate(name);},onState:paint});
       view.relocate(park,{visible:false});
-      const entry={name,owner,view,park,host:park,control,visible:false};views.set(name,entry);return entry;
+      const entry={name,owner,view,park,host:park,control,expandControl,visible:false};views.set(name,entry);return entry;
     }
     function sync(){
       if(syncing)return;syncing=true;
@@ -747,6 +764,7 @@
           entry.host.classList.remove('conversation-cell');
           entry.view.relocate(entry.park,{visible:false,suspend:!target});
           if(entry.control.parentElement!==entry.park)entry.park.appendChild(entry.control);
+          if(entry.expandControl.parentElement!==entry.park)entry.park.appendChild(entry.expandControl);
           entry.host=entry.park;entry.visible=false;
         }
         screen.classList.toggle('conversation-enabled',active);
@@ -756,6 +774,8 @@
             target.host.classList.add('conversation-cell');const controls=target.controlHost||target.host;
             if(entry.control.parentElement!==controls)controls.insertBefore(entry.control,controls.firstChild);
           }
+          if(target.host===screen||!screen.classList.contains('split-pane-headers'))toggle.after(entry.expandControl);
+          else entry.control.after(entry.expandControl);
           entry.view.relocate(target.host,{visible:true,focus:name===selected});entry.host=target.host;entry.visible=true;
         }
         paint();
