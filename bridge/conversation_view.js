@@ -162,6 +162,8 @@
     for(const button of [noticeToggle,modeInfo]){button.setAttribute('aria-controls',noticeMenu.id);button.setAttribute('aria-expanded','false');button.setAttribute('aria-haspopup','dialog');}
     let fullWidth=false,tableMutating=false,tableFrame=0;
     const tablePositions=new Map();
+    let toolGroups=[],toolSerial=0;
+    const toolGroupFor=new Map();
     let submissions=[],submissionTimer=0,flashTimer=0,readSequence=0;
     const observedIds=new Set(),matchedSubmissions=new Set(),pendingEl=el('.conversation-pending');
     const normalizePrompt=text=>text.replace(/\s+/gu,' ').trim();
@@ -315,7 +317,7 @@
     }
     function modeMessage(text){if(!text&&document.activeElement===modeInfo&&opened)scroll.focus({preventScroll:true});modeInfo.title=text;modeInfo.setAttribute('aria-label',text);paintStatus();}
     function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
-    function clear({keepSubmissions=false}={}){closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
+    function clear({keepSubmissions=false}={}){closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
       if(tableMutating)return;
@@ -339,19 +341,71 @@
       });
       return preview?preview.render(event,article):article;
     }
+    // Keep message nodes in place so selections and previews survive polling.
+    const rawRows=()=>[...eventsEl.children].filter(child=>child.dataset.eventId!==undefined);
+    const visibleRows=()=>[...eventsEl.children].filter(child=>!child.hidden);
+    const rowKey=child=>JSON.stringify(child.dataset.toolGroup?['tools',child.dataset.toolGroup]:['event',child.dataset.eventId]);
+    function setGroupOpen(group,open){
+      saveTables();const top=group.button.getBoundingClientRect().top;
+      group.open=open;group.button.setAttribute('aria-expanded',String(open));
+      for(const row of group.rows)row.hidden=!open;
+      restoreTables();scroll.scrollTop+=group.button.getBoundingClientRect().top-top;
+      position();remember(true);
+    }
+    function regroupTools(focused=toolGroups.find(group=>group.button===document.activeElement)){
+      const previous=toolGroups,used=new Set(),groups=[];let run=[];
+      const finish=()=>{
+        if(!run.length)return;
+        const matches=[...new Set(run.map(row=>toolGroupFor.get(row.dataset.eventId)).filter(Boolean))];
+        let group=matches.find(value=>value===focused&&!used.has(value))||matches.find(value=>!used.has(value));
+        const open=matches.some(value=>value.open);
+        if(!group){
+          const button=document.createElement('button');button.type='button';button.className='conversation-tool-group';
+          button.dataset.toolGroup=String(++toolSerial);
+          button.innerHTML='<span class="conversation-tool-arrow" aria-hidden="true">▸</span><span class="conversation-tool-count"></span><span class="conversation-tool-names"></span><span class="conversation-tool-times"></span>';
+          group={button,open:false,rows:[]};
+          button.addEventListener('click',()=>{clearTimeout(jumpTimer);setGroupOpen(group,!group.open);});
+        }
+        used.add(group);group.rows=run;group.open=open;
+        const calls=run.map(row=>events.get(row.dataset.eventId)).filter(event=>event.kind==='tool');
+        const counts=new Map();for(const event of calls)counts.set(event.text,(counts.get(event.text)||0)+1);
+        const names=[...counts].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).map(([name,count])=>(name||'Tool')+' ×'+count).join(', ');
+        const count=calls.length||run.length,label=count+' '+(calls.length?'tool call':'tool result')+(count===1?'':'s');
+        const dates=run.map(row=>new Date(events.get(row.dataset.eventId).ts)).filter(date=>Number.isFinite(date.getTime()));
+        const time=date=>date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+        const times=dates.length?time(dates[0])+(dates.length>1?'–'+time(dates[dates.length-1]):''):'';
+        const full=label+(names?' · '+names:'')+(dates.length?' · '+dates[0].toLocaleString()+(dates.length>1?' – '+dates[dates.length-1].toLocaleString():''):'');
+        const button=group.button;button.title=full;button.setAttribute('aria-label',full);button.setAttribute('aria-expanded',String(open));
+        button.querySelector('.conversation-tool-count').textContent=label;
+        button.querySelector('.conversation-tool-names').textContent=names?'· '+names:'';
+        button.querySelector('.conversation-tool-times').textContent=times;
+        if(button.nextElementSibling!==run[0])run[0].before(button);
+        for(const row of run)row.hidden=!open;
+        groups.push(group);run=[];
+      };
+      for(const row of rawRows()){
+        const event=events.get(row.dataset.eventId);
+        if(event&&['tool','tool_result'].includes(event.kind)&&!event.mail?.length)run.push(row);
+        else{finish();row.hidden=false;}
+      }
+      finish();
+      for(const group of previous)if(!used.has(group))group.button.remove();
+      toolGroups=groups;toolGroupFor.clear();
+      for(const group of groups)for(const row of group.rows)toolGroupFor.set(row.dataset.eventId,group);
+      if(focused&&document.activeElement===document.body)(groups.includes(focused)?focused.button:scroll).focus({preventScroll:true});
+    }
     function anchor(){
       const top=scroll.getBoundingClientRect().top;
-      const first=[...eventsEl.children].find(child=>child.getBoundingClientRect().bottom>top);
-      const next=first?.nextElementSibling;
-      return first?{id:first.dataset.eventId,offset:first.getBoundingClientRect().top-top,
-        next:next?{id:next.dataset.eventId,offset:next.getBoundingClientRect().top-top}:null}:null;
+      const rows=visibleRows(),index=rows.findIndex(child=>child.getBoundingClientRect().bottom>top),first=rows[index],next=rows[index+1];
+      return first?{id:rowKey(first),offset:first.getBoundingClientRect().top-top,
+        next:next?{id:rowKey(next),offset:next.getBoundingClientRect().top-top}:null}:null;
     }
     function restoreAnchor(saved,fallback){
-      let target=saved&&[...eventsEl.children].find(child=>child.dataset.eventId===saved.id),offset=saved?.offset;
+      let target=saved&&visibleRows().find(child=>rowKey(child)===saved.id),offset=saved?.offset;
       // Rewrapping can make the former tail offset longer than the whole
       // event. Keep its next visible boundary instead of skipping past it.
       if(target&&offset<0&&-offset>=target.getBoundingClientRect().height&&saved.next){
-        const next=[...eventsEl.children].find(child=>child.dataset.eventId===saved.next.id);
+        const next=visibleRows().find(child=>rowKey(child)===saved.next.id);
         if(next){target=next;offset=saved.next.offset;}
       }
       if(target)scroll.scrollTop+=target.getBoundingClientRect().top-scroll.getBoundingClientRect().top-offset;
@@ -367,7 +421,7 @@
       if(!force&&(layoutPending||restoring||rect.width!==lastWidth||rect.height!==lastHeight))return;
       if(nearBottom()){lastPosition={bottom:true};return;}
       const bounds=scroll.getBoundingClientRect(),top=bounds.top;
-      const article=[...eventsEl.children].find(child=>child.getBoundingClientRect().bottom>top+1);
+      const article=visibleRows().find(child=>child.getBoundingClientRect().bottom>top+1);
       if(!article)return;
       const point=document.caretPositionFromPoint?.(bounds.left+parseFloat(getComputedStyle(scroll).paddingLeft)+2,top+2);
       let caret=point?{node:point.offsetNode,offset:point.offset}:null;
@@ -386,12 +440,12 @@
       if(!node)return;
       const range=document.createRange();range.setStart(node,Math.min(local,node.length));range.setEnd(node,Math.min(local+1,node.length));
       const r=range.getBoundingClientRect();
-      lastPosition={id:article.dataset.eventId,offset,atTextEnd:local===node.length,top:r.top-top,bottom:false};
+      lastPosition={id:rowKey(article),offset,atTextEnd:local===node.length,top:r.top-top,bottom:false};
     }
     function restoreReading(){
       if(!opened||!presented||!lastPosition||!scroll.getClientRects().length)return;
       if(lastPosition.bottom){scroll.scrollTop=scroll.scrollHeight;return;}
-      const article=[...eventsEl.children].find(child=>child.dataset.eventId===lastPosition.id);
+      const article=visibleRows().find(child=>rowKey(child)===lastPosition.id);
       if(!article)return;
       let remaining=lastPosition.offset;
       for(const node of textNodes(article)){
@@ -453,7 +507,7 @@
       while(events.size>MAX_EVENTS||retainedBytes>MAX_BYTES){
         const ids=[...events.keys()],id=fromStart?ids[0]:ids[ids.length-1];
         retainedBytes-=byteSize(events.get(id));events.delete(id);
-        const child=fromStart?eventsEl.firstElementChild:eventsEl.lastElementChild;
+        const child=rawRows().find(row=>row.dataset.eventId===id);
         if(child)child.remove();removed=true;
       }
       if(removed&&!['fresh_tail','snapshot'].includes(mode)){
@@ -505,6 +559,8 @@
       return article;
     }
     function jump(event){
+      const group=toolGroupFor.get(event.id);
+      if(group&&!group.open){setGroupOpen(group,true);group.rows.find(row=>row.dataset.eventId===event.id)?.scrollIntoView({block:'nearest'});remember(true);}
       const result=fingerprint(getContext()||{})!==contextKey?{state:'changed'}:
         jumpToEvent({agent,event,context:boundContext})||{state:'changed'};
       if(result.state==='unique'){
@@ -619,9 +675,9 @@
           paused=true;message('Updates paused at reader limit. Latest resumes at the newest messages.','Updates paused');position();return;
         }
         saveTables();tableMutating=true;
-        const fragment=document.createDocumentFragment();let added=0;
+        const fragment=document.createDocumentFragment(),focusedGroup=toolGroups.find(group=>group.button===document.activeElement);let added=0;
         if(fresh){
-          const existing=new Map([...eventsEl.children].map(child=>[child.dataset.eventId,child]));
+          const existing=new Map(rawRows().map(child=>[child.dataset.eventId,child]));
           const previous=events;
           if([...previous].some(([id,event])=>JSON.stringify(event)!==JSON.stringify(incoming.find(next=>next.id===id))))preview?.close();
           events=new Map();retainedBytes=0;
@@ -643,6 +699,7 @@
         if(direction!=='newer'){before=page.before;hasOlder=page.has_older===true;}
         if(direction!=='older')after=page.after;
         const trimmed=trim(direction!=='older');earlier.hidden=!hasOlder;
+        regroupTools(focusedGroup);
         for(const key of tablePositions.keys())if(!events.has(JSON.parse(key)[0]))tablePositions.delete(key);
         restoreTables();
         reconcileSubmissions(incoming,direction,sequence);

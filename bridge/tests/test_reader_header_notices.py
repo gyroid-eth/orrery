@@ -48,11 +48,12 @@ def test_provider_notices_live_only_in_the_owning_header(cockpit, theme, layout,
     js, wait, client = show(cockpit, theme, layout, provider)
     assert js("!reader.querySelector('.conversation-top,.conversation-toolbar,.conversation-mode')")
     assert js("readerScroll.scrollHeight===readerScroll.clientHeight")
-    assert js("reader.querySelector('.conversation-byline').getBoundingClientRect().top-readerScroll.getBoundingClientRect().top<25")
-    assert hit(js, '.conversation-byline')
+    first = '.conversation-tool-group' if provider == 'dsh' else '.conversation-byline'
+    assert js('reader.querySelector('+json.dumps(first)+').getBoundingClientRect().top-readerScroll.getBoundingClientRect().top<25')
+    assert hit(js, first)
     assert hit(js, '.conversation-text')
     if provider == 'dsh':
-        assert hit(js, '.conversation-tool-name')
+        assert js("reader.querySelector('.conversation-tool-group').getAttribute('aria-expanded')") == 'false'
     assert js("readerHost.querySelector('.conversation-toolbar').hidden")
     info = js("readerHost.querySelector('.conversation-mode').title")
     assert js("readerHost.querySelector('.conversation-mode').hidden") == (provider == 'claude')

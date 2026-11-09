@@ -28,7 +28,7 @@ def sparse(cockpit, theme, width, mode):
 
 
 def first_row_hits(js):
-    return js("""(()=>{const hits={};for(const selector of ['.conversation-role','.conversation-tool-name','.conversation-text']){const e=document.querySelector(selector);if(!e)continue;const r=document.createRange();r.setStart(e.firstChild,0);r.setEnd(e.firstChild,1);const b=r.getBoundingClientRect(),hit=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2);hits[selector]=!!hit&&(e===hit||e.contains(hit));}return hits})()""")
+    return js("""(()=>{const hits={};for(const selector of ['.conversation-tool-count','.conversation-event:not([hidden]) .conversation-role','.conversation-text']){const e=document.querySelector(selector);if(!e)continue;const r=document.createRange();r.setStart(e.firstChild,0);r.setEnd(e.firstChild,1);const b=r.getBoundingClientRect(),hit=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2);hits[selector]=!!hit&&(e===hit||e.contains(hit));}return hits})()""")
 
 
 @pytest.mark.parametrize('theme', ['dark', 'light'])
@@ -39,7 +39,8 @@ def test_sparse_reader_keeps_mode_notice_and_first_rows_separate(cockpit, theme,
     assert js("(()=>{const s=document.querySelector('.conversation-scroll');return s.scrollHeight===s.clientHeight})()")
     assert all(first_row_hits(js).values()), first_row_hits(js)
     assert js("!document.querySelector('.conversation-panel .conversation-top,.conversation-panel .conversation-toolbar')")
-    assert js("document.querySelector('.conversation-byline').getBoundingClientRect().top-document.querySelector('.conversation-scroll').getBoundingClientRect().top<25")
+    first = '.conversation-tool-group' if mode == 'dsh' else '.conversation-byline'
+    assert js('document.querySelector('+json.dumps(first)+').getBoundingClientRect().top-document.querySelector(".conversation-scroll").getBoundingClientRect().top<25')
     assert js("document.querySelector('.conversation-toolbar').hidden")
     info = js("document.querySelector('.conversation-mode').title")
     assert info == '' if mode == 'legacy' else ('Fresh' in info if mode == 'fresh' else 'snapshot' in info if mode == 'hermes' else 'Recorded append timeline' in info)

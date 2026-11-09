@@ -175,7 +175,7 @@ def test_preview_links_source_code_and_mailto_keep_activation_boundary(cockpit):
     js, wait, client = prepare(cockpit)
     js('OrreryConversationSource.Source.prototype.reference=async()=>({kind:"text",text:"`https://example.com/code` [mail](mailto:reader@example.com) https://example.com/search?q=_foo_&x=1。 https://example.com/#~~bar~~"});OrreryConversationSource.Source.prototype.read=async()=>({events:[{id:"file",kind:"tool",role:"assistant",text:"read",references:[{id:"A".repeat(32),label:"example.md",kind:"file"}]}],after:"two"});readerLinks.refresh()')
     wait('document.querySelector(".conversation-file")!==null')
-    js('document.querySelector(".conversation-file").click()')
+    js('readerLinks.panel.querySelector(".conversation-tool-group").click();document.querySelector(".conversation-file").click()')
     wait('document.querySelector(".conversation-preview-markdown a")!==null')
     assert js('document.querySelector(".conversation-preview-markdown code a").href') == 'https://example.com/code'
     js('document.querySelector(".conversation-preview-markdown code a").click()')
