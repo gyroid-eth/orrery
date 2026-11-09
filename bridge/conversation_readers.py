@@ -128,17 +128,7 @@ def normalize(item,p,sid):
     """Return (block-index,event) pairs; hidden/reasoning/raw tool bodies excluded."""
     out=[]
     def add(index,event):
-        if event:
-            if event.get('kind') == 'text' and event.get('role') == 'assistant':
-                if p == 'claude':
-                    value = item.get('message', {}).get('model')
-                elif p == 'dsh':
-                    value = item.get('data', {}).get('message', {}).get('model')
-                else:
-                    value = item.get('model') or parse(item.get('display_metadata') or '{}').get('model')
-                model = recorded_model(value)
-                if model:event['model'] = model
-            out.append((index,event))
+        if event:out.append((index,event))
     if p=='claude':
         if (item.get('sessionId')!=sid or item.get('isSidechain') or
                 item.get('isMeta') and not (item.get('type')=='user' and item.get('isCompactSummary') is True)):return []
@@ -193,6 +183,15 @@ def normalize(item,p,sid):
         elif role=='tool':
             result=parse(item.get('content') or '{}')
             add(0,tool_event(item.get('tool_name') or 'Tool result',ts,result=True,failed=bool(result.get('error') or result.get('is_error') or result.get('success') is False)))
+    # Model metadata belongs to the record, even when it has many text blocks.
+    assistant_text=[event for _,event in out if event.get('kind')=='text' and event.get('role')=='assistant']
+    if assistant_text:
+        if p=='claude':value=item['message'].get('model')
+        elif p=='dsh':value=item['data']['message'].get('model')
+        else:value=item.get('model') or parse(item.get('display_metadata') or '{}').get('model')
+        model=recorded_model(value)
+        if model:
+            for event in assistant_text:event['model']=model
     return out
 
 

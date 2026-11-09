@@ -82,16 +82,16 @@ def assert_transcript_identity(path: str, stream) -> None:
 
 def recorded_model(value):
     """A small opaque model ID, never arbitrary provider metadata."""
-    if (isinstance(value, str) and 0 < len(value.strip()) <= 256
+    if (isinstance(value, str) and 0 < len(value) <= 256
             and not any(ord(c) < 32 or ord(c) == 127 for c in value)):
-        return value.strip()
+        return value.strip() or None
     return None
 
 
 def codex_event(raw: bytes, offset: int) -> dict | None:
     try:
         item = json.loads(raw)
-    except (ValueError, UnicodeDecodeError):
+    except (ValueError, UnicodeDecodeError, RecursionError):
         return None
     if (not isinstance(item, dict) or not isinstance(item.get("type"), str)
             or item["type"] not in {"response_item", "compacted"}):
@@ -212,7 +212,7 @@ def read_codex_page(path: str, *, before: str | None = None,
         if b'"turn_context"' in raw:
             try:
                 item = json.loads(raw)
-            except (ValueError, UnicodeError):
+            except (ValueError, UnicodeError, RecursionError):
                 item = None
             if isinstance(item, dict) and item.get('type') == 'turn_context' and isinstance(item.get('payload'), dict):
                 contexts.append((context_offset, recorded_model(item['payload'].get('model'))))
