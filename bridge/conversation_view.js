@@ -310,7 +310,7 @@
       if(!node)return;
       const range=document.createRange();range.setStart(node,Math.min(local,node.length));range.setEnd(node,Math.min(local+1,node.length));
       const r=range.getBoundingClientRect();
-      lastPosition={id:article.dataset.eventId,offset,top:r.top-top,bottom:false};
+      lastPosition={id:article.dataset.eventId,offset,atTextEnd:local===node.length,top:r.top-top,bottom:false};
     }
     function restoreReading(){
       if(!opened||!presented||!lastPosition||!scroll.getClientRects().length)return;
@@ -319,7 +319,9 @@
       if(!article)return;
       let remaining=lastPosition.offset;
       for(const node of textNodes(article)){
-        if(remaining>node.length){remaining-=node.length;continue;}
+        // Adjacent text nodes share a cumulative offset at their boundary.
+        // Restore the same side: a body start must not become a label end.
+        if(remaining>node.length||remaining===node.length&&!lastPosition.atTextEnd){remaining-=node.length;continue;}
         const range=document.createRange();range.setStart(node,remaining);range.setEnd(node,Math.min(remaining+1,node.length));
         const rect=range.getBoundingClientRect();if(rect.height)scroll.scrollTop+=rect.top-scroll.getBoundingClientRect().top-lastPosition.top;
         break;

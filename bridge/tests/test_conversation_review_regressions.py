@@ -83,9 +83,13 @@ def cockpit(request):
     client.call("Emulation.setFocusEmulationEnabled", enabled=True)
     client.call("Network.enable")
     client.call("Network.setCacheDisabled", cacheDisabled=True)
-    mobile=getattr(request,'param',False)
+    preference = getattr(request, 'param', False)
+    mobile = preference is True
     client.call("Emulation.setDeviceMetricsOverride", width=390 if mobile else 1600, height=844 if mobile else 1000, deviceScaleFactor=1, mobile=mobile)
-    client.call("Page.addScriptToEvaluateOnNewDocument", source="localStorage.clear();localStorage.setItem('oc-first-flight-v1',JSON.stringify({seen:true,open:false}));")
+    bootstrap = "localStorage.clear();localStorage.setItem('oc-first-flight-v1',JSON.stringify({seen:true,open:false}));"
+    if preference == 'disabled':
+        bootstrap += "localStorage.setItem('oc-term-conversation-enabled','0');"
+    client.call("Page.addScriptToEvaluateOnNewDocument", source=bootstrap)
     def js(expression):
         result = client.call("Runtime.evaluate", expression=expression, returnByValue=True, awaitPromise=True)
         assert not result.get("exceptionDetails"), result.get("exceptionDetails")
@@ -130,9 +134,55 @@ def cockpit(request):
         server.server_close()
 
 
+@pytest.mark.parametrize('cockpit', ['disabled'], indirect=True)
 def test_disabled_does_not_fetch_conversation_assets(cockpit):
     js, wait, client, requests, enable = cockpit
+    assert js("localStorage.getItem('oc-term-conversation-enabled')") == '0'
+    assert js('conversationEnabled.checked') is False
+    js('conversationView.open()')
     assert not [path for path in requests if path.startswith("/conversation_")]
+
+
+@pytest.mark.parametrize('width', [1600, 390])
+def test_load_earlier_keeps_same_character_after_layout(cockpit, width):
+    js, wait, client, requests, enable = cockpit
+    stable_roster(js)
+    client.call('Emulation.setDeviceMetricsOverride', width=width, height=1000,
+                deviceScaleFactor=1, mobile=False)
+    enable(count=1)
+    js(r"""conversationView.close();
+      window.initialRows=Array.from({length:80},(_,i)=>({id:'row-'+i,kind:'text',role:'assistant',
+        text:'Reader fixture paragraph '+(i+1)+'.\n\nThis text stays in the same position when a notice appears or disappears. Earlier messages can still be loaded.',
+        cursor_before:'file:'+i,cursor_after:'file:'+(i+1)}));
+      OrreryConversationSource.Source.prototype.read=async(name,options)=>({events:options.after?[]:initialRows,
+        mode:'cursor',before:'first',after:'last',has_older:true});
+      conversationView.open();""")
+    wait("document.querySelectorAll('.conversation-event').length===80")
+    wait_reading_layout(js)
+    js("""window.readScroll=document.querySelector('.conversation-scroll');
+      window.readCharacter=document.createRange();
+      const node=document.querySelector('[data-event-id=row-0] .conversation-text').firstChild;
+      readCharacter.setStart(node,11);readCharacter.setEnd(node,12);
+      window.characterTop=()=>readCharacter.getBoundingClientRect().top-readScroll.getBoundingClientRect().top;
+      readScroll.dispatchEvent(new WheelEvent('wheel'));readScroll.scrollTop=0;
+      readScroll.dispatchEvent(new Event('scroll'));""")
+    wait_reading_layout(js)
+    before = js('characterTop()')
+    js("""OrreryConversationSource.Source.prototype.read=async()=>({
+      events:Array.from({length:40},(_,i)=>({id:'older-'+i,kind:'text',role:'assistant',text:'Earlier generated message '+i})),
+      mode:'cursor',before:'older-start',after:'older-end',has_older:true});""")
+    button = js("""(()=>{const r=document.querySelector('.conversation-older').getBoundingClientRect();
+      return {x:r.x+r.width/2,y:r.y+r.height/2}})()""")
+    for event_type in ['mousePressed', 'mouseReleased']:
+        client.call('Input.dispatchMouseEvent', type=event_type, **button,
+                    button='left', clickCount=1)
+    wait("document.querySelectorAll('.conversation-event').length===120")
+    immediate = js('characterTop()')
+    wait_reading_layout(js)
+    settled = js('characterTop()')
+    print('Load earlier same character:', width, before, immediate, settled)
+    assert abs(immediate-before) <= 1, (before, immediate)
+    assert abs(settled-before) <= 1, (before, settled)
 
 
 def test_reader_keys_and_automatic_fit_do_not_focus_or_type_into_terminal(cockpit):
