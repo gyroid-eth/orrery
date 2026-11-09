@@ -1,11 +1,25 @@
 """Synthetic compaction records never become human messages."""
+import json
 import pytest
 
 from test_conversation_providers import claude, line, page, row
-from conversation_history import MAX_TEXT
+from conversation_history import MAX_TEXT, codex_event
+from conversation_readers import normalize
 
 PREFIX = ('This session is being continued from a previous conversation that ran out of context. '
           'The summary below covers generated fixture history.')
+
+
+@pytest.mark.parametrize('blocks', [False, True])
+def test_verified_human_queued_prompt_does_not_become_a_compaction(blocks):
+    prompt = [dict(type='text', text=PREFIX)] if blocks else PREFIX
+    item = dict(type='attachment', sessionId='synthetic-session', attachment=dict(
+        type='queued_command', commandMode='prompt', isMeta=False,
+        origin={'kind': 'human'}, prompt=prompt))
+    out = normalize(item, 'claude', 'synthetic-session')
+    assert len(out) == 1
+    _, event = out[0]
+    assert (event['kind'], event['role'], event['text']) == ('text', 'user', PREFIX)
 
 
 @pytest.mark.parametrize('meta', [False, True])
@@ -80,3 +94,14 @@ def test_codex_compaction_preserves_paging_and_normal_human_text(tmp_path):
         events = current['events'] + events
     assert [e['role'] for e in events] == ['user', 'system', 'user']
     assert len({e['id'] for e in events}) == 3
+
+
+@pytest.mark.parametrize('bad_type', [[], {}])
+def test_non_string_native_record_type_is_ignored(tmp_path, bad_type):
+    raw = json.dumps(dict(type=bad_type, payload={})).encode()
+    assert codex_event(raw, 0) is None
+    path = tmp_path / 'rollout.jsonl'
+    path.write_bytes(raw + b'\n' + line(dict(type='response_item', payload=dict(
+        type='message', role='user', content='Readable after malformed record.'))))
+    events = page(row(path, 'codex-cli'))['events']
+    assert [(event['role'], event['text']) for event in events] == [('user', 'Readable after malformed record.')]

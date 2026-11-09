@@ -85,7 +85,8 @@ def codex_event(raw: bytes, offset: int) -> dict | None:
         item = json.loads(raw)
     except (ValueError, UnicodeDecodeError):
         return None
-    if not isinstance(item, dict) or item.get("type") not in {"response_item", "compacted"}:
+    if (not isinstance(item, dict) or not isinstance(item.get("type"), str)
+            or item["type"] not in {"response_item", "compacted"}):
         return None
     payload = item.get("payload")
     if not isinstance(payload, dict):

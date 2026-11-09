@@ -971,12 +971,18 @@
     function userScroll(){clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);layoutTimer=layoutFrame=0;layoutPending=restoring=false;panel.dataset.conversationLayout='settled';userScrolling=true;const r=screen.getBoundingClientRect();lastWidth=r.width;lastHeight=r.height;}
     listen(scroll,'wheel',userScroll,{passive:true});listen(scroll,'touchstart',userScroll,{passive:true});listen(scroll,'pointerdown',userScroll,{passive:true});
     listen(scroll,'keydown',event=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key))userScroll();});
+    let previousScrollTop=scroll.scrollTop,previousScrollHeight=scroll.scrollHeight;
     listen(scroll,'scroll',()=>{
+      const top=scroll.scrollTop,height=scroll.scrollHeight;
+      // Collapsing content can clamp the viewport to the end without the
+      // reader moving downward. Keep that retained window paused.
+      const movedDown=top>previousScrollTop&&height>=previousScrollHeight;
+      previousScrollTop=top;previousScrollHeight=height;
       if(!presented)return;
       position();
       if(userScrolling){
         remember();
-        if(opened&&enabled&&paused&&nearBottom())resumePaused();
+        if(opened&&enabled&&paused&&movedDown&&nearBottom())resumePaused();
       }
     },{passive:true});
     listen(window,'resize',()=>{closeNotice({focus:true});paintStatus();layoutChanged();});

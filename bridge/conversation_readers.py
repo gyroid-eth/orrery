@@ -143,7 +143,7 @@ def normalize(item,p,sid):
                     or not isinstance(queued.get('origin'),dict) or queued['origin'].get('kind')!='human'):
                 return []
             role='user';message=dict(role=role,content=queued.get('prompt'))
-            item=dict(item,timestamp=queued.get('timestamp') or item.get('timestamp'))
+            item=dict(item,origin=queued['origin'],timestamp=queued.get('timestamp') or item.get('timestamp'))
         if role not in {'user','assistant'} or not isinstance(message,dict) or message.get('role')!=role:return []
         content=message.get('content');ts=str(item.get('timestamp') or '')[:128]
         summary=blocks_text(content,block_limit=MAX_TEXT+1) if role=='user' and isinstance(content,list) else None

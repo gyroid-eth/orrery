@@ -72,3 +72,32 @@ def test_programmatic_layout_scroll_does_not_resume_a_paused_reader(cockpit):
     js("tailScroll.scrollTop=1e9;tailScroll.dispatchEvent(new Event('scroll'))")
     time.sleep(.25)
     assert js('tailReads.length') == reads
+
+
+def test_collapsing_tool_group_is_not_a_scroll_to_latest(cockpit):
+    js, wait, client, _, enable = cockpit
+    stable_roster(js);enable(count=1)
+    js("""conversationView.close();window.controlChunk=0;window.controlReads=0;
+      OrreryConversationSource.Source.prototype.read=async()=>{
+        controlReads++;return {mode:'cursor',provider:'claude',events:Array.from({length:200},(_,i)=>({
+          id:'control-'+controlChunk+'-'+i,kind:'tool',role:'assistant',text:'Read'})),after:String(controlChunk)};
+      };conversationView.open();window.controlScroll=document.querySelector('.conversation-scroll');""")
+    wait("document.querySelector('[data-event-id=control-0-199]')!==null")
+    js("document.querySelector('.conversation-tool-group').click()")
+    for n in range(1, 4):
+        js('controlScroll.scrollTop=1e9;controlChunk='+str(n)+';conversationView.refresh()')
+        wait("document.querySelector('[data-event-id=control-"+str(n)+"-199]')!==null")
+        wait_reading_layout(js)
+    js("controlScroll.dispatchEvent(new WheelEvent('wheel'));controlScroll.scrollTop=110;controlScroll.dispatchEvent(new Event('scroll'));controlChunk=4;conversationView.refresh()")
+    wait("document.querySelector('.conversation-latest').title.includes('resume')")
+    wait_reading_layout(js)
+    reads = js('controlReads')
+    js("document.querySelector('.conversation-tool-group').focus()")
+    client.call('Input.dispatchKeyEvent', type='keyDown', key=' ', code='Space', windowsVirtualKeyCode=32, text=' ')
+    client.call('Input.dispatchKeyEvent', type='keyUp', key=' ', code='Space', windowsVirtualKeyCode=32)
+    wait("document.querySelector('.conversation-tool-group').getAttribute('aria-expanded')==='false'")
+    time.sleep(.2)
+    assert js('controlScroll.scrollHeight-controlScroll.clientHeight-controlScroll.scrollTop') == 0
+    assert js('controlReads') == reads
+    assert js("document.querySelectorAll('.conversation-event').length") == 800
+    assert js("document.querySelector('.conversation-latest').title.includes('resume')")
