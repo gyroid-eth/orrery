@@ -14,7 +14,7 @@ def fail(js, wait):
 
 
 def header_geometry(js):
-    return js("""(()=>{const h=readerHost.querySelector('.split-cell-head'),b=h.getBoundingClientRect();return {left:b.left,right:b.right,name:h.querySelector('.scl-name').getBoundingClientRect().width,items:[...h.querySelectorAll('.scl-name,.scl-close,.conversation-retry,.conversation-mode,.conversation-notice-toggle,.split-history-toggle,.conversation-expand,.split-pane-window')].map(e=>{const r=e.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {class:e.className,width:r.width,height:r.height,left:r.left,right:r.right,hit:hit===e||e.contains(hit)}}).filter(r=>r.width>0&&r.height>0)}})()""")
+    return js("""(()=>{const h=readerHost.querySelector('.split-cell-head'),b=h.getBoundingClientRect();return {left:b.left,right:b.right,name:h.querySelector('.scl-name').getBoundingClientRect().width,items:[...h.querySelectorAll('.pane-provider,.scl-name,.scl-close,.conversation-retry,.conversation-mode,.conversation-notice-toggle,.split-history-toggle,.conversation-expand,.split-pane-window')].map(e=>{const r=e.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {class:e.className,width:r.width,height:r.height,left:r.left,right:r.right,hit:hit===e||e.contains(hit)}}).filter(r=>r.width>0&&r.height>0)}})()""")
 
 
 def assert_geometry(js):

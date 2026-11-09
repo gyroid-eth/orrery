@@ -58,6 +58,9 @@ def cockpit(request):
         def do_GET(self):
             path = urlsplit(self.path).path
             requests.append(path)
+            if path.startswith('/cockpit-assets/'):
+                self.path = '/assets/' + path.rsplit('/', 1)[-1]
+                return super().do_GET()
             if path.startswith(("/telemetry/", "/api/")):
                 data = {"agents": [], "prefs": {}}
                 raw = json.dumps(data).encode()
@@ -402,18 +405,30 @@ def test_header_and_history_use_one_control_style_and_settings_keep_actions(cock
 def test_pane_status_is_noninteractive_text_separate_from_buttons(cockpit):
     js,wait,client,requests,enable=cockpit
     enable(count=2)
-    state=js("""(()=>{const e=document.getElementById('scrBadge'),s=getComputedStyle(e),name=document.getElementById('scrName');return {
-      role:e.getAttribute('role'),atomic:e.getAttribute('aria-atomic'),buttonClass:e.classList.contains('cockpit-control'),
-      border:s.borderTopWidth,background:s.backgroundColor,cursor:s.cursor,tabIndex:e.tabIndex,
-      leftOfAction:e.getBoundingClientRect().right<document.getElementById('conversationToggle').getBoundingClientRect().left,
-      nextToName:name.nextElementSibling===e};})()""")
-    assert state==dict(role='status',atomic='true',buttonClass=False,border='0px',background='rgba(0, 0, 0, 0)',cursor='default',tabIndex=-1,leftOfAction=True,nextToName=True)
-    before=js("getComputedStyle(scrBadge).cssText+getComputedStyle(scrBadge).color+getComputedStyle(scrBadge).backgroundColor+getComputedStyle(scrBadge).borderTopWidth")
-    rect=js("(()=>{const r=scrBadge.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()")
-    client.call('Input.dispatchMouseEvent',type='mouseMoved',**rect)
-    assert js("getComputedStyle(scrBadge).cssText+getComputedStyle(scrBadge).color+getComputedStyle(scrBadge).backgroundColor+getComputedStyle(scrBadge).borderTopWidth")==before
-    js("document.querySelector('.conversation-scroll').focus();scrBadge.focus()")
-    assert not js('document.activeElement===scrBadge')
+    for active,label in [(True,'active'),(False,'live')]:
+        js('paintHead({...panes.get("%901").meta,active:'+json.dumps(active)+'});window.statusLogo=scrName.closest(".pane-heading").querySelector(".pane-provider")')
+        assert js("statusLogo.getAttribute('role')")=='img'
+        assert js("statusLogo.getAttribute('aria-label')").endswith(label)
+        assert js('statusLogo.title')==js("statusLogo.getAttribute('aria-label')")
+        assert js("!statusLogo.closest('button')&&!statusLogo.classList.contains('cockpit-control')&&statusLogo.tabIndex===-1")
+        assert js("getComputedStyle(statusLogo).cursor") in ['auto','default']
+        assert js('scrBadge.getBoundingClientRect().width')==0
+        js("document.querySelector('.conversation-scroll').focus();statusLogo.focus()")
+        assert not js('document.activeElement===statusLogo')
+    for action,label in [('paintPendingSession("ReviewFixture")','connecting'),('resetHead()','offline')]:
+        js(action)
+        state=js("""(()=>{const e=scrBadge,s=getComputedStyle(e);return {
+          role:e.getAttribute('role'),atomic:e.getAttribute('aria-atomic'),label:e.getAttribute('aria-label'),text:e.textContent,
+          buttonClass:e.classList.contains('cockpit-control'),border:s.borderTopWidth,background:s.backgroundColor,cursor:s.cursor,tabIndex:e.tabIndex,
+          visible:e.getBoundingClientRect().width>0,leftOfAction:e.getBoundingClientRect().right<document.getElementById('conversationToggle').getBoundingClientRect().left,
+          nextToIdentity:scrName.closest('.pane-heading').nextElementSibling===e};})()""")
+        assert state==dict(role='status',atomic='true',label=label,text=label,buttonClass=False,border='0px',background='rgba(0, 0, 0, 0)',cursor='default',tabIndex=-1,visible=True,leftOfAction=True,nextToIdentity=True)
+        before=js("getComputedStyle(scrBadge).color+getComputedStyle(scrBadge).backgroundColor+getComputedStyle(scrBadge).borderTopWidth")
+        rect=js("(()=>{const r=scrBadge.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()")
+        client.call('Input.dispatchMouseEvent',type='mouseMoved',**rect)
+        assert js("getComputedStyle(scrBadge).color+getComputedStyle(scrBadge).backgroundColor+getComputedStyle(scrBadge).borderTopWidth")==before
+        js("document.querySelector('.conversation-scroll').focus();scrBadge.focus()")
+        assert not js('document.activeElement===scrBadge')
 
 
 def test_provider_labels_snapshot_rewrite_and_receipt_changes_clear(cockpit):

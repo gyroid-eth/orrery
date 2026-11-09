@@ -340,13 +340,14 @@ def test_selecting_an_outside_session_clears_the_previous_central_terminal():
 let activeId='main-pane',pendingJump='old-jump',splitVisible=true;
 let terminalLessAgent=null,paneWindowSelection=null;
 const paneWindows=new Map([['WindowAgent',{kind:'window'}]]);
-const scrName={},scrPath={},scrBadge={},promptTarget={textContent:'MainAgent'},promptAva={hidden:false};
+const scrName={closest(){return null;}},scrPath={},scrBadge={},promptTarget={textContent:'MainAgent'},promptAva={hidden:false};
 const stageEmpty={style:{display:'none'}};
 let visible=['main-pane'],blurred=false,focused=[];
 const document={activeElement:{blur(){blurred=true;}}};
 function blurTerminalFocus(){blurred=true;}
 function renderStage(){visible=activeId?[activeId]:[];}
 function resetHead(){}
+function paintPaneHeading(){}
 function refreshHeaderStats(){}
 function refreshComposerVocabulary(){}
 function focusPaneWindow(name){focused.push(name);}

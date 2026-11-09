@@ -1,4 +1,4 @@
-"""Pane names remain readable while ordinary status is only a labeled dot."""
+"""Pane names remain readable while provider marks carry ordinary status."""
 import json
 
 import pytest
@@ -13,31 +13,31 @@ def test_split_names_match_the_single_header_and_fit_narrow_cells(cockpit,theme,
     js('OrreryColorTheme.setPreference('+json.dumps(theme)+');document.querySelector(".split-cell .split-history-toggle").click()')
     wait("document.querySelector('.split-cell .conversation-text')!==null")
     data=js("""(()=>{const body=getComputedStyle(document.querySelector('.conversation-text')),single=getComputedStyle(scrName);return [...document.querySelectorAll('.split-cell')].map(cell=>{
-      const name=cell.querySelector('.scl-name'),style=getComputedStyle(name),state=cell.querySelector('.split-cell-status'),head=cell.querySelector('.split-cell-head').getBoundingClientRect();
+      const name=cell.querySelector('.scl-name'),style=getComputedStyle(name),state=cell.querySelector('.split-cell-status'),logo=cell.querySelector('.pane-provider'),head=cell.querySelector('.split-cell-head').getBoundingClientRect();
       name.textContent='GeneratedVeryLongSessionFixture';const r=name.getBoundingClientRect();
       return {size:parseFloat(style.fontSize),body:parseFloat(body.fontSize),family:style.fontFamily,single:single.fontFamily,spacing:style.letterSpacing,
-        text:state.textContent,label:state.getAttribute('aria-label'),title:state.title,dot:getComputedStyle(state,'::before').width,statusWidth:state.getBoundingClientRect().width,
+        text:state.textContent,label:logo.getAttribute('aria-label'),title:logo.title,dot:getComputedStyle(state,'::before').content,statusWidth:state.getBoundingClientRect().width,
         nameWidth:r.width,ellipsis:style.textOverflow,nowrap:style.whiteSpace,inside:r.left>=head.left&&r.right<=head.right,
         actions:[...cell.querySelectorAll('.scl-close,.split-history-toggle,.conversation-expand,.split-pane-window')].filter(e=>!e.hidden).every(e=>{const r=e.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return r.left>=head.left&&r.right<=head.right&&r.bottom<=head.bottom&&(hit===e||e.contains(hit))})};})})()""")
     for item in data:
         assert item['size']>=item['body'] and item['size']>=14,item
         assert item['family']==item['single'] and item['spacing']=='normal',item
-        assert item['text']=='' and item['label'] in ['active','live'] and item['title']==item['label'],item
-        assert item['dot']=='5px' and item['statusWidth']>=5,item
+        assert item['text']=='' and item['label'].endswith(('active','live')) and item['title']==item['label'],item
+        assert item['dot'] in ['none','normal'] and item['statusWidth']==0,item
         assert item['nameWidth']>0 and item['ellipsis']=='ellipsis' and item['nowrap']=='nowrap',item
         assert item['inside'] and item['actions'],item
 
 
 @pytest.mark.parametrize('theme',['dark','light'])
-def test_single_normal_status_is_a_dot_and_abnormal_status_stays_named(cockpit,theme):
+def test_single_normal_status_is_on_the_logo_and_abnormal_status_stays_named(cockpit,theme):
     js,wait,client=setup(cockpit,2)
     js('OrreryColorTheme.setPreference('+json.dumps(theme)+');setActive("%901","single")')
     for active,label in [(True,'active'),(False,'live')]:
         js('paintHead({...panes.get("%901").meta,active:'+json.dumps(active)+'})')
         assert js('scrBadge.textContent')==''
-        assert js('scrBadge.getAttribute("aria-label")')==label
-        assert js('scrBadge.title')==label
-        assert js('scrBadge.getBoundingClientRect().width')>=5
+        assert js('document.querySelector(".scr-head .pane-provider").getAttribute("aria-label")').endswith(label)
+        assert js('document.querySelector(".scr-head .pane-provider").title').endswith(label)
+        assert js('scrBadge.getBoundingClientRect().width')==0
     for action,label in [('paintPendingSession("GeneratedFixture")','connecting'),('resetHead()','offline')]:
         js(action)
         assert js('scrBadge.textContent')==label
