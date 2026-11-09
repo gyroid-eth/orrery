@@ -95,7 +95,10 @@ def test_front_matter_stays_text():
 ])
 def test_raw_html_is_text(source):
     out = html(source + '\n\nafter')
-    assert out == '<p>' + source.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;') + '</p>\n<p>after</p>'
+    expected = source.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+    if 'https://example.com' in expected:
+        expected = expected.replace('https://example.com', '<a href="https://example.com/" target="_blank" rel="noopener noreferrer" title="https://example.com/">https://example.com</a>')
+    assert out == '<p>' + expected + '</p>\n<p>after</p>'
 
 
 @pytest.mark.parametrize('target', [
@@ -185,7 +188,7 @@ def test_a_markdown_preview_is_a_document_with_a_source_switch(cockpit):  # noqa
     assert js(body + ".querySelectorAll('img,script,iframe,[onerror]').length") == 0
     assert js(body + ".textContent.includes('<img src=https://example.test/never')")
     assert js("window.pwned===undefined")
-    assert js(body + ".querySelectorAll('a').length") == 1
+    assert js(body + ".querySelectorAll('a').length") == 2
     assert js(body + ".querySelector('a').rel") == 'noopener noreferrer'
     assert js(body + ".querySelector('a').target") == '_blank'
     source = "document.querySelector('.conversation-preview-source')"
@@ -251,9 +254,9 @@ def test_a_badge_is_a_link_labelled_with_its_image():
 
 def test_a_link_inside_a_link_label_stays_text():
     out = html('[a <https://x.example> [b](https://z.example)](https://y.example)')
-    # A label ends at its first `]`; inside it an autolink stays text: one <a>, never nested.
+    # A label ends at its first `]`; its URLs stay text, never nested links.
     assert out == ('<p><a href="https://z.example/" target="_blank" rel="noopener noreferrer" title="https://z.example/">'
-                   'a &lt;https://x.example&gt; [b</a>](https://y.example)</p>')
+                   'a &lt;https://x.example&gt; [b</a>](<a href="https://y.example/" target="_blank" rel="noopener noreferrer" title="https://y.example/">https://y.example</a>)</p>')
 
 
 def test_links_after_many_unmatched_brackets_still_work():

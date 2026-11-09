@@ -20,7 +20,8 @@ def test_table_is_text_only_and_surrounding_paragraphs_stay(cockpit,provider):
     js,wait,client=prepare(cockpit,provider=provider)
     assert js("document.querySelectorAll('.conversation-text table').length")==1
     assert js("[...document.querySelectorAll('th')].map(e=>e.textContent)")==['','公式ベンチ','補助の測定']
-    assert js("document.querySelectorAll('.conversation-text img,.conversation-text a,.conversation-text script').length")==0
+    assert js("document.querySelectorAll('.conversation-text img,.conversation-text script').length")==0
+    assert js("[...document.querySelectorAll('.conversation-text a')].map(a=>a.href)")==['https://example.invalid/']
     assert js("document.querySelector('.conversation-text').textContent.startsWith('前の段落\\n\\n')")
     assert js("document.querySelector('.conversation-text').textContent.endsWith('\\n後の段落')")
     assert js("document.querySelector('thead th:last-child').style.textAlign")=='right'

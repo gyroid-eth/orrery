@@ -25,6 +25,7 @@
         body.replaceChildren();
         if(data.kind==='text'&&typeof data.text==='string'&&data.text.length<=131072){
           const raw=create('pre','conversation-preview-text',data.text),markdown=root.OrreryConversationMarkdown;
+          if(markdown){raw.textContent='';markdown.renderText(data.text,raw);}
           if(/\.(?:md|markdown)$/i.test(ref.label)&&typeof markdown?.renderDocument==='function'){
             // Drawn as a document by default; Source shows the file's own text.
             // Both views are inert (text nodes only); see conversation_markdown.js.
@@ -76,7 +77,9 @@
         const code=create('pre','conversation-diff-code');code.tabIndex=0;
         for(const line of event.diff.slice(0,49152).split('\n')){
           const kind=line.startsWith('+++')||line.startsWith('---')?'file':line.startsWith('+')?'add':line.startsWith('-')?'remove':line.startsWith('@@')?'hunk':'context';
-          code.appendChild(create('span','conversation-diff-line conversation-diff-'+kind,line+'\n'));
+          const text=create('span','conversation-diff-line conversation-diff-'+kind);
+          if(root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.renderText(line+'\n',text);else text.textContent=line+'\n';
+          code.appendChild(text);
         }
         details.appendChild(code);article.appendChild(details);
       }

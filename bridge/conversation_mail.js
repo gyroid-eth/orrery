@@ -24,7 +24,9 @@
         item.coverage==='request'?'Recorded send request · delivery is not confirmed here.':
         'No body in this notification · read it in Mail.';
       body.appendChild(create('p','conversation-mail-notice',notice+(item.truncated?' Recorded text shortened.':'')));
-      body.appendChild(create('p','conversation-mail-text',typeof item.body==='string'?item.body.slice(0,65536):''));
+      const text=create('p','conversation-mail-text'),value=typeof item.body==='string'?item.body.slice(0,65536):'';
+      if(root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.renderText(value,text);else text.textContent=value;
+      body.appendChild(text);
       details.appendChild(body);article.appendChild(details);
     }
     return article;

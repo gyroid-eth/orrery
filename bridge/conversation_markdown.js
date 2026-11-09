@@ -47,7 +47,7 @@
     if(plain)blocks.push({kind:'text',text:plain});return blocks;
   }
   // `fill(cell,value)` writes one cell; the conversation keeps cells as text.
-  function tableNode(block,fill=(cell,value)=>{cell.textContent=value;}){
+  function tableNode(block,fill=(cell,value)=>renderText(value,cell)){
     const container=document.createElement('div');container.className='conversation-table';
     const copy=document.createElement('button');copy.type='button';copy.className='cockpit-control conversation-table-copy';copy.textContent='Copy Markdown';
     copy.addEventListener('click',async event=>{event.stopPropagation();try{await navigator.clipboard.writeText(block.raw);copy.textContent='Copied';}catch(_){copy.textContent='Copy unavailable';}});
@@ -60,9 +60,9 @@
   }
   function render(text,host){
     const blocks=parse(text);
-    if(!blocks.some(block=>block.kind==='table')){host.textContent=text;return host;}
+    if(!blocks.some(block=>block.kind==='table')){host.textContent='';return renderText(text,host);}
     for(const block of blocks){
-      if(block.kind==='text'){const prose=document.createElement('span');prose.textContent=block.text;host.appendChild(prose);continue;}
+      if(block.kind==='text'){const prose=document.createElement('span');renderText(block.text,prose);host.appendChild(prose);continue;}
       host.appendChild(tableNode(block));
     }
     return host;
@@ -79,6 +79,40 @@
   const el=(tag,cls)=>{const node=document.createElement(tag);if(cls)node.className=cls;return node;};
   function safeUrl(value){
     try{const url=new URL(value);return ['http:','https:','mailto:'].includes(url.protocol)?url.href:null;}catch(_){return null;}
+  }
+  function anchor(href){
+    const node=el('a');node.href=href;node.target='_blank';node.rel='noopener noreferrer';node.referrerPolicy='no-referrer';node.title=href;return node;
+  }
+  // Match the terminal addon's boundaries, allowing balanced () and [] in
+  // paths. Japanese punctuation also ends a URL. Scan each candidate once;
+  // overlong candidates stay text rather than becoming truncated links.
+  const URL_END=/[\s"'!*{}|\\^<>`\u3001\u3002\uff0c\uff0e\uff01\uff1f\u300c-\u300f\uff08\uff09\u3010\u3011\u3008-\u300b]/;
+  const URL_START=/https?:\/\//iy;
+  function bareUrl(text,begin){
+    if(/[a-z0-9]/i.test(text[begin-1]||'')||!at(URL_START,text,begin))return null;
+    let end=URL_START.lastIndex,round=0,square=0;
+    while(end<text.length&&!URL_END.test(text[end])){
+      const ch=text[end];
+      if(ch===')'&&!round||ch===']'&&!square)break;
+      if(ch==='(')round++;else if(ch===')')round--;
+      else if(ch==='[')square++;else if(ch===']')square--;
+      end++;
+    }
+    let last=end;
+    while(last>begin&&/[.,;:!?]/.test(text[last-1]))last--;
+    return {end,last,href:last-begin<=SPAN?safeUrl(text.slice(begin,last)):null};
+  }
+  function renderText(text,host){
+    const start=/https?:\/\//gi;let match,from=0;
+    while((match=start.exec(text))){
+      const begin=match.index,url=bareUrl(text,begin);if(!url)continue;
+      const {end,last,href}=url;start.lastIndex=end;
+      if(!href)continue;
+      if(begin>from)host.appendChild(document.createTextNode(text.slice(from,begin)));
+      const node=anchor(href);node.textContent=text.slice(begin,last);host.appendChild(node);from=last;
+    }
+    if(from<text.length)host.appendChild(document.createTextNode(text.slice(from)));
+    return host;
   }
   const ESCAPE=/[\\`*_{}[\]()#+\-.!|~<>]/;
   // The part after a link's or an image's label: ](target "title")
@@ -115,13 +149,20 @@
     const label=text=>node=>{if(depth<MAX_DEPTH)inline(text,node,depth+1,true);else node.textContent=text;};
     for(let i=0;i<text.length;){
       const ch=text[i];let m;
+      // A URL is one token before Markdown can consume its underscores or
+      // tildes. Link labels keep the same token as text, never a nested link.
+      if((ch==='h'||ch==='H')&&(m=bareUrl(text,i))){
+        if(inLink||!m.href)plain+=text.slice(i,m.end);
+        else{flush();const node=anchor(m.href);node.textContent=text.slice(i,m.last);host.appendChild(node);plain=text.slice(m.last,m.end);}
+        i=m.end;continue;
+      }
       if(ch==='\\'&&ESCAPE.test(text[i+1]||'')){plain+=text[i+1];i+=2;continue;}
       if(ch==='`'){
         let run=1;while(text[i+run]==='`')run++;
         let end=runs.get(run);
         if(end===undefined||(end!==-1&&end<i+run)){end=text.indexOf('`'.repeat(run),i+run);runs.set(run,end);}
         if(end>0&&end-i<=SPAN&&text[end+run]!=='`'){
-          flush();const code=el('code');code.textContent=text.slice(i+run,end).replace(/^ ([\s\S]*\S[\s\S]*) $/,'$1');host.appendChild(code);i=end+run;continue;
+          flush();const code=el('code'),value=text.slice(i+run,end).replace(/^ ([\s\S]*\S[\s\S]*) $/,'$1');if(inLink)code.textContent=value;else renderText(value,code);host.appendChild(code);i=end+run;continue;
         }
         plain+='`'.repeat(run);i+=run;continue;
       }
@@ -167,7 +208,7 @@
     const item=ITEM.exec(line);if(item&&line.slice(item[0].length).trim()&&(/^[-+*]$/.test(item[2])||/^1[.)]$/.test(item[2])))return true;
     return isDelimiter(cells(line),next===undefined||next.length>LONG_LINE?null:cells(next));
   }
-  function codeBlock(text,cls='markdown-code'){const pre=el('pre',cls),code=el('code');code.textContent=text;pre.appendChild(code);return pre;}
+  function codeBlock(text,cls='markdown-code'){const pre=el('pre',cls),code=el('code');renderText(text,code);pre.appendChild(code);return pre;}
   // `tight`: a list item without blank lines; its text needs no paragraph.
   function blocks(lines,host,depth,tight=false){
     for(let i=0;i<lines.length;){
@@ -256,5 +297,5 @@
     blocks(lines.slice(start),host,0);
     return host;
   }
-  root.OrreryConversationMarkdown=Object.freeze({parse,render,renderDocument});
+  root.OrreryConversationMarkdown=Object.freeze({parse,render,renderDocument,renderText});
 })(typeof window==='undefined'?globalThis:window);

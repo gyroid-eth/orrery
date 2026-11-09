@@ -178,6 +178,6 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 .conversation-preview-markdown pre code{padding:0;background:none}
 .conversation-preview-markdown .markdown-front-matter{color:var(--ink-dim)}
 .conversation-preview-markdown hr{margin:16px 0;border:0;border-top:1px solid var(--hair)}
-.conversation-preview-markdown a{color:var(--amber);text-decoration:underline;text-underline-offset:2px}
+.conversation-panel a{color:var(--amber);text-decoration:underline;text-underline-offset:2px}
 .conversation-preview-markdown :is(.markdown-link-text,.markdown-image){color:var(--ink-dim);text-decoration:underline dotted;text-underline-offset:2px}
 .conversation-preview-source[aria-pressed="true"]{border-color:var(--amber);color:var(--amber)}
