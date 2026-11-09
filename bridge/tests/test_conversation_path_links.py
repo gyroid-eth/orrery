@@ -326,7 +326,10 @@ def test_real_mixed_path_urls_and_long_japanese_suffix(cockpit,path_backend,tmp_
     target=tmp_path/'mixed.png'
     if exists:Image.new('RGB',(8,6),'teal').save(target)
     unicode_image=tmp_path/'画像.png';Image.new('RGB',(8,6),'teal').save(unicode_image)
-    text=str(target)+' (https://example.com/source)\n'+str(target)+' [source](https://example.com/source)\n'+str(unicode_image)+'です'+'日本語の説明'*12
+    unicode_note=tmp_path/'日本語資料'
+    if exists:unicode_note.write_text('Generated fixture.\n')
+    suffix='です'+'日本語の説明'*12
+    text=str(target)+' (https://example.com/source)\n'+str(target)+' [source](https://example.com/source)\n'+str(unicode_image)+suffix+'\n'+str(unicode_note)+suffix
     event=dict(id='mixed-links',kind='text',role='assistant',text=text)
     js('conversationView.close();window.mixedEvent='+json.dumps(event)+';window.mixedOpened=[];OrreryConversationSource.Source.prototype.read=async()=>({events:[mixedEvent],after:"mixed:1"});window.mixedReader=OrreryConversation.mount({getContext:()=>({...currentAgents[0],terminalPaneId:"%901"}),bindToggle:false,openExternalUrl:url=>mixedOpened.push(url)});mixedReader.open()')
     wait('mixedReader.panel.querySelector("[data-event-id=mixed-links]")!==null')
@@ -336,6 +339,7 @@ def test_real_mixed_path_urls_and_long_japanese_suffix(cockpit,path_backend,tmp_
     wait('!mixedHost.querySelector("[data-path-candidate]")')
     assert js('mixedHost.querySelectorAll("a[href^=https]").length')==2
     assert js('mixedHost.querySelectorAll("a[data-local-path]").length')==(3 if exists else 1)
+    assert not js('Array.from(mixedHost.querySelectorAll("a[data-local-path]")).some(a=>a.dataset.localPath==='+json.dumps(str(tmp_path))+')')
     assert js('Array.from(mixedHost.querySelectorAll("a[data-local-path]")).some(a=>a.dataset.localPath==='+json.dumps(str(unicode_image))+')')
     assert reads==[]
     js('mixedHost.querySelectorAll("a[href^=https]").forEach(a=>a.click())')
@@ -352,3 +356,19 @@ def test_probe_unicode_name_keeps_longest_match_and_stat_budget(tmp_path,monkeyp
     monkeypatch.setattr(Path,'exists',exists)
     assert backend.probe_reader_path(str(tmp_path/'missing.png')+'です'+'日本語の説明'*200) is None
     assert len(checks)<=64
+
+
+@pytest.mark.parametrize('exists', [False,True])
+@pytest.mark.parametrize('home', [False,True])
+def test_probe_long_unicode_name_never_falls_back_to_parent_directory(tmp_path,monkeypatch,exists,home):
+    monkeypatch.setenv('HOME',str(tmp_path))
+    target=tmp_path/'日本語資料'
+    if exists:target.write_text('Generated fixture.\n')
+    shown='~/日本語資料' if home else str(target)
+    assert backend.probe_reader_path(shown+'です'+'日本語の説明'*12) is None
+
+
+@pytest.mark.parametrize('suffix', ['', ' after generated words'])
+def test_probe_explicit_directory_with_trailing_slash_still_works(tmp_path,suffix):
+    shown=str(tmp_path)+'/'
+    assert backend.probe_reader_path(shown+suffix)=={'shown':shown,'path':str(tmp_path)}

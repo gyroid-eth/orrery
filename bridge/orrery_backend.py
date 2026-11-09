@@ -2363,6 +2363,9 @@ def probe_reader_path(text):
     ends=sorted(primary,reverse=True)+sorted(other-primary,reverse=True)
     best=None;seen=set();attempts=0
     for end in ends:
+        # A slash before a path component is not a prose boundary. Explicit
+        # directory paths (whole input or followed by whitespace) stay valid.
+        if end<len(text) and text[end-1:end]=='/' and not text[end].isspace():continue
         shown=text[:end].rstrip(' .,;:!?')
         if len(shown)<2 or shown in seen or best and len(shown)<=len(best['shown']):continue
         seen.add(shown);attempts+=1
