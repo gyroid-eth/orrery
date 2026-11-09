@@ -101,7 +101,8 @@
   const readerIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h6"/></svg>';
   const expandIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6m0-6-6 6M10 20H4v-6m0 6 6-6"/></svg>';
   const latestIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v14m-6-6 6 6 6-6M5 21h14"/></svg>';
-  const earlierIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V7m-6 6 6-6 6 6M5 3h14"/></svg>';
+  const warningIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5m0 3v.1"/></svg>';
+  const retryIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10a8 8 0 1 0-1 7M20 4v6h-6"/></svg>';
   function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,expandControl=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null,openExternalUrl=null}){
     let screen=host||document.querySelector('.screen');
     const toggle=control||document.getElementById('conversationToggle');
@@ -112,16 +113,18 @@
     panel.className='conversation-panel';panel.id=panelId;panel.hidden=true;
     panel.setAttribute('aria-label','Reader');
     panel.innerHTML='<div class="conversation-body"><div class="conversation-thread">'+
-      '<div class="conversation-toolbar" hidden><span class="conversation-status" role="status"></span>'+
-      '<button class="cockpit-control pane-icon conversation-notice-older" type="button" title="Load earlier" aria-label="Load earlier" hidden>'+earlierIcon+'</button>'+
-      '<button class="cockpit-control conversation-action conversation-retry" type="button" hidden>Retry</button></div>'+
       '<div class="conversation-scroll" tabindex="0" aria-label="Conversation messages">'+
-      '<div class="conversation-top"><span class="conversation-status conversation-mode"></span>'+
-      '<button class="cockpit-control conversation-action conversation-older" type="button" hidden>Load earlier</button></div>'+
+      '<button class="cockpit-control conversation-action conversation-older" type="button" aria-label="Load earlier" hidden>Load earlier</button>'+
       '<div class="conversation-events"></div><div class="conversation-pending" role="status" aria-live="polite"></div><div class="conversation-empty"></div></div>'+
       '<div class="conversation-bottom" hidden><button class="cockpit-control pane-icon conversation-latest" type="button" title="Latest" aria-label="Latest">'+latestIcon+'</button></div></div>'+
       '<aside class="conversation-preview" aria-label="Selected file preview" hidden></aside></div>';
     screen.appendChild(panel);
+    const notices=document.createElement('span');notices.className='conversation-notices';notices.hidden=true;
+    notices.innerHTML='<span class="conversation-toolbar" hidden><span class="conversation-status" role="status"></span>'+
+      '<span class="conversation-status-label" aria-hidden="true"></span><span class="conversation-warning" aria-hidden="true">'+warningIcon+'</span>'+
+      '<button class="cockpit-control conversation-action conversation-retry" type="button" title="Retry" aria-label="Retry" hidden><span>Retry</span>'+retryIcon+'</button></span>'+
+      '<button class="conversation-mode" type="button" hidden>i</button>';
+    let noticeControl=toggle,noticeTimer=0,noticeTemporary=false;
     const expandButton=expandControl||document.createElement('button');
     expandButton.type='button';expandButton.className='cockpit-control pane-icon conversation-expand';expandButton.hidden=true;
     expandButton.innerHTML=expandIcon;expandButton.setAttribute('aria-controls',panelId);
@@ -146,8 +149,8 @@
       else root.open(link.href,'_blank','noopener,noreferrer');
     }
     listen(panel,'click',activateLink);listen(panel,'auxclick',activateLink);
-    const toolbar=el('.conversation-toolbar'),status=el('.conversation-toolbar .conversation-status'),modeInfo=el('.conversation-mode'),empty=el('.conversation-empty');
-    const earlier=el('.conversation-older'),noticeEarlier=el('.conversation-notice-older'),retry=el('.conversation-retry'),latest=el('.conversation-latest');
+    const toolbar=notices.querySelector('.conversation-toolbar'),status=notices.querySelector('.conversation-status'),statusLabel=notices.querySelector('.conversation-status-label'),modeInfo=notices.querySelector('.conversation-mode'),empty=el('.conversation-empty');
+    const earlier=el('.conversation-older'),retry=notices.querySelector('.conversation-retry'),latest=el('.conversation-latest');
     let fullWidth=false,tableMutating=false,tableFrame=0;
     const tablePositions=new Map();
     let submissions=[],submissionTimer=0,flashTimer=0,readSequence=0;
@@ -231,6 +234,7 @@
       expandButton.hidden=!opened||!presented;
       expandButton.setAttribute('aria-pressed',String(fullWidth));
       expandButton.title=fullWidth?'Restore side panel':'Full width';expandButton.setAttribute('aria-label',expandButton.title);
+      paintStatus();
     }
     const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onBeforeOpen:layoutChanged,onClose:layoutChanged,onActivate:()=>expand(true)});
     let enabled=false,opened=false,agent='',generation=0,controller=null,timer=0,busy=false;
@@ -252,21 +256,19 @@
       paintStatus();
     }
     function paintStatus(){
-      const focused=document.activeElement===earlier,noticeFocused=document.activeElement===noticeEarlier;
       toolbar.hidden=!status.textContent&&retry.hidden;
-      let covered=false;
-      if(!toolbar.hidden&&!earlier.hidden){
-        const button=earlier.getBoundingClientRect(),overlay=toolbar.getBoundingClientRect();
-        covered=button.bottom>overlay.top&&button.top<overlay.bottom;
-      }
-      if(noticeFocused&&(!covered||earlier.disabled))scroll.focus({preventScroll:true});
-      noticeEarlier.hidden=!covered;noticeEarlier.disabled=earlier.disabled;
-      earlier.style.visibility=covered?'hidden':'';
-      if(focused&&covered)(noticeEarlier.disabled?scroll:noticeEarlier).focus({preventScroll:true});
+      modeInfo.hidden=!opened||!modeInfo.title;
+      notices.hidden=!presented||!opened&&!noticeTemporary||toolbar.hidden&&modeInfo.hidden;
+      if(!presented){notices.remove();return;}
+      if(noticeControl.parentElement&&(notices.parentElement!==noticeControl.parentElement||notices.nextElementSibling!==noticeControl))noticeControl.before(notices);
     }
-    function message(text){status.textContent=text;status.title=text;paintStatus();}
-    function modeMessage(text){modeInfo.textContent=text;modeInfo.title=text;}
-    function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
+    function message(text,label=text,temporary=false){
+      clearTimeout(noticeTimer);noticeTimer=0;noticeTemporary=temporary;
+      status.textContent=text;status.title=text;toolbar.title=text;statusLabel.textContent=label;paintStatus();
+      if(temporary)noticeTimer=setTimeout(()=>message(''),5000);
+    }
+    function modeMessage(text){if(!text&&document.activeElement===modeInfo&&opened)scroll.focus({preventScroll:true});modeInfo.title=text;modeInfo.setAttribute('aria-label',text);paintStatus();}
+    function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);clearTimeout(noticeTimer);timer=jumpTimer=noticeTimer=0;if(noticeTemporary)message('');if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
     function clear({keepSubmissions=false}={}){tablePositions.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
@@ -372,7 +374,8 @@
         });
       });});},32);
     }
-    function relocate(target,{visible=true,suspend=true,focus=false}={}){
+    function relocate(target,{visible=true,suspend=true,focus=false,noticeAnchor=toggle}={}){
+      noticeControl=noticeAnchor;
       const changed=screen!==target||presented!==visible||panel.parentElement!==target;
       if(changed){
         saveTables();tableMutating=true;layoutPending=true;
@@ -461,12 +464,12 @@
         preview?.close();
         if(screen.getBoundingClientRect().width<800||root.innerWidth<=1200)close({focus:false});
         else expand(false);
-        message('Matching message shown in this terminal.');
-      }else if(result.state==='limited')message('Terminal scrollback exceeds the search limit; cannot confirm a unique match. Keep reading history here.');
-      else if(result.state==='multiple')message('Same text found in '+result.count+(result.limited?' or more':'')+' places in the terminal. Keep reading history here.');
-      else if(result.state==='alternate')message('Earlier output of this screen is not kept in the terminal. Keep reading history here.');
-      else if(result.state==='changed')message('Terminal changed. Search again.');
-      else message('Not found in terminal scrollback. Keep reading history here.');
+        message('Matching message shown in this terminal.','Match shown',true);
+      }else if(result.state==='limited')message('Terminal scrollback exceeds the search limit; cannot confirm a unique match. Keep reading history here.','Search limit',true);
+      else if(result.state==='multiple')message('Same text found in '+result.count+(result.limited?' or more':'')+' places in the terminal. Keep reading history here.','Multiple matches',true);
+      else if(result.state==='alternate')message('Earlier output of this screen is not kept in the terminal. Keep reading history here.','Output not retained',true);
+      else if(result.state==='changed')message('Terminal changed. Search again.','Terminal changed',true);
+      else message('Not found in terminal scrollback. Keep reading history here.','Not found',true);
     }
     let holding=false,pendingAction=null;
     // A random id made in this page for this reader (pane); see orrery_backend.py
@@ -533,6 +536,7 @@
       if(!opened||!presented||!enabled||busy||!agent||paused&&direction==='newer'){endOp(op);return;}
       const token=generation,name=agent,sequence=++readSequence;
       let pollAgain=true;
+      if(document.activeElement===retry)scroll.focus({preventScroll:true});
       controller=new AbortController();busy=true;retry.hidden=true;paintStatus();
       const options={signal:controller.signal},mine=controller;
       if(direction==='older')options.before=before;
@@ -545,7 +549,7 @@
       earlier.disabled=!holding;paintStatus();
       if(direction!=='newer'||op){
         if(direction==='initial'&&!events.size)empty.hidden=true;
-        message(direction==='older'?'Loading earlier messages…':'Loading conversation…');
+        message('');
       }
       try{
         const page=direction==='older'?await readOlder(name,options,token):await source.read(name,options);
@@ -565,7 +569,7 @@
         const additions=incoming.filter(event=>!events.has(event.id));
         if(!fresh&&direction==='newer'&&!atBottom&&
           (events.size+additions.length>MAX_EVENTS||retainedBytes+additions.reduce((n,event)=>n+byteSize(event),0)>MAX_BYTES)){
-          paused=true;message('Updates paused at reader limit. Latest resumes at the newest messages.');position();return;
+          paused=true;message('Updates paused at reader limit. Latest resumes at the newest messages.','Updates paused');position();return;
         }
         saveTables();tableMutating=true;
         const fragment=document.createDocumentFragment();let added=0;
@@ -604,24 +608,21 @@
           page.notice||'');
         message(paused?'Reader window is bounded. Latest resumes at the newest messages.':
           trimmed&&!fresh?'Older loaded messages were released. Load earlier to read them again.':
-          page.skipped_large_record?'A large record was skipped. Load earlier to continue.':'');
+          page.skipped_large_record?'A large record was skipped. Load earlier to continue.':'',
+          paused?'Updates paused':trimmed&&!fresh?'Older released':page.skipped_large_record?'Record skipped':'');
         position();if(direction==='initial'||direction==='newer'&&atBottom)remember(true);
         if(direction!=='older')last.rows=added;
-        if(page.has_newer&&direction!=='older'){
-          // A bounded page per request. Continue in the next poll without
-          // sending overlapping reads during a fast provider burst.
-          message('Catching up with new messages…');
-        }
       }catch(error){
         waiting.delete(holder);holding=false;
         if(token!==generation||error.name==='AbortError')return;
         last.failed=true;
         pollAgain=!['history_changed','record_too_large','provider_unavailable','claude_next_phase','dashboard_upgrade_required','dsh_decoder_unavailable','history_format_unsupported'].includes(error.code);
-        retry.hidden=false;message(error.message);
+        retry.hidden=false;message(error.message,'Read failed');
         if(BINDING_ERRORS.includes(error.code)){
           // Never retain content from a stale, unbound or different native session.
           clear({keepSubmissions:error.code==='history_pending'});retry.hidden=false;empty.hidden=false;
           empty.textContent=error.code==='history_changed'?'Session changed. Retry to load the current conversation.':error.message;
+          message(error.message,'Read failed');
           position();
         }
         paintStatus();
@@ -676,13 +677,15 @@
     listen(expandButton,'focus',()=>onActivate());
     listen(panel,'pointerdown',()=>onActivate());
     listen(panel,'focusin',event=>{lastFocused=event.target;onActivate();});
+    listen(notices,'focusin',event=>{lastFocused=event.target;onActivate();});
+    for(const type of ['pointerdown','mousedown'])listen(notices,type,event=>event.stopPropagation());
+    listen(notices,'keydown',event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();close();}});
     listen(panel,'mousedown',event=>event.stopPropagation());
     listen(panel,'keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();if(preview?.selected){preview.close();scroll.focus();}else close();}});
     // Arrow/Page keys and wheels belong only to the browser scroll container;
     // there is no path from this module to xterm or tmux input.
-    listen(earlier,'click',()=>userLoad('older'));
-    listen(noticeEarlier,'click',()=>{scroll.focus({preventScroll:true});userLoad('older');});
-    listen(retry,'click',()=>userLoad(events.size?'newer':'initial'));
+    listen(earlier,'click',()=>{scroll.focus({preventScroll:true});userLoad('older');});
+    listen(retry,'click',()=>{scroll.focus({preventScroll:true});userLoad(events.size?'newer':'initial');});
     listen(latest,'click',()=>{
       if(paused){stop();clear({keepSubmissions:true});load('initial');}
       else{
@@ -734,7 +737,7 @@
     listen(document,'visibilitychange',()=>{if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
     preference();paintControls();
     return Object.freeze({open,close,relocate,reconcile:context,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
-      dispose(){ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
+      dispose(){ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
   }
   function mountWorkspace({getContext,getSlots,getOwner=name=>getContext(name)?.terminalPaneId,activate,...options}){
     const screen=document.querySelector('.screen'),toggle=document.getElementById('conversationToggle');
@@ -802,7 +805,7 @@
           }
           if(target.host===screen||!screen.classList.contains('split-pane-headers'))toggle.after(entry.expandControl);
           else entry.control.after(entry.expandControl);
-          entry.view.relocate(target.host,{visible:true,focus:name===selected});entry.host=target.host;entry.visible=true;
+          entry.view.relocate(target.host,{visible:true,focus:name===selected,noticeAnchor:target.host===screen||!screen.classList.contains('split-pane-headers')?toggle:entry.control});entry.host=target.host;entry.visible=true;
         }
         paint();
       }finally{syncing=false;}

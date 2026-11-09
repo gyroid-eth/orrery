@@ -6,15 +6,16 @@
 .conversation-panel{position:absolute;right:0;top:40px;bottom:0;z-index:5;
   width:var(--conversation-width);display:flex;flex-direction:column;min-height:0;
   border-left:1px solid var(--hair);background:var(--panel);color:var(--ink)}
-/* Reserve the same space even without mode text, so transient notices cannot
-   cover the first row or shift the conversation. */
-.conversation-top,.conversation-toolbar{height:50px;box-sizing:border-box;display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid transparent;border-radius:6px}
-.conversation-toolbar{position:absolute;top:4px;left:18px;right:31px;z-index:3;border-color:var(--hair);background:var(--panel-2)}
-.conversation-top:has(.conversation-mode:not(:empty)){border-color:var(--hair);background:var(--panel-2)}
-.conversation-toolbar .conversation-status,.conversation-mode{min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;max-height:3.2em}
-.conversation-mode:empty{display:none}
-.conversation-top button,.conversation-toolbar button{flex:none}
-.conversation-status{font:10px/1.6 var(--mono);color:var(--ink-dim);flex:1;overflow-wrap:anywhere}
+.conversation-notices,.conversation-toolbar{display:inline-flex;align-items:center;gap:6px;min-width:0;flex:0 0 auto}
+.conversation-notices[hidden],.conversation-toolbar[hidden],.conversation-mode[hidden],.conversation-retry[hidden]{display:none}
+.conversation-toolbar{color:var(--amber);font:10px var(--mono)}
+.conversation-status-label{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conversation-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.conversation-warning,.conversation-retry svg{display:none;width:16px;height:16px}
+.conversation-mode{display:inline-flex;align-items:center;justify-content:center;flex:none;width:18px;height:18px;padding:0;border:1px solid var(--hair);border-radius:50%;background:transparent;color:var(--ink-dim);font:12px Georgia,serif;cursor:help}
+.conversation-mode:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.conversation-toolbar .conversation-retry{height:24px;min-height:24px;padding:2px 6px;font-size:10px}
+.conversation-older{margin:4px 0 2px}
 .conversation-scroll{flex:1;min-height:0;overflow-y:scroll;overscroll-behavior:contain;
   scrollbar-gutter:stable;scrollbar-width:auto;overflow-anchor:none;padding:4px 18px 56px;outline-offset:-3px}
 .conversation-scroll::-webkit-scrollbar{width:13px}
@@ -42,7 +43,6 @@
 .conversation-body{display:flex;flex:1;min-height:0;min-width:0}
 .conversation-thread{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
 .conversation-full .conversation-scroll{padding-left:24px;padding-right:24px}
-.conversation-full .conversation-toolbar{left:24px;right:37px}
 .conversation-full .conversation-events{max-width:960px;margin:0 auto}
 .conversation-files{display:flex;flex-wrap:wrap;gap:6px;padding-top:10px}
 .conversation-file{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;text-transform:none}
@@ -97,7 +97,9 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .conversation-has-preview .conversation-thread{display:none}
   .conversation-preview{width:100%;border:0}
   .conversation-scroll{padding-left:14px;padding-right:12px}
-  .conversation-toolbar{left:14px;right:25px;padding:8px 10px}
+  .conversation-status-label,.conversation-retry span{display:none}
+  .conversation-warning,.conversation-retry svg{display:block}
+  .conversation-toolbar .conversation-retry{width:24px;min-width:24px;padding:3px}
   .conversation-text{font-size:12px;line-height:1.75}
   .scr-head{gap:6px;padding-left:10px;padding-right:10px}
   .scr-head .path{display:none}
@@ -117,7 +119,21 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .conversation-has-preview .conversation-thread{display:none}
   .conversation-preview{width:100%;border:0}
   .conversation-scroll{padding-left:12px;padding-right:10px}
-  .conversation-toolbar{left:12px;right:23px;padding:7px 10px}
+}
+@container split-pane (max-width:600px){
+  .conversation-status-label,.conversation-retry span{display:none}
+  .conversation-warning,.conversation-retry svg{display:block}
+  .conversation-notices,.conversation-toolbar{gap:3px}
+  .conversation-toolbar .conversation-retry{width:24px;min-width:24px;padding:3px}
+  .split-cell-head:has(.conversation-notices:not([hidden])) .split-cell-status{display:none}
+}
+@container split-pane (max-width:240px){
+  .split-cell-head:has(.conversation-notices:not([hidden])) .pane-icon{width:24px;min-width:24px;height:24px;min-height:24px;padding:3px}
+  .conversation-notices,.conversation-toolbar{gap:2px}
+  .conversation-mode{width:16px;height:16px}
+  .conversation-warning{width:12px;height:12px}
+  .conversation-toolbar .conversation-retry{width:20px;min-width:20px;height:22px;min-height:22px;padding:2px}
+  .conversation-retry svg{width:14px;height:14px}
 }
 /* Pressed controls float over live terminal pixels, so their fill stays opaque. */
 .split-cell-actions .split-history-toggle{background:var(--panel)}
