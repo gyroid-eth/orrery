@@ -116,7 +116,8 @@
       '<button class="cockpit-control pane-icon conversation-notice-older" type="button" title="Load earlier" aria-label="Load earlier" hidden>'+earlierIcon+'</button>'+
       '<button class="cockpit-control conversation-action conversation-retry" type="button" hidden>Retry</button></div>'+
       '<div class="conversation-scroll" tabindex="0" aria-label="Conversation messages">'+
-      '<button class="cockpit-control conversation-action conversation-older" type="button" hidden>Load earlier</button>'+
+      '<div class="conversation-top"><span class="conversation-status conversation-mode"></span>'+
+      '<button class="cockpit-control conversation-action conversation-older" type="button" hidden>Load earlier</button></div>'+
       '<div class="conversation-events"></div><div class="conversation-pending" role="status" aria-live="polite"></div><div class="conversation-empty"></div></div>'+
       '<div class="conversation-bottom" hidden><button class="cockpit-control pane-icon conversation-latest" type="button" title="Latest" aria-label="Latest">'+latestIcon+'</button></div></div>'+
       '<aside class="conversation-preview" aria-label="Selected file preview" hidden></aside></div>';
@@ -145,7 +146,7 @@
       else root.open(link.href,'_blank','noopener,noreferrer');
     }
     listen(panel,'click',activateLink);listen(panel,'auxclick',activateLink);
-    const toolbar=el('.conversation-toolbar'),status=el('.conversation-toolbar .conversation-status'),empty=el('.conversation-empty');
+    const toolbar=el('.conversation-toolbar'),status=el('.conversation-toolbar .conversation-status'),modeInfo=el('.conversation-mode'),empty=el('.conversation-empty');
     const earlier=el('.conversation-older'),noticeEarlier=el('.conversation-notice-older'),retry=el('.conversation-retry'),latest=el('.conversation-latest');
     let fullWidth=false,tableMutating=false,tableFrame=0;
     const tablePositions=new Map();
@@ -248,17 +249,24 @@
       el('.conversation-bottom').hidden=!events.size||atBottom&&!paused;
       latest.title=paused?'Latest · resume':newCount?'Latest · '+newCount+' new messages':'Latest';
       latest.setAttribute('aria-label',latest.title);
+      paintStatus();
     }
     function paintStatus(){
       const focused=document.activeElement===earlier;
       toolbar.hidden=!status.textContent&&retry.hidden;
-      noticeEarlier.hidden=toolbar.hidden||earlier.hidden;noticeEarlier.disabled=earlier.disabled;
-      earlier.style.visibility=toolbar.hidden?'':'hidden';
-      if(focused&&!toolbar.hidden)(noticeEarlier.hidden||noticeEarlier.disabled?scroll:noticeEarlier).focus({preventScroll:true});
+      let covered=false;
+      if(!toolbar.hidden&&!earlier.hidden){
+        const button=earlier.getBoundingClientRect(),overlay=toolbar.getBoundingClientRect();
+        covered=button.bottom>overlay.top&&button.top<overlay.bottom;
+      }
+      noticeEarlier.hidden=!covered;noticeEarlier.disabled=earlier.disabled;
+      earlier.style.visibility=covered?'hidden':'';
+      if(focused&&covered)(noticeEarlier.disabled?scroll:noticeEarlier).focus({preventScroll:true});
     }
     function message(text){status.textContent=text;status.title=text;paintStatus();}
+    function modeMessage(text){modeInfo.textContent=text;modeInfo.title=text;}
     function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
-    function clear({keepSubmissions=false}={}){tablePositions.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
+    function clear({keepSubmissions=false}={}){tablePositions.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
       if(tableMutating)return;
@@ -534,6 +542,10 @@
       holding=Boolean(options.wait);
       // Load earlier stays usable while the poll only waits in the background.
       earlier.disabled=!holding;paintStatus();
+      if(direction!=='newer'||op){
+        if(direction==='initial'&&!events.size)empty.hidden=true;
+        message(direction==='older'?'Loading earlier messages…':'Loading conversation…');
+      }
       try{
         const page=direction==='older'?await readOlder(name,options,token):await source.read(name,options);
         holding=false;waiting.delete(holder);
@@ -586,11 +598,12 @@
         if(direction==='initial'||direction==='newer'&&atBottom)scroll.scrollTop=scroll.scrollHeight;
         else if(direction==='older')restoreAnchor(saved,Math.max(0,oldTop+scroll.scrollHeight-oldHeight));
         else{restoreAnchor(saved,oldTop);newCount+=added;}
-        message(paused?'Reader window is bounded. Latest resumes at the newest messages.':
-          mode==='snapshot'?page.notice||'Recent provider snapshot.':
+        modeMessage(mode==='snapshot'?page.notice||'Recent provider snapshot.':
           fresh?(page.limited||trimmed?'Fresh · limited recent snapshot; earlier history and tools need telemetry support.':'Fresh · recent snapshot (up to 200 messages).'):
-          trimmed?'Older loaded messages were released. Load earlier to read them again.':
-          page.skipped_large_record?'A large record was skipped. Load earlier to continue.':page.notice||'');
+          page.notice||'');
+        message(paused?'Reader window is bounded. Latest resumes at the newest messages.':
+          trimmed&&!fresh?'Older loaded messages were released. Load earlier to read them again.':
+          page.skipped_large_record?'A large record was skipped. Load earlier to continue.':'');
         position();if(direction==='initial'||direction==='newer'&&atBottom)remember(true);
         if(direction!=='older')last.rows=added;
         if(page.has_newer&&direction!=='older'){

@@ -107,7 +107,7 @@ def test_initial_long_reader_stops_at_the_tail_without_latest(cockpit, theme, mo
 
 @pytest.mark.parametrize('theme', ['dark', 'light'])
 @pytest.mark.parametrize('notice', ['fresh', 'error', 'paused'])
-def test_notices_and_retry_remain_visible_in_a_long_reader(cockpit, theme, notice):
+def test_mode_and_temporary_notices_have_their_own_positions(cockpit, theme, notice):
     js, wait, client, requests, enable = cockpit
     stable_roster(js)
     enable(mode='fresh_tail' if notice == 'fresh' else 'cursor', count=200)
@@ -119,7 +119,12 @@ def test_notices_and_retry_remain_visible_in_a_long_reader(cockpit, theme, notic
         js("OrreryConversationSource.Source.prototype.read=async()=>{throw new Error('Generated read failure')};conversationView.refresh()")
         wait("!document.querySelector('.conversation-retry').hidden")
     else:
-        wait("document.querySelector('.conversation-status').textContent.includes('Fresh')")
+        wait("document.querySelector('.conversation-mode').textContent.includes('Fresh')")
+        assert js("document.querySelector('.conversation-toolbar').hidden")
+        assert js("(()=>{const s=document.querySelector('.conversation-scroll');return s.scrollHeight-s.clientHeight-s.scrollTop<1})()")
+        js("document.querySelector('.conversation-scroll').dispatchEvent(new WheelEvent('wheel'));document.querySelector('.conversation-scroll').scrollTop=0")
+        assert js("""(()=>{const s=document.querySelector('.conversation-scroll').getBoundingClientRect(),t=document.querySelector('.conversation-top').getBoundingClientRect();return t.top>=s.top&&t.bottom<=s.bottom})()""")
+        return
     assert js("document.querySelector('.conversation-scroll').scrollTop>100")
     assert js("""(()=>{const s=document.querySelector('.conversation-scroll').getBoundingClientRect(),t=document.querySelector('.conversation-toolbar').getBoundingClientRect();return t.height>0&&t.top>=s.top&&t.bottom<=s.bottom})()""")
     if notice != 'paused':

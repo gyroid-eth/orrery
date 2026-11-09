@@ -6,9 +6,14 @@
 .conversation-panel{position:absolute;right:0;top:40px;bottom:0;z-index:5;
   width:var(--conversation-width);display:flex;flex-direction:column;min-height:0;
   border-left:1px solid var(--hair);background:var(--panel);color:var(--ink)}
-.conversation-toolbar{position:absolute;top:4px;left:18px;right:31px;z-index:3;display:flex;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--hair);border-radius:6px;background:var(--panel-2)}
-.conversation-toolbar .conversation-status{min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;max-height:3.2em}
-.conversation-toolbar button{flex:none}
+/* Reserve the same space even without mode text, so transient notices cannot
+   cover the first row or shift the conversation. */
+.conversation-top,.conversation-toolbar{height:50px;box-sizing:border-box;display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid transparent;border-radius:6px}
+.conversation-toolbar{position:absolute;top:4px;left:18px;right:31px;z-index:3;border-color:var(--hair);background:var(--panel-2)}
+.conversation-top:has(.conversation-mode:not(:empty)){border-color:var(--hair);background:var(--panel-2)}
+.conversation-toolbar .conversation-status,.conversation-mode{min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;max-height:3.2em}
+.conversation-mode:empty{display:none}
+.conversation-top button,.conversation-toolbar button{flex:none}
 .conversation-status{font:10px/1.6 var(--mono);color:var(--ink-dim);flex:1;overflow-wrap:anywhere}
 .conversation-scroll{flex:1;min-height:0;overflow-y:scroll;overscroll-behavior:contain;
   scrollbar-gutter:stable;scrollbar-width:auto;overflow-anchor:none;padding:4px 18px 56px;outline-offset:-3px}
