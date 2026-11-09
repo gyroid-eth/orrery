@@ -1,6 +1,7 @@
 .conversation-toggle[hidden],.conversation-panel[hidden]{display:none}
 .screen.conversation-open{--conversation-width:min(46%,460px)}
 .screen.conversation-open .termstage{clip-path:inset(0 var(--conversation-width) 0 0)}
+.screen.conversation-open .termstage>.termhost:not(.follow){right:var(--conversation-width)}
 .screen.conversation-open .promptbar{right:var(--conversation-width)}
 .screen.conversation-open .promptmeta .phint{display:none}
 .conversation-panel{position:absolute;right:0;top:40px;bottom:0;z-index:5;
@@ -49,6 +50,7 @@
 .conversation-bottom .conversation-latest{background:var(--panel)}
 .conversation-panel [hidden]{display:none}
 .screen.conversation-open.conversation-full{--conversation-width:100%}
+.screen.conversation-open.conversation-full .termstage>.termhost:not(.follow){right:0}
 /* Keep the original composer and every existing send/IME/target guard. The
    reader reserves its space instead of covering it or cloning its controls. */
 .screen.conversation-open.conversation-full .conversation-panel{bottom:84px}
@@ -79,6 +81,7 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 @media(max-width:1200px){
   .screen.conversation-open{--conversation-width:100%}
   .screen.conversation-open .termstage,.screen.conversation-open .promptbar{right:0}
+  .screen.conversation-open .termstage>.termhost:not(.follow){right:0}
   .screen.conversation-open .conversation-panel{bottom:84px}
   .screen.conversation-open .promptbar{z-index:6}
   .conversation-panel{border-left:0}
@@ -118,13 +121,15 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .scr-head .path{display:none}
   .scr-head .name{min-width:0;max-width:55px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
 }
-/* Each split owns its reader. Clip only that terminal's pixels, preserving its
-   PTY grid and every neighbouring cell. The original composer stays below Grid. */
+/* Each reader reserves space in its claimed terminal. FOLLOW keeps the external
+   client's grid. Full-width readers overlay the terminal without a zero fit. */
 .split-cell.conversation-cell{--conversation-width:min(100%,max(240px,55%))}
 .split-history-toggle{position:absolute;top:6px;left:8px;z-index:4}
 .split-cell-actions .split-history-toggle{position:static}
 .split-cell.conversation-open>.termhost{clip-path:inset(0 var(--conversation-width) 0 0)}
+.split-cell.conversation-open>.termhost:not(.follow){right:var(--conversation-width);clip-path:none}
 .split-cell.conversation-full{--conversation-width:100%}
+.split-cell.conversation-full>.termhost:not(.follow){right:0}
 .split-cell.conversation-cell>.conversation-panel{position:absolute;left:auto;right:0;top:40px;bottom:0;
   width:var(--conversation-width);height:auto;z-index:4;border-left:1px solid var(--hair)}
 .conversation-cell>.conversation-panel{container:conversation-reader / inline-size}
@@ -141,6 +146,7 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .split-cell-head:has(.conversation-notices:not([hidden])) .split-cell-status{display:none}
 }
 @container split-pane (max-width:240px){
+  .split-cell.conversation-open>.termhost:not(.follow){right:0}
   .split-cell-head:has(.conversation-notices:not([hidden])) .pane-icon{width:24px;min-width:24px;height:24px;min-height:24px;padding:3px}
   .conversation-notices,.conversation-toolbar{gap:2px}
   .conversation-mode{width:16px;height:16px}

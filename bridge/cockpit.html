@@ -4610,9 +4610,9 @@
       }
     }
   },
-  "inventory_digest": "8e2b4ae9ee0c845edcfa8287b7ea9f4d826c1d8dee1c19303311f8d7364e1955",
+  "inventory_digest": "49c689d3b42a03c3eeb7c23bec3eba15ae90f941e40e136da6861c5bbe043b6e",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "e0b7ec4cf99ebb2b2dc2034d94b37478069b79e3301d59a0dabf59b2ae8128a0",
+  "source_digest": "adee0ade262b30b20d93476f18c88fc8cc8d51f363fe9e94bdfdb251f4980088",
   "surface": "cockpit",
   "version": 1
 }
@@ -6942,6 +6942,16 @@ function queueStageFit(focusPaneId=null){
     if(focused&&activeId===focusPaneId)focusTerminalPreservingScroll(focused);
   });
 }
+// Reader visibility and relocation change host geometry without a window resize.
+// Observe the host, not xterm's fitted contents. Share the window-resize debounce
+// so rapid Reader toggles send only the settled grid, without moving focus.
+const terminalHostResizeObserver=new ResizeObserver(entries=>{
+  if(entries.some(({target,contentRect})=>{
+    const pane=panes.get(target.dataset.paneId);
+    return pane&&target.classList.contains('on')&&contentRect.width>0&&contentRect.height>0&&
+      sessionClaimed(claimedSessions,pane.session);
+  }))scheduleFit();
+});
 /* Attach snapshots are one big write that xterm parses across several frames.
    A scroll position read during that write describes a HALF-WRITTEN buffer;
    restoring it pins the viewport there, xterm reads that as "the reader
@@ -7724,6 +7734,7 @@ function createPane(session,meta){
   group.paneTabs.appendChild(tab);
   const paneRec={session,meta:normalized,term,fit,host,tab,bottomJump,_xtermAtBottom:true};
   panes.set(meta.paneId,paneRec);
+  terminalHostResizeObserver.observe(host);
   setCodexWheelModes(paneRec,normalized);installCodexWheel(paneRec);
   beginPaneSnapshot(paneRec);
   host.addEventListener('scroll',()=>{
@@ -7863,6 +7874,7 @@ function closePane(paneId,deferFocus=false){
   const p=panes.get(paneId);if(!p)return;
   const session=p.session;
   if(p._snapshotTimer){clearTimeout(p._snapshotTimer);p._snapshotTimer=null;}
+  terminalHostResizeObserver.unobserve(p.host);
   p.term.dispose();p.host.remove();p.tab.remove();p.bottomJump.remove();panes.delete(paneId);
   if(selectedPaneBySession.get(session)===paneId)selectedPaneBySession.delete(session);
   if(activeId===paneId){

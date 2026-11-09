@@ -28,9 +28,10 @@ reading earlier records. Its opaque background keeps it visible, and extra
 space at the end of the list keeps the last line clear.
 Turn the setting off to remove the button, close the panel and stop its reads.
 Conversation scripts/styles are loaded only while the setting is enabled. Reading keys stay
-in the reader, and opening/closing it does not resize a CLAIMED terminal: the
-terminal grid is preserved and its right portion is clipped until Reader is
-closed.
+in the reader. In CLAIMED mode, opening Reader beside the terminal fits the
+terminal to the remaining width; closing Reader restores its width. Full-width
+Reader overlays the terminal. FOLLOW keeps the external terminal’s grid, so
+Reader can cover part of it.
 The single preference uses the existing shared preference mechanism; transcript
 contents and reading position are never saved as preferences.
 
