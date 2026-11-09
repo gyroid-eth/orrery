@@ -301,6 +301,30 @@
   .agent:hover .name-copy,.name-copy:focus-visible{opacity:1}
   .name-copy:hover,.name-copy:focus-visible{background:rgb(var(--theme-ink-rgb) / .06);color:var(--ink);outline:none}
   .roster.select-mode .name-copy{display:none}
+  .roster-edit-toggle{align-self:center;flex:none;width:18px;height:18px;display:grid;place-items:center;padding:0;
+    border:0;border-radius:4px;background:transparent;color:var(--ink-dim);opacity:0;cursor:pointer}
+  .roster-edit-toggle svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+  .agent:hover .roster-edit-toggle,.roster-edit-toggle:focus-visible{opacity:1}
+  .roster-edit-toggle:focus-visible{outline:1px solid var(--amber);outline-offset:2px}
+  .roster.select-mode .roster-edit-toggle{display:none}
+  .roster-edit{flex:none;min-width:0;margin-top:-5px;padding:10px;border:1px solid var(--hair);border-radius:7px;
+    background:var(--panel-2);color:var(--ink);font-family:var(--mono)}
+  .roster-edit label{display:flex;flex-direction:column;gap:5px;margin-bottom:9px;color:var(--ink-dim);font-size:10px}
+  .roster-edit label[hidden],.roster-edit[hidden]{display:none}
+  .roster-edit input,.roster-edit textarea{box-sizing:border-box;min-width:0;width:100%;padding:6px 7px;
+    border:1px solid var(--hair);border-radius:4px;background:var(--panel);color:var(--ink);font:11px/1.5 var(--mono)}
+  .roster-edit textarea{resize:vertical}
+  .roster-edit input:focus,.roster-edit textarea:focus{outline:1px solid var(--amber)}
+  .roster-edit-hint{color:var(--ink-dim);font-size:9px;line-height:1.6;overflow-wrap:anywhere}
+  .roster-edit-actions{display:flex;gap:7px;margin-top:9px}
+  .roster-edit button{padding:5px 9px;border:1px solid var(--hair);border-radius:4px;background:transparent;
+    color:var(--ink-dim);font:10px var(--mono);cursor:pointer}
+  .roster-edit button:focus-visible{outline:1px solid var(--amber);outline-offset:2px}
+  .roster-edit .roster-edit-save{color:var(--amber);border-color:var(--amber)}
+  .roster-edit :disabled{opacity:.6;cursor:wait}
+  .roster-edit-status{color:var(--ink-dim);font-size:10px;line-height:1.5;overflow-wrap:anywhere}
+  .roster-edit-status:not(:empty){margin-top:8px}
+  @media(hover:none){.roster-edit-toggle{opacity:1}}
   .bulk-check{
     position:absolute;right:10px;top:9px;width:17px;height:17px;border:1px solid var(--hair);
     border-radius:4px;background:rgba(11,13,17,.72);opacity:0;pointer-events:none;
@@ -1587,6 +1611,7 @@
 <script src="vendor/addon-fit-0.10.0/addon-fit.js"></script>
 <script src="vendor/addon-web-links-0.11.0/addon-web-links.js"></script>
 <script src="roster_descriptor.js"></script>
+<script src="roster_edit.js"></script>
 <script src="demo_mask.js"></script>
 <script src="demo_mode.js"></script>
 <script id="agentstack-theme-axis-inventory" type="application/json">
@@ -1799,6 +1824,66 @@
             "property": "color",
             "selector": ".name-copy:hover,.name-copy:focus-visible",
             "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-edit-toggle",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".roster-edit",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".roster-edit",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-edit",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-edit label",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".roster-edit input,.roster-edit textarea",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".roster-edit input,.roster-edit textarea",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-edit input,.roster-edit textarea",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-edit-hint",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".roster-edit button",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-edit button",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-edit-status",
+            "value": "var(--ink-dim)"
           },
           {
             "property": "border",
@@ -3504,6 +3589,31 @@
           },
           {
             "property": "color",
+            "selector": ".roster-edit-toggle",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-edit label",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-edit-hint",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-edit button",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-edit-status",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
             "selector": ".agent.offline-hint::after",
             "value": "var(--ink-dim)"
           },
@@ -4297,7 +4407,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "effae69a82395e8222afbd6cc57c2c2aab0311b1db01b9bff8ef878472702f59",
+        "digest": "7a1c6e9ef13d174480dc7a9c73c7b6b222a37aef5654d09b7316c8d70d1bda91",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4308,6 +4418,9 @@
           ".roster-select\u0000font-size",
           ".roster-filter input\u0000font-size",
           ".roster-filter-status\u0000font-size",
+          ".roster-edit label\u0000font-size",
+          ".roster-edit-hint\u0000font-size",
+          ".roster-edit-status\u0000font-size",
           ".agent.offline-hint::after\u0000font-size",
           ".bulk-count\u0000font-size",
           ".bulk-exit\u0000font-size",
@@ -4448,7 +4561,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "ea89a49deb0a68e899503ccec581a58f7013c7a6cebbc027a0a5be32dc08ee92",
+        "digest": "c79e5d0f163306ccf30aa01ad9a6197f78bcb6396f567b8288d5594535f12f52",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4497,9 +4610,9 @@
       }
     }
   },
-  "inventory_digest": "d689d00d29af443efaeed70859347372259b5616af5e63bf268daae9e4cbe511",
+  "inventory_digest": "8e2b4ae9ee0c845edcfa8287b7ea9f4d826c1d8dee1c19303311f8d7364e1955",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "a2a5f6cc29260f24f23c34019d6504a5a9c898eec2954c0957bfbf720ef2d05a",
+  "source_digest": "e0b7ec4cf99ebb2b2dc2034d94b37478069b79e3301d59a0dabf59b2ae8128a0",
   "surface": "cockpit",
   "version": 1
 }
@@ -9075,6 +9188,9 @@ document.body.appendChild(agentDetail);
 let detailAnchor=null;
 let selectedAgent=null,currentAgents=[];
 const descriptorStore=RosterDescriptor.createStableDescriptorStore();
+let rosterAnnotationEpoch=0;
+const rosterEditor=OrreryRosterEdit.mount({container:rosterEl,getAgent:currentAgentNamed,onSave:applyRosterAnnotation,
+  onOpen:()=>{if(detailAnchor)hideAgentDetail(detailAnchor);},onError:message=>showToast(message,true),isSelecting:()=>rosterSelectMode});
 const DESCRIPTOR_TASK_KEY='oc-descriptor-task',DESCRIPTOR_TASK_MAX=400;
 let descriptorTaskState={},descriptorTaskDirty=false,descriptorTaskSaveAt=0;
 try{descriptorTaskState=JSON.parse(localStorage.getItem(DESCRIPTOR_TASK_KEY)||'{}')||{};}catch(_){descriptorTaskState={};}
@@ -9087,6 +9203,21 @@ function selectAgent(name){selectedAgent=name;tiles.forEach((el,n)=>el.classList
   // used to follow only an activated terminal pane (2026-09-25).
   document.dispatchEvent(new CustomEvent('oc:filter-agent',{detail:{agent:name}}));}
 function currentAgentNamed(name){return currentAgents.find(agent=>agent&&agent.name===name)||null;}
+function paintSplitRoles(agents){
+  agents.forEach(agent=>{
+    const cell=splitCells.get(agent.name);if(!cell||!cell._role)return;
+    const role=String(agent.annot&&agent.annot.role||'').trim();
+    cell._role.hidden=!role;cell._role.textContent=role;
+  });
+}
+function applyRosterAnnotation(name,annotation){
+  rosterAnnotationEpoch++;
+  const agent=currentAgentNamed(name);if(!agent)return;
+  agent.annot=annotation;agent.task=OrreryRosterEdit.effectiveTask(agent);
+  agent.descriptor=descriptorStore.get(agent,currentAgents);noteDescriptorTasks(currentAgents);
+  paintTile(tiles.get(name),agent);paintSplitRoles(currentAgents);applyRosterFilter();
+  document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+}
 function paintBulkTileState(el,agent){
   const eligible=isBulkExitEligibleAgent(agent);
   const selected=eligible&&bulkSelectedAgents.has(agent.name);
@@ -9116,6 +9247,7 @@ function updateRosterBulkUI(){
   rosterSelectBtn.disabled=bulkExitBusy;
 }
 function setRosterSelectMode(on){
+  if(on)rosterEditor.close(false);
   if(bulkExitBusy)return;
   rosterSelectMode=Boolean(on);
   if(!rosterSelectMode)bulkSelectedAgents.clear();
@@ -9216,6 +9348,7 @@ function applyRosterFilter(){
   rosterFilterStatus.hidden=!filtering||shown!==0;
   rosterFilterSummary.textContent=`${shown}/${tiles.size}`;
   paintPinnedBoundary();
+  rosterEditor.reposition();
 }
 rosterFilter.addEventListener('input',applyRosterFilter);
 document.getElementById('needChip').addEventListener('click',()=>{
@@ -9274,6 +9407,7 @@ function positionAgentDetail(el){
 }
 function showAgentDetail(el){
   const a=currentAgentNamed(el&&el.dataset.agent);if(!a)return;
+  if(rosterEditor.isEditing(a.name))return;
   const detail=agentDetailModel(a,currentAgents);
   detailAnchor=el;
   agentDetail.querySelector('.agent-detail-name').textContent=detail.name;
@@ -9328,6 +9462,7 @@ function tileFor(a){
     const copyButton=el.querySelector('.name-copy');
     copyButton.setAttribute('aria-label',`Copy name ${a.name}`);copyButton.title=`Copy name · ${a.name}`;
     copyButton.onclick=event=>handleNameCopy(a.name,event);
+    rosterEditor.bindTile(el,a.name);
     bindAgentDetail(el);
     rosterEl.appendChild(el);
     tiles.set(a.name,el);
@@ -9358,6 +9493,7 @@ function paintTile(el,a){
   else{ctxEl.classList.add('none');fill.style.width='0%';pct.textContent='—';}
   el.querySelector('.glyph').textContent=act.glyph;
   el.querySelector('.statetext').textContent=descriptor.primary;
+  el.querySelector('.statetext').title=OrreryRosterEdit.taskTitle(a);
   const updated=el.querySelector('.descriptor-updated');
   const updatedAt=descriptorTaskState[a.name]&&descriptorTaskState[a.name].updatedAt;
   updated.hidden=!updatedAt;updated.textContent=updatedAt?`updated ${relTime(updatedAt/1000)} ago`:'';
@@ -9378,7 +9514,7 @@ function paintPinnedTileState(el,name){
 }
 function paintPinnedBoundary(){
   let lastPinned=null,hasVisibleUnpinned=false;
-  [...rosterEl.children].forEach(el=>{
+  [...rosterEl.querySelectorAll(':scope > .agent')].forEach(el=>{
     el.classList.remove('pinned-boundary');
     if(el.classList.contains('filtered-out'))return;
     if(pinnedAgents.has(el.dataset.agent))lastPinned=el;
@@ -9537,12 +9673,14 @@ function reorderRoster(live){
   const want=live.slice().sort((a,b)=>Number(pinnedAgents.has(b.name))-Number(pinnedAgents.has(a.name))
     ||rosterRank(a)-rosterRank(b)
     ||activityOf(b)-activityOf(a)||a.name.localeCompare(b.name));
-  const current=[...rosterEl.children].map(el=>el.dataset.agent);
+  const current=[...rosterEl.querySelectorAll(':scope > .agent')].map(el=>el.dataset.agent);
   if(!(want.length===current.length&&want.every((a,i)=>a.name===current[i])))
     want.forEach(a=>{const el=tiles.get(a.name);if(el)rosterEl.appendChild(el);});
   paintPinnedBoundary();
+  rosterEditor.reposition();
 }
 async function pollAgents(){
+  const annotationEpoch=rosterAnnotationEpoch;
   try{
     // only the live rows and the retired names: the full 30-day roster is
     // ~30x larger and every non-live row was filtered out below anyway
@@ -9558,12 +9696,14 @@ async function pollAgents(){
       throw new Error(String(response.status));
     }
     const d=await response.json();
+    if(annotationEpoch!==rosterAnnotationEpoch)return false;
     pruneRetiredPins(d);
     // warmup(warm-*/pending-*) はプール予熱でありエージェントではない。
     // 従来は名前順で最下部に沈んで見えなかったが、recency ソート導入で
     // 浮上するようになったため明示除外（claim され改名された時点で現れる）。
     const live=(d.agents||[]).filter(a=>
       (a.running||a.category==='agent')&&a.category!=='warmup');
+    live.forEach(agent=>{agent.registered_task=agent.task||'';agent.task=OrreryRosterEdit.effectiveTask(agent);});
     noteDescriptorTasks(live);
     descriptorStore.retain(live.map(agent=>agent.name));
     live.forEach(agent=>{agent.descriptor=descriptorStore.get(agent,live);});
@@ -9577,12 +9717,7 @@ async function pollAgents(){
     reorderRoster(live);
     renderCrewCounts(live);
     rosterTag.hidden=true;rosterTag.textContent='';agentDot.className='dot open';
-    live.forEach(agent=>{
-      const cell=splitCells.get(agent.name);
-      if(!cell||!cell._role)return;
-      const role=String(agent.annot&&agent.annot.role||'').trim();
-      cell._role.hidden=!role;cell._role.textContent=role;
-    });
+    paintSplitRoles(live);
     applyRosterFilter();
     document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:live}}));
     if(spawnOverlay.classList.contains('on'))populateSpawnParents();

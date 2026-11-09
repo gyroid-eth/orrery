@@ -285,6 +285,14 @@ PROXY_ROUTES = {
 
 _ANNOTATIONS_CACHE_SECONDS = 4.5
 _annotations_cache: tuple[float, dict[str, dict[str, str]]] = (0.0, {})
+_annotations_generation = 0
+
+
+def invalidate_annotations_cache() -> None:
+    """A completed annotation write fences every older compatibility read."""
+    global _annotations_cache, _annotations_generation
+    _annotations_generation += 1
+    _annotations_cache = (0.0, {})
 
 
 def normalize_annotations(raw: Any) -> dict[str, dict[str, str]]:
@@ -305,6 +313,9 @@ def normalize_annotations(raw: Any) -> dict[str, dict[str, str]]:
             "emoji": str(value.get("emoji", "")).strip()[:8],
             "group": str(value.get("group", "")).strip()[:24],
         }
+        task = str(value.get('task') or '').strip()[:200]
+        if task:
+            annot['task'] = task
         if any(annot.values()):
             labels[name] = annot
     return labels
@@ -331,23 +342,29 @@ async def annotations_by_agent(
     but only use it when the dashboard cannot be reached.
     """
     global _annotations_cache
-    now = time.monotonic()
-    if now - _annotations_cache[0] < _ANNOTATIONS_CACHE_SECONDS:
-        return _annotations_cache[1]
-    try:
-        async with http_session.get(DASHBOARD_URL + "/api/annotations") as response:
-            body = await response.read()
-            if response.status == 200:
-                try:
-                    labels = normalize_annotations(json.loads(body))
-                except (TypeError, json.JSONDecodeError, UnicodeDecodeError):
+    while True:
+        now = time.monotonic()
+        if now - _annotations_cache[0] < _ANNOTATIONS_CACHE_SECONDS:
+            return _annotations_cache[1]
+        generation = _annotations_generation
+        try:
+            async with http_session.get(DASHBOARD_URL + "/api/annotations") as response:
+                body = await response.read()
+                if response.status == 200:
+                    try:
+                        labels = normalize_annotations(json.loads(body))
+                    except (TypeError, json.JSONDecodeError, UnicodeDecodeError):
+                        labels = {}
+                else:
                     labels = {}
-            else:
-                labels = {}
-    except (ClientError, asyncio.TimeoutError):
-        labels = annotations_from_file()
-    _annotations_cache = (time.monotonic(), labels)
-    return labels
+        except (ClientError, asyncio.TimeoutError):
+            labels = annotations_from_file()
+        if generation != _annotations_generation:
+            # A post-save poll may share this in-flight roster request. Read
+            # the current generation instead of returning its stale snapshot.
+            continue
+        _annotations_cache = (time.monotonic(), labels)
+        return labels
 
 
 def _pending_question_in(text: str) -> bool:
@@ -514,7 +531,7 @@ def prepare_agents_payload(
     for agent in kept:
         if isinstance(agent, dict) and isinstance(agent.get("name"), str):
             annot = labels.get(agent["name"])
-            if annot:
+            if annot and 'annot' not in agent:
                 agent["annot"] = annot
                 changed = True
             if agent.get("running") and agent.get("act_state") == "wait" \
@@ -2501,6 +2518,8 @@ async def proxy_dashboard_passthrough(request: web.Request) -> web.Response:
             **({"timeout": ClientTimeout(total=ACTION_PROXY_TIMEOUT)} if action else {}),
         ) as response:
             payload = await response.read()
+            if action and request.path == '/api/annotate' and 200 <= response.status < 300:
+                invalidate_annotations_cache()
             content_type = response.headers.get(
                 "Content-Type", "application/octet-stream"
             )
@@ -4466,7 +4485,7 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "orrery_view.css", "mail_view.css", "spawn_picker.css", "theme_light.css",
     "cockpit_tour.css", "telemetry_light.css",
     "spawn_picker.js", "effort_slider.js", "spawn_catalog_loader.js", "prefs_sync.js", "phone_settings.js",
-    "theme_core.js", "theme_controller.js", "roster_descriptor.js", "demo_mask.js",
+    "theme_core.js", "theme_controller.js", "roster_descriptor.js", "roster_edit.js", "demo_mask.js",
     "demo_mode.js", "orrery_view.js", "mail_view.js", "cockpit_tour.js",
     "cockpit_full_tour.js", "telemetry_light.js",
     "conversation_source.js", "conversation_view.js", "conversation_view.css", "conversation_preview.js",

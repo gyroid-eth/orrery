@@ -137,6 +137,12 @@ Hovering over a tile shows a copy icon to the right of the agent name. Clicking 
 
 In a window where the clipboard cannot be used, or when the browser does not allow writing, `COPY FAILED · …` is shown. It is also shown as a failure when there is no response after 3 seconds. The icon is not shown during Select mode.
 
+### Edit Role and Task
+
+Hover over a roster card to reveal the pencil beside its name, or reach it with Tab. Press it to open Role and Task fields below the card. Enter or Save saves; Esc or Cancel cancels. Use Shift+Enter for a new line in Task.
+
+Role accepts up to 40 characters and Task up to 200. Task is a display override of the description registered with Mail. Save an empty Task to restore the registered description; while overridden, its title shows the original value. Saving updates the roster, Split role labels, and Planetarium immediately. Task editing requires dashboard API 38 or later; older dashboards offer Role only.
+
 ### Pin
 
 With many agents running, the roster keeps reordering by state. If you pin the agents you always look at, such as a parent agent or a reviewer, they stay at the top regardless of reordering.
