@@ -1,5 +1,6 @@
 """Mode information and temporary notices share a fixed, text-safe slot."""
 import json
+import time
 
 import pytest
 from test_conversation_review_regressions import cockpit, stable_roster, wait_reading_layout
@@ -78,3 +79,44 @@ def test_overlay_earlier_control_only_replaces_the_covered_control(cockpit, them
     js("document.querySelector('.conversation-scroll').scrollTop=300;document.querySelector('.conversation-scroll').dispatchEvent(new Event('scroll'))")
     assert js("document.querySelector('.conversation-notice-older').hidden")
     assert js("getComputedStyle(document.querySelector('.conversation-older')).visibility") == 'visible'
+
+
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+@pytest.mark.parametrize('width', [1600, 390])
+def test_hiding_focused_overlay_earlier_keeps_focus_in_reader(cockpit, theme, width):
+    js, wait, client, requests, enable = cockpit
+    client.call('Emulation.setDeviceMetricsOverride', width=width, height=844, deviceScaleFactor=1, mobile=False)
+    stable_roster(js)
+    enable(count=80)
+    js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
+    wait_reading_layout(js)
+    js("const s=document.querySelector('.conversation-scroll');s.scrollTop=0;s.dispatchEvent(new Event('scroll'));OrreryConversationSource.Source.prototype.read=async()=>{throw new Error('Generated read failure')};conversationView.refresh()")
+    wait("!document.querySelector('.conversation-retry').hidden")
+    js("document.querySelector('.conversation-notice-older').focus();packets.length=0")
+    assert js("document.activeElement===document.querySelector('.conversation-notice-older')")
+    center = js("(()=>{const r=document.querySelector('.conversation-scroll').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()")
+    client.call('Input.dispatchMouseEvent', type='mouseWheel', x=center['x'], y=center['y'], deltaX=0, deltaY=300)
+    wait("document.querySelector('.conversation-scroll').scrollTop>100&&document.querySelector('.conversation-notice-older').hidden")
+    assert js("document.activeElement===document.querySelector('.conversation-scroll')")
+    js('queueStageFit(activeId)')
+    time.sleep(.2)
+    assert js("document.activeElement===document.querySelector('.conversation-scroll')")
+    assert js("packets.filter(p=>['input','codex-page'].includes(p.type))") == []
+
+
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_retry_unchanged_clears_temporary_notice_and_keeps_rows(cockpit, theme):
+    js, wait, client = sparse(cockpit, theme, 390, 'dsh')
+    js("window.savedNoticeRow=document.querySelector('[data-event-id=first-text]');window.savedMode=document.querySelector('.conversation-mode').textContent;window.savedTextTop=savedNoticeRow.getBoundingClientRect().top;OrreryConversationSource.Source.prototype.read=async()=>{const e=new Error('Generated read failure');e.code='record_too_large';throw e};conversationView.refresh()")
+    wait("!document.querySelector('.conversation-retry').hidden")
+    js("window.unchangedReads=0;OrreryConversationSource.Source.prototype.read=()=>{unchangedReads++;return unchangedReads===1?new Promise(resolve=>window.finishUnchanged=resolve):Promise.resolve({mode:'cursor',events:[],after:'tail',unchanged:true})};document.querySelector('.conversation-retry').click()")
+    wait("typeof finishUnchanged==='function'&&document.querySelector('.conversation-toolbar .conversation-status').textContent.includes('Loading')")
+    js("finishUnchanged({mode:'cursor',events:[],after:'tail',unchanged:true})")
+    time.sleep(.1)
+    assert js("document.querySelector('.conversation-toolbar').hidden")
+    assert js("document.querySelector('.conversation-retry').hidden")
+    assert js("document.querySelector('[data-event-id=first-text]')===savedNoticeRow&&document.querySelector('.conversation-mode').textContent===savedMode")
+    assert js("Math.abs(savedNoticeRow.getBoundingClientRect().top-savedTextTop)<=1")
+    wait('unchangedReads>=2')
+    assert js("document.querySelector('.conversation-toolbar').hidden")
+    assert js("document.querySelector('[data-event-id=first-text]')===savedNoticeRow&&document.querySelector('.conversation-mode').textContent===savedMode")

@@ -252,13 +252,14 @@
       paintStatus();
     }
     function paintStatus(){
-      const focused=document.activeElement===earlier;
+      const focused=document.activeElement===earlier,noticeFocused=document.activeElement===noticeEarlier;
       toolbar.hidden=!status.textContent&&retry.hidden;
       let covered=false;
       if(!toolbar.hidden&&!earlier.hidden){
         const button=earlier.getBoundingClientRect(),overlay=toolbar.getBoundingClientRect();
         covered=button.bottom>overlay.top&&button.top<overlay.bottom;
       }
+      if(noticeFocused&&(!covered||earlier.disabled))scroll.focus({preventScroll:true});
       noticeEarlier.hidden=!covered;noticeEarlier.disabled=earlier.disabled;
       earlier.style.visibility=covered?'hidden':'';
       if(focused&&covered)(noticeEarlier.disabled?scroll:noticeEarlier).focus({preventScroll:true});
@@ -554,7 +555,7 @@
         last.catchUp=page.has_newer===true&&direction!=='older';last.rows=0;last.failed=false;
         if(token!==generation||!opened||!enabled)return;
         // The server saw no change since this cursor: keep every row as is.
-        if(page.unchanged===true&&direction==='newer'&&page.after===after)return;
+        if(page.unchanged===true&&direction==='newer'&&page.after===after){message('');return;}
         const atBottom=nearBottom(),oldHeight=scroll.scrollHeight,oldTop=scroll.scrollTop,saved=anchor();
         const incoming=page.events.filter(event=>event&&typeof event.id==='string'&&typeof event.text==='string');
         for(const event of incoming)observedIds.add(event.id);
