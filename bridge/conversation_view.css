@@ -171,8 +171,9 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .conversation-mode{width:16px;height:18px}
   .split-cell-status.live{font-size:0}
 }
-/* Pressed controls float over live terminal pixels, so their fill stays opaque. */
-.split-cell-actions .split-history-toggle{background:var(--panel)}
+/* Keep the pressed fill visible through hover and keyboard focus. */
+.cockpit-control:is(.conversation-toggle,.split-history-toggle,.conversation-expand)[aria-pressed="true"]{
+  color:var(--ink);border-color:var(--hair);background:rgb(var(--theme-accent-rgb) / .12)}
 .screen:not(.split-pane-headers) .split-count-1 .conversation-cell>.conversation-panel{top:0}
 .screen:has(.split-cell.conversation-open) .promptmeta .phint{display:none}
 .conversation-expand[hidden]{display:none}
