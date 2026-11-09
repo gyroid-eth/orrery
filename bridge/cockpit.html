@@ -724,8 +724,6 @@
     -webkit-backdrop-filter:none;box-shadow:none;gap:6px}
   .split-pane-headers .split-cell-label .scl-name{min-width:0;flex:0 1 auto;cursor:pointer;font:14px var(--serif);letter-spacing:normal}
   .split-pane-headers .split-cell-label .scl-name:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
-  .split-pane-headers .split-cell-label .scl-close{position:static;flex:0 0 22px;width:22px;height:22px;
-    opacity:.6;pointer-events:auto;transform:none;font-size:14px}
   .split-pane-headers .split-cell-label .scl-role{display:none}
   .split-cell-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto;margin-left:auto}
   .split-cell-status{display:inline-flex;align-items:center;gap:5px;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-faint);font:9px var(--mono);text-transform:uppercase;cursor:default}
@@ -736,7 +734,6 @@
   @container split-pane (max-width:320px){
     .split-pane-headers .split-cell-head{gap:4px;padding:5px 6px}
     .split-pane-headers .split-cell-label{gap:4px}
-    .split-pane-headers .split-cell-label .scl-close{flex-basis:18px;width:18px}
     .split-cell-actions{gap:4px}
     .split-cell-actions .cockpit-control{font-size:9px;padding:5px}
     .split-cell-actions .pane-action-wide{display:none}
@@ -774,18 +771,6 @@
   .split-cell-label .scl-role[hidden]{display:none}
   .split-cell-label > img{width:20px;height:20px;border-radius:50%;flex:0 0 auto;
     border:1px solid var(--hair);background:#0a0a0c}
-  .scl-close{
-    position:absolute;right:-6px;top:-7px;display:grid;place-items:center;width:17px;height:17px;
-    padding:0;border:1px solid var(--hair);border-radius:50%;background:rgba(9,11,15,.74);
-    color:var(--ink-faint);font:11px/1 var(--mono);opacity:0;pointer-events:none;cursor:pointer;
-    transform:scale(.72);
-    transition:opacity .14s,transform .14s,border-color .14s,color .14s,background .14s;
-  }
-  .split-cell-label:hover .scl-close,.scl-close:focus-visible{
-    opacity:1;pointer-events:auto;transform:scale(1)}
-  .scl-close:hover,.scl-close:focus-visible{
-    outline:none;border-color:var(--amber);color:var(--amber);background:var(--amber-glow)}
-  .scl-close[hidden]{display:none}
   .split-cell.focused .split-cell-label{
     color:var(--amber);border-color:rgb(var(--theme-accent-rgb) / .35)}
   .split-cell.focused .split-cell-label > img{border-color:rgb(var(--theme-accent-rgb) / .6)}
@@ -2481,16 +2466,6 @@
             "value": "1px solid var(--hair)"
           },
           {
-            "property": "border",
-            "selector": ".scl-close",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".scl-close",
-            "value": "var(--ink-faint)"
-          },
-          {
             "property": "color",
             "selector": ".split-cell-empty",
             "value": "var(--ink-faint)"
@@ -3864,11 +3839,6 @@
           },
           {
             "property": "color",
-            "selector": ".scl-close",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
             "selector": ".split-cell-empty",
             "value": "var(--ink-faint)"
           },
@@ -4442,7 +4412,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "136c5b21ba24fb466bfc65f7faa3da08208648fd76a10e7380a469ad88c06e10",
+        "digest": "6c2d9a2c5a508466a88a49ae60d3905b3e0790db02e82a487aca98372e1ec83e",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4595,7 +4565,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "feafa9721dd17c04aaad3ad5135100383297bd9e58c142cfd4a071bdf696dfa6",
+        "digest": "22af0092ccc02122fe749c44fe33096e9cee5299b56b39c7cc73cf8f96f14355",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4644,9 +4614,9 @@
       }
     }
   },
-  "inventory_digest": "956b6a88b132505929655e6bc710656bdd6f56ff2ae1b446c4626a9a660392d9",
+  "inventory_digest": "388baaa5609bea222691d0e13314c7ff269dd57abd27ce9b6253a704d79ae17f",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "87ce4909df901f7e3fdc0a43f215b94132227756273efab8d722184d013ec7f4",
+  "source_digest": "01fe75e7e61dfe82ea88b48ab06ee67c21d5b85b4ffc44476a12ed3d117333e6",
   "surface": "cockpit",
   "version": 1
 }
@@ -7357,14 +7327,14 @@ function ensureSplitCell(session){
   const agent=currentAgents.find(item=>item&&item.name===session);
   const role=String(agent&&agent.annot&&agent.annot.role||'').trim();
   lrole.hidden=!role;lrole.textContent=role;
-  const close=document.createElement('button');close.className='scl-close';close.type='button';
-  close.textContent='×';close.title=`close ${session} pane`;
+  const close=document.createElement('button');close.className='cockpit-control pane-icon scl-close';close.type='button';
+  close.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';close.title=`close ${session} pane`;
   close.setAttribute('aria-label',`Close ${session} pane`);
   const heading=document.createElement('span');heading.className='pane-heading';
   const logo=document.createElement('span');logo.className='pane-provider';logo.setAttribute('role','img');
   const copy=document.createElement('span');copy.className='pane-heading-copy';
   const model=document.createElement('span');model.className='pane-model';model.hidden=true;
-  copy.append(lname,model);heading.append(logo,copy);label.append(heading,lrole,close);
+  copy.append(lname,model);heading.append(logo,copy);label.append(heading,lrole);
   const empty=document.createElement('span');empty.className='split-cell-empty';empty.textContent='connecting…';
   const state=document.createElement('span');state.className='split-cell-status';state.setAttribute('role','status');
   const actions=document.createElement('div');actions.className='split-cell-actions';
@@ -7373,7 +7343,7 @@ function ensureSplitCell(session){
   windowButton.addEventListener('click',()=>popPaneSessionToWindow(session));
   for(const type of ['pointerdown','mousedown'])head.addEventListener(type,event=>event.stopPropagation());
   head.addEventListener('keydown',event=>event.stopPropagation());
-  label.insertBefore(state,lrole);actions.append(windowButton);head.append(label,actions);cell.append(head,empty);
+  label.insertBefore(state,lrole);actions.append(windowButton,close);head.append(label,actions);cell.append(head,empty);
   label.addEventListener('pointerdown',event=>beginSplitLabelPointer(event,session,label));
   label.addEventListener('pointermove',updateSplitLabelDrag);
   label.addEventListener('pointerup',event=>finishSplitLabelDrag(event));
@@ -7477,6 +7447,7 @@ function renderStage({fit=true}={}){
   document.dispatchEvent(new CustomEvent('oc:stage-agent',{detail:{name:activeSession()||''}}));
 }
 function paintPendingSession(session){
+  terminalLessAgent=null;paneWindowSelection=null;
   scrName.textContent=session;scrName.title=session;scrPath.textContent='';
   scrBadge.textContent='connecting';scrBadge.className='badge off';
   scrBadge.title=scrBadge.ariaLabel='connecting';
@@ -9126,7 +9097,7 @@ function rosterIsLocal(agent){
 function rosterProviderKey(agent){
   const alias={anthropic:'anthropic',claude:'anthropic','claude-code':'anthropic',
     openai:'openai',codex:'openai',google:'google',gemini:'google',antigravity:'google',
-    deepseek:'deepseek',dsh:'deepseek','dsh-tui':'deepseek'};
+    deepseek:'deepseek',dsh:'deepseek','dsh-tui':'deepseek',alibaba:'qwen',zai:'glm'};
   const provider=String(agent.provider||'').trim().toLowerCase();
   // Backend identity or explicit locality selects the local presentation.
   // Use the resolved model ID, never the adapter/program or profile nickname.
@@ -9161,9 +9132,7 @@ function paneHeadingModel(agent){
   const model=agent&&typeof agent.model==='string'?agent.model.trim():'';
   if(!model)return {text:'',title:''};
   const raw=typeof agent.model_raw==='string'?agent.model_raw.trim():'';
-  const kind=/\bgpt[- ]?\d+(?:\.\d+)*[- ](sol|terra|luna|astra)\b/i;
-  const match=raw.match(kind)||model.match(kind);
-  return {text:match?match[1][0].toUpperCase()+match[1].slice(1).toLowerCase():model,
+  return {text:model,
     title:[...new Set([model,raw].filter(Boolean))].join(' · ')};
 }
 function paintPaneHeading(heading,session,status,active=false){
@@ -9186,7 +9155,7 @@ function paintPaneHeading(heading,session,status,active=false){
   }
   const working=Boolean(active&&agent&&agent.running===true&&agent.act_state==='work');
   logo.classList.toggle('is-working',working);
-  const state=agent&&agent.act_state;
+  const state=agent&&agent.running===true?agent.act_state:null;
   const activity=state==='work'?'Working':state==='ask'||state==='question'?'Waiting for you':state==='wait'?'Waiting':'';
   logo.title=logo.ariaLabel=[provider?provider.label:'Agent',local?'Local':'',activity,status].filter(Boolean).join(' · ');
   const label=paneHeadingModel(agent);model.hidden=!label.text;model.textContent=label.text;model.title=label.title;
@@ -9585,7 +9554,9 @@ function paintTile(el,a){
   if(img.getAttribute('src')!==src){img.style.display='';img.src=src;img.onerror=()=>{img.style.display='none';};}
   el.querySelector('.cname').textContent=a.name;
   paintRosterProvider(el,a);paintRosterHarness(el,a);
-  el.querySelector('.pill.model').textContent=(a.model_raw||a.model||a.cmd||'—')+(a.ctx_window?(' · '+a.ctx_window):'');
+  const modelLabel=paneHeadingModel(a),modelPill=el.querySelector('.pill.model');
+  modelPill.textContent=(modelLabel.text||a.model_raw||a.cmd||'—')+(a.ctx_window?(' · '+a.ctx_window):'');
+  modelPill.title=modelLabel.title||a.model_raw||a.cmd||'';
   const descriptor=a.descriptor||RosterDescriptor.deriveRosterDescriptor(a,currentAgents);
   const secondary=descriptor.secondary;
   const rolePill=el.querySelector('.pill.role');rolePill.hidden=!secondary;rolePill.textContent=secondary;

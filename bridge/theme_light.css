@@ -185,10 +185,6 @@ html[data-color-theme="light"] .split-cell-label{
 html[data-color-theme="light"] .split-cell-label > img{
   background:var(--bg);
 }
-html[data-color-theme="light"] .scl-close{
-  background:color-mix(in srgb,var(--theme-surface-terminal) 96%,transparent);
-  border-color:var(--hair);
-}
 html[data-color-theme="light"] .split-drag-ghost{
   background:color-mix(in srgb,var(--theme-surface-terminal) 94%,transparent);
   box-shadow:0 8px 24px var(--theme-shadow-low);

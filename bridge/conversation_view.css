@@ -162,11 +162,10 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 @container split-pane (max-width:160px){
   .split-pane-headers .split-cell-head{padding:5px 2px;gap:0}
   .split-pane-headers .split-cell-label{gap:2px}
-  .split-pane-headers .split-cell-label .scl-close{flex-basis:14px;width:14px;height:22px}
   .pane-heading{gap:2px;min-width:32px}
   .pane-provider{flex-basis:14px;width:14px}
   .pane-provider .provider-logo,.pane-provider svg{width:14px;height:14px}
-  .split-cell-actions{gap:2px}
+  .split-cell-actions{gap:1px}
   .split-cell-head .split-cell-actions .pane-icon,.split-cell-head:has(.conversation-notices:not([hidden])) .pane-icon,.split-cell-actions .conversation-notice-toggle{width:16px;min-width:16px;height:24px;min-height:24px;padding:1px}
   .split-cell-actions .pane-icon svg{width:14px;height:14px}
   .conversation-mode{width:16px;height:18px}

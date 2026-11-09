@@ -69,7 +69,7 @@ Pick an agent in the roster on the left, give instructions in the terminal in th
 
 An agent using an alternate-screen TUI cannot be reviewed with terminal scrollback alone. Reader displays its recorded conversation in a read-only panel. Press the **Reader icon** in the pane; press it again to close. The setting is on by default; turning off **Settings → Appearance → Reader** closes the panel, removes the button, and stops history reads.
 
-Pane headers show the provider logo, agent name, and model. GPT models show Sol, Terra, Luna, or Astra when the kind is known; the model title retains the full ID. The value comes from telemetry, and missing models are omitted. An active, working agent's logo slowly brightens and dims; waiting agents and reduced-motion mode stay still. Narrow panes truncate the model before the name, keeping the logo and action buttons visible.
+Pane headers and roster cards use telemetry's display model name without shortening it; the title retains the full ID. Headers show the provider logo, agent name, and model, omitting missing models. An active, working agent's logo slowly brightens and dims; waiting agents and reduced-motion mode stay still. Narrow panes truncate the model before the name, keeping the logo and action buttons visible. The split pane close button is the rightmost header action and shares the other icons' size and border.
 
 ![Reader panel with a fictional conversation](docs/images/cockpit_history.png)
 

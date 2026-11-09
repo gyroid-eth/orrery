@@ -45,17 +45,17 @@ def test_provider_marks_use_the_existing_maker_resolution(cockpit, layout, theme
         assert 'active' in js("modelHead.querySelector('.pane-provider').getAttribute('aria-label')")
         assert js("modelHead.querySelector('.pane-provider').title").endswith('active')
         assert js("modelHead.querySelector('.pane-provider').getAttribute('role')") == 'img'
-        assert js("modelHead.querySelector('.pane-model').textContent") == ('Sol' if asset=='openai' else model)
+        assert js("modelHead.querySelector('.pane-model').textContent") == model
 
 
 @pytest.mark.parametrize('layout', ['single', 'split'])
-def test_gpt_kind_display_preserves_the_full_id_in_title(cockpit, layout):
+def test_model_display_uses_the_api_value_and_preserves_the_full_id_in_title(cockpit, layout):
     js, _, _ = prepare(cockpit, layout)
-    for kind in ['Sol', 'Terra', 'Luna', 'Astra']:
-        raw = 'gpt-6.1-'+kind.lower()
-        paint(js, dict(provider='openai', model='GPT 6.1', model_raw=raw))
-        assert js("modelHead.querySelector('.pane-model').textContent") == kind
+    for model,raw in [('GPT-6.1-Sol','gpt-6.1-sol'),('GPT-7-Nova','gpt-6.1-sol'),('Future model name','unrelated-id')]:
+        paint(js, dict(provider='openai', model=model, model_raw=raw))
+        assert js("modelHead.querySelector('.pane-model').textContent") == model
         assert raw in js("modelHead.querySelector('.pane-model').title")
+        assert model in js("modelHead.querySelector('.pane-model').title")
     paint(js, dict(model='GPT 6.1', model_raw='GPT-6.1'))
     assert js("modelHead.querySelector('.pane-model').textContent") == 'GPT 6.1'
     paint(js, dict(model='', model_raw='gpt-6.1-sol'))
@@ -106,8 +106,8 @@ def test_split_model_yields_to_the_name_and_actions_stay_hittable(cockpit, theme
 def test_single_and_pane_window_headers_keep_controls(cockpit, theme, width):
     js, _, client = prepare(cockpit, 'single')
     client.call('Emulation.setDeviceMetricsOverride',width=width,height=844,deviceScaleFactor=1,mobile=False)
-    paint(js, dict(provider='openai', model='GPT 6.1', model_raw='gpt-6.1-terra', running=True, act_state='work'))
-    assert js("!!modelHead.querySelector('.pane-provider')&&modelHead.querySelector('.pane-model').textContent==='Terra'")
+    paint(js, dict(provider='openai', model='GPT-6.1-Terra', model_raw='gpt-6.1-terra', running=True, act_state='work'))
+    assert js("!!modelHead.querySelector('.pane-provider')&&modelHead.querySelector('.pane-model').textContent==='GPT-6.1-Terra'")
     js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
     for window in [False, True]:
         js('document.documentElement.classList.toggle("pane-window",'+json.dumps(window)+')')
@@ -117,8 +117,64 @@ def test_single_and_pane_window_headers_keep_controls(cockpit, theme, width):
 @pytest.mark.parametrize('layout', ['single', 'split'])
 def test_roster_poll_refreshes_identity_without_rebuilding_focused_actions(cockpit, layout):
     js, _, _ = prepare(cockpit, layout)
-    paint(js, dict(provider='openai', model='GPT 6.1', model_raw='gpt-6.1-sol', running=True, act_state='work'))
-    js("window.focusedHeaderAction=[...modelHead.querySelectorAll('button')].find(b=>b.getBoundingClientRect().width>0);focusedHeaderAction.focus();Object.assign(currentAgents.find(a=>a.name==='ReviewFixture'),{model_raw:'gpt-6.1-terra',act_state:'wait'});pollAgents()")
-    assert js("modelHead.querySelector('.pane-model').textContent") == 'Terra'
+    paint(js, dict(provider='openai', model='GPT-6.1-Sol', model_raw='gpt-6.1-sol', running=True, act_state='work'))
+    js("window.focusedHeaderAction=[...modelHead.querySelectorAll('button')].find(b=>b.getBoundingClientRect().width>0);focusedHeaderAction.focus();Object.assign(currentAgents.find(a=>a.name==='ReviewFixture'),{model:'GPT-6.1-Terra',model_raw:'gpt-6.1-terra',act_state:'wait'});pollAgents()")
+    assert js("modelHead.querySelector('.pane-model').textContent") == 'GPT-6.1-Terra'
     assert js("getComputedStyle(modelHead.querySelector('.pane-provider')).animationName") == 'none'
     assert js('document.activeElement===focusedHeaderAction')
+
+
+@pytest.mark.parametrize('layout', ['single','split'])
+@pytest.mark.parametrize('provider,model,asset', [('alibaba','Qwen3 32B','qwen'),('zai','GLM 4.7','glm')])
+def test_cloud_vendor_keys_use_qwen_and_glm_marks(cockpit,layout,provider,model,asset):
+    js,wait,_=prepare(cockpit,layout)
+    paint(js,dict(provider=provider,program='hermes',model=model,model_raw=model.lower(),running=True,act_state='work'))
+    assert js("!!modelHead.querySelector('.pane-provider img')")
+    wait("modelHead.querySelector('.pane-provider img').naturalWidth>0")
+    assert js("modelHead.querySelector('.pane-provider img').getAttribute('src')")=='cockpit-assets/'+asset+'.svg'
+
+
+@pytest.mark.parametrize('layout', ['single','split'])
+def test_stopped_agent_drops_current_activity_labels(cockpit,layout):
+    js,_,_=prepare(cockpit,layout)
+    for state in ['work','question','wait']:
+        paint(js,dict(provider='anthropic',running=False,act_state=state))
+        for attr in ['title','aria-label']:
+            label=js("modelHead.querySelector('.pane-provider').getAttribute("+json.dumps(attr)+")")
+            assert 'Working' not in label and 'Waiting' not in label,label
+        assert js("getComputedStyle(modelHead.querySelector('.pane-provider')).animationName")=='none'
+
+
+def test_roster_uses_display_model_and_keeps_raw_title_and_context(cockpit):
+    js,_,_=prepare(cockpit,'single')
+    cases=[dict(name='DisplayClaude',provider='anthropic',model='Opus 5.5',model_raw='claude-opus-5-5',ctx_window='1M'),dict(name='DisplayCodex',provider='openai',model='GPT-7-Nova',model_raw='gpt-6.1-sol'),dict(name='DisplayLocal',provider='local',model='Qwen3.8 Flash',model_raw='qwen3.8-flash-next-example-quant'),dict(name='DisplayFallback',provider='unknown',model='',model_raw='fallback-id'),dict(name='DisplayCommand',provider='unknown',model='',model_raw='',cmd='custom-cli')]
+    js('window.displayCases='+json.dumps(cases)+";displayCases.forEach(a=>{Object.assign(a,{running:true,category:'agent',program:'custom-cli',act_state:'wait'});currentAgents.push(a);tileFor(a)})")
+    result=js("displayCases.map(a=>{const p=tiles.get(a.name).querySelector('.pill.model');return {text:p.textContent,title:p.title}})")
+    for case,pill in zip(cases,result):
+        expected=(case['model'] or case['model_raw'] or case.get('cmd','—'))+(' · '+case['ctx_window'] if case.get('ctx_window') else '')
+        assert pill['text']==expected,pill
+        if case['model_raw']:
+            assert case['model_raw'] in pill['title'],pill
+
+
+@pytest.mark.parametrize('previous', ['terminal-less', 'window'])
+def test_pending_session_keeps_its_identity_after_roster_poll(cockpit, previous):
+    js,wait,_=prepare(cockpit,'single')
+    js("""replaceSplitSessions([]);currentAgents.push(
+      {name:'PreviousFixture',cmd:'codex-app',provider:'openai',model:'GPT-6.1-Terra',model_raw:'gpt-6.1-terra',running:true,act_state:'question'},
+      {name:'PendingFixture',program:'claude-code',provider:'anthropic',model:'Opus 5.5',model_raw:'claude-opus-5-5',running:true,act_state:'work'});
+      window.pendingIdentity=()=>({name:scrName.textContent,status:scrBadge.textContent,
+        model:modelHead.querySelector('.pane-model').textContent,
+        logo:modelHead.querySelector('.pane-provider img').getAttribute('src'),
+        aria:modelHead.querySelector('.pane-provider').getAttribute('aria-label'),
+        title:modelHead.querySelector('.pane-provider').title});""")
+    if previous=='window':
+        js("focusPaneWindow=()=>true;paneWindows.set('PreviousFixture',{kind:'window',win:{closed:false}})")
+    js("jumpToSessionTarget('PreviousFixture');availableSessions.set('PendingFixture',{name:'PendingFixture'});toggleSplitSession('PendingFixture')")
+    wait("modelHead.querySelector('.pane-provider img').naturalWidth>0")
+    before=js('pendingIdentity()')
+    assert before['name']=='PendingFixture' and before['status']=='connecting'
+    assert before['model']=='Opus 5.5' and before['logo']=='cockpit-assets/anthropic.svg'
+    assert before['aria']==before['title']=='Claude · Working · connecting'
+    js('pollAgents()')
+    assert js('pendingIdentity()')==before

@@ -76,7 +76,7 @@ def test_header_retry_is_visible_and_keyboard_focus_survives_success(cockpit, th
         assert hit(js, '.split-pane-window' if layout.startswith('split') else '#panePopout')
         if layout.startswith('split'):
             assert hit(js, '.scl-close')
-            assert js("readerHost.querySelector('.scl-close').getBoundingClientRect().right<=readerHost.querySelector('.conversation-notices').getBoundingClientRect().left+1")
+            assert js("readerHost.querySelector('.conversation-notices').getBoundingClientRect().right<=readerHost.querySelector('.split-history-toggle').getBoundingClientRect().left+1")
         assert js("readerHost.querySelector('.conversation-toolbar').title") == failure
         assert abs(js("reader.querySelector('.conversation-text').getBoundingClientRect().top")-before) <= 1
     js("OrreryConversationSource.Source.prototype.read=()=>new Promise(resolve=>window.finishHeaderRead=resolve);packets.length=0")
