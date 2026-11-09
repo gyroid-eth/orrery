@@ -96,3 +96,15 @@ def test_roster_refresh_preserves_open_body_and_focus(cockpit):
     js("currentAgents=currentAgents.filter(a=>a.name!=='KnownPeer');document.dispatchEvent(new Event('oc:agents'))")
     assert not js("mailReader.querySelector('.conversation-mail-peer').querySelector('.pane-provider')")
     assert js("mailReader.querySelector('details').open&&keptMailBody===mailReader.querySelector('.conversation-mail-content')")
+
+
+@pytest.mark.parametrize('theme',['dark','light'])
+def test_phone_split_preserves_full_recipient_count_and_readable_names(cockpit,theme):
+    recipients=['KnownPeerWithALongName']+['GeneratedPeer'+str(i) for i in range(23)]
+    js,wait,client,_=prepare(cockpit,direction='sent',recipients=recipients,width=390,theme=theme)
+    js("currentAgents.push({name:'KnownPeerWithALongName',provider:'openai'},{name:'OtherFixture',program:'codex',history_binding:'bound'});createPane('OtherFixture',{paneId:'%902',windowId:'@902',width:80,height:20});replaceSplitSessions(['ReviewFixture','OtherFixture']);splitVisible=true;focusSplitSession('ReviewFixture')")
+    wait("document.querySelector('.split-cell[data-session=ReviewFixture] .conversation-mail')!==null")
+    wait_reading_layout(js)
+    state=js("""(()=>{const head=document.querySelector('.split-cell[data-session=ReviewFixture] .conversation-mail-head'),route=head.querySelector('.conversation-mail-route'),r=route.getBoundingClientRect(),c=route.querySelector('.conversation-mail-more'),t=head.querySelector('time').getBoundingClientRect(),h=head.getBoundingClientRect();return {count:c.textContent,inside:c.getBoundingClientRect().right<=r.right+.5,names:[...route.querySelectorAll('.conversation-mail-peer-name')].map(e=>e.getBoundingClientRect().width),marks:[...route.querySelectorAll('.pane-provider,.conversation-mail-arrow')].every(e=>{const q=e.getBoundingClientRect();return q.left>=r.left-.5&&q.right<=r.right+.5}),time:t.right<=h.right+.5&&t.bottom<=h.bottom+.5}})()""")
+    assert state['count']=='+23' and state['inside'] and state['marks'] and state['time'],state
+    assert all(width>=8 for width in state['names']),state

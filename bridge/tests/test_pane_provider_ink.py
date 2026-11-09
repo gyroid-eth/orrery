@@ -19,8 +19,10 @@ def test_provider_artwork_has_a_consistent_visible_extent(cockpit,layout,theme,w
     js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
     for provider,program,model in CASES:
         paint(js,dict(provider=provider,program=program,model=model,model_raw=model.lower(),running=True,act_state='wait'))
-        wait("modelHead.querySelector('.pane-provider img').naturalWidth>0")
-        ink=js("""(()=>{const img=modelHead.querySelector('.pane-provider img'),r=img.getBoundingClientRect(),canvas=document.createElement('canvas');
+        wait("(()=>{const img=modelHead.querySelector('.pane-provider img');return img?.complete&&img.naturalWidth>0})()")
+        # SVG dimensions can be available before its pixels are ready for canvas.
+        ink=js("""(async()=>{const img=modelHead.querySelector('.pane-provider img');await img.decode();
+          const r=img.getBoundingClientRect(),canvas=document.createElement('canvas');
           canvas.width=canvas.height=256;const ctx=canvas.getContext('2d'),scale=256/Math.max(img.naturalWidth,img.naturalHeight),w=img.naturalWidth*scale,h=img.naturalHeight*scale;
           ctx.drawImage(img,(256-w)/2,(256-h)/2,w,h);const data=ctx.getImageData(0,0,256,256).data;
           let l=256,t=256,right=-1,bottom=-1;for(let y=0;y<256;y++)for(let x=0;x<256;x++)if(data[(y*256+x)*4+3]>=32){l=Math.min(l,x);t=Math.min(t,y);right=Math.max(right,x);bottom=Math.max(bottom,y)}

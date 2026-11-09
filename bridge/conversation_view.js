@@ -104,7 +104,7 @@
   const warningIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5m0 3v.1"/></svg>';
   const retryIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10a8 8 0 1 0-1 7M20 4v6h-6"/></svg>';
   let closeActiveNotice=null;
-  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,expandControl=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null,openExternalUrl=null,renderPeerLogo=null}){
+  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,expandControl=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null,openExternalUrl=null,renderPeerLogo=null,renderAvatar=null}){
     let screen=host||document.querySelector('.screen');
     const toggle=control||document.getElementById('conversationToggle');
     const listeners=[];
@@ -631,7 +631,12 @@
       const byline=document.createElement('div');byline.className='conversation-byline';
       const role=document.createElement('span');role.className='conversation-role';
       const shell=event.role==='user'&&root.OrreryConversationMarkdown?.commandRecord(event.text)?.shell;
-      role.textContent=event.kind==='tool'?'Tool':event.kind==='tool_result'?'Tool result':shell?'Shell':event.role==='user'?'You':providerLabel;byline.appendChild(role);
+      role.textContent=event.kind==='tool'?'Tool':event.kind==='tool_result'?'Tool result':shell?'Shell':event.role==='user'?'You':providerLabel;
+      if(event.kind==='text'&&event.role==='assistant'&&root.OrreryConversationSpeaker){
+        role.dataset.recordedModel=typeof event.model==='string'?event.model:'';
+        root.OrreryConversationSpeaker.paint(role,{name:agent,model:role.dataset.recordedModel,harness:providerLabel,context:getContext()||{},renderAvatar});
+      }
+      byline.appendChild(role);
       if(['tool','tool_result'].includes(event.kind)){
         const tool=document.createElement('span');tool.className='conversation-tool-name';tool.textContent=event.text;byline.appendChild(tool);
       }
@@ -867,6 +872,8 @@
       const current=getContext()||{};const name=String(current.name||''),key=fingerprint(current);
       if(!opened)return;
       root.OrreryConversationMail?.refreshPeers?.(panel,renderPeerLogo);
+      for(const heading of panel.querySelectorAll('.conversation-speaker'))root.OrreryConversationSpeaker?.paint(heading,
+        {name:agent,model:heading.dataset.recordedModel,harness:heading.dataset.harness,context:current,renderAvatar});
       if(name===agent&&key===contextKey){paintActivity(current);return;}
       const sameBinding=key===contextKey;
       stop();agent=name;contextKey=key;clear({keepSubmissions:sameBinding});boundContext={...current};

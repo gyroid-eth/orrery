@@ -20,7 +20,7 @@ from urllib.parse import quote
 from conversation_mail import received, sent
 
 from conversation_history import (HistoryUnavailable, MAX_SCAN, MAX_TEXT, PAGE_SIZE,
-    open_bound_transcript, assert_transcript_identity, read_codex_page)
+    open_bound_transcript, assert_transcript_identity, read_codex_page, recorded_model)
 
 try:
     import zstandard as zstd
@@ -183,6 +183,15 @@ def normalize(item,p,sid):
         elif role=='tool':
             result=parse(item.get('content') or '{}')
             add(0,tool_event(item.get('tool_name') or 'Tool result',ts,result=True,failed=bool(result.get('error') or result.get('is_error') or result.get('success') is False)))
+    # Model metadata belongs to the record, even when it has many text blocks.
+    assistant_text=[event for _,event in out if event.get('kind')=='text' and event.get('role')=='assistant']
+    if assistant_text:
+        if p=='claude':value=item['message'].get('model')
+        elif p=='dsh':value=item['data']['message'].get('model')
+        else:value=item.get('model') or parse(item.get('display_metadata') or '{}').get('model')
+        model=recorded_model(value)
+        if model:
+            for event in assistant_text:event['model']=model
     return out
 
 
