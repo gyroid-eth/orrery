@@ -181,3 +181,29 @@ def test_focusing_a_link_in_clamped_text_exposes_it(cockpit):
     assert js("reader.querySelector('.conversation-submission').classList.contains('submission-expanded')")
     assert js("(()=>{const l=bubbleLink.getBoundingClientRect(),s=reader.querySelector('.conversation-scroll').getBoundingClientRect();return l.top>=s.top&&l.bottom<=s.bottom})()")
     assert js('document.activeElement===bubbleLink')
+
+
+@pytest.mark.parametrize('split',[False,True])
+@pytest.mark.parametrize('control',['more','link'])
+def test_matching_first_receipt_keeps_focus_in_the_surviving_bubble(cockpit,split,control):
+    js,wait,client=prepare(cockpit,split=split)
+    if split:client.call('Emulation.setDeviceMetricsOverride',width=390,height=844,deviceScaleFactor=1,mobile=False)
+    js("sentText='First generated prompt';newRecord.text=sentText;promptInput.value=sentText;sendPrompt()")
+    wait('receipts.length===1')
+    text='Second generated prompt\n'+'Keep this line visible.\n'*12+'https://example.com/second'
+    js('promptInput.value='+json.dumps(text)+';sendPrompt()')
+    wait('receipts.length===2')
+    wait("reader.querySelectorAll('.conversation-submission').length===2&&!reader.querySelectorAll('.conversation-submission-more')[1].hidden")
+    selector='.conversation-submission-more' if control=='more' else 'a'
+    js("window.survivingBubble=reader.querySelectorAll('.conversation-submission')[1];window.keptBubbleControl=survivingBubble.querySelector("+json.dumps(selector)+");keptBubbleControl.focus()")
+    wait_reading_layout(js)
+    js('packets.length=0;turnDone=true;conversationView.refresh()')
+    wait("reader.querySelectorAll('.conversation-submission').length===1")
+    assert js("reader.querySelector('.conversation-submission')===survivingBubble&&keptBubbleControl.isConnected")
+    assert js('document.activeElement===keptBubbleControl')
+    js('queueStageFit(activeId)')
+    time.sleep(.2)
+    for kind in ['keyDown','keyUp']:
+        client.call('Input.dispatchKeyEvent',type=kind,key='q',code='KeyQ',windowsVirtualKeyCode=81,**({'text':'q'} if kind=='keyDown' else {}))
+    assert js('document.activeElement===keptBubbleControl')
+    assert js("packets.filter(p=>['input','codex-page'].includes(p.type))") == []

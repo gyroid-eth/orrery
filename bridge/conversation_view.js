@@ -219,8 +219,12 @@
       const paint=()=>{
         const existing=new Map([...pendingEl.children].map(row=>[row.dataset.receiptKey,row]));
         const items=[...submissions,...sending.values()].sort((a,b)=>a.at-b.at);let next=Infinity,previous=null;
+        const receiptKey=item=>JSON.stringify([item.attemptId?'attempt':'sent',item.attemptId||item.id]);
+        const retained=new Set(items.map(receiptKey));
+        // Remove stale siblings before ordering rows that still own focus.
+        for(const [key,row] of existing)if(!retained.has(key)){keepReaderFocus(row);row.remove();existing.delete(key);}
         for(const item of items){
-          const key=JSON.stringify([item.attemptId?'attempt':'sent',item.attemptId||item.id]);
+          const key=receiptKey(item);
           let row=existing.get(key);existing.delete(key);
           if(!row){
             row=document.createElement('article');row.className='conversation-submission';row.dataset.receiptKey=key;
@@ -255,13 +259,9 @@
           const noteText=item.unmatched?'Check the conversation above.':'';if(note.textContent!==noteText)note.textContent=noteText;
           note.title=item.unmatched?'A user record arrived after this send, but it cannot be matched to this text.':'';
           const after=previous?previous.nextElementSibling:pendingEl.firstElementChild;
-          if(row!==after)pendingEl.insertBefore(row,after);
+          if(row!==after){keepReaderFocus(row);pendingEl.insertBefore(row,after);}
           previous=row;
           if(!item.sending&&!item.unmatched&&elapsed<60000)next=Math.min(next,60000-elapsed);
-        }
-        for(const row of existing.values()){
-          keepReaderFocus(row);
-          row.remove();
         }
         paintSubmissionExpansion();
         if(Number.isFinite(next))submissionTimer=setTimeout(()=>renderSubmissions(),Math.max(1,next));
