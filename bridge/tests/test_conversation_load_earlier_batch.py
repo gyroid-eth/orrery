@@ -99,7 +99,7 @@ def test_a_cursor_that_does_not_move_ends_the_click(cockpit):  # noqa: F811
 def test_two_clicks_are_kept_and_the_third_releases_the_newest(cockpit):  # noqa: F811
     js, wait, client = prepare(cockpit, 'claude')
     reopen(js, wait)
-    status = "reader.querySelector('.conversation-toolbar .conversation-status').textContent"
+    status = "reader.parentElement.querySelector('.conversation-toolbar .conversation-status').textContent"
     click(js, wait)
     click(js, wait)
     assert len(shown(js)) == 80 + 300 + 300
@@ -115,7 +115,7 @@ def test_a_later_failure_keeps_the_pages_already_read(cockpit, code):  # noqa: F
     reopen(js, wait, cap=50, fail={'2': code})
     click(js, wait)
     assert shown(js) == list(range(9870, 10000))      # the first page is shown
-    assert js("reader.querySelector('.conversation-retry').hidden")
+    assert js("reader.parentElement.querySelector('.conversation-retry').hidden")
     assert not js("reader.querySelector('.conversation-older').hidden")
     click(js, wait)                                   # the next click continues from it
     assert older_reads(js)[2]['before'] == 'f:9870'
@@ -126,7 +126,7 @@ def test_a_binding_failure_on_a_later_page_keeps_nothing(cockpit):  # noqa: F811
     js, wait, client = prepare(cockpit, 'claude')
     reopen(js, wait, cap=50, fail={'2': 'history_changed'})
     js("reader.querySelector('.conversation-older').click();0")
-    wait("!reader.querySelector('.conversation-retry').hidden")
+    wait("!reader.parentElement.querySelector('.conversation-retry').hidden")
     assert shown(js) == []
     assert len(older_reads(js)) == 2
 

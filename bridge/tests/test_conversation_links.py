@@ -140,7 +140,7 @@ def prepare(cockpit):
     enable(count=1)
     js('conversationView.close();window.readerLinkText='+json.dumps(EXAMPLE)+';OrreryConversationSource.Source.prototype.read=async()=>({events:[{id:"assistant-links",kind:"text",role:"assistant",text:readerLinkText},{id:"user-links",kind:"text",role:"user",text:"（https://example.com/user）。"},{id:"mail-links",kind:"mail",role:"assistant",text:"Recorded Mail",mail:[{direction:"received",subject:"Links",body:"https://example.com/mail。",coverage:"complete"}]}],after:"one"});document.querySelectorAll(".conversation-panel").forEach(el=>el.remove());window.readerLinks=OrreryConversation.mount({getContext:()=>({...currentAgents[0],terminalPaneId:"%901"}),bindToggle:false,openExternalUrl:url=>openedLinks.push(url),jumpToEvent:event=>{jumps.push(event);return {state:"absent"}}});readerLinks.open()')
     wait('document.querySelector("[data-event-id=mail-links]")!==null')
-    js('document.querySelector(".conversation-expand").click();openedLinks.length=0;jumps.length=0')
+    js("""document.querySelector('.conversation-expand[aria-controls="'+readerLinks.panel.id+'"]').click();openedLinks.length=0;jumps.length=0""")
     return js, wait, client
 
 
@@ -175,7 +175,7 @@ def test_preview_links_source_code_and_mailto_keep_activation_boundary(cockpit):
     js, wait, client = prepare(cockpit)
     js('OrreryConversationSource.Source.prototype.reference=async()=>({kind:"text",text:"`https://example.com/code` [mail](mailto:reader@example.com) https://example.com/search?q=_foo_&x=1。 https://example.com/#~~bar~~"});OrreryConversationSource.Source.prototype.read=async()=>({events:[{id:"file",kind:"tool",role:"assistant",text:"read",references:[{id:"A".repeat(32),label:"example.md",kind:"file"}]}],after:"two"});readerLinks.refresh()')
     wait('document.querySelector(".conversation-file")!==null')
-    js('document.querySelector(".conversation-file").click()')
+    js('readerLinks.panel.querySelector(".conversation-tool-group").click();document.querySelector(".conversation-file").click()')
     wait('document.querySelector(".conversation-preview-markdown a")!==null')
     assert js('document.querySelector(".conversation-preview-markdown code a").href') == 'https://example.com/code'
     js('document.querySelector(".conversation-preview-markdown code a").click()')

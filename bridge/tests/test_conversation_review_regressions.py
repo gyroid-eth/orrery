@@ -83,9 +83,13 @@ def cockpit(request):
     client.call("Emulation.setFocusEmulationEnabled", enabled=True)
     client.call("Network.enable")
     client.call("Network.setCacheDisabled", cacheDisabled=True)
-    mobile=getattr(request,'param',False)
+    preference = getattr(request, 'param', False)
+    mobile = preference is True
     client.call("Emulation.setDeviceMetricsOverride", width=390 if mobile else 1600, height=844 if mobile else 1000, deviceScaleFactor=1, mobile=mobile)
-    client.call("Page.addScriptToEvaluateOnNewDocument", source="localStorage.clear();localStorage.setItem('oc-first-flight-v1',JSON.stringify({seen:true,open:false}));")
+    bootstrap = "localStorage.clear();localStorage.setItem('oc-first-flight-v1',JSON.stringify({seen:true,open:false}));"
+    if preference == 'disabled':
+        bootstrap += "localStorage.setItem('oc-term-conversation-enabled','0');"
+    client.call("Page.addScriptToEvaluateOnNewDocument", source=bootstrap)
     def js(expression):
         result = client.call("Runtime.evaluate", expression=expression, returnByValue=True, awaitPromise=True)
         assert not result.get("exceptionDetails"), result.get("exceptionDetails")
@@ -130,9 +134,55 @@ def cockpit(request):
         server.server_close()
 
 
+@pytest.mark.parametrize('cockpit', ['disabled'], indirect=True)
 def test_disabled_does_not_fetch_conversation_assets(cockpit):
     js, wait, client, requests, enable = cockpit
+    assert js("localStorage.getItem('oc-term-conversation-enabled')") == '0'
+    assert js('conversationEnabled.checked') is False
+    js('conversationView.open()')
     assert not [path for path in requests if path.startswith("/conversation_")]
+
+
+@pytest.mark.parametrize('width', [1600, 390])
+def test_load_earlier_keeps_same_character_after_layout(cockpit, width):
+    js, wait, client, requests, enable = cockpit
+    stable_roster(js)
+    client.call('Emulation.setDeviceMetricsOverride', width=width, height=1000,
+                deviceScaleFactor=1, mobile=False)
+    enable(count=1)
+    js(r"""conversationView.close();
+      window.initialRows=Array.from({length:80},(_,i)=>({id:'row-'+i,kind:'text',role:'assistant',
+        text:'Reader fixture paragraph '+(i+1)+'.\n\nThis text stays in the same position when a notice appears or disappears. Earlier messages can still be loaded.',
+        cursor_before:'file:'+i,cursor_after:'file:'+(i+1)}));
+      OrreryConversationSource.Source.prototype.read=async(name,options)=>({events:options.after?[]:initialRows,
+        mode:'cursor',before:'first',after:'last',has_older:true});
+      conversationView.open();""")
+    wait("document.querySelectorAll('.conversation-event').length===80")
+    wait_reading_layout(js)
+    js("""window.readScroll=document.querySelector('.conversation-scroll');
+      window.readCharacter=document.createRange();
+      const node=document.querySelector('[data-event-id=row-0] .conversation-text').firstChild;
+      readCharacter.setStart(node,11);readCharacter.setEnd(node,12);
+      window.characterTop=()=>readCharacter.getBoundingClientRect().top-readScroll.getBoundingClientRect().top;
+      readScroll.dispatchEvent(new WheelEvent('wheel'));readScroll.scrollTop=0;
+      readScroll.dispatchEvent(new Event('scroll'));""")
+    wait_reading_layout(js)
+    before = js('characterTop()')
+    js("""OrreryConversationSource.Source.prototype.read=async()=>({
+      events:Array.from({length:40},(_,i)=>({id:'older-'+i,kind:'text',role:'assistant',text:'Earlier generated message '+i})),
+      mode:'cursor',before:'older-start',after:'older-end',has_older:true});""")
+    button = js("""(()=>{const r=document.querySelector('.conversation-older').getBoundingClientRect();
+      return {x:r.x+r.width/2,y:r.y+r.height/2}})()""")
+    for event_type in ['mousePressed', 'mouseReleased']:
+        client.call('Input.dispatchMouseEvent', type=event_type, **button,
+                    button='left', clickCount=1)
+    wait("document.querySelectorAll('.conversation-event').length===120")
+    immediate = js('characterTop()')
+    wait_reading_layout(js)
+    settled = js('characterTop()')
+    print('Load earlier same character:', width, before, immediate, settled)
+    assert abs(immediate-before) <= 1, (before, immediate)
+    assert abs(settled-before) <= 1, (before, settled)
 
 
 def test_reader_keys_and_automatic_fit_do_not_focus_or_type_into_terminal(cockpit):
@@ -170,7 +220,7 @@ def test_same_name_provider_and_binding_changes_clear_previous_records(cockpit):
     assert js("document.querySelectorAll('.conversation-event').length") == 0
     js("currentAgents[0].program='claude-code';document.dispatchEvent(new Event('oc:agents'))")
     assert js("document.querySelectorAll('.conversation-event').length") == 0
-    assert js("document.querySelector('.conversation-subtitle').textContent.includes('ReviewFixture')")
+    assert js("document.querySelector('.conversation-panel').getAttribute('aria-label').includes('ReviewFixture')")
 
 
 def test_fresh_is_a_bounded_snapshot_and_legacy_retention_has_a_byte_cap(cockpit):
@@ -203,12 +253,12 @@ def test_legacy_limit_pauses_updates_while_reading_and_latest_reloads(cockpit):
         js("document.querySelector('.conversation-scroll').scrollTop=1e9;conversationView.refresh()")
         wait("document.querySelectorAll('.conversation-event').length===" + str(n * 200))
     js("document.querySelector('.conversation-scroll').scrollTop=110;conversationView.refresh()")
-    wait("document.querySelector('.conversation-latest').textContent.includes('resume')")
+    wait("document.querySelector('.conversation-latest').getAttribute('aria-label').includes('resume')")
     assert js("document.querySelectorAll('.conversation-event').length") == 800
     assert js("document.querySelector('.conversation-scroll').scrollTop") == 110
     js("document.querySelector('.conversation-latest').click()")
     wait("document.querySelectorAll('.conversation-event').length===200")
-    assert not js("document.querySelector('.conversation-latest').textContent.includes('resume')")
+    assert not js("document.querySelector('.conversation-latest').getAttribute('aria-label').includes('resume')")
 def test_retry_after_history_change_resets_retention_accounting(cockpit):
  js,wait,client,requests,enable=cockpit
  enable(mode='cursor',count=80,text_size=40000)
@@ -314,7 +364,7 @@ def test_full_history_keeps_original_composer_usable_and_guarded(cockpit):
 def test_header_and_history_use_one_control_style_and_settings_keep_actions(cockpit):
     js,wait,client,requests,enable=cockpit
     enable(claimed=True,count=3)
-    assert js("[...document.querySelectorAll('.scr-head button')].filter(e=>!e.hidden&&getComputedStyle(e).display!=='none').map(e=>e.id)")==['conversationToggle','panePopout']
+    assert js("[...document.querySelectorAll('.scr-head button')].filter(e=>!e.hidden&&getComputedStyle(e).display!=='none').map(e=>e.id||e.classList.contains('conversation-expand')&&'expand')")==['conversationToggle','expand','panePopout']
     assert js("claimToggle.closest('#settingsPopover')!==null&&ghosttyAction.closest('#settingsPopover')!==null")
     assert not js("claimToggle.hidden||ghosttyAction.hidden")
     # Dialog remains a keyboard destination when a fit/poll occurs.
@@ -337,7 +387,7 @@ def test_header_and_history_use_one_control_style_and_settings_keep_actions(cock
     js("document.querySelector('#settingsPopover').hidePopover()")
     for theme in ['dark','light']:
         js("document.documentElement.setAttribute('data-color-theme',"+json.dumps(theme)+")")
-        styles=js("""(()=>{const selectors=['#conversationToggle','#panePopout','.conversation-expand','.conversation-close','.conversation-latest'];
+        styles=js("""(()=>{const selectors=['#conversationToggle','#panePopout','.conversation-expand','.conversation-latest'];
           return selectors.map(selector=>{const s=getComputedStyle(document.querySelector(selector));return {
             padding:s.padding,borderRadius:s.borderRadius,font:s.font,height:s.height,borderWidth:s.borderWidth};});})()""")
         assert all(style==styles[0] for style in styles)
@@ -431,7 +481,7 @@ def test_split_history_is_per_cell_and_focus_keeps_existing_prompt_route(cockpit
     js("promptInput.focus();promptInput.value='split fixture prompt';promptSend.click()")
     wait("packets.filter(p=>p.type==='input').length===2")
     assert js("packets.filter(p=>p.type==='input').map(p=>p.paneId)")==['%901','%901']
-    js("document.querySelector('.split-cell .conversation-close').click();document.querySelectorAll('.split-cell')[1].querySelector('.conversation-file').click()")
+    js("document.querySelector('.split-cell .split-history-toggle').click();document.querySelectorAll('.split-cell')[1].querySelector('.conversation-file').click()")
     wait("document.querySelectorAll('.split-cell')[1].querySelector('.conversation-preview-text')!==null")
     assert js('promptTarget.textContent')==names[1]
     assert js("document.querySelector('.screen').classList.contains('conversation-open')")==False
@@ -477,7 +527,7 @@ def test_submitted_prompt_resumes_following_from_older_position(cockpit, mode):
     wait("packets.some(p=>p.type==='input'&&p.data==='\\r')")
     wait("pageNumber>=2")
     assert js("(()=>{const s=document.querySelector('.conversation-scroll');return s.scrollHeight-s.clientHeight-s.scrollTop<45})()")
-    assert js("document.querySelector('.conversation-latest').textContent") == 'Latest'
+    assert js("document.querySelector('.conversation-latest').getAttribute('aria-label')") == 'Latest'
 
 
 def test_submitted_prompt_resumes_reader_paused_at_retention_limit(cockpit):
@@ -486,12 +536,12 @@ def test_submitted_prompt_resumes_reader_paused_at_retention_limit(cockpit):
     enable(count=180, text_size=12000)
     time.sleep(.2)
     js("document.querySelector('.conversation-scroll').scrollTop=120;conversationView.refresh()")
-    wait("document.querySelector('.conversation-latest').textContent.includes('resume')")
+    wait("document.querySelector('.conversation-latest').getAttribute('aria-label').includes('resume')")
     old_page = js('pageNumber')
     js("promptInput.value='Generated prompt after reader limit';sendPrompt()")
     wait("packets.some(p=>p.type==='input'&&p.data==='\\r')")
     wait('pageNumber>'+str(old_page))
-    assert js("document.querySelector('.conversation-latest').textContent") == 'Latest'
+    assert js("document.querySelector('.conversation-latest').getAttribute('aria-label')") == 'Latest'
     assert js("document.querySelectorAll('.conversation-event').length>0")
     assert js("(()=>{const s=document.querySelector('.conversation-scroll');return s.scrollHeight-s.clientHeight-s.scrollTop<45})()")
 
@@ -608,7 +658,7 @@ def test_submit_while_older_request_pending_must_not_repause(cockpit):
     # It is the record's start, so this Load earlier reads no further page.
     js("""resolveOlder({events:Array.from({length:80},(_,i)=>({id:'old-'+i,kind:'text',role:'assistant',text:'old'.repeat(300),cursor_before:'old:'+i,cursor_after:'old:'+(i+1)})),before:'older-start',after:'older-end',has_older:false});""")
     time.sleep(.2)
-    observed = js("""({latest:document.querySelector('.conversation-latest').textContent,
+    observed = js("""({latest:document.querySelector('.conversation-latest').getAttribute('aria-label'),
       status:document.querySelector('.conversation-toolbar .conversation-status').textContent,
       count:document.querySelectorAll('.conversation-event').length,afterSubmitReads,
       submittedVisible:document.querySelector('.conversation-events').textContent.includes('Submitted prompt')})""")

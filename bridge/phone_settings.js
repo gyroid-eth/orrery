@@ -116,7 +116,7 @@
       var a2=el('div','phone-actions');a2.append(button('Copy',function(){try{navigator.clipboard.writeText('tailscale serve --https=9443 http://127.0.0.1:'+s.relay.port);}catch(_){}}),button('Check again',refresh));serveBody.push(a2);}
     list.append(step(served,named&&!served,3,'Serve 9443 → reader','you · terminal',serveBody));
     var reviewed=!!set.policy_reviewed_at;
-    var policyBody=[el('div','settings-help',reviewed?'You reviewed it on '+date(set.policy_reviewed_at)+'. ORRERY cannot check the policy.':'Limit tcp:9443 to your own phones and tablets in the Tailscale admin console, then confirm here. ORRERY cannot check it. Conversation and Send stay off until you do.')];
+    var policyBody=[el('div','settings-help',reviewed?'You reviewed it on '+date(set.policy_reviewed_at)+'. ORRERY cannot check the policy.':'Limit tcp:9443 to your own phones and tablets in the Tailscale admin console, then confirm here. ORRERY cannot check it. Reader and Send stay off until you do.')];
     if(!reviewed){var a3=el('div','phone-actions');a3.append(button('I reviewed the policy',function(){change({policy_reviewed:true});},true));policyBody.push(a3);}
     list.append(step(reviewed,named&&served&&!reviewed,4,'Who can reach it','you · admin console',policyBody));
     return list;
@@ -133,7 +133,7 @@
     else if(!named&&hint==='install')words='Not on yet: Tailscale was not found on this computer. Install it and sign in (step 1 below), then press Phone access again.';
     else if(!named&&hint==='signin')words='Not on yet: sign in to Tailscale on this computer first (step 1 below), then press Phone access again.';
     else if(!named&&hint==='first')words='Not on yet: check the owner and address in step 2 below, then press Confirm and turn on.';
-    else if(s.settings.access&&named&&!reviewed&&!manual)words='On, but Conversation and Send from phone stay off until step 4 below (I reviewed the policy).';
+    else if(s.settings.access&&named&&!reviewed&&!manual)words='On, but Reader and Send from phone stay off until step 4 below (I reviewed the policy).';
     if(!words)return null;
     var box=el('div','phone-note');box.id='phoneSwitchNote';box.setAttribute('role','status');box.append(el('span','',words));
     if(!named&&hint==='demo'&&window.OrreryDemo&&typeof window.OrreryDemo.reloadFor==='function'){
@@ -168,7 +168,7 @@
     if(manual){badge.className='phone-badge warn';badge.textContent='MANUAL';}
 
     var main=el('div','settings-row');
-    main.append(toggle('phoneAccess','Phone access','Read the cockpit from your phone over Tailscale: agents, Graph, Mail, conversation, files and images.',
+    main.append(toggle('phoneAccess','Phone access','Read the cockpit from your phone over Tailscale: agents, Graph, Mail, Reader, files and images.',
       set.access,manual,function(on){
         if(on&&!named){
           var box=document.getElementById('phoneAccess');if(box)box.checked=false;

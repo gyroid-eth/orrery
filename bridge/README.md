@@ -18,15 +18,18 @@ replace text without scrolling it into history. A read-only history view
 would need to label that limited capture, or use a separate provider history
 source; it cannot supply an accurate live TUI scrollbar from these rows.
 
-**Settings → Appearance → Conversation history** adds a `History` button to
-the pane header (off by default). It opens a read-only provider conversation next to
+**Settings → Appearance → Reader** adds a page-shaped Reader icon to
+the pane header (on by default). It opens a read-only provider conversation next to
 the terminal; on narrow screens it fills the pane until closed. The scrollbar
 describes the loaded messages, not the live TUI position. `Load earlier` reads
 older records, and new output follows only while the reader is at the bottom.
+The small **↓ (Latest)** button appears over the lower-right corner only while
+reading earlier records. Its opaque background keeps it visible, and extra
+space at the end of the list keeps the last line clear.
 Turn the setting off to remove the button, close the panel and stop its reads.
-Conversation scripts/styles are loaded only after opting in. Reading keys stay
+Conversation scripts/styles are loaded only while the setting is enabled. Reading keys stay
 in the reader, and opening/closing it does not resize a CLAIMED terminal: the
-terminal grid is preserved and its right portion is clipped until History is
+terminal grid is preserved and its right portion is clipped until Reader is
 closed.
 The single preference uses the existing shared preference mechanism; transcript
 contents and reading position are never saved as preferences.
@@ -86,7 +89,7 @@ opening raw transcript paths in cockpit. Data acquisition lives in
 
 ### Split terminals
 
-Each desktop split cell has its own HISTORY button and independent reader.
+Each desktop split cell has its own Reader icon and independent reader.
 Side panel, Full width and file/image preview stay inside that cell; other
 cells retain their terminal grids. Several histories can remain open at once.
 Interacting with a reader selects its cell through the existing pane focus
@@ -113,7 +116,7 @@ search only that pane's current xterm buffer. Soft-wrapped rows are joined and
 whitespace is normalized. A unique literal match scrolls to and selects the
 physical rows, without input, resize, claim or tmux copy-mode. Wide readers
 return to side mode; narrow readers close only their own history. Bottom restores
-normal terminal following. No-match and multiple-match notices leave History
+normal terminal following. No-match and multiple-match notices leave Reader
 open. Native text selection, double click and file/diff controls keep their own
 actions. The search scans at most 6500 rows / 2 MiB; removed rows and old
 alternate-screen frames are unavailable. Markdown rendering and truncation can
@@ -149,7 +152,7 @@ Caption, status and result prose grant no paths. These chips use the same
 workspace/image roots, canonical-path, secret-file, byte and pixel limits as
 other recorded references; delivery does not expand the readable roots.
 
-**Full width** expands History within the pane. Structured `apply_patch`,
+The header’s **⤢** icon expands Reader within the pane; press it again to restore the side panel. Structured `apply_patch`,
 `view_image`, `read_file`, `write_file`, `Read` and `Edit` arguments produce file
 chips when permitted. Codex's static `functions.exec` literal wrappers are also
 supported, without evaluating JavaScript. Computed calls, shell-command paths,
@@ -160,13 +163,13 @@ references; generic result bodies never grant file access.
 Call diffs show the **recorded edit request**, with **outcome unconfirmed**.
 dsh filesystem-result diffs are labeled **Recorded file tool result · contextual
 hunk**. Neither is recomputed from disk or treated as proof of the current file. Expand the diff
-to see colored added/removed lines. Selecting a file chip expands History and
+to see colored added/removed lines. Selecting a file chip expands Reader and
 opens a split preview; **× Preview** returns to the full-width reader. On a
 phone the preview takes the reader area until closed. The preview is labeled
 **Current file · may differ from the recorded edit**. Reveal is an explicit
 button using the existing file-manager adapter.
 
-Full-width History reserves space for the original prompt composer below it;
+Full-width Reader reserves space for the original prompt composer below it;
 on phones it places the target above the textarea and STOP/SEND controls.
 This is the same DOM element, draft, target, IME handling, send guard and
 WebSocket input route as the terminal composer. Reading/preview keys do not
@@ -179,8 +182,8 @@ It is not provider acknowledgement.
 With a provider that records whole seconds, a record written in the same second as the send may show as not matched. Repeated prompts match one record each;
 old loaded records and older pages cannot consume a new receipt. Whitespace is
 normalized; a sufficiently long truncated prefix can match an unambiguous send. Closing and
-reopening History retains receipts; changing binding, closing the pane or
-turning History off discards them. If a new user record cannot be associated confidently, the receipt says
+reopening Reader retains receipts; changing binding, closing the pane or
+turning Reader off discards them. If a new user record cannot be associated confidently, the receipt says
 **Record not matched** rather than claiming the record is still absent. The receipt displays at most 1,000 characters; exact
 matching is available for prompts up to the reader's 64 KiB text limit.
 
@@ -192,8 +195,8 @@ Terminal jump still searches the original complete provider message. Tables
 have a 64-column / 500-row projection limit; larger shapes remain text.
 
 The header shows the status (ACTIVE/LIVE/offline) as a dot and noninteractive
-text beside the pane name, with HISTORY (when enabled) and WINDOW on the right.
-In a separate pane window, WINDOW returns it to the
+text beside the pane name, with Reader (when enabled), full-width (while open) and window icons on the right.
+In a separate pane window, the return icon puts it back in the
 cockpit. Terminal-size claim/follow and opening in the external terminal moved
 to **Settings → Terminal → Selected pane actions**; the selected session/pane
 is shown there, and the same handlers apply. Their defaults did not change:
@@ -421,9 +424,9 @@ The fixed ORRERY aliases include the bound `agentstack` proxy's send tool;
 arbitrary services named `send_message` remain ordinary tools.
 
 Split panes have their own title bars: the name and status identify the pane,
-HISTORY reads that pane, and WINDOW moves that session into its own window.
+the Reader icon reads that pane, and the window icon moves that session into its own window.
 The shared upper header is hidden while two or more splits are visible. A
 single pane retains the existing header. Pane names still support drag reordering
 and closing; their keyboard focus action uses Enter or Space. Title bars stay 40px high at every width. Names and status ellipsize; narrow
-panes use HIST/WIN labels and the smallest panes use labelled icons.
-Turning conversation history off removes HISTORY while keeping WINDOW available.
+panes keep the same icons with accessible labels.
+Turning Reader off removes its controls while keeping the window icon available.

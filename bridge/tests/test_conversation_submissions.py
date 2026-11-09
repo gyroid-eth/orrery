@@ -24,7 +24,7 @@ def prepare(cockpit,provider='codex',split=False):
       OrreryConversationSource.Source.prototype.read=async(name,options)=>({agent:name,provider:"""+json.dumps(provider)+""",mode:"""+json.dumps('snapshot' if provider=='hermes' else 'cursor')+""",events:turnDone?[oldRecord,newRecord,{id:'reply',kind:'text',role:'assistant',text:'Generated turn response'}]:[oldRecord],after:'tail',has_older:true});
       conversationView.refresh();
       window.reader=document.querySelector('.conversation-panel:not([hidden])');
-      if(reader.querySelector('.conversation-expand').getAttribute('aria-pressed')!=='true')reader.querySelector('.conversation-expand').click();
+      if(reader.parentElement.querySelector('.conversation-expand').getAttribute('aria-pressed')!=='true')reader.parentElement.querySelector('.conversation-expand').click();
     """)
     wait("reader.querySelector('[data-event-id=old]')!==null")
     return js,wait,client

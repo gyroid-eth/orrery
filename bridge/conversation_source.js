@@ -11,12 +11,12 @@
     history_pending:'The provider has not completed its conversation header yet.',
     history_unconfirmed:'This agent has no confirmed conversation binding yet.',
     agent_unavailable:'This agent is no longer available in the live roster.',
-    history_changed:'The conversation changed. Reopen History to read the current session.',
+    history_changed:'The conversation changed. Reopen Reader to read the current session.',
     history_unreadable:'The bound conversation file cannot be read.',
-    record_too_large:'A provider record exceeds the reader byte limit. Close and reopen History to resume from the latest messages.',
+    record_too_large:'A provider record exceeds the reader byte limit. Close and reopen Reader to resume from the latest messages.',
     history_unavailable:'The provider history is unavailable.',
     dashboard_unavailable:'The telemetry dashboard could not answer. Retry in a moment.',
-    reference_expired:'This reference expired or its conversation changed. Reload History and select it again.',
+    reference_expired:'This reference expired or its conversation changed. Reload Reader and select it again.',
     preview_path_denied:'This file is outside the permitted preview folders.',
     preview_type_denied:'This file type cannot be previewed safely.',
     preview_too_large:'This file exceeds the preview size or pixel limit.',
@@ -28,10 +28,10 @@
   reasons('receipt_unavailable receipt_missing binding_missing','This launch has no saved history link; open a newly launched child to read its history.');
   reasons('awaiting_hook launch_transition','This child is still preparing its history link; leave it running and retry shortly.');
   reasons('hook_not_observed','Codex has not recorded this run; enable the ORRERY plugin, review its hooks in /hooks, then start a new Codex process.');
-  reasons('receipt_predates_session','Previous conversation · this recording belongs to an earlier launch; open history for a newly launched child instead.');
+  reasons('receipt_predates_session','Previous conversation · this recording belongs to an earlier launch; open Reader for a newly launched child instead.');
   reasons('no_transcript native_session_missing','The provider has not saved a usable conversation yet; retry after its first message or use a newly launched child.');
   reasons('invalid_binding identity_mismatch id_mismatch session_mismatch launch_mismatch ambiguous_binding session_conflict unsupported_source','This recording cannot be matched safely to the selected child; open a newly launched child instead.');
-  reasons('artifact_changed','The saved recording changed; close and reopen History or use a newly launched child if it remains unavailable.');
+  reasons('artifact_changed','The saved recording changed; close and reopen Reader or use a newly launched child if it remains unavailable.');
   reasons('invalid_receipt','This launch has an invalid saved history link; start a new child to create a verified recording.');
   reasons('history_unavailable','The saved conversation is unavailable; retry after startup or use a newly launched child.');
   reasons('registration_missing','This child is no longer registered; refresh the roster or open a newly launched child.');
@@ -40,9 +40,9 @@
   reasons('protected_history_required fresh_history_provider_unavailable','This runtime cannot expose this provider history yet; use a supported Codex conversation until telemetry adds support.');
   function bindingMessage(payload){
     const own=(values,key)=>Object.prototype.hasOwnProperty.call(values,key)?values[key]:null;
-    if(!['history_unconfirmed','history_stale'].includes(payload.error))return own(MESSAGES,payload.error)||'Conversation history could not be loaded.';
+    if(!['history_unconfirmed','history_stale'].includes(payload.error))return own(MESSAGES,payload.error)||'Reader could not be loaded.';
     return own(REASONS,payload.reason_code)||(payload.error==='history_stale'?REASONS.receipt_predates_session:
-      'History has no verified recording for this launch; retry after startup or use a newly launched child.');
+      'Reader has no verified recording for this launch; retry after startup or use a newly launched child.');
   }
   class Source {
     constructor(fetcher=root.fetch.bind(root)){this.fetcher=fetcher;}

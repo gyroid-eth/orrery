@@ -61,7 +61,7 @@ def test_long_message_line_through_image_preview_and_collapse(cockpit):
     wait_reading_layout(js)
     before=js('linePosition()')
     screenshot(js,client,'long-line-before.png')
-    js("longPanel.querySelector('.conversation-file').click()")
+    js("longPanel.querySelector('.conversation-tool-group').click();longPanel.querySelector('.conversation-file').click()")
     wait("longPanel.querySelector('.conversation-preview-image')?.naturalWidth===1")
     js("window.keptImage=longPanel.querySelector('.conversation-preview-image')")
     close_other(js,'OtherFixture');wait_reading_layout(js)
