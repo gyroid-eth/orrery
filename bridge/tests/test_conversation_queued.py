@@ -193,6 +193,6 @@ def test_consumed_native_record_reconciles_submission_in_real_view(cockpit, tmp_
         wait("reader.querySelectorAll('.conversation-submission').length===0")
         assert calls
         assert js("[...reader.querySelectorAll('.conversation-event')].filter(e=>e.textContent.includes(sentText)).length") == 1
-        assert js("[...reader.querySelectorAll('.conversation-byline')].some(e=>e.textContent.toUpperCase().includes('CLAUDE'))")
+        assert js("[...reader.querySelectorAll('.conversation-speaker')].some(e=>e.ariaLabel.includes('(Claude)'))")
         js('conversationView.refresh()')
         assert js("reader.querySelectorAll('.conversation-submission').length") == 0

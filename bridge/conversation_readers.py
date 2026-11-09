@@ -20,7 +20,7 @@ from urllib.parse import quote
 from conversation_mail import received, sent
 
 from conversation_history import (HistoryUnavailable, MAX_SCAN, MAX_TEXT, PAGE_SIZE,
-    open_bound_transcript, assert_transcript_identity, read_codex_page)
+    open_bound_transcript, assert_transcript_identity, read_codex_page, recorded_model)
 
 try:
     import zstandard as zstd
@@ -128,7 +128,17 @@ def normalize(item,p,sid):
     """Return (block-index,event) pairs; hidden/reasoning/raw tool bodies excluded."""
     out=[]
     def add(index,event):
-        if event:out.append((index,event))
+        if event:
+            if event.get('kind') == 'text' and event.get('role') == 'assistant':
+                if p == 'claude':
+                    value = item.get('message', {}).get('model')
+                elif p == 'dsh':
+                    value = item.get('data', {}).get('message', {}).get('model')
+                else:
+                    value = item.get('model') or parse(item.get('display_metadata') or '{}').get('model')
+                model = recorded_model(value)
+                if model:event['model'] = model
+            out.append((index,event))
     if p=='claude':
         if (item.get('sessionId')!=sid or item.get('isSidechain') or
                 item.get('isMeta') and not (item.get('type')=='user' and item.get('isCompactSummary') is True)):return []

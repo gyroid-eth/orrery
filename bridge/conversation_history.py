@@ -80,6 +80,14 @@ def assert_transcript_identity(path: str, stream) -> None:
             raise HistoryUnavailable('history_changed')
 
 
+def recorded_model(value):
+    """A small opaque model ID, never arbitrary provider metadata."""
+    if (isinstance(value, str) and 0 < len(value.strip()) <= 256
+            and not any(ord(c) < 32 or ord(c) == 127 for c in value)):
+        return value.strip()
+    return None
+
+
 def codex_event(raw: bytes, offset: int) -> dict | None:
     try:
         item = json.loads(raw)
@@ -125,8 +133,12 @@ def codex_event(raw: bytes, offset: int) -> dict | None:
             return None
         if not text.strip():
             return None
-        return received(dict(base, kind="text", role=payload["role"], text=text[:MAX_TEXT],
+        event = received(dict(base, kind="text", role=payload["role"], text=text[:MAX_TEXT],
                     truncated=len(text) > MAX_TEXT))
+        model = recorded_model(payload.get("model"))
+        if event.get("kind") == "text" and role == "assistant" and model:
+            event["model"] = model
+        return event
     if kind in {"function_call", "custom_tool_call"}:
         # Arguments/results can contain credentials. The initial reader shows
         # only the call's name, rather than interpolating arbitrary tool input.
@@ -192,6 +204,19 @@ def read_codex_page(path: str, *, before: str | None = None,
     if after is not None and len(data) == MAX_SCAN and complete == 0:
         raise HistoryUnavailable("record_too_large")
     data = data[:complete]  # Never advance over an in-progress record.
+    # Metadata comes only from the already loaded window. In particular a
+    # delta without its turn_context uses the browser's roster fallback.
+    contexts = []
+    context_offset = position
+    for raw in data.splitlines(keepends=True):
+        if b'"turn_context"' in raw:
+            try:
+                item = json.loads(raw)
+            except (ValueError, UnicodeError):
+                item = None
+            if isinstance(item, dict) and item.get('type') == 'turn_context' and isinstance(item.get('payload'), dict):
+                contexts.append((context_offset, recorded_model(item['payload'].get('model'))))
+        context_offset += len(raw)
     entries = []
     complete_end = position
     if after is None:
@@ -220,7 +245,14 @@ def read_codex_page(path: str, *, before: str | None = None,
         oldest = int(entries[0][0]["id"]) if entries else window_start
     else:
         oldest = int(entries[0][0]["id"]) if entries else start
+    context_index = 0
+    model = None
     for event, next_offset in entries:
+        while context_index < len(contexts) and contexts[context_index][0] < int(event['id']):
+            model = contexts[context_index][1]
+            context_index += 1
+        if model and event.get('kind') == 'text' and event.get('role') == 'assistant':
+            event.setdefault('model', model)
         event['cursor_before'] = f"{file_id}:{event['id']}"
         event['cursor_after'] = f"{file_id}:{next_offset}"
     return dict(events=[event for event, _ in entries],

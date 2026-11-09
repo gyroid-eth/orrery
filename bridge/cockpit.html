@@ -4613,9 +4613,9 @@
       }
     }
   },
-  "inventory_digest": "1c2f57fff099b7c9cee74f77cd2ef4cd97da95a521cd12d053b61500a0bc088a",
+  "inventory_digest": "30147b48402ff840ac3b93631683c2aca6b9dcfda5c4a2f23747c4441610042b",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "981b394d7814fe86c905b233737cfec4b842917de5e04cd604f538a09ab7e0cd",
+  "source_digest": "c9d1cb5912a4429400679267d2f0815e914ecc2a5663066a53417d6513556369",
   "surface": "cockpit",
   "version": 1
 }
@@ -9152,6 +9152,31 @@ function paintProviderLogo(logo,agent){
   }
   return {provider,local};
 }
+function paintAgentPortrait(face,name){
+  face.querySelector('.ini').textContent=(name[0]||'?');
+  const img=face.querySelector('img');
+  const src='/telemetry/portrait?v=4&name='+encodeURIComponent(name)+'&hi=1';
+  if(img.getAttribute('src')!==src){img.style.display='';img.src=src;img.onerror=()=>{img.style.display='none';};}
+}
+function conversationAvatar(name,model,existing=null){
+  if(!name)return null;
+  const avatar=existing||document.createElement('span');
+  if(!existing){
+    avatar.className='medal conversation-avatar';avatar.setAttribute('aria-hidden','true');
+    const face=document.createElement('span');face.className='face';
+    const initial=document.createElement('span');initial.className='ini';
+    const image=document.createElement('img');image.alt='';image.referrerPolicy='no-referrer';face.append(initial,image);
+    const badge=document.createElement('span');badge.className='provider-badge';badge.hidden=true;
+    const logo=document.createElement('img');logo.className='provider-logo';logo.alt='';badge.appendChild(logo);
+    const pill=document.createElement('span');pill.className='pill eng';pill.hidden=true;avatar.append(face,badge,pill);
+  }
+  paintAgentPortrait(avatar.querySelector('.face'),name);
+  const roster=currentAgentNamed(name)||{name};
+  // A recorded model can belong to a different maker than today's roster.
+  const identity=model?{...roster,provider:rosterIsLocal(roster)?'local':'',model,model_raw:model}:roster;
+  paintRosterProvider(avatar,identity);avatar.querySelector('.pill.eng').hidden=true;
+  return avatar;
+}
 function conversationPeerLogo(name,existing=null){
   const agent=currentAgentNamed(name);if(!agent)return null;
   const logo=existing||document.createElement('span');logo.classList.add('pane-provider');logo.setAttribute('role','img');
@@ -9558,10 +9583,7 @@ function paintTile(el,a){
   // reads as random color noise — lineage color lives in the graph views,
   // where the tree gives it meaning).
   el.querySelector('.face').style.removeProperty('--lineage-ring');
-  el.querySelector('.ini').textContent=(a.name[0]||'?');
-  const img=el.querySelector('.face img');
-  const src='/telemetry/portrait?v=4&name='+encodeURIComponent(a.name)+'&hi=1';
-  if(img.getAttribute('src')!==src){img.style.display='';img.src=src;img.onerror=()=>{img.style.display='none';};}
+  paintAgentPortrait(el.querySelector('.face'),a.name);
   el.querySelector('.cname').textContent=a.name;
   paintRosterProvider(el,a);paintRosterHarness(el,a);
   const modelLabel=paneHeadingModel(a),modelPill=el.querySelector('.pill.model');
@@ -11262,6 +11284,7 @@ const conversationView=(()=>{
       await asset('script','src','conversation_source.js');
       await asset('script','src','conversation_preview.js');
       await asset('script','src','conversation_mail.js');
+      await asset('script','src','conversation_speaker.js');
       await asset('script','src','conversation_terminal.js');
       await asset('script','src','conversation_markdown.js');
       await asset('script','src','conversation_view.js');
@@ -11296,6 +11319,7 @@ const conversationView=(()=>{
         jumpToEvent:jumpConversationEvent,
         openExternalUrl,
         renderPeerLogo:conversationPeerLogo,
+        renderAvatar:conversationAvatar,
       });
       return instance;
     })().catch(error=>{loading=null;showToast(error.message,true);return null;});
