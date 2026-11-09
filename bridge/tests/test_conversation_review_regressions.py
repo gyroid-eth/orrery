@@ -161,7 +161,7 @@ def test_load_earlier_keeps_same_character_after_layout(cockpit, width):
     wait_reading_layout(js)
     js("""window.readScroll=document.querySelector('.conversation-scroll');
       window.readCharacter=document.createRange();
-      const node=document.querySelector('[data-event-id=row-0] .conversation-text').firstChild;
+      const node=document.createTreeWalker(document.querySelector('[data-event-id=row-0] .conversation-text'),NodeFilter.SHOW_TEXT).nextNode();
       readCharacter.setStart(node,11);readCharacter.setEnd(node,12);
       window.characterTop=()=>readCharacter.getBoundingClientRect().top-readScroll.getBoundingClientRect().top;
       readScroll.dispatchEvent(new WheelEvent('wheel'));readScroll.scrollTop=0;
