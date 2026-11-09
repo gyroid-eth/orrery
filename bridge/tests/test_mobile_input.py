@@ -29,8 +29,9 @@ def bridge_fixture(tmp_path):
     return bridge
 
 
+@pytest.mark.parametrize('max_lines', [40, 120])
 @pytest.mark.parametrize('case',['accepted','overflow','timeout','ack_error'])
-def test_bounded_capture_uses_real_parser_and_keeps_next_ack_aligned(tmp_path,monkeypatch,case):
+def test_bounded_capture_uses_real_parser_and_keeps_next_ack_aligned(tmp_path,monkeypatch,case,max_lines):
     async def scenario():
         bridge=bridge_fixture(tmp_path)
         assert hasattr(bridge,'capture_mobile_preview'),'bounded pane capture is absent'
@@ -42,9 +43,9 @@ def test_bounded_capture_uses_real_parser_and_keeps_next_ack_aligned(tmp_path,mo
         bridge._write_master=writer
         async def no_history(*a,**kw):raise AssertionError('recorder/history capture must not be used')
         bridge.capture_pane=no_history
-        task=asyncio.create_task(bridge.capture_mobile_preview('%3',24,deadline=time.monotonic()+(.05 if case=='timeout' else 1)))
+        task=asyncio.create_task(bridge.capture_mobile_preview('%3',24,deadline=time.monotonic()+(.05 if case=='timeout' else 1), max_lines=max_lines))
         while not writes:await asyncio.sleep(0)
-        assert b'capture-pane' in writes[0] and b'-S -16' in writes[0] and b'-E 23' in writes[0]
+        assert b'capture-pane' in writes[0] and f'-S {24-max_lines}'.encode() in writes[0] and b'-E 23' in writes[0]
         if case=='timeout':
             with pytest.raises(Exception):await task
             assert aborts==[True]
@@ -823,3 +824,43 @@ def test_external_fresh_r4_preview_and_confirmed_ack_on_private_control(tmp_path
     attach.benchmark_original=original
     monkeypatch.setattr(ob.SessionBridgeManager,'attach',attach)
     fixture.test_external_control_bridge_and_same_native_resume_gate(tmp_path,monkeypatch,provider)
+
+
+@pytest.mark.parametrize('expanded', [False, True])
+@pytest.mark.parametrize('kind', ['japanese', 'quotes'])
+def test_http_preview_negotiates_capacity_and_stays_within_json_budget(tmp_path, expanded, kind):
+    import mobile_input as mobile
+    from aiohttp import ClientSession, web
+    async def scenario():
+        bridge=bridge_fixture(tmp_path); captures=[]
+        class Resolver:
+            def read(self,b,p,deadline): return {'height':24, 'pane_id':p}
+        async def get_bridge(name): return bridge
+        async def capture(pane,height,**kw):
+            captures.append(kw.get('max_lines',40))
+            line='界'*33 if kind=='japanese' else '"'*102
+            return SimpleNamespace(lines=[line]*120)
+        bridge.capture_mobile_preview=capture
+        coordinator=mobile.InputCoordinator(Resolver(),get_bridge,enabled=True)
+        app=web.Application(); mobile.install_routes(app,coordinator)
+        runner=web.AppRunner(app,access_log=None); await runner.setup()
+        site=web.TCPSite(runner,'127.0.0.1',0); await site.start()
+        port=site._server.sockets[0].getsockname()[1]
+        scope=dict(contract=mobile.CONTRACT,owner='owner@example.test',reader_epoch='a'*32)
+        headers={'Origin':f'http://127.0.0.1:{port}', 'X-ORRERY-Mobile-Contract':mobile.CONTRACT, 'Content-Type':'application/json'}
+        async def post(client,op,**fields):
+            async with client.post(f'http://127.0.0.1:{port}/_mobile/terminal/'+op,data=json.dumps(dict(scope,**fields)),headers={**headers,**({'X-ORRERY-Mobile-Preview':'120/12288'} if expanded and op=='preview' else {})}) as response:
+                data=await response.read(); assert response.status==200; assert len(data)<=16384
+                return json.loads(data)
+        try:
+            async with ClientSession() as client:
+                scope['epoch']=(await post(client,'capability'))['epoch']
+                choice=(await post(client,'targets',name='FixtureCurie'))['targets'][0]['choice']
+                value=await post(client,'preview',choice=choice)
+                assert (value['max_lines'],value['max_bytes'])==((120,12288) if expanded else (40,6144))
+                assert captures==[120 if expanded else 40]
+                assert len(value['text'].splitlines())>(40 if expanded else 0)
+                if expanded and kind=='japanese': assert len(value['text'].splitlines())==120
+                if expanded and kind=='quotes': assert value['truncated'] is True
+        finally: await runner.cleanup()
+    asyncio.run(scenario())
