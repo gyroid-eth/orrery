@@ -87,6 +87,57 @@ def test_dsh_concatenated_frames_partial_append_and_millisecond_time(tmp_path):
         p=page(r,before=p['before'],limit=1);ids=[e['id'] for e in p['events']]+ids
     assert len(ids)==5 and len(set(ids))==5
 
+def streaming_frame(data,window_log=21):
+    z=pytest.importorskip('zstandard')
+    compressor=z.ZstdCompressor(compression_params=z.ZstdCompressionParameters.from_level(3,window_log=window_log)).compressobj()
+    frame=compressor.compress(data)+compressor.flush()
+    params=z.get_frame_parameters(frame)
+    assert params.window_size==1<<window_log
+    assert params.content_size==z.CONTENTSIZE_UNKNOWN
+    return frame
+
+def test_dsh_streaming_frames_header_paging_and_record_lookup(tmp_path):
+    path=tmp_path/'session.v4.jsonl.zstd'
+    header=streaming_frame(line(dict(type='session',version=4,id='fixture-session',cwd=str(tmp_path))))
+    records=[dsh('user/message',dict(source=dict(kind='user'),content=[dict(type='text',text='hello')])),
+        dsh('assistant/message',dict(message=dict(content=[dict(type='text',text='answer')])),2),
+        dsh('tool/call',dict(name='read',arguments=dict(path='a.txt')),3)]
+    frames=[streaming_frame(line(item)) for item in records]
+    path.write_bytes(header+frames[0]);r=row(path,'dsh')
+    with history.open_reader(r) as reader:
+        assert reader.cwd==str(tmp_path)
+        initial=reader.read_page()
+    assert [e['text'] for e in initial['events']]==['hello']
+    with path.open('ab') as f:
+        for frame in frames[1:]:f.write(frame)
+    forward=page(r,after=initial['after'])
+    assert [e['text'] for e in forward['events']]==['answer','read']
+    latest=page(r,limit=1)
+    previous=page(r,before=latest['before'],limit=1)
+    oldest=page(r,before=previous['before'],limit=1)
+    assert [p['events'][0]['text'] for p in (oldest,previous,latest)]==['hello','answer','read']
+    assert not oldest['has_older']
+    # A fresh reader exercises lookup without the page's decoded-frame cache.
+    with history.open_reader(r) as reader:
+        for event,expected in zip(initial['events']+forward['events'],records):
+            pos,line_offset,index=map(int,event['id'].split(':'))
+            item,raw,indexes=reader.record((pos,line_offset))
+            assert item==expected and raw==line(expected).rstrip(b'\n') and index in indexes
+            artifact,digest=reader.record_at(event['id'])
+            assert len(digest)==32
+        assert artifact['payload']['name']=='read'
+    with pytest.raises(history.HistoryUnavailable,match='history_changed'):
+        page(row(path,'dsh',sid='other'))
+
+@pytest.mark.parametrize('in_header',[True,False])
+def test_dsh_streaming_frame_window_over_limit_is_rejected(tmp_path,in_header):
+    import conversation_readers as readers
+    path=tmp_path/'session.v4.jsonl.zstd'
+    header=line(dict(type='session',version=4,id='fixture-session'))
+    oversized=streaming_frame(header,window_log=readers.MAX_SCAN.bit_length())
+    path.write_bytes(oversized if in_header else streaming_frame(header)+oversized)
+    with pytest.raises(history.HistoryUnavailable,match='record_too_large'):page(row(path,'dsh'))
+
 @pytest.mark.parametrize('kind,extra',[('user/message',dict(source=dict(kind='injection'))),('assistant/attempt',{}),('system/message',{}),('developer/message',{})])
 def test_dsh_hidden_sources_are_not_operator_prompts(tmp_path,kind,extra):
     path=tmp_path/'session.v4.jsonl';path.write_bytes(line(dict(type='session',version=4,id='fixture-session'))+line(dsh(kind,dict(content=[dict(type='text',text='HIDDEN')],**extra))))
