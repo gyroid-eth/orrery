@@ -293,3 +293,62 @@ def test_clicked_supported_raster_formats(extension,format,tmp_path):
 def test_path_scan_long_lines_remain_bounded(expression):
     result=json.loads(run('const text='+expression+';const h=new Element("div");const t=performance.now();md.renderText(text,h);show(text);console.log(JSON.stringify({ms:performance.now()-t}));'))
     assert result['ms']<1500
+
+
+@pytest.mark.parametrize('document', [False,True])
+@pytest.mark.parametrize('suffix', [' (https://example.com/source)', ' [source](https://example.com/source)'])
+def test_path_candidate_never_consumes_following_url_or_markdown_link(document,suffix):
+    text='/fixture/mixed.png'+suffix
+    renderer='renderDocument' if document else 'renderText'
+    result=json.loads(run('const h=new Element("div");md.'+renderer+'('+json.dumps(text)+',h);const paths=[],urls=[];function walk(n){if(n.dataset?.pathCandidate)paths.push(n.dataset.pathCandidate);if(n.tag==="a")urls.push(n.href);for(const c of n.children||[])walk(c);}walk(h);console.log(JSON.stringify({paths,urls}));'))
+    assert result['paths']==['/fixture/mixed.png']
+    assert result['urls']==['https://example.com/source']
+
+
+@pytest.mark.parametrize('name', ['plain.png','画像.png','日本語のファイル.png'])
+@pytest.mark.parametrize('home', [False,True])
+def test_probe_path_before_long_japanese_prose_keeps_unicode_filenames(tmp_path,monkeypatch,name,home):
+    monkeypatch.setenv('HOME',str(tmp_path))
+    target=tmp_path/name;target.touch()
+    shown='~/'+name if home else str(target)
+    text=shown+'です'+'日本語の説明'*12
+    assert backend.probe_reader_path(text)=={'shown':shown,'path':str(target)}
+
+
+@pytest.mark.parametrize('document', [False,True])
+@pytest.mark.parametrize('exists', [False,True])
+def test_real_mixed_path_urls_and_long_japanese_suffix(cockpit,path_backend,tmp_path,document,exists):
+    js,wait,client,requests,enable=cockpit
+    origin,reads=path_backend
+    client.call('Page.navigate',url=origin+'/cockpit.html')
+    wait("typeof conversationView!=='undefined'&&typeof createPane==='function'")
+    js('clearTimeout(reconnectTimer);scheduleReconnect=()=>{}');stable_roster(js);enable(count=1)
+    target=tmp_path/'mixed.png'
+    if exists:Image.new('RGB',(8,6),'teal').save(target)
+    unicode_image=tmp_path/'画像.png';Image.new('RGB',(8,6),'teal').save(unicode_image)
+    text=str(target)+' (https://example.com/source)\n'+str(target)+' [source](https://example.com/source)\n'+str(unicode_image)+'です'+'日本語の説明'*12
+    event=dict(id='mixed-links',kind='text',role='assistant',text=text)
+    js('conversationView.close();window.mixedEvent='+json.dumps(event)+';window.mixedOpened=[];OrreryConversationSource.Source.prototype.read=async()=>({events:[mixedEvent],after:"mixed:1"});window.mixedReader=OrreryConversation.mount({getContext:()=>({...currentAgents[0],terminalPaneId:"%901"}),bindToggle:false,openExternalUrl:url=>mixedOpened.push(url)});mixedReader.open()')
+    wait('mixedReader.panel.querySelector("[data-event-id=mixed-links]")!==null')
+    if document:
+        js('window.mixedHost=mixedReader.panel.querySelector(".conversation-text");mixedHost.replaceChildren();mixedHost.classList.add("conversation-preview-markdown");OrreryConversationMarkdown.renderDocument(mixedEvent.text,mixedHost)')
+    else:js('window.mixedHost=mixedReader.panel.querySelector(".conversation-text")')
+    wait('!mixedHost.querySelector("[data-path-candidate]")')
+    assert js('mixedHost.querySelectorAll("a[href^=https]").length')==2
+    assert js('mixedHost.querySelectorAll("a[data-local-path]").length')==(3 if exists else 1)
+    assert js('Array.from(mixedHost.querySelectorAll("a[data-local-path]")).some(a=>a.dataset.localPath==='+json.dumps(str(unicode_image))+')')
+    assert reads==[]
+    js('mixedHost.querySelectorAll("a[href^=https]").forEach(a=>a.click())')
+    assert js('mixedOpened')==['https://example.com/source']*2
+
+
+def test_probe_unicode_name_keeps_longest_match_and_stat_budget(tmp_path,monkeypatch):
+    target=tmp_path/'日本語の資料';target.touch()
+    assert backend.probe_reader_path(str(target)+'です')=={'shown':str(target),'path':str(target)}
+    original=Path.exists;checks=[]
+    def exists(path):
+        checks.append(path)
+        return original(path)
+    monkeypatch.setattr(Path,'exists',exists)
+    assert backend.probe_reader_path(str(tmp_path/'missing.png')+'です'+'日本語の説明'*200) is None
+    assert len(checks)<=64

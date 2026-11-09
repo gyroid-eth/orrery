@@ -2352,16 +2352,28 @@ def probe_reader_path(text):
     """Bounded literal existence checks; no reads or ellipsis directory walks."""
     if (not isinstance(text,str) or not text.startswith(('/', '~/')) or len(text)>2000
             or re.search(r'[\x00-\x1f\x7f]',text)):return None
-    ends=[i for i,ch in enumerate(text) if ch==' ' or not ch.isascii()]
-    ends.append(len(text))
-    for end in sorted(set(ends),reverse=True)[:64]:
+    # Long prose must not consume every slot before the filename boundary.
+    # Try the full text, spaces and ASCII-to-Unicode transitions first, then
+    # remaining Unicode positions. Keep the longest match within 64 stats.
+    primary={len(text)}
+    other=set()
+    for i,ch in enumerate(text):
+        if ch==' ' or not ch.isascii() and i>0 and text[i-1].isascii():primary.add(i)
+        if not ch.isascii():other.add(i)
+    ends=sorted(primary,reverse=True)+sorted(other-primary,reverse=True)
+    best=None;seen=set();attempts=0
+    for end in ends:
         shown=text[:end].rstrip(' .,;:!?')
-        if len(shown)<2:continue
+        if len(shown)<2 or shown in seen or best and len(shown)<=len(best['shown']):continue
+        seen.add(shown);attempts+=1
         try:
             path=Path(shown).expanduser()
-            if path.exists():return {'shown':shown,'path':str(path)}
-        except (OSError,ValueError):continue
-    return None
+            if path.exists():
+                best={'shown':shown,'path':str(path)}
+                if end==len(text):return best
+        except (OSError,ValueError):pass
+        if attempts>=64:break
+    return best
 
 
 async def probe_conversation_paths(request: web.Request) -> web.Response:

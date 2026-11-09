@@ -107,13 +107,23 @@
   // until the server finds its longest existing prefix. Never probe URL parts.
   function barePath(text,begin){
     if(/[a-z0-9/:~<]/i.test(text[begin-1]||'')||text.slice(begin,begin+2)==='//'||!(text[begin]==='/'||text.slice(begin,begin+2)==='~/'))return null;
-    let end=begin,round=0,square=0;
+    let end=begin,closedSquare=null;const round=[],square=[];
     while(end<text.length){
       const ch=text[end];
-      if(ch!==' '&&URL_END.test(ch)||ch===')'&&!round||ch===']'&&!square)break;
+      // A following URL belongs to its own token, including a parenthesized
+      // URL or a Markdown label/target. Retain balanced brackets in filenames.
+      if((ch==='h'||ch==='H')&&at(URL_START,text,end)){
+        let boundary=end;
+        for(const start of round)if(text[start-1]===' ')boundary=Math.min(boundary,start-1);
+        for(const start of square)if(text[start-1]===' ')boundary=Math.min(boundary,start-1);
+        end=boundary;break;
+      }
+      if(ch!==' '&&URL_END.test(ch)||ch===')'&&!round.length||ch===']'&&!square.length)break;
       if(ch===' '&&/^(?:https?:\/\/|~\/|\/)/i.test(text.slice(end+1,end+10)))break;
-      if(ch==='(')round++;else if(ch===')')round--;
-      else if(ch==='[')square++;else if(ch===']')square--;
+      if(ch==='(')round.push(closedSquare?.end===end-1?closedSquare.start:end);
+      else if(ch===')')round.pop();
+      else if(ch==='[')square.push(end);
+      else if(ch===']')closedSquare={start:square.pop(),end};
       end++;
     }
     let last=end;while(last>begin&&/[ .,;:!?]/.test(text[last-1]))last--;
@@ -146,7 +156,9 @@
           /[\x00-\x1f\x7f]/.test(result.path)||label&&result.shown!==text){node.replaceWith(document.createTextNode(node.textContent));return;}
       const link=el('a');link.href='#';link.dataset.localPath=result.path;
       link.title='Preview image or reveal in file manager';link.textContent=label?node.textContent:result.shown;
-      node.replaceWith(link,document.createTextNode(label?'':text.slice(result.shown.length)));
+      const remainder=document.createDocumentFragment();
+      renderText(label?'':text.slice(result.shown.length),remainder);
+      node.replaceWith(link,remainder);
     }
     async function pump(){
       if(running||closed)return;running=true;
