@@ -115,3 +115,74 @@ def test_single_header_displays_session_without_internal_identifiers(cockpit, th
     text = js("document.querySelector('.scr-head').innerText")
     for internal in ['%901', 'w7/p2', 'w?/p?', 'InternalWindowFixture', 'fixture-command']:
         assert internal not in text, text
+
+
+def pointer_click(js, client, selector):
+    point=js('(()=>{const element=document.querySelector('+json.dumps(selector)+');const rect=element.getBoundingClientRect();return {x:rect.x+rect.width/2,y:rect.y+rect.height/2}})()')
+    for kind in ['mousePressed','mouseReleased']:
+        client.call('Input.dispatchMouseEvent',type=kind,button='left',clickCount=1,**point)
+
+
+def press_enter(client):
+    for kind in ['keyDown','keyUp']:
+        client.call('Input.dispatchKeyEvent',type=kind,key='Enter',code='Enter',windowsVirtualKeyCode=13,**({'text':'\r'} if kind=='keyDown' else {}))
+
+
+def dialog_screenshot(client, tmp_path, name):
+    import base64
+    import os
+    from pathlib import Path
+    output=Path(os.environ.get('ORRERY_READER_DIALOG_SCREENSHOTS',tmp_path))
+    output.mkdir(parents=True,exist_ok=True)
+    (output/name).write_bytes(base64.b64decode(client.call('Page.captureScreenshot',format='png')['data']))
+    print('Reader dialog screenshot:',output/name)
+
+
+@pytest.mark.parametrize('theme', ['dark','light'])
+def test_relocated_dialog_retry_focus_stays_in_reader_after_fit(cockpit, theme, tmp_path):
+    js,wait,client=show(cockpit,theme,'split-phone','dsh')
+    fail(js,wait)
+    pointer_click(js,client,'.split-cell[data-session=ReviewFixture] .conversation-notice-toggle')
+    wait("document.querySelector('.conversation-notice-menu:not([hidden])')!==null")
+    # Escape returns to the trigger; Enter opens it again with Retry focused.
+    client.call('Input.dispatchKeyEvent',type='keyDown',key='Escape',windowsVirtualKeyCode=27)
+    client.call('Input.dispatchKeyEvent',type='keyUp',key='Escape',windowsVirtualKeyCode=27)
+    press_enter(client)
+    assert js("document.activeElement.classList.contains('conversation-menu-retry')")
+    js("packets.length=0;setActive(paneIdForSession('ReviewFixture'),'single');renderStage()")
+    wait_reading_layout(js)
+    js('queueStageFit(activeId)')
+    time.sleep(.25)
+    assert js("document.querySelectorAll('.conversation-notice-menu:not([hidden])').length") == 0
+    assert js("!!document.activeElement.closest('.conversation-panel,.conversation-notices')")
+    assert js('document.activeElement.getClientRects().length>0')
+    client.call('Input.dispatchKeyEvent',type='keyDown',key='q',code='KeyQ',text='q',windowsVirtualKeyCode=81)
+    client.call('Input.dispatchKeyEvent',type='keyUp',key='q',code='KeyQ',windowsVirtualKeyCode=81)
+    assert js("packets.filter(p=>['input','codex-page'].includes(p.type))") == []
+    dialog_screenshot(client,tmp_path,theme+'-relocated-focus.png')
+
+
+@pytest.mark.parametrize('theme', ['dark','light'])
+def test_outside_header_dismisses_dialog_and_only_one_menu_opens(cockpit, theme, tmp_path):
+    js,wait,client=show(cockpit,theme,'split-phone','dsh')
+    fail(js,wait)
+    owner='.split-cell[data-session=ReviewFixture]'
+    other='.split-cell[data-session=OtherFixture]'
+    pointer_click(js,client,owner+' .conversation-notice-toggle')
+    wait("document.querySelector('.conversation-notice-menu:not([hidden])')!==null")
+    pointer_click(js,client,other+' .scl-name')
+    assert js("document.querySelectorAll('.conversation-notice-menu:not([hidden])').length") == 0
+    js("OrreryConversationSource.Source.prototype.read=async()=>({...noticePayload,provider:'hermes',mode:'snapshot',notice:'Other provider snapshot.'})")
+    pointer_click(js,client,other+' .split-history-toggle')
+    wait("document.querySelector('.split-cell[data-session=OtherFixture] .conversation-mode')?.title==='Other provider snapshot.'")
+    pointer_click(js,client,other+' .conversation-mode')
+    assert js("document.querySelectorAll('.conversation-notice-menu:not([hidden])').length") == 1
+    assert js("document.querySelector('.conversation-notice-menu:not([hidden])').textContent.includes('Other provider snapshot.')")
+    # Switching by keyboard has no outside pointerdown to dismiss the old menu.
+    js("document.querySelector('.split-cell[data-session=ReviewFixture] .conversation-notice-toggle').focus();packets.length=0")
+    press_enter(client)
+    assert js("document.querySelectorAll('.conversation-notice-menu:not([hidden])').length") == 1
+    assert js("document.querySelector('.conversation-notice-menu:not([hidden])').textContent.includes('Generated read failure')")
+    assert js("document.querySelector('.split-cell[data-session=OtherFixture] .conversation-mode').getAttribute('aria-expanded')") == 'false'
+    assert js("packets.filter(p=>['input','codex-page'].includes(p.type))") == []
+    dialog_screenshot(client,tmp_path,theme+'-single-dialog.png')

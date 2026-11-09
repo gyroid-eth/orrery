@@ -103,6 +103,7 @@
   const latestIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v14m-6-6 6 6 6-6M5 21h14"/></svg>';
   const warningIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5m0 3v.1"/></svg>';
   const retryIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10a8 8 0 1 0-1 7M20 4v6h-6"/></svg>';
+  let closeActiveNotice=null;
   function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,expandControl=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null,openExternalUrl=null}){
     let screen=host||document.querySelector('.screen');
     const toggle=control||document.getElementById('conversationToggle');
@@ -284,11 +285,18 @@
       if(noticeMenu.hidden)return;
       const owned=noticeMenu.contains(document.activeElement),anchor=menuAnchor;
       noticeMenu.hidden=true;menuAnchor=null;
+      if(closeActiveNotice===closeNotice)closeActiveNotice=null;
       for(const button of [noticeToggle,modeInfo])button.setAttribute('aria-expanded','false');
-      if((focus||owned)&&opened&&presented)([anchor,noticeToggle,modeInfo,scroll].find(e=>e?.getClientRects().length)||scroll).focus({preventScroll:true});
+      const target=[anchor,noticeToggle,modeInfo,scroll].find(e=>e?.getClientRects().length)||scroll;
+      // A parked reader cannot focus yet. Retain a reader target rather than
+      // its hidden menu control so relocate can restore it once visible.
+      if(owned||noticeMenu.contains(lastFocused))lastFocused=target;
+      if((focus||owned)&&opened&&presented)target.focus({preventScroll:true});
     }
     function openNotice(anchor){
       if(!noticeMenu.hidden){closeNotice({focus:true});return;}
+      if(closeActiveNotice&&closeActiveNotice!==closeNotice)closeActiveNotice();
+      closeActiveNotice=closeNotice;
       menuAnchor=anchor;noticeMenu.hidden=false;anchor.setAttribute('aria-expanded','true');
       const r=anchor.getBoundingClientRect(),box=noticeMenu.getBoundingClientRect();
       noticeMenu.style.left=Math.max(8,Math.min(r.right-box.width,root.innerWidth-box.width-8))+'px';
@@ -433,7 +441,8 @@
       viewport();restoreTables();
       const rect=screen.getBoundingClientRect(),resized=rect.width!==lastWidth||rect.height!==lastHeight;
       if(changed||resized)layoutChanged();
-      if(focus&&lastFocused?.isConnected&&document.activeElement===document.body){
+      if(focus&&lastFocused&&(document.activeElement===document.body||noticeMenu.hidden&&noticeMenu.contains(document.activeElement))){
+        lastFocused=[lastFocused,noticeToggle,modeInfo,scroll].find(e=>e?.isConnected&&e.getClientRects().length)||scroll;
         lastFocused.focus({preventScroll:true});layoutChanged();
       }
       if(followPending&&!busy){followPending=false;followSubmitted();}
@@ -721,7 +730,7 @@
     for(const type of ['pointerdown','mousedown'])listen(noticeMenu,type,event=>event.stopPropagation());
     listen(notices,'keydown',event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();close();}});
     listen(noticeMenu,'keydown',event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();closeNotice({focus:true});}});
-    listen(document,'pointerdown',event=>{if(!noticeMenu.hidden&&!noticeMenu.contains(event.target)&&!notices.contains(event.target))closeNotice();});
+    listen(document,'pointerdown',event=>{if(!noticeMenu.hidden&&!noticeMenu.contains(event.target)&&!notices.contains(event.target))closeNotice();},{capture:true});
     listen(document,'scroll',event=>{if(!noticeMenu.hidden&&!noticeMenu.contains(event.target))closeNotice();},{capture:true,passive:true});
     for(const button of [noticeToggle,modeInfo])listen(button,'click',event=>{event.stopPropagation();openNotice(button);});
     listen(menuRetry,'click',()=>{scroll.focus({preventScroll:true});closeNotice();userLoad(events.size?'newer':'initial');});
