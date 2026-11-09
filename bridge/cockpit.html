@@ -602,14 +602,25 @@
   .scr-head{display:flex;align-items:center;gap:8px;height:40px;padding:5px 12px;border-bottom:1px solid var(--hair-2);position:relative;z-index:4;
     background:rgba(10,12,16,.7)}
   .scr-head .name{font-family:var(--serif);font-size:14px;color:var(--ink)}
+  .pane-heading{display:flex;align-items:center;gap:6px;flex:1;min-width:0;overflow:hidden}
+  .pane-heading-copy{display:flex;align-items:baseline;gap:6px;flex:1;min-width:16px;overflow:hidden}
+  .pane-heading-copy .name,.split-pane-headers .split-cell-label .pane-heading-copy .scl-name{flex:0 0 auto;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pane-model{flex:0 1 auto;min-width:0;max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-dim);font:12px var(--mono);letter-spacing:normal}
+  .pane-model::before{content:'·';margin-right:6px;color:var(--ink-faint)}
+  .pane-provider{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;width:16px;height:18px;color:var(--ink);opacity:.9}
+  .pane-provider .provider-logo{width:16px;height:16px;object-fit:contain;border:0;border-radius:0;background:none}
+  .pane-provider svg{position:absolute;inset:1px 0;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5}
+  .pane-provider.is-local .provider-logo{width:11px;height:11px}
+  .pane-provider.is-working{animation:pane-provider-breathe 3.2s ease-in-out infinite}
+  @keyframes pane-provider-breathe{0%,100%{opacity:1}50%{opacity:.45}}
+  @media(prefers-reduced-motion:reduce){.pane-provider.is-working{animation:none}}
   .scr-head .path{flex:1;min-width:0;color:var(--ink-faint);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .scr-head .badge{
     display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;margin-right:auto;
     border:0;padding:0;background:transparent;color:var(--ink-faint);
     font:9.5px/1.2 var(--mono);letter-spacing:.06em;text-transform:uppercase;cursor:default;
   }
-  .scr-head .badge::before{content:"";width:5px;height:5px;flex:0 0 auto;border-radius:50%;background:currentColor}
-  .scr-head .badge:empty:not(.live){display:none}
+  .scr-head .badge:empty{display:none}
   .scr-head .badge.live{color:var(--amber)}
   .cockpit-control{
     display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:0 0 auto;
@@ -717,15 +728,14 @@
     opacity:.6;pointer-events:auto;transform:none;font-size:14px}
   .split-pane-headers .split-cell-label .scl-role{display:none}
   .split-cell-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto;margin-left:auto}
-  .split-cell-status{display:inline-flex;align-items:center;gap:5px;flex:0 1 auto;min-width:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-faint);font:9px var(--mono);text-transform:uppercase;cursor:default}
-  .split-cell-status::before{content:'';width:5px;height:5px;flex:0 0 auto;border-radius:50%;background:currentColor}
+  .split-cell-status{display:inline-flex;align-items:center;gap:5px;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-faint);font:9px var(--mono);text-transform:uppercase;cursor:default}
+  .split-cell-status:empty{display:none}
   .split-cell-status.live{color:var(--amber)}
   .split-cell.focused > .split-cell-head{box-shadow:inset 3px 0 var(--amber)}
   .pane-action-short,.pane-action-icon{display:none}
   @container split-pane (max-width:320px){
     .split-pane-headers .split-cell-head{gap:4px;padding:5px 6px}
     .split-pane-headers .split-cell-label{gap:4px}
-    .split-pane-headers .split-cell-label img{display:none}
     .split-pane-headers .split-cell-label .scl-close{flex-basis:18px;width:18px}
     .split-cell-actions{gap:4px}
     .split-cell-actions .cockpit-control{font-size:9px;padding:5px}
@@ -762,7 +772,7 @@
   .split-cell-label .scl-role{max-width:96px;overflow:hidden;text-overflow:ellipsis;
     padding-left:6px;border-left:1px solid var(--hair);color:var(--ink-dim);font-size:8px;letter-spacing:.05em}
   .split-cell-label .scl-role[hidden]{display:none}
-  .split-cell-label img{width:20px;height:20px;border-radius:50%;flex:0 0 auto;
+  .split-cell-label > img{width:20px;height:20px;border-radius:50%;flex:0 0 auto;
     border:1px solid var(--hair);background:#0a0a0c}
   .scl-close{
     position:absolute;right:-6px;top:-7px;display:grid;place-items:center;width:17px;height:17px;
@@ -778,7 +788,7 @@
   .scl-close[hidden]{display:none}
   .split-cell.focused .split-cell-label{
     color:var(--amber);border-color:rgb(var(--theme-accent-rgb) / .35)}
-  .split-cell.focused .split-cell-label img{border-color:rgb(var(--theme-accent-rgb) / .6)}
+  .split-cell.focused .split-cell-label > img{border-color:rgb(var(--theme-accent-rgb) / .6)}
   .split-cell.drop-target{
     border-color:var(--amber);box-shadow:inset 0 0 0 1px rgb(var(--theme-accent-rgb) / .28),0 0 16px rgb(var(--theme-accent-rgb) / .12)}
   .split-drag-ghost{
@@ -1309,7 +1319,7 @@
       <div class="screen">
         <div class="glassglow"></div>
         <div class="scr-head">
-          <span class="name" id="scrName">—</span>
+          <span class="pane-heading"><span class="pane-provider" role="img" aria-label="Agent · offline" title="Agent · offline"><svg viewBox="0 0 100 100" aria-hidden="true"><polygon points="50,4 90,27 90,73 50,96 10,73 10,27"/></svg></span><span class="pane-heading-copy"><span class="name" id="scrName">—</span><span class="pane-model" hidden></span></span></span>
           <span class="badge off" id="scrBadge" role="status" aria-live="polite" aria-atomic="true">offline</span>
           <span class="path" id="scrPath"></span>
           <button class="cockpit-control pane-icon conversation-toggle" id="conversationToggle" type="button" hidden
@@ -2267,6 +2277,21 @@
           },
           {
             "property": "color",
+            "selector": ".pane-model",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-model::before",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-provider",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
             "selector": ".scr-head .path",
             "value": "var(--ink-faint)"
           },
@@ -2452,7 +2477,7 @@
           },
           {
             "property": "border",
-            "selector": ".split-cell-label img",
+            "selector": ".split-cell-label > img",
             "value": "1px solid var(--hair)"
           },
           {
@@ -3774,6 +3799,16 @@
           },
           {
             "property": "color",
+            "selector": ".pane-model",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".pane-model::before",
+            "value": "var(--ink-faint)"
+          },
+          {
+            "property": "color",
             "selector": ".scr-head .path",
             "value": "var(--ink-faint)"
           },
@@ -4407,7 +4442,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "c3c7f6d4f108292c5950ac01e91782d895d7dad9c82603944f5c4e47effc3580",
+        "digest": "136c5b21ba24fb466bfc65f7faa3da08208648fd76a10e7380a469ad88c06e10",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4560,7 +4595,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "c79e5d0f163306ccf30aa01ad9a6197f78bcb6396f567b8288d5594535f12f52",
+        "digest": "feafa9721dd17c04aaad3ad5135100383297bd9e58c142cfd4a071bdf696dfa6",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4609,9 +4644,9 @@
       }
     }
   },
-  "inventory_digest": "927ab19cdffb585d8d8f8902e8925c95464350b702fba88c253318ef025fcfa8",
+  "inventory_digest": "956b6a88b132505929655e6bc710656bdd6f56ff2ae1b446c4626a9a660392d9",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "da05ea62b7c9f5f5b488576dff495b75a8a28bd9dcd35848a3d3f9ff8e765147",
+  "source_digest": "87ce4909df901f7e3fdc0a43f215b94132227756273efab8d722184d013ec7f4",
   "surface": "cockpit",
   "version": 1
 }
@@ -6611,6 +6646,7 @@ function resetHead(){
   scrName.textContent='—';scrName.title='';scrPath.textContent='';
   scrBadge.textContent='offline';scrBadge.className='badge off';
   scrBadge.title=scrBadge.ariaLabel='offline';
+  paintPaneHeading(scrName.closest('.pane-heading'),null,'offline');
   paintClaimToggle();paintGhosttyAction();
 }
 function refreshHeaderStats(){
@@ -7314,9 +7350,6 @@ function ensureSplitCell(session){
   cell=document.createElement('div');cell.className='split-cell';cell.dataset.session=session;
   const head=document.createElement('div');head.className='split-cell-head';head.setAttribute('role','group');head.setAttribute('aria-label','Pane '+session);
   const label=document.createElement('span');label.className='split-cell-label';
-  const lava=document.createElement('img');lava.alt='';
-  lava.src='/telemetry/portrait?v=3&name='+encodeURIComponent(session);
-  lava.onerror=()=>lava.remove();
   const lname=document.createElement('span');lname.className='scl-name';lname.textContent=session;
   lname.tabIndex=0;lname.setAttribute('role','button');lname.setAttribute('aria-label','Focus pane '+session);lname.title=session;
   lname.addEventListener('keydown',event=>{if(!['Enter',' '].includes(event.key))return;event.preventDefault();event.stopPropagation();focusSplitSession(session);});
@@ -7327,7 +7360,11 @@ function ensureSplitCell(session){
   const close=document.createElement('button');close.className='scl-close';close.type='button';
   close.textContent='×';close.title=`close ${session} pane`;
   close.setAttribute('aria-label',`Close ${session} pane`);
-  label.append(lava,lname,lrole,close);
+  const heading=document.createElement('span');heading.className='pane-heading';
+  const logo=document.createElement('span');logo.className='pane-provider';logo.setAttribute('role','img');
+  const copy=document.createElement('span');copy.className='pane-heading-copy';
+  const model=document.createElement('span');model.className='pane-model';model.hidden=true;
+  copy.append(lname,model);heading.append(logo,copy);label.append(heading,lrole,close);
   const empty=document.createElement('span');empty.className='split-cell-empty';empty.textContent='connecting…';
   const state=document.createElement('span');state.className='split-cell-status';state.setAttribute('role','status');
   const actions=document.createElement('div');actions.className='split-cell-actions';
@@ -7356,7 +7393,7 @@ function ensureSplitCell(session){
     }
     focusSplitSession(session,null,{forceFocus:true});
   });
-  cell._empty=empty;cell._close=close;cell._role=lrole;cell._actions=actions;cell._status=state;cell._window=windowButton;
+  cell._empty=empty;cell._close=close;cell._role=lrole;cell._actions=actions;cell._status=state;cell._window=windowButton;cell._heading=heading;
   splitCells.set(session,cell);return cell;
 }
 let fullTourSplitPending=false;
@@ -7409,8 +7446,10 @@ function renderStage({fit=true}={}){
       cell._window.disabled=!p;
       const status=p?(p.meta.active?'active':'live'):'connecting';
       cell._status.textContent=p?'':status;
-      cell._status.title=cell._status.ariaLabel=status;
+      if(p){cell._status.removeAttribute('title');cell._status.removeAttribute('aria-label');}
+      else cell._status.title=cell._status.ariaLabel=status;
       cell._status.classList.toggle('live',Boolean(p));
+      paintPaneHeading(cell._heading,session,status,Boolean(p&&p.meta.active));
       if(p){
         moveHostPreservingScroll(p.host,cell);
         visible.add(paneId);cell._empty.style.display='none';
@@ -7441,6 +7480,7 @@ function paintPendingSession(session){
   scrName.textContent=session;scrName.title=session;scrPath.textContent='';
   scrBadge.textContent='connecting';scrBadge.className='badge off';
   scrBadge.title=scrBadge.ariaLabel='connecting';
+  paintPaneHeading(scrName.closest('.pane-heading'),session,'connecting');
   paintClaimToggle();paintGhosttyAction();
   if(sessChip)sessChip.textContent=session;
 }
@@ -7817,7 +7857,8 @@ function paintGhosttyAction(meta=null){
 function paintHead(meta){
   scrName.textContent=meta.session;scrName.title=paneTag(meta);scrPath.textContent='';
   scrBadge.textContent='';scrBadge.className='badge live';
-  scrBadge.title=scrBadge.ariaLabel=meta.active?'active':'live';
+  scrBadge.removeAttribute('title');scrBadge.removeAttribute('aria-label');
+  paintPaneHeading(scrName.closest('.pane-heading'),meta.session,meta.active?'active':'live',Boolean(meta.active));
   paintClaimToggle(meta);paintGhosttyAction(meta);
   if(sessChip)sessChip.textContent=meta.session;
 }
@@ -8044,6 +8085,7 @@ function jumpToSessionTarget(name,{forceFocus=false}={}){
     renderStage({fit:false});resetHead();
     scrName.textContent=name;scrPath.textContent='';scrBadge.textContent='';
     scrBadge.title=scrBadge.ariaLabel='';
+    paintPaneHeading(scrName.closest('.pane-heading'),name,'live');
     promptTarget.textContent='—';promptAva.hidden=true;
     refreshComposerVocabulary();refreshHeaderStats();
     focusPaneWindow(name);return;
@@ -8071,6 +8113,7 @@ function jumpToSessionTarget(name,{forceFocus=false}={}){
     scrName.title=name;scrPath.textContent='';
     scrBadge.textContent='no terminal';scrBadge.className='badge off';
     scrBadge.title=scrBadge.ariaLabel='no terminal';
+    paintPaneHeading(scrName.closest('.pane-heading'),name,'no terminal');
     stageEmpty.innerHTML=
       '<b>'+name+'</b> runs in the Codex App —<br>there is no terminal to attach to.'+
       '<br><span style="opacity:.6">visible in telemetry only</span>';
@@ -9114,6 +9157,48 @@ function providerPresentation(agent){
     (String(agent.program||'').trim()||String(agent.provider||'').trim()||eng.lbl);
   return {provider,text,compactText:Array.from(text).slice(0,2).join('').toUpperCase(),cls:eng.cls};
 }
+function paneHeadingModel(agent){
+  const model=agent&&typeof agent.model==='string'?agent.model.trim():'';
+  if(!model)return {text:'',title:''};
+  const raw=typeof agent.model_raw==='string'?agent.model_raw.trim():'';
+  const kind=/\bgpt[- ]?\d+(?:\.\d+)*[- ](sol|terra|luna|astra)\b/i;
+  const match=raw.match(kind)||model.match(kind);
+  return {text:match?match[1][0].toUpperCase()+match[1].slice(1).toLowerCase():model,
+    title:[...new Set([model,raw].filter(Boolean))].join(' · ')};
+}
+function paintPaneHeading(heading,session,status,active=false){
+  if(!heading)return;
+  const agent=currentAgentNamed(session),{provider,local}=providerPresentation(agent||{});
+  const logo=heading.querySelector('.pane-provider'),model=heading.querySelector('.pane-model');
+  const key=(provider?provider.asset:'')+':'+Boolean(local);
+  if(logo.dataset.provider!==key){
+    logo.dataset.provider=key;logo.replaceChildren();logo.classList.toggle('is-local',Boolean(local));
+    const rim=svgEl('svg',{viewBox:'0 0 100 100','aria-hidden':'true'});
+    rim.appendChild(svgEl('polygon',{points:'50,4 90,27 90,73 50,96 10,73 10,27'}));
+    logo.appendChild(rim);
+    if(provider){
+      const image=document.createElement('img');image.className='provider-logo';image.alt='';
+      image.onload=()=>{image.hidden=false;rim.style.display=local?'':'none';};
+      image.onerror=()=>{image.hidden=true;rim.style.display='';};
+      image.src='cockpit-assets/'+provider.asset+'.svg';logo.appendChild(image);
+      rim.style.display=local?'':'none';
+    }
+  }
+  const working=Boolean(active&&agent&&agent.running===true&&agent.act_state==='work');
+  logo.classList.toggle('is-working',working);
+  const state=agent&&agent.act_state;
+  const activity=state==='work'?'Working':state==='ask'||state==='question'?'Waiting for you':state==='wait'?'Waiting':'';
+  logo.title=logo.ariaLabel=[provider?provider.label:'Agent',local?'Local':'',activity,status].filter(Boolean).join(' · ');
+  const label=paneHeadingModel(agent);model.hidden=!label.text;model.textContent=label.text;model.title=label.title;
+}
+function refreshPaneHeadings(){
+  splitCells.forEach((cell,session)=>{
+    const p=panes.get(paneIdForSession(session));
+    paintPaneHeading(cell._heading,session,p?(p.meta.active?'active':'live'):'connecting',Boolean(p&&p.meta.active));
+  });
+  const p=panes.get(activeId),session=terminalLessAgent||paneWindowSelection||(p&&p.session)||scrName.textContent;
+  paintPaneHeading(scrName.closest('.pane-heading'),session,p?(p.meta.active?'active':'live'):scrBadge.textContent||'live',Boolean(p&&p.meta.active));
+}
 function paintRosterProvider(el,agent){
   const {provider,text,cls,local}=providerPresentation(agent);
   const pill=el.querySelector('.pill.eng'),badge=el.querySelector('.provider-badge');
@@ -9735,6 +9820,7 @@ async function pollAgents(){
     renderCrewCounts(live);
     rosterTag.hidden=true;rosterTag.textContent='';agentDot.className='dot open';
     paintSplitRoles(live);
+    refreshPaneHeadings();
     applyRosterFilter();
     document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:live}}));
     if(spawnOverlay.classList.contains('on'))populateSpawnParents();

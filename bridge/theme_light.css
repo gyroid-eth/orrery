@@ -182,7 +182,7 @@ html[data-color-theme="light"] .split-cell-label{
   border-color:var(--hair);
   box-shadow:0 4px 14px var(--theme-shadow-low);
 }
-html[data-color-theme="light"] .split-cell-label img{
+html[data-color-theme="light"] .split-cell-label > img{
   background:var(--bg);
 }
 html[data-color-theme="light"] .scl-close{

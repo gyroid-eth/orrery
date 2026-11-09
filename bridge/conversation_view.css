@@ -119,7 +119,6 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .conversation-text{font-size:12px;line-height:1.75}
   .scr-head{gap:6px;padding-left:10px;padding-right:10px}
   .scr-head .path{display:none}
-  .scr-head .name{min-width:0;max-width:55px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
 }
 /* Each reader reserves space in its claimed terminal. FOLLOW keeps the external
    client's grid. Full-width readers overlay the terminal without a zero fit. */
@@ -147,7 +146,11 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 }
 @container split-pane (max-width:240px){
   .split-cell.conversation-open>.termhost:not(.follow){right:0}
-  .split-cell-head:has(.conversation-notices:not([hidden])) .pane-icon{width:24px;min-width:24px;height:24px;min-height:24px;padding:3px}
+  .split-pane-headers .split-cell-head{padding:5px 4px;gap:2px}
+  .split-pane-headers .split-cell-label{gap:2px}
+  .pane-heading{gap:4px;min-width:36px}
+  .split-cell-actions{gap:2px}
+  .split-cell-head:has(.conversation-notices:not([hidden])) .pane-icon{width:22px;min-width:22px;height:24px;min-height:24px;padding:2px}
   .conversation-notices,.conversation-toolbar{gap:2px}
   .conversation-mode{width:16px;height:16px}
   .conversation-toolbar .conversation-warning,.conversation-toolbar .conversation-retry{display:none}
@@ -157,15 +160,17 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .split-pane-headers .split-cell-label .scl-name{min-width:16px}
 }
 @container split-pane (max-width:160px){
-  .split-pane-headers .split-cell-head{padding:5px 4px;gap:2px}
+  .split-pane-headers .split-cell-head{padding:5px 2px;gap:0}
   .split-pane-headers .split-cell-label{gap:2px}
-  .split-pane-headers .split-cell-label .scl-close{flex-basis:16px;width:16px;height:22px}
+  .split-pane-headers .split-cell-label .scl-close{flex-basis:14px;width:14px;height:22px}
+  .pane-heading{gap:2px;min-width:32px}
+  .pane-provider{flex-basis:14px;width:14px}
+  .pane-provider .provider-logo,.pane-provider svg{width:14px;height:14px}
   .split-cell-actions{gap:2px}
-  .split-cell-head .split-cell-actions .pane-icon,.split-cell-head:has(.conversation-notices:not([hidden])) .pane-icon,.split-cell-actions .conversation-notice-toggle{width:18px;min-width:18px;height:24px;min-height:24px;padding:1px}
+  .split-cell-head .split-cell-actions .pane-icon,.split-cell-head:has(.conversation-notices:not([hidden])) .pane-icon,.split-cell-actions .conversation-notice-toggle{width:16px;min-width:16px;height:24px;min-height:24px;padding:1px}
   .split-cell-actions .pane-icon svg{width:14px;height:14px}
-  .conversation-mode{width:18px;height:18px}
+  .conversation-mode{width:16px;height:18px}
   .split-cell-status.live{font-size:0}
-  .split-cell-status::before{margin-right:0}
 }
 /* Pressed controls float over live terminal pixels, so their fill stays opaque. */
 .split-cell-actions .split-history-toggle{background:var(--panel)}

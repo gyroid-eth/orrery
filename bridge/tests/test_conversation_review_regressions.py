@@ -58,6 +58,9 @@ def cockpit(request):
         def do_GET(self):
             path = urlsplit(self.path).path
             requests.append(path)
+            if path.startswith('/cockpit-assets/'):
+                self.path = '/assets/' + path.rsplit('/', 1)[-1]
+                return super().do_GET()
             if path.startswith(("/telemetry/", "/api/")):
                 data = {"agents": [], "prefs": {}}
                 raw = json.dumps(data).encode()
