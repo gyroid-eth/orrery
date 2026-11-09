@@ -4610,9 +4610,9 @@
       }
     }
   },
-  "inventory_digest": "8e2b4ae9ee0c845edcfa8287b7ea9f4d826c1d8dee1c19303311f8d7364e1955",
+  "inventory_digest": "e8190420469d8cc477c62fc2f70868b3a8d0decc7350a062c6c45841ccc3702c",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "e0b7ec4cf99ebb2b2dc2034d94b37478069b79e3301d59a0dabf59b2ae8128a0",
+  "source_digest": "2fa0c3da178ef67fb89f723fc3b07abeaa674d4ac00283ef285379efc6a7fca5",
   "surface": "cockpit",
   "version": 1
 }
@@ -6942,6 +6942,16 @@ function queueStageFit(focusPaneId=null){
     if(focused&&activeId===focusPaneId)focusTerminalPreservingScroll(focused);
   });
 }
+// Reader visibility and relocation change host geometry without a window resize.
+// Observe the host, not xterm's fitted contents. Share the window-resize debounce
+// so rapid Reader toggles send only the settled grid, without moving focus.
+const terminalHostResizeObserver=new ResizeObserver(entries=>{
+  if(entries.some(({target,contentRect})=>{
+    const pane=panes.get(target.dataset.paneId);
+    return pane&&target.classList.contains('on')&&contentRect.width>0&&contentRect.height>0&&
+      sessionClaimed(claimedSessions,pane.session);
+  }))scheduleFit();
+});
 /* Attach snapshots are one big write that xterm parses across several frames.
    A scroll position read during that write describes a HALF-WRITTEN buffer;
    restoring it pins the viewport there, xterm reads that as "the reader
@@ -7724,6 +7734,7 @@ function createPane(session,meta){
   group.paneTabs.appendChild(tab);
   const paneRec={session,meta:normalized,term,fit,host,tab,bottomJump,_xtermAtBottom:true};
   panes.set(meta.paneId,paneRec);
+  terminalHostResizeObserver.observe(host);
   setCodexWheelModes(paneRec,normalized);installCodexWheel(paneRec);
   beginPaneSnapshot(paneRec);
   host.addEventListener('scroll',()=>{
@@ -7863,6 +7874,7 @@ function closePane(paneId,deferFocus=false){
   const p=panes.get(paneId);if(!p)return;
   const session=p.session;
   if(p._snapshotTimer){clearTimeout(p._snapshotTimer);p._snapshotTimer=null;}
+  terminalHostResizeObserver.unobserve(p.host);
   p.term.dispose();p.host.remove();p.tab.remove();p.bottomJump.remove();panes.delete(paneId);
   if(selectedPaneBySession.get(session)===paneId)selectedPaneBySession.delete(session);
   if(activeId===paneId){
@@ -10781,6 +10793,7 @@ function composerTargetPresent(target){
   return false;
 }
 let promptSubmissionSequence=0;
+let promptAttemptSequence=0;
 function sendPrompt(opts){
   const bypass=opts&&opts.bypassGuard;
   const text=promptInput.value;
@@ -10796,16 +10809,19 @@ function sendPrompt(opts){
   // then a separate CR to submit — same shape the pty expects from a human.
   if(!send({type:"input",paneId:target.paneId,data:"\x1b[200~"+text+"\x1b[201~"})){showToast('not connected — try again');return;}
   const submittedAt=Date.now();
+  const attemptId=submittedAt+':attempt:'+(++promptAttemptSequence);
+  document.dispatchEvent(new CustomEvent('oc:prompt-sending',{detail:{attemptId,name:target.session,text,startedAt:submittedAt}}));
+  const cancel=()=>document.dispatchEvent(new CustomEvent('oc:prompt-send-cancelled',{detail:{attemptId,name:target.session}}));
   setTimeout(()=>{
-    if(!composerTargetPresent(target))return;
+    if(!composerTargetPresent(target)){cancel();return;}
     if(send({type:"input",paneId:target.paneId,data:"\r"})){
       document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'talk',name:p.session}}));
-      document.dispatchEvent(new CustomEvent('oc:prompt-submitted',{detail:{name:target.session,text,submittedAt,id:submittedAt+':'+(++promptSubmissionSequence)}}));
-    }else showToast(`send cancelled → ${target.session}: disconnected before Enter; reconnect and retry`,true);
+      document.dispatchEvent(new CustomEvent('oc:prompt-submitted',{detail:{name:target.session,text,submittedAt,id:submittedAt+':'+(++promptSubmissionSequence),attemptId}}));
+      showToast(`sent → ${p.session}`);
+    }else{cancel();showToast(`send cancelled → ${target.session}: disconnected before Enter; reconnect and retry`,true);}
   },250);
   pushPromptHistory(text);
   promptInput.value='';saveDraft();closeSlashMenu();
-  showToast(`sent → ${p.session}`);
 }
 function sendInterrupt(){
   const p=panes.get(activeId);

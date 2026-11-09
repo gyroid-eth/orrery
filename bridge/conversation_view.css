@@ -1,6 +1,7 @@
 .conversation-toggle[hidden],.conversation-panel[hidden]{display:none}
 .screen.conversation-open{--conversation-width:min(46%,460px)}
 .screen.conversation-open .termstage{clip-path:inset(0 var(--conversation-width) 0 0)}
+.screen.conversation-open .termstage>.termhost:not(.follow){right:var(--conversation-width)}
 .screen.conversation-open .promptbar{right:var(--conversation-width)}
 .screen.conversation-open .promptmeta .phint{display:none}
 .conversation-panel{position:absolute;right:0;top:40px;bottom:0;z-index:5;
@@ -49,6 +50,7 @@
 .conversation-bottom .conversation-latest{background:var(--panel)}
 .conversation-panel [hidden]{display:none}
 .screen.conversation-open.conversation-full{--conversation-width:100%}
+.screen.conversation-open.conversation-full .termstage>.termhost:not(.follow){right:0}
 /* Keep the original composer and every existing send/IME/target guard. The
    reader reserves its space instead of covering it or cloning its controls. */
 .screen.conversation-open.conversation-full .conversation-panel{bottom:84px}
@@ -79,6 +81,7 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 @media(max-width:1200px){
   .screen.conversation-open{--conversation-width:100%}
   .screen.conversation-open .termstage,.screen.conversation-open .promptbar{right:0}
+  .screen.conversation-open .termstage>.termhost:not(.follow){right:0}
   .screen.conversation-open .conversation-panel{bottom:84px}
   .screen.conversation-open .promptbar{z-index:6}
   .conversation-panel{border-left:0}
@@ -118,13 +121,15 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .scr-head .path{display:none}
   .scr-head .name{min-width:0;max-width:55px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
 }
-/* Each split owns its reader. Clip only that terminal's pixels, preserving its
-   PTY grid and every neighbouring cell. The original composer stays below Grid. */
+/* Each reader reserves space in its claimed terminal. FOLLOW keeps the external
+   client's grid. Full-width readers overlay the terminal without a zero fit. */
 .split-cell.conversation-cell{--conversation-width:min(100%,max(240px,55%))}
 .split-history-toggle{position:absolute;top:6px;left:8px;z-index:4}
 .split-cell-actions .split-history-toggle{position:static}
 .split-cell.conversation-open>.termhost{clip-path:inset(0 var(--conversation-width) 0 0)}
+.split-cell.conversation-open>.termhost:not(.follow){right:var(--conversation-width);clip-path:none}
 .split-cell.conversation-full{--conversation-width:100%}
+.split-cell.conversation-full>.termhost:not(.follow){right:0}
 .split-cell.conversation-cell>.conversation-panel{position:absolute;left:auto;right:0;top:40px;bottom:0;
   width:var(--conversation-width);height:auto;z-index:4;border-left:1px solid var(--hair)}
 .conversation-cell>.conversation-panel{container:conversation-reader / inline-size}
@@ -141,6 +146,7 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .split-cell-head:has(.conversation-notices:not([hidden])) .split-cell-status{display:none}
 }
 @container split-pane (max-width:240px){
+  .split-cell.conversation-open>.termhost:not(.follow){right:0}
   .split-cell-head:has(.conversation-notices:not([hidden])) .pane-icon{width:24px;min-width:24px;height:24px;min-height:24px;padding:3px}
   .conversation-notices,.conversation-toolbar{gap:2px}
   .conversation-mode{width:16px;height:16px}
@@ -188,9 +194,42 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 
 /* Ephemeral composer receipts are separate from provider events and cursors. */
 .conversation-pending{max-width:960px;margin:0 auto}
-.conversation-submission{margin:12px 0;padding:14px;border:1px dashed var(--amber);border-radius:6px;background:var(--panel-2)}
-.conversation-submission .conversation-byline{color:var(--amber)}
-.conversation-submission-note{font:10px/1.7 var(--mono);color:var(--ink-dim);margin-top:8px}
+.conversation-activity{display:flex;align-items:center;gap:8px;height:32px;margin:8px auto 0;max-width:960px;white-space:nowrap;font:11px/1.6 var(--mono);color:#75c8b1}
+html[data-color-theme="light"] .conversation-activity[data-state="work"]{color:#24765e}
+.conversation-activity[data-state="wait"]{color:var(--ink-dim)}
+.conversation-activity[data-state="question"]{color:var(--theme-status-alert,#d2685e)}
+.conversation-activity-mark{display:inline-flex;align-items:center;gap:4px;width:24px;flex:none}
+.conversation-activity-mark i{display:none;width:4px;height:4px;border-radius:50%;background:currentColor}
+.conversation-activity[data-state="work"] i{display:block}
+.conversation-activity-mark::before{font:12px/1 var(--mono)}
+.conversation-activity[data-state="question"] .conversation-activity-mark::before{content:'?';display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border:1px solid currentColor;border-radius:3px;font-weight:600}
+.conversation-activity[data-state="wait"] .conversation-activity-mark::before{content:'—'}
+.conversation-activity-label{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.conversation-activity-time{flex:0 1 auto;min-width:0;max-width:35%;overflow:hidden;text-overflow:ellipsis;color:var(--ink-dim);font-size:10px}
+@keyframes conversation-activity-dots{0%,65%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-2px)}}
+.conversation-activity:not([hidden])[data-state="work"] i{animation:conversation-activity-dots 1.4s ease-in-out infinite}
+.conversation-activity i:nth-child(2){animation-delay:.16s}
+.conversation-activity i:nth-child(3){animation-delay:.32s}
+.conversation-activity.activity-paused[data-state="work"] i{animation-play-state:paused}
+@media(prefers-reduced-motion:reduce){.conversation-activity:not([hidden])[data-state="work"] i{animation:none}}
+.conversation-submission{box-sizing:border-box;max-width:min(78%,70ch);margin:18px 0 0 auto;padding:12px 15px;border:1px solid var(--hair-2);border-radius:14px 14px 4px 14px;background:var(--panel-2)}
+.conversation-submission-text{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.submission-expanded .conversation-submission-text{-webkit-line-clamp:unset}
+.conversation-submission .conversation-byline{justify-content:flex-end;align-items:flex-start;flex-wrap:wrap;gap:6px;margin:8px 0 0;color:var(--ink-dim);font:10px/1.6 var(--mono)}
+.conversation-submission-mark{flex:none}
+.conversation-submission[data-state="unmatched"] .conversation-submission-mark{color:var(--amber)}
+.conversation-submission-state{min-width:0}
+.conversation-submission-recipient{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.conversation-submission-more{border:0;padding:0;margin:5px 0 0;background:none;color:var(--ink-dim);font:10px/1.6 var(--mono);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.conversation-submission-more:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.conversation-submission-note{font:10px/1.6 var(--mono);color:var(--ink-dim);margin-top:5px}
+@container conversation-reader (max-width:300px){.conversation-submission{max-width:100%;padding:10px}.conversation-submission .conversation-byline{justify-content:flex-start}.conversation-submission-state{flex:1 1 calc(100% - 20px)}}
+@media(max-width:700px){.conversation-submission{max-width:100%;padding:10px}.conversation-submission .conversation-byline{justify-content:flex-start}.conversation-submission-state{flex:1 1 calc(100% - 20px)}}
+.conversation-submission-dismiss{margin-left:auto;flex:none;padding:2px 6px;font:10px/1.6 var(--mono);text-transform:none;letter-spacing:0}
+@keyframes conversation-send-spin{to{transform:rotate(360deg)}}
+.conversation-panel:not([hidden]) .conversation-submission[data-state="sending"] .conversation-submission-mark{animation:conversation-send-spin 1.4s linear infinite}
+.conversation-panel.conversation-inactive .conversation-submission[data-state="sending"] .conversation-submission-mark{animation-play-state:paused}
+@media(prefers-reduced-motion:reduce){.conversation-panel:not([hidden]) .conversation-submission[data-state="sending"] .conversation-submission-mark{animation:none}}
 .conversation-just-submitted>.split-cell-head,.conversation-just-submitted>.scr-head{box-shadow:inset 0 -2px var(--amber)}
 
 .conversation-table{margin:10px 0;white-space:normal;max-width:100%;min-width:0}
@@ -199,6 +238,39 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 .conversation-table table{border-collapse:collapse;width:max-content;min-width:100%;font:12px/1.75 var(--mono)}
 .conversation-table th,.conversation-table td{border:1px solid var(--hair);padding:8px 12px;white-space:pre-wrap;min-width:80px;max-width:42ch;overflow-wrap:anywhere}
 .conversation-table th{background:var(--panel-2);font-weight:600}
+.conversation-markdown{white-space:pre-line}
+.conversation-markdown>:first-child{margin-top:0}
+.conversation-markdown>:last-child{margin-bottom:0}
+.conversation-markdown :is(p,ul,ol,blockquote,.conversation-table){margin:0 0 12px}
+.conversation-markdown p,.conversation-markdown li{white-space:pre-line}
+.conversation-markdown .markdown-heading{margin:16px 0 8px;font-size:13px;line-height:1.5;font-weight:600}
+.conversation-markdown :is(h1,h2){font-size:14px}
+.conversation-markdown :is(h4,h5,h6){font-size:12px;color:var(--ink-dim)}
+.conversation-markdown :is(ul,ol){padding-left:22px}
+.conversation-markdown li>:is(ul,ol,p,blockquote,.conversation-code){margin:2px 0 4px}
+.conversation-markdown .markdown-task{list-style:none;margin-left:-16px}
+.conversation-markdown .markdown-task-box{color:var(--ink-dim)}
+.conversation-markdown blockquote{padding:2px 0 2px 12px;border-left:2px solid var(--hair-2);color:var(--ink-dim)}
+.conversation-markdown code{font:inherit;padding:1px 4px;border-radius:3px;background:var(--panel-2)}
+.conversation-markdown hr{border:0;border-top:1px solid var(--hair);margin:14px 0}
+.conversation-code{margin:10px 0 12px;min-width:0;max-width:100%;border:1px solid var(--hair);border-radius:4px;background:var(--panel-2);white-space:normal;overflow:hidden}
+.conversation-code-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 10px;border-bottom:1px solid var(--hair-2);font:10px/1.5 var(--mono);color:var(--ink-dim)}
+.conversation-code-language{min-width:0;overflow-wrap:anywhere}
+.conversation-code-copy{flex:none;min-height:24px;height:auto;padding:3px 6px;font-size:10px}
+.conversation-output-toggle{margin-left:auto;flex:none;min-height:24px;height:auto;padding:3px 6px;font-size:10px}
+.conversation-code pre{margin:0;padding:10px 12px;max-width:100%;box-sizing:border-box;overflow-x:auto;white-space:pre;overflow-wrap:normal;font:12px/1.75 var(--mono);tab-size:2;overscroll-behavior-x:contain}
+.conversation-code pre code{padding:0;background:none;font:inherit}
+.conversation-code pre.conversation-output-collapsed{max-height:168px;overflow-y:hidden}
+.conversation-shell-start{padding-bottom:0;border-bottom:0}
+.conversation-shell-continuation{padding-top:0}
+.conversation-shell-continuation>.conversation-byline{display:none}
+.conversation-code pre:focus-visible,.conversation-system-toggle:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.conversation-command-notice{font:10px/1.7 var(--mono);color:var(--ink-dim);white-space:pre-wrap}
+.conversation-event[data-kind="system"]{padding:0}
+.conversation-system-toggle{display:flex;align-items:center;gap:6px;width:100%;padding:12px 0;border:0;background:transparent;color:var(--ink-dim);font:10px/1.6 var(--mono);text-align:left;cursor:pointer}
+.conversation-system-toggle>span:last-child{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.conversation-system-toggle[aria-expanded="true"] .conversation-tool-arrow{transform:rotate(90deg)}
+.conversation-system-detail{padding:0 0 12px;font:11px/1.7 var(--mono);white-space:pre-wrap;color:var(--ink-dim)}
 /* A .md preview drawn as a document (conversation_markdown.js renderDocument). */
 .conversation-preview-markdown{color:var(--ink);font:12px/1.75 var(--mono);max-width:88ch}
 .conversation-preview-markdown>:first-child{margin-top:0}

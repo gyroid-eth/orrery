@@ -6,6 +6,7 @@ Hermes is a bounded active-segment snapshot because native rows can be rewritten
 from __future__ import annotations
 
 import hashlib
+import html
 import io
 import json
 import os
@@ -70,6 +71,45 @@ def blocks_text(content):
         and b.get('type')=='text' and isinstance(b.get('text'),str))[:MAX_TEXT+1]
 
 
+def claude_text(text, role, ts, item):
+    """Keep harness notices out of human prompts and send matching."""
+    if role != 'user' or not isinstance(text, str):
+        return text_event(text, role, ts)
+    origin = item.get('origin')
+    origin = origin.get('kind') if isinstance(origin, dict) else None
+    body = text.lstrip()[:MAX_TEXT]
+    # An explicit human origin wins over tag-looking text in a prompt. Older
+    # CLI versions lack origin, so only a leading known tag is a fallback.
+    if origin == 'human' or not (item.get('promptSource') == 'system' or
+            origin in {'task-notification', 'system'} or
+            body.startswith(('<task-notification>', '<system-reminder>'))):
+        return text_event(text, role, ts)
+    def field(name):
+        start = body.find('<' + name + '>')
+        if start < 0:
+            return ''
+        start += len(name) + 2
+        end = body.find('</' + name + '>', start)
+        return html.unescape(body[start:end]).strip() if end >= 0 else ''
+    if body.startswith('<task-notification>') or origin == 'task-notification':
+        status = field('status')
+        title = {'completed': 'Background task completed', 'failed': 'Background task failed',
+                 'running': 'Background task running'}.get(status, 'Background task update')
+        summary = field('summary')
+        name = re.match(r'Background (?:command|task) "([^"\n]{1,200})"', summary)
+        if name:
+            short = ' '.join(name[1].split())
+            title += ' · ' + short[:48] + ('…' if len(short) > 48 else '')
+        detail = '\n'.join(value for value in [summary,
+            'Status: ' + status if status else '',
+            'Output: ' + field('output-file') if field('output-file') else ''] if value)
+    else:
+        title = 'System notice'
+        detail = field('system-reminder') or body
+    return dict(kind='system', role='system', text=title, ts=ts,
+                system_detail=detail[:MAX_TEXT], truncated=len(text)>MAX_TEXT)
+
+
 def normalize(item,p,sid):
     """Return (block-index,event) pairs; hidden/reasoning/raw tool bodies excluded."""
     out=[]
@@ -91,11 +131,11 @@ def normalize(item,p,sid):
             item=dict(item,timestamp=queued.get('timestamp') or item.get('timestamp'))
         if role not in {'user','assistant'} or not isinstance(message,dict) or message.get('role')!=role:return []
         content=message.get('content');ts=str(item.get('timestamp') or '')[:128]
-        if isinstance(content,str):add(0,text_event(content,role,ts))
+        if isinstance(content,str):add(0,claude_text(content,role,ts,item))
         elif isinstance(content,list):
             for i,b in enumerate(content[:MAX_BLOCKS]):
                 if not isinstance(b,dict):continue
-                if b.get('type')=='text':add(i,text_event(b.get('text'),role,ts))
+                if b.get('type')=='text':add(i,claude_text(b.get('text'),role,ts,item))
                 elif b.get('type')=='tool_use' and role=='assistant':add(i,sent(tool_event(b.get('name'),ts),b.get('name'),b.get('input')))
                 elif b.get('type')=='tool_result' and role=='user':
                     add(i,tool_event('Tool result',ts,result=True,failed=bool(b.get('is_error'))))

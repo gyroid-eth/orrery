@@ -254,12 +254,12 @@ def test_double_click_and_middle_click_use_the_opener_once(cockpit):
     ('[https://example.com/_x_](https://example.com/_x_)', ['https://example.com/_x_', 'https://example.com/_x_']),
 ])
 @pytest.mark.parametrize('role', ['assistant', 'user'])
-def test_raw_markdown_url_label_and_target_open_separately(cockpit, source, expected, role):
+def test_assistant_markdown_opens_its_target_and_user_text_keeps_both_urls(cockpit, source, expected, role):
     js, wait, client = prepare(cockpit)
     event = dict(id='separate-links', kind='text', role=role, text=source)
     js('OrreryConversationSource.Source.prototype.read=async()=>({events:['+json.dumps(event)+'],after:"separate:1"});readerLinks.refresh()')
     wait('document.querySelector("[data-event-id=separate-links] a")!==null')
     js('document.querySelectorAll("[data-event-id=separate-links] a").forEach(a=>a.click())')
     time.sleep(.75)
-    assert js('openedLinks') == expected
+    assert js('openedLinks') == (expected[-1:] if role=='assistant' else expected)
     assert js('jumps') == []

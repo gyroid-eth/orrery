@@ -161,7 +161,7 @@ def test_load_earlier_keeps_same_character_after_layout(cockpit, width):
     wait_reading_layout(js)
     js("""window.readScroll=document.querySelector('.conversation-scroll');
       window.readCharacter=document.createRange();
-      const node=document.querySelector('[data-event-id=row-0] .conversation-text').firstChild;
+      const node=document.createTreeWalker(document.querySelector('[data-event-id=row-0] .conversation-text'),NodeFilter.SHOW_TEXT).nextNode();
       readCharacter.setStart(node,11);readCharacter.setEnd(node,12);
       window.characterTop=()=>readCharacter.getBoundingClientRect().top-readScroll.getBoundingClientRect().top;
       readScroll.dispatchEvent(new WheelEvent('wheel'));readScroll.scrollTop=0;
@@ -198,9 +198,9 @@ def test_reader_keys_and_automatic_fit_do_not_focus_or_type_into_terminal(cockpi
     assert js("packets.filter(p=>['input','codex-page'].includes(p.type))") == []
 
 
-def test_claimed_grid_is_not_resized_by_open_close_or_disable(cockpit):
+def test_follow_grid_is_not_resized_by_open_close_or_disable(cockpit):
     js, wait, client, requests, enable = cockpit
-    enable(claimed=True)
+    enable()
     time.sleep(.1)
     assert js("packets.filter(p=>p.type==='resize')") == []
     js("packets.length=0;conversationView.close()")

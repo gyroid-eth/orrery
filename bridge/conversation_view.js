@@ -116,7 +116,8 @@
     panel.innerHTML='<div class="conversation-body"><div class="conversation-thread">'+
       '<div class="conversation-scroll" tabindex="0" aria-label="Conversation messages">'+
       '<button class="cockpit-control conversation-action conversation-older" type="button" aria-label="Load earlier" hidden>Load earlier</button>'+
-      '<div class="conversation-events"></div><div class="conversation-pending" role="status" aria-live="polite"></div><div class="conversation-empty"></div></div>'+
+      '<div class="conversation-events"></div><div class="conversation-pending" role="status" aria-live="polite"></div>'+
+      '<div class="conversation-activity" hidden><span class="conversation-activity-mark" aria-hidden="true"><i></i><i></i><i></i></span><span class="conversation-activity-label" role="status" aria-live="polite"></span><span class="conversation-activity-time" aria-hidden="true"></span></div><div class="conversation-empty"></div></div>'+
       '<div class="conversation-bottom" hidden><button class="cockpit-control pane-icon conversation-latest" type="button" title="Latest" aria-label="Latest">'+latestIcon+'</button></div></div>'+
       '<aside class="conversation-preview" aria-label="Selected file preview" hidden></aside></div>';
     screen.appendChild(panel);
@@ -171,27 +172,104 @@
     let toolGroups=[],toolSerial=0;
     const toolGroupFor=new Map();
     let submissions=[],submissionTimer=0,flashTimer=0,readSequence=0;
+    const sending=new Map();
     const observedIds=new Set(),matchedSubmissions=new Set(),pendingEl=el('.conversation-pending');
-    const normalizePrompt=text=>text.replace(/\s+/gu,' ').trim();
-    function renderSubmissions(){
-      clearTimeout(submissionTimer);submissionTimer=0;pendingEl.replaceChildren();
-      let next=Infinity;
-      for(const item of submissions){
-        const row=document.createElement('article');row.className='conversation-submission';row.dataset.submissionId=item.id;
-        const label=document.createElement('div');label.className='conversation-byline';
-        const elapsed=Date.now()-item.at;
-        label.textContent='Sent → '+item.name+' · '+(item.unmatched?'Record not matched':elapsed>=60000?'Not recorded yet':'Awaiting record');
-        const text=document.createElement('p');text.className='conversation-text';
-        if(root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.renderText(item.preview,text);else text.textContent=item.preview;
-        const note=document.createElement('div');note.className='conversation-submission-note';
-        note.textContent=item.unmatched?'A user record arrived after this send, but it cannot be matched to this text. Check the conversation above.':'Sent to the terminal. The agent may still be busy. Shown here until it appears in the conversation record.';
-        row.append(label,text,note);pendingEl.appendChild(row);
-        if(!item.unmatched&&elapsed<60000)next=Math.min(next,60000-elapsed);
+    const normalizePrompt=text=>(root.OrreryConversationMarkdown?.submissionText(text)??text).replace(/\s+/gu,' ').trim();
+    function keepReaderFocus(container){
+      // A detached control leaves BODY focused, which terminal fitting may
+      // interpret as permission to focus xterm and send the next reading key.
+      if(opened&&presented&&container?.contains(document.activeElement))scroll.focus({preventScroll:true});
+    }
+    const activityEl=el('.conversation-activity'),activityLabel=el('.conversation-activity-label'),activityTime=el('.conversation-activity-time');
+    function paintActivity(current=getContext()||{}){
+      const state=opened&&presented&&current.running===true&&['work','wait','ask','question'].includes(current.act_state)?
+        (current.act_state==='ask'?'question':current.act_state):'';
+      const label=state==='work'?'Working':state==='wait'?'Waiting':state?'Waiting for you':'';
+      const elapsed=state==='work'&&typeof current.work_disp==='string'?current.work_disp.trim():'';
+      activityEl.classList.toggle('activity-paused',document.hidden||!presented||!opened);
+      panel.classList.toggle('conversation-inactive',document.hidden||!presented||!opened);
+      if(activityEl.hidden===!state&&activityEl.dataset.state===(state||'')&&activityTime.textContent===(elapsed?'· '+elapsed:''))return;
+      const atBottom=nearBottom();
+      activityEl.hidden=!state;activityEl.dataset.state=state;
+      if(activityLabel.textContent!==label)activityLabel.textContent=label;
+      activityTime.textContent=elapsed?'· '+elapsed:'';
+      activityEl.title=label+(elapsed?' · '+elapsed:'');
+      if(opened&&presented){
+        if(atBottom)scroll.scrollTop=scroll.scrollHeight;
+        position();if(atBottom)remember(true);
       }
-      if(Number.isFinite(next))submissionTimer=setTimeout(renderSubmissions,Math.max(1,next));
+    }
+    function changeTail(change,follow=true){
+      const atBottom=follow&&nearBottom(),top=scroll.scrollTop,saved=anchor();
+      change();
+      if(atBottom)scroll.scrollTop=scroll.scrollHeight;else restoreAnchor(saved,top);
+      position();remember(true);
+    }
+    function paintSubmissionExpansion(){
+      for(const row of pendingEl.children){
+        const text=row.querySelector('.conversation-submission-text'),more=row.querySelector('.conversation-submission-more');
+        const expanded=row.classList.contains('submission-expanded');
+        if(!expanded)row._expandable=text.scrollHeight>text.clientHeight+1;
+        if(!row._expandable&&document.activeElement===more)keepReaderFocus(more);
+        more.hidden=!row._expandable;more.textContent=expanded?'Show less':'Show more';more.setAttribute('aria-expanded',String(expanded));
+      }
+    }
+    function renderSubmissions({preserve=true}={}){
+      clearTimeout(submissionTimer);submissionTimer=0;
+      const paint=()=>{
+        const existing=new Map([...pendingEl.children].map(row=>[row.dataset.receiptKey,row]));
+        const items=[...submissions,...sending.values()].sort((a,b)=>a.at-b.at);let next=Infinity,previous=null;
+        const receiptKey=item=>JSON.stringify([item.attemptId?'attempt':'sent',item.attemptId||item.id]);
+        const retained=new Set(items.map(receiptKey));
+        // Remove stale siblings before ordering rows that still own focus.
+        for(const [key,row] of existing)if(!retained.has(key)){keepReaderFocus(row);row.remove();existing.delete(key);}
+        for(const item of items){
+          const key=receiptKey(item);
+          let row=existing.get(key);existing.delete(key);
+          if(!row){
+            row=document.createElement('article');row.className='conversation-submission';row.dataset.receiptKey=key;
+            const text=document.createElement('p');text.className='conversation-text conversation-submission-text';
+            if(root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.renderText(item.preview,text);else text.textContent=item.preview;
+            text.addEventListener('focusin',event=>{
+              if(row.classList.contains('submission-expanded'))return;
+              changeTail(()=>{row.classList.add('submission-expanded');paintSubmissionExpansion();},false);
+              event.target.scrollIntoView({block:'nearest'});remember(true);
+            });
+            const more=document.createElement('button');more.type='button';more.className='conversation-submission-more';more.hidden=true;
+            more.addEventListener('click',()=>changeTail(()=>{row.classList.toggle('submission-expanded');paintSubmissionExpansion();},false));
+            const label=document.createElement('div');label.className='conversation-byline';
+            label.innerHTML='<span class="conversation-submission-mark" aria-hidden="true"></span><span class="conversation-submission-state"></span><span class="conversation-submission-recipient"></span>';
+            const note=document.createElement('div');note.className='conversation-submission-note';
+            row.append(text,more,label,note);
+          }
+          const elapsed=Date.now()-item.at,state=item.sending?'sending':item.unmatched?'unmatched':elapsed>=60000?'late':'awaiting';
+          const status=state==='sending'?'Sending…':state==='unmatched'?'Record not matched':state==='late'?'Not recorded yet':'Awaiting record';
+          row.dataset.state=state;row.dataset.submissionId=item.id;
+          const label=row.querySelector('.conversation-byline');label.title=(item.sending?'Sending to ':'Sent → ')+item.name+' · '+status;
+          const copy={mark:state==='sending'?'◌':state==='unmatched'?'ⓘ':'✓',state:item.sending?status:'Sent · '+status,recipient:' → '+item.name};
+          for(const [part,value] of Object.entries(copy)){
+            const span=label.querySelector('.conversation-submission-'+part);if(span.textContent!==value)span.textContent=value;
+          }
+          let dismiss=label.querySelector('.conversation-submission-dismiss');
+          if(item.unmatched&&!dismiss){
+            dismiss=document.createElement('button');dismiss.type='button';dismiss.className='cockpit-control conversation-submission-dismiss';dismiss.textContent='Dismiss';dismiss.setAttribute('aria-label','Dismiss unmatched send receipt');
+            dismiss.addEventListener('click',()=>{keepReaderFocus(row);submissions=submissions.filter(entry=>entry.id!==item.id);renderSubmissions();});label.appendChild(dismiss);
+          }else if(!item.unmatched&&dismiss){keepReaderFocus(dismiss);dismiss.remove();}
+          const note=row.querySelector('.conversation-submission-note');note.hidden=!item.unmatched;
+          const noteText=item.unmatched?'Check the conversation above.':'';if(note.textContent!==noteText)note.textContent=noteText;
+          note.title=item.unmatched?'A user record arrived after this send, but it cannot be matched to this text.':'';
+          const after=previous?previous.nextElementSibling:pendingEl.firstElementChild;
+          if(row!==after){keepReaderFocus(row);pendingEl.insertBefore(row,after);}
+          previous=row;
+          if(!item.sending&&!item.unmatched&&elapsed<60000)next=Math.min(next,60000-elapsed);
+        }
+        paintSubmissionExpansion();
+        if(Number.isFinite(next))submissionTimer=setTimeout(()=>renderSubmissions(),Math.max(1,next));
+      };
+      if(preserve)changeTail(paint);else paint();
     }
     function clearSubmissions(){
-      submissions=[];observedIds.clear();matchedSubmissions.clear();clearTimeout(submissionTimer);clearTimeout(flashTimer);
+      submissions=[];sending.clear();observedIds.clear();matchedSubmissions.clear();clearTimeout(submissionTimer);clearTimeout(flashTimer);
       flashTimer=0;screen.classList.remove('conversation-just-submitted');renderSubmissions();
     }
     function reconcileSubmissions(incoming,direction,sequence){
@@ -231,7 +309,7 @@
           eligible[0].unmatched=true;matchedSubmissions.add(event.id);
         }
       }
-      renderSubmissions();
+      renderSubmissions({preserve:false});
     }
     function viewport(){
       if(!opened||!enabled||!presented)return;
@@ -252,6 +330,7 @@
       expandButton.setAttribute('aria-pressed',String(fullWidth));
       expandButton.title=fullWidth?'Restore side panel':'Full width';expandButton.setAttribute('aria-label',expandButton.title);
       paintStatus();
+      paintActivity();
     }
     const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onBeforeOpen:layoutChanged,onClose:layoutChanged,onActivate:()=>expand(true)});
     const stopPathLinks=root.OrreryConversationMarkdown?.observePaths?.(panel,source);
@@ -324,7 +403,7 @@
     }
     function modeMessage(text){if(!text&&document.activeElement===modeInfo&&opened)scroll.focus({preventScroll:true});modeInfo.title=text;modeInfo.setAttribute('aria-label',text);paintStatus();}
     function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
-    function clear({keepSubmissions=false}={}){closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
+    function clear({keepSubmissions=false}={}){closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
       if(tableMutating)return;
@@ -350,12 +429,12 @@
     }
     // Keep message nodes in place so selections and previews survive polling.
     const rawRows=()=>[...eventsEl.children].filter(child=>child.dataset.eventId!==undefined);
-    const visibleRows=()=>[...eventsEl.children].filter(child=>!child.hidden);
-    const rowKey=child=>JSON.stringify(child.dataset.toolGroup?['tools',child.dataset.toolGroup]:['event',child.dataset.eventId]);
+    const visibleRows=()=>[...eventsEl.children,...pendingEl.children,activityEl].filter(child=>!child.hidden);
+    const rowKey=child=>JSON.stringify(child.dataset.toolGroup?['tools',child.dataset.toolGroup]:child.dataset.receiptKey?['receipt',child.dataset.receiptKey]:child===activityEl?['activity']:['event',child.dataset.eventId]);
     function setGroupOpen(group,open){
       saveTables();const top=group.button.getBoundingClientRect().top;
       group.open=open;group.button.setAttribute('aria-expanded',String(open));
-      for(const row of group.rows)row.hidden=!open;
+      for(const row of group.rows){if(!open)keepReaderFocus(row);row.hidden=!open;}
       restoreTables();scroll.scrollTop+=group.button.getBoundingClientRect().top-top;
       position();remember(true);
     }
@@ -396,10 +475,20 @@
         else{finish();row.hidden=false;}
       }
       finish();
-      for(const group of previous)if(!used.has(group))group.button.remove();
+      for(const group of previous)if(!used.has(group)){keepReaderFocus(group.button);group.button.remove();}
       toolGroups=groups;toolGroupFor.clear();
       for(const group of groups)for(const row of group.rows)toolGroupFor.set(row.dataset.eventId,group);
-      if(focused&&document.activeElement===document.body)(groups.includes(focused)?focused.button:scroll).focus({preventScroll:true});
+      // Keep native IDs and nodes as siblings for cursors and reading anchors,
+      // while adjacent shell records share one visible heading and boundary.
+      let shellStart=null;
+      for(const row of rawRows()){
+        row.classList.remove('conversation-shell-start','conversation-shell-continuation');
+        const event=events.get(row.dataset.eventId),record=event?.role==='user'&&event.kind==='text'?root.OrreryConversationMarkdown?.commandRecord(event.text):null;
+        if(!record?.shell){shellStart=null;continue;}
+        if(record.command!==null)shellStart=row;
+        else if(shellStart){shellStart.classList.add('conversation-shell-start');row.classList.add('conversation-shell-continuation');}
+      }
+      if(focused&&(document.activeElement===document.body||document.activeElement===scroll))(groups.includes(focused)?focused.button:scroll).focus({preventScroll:true});
     }
     function anchor(){
       const top=scroll.getBoundingClientRect().top;
@@ -420,7 +509,7 @@
     }
     function textNodes(article){
       const walker=document.createTreeWalker(article,NodeFilter.SHOW_TEXT),nodes=[];
-      while(walker.nextNode())nodes.push(walker.currentNode);return nodes;
+      while(walker.nextNode())if(!walker.currentNode.parentElement?.closest('.conversation-code-head'))nodes.push(walker.currentNode);return nodes;
     }
     function remember(force=false){
       if(!opened||!presented||!panel.isConnected||!scroll.getClientRects().length)return;
@@ -515,7 +604,7 @@
         const ids=[...events.keys()],id=fromStart?ids[0]:ids[ids.length-1];
         retainedBytes-=byteSize(events.get(id));events.delete(id);
         const child=rawRows().find(row=>row.dataset.eventId===id);
-        if(child)child.remove();removed=true;
+        if(child){keepReaderFocus(child);child.remove();}removed=true;
       }
       if(removed&&!['fresh_tail','snapshot'].includes(mode)){
         const kept=[...events.values()];
@@ -528,10 +617,21 @@
     function node(event){
       const article=document.createElement('article');article.className='conversation-event';
       article.dataset.eventId=event.id;article.dataset.role=event.role;article.dataset.kind=event.kind;
+      if(event.kind==='system'){
+        const toggle=document.createElement('button');toggle.type='button';toggle.className='conversation-system-toggle';toggle.setAttribute('aria-expanded','false');
+        const arrow=document.createElement('span');arrow.className='conversation-tool-arrow';arrow.textContent='▸';arrow.setAttribute('aria-hidden','true');
+        const label=document.createElement('span');label.textContent=event.text;toggle.append(arrow,label);
+        const detail=document.createElement('div');detail.className='conversation-system-detail';detail.hidden=true;
+        detail.id='conversation-system-'+(++toolSerial)+'-'+Math.random().toString(36).slice(2);toggle.setAttribute('aria-controls',detail.id);
+        if(root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.renderText(event.system_detail||event.text,detail);else detail.textContent=event.system_detail||event.text;
+        toggle.addEventListener('click',()=>{if(!detail.hidden)keepReaderFocus(detail);detail.hidden=!detail.hidden;toggle.setAttribute('aria-expanded',String(!detail.hidden));});
+        article.append(toggle,detail);return article;
+      }
       if(event.kind==='mail'&&Array.isArray(event.mail)&&root.OrreryConversationMail)return root.OrreryConversationMail.render(event,article);
       const byline=document.createElement('div');byline.className='conversation-byline';
       const role=document.createElement('span');role.className='conversation-role';
-      role.textContent=event.kind==='tool'?'Tool':event.kind==='tool_result'?'Tool result':event.role==='user'?'You':providerLabel;byline.appendChild(role);
+      const shell=event.role==='user'&&root.OrreryConversationMarkdown?.commandRecord(event.text)?.shell;
+      role.textContent=event.kind==='tool'?'Tool':event.kind==='tool_result'?'Tool result':shell?'Shell':event.role==='user'?'You':providerLabel;byline.appendChild(role);
       if(['tool','tool_result'].includes(event.kind)){
         const tool=document.createElement('span');tool.className='conversation-tool-name';tool.textContent=event.text;byline.appendChild(tool);
       }
@@ -541,8 +641,12 @@
       byline.appendChild(time);article.appendChild(byline);
       if(!['tool','tool_result'].includes(event.kind)){
         const text=document.createElement('div');text.className='conversation-text';
-        if(event.role==='assistant'&&root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.render(event.text,text);
-        else if(root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.renderText(event.text,text);
+        if(event.role==='assistant'&&root.OrreryConversationMarkdown){
+          text.className+=' conversation-markdown';root.OrreryConversationMarkdown.renderDocument(event.text,text,{codeControls:true});
+          // A single paragraph needs no block wrapper in a conversation row.
+          if(text.childNodes.length===1&&text.firstChild.nodeName==='P')text.replaceChildren(...text.firstChild.childNodes);
+        }
+        else if(root.OrreryConversationMarkdown){if(!root.OrreryConversationMarkdown.renderCommand(event.text,text))root.OrreryConversationMarkdown.renderText(event.text,text);}
         else text.textContent=event.text;article.appendChild(text);
       }
       if(event.truncated){const note=document.createElement('div');note.className='conversation-truncated';note.textContent='Long message shortened in this reader.';article.appendChild(note);}
@@ -684,6 +788,7 @@
         saveTables();tableMutating=true;
         const fragment=document.createDocumentFragment(),focusedGroup=toolGroups.find(group=>group.button===document.activeElement);let added=0;
         if(fresh){
+          keepReaderFocus(eventsEl);
           const existing=new Map(rawRows().map(child=>[child.dataset.eventId,child]));
           const previous=events;
           if([...previous].some(([id,event])=>JSON.stringify(event)!==JSON.stringify(incoming.find(next=>next.id===id))))preview?.close();
@@ -750,9 +855,10 @@
     function context(){
       const current=getContext()||{};const name=String(current.name||''),key=fingerprint(current);
       if(!opened)return;
-      if(name===agent&&key===contextKey)return;
+      if(name===agent&&key===contextKey){paintActivity(current);return;}
       const sameBinding=key===contextKey;
       stop();agent=name;contextKey=key;clear({keepSubmissions:sameBinding});boundContext={...current};
+      paintActivity(current);
       panel.setAttribute('aria-label',agent?'Reader for '+agent:'Reader');message('');
       if(!agent){empty.textContent='Select an agent pane to read its conversation.';message('No agent selected');return;}
       providerLabel=({'claude-code':'Claude',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[current.program]||'Codex';
@@ -819,12 +925,20 @@
       if(paused){stop();clear({keepSubmissions:true});load('initial');}
       else{scroll.scrollTop=scroll.scrollHeight;newCount=0;position();remember(true);load('newer');}
     }
-    listen(document,'oc:prompt-submitted',event=>{
-      if(!opened||!enabled||event.detail?.name!==agent)return;
+    listen(document,'oc:prompt-sending',event=>{
       const detail=event.detail;
+      if(!opened||!enabled||detail?.name!==agent||typeof detail.attemptId!=='string'||typeof detail.text!=='string')return;
+      sending.set(detail.attemptId,{id:detail.attemptId,attemptId:detail.attemptId,name:agent,sending:true,at:Number.isFinite(detail.startedAt)?detail.startedAt:Date.now(),preview:detail.text.slice(0,1000)+(detail.text.length>1000?'…':'')});
+      renderSubmissions();empty.hidden=true;
+    });
+    listen(document,'oc:prompt-send-cancelled',event=>{if(sending.delete(event.detail?.attemptId))renderSubmissions();});
+    listen(document,'oc:prompt-submitted',event=>{
+      const detail=event.detail,attempt=detail?.attemptId;
+      const pending=attempt&&sending.get(attempt);if(pending)sending.delete(attempt);
+      if(!opened||!enabled||detail?.name!==agent||attempt&&!pending){if(pending)renderSubmissions();return;}
       if(typeof detail.text==='string'&&typeof detail.id==='string'&&!submissions.some(item=>item.id===detail.id)){
         const text=normalizePrompt(detail.text);
-        submissions.push({id:detail.id,name:agent,at:Number.isFinite(detail.submittedAt)?detail.submittedAt:Date.now(),
+        submissions.push({id:detail.id,attemptId:pending?attempt:null,name:agent,at:Number.isFinite(detail.submittedAt)?detail.submittedAt:Date.now(),
           text:text.slice(0,65536),length:text.length,matchable:text.length<=65536,preview:detail.text.slice(0,1000)+(detail.text.length>1000?'…':''),
           known:new Set(observedIds),uncertain:new Set(),nextRead:readSequence+1});
         renderSubmissions();empty.hidden=true;
@@ -847,15 +961,16 @@
     listen(window,'resize',()=>{closeNotice({focus:true});paintStatus();layoutChanged();});
     const layoutObserver=new ResizeObserver(layoutChanged);
     layoutObserver.observe(panel);layoutObserver.observe(scroll);layoutObserver.observe(eventsEl);
+    const submissionObserver=new ResizeObserver(paintSubmissionExpansion);submissionObserver.observe(pendingEl);
     listen(document,'oc:stage-agent',context);
     listen(document,'oc:focus-agent',context);
     listen(document,'oc:agents',context);
     // A hidden tab keeps no held poll: end one that is waiting, so its
     // browser connection and the server's slot are returned at once.
-    listen(document,'visibilitychange',()=>{if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
+    listen(document,'visibilitychange',()=>{paintActivity();if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
     preference();paintControls();
     return Object.freeze({open,close,relocate,reconcile:context,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
-      dispose(){stopPathLinks?.();ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();noticeMenu.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
+      dispose(){stopPathLinks?.();ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();submissionObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();noticeMenu.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
   }
   function mountWorkspace({getContext,getSlots,getOwner=name=>getContext(name)?.terminalPaneId,activate,...options}){
     const screen=document.querySelector('.screen'),toggle=document.getElementById('conversationToggle');

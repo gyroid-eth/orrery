@@ -219,7 +219,7 @@ def test_notice_load_earlier_is_clickable_at_the_top(cockpit, theme, width):
     wait("document.querySelector('[data-event-id=paragraph-0]')!==null")
     js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
     wait_reading_layout(js)
-    js("""window.readerAnchorText=document.querySelector('.conversation-text');window.readerAnchorNode=readerAnchorText.firstChild;window.readerAnchorId=readerAnchorText.closest('.conversation-event').dataset.eventId;const s=document.querySelector('.conversation-scroll');s.dispatchEvent(new WheelEvent('wheel'));s.scrollTop=0;s.dispatchEvent(new Event('scroll'));""")
+    js("""window.readerAnchorText=document.querySelector('.conversation-text');window.readerAnchorNode=document.createTreeWalker(readerAnchorText,NodeFilter.SHOW_TEXT).nextNode();window.readerAnchorId=readerAnchorText.closest('.conversation-event').dataset.eventId;const s=document.querySelector('.conversation-scroll');s.dispatchEvent(new WheelEvent('wheel'));s.scrollTop=0;s.dispatchEvent(new Event('scroll'));""")
     before = line_top(js)
     js("document.querySelector('.conversation-older').focus()")
     fail_read(js, wait, 'Generated read failure with more context. '*10)
