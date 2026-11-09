@@ -31,6 +31,8 @@ MAX_RECORD = 1024 * 1024
 MAX_BLOCKS = 64
 NATIVE_CURSOR = re.compile(r'([a-f0-9]{24}):(\d{1,20}):(\d{1,10}):(\d{1,3})\Z')
 MAGIC = b'\x28\xb5\x2f\xfd'
+CLAUDE_COMPACTION_PREFIX = ('This session is being continued from a previous conversation that ran out of context. '
+                            'The summary below covers')
 
 
 def provider(row):
@@ -64,11 +66,18 @@ def tool_event(name,ts,*,result=False,failed=False):
                 text=(name[:160]+(' · failed' if failed else ' · completed')) if result else name[:160],ts=ts)
 
 
-def blocks_text(content):
+def blocks_text(content, *, block_limit=MAX_TEXT):
     if isinstance(content,str):return content
     if not isinstance(content,list):return ''
-    return '\n'.join(b['text'][:MAX_TEXT] for b in content[:MAX_BLOCKS] if isinstance(b,dict)
+    return '\n'.join(b['text'][:block_limit] for b in content[:MAX_BLOCKS] if isinstance(b,dict)
         and b.get('type')=='text' and isinstance(b.get('text'),str))[:MAX_TEXT+1]
+
+
+def is_claude_summary(text, item):
+    origin = item.get('origin')
+    human = isinstance(origin, dict) and origin.get('kind') == 'human'
+    return item.get('isCompactSummary') is True or ('isCompactSummary' not in item and
+        not human and isinstance(text, str) and text.lstrip().startswith(CLAUDE_COMPACTION_PREFIX))
 
 
 def claude_text(text, role, ts, item):
@@ -78,6 +87,11 @@ def claude_text(text, role, ts, item):
     origin = item.get('origin')
     origin = origin.get('kind') if isinstance(origin, dict) else None
     body = text.lstrip()[:MAX_TEXT]
+    # The native marker is authoritative. Only unmarked older records need
+    # the stock prefix; an explicitly human prompt stays a human prompt.
+    if is_claude_summary(text, item):
+        return dict(kind='system', role='system', text='Context compacted', ts=ts,
+                    system_detail=text[:MAX_TEXT], truncated=len(text)>MAX_TEXT)
     # An explicit human origin wins over tag-looking text in a prompt. Older
     # CLI versions lack origin, so only a leading known tag is a fallback.
     if origin == 'human' or not (item.get('promptSource') == 'system' or
@@ -116,7 +130,8 @@ def normalize(item,p,sid):
     def add(index,event):
         if event:out.append((index,event))
     if p=='claude':
-        if item.get('sessionId')!=sid or item.get('isSidechain') or item.get('isMeta'):return []
+        if (item.get('sessionId')!=sid or item.get('isSidechain') or
+                item.get('isMeta') and not (item.get('type')=='user' and item.get('isCompactSummary') is True)):return []
         role=item.get('type');message=item.get('message')
         if role=='attachment':
             queued=item.get('attachment')
@@ -131,6 +146,9 @@ def normalize(item,p,sid):
             item=dict(item,timestamp=queued.get('timestamp') or item.get('timestamp'))
         if role not in {'user','assistant'} or not isinstance(message,dict) or message.get('role')!=role:return []
         content=message.get('content');ts=str(item.get('timestamp') or '')[:128]
+        summary=blocks_text(content,block_limit=MAX_TEXT+1) if role=='user' and isinstance(content,list) else None
+        if summary is not None and is_claude_summary(summary,item):
+            add(0,claude_text(summary,role,ts,item));return out
         if isinstance(content,str):add(0,claude_text(content,role,ts,item))
         elif isinstance(content,list):
             for i,b in enumerate(content[:MAX_BLOCKS]):

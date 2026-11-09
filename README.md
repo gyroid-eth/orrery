@@ -83,7 +83,7 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 
 agent の発言は Markdown の見出し・太字・箇条書き・引用・inline code などを描きます。コードの塊は横にスクロールでき、**Copy** で改行や空白を含む中身をコピーできます。生の HTML は文字のまま表示し、Markdown の画像を取りには行きません。人が打った本文は文字のままです。表も横にスクロールでき、**Copy Markdown** で元の表をコピーできます。
 
-Claude の `!` の記録は **SHELL** と表示し、続くコマンドと出力を1つのまとまりにします。長い出力は短く表示し、**Show all** で開けます。slash command もコマンドと出力の塊として表示します。文字参照は認識した記録の中だけで戻し、コマンドもコピーできます。background task などの system 通知は、人の発言と区別した短い1行で表示し、押すと記録の詳細を開閉できます。
+Claude の `!` の記録は **SHELL** と表示し、続くコマンドと出力を1つのまとまりにします。長い出力は短く表示し、**Show all** で開けます。slash command もコマンドと出力の塊として表示します。文字参照は認識した記録の中だけで戻し、コマンドもコピーできます。background task などの system 通知は、人の発言と区別した短い1行で表示し、押すと記録の詳細を開閉できます。Claude・Codex の compact の記録も **Context compacted** の1行になり、記録に読める要約がある場合は開いて読めます。セッションが変わったときは前の表示を消し、**New session** と表示して自動で読み直します。変化が続く場合は通常の間隔で確認し、Retry は不要です。
 
 ![agent の発言に含まれる表と Copy Markdown](docs/images/cockpit_history_table.png)
 

@@ -259,15 +259,18 @@ def test_legacy_limit_pauses_updates_while_reading_and_latest_reloads(cockpit):
     js("document.querySelector('.conversation-latest').click()")
     wait("document.querySelectorAll('.conversation-event').length===200")
     assert not js("document.querySelector('.conversation-latest').getAttribute('aria-label').includes('resume')")
-def test_retry_after_history_change_resets_retention_accounting(cockpit):
+def test_auto_reload_after_history_change_resets_retention_accounting(cockpit):
  js,wait,client,requests,enable=cockpit
  enable(mode='cursor',count=80,text_size=40000)
  before=js("document.querySelectorAll('.conversation-event').length")
- js("""OrreryConversationSource.Source.prototype.read=async()=>{const e=new Error('changed');e.code='history_changed';throw e};conversationView.refresh();""")
- wait("document.querySelector('.conversation-retry').hidden===false")
+ js("""window.changedOnce=false;OrreryConversationSource.Source.prototype.read=async()=>{
+   if(!changedOnce){changedOnce=true;const e=new Error('changed');e.code='history_changed';throw e}
+   return {mode:'cursor',events:[{id:'retry',kind:'text',role:'assistant',text:'x'.repeat(40000),cursor_before:'file:0',cursor_after:'file:1'}],before:'file:0',after:'file:1',has_older:false};
+ };conversationView.refresh();""")
+ wait("document.querySelectorAll('.conversation-event').length===0")
+ assert js("document.querySelector('.conversation-retry').hidden")
  cleared=js("document.querySelectorAll('.conversation-event').length")
- js("""OrreryConversationSource.Source.prototype.read=async()=>({mode:'cursor',events:[{id:'retry',kind:'text',role:'assistant',text:'x'.repeat(40000),cursor_before:'file:0',cursor_after:'file:1'}],before:'file:0',after:'file:1',has_older:false});document.querySelector('.conversation-retry').click()""")
- time.sleep(.15)
+ wait("document.querySelector('[data-event-id=retry]')!==null")
  loaded=js("document.querySelectorAll('.conversation-event').length")
  print(json.dumps(dict(before_error=before,after_error=cleared,after_successful_retry=loaded,status=js("document.querySelector('.conversation-toolbar .conversation-status').textContent"))))
  assert loaded==1

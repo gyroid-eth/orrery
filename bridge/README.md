@@ -32,6 +32,11 @@ in the reader. In CLAIMED mode, opening Reader beside the terminal fits the
 terminal to the remaining width; closing Reader restores its width. Full-width
 Reader overlays the terminal. FOLLOW keeps the external terminal’s grid, so
 Reader can cover part of it.
+Claude and Codex compaction records appear as a collapsible `Context compacted`
+system row, with the readable summary when available. Encrypted context is never
+displayed. A `history_changed` response clears the old session and shows `New session`,
+then retries once after 250 ms; repeated changes use the normal polling interval.
+Other permanent read failures retain the existing Retry control.
 The single preference uses the existing shared preference mechanism; transcript
 contents and reading position are never saved as preferences.
 
