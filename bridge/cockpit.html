@@ -4610,9 +4610,9 @@
       }
     }
   },
-  "inventory_digest": "49c689d3b42a03c3eeb7c23bec3eba15ae90f941e40e136da6861c5bbe043b6e",
+  "inventory_digest": "e8190420469d8cc477c62fc2f70868b3a8d0decc7350a062c6c45841ccc3702c",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "adee0ade262b30b20d93476f18c88fc8cc8d51f363fe9e94bdfdb251f4980088",
+  "source_digest": "2fa0c3da178ef67fb89f723fc3b07abeaa674d4ac00283ef285379efc6a7fca5",
   "surface": "cockpit",
   "version": 1
 }
@@ -10793,6 +10793,7 @@ function composerTargetPresent(target){
   return false;
 }
 let promptSubmissionSequence=0;
+let promptAttemptSequence=0;
 function sendPrompt(opts){
   const bypass=opts&&opts.bypassGuard;
   const text=promptInput.value;
@@ -10808,16 +10809,19 @@ function sendPrompt(opts){
   // then a separate CR to submit — same shape the pty expects from a human.
   if(!send({type:"input",paneId:target.paneId,data:"\x1b[200~"+text+"\x1b[201~"})){showToast('not connected — try again');return;}
   const submittedAt=Date.now();
+  const attemptId=submittedAt+':attempt:'+(++promptAttemptSequence);
+  document.dispatchEvent(new CustomEvent('oc:prompt-sending',{detail:{attemptId,name:target.session,text,startedAt:submittedAt}}));
+  const cancel=()=>document.dispatchEvent(new CustomEvent('oc:prompt-send-cancelled',{detail:{attemptId,name:target.session}}));
   setTimeout(()=>{
-    if(!composerTargetPresent(target))return;
+    if(!composerTargetPresent(target)){cancel();return;}
     if(send({type:"input",paneId:target.paneId,data:"\r"})){
       document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'talk',name:p.session}}));
-      document.dispatchEvent(new CustomEvent('oc:prompt-submitted',{detail:{name:target.session,text,submittedAt,id:submittedAt+':'+(++promptSubmissionSequence)}}));
-    }else showToast(`send cancelled → ${target.session}: disconnected before Enter; reconnect and retry`,true);
+      document.dispatchEvent(new CustomEvent('oc:prompt-submitted',{detail:{name:target.session,text,submittedAt,id:submittedAt+':'+(++promptSubmissionSequence),attemptId}}));
+      showToast(`sent → ${p.session}`);
+    }else{cancel();showToast(`send cancelled → ${target.session}: disconnected before Enter; reconnect and retry`,true);}
   },250);
   pushPromptHistory(text);
   promptInput.value='';saveDraft();closeSlashMenu();
-  showToast(`sent → ${p.session}`);
 }
 function sendInterrupt(){
   const p=panes.get(activeId);
