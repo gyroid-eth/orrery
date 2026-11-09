@@ -609,7 +609,7 @@
     font:9.5px/1.2 var(--mono);letter-spacing:.06em;text-transform:uppercase;cursor:default;
   }
   .scr-head .badge::before{content:"";width:5px;height:5px;flex:0 0 auto;border-radius:50%;background:currentColor}
-  .scr-head .badge:empty{display:none}
+  .scr-head .badge:empty:not(.live){display:none}
   .scr-head .badge.live{color:var(--amber)}
   .cockpit-control{
     display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:0 0 auto;
@@ -711,14 +711,14 @@
   .split-pane-headers .split-cell-label{position:static;flex:1;min-width:0;max-width:none;
     padding:0;border:0;border-radius:0;background:transparent;backdrop-filter:none;
     -webkit-backdrop-filter:none;box-shadow:none;gap:6px}
-  .split-pane-headers .split-cell-label .scl-name{min-width:0;flex:0 1 auto;cursor:pointer}
+  .split-pane-headers .split-cell-label .scl-name{min-width:0;flex:0 1 auto;cursor:pointer;font:14px var(--serif);letter-spacing:normal}
   .split-pane-headers .split-cell-label .scl-name:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
   .split-pane-headers .split-cell-label .scl-close{position:static;flex:0 0 22px;width:22px;height:22px;
     opacity:.6;pointer-events:auto;transform:none;font-size:14px}
   .split-pane-headers .split-cell-label .scl-role{display:none}
   .split-cell-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto;margin-left:auto}
-  .split-cell-status{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-faint);font:9px var(--mono);text-transform:uppercase;cursor:default}
-  .split-cell-status::before{content:'●';font-size:7px;margin-right:5px}
+  .split-cell-status{display:inline-flex;align-items:center;gap:5px;flex:0 1 auto;min-width:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-faint);font:9px var(--mono);text-transform:uppercase;cursor:default}
+  .split-cell-status::before{content:'';width:5px;height:5px;flex:0 0 auto;border-radius:50%;background:currentColor}
   .split-cell-status.live{color:var(--amber)}
   .split-cell.focused > .split-cell-head{box-shadow:inset 3px 0 var(--amber)}
   .pane-action-short,.pane-action-icon{display:none}
@@ -4407,7 +4407,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "7a1c6e9ef13d174480dc7a9c73c7b6b222a37aef5654d09b7316c8d70d1bda91",
+        "digest": "c3c7f6d4f108292c5950ac01e91782d895d7dad9c82603944f5c4e47effc3580",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4459,7 +4459,6 @@
           ".slashmenu .sm-desc\u0000font-size",
           ".sendguard .sg-msg\u0000font-size",
           ".network-note\u0000font-size",
-          ".split-cell-status::before\u0000font-size",
           ".split-cell-actions .cockpit-control\u0000font-size",
           ".split-cell-label\u0000font-size",
           ".split-cell-label .scl-role\u0000font-size",
@@ -4610,9 +4609,9 @@
       }
     }
   },
-  "inventory_digest": "e8190420469d8cc477c62fc2f70868b3a8d0decc7350a062c6c45841ccc3702c",
+  "inventory_digest": "927ab19cdffb585d8d8f8902e8925c95464350b702fba88c253318ef025fcfa8",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "2fa0c3da178ef67fb89f723fc3b07abeaa674d4ac00283ef285379efc6a7fca5",
+  "source_digest": "da05ea62b7c9f5f5b488576dff495b75a8a28bd9dcd35848a3d3f9ff8e765147",
   "surface": "cockpit",
   "version": 1
 }
@@ -6611,6 +6610,7 @@ function focusAttachedSessionNumber(number){
 function resetHead(){
   scrName.textContent='—';scrName.title='';scrPath.textContent='';
   scrBadge.textContent='offline';scrBadge.className='badge off';
+  scrBadge.title=scrBadge.ariaLabel='offline';
   paintClaimToggle();paintGhosttyAction();
 }
 function refreshHeaderStats(){
@@ -7407,8 +7407,9 @@ function renderStage({fit=true}={}){
       });
       const p=panes.get(paneId);
       cell._window.disabled=!p;
-      cell._status.textContent=p?(p.meta.active?'active':'live'):'connecting';
-      cell._status.title=cell._status.textContent;
+      const status=p?(p.meta.active?'active':'live'):'connecting';
+      cell._status.textContent=p?'':status;
+      cell._status.title=cell._status.ariaLabel=status;
       cell._status.classList.toggle('live',Boolean(p));
       if(p){
         moveHostPreservingScroll(p.host,cell);
@@ -7439,6 +7440,7 @@ function renderStage({fit=true}={}){
 function paintPendingSession(session){
   scrName.textContent=session;scrName.title=session;scrPath.textContent='';
   scrBadge.textContent='connecting';scrBadge.className='badge off';
+  scrBadge.title=scrBadge.ariaLabel='connecting';
   paintClaimToggle();paintGhosttyAction();
   if(sessChip)sessChip.textContent=session;
 }
@@ -7814,7 +7816,8 @@ function paintGhosttyAction(meta=null){
 }
 function paintHead(meta){
   scrName.textContent=meta.session;scrName.title=paneTag(meta);scrPath.textContent='';
-  scrBadge.textContent=meta.active?'active':'live';scrBadge.className='badge live';
+  scrBadge.textContent='';scrBadge.className='badge live';
+  scrBadge.title=scrBadge.ariaLabel=meta.active?'active':'live';
   paintClaimToggle(meta);paintGhosttyAction(meta);
   if(sessChip)sessChip.textContent=meta.session;
 }
@@ -8040,6 +8043,7 @@ function jumpToSessionTarget(name,{forceFocus=false}={}){
     activeId=null;splitVisible=false;blurTerminalFocus();
     renderStage({fit:false});resetHead();
     scrName.textContent=name;scrPath.textContent='';scrBadge.textContent='';
+    scrBadge.title=scrBadge.ariaLabel='';
     promptTarget.textContent='—';promptAva.hidden=true;
     refreshComposerVocabulary();refreshHeaderStats();
     focusPaneWindow(name);return;
@@ -8066,6 +8070,7 @@ function jumpToSessionTarget(name,{forceFocus=false}={}){
     scrName.textContent=name;
     scrName.title=name;scrPath.textContent='';
     scrBadge.textContent='no terminal';scrBadge.className='badge off';
+    scrBadge.title=scrBadge.ariaLabel='no terminal';
     stageEmpty.innerHTML=
       '<b>'+name+'</b> runs in the Codex App —<br>there is no terminal to attach to.'+
       '<br><span style="opacity:.6">visible in telemetry only</span>';
