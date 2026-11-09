@@ -98,7 +98,7 @@
     return tracked;
   }
   function yieldHolds(){const id=beginOp();queueMicrotask(()=>endOp(id));}
-  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null}){
+  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null,openExternalUrl=null}){
     let screen=host||document.querySelector('.screen');
     const toggle=control||document.getElementById('conversationToggle');
     const listeners=[];
@@ -122,6 +122,24 @@
     screen.appendChild(panel);
     const el=selector=>panel.querySelector(selector);
     const scroll=el('.conversation-scroll'),eventsEl=el('.conversation-events');
+    let linkPress=null;
+    listen(panel,'pointerdown',event=>{linkPress={x:event.clientX,y:event.clientY,selected:!root.getSelection()?.isCollapsed};});
+    function activateLink(event){
+      if(event.type==='auxclick'&&event.button!==1)return;
+      const link=event.target.closest('a');if(!link||!panel.contains(link))return;
+      clearTimeout(jumpTimer);event.stopPropagation();
+      const selected=!root.getSelection()?.isCollapsed;
+      if(event.detail>1||selected||event.detail>0&&(linkPress?.selected||linkPress&&Math.hypot(event.clientX-linkPress.x,event.clientY-linkPress.y)>5)){
+        event.preventDefault();return;
+      }
+      // Mail links retain the browser's native handling. HTTP links use the
+      // same opener as the terminal, including modified clicks in the app.
+      if(!/^https?:$/i.test(link.protocol))return;
+      event.preventDefault();
+      if(openExternalUrl)openExternalUrl(link.href);
+      else root.open(link.href,'_blank','noopener,noreferrer');
+    }
+    listen(panel,'click',activateLink);listen(panel,'auxclick',activateLink);
     const status=el('.conversation-toolbar .conversation-status'),empty=el('.conversation-empty');
     const earlier=el('.conversation-older'),retry=el('.conversation-retry'),latest=el('.conversation-latest');
     let fullWidth=false,tableMutating=false,tableFrame=0;
@@ -137,7 +155,8 @@
         const label=document.createElement('div');label.className='conversation-byline';
         const elapsed=Date.now()-item.at;
         label.textContent='Sent → '+item.name+' · '+(item.unmatched?'Record not matched':elapsed>=60000?'Not recorded yet':'Awaiting record');
-        const text=document.createElement('p');text.className='conversation-text';text.textContent=item.preview;
+        const text=document.createElement('p');text.className='conversation-text';
+        if(root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.renderText(item.preview,text);else text.textContent=item.preview;
         const note=document.createElement('div');note.className='conversation-submission-note';
         note.textContent=item.unmatched?'A user record arrived after this send, but it cannot be matched to this text. Check the conversation above.':'Sent to the terminal. The agent may still be busy. Shown here until it appears in the conversation record.';
         row.append(label,text,note);pendingEl.appendChild(row);
@@ -381,6 +400,7 @@
       if(!['tool','tool_result'].includes(event.kind)){
         const text=document.createElement('div');text.className='conversation-text';
         if(event.role==='assistant'&&root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.render(event.text,text);
+        else if(root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.renderText(event.text,text);
         else text.textContent=event.text;article.appendChild(text);
       }
       if(event.truncated){const note=document.createElement('div');note.className='conversation-truncated';note.textContent='Long message shortened in this reader.';article.appendChild(note);}
@@ -392,13 +412,13 @@
         target.addEventListener('pointerdown',e=>{press={x:e.clientX,y:e.clientY,selected:!root.getSelection()?.isCollapsed};});
         target.addEventListener('click',e=>{
           clearTimeout(jumpTimer);
-          if(e.target.closest('button')||e.detail>1||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||press?.selected||!root.getSelection()?.isCollapsed)return;
+          if(e.target.closest('button,a')||e.detail>1||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||press?.selected||!root.getSelection()?.isCollapsed)return;
           if(press&&Math.hypot(e.clientX-press.x,e.clientY-press.y)>5)return;
           const token=generation;
           // Give double click and drag selection their native copy behaviour.
           jumpTimer=setTimeout(()=>{if(token===generation&&opened&&root.getSelection()?.isCollapsed)jump(event);},600);
         });
-        target.addEventListener('keydown',e=>{if(!['Enter',' '].includes(e.key)||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey)return;e.preventDefault();e.stopPropagation();clearTimeout(jumpTimer);if(root.getSelection()?.isCollapsed)jump(event);});
+        target.addEventListener('keydown',e=>{if(e.target.closest('button,a')){clearTimeout(jumpTimer);return;}if(!['Enter',' '].includes(e.key)||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey)return;e.preventDefault();e.stopPropagation();clearTimeout(jumpTimer);if(root.getSelection()?.isCollapsed)jump(event);});
       }
       if(Array.isArray(event.mail)&&root.OrreryConversationMail)root.OrreryConversationMail.render(event,article);
       return article;

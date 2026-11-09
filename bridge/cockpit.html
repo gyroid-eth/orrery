@@ -4489,9 +4489,9 @@
       }
     }
   },
-  "inventory_digest": "71dd12b6878ea38e10082cd89688f9b292bc89f1bd5c71e20b3b6319d0e62905",
+  "inventory_digest": "661e32d0ad6ef3b38a3efd969dd3279d75b823b09798c9846e1022810e4dff94",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "fd460a3b4d7d4d3fbdcb5f0abad619892a3fb9d89000d138e066d742d8b8673c",
+  "source_digest": "d03498b23e911d6b5873c97cf63d8169c25355e233f3d231b6691c2b6f348e6a",
   "surface": "cockpit",
   "version": 1
 }
@@ -11063,6 +11063,7 @@ const conversationView=(()=>{
         getOwner:name=>panes.get(paneIdForSession(name)),
         activate:name=>focusSplitSession(name),
         jumpToEvent:jumpConversationEvent,
+        openExternalUrl,
       });
       return instance;
     })().catch(error=>{loading=null;showToast(error.message,true);return null;});
