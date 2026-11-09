@@ -23,7 +23,8 @@
 .conversation-menu-retry{margin-top:8px}
 .conversation-older{margin:4px 0 2px}
 .conversation-scroll{flex:1;min-height:0;overflow-y:scroll;overscroll-behavior:contain;
-  scrollbar-gutter:stable;scrollbar-width:auto;overflow-anchor:none;padding:4px 18px 56px;outline-offset:-3px}
+  scrollbar-gutter:stable;scrollbar-width:auto;overflow-anchor:none;padding:4px 18px 14px;outline-offset:-3px}
+.conversation-scroll:has(+ .conversation-bottom:not([hidden])){padding-bottom:56px}
 .conversation-scroll::-webkit-scrollbar{width:13px}
 .conversation-scroll::-webkit-scrollbar-track{background:rgb(var(--theme-ink-rgb) / .05)}
 .conversation-scroll::-webkit-scrollbar-thumb{background:rgb(var(--theme-ink-rgb) / .4);border:3px solid transparent;border-radius:8px;background-clip:padding-box}
