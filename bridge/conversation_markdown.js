@@ -70,8 +70,9 @@
 
   /* A document view for a file preview: headings, paragraphs, lists, tables,
      code, quotes, rules and inline marks. Raw HTML stays visible text. An
-     image is a text label and is never fetched. Only http(s) and mailto links
-     are links (a new tab, no referrer); any other target is plain text.
+     image is a text label and is never fetched. HTTP(S) and mailto targets
+     are links (a new tab, no referrer); local paths wait for an existence
+     probe and explicit activation. All other targets remain plain text.
      Every pattern runs in time linear in its line: a file of 128 KiB in one
      line must not hold the page (review r1 measured 35 s for a backtracking
      heading pattern). Lines longer than LONG_LINE are paragraphs. */
@@ -102,17 +103,82 @@
     while(last>begin&&/[.,;:!?]/.test(text[last-1]))last--;
     return {end,last,href:last-begin<=SPAN?safeUrl(text.slice(begin,last)):null};
   }
+  // Spaces can belong to filenames. Keep the bounded candidate as inert text
+  // until the server finds its longest existing prefix. Never probe URL parts.
+  function barePath(text,begin){
+    if(/[a-z0-9/:~<]/i.test(text[begin-1]||'')||text.slice(begin,begin+2)==='//'||!(text[begin]==='/'||text.slice(begin,begin+2)==='~/'))return null;
+    let end=begin,round=0,square=0;
+    while(end<text.length){
+      const ch=text[end];
+      if(ch!==' '&&URL_END.test(ch)||ch===')'&&!round||ch===']'&&!square)break;
+      if(ch===' '&&/^(?:https?:\/\/|~\/|\/)/i.test(text.slice(end+1,end+10)))break;
+      if(ch==='(')round++;else if(ch===')')round--;
+      else if(ch==='[')square++;else if(ch===']')square--;
+      end++;
+    }
+    let last=end;while(last>begin&&/[ .,;:!?]/.test(text[last-1]))last--;
+    const value=text.slice(begin,last);
+    return {end,last,path:value.length>1&&value.length<=SPAN&&!/[\x00-\x1f\x7f]/.test(value)?value:null};
+  }
+  function pathNode(path,label){
+    const node=el('span');node.dataset.pathCandidate=path;node.textContent=label??path;
+    if(label!==undefined)node.dataset.pathLabel='true';return node;
+  }
   function renderText(text,host){
-    const start=/https?:\/\//gi;let match,from=0;
+    const start=/https?:\/\/|~\/|\//gi;let match,from=0;
     while((match=start.exec(text))){
-      const begin=match.index,url=bareUrl(text,begin);if(!url)continue;
-      const {end,last,href}=url;start.lastIndex=end;
-      if(!href)continue;
+      const begin=match.index,url=bareUrl(text,begin)||barePath(text,begin);if(!url)continue;
+      const {end,last,href,path}=url;start.lastIndex=end;
+      if(!href&&!path)continue;
       if(begin>from)host.appendChild(document.createTextNode(text.slice(from,begin)));
-      const node=anchor(href);node.textContent=text.slice(begin,last);host.appendChild(node);from=last;
+      const node=path?pathNode(path):anchor(href);node.textContent=text.slice(begin,last);host.appendChild(node);from=last;
     }
     if(from<text.length)host.appendChild(document.createTextNode(text.slice(from)));
     return host;
+  }
+  function observePaths(host,source){
+    if(!root.MutationObserver||!source.probePaths)return ()=>{};
+    const pending=new Set(),cache=new Map();let running=false,closed=false;
+    function apply(node,result){
+      if(!host.contains(node))return;
+      const text=node.dataset.pathCandidate,label=node.dataset.pathLabel;
+      if(!result||typeof result.shown!=='string'||!text.startsWith(result.shown)||!result.path?.startsWith('/')||
+          /[\x00-\x1f\x7f]/.test(result.path)||label&&result.shown!==text){node.replaceWith(document.createTextNode(node.textContent));return;}
+      const link=el('a');link.href='#';link.dataset.localPath=result.path;
+      link.title='Preview image or reveal in file manager';link.textContent=label?node.textContent:result.shown;
+      node.replaceWith(link,document.createTextNode(label?'':text.slice(result.shown.length)));
+    }
+    async function pump(){
+      if(running||closed)return;running=true;
+      try{while(pending.size&&!closed){
+        const nodes=[],texts=[];let size=0;
+        for(const node of pending){
+          const text=node.dataset.pathCandidate;
+          if(nodes.length>=32||size+text.length>32768)break;
+          pending.delete(node);if(!host.contains(node))continue;
+          const saved=cache.get(text);
+          if(saved&&saved.until>Date.now()){apply(node,saved.result);continue;}
+          nodes.push(node);texts.push(text);size+=text.length;
+        }
+        if(!nodes.length)continue;
+        let results;try{results=await source.probePaths(texts);}catch(_){results=[];}
+        if(closed)return;
+        nodes.forEach((node,i)=>{const result=results?.[i]??null;
+          cache.set(texts[i],{result,until:Date.now()+30000});apply(node,result);});
+        while(cache.size>1024)cache.delete(cache.keys().next().value);
+      }}finally{running=false;}
+    }
+    function collect(node){
+      if(node.nodeType!==1)return;
+      if(node.dataset?.pathCandidate)pending.add(node);
+      node.querySelectorAll('[data-path-candidate]').forEach(item=>pending.add(item));
+    }
+    const observer=new root.MutationObserver(records=>{
+      for(const record of records)for(const node of record.addedNodes)collect(node);
+      queueMicrotask(pump);
+    });
+    observer.observe(host,{childList:true,subtree:true});collect(host);queueMicrotask(pump);
+    return ()=>{closed=true;observer.disconnect();pending.clear();cache.clear();};
   }
   const ESCAPE=/[\\`*_{}[\]()#+\-.!|~<>]/;
   // The part after a link's or an image's label: ](target "title")
@@ -141,7 +207,7 @@
     const wrap=(tag,inner,cls)=>{flush();const node=el(tag,cls);if(depth<MAX_DEPTH)inline(inner,node,depth+1,inLink||tag==='a');else node.textContent=inner;host.appendChild(node);return node;};
     const image=(alt,target)=>{const label=el('span','markdown-image');label.textContent='[image'+(alt?': '+alt:'')+']';label.title=target;return label;};
     function link(target,fill){
-      flush();const href=safeUrl(target),node=el(href?'a':'span',href?'':'markdown-link-text');
+      flush();const href=safeUrl(target),path=!href&&barePath(target,0),node=path?.path&&path.last===target.length?pathNode(target,''):el(href?'a':'span',href?'':'markdown-link-text');
       if(href){node.href=href;node.target='_blank';node.rel='noopener noreferrer';node.referrerPolicy='no-referrer';node.title=href;}
       else if(target)node.title=target;
       fill(node);host.appendChild(node);
@@ -154,6 +220,11 @@
       if((ch==='h'||ch==='H')&&(m=bareUrl(text,i))){
         if(inLink||!m.href)plain+=text.slice(i,m.end);
         else{flush();const node=anchor(m.href);node.textContent=text.slice(i,m.last);host.appendChild(node);plain=text.slice(m.last,m.end);}
+        i=m.end;continue;
+      }
+      if((ch==='/'||ch==='~')&&(m=barePath(text,i))){
+        if(inLink||!m.path)plain+=text.slice(i,m.end);
+        else{flush();host.appendChild(pathNode(m.path));plain=text.slice(m.last,m.end);}
         i=m.end;continue;
       }
       if(ch==='\\'&&ESCAPE.test(text[i+1]||'')){plain+=text[i+1];i+=2;continue;}
@@ -297,5 +368,5 @@
     blocks(lines.slice(start),host,0);
     return host;
   }
-  root.OrreryConversationMarkdown=Object.freeze({parse,render,renderDocument,renderText});
+  root.OrreryConversationMarkdown=Object.freeze({parse,render,renderDocument,renderText,observePaths});
 })(typeof window==='undefined'?globalThis:window);
