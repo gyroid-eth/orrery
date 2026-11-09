@@ -22,7 +22,8 @@ CONTRACT='orrery-mobile-pane-v1'
 MAX_TEXT_BYTES=4096
 MAX_JSON_BYTES=16384
 MAX_CAPTURE_BYTES=65536
-MAX_PREVIEW_BYTES=6144
+MAX_PREVIEW_BYTES=12288
+MAX_PREVIEW_LINES=120
 NAME=re.compile(r'[A-Za-z][A-Za-z0-9_-]{0,95}\Z')
 REVISION=re.compile(r'[a-f0-9]{64}\Z')
 EPOCH=re.compile(r'[a-f0-9]{32}\Z')
@@ -40,9 +41,9 @@ def encode_json(value):
 
 def revision(value):return hashlib.sha256(encode_json(value)).hexdigest()
 
-def terminal_text(lines):
+def terminal_text(lines, *, max_lines=40, max_bytes=6144):
     if not isinstance(lines,list) or not all(isinstance(x,str) for x in lines):raise InputRefused('preview_unavailable')
-    text='\n'.join(lines[-40:]);original=text
+    text='\n'.join(lines[-max_lines:]);original=text
     # Remove complete and unterminated OSC/DCS/CSI sequences. Never interpret
     # output as HTML, URLs, input, or instructions for the reader itself.
     text=re.sub(r'(?:\x1b\]|\x9d).*?(?:\x07|\x1b\\|\x9c|$)','',text,flags=re.S)
@@ -50,8 +51,8 @@ def terminal_text(lines):
     text=re.sub(r'(?:\x1b\[|\x9b)[0-?]*[ -/]*(?:[@-~]|$)','',text)
     text=re.sub(r'\x1b[ -/]*[0-~]?','',text)
     text=''.join(c for c in text if c=='\n' or unicodedata.category(c) not in {'Cc','Cf','Cs','Zl','Zp'})
-    removed=text!=original;raw=text.encode('utf-8');shortened=len(lines)>40 or len(raw)>MAX_PREVIEW_BYTES
-    if len(raw)>MAX_PREVIEW_BYTES:text=raw[-MAX_PREVIEW_BYTES:].decode('utf-8','ignore')
+    removed=text!=original;raw=text.encode('utf-8');shortened=len(lines)>max_lines or len(raw)>max_bytes
+    if len(raw)>max_bytes:text=raw[-max_bytes:].decode('utf-8','ignore')
     return text,shortened,removed
 
 def validate_text(value):
@@ -372,7 +373,7 @@ class InputCoordinator:
         return await asyncio.wait_for(asyncio.to_thread(self.resolver.read,row['bridge'],row['pane_id'],deadline),
                                       max(.001,deadline-time.monotonic()))
 
-    async def request(self,operation,payload):
+    async def request(self,operation,payload, *, expanded_preview=False):
         fields={'capability':set(),'targets':{'name'},'preview':{'choice'},'prepare':{'choice','revision','text'},
                 'commit':{'intent','confirmation'},'cancel':{'intent'},'status':{'intent'}}
         if self.fresh and operation=='targets' and isinstance(payload,dict) and ('mail_instance_id' in payload or 'mail_agent_id' in payload):
@@ -440,13 +441,28 @@ class InputCoordinator:
                 raise
             if operation=='preview':
                 try:
-                    result=await row['bridge'].capture_mobile_preview(row['pane_id'],proof['height'],deadline=deadline)
+                    max_lines,max_bytes=(MAX_PREVIEW_LINES,MAX_PREVIEW_BYTES) if expanded_preview else (40,6144)
+                    options={'max_lines':max_lines} if expanded_preview else {}
+                    result=await row['bridge'].capture_mobile_preview(row['pane_id'],proof['height'],deadline=deadline,**options)
                     after=await self._read(row,deadline)
                     if (not self.enabled or after!=proof or self.choices.get(key) is not row or self.clock()>=row['expires']
                             or await self._bridge(row) is not row['bridge']):raise InputRefused('input_target_changed')
-                    text,truncated,controls=terminal_text(result.lines)
-                    value=self._reply(target=target,text=text,truncated=truncated,controls_removed=controls,
-                        observed_at=int(time.time()),max_lines=40,max_bytes=MAX_PREVIEW_BYTES)
+                    text,truncated,controls=terminal_text(result.lines,max_lines=max_lines,max_bytes=max_bytes)
+                    value=self._reply(target=target,text='',truncated=truncated,controls_removed=controls,
+                        observed_at=int(time.time()),max_lines=max_lines,max_bytes=max_bytes)
+                    # Fit the complete serialized envelope, including escaped quotes.
+                    budget=MAX_JSON_BYTES-len(encode_json(value))
+                    size=lambda tail:len(json.dumps(tail,ensure_ascii=False).encode('utf-8'))-2
+                    if size(text)>budget:
+                        low,high=0,len(text)
+                        while low<high:
+                            middle=(low+high+1)//2
+                            if size(text[-middle:])<=budget:low=middle
+                            else:high=middle-1
+                        text=text[-low:] if low else ''
+                        value['truncated']=True
+                    value['text']=text
+                    encode_json(value)
                     row['proof']=proof
                     # A foreground preview lease can renew. Prepared Review
                     # proof/text and its independent 30s expiry never renew.
@@ -534,8 +550,12 @@ def install_routes(app,coordinator):
             payload=decode_json(data)
         except (Exception,asyncio.CancelledError):
             return reply({'error':'input_request_invalid'},400)
+        limits=request.headers.getall('X-ORRERY-Mobile-Preview',[])
+        if limits and (operation!='preview' or limits!=['120/12288']):
+            return reply({'error':'input_request_denied'},403)
         try:
-            return reply(await coordinator.request(operation,payload))
+            options={'expanded_preview':True} if limits else {}
+            return reply(await coordinator.request(operation,payload,**options))
         except InputRefused:
             return reply({'error':'input_unavailable'},403)
         except Exception:

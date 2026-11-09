@@ -1554,16 +1554,17 @@ class TmuxControlBridge:
                 self._pending_blocks.append(None)
                 await self._write_master((make_tmux_command(args) + '\n').encode('utf-8'))
 
-    async def capture_mobile_preview(self, pane_id: str, height: int, *, deadline: float) -> CommandResult:
+    async def capture_mobile_preview(self, pane_id: str, height: int, *, deadline: float, max_lines: int = 40) -> CommandResult:
         """One finite raw capture; never recorder or restored-history output."""
-        from mobile_input import InputRefused, _deadline, MAX_CAPTURE_BYTES
+        from mobile_input import InputRefused, _deadline, MAX_CAPTURE_BYTES, MAX_PREVIEW_LINES
         if (not re.fullmatch(r'%[0-9]+', pane_id) or type(height) is not int
-                or not 1 <= height <= 10000 or deadline <= time.monotonic()
+                or not 1 <= height <= 10000 or type(max_lines) is not int
+                or not 1 <= max_lines <= MAX_PREVIEW_LINES or deadline <= time.monotonic()
                 or deadline > time.monotonic() + 3.01):
             raise InputRefused('preview_unavailable')
         future = asyncio.get_running_loop().create_future()
         args = ['capture-pane', '-p', '-J', '-t', pane_id,
-                '-S', str(height - 40), '-E', str(height - 1)]
+                '-S', str(height - max_lines), '-E', str(height - 1)]
         started = False
         try:
             async with _deadline(deadline):
