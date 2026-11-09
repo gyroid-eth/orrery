@@ -305,6 +305,9 @@ def normalize_annotations(raw: Any) -> dict[str, dict[str, str]]:
             "emoji": str(value.get("emoji", "")).strip()[:8],
             "group": str(value.get("group", "")).strip()[:24],
         }
+        task = str(value.get('task') or '').strip()[:200]
+        if task:
+            annot['task'] = task
         if any(annot.values()):
             labels[name] = annot
     return labels
@@ -514,7 +517,7 @@ def prepare_agents_payload(
     for agent in kept:
         if isinstance(agent, dict) and isinstance(agent.get("name"), str):
             annot = labels.get(agent["name"])
-            if annot:
+            if annot and 'annot' not in agent:
                 agent["annot"] = annot
                 changed = True
             if agent.get("running") and agent.get("act_state") == "wait" \
@@ -4466,7 +4469,7 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "orrery_view.css", "mail_view.css", "spawn_picker.css", "theme_light.css",
     "cockpit_tour.css", "telemetry_light.css",
     "spawn_picker.js", "effort_slider.js", "spawn_catalog_loader.js", "prefs_sync.js", "phone_settings.js",
-    "theme_core.js", "theme_controller.js", "roster_descriptor.js", "demo_mask.js",
+    "theme_core.js", "theme_controller.js", "roster_descriptor.js", "roster_edit.js", "demo_mask.js",
     "demo_mode.js", "orrery_view.js", "mail_view.js", "cockpit_tour.js",
     "cockpit_full_tour.js", "telemetry_light.js",
     "conversation_source.js", "conversation_view.js", "conversation_view.css", "conversation_preview.js",

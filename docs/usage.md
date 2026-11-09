@@ -137,6 +137,12 @@ tile に mouse を乗せると、agent 名の右に copy icon が出ます。ク
 
 クリップボードが使えない window や、ブラウザが書き込みを許可しなかった場合は `COPY FAILED · …` と出ます。3秒待っても応答がない場合も失敗として表示します。Select mode の間は icon を出しません。
 
+### Role と Task の編集
+
+rosterのカードにmouseを重ねると、名前の右に鉛筆iconが出ます。キーボードでもTabで選べます。押すとカードの下にRoleとTaskの編集欄が開き、EnterまたはSaveで保存、EscまたはCancelで取り消します。Taskで改行する場合はShift+Enterを使います。
+
+Roleは40字、Taskは200字までです。TaskはMailに登録された説明の表示上書きとして保存し、空欄で保存すると元の説明に戻ります。上書き中は説明のtitleで元の登録値を確認できます。保存後は名簿・Splitのrole・Planetariumへすぐ反映します。Taskの編集にはdashboard API 38以降が必要で、古いdashboardではRoleだけを編集できます。
+
 ### Pin
 
 何体も動いていると、roster は状態の順に並び替わり続けます。親の agent やレビュー役など、いつも見る agent は pin しておくと、並び替えに関係なく上に留まります。
