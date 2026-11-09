@@ -1,5 +1,5 @@
-/* Inert record renderer and replaceable preview outlet. No paths or external
-   URLs are accepted here. Only server reference IDs cross the data boundary. */
+/* Inert record renderer and preview outlet. Recorded references retain their
+   grants; an explicit body-path click has a separate image-only boundary. */
 (function(root){
   'use strict';
   function mount({host,source,onActivate=()=>{},onBeforeOpen=()=>{},onClose=()=>{}}){
@@ -16,11 +16,11 @@
       const head=create('div','conversation-preview-head'),title=create('h3','conversation-preview-title',ref.label);
       const closeButton=button('conversation-preview-close','× Preview',()=>{close();host.closest('.conversation-panel').querySelector('.conversation-scroll')?.focus();});
       head.append(title,closeButton);
-      const notice=create('div','conversation-preview-notice','Current file · may differ from the recorded edit');
+      const notice=create('div','conversation-preview-notice',ref.path?'':'Current file · may differ from the recorded edit');
       const body=create('div','conversation-preview-content','Loading preview…');body.tabIndex=0;
       host.replaceChildren(head,notice,body);closeButton.focus();
       try{
-        const data=await source.reference(ref.id,{signal:request.signal});
+        const data=await (ref.path?source.pathImage(ref.path,{signal:request.signal}):source.reference(ref.id,{signal:request.signal}));
         if(token!==generation)return;
         body.replaceChildren();
         if(data.kind==='text'&&typeof data.text==='string'&&data.text.length<=131072){
@@ -48,11 +48,11 @@
           const bytes=Uint8Array.from(atob(data.data),char=>char.charCodeAt(0));
           objectUrl=URL.createObjectURL(new Blob([bytes],{type:'image/png'}));
           const image=create('img','conversation-preview-image');image.alt=ref.label;image.src=objectUrl;image.draggable=false;
-          body.appendChild(image);notice.textContent+=' · '+data.width+' × '+data.height;
+          body.appendChild(image);notice.textContent+=(ref.path?'':' · ')+data.width+' × '+data.height;
         }else throw new Error('Unsupported preview response.');
         const reveal=button('conversation-reveal','Reveal in file manager',async()=>{
           reveal.disabled=true;
-          try{await source.reference(ref.id,{reveal:true});if(token===generation)notice.textContent='Selected in file manager';}
+          try{if(ref.path)await source.revealPath(ref.path);else await source.reference(ref.id,{reveal:true});if(token===generation)notice.textContent='Selected in file manager';}
           catch(error){if(token===generation)notice.textContent=error.message;}
           finally{reveal.disabled=false;}
         });

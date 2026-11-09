@@ -1,4 +1,4 @@
-"""Server-issued record references and confined, bounded file previews.
+"""Recorded references and bounded previews, plus explicit local image clicks.
 
 No path registration API. An ID is useful only with the same authoritative
 agent binding, pinned transcript inode and unchanged originating record.
@@ -31,6 +31,29 @@ TEXT_EXT={'.txt','.md','.py','.js','.mjs','.cjs','.ts','.tsx','.jsx','.css','.sc
           '.yaml','.yml','.toml','.ini','.cfg','.csv','.tsv','.xml','.html','.svg','.sh','.bash','.zsh',
           '.rs','.go','.c','.h','.cpp','.hpp','.java','.kt','.sql','.diff','.patch','.log','.rst'}
 IMAGE_EXT={'.png','.jpg','.jpeg','.gif','.webp'}
+
+
+def clicked_image(value):
+    """Explicit local path click: image-only, independent of record grants.
+
+    Resolve aliases first, then use the same no-follow descriptor walk and
+    raster limits as recorded previews. Recheck the alias after the read.
+    """
+    if (not isinstance(value,str) or len(value)>2000
+            or not value.startswith(('/', '~/')) or re.search(r'[\x00-\x1f\x7f]',value)):
+        raise PreviewUnavailable('preview_path_denied')
+    original=Path(value).expanduser()
+    if original.suffix.lower() not in IMAGE_EXT:raise PreviewUnavailable('preview_type_denied')
+    try:
+        path=original.resolve(strict=True)
+        if path.suffix.lower() not in IMAGE_EXT:raise PreviewUnavailable('preview_type_denied')
+        result=ReferenceStore().read_file(path)
+        if original.resolve(strict=True)!=path:raise PreviewUnavailable('preview_changed')
+        result.pop('notice',None)
+        return result
+    except (OSError,ValueError,RuntimeError) as exc:
+        if isinstance(exc,PreviewUnavailable):raise
+        raise PreviewUnavailable('preview_unavailable') from None
 
 
 class PreviewUnavailable(ValueError): pass

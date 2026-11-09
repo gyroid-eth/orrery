@@ -69,7 +69,7 @@
   // probe, and not the dashboard frame's automatic error report (/api/jserr):
   // nobody asked for those. From the NETWORK frame: the dashboard's actions.
   const USER_POSTS=new Set(['/telemetry/open-url','/telemetry/reveal-path','/telemetry/open-ghostty',
-    '/telemetry/spawn','/api/exit','/telemetry/conversation/reveal']);
+    '/telemetry/spawn','/api/exit','/telemetry/conversation/reveal','/telemetry/conversation/path-image']);
   const FRAME_POSTS=new Set(['/api/jump','/api/kill','/api/exit','/api/annotate','/api/spawn','/api/reactivate']);
   const USER_GETS=new Set(['/telemetry/clipboard/files','/telemetry/conversation/preview']);
   function userRequest(input,init,{frame=false,origin=root.location?.origin}={}){
@@ -150,6 +150,12 @@
       }
       // Mail links retain the browser's native handling. HTTP links use the
       // same opener as the terminal, including modified clicks in the app.
+      if(link.dataset.localPath){
+        event.preventDefault();const path=link.dataset.localPath;
+        if(/\.(png|jpe?g|gif|webp)$/i.test(path))preview?.open({path,label:path.split('/').pop(),kind:'image'});
+        else source.revealPath(path).catch(error=>message(error.message));
+        return;
+      }
       if(!/^https?:$/i.test(link.protocol))return;
       event.preventDefault();
       if(openExternalUrl)openExternalUrl(link.href);
@@ -248,6 +254,7 @@
       paintStatus();
     }
     const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onBeforeOpen:layoutChanged,onClose:layoutChanged,onActivate:()=>expand(true)});
+    const stopPathLinks=root.OrreryConversationMarkdown?.observePaths?.(panel,source);
     let enabled=false,opened=false,agent='',generation=0,controller=null,timer=0,busy=false;
     let before=null,after=null,hasOlder=false,mode='',newCount=0,events=new Map();
     let presented=true,lastPosition=null,lastWidth=0,lastHeight=0,lastFocused=null;
@@ -848,7 +855,7 @@
     listen(document,'visibilitychange',()=>{if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
     preference();paintControls();
     return Object.freeze({open,close,relocate,reconcile:context,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
-      dispose(){ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();noticeMenu.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
+      dispose(){stopPathLinks?.();ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();noticeMenu.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
   }
   function mountWorkspace({getContext,getSlots,getOwner=name=>getContext(name)?.terminalPaneId,activate,...options}){
     const screen=document.querySelector('.screen'),toggle=document.getElementById('conversationToggle');

@@ -52,7 +52,7 @@ from usage_probe import (
 )
 from conversation_history import (HistoryUnavailable, UnchangedPolls, bound_agent, bound_signature, open_reader)
 from conversation_mail import received as recorded_mail
-from conversation_preview import ReferenceStore, PreviewUnavailable, binding as conversation_binding
+from conversation_preview import ReferenceStore, PreviewUnavailable, clicked_image, binding as conversation_binding
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8791
@@ -2332,6 +2332,67 @@ async def reveal_conversation_reference(request: web.Request) -> web.Response:
     return await conversation_reference(request,reveal=True)
 
 
+async def preview_clicked_path(request: web.Request) -> web.Response:
+    """Own-page JSON POST only: read a clicked local image, never text."""
+    headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
+             'Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"}
+    try:
+        payload=await request.json()
+        if request.query or not isinstance(payload,dict) or set(payload)!={'path'}:
+            raise PreviewUnavailable('invalid_query')
+        result=await asyncio.to_thread(clicked_image,payload['path'])
+        return web.json_response(dict(result,ok=True),headers=headers)
+    except PreviewUnavailable as exc:
+        return web.json_response({'ok':False,'error':str(exc)},status=400,headers=headers)
+    except (ValueError,TypeError):
+        return web.json_response({'ok':False,'error':'invalid_query'},status=400,headers=headers)
+
+
+def probe_reader_path(text):
+    """Bounded literal existence checks; no reads or ellipsis directory walks."""
+    if (not isinstance(text,str) or not text.startswith(('/', '~/')) or len(text)>2000
+            or re.search(r'[\x00-\x1f\x7f]',text)):return None
+    # Long prose must not consume every slot before the filename boundary.
+    # Try the full text, spaces and ASCII-to-Unicode transitions first, then
+    # remaining Unicode positions. Keep the longest match within 64 stats.
+    primary={len(text)}
+    other=set()
+    for i,ch in enumerate(text):
+        if ch==' ' or not ch.isascii() and i>0 and text[i-1].isascii():primary.add(i)
+        if not ch.isascii():other.add(i)
+    ends=sorted(primary,reverse=True)+sorted(other-primary,reverse=True)
+    best=None;seen=set();attempts=0
+    for end in ends:
+        # A slash before a path component is not a prose boundary. Explicit
+        # directory paths (whole input or followed by whitespace) stay valid.
+        if end<len(text) and text[end-1:end]=='/' and not text[end].isspace():continue
+        shown=text[:end].rstrip(' .,;:!?')
+        if len(shown)<2 or shown in seen or best and len(shown)<=len(best['shown']):continue
+        seen.add(shown);attempts+=1
+        try:
+            path=Path(shown).expanduser()
+            if path.exists():
+                best={'shown':shown,'path':str(path)}
+                if end==len(text):return best
+        except (OSError,ValueError):pass
+        if attempts>=64:break
+    return best
+
+
+async def probe_conversation_paths(request: web.Request) -> web.Response:
+    try:
+        payload=await request.json()
+        texts=payload.get('texts') if isinstance(payload,dict) else None
+        if (request.query or not isinstance(payload,dict) or set(payload)!={'texts'}
+                or not isinstance(texts,list) or len(texts)>32
+                or any(not isinstance(text,str) or len(text)>2000 for text in texts)
+                or sum(map(len,texts))>32768):raise ValueError
+        results=await asyncio.to_thread(lambda:[probe_reader_path(text) for text in texts])
+        return web.json_response({'ok':True,'paths':results},headers={'Cache-Control':'no-store'})
+    except (ValueError,TypeError):
+        return web.json_response({'ok':False,'error':'invalid_query'},status=400)
+
+
 async def proxy_spawn(request: web.Request) -> web.Response:
     try:
         payload = await request.json()
@@ -4457,6 +4518,8 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
     app.router.add_get("/telemetry/conversation", serve_conversation)
     app.router.add_get("/telemetry/conversation/stats", serve_conversation_stats)
     app.router.add_get('/telemetry/conversation/preview', serve_conversation_preview)
+    app.router.add_post('/telemetry/conversation/path-image', preview_clicked_path)
+    app.router.add_post('/telemetry/conversation/path-probe', probe_conversation_paths)
     app.router.add_post('/telemetry/conversation/reveal', reveal_conversation_reference)
     app.router.add_get("/telemetry/messages", proxy_dashboard)
     app.router.add_get("/telemetry/graph", proxy_dashboard)

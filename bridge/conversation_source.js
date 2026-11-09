@@ -75,6 +75,16 @@
       if(!response.ok||payload.ok!==true){const error=new Error(MESSAGES[payload.error]||'Preview is unavailable.');error.code=payload.error;throw error;}
       return payload;
     }
+    async pathRequest(url,body,{signal}={}){
+      const response=await this.fetcher(url,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(body),cache:'no-store',signal});
+      const payload=await response.json();
+      if(!response.ok||payload.ok!==true){const error=new Error(MESSAGES[payload.error]||payload.error||'Path is unavailable.');error.code=payload.error;throw error;}
+      return payload;
+    }
+    async probePaths(texts,options){return (await this.pathRequest('/telemetry/conversation/path-probe',{texts},options)).paths;}
+    pathImage(path,options){return this.pathRequest('/telemetry/conversation/path-image',{path},options);}
+    revealPath(path,options){return this.pathRequest('/telemetry/reveal-path',{path,literal:true},options);}
   }
   root.OrreryConversationSource=Object.freeze({Source,MESSAGES,REASONS,bindingMessage});
   if(typeof module!=='undefined')module.exports={Source,MESSAGES,REASONS,bindingMessage};
