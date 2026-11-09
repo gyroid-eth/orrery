@@ -202,10 +202,18 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 .conversation-mail-label{display:block;font:9px/1.6 var(--mono);letter-spacing:.04em;color:var(--ink-dim);margin-bottom:5px}
 .conversation-mail-chevron{flex:none;font-size:9px;color:var(--ink-faint)}
 .conversation-mail[open] .conversation-mail-chevron{transform:rotate(90deg)}
-.conversation-mail-route{display:flex;flex:1 1 min(155px,calc(100% - 13px));align-items:center;gap:6px;min-width:min(155px,calc(100% - 13px));}
-.conversation-mail-peer{display:inline-flex;align-items:center;gap:5px;min-width:37px;flex:0 1 auto}
+.conversation-mail-route{display:flex;flex-wrap:wrap;flex:1 1 min(155px,calc(100% - 13px));align-items:center;gap:6px;min-width:min(155px,calc(100% - 13px));}
+.conversation-mail-peer{display:inline-flex;align-items:center;gap:5px;min-width:0;max-width:100%;flex:0 1 auto}
 .conversation-mail-peer-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.conversation-mail-peer.is-counterpart{font-size:13px;font-weight:650;color:var(--ink)}
+.conversation-mail-sender{max-width:100%;font-size:13px;font-weight:650;color:var(--ink)}
+.conversation-mail-peer .conversation-avatar.medal{width:18px;height:18px;margin-right:0}
+.conversation-mail-recipients{display:contents}
+.conversation-mail-peer[hidden],.conversation-mail-more[hidden]{display:none}
+.conversation-mail-route.is-compact .conversation-mail-recipients{display:inline-flex;align-items:center;max-width:100%;padding-right:3px}
+.conversation-mail-route.is-compact .conversation-mail-recipients.is-wrap{flex-basis:100%}
+.conversation-mail-route.is-compact .conversation-mail-arrow{margin-right:6px}
+.conversation-mail-route.is-compact .conversation-mail-recipients .conversation-mail-peer{flex:none;isolation:isolate}
+.conversation-mail-route.is-compact .conversation-mail-recipients .conversation-mail-peer:not([hidden])~.conversation-mail-peer:not([hidden]){margin-left:-4px}
 .conversation-mail-arrow,.conversation-mail-more{flex:none;font-size:10px;color:var(--ink-dim)}
 .conversation-mail-subject-row{display:flex;align-items:baseline;gap:7px;margin-top:5px}
 .conversation-mail-importance{display:none;flex:none;width:4px;height:4px;border-radius:50%;position:relative;top:-2px}
