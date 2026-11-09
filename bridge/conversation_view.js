@@ -101,6 +101,7 @@
   const readerIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h6"/></svg>';
   const expandIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6m0-6-6 6M10 20H4v-6m0 6 6-6"/></svg>';
   const latestIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v14m-6-6 6 6 6-6M5 21h14"/></svg>';
+  const earlierIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V7m-6 6 6-6 6 6M5 3h14"/></svg>';
   function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,expandControl=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null,openExternalUrl=null}){
     let screen=host||document.querySelector('.screen');
     const toggle=control||document.getElementById('conversationToggle');
@@ -110,9 +111,11 @@
     const panel=document.createElement('section');
     panel.className='conversation-panel';panel.id=panelId;panel.hidden=true;
     panel.setAttribute('aria-label','Reader');
-    panel.innerHTML='<div class="conversation-body"><div class="conversation-thread"><div class="conversation-scroll" tabindex="0" aria-label="Conversation messages">'+
+    panel.innerHTML='<div class="conversation-body"><div class="conversation-thread">'+
       '<div class="conversation-toolbar" hidden><span class="conversation-status" role="status"></span>'+
+      '<button class="cockpit-control pane-icon conversation-notice-older" type="button" title="Load earlier" aria-label="Load earlier" hidden>'+earlierIcon+'</button>'+
       '<button class="cockpit-control conversation-action conversation-retry" type="button" hidden>Retry</button></div>'+
+      '<div class="conversation-scroll" tabindex="0" aria-label="Conversation messages">'+
       '<button class="cockpit-control conversation-action conversation-older" type="button" hidden>Load earlier</button>'+
       '<div class="conversation-events"></div><div class="conversation-pending" role="status" aria-live="polite"></div><div class="conversation-empty"></div></div>'+
       '<div class="conversation-bottom" hidden><button class="cockpit-control pane-icon conversation-latest" type="button" title="Latest" aria-label="Latest">'+latestIcon+'</button></div></div>'+
@@ -143,7 +146,7 @@
     }
     listen(panel,'click',activateLink);listen(panel,'auxclick',activateLink);
     const toolbar=el('.conversation-toolbar'),status=el('.conversation-toolbar .conversation-status'),empty=el('.conversation-empty');
-    const earlier=el('.conversation-older'),retry=el('.conversation-retry'),latest=el('.conversation-latest');
+    const earlier=el('.conversation-older'),noticeEarlier=el('.conversation-notice-older'),retry=el('.conversation-retry'),latest=el('.conversation-latest');
     let fullWidth=false,tableMutating=false,tableFrame=0;
     const tablePositions=new Map();
     let submissions=[],submissionTimer=0,flashTimer=0,readSequence=0;
@@ -246,8 +249,14 @@
       latest.title=paused?'Latest · resume':newCount?'Latest · '+newCount+' new messages':'Latest';
       latest.setAttribute('aria-label',latest.title);
     }
-    function paintStatus(){toolbar.hidden=!status.textContent&&retry.hidden;}
-    function message(text){const bottom=nearBottom();status.textContent=text;paintStatus();if(bottom)scroll.scrollTop=scroll.scrollHeight;}
+    function paintStatus(){
+      const focused=document.activeElement===earlier;
+      toolbar.hidden=!status.textContent&&retry.hidden;
+      noticeEarlier.hidden=toolbar.hidden||earlier.hidden;noticeEarlier.disabled=earlier.disabled;
+      earlier.style.visibility=toolbar.hidden?'':'hidden';
+      if(focused&&!toolbar.hidden)(noticeEarlier.hidden||noticeEarlier.disabled?scroll:noticeEarlier).focus({preventScroll:true});
+    }
+    function message(text){status.textContent=text;status.title=text;paintStatus();}
     function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
     function clear({keepSubmissions=false}={}){tablePositions.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
@@ -524,7 +533,7 @@
       if(direction==='newer'&&after!==null&&!document.hidden&&!opsActive()&&waiting.size<MAX_WAITING){options.wait=WAIT_SECONDS;options.reader=readerId;waiting.add(holder);}
       holding=Boolean(options.wait);
       // Load earlier stays usable while the poll only waits in the background.
-      earlier.disabled=!holding;
+      earlier.disabled=!holding;paintStatus();
       try{
         const page=direction==='older'?await readOlder(name,options,token):await source.read(name,options);
         holding=false;waiting.delete(holder);
@@ -604,7 +613,7 @@
         paintStatus();
       }finally{
         if(token===generation){
-          busy=false;controller=null;earlier.disabled=false;
+          busy=false;controller=null;earlier.disabled=false;paintStatus();
           if(followPending){followPending=false;followSubmitted();}
           else if(pendingAction){const next=pendingAction;pendingAction=null;load(next.direction,next.op);}
           else if(pollAgain)plan();
@@ -658,6 +667,7 @@
     // Arrow/Page keys and wheels belong only to the browser scroll container;
     // there is no path from this module to xterm or tmux input.
     listen(earlier,'click',()=>userLoad('older'));
+    listen(noticeEarlier,'click',()=>{scroll.focus({preventScroll:true});userLoad('older');});
     listen(retry,'click',()=>userLoad(events.size?'newer':'initial'));
     listen(latest,'click',()=>{
       if(paused){stop();clear({keepSubmissions:true});load('initial');}

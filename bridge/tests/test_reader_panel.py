@@ -61,11 +61,11 @@ def test_latest_shows_only_when_reading_earlier_and_keeps_the_tail_clear(cockpit
     assert js('document.activeElement.classList.contains("conversation-scroll")')
 
 
-def test_status_and_retry_stay_in_the_reading_flow(cockpit):
+def test_status_and_retry_stay_available(cockpit):
     js, wait, client = opened(cockpit)
     js('conversationView.close();window.readerFail=true;OrreryConversationSource.Source.prototype.read=async()=>{if(readerFail)throw new Error("Generated read failure");return {events:[{id:"retry-row",kind:"text",role:"assistant",text:"Recovered"}],after:"one",before:"zero",has_older:true}};conversationView.open()')
     wait('!document.querySelector(".conversation-retry").hidden')
-    assert js('document.querySelector(".conversation-scroll .conversation-toolbar")!==null')
+    assert js('document.querySelector(".conversation-thread > .conversation-toolbar")!==null')
     assert js('!document.querySelector(".conversation-toolbar").hidden')
     js('readerFail=false;document.querySelector(".conversation-retry").click()')
     wait('document.querySelector("[data-event-id=retry-row]")!==null')
@@ -144,3 +144,90 @@ def test_paused_latest_enter_keeps_focus_in_the_reader_after_fit(cockpit, theme)
     time.sleep(.2)
     assert js("document.activeElement.classList.contains('conversation-scroll')")
     assert js("packets.filter(p=>['input','codex-page'].includes(p.type))") == []
+
+
+def line_top(js):
+    return js("""(()=>{const s=document.querySelector('.conversation-scroll'),r=document.createRange();r.setStart(readerAnchorNode,11);r.setEnd(readerAnchorNode,12);return {id:readerAnchorId,top:r.getBoundingClientRect().top-s.getBoundingClientRect().top}})()""")
+
+
+def fail_read(js, wait, message='Generated read failure'):
+    js('window.readerFailure='+json.dumps(message)+';OrreryConversationSource.Source.prototype.read=async()=>{throw new Error(readerFailure)};conversationView.refresh()')
+    wait("!document.querySelector('.conversation-retry').hidden")
+
+
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+@pytest.mark.parametrize('transition', ['show', 'recover', 'older'])
+@pytest.mark.parametrize('message', ['Generated read failure', 'Generated read failure with more context. '*10], ids=['short', 'long'])
+def test_notice_transition_preserves_the_same_read_character(cockpit, theme, transition, message):
+    js, wait, client, requests, enable = cockpit
+    stable_roster(js)
+    enable(count=80)
+    js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
+    wait_reading_layout(js)
+    js("""window.readerAnchorText=document.querySelectorAll('.conversation-text')[20];window.readerAnchorNode=readerAnchorText.firstChild;window.readerAnchorId=readerAnchorText.closest('.conversation-event').dataset.eventId;const s=document.querySelector('.conversation-scroll');s.dispatchEvent(new WheelEvent('wheel'));s.scrollTop+=readerAnchorText.getBoundingClientRect().top-s.getBoundingClientRect().top-30;s.dispatchEvent(new Event('scroll'));""")
+    if transition != 'show':
+        fail_read(js, wait, message)
+    before = line_top(js)
+    if transition == 'show':
+        fail_read(js, wait, message)
+    elif transition == 'recover':
+        js("OrreryConversationSource.Source.prototype.read=async()=>({events:[],mode:'cursor',after:'recovered',has_older:true});document.querySelector('.conversation-retry').click()")
+        wait("document.querySelector('.conversation-toolbar').hidden")
+    else:
+        js("OrreryConversationSource.Source.prototype.read=async()=>({events:Array.from({length:40},(_,i)=>({id:'older-'+i,kind:'text',role:'assistant',text:'Earlier generated message '+i})),mode:'cursor',before:'older-start',after:'older-end',has_older:true});document.querySelector('.conversation-older').click()")
+        wait("document.querySelectorAll('.conversation-event').length===120")
+        wait("document.querySelector('.conversation-toolbar').hidden")
+    time.sleep(.15)
+    after = line_top(js)
+    assert after['id'] == before['id']
+    assert abs(after['top']-before['top']) <= 1, (before, after)
+
+
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_short_long_hidden_notice_keeps_text_position_and_retry_visible(cockpit, theme):
+    js, wait, client, requests, enable = cockpit
+    stable_roster(js)
+    enable(count=80)
+    js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
+    wait_reading_layout(js)
+    js("""window.readerAnchorText=document.querySelectorAll('.conversation-text')[20];window.readerAnchorNode=readerAnchorText.firstChild;window.readerAnchorId=readerAnchorText.closest('.conversation-event').dataset.eventId;const s=document.querySelector('.conversation-scroll');s.dispatchEvent(new WheelEvent('wheel'));s.scrollTop+=readerAnchorText.getBoundingClientRect().top-s.getBoundingClientRect().top-30;s.dispatchEvent(new Event('scroll'));""")
+    before = line_top(js)
+    for message in ['Generated read failure', 'Generated read failure with more context. '*10]:
+        fail_read(js, wait, message)
+        assert abs(line_top(js)['top']-before['top']) <= 1
+        assert js("""(()=>{const s=document.querySelector('.conversation-toolbar .conversation-status');return s.getBoundingClientRect().height<=2*parseFloat(getComputedStyle(s).lineHeight)+1})()""")
+        assert js("document.querySelector('.conversation-toolbar .conversation-status').title") == message
+        assert js("""(()=>{const b=document.querySelector('.conversation-retry'),r=b.getBoundingClientRect();return document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===b})()""")
+    js("OrreryConversationSource.Source.prototype.read=async()=>({events:[],mode:'cursor',after:'recovered',has_older:true});document.querySelector('.conversation-retry').click()")
+    wait("document.querySelector('.conversation-toolbar').hidden")
+    assert abs(line_top(js)['top']-before['top']) <= 1
+
+
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+@pytest.mark.parametrize('width', [1600, 390])
+def test_notice_load_earlier_is_clickable_at_the_top(cockpit, theme, width):
+    js, wait, client, requests, enable = cockpit
+    client.call('Emulation.setDeviceMetricsOverride', width=width, height=1000, deviceScaleFactor=1, mobile=False)
+    stable_roster(js)
+    enable(count=80)
+    js(r"""conversationView.close();OrreryConversationSource.Source.prototype.read=async()=>({events:Array.from({length:80},(_,i)=>({id:'paragraph-'+i,kind:'text',role:'assistant',text:'Generated paragraph '+i+'.\n\nThis text stays in the same position when a notice appears or disappears.'})),mode:'cursor',before:'first',after:'last',has_older:true});conversationView.open()""")
+    wait("document.querySelector('[data-event-id=paragraph-0]')!==null")
+    js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
+    wait_reading_layout(js)
+    js("""window.readerAnchorText=document.querySelector('.conversation-text');window.readerAnchorNode=readerAnchorText.firstChild;window.readerAnchorId=readerAnchorText.closest('.conversation-event').dataset.eventId;const s=document.querySelector('.conversation-scroll');s.dispatchEvent(new WheelEvent('wheel'));s.scrollTop=0;s.dispatchEvent(new Event('scroll'));""")
+    before = line_top(js)
+    js("document.querySelector('.conversation-older').focus()")
+    fail_read(js, wait, 'Generated read failure with more context. '*10)
+    assert js("document.querySelector('.conversation-panel').contains(document.activeElement)")
+    assert abs(line_top(js)['top']-before['top']) <= 1
+    assert js("getComputedStyle(document.querySelector('.conversation-older')).visibility") == 'hidden'
+    bounds = js("""(()=>{const b=document.querySelector('.conversation-notice-older'),r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===b||b.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)),label:b.getAttribute('aria-label')}})()""")
+    assert bounds['hit'] and bounds['label'] == 'Load earlier'
+    js("OrreryConversationSource.Source.prototype.read=async()=>({events:Array.from({length:40},(_,i)=>({id:'older-'+i,kind:'text',role:'assistant',text:'Earlier generated message '+i})),mode:'cursor',before:'older-start',after:'older-end',has_older:true})")
+    client.call('Input.dispatchMouseEvent', type='mousePressed', x=bounds['x'], y=bounds['y'], button='left', clickCount=1)
+    client.call('Input.dispatchMouseEvent', type='mouseReleased', x=bounds['x'], y=bounds['y'], button='left', clickCount=1)
+    wait("document.querySelectorAll('.conversation-event').length===120")
+    wait("document.querySelector('.conversation-toolbar').hidden")
+    wait_reading_layout(js)
+    assert js("getComputedStyle(document.querySelector('.conversation-older')).visibility") == 'visible'
+    assert js("document.activeElement.classList.contains('conversation-scroll')")

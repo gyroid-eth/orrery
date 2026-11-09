@@ -6,7 +6,9 @@
 .conversation-panel{position:absolute;right:0;top:40px;bottom:0;z-index:5;
   width:var(--conversation-width);display:flex;flex-direction:column;min-height:0;
   border-left:1px solid var(--hair);background:var(--panel);color:var(--ink)}
-.conversation-toolbar{position:sticky;top:0;z-index:3;display:flex;gap:8px;align-items:center;margin:0 0 8px;padding:6px 8px;border:1px solid var(--hair);border-radius:6px;background:var(--panel-2)}
+.conversation-toolbar{position:absolute;top:4px;left:18px;right:31px;z-index:3;display:flex;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--hair);border-radius:6px;background:var(--panel-2)}
+.conversation-toolbar .conversation-status{min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;max-height:3.2em}
+.conversation-toolbar button{flex:none}
 .conversation-status{font:10px/1.6 var(--mono);color:var(--ink-dim);flex:1;overflow-wrap:anywhere}
 .conversation-scroll{flex:1;min-height:0;overflow-y:scroll;overscroll-behavior:contain;
   scrollbar-gutter:stable;scrollbar-width:auto;overflow-anchor:none;padding:4px 18px 56px;outline-offset:-3px}
@@ -35,6 +37,7 @@
 .conversation-body{display:flex;flex:1;min-height:0;min-width:0}
 .conversation-thread{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
 .conversation-full .conversation-scroll{padding-left:24px;padding-right:24px}
+.conversation-full .conversation-toolbar{left:24px;right:37px}
 .conversation-full .conversation-events{max-width:960px;margin:0 auto}
 .conversation-files{display:flex;flex-wrap:wrap;gap:6px;padding-top:10px}
 .conversation-file{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;text-transform:none}
@@ -89,7 +92,7 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .conversation-has-preview .conversation-thread{display:none}
   .conversation-preview{width:100%;border:0}
   .conversation-scroll{padding-left:14px;padding-right:12px}
-  .conversation-toolbar{padding:8px 10px}
+  .conversation-toolbar{left:14px;right:25px;padding:8px 10px}
   .conversation-text{font-size:12px;line-height:1.75}
   .scr-head{gap:6px;padding-left:10px;padding-right:10px}
   .scr-head .path{display:none}
@@ -109,7 +112,7 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .conversation-has-preview .conversation-thread{display:none}
   .conversation-preview{width:100%;border:0}
   .conversation-scroll{padding-left:12px;padding-right:10px}
-  .conversation-toolbar{padding:7px 10px}
+  .conversation-toolbar{left:12px;right:23px;padding:7px 10px}
 }
 /* Pressed controls float over live terminal pixels, so their fill stays opaque. */
 .split-cell-actions .split-history-toggle{background:var(--panel)}
