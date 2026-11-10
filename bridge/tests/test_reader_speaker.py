@@ -71,10 +71,17 @@ def prepare_speaker(cockpit, width=1600, theme='dark'):
     return js,wait,client,requests
 
 
+def test_speaker_has_no_model_element_or_model_label(cockpit):
+    js,wait,_,_=prepare_speaker(cockpit)
+    assert js("speakerReader.querySelector('.conversation-speaker-model')===null")
+    assert js("[...speakerReader.querySelectorAll('.conversation-speaker')].every(e=>!/(Opus 5.5|GPT-6.1-Sol|DeepSeek V4|Roster model)/.test(e.textContent+' '+e.title+' '+e.ariaLabel))")
+    assert js("speakerReader.querySelector('.conversation-avatar')!==null&&speakerReader.querySelector('[data-event-id=first] time').textContent.length>0")
+
+
 def test_speaker_name_recorded_model_and_roster_fallback(cockpit):
     js,wait,client,requests=prepare_speaker(cockpit)
     assert js("[...speakerReader.querySelectorAll('.conversation-speaker-name')].map(e=>e.textContent)")==['ReviewFixture']*4
-    assert js("[...speakerReader.querySelectorAll('.conversation-speaker-model')].map(e=>e.textContent)")==['Opus 5.5','GPT-6.1-Sol','DeepSeek V4','Roster model']
+    assert js("speakerReader.querySelector('.conversation-speaker-model')===null")
     assert all('Claude' in label for label in js("[...speakerReader.querySelectorAll('.conversation-speaker')].map(e=>e.ariaLabel)"))
     assert js("speakerReader.querySelector('[data-event-id=human] .conversation-role').textContent")=='You'
     assert js("speakerReader.querySelector('[data-event-id=shell] .conversation-role').textContent")=='Shell'
@@ -88,14 +95,14 @@ def test_speaker_name_recorded_model_and_roster_fallback(cockpit):
     wait("speakerReader.querySelector('.conversation-avatar .face img').style.display==='none'")
     js("window.keptText=speakerReader.querySelector('.conversation-text');const r=document.createRange();r.selectNodeContents(keptText);getSelection().removeAllRanges();getSelection().addRange(r);Object.assign(currentAgents[0],{model:'Updated roster model'});document.dispatchEvent(new Event('oc:agents'))")
     assert js("speakerReader.querySelector('.conversation-text')===keptText&&getSelection().toString()==='First model'")
-    assert js("speakerReader.querySelector('[data-event-id=fallback] .conversation-speaker-model').textContent")=='Updated roster model'
-    assert js("speakerReader.querySelector('[data-event-id=first] .conversation-speaker-model').textContent")=='Opus 5.5'
+    assert js("speakerReader.querySelector('.conversation-speaker-model')===null")
+    assert js("speakerReader.querySelector('[data-event-id=second] .provider-badge img').getAttribute('src')")=='cockpit-assets/openai.svg'
     assert js("packets.filter(p=>p.type==='input')")==[]
 
 
 @pytest.mark.parametrize('theme',['dark','light'])
 @pytest.mark.parametrize('width',[1600,390])
-def test_model_is_subdued_and_yields_before_the_name(cockpit,theme,width):
+def test_speaker_name_and_avatar_fit_without_model(cockpit,theme,width):
     js,wait,client,_=prepare_speaker(cockpit,width,theme)
     if width==390:
         js("currentAgents.push({name:'OtherFixture',program:'codex',history_binding:'bound'});createPane('OtherFixture',{paneId:'%902',windowId:'@902',width:80,height:20});replaceSplitSessions(['ReviewFixture','OtherFixture']);splitVisible=true;focusSplitSession('ReviewFixture')")
@@ -103,23 +110,19 @@ def test_model_is_subdued_and_yields_before_the_name(cockpit,theme,width):
         js("speakerReader=document.querySelector('.split-cell[data-session=ReviewFixture] .conversation-panel')")
         wait_reading_layout(js)
     js("OrreryConversationSpeaker.paint(speakerReader.querySelector('.conversation-speaker'),{name:'A deliberately long agent name',model:'claude-opus-5-5',harness:'Claude',context:{},renderAvatar:conversationAvatar})")
-    metrics=js("""(()=>{const e=speakerReader.querySelector('.conversation-speaker'),n=e.querySelector('.conversation-speaker-name'),m=e.querySelector('.conversation-speaker-model'),a=e.querySelector('.conversation-avatar'),ns=getComputedStyle(n),ms=getComputedStyle(m);return {name:n.getBoundingClientRect().width,model:m.getBoundingClientRect().width,full:n.scrollWidth,avatar:a.getBoundingClientRect().width,nameFont:parseFloat(ns.fontSize),modelFont:parseFloat(ms.fontSize),nameColor:ns.color,modelColor:ms.color,overflow:e.scrollWidth>e.clientWidth+1}})()""")
+    metrics=js("""(()=>{const e=speakerReader.querySelector('.conversation-speaker'),n=e.querySelector('.conversation-speaker-name'),a=e.querySelector('.conversation-avatar');return {name:n.getBoundingClientRect().width,avatar:a.getBoundingClientRect().width,model:!!e.querySelector('.conversation-speaker-model'),overflow:e.scrollWidth>e.clientWidth+1}})()""")
     assert 18<=metrics['avatar']<=20 and metrics['name']>=8
-    assert metrics['modelFont']<metrics['nameFont'] and metrics['modelColor']!=metrics['nameColor']
+    assert not metrics['model']
     assert not metrics['overflow'],metrics
-    if metrics['name']<metrics['full']-1:assert metrics['model']<=1,metrics
 
 
 def test_unknown_name_model_and_harness_fallback_use_literal_text(cockpit):
     js,wait,_,_=prepare_speaker(cockpit)
-    assert js("OrreryConversationSpeaker.displayModel('gpt-7.2-nova-mini')")=='GPT-7.2-Nova-Mini'
-    assert js("OrreryConversationSpeaker.displayModel('claude-sonnet-8-2-20261109')")=='Sonnet 8.2'
-    assert js("OrreryConversationSpeaker.displayModel('<b>Future model</b>')")=='<b>Future model</b>'
     js("window.isolated=document.createElement('span');OrreryConversationSpeaker.paint(isolated,{harness:'Hermes',name:'',context:{},model:'',renderAvatar:null})")
     assert js("isolated.textContent")=='Hermes'
     assert not js("isolated.classList.contains('conversation-speaker')")
     js("OrreryConversationSpeaker.paint(isolated,{harness:'Codex',name:'',context:{},model:'gpt-6.1-sol',renderAvatar:null})")
-    assert js("isolated.textContent")=='GPT-6.1-Sol'
+    assert js("isolated.textContent")=='Codex'
     js("OrreryConversationSpeaker.paint(isolated,{harness:'Hermes',name:'<b>Agent</b>',context:{model:'<i>Model</i>'},renderAvatar:null})")
     assert not js("isolated.querySelector('b,i')")
 
@@ -148,5 +151,5 @@ def test_cross_message_selection_excludes_decorative_avatar_text(cockpit,theme):
     wait("speakerReader.querySelector('[data-event-id=second] .conversation-avatar .face img').style.display==='none'")
     selected=js("""(()=>{const first=speakerReader.querySelector('[data-event-id=first] .conversation-text'),second=speakerReader.querySelector('[data-event-id=second] .conversation-text'),r=document.createRange();r.setStart(first.firstChild,0);r.setEnd(second.firstChild,second.firstChild.length);getSelection().removeAllRanges();getSelection().addRange(r);return getSelection().toString()})()""")
     assert [line.strip() for line in selected.splitlines() if line.strip()]==[
-        'First model','ReviewFixture','GPT-6.1-Sol','Changed model'],selected
+        'First model','ReviewFixture','Changed model'],selected
     assert js("packets.filter(p=>p.type==='input')")==[]

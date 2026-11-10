@@ -184,3 +184,39 @@ def test_narrow_unregistered_recipients_are_counted_without_fabricated_faces(coc
     assert js("mailReader.querySelector('.conversation-mail-more').textContent")=='+2'
     assert js("[...mailReader.querySelectorAll('.conversation-mail-recipients .conversation-mail-peer')].every(e=>e.hidden)")
     assert all(name in js("mailReader.querySelector('summary').ariaLabel") for name in ['UnlistedOne','UnlistedTwo'])
+
+
+@pytest.mark.parametrize('theme',['dark','light'])
+@pytest.mark.parametrize('width',[1600,390])
+def test_open_mail_thread_tracks_sender_and_body_end(cockpit,theme,width):
+    js,wait,client,_=prepare(cockpit,direction='sent',recipients=['KnownPeer','LocalPeer','UnlistedPeer'],theme=theme,width=width)
+    if width==390:split_mail(js,wait)
+    js("window.threadCard=mailReader.querySelector('.conversation-mail')")
+    assert js("threadCard.querySelector('.conversation-mail-thread')!==null")
+    assert js("threadCard.querySelector('.conversation-mail-thread').getClientRects().length===0")
+    js("threadCard.querySelector('summary').click()")
+    wait("threadCard.querySelector('.conversation-mail-thread').getBoundingClientRect().height>0")
+    wait_reading_layout(js)
+    def geometry():
+        return js("""(()=>{const t=threadCard.querySelector('.conversation-mail-thread'),l=t.getBoundingClientRect(),a=threadCard.querySelector('.conversation-mail-sender .conversation-avatar').getBoundingClientRect(),b=threadCard.querySelector('.conversation-mail-text').getBoundingClientRect();return {x:Math.abs((l.left+l.width/2)-(a.left+a.width/2)),top:l.top-a.bottom,end:Math.abs(l.bottom-b.bottom),width:l.width,decorative:t.getAttribute('aria-hidden')==='true'&&getComputedStyle(t).userSelect==='none'&&getComputedStyle(t).pointerEvents==='none',empty:t.textContent==='',right:b.left>l.right}})()""")
+    value=geometry()
+    assert value['x']<=1 and value['end']<=1 and value['width']==1 and 0<=value['top']<=4,value
+    assert value['decorative'] and value['empty'] and value['right'],value
+    wait("threadCard.querySelector('.conversation-mail-sender .face img').style.display==='none'")
+    assert js("threadCard.querySelector('.conversation-mail-sender .ini').textContent==='R'")
+    # Reflow an already open card; the sender and body must remain its anchors.
+    client.call('Emulation.setDeviceMetricsOverride',width=1800 if width==390 else 1100,height=1000,deviceScaleFactor=1,mobile=False)
+    wait_reading_layout(js)
+    value=geometry()
+    assert value['x']<=1 and value['end']<=1,value
+    js("threadCard.querySelector('summary').click()")
+    wait("threadCard.querySelector('.conversation-mail-thread').getClientRects().length===0")
+
+
+def test_wrapped_mail_recipients_leave_the_sender_thread_column_clear(cockpit):
+    names=['KnownPeer','LocalPeer']+['GeneratedPeer'+str(i) for i in range(6)]
+    js,wait,_,_=prepare(cockpit,direction='sent',recipients=names,width=1200)
+    js("for(let i=0;i<6;i++)currentAgents.push({name:'GeneratedPeer'+i,provider:'openai'});document.dispatchEvent(new Event('oc:agents'));mailReader.querySelector('summary').click()")
+    wait("mailReader.querySelector('.conversation-mail-thread')?.getBoundingClientRect().height>0")
+    value=js("""(()=>{const d=mailReader.querySelector('.conversation-mail'),a=d.querySelector('.conversation-mail-sender .conversation-avatar').getBoundingClientRect(),line=d.querySelector('.conversation-mail-thread').getBoundingClientRect(),wrapped=[...d.querySelectorAll('.conversation-mail-recipients .conversation-avatar')].map(e=>e.getBoundingClientRect()).filter(r=>r.top>a.bottom);return {wrapped:wrapped.length,clear:wrapped.every(r=>r.left>line.right)}})()""")
+    assert value['wrapped']>0 and value['clear'],value

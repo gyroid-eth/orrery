@@ -2,6 +2,17 @@
 (function(root){
   'use strict';
   const create=(tag,cls,text)=>{const el=document.createElement(tag);el.className=cls;if(typeof text==='string')el.textContent=text;return el;};
+  function layoutThread(details){
+    const line=details.querySelector('.conversation-mail-thread'),avatar=details.querySelector('.conversation-mail-sender .conversation-avatar');
+    line.hidden=true;details.classList.remove('is-threaded');
+    if(!details.open||!avatar)return;
+    const card=details.getBoundingClientRect(),face=avatar.getBoundingClientRect();
+    if(!face.width)return;
+    const x=face.left+face.width/2-card.left;
+    details.style.setProperty('--mail-thread-inset',(x+16)+'px');
+    line.style.left=(x-.5)+'px';line.style.top=(face.bottom-card.top+3)+'px';
+    details.classList.add('is-threaded');line.hidden=false;
+  }
   function layout(container,force=false){
     const panel=container.matches('.conversation-panel')?container:container.closest('.conversation-panel');
     if(!panel||!panel.getClientRects().length)return;
@@ -42,6 +53,7 @@
       more.textContent=hidden?'+'+hidden:'';more.hidden=!hidden;more.style.marginLeft=shown&&hidden?'6px':'';
       more.title=peers.filter(peer=>!visible.has(peer)).map(peer=>peer.dataset.peerName).join(', ');
     }
+    for(const details of container.querySelectorAll('.conversation-mail'))layoutThread(details);
   }
   function refreshPeers(container,renderPeerAvatar){
     if(typeof renderPeerAvatar!=='function')return;
@@ -96,7 +108,8 @@
       const text=create('p','conversation-mail-text'),value=typeof item.body==='string'?item.body.slice(0,65536):'';
       if(root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.renderText(value,text);else text.textContent=value;
       body.appendChild(text);
-      details.appendChild(body);article.appendChild(details);
+      const line=create('span','conversation-mail-thread');line.hidden=true;line.setAttribute('aria-hidden','true');
+      details.append(body,line);details.addEventListener('toggle',()=>layoutThread(details));article.appendChild(details);
     }
     refreshPeers(article,renderPeerAvatar);return article;
   }
