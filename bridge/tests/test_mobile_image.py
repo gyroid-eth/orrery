@@ -139,7 +139,8 @@ def test_real_bridge_route_validates_pane_before_image_and_keeps_text_send(tmp_p
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize('case',['bound','missing_workspace','binding_changed','secondary_pane'])
+@pytest.mark.parametrize('case',['bound','bound_reordered','missing_workspace','binding_changed','secondary_pane',
+                                'secondary_same_workspace','cwd_unavailable'])
 def test_app_uses_bound_transcript_workspace_not_phone_path(tmp_path,monkeypatch,case):
     import json
     from types import SimpleNamespace
@@ -160,6 +161,16 @@ def test_app_uses_bound_transcript_workspace_not_phone_path(tmp_path,monkeypatch
     monkeypatch.setattr(backend,'conversation_bound_row',bound)
     async def scenario():
         bridge=bridge_fixture(tmp_path)
+        if case=='bound_reordered':
+            from dataclasses import replace
+            bridge.panes['%3']=replace(bridge.panes['%3'],pane_index='1')
+            bridge.panes['%4']=replace(bridge.panes['%3'],pane_id='%4',pane_index='0')
+        selected_id='%4' if case in {'secondary_pane','secondary_same_workspace'} else '%3'
+        async def command(args,**kwargs):
+            assert args==['display-message','-p','-t',selected_id,'#{pane_current_path}']
+            return SimpleNamespace(ok=case!='cwd_unavailable',overflow=False,
+                lines=[str(tmp_path/'elsewhere' if case=='secondary_pane' else tmp_path)])
+        bridge.send_command=command
         app=backend.create_app(Boundary(),mobile_input_enabled=True)
         app[backend.BRIDGE_MANAGER_KEY]=SimpleNamespace(states={'FixtureCurie':SimpleNamespace(bridge=bridge)})
         coordinator=app[mobile_access.INPUT_KEY]
@@ -171,14 +182,14 @@ def test_app_uses_bound_transcript_workspace_not_phone_path(tmp_path,monkeypatch
         scope=dict(contract=CONTRACT,owner='fixture@example.invalid',reader_epoch='a'*32,epoch=coordinator.epoch)
         target=(await coordinator.request('targets',dict(scope,name='FixtureCurie')))['targets'][0]
         preview=await coordinator.request('preview',dict(scope,choice=target['choice']))
-        if case=='secondary_pane':
+        if case in {'secondary_pane','secondary_same_workspace'}:
             import mobile_input
             selected=coordinator.choices[target['choice']]
             selected['pane_id']='%4';bridge.panes['%4']=bridge.panes['%3']
             selected['proof']=coordinator.resolver.read(bridge,'%4',time.monotonic()+1)
             preview['target']['revision']=mobile_input.revision(selected['proof'])
         value=await coordinator.request('image',dict(scope,choice=target['choice'],revision=preview['target']['revision'],image=None))
-        assert value['enabled'] is (case=='bound')
+        assert value['enabled'] is (case in {'bound','bound_reordered','secondary_same_workspace'})
         assert not (tmp_path/'.orrery-input-images').exists()
         coordinator.close()
     asyncio.run(scenario())
