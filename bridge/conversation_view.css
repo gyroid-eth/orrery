@@ -36,9 +36,6 @@
 .conversation-speaker-name{flex:0 0 auto;max-width:calc(100% - 35px);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 12px/1.6 var(--mono)}
 .conversation-speaker-name:last-child{max-width:calc(100% - 28px)}
 .conversation-speaker-name:first-child{max-width:100%}
-.conversation-speaker-model{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-dim);font:10px/1.6 var(--mono)}
-.conversation-speaker-model::before{content:"·";margin-right:7px;color:var(--ink-faint)}
-.conversation-speaker-model:only-child::before{content:none}
 .conversation-speaker+.conversation-time{flex:none;white-space:nowrap}
 .conversation-avatar.medal{flex:none;width:20px;height:20px;margin-right:1px;-webkit-user-select:none;user-select:none}
 .conversation-avatar .face{font-size:10px;box-shadow:0 0 0 1px var(--hair)}
