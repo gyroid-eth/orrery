@@ -14,6 +14,7 @@ import stat
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from conversation_mail import received, sent
+from conversation_artifacts import SHOW_FILES, completed_show_files
 
 MAX_SCAN = 4 * 1024 * 1024
 MAX_TEXT = 64 * 1024
@@ -93,6 +94,12 @@ def codex_event(raw: bytes, offset: int) -> dict | None:
         item = json.loads(raw)
     except (ValueError, UnicodeDecodeError, RecursionError):
         return None
+    if isinstance(item, dict) and completed_show_files(item) is not None:
+        # Code mode's wrapper is source text, not proof that a nested call ran.
+        # This completion is its own pinned reference record; expose no result
+        # or raw argument fields, just the ordinary tool row and opaque chips.
+        return dict(id=str(offset), ts=str(item.get('timestamp') or '')[:128],
+                    kind='tool', role='assistant', text='mcp__orrery_mail__show_files')
     if (not isinstance(item, dict) or not isinstance(item.get("type"), str)
             or item["type"] not in {"response_item", "compacted"}):
         return None
@@ -144,6 +151,10 @@ def codex_event(raw: bytes, offset: int) -> dict | None:
         # only the call's name, rather than interpolating arbitrary tool input.
         name = payload.get("name")
         if isinstance(name, str):
+            # Codex rollouts also persist the MCP completion (Paginated or
+            # Legacy). Show this delivery once from that record, even when
+            # the raw native call and its completion arrive on separate polls.
+            if SHOW_FILES.fullmatch(name.split('.')[-1]):return None
             return sent(dict(base, kind="tool", role="assistant", text=name[:160]),name,
                         payload.get('input',payload.get('arguments')))
     return None

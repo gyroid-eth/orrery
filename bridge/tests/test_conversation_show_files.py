@@ -50,6 +50,7 @@ FORMS = [claude, dsh, hermes, codex_function, codex_exec]
 @pytest.mark.parametrize('form', FORMS, ids=lambda form: form.__name__)
 def test_each_recorded_form_names_the_paths(form):
     assert form()['paths'] == PATHS
+    assert form()['shown_paths'] == ([] if form is codex_exec else PATHS)
 
 
 @pytest.mark.parametrize('form', FORMS, ids=lambda form: form.__name__)
@@ -71,7 +72,7 @@ def test_at_most_24_paths():
     assert len(claude(value={'paths': [f'f{n}.md' for n in range(40)]})['paths']) == 24
 
 
-def test_a_shown_file_opens_only_inside_the_working_folder(tmp_path):
+def test_a_shown_text_file_opens_only_inside_the_working_folder(tmp_path):
     (tmp_path / 'report.md').write_text('# Report\n')
     outside = tmp_path.parent / (tmp_path.name + '-outside.md')
     outside.write_text('# Elsewhere\n')

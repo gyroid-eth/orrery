@@ -40,16 +40,16 @@ def test_native_claude_delivery_yields_opaque_image_and_text_chips(tmp_path):
     assert 'caption' not in json.dumps(events) and 'Generated delivery result' not in json.dumps(events)
 
 
-@pytest.mark.parametrize('case',['outside','url','symlink','pixels','bytes'])
+@pytest.mark.parametrize('case',['outside_text','url','symlink','pixels','bytes'])
 def test_send_user_file_keeps_existing_preview_policy(tmp_path,case):
     work=tmp_path/'work';work.mkdir();target=work/'plot.png';Image.new('RGB',(20,12)).save(target);name='plot.png';options={}
-    if case=='outside':name=str(tmp_path/'outside.png');Image.new('RGB',(20,12)).save(name)
+    if case=='outside_text':name=str(tmp_path/'outside.txt');Path(name).write_text('Generated outside text')
     if case=='url':name='https://example.invalid/p.png'
     if case=='symlink':target.unlink();target.symlink_to(tmp_path/'outside.png');Image.new('RGB',(20,12)).save(tmp_path/'outside.png')
     if case=='pixels':options['max_pixels']=10
     if case=='bytes':target.write_bytes(b'\0'*(12*1024*1024+1))
     store,r,event=setup(work,call('SendUserFile',dict(files=[name])),**options)
-    if case in ['outside','url','symlink']:assert not event.get('references')
+    if case in ['outside_text','url','symlink']:assert not event.get('references')
     else:
         with pytest.raises(PreviewUnavailable):preview(store,r,event)
 
