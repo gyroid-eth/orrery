@@ -156,10 +156,22 @@ setup). It does not offer rebinding or infer a transcript path.
 
 ### Recorded edits and file preview
 
-Claude `SendUserFile` creates chips from its explicit `files: string[]`.
-Caption, status and result prose grant no paths. These chips use the same
-workspace/image roots, canonical-path, secret-file, byte and pixel limits as
-other recorded references; delivery does not expand the readable roots.
+Claude `SendUserFile` creates chips from its explicit `files: string[]`;
+ORRERY Mail's `show_files` uses `paths: string[]` across all four harnesses.
+Raster images explicitly named by these calls can be previewed outside the
+working folder and configured roots. Other tools' references still require the
+existing workspace/image roots; text files always require a workspace root.
+Caption, status and result prose grant no paths. Every preview rechecks the
+original bound record and preserves canonical-path, no-symlink, file-type,
+byte and pixel limits; images are reencoded as PNG before delivery.
+Codex supplies a completed MCP record for ORRERY Mail's `show_files` call,
+both natively and through code mode: `item_completed` / `McpToolCall` in
+Paginated history, or a successful `mcp_tool_call_end` in Legacy history.
+Its recorded arguments grant the image reference on that tool row; the raw
+native call is omitted to avoid a duplicate row and chip. Codex histories
+without either completion record no longer show `show_files` chips.
+A call merely written inside a `functions.exec` wrapper keeps the existing
+root restrictions, including dead branches, function definitions and comments.
 
 The header’s **⤢** icon expands Reader within the pane; press it again to restore the side panel. Structured `apply_patch`,
 `view_image`, `read_file`, `write_file`, `Read` and `Edit` arguments produce file

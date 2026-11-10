@@ -85,6 +85,36 @@ class Literal:
 SHOW_FILES=re.compile(r'mcp__orrery[-_]mail__show_files')
 
 
+def completed_show_files(item):
+    """Codex's Paginated and Legacy histories record MCP completions.
+
+    Only the known completion envelope and its structured arguments count.
+    Wrapper source, tool-result prose and other item_completed events do not.
+    """
+    if not isinstance(item,dict) or item.get('type')!='event_msg':return None
+    payload=item.get('payload')
+    if not isinstance(payload,dict):return None
+    if payload.get('type')=='item_completed':
+        call=payload.get('item')
+        if (not isinstance(call,dict) or call.get('type')!='McpToolCall'
+                or call.get('status')!='completed'):return None
+    elif payload.get('type')=='mcp_tool_call_end':
+        # McpToolCallEndEvent.result is Result<CallToolResult,String>.
+        # Only Ok is success; CallToolResult uses the wire key isError, which
+        # may be absent/null/false. Never use text inside its content as paths.
+        result=payload.get('result')
+        if not isinstance(result,dict) or set(result)!={'Ok'}:return None
+        result=result['Ok']
+        if (not isinstance(result,dict) or not isinstance(result.get('content'),list)
+                or 'is_error' in result
+                or result.get('isError') is not None and result['isError'] is not False):return None
+        call=payload.get('invocation')
+    else:return None
+    if (not isinstance(call,dict) or call.get('server')!='orrery-mail'
+            or call.get('tool')!='show_files' or not isinstance(call.get('arguments'),dict)):return None
+    return call['arguments']
+
+
 def static_calls(text,names=('apply_patch','view_image','read_file','write_file','Edit','Read','SendUserFile',
                              'mcp__orrery_mail__show_files')):
     reader=Literal(text)
@@ -111,8 +141,12 @@ def static_calls(text,names=('apply_patch','view_image','read_file','write_file'
 
 
 def extract_artifacts(item: dict) -> dict:
-    result=dict(paths=[],diff='',diff_status='Recorded edit request · outcome unconfirmed')
+    result=dict(paths=[],shown_paths=[],diff='',diff_status='Recorded edit request · outcome unconfirmed')
     if not isinstance(item,dict):return result
+    completed=completed_show_files(item)
+    if completed is not None:
+        item=dict(type='response_item',payload=dict(type='function_call',
+                  name='mcp__orrery_mail__show_files',arguments=completed))
     if item.get('type')=='recorded_fs_result':
         # dsh-tool-fs stores contextual before/after hunks at result time.
         paths=[];diffs=[]
@@ -127,7 +161,7 @@ def extract_artifacts(item: dict) -> dict:
             diffs.extend('-'+x for x in (old or '')[:MAX_DIFF].splitlines())
             diffs.extend('+'+x for x in new[:MAX_DIFF].splitlines())
             if sum(map(len,diffs))>=MAX_DIFF:break
-        return dict(paths=paths,diff='\n'.join(diffs)[:MAX_DIFF],diff_status='Recorded file tool result · contextual hunk')
+        return dict(paths=paths,shown_paths=[],diff='\n'.join(diffs)[:MAX_DIFF],diff_status='Recorded file tool result · contextual hunk')
     if item.get('type')!='response_item':return result
     p=item.get('payload')
     if not isinstance(p,dict) or p.get('type') not in {'function_call','custom_tool_call'}:return result
@@ -140,27 +174,31 @@ def extract_artifacts(item: dict) -> dict:
             try:value=json.loads(value)
             except ValueError:return result
     if isinstance(value,str) and len(value)>MAX_INPUT:return result
-    calls=list(static_calls(value)) if name=='exec' and isinstance(value,str) else [(name,value)]
+    wrapped=name=='exec' and isinstance(value,str)
+    calls=list(static_calls(value)) if wrapped else [(name,value)]
     diffs=[];diff_bytes=0
     def diff(line):
         nonlocal diff_bytes
         if diff_bytes>=MAX_DIFF:return
         line=line[:MAX_DIFF-diff_bytes]
         diffs.append(line);diff_bytes+=len(line)+1
-    def path(value):
+    def path(value,*,shown=False):
         if (isinstance(value,str) and 0<len(value)<4096
-                and not re.search(r'[\x00-\x1f\x7f]|://|^~',value) and len(result['paths'])<MAX_REFS
-                and value not in result['paths']):result['paths'].append(value)
+                and not re.search(r'[\x00-\x1f\x7f]|://|^~',value)):
+            if value not in result['paths'] and len(result['paths'])<MAX_REFS:result['paths'].append(value)
+            # A wrapper's lexical paths keep their old root restrictions.
+            # Only recorded calls, not source text, grant an external image.
+            if shown and value in result['paths'] and value not in result['shown_paths']:result['shown_paths'].append(value)
     for name,value in calls[:MAX_REFS]:
         if SHOW_FILES.fullmatch(name) and isinstance(value,dict):
             # The agent names files to show; the preview's own checks decide.
             paths=value.get('paths')
-            for filename in paths[:MAX_REFS] if isinstance(paths,list) else []:path(filename)
+            for filename in paths[:MAX_REFS] if isinstance(paths,list) else []:path(filename,shown=not wrapped)
         elif name=='SendUserFile' and isinstance(value,dict):
             # Claude's native delivery call records files: string[]. Caption,
             # status and tool-result prose never grant additional references.
             files=value.get('files')
-            for filename in files[:MAX_REFS] if isinstance(files,list) else []:path(filename)
+            for filename in files[:MAX_REFS] if isinstance(files,list) else []:path(filename,shown=not wrapped)
         elif name=='apply_patch' and isinstance(value,str):
             safe=False
             for line in value.splitlines()[:4000]:

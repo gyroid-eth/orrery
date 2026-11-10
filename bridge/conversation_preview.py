@@ -135,7 +135,7 @@ class ReferenceStore:
         if len(self.by_key)>len(self.refs):
             self.by_key={value['key']:ref for ref,value in self.refs.items()}
 
-    def policy(self,value,cwd):
+    def policy(self,value,cwd,*,shown=False):
         if (not isinstance(value,str) or re.search(r'[\x00-\x1f\x7f]|://|^~',value)
                 or '..' in Path(value).parts):raise PreviewUnavailable('preview_path_denied')
         if not os.path.isabs(value):
@@ -149,7 +149,10 @@ class ReferenceStore:
         roots=((*self.workspace_roots,cwd) if cwd else self.workspace_roots)
         is_image=path.suffix.lower() in IMAGE_EXT
         allowed=any(path.is_relative_to(root) for root in roots)
-        if not allowed and is_image:allowed=any(path.is_relative_to(root) for root in self.image_roots)
+        # Only explicit delivery calls grant their particular raster image
+        # outside configured roots. Callers derive this from the pinned record,
+        # never from a client flag, tool result, caption or an adjacent path.
+        if not allowed and is_image:allowed=shown or any(path.is_relative_to(root) for root in self.image_roots)
         if not allowed:raise PreviewUnavailable('preview_path_denied')
         if not is_image and path.suffix.lower() not in TEXT_EXT and path.name not in {'Makefile','Dockerfile','LICENSE'}:
             raise PreviewUnavailable('preview_type_denied')
@@ -176,7 +179,7 @@ class ReferenceStore:
         with self.lock:
             self.prune()
             for index,value in enumerate(projection['paths']):
-                try:path=self.policy(value,cwd)
+                try:path=self.policy(value,cwd,shown=value in projection['shown_paths'])
                 except (PreviewUnavailable,OSError,ValueError):continue
                 key=(binding(row),identity(stream),event['id'],digest,index,str(path))
                 ref=self.by_key.get(key)
@@ -199,15 +202,16 @@ class ReferenceStore:
                 if identity(stream)!=entry['inode']:raise PreviewUnavailable('reference_expired')
                 item,digest=record_at(stream,entry['offset'])
                 if digest!=entry['digest']:raise PreviewUnavailable('reference_expired')
-                paths=extract_artifacts(item)['paths']
+                projection=extract_artifacts(item);paths=projection['paths']
                 if entry['index']>=len(paths):raise PreviewUnavailable('reference_expired')
-                path=self.policy(paths[entry['index']],workspace(stream))
+                value=paths[entry['index']];shown=value in projection['shown_paths']
+                path=self.policy(value,workspace(stream),shown=shown)
                 if str(path)!=entry['key'][-1]:raise PreviewUnavailable('reference_expired')
                 result=self.read_file(path)
                 # Revalidate both the source record and file descriptor identity
                 # before publishing; append-only transcript growth is allowed.
                 if record_at(stream,entry['offset'])[1]!=entry['digest']:raise PreviewUnavailable('reference_expired')
-                if self.policy(paths[entry['index']],workspace(stream))!=path:raise PreviewUnavailable('reference_expired')
+                if self.policy(value,workspace(stream),shown=shown)!=path:raise PreviewUnavailable('reference_expired')
                 stream.assert_identity()
             return path if reveal else result
         except (HistoryUnavailable,OSError,ValueError,KeyError,TypeError) as exc:
