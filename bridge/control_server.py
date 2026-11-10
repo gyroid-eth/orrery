@@ -437,6 +437,8 @@ class TmuxControlBridge:
     def __init__(self, config: ControlConfig) -> None:
         self.config = config
         self._incarnation = uuid.uuid4().hex
+        self._approval_revisions: dict[str, int] = {}
+        self._approval_capture_revisions: dict[str, int] = {}
         self.master_fd: int | None = None
         self.process: subprocess.Popen[bytes] | None = None
         self._lifetime_fd: int | None = None
@@ -936,6 +938,7 @@ class TmuxControlBridge:
             self._record_and_broadcast(pane_id, data)
 
     def _record_and_broadcast(self, pane_id: str, data: str) -> None:
+        self._approval_revisions[pane_id] = self._approval_revisions.get(pane_id, 0) + 1
         if isinstance(self.config.tmux_bin,FreshPaneBoundary):
             if self._closed or pane_id!=self.config.tmux_bin.pane_id:return
             self._fresh_output_bytes+=len(data.encode('utf-8'))
@@ -1518,6 +1521,68 @@ class TmuxControlBridge:
         if len(fields) != 5 or fields[0] not in ("codex", "node") or fields[1:] != ["1", "0", "0", "0"]:
             return
         await self.send_input(pane_id, ("\x1b[5~" if direction == "up" else "\x1b[6~") * count, proof=proof)
+
+    async def _approval_command_locked(self, args, *, limit=65536):
+        """Finite control command with the caller owning the existing write lock."""
+        if not self._write_lock.locked() or self.master_fd is None or self._closed:
+            raise RuntimeError('approval target unavailable')
+        await asyncio.to_thread(admit_command, self.config.tmux_bin, args, session=self.config.session)
+        future = asyncio.get_running_loop().create_future()
+        self._bounded_blocks[future] = limit
+        self._pending_blocks.append(future)
+        await self._write_master((make_tmux_command(args) + '\n').encode('utf-8'))
+        result = await asyncio.wait_for(future, 3)
+        if not result.ok or result.overflow:
+            raise RuntimeError('approval capture unavailable')
+        return result.lines
+
+    async def approval_capture_locked(self, pane_id):
+        """Only the current tmux screen, never saved or recorder history."""
+        fields = '#{session_id}\t#{session_name}\t#{pane_id}\t#{pane_pid}\t#{pane_width}\t#{pane_height}\t#{pane_in_mode}\t#{alternate_on}\t#{pane_current_command}'
+        args = ['display-message', '-p', '-t', pane_id, fields]
+        for _ in range(3):
+            revision = self._approval_revisions.get(pane_id, 0)
+            before = await self._approval_command_locked(args, limit=4096)
+            lines = await self._approval_command_locked(['capture-pane', '-p', '-J', '-t', pane_id])
+            after = await self._approval_command_locked(args, limit=4096)
+            # Output received anywhere in this transaction invalidates its text,
+            # including output while the final metadata command was pending.
+            if before != after or revision != self._approval_revisions.get(pane_id, 0):
+                continue
+            if len(after) != 1:
+                break
+            meta = after[0].split('\t')
+            if len(meta) != 9 or meta[1:3] != [self.config.session, pane_id] or meta[6] != '0':
+                break
+            self._approval_capture_revisions[pane_id] = revision
+            return dict(text='\n'.join(lines).rstrip(), command=meta[-1], identity=meta)
+        raise RuntimeError('approval target changed')
+
+    async def approval_keys_locked(self, pane_id, keys, *, proof=None):
+        from reader_approval import ApprovalNotSent
+        args = ['send-keys', '-t', pane_id, *keys]
+        try:
+            if not self._write_lock.locked() or self.master_fd is None or self._closed:
+                raise RuntimeError('approval target unavailable')
+            if proof is None:
+                await asyncio.to_thread(admit_command, self.config.tmux_bin, args, session=self.config.session)
+            else:
+                if (not isinstance(self.config.tmux_bin, FreshPaneBoundary) or proof.target is not self.config.tmux_bin
+                        or proof.purpose != 'input' or pane_id != self.config.tmux_bin.pane_id):
+                    raise TargetRefused('FRESH_TMUX_TARGET_CHANGED')
+                await proof.check()
+                if proof.closed:
+                    raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
+            if self._approval_capture_revisions.get(pane_id) != self._approval_revisions.get(pane_id, 0):
+                raise RuntimeError('approval screen changed before key write')
+        except Exception as exc:
+            raise ApprovalNotSent(str(exc)) from None
+        future = asyncio.get_running_loop().create_future()
+        self._pending_blocks.append(future)
+        await self._write_master((make_tmux_command(args) + '\n').encode('utf-8'))
+        result = await asyncio.wait_for(future, 3)
+        if not result.ok:
+            raise RuntimeError('approval key acknowledgement unavailable')
 
     async def send_input(
         self, pane_id: str, data: str, *, binary: bool = False, proof=None

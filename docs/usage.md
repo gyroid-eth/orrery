@@ -220,6 +220,14 @@ backend は起動時に live tmux session ごとに recorder connection を一�
 
 上に scroll して過去の出力を読んでいる間は、新しい出力が来ても末尾へ引き戻しません。backend を再起動すると、cockpit は page を自動で読み直します（composer の下書きは残る）。
 
+### Reader で承認する
+
+PC の Reader では、承認待ちになると入力欄のすぐ上に `Approval needed` の帯が出ます。クリックまたは Enter で全文と選択肢を開くと、「今回だけ許可」に focus が移り、もう一度 Enter で送れます。継続的に許可する選択肢は既定になりません。
+
+対応するのは Codex の MCP tool の4択、sandbox 外のコマンドの3択、Claude の作業外 Read の4択です。全文を読めない画面や別の形では、`Open terminal to review` から同じ pane を開いて確認します。押す直前に画面が変わっていればキーを送らず、確認し直す帯に更新します。
+
+`Response sent` はキーが届いたことを表し、処理の成功を保証しません。画面が解消するまでは再送できません。`Outcome unknown` が出た場合は自動再送せず、Terminal で確認してください。
+
 ### スマホのTerminal（別途有効化）
 
 別のTelemetry mobile readerで、短いpane画面を見ながら確認付きの1行を送れます。**Settings → Phone**の**Phone access**と**Send from phone**で、readerとこのadapterを一緒に切り替えられます（[設定](configuration.md#settingsのphone)）。手で設定する場合、backend adapterは既定オフです。[共有設定](configuration.md#スマホterminalを通常の起動で有効にする)の`enable_mobile_terminal`をJSONの`true`にし、現在の起動手順でbackendを明示的に再起動します。稼働中のbackendの再利用だけでは反映されません。reader側にもAPI31・対応する`orrery-mobile-pane-v1` capabilityと別の有効化が必要です。操作に使う自分の端末だけへのアクセス制限を推奨しますが、スマホ・タブレットを複数使えます。agentに任せる段と本人の段は[Telemetryのスマホ手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md)を参照してください。
