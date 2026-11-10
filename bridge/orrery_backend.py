@@ -4597,8 +4597,31 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
             state=manager.states.get(target.key)
         else:state = manager.states.get(name) if manager is not None else None
         return state.bridge if state is not None and not state.bridge._closed else None
+    async def mobile_image_workspace(choice):
+        # Pane indices can move or survive the original agent's pane. Check
+        # this exact pane's current directory against the bound workspace.
+        bridge=choice['bridge']
+        from types import SimpleNamespace
+        from conversation_preview import workspace, root_path
+        request=SimpleNamespace(app=app)
+        try:
+            row=await asyncio.wait_for(conversation_bound_row(request,choice['name']),3)
+            if choice['ref'] and any(row.get(k)!=v for k,v in choice['ref'].items()):return None
+            with open_reader(row) as reader:
+                root=workspace(reader)
+                if root is None:return None
+                # Do not adopt a transcript that changed bindings while opened.
+                current=await asyncio.wait_for(conversation_bound_row(request,choice['name'],asyncio.get_running_loop().time()),3)
+                if conversation_binding(current)!=conversation_binding(row):return None
+                reader.assert_identity()
+                location=await bridge.send_command(['display-message','-p','-t',choice['pane_id'],
+                                                   '#{pane_current_path}'],timeout=3)
+                if (location is None or not location.ok or location.overflow or len(location.lines)!=1
+                        or root_path(location.lines[0])!=root):return None
+                return root
+        except (HistoryUnavailable,PreviewUnavailable,OSError,ValueError,RuntimeError,ClientError,asyncio.TimeoutError):return None
     coordinator = install_routes(app, InputCoordinator(PaneResolver(app[TMUX_BIN_KEY]), mobile_bridge,
-                                                       enabled=mobile_input_enabled))
+                                                       enabled=mobile_input_enabled,image_workspace=mobile_image_workspace))
     import mobile_access
     mobile_access.install(app, coordinator, config_path=CONFIG_PATH)
     app.router.add_get("/telemetry/agents", proxy_dashboard)
