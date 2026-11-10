@@ -154,8 +154,8 @@ async def confirmed_batch(bridge,pane_id,text,*,admission,valid,claim,deadline=N
             return 'unknown'
         return 'refused'
 
-def decode_json(data):
-    if not isinstance(data,bytes) or len(data)>MAX_JSON_BYTES:
+def decode_json(data, *, max_bytes=MAX_JSON_BYTES):
+    if not isinstance(data,bytes) or len(data)>max_bytes:
         raise InputRefused('input_json_invalid')
     def pairs(items):
         value={}
@@ -316,8 +316,9 @@ class PaneResolver:
 
 class InputCoordinator:
     """One reader/owner scoped, bounded, memory-only pane/confirmation authority."""
-    def __init__(self,resolver,get_bridge,*,enabled=False,clock=time.monotonic):
+    def __init__(self,resolver,get_bridge,*,enabled=False,clock=time.monotonic,image_workspace=None):
         self.resolver=resolver;self.get_bridge=get_bridge;self.enabled=enabled;self.clock=clock
+        self.image_workspace=image_workspace
         self.fresh=getattr(resolver,'fresh',False)
         self.epoch=secrets.token_hex(16);self.choices={};self.intents={};self.busy=set();self.rates={};self.previews=set()
 
@@ -375,7 +376,8 @@ class InputCoordinator:
 
     async def request(self,operation,payload, *, expanded_preview=False):
         fields={'capability':set(),'targets':{'name'},'preview':{'choice'},'prepare':{'choice','revision','text'},
-                'commit':{'intent','confirmation'},'cancel':{'intent'},'status':{'intent'}}
+                'commit':{'intent','confirmation'},'cancel':{'intent'},'status':{'intent'},
+                'image':{'choice','revision','image'}}
         if self.fresh and operation=='targets' and isinstance(payload,dict) and ('mail_instance_id' in payload or 'mail_agent_id' in payload):
             fields['targets']|={'mail_instance_id','mail_agent_id'}
             if not _matches(EPOCH,payload.get('mail_instance_id')) or not _integer(payload.get('mail_agent_id')):
@@ -390,7 +392,24 @@ class InputCoordinator:
         if operation=='capability':return self._reply(api=34 if self.fresh else 31,enabled=self.enabled,
             supported='fresh-managed-pane' if self.fresh else 'legacy-managed-pane',ack='tmux-command-accepted')
         if payload['epoch']!=self.epoch:raise InputRefused('input_epoch_changed')
-        if operation in {'targets','preview','prepare'} and not self.enabled:raise InputRefused('input_disabled')
+        if operation in {'targets','preview','prepare','image'} and not self.enabled:raise InputRefused('input_disabled')
+        if operation=='image':
+            import mobile_image
+            row=await self._choice(payload['choice'],scope)
+            proof=await self._read(row,time.monotonic()+3)
+            if (row['proof'] is None or proof!=row['proof'] or payload['revision']!=revision(proof)):
+                raise InputRefused('input_target_changed')
+            target=dict(row['target'],revision=revision(proof))
+            root=(await self.image_workspace(row)) if mobile_image.available() and self.image_workspace else None
+            # Resolve the same pane again after the workspace binding read.
+            if (not self.enabled or self.choices.get(payload['choice']) is not row or self.clock()>=row['expires']
+                    or await self._bridge(row) is not row['bridge'] or await self._read(row,time.monotonic()+3)!=proof):
+                raise InputRefused('input_target_changed')
+            if payload['image'] is None:return self._reply(target=target,enabled=root is not None)
+            if root is None:raise InputRefused('image_workspace_unavailable')
+            try:path=mobile_image.save_image(root,payload['image'])
+            except (ValueError,OSError) as error:raise InputRefused(str(error) if isinstance(error,ValueError) else 'image_save_failed') from None
+            return self._reply(target=target,enabled=True,path=path)
         if operation=='targets':
             name=payload['name']
             if not _matches(NAME,name):raise InputRefused('input_target_invalid')
@@ -519,7 +538,8 @@ class InputCoordinator:
 def install_routes(app,coordinator):
     """Install only the finite loopback protocol, with its own request boundary."""
     from aiohttp import web
-    operations={'capability','targets','preview','prepare','commit','cancel','status'}
+    operations={'capability','targets','preview','prepare','commit','cancel','status','image'}
+    from mobile_image import MAX_IMAGE_JSON
     headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
              'Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"}
     def reply(value,status=200):
@@ -540,14 +560,16 @@ def install_routes(app,coordinator):
                 'Upgrade','Expect','X-HTTP-Method-Override','X-Method-Override','X-HTTP-Method',
                 'Forwarded','X-Forwarded-Host','X-Forwarded-Proto','Tailscale-User-Login')): return False
         lengths=request.headers.getall('Content-Length',[])
-        return (len(lengths)==1 and re.fullmatch(r'[0-9]{1,5}',lengths[0]) is not None and 0<int(lengths[0])<=MAX_JSON_BYTES
+        limit=MAX_IMAGE_JSON if operation=='image' else MAX_JSON_BYTES
+        return (len(lengths)==1 and re.fullmatch(r'[0-9]{1,8}',lengths[0]) is not None and 0<int(lengths[0])<=limit
                 and request.headers.get('Sec-Fetch-Site','').lower() in {'','none','same-origin'})
     async def handler(request):
         operation=request.match_info['operation']
         if not admitted(request,operation): return reply({'error':'input_request_denied'},403)
         try:
-            data=await asyncio.wait_for(request.content.readexactly(int(request.headers['Content-Length'])),5)
-            payload=decode_json(data)
+            limit=MAX_IMAGE_JSON if operation=='image' else MAX_JSON_BYTES
+            data=await asyncio.wait_for(request.content.readexactly(int(request.headers['Content-Length'])),20 if operation=='image' else 5)
+            payload=decode_json(data,max_bytes=limit)
         except (Exception,asyncio.CancelledError):
             return reply({'error':'input_request_invalid'},400)
         limits=request.headers.getall('X-ORRERY-Mobile-Preview',[])
@@ -556,8 +578,9 @@ def install_routes(app,coordinator):
         try:
             options={'expanded_preview':True} if limits else {}
             return reply(await coordinator.request(operation,payload,**options))
-        except InputRefused:
-            return reply({'error':'input_unavailable'},403)
+        except InputRefused as error:
+            reason=str(error) if operation=='image' and str(error).startswith('image_') else 'input_unavailable'
+            return reply({'error':reason},403)
         except Exception:
             return reply({'error':'input_unavailable'},503)
     app.router.add_route('*','/_mobile/terminal/{operation}',handler)

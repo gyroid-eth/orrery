@@ -4597,8 +4597,28 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
             state=manager.states.get(target.key)
         else:state = manager.states.get(name) if manager is not None else None
         return state.bridge if state is not None and not state.bridge._closed else None
+    async def mobile_image_workspace(choice):
+        # Only the agent's original pane owns its bound conversation workspace.
+        bridge=choice['bridge']
+        primary=min(bridge.panes.values(),key=lambda pane:(pane.window_index,pane.pane_index),default=None)
+        if primary is None or choice['pane_id']!=primary.pane_id:return None
+        from types import SimpleNamespace
+        from conversation_preview import workspace
+        request=SimpleNamespace(app=app)
+        try:
+            row=await asyncio.wait_for(conversation_bound_row(request,choice['name']),3)
+            if choice['ref'] and any(row.get(k)!=v for k,v in choice['ref'].items()):return None
+            with open_reader(row) as reader:
+                root=workspace(reader)
+                if root is None:return None
+                # Do not adopt a transcript that changed bindings while opened.
+                current=await asyncio.wait_for(conversation_bound_row(request,choice['name'],asyncio.get_running_loop().time()),3)
+                if conversation_binding(current)!=conversation_binding(row):return None
+                reader.assert_identity()
+                return root
+        except (HistoryUnavailable,PreviewUnavailable,OSError,ValueError,ClientError,asyncio.TimeoutError):return None
     coordinator = install_routes(app, InputCoordinator(PaneResolver(app[TMUX_BIN_KEY]), mobile_bridge,
-                                                       enabled=mobile_input_enabled))
+                                                       enabled=mobile_input_enabled,image_workspace=mobile_image_workspace))
     import mobile_access
     mobile_access.install(app, coordinator, config_path=CONFIG_PATH)
     app.router.add_get("/telemetry/agents", proxy_dashboard)
