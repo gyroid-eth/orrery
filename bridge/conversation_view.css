@@ -191,7 +191,12 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 .conversation-expand[hidden]{display:none}
 /* Recorded Mail is a collapsible source of its own, never a human prompt. */
 .conversation-mail-event{padding:12px 0}
-.conversation-mail{color:var(--ink)}
+.conversation-mail{color:var(--ink);position:relative}
+.conversation-mail-thread{position:absolute;bottom:2px;width:1px;background:color-mix(in srgb,var(--ink-dim) 38%,transparent);pointer-events:none;user-select:none;-webkit-user-select:none}
+.conversation-mail[open].is-threaded .conversation-mail-subject-row{margin-left:var(--mail-thread-inset)}
+.conversation-mail[open].is-threaded .conversation-mail-content{padding-left:var(--mail-thread-inset)}
+.conversation-mail[open].is-threaded .conversation-mail-route:not(.is-compact){padding-left:23px}
+.conversation-mail[open].is-threaded .conversation-mail-route:not(.is-compact) .conversation-mail-sender{margin-left:-23px}
 .conversation-mail+.conversation-mail{margin-top:8px}
 .conversation-mail-summary{cursor:pointer;padding:2px 0 7px;list-style:none}
 .conversation-mail-summary::-webkit-details-marker{display:none}
