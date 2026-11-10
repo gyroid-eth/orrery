@@ -278,6 +278,10 @@ def test_fresh_output_gap_uses_actual_caller_to_stop_only_affected_session_and_r
         match = re.search(r'function '+name+r'\([^\n]*\)\{.*?\n\}', html, re.DOTALL)
         assert match, name
         functions.append(match.group(0))
+    # The extracted WS functions share this optional module with the page.
+    declaration = re.search(r'^let readerApproval=null;$', html, re.MULTILINE)
+    assert declaration
+    functions.append(declaration.group(0))
     script = r'''
 const groups=new Map(),sessionGroups=groups,panes=new Map(),sent=[],toasts=[],links=[];
 const attachedSessions=new Set(),requestedSessions=new Set(),availableSessions=new Map([['Alpha',{}],['Beta',{}]]);
@@ -314,9 +318,14 @@ handle({type:'error',session:'Beta',message:'legacy error'});
 if(!attachedSessions.has('Beta'))throw Error('legacy error changed');
 // If the server cannot send the error, it closes that WebSocket. Exercise
 // the real close callback: the surviving UI must not continue showing live.
+handle({type:'approval',state:'ready'}); // Reader has not been initialized yet.
 connect();events.close();
 if(attachedSessions.size||requestedSessions.size||groups.get('Alpha').state.textContent!=='closed'||links.at(-1)[1]!=='disconnected')throw Error('transport failure remained live');
-console.log(JSON.stringify({gapVisible:true,reattach:true,oldErrorIgnored:true,otherSessionPreserved:true,transportFailureClosed:true}));
+const approvalEvents=[];
+readerApproval={receive:msg=>approvalEvents.push(msg.state),disconnected:()=>approvalEvents.push('disconnected')};
+handle({type:'approval',state:'ready'});connect();events.close();
+if(JSON.stringify(approvalEvents)!==JSON.stringify(['ready','disconnected']))throw Error('approval lifecycle not forwarded');
+console.log(JSON.stringify({gapVisible:true,reattach:true,oldErrorIgnored:true,otherSessionPreserved:true,transportFailureClosed:true,approvalLifecycle:true}));
 '''
     done = subprocess.run(['node', '-e', '\n'.join(functions)+'\n'+script],
                           capture_output=True, text=True, check=False)

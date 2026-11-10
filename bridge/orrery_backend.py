@@ -1426,6 +1426,7 @@ class SessionBridgeManager:
         peer: WebSocketPeer,
         attached: set[str],
         payload: dict[str, Any],
+        *, approval_request=None,
     ) -> None:
         message_type = payload.get("type")
 
@@ -1461,7 +1462,7 @@ class SessionBridgeManager:
                 await state.bridge.refresh_panes(send_captures=True)
             return
 
-        if message_type not in {"input", "codex-page", "resize", "release", "split", "close"}:
+        if message_type not in {"input", "codex-page", "resize", "release", "split", "close", "approval-inspect", "approval-answer"}:
             await send_error(peer, None, "unsupported message type")
             return
 
@@ -1472,10 +1473,40 @@ class SessionBridgeManager:
 
         state = self._find_attached_pane(attached, pane_id)
         if state is None:
+            if message_type in {'approval-inspect', 'approval-answer'}:
+                await peer.send_json(dict(type='approval', paneId=pane_id, session=payload.get('session'),
+                    requestId=payload.get('requestId'), state='unavailable', message='Pane unavailable'))
+                return
             await send_error(peer, None, f"pane is not attached: {pane_id}")
             return
 
         session = state.bridge.config.session
+        if message_type in {'approval-inspect', 'approval-answer'}:
+            from reader_approval import ApprovalCoordinator
+            bridge = state.bridge
+            proof = None
+            if isinstance(bridge.config.tmux_bin, FreshPaneBoundary):
+                target = bridge.config.tmux_bin
+                proofs = bridge._fresh_peer_proofs.get(peer)
+                if proofs is None or any(k in payload and payload[k] != v for k, v in target.ref.items()):
+                    await peer.send_json(dict(type='approval', paneId=pane_id, session=bridge.config.session,
+                        requestId=payload.get('requestId'), state='unavailable', message='Pane unavailable'))
+                    return
+                proof = proofs[0]
+                pane_id = target.pane_id
+            coordinator = getattr(bridge, '_approval_coordinator', None)
+            if coordinator is None:
+                async def harness(target_pane):
+                    return await approval_harness(approval_request, bridge, target_pane)
+                coordinator = bridge._approval_coordinator = ApprovalCoordinator(bridge, harness_resolver=harness)
+            if message_type == 'approval-inspect':
+                result = await coordinator.inspect(pane_id, peer)
+            else:
+                result = await coordinator.answer(pane_id, peer, payload.get('token'), payload.get('choice'),
+                                                  payload.get('operation'), proof=proof)
+            await bridge.send_json(peer, dict(type='approval', paneId=pane_id,
+                requestId=payload.get('requestId'), **result))
+            return
         if isinstance(state.bridge.config.tmux_bin,FreshPaneBoundary):
             target=state.bridge.config.tmux_bin
             if any(k in payload and payload[k]!=v for k,v in target.ref.items()):raise TargetRefused('FRESH_TMUX_TARGET_CHANGED')
@@ -1938,6 +1969,39 @@ async def conversation_binding_route(request: web.Request, name: str):
             or not isinstance(data.get('agent'),dict) or data['agent'].get('name')!=name):
         return _BINDING_ROUTE_UNAVAILABLE
     return data['agent']
+
+
+async def approval_harness(request, bridge, pane):
+    """Resolve the named agent on the server; browser claims never authorize keys."""
+    if request is None or not bridge.panes:
+        return None
+    # A roster row describes the agent's original pane, not arbitrary splits
+    # running under the same session name.
+    primary = min(bridge.panes.values(), key=lambda p: (p.window_index, p.pane_index))
+    if pane != primary.pane_id:
+        return None
+    name = bridge.config.session
+    try:
+        async with asyncio.timeout(3):
+            payload = await conversation_live_agents(request)
+        if not isinstance(payload, dict) or not isinstance(payload.get('agents'), list):
+            return None
+        rows = [r for r in payload.get('agents', []) if isinstance(r, dict) and r.get('name') == name]
+        row = rows[0] if len(rows) == 1 else None
+        if not isinstance(row, dict) or row.get('name') != name or row.get('running') is not True:
+            return None
+        if isinstance(bridge.config.tmux_bin, FreshPaneBoundary):
+            if any(row.get(k) != v for k, v in bridge.config.tmux_bin.ref.items()):
+                return None
+        program = row.get('program')
+        provider = row.get('provider')
+        if program in ('codex', 'codex-cli') and provider in ('openai', 'codex'):
+            return 'codex'
+        if program in ('claude', 'claude-code') and provider in ('anthropic', 'claude'):
+            return 'claude'
+    except (ClientError, asyncio.TimeoutError, ValueError, TypeError, KeyError):
+        pass
+    return None
 
 
 async def conversation_bound_row(request: web.Request, name: str, not_before: float | None = None) -> dict:
@@ -4371,7 +4435,10 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
                     await send_error(peer, None, "message must be a JSON object")
                     continue
                 try:
-                    await manager.handle_message(peer, attached, payload)
+                    if payload.get('type') in {'approval-inspect', 'approval-answer'}:
+                        await manager.handle_message(peer, attached, payload, approval_request=request)
+                    else:
+                        await manager.handle_message(peer, attached, payload)
                 except Exception as exc:
                     session = payload.get("session")
                     await send_error(
@@ -4490,6 +4557,7 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "cockpit_full_tour.js", "telemetry_light.js",
     "conversation_source.js", "conversation_view.js", "conversation_view.css", "conversation_preview.js",
     "conversation_mail.js", "conversation_speaker.js", "conversation_terminal.js", "conversation_markdown.js",
+    "reader_approval.js", "reader_approval.css",
     "vendor/xterm-5.5.0/xterm.js", "vendor/xterm-5.5.0/xterm.css",
     "vendor/addon-fit-0.10.0/addon-fit.js",
     "vendor/addon-web-links-0.11.0/addon-web-links.js",

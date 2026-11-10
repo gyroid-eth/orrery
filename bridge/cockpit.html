@@ -4620,9 +4620,9 @@
       }
     }
   },
-  "inventory_digest": "d396cdc7537e9a5d84c03b7a5822d8dd0f3927645210fe036336f48cdd2d7e84",
+  "inventory_digest": "f2e5e94d349747ef94789e8ed35dbb1e987f2b5ab7bb0799dad70f0435a1fd79",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "a853a46cbff8afbc9fe2e5b9b81eb0a3ae7f4d9e53f4bf7f835525eaddf221c5",
+  "source_digest": "2562b6d061f13346be44db6b8d6ffa51ded9767882cc43d2b876cf06039dc67f",
   "surface": "cockpit",
   "version": 1
 }
@@ -6474,6 +6474,7 @@ applyThemeAxisState({broadcast:false});
 
 function setLink(state,label){linkDot.className='dot '+state;linkText.textContent=label;
   const stat=document.getElementById('linkStat');if(stat)stat.hidden=(state==='open');}
+let readerApproval=null;
 function send(payload){
   if(!socket||socket.readyState!==WebSocket.OPEN)return false;
   socket.send(JSON.stringify(payload));return true;
@@ -7191,7 +7192,7 @@ function bottomJumpShortcutBlocked(event){
   return targets.some(target=>{
     if(!target.closest||target.closest('.xterm'))return false;
     return Boolean(target.closest(
-      '.promptbar,.overlay,.settings-popover,.conversation-panel,.conversation-notice-menu,.split-cell-head,.scr-head,[contenteditable="true"],input,textarea,select',
+      '.promptbar,.overlay,.settings-popover,.reader-approval,.conversation-panel,.conversation-notice-menu,.split-cell-head,.scr-head,[contenteditable="true"],input,textarea,select',
     ));
   });
 }
@@ -7200,7 +7201,7 @@ function editableElementOwnsFocus(){
   if(!focused||focused===document.body||!focused.matches)return false;
   // xterm owns a hidden textarea. It is terminal input, not a browser form.
   if(focused.closest('.xterm'))return false;
-  if(focused.closest('.conversation-panel,.conversation-notice-menu,.settings-popover,.split-cell-head,.scr-head'))return true;
+  if(focused.closest('.reader-approval,.conversation-panel,.conversation-notice-menu,.settings-popover,.split-cell-head,.scr-head'))return true;
   return focused.matches('input,textarea,select,[contenteditable="true"]')||
     focused.isContentEditable;
 }
@@ -7753,6 +7754,7 @@ function createPane(session,meta){
   });
   group.paneTabs.appendChild(tab);
   const paneRec={session,meta:normalized,term,fit,host,tab,bottomJump,_xtermAtBottom:true};
+  term.onWriteParsed(()=>queueMicrotask(()=>readerApproval?.observe(paneRec,true)));
   panes.set(meta.paneId,paneRec);
   terminalHostResizeObserver.observe(host);
   setCodexWheelModes(paneRec,normalized);installCodexWheel(paneRec);
@@ -8768,6 +8770,7 @@ function handle(msg){
   if((manualDetached.has(msg.session)||paneWindows.has(msg.session))&&
      (msg.type==='reset'||msg.type==='add'||msg.type==='update'))return;
   switch(msg.type){
+    case 'approval':readerApproval?.receive(msg);break;
     case "sessions":
       handleSessions(msg.sessions);
       // connected + lazy attach: the stage starts empty by design
@@ -8831,6 +8834,7 @@ function connect(){
   });
   nextSocket.addEventListener('close',()=>{
     if(socket!==nextSocket)return;
+    readerApproval?.disconnected();
     attachedSessions.clear();requestedSessions.clear();
     sessionGroups.forEach((_,session)=>setGroupState(session,'closed'));
     refreshHeaderStats();setLink('closed','disconnected');scheduleReconnect();
@@ -11294,6 +11298,12 @@ const conversationView=(()=>{
       await asset('script','src','conversation_terminal.js');
       await asset('script','src','conversation_markdown.js');
       await asset('script','src','conversation_view.js');
+      await asset('link','href','reader_approval.css');
+      await asset('script','src','reader_approval.js');
+      readerApproval=OrreryReaderApproval.mount({
+        screen:document.querySelector('.screen'),getPane:()=>panes.get(activeId),
+        getPanes:()=>panes.values(),send:payload=>send(payload),openTerminal:()=>conversationView.close(),
+      });
       // A user operation (conversation_view.js userRequest: the named POSTs,
       // the clipboard files, a file preview; from the NETWORK frame the
       // dashboard's named actions) is never kept waiting behind History's held polls: no poll is

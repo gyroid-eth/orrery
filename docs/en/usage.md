@@ -220,6 +220,14 @@ At startup, the backend connects one recorder connection for each live tmux sess
 
 While you are scrolled up reading past output, new output does not pull you back to the end. When the backend restarts, the cockpit reloads the page automatically (the composer draft is kept).
 
+### Approvals in Reader
+
+In the PC Reader, an `Approval needed` band appears directly above the composer. Click it or press Enter to open the complete request and choices. Focus moves to the choice that allows only this request; press Enter again to send it. Persistent permissions are never the default.
+
+Supported menus are the four-choice Codex MCP tool prompt, the three-choice Codex command outside the sandbox, and the four-choice Claude Read outside the working directories. Incomplete or other menus offer `Open terminal to review` for the same pane. If the screen changes before sending, no keys are sent and the band asks you to review again.
+
+`Response sent` means the keys were delivered, not that the requested operation succeeded. The response cannot be repeated while the prompt remains. An `Outcome unknown` is never retried automatically; check Terminal.
+
 ### Optional Terminal on your phone
 
 The separate Telemetry mobile reader can show a short pane preview above a confirmed one-line input. **Settings → Phone** (**Phone access** and **Send from phone**) switches the reader and this adapter together ([settings](configuration.md#settings--phone)). Set by hand, the backend adapter is off by default. Set `enable_mobile_terminal` to JSON `true` in the [shared settings](configuration.md#enable-mobile-terminal-through-normal-startup), then explicitly restart the backend through its current launch procedure. Reusing an already running backend does not apply the setting. The reader also needs API 31, the matching `orrery-mobile-pane-v1` capability and its own opt-in. Restricting access to your operating devices is recommended; multiple personal phones and tablets are fine. The [Telemetry phone guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md) separates agent and human steps.
