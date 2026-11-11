@@ -153,7 +153,10 @@
       if(!host.contains(node))return;
       const text=node.dataset.pathCandidate,label=node.dataset.pathLabel;
       if(!result||typeof result.shown!=='string'||!text.startsWith(result.shown)||!result.path?.startsWith('/')||
-          /[\x00-\x1f\x7f]/.test(result.path)||label&&result.shown!==text){node.replaceWith(document.createTextNode(node.textContent));return;}
+          /[\x00-\x1f\x7f]/.test(result.path)||label&&result.shown!==text){
+        // Keep text-node identity: demo mode retains the original copy text there.
+        node.replaceWith(...node.childNodes);return;
+      }
       const link=el('a');link.href='#';link.dataset.localPath=result.path;
       link.title='Preview image or reveal in file manager';link.textContent=label?node.textContent:result.shown;
       const remainder=document.createDocumentFragment();

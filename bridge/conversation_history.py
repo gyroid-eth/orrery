@@ -20,6 +20,7 @@ MAX_SCAN = 4 * 1024 * 1024
 MAX_TEXT = 64 * 1024
 PAGE_SIZE = 80
 CURSOR = re.compile(r"([a-f0-9]{24}):([0-9]{1,20})\Z")
+CODEX_CONTEXT_KINDS = frozenset({'agents_md.instructions', 'environments.environment_context'})
 
 
 class HistoryUnavailable(ValueError):
@@ -89,6 +90,36 @@ def recorded_model(value):
     return None
 
 
+def codex_context_text(text):
+    """Older rollouts lack source metadata: recognize complete stock wrappers."""
+    body = text.strip()
+    for tag in ('environment_context', 'user_instructions'):
+        if body.startswith('<' + tag + '>') and body.endswith('</' + tag + '>'):
+            return True
+    header, _, rest = body.partition('\n')
+    return (header == '# AGENTS.md instructions' or header.startswith('# AGENTS.md instructions for ')) and (
+        rest.lstrip().startswith('<INSTRUCTIONS>') and body.endswith('</INSTRUCTIONS>'))
+
+
+def codex_user_content(content, payload):
+    """Native per-block sources win over tag-looking human input."""
+    blocks = [dict(type='text', text=content)] if isinstance(content, str) else content
+    if not isinstance(blocks, list):
+        return content, False
+    metadata = payload.get('internal_chat_message_metadata_passthrough')
+    kinds = metadata.get('content_item_kinds') if isinstance(metadata, dict) else None
+    marked = isinstance(kinds, list) and len(kinds) == len(blocks) and all(isinstance(k, str) for k in kinds)
+    human, context = [], []
+    for index, block in enumerate(blocks):
+        injected = kinds[index] in CODEX_CONTEXT_KINDS if marked else (kinds is None and
+            isinstance(block, dict) and block.get('type') in {'text', 'input_text', 'output_text'}
+            and isinstance(block.get('text'), str) and codex_context_text(block['text']))
+        (context if injected else human).append(block)
+    # A mixed native message still has one record/cursor. Keep its human
+    # blocks without attributing the injected instructions to that speaker.
+    return (human, False) if human else (context, bool(context))
+
+
 def codex_event(raw: bytes, offset: int) -> dict | None:
     try:
         item = json.loads(raw)
@@ -125,6 +156,9 @@ def codex_event(raw: bytes, offset: int) -> dict | None:
         if payload.get("role") == "assistant" and payload.get("phase") == "analysis":
             return None
         content = payload.get("content")
+        context = False
+        if role == 'user':
+            content, context = codex_user_content(content, payload)
         if isinstance(content, str):
             text = content
         elif isinstance(content, list):
@@ -140,6 +174,9 @@ def codex_event(raw: bytes, offset: int) -> dict | None:
             return None
         if not text.strip():
             return None
+        if context:
+            return dict(base, kind='system', role='system', text='System notice',
+                        system_detail=text[:MAX_TEXT], truncated=len(text)>MAX_TEXT)
         event = received(dict(base, kind="text", role=payload["role"], text=text[:MAX_TEXT],
                     truncated=len(text) > MAX_TEXT))
         model = recorded_model(payload.get("model"))
