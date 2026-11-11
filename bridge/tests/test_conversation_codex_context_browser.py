@@ -6,6 +6,7 @@ import pytest
 from test_conversation_codex_context import ENVIRONMENT, INSTRUCTIONS, message
 from test_conversation_providers import line, page, row
 from test_conversation_review_regressions import cockpit, stable_roster
+from test_conversation_harness_context import CONTEXT, dsh_records, hermes_records
 
 
 @pytest.mark.parametrize('cockpit', [False, True], indirect=True, ids=['desktop', 'phone-width'])
@@ -31,6 +32,30 @@ def test_codex_injected_context_folds_but_literal_human_input_stays_visible(cock
     wait("!document.querySelector('.conversation-system-detail').hidden")
     assert js("document.querySelector('.conversation-system-detail').textContent") == INSTRUCTIONS + '\n' + ENVIRONMENT
     assert js("document.querySelector('.conversation-system-toggle').getAttribute('aria-expanded')") == 'true'
+    assert js("packets.filter(p=>p.type==='input')") == []
+
+
+@pytest.mark.parametrize('program', ['dsh', 'hermes'])
+@pytest.mark.parametrize('cockpit', [False, True], indirect=True, ids=['desktop', 'phone-width'])
+def test_other_harness_context_and_mail_do_not_impersonate_the_human(cockpit, tmp_path, program):
+    path = tmp_path / ('state.db' if program == 'hermes' else 'session.v4.jsonl')
+    (hermes_records if program == 'hermes' else dsh_records)(path)
+    events = page(row(path, program))['events']
+    js, wait, client, _, enable = cockpit
+    stable_roster(js)
+    enable(count=1)
+    js('conversationView.close();currentAgents[0].program=' + json.dumps(program) +
+       ';OrreryConversationSource.Source.prototype.read=async()=>({events:' + json.dumps(events) +
+       ',provider:' + json.dumps(program) + ',after:"end"});conversationView.open()')
+    wait('document.querySelectorAll(".conversation-event").length===' + str(len(events)))
+    assert js("document.querySelector('.conversation-events').textContent.includes('HIDDEN')") is False
+    assert js("document.querySelector('.conversation-text').textContent") == CONTEXT
+    assert js("document.querySelectorAll('.conversation-mail').length") == 1
+    assert js("document.querySelectorAll('.conversation-system-toggle').length") == (1 if program == 'hermes' else 0)
+    if program == 'hermes':
+        assert js("document.querySelector('.conversation-system-detail').hidden")
+        js("document.querySelector('.conversation-system-toggle').click()")
+        assert js("document.querySelector('.conversation-system-detail').textContent") == 'Generated native notification.'
     assert js("packets.filter(p=>p.type==='input')") == []
 
 

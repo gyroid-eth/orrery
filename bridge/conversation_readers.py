@@ -33,6 +33,8 @@ NATIVE_CURSOR = re.compile(r'([a-f0-9]{24}):(\d{1,20}):(\d{1,10}):(\d{1,3})\Z')
 MAGIC = b'\x28\xb5\x2f\xfd'
 CLAUDE_COMPACTION_PREFIX = ('This session is being continued from a previous conversation that ran out of context. '
                             'The summary below covers')
+HERMES_SYSTEM_KINDS = frozenset({'model_switch', 'personality_switch', 'async_delegation_complete',
+                               'process_complete', 'auto_continue'})
 
 
 def provider(row):
@@ -171,7 +173,11 @@ def normalize(item,p,sid):
             add(0,tool_event('Tool result',ts,result=True,failed=bool(data['message'].get('isError'))))
     elif p=='hermes':
         ts=epoch(item.get('timestamp'));role=item.get('role')
-        if role in {'user','assistant'}:add(0,text_event(item.get('content'),role,ts))
+        if role=='user' and item.get('display_kind') in HERMES_SYSTEM_KINDS and isinstance(item.get('content'),str):
+            text=item['content']
+            add(0,dict(kind='system',role='system',text='System notice',ts=ts,
+                       system_detail=text[:MAX_TEXT],truncated=len(text)>MAX_TEXT))
+        elif role in {'user','assistant'}:add(0,text_event(item.get('content'),role,ts))
         if role=='assistant':
             calls=item.get('tool_calls')
             if isinstance(calls,str):
@@ -550,7 +556,7 @@ class Reader:
         """
         self.db.row_factory=sqlite3.Row
         rows=self.db.execute('''SELECT id,role,substr(content,1,65537) AS content,
-            substr(tool_calls,1,1048576) AS tool_calls,tool_call_id,tool_name,timestamp,display_metadata
+            substr(tool_calls,1,1048576) AS tool_calls,tool_call_id,tool_name,timestamp,display_kind,display_metadata
             FROM messages WHERE session_id=? AND active=1 AND role IN ('user','assistant','tool')
             AND COALESCE(display_kind,'')!='hidden' AND COALESCE(_compressed_summary,0)=0
             AND CASE WHEN display_metadata IS NULL THEN 1 WHEN json_valid(display_metadata)
@@ -622,7 +628,7 @@ class Reader:
         if self.provider=='hermes':
             self.db.row_factory=sqlite3.Row
             found=self.db.execute('''SELECT id,role,substr(content,1,65537) AS content,
-                substr(tool_calls,1,1048576) AS tool_calls,tool_call_id,tool_name,timestamp,display_metadata
+                substr(tool_calls,1,1048576) AS tool_calls,tool_call_id,tool_name,timestamp,display_kind,display_metadata
                 FROM messages WHERE session_id=? AND id=? AND active=1 AND role IN ('user','assistant','tool')
                 AND COALESCE(display_kind,'')!='hidden' AND COALESCE(_compressed_summary,0)=0
                 AND CASE WHEN display_metadata IS NULL THEN 1 WHEN json_valid(display_metadata)
