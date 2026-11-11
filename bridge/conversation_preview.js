@@ -54,7 +54,8 @@
       const keep=new Set();
       for(const row of rows){
         const event=events.get(row.dataset.eventId);
-        if(event?.kind!=='tool'||!/^mcp__orrery[-_]mail__show_files$/.test(event.text))continue;
+        const input=event?.kind==='text'&&event.role==='user'&&event.input_images===true;
+        if(!input&&(event?.kind!=='tool'||!/^mcp__orrery[-_]mail__show_files$/.test(event.text)))continue;
         const refs=(Array.isArray(event.references)?event.references:[]).slice(0,24).filter(ref=>
           ref?.kind==='image'&&/^[A-Za-z0-9_-]{32}$/.test(ref.id)&&typeof ref.label==='string');
         if(!refs.length)continue;
@@ -88,7 +89,7 @@
       const head=create('div','conversation-preview-head'),title=create('h3','conversation-preview-title',ref.label);
       const closeButton=button('conversation-preview-close','× Preview',()=>{close();host.closest('.conversation-panel').querySelector('.conversation-scroll')?.focus();});
       head.append(title,closeButton);
-      const notice=create('div','conversation-preview-notice',ref.path?'':'Current file · may differ from the recorded edit');
+      const notice=create('div','conversation-preview-notice',ref.path?'':ref.input_image?'Recorded input image':'Current file · may differ from the recorded edit');
       const body=create('div','conversation-preview-content','Loading preview…');body.tabIndex=0;
       host.replaceChildren(head,notice,body);closeButton.focus();
       try{
@@ -128,7 +129,7 @@
           catch(error){if(token===generation)notice.textContent=error.message;}
           finally{reveal.disabled=false;}
         });
-        head.insertBefore(reveal,closeButton);
+        if(!ref.input_image)head.insertBefore(reveal,closeButton);
       }catch(error){if(token===generation&&error.name!=='AbortError')body.textContent=error.message;}
       finally{if(token===generation)request=null;}
     }

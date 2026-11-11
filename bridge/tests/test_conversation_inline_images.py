@@ -109,3 +109,17 @@ def test_background_retries_aborted_thumbnail_and_late_close_cannot_paint(cockpi
     js('conversationView.close();inlinePending.shift()(inlineData)')
     wait("document.querySelectorAll('.conversation-inline-images').length===0")
     assert js('inlineUrls.length') == 0
+
+
+def test_recorded_user_image_shares_inline_and_expanded_preview(cockpit):
+    event=message('input','この画像を確認してください。')
+    event.update(role='user',input_images=True,references=[dict(id='c'*32,label='入力画像.png',kind='image',input_image=True)])
+    js,wait,_=prepare(cockpit,[event,message('reply','画像を確認します。')])
+    wait("document.querySelector('.conversation-inline-thumbnail')?.naturalWidth>0")
+    assert js("document.querySelector('.conversation-inline-images').previousElementSibling.dataset.role")=='user'
+    assert js("document.querySelectorAll('.conversation-tool-group').length")==0
+    js("document.querySelector('.conversation-inline-image').click()")
+    wait("document.querySelector('.conversation-preview-image')?.naturalWidth>0")
+    assert js("document.querySelector('.conversation-preview-notice').textContent.startsWith('Recorded input image')")
+    assert not js("document.querySelector('.conversation-reveal')!==null")
+    assert js("inlineCalls.map(c=>c.thumbnail)")==[True,False]

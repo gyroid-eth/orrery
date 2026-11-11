@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from urllib.parse import quote
 from conversation_mail import received, sent
+from conversation_images import hermes_content
 
 from conversation_history import (HistoryUnavailable, MAX_SCAN, MAX_TEXT, PAGE_SIZE,
     open_bound_transcript, assert_transcript_identity, read_codex_page, recorded_model)
@@ -165,7 +166,9 @@ def normalize(item,p,sid):
         kind=item.get('type');data=item.get('data');ts=epoch(item.get('time'),1000)
         if not isinstance(data,dict):return []
         if kind=='user/message' and isinstance(data.get('source'),dict) and data['source'].get('kind')=='user':
-            add(0,text_event(blocks_text(data.get('content')),'user',ts))
+            content=data.get('content')
+            images=isinstance(content,list) and any(isinstance(b,dict) and b.get('type')=='image' for b in content[:MAX_BLOCKS])
+            add(0,text_event(blocks_text(content) or ('[image attachment]' if images else ''),'user',ts))
         elif kind=='assistant/message' and isinstance(data.get('message'),dict):
             add(0,text_event(blocks_text(data['message'].get('content')),'assistant',ts))
         elif kind=='tool/call':add(0,sent(tool_event(data.get('name'),ts),data.get('name'),data.get('arguments')))
@@ -177,7 +180,11 @@ def normalize(item,p,sid):
             text=item['content']
             add(0,dict(kind='system',role='system',text='System notice',ts=ts,
                        system_detail=text[:MAX_TEXT],truncated=len(text)>MAX_TEXT))
-        elif role in {'user','assistant'}:add(0,text_event(item.get('content'),role,ts))
+        elif role=='user':
+            content=hermes_content(item.get('content'))
+            images=isinstance(content,list) and any(isinstance(b,dict) and b.get('type')=='image_url' for b in content[:MAX_BLOCKS])
+            add(0,text_event(blocks_text(content) or ('[image attachment]' if images else ''),role,ts))
+        elif role=='assistant':add(0,text_event(item.get('content'),role,ts))
         if role=='assistant':
             calls=item.get('tool_calls')
             if isinstance(calls,str):
@@ -202,8 +209,16 @@ def normalize(item,p,sid):
 
 
 def artifact_item(item,p,index):
-    """Translate known structured calls only, preserving existing artifact policy."""
+    """既知の tool と入力画像の記録だけを渡す。通常の文を引数と解釈しない。"""
     name=value=None
+    if p=='claude' and item.get('type')=='user':
+        content=item.get('message',{}).get('content')
+        if isinstance(content,list):content=content[index:index+1]
+        return dict(type='recorded_user_input',provider=p,content=content)
+    if p=='dsh' and item.get('type')=='user/message' and item.get('data',{}).get('source',{}).get('kind')=='user':
+        return dict(type='recorded_user_input',provider=p,content=item['data'].get('content'))
+    if p=='hermes' and item.get('role')=='user' and index==0:
+        return dict(type='recorded_user_input',provider=p,content=hermes_content(item.get('content')))
     if p=='claude':
         content=item.get('message',{}).get('content')
         if isinstance(content,list) and index<len(content) and isinstance(content[index],dict):
@@ -555,7 +570,10 @@ class Reader:
         large rows costs what the snapshot costs.
         """
         self.db.row_factory=sqlite3.Row
-        rows=self.db.execute('''SELECT id,role,substr(content,1,65537) AS content,
+        rows=self.db.execute('''SELECT id,role,
+            CASE WHEN substr(CAST(content AS BLOB),1,6)=X'006a736f6e3a'
+                THEN CAST(substr(CAST(content AS BLOB),1,65537) AS TEXT)
+                ELSE substr(content,1,65537) END AS content,
             substr(tool_calls,1,1048576) AS tool_calls,tool_call_id,tool_name,timestamp,display_kind,display_metadata
             FROM messages WHERE session_id=? AND active=1 AND role IN ('user','assistant','tool')
             AND COALESCE(display_kind,'')!='hidden' AND COALESCE(_compressed_summary,0)=0
@@ -627,7 +645,10 @@ class Reader:
         pos,line=location
         if self.provider=='hermes':
             self.db.row_factory=sqlite3.Row
-            found=self.db.execute('''SELECT id,role,substr(content,1,65537) AS content,
+            found=self.db.execute('''SELECT id,role,
+                CASE WHEN substr(CAST(content AS BLOB),1,6)=X'006a736f6e3a'
+                    THEN CAST(substr(CAST(content AS BLOB),1,65537) AS TEXT)
+                    ELSE substr(content,1,65537) END AS content,
                 substr(tool_calls,1,1048576) AS tool_calls,tool_call_id,tool_name,timestamp,display_kind,display_metadata
                 FROM messages WHERE session_id=? AND id=? AND active=1 AND role IN ('user','assistant','tool')
                 AND COALESCE(display_kind,'')!='hidden' AND COALESCE(_compressed_summary,0)=0
