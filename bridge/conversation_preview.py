@@ -219,7 +219,7 @@ class ReferenceStore:
                 self.refs[ref]=dict(key=key,row=binding(row),inode=identity(stream),offset=event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id']),
                                     digest=digest,index=index,input_image=True,expires=self.clock()+self.ttl)
                 self.refs.move_to_end(ref)
-                refs.append(dict(id=ref,label=f'入力画像 {index+1}.png',kind='image',input_image=True))
+                refs.append(dict(id=ref,label=f'Input image {index+1}.png',kind='image',input_image=True))
             self.prune()
         if refs:event['references']=refs;event['input_images']=True
 
@@ -254,7 +254,7 @@ class ReferenceStore:
                     images=input_images(item)
                     if entry['index']>=len(images) or self.image_key(images[entry['index']])!=entry['key'][-1]:raise PreviewUnavailable('reference_expired')
                     result=self.read_input(images[entry['index']],stream,thumbnail=thumbnail)
-                    result=dict(result,label=f"入力画像 {entry['index']+1}.png",notice='Recorded input image')
+                    result=dict(result,label=f"Input image {entry['index']+1}.png",notice='Recorded input image')
                 else:
                     projection=extract_artifacts(item);paths=projection['paths']
                     if entry['index']>=len(paths):raise PreviewUnavailable('reference_expired')

@@ -195,7 +195,7 @@ def test_the_mac_keeps_every_route():
     assert r["file"]["value"] == "'/tmp/a b.pdf'"
     assert r["file"]["toasts"] == [{"message": "path → composer", "isError": False}]
     assert r["image"]["sent"] == [{"type": "input", "paneId": "%1", "data": "\x16"}]
-    assert r["image"]["toasts"][0]["message"].startswith("画像の貼り付けを送りました → orrery-A")
+    assert r["image"]["toasts"][0]["message"].startswith("Image paste sent → orrery-A")
     assert r["uri"]["value"] == "/Users/u/x.pdf" and r["uri"]["reads"] == 0
     assert r["text"]["prevented"] is False
 

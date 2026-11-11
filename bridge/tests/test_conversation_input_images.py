@@ -59,8 +59,10 @@ def test_native_input_image_uses_a_record_bound_reference(tmp_path,program):
     assert len(images)==1
     ref=images[0]['references'][0]
     assert ref['input_image'] and ref['kind']=='image'
+    assert ref['label']=='Input image 1.png'
     assert url() not in json.dumps(events)
     result=store.read(ref['id'],r)
+    assert result['label']=='Input image 1.png'
     assert result['kind']=='image' and (result['width'],result['height'])==(640,400)
     thumb=store.read(ref['id'],r,thumbnail=True)
     assert Image.open(io.BytesIO(base64.b64decode(thumb['data']))).size==(320,200)

@@ -4620,9 +4620,9 @@
       }
     }
   },
-  "inventory_digest": "c0f2316f0c77660acbc4425888013fe75d9137e4ab47e272680de7c8e868d69e",
+  "inventory_digest": "06bf63872e7f0482bf264e6cb10c17394954acaa456aaddde527451ae7f11752",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "2f4a03009f1d05b033c56d9b49472bc4df23a9527e8fbe7709c165cb0352ad5f",
+  "source_digest": "d710bd5b90ccce00fb6462cba0fbe1f6f97df0b897959c6aa4d8b0a9a14cb5fd",
   "surface": "cockpit",
   "version": 1
 }
@@ -11069,7 +11069,7 @@ function handleComposerPaste(e){
     if(hasImage){
       if(!composerTargetPresent(target))return;
       if(!send({type:"input",paneId:target.paneId,data:"\x16"})){showToast('not connected — try again');return;}
-      showToast(`画像の貼り付けを送りました → ${p.session} (TUI clipboard paste)`);
+      showToast(`Image paste sent → ${p.session} (TUI clipboard paste)`);
       return;
     }
     showToast('nothing on the clipboard the composer can use');
@@ -11077,7 +11077,7 @@ function handleComposerPaste(e){
     if(hasImage&&!onWsl){
       if(!composerTargetPresent(target))return;
       if(!send({type:"input",paneId:target.paneId,data:"\x16"})){showToast('not connected — try again');return;}
-      showToast(`画像の貼り付けを送りました → ${p.session} (TUI clipboard paste)`);
+      showToast(`Image paste sent → ${p.session} (TUI clipboard paste)`);
     }else showToast('could not read the clipboard');
   });
 }
