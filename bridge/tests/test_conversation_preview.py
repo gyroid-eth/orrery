@@ -4,6 +4,7 @@ import io
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -34,6 +35,32 @@ def setup(tmp_path, item, **options):
 
 def preview(store,row,event,index=0):
     return store.read(event['references'][index]['id'],row)
+
+
+def test_os_tmp_image_alias_gets_a_reference(tmp_path):
+    """OS の /tmp 別名だけを許可し、固定した記録から画像を読める。"""
+    with tempfile.TemporaryDirectory(dir='/tmp') as folder:
+        image=Path(folder)/'shown.png'
+        Image.new('RGB',(12,9)).save(image)
+        item=dict(type='event_msg',payload=dict(type='item_completed',item=dict(
+            type='McpToolCall',server='orrery-mail',tool='show_files',status='completed',
+            arguments={'paths':[str(image)]})))
+        store,row,event=setup(tmp_path,item)
+        assert event['references'][0]['kind']=='image'
+        assert preview(store,row,event)['kind']=='image'
+
+
+def test_user_symlink_under_tmp_is_still_denied(tmp_path):
+    """OS の別名の先にある利用者の symlink は許可しない。"""
+    with tempfile.TemporaryDirectory(dir='/tmp') as folder:
+        root=Path(folder);image=root/'image.png';Image.new('RGB',(12,9)).save(image)
+        link=root/'user-link.png';link.symlink_to(image.resolve())
+        item=dict(type='event_msg',payload=dict(type='item_completed',item=dict(
+            type='McpToolCall',server='orrery-mail',tool='show_files',status='completed',
+            arguments={'paths':[str(link)]})))
+        store,row,event=setup(tmp_path,item)
+        assert not event.get('references')
+        with pytest.raises(PreviewUnavailable):store.policy(str(link),tmp_path,shown=True)
 
 
 def test_structured_paths_and_recorded_diff_never_parse_shell_or_free_text():

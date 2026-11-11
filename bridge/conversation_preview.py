@@ -142,6 +142,14 @@ class ReferenceStore:
             if cwd is None:raise PreviewUnavailable('preview_path_denied')
             path=cwd/value
         else:path=Path(value)
+        # OS が置いた固定の別名だけを比較前に展開する。Linux 等で
+        # 別名が無い場合はそのままにし、利用者の symlink は後段で拒否する。
+        for alias,target in (('/tmp','/private/tmp'),('/var','/private/var'),('/etc','/private/etc')):
+            prefix=Path(alias)
+            if (path.is_relative_to(prefix) and prefix.is_symlink()
+                    and prefix.lstat().st_uid==0 and prefix.resolve()==Path(target)):
+                path=Path(target)/path.relative_to(prefix)
+                break
         canonical=path.resolve()
         # Reject any symlink rather than using its target as a grant. A late
         # replacement is also rejected by the descriptor walk in read_file.
