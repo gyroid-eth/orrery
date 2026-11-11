@@ -154,9 +154,16 @@ def normalize(item,p,sid):
             add(0,claude_text(summary,role,ts,item));return out
         if isinstance(content,str):add(0,claude_text(content,role,ts,item))
         elif isinstance(content,list):
+            images=sum(isinstance(b,dict) and b.get('type')=='image' for b in content[:MAX_BLOCKS])
             for i,b in enumerate(content[:MAX_BLOCKS]):
                 if not isinstance(b,dict):continue
-                if b.get('type')=='text':add(i,claude_text(b.get('text'),role,ts,item))
+                if b.get('type')=='text':
+                    event=claude_text(b.get('text'),role,ts,item)
+                    # Claude exposes text and attachments as separate events.
+                    # Keep their shared native provenance for send matching;
+                    # do not duplicate the image references on the text event.
+                    if images and event and event.get('role')=='user' and event.get('kind')=='text':event['input_image_count']=images
+                    add(i,event)
                 elif b.get('type')=='tool_use' and role=='assistant':add(i,sent(tool_event(b.get('name'),ts),b.get('name'),b.get('input')))
                 elif b.get('type')=='tool_result' and role=='user':
                     add(i,tool_event('Tool result',ts,result=True,failed=bool(b.get('is_error'))))

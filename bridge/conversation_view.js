@@ -175,6 +175,26 @@
     const sending=new Map();
     const observedIds=new Set(),matchedSubmissions=new Set(),pendingEl=el('.conversation-pending');
     const normalizePrompt=text=>(root.OrreryConversationMarkdown?.submissionText(text)??text).replace(/\s+/gu,' ').trim();
+    function imagePromptText(event){
+      let text=event.text;
+      // Only structured native input images justify treating these labels as
+      // generated text. Claude's image event is separate from its text event.
+      // A typed image label without an attachment stays literal.
+      const images=providerLabel==='Claude'&&Number.isInteger(event.input_image_count)&&event.input_image_count>0&&event.input_image_count<=64
+        ?event.input_image_count:event.input_images===true?(event.references||[]).filter(ref=>ref.input_image===true).length:0;
+      if(images&&['dsh','Claude'].includes(providerLabel)){
+        for(let i=0;i<images;i++){
+          const prefix=/^\s*\[Image #\d+\]\s*/u.exec(text);
+          if(!prefix)break;
+          text=text.slice(prefix[0].length);
+        }
+      }else if(images&&providerLabel==='Codex'){
+        // conversation_history appends exactly one attachment label after the
+        // recorded text; retain any identical label the person actually typed.
+        text=text.replace(/\n\[image attachment\]$/u,'');
+      }
+      return normalizePrompt(text);
+    }
     function keepReaderFocus(container){
       // A detached control leaves BODY focused, which terminal fitting may
       // interpret as permission to focus xterm and send the next reading key.
@@ -276,7 +296,7 @@
       if(!submissions.length)return;
       for(const event of incoming){
         if(event.role!=='user'||event.kind!=='text'||matchedSubmissions.has(event.id))continue;
-        const ts=Date.parse(event.ts),text=normalizePrompt(event.text);
+        const ts=Date.parse(event.ts),text=normalizePrompt(event.text),imageText=imagePromptText(event);
         const fraction=/\.(\d+)(?:Z|[+-]\d\d:\d\d)$/.exec(event.ts||'');
         const secondsOnly=!fraction||!/[1-9]/.test(fraction[1]);
         for(const item of submissions){
@@ -287,7 +307,7 @@
             const ambiguous=secondsOnly&&Number.isFinite(ts)&&ts===Math.floor(item.at/1000)*1000;
             if(ambiguous){
               item.uncertain.add(event.id);
-              if(item.text===text||event.truncated&&text.length>=256&&item.text.startsWith(text))item.unmatched=true;
+              if(item.text===text||item.text===imageText||event.truncated&&text.length>=256&&item.text.startsWith(text))item.unmatched=true;
             }else if(!(Number.isFinite(ts)&&ts>=item.at))item.known.add(event.id);
           }
         }
@@ -296,6 +316,8 @@
           (Number.isFinite(ts)?ts>=item.at||ts>=(secondsOnly?Math.floor(item.at/1000)*1000:item.at)&&sequence>=item.nextRead:
             sequence>=item.nextRead&&direction==='newer'));
         let candidates=eligible.filter(item=>item.matchable&&!event.truncated&&item.text===text);
+        // Prefer a literal exact match before trying a known attachment wrapper.
+        if(!candidates.length&&imageText!==text)candidates=eligible.filter(item=>item.matchable&&!event.truncated&&item.text===imageText);
         if(!candidates.length&&event.truncated&&text.length>=256){
           candidates=eligible.filter(item=>item.text.startsWith(text));
           // A shared prefix cannot distinguish two different pending prompts.
