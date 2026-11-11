@@ -2246,7 +2246,8 @@ async def conversation_full_read(request, name, query, cursor, limit, polls, sta
                 return polls.remember(name,row,result,signature,verified,digest,provider=provider,fingerprint=fingerprint),True
         store=request.app.get(CONVERSATION_REFERENCES_KEY)
         if store is not None:
-            tools=[event for event in result['events'] if event['kind'] in {'tool','tool_result'}]
+            tools=[event for event in result['events'] if event['kind'] in {'tool','tool_result'} or
+                   event['kind']=='text' and event['role']=='user']
             if tools:
                 await asyncio.to_thread(store.decorate_all,row,reader,tools)
         checked=polls.clock() if polls is not None else 0.0
@@ -2373,14 +2374,19 @@ async def conversation_reference(request: web.Request, *, reveal: bool = False) 
     headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
              'Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"}
     try:
+        thumbnail=False
         if reveal:
             if request.query:raise PreviewUnavailable('invalid_query')
             payload=await request.json()
             if not isinstance(payload,dict) or set(payload)!={'ref'}:raise PreviewUnavailable('invalid_query')
             ref=payload['ref']
         else:
-            if set(request.query)!={'ref'} or len(request.query.getall('ref'))!=1:raise PreviewUnavailable('invalid_query')
+            if (set(request.query) not in ({'ref'},{'ref','thumbnail'})
+                    or len(request.query.getall('ref',[]))!=1
+                    or ('thumbnail' in request.query and request.query.getall('thumbnail')!=['1'])):
+                raise PreviewUnavailable('invalid_query')
             ref=request.query['ref']
+            thumbnail=request.query.get('thumbnail')=='1'
         if not isinstance(ref,str) or not re.fullmatch(r'[A-Za-z0-9_-]{32}',ref):raise PreviewUnavailable('invalid_reference')
         # Fresh has only a public text projection. Never bypass it by discovering
         # provider paths through another runtime route.
@@ -2388,7 +2394,7 @@ async def conversation_reference(request: web.Request, *, reveal: bool = False) 
         store=request.app[CONVERSATION_REFERENCES_KEY]
         name=store.owner(ref)
         row=await conversation_bound_row(request,name)
-        result=await asyncio.to_thread(store.read,ref,row,reveal=reveal)
+        result=await asyncio.to_thread(store.read,ref,row,reveal=reveal,thumbnail=thumbnail)
         current=await conversation_bound_row(request,name)
         if conversation_binding(row)!=conversation_binding(current):raise PreviewUnavailable('reference_expired')
         if reveal:
@@ -2955,6 +2961,8 @@ def save_clipboard_image(png: bytes) -> str:
                  0o600)
     with os.fdopen(fd, "wb") as fh:
         fh.write(png)
+    from conversation_images import remember_saved
+    remember_saved(str(target))
     old = sorted(folder.glob("clipboard-*.png"), key=lambda p: p.stat().st_mtime,
                  reverse=True)[CLIPBOARD_IMAGE_KEEP:]
     for stale in old:

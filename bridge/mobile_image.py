@@ -11,6 +11,7 @@ import secrets
 import stat
 import time
 import warnings
+from conversation_images import remember_saved
 
 try:
     from PIL import Image, ImageOps
@@ -101,6 +102,8 @@ def save_image(workspace, encoded):
         except BaseException:
             os.unlink(name, dir_fd=directory)
             raise
-        return str(folder / name)
+        path=str(folder / name)
+        remember_saved(path)
+        return path
     finally:
         os.close(directory)

@@ -239,6 +239,20 @@ References expire after 15 minutes, are capped at 4096 and are revalidated
 against the live binding, pinned transcript inode and original record digest
 for every read. Browser input cannot register a reference or broaden a root.
 
+会話内では、`show_files` の画像と、人の入力として記録された画像を小さく表示し、
+クリックで既存の拡大 preview を開きます。`?ref=<id>&thumbnail=1` は同じ許可を
+確認してから 320×200 以内の PNG を返します。元の chip は tool の中に残ります。
+一覧の画像は画面付近だけを取得し、Reader ごとに同時2件・Blob8件まで保持します。
+
+入力画像は Claude の base64 image block、Codex の input_image、dsh の
+content-addressed attachment、Hermes の構造化 image_url を、固定した会話記録から
+参照します。外部 URL は取得せず、本文中の任意の path も自動では開きません。
+bridge が保存した clipboard / `.orrery-input-images` の画像だけは、保存成功時の
+プロセス内の path・ファイル情報と本文を照合します。bridge 再起動前の保存は
+自動表示しません。既存の record 上限（構造化抽出1 MiB、Hermes content 65537以内）
+を超える入力画像は表示しません。native の `^V` は変更せず、paste 直後の通知は
+貼り付け操作を送ったことだけを示し、会話に記録されて初めて timeline に画像が出ます。
+
 The default preview root is the bound native workspace: Codex's
 `session_meta.payload.cwd`, Claude's first native message `cwd`, dsh's session
 header `cwd`, or Hermes's exact `sessions.cwd`. A missing cwd grants no default root.

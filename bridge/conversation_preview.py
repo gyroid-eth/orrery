@@ -23,6 +23,7 @@ from pathlib import Path
 from PIL import Image
 from conversation_artifacts import extract_artifacts
 from conversation_history import open_bound_transcript, assert_transcript_identity, HistoryUnavailable, open_reader
+from conversation_images import input_images, saved_path, dsh_image_path
 
 MAX_RECORD=1024*1024
 MAX_TEXT=128*1024
@@ -181,6 +182,9 @@ class ReferenceStore:
             item,digest=record_at(stream,event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id']),records);projection=extract_artifacts(item)
             if cwd is False:cwd=workspace(stream)
         except (PreviewUnavailable,ValueError):return
+        if event.get('kind')=='text' and event.get('role')=='user':
+            self.decorate_input(row,stream,event,item,digest)
+            return
         if projection['diff']:
             event['diff']=projection['diff'];event['diff_status']=projection['diff_status']
         refs=[]
@@ -199,7 +203,42 @@ class ReferenceStore:
             self.prune()
         if refs:event['references']=refs
 
-    def read(self,ref,row,*,reveal=False):
+    @staticmethod
+    def image_key(image):
+        return hashlib.sha256(json.dumps(image,sort_keys=True).encode()).digest()
+
+    def decorate_input(self,row,stream,event,item,digest):
+        refs=[]
+        with self.lock:
+            self.prune()
+            for index,image in enumerate(input_images(item)):
+                key=(binding(row),identity(stream),event['id'],digest,index,self.image_key(image))
+                ref=self.by_key.get(key)
+                if ref not in self.refs or self.refs[ref]['key']!=key:ref=secrets.token_urlsafe(24)
+                self.by_key[key]=ref
+                self.refs[ref]=dict(key=key,row=binding(row),inode=identity(stream),offset=event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id']),
+                                    digest=digest,index=index,input_image=True,expires=self.clock()+self.ttl)
+                self.refs.move_to_end(ref)
+                refs.append(dict(id=ref,label=f'Input image {index+1}.png',kind='image',input_image=True))
+            self.prune()
+        if refs:event['references']=refs;event['input_images']=True
+
+    def read_input(self,image,stream,*,thumbnail=False):
+        if image['kind']=='data':
+            data=base64.b64decode(image['url'].split(',',1)[1],validate=True)
+            if len(data)>MAX_IMAGE:raise PreviewUnavailable('preview_too_large')
+            return self.raster(data,thumbnail=thumbnail)
+        if image['kind']=='dsh':
+            path=dsh_image_path(stream.path,image['digest'])
+            if path is None:raise PreviewUnavailable('preview_unavailable')
+            return self.read_file(path,thumbnail=thumbnail,image_digest=image['digest'])
+        path=saved_path(image['path'])
+        if path is None:raise PreviewUnavailable('reference_expired')
+        result=self.read_file(path,thumbnail=thumbnail)
+        if result['kind']!='image' or saved_path(image['path'])!=path:raise PreviewUnavailable('reference_expired')
+        return result
+
+    def read(self,ref,row,*,reveal=False,thumbnail=False):
         with self.lock:
             self.prune();entry=self.refs.get(ref)
             if not entry or binding(row)!=entry['row']:raise PreviewUnavailable('reference_expired')
@@ -210,16 +249,23 @@ class ReferenceStore:
                 if identity(stream)!=entry['inode']:raise PreviewUnavailable('reference_expired')
                 item,digest=record_at(stream,entry['offset'])
                 if digest!=entry['digest']:raise PreviewUnavailable('reference_expired')
-                projection=extract_artifacts(item);paths=projection['paths']
-                if entry['index']>=len(paths):raise PreviewUnavailable('reference_expired')
-                value=paths[entry['index']];shown=value in projection['shown_paths']
-                path=self.policy(value,workspace(stream),shown=shown)
-                if str(path)!=entry['key'][-1]:raise PreviewUnavailable('reference_expired')
-                result=self.read_file(path)
+                if entry.get('input_image'):
+                    if reveal:raise PreviewUnavailable('preview_unavailable')
+                    images=input_images(item)
+                    if entry['index']>=len(images) or self.image_key(images[entry['index']])!=entry['key'][-1]:raise PreviewUnavailable('reference_expired')
+                    result=self.read_input(images[entry['index']],stream,thumbnail=thumbnail)
+                    result=dict(result,label=f"Input image {entry['index']+1}.png",notice='Recorded input image')
+                else:
+                    projection=extract_artifacts(item);paths=projection['paths']
+                    if entry['index']>=len(paths):raise PreviewUnavailable('reference_expired')
+                    value=paths[entry['index']];shown=value in projection['shown_paths']
+                    path=self.policy(value,workspace(stream),shown=shown)
+                    if str(path)!=entry['key'][-1]:raise PreviewUnavailable('reference_expired')
+                    result=self.read_file(path,thumbnail=thumbnail)
                 # Revalidate both the source record and file descriptor identity
                 # before publishing; append-only transcript growth is allowed.
                 if record_at(stream,entry['offset'])[1]!=entry['digest']:raise PreviewUnavailable('reference_expired')
-                if self.policy(value,workspace(stream),shown=shown)!=path:raise PreviewUnavailable('reference_expired')
+                if not entry.get('input_image') and self.policy(value,workspace(stream),shown=shown)!=path:raise PreviewUnavailable('reference_expired')
                 stream.assert_identity()
             return path if reveal else result
         except (HistoryUnavailable,OSError,ValueError,KeyError,TypeError) as exc:
@@ -232,14 +278,15 @@ class ReferenceStore:
             if not entry:raise PreviewUnavailable('reference_expired')
             return entry['row'][0]
 
-    def read_file(self,path):
-        is_image=path.suffix.lower() in IMAGE_EXT
+    def read_file(self,path,*,thumbnail=False,image_digest=None):
+        is_image=image_digest is not None or path.suffix.lower() in IMAGE_EXT
         maximum=MAX_IMAGE if is_image else MAX_TEXT
         with open_file(path) as (fd,info):
             if info.st_size>maximum:raise PreviewUnavailable('preview_too_large')
             data=os.read(fd,maximum+1)
             if len(data)>maximum:raise PreviewUnavailable('preview_too_large')
-            if is_image:result=self.raster(data)
+            if image_digest is not None and hashlib.sha256(data).hexdigest()!=image_digest:raise PreviewUnavailable('preview_changed')
+            if is_image:result=self.raster(data,thumbnail=thumbnail)
             else:
                 try:text=data.decode('utf-8')
                 except UnicodeError:raise PreviewUnavailable('preview_type_denied') from None
@@ -251,7 +298,7 @@ class ReferenceStore:
                 if signature(info)!=signature(after) or signature(info)!=signature(current):raise PreviewUnavailable('preview_changed')
         return dict(result,label=path.name[:160],notice='Current file · may differ from the recorded edit')
 
-    def raster(self,data):
+    def raster(self,data,*,thumbnail=False):
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter('error',Image.DecompressionBombWarning)
@@ -266,6 +313,10 @@ class ReferenceStore:
                     pixels=Image.frombytes('RGBA',clean.size,clean.tobytes())
                     output=io.BytesIO();pixels.save(output,format='PNG')
                     if output.tell()>MAX_IMAGE:raise PreviewUnavailable('preview_too_large')
+                    # 原寸と同じ制限を通した後、会話内の表示だけ小さい PNG にする。
+                    if thumbnail:
+                        pixels.thumbnail((320,200),Image.Resampling.LANCZOS)
+                        output=io.BytesIO();pixels.save(output,format='PNG')
             return dict(kind='image',mime='image/png',data=base64.b64encode(output.getvalue()).decode('ascii'),width=width,height=height)
         except PreviewUnavailable:
             raise

@@ -403,7 +403,7 @@
     }
     function modeMessage(text){if(!text&&document.activeElement===modeInfo&&opened)scroll.focus({preventScroll:true});modeInfo.title=text;modeInfo.setAttribute('aria-label',text);paintStatus();}
     function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;sessionReloadAttempted=false;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
-    function clear({keepSubmissions=false}={}){closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
+    function clear({keepSubmissions=false}={}){closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();preview?.resetInline();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
       if(tableMutating)return;
@@ -430,7 +430,7 @@
     // Keep message nodes in place so selections and previews survive polling.
     const rawRows=()=>[...eventsEl.children].filter(child=>child.dataset.eventId!==undefined);
     const visibleRows=()=>[...eventsEl.children,...pendingEl.children,activityEl].filter(child=>!child.hidden);
-    const rowKey=child=>JSON.stringify(child.dataset.toolGroup?['tools',child.dataset.toolGroup]:child.dataset.receiptKey?['receipt',child.dataset.receiptKey]:child===activityEl?['activity']:['event',child.dataset.eventId]);
+    const rowKey=child=>JSON.stringify(child.dataset.inlineFor?['images',child.dataset.inlineFor]:child.dataset.toolGroup?['tools',child.dataset.toolGroup]:child.dataset.receiptKey?['receipt',child.dataset.receiptKey]:child===activityEl?['activity']:['event',child.dataset.eventId]);
     function setGroupOpen(group,open){
       saveTables();const top=group.button.getBoundingClientRect().top;
       group.open=open;group.button.setAttribute('aria-expanded',String(open));
@@ -489,6 +489,7 @@
         else if(shellStart){shellStart.classList.add('conversation-shell-start');row.classList.add('conversation-shell-continuation');}
       }
       if(focused&&(document.activeElement===document.body||document.activeElement===scroll))(groups.includes(focused)?focused.button:scroll).focus({preventScroll:true});
+      preview?.syncInline(rawRows(),events);
     }
     function anchor(){
       const top=scroll.getBoundingClientRect().top;
@@ -583,6 +584,7 @@
         if(panel.parentElement!==target)target.appendChild(panel);
       }
       panel.hidden=!opened||!presented;
+      preview?.setVisible(opened&&presented&&!document.hidden);
       paintControls();
       screen.classList.toggle('conversation-enabled',enabled);
       screen.classList.toggle('conversation-just-submitted',Boolean(flashTimer));
@@ -886,7 +888,7 @@
     }
     function close({focus=true}={}){
       if(!opened)return;
-      stop();opened=false;agent='';panel.hidden=true;screen.classList.remove('conversation-open','conversation-full');
+      stop();opened=false;agent='';panel.hidden=true;preview?.setVisible(false);screen.classList.remove('conversation-open','conversation-full');
       screen.style.removeProperty('--conversation-viewport-height');screen.style.removeProperty('--conversation-viewport-top');
       toggle.setAttribute('aria-expanded','false');paintControls();clear({keepSubmissions:true});onState();const target=typeof focusControl==='function'?focusControl():focusControl||toggle;
       if(focus&&target&&!target.hidden&&target.getClientRects().length)target.focus();
@@ -894,7 +896,7 @@
     function open(){
       if(!enabled)return;
       if(opened){onActivate();return;}
-      onActivate();opened=true;panel.hidden=false;screen.classList.add('conversation-open');screen.classList.toggle('conversation-full',fullWidth);
+      onActivate();opened=true;panel.hidden=false;preview?.setVisible(presented&&!document.hidden);screen.classList.add('conversation-open');screen.classList.toggle('conversation-full',fullWidth);
       viewport();const rect=screen.getBoundingClientRect();lastWidth=rect.width;lastHeight=rect.height;
       toggle.setAttribute('aria-expanded','true');paintControls();agent=null;context();scroll.focus();onState();
     }
@@ -1003,10 +1005,10 @@
     listen(document,'oc:agents',context);
     // A hidden tab keeps no held poll: end one that is waiting, so its
     // browser connection and the server's slot are returned at once.
-    listen(document,'visibilitychange',()=>{paintActivity();if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
+    listen(document,'visibilitychange',()=>{preview?.setVisible(opened&&presented&&!document.hidden);paintActivity();if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
     preference();paintControls();
     return Object.freeze({open,close,relocate,reconcile:context,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
-      dispose(){stopPathLinks?.();ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();submissionObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();noticeMenu.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
+      dispose(){stopPathLinks?.();ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();submissionObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});preview?.dispose();clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();noticeMenu.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
   }
   function mountWorkspace({getContext,getSlots,getOwner=name=>getContext(name)?.terminalPaneId,activate,...options}){
     const screen=document.querySelector('.screen'),toggle=document.getElementById('conversationToggle');
