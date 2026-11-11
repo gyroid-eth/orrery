@@ -199,7 +199,7 @@ class ReferenceStore:
             self.prune()
         if refs:event['references']=refs
 
-    def read(self,ref,row,*,reveal=False):
+    def read(self,ref,row,*,reveal=False,thumbnail=False):
         with self.lock:
             self.prune();entry=self.refs.get(ref)
             if not entry or binding(row)!=entry['row']:raise PreviewUnavailable('reference_expired')
@@ -215,7 +215,7 @@ class ReferenceStore:
                 value=paths[entry['index']];shown=value in projection['shown_paths']
                 path=self.policy(value,workspace(stream),shown=shown)
                 if str(path)!=entry['key'][-1]:raise PreviewUnavailable('reference_expired')
-                result=self.read_file(path)
+                result=self.read_file(path,thumbnail=thumbnail)
                 # Revalidate both the source record and file descriptor identity
                 # before publishing; append-only transcript growth is allowed.
                 if record_at(stream,entry['offset'])[1]!=entry['digest']:raise PreviewUnavailable('reference_expired')
@@ -232,14 +232,14 @@ class ReferenceStore:
             if not entry:raise PreviewUnavailable('reference_expired')
             return entry['row'][0]
 
-    def read_file(self,path):
+    def read_file(self,path,*,thumbnail=False):
         is_image=path.suffix.lower() in IMAGE_EXT
         maximum=MAX_IMAGE if is_image else MAX_TEXT
         with open_file(path) as (fd,info):
             if info.st_size>maximum:raise PreviewUnavailable('preview_too_large')
             data=os.read(fd,maximum+1)
             if len(data)>maximum:raise PreviewUnavailable('preview_too_large')
-            if is_image:result=self.raster(data)
+            if is_image:result=self.raster(data,thumbnail=thumbnail)
             else:
                 try:text=data.decode('utf-8')
                 except UnicodeError:raise PreviewUnavailable('preview_type_denied') from None
@@ -251,7 +251,7 @@ class ReferenceStore:
                 if signature(info)!=signature(after) or signature(info)!=signature(current):raise PreviewUnavailable('preview_changed')
         return dict(result,label=path.name[:160],notice='Current file · may differ from the recorded edit')
 
-    def raster(self,data):
+    def raster(self,data,*,thumbnail=False):
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter('error',Image.DecompressionBombWarning)
@@ -266,6 +266,10 @@ class ReferenceStore:
                     pixels=Image.frombytes('RGBA',clean.size,clean.tobytes())
                     output=io.BytesIO();pixels.save(output,format='PNG')
                     if output.tell()>MAX_IMAGE:raise PreviewUnavailable('preview_too_large')
+                    # 原寸と同じ制限を通した後、会話内の表示だけ小さい PNG にする。
+                    if thumbnail:
+                        pixels.thumbnail((320,200),Image.Resampling.LANCZOS)
+                        output=io.BytesIO();pixels.save(output,format='PNG')
             return dict(kind='image',mime='image/png',data=base64.b64encode(output.getvalue()).decode('ascii'),width=width,height=height)
         except PreviewUnavailable:
             raise

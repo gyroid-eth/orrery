@@ -264,3 +264,39 @@ def test_api_accepts_only_server_ids_and_rechecks_live_binding(tmp_path,monkeypa
         finally:
             await server.cleanup();await app[backend.HTTP_SESSION_KEY].close();await runner.cleanup()
     asyncio.run(main())
+
+
+def test_thumbnail_uses_the_same_reference_and_binding_as_full_preview(tmp_path,monkeypatch):
+    """縮小も同じ記録の許可を使い、path や別会話への切替えで取得できない。"""
+    import asyncio
+    from aiohttp import ClientSession,web
+    import orrery_backend as backend
+    from test_conversation_history import start
+    Image.new('RGB',(800,500),'#548eae').save(tmp_path/'figure.png')
+    store,row,event=setup(tmp_path,call('mcp__orrery_mail__show_files',{'paths':['figure.png']}))
+    async def main():
+        async def agents(request):return web.json_response({'agents':[row]})
+        upstream=web.Application();upstream.router.add_get('/api/agents',agents)
+        runner,origin=await start(upstream);monkeypatch.setattr(backend,'DASHBOARD_URL',origin)
+        app=web.Application(middlewares=[backend.own_page_only,backend.json_writes_only])
+        app[backend.HTTP_SESSION_KEY]=ClientSession();app[backend.TMUX_BIN_KEY]=object()
+        app[backend.CONVERSATION_REFERENCES_KEY]=store
+        app.router.add_get('/telemetry/conversation/preview',backend.serve_conversation_preview)
+        server,url=await start(app)
+        ref=event['references'][0]['id'];query='/telemetry/conversation/preview?ref='+ref
+        try:
+            async with ClientSession() as client:
+                for suffix,size in [('&thumbnail=1',(320,200)),('',(800,500))]:
+                    async with client.get(url+query+suffix) as response:
+                        data=await response.json();assert response.status==200
+                        assert response.headers['Cache-Control']=='no-store'
+                        assert (data['width'],data['height'])==(800,500)
+                        assert Image.open(io.BytesIO(base64.b64decode(data['data']))).size==size
+                for suffix in ['&thumbnail=2','&thumbnail=1&thumbnail=1','&thumbnail=1&path=figure.png']:
+                    async with client.get(url+query+suffix) as response:assert response.status==400
+                row['native_session_id']='replaced'
+                async with client.get(url+query+'&thumbnail=1') as response:
+                    data=await response.json();assert response.status==400 and 'data' not in data
+        finally:
+            await server.cleanup();await app[backend.HTTP_SESSION_KEY].close();await runner.cleanup()
+    asyncio.run(main())

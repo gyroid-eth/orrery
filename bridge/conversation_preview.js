@@ -7,6 +7,78 @@
     let request=null,generation=0,objectUrl=null,selected=null,sourceView=false;
     const create=(tag,cls,text)=>{const el=document.createElement(tag);el.className=cls;if(text!==undefined)el.textContent=text;return el;};
     const button=(cls,text,action)=>{const el=create('button','cockpit-control conversation-action '+cls,text);el.type='button';el.addEventListener('click',action);return el;};
+    const scroll=host.closest('.conversation-panel').querySelector('.conversation-scroll');
+    const inlineRows=new Map(),near=new Set();let visible=false,loading=0,frame=0;
+    const observer=new IntersectionObserver(changes=>{
+      for(const change of changes){const entry=change.target.inlineEntry;if(entry.alive&&change.isIntersecting)near.add(entry);else near.delete(entry);}
+      schedule();
+    },{root:scroll,rootMargin:'200px'});
+    function schedule(){if(!frame)frame=requestAnimationFrame(()=>{frame=0;pump();});}
+    function release(entry){
+      entry.request?.abort();entry.request=null;
+      if(entry.url)URL.revokeObjectURL(entry.url);entry.url=null;
+      entry.image.removeAttribute('src');entry.image.hidden=true;entry.status.hidden=false;
+    }
+    function forget(row){for(const entry of row.entries){entry.alive=false;observer.unobserve(entry.button);near.delete(entry);release(entry);}row.node.remove();}
+    function resetInline(){observer.disconnect();near.clear();for(const row of inlineRows.values())forget(row);inlineRows.clear();cancelAnimationFrame(frame);frame=0;}
+    function setVisible(value){
+      if(visible===value)return;visible=value;observer.disconnect();near.clear();
+      for(const row of inlineRows.values())for(const entry of row.entries){
+        if(value)observer.observe(entry.button);else{entry.request?.abort();entry.request=null;}
+      }
+      schedule();
+    }
+    async function loadInline(entry){
+      const request=new AbortController();entry.request=request;loading++;
+      try{
+        const data=await source.reference(entry.ref.id,{signal:request.signal,thumbnail:true});
+        if(entry.request!==request||!visible||!entry.button.isConnected)return;
+        if(data.kind!=='image'||data.mime!=='image/png'||typeof data.data!=='string'||data.data.length>=12*1024*1024)throw new Error('Preview unavailable');
+        const bytes=Uint8Array.from(atob(data.data),char=>char.charCodeAt(0));
+        entry.url=URL.createObjectURL(new Blob([bytes],{type:'image/png'}));
+        entry.image.src=entry.url;entry.image.hidden=false;entry.status.hidden=true;
+      }catch(error){if(entry.request===request&&error.name!=='AbortError'){entry.failed=true;entry.status.textContent='Preview unavailable · click to retry';}}
+      finally{loading--;if(entry.request===request)entry.request=null;schedule();}
+    }
+    function pump(){
+      if(!visible)return;
+      // 近い画像を優先する。同時取得と Blob の保持を各 Reader で制限する。
+      const top=scroll.getBoundingClientRect().top;
+      const wanted=new Set([...near].filter(entry=>entry.button.isConnected).sort((a,b)=>
+        Math.abs(a.button.getBoundingClientRect().top-top)-Math.abs(b.button.getBoundingClientRect().top-top)).slice(0,8));
+      for(const row of inlineRows.values())for(const entry of row.entries)if(!wanted.has(entry))release(entry);
+      for(const entry of wanted)if(loading<2&&!entry.url&&!entry.request&&!entry.failed)loadInline(entry);
+    }
+    scroll.addEventListener('scroll',schedule,{passive:true});
+    function syncInline(rows,events){
+      const keep=new Set();
+      for(const row of rows){
+        const event=events.get(row.dataset.eventId);
+        if(event?.kind!=='tool'||!/^mcp__orrery[-_]mail__show_files$/.test(event.text))continue;
+        const refs=(Array.isArray(event.references)?event.references:[]).slice(0,24).filter(ref=>
+          ref?.kind==='image'&&/^[A-Za-z0-9_-]{32}$/.test(ref.id)&&typeof ref.label==='string');
+        if(!refs.length)continue;
+        const id=event.id,signature=JSON.stringify(refs);keep.add(id);
+        let record=inlineRows.get(id);
+        if(record?.signature!==signature){if(record)forget(record);record=null;}
+        if(!record){
+          const node=create('div','conversation-inline-images');node.dataset.inlineFor=id;
+          record={node,signature,entries:[]};inlineRows.set(id,record);
+          for(const ref of refs){
+            const control=button('conversation-inline-image conversation-file','',()=>open(ref));
+            control.dataset.refId=ref.id;control.setAttribute('aria-label','Preview '+ref.label);
+            const image=create('img','conversation-inline-thumbnail');image.alt='';image.hidden=true;image.draggable=false;
+            const status=create('span','conversation-inline-status','Preview image');
+            control.append(image,status,create('span','conversation-inline-label',ref.label));
+            const entry={ref,button:control,image,status,url:null,request:null,failed:false,alive:true};control.inlineEntry=entry;
+            record.entries.push(entry);node.appendChild(control);if(visible)observer.observe(control);
+          }
+        }
+        if(row.nextElementSibling!==record.node)row.after(record.node);
+      }
+      for(const [id,row] of inlineRows)if(!keep.has(id)){forget(row);inlineRows.delete(id);}
+      markSelected();schedule();
+    }
     function cancel(){generation++;if(request)request.abort();request=null;if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl=null;}
     function markSelected(){host.closest('.conversation-panel').querySelectorAll('.conversation-file').forEach(chip=>chip.setAttribute('aria-pressed',String(chip.dataset.refId===selected?.id)));}
     function close(){cancel();selected=null;markSelected();host.hidden=true;host.replaceChildren();host.parentElement.classList.remove('conversation-has-preview');onClose();}
@@ -85,7 +157,8 @@
       }
       return article;
     }
-    return Object.freeze({render,open,close,get selected(){return selected;}});
+    return Object.freeze({render,open,close,syncInline,setVisible,resetInline,
+      dispose(){resetInline();scroll.removeEventListener('scroll',schedule);close();},get selected(){return selected;}});
   }
   root.OrreryConversationPreview=Object.freeze({mount});
 })(window);

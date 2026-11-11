@@ -67,9 +67,10 @@
       if(payload.agent!==agent||!Array.isArray(payload.events))throw new Error('Invalid conversation response.');
       return payload;
     }
-    async reference(ref,{signal,reveal=false}={}){
+    async reference(ref,{signal,reveal=false,thumbnail=false}={}){
       const options={cache:'no-store',signal};
-      let url='/telemetry/conversation/preview?'+new URLSearchParams({ref});
+      const query=new URLSearchParams({ref});if(thumbnail)query.set('thumbnail','1');
+      let url='/telemetry/conversation/preview?'+query;
       if(reveal){url='/telemetry/conversation/reveal';Object.assign(options,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ref})});}
       const response=await this.fetcher(url,options),payload=await response.json();
       if(!response.ok||payload.ok!==true){const error=new Error(MESSAGES[payload.error]||'Preview is unavailable.');error.code=payload.error;throw error;}
