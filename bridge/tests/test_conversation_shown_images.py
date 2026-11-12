@@ -13,38 +13,40 @@ from test_conversation_providers import claude, dsh, history, line, make_db, row
 from conversation_preview import PreviewUnavailable, ReferenceStore
 
 
-def completed_call(paths):
+def completed_call(paths, server='orrery-mail'):
     # Codex 0.163 code mode's native event, with generated IDs and paths.
     return dict(type='event_msg', timestamp='2026-11-10T06:00:00Z', payload=dict(
         type='item_completed', thread_id='fixture-thread', turn_id='fixture-turn',
         started_at_ms=1794290400000, completed_at_ms=1794290400010,
-        item=dict(type='McpToolCall', id='exec-fixture-call', server='orrery-mail',
+        item=dict(type='McpToolCall', id='exec-fixture-call', server=server,
                   tool='show_files', arguments=dict(paths=paths), status='completed',
                   result=dict(content=[]), duration=dict(secs=0,nanos=10000000))))
 
 
-def legacy_completed_call(paths):
+def legacy_completed_call(paths, server='orrery-mail'):
     # McpToolCallEndEvent has a Rust Result and camelCase CallToolResult.
     return dict(type='event_msg', timestamp='2026-11-10T06:00:00Z', payload=dict(
         type='mcp_tool_call_end', call_id='fixture-call', turn_id='fixture-turn',
-        invocation=dict(server='orrery-mail', tool='show_files', arguments=dict(paths=paths)),
+        invocation=dict(server=server, tool='show_files', arguments=dict(paths=paths)),
         duration=dict(secs=0, nanos=10000000), result={'Ok': dict(content=[], isError=False)}))
 
 
-def native_delivery(work, paths, form):
+def native_delivery(work, paths, form, server='orrery-mail'):
     """Real reader formats; neither the event nor the browser supplies a grant."""
     name = 'SendUserFile' if form == 'send_user_file' else 'mcp__orrery_mail__show_files'
+    if server == 'agentstack':
+        name = 'mcp__agentstack__show_files'
     args = {'files' if form == 'send_user_file' else 'paths': paths}
     transcript = work / 'record.jsonl'
     if form in {'send_user_file', 'claude'}:
-        if form == 'claude':
+        if form == 'claude' and server == 'orrery-mail':
             name = 'mcp__orrery-mail__show_files'
         transcript.write_bytes(line(claude('user', 'Generated request', cwd=str(work))) +
             line(claude('assistant', [dict(type='tool_use', id='call', name=name, input=args)])))
         bound = row(transcript, 'claude-code')
     elif form == 'dsh':
         transcript.write_bytes(line(dict(type='session', version=4, id='fixture-session', cwd=str(work))) +
-            line(dsh('tool/call', dict(name='mcp__orrery-mail__show_files', arguments=args))))
+            line(dsh('tool/call', dict(name='mcp__orrery-mail__show_files' if server == 'orrery-mail' else name, arguments=args))))
         bound = row(transcript, 'dsh')
     elif form == 'hermes':
         transcript = work / 'state.db'
@@ -62,7 +64,7 @@ def native_delivery(work, paths, form):
         transcript.write_bytes(line(dict(type='session_meta', payload=dict(cwd=str(work)))) + line(item))
         if form in {'codex', 'codex_exec', 'codex_legacy'}:
             with transcript.open('ab') as stream:
-                stream.write(line(legacy_completed_call(paths) if form == 'codex_legacy' else completed_call(paths)))
+                stream.write(line(legacy_completed_call(paths, server) if form == 'codex_legacy' else completed_call(paths, server)))
         bound = dict(row(transcript, 'codex'), native_session_id='fixture-session')
     store = ReferenceStore()
     with history.open_reader(bound) as reader:
@@ -72,6 +74,28 @@ def native_delivery(work, paths, form):
 
 
 FORMS = ['send_user_file', 'claude', 'dsh', 'hermes', 'codex', 'codex_exec', 'codex_legacy']
+
+
+@pytest.mark.parametrize('form', FORMS[1:])
+def test_agentstack_alias_uses_canonical_image_event_and_preview(tmp_path, form):
+    work = tmp_path / 'work'
+    work.mkdir()
+    image = tmp_path / 'shown.png'
+    Image.new('RGB', (24, 16), 'teal').save(image)
+    store, bound, event = native_delivery(work, [str(image)], form, 'agentstack')
+    assert event['text'] == 'mcp__orrery_mail__show_files'
+    assert [ref['label'] for ref in event.get('references', [])] == ['shown.png']
+    assert preview(store, bound, event)['kind'] == 'image'
+
+
+@pytest.mark.parametrize('legacy', [False, True])
+def test_agentstack_alias_never_grants_external_text(tmp_path, legacy):
+    work = tmp_path / 'work'
+    work.mkdir()
+    note = tmp_path / 'note.txt'
+    note.write_text('Outside the working folder')
+    _, _, event = native_delivery(work, [str(note)], 'codex_legacy' if legacy else 'codex', 'agentstack')
+    assert not event.get('references')
 
 
 @pytest.mark.parametrize('form', FORMS)
@@ -274,16 +298,17 @@ def test_completed_call_grants_only_its_arguments_not_wrapper_or_result(tmp_path
         store.read(events[1]['references'][0]['id'], bound)
 
 
+@pytest.mark.parametrize('server', ['orrery-mail', 'agentstack'])
 @pytest.mark.parametrize('legacy', [False, True])
-def test_native_call_and_completion_render_one_row_and_chip_across_polls(tmp_path, legacy):
+def test_native_call_and_completion_render_one_row_and_chip_across_polls(tmp_path, legacy, server):
     work = tmp_path / 'work'
     work.mkdir()
     image = tmp_path / 'shown.png'
     Image.new('RGB', (8, 6)).save(image)
     transcript = work / 'record.jsonl'
-    native = call('mcp__orrery_mail__show_files', dict(paths=[str(image)]))
+    native = call('mcp__' + server.replace('-', '_') + '__show_files', dict(paths=[str(image)]))
     native['payload']['call_id'] = 'fixture-call'
-    completed = legacy_completed_call([str(image)]) if legacy else completed_call([str(image)])
+    completed = legacy_completed_call([str(image)], server) if legacy else completed_call([str(image)], server)
     if not legacy:
         completed['payload']['item']['id'] = 'fixture-call'
     transcript.write_bytes(line(dict(type='session_meta', payload=dict(cwd=str(work)))) + line(native))
@@ -326,16 +351,18 @@ def test_same_arguments_in_two_native_calls_remain_two_deliveries(tmp_path, lega
     assert len({e['id'] for e in events}) == 2
 
 
-def test_codex_delivery_without_completion_has_no_chip(tmp_path):
+@pytest.mark.parametrize('server', ['orrery-mail', 'agentstack'])
+def test_codex_delivery_without_completion_has_no_chip(tmp_path, server):
     work = tmp_path / 'work'
     work.mkdir()
     Image.new('RGB', (8, 6)).save(work / 'shown.png')
     transcript = work / 'record.jsonl'
     transcript.write_bytes(line(dict(type='session_meta', payload=dict(cwd=str(work)))) +
-        line(call('mcp__orrery_mail__show_files', dict(paths=['shown.png']))))
+        line(call('mcp__' + server.replace('-', '_') + '__show_files', dict(paths=['shown.png']))))
     assert not history.read_codex_page(str(transcript))['events']
 
 
+@pytest.mark.parametrize('server', ['orrery-mail', 'agentstack'])
 @pytest.mark.parametrize('result', [
     {'Err': 'Failed'}, {'Ok': {'content': [], 'isError': True}},
     {'Ok': {'content': [], 'isError': 'false'}}, {'Ok': {'content': [], 'isError': 0}},
@@ -343,9 +370,9 @@ def test_codex_delivery_without_completion_has_no_chip(tmp_path):
     {'Ok': {'content': []}, 'Err': 'ambiguous'}, {'content': [], 'isError': False},
     'tool result prose', None,
 ])
-def test_legacy_failure_or_malformed_result_never_grants(result):
+def test_legacy_failure_or_malformed_result_never_grants(result, server):
     from conversation_artifacts import extract_artifacts
-    event = legacy_completed_call(['outside.png'])
+    event = legacy_completed_call(['outside.png'], server)
     event['payload']['result'] = result
     assert not extract_artifacts(event)['paths']
     assert history.codex_event(line(event), 0) is None

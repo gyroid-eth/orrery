@@ -5,9 +5,11 @@ import json
 import os
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from test_conversation_review_regressions import cockpit, stable_roster
+from test_conversation_shown_images import native_delivery
 
 
 def image_data():
@@ -29,10 +31,10 @@ def shown(id='shown', name='mcp__orrery_mail__show_files', ref='a'*32):
     return event
 
 
-def prepare(cockpit, events, *, delayed=False):
+def prepare(cockpit, events, *, delayed=False, preview=None):
     js, wait, client, _, enable = cockpit
     stable_roster(js); enable(count=1); js('conversationView.close()')
-    js('window.inlineEvents=' + json.dumps(events) + ';window.inlineData=' + json.dumps(image_data()) + ';' + """
+    js('window.inlineEvents=' + json.dumps(events) + ';window.inlineData=' + json.dumps(preview or image_data()) + ';' + """
       window.inlineCalls=[];window.inlinePending=[];window.inlineUrls=[];window.inlineRevoked=[];
       const makeUrl=URL.createObjectURL.bind(URL),revokeUrl=URL.revokeObjectURL.bind(URL);
       URL.createObjectURL=blob=>{const url=makeUrl(blob);inlineUrls.push(url);return url;};
@@ -46,6 +48,31 @@ def prepare(cockpit, events, *, delayed=False):
     wait("document.querySelectorAll('.conversation-event').length===" + str(len(events)))
     wait("document.querySelector('.conversation-panel').dataset.conversationLayout==='settled'")
     return js, wait, client
+
+
+@pytest.mark.parametrize('cockpit', [True, False], indirect=True, ids=['phone', 'desktop'])
+def test_agentstack_completed_delivery_reaches_inline_and_expanded_preview(cockpit, tmp_path):
+    work = tmp_path / 'work'
+    work.mkdir()
+    image = tmp_path / 'alias-image.png'
+    Image.new('RGB', (640, 400), '#548eae').save(image)
+    store, bound, event = native_delivery(work, [str(image)], 'codex_legacy', 'agentstack')
+    preview = store.read(event['references'][0]['id'], bound)
+    js, wait, client = prepare(cockpit, [message('intro', '画像を表示します。'), event], preview=preview)
+    wait("document.querySelector('.conversation-inline-thumbnail')?.naturalWidth===640")
+    assert js("document.querySelector('.conversation-inline-label').textContent") == 'alias-image.png'
+    assert js("document.querySelector('.conversation-inline-images').previousElementSibling.hidden")
+    capture = os.environ.get('ORRERY_ALIAS_SCREENSHOTS')
+    layout = 'phone' if js('innerWidth') == 390 else 'desktop'
+    if capture:
+        folder = Path(capture)
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / (layout + '-inline.png')).write_bytes(base64.b64decode(client.call('Page.captureScreenshot', format='png')['data']))
+    js("document.querySelector('.conversation-inline-image').click()")
+    wait("document.querySelector('.conversation-preview-image')?.naturalWidth===640")
+    assert js("inlineCalls.map(c=>c.thumbnail)") == [True, False]
+    if capture:
+        (folder / (layout + '-expanded.png')).write_bytes(base64.b64decode(client.call('Page.captureScreenshot', format='png')['data']))
 
 
 def test_shown_image_is_outside_tools_and_opens_existing_preview(cockpit):
