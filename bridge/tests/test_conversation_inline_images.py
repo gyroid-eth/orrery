@@ -50,8 +50,8 @@ def prepare(cockpit, events, *, delayed=False, preview=None):
     return js, wait, client
 
 
-@pytest.mark.parametrize('cockpit', [True, False], indirect=True, ids=['phone', 'desktop'])
-def test_agentstack_completed_delivery_reaches_inline_and_expanded_preview(cockpit, tmp_path):
+@pytest.mark.parametrize('cockpit,layout', [(True, 'phone'), (False, 'desktop')], indirect=['cockpit'], ids=['phone', 'desktop'])
+def test_agentstack_completed_delivery_reaches_inline_and_expanded_preview(cockpit, tmp_path, layout):
     work = tmp_path / 'work'
     work.mkdir()
     image = tmp_path / 'alias-image.png'
@@ -63,7 +63,6 @@ def test_agentstack_completed_delivery_reaches_inline_and_expanded_preview(cockp
     assert js("document.querySelector('.conversation-inline-label').textContent") == 'alias-image.png'
     assert js("document.querySelector('.conversation-inline-images').previousElementSibling.hidden")
     capture = os.environ.get('ORRERY_ALIAS_SCREENSHOTS')
-    layout = 'phone' if js('innerWidth') == 390 else 'desktop'
     if capture:
         folder = Path(capture)
         folder.mkdir(parents=True, exist_ok=True)
