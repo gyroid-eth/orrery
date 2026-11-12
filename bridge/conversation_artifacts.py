@@ -81,8 +81,9 @@ class Literal:
 
 # ORRERY Mail's local show_files tool, as each harness records its name: Claude
 # and dsh `mcp__orrery-mail__show_files`; Codex and Hermes `mcp__orrery_mail__show_files`.
-# Only this server's tool; a same-named tool of another server grants nothing.
-SHOW_FILES=re.compile(r'mcp__orrery[-_]mail__show_files')
+# The bound proxy also exposes the same tool through the agentstack server.
+# Only these known names count; a same-named tool of another server grants nothing.
+SHOW_FILES=re.compile(r'mcp__(?:orrery[-_]mail|agentstack)__show_files')
 
 
 def completed_show_files(item):
@@ -110,13 +111,13 @@ def completed_show_files(item):
                 or result.get('isError') is not None and result['isError'] is not False):return None
         call=payload.get('invocation')
     else:return None
-    if (not isinstance(call,dict) or call.get('server')!='orrery-mail'
+    if (not isinstance(call,dict) or call.get('server') not in ('orrery-mail','agentstack')
             or call.get('tool')!='show_files' or not isinstance(call.get('arguments'),dict)):return None
     return call['arguments']
 
 
 def static_calls(text,names=('apply_patch','view_image','read_file','write_file','Edit','Read','SendUserFile',
-                             'mcp__orrery_mail__show_files')):
+                             'mcp__orrery_mail__show_files','mcp__agentstack__show_files')):
     reader=Literal(text)
     pattern=r'tools\.('+ '|'.join(re.escape(name) for name in names)+r')\s*\('
     while reader.pos<len(text):

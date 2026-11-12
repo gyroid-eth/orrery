@@ -54,11 +54,17 @@ def test_each_recorded_form_names_the_paths(form):
 
 
 @pytest.mark.parametrize('form', FORMS, ids=lambda form: form.__name__)
+def test_bound_agentstack_alias_names_the_same_paths(form):
+    result = form(name='mcp__agentstack__show_files')
+    assert result['paths'] == PATHS
+    assert result['shown_paths'] == ([] if form is codex_exec else PATHS)
+
+
+@pytest.mark.parametrize('form', FORMS, ids=lambda form: form.__name__)
 @pytest.mark.parametrize('name', ['mcp__other__show_files', 'show_files', 'mcp__orrery-mail__show_filesx',
-                                  'mcp__orrery_mail__send_message'])
+                                  'mcp__orrery_mail__send_message', 'mcp__agentstack_other__show_files',
+                                  'mcp__agentstack__show_filesx', 'mcp__agentstack__send_message'])
 def test_another_tool_or_server_grants_nothing(form, name):
-    if form is codex_exec and not name.startswith('mcp__orrery'):
-        return  # an unknown tools.X is not parsed at all
     assert form(name=name)['paths'] == []
 
 

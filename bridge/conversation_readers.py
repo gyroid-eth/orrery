@@ -65,6 +65,8 @@ def text_event(text,role,ts):
 
 def tool_event(name,ts,*,result=False,failed=False):
     if not isinstance(name,str):name='Tool'
+    # Keep the PC/mobile image renderers on the established delivery name.
+    if name=='mcp__agentstack__show_files':name='mcp__orrery_mail__show_files'
     return dict(kind='tool_result' if result else 'tool',role='assistant',
                 text=(name[:160]+(' · failed' if failed else ' · completed')) if result else name[:160],ts=ts)
 
