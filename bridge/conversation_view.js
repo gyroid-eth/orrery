@@ -104,7 +104,7 @@
   const warningIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5m0 3v.1"/></svg>';
   const retryIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10a8 8 0 1 0-1 7M20 4v6h-6"/></svg>';
   let closeActiveNotice=null;
-  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,expandControl=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null,openExternalUrl=null,renderPeerAvatar=null,renderAvatar=null}){
+  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,expandControl=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null,openExternalUrl=null,renderPeerAvatar=null,renderAvatar=null,onReference=null}){
     let screen=host||document.querySelector('.screen');
     const toggle=control||document.getElementById('conversationToggle');
     const listeners=[];
@@ -113,7 +113,7 @@
     const panel=document.createElement('section');
     panel.className='conversation-panel';panel.id=panelId;panel.hidden=true;
     panel.setAttribute('aria-label','Reader');
-    panel.innerHTML='<div class="conversation-body"><div class="conversation-thread">'+
+    panel.innerHTML='<div class="conversation-process" hidden><span class="conversation-process-dot" aria-hidden="true"></span><span class="conversation-process-label" role="status" aria-live="polite">Compacting context…</span><span class="conversation-process-time"></span></div><div class="conversation-body"><div class="conversation-thread">'+
       '<div class="conversation-scroll" tabindex="0" aria-label="Conversation messages">'+
       '<button class="cockpit-control conversation-action conversation-older" type="button" aria-label="Load earlier" hidden>Load earlier</button>'+
       '<div class="conversation-events"></div><div class="conversation-pending" role="status" aria-live="polite"></div>'+
@@ -139,6 +139,44 @@
     if(!expandControl)toggle.after(expandButton);
     const el=selector=>panel.querySelector(selector);
     const scroll=el('.conversation-scroll'),eventsEl=el('.conversation-events');
+    const replyButton=document.createElement('button');replyButton.type='button';replyButton.className='cockpit-control conversation-selection-reply';
+    replyButton.textContent='Reply with reference';replyButton.hidden=true;panel.append(replyButton);
+    let selectedPassage=null,selectionFrame=0;
+    function hideSelection(){replyButton.hidden=true;selectedPassage=null;}
+    function reference(event,text,kind='text'){
+      const key=contextKey,signature=JSON.stringify(event),owner=agent;
+      const value={agent:owner,eventId:event.id,role:event.role||'assistant',ts:event.ts||'',text,kind,
+        isCurrent:()=>fingerprint(getContext()||{})===key&&(!events.has(event.id)||JSON.stringify(events.get(event.id))===signature)};
+      hideSelection();onActivate();
+      return onReference?.(value)===true;
+    }
+    function selection(){
+      selectionFrame=0;
+      if(!onReference||!opened||!presented||document.hidden)return hideSelection();
+      const selected=root.getSelection();
+      if(!selected||selected.isCollapsed||selected.rangeCount!==1)return hideSelection();
+      const range=selected.getRangeAt(0),element=node=>node.nodeType===1?node:node.parentElement;
+      const start=element(range.startContainer),end=element(range.endContainer);
+      const article=start?.closest('.conversation-event'),text=start?.closest('.conversation-text');
+      if(!article||!eventsEl.contains(article)||!text?.contains(range.endContainer)||end?.closest('.conversation-event')!==article)return hideSelection();
+      const event=events.get(article.dataset.eventId),value=selected.toString().trim();
+      if(!event||!value||value.length>8192)return hideSelection();
+      const bounds=range.getBoundingClientRect(),viewport=scroll.getBoundingClientRect(),box=panel.getBoundingClientRect();
+      if(bounds.bottom<viewport.top||bounds.top>viewport.bottom)return hideSelection();
+      selectedPassage={event,text:value};replyButton.hidden=false;
+      const width=replyButton.offsetWidth,height=replyButton.offsetHeight;
+      replyButton.style.left=Math.max(8,Math.min(bounds.left-box.left,box.width-width-8))+'px';
+      const below=bounds.bottom-box.top+6;
+      replyButton.style.top=Math.max(8,Math.min(below,viewport.bottom-box.top-height-6))+'px';
+    }
+    function planSelection(){if(!onReference||!opened||!presented)return;cancelAnimationFrame(selectionFrame);selectionFrame=requestAnimationFrame(selection);}
+    listen(document,'selectionchange',planSelection);listen(panel,'pointerup',planSelection);listen(panel,'keyup',planSelection);
+    listen(scroll,'scroll',hideSelection,{passive:true});
+    listen(replyButton,'pointerdown',event=>{event.preventDefault();event.stopPropagation();});
+    listen(replyButton,'click',event=>{
+      event.stopPropagation();clearTimeout(jumpTimer);
+      const selected=selectedPassage;if(selected&&reference(selected.event,selected.text))root.getSelection()?.removeAllRanges();
+    });
     let linkPress=null;
     listen(panel,'pointerdown',event=>{linkPress={x:event.clientX,y:event.clientY,selected:!root.getSelection()?.isCollapsed};});
     function activateLink(event){
@@ -201,16 +239,22 @@
       if(opened&&presented&&container?.contains(document.activeElement))scroll.focus({preventScroll:true});
     }
     const activityEl=el('.conversation-activity'),activityLabel=el('.conversation-activity-label'),activityTime=el('.conversation-activity-time');
+    const process=el('.conversation-process'),processTime=el('.conversation-process-time');
     function paintActivity(current=getContext()||{}){
+      const compacting=opened&&presented&&current.running===true&&current.reader_phase==='compacting';
+      if(process.hidden===compacting)process.hidden=!compacting;
+      const phaseTime=compacting&&typeof current.reader_phase_elapsed==='string'?current.reader_phase_elapsed:'';
+      if(processTime.textContent!==phaseTime)processTime.textContent=phaseTime;
       const state=opened&&presented&&current.running===true&&['work','wait','ask','question'].includes(current.act_state)?
         (current.act_state==='ask'?'question':current.act_state):'';
       const label=state==='work'?'Working':state==='wait'?'Waiting':state?'Waiting for you':'';
       const elapsed=state==='work'&&typeof current.work_disp==='string'?current.work_disp.trim():'';
       activityEl.classList.toggle('activity-paused',document.hidden||!presented||!opened);
       panel.classList.toggle('conversation-inactive',document.hidden||!presented||!opened);
-      if(activityEl.hidden===!state&&activityEl.dataset.state===(state||'')&&activityTime.textContent===(elapsed?'· '+elapsed:''))return;
+      const hidden=!state||compacting;
+      if(activityEl.hidden===hidden&&activityEl.dataset.state===(state||'')&&activityTime.textContent===(elapsed?'· '+elapsed:''))return;
       const atBottom=nearBottom();
-      activityEl.hidden=!state;activityEl.dataset.state=state;
+      activityEl.hidden=hidden;activityEl.dataset.state=state;
       if(activityLabel.textContent!==label)activityLabel.textContent=label;
       activityTime.textContent=elapsed?'· '+elapsed:'';
       activityEl.title=label+(elapsed?' · '+elapsed:'');
@@ -354,7 +398,9 @@
       paintStatus();
       paintActivity();
     }
-    const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onBeforeOpen:layoutChanged,onClose:layoutChanged,onActivate:()=>expand(true)});
+    const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onBeforeOpen:layoutChanged,onClose:layoutChanged,onActivate:()=>expand(true),
+      onReference:onReference?ref=>{const event=[...events.values()].find(event=>event.references?.some(value=>value.id===ref.id));
+        if(event&&reference(event,ref.label,'file'))preview.close();}:null});
     const stopPathLinks=root.OrreryConversationMarkdown?.observePaths?.(panel,source);
     let enabled=false,opened=false,agent='',generation=0,controller=null,timer=0,busy=false,sessionReloadAttempted=false;
     let before=null,after=null,hasOlder=false,mode='',newCount=0,events=new Map();
@@ -425,7 +471,7 @@
     }
     function modeMessage(text){if(!text&&document.activeElement===modeInfo&&opened)scroll.focus({preventScroll:true});modeInfo.title=text;modeInfo.setAttribute('aria-label',text);paintStatus();}
     function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;sessionReloadAttempted=false;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
-    function clear({keepSubmissions=false}={}){closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();preview?.resetInline();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
+    function clear({keepSubmissions=false}={}){hideSelection();closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();preview?.resetInline();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
       if(tableMutating)return;
@@ -817,21 +863,27 @@
           (events.size+additions.length>MAX_EVENTS||retainedBytes+additions.reduce((n,event)=>n+byteSize(event),0)>MAX_BYTES)){
           paused=true;message('Updates paused at reader limit. Scroll to the bottom or select Latest to resume.','Updates paused');position();return;
         }
-        saveTables();tableMutating=true;
+        // Native snapshots repeat their current window. Leave an identical
+        // window attached so a poll neither clears a text selection nor lays
+        // out every message again. Order and the complete event still matter.
+        const snapshot=fresh?incoming.slice(-200):null,previousRows=fresh?[...events.values()]:null;
+        const unchangedSnapshot=fresh&&snapshot.length===previousRows.length&&snapshot.every((event,index)=>
+          event.id===previousRows[index].id&&JSON.stringify(event)===JSON.stringify(previousRows[index]));
+        if(!unchangedSnapshot){saveTables();tableMutating=true;}
         const fragment=document.createDocumentFragment(),focusedGroup=toolGroups.find(group=>group.button===document.activeElement);let added=0;
-        if(fresh){
+        if(fresh&&!unchangedSnapshot){
           keepReaderFocus(eventsEl);
           const existing=new Map(rawRows().map(child=>[child.dataset.eventId,child]));
           const previous=events;
           if([...previous].some(([id,event])=>JSON.stringify(event)!==JSON.stringify(incoming.find(next=>next.id===id))))preview?.close();
           events=new Map();retainedBytes=0;
-          for(const event of incoming.slice(-200)){
+          for(const event of snapshot){
             if(events.has(event.id))continue;
             events.set(event.id,event);retainedBytes+=byteSize(event);
             fragment.appendChild(existing.has(event.id)&&JSON.stringify(previous.get(event.id))===JSON.stringify(event)?existing.get(event.id):draw(event));if(!previous.has(event.id))added++;
           }
           eventsEl.replaceChildren(fragment);
-        }else{
+        }else if(!fresh){
           for(const event of additions){fragment.appendChild(draw(event));added++;}
           if(direction==='older'){
             events=new Map([...additions.map(event=>[event.id,event]),...events]);eventsEl.prepend(fragment);
@@ -843,9 +895,9 @@
         if(direction!=='newer'){before=page.before;hasOlder=page.has_older===true;}
         if(direction!=='older')after=page.after;
         const trimmed=trim(direction!=='older');earlier.hidden=!hasOlder;
-        regroupTools(focusedGroup);
+        if(!unchangedSnapshot)regroupTools(focusedGroup);
         for(const key of tablePositions.keys())if(!events.has(JSON.parse(key)[0]))tablePositions.delete(key);
-        restoreTables();
+        if(!unchangedSnapshot)restoreTables();
         reconcileSubmissions(incoming,direction,sequence);
         empty.hidden=events.size>0||submissions.length>0;empty.textContent='No conversation messages in this portion yet.';
         if(direction==='initial'||direction==='newer'&&atBottom)scroll.scrollTop=scroll.scrollHeight;
@@ -910,6 +962,7 @@
     }
     function close({focus=true}={}){
       if(!opened)return;
+      hideSelection();
       stop();opened=false;agent='';panel.hidden=true;preview?.setVisible(false);screen.classList.remove('conversation-open','conversation-full');
       screen.style.removeProperty('--conversation-viewport-height');screen.style.removeProperty('--conversation-viewport-top');
       toggle.setAttribute('aria-expanded','false');paintControls();clear({keepSubmissions:true});onState();const target=typeof focusControl==='function'?focusControl():focusControl||toggle;
@@ -1030,7 +1083,7 @@
     listen(document,'visibilitychange',()=>{preview?.setVisible(opened&&presented&&!document.hidden);paintActivity();if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
     preference();paintControls();
     return Object.freeze({open,close,relocate,reconcile:context,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
-      dispose(){stopPathLinks?.();ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();submissionObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});preview?.dispose();clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();noticeMenu.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
+      dispose(){cancelAnimationFrame(selectionFrame);stopPathLinks?.();ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();submissionObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});preview?.dispose();clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();noticeMenu.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
   }
   function mountWorkspace({getContext,getSlots,getOwner=name=>getContext(name)?.terminalPaneId,activate,...options}){
     const screen=document.querySelector('.screen'),toggle=document.getElementById('conversationToggle');
@@ -1104,7 +1157,7 @@
       }finally{syncing=false;}
     }
     toggle.addEventListener('click',()=>{sync();const view=current();if(view)view.opened?view.close():view.open();});
-    for(const event of ['oc:stage-agent','oc:focus-agent','oc:agents','oc:prefs-changed'])document.addEventListener(event,sync);
+    for(const event of ['oc:stage-agent','oc:focus-agent','oc:agents','oc:prefs-changed','oc:reader-activity'])document.addEventListener(event,sync);
     document.getElementById('conversationEnabled').addEventListener('change',event=>{
       try{localStorage.setItem(KEY,event.target.checked?'1':'0');}catch(_){}sync();
     });
