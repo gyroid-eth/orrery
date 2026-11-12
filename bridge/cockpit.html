@@ -4620,9 +4620,9 @@
       }
     }
   },
-  "inventory_digest": "06bf63872e7f0482bf264e6cb10c17394954acaa456aaddde527451ae7f11752",
+  "inventory_digest": "72244a18d4535ef74204ad1dd326d1de3d61c92048c3ec85c30e8c7fbaae978f",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "d710bd5b90ccce00fb6462cba0fbe1f6f97df0b897959c6aa4d8b0a9a14cb5fd",
+  "source_digest": "ab07504ab0c77183288661039dcda79fa8a8a3ac3d1307aa2a637d3d875f045f",
   "surface": "cockpit",
   "version": 1
 }
@@ -6475,6 +6475,7 @@ applyThemeAxisState({broadcast:false});
 function setLink(state,label){linkDot.className='dot '+state;linkText.textContent=label;
   const stat=document.getElementById('linkStat');if(stat)stat.hidden=(state==='open');}
 let readerApproval=null;
+let readerActivity=null;
 function send(payload){
   if(!socket||socket.readyState!==WebSocket.OPEN)return false;
   socket.send(JSON.stringify(payload));return true;
@@ -7110,6 +7111,7 @@ function writePaneOutput(pane,msg){
     if(token!==null)endPaneSnapshot(pane,token);
     else stickFollowHost(pane);
     relandAfterBufferReset(pane);
+    readerActivity?.observe(pane);
   });
 }
 /* A CLI that reflows after a resize clears the buffer and reprints its whole
@@ -7754,7 +7756,7 @@ function createPane(session,meta){
   });
   group.paneTabs.appendChild(tab);
   const paneRec={session,meta:normalized,term,fit,host,tab,bottomJump,_xtermAtBottom:true};
-  term.onWriteParsed(()=>queueMicrotask(()=>readerApproval?.observe(paneRec,true)));
+  term.onWriteParsed(()=>queueMicrotask(()=>{readerApproval?.observe(paneRec,true);readerActivity?.observe(paneRec);}));
   panes.set(meta.paneId,paneRec);
   terminalHostResizeObserver.observe(host);
   setCodexWheelModes(paneRec,normalized);installCodexWheel(paneRec);
@@ -8835,6 +8837,7 @@ function connect(){
   nextSocket.addEventListener('close',()=>{
     if(socket!==nextSocket)return;
     readerApproval?.disconnected();
+    readerActivity?.disconnected();
     attachedSessions.clear();requestedSessions.clear();
     sessionGroups.forEach((_,session)=>setGroupState(session,'closed'));
     refreshHeaderStats();setLink('closed','disconnected');scheduleReconnect();
@@ -9172,6 +9175,12 @@ function paintAgentPortrait(face,name){
 }
 function conversationAvatar(name,model,existing=null){
   if(!name)return null;
+  const roster=currentAgentNamed(name)||{name};
+  // A recorded model can belong to a different maker than today's roster.
+  const identity=model?{...roster,provider:rosterIsLocal(roster)?'local':'',model,model_raw:model}:roster;
+  const presentation=providerPresentation(identity);
+  const signature=JSON.stringify([name,presentation.provider?.asset,presentation.text,presentation.cls,Boolean(presentation.local)]);
+  if(existing?.dataset.readerIdentity===signature)return existing;
   const avatar=existing||document.createElement('span');
   if(!existing){
     avatar.className='medal conversation-avatar';avatar.setAttribute('aria-hidden','true');
@@ -9183,10 +9192,8 @@ function conversationAvatar(name,model,existing=null){
     const pill=document.createElement('span');pill.className='pill eng';pill.hidden=true;avatar.append(face,badge,pill);
   }
   paintAgentPortrait(avatar.querySelector('.face'),name);
-  const roster=currentAgentNamed(name)||{name};
-  // A recorded model can belong to a different maker than today's roster.
-  const identity=model?{...roster,provider:rosterIsLocal(roster)?'local':'',model,model_raw:model}:roster;
   paintRosterProvider(avatar,identity);avatar.querySelector('.pill.eng').hidden=true;
+  avatar.dataset.readerIdentity=signature;
   return avatar;
 }
 function conversationPeerAvatar(name,existing=null){
@@ -10898,16 +10905,20 @@ function composerTargetPresent(target){
 }
 let promptSubmissionSequence=0;
 let promptAttemptSequence=0;
+let readerReply=null;
 function sendPrompt(opts){
   const bypass=opts&&opts.bypassGuard;
-  const text=promptInput.value;
-  if(!text.trim())return;
+  const draft=promptInput.value;
+  if(!draft.trim())return;
   const target=captureComposerTarget(),p=target?.pane;
   if(!target){showToast('no pane focused — click an agent first');return;}
+  const referenceGuard=readerReply?.guard();
+  if(referenceGuard&&!referenceGuard(target))return;
   if(!bypass){
-    const verdict=inspectPrompt(text);
+    const verdict=inspectPrompt(draft);
     if(verdict){showSendGuard(verdict);return;}
   }
+  const text=readerReply?readerReply.compose(draft):draft;
   hideSendGuard();
   // one bracketed paste (multiline stays one block in the TUI input box),
   // then a separate CR to submit — same shape the pty expects from a human.
@@ -10917,7 +10928,7 @@ function sendPrompt(opts){
   document.dispatchEvent(new CustomEvent('oc:prompt-sending',{detail:{attemptId,name:target.session,text,startedAt:submittedAt}}));
   const cancel=()=>document.dispatchEvent(new CustomEvent('oc:prompt-send-cancelled',{detail:{attemptId,name:target.session}}));
   setTimeout(()=>{
-    if(!composerTargetPresent(target)){cancel();return;}
+    if(!composerTargetPresent(target)||referenceGuard&&!referenceGuard(target)){cancel();return;}
     if(send({type:"input",paneId:target.paneId,data:"\r"})){
       document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'talk',name:p.session}}));
       document.dispatchEvent(new CustomEvent('oc:prompt-submitted',{detail:{name:target.session,text,submittedAt,id:submittedAt+':'+(++promptSubmissionSequence),attemptId}}));
@@ -10925,7 +10936,7 @@ function sendPrompt(opts){
     }else{cancel();showToast(`send cancelled → ${target.session}: disconnected before Enter; reconnect and retry`,true);}
   },250);
   pushPromptHistory(text);
-  promptInput.value='';saveDraft();closeSlashMenu();
+  promptInput.value='';readerReply?.clear();saveDraft();closeSlashMenu();
 }
 function sendInterrupt(){
   const p=panes.get(activeId);
@@ -11298,6 +11309,12 @@ const conversationView=(()=>{
       await asset('script','src','conversation_terminal.js');
       await asset('script','src','conversation_markdown.js');
       await asset('script','src','conversation_view.js');
+      await asset('script','src','conversation_reply.js');
+      await asset('script','src','reader_activity.js');
+      readerReply=OrreryConversationReply.mount({host:promptInput.closest('.promptbar'),input:promptInput,
+        getTarget:captureComposerTarget,onError:text=>showToast(text,true)});
+      readerActivity=OrreryReaderActivity.mount({getPanes:()=>panes.values(),
+        getProgram:pane=>currentAgents.find(agent=>agent.name===pane.session)?.program});
       await asset('link','href','reader_approval.css');
       await asset('script','src','reader_approval.js');
       readerApproval=OrreryReaderApproval.mount({
@@ -11328,7 +11345,8 @@ const conversationView=(()=>{
         frame?.addEventListener('load',wrapFrame);wrapFrame();
       }
       instance=OrreryConversation.mountWorkspace({
-        getContext:(selected)=>{const name=selected||activeSession();return {...(currentAgents.find(a=>a.name===name)||{name}),terminalPaneId:paneIdForSession(name)};},
+        getContext:(selected)=>{const name=selected||activeSession(),paneId=paneIdForSession(name);
+          return {...(currentAgents.find(a=>a.name===name)||{name}),terminalPaneId:paneId,...readerActivity.current(panes.get(paneId))};},
         getSlots:()=>splitVisible?splitSessions.map(name=>({name,host:splitCells.get(name),controlHost:splitCells.get(name)?._actions})).filter(slot=>slot.host?.isConnected):[],
         getOwner:name=>panes.get(paneIdForSession(name)),
         activate:name=>focusSplitSession(name),
@@ -11336,6 +11354,7 @@ const conversationView=(()=>{
         openExternalUrl,
         renderPeerAvatar:conversationPeerAvatar,
         renderAvatar:conversationAvatar,
+        onReference:value=>readerReply.add(value),
       });
       return instance;
     })().catch(error=>{loading=null;showToast(error.message,true);return null;});

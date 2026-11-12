@@ -2,7 +2,7 @@
    grants; an explicit body-path click has a separate image-only boundary. */
 (function(root){
   'use strict';
-  function mount({host,source,onActivate=()=>{},onBeforeOpen=()=>{},onClose=()=>{}}){
+  function mount({host,source,onActivate=()=>{},onBeforeOpen=()=>{},onClose=()=>{},onReference=null}){
     // sourceView: this reader's last Markdown/Source choice for .md previews.
     let request=null,generation=0,objectUrl=null,selected=null,sourceView=false;
     const create=(tag,cls,text)=>{const el=document.createElement(tag);el.className=cls;if(text!==undefined)el.textContent=text;return el;};
@@ -89,6 +89,7 @@
       const head=create('div','conversation-preview-head'),title=create('h3','conversation-preview-title',ref.label);
       const closeButton=button('conversation-preview-close','× Preview',()=>{close();host.closest('.conversation-panel').querySelector('.conversation-scroll')?.focus();});
       head.append(title,closeButton);
+      if(onReference&&ref.id)head.insertBefore(button('conversation-preview-reply','Reply with reference',()=>onReference(ref)),closeButton);
       const notice=create('div','conversation-preview-notice',ref.path?'':ref.input_image?'Recorded input image':'Current file · may differ from the recorded edit');
       const body=create('div','conversation-preview-content','Loading preview…');body.tabIndex=0;
       host.replaceChildren(head,notice,body);closeButton.focus();

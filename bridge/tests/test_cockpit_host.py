@@ -278,10 +278,11 @@ def test_fresh_output_gap_uses_actual_caller_to_stop_only_affected_session_and_r
         match = re.search(r'function '+name+r'\([^\n]*\)\{.*?\n\}', html, re.DOTALL)
         assert match, name
         functions.append(match.group(0))
-    # The extracted WS functions share this optional module with the page.
-    declaration = re.search(r'^let readerApproval=null;$', html, re.MULTILINE)
-    assert declaration
-    functions.append(declaration.group(0))
+    # The extracted WS functions share these optional modules with the page.
+    for module in ('readerApproval', 'readerActivity'):
+        declaration = re.search(r'^let '+module+r'=null;$', html, re.MULTILINE)
+        assert declaration, module
+        functions.append(declaration.group(0))
     script = r'''
 const groups=new Map(),sessionGroups=groups,panes=new Map(),sent=[],toasts=[],links=[];
 const attachedSessions=new Set(),requestedSessions=new Set(),availableSessions=new Map([['Alpha',{}],['Beta',{}]]);

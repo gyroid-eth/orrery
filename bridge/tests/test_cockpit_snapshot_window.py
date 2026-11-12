@@ -43,6 +43,7 @@ COCKPIT = SOURCES / "cockpit.html"
 CONTROL_SERVER = SOURCES / "control_server.py"
 
 BLOCKS = (
+    r"let readerActivity=null;\n",
     r"function paneSnapshotEpoch\(host\)\{.*?\n",
     r"function hostSnapshotPending\(host\)\{.*?\n",
     r"function captureHostScrollState\(host\)\{.*?\n\}\n",

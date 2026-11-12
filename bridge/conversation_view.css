@@ -70,7 +70,7 @@
 .screen.conversation-open.conversation-full .termstage>.termhost:not(.follow){right:0}
 /* Keep the original composer and every existing send/IME/target guard. The
    reader reserves its space instead of covering it or cloning its controls. */
-.screen.conversation-open.conversation-full .conversation-panel{bottom:84px}
+.screen.conversation-open.conversation-full .conversation-panel{bottom:calc(84px + var(--conversation-reply-space,0px))}
 .screen.conversation-open.conversation-full .promptbar{right:0;z-index:6}
 .conversation-body{display:flex;flex:1;min-height:0;min-width:0}
 .conversation-thread{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
@@ -99,7 +99,7 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .screen.conversation-open{--conversation-width:100%}
   .screen.conversation-open .termstage,.screen.conversation-open .promptbar{right:0}
   .screen.conversation-open .termstage>.termhost:not(.follow){right:0}
-  .screen.conversation-open .conversation-panel{bottom:84px}
+  .screen.conversation-open .conversation-panel{bottom:calc(84px + var(--conversation-reply-space,0px))}
   .screen.conversation-open .promptbar{z-index:6}
   .conversation-panel{border-left:0}
 }
@@ -109,12 +109,12 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   /* The existing cockpit header/composer can overflow a phone viewport. Keep
      this reader attached to the actual viewport, not that wider grid. */
   .conversation-panel{position:fixed;left:0;right:0;top:calc(var(--conversation-viewport-top,0px) + 94px);bottom:auto;width:100vw;
-    height:calc(var(--conversation-viewport-height,100dvh) - 94px - 132px);z-index:1090}
+    height:calc(var(--conversation-viewport-height,100dvh) - 94px - 132px - var(--conversation-reply-space,0px));z-index:1090}
   .screen.conversation-open .scr-head{position:fixed;left:0;right:auto;
     top:calc(var(--conversation-viewport-top,0px) + 54px);width:100vw;z-index:1092;background:var(--panel)}
   .screen.conversation-open .termstage{visibility:hidden}
   .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .promptbar{position:fixed;left:0;right:auto;bottom:auto;
-    top:calc(var(--conversation-viewport-top,0px) + var(--conversation-viewport-height,100dvh) - 132px);width:100vw;height:132px;
+    top:calc(var(--conversation-viewport-top,0px) + var(--conversation-viewport-height,100dvh) - 132px - var(--conversation-reply-space,0px));width:100vw;height:calc(132px + var(--conversation-reply-space,0px));
     z-index:1091;display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-rows:22px minmax(0,1fr);
     gap:6px;padding:8px 10px;visibility:visible}
   .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .promptmeta{grid-column:1/-1;grid-row:1;display:block;max-width:none;min-width:0}
@@ -126,7 +126,7 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .slashmenu,.screen:is(.conversation-open,:has(.split-cell.conversation-open)) .sendguard{left:10px;right:10px;bottom:calc(100% + 6px)}
   .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .sendguard{flex-wrap:wrap}
   .screen:has(.split-cell.conversation-open) .promptbar{position:absolute;left:0;right:0;top:auto;bottom:0;width:auto;z-index:6}
-  .screen:has(.split-cell.conversation-open) .termstage{bottom:132px}
+  .screen:has(.split-cell.conversation-open) .termstage{bottom:calc(132px + var(--conversation-reply-space,0px))}
   .conversation-has-preview .conversation-thread{display:none}
   .conversation-preview{width:100%;border:0}
   .conversation-scroll{padding-left:14px;padding-right:12px}
@@ -336,3 +336,24 @@ html[data-color-theme="light"] .conversation-activity[data-state="work"]{color:#
 .conversation-panel a{color:var(--amber);text-decoration:underline;text-underline-offset:2px}
 .conversation-preview-markdown :is(.markdown-link-text,.markdown-image){color:var(--ink-dim);text-decoration:underline dotted;text-underline-offset:2px}
 .conversation-preview-source[aria-pressed="true"]{border-color:var(--amber);color:var(--amber)}
+.conversation-selection-reply{position:absolute;z-index:12;padding:8px 12px;border-radius:7px;
+  color:var(--bg);border-color:var(--amber);background:var(--amber);box-shadow:0 4px 18px rgb(0 0 0 / .25);font:11px/1.5 var(--mono)}
+.conversation-process{display:flex;align-items:center;gap:8px;flex:none;padding:11px 14px;
+  border-bottom:1px solid var(--hair);background:rgb(var(--theme-accent-rgb) / .08);color:var(--amber);font:11px/1.5 var(--mono)}
+.conversation-process-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.conversation-process-time{margin-left:auto;white-space:nowrap;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+.conversation-reply-reference{position:absolute;left:12px;right:12px;top:8px;padding:8px 30px 8px 10px;
+  border-left:2px solid var(--amber);border-radius:3px 7px 7px 3px;background:rgb(var(--theme-accent-rgb) / .09);min-width:0}
+.conversation-reply-reference[hidden]{display:none}
+.conversation-reply-label{margin-bottom:4px;color:var(--ink-dim);font:10px/1.5 var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conversation-reply-quote{margin:0;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 var(--mono);
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+.conversation-reply-remove{position:absolute;right:3px;top:3px;width:28px;height:28px;border:0;background:transparent;color:var(--ink-dim);font:18px var(--mono);cursor:pointer}
+.conversation-reply-remove:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.screen .promptbar.has-conversation-reference{height:calc(84px + var(--conversation-reply-space,0px));padding-top:calc(10px + var(--conversation-reply-space,0px))}
+.screen:has(.promptbar.has-conversation-reference) .termstage{bottom:calc(84px + var(--conversation-reply-space,0px))}
+@media(max-width:600px){
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .promptbar.has-conversation-reference{
+    height:calc(132px + var(--conversation-reply-space,0px));padding-top:calc(8px + var(--conversation-reply-space,0px))}
+  .screen:has(.split-cell.conversation-open):has(.promptbar.has-conversation-reference) .termstage{bottom:calc(132px + var(--conversation-reply-space,0px))}
+}
