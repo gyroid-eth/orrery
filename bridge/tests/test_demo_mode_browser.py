@@ -64,6 +64,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         path = urlsplit(self.path).path
+        if path == "/telemetry/prefs":
+            return self.send(200, json.dumps({"rev": self.server.prefs_rev, "prefs": self.server.prefs}).encode())
         if path == "/telemetry/identity":
             mode = self.server.identity_mode
             if mode == "error":
@@ -80,11 +82,23 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send(404, b"{}")
         return super().do_GET()
 
+    def do_PUT(self):  # noqa: N802
+        if self.path != "/telemetry/prefs":
+            return self.send(404, b"{}")
+        value = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+        self.server.prefs.update(value.get('set', {}))
+        for key in value.get('remove', []):
+            self.server.prefs.pop(key, None)
+        self.server.prefs_rev += 1
+        return self.send(200, json.dumps({"rev": self.server.prefs_rev, "prefs": self.server.prefs}).encode())
+
 
 @contextlib.contextmanager
 def browser(identity_mode="ok"):
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     server.identity_mode = identity_mode
+    server.prefs = {}
+    server.prefs_rev = 0
     threading.Thread(target=server.serve_forever, daemon=True).start()
     port = cdp._free_port()
     profile = tempfile.mkdtemp(prefix="orrery-demo-cdp-")

@@ -677,7 +677,7 @@ BACKEND_COMMIT = _checkout_commit()
 # Mirrors SYNC_RE in bridge/prefs_sync.js.
 PREFS_KEY_RE = re.compile(
     r"^(oc-(term-|mini-|split-|pinned-)|orrery\.(color-theme|spawn-advanced)"
-    r"|agentstack\.theme-profile\.v1\.state$|agentdash\.(netparams|netctl|holdMs))"
+    r"|orrery\.demo\.shared\.v1$|agentstack\.theme-profile\.v1\.state$|agentdash\.(netparams|netctl|holdMs))"
 )
 PREFS_MAX_VALUE = 16 * 1024
 PREFS_MAX_KEYS = 200
@@ -3267,6 +3267,29 @@ async def serve_identity(request: web.Request) -> web.Response:
     return web.json_response(demo_identity(), headers={"Cache-Control": "no-store"})
 
 
+def shared_demo_state(prefs: dict[str, str]) -> dict[str, Any]:
+    raw = prefs.get("orrery.demo.shared.v1")
+    value = json.loads(raw) if raw is not None else {"version": 1, "on": False, "words": []}
+    if (not isinstance(value, dict) or set(value) != {"version", "on", "words"}
+            or type(value["version"]) is not int or value["version"] != 1
+            or type(value["on"]) is not bool or not isinstance(value["words"], list)
+            or any(not isinstance(word, str) or not 2 <= len(word) <= PREFS_MAX_VALUE for word in value["words"])):
+        raise ValueError("invalid_demo_state")
+    identity = demo_identity() if value["on"] else None
+    return {"version": 1, "on": value["on"],
+            "words": value["words"] if value["on"] else [],
+            "identity": {key: identity[key] for key in ("users", "hosts")} if identity else None}
+
+
+async def serve_shared_demo(request: web.Request) -> web.Response:
+    try:
+        state = shared_demo_state(read_prefs(PREFS_PATH))
+    except (ValueError, TypeError):
+        return web.json_response({"error": "demo_unavailable"}, status=503,
+                                 headers={"Cache-Control": "no-store"})
+    return web.json_response(state, headers={"Cache-Control": "no-store"})
+
+
 def launch_ghostty(tmux_bin: str, session: str) -> None:
     """Launch a detached Ghostty client attached to the requested tmux session."""
     require_target(tmux_bin, "attach", session=session)
@@ -4649,6 +4672,7 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
     app.router.add_get("/telemetry/health", serve_health)
     app.router.add_get("/telemetry/platform", serve_platform)
     app.router.add_get("/telemetry/identity", serve_identity)
+    app.router.add_get("/telemetry/demo", serve_shared_demo)
     app.router.add_get("/telemetry/usage", serve_usage)
     app.router.add_get("/telemetry/prefs", serve_prefs)
     app.router.add_put("/telemetry/prefs", update_prefs)

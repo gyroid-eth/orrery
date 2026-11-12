@@ -229,6 +229,8 @@ The backend refuses to bind to anything other than `127.0.0.1`, but there is no 
 
 `/telemetry/fs/dirs` excludes hidden directories, but unlike the browser on the dashboard side, it has no root allowlist. Keep the localhost-only boundary.
 
+An updated phone reader automatically follows Demo mode and the additional words enabled on the desktop. Turning the Settings switch off also unmasks the phone. Closing the desktop preserves the last explicit state; merely opening another ordinary, non-demo page does not clear it. URL `?demo=0` still affects that page only. Only display settings and the names needed for masking are shared, never drafts or histories. The phone keeps its draft and attachments open, and copying and sending use the original values. Update both components, then reload the active Demo desktop and phone once.
+
 ## Related documents
 
 - [Installation](install.md)

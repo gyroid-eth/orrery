@@ -31,6 +31,8 @@
   'use strict';
   const STORAGE_KEY='orrery.demo-mode.v1';
   const WORDS_KEY='orrery.demo-mask-words.v1';
+  const SHARED_KEY='orrery.demo.shared.v1';
+  const bootstrap=window.OrreryDemoBootstrap||null;
   const ATTRIBUTES=['title','aria-label','alt','placeholder','data-tip','data-tooltip'];
   const SKIP=new Set(['SCRIPT','STYLE','NOSCRIPT','TEXTAREA']);
   const IDENTITY_TIMEOUT_MS=5000;
@@ -43,14 +45,28 @@
     try{return parseWords((JSON.parse(localStorage.getItem(WORDS_KEY)||'[]')||[]).join(','));}catch(_){return [];}
   }
   function words(search){
+    if(bootstrap)return bootstrap.words;
     const extra=parseWords(new URLSearchParams(search).get('mask')||'');
     return [...new Set([...storedWords(),...extra])];
   }
   function requested(search){
+    if(bootstrap)return bootstrap.on;
     const value=new URLSearchParams(search).get('demo');
     if(value==='1'||value==='true')return true;
     if(value==='0'||value==='false')return false;
     return stored();
+  }
+  function publish(value){
+    if(bootstrap||!window.OrreryPrefs?.flush)return Promise.resolve(true);
+    const encoded=JSON.stringify({version:1,on:value,words:value?words(location.search):[]});
+    try{localStorage.setItem(SHARED_KEY,encoded);}catch(_){return Promise.resolve(false);}
+    return window.OrreryPrefs.flush().then(data=>data?.prefs?.[SHARED_KEY]===encoded);
+  }
+  function syncedReload(reload){
+    return publish(api.on).then(ok=>{
+      if(ok){reload();return true;}
+      window.showToast?.('Could not sync Demo mode. Try again.',true);return false;
+    });
   }
   let resolveReady=null;
   const api={
@@ -72,7 +88,12 @@
     reloadFor(value){
       api.setStored(value);
       const url=new URL(location.href);url.searchParams.delete('demo');
-      location.replace(url.toString());
+      return publish(value).then(ok=>{
+        if(ok){location.replace(url.toString());return true;}
+        api.setStored(api.on);window.showToast?.('Could not sync Demo mode. Try again.',true);
+        const toggle=document.getElementById('demoModeToggle');if(toggle)toggle.checked=api.on;
+        return false;
+      });
     },
     attachFrame(){},
     requested,
@@ -81,7 +102,7 @@
     /* Saved words; demo mode reloads to redraw the terminals with them. */
     setWords(list,{reload=true}={}){
       try{localStorage.setItem(WORDS_KEY,JSON.stringify(parseWords((list||[]).join(','))));}catch(_){/* not kept */}
-      if(reload&&api.on)location.reload();
+      if(reload&&api.on)return syncedReload(()=>location.reload());
     },
   };
   window.OrreryDemo=api;
@@ -151,23 +172,30 @@
 
   // ---------------------------------------------------------------- DOM text
   const originals=new WeakMap(); // text node -> {original, masked}
+  const attributeOriginals=new WeakMap();
+  let remasking=false;
   function maskText(node){
     const row=rowOf(node);
     if(row){pendingRows.add(row);return;}
-    const value=node.nodeValue;
-    if(!value)return;
+    const shown=node.nodeValue;
+    if(!shown)return;
     const kept=originals.get(node);
     // Our own write comes back through the observer: nothing to do.
-    if(kept&&kept.masked===value)return;
+    if(!remasking&&kept&&kept.masked===shown)return;
+    const value=kept&&kept.masked===shown?kept.original:shown;
     const masked=api.mask(value);
     if(masked!==value){originals.set(node,{original:value,masked});node.nodeValue=masked;}
-    else originals.delete(node);
+    else{originals.delete(node);if(node.nodeValue!==value)node.nodeValue=value;}
   }
   function maskAttributes(element){
+    let kept=attributeOriginals.get(element);
+    if(!kept){kept=new Map();attributeOriginals.set(element,kept);}
     for(const name of ATTRIBUTES){
       const value=element.getAttribute&&element.getAttribute(name);
-      if(!value)continue;
-      const masked=api.mask(value);
+      if(!value){kept.delete(name);continue;}
+      const original=kept.get(name),real=original&&original.masked===value?original.original:value;
+      const masked=api.mask(real);
+      if(masked!==real)kept.set(name,{original:real,masked});else kept.delete(name);
       if(masked!==value)element.setAttribute(name,masked);
     }
   }
@@ -395,11 +423,13 @@
   function load(){
     const abort=typeof AbortController==='function'?new AbortController():null;
     const timer=setTimeout(()=>abort&&abort.abort(),IDENTITY_TIMEOUT_MS);
-    fetch('/telemetry/identity',{cache:'no-store',signal:abort?abort.signal:undefined})
-      .then(response=>{
+    (bootstrap?Promise.resolve(bootstrap.identity):publish(true).then(ok=>{
+      if(!ok)throw new Error('Demo mode could not be synced');
+      return fetch('/telemetry/identity',{cache:'no-store',signal:abort?abort.signal:undefined}).then(response=>{
         if(!response.ok)throw new Error(`the backend answered ${response.status}`);
         return response.json();
-      })
+      });
+    }))
       .then(identity=>{
         clearTimeout(timer);
         const masker=window.OrreryDemoMask.create({...(identity||{}),words:words(location.search)});
@@ -423,5 +453,16 @@
         if(document.body)fail(reason);else document.addEventListener('DOMContentLoaded',()=>fail(reason),{once:true});
       });
   }
+  api.refresh=function({on,identity,words:extra}){
+    const masker=on?window.OrreryDemoMask.create({...identity,words:extra}):null;
+    if(on&&!masker.active)throw new Error('No names to mask');
+    api.on=on;api.mask=on?masker.mask:text=>text;remasking=true;
+    try{
+      const visit=doc=>{walk(doc.documentElement);for(const frame of doc.querySelectorAll('iframe')){try{if(frame.contentDocument)visit(frame.contentDocument);}catch(_){}}};
+      visit(document);for(const field of fields)syncField(field);
+    }finally{remasking=false;}
+    const badge=document.querySelector('.demo-badge');if(badge)badge.hidden=!on;
+    html.setAttribute('data-demo',on?'on':'off');
+  };
   load();
 })();
