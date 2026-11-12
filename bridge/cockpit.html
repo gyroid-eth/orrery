@@ -4620,9 +4620,9 @@
       }
     }
   },
-  "inventory_digest": "b64c7c2dc52fc95786391d33daa0c06d6842038ea9c9b4ac5c8818f56cf400bc",
+  "inventory_digest": "72244a18d4535ef74204ad1dd326d1de3d61c92048c3ec85c30e8c7fbaae978f",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "7d2717db3d097adc0b59b06a97138c8de7cb8ec8a3f88d5677fe6237db42adcc",
+  "source_digest": "ab07504ab0c77183288661039dcda79fa8a8a3ac3d1307aa2a637d3d875f045f",
   "surface": "cockpit",
   "version": 1
 }
@@ -9175,6 +9175,12 @@ function paintAgentPortrait(face,name){
 }
 function conversationAvatar(name,model,existing=null){
   if(!name)return null;
+  const roster=currentAgentNamed(name)||{name};
+  // A recorded model can belong to a different maker than today's roster.
+  const identity=model?{...roster,provider:rosterIsLocal(roster)?'local':'',model,model_raw:model}:roster;
+  const presentation=providerPresentation(identity);
+  const signature=JSON.stringify([name,presentation.provider?.asset,presentation.text,presentation.cls,Boolean(presentation.local)]);
+  if(existing?.dataset.readerIdentity===signature)return existing;
   const avatar=existing||document.createElement('span');
   if(!existing){
     avatar.className='medal conversation-avatar';avatar.setAttribute('aria-hidden','true');
@@ -9186,10 +9192,8 @@ function conversationAvatar(name,model,existing=null){
     const pill=document.createElement('span');pill.className='pill eng';pill.hidden=true;avatar.append(face,badge,pill);
   }
   paintAgentPortrait(avatar.querySelector('.face'),name);
-  const roster=currentAgentNamed(name)||{name};
-  // A recorded model can belong to a different maker than today's roster.
-  const identity=model?{...roster,provider:rosterIsLocal(roster)?'local':'',model,model_raw:model}:roster;
   paintRosterProvider(avatar,identity);avatar.querySelector('.pill.eng').hidden=true;
+  avatar.dataset.readerIdentity=signature;
   return avatar;
 }
 function conversationPeerAvatar(name,existing=null){

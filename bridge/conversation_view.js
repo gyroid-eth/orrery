@@ -1078,6 +1078,7 @@
     listen(document,'oc:stage-agent',context);
     listen(document,'oc:focus-agent',context);
     listen(document,'oc:agents',context);
+    listen(document,'oc:reader-activity',()=>{if(opened&&presented)paintActivity();});
     // A hidden tab keeps no held poll: end one that is waiting, so its
     // browser connection and the server's slot are returned at once.
     listen(document,'visibilitychange',()=>{preview?.setVisible(opened&&presented&&!document.hidden);paintActivity();if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
@@ -1157,7 +1158,7 @@
       }finally{syncing=false;}
     }
     toggle.addEventListener('click',()=>{sync();const view=current();if(view)view.opened?view.close():view.open();});
-    for(const event of ['oc:stage-agent','oc:focus-agent','oc:agents','oc:prefs-changed','oc:reader-activity'])document.addEventListener(event,sync);
+    for(const event of ['oc:stage-agent','oc:focus-agent','oc:agents','oc:prefs-changed'])document.addEventListener(event,sync);
     document.getElementById('conversationEnabled').addEventListener('change',event=>{
       try{localStorage.setItem(KEY,event.target.checked?'1':'0');}catch(_){}sync();
     });
