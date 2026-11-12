@@ -21,18 +21,19 @@
   'use strict';
   var ENDPOINT='/telemetry/prefs';
   var POLL_MS=4000;
-  var SYNC_RE=/^(oc-(term-|mini-|split-|pinned-)|orrery\.(color-theme|spawn-advanced)|agentstack\.theme-profile\.v1\.state$|agentdash\.(netparams|netctl|holdMs))/;
+  var SYNC_RE=/^(oc-(term-|mini-|split-|pinned-)|orrery\.(color-theme|spawn-advanced)|orrery\.demo\.shared\.v1$|agentstack\.theme-profile\.v1\.state$|agentdash\.(netparams|netctl|holdMs))/;
   var HISTORY_RE=/history/i;
   function synced(key){return typeof key==='string'&&SYNC_RE.test(key)&&!HISTORY_RE.test(key);}
 
   var store;
   try{store=window.localStorage;store.getItem('oc-prefs-probe');}catch(_){return;} /* storage blocked: nothing to sync */
   var rawSet=Storage.prototype.setItem,rawRemove=Storage.prototype.removeItem;
-  var rev=null,pending={},flushTimer=null,applying=false;
+  var rev=null,pending={},flushTimer=null,applying=false,inflight=Promise.resolve(null);
 
   function request(method,body,sync,done){
     var xhr=new XMLHttpRequest();
     xhr.open(method,ENDPOINT,!sync);
+    if(!sync){xhr.timeout=3000;xhr.onerror=xhr.ontimeout=function(){if(done)done(null);};}
     xhr.setRequestHeader('Accept','application/json');
     if(body!==undefined)xhr.setRequestHeader('Content-Type','application/json');
     xhr.onreadystatechange=function(){
@@ -64,13 +65,18 @@
   }
 
   function flush(){
+    if(flushTimer)clearTimeout(flushTimer);
     flushTimer=null;
     var batch=pending;pending={};
+    if(!Object.keys(batch).length)return inflight;
     var set={},remove=[];
     Object.keys(batch).forEach(function(key){
       if(batch[key]===null)remove.push(key);else set[key]=batch[key];
     });
-    request('PUT',{set:set,remove:remove},false,function(data){if(data)rev=data.rev;});
+    inflight=inflight.then(function(){return new Promise(function(resolve){
+      request('PUT',{set:set,remove:remove},false,function(data){if(data)rev=data.rev;resolve(data);});
+    });});
+    return inflight;
   }
   function queue(key,value){
     if(applying||!synced(key))return;
@@ -102,5 +108,5 @@
   }
   setInterval(poll,POLL_MS);
   document.addEventListener('visibilitychange',function(){if(!document.hidden)poll();});
-  window.OrreryPrefs=Object.freeze({synced:synced,get rev(){return rev;}});
+  window.OrreryPrefs=Object.freeze({synced:synced,flush:flush,get rev(){return rev;}});
 })();
