@@ -85,6 +85,15 @@ def is_claude_summary(text, item):
         not human and isinstance(text, str) and text.lstrip().startswith(CLAUDE_COMPACTION_PREFIX))
 
 
+def claude_pasted_text(text):
+    """Unwrap one native paste envelope; leave mixed or nested text literal."""
+    match = re.fullmatch(r'\s*<pasted_content id="([A-Za-z0-9_-]{1,128})">(.*)</pasted_content id="\1">\s*',
+                         text, re.DOTALL)
+    if not match or re.search(r'</?pasted_content\b', match[2]):
+        return text
+    return re.sub(r'\A\r?\n|\r?\n\Z', '', match[2])
+
+
 def claude_text(text, role, ts, item):
     """Keep harness notices out of human prompts and send matching."""
     if role != 'user' or not isinstance(text, str):
@@ -102,7 +111,7 @@ def claude_text(text, role, ts, item):
     if origin == 'human' or not (item.get('promptSource') == 'system' or
             origin in {'task-notification', 'system'} or
             body.startswith(('<task-notification>', '<system-reminder>'))):
-        return text_event(text, role, ts)
+        return text_event(claude_pasted_text(text), role, ts)
     def field(name):
         start = body.find('<' + name + '>')
         if start < 0:
