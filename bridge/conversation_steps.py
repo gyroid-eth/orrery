@@ -28,15 +28,14 @@ def filename(value, limit=160):
     if not isinstance(value, str):
         return ''
     value = value.replace('\\', '/')
-    if not re.match(r'^[A-Za-z]:/', value):
-        try:
-            url = urlsplit(value)
-        except ValueError:
-            return ''
-        if url.scheme or url.netloc:
-            # Only a URL's path can name a target; never its authority,
-            # credentials, query or fragment. No path means no summary.
-            value = url.path if url.path.startswith('/') else ''
+    try:
+        url = urlsplit(value)
+    except ValueError:
+        return ''
+    if url.scheme or url.netloc:
+        # Only a URL's path can name a target; never its authority,
+        # credentials, query or fragment. No path means no summary.
+        value = url.path if url.path.startswith('/') else ''
     return label(PurePosixPath(value).name, limit) if value else ''
 
 

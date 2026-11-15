@@ -9,7 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from conversation_history import codex_event, read_codex_page, open_reader
 from conversation_readers import normalize
-from conversation_steps import codex_completed, filename, opaque, summary
+from conversation_steps import codex_completed, command_summary, filename, opaque, summary
 
 JS = Path(__file__).resolve().parents[1] / 'conversation_steps.js'
 
@@ -216,6 +216,9 @@ def test_native_steps_through_api_keep_post_read_binding_check(tmp_path, monkeyp
 
 
 URL = 'https://example.invalid/report?token=SECRET_VALUE#private'
+URL_TARGETS = [URL, 's:/report?token=SECRET_VALUE#private',
+              's://user:password@host/report?token=SECRET_VALUE#private',
+              r's:\report?token=SECRET_VALUE#private']
 
 
 @pytest.mark.parametrize('value,expected', [
@@ -226,26 +229,37 @@ URL = 'https://example.invalid/report?token=SECRET_VALUE#private'
     ('https://[invalid/report?token=SECRET_VALUE', ''),
     ('notes/report.md', 'report.md'),
     ('C:\\notes\\report.md', 'report.md'),
+    ('s:/report?token=SECRET_VALUE#private', 'report'),
+    ('s://user:password@host/report?token=SECRET_VALUE#private', 'report'),
+    (r's:\report?token=SECRET_VALUE#private', 'report'),
+    (r's:\\report?token=SECRET_VALUE#private', ''),
+    ('file:/report?token=SECRET_VALUE#private', 'report'),
+    ('file:report?token=SECRET_VALUE#private', ''),
+    ('notes:/report?token=SECRET_VALUE#private', 'report'),
+    ('notes:report?token=SECRET_VALUE#private', ''),
+    ('C:/notes/report.md', 'report.md'),
 ])
 def test_target_filename_uses_only_url_path_and_preserves_local_paths(value, expected):
     assert filename(value) == expected
+    assert command_summary([value]) == expected
 
 
 @pytest.mark.parametrize('failed', [False, True], ids=['success', 'failed'])
 @pytest.mark.parametrize('form', ['claude', 'mcp', 'image', 'change', 'parsed-command', 'executable'])
-def test_every_basename_projection_strips_url_secrets(form, failed):
+@pytest.mark.parametrize('target', URL_TARGETS)
+def test_every_basename_projection_strips_url_secrets(form, failed, target):
     if form == 'claude':
         events = claude_events([
-            c('assistant', [dict(type='tool_use', id='url', name='Read', input={'file_path': URL})]),
+            c('assistant', [dict(type='tool_use', id='url', name='Read', input={'file_path': target})]),
             c('user', [dict(type='tool_result', tool_use_id='url', is_error=failed)])])
         assert events[0]['step']['detail'] == 'report'
     else:
         kind, fields = {
-            'mcp': ('McpToolCall', dict(tool='read_file', arguments={'path': URL}, result={'isError': failed})),
-            'image': ('ImageView', dict(path=URL)),
-            'change': ('FileChange', dict(changes={URL: {}})),
-            'parsed-command': ('CommandExecution', dict(command=['pytest'], parsed_cmd=[{'path': URL}])),
-            'executable': ('CommandExecution', dict(command=[URL])),
+            'mcp': ('McpToolCall', dict(tool='read_file', arguments={'path': target}, result={'isError': failed})),
+            'image': ('ImageView', dict(path=target)),
+            'change': ('FileChange', dict(changes={target: {}})),
+            'parsed-command': ('CommandExecution', dict(command=['pytest'], parsed_cmd=[{'path': target}])),
+            'executable': ('CommandExecution', dict(command=[target])),
         }[form]
         events = [project(native(kind, status='failed' if failed else 'completed', **fields))]
         assert events[0]['step']['detail'].endswith('report')
@@ -253,18 +267,23 @@ def test_every_basename_projection_strips_url_secrets(form, failed):
 
 
 @pytest.mark.parametrize('failed', [False, True], ids=['success', 'failed'])
-@pytest.mark.parametrize('form', ['claude', 'mcp', 'image'])
-def test_http_response_does_not_publish_url_query_in_target(tmp_path, monkeypatch, form, failed):
+@pytest.mark.parametrize('form', ['claude', 'mcp', 'image', 'executable'])
+@pytest.mark.parametrize('target', URL_TARGETS)
+def test_http_response_does_not_publish_url_query_in_target(tmp_path, monkeypatch, form, failed, target):
     import test_conversation_history as api
     async def current_api(*args, **kwargs):
         return 35
     monkeypatch.setattr(api.backend, 'conversation_api_version', current_api)
-    records = ([c('assistant', [dict(type='tool_use', id='url', name='Read', input={'file_path': URL})]),
-                c('user', [dict(type='tool_result', tool_use_id='url', is_error=failed)])]
-               if form == 'claude' else [native('McpToolCall' if form == 'mcp' else 'ImageView',
-                   status='failed' if failed else 'completed',
-                   **(dict(tool='read_file', arguments={'path': URL}, result={'isError': failed})
-                      if form == 'mcp' else dict(path=URL)))])
+    if form == 'claude':
+        records = [c('assistant', [dict(type='tool_use', id='url', name='Read', input={'file_path': target})]),
+                   c('user', [dict(type='tool_result', tool_use_id='url', is_error=failed)])]
+    else:
+        kind, fields = {
+            'mcp': ('McpToolCall', dict(tool='read_file', arguments={'path': target}, result={'isError': failed})),
+            'image': ('ImageView', dict(path=target)),
+            'executable': ('CommandExecution', dict(command=[target])),
+        }[form]
+        records = [native(kind, status='failed' if failed else 'completed', **fields)]
     monkeypatch.setattr(api, 'record', lambda *a, **kw: b''.join(line(r) for r in records))
     async def scenario(client, base, reads):
         async with client.get(base+'/telemetry/conversation?agent=BoundAgent') as response:
