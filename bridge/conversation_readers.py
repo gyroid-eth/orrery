@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from urllib.parse import quote
 from conversation_mail import received, sent
 from conversation_images import hermes_content
+from conversation_steps import claude_call, claude_result
 
 from conversation_history import (HistoryUnavailable, MAX_SCAN, MAX_TEXT, PAGE_SIZE,
     open_bound_transcript, assert_transcript_identity, read_codex_page, recorded_model)
@@ -142,6 +143,9 @@ def normalize(item,p,sid):
     """Return (block-index,event) pairs; hidden/reasoning/raw tool bodies excluded."""
     out=[]
     def add(index,event):
+        if (event and p=='claude' and event.get('kind')=='text' and event.get('role')=='user'
+                and item.get('type')=='user' and not any(e.get('step_boundary') for _,e in out)):
+            event['step_boundary']=True
         if event:out.append((index,event))
     if p=='claude':
         if (item.get('sessionId')!=sid or item.get('isSidechain') or
@@ -175,9 +179,16 @@ def normalize(item,p,sid):
                     # do not duplicate the image references on the text event.
                     if images and event and event.get('role')=='user' and event.get('kind')=='text':event['input_image_count']=images
                     add(i,event)
-                elif b.get('type')=='tool_use' and role=='assistant':add(i,sent(tool_event(b.get('name'),ts),b.get('name'),b.get('input')))
+                elif b.get('type')=='tool_use' and role=='assistant':
+                    event=sent(tool_event(b.get('name'),ts),b.get('name'),b.get('input'))
+                    step=claude_call(b,ts)
+                    if step:event['step']=step
+                    add(i,event)
                 elif b.get('type')=='tool_result' and role=='user':
-                    add(i,tool_event('Tool result',ts,result=True,failed=bool(b.get('is_error'))))
+                    event=tool_event('Tool result',ts,result=True,failed=bool(b.get('is_error')))
+                    step=claude_result(b,ts)
+                    if step:event['step']=step
+                    add(i,event)
                 elif b.get('type') in {'image','document'}:add(i,text_event('[attachment]',role,ts))
     elif p=='dsh':
         if item.get('surfaceOp','append')!='append':return []

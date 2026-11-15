@@ -15,6 +15,7 @@ from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from conversation_mail import received, sent
 from conversation_artifacts import SHOW_FILES, completed_show_files
+from conversation_steps import codex_completed, codex_turn
 
 MAX_SCAN = 4 * 1024 * 1024
 MAX_TEXT = 64 * 1024
@@ -125,6 +126,18 @@ def codex_event(raw: bytes, offset: int) -> dict | None:
         item = json.loads(raw)
     except (ValueError, UnicodeDecodeError, RecursionError):
         return None
+    turn = codex_turn(item)
+    if turn:
+        return dict(id=str(offset), ts=str(item.get('timestamp') or '')[:128],
+                    kind='system', role='system', text='Turn '+('started' if turn['phase']=='start' else 'ended'),
+                    step_turn=turn)
+    step = codex_completed(item)
+    if step:
+        # Keep show_files' established name and reference gate. Generic native
+        # completions add inert summaries, never arguments or new file grants.
+        name = 'mcp__orrery_mail__show_files' if completed_show_files(item) is not None else step['tool']
+        return dict(id=str(offset), ts=str(item.get('timestamp') or '')[:128],
+                    kind='tool', role='assistant', text=name, step=step)
     if isinstance(item, dict) and completed_show_files(item) is not None:
         # Code mode's wrapper is source text, not proof that a nested call ran.
         # This completion is its own pinned reference record; expose no result
@@ -192,8 +205,11 @@ def codex_event(raw: bytes, offset: int) -> dict | None:
             # Legacy). Show this delivery once from that record, even when
             # the raw native call and its completion arrive on separate polls.
             if SHOW_FILES.fullmatch(name.split('.')[-1]):return None
-            return sent(dict(base, kind="tool", role="assistant", text=name[:160]),name,
-                        payload.get('input',payload.get('arguments')))
+            event = sent(dict(base, kind="tool", role="assistant", text=name[:160]),name,
+                         payload.get('input',payload.get('arguments')))
+            if name in {'exec', 'functions.exec'}:
+                event['step_wrapper'] = True
+            return event
     return None
 
 
