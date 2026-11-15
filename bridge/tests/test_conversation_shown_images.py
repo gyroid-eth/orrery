@@ -251,13 +251,55 @@ def test_unexecuted_wrapper_cannot_grant_external_image(tmp_path, form):
 
 @pytest.mark.parametrize('change', [dict(server='other'), dict(tool='send_message'),
     dict(type='AgentMessage'), dict(status='failed'), dict(status='in_progress'),
-    dict(arguments='not structured'), dict(arguments=None)])
-def test_only_known_completed_mcp_call_grants_paths(change):
+    dict(arguments='not structured'), dict(arguments=None), dict(result={'isError': True})])
+def test_only_known_successful_mcp_call_grants_paths(change, tmp_path):
     from conversation_artifacts import extract_artifacts
-    event = completed_call(['outside.png'])
+    work = tmp_path / 'work'
+    work.mkdir()
+    inside, outside = work / 'inside.png', tmp_path / 'outside.png'
+    for image in (inside, outside):
+        Image.new('RGB', (8, 6), 'teal').save(image)
+    event = completed_call([str(inside), str(outside)])
     event['payload']['item'].update(change)
-    assert not extract_artifacts(event)['paths']
-    assert history.codex_event(line(event), 0) is None
+    artifacts = extract_artifacts(event)
+    assert not artifacts['paths'] and not artifacts['shown_paths'] and not artifacts['diff']
+    projected = history.codex_event(line(event), 0)
+    if change.get('type') == 'AgentMessage':
+        assert projected is None
+    else:
+        # A recorded operation is distinct from proof of image delivery.
+        assert projected['kind'] == 'tool'
+        assert projected['step']['status'] == ('failed' if change.get('status') == 'failed' or
+            change.get('result', {}).get('isError') is True else
+            'observed' if change.get('status') == 'in_progress' else 'done')
+        assert not {'arguments', 'result', 'references', 'diff'} & projected.keys()
+        assert str(tmp_path) not in json.dumps(projected)
+    transcript = work / 'record.jsonl'
+    transcript.write_bytes(line(dict(type='session_meta', payload=dict(cwd=str(work)))) + line(event))
+    bound = dict(row(transcript, 'codex'), native_session_id='fixture-session')
+    store = ReferenceStore()
+    with history.open_reader(bound) as reader:
+        events = reader.read_page()['events']
+        assert len(events) == int(projected is not None)
+        store.decorate_all(bound, reader, events)
+    assert not store.refs, 'neither workspace nor external preview grants may be issued'
+    assert all(not e.get('references') and not e.get('diff') for e in events)
+
+
+@pytest.mark.parametrize('server', ['orrery-mail', 'agentstack'])
+@pytest.mark.parametrize('flag', ['absent', False, None])
+def test_paginated_optional_error_flag_keeps_successful_image_delivery(tmp_path, server, flag):
+    work = tmp_path / 'work'
+    work.mkdir()
+    image = tmp_path / 'shown.png'
+    Image.new('RGB', (8, 6), 'teal').save(image)
+    item = completed_call([str(image)], server)
+    if flag != 'absent':
+        item['payload']['item']['result']['isError'] = flag
+    store, bound, event = setup(work, item)
+    assert history.codex_event(line(item), 0)['step']['status'] == 'done'
+    assert [ref['label'] for ref in event['references']] == ['shown.png']
+    assert preview(store, bound, event)['kind'] == 'image'
 
 
 @pytest.mark.parametrize('legacy', [False, True])

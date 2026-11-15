@@ -99,6 +99,8 @@ def completed_show_files(item):
         call=payload.get('item')
         if (not isinstance(call,dict) or call.get('type')!='McpToolCall'
                 or call.get('status')!='completed'):return None
+        result=call.get('result')
+        if isinstance(result,dict) and result.get('isError') is True:return None
     elif payload.get('type')=='mcp_tool_call_end':
         # McpToolCallEndEvent.result is Result<CallToolResult,String>.
         # Only Ok is success; CallToolResult uses the wire key isError, which
