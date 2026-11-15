@@ -551,3 +551,5 @@ xterm と addon は、以下の固定版の npm 配布物をそのまま同梱�
 | `bridge/vendor/addon-web-links-0.11.0/LICENSE` | `@xterm/addon-web-links@0.11.0` | [配布元](https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/LICENSE) | `689ceb10716bd7a87a804c14951d7c2b818cbd60aab83d540902470ce3b13444` |
 
 npm tarball の出典と integrity、ファイルサイズも [`bridge/vendor/manifest.json`](bridge/vendor/manifest.json) に記録しています。
+
+- Agent steps の表示: [Kokonut UI AI Loading](https://kokonutui.com/docs/ai/ai-loading)（@kokonutui、MIT、[元のコード](https://github.com/kokonut-labs/kokonutui/blob/d8162dfe2c052a796a74d217b1f06511f213e4e0/components/kokonutui/ai-loading.tsx)）。元のヘッダと動きの時間を保ち、ORRERY の色・字を使う素の JavaScript/CSS へ作り直しています。

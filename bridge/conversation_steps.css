@@ -1,0 +1,47 @@
+/* @author: @kokonutui · @license: MIT · @website: https://kokonutui.com
+   AI Loading State, adapted to ORRERY's recorded operations and theme. */
+.conversation-steps{--steps-ease:cubic-bezier(.23,1,.32,1);min-width:0;margin:18px 0 24px;
+  border:1px solid var(--hair);border-radius:6px;padding:10px 14px;background:var(--panel-2);
+  color:var(--ink);font:12px/1.5 var(--mono)}
+.conversation-steps[hidden]{display:none}
+.conversation-steps-toggle{display:flex;align-items:center;gap:8px;width:100%;padding:5px 0;
+  border:0;background:transparent;text-align:left;cursor:pointer;color:var(--ink);font:500 12px/1.5 var(--mono)}
+.conversation-steps-toggle:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+.conversation-steps-heading{min-width:0}
+.conversation-steps-time,.conversation-steps-count{white-space:nowrap;color:var(--ink-dim);font:10px var(--mono);font-variant-numeric:tabular-nums}
+.conversation-steps-chevron{margin-left:auto;color:var(--ink-dim);font-size:16px;transition:transform 250ms var(--steps-ease)}
+.conversation-steps.is-open .conversation-steps-chevron{transform:rotate(180deg)}
+.conversation-steps-letter{display:inline-block;animation:conversation-steps-wave 1.6s ease-in-out infinite both}
+@keyframes conversation-steps-wave{50%{opacity:.3}}
+.conversation-steps-expansion{display:grid;grid-template-rows:0fr;opacity:0;
+  transition:grid-template-rows 250ms var(--steps-ease),opacity 250ms var(--steps-ease)}
+.conversation-steps.is-open .conversation-steps-expansion{grid-template-rows:1fr;opacity:1}
+.conversation-steps-inner{overflow:hidden;min-height:0}
+.conversation-steps-label{padding:12px 0 7px;color:var(--ink-faint);font:9px var(--mono);text-transform:uppercase;letter-spacing:.12em}
+.conversation-steps-list{list-style:none;margin:0;padding:0}
+.conversation-step{position:relative;display:flex;gap:10px;min-width:0;padding:9px 0 12px}
+.conversation-step.is-new{animation:conversation-step-enter 200ms var(--steps-ease) both}
+@keyframes conversation-step-enter{from{opacity:0}to{opacity:1}}
+.conversation-step.has-next::before{content:'';position:absolute;left:7px;top:29px;bottom:-6px;width:1px;background:var(--hair);transform-origin:top;animation:conversation-step-line 500ms var(--steps-ease) both}
+@keyframes conversation-step-line{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+.conversation-step-icon{display:flex;align-items:center;justify-content:center;flex:none;width:16px;height:16px;margin-top:1px;color:var(--ink-dim)}
+.conversation-step.is-new .conversation-step-icon{animation:conversation-step-icon 180ms var(--steps-ease) both}
+@keyframes conversation-step-icon{from{opacity:0;filter:blur(2px)}to{opacity:1;filter:blur(0)}}
+.conversation-step-icon svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.5}
+.conversation-step-icon.failed{color:var(--amber)}
+.conversation-step.is-new .conversation-step-check{stroke-dasharray:1;stroke-dashoffset:1;animation:conversation-step-check 300ms var(--steps-ease) 50ms forwards}
+@keyframes conversation-step-check{to{stroke-dashoffset:0}}
+.conversation-step-copy{min-width:0;flex:1}
+.conversation-step-top{display:flex;align-items:baseline;gap:8px}
+.conversation-step-tool{color:var(--ink);overflow-wrap:anywhere}
+.conversation-step-outcome{font-size:9px;color:var(--ink-dim)}
+.conversation-step-icon.failed+.conversation-step-copy .conversation-step-outcome{color:var(--amber)}
+.conversation-step-duration{margin-left:auto;color:var(--ink-faint);font-size:10px;font-variant-numeric:tabular-nums}
+.conversation-step-target{margin-top:2px;color:var(--ink-dim);font-size:10px;line-height:1.7;overflow-wrap:anywhere;white-space:pre-wrap}
+.conversation-steps-notice{color:var(--ink-dim);font:10px/1.7 var(--mono)}
+.conversation-step-record>.conversation-byline{display:none}
+.conversation-steps.is-paused *,.conversation-steps.is-paused *::before,.conversation-steps.is-paused *::after{animation-play-state:paused}
+@media(prefers-reduced-motion:reduce){
+  .conversation-steps *,.conversation-steps *::before{animation:none!important;transition:none!important;filter:none!important}
+  .conversation-step-check{stroke-dashoffset:0!important}
+}

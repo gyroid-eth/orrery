@@ -4620,9 +4620,9 @@
       }
     }
   },
-  "inventory_digest": "72244a18d4535ef74204ad1dd326d1de3d61c92048c3ec85c30e8c7fbaae978f",
+  "inventory_digest": "9d793956355e925e508718ea1283e83a1c3b69067bb76c4590102fb22fc87fe0",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "ab07504ab0c77183288661039dcda79fa8a8a3ac3d1307aa2a637d3d875f045f",
+  "source_digest": "64e94e90e9213ef29f8cdf0b3d0688acc7ebb99b79d41d254c97a1dadcd2e3eb",
   "surface": "cockpit",
   "version": 1
 }
@@ -11302,6 +11302,8 @@ const conversationView=(()=>{
     if(loading)return loading;
     loading=(async()=>{
       await asset('link','href','conversation_view.css');
+      await asset('link','href','conversation_steps.css');
+      await asset('script','src','conversation_steps.js');
       await asset('script','src','conversation_source.js');
       await asset('script','src','conversation_preview.js');
       await asset('script','src','conversation_mail.js');

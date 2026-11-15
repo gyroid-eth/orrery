@@ -241,6 +241,7 @@
     const activityEl=el('.conversation-activity'),activityLabel=el('.conversation-activity-label'),activityTime=el('.conversation-activity-time');
     const process=el('.conversation-process'),processTime=el('.conversation-process-time');
     function paintActivity(current=getContext()||{}){
+      const stepActivity=stepView?.activity(current,opened&&presented&&!document.hidden);
       const compacting=opened&&presented&&current.running===true&&current.reader_phase==='compacting';
       if(process.hidden===compacting)process.hidden=!compacting;
       const phaseTime=compacting&&typeof current.reader_phase_elapsed==='string'?current.reader_phase_elapsed:'';
@@ -251,7 +252,7 @@
       const elapsed=state==='work'&&typeof current.work_disp==='string'?current.work_disp.trim():'';
       activityEl.classList.toggle('activity-paused',document.hidden||!presented||!opened);
       panel.classList.toggle('conversation-inactive',document.hidden||!presented||!opened);
-      const hidden=!state||compacting;
+      const hidden=!state||compacting||stepActivity;
       if(activityEl.hidden===hidden&&activityEl.dataset.state===(state||'')&&activityTime.textContent===(elapsed?'· '+elapsed:''))return;
       const atBottom=nearBottom();
       activityEl.hidden=hidden;activityEl.dataset.state=state;
@@ -408,6 +409,8 @@
     let layoutTimer=0,layoutFrame=0,layoutPending=false,restoring=false,userScrolling=false,layoutStarted=0;
     panel.dataset.conversationLayout="idle";
     let contextKey='',boundContext={},paused=false,retainedBytes=0,providerLabel='Codex',followPending=false,jumpTimer=0;
+    const stepView=root.OrreryConversationSteps?.mount({host:eventsEl,
+      mutate:fn=>changeTail(fn,false),onFocusLost:()=>scroll.focus({preventScroll:true})});
     const byteSize=event=>new TextEncoder().encode(JSON.stringify(event)).byteLength;
     const fingerprint=current=>JSON.stringify(['name','program','provider','history_binding','transcript_path',
       'native_session_id','history_session_id','history_receipt_ts','created','mail_instance_id','mail_agent_id','terminalPaneId'].map(key=>current[key]??null));
@@ -471,7 +474,7 @@
     }
     function modeMessage(text){if(!text&&document.activeElement===modeInfo&&opened)scroll.focus({preventScroll:true});modeInfo.title=text;modeInfo.setAttribute('aria-label',text);paintStatus();}
     function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;sessionReloadAttempted=false;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
-    function clear({keepSubmissions=false}={}){hideSelection();closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();preview?.resetInline();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
+    function clear({keepSubmissions=false}={}){hideSelection();closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();stepView?.reset();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();preview?.resetInline();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
       if(tableMutating)return;
@@ -498,7 +501,7 @@
     // Keep message nodes in place so selections and previews survive polling.
     const rawRows=()=>[...eventsEl.children].filter(child=>child.dataset.eventId!==undefined);
     const visibleRows=()=>[...eventsEl.children,...pendingEl.children,activityEl].filter(child=>!child.hidden);
-    const rowKey=child=>JSON.stringify(child.dataset.inlineFor?['images',child.dataset.inlineFor]:child.dataset.toolGroup?['tools',child.dataset.toolGroup]:child.dataset.receiptKey?['receipt',child.dataset.receiptKey]:child===activityEl?['activity']:['event',child.dataset.eventId]);
+    const rowKey=child=>JSON.stringify(child.dataset.stepsGroup?['steps',child.dataset.stepsGroup]:child.dataset.inlineFor?['images',child.dataset.inlineFor]:child.dataset.toolGroup?['tools',child.dataset.toolGroup]:child.dataset.receiptKey?['receipt',child.dataset.receiptKey]:child===activityEl?['activity']:['event',child.dataset.eventId]);
     function setGroupOpen(group,open){
       saveTables();const top=group.button.getBoundingClientRect().top;
       group.open=open;group.button.setAttribute('aria-expanded',String(open));
@@ -507,6 +510,8 @@
       position();remember(true);
     }
     function regroupTools(focused=toolGroups.find(group=>group.button===document.activeElement)){
+      const stepRows=stepView?.sync({events:[...events.values()],provider:providerLabel,mode,rows:rawRows(),
+        context:getContext()||{},isVisible:opened&&presented&&!document.hidden})||new Set();
       const previous=toolGroups,used=new Set(),groups=[];let run=[];
       const finish=()=>{
         if(!run.length)return;
@@ -539,6 +544,11 @@
       };
       for(const row of rawRows()){
         const event=events.get(row.dataset.eventId);
+        if(event&&stepRows.has(event.id)){
+          finish();row.classList.add('conversation-step-record');
+          row.hidden=!row.querySelector('.conversation-files,.conversation-diff,.conversation-mail');continue;
+        }
+        row.classList.remove('conversation-step-record');
         if(event&&['tool','tool_result'].includes(event.kind)&&!event.mail?.length)run.push(row);
         else{finish();row.hidden=false;}
       }
@@ -558,6 +568,7 @@
       }
       if(focused&&(document.activeElement===document.body||document.activeElement===scroll))(groups.includes(focused)?focused.button:scroll).focus({preventScroll:true});
       preview?.syncInline(rawRows(),events);
+      paintActivity();
     }
     function anchor(){
       const top=scroll.getBoundingClientRect().top;
@@ -688,6 +699,7 @@
     function node(event){
       const article=document.createElement('article');article.className='conversation-event';
       article.dataset.eventId=event.id;article.dataset.role=event.role;article.dataset.kind=event.kind;
+      if(event.step_turn){article.hidden=true;return article;}
       if(event.kind==='system'){
         const toggle=document.createElement('button');toggle.type='button';toggle.className='conversation-system-toggle';toggle.setAttribute('aria-expanded','false');
         const arrow=document.createElement('span');arrow.className='conversation-tool-arrow';arrow.textContent='▸';arrow.setAttribute('aria-hidden','true');

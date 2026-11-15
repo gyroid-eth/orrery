@@ -108,9 +108,16 @@ def test_queued_prompt_keeps_existing_session_and_visibility_rules(flag):
 def test_queued_images_keep_normal_user_block_indexes_and_attachment_display():
     content = [dict(type='text', text='Generated image instruction'),
                dict(type='image', source=dict(type='base64', data='unused'))]
-    assert normalize(queued(content), 'claude', 'fixture-session') == normalize(
-        dict(claude('user', content), timestamp='2026-11-04T07:00:01.125Z'), 'claude', 'fixture-session')
-    assert [i for i, _ in normalize(queued(content), 'claude', 'fixture-session')] == [0, 1]
+    consumed = normalize(queued(content), 'claude', 'fixture-session')
+    ordinary = normalize(dict(claude('user', content), timestamp='2026-11-04T07:00:01.125Z'),
+                         'claude', 'fixture-session')
+    # Images/text keep the same display and block indexes. Only an ordinary
+    # prompt starts a turn; a consumed mid-turn prompt must not split steps.
+    assert ordinary[0][1].get('step_boundary') is True
+    assert all(not event.get('step_boundary') for _, event in consumed)
+    assert consumed == [(i, {k: v for k, v in event.items() if k != 'step_boundary'})
+                        for i, event in ordinary]
+    assert [i for i, _ in consumed] == [0, 1]
 
 
 def test_tail_forward_and_older_pages_have_identical_stable_ids_without_queue_duplicates(tmp_path):

@@ -175,6 +175,9 @@
   const attributeOriginals=new WeakMap();
   let remasking=false;
   function maskText(node){
+    // Native operation labels are UI chrome, not paths/commands/recipients.
+    // Only this app-created leaf is exempt; its target remains normal text.
+    if(node.parentElement?.classList.contains('conversation-step-tool'))return;
     const row=rowOf(node);
     if(row){pendingRows.add(row);return;}
     const shown=node.nodeValue;
