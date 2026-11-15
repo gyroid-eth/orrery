@@ -1,5 +1,8 @@
 """Selected A in the actual Reader; synthetic provider records and shared CDP."""
 import json
+import os
+from pathlib import Path
+import base64
 import time
 
 import pytest
@@ -103,7 +106,7 @@ def test_append_keeps_existing_row_selection_and_earlier_pair_fills_without_dupl
     assert js("document.querySelectorAll('.conversation-step').length")==2
 
 
-def test_close_and_hidden_reader_stop_motion_timer(cockpit):
+def test_close_clears_steps_and_reduced_motion_stops_letter_animation(cockpit):
     js,wait,client=prepare(cockpit)
     js("conversationView.close()")
     assert js("document.querySelectorAll('.conversation-steps').length")==0
@@ -113,6 +116,42 @@ def test_close_and_hidden_reader_stop_motion_timer(cockpit):
     assert js("document.querySelector('.conversation-steps-letter').getAnimations().length")==0
     assert js("document.querySelectorAll('.conversation-step').length")==1
     assert js("packets.filter(p=>p.type==='input')")==[]
+
+
+@pytest.mark.parametrize('unknown', [False, True], ids=['missing-completion', 'unknown-completion'])
+def test_codex_unmatched_tools_remain_in_existing_group(cockpit, unknown):
+    rows=events('codex',False)
+    rows.append(project(dict(type='response_item',payload=dict(type='function_call',name='old_server_tool',
+                      call_id='old-call',arguments='{}')),21))
+    if unknown:
+        assert project(native('Extension',kind='unknown'),22) is None
+    rows.append(project(dict(type='event_msg',payload=dict(type='task_complete',turn_id='turn-one')),23))
+    js,wait,client=prepare(cockpit,'codex',rows=rows,working=False)
+    assert js("document.querySelectorAll('.conversation-step').length")==0
+    assert js("document.querySelectorAll('.conversation-tool-group').length")==1
+    js("document.querySelector('.conversation-tool-group').click()")
+    assert js("document.querySelector('[data-event-id=\"21\"]').hidden") is False
+    assert js("document.querySelector('[data-event-id=\"21\"] .conversation-tool-name').textContent")=='old_server_tool'
+    folder=os.environ.get('ORRERY_STEPS_SCREENSHOTS')
+    if folder and not unknown:
+        wait_reading_layout(js)
+        Path(folder,'codex-unmatched-tool.png').write_bytes(base64.b64decode(client.call('Page.captureScreenshot',format='png')['data']))
+
+
+def test_hidden_reader_pauses_letters_pseudo_connectors_and_elapsed_timer(cockpit):
+    rows=events('codex')+[project(native('ImageView',ident='image',path='/fixture/a.png'),11)]
+    js,wait,client=prepare(cockpit,'codex',rows=rows)
+    assert js("getComputedStyle(document.querySelector('.conversation-step.has-next'),'::before').animationPlayState")=='running'
+    js("""Object.defineProperty(document,'hidden',{configurable:true,value:true});
+      document.dispatchEvent(new Event('visibilitychange'));""")
+    assert js("document.querySelector('.conversation-steps').classList.contains('is-paused')")
+    assert js("getComputedStyle(document.querySelector('.conversation-steps-letter')).animationPlayState")=='paused'
+    assert js("getComputedStyle(document.querySelector('.conversation-step.has-next'),'::before').animationPlayState")=='paused'
+    before=js("document.querySelector('.conversation-steps-time').textContent")
+    time.sleep(1.1)
+    assert js("document.querySelector('.conversation-steps-time').textContent")==before
+    js("delete document.hidden;document.dispatchEvent(new Event('visibilitychange'))")
+    assert js("getComputedStyle(document.querySelector('.conversation-step.has-next'),'::before').animationPlayState")=='running'
 
 
 def test_demo_keeps_native_tool_label_and_masks_only_targets(cockpit):

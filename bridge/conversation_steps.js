@@ -75,16 +75,18 @@ SOFTWARE.
         }else if(!Number.isFinite(current.started))current.started=time(event.ts);
       }
       if(current&&event.kind==='text'&&event.role==='assistant')current.last=time(event.ts);
-      if(provider==='Codex'&&['tool','tool_result'].includes(event.kind))consumed.add(event.id);
+      if(provider==='Codex'&&event.step_wrapper===true)consumed.add(event.id);
       const step=event.step;
       if(!step||!key(step.id))continue;
-      consumed.add(event.id);
       if(step.phase==='call'&&provider==='Claude'){
+        consumed.add(event.id);
         const owner=active();owner.anchor??=event.id;
         calls.set(step.id,{step,event,owner});
       }else if(step.phase==='result'&&provider==='Claude'){
+        consumed.add(event.id);
         results.set(step.id,{step,event,owner:active()});
       }else if(step.phase==='complete'&&provider==='Codex'){
+        consumed.add(event.id);
         const owner=key(step.turn)?group(step.turn):active();
         current=owner;owner.anchor??=event.id;
         owner.steps.set(step.id,{...step,eventId:event.id});
@@ -228,7 +230,6 @@ SOFTWARE.
     return Object.freeze({sync,
       activity(context,isVisible){current=context||{};visible=isVisible;paint();return [...cards.values()].some(c=>!c.node.hidden&&(c.working||c.waiting));},
       reset(){if(timer)root.clearInterval(timer);timer=0;for(const card of cards.values())card.node.remove();cards.clear();model={groups:[],consumed:new Set()};},
-      dispose(){this.reset();},
     });
   }
   const api={collect,duration,elapsed,mount};

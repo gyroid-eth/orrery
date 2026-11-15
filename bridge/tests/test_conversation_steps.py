@@ -9,7 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from conversation_history import codex_event, read_codex_page, open_reader
 from conversation_readers import normalize
-from conversation_steps import codex_completed, opaque, summary
+from conversation_steps import codex_completed, filename, opaque, summary
 
 JS = Path(__file__).resolve().parents[1] / 'conversation_steps.js'
 
@@ -213,3 +213,88 @@ def test_native_steps_through_api_keep_post_read_binding_check(tmp_path, monkeyp
     row = (dict(program='claude-code', history_session_id='synthetic', history_receipt_ts='fixture')
            if provider == 'claude' else {})
     api.run_api(tmp_path, monkeypatch, scenario, row_update=row, change_binding=changed)
+
+
+URL = 'https://example.invalid/report?token=SECRET_VALUE#private'
+
+
+@pytest.mark.parametrize('value,expected', [
+    (URL, 'report'),
+    ('https://SECRET_VALUE:password@example.invalid/report?other=value#SECRET_VALUE', 'report'),
+    ('//example.invalid/report?token=SECRET_VALUE#private', 'report'),
+    ('https://SECRET_VALUE@example.invalid?token=SECRET_VALUE', ''),
+    ('https://[invalid/report?token=SECRET_VALUE', ''),
+    ('notes/report.md', 'report.md'),
+    ('C:\\notes\\report.md', 'report.md'),
+])
+def test_target_filename_uses_only_url_path_and_preserves_local_paths(value, expected):
+    assert filename(value) == expected
+
+
+@pytest.mark.parametrize('failed', [False, True], ids=['success', 'failed'])
+@pytest.mark.parametrize('form', ['claude', 'mcp', 'image', 'change', 'parsed-command', 'executable'])
+def test_every_basename_projection_strips_url_secrets(form, failed):
+    if form == 'claude':
+        events = claude_events([
+            c('assistant', [dict(type='tool_use', id='url', name='Read', input={'file_path': URL})]),
+            c('user', [dict(type='tool_result', tool_use_id='url', is_error=failed)])])
+        assert events[0]['step']['detail'] == 'report'
+    else:
+        kind, fields = {
+            'mcp': ('McpToolCall', dict(tool='read_file', arguments={'path': URL}, result={'isError': failed})),
+            'image': ('ImageView', dict(path=URL)),
+            'change': ('FileChange', dict(changes={URL: {}})),
+            'parsed-command': ('CommandExecution', dict(command=['pytest'], parsed_cmd=[{'path': URL}])),
+            'executable': ('CommandExecution', dict(command=[URL])),
+        }[form]
+        events = [project(native(kind, status='failed' if failed else 'completed', **fields))]
+        assert events[0]['step']['detail'].endswith('report')
+    assert 'SECRET_VALUE' not in json.dumps(events) and '?token=' not in json.dumps(events)
+
+
+@pytest.mark.parametrize('failed', [False, True], ids=['success', 'failed'])
+@pytest.mark.parametrize('form', ['claude', 'mcp', 'image'])
+def test_http_response_does_not_publish_url_query_in_target(tmp_path, monkeypatch, form, failed):
+    import test_conversation_history as api
+    async def current_api(*args, **kwargs):
+        return 35
+    monkeypatch.setattr(api.backend, 'conversation_api_version', current_api)
+    records = ([c('assistant', [dict(type='tool_use', id='url', name='Read', input={'file_path': URL})]),
+                c('user', [dict(type='tool_result', tool_use_id='url', is_error=failed)])]
+               if form == 'claude' else [native('McpToolCall' if form == 'mcp' else 'ImageView',
+                   status='failed' if failed else 'completed',
+                   **(dict(tool='read_file', arguments={'path': URL}, result={'isError': failed})
+                      if form == 'mcp' else dict(path=URL)))])
+    monkeypatch.setattr(api, 'record', lambda *a, **kw: b''.join(line(r) for r in records))
+    async def scenario(client, base, reads):
+        async with client.get(base+'/telemetry/conversation?agent=BoundAgent') as response:
+            data = await response.json()
+            assert response.status == 200
+            assert 'SECRET_VALUE' not in json.dumps(data) and '?token=' not in json.dumps(data)
+            assert data['events'][0]['step']['detail'] == 'report'
+        assert len(reads) == 2
+    row = (dict(program='claude-code', history_session_id='synthetic', history_receipt_ts='fixture')
+           if form == 'claude' else {})
+    api.run_api(tmp_path, monkeypatch, scenario, row_update=row)
+
+
+@pytest.mark.parametrize('other', ['no-completion', 'unknown-completion', 'retained-without-completion'])
+def test_codex_unmatched_tool_stays_unconsumed(other):
+    start = project(dict(type='event_msg', payload=dict(type='task_started', turn_id='turn-one')), 0)
+    tool = project(dict(type='response_item', payload=dict(type='function_call', name='old_server_tool',
+                                                         call_id='old-call', arguments='{}')), 1)
+    rows = [start, tool]
+    if other == 'unknown-completion':
+        assert project(native('Extension', kind='unknown'), 2) is None
+    if other == 'retained-without-completion':
+        done = project(native('CommandExecution', command=['pytest'], status='completed'), 3)
+        assert tool['id'] not in model(rows+[done], 'Codex')['consumed']
+    out = model(rows, 'Codex')
+    assert tool['id'] not in out['consumed'] and not any(g['steps'] for g in out['groups'])
+
+
+def test_steps_public_instance_has_reset_without_unused_dispose():
+    result = subprocess.run(['node', '-e',
+        "const instance=require(process.argv[1]).mount({host:{}});instance.reset();console.log('dispose' in instance)",
+        str(JS)], capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0 and result.stdout.strip() == 'false'

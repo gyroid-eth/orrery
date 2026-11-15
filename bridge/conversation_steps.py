@@ -7,6 +7,7 @@ import hashlib
 import math
 from pathlib import PurePosixPath
 import re
+from urllib.parse import urlsplit
 
 
 def label(value, limit=160):
@@ -23,9 +24,24 @@ def millis(value):
     return value if type(value) in (int, float) and math.isfinite(value) and 0 <= value < 1e15 else None
 
 
+def filename(value, limit=160):
+    if not isinstance(value, str):
+        return ''
+    value = value.replace('\\', '/')
+    if not re.match(r'^[A-Za-z]:/', value):
+        try:
+            url = urlsplit(value)
+        except ValueError:
+            return ''
+        if url.scheme or url.netloc:
+            # Only a URL's path can name a target; never its authority,
+            # credentials, query or fragment. No path means no summary.
+            value = url.path if url.path.startswith('/') else ''
+    return label(PurePosixPath(value).name, limit) if value else ''
+
+
 def filenames(values):
-    names = [label(PurePosixPath(value.replace('\\', '/')).name)
-             for value in values[:3] if isinstance(value, str)]
+    names = [filename(value) for value in values[:3]]
     return ' · '.join(filter(None, names))[:240]
 
 
@@ -56,7 +72,7 @@ def command_summary(command):
     if isinstance(command, list):
         if not command or not isinstance(command[0], str):
             return ''
-        head = label(PurePosixPath(command[0]).name, 48)
+        head = filename(command[0], 48)
         if head in {'bash', 'sh', 'zsh'} and len(command) >= 3 and command[1] in {'-c', '-lc'}:
             return command_summary(command[2]) or head
         return head

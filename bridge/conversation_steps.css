@@ -40,7 +40,7 @@
 .conversation-step-target{margin-top:2px;color:var(--ink-dim);font-size:10px;line-height:1.7;overflow-wrap:anywhere;white-space:pre-wrap}
 .conversation-steps-notice{color:var(--ink-dim);font:10px/1.7 var(--mono)}
 .conversation-step-record>.conversation-byline{display:none}
-.conversation-steps.is-paused *{animation-play-state:paused}
+.conversation-steps.is-paused *,.conversation-steps.is-paused *::before,.conversation-steps.is-paused *::after{animation-play-state:paused}
 @media(prefers-reduced-motion:reduce){
   .conversation-steps *,.conversation-steps *::before{animation:none!important;transition:none!important;filter:none!important}
   .conversation-step-check{stroke-dashoffset:0!important}
