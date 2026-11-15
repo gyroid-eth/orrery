@@ -317,3 +317,22 @@ def test_steps_public_instance_has_reset_without_unused_dispose():
         "const instance=require(process.argv[1]).mount({host:{}});instance.reset();console.log('dispose' in instance)",
         str(JS)], capture_output=True, text=True, timeout=15)
     assert result.returncode == 0 and result.stdout.strip() == 'false'
+
+
+@pytest.mark.parametrize('later_prompt', [False, True])
+def test_unpaired_claude_call_is_consumed_only_after_its_matching_result(later_prompt):
+    events=claude_events([c('user','Inspect the report'),
+        c('assistant',[dict(type='tool_use',id='pending',name='Read',input={'file_path':'/fixture/report.md'})])])
+    call=next(e for e in events if e.get('step',{}).get('phase')=='call')
+    if later_prompt:
+        events.append(dict(id='later-prompt',kind='text',role='user',text='Another task',step_boundary=True))
+    pending=model(events,'Claude')
+    assert call['id'] not in pending['consumed']
+    assert sum(len(g['steps']) for g in pending['groups'])==0
+    assert sum(g['orphans'] for g in pending['groups'])==0
+    result=claude_events([c('user',[dict(type='tool_result',tool_use_id='pending')])])[0]
+    result['id']='late-result';events.append(result)
+    paired=model(events,'Claude')
+    assert {call['id'],result['id']}<=set(paired['consumed'])
+    assert len(paired['groups'][0]['steps'])==1
+    assert sum(len(g['steps']) for g in paired['groups'])==1

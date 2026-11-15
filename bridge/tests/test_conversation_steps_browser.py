@@ -192,3 +192,41 @@ def test_non_legacy_modes_do_not_enable_native_steps(cockpit,mode):
        ');conversationView.open()')
     wait("document.querySelectorAll('.conversation-event').length>1")
     assert js("document.querySelectorAll('.conversation-steps').length")==0
+
+
+@pytest.mark.parametrize('theme',['light','dark'])
+def test_stopped_unpaired_claude_call_survives_prompt_then_late_result(cockpit,theme,tmp_path):
+    pending=events('claude',False)
+    call=next(e for e in pending if e.get('step',{}).get('phase')=='call')
+    js,wait,client=prepare(cockpit,'claude',rows=pending,theme=theme,working=False)
+    js("currentAgents[0].running=false;document.dispatchEvent(new CustomEvent('oc:agents'))")
+    wait("document.querySelector('.conversation-tool-group')!==null")
+    assert js("document.querySelectorAll('.conversation-step').length")==0
+    assert js("document.querySelectorAll('.conversation-steps:not([hidden])').length")==0
+    js("document.querySelector('.conversation-tool-group').click();window.pendingCall=document.querySelector('[data-event-id='+CSS.escape("+json.dumps(call['id'])+")+']')")
+    assert js('pendingCall.hidden') is False
+    assert js("pendingCall.querySelector('.conversation-tool-name').textContent")=='Read'
+    folder=Path(os.environ.get('ORRERY_STEPS_UNPAIRED_CAPTURE_DIR',str(tmp_path)))
+    folder.mkdir(parents=True,exist_ok=True)
+    def capture(stage):
+        wait_reading_layout(js)
+        js('new Promise(r=>setTimeout(r,300))')
+        data=client.call('Page.captureScreenshot',format='png',captureBeyondViewport=False)['data']
+        (folder/('pc-'+theme+'-'+stage+'.png')).write_bytes(base64.b64decode(data))
+    capture('call-only')
+    later=dict(id='later-prompt',kind='text',role='user',text='Now inspect another file.',step_boundary=True)
+    js('stepsPage.events.push('+json.dumps(later)+');conversationView.refresh()')
+    wait("document.querySelector('[data-event-id=later-prompt]')!==null")
+    assert js('pendingCall.hidden') is False
+    assert js("document.querySelectorAll('.conversation-tool-group').length")==1
+    assert js("document.querySelectorAll('.conversation-step').length")==0
+    capture('later-prompt')
+    result=events('claude')[-1]
+    js('stepsPage.events.push('+json.dumps(result)+');conversationView.refresh()')
+    wait("document.querySelectorAll('.conversation-step').length===1")
+    assert js('pendingCall.hidden') is True
+    assert js("document.querySelectorAll('.conversation-tool-group').length")==0
+    assert js("document.querySelectorAll('.conversation-step-icon.done').length")==1
+    js("document.querySelector('.conversation-steps:not([hidden]) .conversation-steps-toggle').click()")
+    capture('matched')
+    assert js("packets.filter(p=>p.type==='input')")==[]

@@ -79,7 +79,6 @@ SOFTWARE.
       const step=event.step;
       if(!step||!key(step.id))continue;
       if(step.phase==='call'&&provider==='Claude'){
-        consumed.add(event.id);
         const owner=active();owner.anchor??=event.id;
         calls.set(step.id,{step,event,owner});
       }else if(step.phase==='result'&&provider==='Claude'){
@@ -94,8 +93,11 @@ SOFTWARE.
     }
     for(const [id,call] of calls){
       const result=results.get(id);
-      if(result)call.owner.steps.set(id,{...call.step,...result.step,phase:'complete',
-        eventId:call.event.id,resultId:result.event.id});
+      if(result){
+        consumed.add(call.event.id);
+        call.owner.steps.set(id,{...call.step,...result.step,phase:'complete',
+          eventId:call.event.id,resultId:result.event.id});
+      }
     }
     for(const [id,result] of results)if(!calls.has(id)){
       result.owner.orphans++;result.owner.anchor??=result.event.id;
