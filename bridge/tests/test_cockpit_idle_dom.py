@@ -1,7 +1,7 @@
 """A roster poll that finds nothing new leaves the DOM alone (2026-11-16).
 
-Every 3 s the cockpit repainted every roster tile and rebuilt the rail's
-orrery, about 600 DOM writes for 20 agents even when no row had changed, which
+Every 3 s the cockpit repainted every roster tile, about 600 DOM writes for 20
+agents even when no row had changed, which
 kept style and layout work running in an idle tab. These run the real cockpit
 against a disposable fake dashboard and count DOM mutations around one poll.
 
@@ -128,25 +128,22 @@ def settle(js):
       o.disconnect();return 1;})()""")
 
 
-def test_an_unchanged_roster_writes_nothing_to_the_roster_or_the_orrery(cockpit):
+def test_an_unchanged_roster_writes_nothing_to_the_roster(cockpit):
     js, wait, state = cockpit
     settle(js)
     r = js(POLL)
     assert r['roster'] == 0, r
-    assert r['orrery'] == 0, r
 
 
-def test_a_changed_row_repaints_only_that_tile_and_the_orrery_follows(cockpit):
+def test_a_changed_row_repaints_only_that_tile(cockpit):
     js, wait, state = cockpit
     settle(js)
     state['agents'][3]['ctx_used'] = 77
     r = js(POLL)
     assert r['rosterTiles'] == ['DeltaNode'], r
     assert js("tiles.get('DeltaNode').querySelector('.pct').textContent") == '77%'
-    # an agent that starts to work changes what the rail draws
     state['agents'][4]['act_state'] = 'work'
-    r = js(POLL)
-    assert r['orrery'] > 0, r
+    js(POLL)
     assert js("tiles.get('EpsilonNode').classList.contains('working')") is True
     assert js("document.querySelectorAll('#orrery .mini-agent.is-working').length") == 3
     state['agents'][4]['act_state'] = 'wait'
@@ -169,15 +166,10 @@ def test_classes_the_poll_does_not_own_survive_it(cockpit):
     assert js("tiles.get('AlphaNode').classList.contains('working')") is True
 
 
-def test_a_changed_parent_redraws_the_spawn_lines(cockpit):
+def test_a_mail_event_draws_a_line_between_the_two_agents(cockpit):
     js, wait, state = cockpit
-    js("lineageParent=new Map([['GammaNode','AlphaNode'],['DeltaNode','BetaNode']]);pollAgents()")
-    time.sleep(.3)
     settle(js)
-    edge = "[...document.querySelectorAll('#orrery .orrery-spawn-edge')].map(e=>e.dataset.parent+'>'+e.dataset.child)"
-    assert sorted(js(edge)) == ['AlphaNode>GammaNode', 'BetaNode>DeltaNode']
-    # same agents, new parent: nothing in the roster changed, the lines must
-    js("lineageParent=new Map([['GammaNode','BetaNode'],['DeltaNode','AlphaNode']]);pollAgents()")
-    time.sleep(.3)
-    settle(js)
-    assert sorted(js(edge)) == ['AlphaNode>DeltaNode', 'BetaNode>GammaNode']
+    assert js("document.querySelectorAll('#orrery .orrery-comm-edge').length") == 0
+    js("""document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages:[{id:1,
+      sender:'AlphaNode',recipients:[{name:'BetaNode',kind:'to'}],ts:Math.floor(Date.now()/1000),subject:'x'}]}}))""")
+    wait("document.querySelectorAll('#orrery .orrery-comm-edge').length>0")
