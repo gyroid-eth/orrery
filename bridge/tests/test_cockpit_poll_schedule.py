@@ -140,15 +140,16 @@ def test_a_hidden_tab_stops_the_graph_and_asks_at_once_when_shown():
     assert r["shown"].index("graph") < r["shown"].index("agents")
 
 
-def test_a_hidden_tab_keeps_the_agents_and_mail_but_at_a_slower_pace():
-    """The roster stamps changes with the time it saw them and the mail stream
-    only reaches five minutes back, so the polls stay: at 15 s and 20 s."""
+def test_a_hidden_tab_keeps_the_agents_slower_and_the_mail_at_its_pace():
+    """The roster stamps changes with the time it saw them, so it stays at 15 s.
+    Mail keeps its 4 s: a request carries at most 40 messages and the next one
+    starts from the answer's clock, so a longer gap could drop mail for good."""
     r = run("""
       await advance(500);await setHidden(true);const a=count('agents'),m=count('mail');
       await advance(60000);return {agents:count('agents')-a,mail:count('mail')-m,
         agentTimes:calls.filter(c=>c[0]==='agents').map(c=>c[1]).slice(-3)};""")
     # the request already due at 3 s / 4 s goes out, then every 15 s / 20 s
-    assert r["agents"] == 4 and r["mail"] == 3       # a visible tab: 20 and 15
+    assert r["agents"] == 4 and r["mail"] == 15      # a visible tab: 20 and 15
     assert r["agentTimes"] == [18000, 33000, 48000]
 
 
@@ -378,3 +379,17 @@ def test_switching_back_within_a_second_does_not_ask_again():
     assert r["quick"] == {"graph": 1, "agents": 1, "mail": 1}
     assert r["later"] == {"graph": 2, "agents": 2, "mail": 2}   # 1.5 s after the first round
     assert r["paced"] == 3   # agents at 0, 1.5 (shown again), then 3 s from that: 4.5
+
+
+def test_showing_the_tab_right_after_a_hidden_poll_returns_to_the_three_second_pace():
+    """A hidden-tab poll answered, the tab is shown within the fresh window, so
+    no request is made: the timer must not keep the 15 s hidden gap."""
+    r = run("""
+      await setHidden(true);await advance(3000);            // the hidden poll runs at 3 s
+      const at=now;await advance(500);await setHidden(false);
+      const during=count('agents');
+      await advance(2600);const after3=count('agents');      // 3.1 s after the poll: asked again
+      await advance(3000);return {during,after3,later:count('agents'),
+        times:calls.filter(c=>c[0]==='agents').map(c=>c[1]).slice(-3),at};""")
+    assert r["after3"] == r["during"] + 1
+    assert r["times"][-1] - r["times"][-2] == 3000

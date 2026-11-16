@@ -167,3 +167,17 @@ def test_classes_the_poll_does_not_own_survive_it(cockpit):
     js("pollAgents()")
     assert js("tiles.get('BetaNode').classList.contains('pinned')") is False
     assert js("tiles.get('AlphaNode').classList.contains('working')") is True
+
+
+def test_a_changed_parent_redraws_the_spawn_lines(cockpit):
+    js, wait, state = cockpit
+    js("lineageParent=new Map([['GammaNode','AlphaNode'],['DeltaNode','BetaNode']]);pollAgents()")
+    time.sleep(.3)
+    settle(js)
+    edge = "[...document.querySelectorAll('#orrery .orrery-spawn-edge')].map(e=>e.dataset.parent+'>'+e.dataset.child)"
+    assert sorted(js(edge)) == ['AlphaNode>GammaNode', 'BetaNode>DeltaNode']
+    # same agents, new parent: nothing in the roster changed, the lines must
+    js("lineageParent=new Map([['GammaNode','BetaNode'],['DeltaNode','AlphaNode']]);pollAgents()")
+    time.sleep(.3)
+    settle(js)
+    assert sorted(js(edge)) == ['AlphaNode>DeltaNode', 'BetaNode>GammaNode']

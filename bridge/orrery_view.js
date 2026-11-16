@@ -816,6 +816,7 @@ function miniDrawnKey(layout){
   const presentation=OC.providerPresentation;
   return JSON.stringify([
     miniMode,miniNetworkDepth,layout.networkFocus||'',layout.width,layout.height,
+    [...(layout.parentOf||[])],   // who spawned whom: a re-parent redraws the lines
     [...layout.positions].map(([name,at])=>[
       name,at.x,at.y,Boolean(at.working),Boolean(at.promoted),at.promotionPartner||'',
       roleOf(at.agent),modelOf(at.agent),stateOf(at.agent),stateGlyph(at.agent),
