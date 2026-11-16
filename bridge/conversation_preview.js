@@ -7,6 +7,21 @@
     let request=null,generation=0,objectUrl=null,selected=null,sourceView=false;
     const create=(tag,cls,text)=>{const el=document.createElement(tag);el.className=cls;if(text!==undefined)el.textContent=text;return el;};
     const button=(cls,text,action)=>{const el=create('button','cockpit-control conversation-action '+cls,text);el.type='button';el.addEventListener('click',action);return el;};
+    // Heading buttons are icons only; the name lives in aria-label and title.
+    const ICONS={
+      reply:'<path d="M6.5 3.5 2.5 7.5l4 4"/><path d="M2.5 7.5h6a5 5 0 0 1 5 5v0"/>',
+      source:'<path d="m5.5 4.5-3.5 3.5 3.5 3.5"/><path d="m10.5 4.5 3.5 3.5-3.5 3.5"/>',
+      fullscreen:'<path d="M2.5 6V2.5H6"/><path d="M10 2.5h3.5V6"/><path d="M13.5 10v3.5H10"/><path d="M6 13.5H2.5V10"/>',
+      reveal:'<path d="M1.8 4.2c0-.7.5-1.2 1.2-1.2h3l1.4 1.6H13c.7 0 1.2.5 1.2 1.2v6.2c0 .7-.5 1.2-1.2 1.2H3c-.7 0-1.2-.5-1.2-1.2z"/>',
+      close:'<path d="m3.5 3.5 9 9"/><path d="m12.5 3.5-9 9"/>',
+    };
+    const iconButton=(cls,icon,name,action)=>{
+      const el=button('conversation-preview-icon '+cls,'',action),svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+      svg.setAttribute('viewBox','0 0 16 16');svg.setAttribute('width','16');svg.setAttribute('height','16');svg.setAttribute('fill','none');
+      svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.5');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');
+      svg.setAttribute('aria-hidden','true');svg.innerHTML=ICONS[icon];
+      el.appendChild(svg);el.setAttribute('aria-label',name);el.title=name;return el;
+    };
     const scroll=host.closest('.conversation-panel').querySelector('.conversation-scroll');
     const inlineRows=new Map(),near=new Set();let visible=false,loading=0,frame=0;
     const observer=new IntersectionObserver(changes=>{
@@ -243,9 +258,9 @@
       onBeforeOpen();cancel();current=null;selected=ref;markSelected();const token=generation;request=new AbortController();
       host.hidden=false;host.parentElement.classList.add('conversation-has-preview');onActivate(ref);
       const head=create('div','conversation-preview-head'),title=create('h3','conversation-preview-title',ref.label);
-      const closeButton=button('conversation-preview-close','× Preview',()=>{close();host.closest('.conversation-panel').querySelector('.conversation-scroll')?.focus();});
+      const closeButton=iconButton('conversation-preview-close','close','Close preview',()=>{close();host.closest('.conversation-panel').querySelector('.conversation-scroll')?.focus();});
       head.append(title,closeButton);
-      if(onReference&&ref.id)head.insertBefore(button('conversation-preview-reply','Reply with reference',()=>onReference(ref)),closeButton);
+      if(onReference&&ref.id)head.insertBefore(iconButton('conversation-preview-reply','reply','Reply with reference',()=>onReference(ref)),closeButton);
       const notice=create('div','conversation-preview-notice',ref.path?'':ref.input_image?'Recorded input image':'Current file · may differ from the recorded edit');
       const body=create('div','conversation-preview-content','Loading preview…');body.tabIndex=0;
       host.replaceChildren(head,notice,body);closeButton.focus();
@@ -260,7 +275,7 @@
             // Drawn as a document by default; Source shows the file's own text.
             // Both views are inert (text nodes only); see conversation_markdown.js.
             let doc=null;
-            const toggle=button('conversation-preview-source','Source',()=>{sourceView=!sourceView;show();});
+            const toggle=iconButton('conversation-preview-source','source','Source',()=>{sourceView=!sourceView;show();});
             const show=()=>{
               if(!sourceView&&!doc){
                 // A drawing failure shows the file's own text, never an error in its place.
@@ -284,10 +299,10 @@
           image.tabIndex=0;image.setAttribute('role','button');image.setAttribute('aria-label','Full screen');image.title='Full screen';
           image.addEventListener('click',()=>openLightbox('image'));
           image.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openLightbox('image');}});
-          head.insertBefore(button('conversation-preview-fullscreen','⤢ Full screen',()=>openLightbox('button')),closeButton);
+          head.insertBefore(iconButton('conversation-preview-fullscreen','fullscreen','Full screen',()=>openLightbox('button')),closeButton);
           if(lightbox)setImage(current);
         }else throw new Error('Unsupported preview response.');
-        const reveal=button('conversation-reveal','Reveal in file manager',async()=>{
+        const reveal=iconButton('conversation-reveal','reveal','Reveal in file manager',async()=>{
           reveal.disabled=true;
           try{if(ref.path)await source.revealPath(ref.path);else await source.reference(ref.id,{reveal:true});if(token===generation)notice.textContent='Selected in file manager';}
           catch(error){if(token===generation)notice.textContent=error.message;}
