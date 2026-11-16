@@ -14,13 +14,18 @@
       fullscreen:'<path d="M2.5 6V2.5H6"/><path d="M10 2.5h3.5V6"/><path d="M13.5 10v3.5H10"/><path d="M6 13.5H2.5V10"/>',
       reveal:'<path d="M1.8 4.2c0-.7.5-1.2 1.2-1.2h3l1.4 1.6H13c.7 0 1.2.5 1.2 1.2v6.2c0 .7-.5 1.2-1.2 1.2H3c-.7 0-1.2-.5-1.2-1.2z"/>',
       close:'<path d="m3.5 3.5 9 9"/><path d="m12.5 3.5-9 9"/>',
+      fit:'<path d="M6 2.5V6H2.5"/><path d="M10 2.5V6h3.5"/><path d="M13.5 10H10v3.5"/><path d="M2.5 10H6v3.5"/>',
+      actual:'<path d="m2.5 6.8 1.7-1.3v5.5"/><path d="M8 7.2v.01"/><path d="M8 10.2v.01"/><path d="m11.3 6.8 1.7-1.3v5.5"/>',
     };
-    const iconButton=(cls,icon,name,action)=>{
-      const el=button('conversation-preview-icon '+cls,'',action),svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    const svgIcon=icon=>{
+      const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
       svg.setAttribute('viewBox','0 0 16 16');svg.setAttribute('width','16');svg.setAttribute('height','16');svg.setAttribute('fill','none');
       svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.5');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');
-      svg.setAttribute('aria-hidden','true');svg.innerHTML=ICONS[icon];
-      el.appendChild(svg);el.setAttribute('aria-label',name);el.title=name;return el;
+      svg.setAttribute('aria-hidden','true');svg.innerHTML=ICONS[icon];return svg;
+    };
+    const iconButton=(cls,icon,name,action)=>{
+      const el=button('conversation-preview-icon '+cls,'',action);
+      el.appendChild(svgIcon(icon));el.setAttribute('aria-label',name);el.title=name;return el;
     };
     const scroll=host.closest('.conversation-panel').querySelector('.conversation-scroll');
     const inlineRows=new Map(),near=new Set();let visible=false,loading=0,frame=0;
@@ -117,6 +122,10 @@
     function lbButton(text,title,action){
       const el=create('button','conversation-lightbox-btn',text);el.type='button';el.title=title;el.addEventListener('click',action);return el;
     }
+    // Bar buttons are icons only, built like the heading's (#140); the name is aria-label and title.
+    function lbIcon(icon,name,action){
+      const el=lbButton('',name,action);el.classList.add('conversation-lightbox-icon');el.appendChild(svgIcon(icon));el.setAttribute('aria-label',name);return el;
+    }
     function openLightbox(returnTo){
       if(lightbox||!current)return;
       const lb={returnTo,w:current.width||1,h:current.height||1,s:1,x:0,y:0,drag:null,inerted:[],ready:false};
@@ -124,8 +133,8 @@
       rootEl.setAttribute('role','dialog');rootEl.setAttribute('aria-modal','true');rootEl.setAttribute('aria-label','Image viewer');rootEl.tabIndex=-1;
       const bar=create('div','conversation-lightbox-bar');
       lb.name=create('span','conversation-lightbox-name');lb.count=create('span','conversation-lightbox-meta conversation-lightbox-count');lb.zoom=create('span','conversation-lightbox-meta conversation-lightbox-zoom');
-      lb.fitBtn=lbButton('Fit','Fit to window (0)',()=>setFit(true));lb.oneBtn=lbButton('100%','Actual size (1)',()=>setActual(null,true));
-      lb.closeBtn=lbButton('× Close','Close (Esc)',()=>closeLightbox(true));
+      lb.fitBtn=lbIcon('fit','Fit to window (0)',()=>setFit(true));lb.oneBtn=lbIcon('actual','Actual size (1)',()=>setActual(null,true));
+      lb.closeBtn=lbIcon('close','Close (Esc)',()=>closeLightbox(true));
       bar.append(lb.name,lb.count,lb.zoom,lb.fitBtn,lb.oneBtn,lb.closeBtn);
       lb.stage=create('div','conversation-lightbox-stage');
       lb.img=create('img','conversation-lightbox-image');lb.img.alt='';lb.img.draggable=false;
@@ -133,8 +142,8 @@
       lb.stage.append(lb.img,lb.status);
       lb.prev=lbButton('‹','Previous image (←)',()=>nav(-1));lb.next=lbButton('›','Next image (→)',()=>nav(1));
       lb.prev.classList.add('conversation-lightbox-nav','prev');lb.next.classList.add('conversation-lightbox-nav','next');
-      const help=create('div','conversation-lightbox-help','Wheel zoom · drag pan · click fit ↔ 100% · ← → images · + − 0 1 · Esc close');
-      rootEl.append(bar,lb.stage,lb.prev,lb.next,help);lb.root=rootEl;
+      lb.stage.title='Wheel zoom · drag pan · click fit ↔ 100% · ← → images · + − 0 1 · Esc close';
+      rootEl.append(bar,lb.stage,lb.prev,lb.next);lb.root=rootEl;
       // The layer is modal: everything else is inert and keys never reach the page behind it.
       for(const node of [...document.body.children])if(!node.inert){node.inert=true;lb.inerted.push(node);}
       document.body.appendChild(rootEl);lightbox=lb;

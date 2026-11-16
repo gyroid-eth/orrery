@@ -130,14 +130,37 @@ def test_full_screen_button_opens_a_modal_layer_fitted_to_the_window(cockpit):
     assert js("getComputedStyle(document.querySelector('.conversation-lightbox')).position") == 'fixed'
 
 
+def test_bar_buttons_are_icons_only_with_names_in_aria_label_and_title(cockpit):
+    js, wait, client = prepare(cockpit)
+    open_lightbox(js, wait, client)
+    bar = js("""[...document.querySelectorAll('.conversation-lightbox-bar button')].map(b=>({text:b.textContent.trim(),label:b.getAttribute('aria-label'),
+      title:b.title,svg:b.querySelectorAll('svg').length,w:Math.round(b.getBoundingClientRect().width),h:Math.round(b.getBoundingClientRect().height)}))""")
+    assert [b['label'] for b in bar] == ['Fit to window (0)', 'Actual size (1)', 'Close (Esc)']
+    assert all(b['text'] == '' and b['svg'] == 1 and b['title'] == b['label'] and (b['w'], b['h']) == (30, 30) for b in bar)
+    assert js("document.querySelector('.conversation-lightbox-help')") is None
+    assert 'Wheel zoom' in js("document.querySelector('.conversation-lightbox-stage').title")
+    # the information stays as text: the name, the position and the magnification
+    assert js("document.querySelector('.conversation-lightbox-name').textContent") == 'fig0.png'
+    assert js("document.querySelector('.conversation-lightbox-count').textContent") == '1 / 3'
+    assert js("document.querySelector('.conversation-lightbox-zoom').textContent").endswith('%')
+    js("document.querySelector('[aria-label=\"Actual size (1)\"]').click()")
+    assert js("document.querySelector('[aria-label=\"Actual size (1)\"]').getAttribute('aria-pressed')") == 'true'
+
+
 def test_wheel_zooms_around_the_cursor_and_is_bounded(cockpit):
     js, wait, client = prepare(cockpit)
     v = open_lightbox(js, wait, client)
     px, py = v['left'] + v['width'] * 0.7, v['top'] + v['height'] * 0.4
-    before = ((px - v['left'] - v['x']) / v['s'], (py - v['top'] - v['y']) / v['s'])
+    wheel(js, wait, client, px, py, -120)
+    assert view(js)['s'] > v['s'] * 1.1
+    # Once the picture covers the window, zooming keeps the point under the cursor fixed
+    # (while it is still smaller than the window it stays centred, so that is not tested here).
+    wheel(js, wait, client, px, py, -120, times=3)
+    start = view(js)
+    before = ((px - start['left'] - start['x']) / start['s'], (py - start['top'] - start['y']) / start['s'])
     wheel(js, wait, client, px, py, -120)
     after = view(js)
-    assert after['s'] > v['s'] * 1.1
+    assert after['s'] > start['s'] * 1.1
     point = ((px - after['left'] - after['x']) / after['s'], (py - after['top'] - after['y']) / after['s'])
     assert point[0] == pytest.approx(before[0], abs=1) and point[1] == pytest.approx(before[1], abs=1)
     wheel(js, wait, client, px, py, -240, times=60)
