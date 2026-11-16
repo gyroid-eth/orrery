@@ -354,3 +354,33 @@ html[data-color-theme="light"] .conversation-activity[data-state="work"]{color:#
     height:calc(132px + var(--conversation-reply-space,0px));padding-top:calc(8px + var(--conversation-reply-space,0px))}
   .screen:has(.split-cell.conversation-open):has(.promptbar.has-conversation-reference) .termstage{bottom:calc(132px + var(--conversation-reply-space,0px))}
 }
+/* Lightbox: the preview image on a dark layer over the whole window. The layer
+   is dark in every theme (it is a place to look at a picture, not a panel). */
+.conversation-preview-image{cursor:zoom-in}
+.conversation-preview-image:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.conversation-lightbox{position:fixed;inset:0;z-index:5000;display:flex;flex-direction:column;background:rgb(6 6 8 / .975);color:#ddd;font:12px var(--mono, ui-monospace, monospace);outline:0}
+.conversation-lightbox-bar{position:relative;z-index:2;flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:12px 16px}
+.conversation-lightbox-name{flex:1 1 120px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#eee}
+.conversation-lightbox-meta{flex:none;color:#9a9aa2;white-space:nowrap;font-variant-numeric:tabular-nums}
+.conversation-lightbox-btn{flex:none;border:1px solid #555;border-radius:10px;background:rgb(40 40 46 / .8);color:#eee;font:12px var(--mono, ui-monospace, monospace);padding:6px 12px;cursor:pointer}
+.conversation-lightbox-btn:hover:not(:disabled){border-color:#888;background:rgb(60 60 68 / .9)}
+.conversation-lightbox-btn:focus-visible{outline:2px solid #f2b65a;outline-offset:2px}
+.conversation-lightbox-btn:disabled{opacity:.35;cursor:default}
+.conversation-lightbox-btn[aria-pressed="true"]{border-color:#f2b65a;color:#f2b65a}
+.conversation-lightbox-stage{position:relative;flex:1;min-height:0;overflow:hidden;touch-action:none;cursor:zoom-in;-webkit-user-select:none;user-select:none}
+.conversation-lightbox-stage.dragging{cursor:grabbing}
+.conversation-lightbox-image{position:absolute;left:0;top:0;max-width:none;max-height:none;transform-origin:0 0;box-shadow:0 10px 50px #000a;background:repeating-conic-gradient(#8882 0% 25%,transparent 0% 50%) 50% / 16px 16px}
+.conversation-lightbox-image.pixelated{image-rendering:pixelated}
+.conversation-lightbox-status{position:absolute;inset:0;display:grid;place-items:center;color:#9a9aa2;pointer-events:none}
+.conversation-lightbox-nav{position:absolute;top:50%;z-index:2;width:44px;height:44px;margin-top:-22px;padding:0;border-radius:50%;font-size:22px;line-height:1}
+.conversation-lightbox-nav.prev{left:16px}.conversation-lightbox-nav.next{right:16px}
+.conversation-lightbox-help{position:relative;z-index:2;flex:none;padding:8px 16px 12px;text-align:center;color:#8a8a92;font-size:11px}
+@media (max-width:760px){
+  .conversation-lightbox-help{display:none}
+  .conversation-lightbox-nav{top:auto;bottom:16px;margin-top:0}
+}
+@media (prefers-reduced-motion:no-preference){
+  .conversation-lightbox{animation:conversation-lightbox-in .12s ease-out}
+  .conversation-lightbox-image.animate{transition:transform .14s ease-out}
+}
+@keyframes conversation-lightbox-in{from{opacity:0}to{opacity:1}}

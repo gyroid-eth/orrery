@@ -66,6 +66,7 @@
           const node=create('div','conversation-inline-images');node.dataset.inlineFor=id;
           record={node,signature,entries:[]};inlineRows.set(id,record);
           for(const ref of refs){
+            remember(ref);
             const control=button('conversation-inline-image conversation-file','',()=>open(ref));
             control.dataset.refId=ref.id;control.setAttribute('aria-label','Preview '+ref.label);
             const image=create('img','conversation-inline-thumbnail');image.alt='';image.hidden=true;image.draggable=false;
@@ -82,9 +83,164 @@
     }
     function cancel(){generation++;if(request)request.abort();request=null;if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl=null;}
     function markSelected(){host.closest('.conversation-panel').querySelectorAll('.conversation-file').forEach(chip=>chip.setAttribute('aria-pressed',String(chip.dataset.refId===selected?.id)));}
-    function close(){cancel();selected=null;markSelected();host.hidden=true;host.replaceChildren();host.parentElement.classList.remove('conversation-has-preview');onClose();}
+    // ---- Lightbox: the open image on a dark layer over the whole window. It
+    // draws the bytes the preview already holds; Left/Right ask open() for the
+    // neighbouring image so every fetch keeps the preview's route and limits.
+    const known=new Map();            // id -> image reference seen in this conversation
+    let current=null,lightbox=null;   // current: {ref,url,width,height} of the open preview image
+    const SVG_NS='http://www.w3.org/2000/svg';
+    function remember(ref){if(ref&&ref.kind==='image'&&typeof ref.id==='string')known.set(ref.id,ref);}
+    function imageRefs(){
+      const list=[],seen=new Set();
+      for(const node of host.closest('.conversation-panel').querySelectorAll('[data-ref-id]')){
+        const ref=known.get(node.dataset.refId);
+        if(ref&&!seen.has(ref.id)){seen.add(ref.id);list.push(ref);}
+      }
+      if(selected&&!seen.has(selected.id)&&!list.includes(selected))list.push(selected);
+      return list;
+    }
+    function lbButton(text,title,action){
+      const el=create('button','conversation-lightbox-btn',text);el.type='button';el.title=title;el.addEventListener('click',action);return el;
+    }
+    function openLightbox(returnTo){
+      if(lightbox||!current)return;
+      const lb={returnTo,w:current.width||1,h:current.height||1,s:1,x:0,y:0,drag:null,inerted:[],ready:false};
+      const rootEl=create('div','conversation-lightbox');
+      rootEl.setAttribute('role','dialog');rootEl.setAttribute('aria-modal','true');rootEl.setAttribute('aria-label','Image viewer');rootEl.tabIndex=-1;
+      const bar=create('div','conversation-lightbox-bar');
+      lb.name=create('span','conversation-lightbox-name');lb.count=create('span','conversation-lightbox-meta conversation-lightbox-count');lb.zoom=create('span','conversation-lightbox-meta conversation-lightbox-zoom');
+      lb.fitBtn=lbButton('Fit','Fit to window (0)',()=>setFit(true));lb.oneBtn=lbButton('100%','Actual size (1)',()=>setActual(null,true));
+      lb.closeBtn=lbButton('× Close','Close (Esc)',()=>closeLightbox(true));
+      bar.append(lb.name,lb.count,lb.zoom,lb.fitBtn,lb.oneBtn,lb.closeBtn);
+      lb.stage=create('div','conversation-lightbox-stage');
+      lb.img=create('img','conversation-lightbox-image');lb.img.alt='';lb.img.draggable=false;
+      lb.status=create('div','conversation-lightbox-status');lb.status.hidden=true;lb.status.setAttribute('role','status');
+      lb.stage.append(lb.img,lb.status);
+      lb.prev=lbButton('‹','Previous image (←)',()=>nav(-1));lb.next=lbButton('›','Next image (→)',()=>nav(1));
+      lb.prev.classList.add('conversation-lightbox-nav','prev');lb.next.classList.add('conversation-lightbox-nav','next');
+      const help=create('div','conversation-lightbox-help','Wheel zoom · drag pan · click fit ↔ 100% · ← → images · + − 0 1 · Esc close');
+      rootEl.append(bar,lb.stage,lb.prev,lb.next,help);lb.root=rootEl;
+      // The layer is modal: everything else is inert and keys never reach the page behind it.
+      for(const node of [...document.body.children])if(!node.inert){node.inert=true;lb.inerted.push(node);}
+      document.body.appendChild(rootEl);lightbox=lb;
+      lb.onKey=event=>{
+        if(lightbox!==lb)return;
+        event.stopPropagation();
+        if(event.type!=='keydown'||event.ctrlKey||event.metaKey||event.altKey)return;
+        const half=()=>{const r=lb.stage.getBoundingClientRect();return [r.width/2,r.height/2];};
+        let handled=true;
+        switch(event.key){
+          case 'Escape':closeLightbox(true);break;
+          case 'ArrowLeft':nav(-1);break;
+          case 'ArrowRight':nav(1);break;
+          case '+':case '=':zoomAt(1.25,...half(),true);break;
+          case '-':case '_':zoomAt(1/1.25,...half(),true);break;
+          case '0':setFit(true);break;
+          case '1':setActual(null,true);break;
+          case 'Tab':{
+            const items=[lb.fitBtn,lb.oneBtn,lb.closeBtn,lb.prev,lb.next].filter(el=>!el.disabled);
+            const at=items.indexOf(document.activeElement),next=event.shiftKey?(at<=0?items.length-1:at-1):(at+1)%items.length;
+            items[next]?.focus();break;
+          }
+          default:handled=false;
+        }
+        if(handled)event.preventDefault();
+      };
+      for(const type of ['keydown','keyup','keypress'])window.addEventListener(type,lb.onKey,true);
+      lb.stage.addEventListener('wheel',event=>{
+        event.preventDefault();
+        const unit=event.deltaMode===1?16:event.deltaMode===2?400:1,delta=Math.max(-240,Math.min(240,event.deltaY*unit));
+        const rect=lb.stage.getBoundingClientRect();
+        zoomAt(Math.exp(-delta*(event.ctrlKey?0.01:0.0015)),event.clientX-rect.left,event.clientY-rect.top,false);
+      },{passive:false});
+      lb.stage.addEventListener('pointerdown',event=>{
+        if(event.button!==0||!lb.ready)return;
+        lb.drag={id:event.pointerId,sx:event.clientX,sy:event.clientY,x:lb.x,y:lb.y,moved:false};
+        try{lb.stage.setPointerCapture(event.pointerId);}catch(_){}
+      });
+      lb.stage.addEventListener('pointermove',event=>{
+        const d=lb.drag;if(!d||d.id!==event.pointerId)return;
+        const dx=event.clientX-d.sx,dy=event.clientY-d.sy;
+        if(!d.moved&&Math.hypot(dx,dy)>4){d.moved=true;lb.stage.classList.add('dragging');}
+        if(d.moved){lb.x=d.x+dx;lb.y=d.y+dy;paint(false);}
+      });
+      const endDrag=event=>{
+        const d=lb.drag;if(!d||d.id!==event.pointerId)return;
+        lb.drag=null;lb.stage.classList.remove('dragging');
+        try{lb.stage.releasePointerCapture(event.pointerId);}catch(_){}
+        if(d.moved||event.type==='pointercancel')return;
+        // A click (no drag): fit <-> actual size, but only on the image itself.
+        const rect=lb.stage.getBoundingClientRect(),px=event.clientX-rect.left,py=event.clientY-rect.top;
+        if(px<lb.x||py<lb.y||px>lb.x+lb.w*lb.s||py>lb.y+lb.h*lb.s)return;
+        if(isFit())setActual([px,py],true);else setFit(true);
+      };
+      lb.stage.addEventListener('pointerup',endDrag);lb.stage.addEventListener('pointercancel',endDrag);
+      lb.ro=new ResizeObserver(()=>{if(!lb.ready)return;if(lb.fitMode)setFit(false);else paint(false);});lb.ro.observe(lb.stage);
+      setImage(current);rootEl.focus({preventScroll:true});
+    }
+    function fitScale(){const r=lightbox.stage.getBoundingClientRect();return Math.min(1,r.width/lightbox.w,r.height/lightbox.h)||1;}
+    function isFit(){return Math.abs(lightbox.s-fitScale())<1e-3;}
+    function paint(animate){
+      const lb=lightbox;if(!lb)return;
+      const r=lb.stage.getBoundingClientRect(),iw=lb.w*lb.s,ih=lb.h*lb.s;
+      lb.x=iw<=r.width?(r.width-iw)/2:Math.min(0,Math.max(r.width-iw,lb.x));
+      lb.y=ih<=r.height?(r.height-ih)/2:Math.min(0,Math.max(r.height-ih,lb.y));
+      lb.img.classList.toggle('animate',!!animate);
+      lb.img.style.transform='translate('+lb.x+'px,'+lb.y+'px) scale('+lb.s+')';
+      lb.img.classList.toggle('pixelated',lb.s>=2);
+      lb.fitMode=Math.abs(lb.s-fitScale())<1e-3;
+      lb.zoom.textContent=Math.round(lb.s*100)+'%';
+      lb.fitBtn.setAttribute('aria-pressed',String(lb.fitMode));lb.oneBtn.setAttribute('aria-pressed',String(Math.abs(lb.s-1)<1e-3));
+    }
+    function zoomAt(factor,cx,cy,animate){
+      const lb=lightbox;if(!lb||!lb.ready)return;
+      const fit=fitScale(),next=Math.max(fit*0.8,Math.min(Math.max(8,fit),lb.s*factor)),k=next/lb.s;
+      lb.x=cx-(cx-lb.x)*k;lb.y=cy-(cy-lb.y)*k;lb.s=next;paint(animate);
+    }
+    function setFit(animate){const lb=lightbox;if(!lb||!lb.ready)return;lb.s=fitScale();lb.x=lb.y=0;paint(animate);}
+    function setActual(point,animate){
+      const lb=lightbox;if(!lb||!lb.ready)return;
+      const r=lb.stage.getBoundingClientRect();
+      // Put the clicked image point at the centre of the window (centre of the image when no point).
+      const ix=point?(point[0]-lb.x)/lb.s:lb.w/2,iy=point?(point[1]-lb.y)/lb.s:lb.h/2;
+      lb.s=1;lb.x=r.width/2-ix;lb.y=r.height/2-iy;paint(animate);
+    }
+    function lbState(){
+      const lb=lightbox;if(!lb)return;
+      const list=imageRefs(),index=Math.max(0,list.findIndex(ref=>ref===selected||(ref.id&&ref.id===selected?.id)));
+      lb.count.textContent=list.length>1?(index+1)+' / '+list.length:'';lb.count.hidden=list.length<2;
+      lb.prev.disabled=index<=0;lb.next.disabled=index>=list.length-1;
+      lb.name.textContent=selected?.label||'';
+    }
+    function setImage(info){
+      const lb=lightbox;if(!lb)return;
+      lb.w=info.width||info.image?.naturalWidth||1;lb.h=info.height||info.image?.naturalHeight||1;
+      lb.status.hidden=true;lb.img.style.width=lb.w+'px';lb.img.style.height=lb.h+'px';
+      lb.img.src=info.url;lb.img.hidden=false;lb.ready=true;lbState();setFit(false);
+    }
+    function lbMessage(text){
+      const lb=lightbox;if(!lb)return;
+      lb.ready=false;lb.img.hidden=true;lb.img.removeAttribute('src');lb.status.textContent=text;lb.status.hidden=false;lb.zoom.textContent='';lbState();
+    }
+    function nav(delta){
+      const lb=lightbox;if(!lb)return;
+      const list=imageRefs(),index=list.findIndex(ref=>ref===selected||(ref.id&&ref.id===selected?.id)),ref=list[index+delta];
+      if(!ref)return;
+      lbMessage('Loading…');open(ref);
+    }
+    function closeLightbox(restoreFocus){
+      const lb=lightbox;if(!lb)return;
+      lightbox=null;lb.ro.disconnect();
+      for(const type of ['keydown','keyup','keypress'])window.removeEventListener(type,lb.onKey,true);
+      lb.root.remove();for(const node of lb.inerted)node.inert=false;
+      if(restoreFocus){
+        const target=host.querySelector(lb.returnTo==='image'?'.conversation-preview-image':'.conversation-preview-fullscreen')||host.querySelector('.conversation-preview-close');
+        target?.focus();
+      }
+    }
+    function close(){closeLightbox(false);current=null;cancel();selected=null;markSelected();host.hidden=true;host.replaceChildren();host.parentElement.classList.remove('conversation-has-preview');onClose();}
     async function open(ref){
-      onBeforeOpen();cancel();selected=ref;markSelected();const token=generation;request=new AbortController();
+      onBeforeOpen();cancel();current=null;selected=ref;markSelected();const token=generation;request=new AbortController();
       host.hidden=false;host.parentElement.classList.add('conversation-has-preview');onActivate(ref);
       const head=create('div','conversation-preview-head'),title=create('h3','conversation-preview-title',ref.label);
       const closeButton=button('conversation-preview-close','× Preview',()=>{close();host.closest('.conversation-panel').querySelector('.conversation-scroll')?.focus();});
@@ -123,6 +279,13 @@
           objectUrl=URL.createObjectURL(new Blob([bytes],{type:'image/png'}));
           const image=create('img','conversation-preview-image');image.alt=ref.label;image.src=objectUrl;image.draggable=false;
           body.appendChild(image);notice.textContent+=(ref.path?'':' · ')+data.width+' × '+data.height;
+          current={ref,url:objectUrl,width:data.width,height:data.height};
+          // Same two doors as the Full screen button: the picture itself (also from the keyboard).
+          image.tabIndex=0;image.setAttribute('role','button');image.setAttribute('aria-label','Full screen');image.title='Full screen';
+          image.addEventListener('click',()=>openLightbox('image'));
+          image.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openLightbox('image');}});
+          head.insertBefore(button('conversation-preview-fullscreen','⤢ Full screen',()=>openLightbox('button')),closeButton);
+          if(lightbox)setImage(current);
         }else throw new Error('Unsupported preview response.');
         const reveal=button('conversation-reveal','Reveal in file manager',async()=>{
           reveal.disabled=true;
@@ -131,7 +294,7 @@
           finally{reveal.disabled=false;}
         });
         if(!ref.input_image)head.insertBefore(reveal,closeButton);
-      }catch(error){if(token===generation&&error.name!=='AbortError')body.textContent=error.message;}
+      }catch(error){if(token===generation&&error.name!=='AbortError'){body.textContent=error.message;if(lightbox)lbMessage(error.message);}}
       finally{if(token===generation)request=null;}
     }
     function render(event,article){
@@ -139,6 +302,7 @@
         const chips=create('div','conversation-files');
         for(const ref of event.references.slice(0,24)){
           if(!ref||!/^[A-Za-z0-9_-]{32}$/.test(ref.id)||typeof ref.label!=='string')continue;
+          remember(ref);
           const chip=button('conversation-file',(ref.kind==='image'?'▧ ':'▤ ')+ref.label,()=>open(ref));
           chip.title='Preview current '+(ref.kind==='image'?'image':'file');chip.dataset.refId=ref.id;chips.appendChild(chip);
           chip.setAttribute('aria-pressed',String(selected?.id===ref.id));
