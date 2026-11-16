@@ -89,7 +89,7 @@ ORRERY Telemetry が不達でも terminal は利用できます。roster は `da
 
 ## Roster
 
-Roster は ORRERY Telemetry `/api/agents` を3秒間隔で取得し、稼働中の agent を表示します。
+Roster は ORRERY Telemetry `/api/agents` を3秒間隔で取得し、稼働中の agent を表示します。タブが隠れている間は 15 秒間隔に落とし（メールは 4 秒のまま）、見えたら直ちに取り直します。隠れている間は animation も止まります。
 
 tile の読み方（上から）:
 

@@ -89,7 +89,7 @@ Even if ORRERY Telemetry is unreachable, terminals remain usable. The roster sho
 
 ## Roster
 
-The roster fetches ORRERY Telemetry `/api/agents` every 3 seconds and shows running agents.
+The roster fetches ORRERY Telemetry `/api/agents` every 3 seconds and shows running agents. While the tab is hidden it slows to every 15 seconds (mail stays at 4 seconds) and asks again at once when the tab is shown. Animations also pause while hidden.
 
 How to read a tile (from the top):
 

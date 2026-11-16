@@ -52,7 +52,9 @@ async function advance(ms){
   now=end;await flush();
 }
 const listeners=[];
-const document={hidden:false,addEventListener(type,fn){if(type==='visibilitychange')listeners.push(fn);}};
+const classes=new Set();
+const document={hidden:false,addEventListener(type,fn){if(type==='visibilitychange')listeners.push(fn);},
+  documentElement:{classList:{toggle(name,on){if(on)classes.add(name);else classes.delete(name);return on;}}}};
 async function setHidden(h){document.hidden=h;listeners.forEach(fn=>fn());await flush();}
 // mode: 'ok' answers at once, 'slow' waits for answer(kind), 'fail' rejects
 const calls=[],waiting={graph:[],agents:[],mail:[]},mode={graph:'ok',agents:'ok',mail:'ok'};
@@ -138,11 +140,41 @@ def test_a_hidden_tab_stops_the_graph_and_asks_at_once_when_shown():
     assert r["shown"].index("graph") < r["shown"].index("agents")
 
 
-def test_a_hidden_tab_keeps_the_agents_and_mail_at_their_pace():
+def test_a_hidden_tab_keeps_the_agents_slower_and_the_mail_at_its_pace():
+    """The roster stamps changes with the time it saw them, so it stays at 15 s.
+    Mail keeps its 4 s: a request carries at most 40 messages and the next one
+    starts from the answer's clock, so a longer gap could drop mail for good."""
     r = run("""
       await advance(500);await setHidden(true);const a=count('agents'),m=count('mail');
-      await advance(12000);return {agents:count('agents')-a,mail:count('mail')-m};""")
-    assert r == {"agents": 4, "mail": 3}
+      await advance(60000);return {agents:count('agents')-a,mail:count('mail')-m,
+        agentTimes:calls.filter(c=>c[0]==='agents').map(c=>c[1]).slice(-3)};""")
+    # the request already due at 3 s / 4 s goes out, then every 15 s / 20 s
+    assert r["agents"] == 4 and r["mail"] == 15      # a visible tab: 20 and 15
+    assert r["agentTimes"] == [18000, 33000, 48000]
+
+
+def test_the_slower_pace_applies_to_the_whole_hidden_stretch_and_ends_when_shown():
+    r = run("""
+      await setHidden(true);await advance(120000);const hiddenCount=count('agents');
+      await setHidden(false);const shownAt=now;const kicked=calls.filter(c=>c[1]===shownAt).map(c=>c[0]);
+      await advance(12000);return {hiddenCount,kicked,visible:count('agents')-hiddenCount};""")
+    assert r["hiddenCount"] <= 9                 # a visible tab would have asked 41 times
+    assert "agents" in r["kicked"] and "mail" in r["kicked"]
+    assert r["visible"] >= 5                     # 3 s pace again: 1 at once + 4 in 12 s
+
+
+def test_a_hidden_tab_pauses_the_animations_and_a_shown_one_runs_them():
+    r = run("""
+      const start=[...classes];await setHidden(true);const hidden=[...classes];
+      await setHidden(false);return {start,hidden,shown:[...classes]};""")
+    assert r == {"start": [], "hidden": ["page-hidden"], "shown": []}
+
+
+def test_a_hidden_tab_asks_for_the_graph_slowly_while_the_lineage_is_empty():
+    r = run("""
+      await setHidden(true);const g=count('graph');await advance(120000);
+      return count('graph')-g;""", setup="lineageAnswer=[];")
+    assert r <= 4                                # 30 s pace, not the 6 s one
 
 
 def test_a_tab_hidden_while_the_graph_is_out_does_not_ask_again_until_shown():
@@ -328,11 +360,11 @@ def test_a_page_loaded_hidden_takes_its_first_lineage_and_then_waits():
 
 
 def test_a_hidden_tab_keeps_asking_for_the_graph_while_it_has_no_lineage():
-    """As before the change: no lineage yet (a failed first answer, or no
-    spawns at all) and the graph is asked for even in a hidden tab."""
-    r = run("await advance(12000);return count('graph');",
+    """No lineage yet (a failed first answer, or no spawns at all): the graph is
+    still asked for in a hidden tab, every 30 s instead of every 6 s."""
+    r = run("await advance(62000);return count('graph');",
             setup="document.hidden=true;lineageAnswer=[];")
-    assert r == 3
+    assert r == 3                                # at 0 s, 30 s and 60 s
 
 
 def test_switching_back_within_a_second_does_not_ask_again():
@@ -347,3 +379,17 @@ def test_switching_back_within_a_second_does_not_ask_again():
     assert r["quick"] == {"graph": 1, "agents": 1, "mail": 1}
     assert r["later"] == {"graph": 2, "agents": 2, "mail": 2}   # 1.5 s after the first round
     assert r["paced"] == 3   # agents at 0, 1.5 (shown again), then 3 s from that: 4.5
+
+
+def test_showing_the_tab_right_after_a_hidden_poll_returns_to_the_three_second_pace():
+    """A hidden-tab poll answered, the tab is shown within the fresh window, so
+    no request is made: the timer must not keep the 15 s hidden gap."""
+    r = run("""
+      await setHidden(true);await advance(3000);            // the hidden poll runs at 3 s
+      const at=now;await advance(500);await setHidden(false);
+      const during=count('agents');
+      await advance(2600);const after3=count('agents');      // 3.1 s after the poll: asked again
+      await advance(3000);return {during,after3,later:count('agents'),
+        times:calls.filter(c=>c[0]==='agents').map(c=>c[1]).slice(-3),at};""")
+    assert r["after3"] == r["during"] + 1
+    assert r["times"][-1] - r["times"][-2] == 3000

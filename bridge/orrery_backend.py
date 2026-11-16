@@ -957,6 +957,35 @@ def list_tmux_sessions(tmux_bin: str) -> list[dict[str, Any]]:
     return sessions
 
 
+SESSION_LIST_SHARE_SECONDS = 2.0
+_session_list_shared: dict[Any, tuple[float, "asyncio.Task[list[dict[str, Any]]]"]] = {}
+
+
+async def shared_session_list(tmux_bin) -> list[dict[str, Any]]:
+    """list_tmux_sessions, shared between the callers that ask within a couple
+    of seconds of each other.
+
+    Every cockpit window keeps a connection that asks for the list every 5 s,
+    and the recorder asks too; each ask runs tmux twice. With several windows
+    open they now share one answer instead of running tmux once per window.
+    An answer older than SESSION_LIST_SHARE_SECONDS is never reused, so a
+    session that appears is still seen within that much of the ordinary beat.
+    """
+    key = tmux_bin if isinstance(tmux_bin, str) else id(tmux_bin)
+    now = time.monotonic()
+    shared = _session_list_shared.get(key)
+    if (
+        shared is None
+        or shared[1].get_loop() is not asyncio.get_running_loop()
+        or (shared[1].done() and now - shared[0] >= SESSION_LIST_SHARE_SECONDS)
+    ):
+        task = asyncio.ensure_future(asyncio.to_thread(list_tmux_sessions, tmux_bin))
+        _session_list_shared[key] = shared = (now, task)
+        # a failure is also shared for that long, but never kept beyond it
+        task.add_done_callback(lambda finished: finished.cancelled() or finished.exception())
+    return await asyncio.shield(shared[1])
+
+
 def pane_tmux_session(tmux_bin: str, pane_id: str) -> str | None:
     """Resolve a pane's current session name for destructive-op checks."""
     result = subprocess.run(
@@ -1150,7 +1179,7 @@ class SessionBridgeManager:
         if isinstance(self.tmux_bin,FreshTargetBoundary):
             await self._reconcile_fresh();return
         try:
-            sessions = await asyncio.to_thread(list_tmux_sessions, self.tmux_bin)
+            sessions = await shared_session_list(self.tmux_bin)
         except (OSError, RuntimeError):
             return
         live_sessions = {
@@ -3912,10 +3941,13 @@ async def open_ghostty(request: web.Request) -> web.Response:
 
 
 async def serve_health(request: web.Request) -> web.Response:
+    # Alive is all this asks: the small version route answers it. The full
+    # roster (/api/agents) is about half a megabyte and about a second of the
+    # dashboard's time, and the cockpit checks this often.
     http_session = request.app[HTTP_SESSION_KEY]
     try:
         async with http_session.get(
-            DASHBOARD_URL + "/api/agents",
+            DASHBOARD_URL + "/api/version",
             timeout=ClientTimeout(total=1),
         ):
             dashboard_online = True
@@ -4425,7 +4457,7 @@ async def _session_list_refresher(
     while True:
         await asyncio.sleep(SESSIONS_REFRESH_SECONDS)
         try:
-            sessions = await asyncio.to_thread(list_tmux_sessions, tmux_bin)
+            sessions = await shared_session_list(tmux_bin)
         except (OSError,TargetRefused) as exc:
             _warn_tmux_gone(tmux_bin, exc)
             continue

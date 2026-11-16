@@ -1171,6 +1171,7 @@
   @keyframes blinkring{50%{border-color:transparent}}
   @keyframes spin{to{transform:rotate(360deg)}}
   @keyframes breathe{0%,100%{opacity:1}50%{opacity:.4}}
+  html.page-hidden *,html.page-hidden *::before,html.page-hidden *::after{animation-play-state:paused !important}
   @keyframes bulkarm{0%,100%{box-shadow:0 0 0 0 rgb(var(--theme-accent-rgb) / .08)}50%{box-shadow:0 0 0 4px rgb(var(--theme-accent-rgb) / .18)}}
   /* ── pane windows: a session out of the cockpit ── */
   /* the page itself in solo mode: only the terminal and its composer */
@@ -4439,7 +4440,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "99f52a4914add6bb0c0fa629b8d6d58028171cec8ad27cca493b876af2557310",
+        "digest": "fa069e72e51d5a9402aa4fd46ec36e0043de268e02e2e7a02e139ddc11d2cd65",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4594,7 +4595,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "fa40433ce9b55da27b3d05409aeb7d0229b211828b1c749b17d8b638eecc2fba",
+        "digest": "d69a0ad554593a88bfdebea29c5bed4aad3f274f61c9ca5a11f7bd29bf636ae4",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4643,9 +4644,9 @@
       }
     }
   },
-  "inventory_digest": "73f8673dc463b46a16d30152e1d45043d1b07f183962987bd6b443ce729b3f4d",
+  "inventory_digest": "3eb9dc0d79518cc1e67cf7c2d966a7d5898c203ed8eb1648fc243a0735efe31e",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "509232fceecb8644ba79d13ff7d1a650def5c2300464fef63b090c7ea4bc43bc",
+  "source_digest": "22f47efeabb62ee62a5ed537727388cf38b331ff4a8cb79129aacfb1798dcab8",
   "surface": "cockpit",
   "version": 1
 }
@@ -9191,7 +9192,7 @@ function paintProviderLogo(logo,agent){
   return {provider,local};
 }
 function paintAgentPortrait(face,name){
-  face.querySelector('.ini').textContent=(name[0]||'?');
+  setText(face.querySelector('.ini'),name[0]||'?');
   const img=face.querySelector('img');
   const src='/telemetry/portrait?v=4&name='+encodeURIComponent(name)+'&hi=1';
   if(img.getAttribute('src')!==src){img.style.display='';img.src=src;img.onerror=()=>{img.style.display='none';};}
@@ -9253,11 +9254,11 @@ function paintRosterProvider(el,agent){
     rim.appendChild(svgEl('polygon',{points:'50,4 90,27 90,73 50,96 10,73 10,27'}));
     badge.prepend(rim);
   }else if(!local&&rim){rim.remove();image.hidden=false;}
-  pill.className='pill eng '+cls;pill.textContent=text;
+  setClassName(pill,'pill eng '+cls);setText(pill,text);
   if(local){
-    badge.hidden=false;pill.hidden=true;badge.title=text;image.hidden=!provider;
+    setHidden(badge,false);setHidden(pill,true);setTitle(badge,text);setHidden(image,!provider);
     if(!provider){image.onload=null;image.onerror=null;image.removeAttribute('src');image.alt='';image.removeAttribute('title');return;}
-    image.alt=text;image.title=text;
+    if(image.alt!==text)image.alt=text;setTitle(image,text);
     image.onload=()=>{image.hidden=false;};
     image.onerror=()=>{image.hidden=true;};
     const src='cockpit-assets/'+provider.asset+'.svg';
@@ -9265,9 +9266,9 @@ function paintRosterProvider(el,agent){
     else if(image.complete&&!image.naturalWidth)image.hidden=true;
     return;
   }
-  badge.hidden=!provider;pill.hidden=!!provider;
+  setHidden(badge,!provider);setHidden(pill,!!provider);
   if(!provider){image.onload=null;image.onerror=null;image.removeAttribute('src');image.alt='';image.removeAttribute('title');badge.removeAttribute('title');return;}
-  badge.title=provider.label;image.alt=provider.label;image.title=provider.label;
+  setTitle(badge,provider.label);if(image.alt!==provider.label)image.alt=provider.label;setTitle(image,provider.label);
   const src='cockpit-assets/'+provider.asset+'.svg';
   image.onload=()=>{badge.hidden=false;pill.hidden=true;};
   image.onerror=()=>{badge.hidden=true;pill.hidden=false;};
@@ -9276,7 +9277,10 @@ function paintRosterProvider(el,agent){
 }
 function paintRosterHarness(el,agent){
   const chip=el.querySelector('.roster-harness');if(!chip)return;
-  const h=SpawnPicker.rosterHarness(agent);chip.replaceChildren();chip.hidden=!h;if(!h)return;
+  const h=SpawnPicker.rosterHarness(agent);
+  const harnessKey=h?h.id+'|'+h.label+'|'+(h.asset||''):'';
+  if(chip.dataset.harnessKey===harnessKey)return;chip.dataset.harnessKey=harnessKey;
+  chip.replaceChildren();chip.hidden=!h;if(!h)return;
   if(h.asset){const image=document.createElement('img');image.src='cockpit-assets/'+h.asset;image.alt='';
     if(['hermes','dsh'].includes(h.id))image.className='harness-art';chip.append(image);}
   chip.append(document.createTextNode(h.label));chip.title='Harness: '+h.label;
@@ -9384,12 +9388,12 @@ function clearBulkExitArm(){
 }
 function updateRosterBulkUI(){
   const count=bulkSelectedAgents.size;
-  rosterBulkBar.hidden=count===0;
-  rosterBulkCount.textContent=`${count} selected`;
-  rosterBulkExit.textContent=bulkExitBusy?'Exiting…':
-    bulkExitArmed?`Confirm Exit (${count})`:'Exit';
-  rosterBulkExit.disabled=bulkExitBusy||count===0;
-  rosterSelectBtn.disabled=bulkExitBusy;
+  setHidden(rosterBulkBar,count===0);
+  setText(rosterBulkCount,`${count} selected`);
+  setText(rosterBulkExit,bulkExitBusy?'Exiting…':
+    bulkExitArmed?`Confirm Exit (${count})`:'Exit');
+  if(rosterBulkExit.disabled!==(bulkExitBusy||count===0))rosterBulkExit.disabled=bulkExitBusy||count===0;
+  if(rosterSelectBtn.disabled!==bulkExitBusy)rosterSelectBtn.disabled=bulkExitBusy;
 }
 function setRosterSelectMode(on){
   if(on)rosterEditor.close(false);
@@ -9471,11 +9475,11 @@ let needOnly=false;
 function renderCrewCounts(live){
   const running=live.filter(a=>a.running);
   const need=running.filter(agentNeedsYou).length;
-  document.getElementById('needCount').textContent=need;
-  document.getElementById('crewWork').textContent=running.filter(a=>a.act_state==='work').length;
-  document.getElementById('crewWait').textContent=running.filter(a=>a.act_state==='wait').length;
+  setText(document.getElementById('needCount'),need);
+  setText(document.getElementById('crewWork'),running.filter(a=>a.act_state==='work').length);
+  setText(document.getElementById('crewWait'),running.filter(a=>a.act_state==='wait').length);
   const chip=document.getElementById('needChip');
-  chip.hidden=need===0;
+  setHidden(chip,need===0);
   if(!need&&needOnly){needOnly=false;chip.setAttribute('aria-pressed','false');}
 }
 function applyRosterFilter(){
@@ -9580,6 +9584,18 @@ function bindAgentDetail(el){
 window.addEventListener('resize',()=>{if(detailAnchor)positionAgentDetail(detailAnchor);});
 rosterEl.addEventListener('scroll',()=>{if(detailAnchor)positionAgentDetail(detailAnchor);},{passive:true});
 
+/* Writes that skip a value the node already has. A roster poll that finds
+   nothing changed (most rows, most of the time) then leaves the DOM alone:
+   assigning the same text replaces the text node, and even an equal attribute
+   write is a mutation the browser has to look at, so doing it for every row
+   every 3 s kept style and layout work running for nothing. */
+function setText(node,value){value=String(value);if(node.textContent!==value)node.textContent=value;}
+function setClassName(node,value){if(node.className!==value)node.className=value;}
+function setAttr(node,name,value){value=String(value);if(node.getAttribute(name)!==value)node.setAttribute(name,value);}
+function setHidden(node,hidden){hidden=!!hidden;if(node.hidden!==hidden)node.hidden=hidden;}
+function setTitle(node,value){value=String(value);if(node.title!==value)node.title=value;}
+function setBox(node,name,value){value=String(value);if(node.style.getPropertyValue(name)!==value)node.style.setProperty(name,value);}
+
 function tileFor(a){
   let el=tiles.get(a.name);
   if(!el){
@@ -9617,30 +9633,34 @@ function tileFor(a){
 
 function paintTile(el,a){
   const act=ACT[a.act_state]||ACT.wait;
-  el.className='agent '+(a.running?act.cls:'')+(a.name===selectedAgent?' sel':'');
+  // only the classes this function owns are set, so the others a tile carries
+  // (pinned, filtered-out, bulk-*) stay as they are and an unchanged row writes nothing
+  {const own=a.running?act.cls:'';
+   ['working','ask','question'].forEach(c=>el.classList.toggle(c,c===own));
+   el.classList.toggle('sel',a.name===selectedAgent);}
   // Roster rings are neutral (2026-07-30 product decision: lineage hue in a flat list
   // reads as random color noise — lineage color lives in the graph views,
   // where the tree gives it meaning).
-  el.querySelector('.face').style.removeProperty('--lineage-ring');
+  {const face=el.querySelector('.face');if(face.style.getPropertyValue('--lineage-ring'))face.style.removeProperty('--lineage-ring');}
   paintAgentPortrait(el.querySelector('.face'),a.name);
-  el.querySelector('.cname').textContent=a.name;
+  setText(el.querySelector('.cname'),a.name);
   paintRosterProvider(el,a);paintRosterHarness(el,a);
   const modelLabel=paneHeadingModel(a),modelPill=el.querySelector('.pill.model');
-  modelPill.textContent=(modelLabel.text||a.model_raw||a.cmd||'—')+(a.ctx_window?(' · '+a.ctx_window):'');
-  modelPill.title=modelLabel.title||a.model_raw||a.cmd||'';
+  setText(modelPill,(modelLabel.text||a.model_raw||a.cmd||'—')+(a.ctx_window?(' · '+a.ctx_window):''));
+  setTitle(modelPill,modelLabel.title||a.model_raw||a.cmd||'');
   const descriptor=a.descriptor||RosterDescriptor.deriveRosterDescriptor(a,currentAgents);
   const secondary=descriptor.secondary;
-  const rolePill=el.querySelector('.pill.role');rolePill.hidden=!secondary;rolePill.textContent=secondary;
+  const rolePill=el.querySelector('.pill.role');setHidden(rolePill,!secondary);setText(rolePill,secondary);
   const ctxEl=el.querySelector('.ctx'),fill=el.querySelector('.fill'),pct=el.querySelector('.pct');
-  if(typeof a.ctx_used==='number'){ctxEl.classList.remove('none');fill.style.width=a.ctx_used+'%';
-    fill.classList.toggle('hot',a.ctx_used>65);pct.textContent=a.ctx_used+'%';}
-  else{ctxEl.classList.add('none');fill.style.width='0%';pct.textContent='—';}
-  el.querySelector('.glyph').textContent=act.glyph;
-  el.querySelector('.statetext').textContent=descriptor.primary;
-  el.querySelector('.statetext').title=OrreryRosterEdit.taskTitle(a);
+  if(typeof a.ctx_used==='number'){if(ctxEl.classList.contains('none'))ctxEl.classList.remove('none');setBox(fill,'width',a.ctx_used+'%');
+    fill.classList.toggle('hot',a.ctx_used>65);setText(pct,a.ctx_used+'%');}
+  else{if(!ctxEl.classList.contains('none'))ctxEl.classList.add('none');setBox(fill,'width','0%');setText(pct,'—');}
+  setText(el.querySelector('.glyph'),act.glyph);
+  setText(el.querySelector('.statetext'),descriptor.primary);
+  setTitle(el.querySelector('.statetext'),OrreryRosterEdit.taskTitle(a));
   const updated=el.querySelector('.descriptor-updated');
   const updatedAt=descriptorTaskState[a.name]&&descriptorTaskState[a.name].updatedAt;
-  updated.hidden=!updatedAt;updated.textContent=updatedAt?`updated ${relTime(updatedAt/1000)} ago`:'';
+  setHidden(updated,!updatedAt);setText(updated,updatedAt?`updated ${relTime(updatedAt/1000)} ago`:'');
   paintPinnedTileState(el,a.name);
   el.classList.toggle('filtered-out',!rosterNameMatches(a.name,rosterFilter.value,currentAgents));
   paintBulkTileState(el,a);
@@ -9651,15 +9671,15 @@ function persistPinnedAgents(){
 }
 function paintPinnedTileState(el,name){
   const pinned=pinnedAgents.has(name),button=el.querySelector('.pin-toggle');
-  el.classList.toggle('pinned',pinned);el.dataset.pinned=String(pinned);
-  button.setAttribute('aria-pressed',String(pinned));
-  button.setAttribute('aria-label',`${pinned?'Unpin':'Pin'} ${name}`);
-  button.title=`${pinned?'Unpin':'Pin'} ${name}`;
+  el.classList.toggle('pinned',pinned);if(el.dataset.pinned!==String(pinned))el.dataset.pinned=String(pinned);
+  setAttr(button,'aria-pressed',pinned);
+  setAttr(button,'aria-label',`${pinned?'Unpin':'Pin'} ${name}`);
+  setTitle(button,`${pinned?'Unpin':'Pin'} ${name}`);
 }
 function paintPinnedBoundary(){
   let lastPinned=null,hasVisibleUnpinned=false;
   [...rosterEl.querySelectorAll(':scope > .agent')].forEach(el=>{
-    el.classList.remove('pinned-boundary');
+    el.classList.toggle('pinned-boundary',false);   // toggle writes nothing when the class is already absent
     if(el.classList.contains('filtered-out'))return;
     if(pinnedAgents.has(el.dataset.agent))lastPinned=el;
     else hasVisibleUnpinned=true;
@@ -11265,11 +11285,13 @@ promptInput.addEventListener('keydown',e=>{
    computing that answer.
    Polls without `whileHidden` stop in a hidden tab, and kickPolls asks them at
    once when the tab is shown again. `whileHidden` may be a function, asked
-   each time. The agents and mail polls keep running
-   there: the roster stamps each change with the time it was seen, and the mail
-   stream only reaches five minutes back, so a pause would show the wrong order
-   and lose mail when the tab comes back. */
-function startPoll(fn,ms,{whileHidden=false}={}){
+   each time. The agents and mail polls keep running there, but slower
+   (`hiddenMs`): the roster stamps each change with the time it was seen, and
+   the mail stream only reaches five minutes back, so a pause would show the
+   wrong order and lose mail when the tab comes back, while a pace of 15 to
+   20 s only blurs those stamps by that much. Nothing here is shown to
+   anyone while the tab is hidden, and showing it asks again at once. */
+function startPoll(fn,ms,{whileHidden=false,hiddenMs=0}={}){
   let inFlight=null,timer=0,started=-Infinity;
   function run(){
     clearTimeout(timer);timer=0;
@@ -11277,26 +11299,42 @@ function startPoll(fn,ms,{whileHidden=false}={}){
     if(document.hidden&&!(typeof whileHidden==='function'?whileHidden():whileHidden))return Promise.resolve();
     started=Date.now();
     inFlight=Promise.resolve().then(fn).then(ok=>ok===false,()=>true).then(failed=>{
-      inFlight=null;timer=setTimeout(run,failed?ms:Math.max(0,started+ms-Date.now()));
+      // the pace is chosen when the answer is in, so a tab that went to the
+      // background mid-request slows down and one that came back speeds up
+      const every=document.hidden?Math.max(ms,hiddenMs):ms;
+      inFlight=null;timer=setTimeout(run,failed?every:Math.max(0,started+every-Date.now()));
     });
     return inFlight;
   }
   /* kickPolls: at once, unless a request is out or started under a second ago
-     (switching tabs back and forth); the timer then keeps the usual pace */
-  run.kick=()=>inFlight||(Date.now()-started<KICK_FRESH_MS?Promise.resolve():run());
+     (switching tabs back and forth); the timer then goes back to the visible pace */
+  run.kick=()=>{
+    if(inFlight)return inFlight;
+    if(Date.now()-started>=KICK_FRESH_MS)return run();
+    // fresh enough to skip the request, but the timer may still hold the
+    // hidden-tab gap: put it back on the visible pace, counted from that request
+    clearTimeout(timer);timer=setTimeout(run,Math.max(0,started+ms-Date.now()));
+    return Promise.resolve();
+  };
   return run;
 }
 const KICK_FRESH_MS=1000;
-const agentsPoll=startPoll(pollAgents,3000,{whileHidden:true});
+const HIDDEN_AGENTS_MS=15000,HIDDEN_GRAPH_MS=30000;
+const agentsPoll=startPoll(pollAgents,3000,{whileHidden:true,hiddenMs:HIDDEN_AGENTS_MS});
 // a tab opened in the background still takes its first lineage, so the roster
 // it shows when brought forward has the right colours from the start
-const graphPoll=soloSession?null:startPoll(pollGraph,6000,{whileHidden:()=>!lineageParent.size});
+const graphPoll=soloSession?null:startPoll(pollGraph,6000,{whileHidden:()=>!lineageParent.size,hiddenMs:HIDDEN_GRAPH_MS});
 const mailPoll=soloSession?null:startPoll(pollMail,4000,{whileHidden:true});
 function kickPolls(){
   if(soloSession){agentsPoll.kick();return;}
   graphPoll.kick().then(agentsPoll.kick);mailPoll.kick();   // lineage ready before first roster paint
 }
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)kickPolls();});
+/* A hidden tab paints nothing, but its infinite animations still cost style
+   work on every frame in some engines: `page-hidden` (see the stylesheet)
+   pauses them all, and showing the tab lets them run again from where they were. */
+function syncPageHidden(){document.documentElement.classList.toggle('page-hidden',!!document.hidden);}
+document.addEventListener('visibilitychange',()=>{syncPageHidden();if(!document.hidden)kickPolls();});
+syncPageHidden();
 kickPolls();
 </script>
 <script src="orrery_view.js"></script>
