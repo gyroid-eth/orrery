@@ -85,8 +85,11 @@
 html[data-color-theme="light"] .conversation-diff-add{color:#17633b}
 html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 .conversation-preview{display:flex;flex-direction:column;min-width:0;width:48%;border-left:1px solid var(--hair);background:var(--panel-2)}
-.conversation-preview-head{display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding:12px;border-bottom:1px solid var(--hair)}
-.conversation-preview-title{font:12px var(--mono);margin:0;flex:1;min-width:100px;overflow-wrap:anywhere}
+.conversation-preview-head{display:flex;flex-wrap:nowrap;align-items:flex-start;gap:6px;padding:12px;border-bottom:1px solid var(--hair)}
+.conversation-preview-title{font:12px/18px var(--mono);margin:0;padding:6px 0;flex:1 1 0;min-width:0;overflow-wrap:anywhere}
+/* Heading buttons: icon only, square, always one row (the name wraps, the buttons do not). */
+.conversation-preview-head .conversation-preview-icon{flex:none;width:30px;height:30px;min-height:30px;padding:0;border-radius:10px}
+.conversation-preview-head .conversation-preview-icon svg{display:block;flex:none}
 .conversation-preview-notice{font:10px/1.6 var(--mono);padding:10px 12px;color:var(--ink-dim)}
 .conversation-preview-content{flex:1;min-height:0;overflow:auto;padding:12px;font:12px/1.7 var(--mono);overflow-wrap:anywhere;overscroll-behavior:contain}
 .conversation-preview-text{margin:0;white-space:pre-wrap;font:inherit;tab-size:2}
