@@ -808,12 +808,34 @@ function syncMiniSelection(){
     class:'mini-selection-ring',cx:hit.getAttribute('cx'),cy:hit.getAttribute('cy'),r:19.5,
   }));
 }
+/* What the rail draws, as text: a roster poll that changes nothing the rail
+   shows (a spinner frame, a token count) gets the same text, and the rail is
+   left alone instead of being torn down and rebuilt every 3 s. */
+let miniDrawKey='';
+function miniDrawnKey(layout){
+  const presentation=OC.providerPresentation;
+  return JSON.stringify([
+    miniMode,miniNetworkDepth,layout.networkFocus||'',layout.width,layout.height,
+    [...layout.positions].map(([name,at])=>[
+      name,at.x,at.y,Boolean(at.working),Boolean(at.promoted),at.promotionPartner||'',
+      roleOf(at.agent),modelOf(at.agent),stateOf(at.agent),stateGlyph(at.agent),
+      presentation?presentation(at.agent):null,
+    ]),
+  ]);
+}
+function miniIsSettled(layout){
+  return !miniMotion.active&&miniMotion.states.size===layout.positions.size
+    &&[...miniMotion.states.values()].every(state=>!state.removing&&!state.fading);
+}
 function renderMini(){
-  const flights=preservedFlights(miniSvg);
-  miniSvg.replaceChildren();
   const layout=miniMode==='network'
     ?telemetryMiniLayout(liveAgents,miniFocusName,miniNetworkDepth,MINI)
     :layoutAgents(liveAgents,MINI);
+  const key=miniDrawnKey(layout);
+  if(key===miniDrawKey&&miniSvg.firstChild&&miniIsSettled(layout)&&!motionIsReduced())return;
+  miniDrawKey=key;
+  const flights=preservedFlights(miniSvg);
+  miniSvg.replaceChildren();
   prepareMotion(miniMotion,layout);
   // Expand the clipping viewport, not the layout. The matching CSS uses the
   // rail's existing margins, preserving node positions and the mail boundary.

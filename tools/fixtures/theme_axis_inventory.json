@@ -3434,7 +3434,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "99f52a4914add6bb0c0fa629b8d6d58028171cec8ad27cca493b876af2557310",
+        "digest": "fa069e72e51d5a9402aa4fd46ec36e0043de268e02e2e7a02e139ddc11d2cd65",
         "expected": 140,
         "records": [
           {
@@ -4180,42 +4180,42 @@
             "value": "10.5px"
           },
           {
-            "line": 1190,
+            "line": 1191,
             "property": "font-size",
             "selector": ".pane-drag-ghost small",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1201,
+            "line": 1202,
             "property": "font-size",
             "selector": ".pane-float-bar .hint",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1202,
+            "line": 1203,
             "property": "font-size",
             "selector": ".pane-float-bar button",
             "source": "bridge/cockpit.html",
             "value": "10px"
           },
           {
-            "line": 1211,
+            "line": 1212,
             "property": "font-size",
             "selector": ".pane-out-chip",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 1216,
+            "line": 1217,
             "property": "font-size",
             "selector": ".pane-out-chip .where",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 1217,
+            "line": 1218,
             "property": "font-size",
             "selector": ".pane-out-chip .back",
             "source": "bridge/cockpit.html",
@@ -4431,7 +4431,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "fa40433ce9b55da27b3d05409aeb7d0229b211828b1c749b17d8b638eecc2fba",
+        "digest": "d69a0ad554593a88bfdebea29c5bed4aad3f274f61c9ca5a11f7bd29bf636ae4",
         "expected": 42,
         "records": [
           {
@@ -4666,14 +4666,14 @@
             "value": ".12em"
           },
           {
-            "line": 1190,
+            "line": 1191,
             "property": "letter-spacing",
             "selector": ".pane-drag-ghost small",
             "source": "bridge/cockpit.html",
             "value": ".1em"
           },
           {
-            "line": 1216,
+            "line": 1217,
             "property": "letter-spacing",
             "selector": ".pane-out-chip .where",
             "source": "bridge/cockpit.html",
@@ -4733,7 +4733,7 @@
       }
     }
   },
-  "inventory_digest": "73f8673dc463b46a16d30152e1d45043d1b07f183962987bd6b443ce729b3f4d",
+  "inventory_digest": "04277462a209c22dda1e3c2eaba4c661dc399b09ccbf2bb1e6d15c2401f1f931",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -4745,9 +4745,9 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "509232fceecb8644ba79d13ff7d1a650def5c2300464fef63b090c7ea4bc43bc",
+  "source_digest": "992c9bd587bafc4c35722a6ee10b398640eb683c5092ec8b91e7bf6839259e53",
   "source_files": {
-    "bridge/cockpit.html": "a1d92f85e5342a26acfa99fbea2085f64b1b564c3dcde4357a11461b2266545d",
+    "bridge/cockpit.html": "ae7e56923448176578f56b5d6a00c55d3ee3eac1fa4122fa5824516d97bd77e2",
     "bridge/mail_view.css": "d52a28452c2c494c60f273750106737ac3b6180c7e6e088a5eef29e1dd2cd7ab",
     "bridge/orrery_view.css": "ad0adcc4a4bc1867240ea68bb37c36d1bdd73b8e198c7e5ebba92343c78c26cd"
   },
