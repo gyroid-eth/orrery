@@ -26,6 +26,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from wcwidth import wcswidth
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -368,7 +369,7 @@ def test_a_probed_path_that_is_still_there_opens(runs, monkeypatch):
 NODE = shutil.which("node")
 
 
-def _links_for(row: str, probe: dict | None, *, trace=False, wrap=(False, False)):
+def _links_for(row: str, probe: dict | None, *, ranges=False, trace=False, wrap=(False, False)):
     """Run the cockpit's own link provider on one pane row, with the probe
     answering ``probe``; return each link's text and what a click sends."""
     html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
@@ -388,7 +389,7 @@ const term={{buffer:{{active:{{getLine:y=>y===0?line:{{isWrapped:{json.dumps(wra
 {provider}
 term.p.provideLinks(1,links=>{{
   for(const l of links||[])l.activate({{preventDefault(){{}}}});
-  const result=(links||[]).map((l,i)=>({{text:l.text,...sent[i],...({json.dumps(trace)}?{{range:l.range}}:{{}})}}));
+  const result=(links||[]).map((l,i)=>({{text:l.text,...sent[i],...({json.dumps(ranges or trace)}?{{range:l.range}}:{{}})}}));
   console.log(JSON.stringify({json.dumps(trace)}?{{links:result,requests}}:result));
 }});
 """
@@ -450,6 +451,24 @@ async function fetch(url,options){
         "requests": [dict(text="docs/note.md", session="Fixture", paneId=pane)
                      for pane in ("%1", "%2", "%1")],
     }
+
+
+@pytest.mark.skipif(NODE is None, reason="no node")
+@pytest.mark.parametrize('template', ['<{path}>', '[file](<{path}>)', 'file (<{path}>)'])
+@pytest.mark.parametrize('path', ['/fixture/report.md', '~/A B/画像(1).png'])
+def test_angle_wrapped_pane_path_range_and_activation(template, path):
+    row = template.format(path=path)
+    resolved = '/fixture/resolved.png'
+    (link,) = _links_for(row, {'path': path, 'resolved': resolved}, ranges=True)
+    start = row.index(path)
+    assert link['text'] == row[start:start+len(path)] == path
+    start_column = wcswidth(row[:start])
+    assert link['range'] == {'start': {'x': start_column+1, 'y': 1},
+                             'end': {'x': start_column+wcswidth(path), 'y': 1}}
+    # ASCII paths need no probe; paths with spaces/Unicode open the probe result.
+    probed = ' ' in path
+    assert link['path'] == (resolved if probed else path)
+    assert link['literal'] is probed
 
 
 @pytest.mark.skipif(NODE is None, reason="no node")

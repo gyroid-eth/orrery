@@ -106,7 +106,7 @@
   // Spaces can belong to filenames. Keep the bounded candidate as inert text
   // until the server finds its longest existing prefix. Never probe URL parts.
   function barePath(text,begin){
-    if(/[a-z0-9/:~<]/i.test(text[begin-1]||'')||text.slice(begin,begin+2)==='//'||!(text[begin]==='/'||text.slice(begin,begin+2)==='~/'))return null;
+    if(/[a-z0-9/:~]/i.test(text[begin-1]||'')||text.slice(begin,begin+2)==='//'||!(text[begin]==='/'||text.slice(begin,begin+2)==='~/'))return null;
     let end=begin,closedSquare=null;const round=[],square=[];
     while(end<text.length){
       const ch=text[end];
@@ -128,6 +128,9 @@
     }
     let last=end;while(last>begin&&/[ .,;:!?]/.test(text[last-1]))last--;
     const value=text.slice(begin,last);
+    // As in panes, an angle-wrapped single segment without an extension
+    // stays text: </script> is a closing HTML tag, not a local path.
+    if(text[begin-1]==='<'&&!(value.indexOf('/',1)>0||/\.[A-Za-z0-9]+$/.test(value)))return null;
     return {end,last,path:value.length>1&&value.length<=SPAN&&!/[\x00-\x1f\x7f]/.test(value)?value:null};
   }
   function pathNode(path,label){
@@ -197,7 +200,7 @@
   }
   const ESCAPE=/[\\`*_{}[\]()#+\-.!|~<>]/;
   // The part after a link's or an image's label: ](target "title")
-  const TARGET=/\]\(([^()\s]{0,2000})(?:[ \t]+"[^"\n]{0,500}")?\)/y;
+  const TARGET=/\]\((?:<([^<>\r\n]{0,2000})>|([^()\s]{0,2000}))(?:[ \t]+"[^"\n]{0,500}")?\)/y;
   const AUTOLINK=/<((?:https?:\/\/|mailto:)[^\s<>]{1,2000})>/iy;
   const STRONG=/(\*\*|__)(?=\S)([\s\S]{0,2000}?\S)\1/y;
   const STRIKE=/~~(?=\S)([\s\S]{0,2000}?\S)~~/y;
@@ -216,7 +219,7 @@
       if(close-from>max||(!empty&&close===from)||(newline!==-1&&newline<close)||close===failed)return null;
       const target=at(TARGET,text,close);
       if(!target){failed=close;return null;}
-      return {label:text.slice(from,close),target:target[1],end:close+target[0].length};
+      return {label:text.slice(from,close),target:target[1]??target[2],end:close+target[0].length};
     }
     const flush=()=>{if(plain){host.appendChild(document.createTextNode(plain));plain='';}};
     const wrap=(tag,inner,cls)=>{flush();const node=el(tag,cls);if(depth<MAX_DEPTH)inline(inner,node,depth+1,inLink||tag==='a');else node.textContent=inner;host.appendChild(node);return node;};
@@ -257,7 +260,7 @@
         // A badge: [![alt](image)](link) is a link whose label is the image's.
         if(text[i+1]==='!'&&text[i+2]==='['){
           const inner=bracket(i+3,500,true),outer=inner&&text[inner.end]===']'?at(TARGET,text,inner.end):null;
-          if(outer){link(outer[1],node=>node.appendChild(image(inner.label,inner.target)));i=inner.end+outer[0].length;continue;}
+          if(outer){link(outer[1]??outer[2],node=>node.appendChild(image(inner.label,inner.target)));i=inner.end+outer[0].length;continue;}
         }
         if((m=bracket(i+1,1000,false))){link(m.target,label(m.label));i=m.end;continue;}
       }
