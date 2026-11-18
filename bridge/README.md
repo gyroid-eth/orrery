@@ -353,7 +353,7 @@ The unified backend keeps browser traffic same-origin:
 | `/telemetry/sessions` | live tmux session inventory |
 | `POST /telemetry/open-url` | `{url}` → default browser via `open` (http/https only; used by the pane link addon) |
 | `POST /telemetry/reveal-path` | `{path}` → Finder: a file is revealed (`open -R`), a folder opened. Absolute or `~` paths that exist; never launched |
-| `POST /telemetry/path-probe` | `{text}` → longest existing path prefix of a printed row (resolves unquoted paths with spaces) |
+| `POST /telemetry/path-probe` | `{text}` → longest existing path prefix of a printed row. Relative paths also require `{session, paneId}` |
 | `/telemetry/portrait?name=&hi=&style=pixel` | `assets/portraits_64/`, `assets/portraits/`, or `assets/portraits_px/` on disk |
 
 ```sh
@@ -401,9 +401,15 @@ Pane output is scanned by two xterm link providers (2026-09-05):
   longest existing prefix, so `…/21_Coding Projects/orrery/logs はうまくいかない`
   links exactly `…/orrery/logs`. Results are cached per row text.
 
-Limits: a path wrapped across rows is not linked; relative paths
-(`dashboard/server.py:12`) are not resolved (would need the pane's cwd).
-Agents that want a location to be clickable should print it absolute.
+- **Relative paths** (`dashboard/server.py`, `./README.md`, `../docs/setup.md`)
+  are checked against that pane's current working directory. The probe tries
+  the filename as printed before interpreting a `:line` or `:line:column`
+  suffix. A successful probe briefly caches the absolute destination for that
+  pane. Quotes, angle brackets, or parentheses can enclose paths with spaces.
+
+Limits: paths wrapping across rows and bare relative filenames are outside
+the scan. Relative paths must exist at the time of the probe. Print absolute
+paths in historical output or when a command runs in a different directory.
 
 ## Unified Backend
 
