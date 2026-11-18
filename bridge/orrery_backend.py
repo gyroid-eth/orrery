@@ -66,7 +66,7 @@ REPO_ROOT = HERE.parent
 MAX_CLIENT_SESSIONS = 12
 RECORDER_ROSTER_SECONDS = 5
 SESSION_FORMAT = (
-    "#{session_name}\t#{session_attached}\t#{session_windows}\t#{session_created}"
+    "#{session_name}\t#{session_attached}\t#{session_windows}\t#{session_created}\t#{pid}"
 )
 CLIENT_CONTROL_MODE_FORMAT = "#{client_control_mode}"
 
@@ -917,6 +917,9 @@ def list_tmux_sessions(tmux_bin: str) -> list[dict[str, Any]]:
             sessions.append(dict(session=target.name,attached=False,interactive=False,windows=1,created=0,
                 catalog_truncated=tmux_bin.truncated,**target.ref))
         return sessions
+    # A concurrent first pin must not turn an older roster reply into a warning.
+    watch_server = (isinstance(tmux_bin, LegacyTargetBoundary) and tmux_bin.pin is not None
+                    and tmux_bin.pin['server_pid'] is not None)
     result = subprocess.run(
         tmux_argv(tmux_bin, "list-sessions", "-F", SESSION_FORMAT),
         capture_output=True,
@@ -935,10 +938,14 @@ def list_tmux_sessions(tmux_bin: str) -> list[dict[str, Any]]:
     sessions: list[dict[str, Any]] = []
     for line in result.stdout.splitlines():
         fields = line.split("\t")
-        if len(fields) != 4:
+        if len(fields) != 5:
             continue
-        session, attached, windows, created = fields
+        session, attached, windows, created, server_pid = fields
         try:
+            # The normal roster query sees the current PID even when an
+            # inherited TMUX points at the same socket with the old PID.
+            if watch_server:
+                tmux_bin.observe_server_pid(int(server_pid) if server_pid.isdecimal() else None)
             sessions.append(
                 {
                     "session": session,
@@ -4494,10 +4501,17 @@ async def serve_sessions(request: web.Request) -> web.Response:
 SESSIONS_REFRESH_SECONDS = 5
 
 
+def _session_list_message(tmux_bin, sessions: list[dict[str, Any]]) -> dict[str, Any]:
+    message = {"type": "sessions", "sessions": sessions}
+    if isinstance(tmux_bin, LegacyTargetBoundary) and tmux_bin.tmux_restarted:
+        message["tmuxRestarted"] = True
+    return message
+
+
 async def _session_list_refresher(
     peer: WebSocketPeer,
     tmux_bin: str,
-    initial: list[dict[str, Any]],
+    initial: dict[str, Any],
 ) -> None:
     """Keep the client's session list fresh.
 
@@ -4512,10 +4526,11 @@ async def _session_list_refresher(
             sessions = await shared_session_list(tmux_bin)
         except (OSError,TargetRefused) as exc:
             _warn_tmux_gone(tmux_bin, exc)
-            continue
-        if sessions != last:
-            last = sessions
-            await peer.send_json({"type": "sessions", "sessions": sessions})
+            sessions = last["sessions"]
+        message = _session_list_message(tmux_bin, sessions)
+        if message != last:
+            last = message
+            await peer.send_json(message)
 
 
 async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
@@ -4524,20 +4539,18 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
     peer = WebSocketPeer(response)
     attached: set[str] = set()
     manager = request.app[BRIDGE_MANAGER_KEY]
+    tmux_bin = request.app[TMUX_BIN_KEY]
     refresher: asyncio.Task[None] | None = None
 
     try:
         try:
-            sessions = await asyncio.to_thread(
-                list_tmux_sessions, request.app[TMUX_BIN_KEY]
-            )
+            sessions = await asyncio.to_thread(list_tmux_sessions, tmux_bin)
         except OSError as exc:
-            _warn_tmux_gone(request.app[TMUX_BIN_KEY], exc)
+            _warn_tmux_gone(tmux_bin, exc)
             sessions = []
-        await peer.send_json({"type": "sessions", "sessions": sessions})
-        refresher = asyncio.create_task(
-            _session_list_refresher(peer, request.app[TMUX_BIN_KEY], sessions)
-        )
+        initial = _session_list_message(tmux_bin, sessions)
+        await peer.send_json(initial)
+        refresher = asyncio.create_task(_session_list_refresher(peer, tmux_bin, initial))
 
         async for message in response:
             if message.type == WSMsgType.TEXT:
