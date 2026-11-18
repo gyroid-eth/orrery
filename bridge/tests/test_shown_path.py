@@ -272,7 +272,7 @@ def test_a_probed_path_that_is_still_there_opens(runs, monkeypatch):
 NODE = shutil.which("node")
 
 
-def _links_for(row: str, probe: dict | None) -> list[dict]:
+def _links_for(row: str, probe: dict | None, *, ranges=False) -> list[dict]:
     """Run the cockpit's own link provider on one pane row, with the probe
     answering ``probe``; return each link's text and what a click sends."""
     html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
@@ -287,12 +287,29 @@ const term={{buffer:{{active:{{getLine:()=>line}}}},registerLinkProvider(p){{thi
 {provider}
 term.p.provideLinks(1,links=>{{
   for(const l of links||[])l.activate({{preventDefault(){{}}}});
-  console.log(JSON.stringify((links||[]).map((l,i)=>({{text:l.text,...sent[i]}}))));
+  console.log(JSON.stringify((links||[]).map((l,i)=>({{text:l.text,...sent[i],...({str(ranges).lower()}?{{range:l.range}}:{{}})}}))));
 }});
 """
     done = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=20)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
+
+
+@pytest.mark.skipif(NODE is None, reason="no node")
+@pytest.mark.parametrize('template', ['<{path}>', '[file](<{path}>)', 'file (<{path}>)'])
+@pytest.mark.parametrize('path', ['/fixture/report.md', '~/A B/画像(1).png'])
+def test_angle_wrapped_pane_path_range_and_activation(template, path):
+    row = template.format(path=path)
+    resolved = '/fixture/resolved.png'
+    (link,) = _links_for(row, {'path': path, 'resolved': resolved}, ranges=True)
+    start = row.index(path)
+    assert link['text'] == row[start:start+len(path)] == path
+    assert link['range'] == {'start': {'x': start+1, 'y': 1},
+                             'end': {'x': start+len(path), 'y': 1}}
+    # ASCII paths need no probe; paths with spaces/Unicode open the probe result.
+    probed = ' ' in path
+    assert link['path'] == (resolved if probed else path)
+    assert link['literal'] is probed
 
 
 @pytest.mark.skipif(NODE is None, reason="no node")
