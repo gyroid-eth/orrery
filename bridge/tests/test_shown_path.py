@@ -369,15 +369,19 @@ def test_a_probed_path_that_is_still_there_opens(runs, monkeypatch):
 NODE = shutil.which("node")
 
 
+def _pane_link_script(*, probe=False):
+    html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
+    start = html.index("  // Local paths in pane output:")
+    provider = html[start : html.index("\n  });", start) + len("\n  });")]
+    end = html.index("/* The file manager's name" if probe else "const probeCache")
+    return html[html.index("function relativePathEnd") : end] + provider
+
+
 def _links_for(row: str, probe: dict | None, *, ranges=False, trace=False, wrap=(False, False)):
     """Run the cockpit's own link provider on one pane row, with the probe
     answering ``probe``; return each link's text and what a click sends."""
-    html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
-    start = html.index("  term.registerLinkProvider({")
-    provider = html[start : html.index("\n  });", start) + len("\n  });")]
-    bounds = html[html.index("function relativePathEnd"):html.index("const probeCache")]
     script = f"""
-const sent=[],requests=[],relativeProbes=new Map(),session='Fixture',meta={{paneId:'%1'}};
+const sent=[],requests=[],session='Fixture',meta={{paneId:'%1'}};
 function revealLocalPath(path,opts={{}}){{sent.push({{path,literal:Boolean(opts.literal)}});}}
 async function probeLocalPath(text,pane=null){{requests.push({{text,pane}});return {json.dumps(probe)};}}
 const row={json.dumps(row)},cells=[];
@@ -385,8 +389,7 @@ for(const ch of row){{cells.push(ch);if(/[\u3040-\u9fff]/.test(ch))cells.push(''
 const line={{isWrapped:{json.dumps(wrap[0])},translateToString:()=>row,
   getCell(col,cell){{Object.assign(cell,{{getChars:()=>cells[col],getWidth:()=>cells[col+1]===''?2:1}});return cell;}}}};
 const term={{buffer:{{active:{{getLine:y=>y===0?line:{{isWrapped:{json.dumps(wrap[1])}}},getNullCell:()=>({{}})}}}},registerLinkProvider(p){{this.p=p;}}}};
-{bounds}
-{provider}
+{_pane_link_script()}
 term.p.provideLinks(1,links=>{{
   for(const l of links||[])l.activate({{preventDefault(){{}}}});
   const result=(links||[]).map((l,i)=>({{text:l.text,...sent[i],...({json.dumps(ranges or trace)}?{{range:l.range}}:{{}})}}));
@@ -421,35 +424,37 @@ def test_relative_links_skip_url_parts_missing_and_incomplete_candidates():
 
 
 @pytest.mark.skipif(NODE is None, reason="no node")
-def test_relative_probe_cache_is_scoped_to_each_pane_and_expires():
-    html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
-    cache = html[html.index("const probeCache"):html.index("/* The file manager's name")]
-    script = """
-let now=0,cwd='/first';
-const performance={now:()=>now},requests=[];
+def test_new_relative_links_use_the_current_directory_in_the_same_pane(pane_probe):
+    _, _, workspaces, _ = pane_probe
+    script = f"const workspaces={json.dumps([str(workspaces[p]) for p in ('%1', '%2')])};\n" + """
+const fs=require('node:fs'),path=require('node:path');
+const performance={now:()=>0},requests=[],opened=[],session='Fixture',meta={paneId:'%1'};
+const rows=['Before (docs/note.md) (docs/note.md)','After (docs/note.md)'];
+const term={buffer:{active:{getLine(i){return rows[i]&&{translateToString:()=>rows[i]};}}},
+  registerLinkProvider(provider){this.provider=provider;}};
+let cwd=workspaces[0];
+function revealLocalPath(path,{literal}){opened.push({path,literal});}
 async function fetch(url,options){
   const payload=JSON.parse(options.body);
   requests.push(payload);
-  const root=cwd;
-  return {ok:true,json:async()=>({ok:true,path:payload.text,resolved:root+'/'+payload.text})};
+  const resolved=path.join(cwd,payload.text),ok=fs.existsSync(resolved);
+  return {ok,json:async()=>({ok,path:payload.text,resolved})};
 }
-""" + cache + """
+""" + _pane_link_script(probe=True) + """
 (async()=>{
-  const a=new Map(),b=new Map(),first={session:'Fixture',paneId:'%1'},second={...first,paneId:'%2'};
-  const probe=(pane,cache)=>probeLocalPath('docs/note.md',pane,cache);
-  const [one,duplicate]=await Promise.all([probe(first,a),probe(first,a)]);
-  cwd='/second';
-  const other=await probe(second,b);
-  now=1001;
-  const refreshed=await probe(first,a);
-  console.log(JSON.stringify({paths:[one,duplicate,other,refreshed].map(r=>r.resolved),requests}));
+  const linksAt=y=>new Promise(resolve=>term.provider.provideLinks(y,resolve));
+  const before=await linksAt(1);
+  cwd=workspaces[1];
+  const after=await linksAt(2);
+  for(const link of [...before,...after])link.activate({preventDefault(){}});
+  console.log(JSON.stringify({opened,requests}));
 })();
 """
     done = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=20, check=True)
     assert json.loads(done.stdout) == {
-        "paths": [f"/{cwd}/docs/note.md" for cwd in ("first", "first", "second", "second")],
-        "requests": [dict(text="docs/note.md", session="Fixture", paneId=pane)
-                     for pane in ("%1", "%2", "%1")],
+        "opened": [dict(path=str(workspaces[p] / "docs/note.md"), literal=True)
+                   for p in ("%1", "%1", "%2")],
+        "requests": [dict(text="docs/note.md", session="Fixture", paneId="%1")] * 2,
     }
 
 

@@ -4644,9 +4644,9 @@
       }
     }
   },
-  "inventory_digest": "da19089d24f1cfb73febc91d2e2e9a9659542eb806fbca15454f59d8291ec44d",
+  "inventory_digest": "e0d169e9baf005000fbecfaa6e2669d2370b6b5e1db3f29757e68428b405d7a5",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "5e31d9cd0efa1fc44b8369964c431f3f565b499151d96f0c51d8c92497170444",
+  "source_digest": "ed4d6b5d61f6619c3ae8dc618761287c7c342399ce1882ae5d6fce99bfa66f79",
   "surface": "cockpit",
   "version": 1
 }
@@ -7716,11 +7716,12 @@ function createPane(session,meta){
   }
   // Local paths in pane output: click → reveal in the file manager.
   // Single-line matches only; a path wrapped across rows is not linked.
-  const relativeProbes=new Map();
   term.registerLinkProvider({
     provideLinks(y,cb){
       const line=term.buffer.active.getLine(y-1);if(!line)return cb(undefined);
       const text=line.translateToString(true);const pending=[];
+      // Deduplicate within this scan; the pane's cwd can change before the next scan.
+      const relativeProbes=new Map();
       const re=/(["'`(<])([^/\s"'`()\[\]<>=:](?:[^/"'`()\[\]<>=:]*[^/\s"'`()\[\]<>=:])?\/[^/\s"'`()\[\]<>][^\s"'`()\[\]<>]*)|(^|[\s"'`(\[<=])((?:~|\/)[^\s"'`()\[\]<>]+|[^/\s"'`()\[\]<>=:]+\/[^/\s"'`()\[\]<>][^\s"'`()\[\]<>]*)/g;
       let m,wrappedEnd=0;
       const urls=[...text.matchAll(/[a-z][a-z\d+.-]*:\/\/[^\s"'`()<>]+/gi)];
@@ -8333,8 +8334,7 @@ function relativePathEnd(text,start,before){
 
 const probeCache=new Map();
 async function probeLocalPath(text,pane=null,cache=probeCache){
-  const now=performance.now(),cached=cache.get(text);
-  if(cached&&(!pane||now<cached.expires))return cached.result;
+  if(cache.has(text))return cache.get(text);
   const p=(async()=>{
     try{
       const response=await fetch('/telemetry/path-probe',{
@@ -8345,7 +8345,7 @@ async function probeLocalPath(text,pane=null,cache=probeCache){
       return {path:String(result.path),resolved:typeof result.resolved==='string'?result.resolved:null};
     }catch(_){return null;}
   })();
-  cache.set(text,{result:p,expires:now+1000});
+  cache.set(text,p);
   if(cache.size>500)cache.delete(cache.keys().next().value);
   return p;
 }

@@ -404,8 +404,9 @@ Pane output is scanned by two xterm link providers (2026-09-05):
 - **Relative paths** (`dashboard/server.py`, `./README.md`, `../docs/setup.md`)
   are checked against that pane's current working directory. The probe tries
   the filename as printed before interpreting a `:line` or `:line:column`
-  suffix. A successful probe briefly caches the absolute destination for that
-  pane. Quotes, angle brackets, or parentheses can enclose paths with spaces.
+  suffix. Each link scan checks the current directory again. The resulting
+  link keeps its verified absolute destination. Quotes, angle brackets, or
+  parentheses can enclose paths with spaces.
 
 Limits: paths wrapping across rows and bare relative filenames are outside
 the scan. Relative paths must exist at the time of the probe. Print absolute
