@@ -473,7 +473,7 @@
       paintMessage();
     }
     function modeMessage(text){if(!text&&document.activeElement===modeInfo&&opened)scroll.focus({preventScroll:true});modeInfo.title=text;modeInfo.setAttribute('aria-label',text);paintStatus();}
-    function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;sessionReloadAttempted=false;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
+    function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;sessionReloadAttempted=false;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=holding=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
     function clear({keepSubmissions=false}={}){hideSelection();closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();stepView?.reset();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();preview?.resetInline();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
@@ -778,14 +778,15 @@
     // conversation_legacy_read: the server lets it take over its own held slot.
     const readerId=Array.from(root.crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
     // What the last answer said, for plan().
-    const last={hold:false,slot:false,refused:false,rows:0,catchUp:false,failed:false};
-    // A user's own load (Load earlier, Retry) is a user operation: other
-    // panes' held polls give way, and this pane's held poll ends first.
-    function userLoad(direction){
+    const initialPoll={hold:false,slot:false,refused:false,rows:0,catchUp:false,failed:false};
+    let last={...initialPoll};
+    // Load earlier gives way to the end of this pane's held poll and
+    // releases other panes' held polls while the request runs.
+    function loadEarlier(){
       if(busy&&!holding)return;
       const op=beginOp();
-      if(busy){pendingAction={direction,op};controller?.abort();return;}
-      load(direction,op);
+      if(busy){pendingAction={direction:'older',op};controller?.abort();return;}
+      load('older',op);
     }
     /* The one place that decides when this reader asks next.
        - nothing while it is closed, hidden, paused or already asking;
@@ -856,11 +857,12 @@
       }
       try{
         const page=direction==='older'?await readOlder(name,options,token):await source.read(name,options);
-        holding=false;waiting.delete(holder);
+        waiting.delete(holder);
+        if(token!==generation||!opened||!enabled)return;
+        holding=false;
         if(page.hold===true)last.hold=true;
         last.slot=page.slot===true;last.refused=Boolean(options.wait)&&!last.slot;
         last.catchUp=page.has_newer===true&&direction!=='older';last.rows=0;last.failed=false;
-        if(token!==generation||!opened||!enabled)return;
         sessionReloadAttempted=false;
         // The server saw no change since this cursor: keep every row as is.
         if(page.unchanged===true&&direction==='newer'&&page.after===after){message('');return;}
@@ -925,8 +927,10 @@
         position();if(direction==='initial'||direction==='newer'&&atBottom)remember(true);
         if(direction!=='older')last.rows=added;
       }catch(error){
-        waiting.delete(holder);holding=false;
-        if(token!==generation||error.name==='AbortError')return;
+        waiting.delete(holder);
+        if(token!==generation)return;
+        holding=false;
+        if(error.name==='AbortError')return;
         last.failed=true;
         if(error.code==='history_changed'){
           // One short retry for a changed binding; repeated changes use the
@@ -964,13 +968,21 @@
       for(const heading of panel.querySelectorAll('.conversation-speaker'))root.OrreryConversationSpeaker?.paint(heading,
         {name:agent,model:heading.dataset.recordedModel,harness:heading.dataset.harness,context:current,renderAvatar});
       if(name===agent&&key===contextKey){paintActivity(current);return;}
-      const sameBinding=key===contextKey;
-      stop();agent=name;contextKey=key;clear({keepSubmissions:sameBinding});boundContext={...current};
+      readContext(current);
+    }
+    function readContext(current,op=null){
+      const key=fingerprint(current),sameBinding=key===contextKey;
+      stop();last={...initialPoll};agent=String(current.name||'');contextKey=key;
+      clear({keepSubmissions:sameBinding});boundContext={...current};
       paintActivity(current);
       panel.setAttribute('aria-label',agent?'Reader for '+agent:'Reader');message('');
-      if(!agent){empty.textContent='Select an agent pane to read its conversation.';message('No agent selected');return;}
+      if(!agent){empty.textContent='Select an agent pane to read its conversation.';message('No agent selected');endOp(op);return;}
       providerLabel=({'claude-code':'Claude',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[current.program]||'Codex';
-      load();
+      load('initial',op);
+    }
+    function retryRead(){
+      scroll.focus({preventScroll:true});
+      readContext(getContext()||{},beginOp());
     }
     function close({focus=true}={}){
       if(!opened)return;
@@ -985,7 +997,7 @@
       if(opened){onActivate();return;}
       onActivate();opened=true;panel.hidden=false;preview?.setVisible(presented&&!document.hidden);screen.classList.add('conversation-open');screen.classList.toggle('conversation-full',fullWidth);
       viewport();const rect=screen.getBoundingClientRect();lastWidth=rect.width;lastHeight=rect.height;
-      toggle.setAttribute('aria-expanded','true');paintControls();agent=null;context();scroll.focus();onState();
+      toggle.setAttribute('aria-expanded','true');paintControls();readContext(getContext()||{});scroll.focus();onState();
     }
     function preference(){
       try{enabled=localStorage.getItem(KEY)==='1';}catch(_){enabled=false;}
@@ -1012,13 +1024,13 @@
     listen(document,'pointerdown',event=>{if(!noticeMenu.hidden&&!noticeMenu.contains(event.target)&&!notices.contains(event.target))closeNotice();},{capture:true});
     listen(document,'scroll',event=>{if(!noticeMenu.hidden&&!noticeMenu.contains(event.target))closeNotice();},{capture:true,passive:true});
     for(const button of [noticeToggle,modeInfo])listen(button,'click',event=>{event.stopPropagation();openNotice(button);});
-    listen(menuRetry,'click',()=>{scroll.focus({preventScroll:true});closeNotice();userLoad(events.size?'newer':'initial');});
+    listen(menuRetry,'click',retryRead);
     listen(panel,'mousedown',event=>event.stopPropagation());
     listen(panel,'keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();if(preview?.selected){preview.close();scroll.focus();}else close();}});
     // Arrow/Page keys and wheels belong only to the browser scroll container;
     // there is no path from this module to xterm or tmux input.
-    listen(earlier,'click',()=>{scroll.focus({preventScroll:true});userLoad('older');});
-    listen(retry,'click',()=>{scroll.focus({preventScroll:true});userLoad(events.size?'newer':'initial');});
+    listen(earlier,'click',()=>{scroll.focus({preventScroll:true});loadEarlier();});
+    listen(retry,'click',retryRead);
     function resumePaused(){
       if(!paused)return false;
       stop();clear({keepSubmissions:true});load('initial');

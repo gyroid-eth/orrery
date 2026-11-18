@@ -65,7 +65,8 @@ def test_compact_notice_keyboard_retry_preserves_reader_focus(cockpit, theme, wi
     wait("typeof finishCompactRetry==='function'")
     assert js("document.querySelector('.conversation-notice-menu').hidden")
     assert js("document.activeElement===readerScroll")
-    js("finishCompactRetry({mode:'cursor',events:[],after:'tail',unchanged:true});queueStageFit(activeId)")
+    js('finishCompactRetry(noticePayload);queueStageFit(activeId)')
+    wait("reader.querySelector('[data-event-id=first-text]')!==null")
     time.sleep(.2)
     assert js("document.activeElement===readerScroll")
     assert js("packets.filter(p=>['input','codex-page'].includes(p.type))") == []
