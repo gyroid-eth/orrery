@@ -43,6 +43,25 @@ def test_candidates_keep_spaces_balanced_brackets_and_tilde_without_url_parts():
     assert candidates('[https://example.com/a](https://example.com/b)')['values'] == []
 
 
+@pytest.mark.parametrize('document', [False, True])
+@pytest.mark.parametrize('path', ['/fixture/A B/report(1).md', '~/資料/画像.png'])
+@pytest.mark.parametrize('template', ['<{path}>', '[file](<{path}>)', '[file](<{path}> "title")'])
+def test_angle_wrapped_paths_keep_only_destination_as_candidate(document, path, template):
+    text = template.format(path=path)
+    result = candidates(text, document)
+    assert result['values'] == [path]
+    assert result['text'] == ('file' if document and text.startswith('[') else text)
+
+
+def test_angle_markdown_targets_keep_urls_and_unsafe_targets_inert():
+    out = html('[web](<https://example.com/a>) [mail](<mailto:a@example.com>) '
+               '[unsafe](<javascript:alert(1)>) [![image](<https://example.com/i.png>)](<https://example.com/b>)')
+    assert out.count('<a ') == 3
+    assert 'href="https://example.com/a"' in out and 'href="mailto:a@example.com"' in out
+    assert 'href="https://example.com/b"' in out
+    assert 'href="javascript:' not in out and '<img' not in out
+
+
 def test_probe_literal_longest_prefix_spaces_unicode_home_and_missing(tmp_path, monkeypatch):
     monkeypatch.setenv('HOME', str(tmp_path))
     image = tmp_path/'A B'/'画像.png'; image.parent.mkdir(); image.touch()
@@ -225,6 +244,7 @@ def path_backend():
         async def empty(request):return web.json_response({'agents':[],'prefs':{}})
         app.router.add_post('/telemetry/conversation/path-probe',backend.probe_conversation_paths)
         app.router.add_post('/telemetry/conversation/path-image',image)
+        app.router.add_post('/telemetry/path-probe',backend.path_probe)
         for path in backend.PUBLIC_FILES:app.router.add_get(path,backend.serve_public_file)
         app.router.add_route('*','/{tail:.*}',empty)
         runner,url=await start(app)
@@ -235,6 +255,50 @@ def path_backend():
     url,loop,stop=ready.get(timeout=10)
     try:yield url,reads
     finally:loop.call_soon_threadsafe(stop.set);thread.join(timeout=10)
+
+
+@pytest.mark.parametrize('document', [False, True])
+def test_real_angle_paths_reader_and_pane_activation(cockpit, path_backend, tmp_path, document):
+    js, wait, client, requests, enable = cockpit
+    origin, reads = path_backend
+    target = tmp_path/'A B'/'report(1).png'
+    target.parent.mkdir(); Image.new('RGB', (48, 24), 'teal').save(target)
+    path = str(target)
+    text = f'[image](<{path}>)\n<{path}>\n[source](https://example.com/source)'
+    client.call('Page.navigate', url=origin+'/cockpit.html')
+    wait("typeof conversationView!=='undefined'&&typeof createPane==='function'")
+    js('clearTimeout(reconnectTimer);scheduleReconnect=()=>{}')
+    stable_roster(js); enable(count=1)
+    event = dict(id='angle-path', kind='text', role='assistant', text=text)
+    js('conversationView.close();window.angleEvent='+json.dumps(event)+';window.angleOpened=[];'
+       'OrreryConversationSource.Source.prototype.read=async()=>({events:[angleEvent],after:"angle:1"});'
+       'window.angleReader=OrreryConversation.mount({getContext:()=>({...currentAgents[0],terminalPaneId:"%901"}),bindToggle:false,openExternalUrl:url=>angleOpened.push(url)});angleReader.open()')
+    wait('angleReader.panel.querySelector(".conversation-text")!==null')
+    js('window.angleHost=angleReader.panel.querySelector(".conversation-text")')
+    if document:
+        js('angleHost.replaceChildren();OrreryConversationMarkdown.renderDocument(angleEvent.text,angleHost)')
+    wait('angleHost.querySelectorAll("a[data-local-path]").length===2')
+    assert js('[...angleHost.querySelectorAll("a[data-local-path]")].map(a=>a.dataset.localPath)') == [path, path]
+    assert js('angleHost.querySelector("a[data-local-path]").textContent') == 'image'
+    assert reads == []
+    js('angleHost.querySelector("a[data-local-path]").click()')
+    wait('document.querySelector(".conversation-preview-image")?.naturalWidth===48')
+    assert len(reads) == 1
+    js('angleReader.panel.querySelector(".conversation-preview-close").click();angleHost.querySelector("a[href^=https]").click()')
+    assert js('angleOpened') == ['https://example.com/source']
+    # The same unrendered source in xterm already supports angle boundaries.
+    js('window.anglePane=panes.get("%901");anglePane.term.resize(240,20);anglePane.term.reset();'
+       'revealLocalPath=path=>angleOpened.push(path);'
+       'anglePane.term.write('+json.dumps(text.replace('\n','\r\n'))+')')
+    wait('anglePane.term.buffer.active.getLine(1).translateToString(true).startsWith("<")')
+    links = js('(async()=>{const provider=anglePane.term._core._linkProviderService.linkProviders.at(-1),out=[];'
+               'for(const y of [1,2]){const links=await new Promise(r=>provider.provideLinks(y,r));'
+               'for(const link of links||[]){out.push({text:link.text,range:link.range});link.activate({preventDefault(){}});}}return out;})()')
+    assert [link['text'] for link in links] == [path, path]
+    assert js('angleOpened') == ['https://example.com/source', path, path]
+    for link, prefix in zip(links, ['[image](<', '<']):
+        assert link['range']['start']['x'] == len(prefix)+1
+        assert link['range']['end']['x'] == len(prefix)+len(path)
 
 
 def test_real_body_path_image_roundtrip_dark_light(cockpit,path_backend,tmp_path,monkeypatch):
