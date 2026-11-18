@@ -61,13 +61,18 @@ def test_latest_shows_only_when_reading_earlier_and_keeps_the_tail_clear(cockpit
     assert js('document.activeElement.classList.contains("conversation-scroll")')
 
 
-def test_status_and_retry_stay_available(cockpit):
+@pytest.mark.parametrize('code', ['history_unconfirmed', 'provider_unavailable'])
+def test_status_and_retry_stay_available(cockpit, code):
     js, wait, client = opened(cockpit)
-    js('conversationView.close();window.readerFail=true;OrreryConversationSource.Source.prototype.read=async()=>{if(readerFail)throw new Error("Generated read failure");return {events:[{id:"retry-row",kind:"text",role:"assistant",text:"Recovered"}],after:"one",before:"zero",has_older:true}};conversationView.open()')
+    js('window.readerError='+json.dumps(code)+''';conversationView.close();
+      OrreryConversationSource.Source.prototype.read=async()=>{
+        if(readerError)throw Object.assign(new Error('Generated read failure'),{code:readerError});
+        return {events:[{id:'retry-row',kind:'text',role:'assistant',text:'Recovered'}],after:'one',before:'zero',has_older:true};
+      };conversationView.open()''')
     wait('!document.querySelector(".conversation-retry").hidden')
     assert js('document.querySelector(".scr-head .conversation-toolbar")!==null')
     assert js('!document.querySelector(".conversation-toolbar").hidden')
-    js('readerFail=false;document.querySelector(".conversation-retry").click()')
+    js('readerError=null;document.querySelector(".conversation-retry").click()')
     wait('document.querySelector("[data-event-id=retry-row]")!==null')
     assert js('document.querySelector(".conversation-toolbar").hidden')
     assert js('!document.querySelector(".conversation-older").hidden')
@@ -161,7 +166,7 @@ def fail_read(js, wait, message='Generated read failure'):
 
 
 @pytest.mark.parametrize('theme', ['dark', 'light'])
-@pytest.mark.parametrize('transition', ['show', 'recover', 'older'])
+@pytest.mark.parametrize('transition', ['show', 'older'])
 @pytest.mark.parametrize('message', ['Generated read failure', 'Generated read failure with more context. '*10], ids=['short', 'long'])
 def test_notice_transition_preserves_the_same_read_character(cockpit, theme, transition, message):
     js, wait, client, requests, enable = cockpit
@@ -175,9 +180,6 @@ def test_notice_transition_preserves_the_same_read_character(cockpit, theme, tra
     before = line_top(js)
     if transition == 'show':
         fail_read(js, wait, message)
-    elif transition == 'recover':
-        js("OrreryConversationSource.Source.prototype.read=async()=>({events:[],mode:'cursor',after:'recovered',has_older:true});document.querySelector('.conversation-retry').click()")
-        wait("document.querySelector('.conversation-toolbar').hidden")
     else:
         js("OrreryConversationSource.Source.prototype.read=async()=>({events:Array.from({length:40},(_,i)=>({id:'older-'+i,kind:'text',role:'assistant',text:'Earlier generated message '+i})),mode:'cursor',before:'older-start',after:'older-end',has_older:true});document.querySelector('.conversation-older').click()")
         wait("document.querySelectorAll('.conversation-event').length===120")
@@ -203,9 +205,6 @@ def test_short_long_hidden_notice_keeps_text_position_and_retry_visible(cockpit,
         assert js("document.querySelector('.scr-head').getBoundingClientRect().height") == 40
         assert js("document.querySelector('.conversation-toolbar .conversation-status').title") == message
         assert js("""(()=>{const b=document.querySelector('.conversation-retry'),r=b.getBoundingClientRect();return b.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))})()""")
-    js("OrreryConversationSource.Source.prototype.read=async()=>({events:[],mode:'cursor',after:'recovered',has_older:true});document.querySelector('.conversation-retry').click()")
-    wait("document.querySelector('.conversation-toolbar').hidden")
-    assert abs(line_top(js)['top']-before['top']) <= 1
 
 
 @pytest.mark.parametrize('theme', ['dark', 'light'])

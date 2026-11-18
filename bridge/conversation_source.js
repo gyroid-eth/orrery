@@ -13,7 +13,7 @@
     agent_unavailable:'This agent is no longer available in the live roster.',
     history_changed:'The conversation changed. Reopen Reader to read the current session.',
     history_unreadable:'The bound conversation file cannot be read.',
-    record_too_large:'A provider record exceeds the reader byte limit. Close and reopen Reader to resume from the latest messages.',
+    record_too_large:'A provider record exceeds the reader byte limit. Retry to resume from the latest messages.',
     history_unavailable:'The provider history is unavailable.',
     dashboard_unavailable:'The telemetry dashboard could not answer. Retry in a moment.',
     reference_expired:'This reference expired or its conversation changed. Reload Reader and select it again.',

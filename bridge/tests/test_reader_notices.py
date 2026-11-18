@@ -62,9 +62,9 @@ def test_temporary_header_notice_never_covers_sparse_text(cockpit, theme, width)
     js("OrreryConversationSource.Source.prototype.read=()=>new Promise(resolve=>window.finishNoticeRead=resolve);document.querySelector('.conversation-retry').click()")
     wait("typeof finishNoticeRead==='function'")
     assert js("document.querySelector('.conversation-toolbar').hidden")
-    assert all(first_row_hits(js).values()), first_row_hits(js)
     js('finishNoticeRead(noticePayload)')
-    wait("document.querySelector('.conversation-toolbar').hidden")
+    wait("document.querySelector('[data-event-id=first-text]')!==null")
+    assert all(first_row_hits(js).values()), first_row_hits(js)
     assert abs(js("document.querySelector('.conversation-text').getBoundingClientRect().top")-before) <= 1
 
 
@@ -109,18 +109,21 @@ def test_scrolling_focused_load_earlier_keeps_focus_in_reader(cockpit, theme, wi
 
 
 @pytest.mark.parametrize('theme', ['dark', 'light'])
-def test_retry_unchanged_clears_temporary_notice_and_keeps_rows(cockpit, theme):
+def test_retry_replaces_rows_and_unchanged_poll_keeps_the_new_rows(cockpit, theme):
     js, wait, client = sparse(cockpit, theme, 390, 'dsh')
     js("window.savedNoticeRow=document.querySelector('[data-event-id=first-text]');window.savedMode=document.querySelector('.conversation-mode').title;window.savedTextTop=savedNoticeRow.getBoundingClientRect().top;OrreryConversationSource.Source.prototype.read=async()=>{const e=new Error('Generated read failure');e.code='record_too_large';throw e};conversationView.refresh()")
     wait("!document.querySelector('.conversation-retry').hidden")
-    js("window.unchangedReads=0;OrreryConversationSource.Source.prototype.read=()=>{unchangedReads++;return unchangedReads===1?new Promise(resolve=>window.finishUnchanged=resolve):Promise.resolve({mode:'cursor',events:[],after:'tail',unchanged:true})};document.querySelector('.conversation-retry').click()")
-    wait("typeof finishUnchanged==='function'&&document.querySelector('.conversation-toolbar').hidden")
-    js("finishUnchanged({mode:'cursor',events:[],after:'tail',unchanged:true})")
-    time.sleep(.1)
+    js("""window.retryReads=[];OrreryConversationSource.Source.prototype.read=async(name,options)=>{
+      retryReads.push(options.after??null);
+      return options.after?{mode:'cursor',events:[],after:'tail',unchanged:true}:noticePayload;
+    };document.querySelector('.conversation-retry').click()""")
+    wait("document.querySelector('[data-event-id=first-text]')!==null")
     assert js("document.querySelector('.conversation-toolbar').hidden")
     assert js("document.querySelector('.conversation-retry').hidden")
-    assert js("document.querySelector('[data-event-id=first-text]')===savedNoticeRow&&document.querySelector('.conversation-mode').title===savedMode")
-    assert js("Math.abs(savedNoticeRow.getBoundingClientRect().top-savedTextTop)<=1")
-    wait('unchangedReads>=2')
+    assert js("!savedNoticeRow.isConnected&&document.querySelector('.conversation-mode').title===savedMode")
+    js("window.recoveredNoticeRow=document.querySelector('[data-event-id=first-text]')")
+    assert js("Math.abs(recoveredNoticeRow.getBoundingClientRect().top-savedTextTop)<=1")
+    wait('retryReads.length>=2')
+    assert js('retryReads.slice(0,2)') == [None, 'tail']
     assert js("document.querySelector('.conversation-toolbar').hidden")
-    assert js("document.querySelector('[data-event-id=first-text]')===savedNoticeRow&&document.querySelector('.conversation-mode').title===savedMode")
+    assert js("document.querySelector('[data-event-id=first-text]')===recoveredNoticeRow")

@@ -11,7 +11,7 @@ import time
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -49,6 +49,7 @@ def wait_reading_layout(js, timeout=1):
 def cockpit(request):
     if not CDP:
         pytest.skip("set ORRERY_CDP_URL to an existing private/shared CDP browser")
+    preference = getattr(request, 'param', False)
     requests = []
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
@@ -56,15 +57,18 @@ def cockpit(request):
         def log_message(self, *_):
             pass
         def do_GET(self):
-            path = urlsplit(self.path).path
+            url = urlsplit(self.path)
+            path = url.path
             requests.append(path)
             if path.startswith('/cockpit-assets/'):
                 self.path = '/assets/' + path.rsplit('/', 1)[-1]
                 return super().do_GET()
             if path.startswith(("/telemetry/", "/api/")):
-                data = {"agents": [], "prefs": {}}
+                status, data = (200, {"agents": [], "prefs": {}})
+                if path == '/telemetry/conversation' and callable(preference):
+                    status, data = preference(parse_qs(url.query))
                 raw = json.dumps(data).encode()
-                self.send_response(200)
+                self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(raw)))
                 self.end_headers()
@@ -86,7 +90,6 @@ def cockpit(request):
     client.call("Emulation.setFocusEmulationEnabled", enabled=True)
     client.call("Network.enable")
     client.call("Network.setCacheDisabled", cacheDisabled=True)
-    preference = getattr(request, 'param', False)
     mobile = preference is True
     client.call("Emulation.setDeviceMetricsOverride", width=390 if mobile else 1600, height=844 if mobile else 1000, deviceScaleFactor=1, mobile=mobile)
     bootstrap = "localStorage.clear();localStorage.setItem('oc-first-flight-v1',JSON.stringify({seen:true,open:false}));"
@@ -224,6 +227,32 @@ def test_same_name_provider_and_binding_changes_clear_previous_records(cockpit):
     js("currentAgents[0].program='claude-code';document.dispatchEvent(new Event('oc:agents'))")
     assert js("document.querySelectorAll('.conversation-event').length") == 0
     assert js("document.querySelector('.conversation-panel').getAttribute('aria-label').includes('ReviewFixture')")
+
+
+def retry_backend(query):
+    if 'after' in query or 'before' in query:
+        return 413, {'ok': False, 'error': 'record_too_large'}
+    return 200, {
+        'ok': True, 'agent': query['agent'][0], 'mode': 'cursor', 'after': 'latest',
+        'events': [{'id': 'recovered', 'kind': 'text', 'role': 'assistant', 'text': 'Latest readable message'}],
+    }
+
+
+@pytest.mark.parametrize('cockpit', [retry_backend], indirect=True)
+def test_retry_reads_latest_http_page_without_the_failed_cursor(cockpit):
+    js, wait, _, _, enable = cockpit
+    stable_roster(js)
+    wait("typeof OrreryConversationSource!=='undefined'")
+    js('window.originalRead=OrreryConversationSource.Source.prototype.read')
+    enable(count=1)
+    js('OrreryConversationSource.Source.prototype.read=originalRead;conversationView.refresh()')
+    wait("!document.querySelector('.conversation-retry').hidden")
+    assert js("document.querySelector('.conversation-status-label').textContent") == 'Read failed'
+    assert js("document.querySelector('[data-event-id=\"1000\"]')!==null")
+    js("document.querySelector('.conversation-retry').click()")
+    wait("document.querySelector('[data-event-id=recovered]')!==null")
+    assert js("document.querySelectorAll('.conversation-event').length") == 1
+    assert js("document.querySelector('.conversation-retry').hidden")
 
 
 def test_fresh_is_a_bounded_snapshot_and_legacy_retention_has_a_byte_cap(cockpit):
