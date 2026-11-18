@@ -3,6 +3,7 @@ import base64
 import io
 import json
 import os
+import random
 import sys
 import tempfile
 from pathlib import Path
@@ -12,7 +13,8 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from conversation_artifacts import extract_artifacts
-from conversation_preview import ReferenceStore, PreviewUnavailable
+from conversation_images import remember_saved
+from conversation_preview import MAX_IMAGE, MOBILE_IMAGE_BYTES, MOBILE_IMAGE_PIXELS, ReferenceStore, PreviewUnavailable
 
 
 def call(name, arguments=None, input=None):
@@ -151,6 +153,41 @@ def test_raster_reencoded_and_explicit_image_root_is_not_text_grant(tmp_path):
     assert not event.get('references')
 
 
+def test_phone_sized_jpeg_previews_fit_both_readers(tmp_path):
+    size=(4096,2304)
+    path=tmp_path/'photo.jpg'
+    photo=Image.frombytes('RGB',size,random.Random(42).randbytes(3*size[0]*size[1]))
+    exif=Image.Exif()
+    exif[270]='fixture metadata'
+    photo.save(path,quality=20,exif=exif)
+    assert path.stat().st_size<2*1024*1024
+    remember_saved(path)
+    store=ReferenceStore()
+    desktop=store.read_input(dict(kind='saved',path=str(path)),None)
+    mobile=store.read_file(path,mobile=True)
+    for preview,limit in [(desktop,MAX_IMAGE),(mobile,MOBILE_IMAGE_BYTES)]:
+        data=base64.b64decode(preview['data'])
+        assert len(data)<=limit
+        with Image.open(io.BytesIO(data)) as decoded:
+            assert decoded.format=='PNG' and not decoded.info
+            assert decoded.size==(preview['width'],preview['height'])
+            assert decoded.width<size[0] and decoded.height<size[1]
+    assert mobile['width']*mobile['height']<=MOBILE_IMAGE_PIXELS
+
+
+def test_thumbnail_checks_source_pixel_limit_before_resizing():
+    store=ReferenceStore()
+    for size in [(4000,4000),(4000,4001)]:
+        source=io.BytesIO()
+        Image.new('RGB',size).save(source,format='PNG')
+        if size==(4000,4000):
+            result=store.raster(source.getvalue(),thumbnail=True)
+            assert Image.open(io.BytesIO(base64.b64decode(result['data']))).size==(200,200)
+        else:
+            with pytest.raises(PreviewUnavailable,match='preview_too_large'):
+                store.raster(source.getvalue(),thumbnail=True)
+
+
 def test_oversized_pixels_and_expiring_bounded_reference_store(tmp_path):
     Image.new('RGB',(100,100)).save(tmp_path/'plot.png')
     store,row,event=setup(tmp_path,call('view_image',{'path':'plot.png'}),max_pixels=99)
@@ -286,13 +323,17 @@ def test_thumbnail_uses_the_same_reference_and_binding_as_full_preview(tmp_path,
         ref=event['references'][0]['id'];query='/telemetry/conversation/preview?ref='+ref
         try:
             async with ClientSession() as client:
-                for suffix,size in [('&thumbnail=1',(320,200)),('',(800,500))]:
+                for suffix,size,dimensions in [
+                    ('&thumbnail=1',(320,200),(800,500)), ('',(800,500),(800,500)),
+                    ('&mobile=1&thumbnail=1',(320,200),(320,200)),
+                ]:
                     async with client.get(url+query+suffix) as response:
                         data=await response.json();assert response.status==200
                         assert response.headers['Cache-Control']=='no-store'
-                        assert (data['width'],data['height'])==(800,500)
+                        assert (data['width'],data['height'])==dimensions
                         assert Image.open(io.BytesIO(base64.b64decode(data['data']))).size==size
-                for suffix in ['&thumbnail=2','&thumbnail=1&thumbnail=1','&thumbnail=1&path=figure.png']:
+                for suffix in ['&thumbnail=2','&thumbnail=1&thumbnail=1','&thumbnail=1&path=figure.png',
+                               '&mobile=0','&mobile=1&mobile=1']:
                     async with client.get(url+query+suffix) as response:assert response.status==400
                 row['native_session_id']='replaced'
                 async with client.get(url+query+'&thumbnail=1') as response:
