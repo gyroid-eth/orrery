@@ -3722,23 +3722,38 @@ def resolve_shown_path(text: str) -> pathlib.Path | None:
     return matches[0] if matches and len(matches) == 1 else None
 
 
-def probe_shown_path(text: str) -> tuple[str, list[pathlib.Path]] | None:
+def probe_shown_path(text: str, *, cwd: Path | None = None) -> tuple[str, list[pathlib.Path]] | None:
     """The longest leading part of ``text`` that names an existing path, with
     what it names. One budget covers every prefix tried."""
-    if not (text.startswith("/") or text.startswith("~")):
+    if cwd is None and not text.startswith(("/", "~")):
         return None
     # Candidate ends: before any ASCII / ideographic space and before any
     # non-ASCII character (prose such as "…/logs はうまくいかない" follows a
     # path without a space), plus the end of the text. Longest first.
     ends = [
         i for i, ch in enumerate(text)
-        if ch in " \u3000)]}>\"'`" or (not ch.isascii() and ch != ELLIPSIS)
+        if ch in " \u3000)]}>\"'`" or (cwd is None and not ch.isascii() and ch != ELLIPSIS)
     ]
     ends.append(len(text))
     seen: set[str] = set()
     budget = WalkBudget()
     for end in sorted(set(ends), reverse=True):
-        candidate = text[:end].rstrip(" \u3000").rstrip(".,;:!?")
+        candidate = text[:end].rstrip(" \u3000")
+        stripped = candidate.rstrip(".,;:!?")
+        if cwd is not None:
+            # Use literal names before interpreting punctuation or :line:column.
+            for name in (candidate, stripped, re.sub(r":[0-9]+(?::[0-9]+)?$", "", stripped)):
+                if name in seen or not re.fullmatch(r"[^/:]+/[^/].*", name):
+                    continue
+                seen.add(name)
+                path = cwd / name
+                try:
+                    if path.exists():
+                        return stripped if name != candidate else candidate, [path]
+                except OSError:
+                    continue
+            continue
+        candidate = stripped
         if len(candidate) < 2 or candidate in seen:
             continue
         seen.add(candidate)
@@ -3773,7 +3788,14 @@ async def path_probe(request: web.Request) -> web.Response:
     text = payload.get("text") if isinstance(payload, dict) else None
     if not isinstance(text, str) or not text or len(text) > 4096 or "\x00" in text:
         return web.json_response({"ok": False, "error": "text is required"}, status=400)
-    found = await asyncio.to_thread(probe_shown_path, text)
+    cwd = None
+    relative = not text.startswith(("/", "~"))
+    if relative:
+        session, pane_id = payload.get("session"), payload.get("paneId")
+        if not isinstance(session, str) or not isinstance(pane_id, str) or not session or not pane_id:
+            return web.json_response({"ok": False, "error": "session and paneId are required"}, status=400)
+        cwd = await pane_probe_cwd(request.app, session, pane_id)
+    found = await asyncio.to_thread(probe_shown_path, text, cwd=cwd) if not relative or cwd else None
     if found is None:
         return web.json_response({"ok": False, "error": "no such path"}, status=404)
     shown, matches = found
@@ -3783,6 +3805,35 @@ async def path_probe(request: web.Request) -> web.Response:
         # resolves to by the time it is clicked.
         payload["resolved"] = str(matches[0])
     return web.json_response(payload)
+
+
+async def pane_probe_cwd(app: web.Application, session: str, wire_pane: str) -> Path | None:
+    manager = app.get(BRIDGE_MANAGER_KEY)
+    if manager is None:
+        return None
+    keys = {key for key, state in manager.states.items() if state.bridge.config.session == session}
+    state = manager._find_attached_pane(keys, wire_pane)
+    if state is None or state.bridge._closed:
+        return None
+    bridge = state.bridge
+    target = bridge.config.tmux_bin
+    pane_id = target.pane_id if isinstance(target, FreshPaneBoundary) else wire_pane
+    pane = bridge.panes[pane_id]
+    try:
+        result = await bridge.send_command([
+            "display-message", "-p", "-t", pane_id,
+            "#{session_id}\t#{window_id}\t#{pane_id}\t#{pane_current_path}",
+        ], timeout=3)
+    except (OSError, RuntimeError, asyncio.TimeoutError):
+        return None
+    if (not result or not result.ok or result.overflow or len(result.lines) != 1
+            or bridge._closed or manager._find_attached_pane(keys, wire_pane) is not state):
+        return None
+    fields = result.lines[0].split("\t", 3)
+    if len(fields) != 4 or fields[:3] != [pane.session_id, pane.window_id, pane_id]:
+        return None
+    cwd = fields[3]
+    return Path(cwd) if cwd.startswith("/") and not any(ch in cwd for ch in "\x00\r\n") else None
 
 
 FILE_MANAGER_NAMES = {"mac": "Finder", "wsl": "Explorer", "linux": "the file manager"}

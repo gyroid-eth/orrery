@@ -23,12 +23,15 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from wcwidth import wcswidth
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import orrery_backend as ob  # noqa: E402
+from control_server import CommandResult, PaneInfo  # noqa: E402
 
 RUN = "The-fin-to-limb-transition-as-the-re-org-bcaa45bc-20261001T224253"
 
@@ -207,11 +210,105 @@ def test_the_cockpit_opens_the_probed_path():
 
 
 class _Request:
-    def __init__(self, payload):
+    def __init__(self, payload, app=None):
         self._payload = payload
+        self.app = app
 
     async def json(self):
         return self._payload
+
+
+@pytest.fixture
+def pane_probe(tmp_path):
+    manager = ob.SessionBridgeManager("tmux", history_dir=tmp_path)
+    panes = {p: PaneInfo(p, "@1", "$1", "0", str(i), 80, 24, i == 0, "shell", "sh")
+             for i, p in enumerate(("%1", "%2"))}
+    workspaces = {p: tmp_path / p[1:] for p in panes}
+    for folder in workspaces.values():
+        (folder / "docs").mkdir(parents=True)
+        (folder / "docs" / "note.md").touch()
+
+    async def command(args, **_):
+        pane = args[3]
+        assert args == ["display-message", "-p", "-t", pane,
+                        "#{session_id}\t#{window_id}\t#{pane_id}\t#{pane_current_path}"]
+        return CommandResult(True, [f"$1\t@1\t{pane}\t{workspaces[pane]}"])
+
+    bridge = SimpleNamespace(panes=panes, config=SimpleNamespace(session="Fixture", tmux_bin="tmux"),
+                             _closed=False, send_command=command)
+    manager.states["Fixture"] = ob.SessionState(bridge)
+
+    def probe(text, pane="%1", session="Fixture"):
+        return asyncio.run(ob.path_probe(_Request(dict(text=text, paneId=pane, session=session),
+                                                  {ob.BRIDGE_MANAGER_KEY: manager})))
+
+    return probe, bridge, workspaces, manager
+
+
+def test_relative_probe_uses_the_selected_pane_and_its_current_directory(pane_probe):
+    probe, _, cwd, _ = pane_probe
+    for selected in ("%1", "%2"):
+        body = json.loads(probe("docs/note.md", selected).body)
+        assert body == dict(ok=True, path="docs/note.md", length=12,
+                            resolved=str(cwd[selected] / "docs/note.md"))
+    cwd["%1"] = cwd["%2"]
+    assert json.loads(probe("docs/note.md").body)["resolved"] == str(cwd["%2"] / "docs/note.md")
+
+
+@pytest.mark.parametrize("shown,name", [("docs/note.md:12", "docs/note.md"),
+                                        ("./docs/note.md:12:3", "docs/note.md"),
+                                        ("../2/docs/note.md", "../2/docs/note.md"),
+                                        ("docs/記録 (1).md", "docs/記録 (1).md"),
+                                        ("docs/record:12:3", "docs/record:12:3"),
+                                        ("docs/record!", "docs/record!")])
+def test_relative_probe_prefers_literal_names_and_keeps_the_display_suffix(pane_probe, shown, name):
+    probe, _, cwd, _ = pane_probe
+    (cwd["%1"] / "docs/record").touch()
+    (cwd["%1"] / name).touch()
+    body = json.loads(probe(shown).body)
+    assert body["path"] == shown and body["resolved"] == str(cwd["%1"] / name)
+
+
+def test_relative_probe_refuses_unknown_moved_and_replaced_panes(pane_probe):
+    probe, bridge, cwd, manager = pane_probe
+    assert probe("docs/note.md", session="Elsewhere").status == 404
+    assert probe("docs/note.md", pane="%999").status == 404
+
+    async def moved(*_, **__):
+        return CommandResult(True, [f"$2\t@1\t%1\t{cwd['%1']}"])
+
+    bridge.send_command = moved
+    assert probe("docs/note.md").status == 404
+
+    async def replaced(*_, **__):
+        manager.states["Fixture"] = ob.SessionState(bridge)
+        return CommandResult(True, [f"$1\t@1\t%1\t{cwd['%1']}"])
+
+    bridge.send_command = replaced
+    assert probe("docs/note.md").status == 404
+
+
+def test_relative_probe_follows_the_fresh_wire_handle(pane_probe):
+    probe, bridge, _, manager = pane_probe
+    target = object.__new__(ob.FreshPaneBoundary)
+    target.pane_id, target.wire_pane = "%1", "fresh-fixture-1"
+    bridge.config.tmux_bin = target
+    manager.states["fresh-fixture"] = manager.states.pop("Fixture")
+    assert probe("docs/note.md", pane="%1").status == 404
+    response = probe("docs/note.md", pane=target.wire_pane)
+    assert response.status == 200
+
+
+def test_relative_probe_does_not_guess_missing_or_shortened_paths(pane_probe, monkeypatch):
+    probe, _, cwd, _ = pane_probe
+    path = cwd["%1"] / "docs/note.md"
+    resolved = json.loads(probe("docs/note.md").body)["resolved"]
+    path.rename(path.with_name("note-long.md"))
+    path.with_name("note-other.md").touch()
+    assert probe("docs/note.md").status == probe("docs/note-….md").status == 404
+    monkeypatch.setattr(ob, "reveal_in_finder", lambda path: pytest.fail(f"opened {path}"))
+    response = asyncio.run(ob.reveal_path(_Request({"path": resolved, "literal": True})))
+    assert response.status == 404
 
 
 def test_reveal_opens_the_resolved_path(runs, monkeypatch):
@@ -272,27 +369,93 @@ def test_a_probed_path_that_is_still_there_opens(runs, monkeypatch):
 NODE = shutil.which("node")
 
 
-def _links_for(row: str, probe: dict | None, *, ranges=False) -> list[dict]:
+def _pane_link_script(*, probe=False):
+    html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
+    start = html.index("  // Local paths in pane output:")
+    provider = html[start : html.index("\n  });", start) + len("\n  });")]
+    end = html.index("/* The file manager's name" if probe else "const probeCache")
+    return html[html.index("function relativePathEnd") : end] + provider
+
+
+def _links_for(row: str, probe: dict | None, *, ranges=False, trace=False, wrap=(False, False)):
     """Run the cockpit's own link provider on one pane row, with the probe
     answering ``probe``; return each link's text and what a click sends."""
-    html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
-    start = html.index("  term.registerLinkProvider({")
-    provider = html[start : html.index("\n  });", start) + len("\n  });")]
     script = f"""
-const sent=[];
+const sent=[],requests=[],session='Fixture',meta={{paneId:'%1'}};
 function revealLocalPath(path,opts={{}}){{sent.push({{path,literal:Boolean(opts.literal)}});}}
-async function probeLocalPath(text){{return {json.dumps(probe)};}}
-const line={{translateToString:()=>{json.dumps(row)}}};
-const term={{buffer:{{active:{{getLine:()=>line}}}},registerLinkProvider(p){{this.p=p;}}}};
-{provider}
+async function probeLocalPath(text,pane=null){{requests.push({{text,pane}});return {json.dumps(probe)};}}
+const row={json.dumps(row)},cells=[];
+for(const ch of row){{cells.push(ch);if(/[\u3040-\u9fff]/.test(ch))cells.push('');}}
+const line={{isWrapped:{json.dumps(wrap[0])},translateToString:()=>row,
+  getCell(col,cell){{Object.assign(cell,{{getChars:()=>cells[col],getWidth:()=>cells[col+1]===''?2:1}});return cell;}}}};
+const term={{buffer:{{active:{{getLine:y=>y===0?line:{{isWrapped:{json.dumps(wrap[1])}}},getNullCell:()=>({{}})}}}},registerLinkProvider(p){{this.p=p;}}}};
+{_pane_link_script()}
 term.p.provideLinks(1,links=>{{
   for(const l of links||[])l.activate({{preventDefault(){{}}}});
-  console.log(JSON.stringify((links||[]).map((l,i)=>({{text:l.text,...sent[i],...({str(ranges).lower()}?{{range:l.range}}:{{}})}}))));
+  const result=(links||[]).map((l,i)=>({{text:l.text,...sent[i],...({json.dumps(ranges or trace)}?{{range:l.range}}:{{}})}}));
+  console.log(JSON.stringify({json.dumps(trace)}?{{links:result,requests}}:result));
 }});
 """
     done = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=20)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
+
+
+@pytest.mark.skipif(NODE is None, reason="no node")
+@pytest.mark.parametrize("opener,closer", [("(", ")"), ("<", ">"), ('"', '"')])
+def test_relative_link_ranges_use_cells_and_exclude_wrappers(opener, closer):
+    shown, resolved = "Lab Notes/記録 (1).md:12:3", "/fixture/Lab Notes/記録 (1).md"
+    result = _links_for(f"配線 {opener}{shown}{closer}", {"path": shown, "resolved": resolved}, trace=True)
+    assert result == {"links": [{"text": shown, "path": resolved, "literal": True,
+                                "range": {"start": {"x": 7, "y": 1}, "end": {"x": 32, "y": 1}}}],
+                      "requests": [{"text": shown, "pane": {"session": "Fixture", "paneId": "%1"}}]}
+
+
+@pytest.mark.skipif(NODE is None, reason="no node")
+def test_relative_links_skip_url_parts_missing_and_incomplete_candidates():
+    row = "https://example.com/a?ref=docs/note.md docs/missing.md /compact"
+    result = _links_for(row, None, trace=True)
+    assert result == {"links": [], "requests": [{"text": "docs/missing.md /compact",
+                                                 "pane": {"session": "Fixture", "paneId": "%1"}}]}
+    prefix = {"path": "docs/note.md", "resolved": "/fixture/docs/note.md"}
+    assert _links_for("<docs/note.md extra>", prefix) == []
+    assert _links_for("docs/note.md", prefix, wrap=(False, True)) == []
+    assert _links_for("docs/note.md", prefix, wrap=(True, False)) == []
+
+
+@pytest.mark.skipif(NODE is None, reason="no node")
+def test_new_relative_links_use_the_current_directory_in_the_same_pane(pane_probe):
+    _, _, workspaces, _ = pane_probe
+    script = f"const workspaces={json.dumps([str(workspaces[p]) for p in ('%1', '%2')])};\n" + """
+const fs=require('node:fs'),path=require('node:path');
+const performance={now:()=>0},requests=[],opened=[],session='Fixture',meta={paneId:'%1'};
+const rows=['Before (docs/note.md) (docs/note.md)','After (docs/note.md)'];
+const term={buffer:{active:{getLine(i){return rows[i]&&{translateToString:()=>rows[i]};}}},
+  registerLinkProvider(provider){this.provider=provider;}};
+let cwd=workspaces[0];
+function revealLocalPath(path,{literal}){opened.push({path,literal});}
+async function fetch(url,options){
+  const payload=JSON.parse(options.body);
+  requests.push(payload);
+  const resolved=path.join(cwd,payload.text),ok=fs.existsSync(resolved);
+  return {ok,json:async()=>({ok,path:payload.text,resolved})};
+}
+""" + _pane_link_script(probe=True) + """
+(async()=>{
+  const linksAt=y=>new Promise(resolve=>term.provider.provideLinks(y,resolve));
+  const before=await linksAt(1);
+  cwd=workspaces[1];
+  const after=await linksAt(2);
+  for(const link of [...before,...after])link.activate({preventDefault(){}});
+  console.log(JSON.stringify({opened,requests}));
+})();
+"""
+    done = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=20, check=True)
+    assert json.loads(done.stdout) == {
+        "opened": [dict(path=str(workspaces[p] / "docs/note.md"), literal=True)
+                   for p in ("%1", "%1", "%2")],
+        "requests": [dict(text="docs/note.md", session="Fixture", paneId="%1")] * 2,
+    }
 
 
 @pytest.mark.skipif(NODE is None, reason="no node")
@@ -304,8 +467,9 @@ def test_angle_wrapped_pane_path_range_and_activation(template, path):
     (link,) = _links_for(row, {'path': path, 'resolved': resolved}, ranges=True)
     start = row.index(path)
     assert link['text'] == row[start:start+len(path)] == path
-    assert link['range'] == {'start': {'x': start+1, 'y': 1},
-                             'end': {'x': start+len(path), 'y': 1}}
+    start_column = wcswidth(row[:start])
+    assert link['range'] == {'start': {'x': start_column+1, 'y': 1},
+                             'end': {'x': start_column+wcswidth(path), 'y': 1}}
     # ASCII paths need no probe; paths with spaces/Unicode open the probe result.
     probed = ' ' in path
     assert link['path'] == (resolved if probed else path)
