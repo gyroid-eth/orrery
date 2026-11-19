@@ -412,6 +412,7 @@ class LegacyTargetBoundary:
         self.shared = None
         self.transport = None
         self.pin = None
+        self.tmux_restarted = False
         self._pane_proofs = {}
         self.validate = None
         self._settings_stamp = None
@@ -455,6 +456,13 @@ class LegacyTargetBoundary:
         if self.shared is None:
             return dict(self.environment)  # old bare-tmux endpoint semantics
         return {k: v for k, v in self.environment.items() if k not in ('TMUX', 'TMUX_PANE')}
+
+    def observe_server_pid(self, server_pid: int | None) -> None:
+        # The warning stays latched until the backend starts with a new pin.
+        if server_pid is not None and self.shared is not None and self.pin is not None:
+            pinned_pid = self.pin['server_pid']
+            if pinned_pid is not None and server_pid != pinned_pid:
+                self.tmux_restarted = True
 
     def _installed_hint(self):
         """Reuse the installed literal reader; never execute env.sh or parse it twice."""
@@ -578,6 +586,7 @@ class LegacyTargetBoundary:
             self.validate({'contract':self.shared['CONTRACT'],'ok':True,**public},
                           self.shared['result_schema']('legacy-transport'))
             with self._pin_lock:
+                self.observe_server_pid(public['server_pid'])
                 self.pin = self.shared['check_pinned_transport'](self.pin, public)
                 if self.transport.identity is None:
                     self.transport = refreshed

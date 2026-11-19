@@ -1242,6 +1242,10 @@
   .local-provider-badge .provider-logo[hidden]{display:none}
   .usage-popover .up-balance-warning{color:var(--amber)}
   .usage-popover .up-balance-low{color:var(--theme-status-alert,#d2685e)}
+  .tmux-restart-notice:not(:empty){
+    padding:8px 14px;border-bottom:1px solid var(--hair);
+    background:var(--panel);color:var(--amber);font-size:12px;line-height:1.4;
+  }
 </style>
 <link rel="stylesheet" href="theme_light.css">
 <link rel="stylesheet" href="cockpit_tour.css">
@@ -1313,6 +1317,7 @@
         <div class="tab-fade right" id="tabFadeRight"></div>
         <div class="tab-overflow" id="tabOverflow" title="hidden session groups"></div>
       </div>
+      <div class="tmux-restart-notice" id="tmuxRestartNotice" role="status"></div>
       <div class="screen">
         <div class="glassglow"></div>
         <div class="scr-head">
@@ -3103,6 +3108,16 @@
             "value": "var(--ink-faint)"
           },
           {
+            "property": "border-bottom",
+            "selector": ".tmux-restart-notice:not(:empty)",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".tmux-restart-notice:not(:empty)",
+            "value": "var(--panel)"
+          },
+          {
             "property": "stroke",
             "selector": ".orrery-comm-edge",
             "value": "var(--ink)"
@@ -4644,9 +4659,9 @@
       }
     }
   },
-  "inventory_digest": "e0d169e9baf005000fbecfaa6e2669d2370b6b5e1db3f29757e68428b405d7a5",
+  "inventory_digest": "eae386ab127eed9ac41d88b737605d0e68b34d25826fb69503fc7c8840c1a7c0",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "ed4d6b5d61f6619c3ae8dc618761287c7c342399ce1882ae5d6fce99bfa66f79",
+  "source_digest": "5434471ac96662bcaaa7623366b07f1916ed79d5235dc882986a70688d5c9954",
   "surface": "cockpit",
   "version": 1
 }
@@ -8845,7 +8860,12 @@ function handle(msg){
      (msg.type==='reset'||msg.type==='add'||msg.type==='update'))return;
   switch(msg.type){
     case 'approval':readerApproval?.receive(msg);break;
-    case "sessions":
+    case "sessions":{
+      const notice=document.getElementById('tmuxRestartNotice');
+      const text=msg.tmuxRestarted===true
+        ? 'tmux has restarted. Restart the ORRERY backend to restore terminals and recording.'
+        : '';
+      if(notice.textContent!==text)notice.textContent=text;
       handleSessions(msg.sessions);
       // connected + lazy attach: the stage starts empty by design
       stageEmpty.innerHTML=stageEmptyHtml();
@@ -8856,6 +8876,7 @@ function handle(msg){
          looks focusable to resolveJump. */
       else if(soloSession&&availableSessions.has(soloSession)&&!occupiedSessions().has(soloSession))requestAttach(soloSession,true);
       break;
+    }
     case "reset":resetSession(msg);applyAutoClaims();break;
     case "add":createPane(msg.session,msg.pane);break;
     case "update":updatePane(msg.session,msg.pane);break;
