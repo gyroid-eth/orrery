@@ -21,7 +21,8 @@ MAX_SCAN = 4 * 1024 * 1024
 MAX_TEXT = 64 * 1024
 PAGE_SIZE = 80
 CURSOR = re.compile(r"([a-f0-9]{24}):([0-9]{1,20})\Z")
-CODEX_CONTEXT_KINDS = frozenset({'agents_md.instructions', 'environments.environment_context'})
+CODEX_CONTEXT_KINDS = frozenset({'agents_md.instructions', 'environments.environment_context',
+                                 'skills.selected_skill_instructions'})
 
 
 class HistoryUnavailable(ValueError):
@@ -94,7 +95,7 @@ def recorded_model(value):
 def codex_context_text(text):
     """Older rollouts lack source metadata: recognize complete stock wrappers."""
     body = text.strip()
-    for tag in ('environment_context', 'user_instructions'):
+    for tag in ('environment_context', 'user_instructions', 'skill'):
         if body.startswith('<' + tag + '>') and body.endswith('</' + tag + '>'):
             return True
     header, _, rest = body.partition('\n')
