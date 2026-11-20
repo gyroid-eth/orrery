@@ -2796,6 +2796,7 @@ async def serve_fs_dirs(request: web.Request) -> web.Response:
     parent = os.path.dirname(path)
     return web.json_response({
         "path": path,
+        "home": os.path.realpath(os.path.expanduser("~")),
         "parent": parent if parent != path else None,
         "dirs": dirs[:200],
         "truncated": len(dirs) > 200,

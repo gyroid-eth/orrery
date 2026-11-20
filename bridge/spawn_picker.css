@@ -72,7 +72,7 @@ html[data-color-theme="light"] #spawnOverlay {
 #spawnForm .spawn-chip:hover {border-color:color-mix(in srgb,var(--amber) 40%,var(--hair))}
 #spawnForm .spawn-chip:active {transform:scale(.95)}
 #spawnForm .spawn-chip[aria-expanded="true"] {border-color:var(--amber);background:color-mix(in srgb,var(--amber) 10%,var(--spawn-control-surface))}
-#spawnForm .spawn-name-chip {padding:0 8px}
+#spawnForm .spawn-name-chip {padding:0 8px;flex:none;max-width:145px}
 #spawnForm .spawn-name-chip:has(.spawn-name-copy:not([hidden])) {padding-right:11px}
 #ncDiceFace,#spawnModelMark {display:flex;flex:none;color:var(--ink-dim)}
 #ncPortrait {width:22px;height:22px;border-radius:50%;object-fit:cover}
@@ -80,11 +80,11 @@ html[data-color-theme="light"] #spawnOverlay {
 #ncName {font:15px/1 var(--serif);max-width:100%}
 #ncRole {color:var(--ink-dim);font-size:10px;line-height:1.1;max-width:min(100%,18ch);overflow:hidden;text-overflow:ellipsis}
 #ncName.collide {color:var(--theme-status-alert,#e0655f)}
-#spawnDirButton {flex:0 1 auto;color:var(--ink-dim)}
+#spawnForm #spawnDirButton {flex:0 1 auto;min-width:40px;color:var(--ink-dim)}
 #spawnDirSelected {font:12.5px var(--mono)}
-#spawnModelButton {flex:0 1 auto}
+#spawnModelButton,#spawnModelLabel {flex:none}
 #spawnModelLabel {font-weight:500}
-#ncName,#spawnModelLabel,#spawnDirSelected {overflow:hidden;text-overflow:ellipsis}
+#ncName,#spawnDirSelected {overflow:hidden;text-overflow:ellipsis}
 .spawn-pips {display:flex;gap:2px;align-items:flex-end;height:12px;flex:none}
 .spawn-pips i {width:3px;border-radius:1px;background:var(--ink-faint);transition:background .25s}
 .spawn-pips i:nth-child(1){height:5px}
@@ -255,10 +255,18 @@ html[data-color-theme="light"] .spawn-brand.mono {filter:invert(.82) sepia(.2)}
 .roster-harness img{width:13px;height:13px;object-fit:contain;border-radius:2px}
 :root[data-color-theme="light"] .roster-harness img:not(.harness-art){filter:brightness(0)}
 
-@media (max-width:560px) {
-  .spawn-row {gap:5px;padding-inline:8px}
+@media (max-width:620px) {
+  .spawn-row {
+    display:grid;grid-template-columns:max-content minmax(0,1fr) max-content max-content;
+    grid-template-areas:'name model model model' 'folder folder tools launch';
+    gap:5px;padding-inline:8px;
+  }
+  #spawnForm .spawn-name-chip {grid-area:name;max-width:25vw}
+  #spawnModelButton {grid-area:model;justify-self:start}
+  #spawnForm #spawnDirButton {grid-area:folder;justify-self:start;max-width:100%;min-width:31px}
+  .spawn-tools {grid-area:tools}
+  #spawnForm #spawnSubmit {grid-area:launch}
   #spawnForm .spawn-chip {gap:4px;padding-inline:6px}
-  #spawnForm .spawn-name-chip {max-width:26%}
   #spawnForm .spawn-name-chip:has(.spawn-name-copy:not([hidden])) {padding-right:6px}
   .spawn-tools {gap:4px}
   #spawnForm .spawn-tools button {width:30px;height:30px}

@@ -361,13 +361,14 @@ def test_directory_sheet_commits_only_on_confirmation_and_escape_keeps_launcher(
         const before=spawnDirPath;esc();
         const cancelled=spawnDirPath;
         openSpawnDirPicker();spawnDirBrowseButton.click();await browseDir('/workspace/tools');spawnDirUse.click();
-        const confirmed=spawnDirPath,label=document.getElementById('spawnDirSelected').textContent;
+        const confirmed=spawnDirPath,label=document.getElementById('spawnDirSelected').textContent,title=spawnDirButton.title;
         openSpawnDirPicker();esc();
-        return {before,cancelled,confirmed,label,closed:spawnOpenSheet!==spawnDirSheet,parent:spawnOverlay.classList.contains('on'),payload:spawnPayloadFromForm().dir};
+        return {before,cancelled,confirmed,label,title,closed:spawnOpenSheet!==spawnDirSheet,parent:spawnOverlay.classList.contains('on'),payload:spawnPayloadFromForm().dir};
       }finally{window.fetch=originalFetch;}
     })()''')
     assert result['before'] == result['cancelled'] == '/workspace'
-    assert result['confirmed'] == result['label'] == result['payload'] == '/workspace/tools'
+    assert result['confirmed'] == result['title'] == result['payload'] == '/workspace/tools'
+    assert result['label'] == 'tools'
     assert result['closed'] and result['parent']
 
 
@@ -681,3 +682,61 @@ def test_scientist_grid_scrolls_filters_and_remembers_successful_names(tour_brow
         top:spawnScientistOptions().slice(0,2).map(option=>option.dataset.scientist)};
     })()''')
     assert saved==dict(history=['Curie','Noether'],top=['Curie','Noether'])
+
+
+def test_folder_browser_reports_the_canonical_home(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    real_home = tmp_path / 'account'
+    folder = real_home / 'projects'
+    folder.mkdir(parents=True)
+    alias = tmp_path / 'home'
+    alias.symlink_to(real_home)
+    monkeypatch.setenv('HOME', str(alias))
+    response = asyncio.run(ob.serve_fs_dirs(SimpleNamespace(query={'path': '~/projects'})))
+    result = json.loads(response.body)
+    assert result['home'] == str(real_home.resolve())
+    assert result['path'] == str(folder.resolve())
+
+
+@pytest.mark.parametrize('width', [1600, 390])
+def test_long_folder_only_compresses_the_folder_chip(tour_browser, width):
+    client,evaluate=tour_browser
+    client.call('Emulation.setDeviceMetricsOverride',width=width,height=850,deviceScaleFactor=1,mobile=False)
+    home='/home/fixture'
+    leaf='a-very-long-folder-name-that-cannot-normally-fit-the-launch-row'
+    path=home+'/projects/lab/notes/archive/'+leaf
+    model='claude-opus-5-5-20261120'
+    data=dict(home=home,path=path,model=model)
+    result=evaluate('''(async()=>{
+      const data=DATA;
+      const catalog={providers:[{id:'claude',program:'claude-code',
+        models:[{id:data.model}],efforts:['low','medium','high','xhigh','max'],effort_default:'high'}],
+        naming:{adjectives:['ResourcefulThoughtful'],scientists:['Leeuwenhoek']},dirs:[{path:data.path}]};
+      const original=window.fetch;
+      window.fetch=async url=>({ok:true,json:async()=>url.startsWith('/telemetry/fs/dirs')
+        ?{path:url.includes('path=~')?data.home:data.path,home:data.home,dirs:[]}:catalog});
+      const modelChip=()=>spawnModelButton.getBoundingClientRect();
+      const folderLabel=document.getElementById('spawnDirSelected');
+      try{
+        openSpawnModal();await loadSpawnCatalog();await new Promise(resolve=>setTimeout(resolve,550));
+        selScientist='Leeuwenhoek';spawnAdjective.value='ResourcefulThoughtful';
+        spawnRole.value='Release engineering';updateNameCard();
+        const long={label:folderLabel.textContent,title:spawnDirButton.title,payload:spawnPayloadFromForm(),
+          modelWidth:modelChip().width,folderShortened:folderLabel.scrollWidth>folderLabel.clientWidth,
+          modelFits:spawnModelLabel.scrollWidth<=spawnModelLabel.clientWidth&&
+            spawnPips.getBoundingClientRect().right<=modelChip().right,
+          pips:spawnPips.querySelectorAll('i').length,model:spawnModelLabel.textContent,
+          modelTitle:spawnModelButton.title,modelOnscreen:modelChip().right<=spawnLauncher.getBoundingClientRect().right};
+        await browseDir('~');
+        return {long,home:{label:folderLabel.textContent,title:spawnDirButton.title,modelWidth:modelChip().width},
+          generic:compactSpawnModelLabel('vendor/Qwen3.8-Flash-Next-IQ3_XXS')};
+      }finally{window.fetch=original;}
+    })()'''.replace('DATA',json.dumps(data)))
+    assert result['long']['label']==leaf and result['long']['title']==path
+    payload=result['long']['payload']
+    assert (payload['dir'],payload['model'],payload['effort'])==(path,model,'high')
+    assert result['long']['model']=='opus-5-5' and model in result['long']['modelTitle']
+    assert result['long']['folderShortened'] and result['long']['modelFits'] and result['long']['modelOnscreen']
+    assert result['long']['pips']==5 and result['generic']=='Qwen3.8-Flas…XXS'
+    assert result['home']==dict(label='~',title=home,modelWidth=result['long']['modelWidth'])

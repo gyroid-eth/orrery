@@ -4115,9 +4115,9 @@
       }
     }
   },
-  "inventory_digest": "7c5b12fdf7fe6bdc02a6d39ad188523f1fdd56693530c090860a3f05b2027044",
+  "inventory_digest": "67b03d7218c841cf7e51f320067c405b79ee82ac463cf09adaa54d2f8963b86c",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "94ed3739c4317d329f0b82d3a658e6f8522b046b689c23078c637a80a8500018",
+  "source_digest": "ca5bee25b28a4fcf02205deafc2bfa38d35bbba07e10182e5c7da9f67f50551a",
   "surface": "cockpit",
   "version": 1
 }
@@ -9673,11 +9673,14 @@ const spawnDirUse=document.getElementById('spawnDirUse');
 const spawnDirSearch=document.getElementById('spawnDirSearch');
 const spawnDirResults=document.getElementById('spawnDirResults');
 const spawnDirSearchStatus=document.getElementById('spawnDirSearchStatus');
-let spawnDirPath='',spawnDirBrowsePath='',spawnDirBrowseEpoch=0,spawnDirDefaultEpoch=0;
+let spawnDirPath='',spawnDirHome='',spawnDirBrowsePath='',spawnDirBrowseEpoch=0,spawnDirDefaultEpoch=0;
 let spawnDirSearchEpoch=0,spawnDirSearchTimer,spawnDirActive=-1;
 function renderSpawnDirPath(){
   const label=document.getElementById('spawnDirSelected');
-  label.textContent=spawnDirPath||'Folder';spawnDirButton.title=spawnDirPath||'Folder';
+  const path=spawnDirPath.replace(/\/+$/,'')||(spawnDirPath?'/':'');
+  label.textContent=path&&path===spawnDirHome?'~':path.split('/').at(-1)||path||'Folder';
+  spawnDirButton.title=spawnDirPath||'Folder';
+  spawnDirButton.setAttribute('aria-label',spawnDirPath?'Folder: '+spawnDirPath:'Folder');
 }
 function openSpawnDirPicker(){
   if(spawnOpenSheet===spawnDirSheet){dismissSpawnSheet(true);return;}
@@ -10011,6 +10014,12 @@ function renderHarnesses(){
   renderSpawnTools();renderEfforts(p);renderSpawnModelChip();updateSpawnAvailability();
   if(spawnOpenSheet===spawnModelSheet)positionSpawnSheet(spawnModelSheet,spawnModelButton);
 }
+function compactSpawnModelLabel(name){
+  const label=name.split('/').at(-1).trim()||name;
+  const compact=label.replace(/^(?:claude|deepseek)-/i,'').replace(/-\d{8}$/,'')||label;
+  const chars=Array.from(compact);
+  return chars.length>16?chars.slice(0,12).join('')+'…'+chars.slice(-3).join(''):compact;
+}
 function renderSpawnModelChip(){
   const provider=providerById(selProvider),model=selectedSpawnModel();
   const family=spawnFamilies.find(f=>f.id===selFamily);
@@ -10022,11 +10031,11 @@ function renderSpawnModelChip(){
   spawnModelMark.classList.toggle('spawn-local-maker',Boolean(maker));
   spawnModelMark.title=maker?maker.label+' · Local':'';
   const name=model?.display_name||model?.id||'Model';
-  spawnModelLabel.textContent=name.replace(/^(?:claude|deepseek)-/i,'');
+  spawnModelLabel.textContent=compactSpawnModelLabel(name);
   const info=effortsForModel(provider,selModel);
   const effort=effectiveSpawnEffort(provider,selModel);
   const harness=provider&&model&&SpawnPicker.harnesses(provider,model).find(h=>h.id===selHarness);
-  const description=[name,spawnModelMark.title,harness?.label,effort].filter(Boolean).join(' · ');
+  const description=[name,model?.id!==name?model?.id:'',spawnModelMark.title,harness?.label,effort].filter(Boolean).join(' · ');
   spawnModelButton.title=description;spawnModelButton.setAttribute('aria-label','Model and effort: '+description);
   spawnPips.hidden=!info.efforts?.length;
   const index=info.efforts?.indexOf(effort)??-1;
@@ -10234,6 +10243,7 @@ async function browseDir(path,confirm=false,initial=false){
     dirList.appendChild(row);return;
   }
   if(!stillCurrent())return;
+  spawnDirHome=typeof payload.home==='string'?payload.home:(path==='~'?payload.path:spawnDirHome);
   if(initial){
     if(!spawnDirPath){spawnDirPath=payload.path;renderSpawnDirPath();}
     return;
