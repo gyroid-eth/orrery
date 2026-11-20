@@ -3444,7 +3444,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "fa069e72e51d5a9402aa4fd46ec36e0043de268e02e2e7a02e139ddc11d2cd65",
+        "digest": "71d7e767fa6ea1cea99b0e68e698fc04cfa5ab8c7f557b68034a24960d7c6520",
         "expected": 140,
         "records": [
           {
@@ -4302,126 +4302,126 @@
             "value": "8.5px"
           },
           {
-            "line": 53,
+            "line": 58,
             "property": "font-size",
             "selector": ".msg .arrow",
             "source": "bridge/mail_view.css",
             "value": "11px"
           },
           {
-            "line": 55,
+            "line": 60,
             "property": "font-size",
             "selector": ".msg .to",
             "source": "bridge/mail_view.css",
             "value": "10.5px"
           },
           {
-            "line": 69,
+            "line": 74,
             "property": "font-size",
             "selector": ".msg .conversation-avatar .face",
             "source": "bridge/mail_view.css",
             "value": "10px"
           },
           {
-            "line": 74,
+            "line": 79,
             "property": "font-size",
             "selector": ".mailview-host .imp",
             "source": "bridge/mail_view.css",
             "value": "8.5px"
           },
           {
-            "line": 79,
+            "line": 84,
             "property": "font-size",
             "selector": ".msg .body",
             "source": "bridge/mail_view.css",
             "value": "11.5px"
           },
           {
-            "line": 82,
+            "line": 87,
             "property": "font-size",
             "selector": ".msg .time",
             "source": "bridge/mail_view.css",
             "value": "9.5px"
           },
           {
-            "line": 83,
+            "line": 88,
             "property": "font-size",
             "selector": ".mailempty",
             "source": "bridge/mail_view.css",
             "value": "11px"
           },
           {
-            "line": 107,
+            "line": 112,
             "property": "font-size",
             "selector": ".drawer-mode",
             "source": "bridge/mail_view.css",
             "value": "8.5px"
           },
           {
-            "line": 113,
+            "line": 118,
             "property": "font-size",
             "selector": ".drawer-label",
             "source": "bridge/mail_view.css",
             "value": "8.5px"
           },
           {
-            "line": 117,
+            "line": 122,
             "property": "font-size",
             "selector": ".drawer-arrow",
             "source": "bridge/mail_view.css",
             "value": "11px"
           },
           {
-            "line": 119,
+            "line": 124,
             "property": "font-size",
             "selector": ".drawer-recipient",
             "source": "bridge/mail_view.css",
             "value": "10.5px"
           },
           {
-            "line": 121,
+            "line": 126,
             "property": "font-size",
             "selector": ".recipient-kind",
             "source": "bridge/mail_view.css",
             "value": "7.5px"
           },
           {
-            "line": 123,
+            "line": 128,
             "property": "font-size",
             "selector": ".drawer-meta",
             "source": "bridge/mail_view.css",
             "value": "8.5px"
           },
           {
-            "line": 129,
+            "line": 134,
             "property": "font-size",
             "selector": ".mail-md",
             "source": "bridge/mail_view.css",
             "value": "10.75px"
           },
           {
-            "line": 134,
+            "line": 139,
             "property": "font-size",
             "selector": ".mail-md h4",
             "source": "bridge/mail_view.css",
             "value": "11.5px"
           },
           {
-            "line": 149,
+            "line": 154,
             "property": "font-size",
             "selector": ".drawer-empty",
             "source": "bridge/mail_view.css",
             "value": "10.5px"
           },
           {
-            "line": 164,
+            "line": 169,
             "property": "font-size",
             "selector": ".thread-time",
             "source": "bridge/mail_view.css",
             "value": "8.5px"
           },
           {
-            "line": 166,
+            "line": 171,
             "property": "font-size",
             "selector": ".thread-excerpt",
             "source": "bridge/mail_view.css",
@@ -4441,7 +4441,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "d69a0ad554593a88bfdebea29c5bed4aad3f274f61c9ca5a11f7bd29bf636ae4",
+        "digest": "66526de70311cef000a7c2942ed0df3fa0f8b2182a574e85ad0eec73d837e522",
         "expected": 42,
         "records": [
           {
@@ -4718,21 +4718,21 @@
             "value": ".12em"
           },
           {
-            "line": 74,
+            "line": 79,
             "property": "letter-spacing",
             "selector": ".mailview-host .imp",
             "source": "bridge/mail_view.css",
             "value": ".1em"
           },
           {
-            "line": 113,
+            "line": 118,
             "property": "letter-spacing",
             "selector": ".drawer-label",
             "source": "bridge/mail_view.css",
             "value": ".22em"
           },
           {
-            "line": 121,
+            "line": 126,
             "property": "letter-spacing",
             "selector": ".recipient-kind",
             "source": "bridge/mail_view.css",
@@ -4743,7 +4743,7 @@
       }
     }
   },
-  "inventory_digest": "eae386ab127eed9ac41d88b737605d0e68b34d25826fb69503fc7c8840c1a7c0",
+  "inventory_digest": "162f913693c67815e72d54e69f49948f3c324513ad02a35f247cfec6f6e11461",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -4755,10 +4755,10 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "5434471ac96662bcaaa7623366b07f1916ed79d5235dc882986a70688d5c9954",
+  "source_digest": "1176fb4a8d534ddffa228e519e7131903e33d0fa2d2041a746420770acea332c",
   "source_files": {
     "bridge/cockpit.html": "b55d9145d27a42ba470095d6740e2f258c9f163430e6c8e08d52c5dcadf65768",
-    "bridge/mail_view.css": "d52a28452c2c494c60f273750106737ac3b6180c7e6e088a5eef29e1dd2cd7ab",
+    "bridge/mail_view.css": "6af6bd4b334b21c2edcbaf639f91bffac08a50dbba347e1281a3aa3448613249",
     "bridge/orrery_view.css": "ad0adcc4a4bc1867240ea68bb37c36d1bdd73b8e198c7e5ebba92343c78c26cd"
   },
   "surface": "cockpit",
