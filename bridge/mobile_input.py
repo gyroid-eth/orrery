@@ -417,9 +417,9 @@ class InputCoordinator:
             bridge=await self.get_bridge(name,ref) if self.fresh else await self.get_bridge(name)
             if not self.enabled:raise InputRefused('input_disabled')
             if (bridge is None or bridge._closed or bridge.master_fd is None or bridge.config.session!=name):raise InputRefused('input_target_unavailable')
-            # Old catalog handles for this reader are retired; prepared intents
-            # retain their independent immutable descriptor and original expiry.
-            self.choices={k:v for k,v in self.choices.items() if v['scope']!=scope}
+            # Retire this agent's previous catalog. Other Readers in the same
+            # phone workspace are still using their own choices.
+            self.choices={k:v for k,v in self.choices.items() if (v['scope'],v['name'])!=(scope,name)}
             available=max(0,128-len(self.choices));targets=[]
             for pane_id,info in sorted(bridge.panes.items())[:available]:
                 if not re.fullmatch(r'%[0-9]+',pane_id):continue

@@ -22,8 +22,8 @@ sys.path.insert(0,str(BRIDGE))
 from control_server import ControlConfig, TmuxControlBridge, PaneInfo
 
 
-def bridge_fixture(tmp_path):
-    bridge=TmuxControlBridge(ControlConfig('127.0.0.1',0,'FixtureCurie','tmux',history_dir=tmp_path))
+def bridge_fixture(tmp_path, name='FixtureCurie'):
+    bridge=TmuxControlBridge(ControlConfig('127.0.0.1',0,name,'tmux',history_dir=tmp_path))
     bridge.master_fd=99  # Synthetic writer owns no actual host descriptor.
     bridge.panes={'%3':PaneInfo('%3','@1','$2','0','0',80,24,True,'Main','fixture')}
     return bridge
@@ -121,6 +121,94 @@ def test_preview_change_discards_body_and_prepared_send_is_once(tmp_path):
         with pytest.raises(mobile.InputRefused):await c.request('preview',dict(scope,choice=choice))
         with pytest.raises(mobile.InputRefused):await c.request('preview',dict(scope,choice=choice,reader_epoch='c'*32))
         c.close()
+    asyncio.run(scenario())
+
+
+def test_alternating_agent_catalogs_preserve_both_pane_inputs_and_images(tmp_path):
+    pytest.importorskip('PIL')
+    import mobile_input as mobile
+    from test_mobile_image import picture
+
+    async def scenario():
+        names=('FixtureCurie','FixtureNoether')
+        roots={name:tmp_path/name for name in names}
+        bridges={}
+        sent={name:[] for name in names}
+
+        async def capture(*args, **kwargs):
+            return SimpleNamespace(lines=['fixture output'])
+
+        def sender(name):
+            async def send(pane,text,**options):
+                assert pane=='%3' and options['valid']() and options['claim']()
+                with options['admission'](time.monotonic()+1):
+                    sent[name].append(text)
+                return 'accepted'
+            return send
+
+        for name,root in roots.items():
+            root.mkdir()
+            bridge=bridge_fixture(root,name)
+            bridge.capture_mobile_preview=capture
+            bridge.send_confirmed_input=sender(name)
+            bridges[name]=bridge
+
+        class Resolver:
+            def read(self,bridge,pane,deadline):
+                return dict(session=bridge.config.session,pane_id=pane,incarnation=bridge._incarnation,height=24)
+
+            @contextlib.contextmanager
+            def admission(self,row,deadline):
+                yield self.read(row['bridge'],row['pane_id'],deadline)
+
+        async def get_bridge(name):
+            return bridges.get(name)
+
+        async def image_workspace(row):
+            return roots[row['name']]
+
+        coordinator=mobile.InputCoordinator(Resolver(),get_bridge,enabled=True,image_workspace=image_workspace)
+        scope=dict(contract=mobile.CONTRACT,owner='fixture@example.invalid',reader_epoch='a'*32,epoch=coordinator.epoch)
+
+        async def select(name):
+            catalog=await coordinator.request('targets',dict(scope,name=name))
+            return catalog['targets'][0]['choice']
+
+        async def preview(choice):
+            return (await coordinator.request('preview',dict(scope,choice=choice)))['target']
+
+        try:
+            old_first=await select(names[0])
+            await preview(old_first)
+            second=await select(names[1])
+            await preview(second)
+            first=await select(names[0])
+            with pytest.raises(mobile.InputRefused,match='input_choice_unavailable'):
+                await preview(old_first)
+            second_target=await preview(second)
+            second=await select(names[1])
+            first_target=await preview(first)
+            with pytest.raises(mobile.InputRefused,match='input_choice_unavailable'):
+                await preview(second_target['choice'])
+            second_target=await preview(second)
+            drafts=[]
+            for target in (first_target,second_target):
+                verified=dict(scope,choice=target['choice'],revision=target['revision'])
+                image=await coordinator.request('image',dict(verified,image=picture()))
+                assert Path(image['path']).parent==roots[target['name']]/'.orrery-input-images'
+                assert Path(image['path']).is_file()
+                assert not any(sent.values())
+                text=f"Review [image: '{image['path']}']"
+                prepared=await coordinator.request('prepare',dict(verified,text=text))
+                drafts.append((target['name'],text,prepared))
+            for name,text,prepared in drafts:
+                commit=dict(scope,intent=prepared['intent'],confirmation=prepared['confirmation'])
+                assert (await coordinator.request('commit',commit))['state']=='accepted'
+                assert (await coordinator.request('commit',commit))['state']=='accepted'
+                assert sent[name]==[text]
+        finally:
+            coordinator.close()
+
     asyncio.run(scenario())
 
 
