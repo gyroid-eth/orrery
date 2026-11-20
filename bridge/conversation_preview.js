@@ -264,15 +264,30 @@
     }
     function close(){closeLightbox(false);current=null;cancel();selected=null;markSelected();host.hidden=true;host.replaceChildren();host.parentElement.classList.remove('conversation-has-preview');onClose();}
     async function open(ref){
-      onBeforeOpen();cancel();current=null;selected=ref;markSelected();const token=generation;request=new AbortController();
+      onBeforeOpen();cancel();current=null;selected=ref;markSelected();const token=generation;
       host.hidden=false;host.parentElement.classList.add('conversation-has-preview');onActivate(ref);
       const head=create('div','conversation-preview-head'),title=create('h3','conversation-preview-title',ref.label);
       const closeButton=iconButton('conversation-preview-close','close','Close preview',()=>{close();host.closest('.conversation-panel').querySelector('.conversation-scroll')?.focus();});
       head.append(title,closeButton);
-      if(onReference&&ref.id)head.insertBefore(iconButton('conversation-preview-reply','reply','Reply with reference',()=>onReference(ref)),closeButton);
+      if(onReference&&(ref.path?ref.origin:ref.id))head.insertBefore(iconButton('conversation-preview-reply','reply','Reply with reference',()=>onReference(ref)),closeButton);
       const notice=create('div','conversation-preview-notice',ref.path?'':ref.input_image?'Recorded input image':'Current file · may differ from the recorded edit');
       const body=create('div','conversation-preview-content','Loading preview…');body.tabIndex=0;
       host.replaceChildren(head,notice,body);closeButton.focus();
+      function addReveal(){
+        const reveal=iconButton('conversation-reveal','reveal','Reveal in file manager',async()=>{
+          reveal.disabled=true;
+          try{if(ref.path)await source.revealPath(ref.path);else await source.reference(ref.id,{reveal:true});if(token===generation)notice.textContent='Selected in file manager';}
+          catch(error){if(token===generation)notice.textContent=error.message;}
+          finally{reveal.disabled=false;}
+        });
+        head.insertBefore(reveal,closeButton);
+      }
+      if(ref.path&&ref.kind==='file'){
+        body.replaceChildren(create('div','conversation-preview-text',ref.path));
+        addReveal();
+        return;
+      }
+      request=new AbortController();
       try{
         const data=await (ref.path?source.pathImage(ref.path,{signal:request.signal}):source.reference(ref.id,{signal:request.signal}));
         if(token!==generation)return;
@@ -311,13 +326,7 @@
           head.insertBefore(iconButton('conversation-preview-fullscreen','fullscreen','Full screen',()=>openLightbox('button')),closeButton);
           if(lightbox)setImage(current);
         }else throw new Error('Unsupported preview response.');
-        const reveal=iconButton('conversation-reveal','reveal','Reveal in file manager',async()=>{
-          reveal.disabled=true;
-          try{if(ref.path)await source.revealPath(ref.path);else await source.reference(ref.id,{reveal:true});if(token===generation)notice.textContent='Selected in file manager';}
-          catch(error){if(token===generation)notice.textContent=error.message;}
-          finally{reveal.disabled=false;}
-        });
-        if(!ref.input_image)head.insertBefore(reveal,closeButton);
+        if(!ref.input_image)addReveal();
       }catch(error){if(token===generation&&error.name!=='AbortError'){body.textContent=error.message;if(lightbox)lbMessage(error.message);}}
       finally{if(token===generation)request=null;}
     }

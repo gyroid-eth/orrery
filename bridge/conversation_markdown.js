@@ -161,7 +161,7 @@
         node.replaceWith(...node.childNodes);return;
       }
       const link=el('a');link.href='#';link.dataset.localPath=result.path;
-      link.title='Preview image or reveal in file manager';link.textContent=label?node.textContent:result.shown;
+      link.title='Open local path';link.textContent=label?node.textContent:result.shown;
       const remainder=document.createDocumentFragment();
       renderText(label?'':text.slice(result.shown.length),remainder);
       node.replaceWith(link,remainder);

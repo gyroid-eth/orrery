@@ -191,7 +191,10 @@
       // same opener as the terminal, including modified clicks in the app.
       if(link.dataset.localPath){
         event.preventDefault();const path=link.dataset.localPath;
-        if(/\.(png|jpe?g|gif|webp)$/i.test(path))preview?.open({path,label:path.split('/').pop(),kind:'image'});
+        const article=link.closest('.conversation-event');
+        const origin=eventsEl.contains(article)?events.get(article.dataset.eventId):null;
+        const kind=/\.(png|jpe?g|gif|webp)$/i.test(path)?'image':'file';
+        if(kind==='image'||(onReference&&origin))preview?.open({path,label:path.split('/').pop(),kind,origin});
         else source.revealPath(path).catch(error=>message(error.message));
         return;
       }
@@ -400,8 +403,10 @@
       paintActivity();
     }
     const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onBeforeOpen:layoutChanged,onClose:layoutChanged,onActivate:()=>expand(true),
-      onReference:onReference?ref=>{const event=[...events.values()].find(event=>event.references?.some(value=>value.id===ref.id));
-        if(event&&reference(event,ref.label,'file'))preview.close();}:null});
+      onReference:onReference?ref=>{
+        const event=ref.path?ref.origin:[...events.values()].find(event=>event.references?.some(value=>value.id===ref.id));
+        if(event&&reference(event,ref.path||ref.label,'file'))preview.close();
+      }:null});
     const stopPathLinks=root.OrreryConversationMarkdown?.observePaths?.(panel,source);
     let enabled=false,opened=false,agent='',generation=0,controller=null,timer=0,busy=false,sessionReloadAttempted=false;
     let before=null,after=null,hasOlder=false,mode='',newCount=0,events=new Map();
