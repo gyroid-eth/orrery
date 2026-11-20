@@ -121,7 +121,7 @@
   }
   html[data-theme-axis="glow"] .split-divider:hover::after,
   html[data-theme-axis="glow"] .split-divider.dragging::after{box-shadow:0 0 2px rgb(var(--theme-accent-rgb) / .084)}
-  html[data-theme-axis="glow"] .agent-pick.sel img{box-shadow:0 0 2.5px rgb(var(--theme-accent-rgb) / .07)}
+  html[data-theme-axis="glow"] .agent-pick[aria-selected="true"] img{box-shadow:0 0 2.5px rgb(var(--theme-accent-rgb) / .07)}
   html[data-theme-axis="glow"] .miniorrery.telemetry-network{
     background:radial-gradient(ellipse at center,rgb(var(--theme-accent-rgb) / .011),transparent 62%);
   }
@@ -890,7 +890,7 @@
   .overlay.on{display:flex}
   /* glass surfaces — translucent panels over the darkened stage (2026-07-30
      product direction: 黒背景にガラスの透明感、ごちゃごちゃさせず美しく) */
-  .modal,.palette,.network-panel,.slashmenu,.settings-popover,.usage-popover{
+  .palette,.network-panel,.slashmenu,.settings-popover,.usage-popover{
     background:
       linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,0) 140px),
       rgba(17,19,25,.66);
@@ -902,6 +902,7 @@
     -webkit-backdrop-filter:blur(18px) saturate(1.1);
     backdrop-filter:blur(18px) saturate(1.1);
   }
+  #paletteOverlay{z-index:1165}
   .palette{
     width:min(640px,100%);overflow:hidden;border:1px solid var(--hair);border-radius:13px;
     background:var(--panel);box-shadow:0 30px 90px rgba(0,0,0,.58);
@@ -921,137 +922,10 @@
   .palette-kind{font-size:9px;letter-spacing:.15em;color:var(--ink-faint)}
   .palette-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--serif);font-size:14px;color:var(--ink)}
   .palette-meta{font-size:9.5px;color:var(--ink-faint);white-space:nowrap}
-  .palette-empty{padding:24px;color:var(--ink-faint);font-size:11px;text-align:center}
-  .modal{
-    width:min(680px,100%);max-height:78vh;overflow-y:auto;border:1px solid var(--hair);border-radius:13px;
-    background:var(--panel);box-shadow:0 30px 90px rgba(0,0,0,.58);
-  }
-  .modal-head{display:flex;align-items:flex-start;gap:14px;padding:17px 19px;border-bottom:1px solid var(--hair)}
-  .modal-title{font-family:var(--serif);font-size:19px;letter-spacing:.04em}
-  .modal-sub{margin-top:4px;color:var(--ink-faint);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase}
+  .spawn-launcher,.spawn-sheet{box-shadow:var(--spawn-shadow)}
+  .agent-pick[aria-selected="true"] img{box-shadow:0 0 10px var(--amber-glow)}
   .modal-close{margin-left:auto;border:0;background:transparent;color:var(--ink-faint);font-size:17px;cursor:pointer}
   .modal-close:hover,.modal-close:focus-visible{color:var(--amber);outline:none}
-  .spawn-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px 16px;padding:18px 19px}
-  .field{display:flex;flex-direction:column;gap:6px;min-width:0}
-  .field.full{grid-column:1/-1}
-  .field label,.field .field-label{color:var(--ink-faint);font-size:9px;letter-spacing:.14em;text-transform:uppercase}
-  .field input[type="text"],.field select,.field textarea{
-    width:100%;border:1px solid var(--hair);border-radius:7px;background:var(--bg);color:var(--ink);
-    padding:9px 10px;outline:none;
-  }
-  .spawn-advanced{grid-column:1/-1;border-top:1px solid var(--hair-2);margin-top:2px}
-  .spawn-advanced summary{display:flex;align-items:baseline;gap:10px;padding:11px 0 2px;
-    color:var(--ink-dim);cursor:pointer;list-style:none;font-size:9px;letter-spacing:.16em;text-transform:uppercase}
-  .spawn-advanced summary::-webkit-details-marker{display:none}
-  .spawn-advanced summary::before{content:'+';width:10px;color:var(--amber);font-size:12px;line-height:1}
-  .spawn-advanced[open] summary::before{content:'—'}
-  .spawn-advanced summary small{color:var(--ink-faint);font-size:8px;letter-spacing:.06em;text-transform:none}
-  .advanced-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px 16px;padding:12px 0 2px}
-  .field textarea{min-height:112px;resize:vertical;line-height:1.45}
-  .field input:focus,.field select:focus,.field textarea:focus{border-color:rgb(var(--theme-accent-rgb) / .4)}
-  .field-row{display:grid;grid-template-columns:1fr 92px;gap:10px}
-  /* ── spawn modal: agent picker + name card ── */
-  .namecard{display:flex;align-items:center;gap:12px;padding:10px 12px;margin-bottom:9px;
-    border:1px solid var(--hair);border-radius:9px;background:var(--bg)}
-  .nc-portrait{width:44px;height:44px;border-radius:50%;
-    border:2px solid rgb(var(--theme-accent-rgb) / .45);flex:0 0 auto}
-  .nc-dice-face{width:44px;height:44px;border-radius:50%;border:2px dashed var(--hair);
-    display:flex;align-items:center;justify-content:center;font-size:19px;flex:0 0 auto;opacity:.75}
-  .nc-name-wrap{min-width:0;flex:1}
-  .nc-name{font-family:var(--serif);font-size:17px;color:var(--ink);
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .nc-name.collide{color:#e0655f;text-decoration:line-through}
-  .nc-hint{font-size:9px;color:var(--ink-faint);letter-spacing:.05em;margin-top:2px}
-  .nc-hint.collide{color:#e0655f}
-  .nc-adj{display:flex;align-items:center;gap:6px;flex:0 0 auto}
-  .nc-adj input{width:110px;border:1px solid var(--hair);border-radius:6px;background:var(--panel);
-    color:var(--ink);padding:5px 8px;font-family:var(--mono);font-size:11px;outline:none}
-  .nc-adj input:focus{border-color:rgb(var(--theme-accent-rgb) / .4)}
-  .nc-dice{border:1px solid var(--hair);border-radius:6px;background:transparent;cursor:pointer;
-    font-size:14px;padding:3px 7px;transition:border-color .15s,transform .15s}
-  .nc-dice:hover{border-color:var(--amber);transform:rotate(-18deg)}
-  /* scrollbar-width:thin makes WebKit fall back to the native (white) bar and
-     ignore the ::-webkit-scrollbar skin — use scrollbar-color instead */
-  .agent-strip{display:flex;gap:6px;overflow-x:auto;padding:6px 2px 8px;
-    scrollbar-color:rgb(var(--theme-ink-rgb) / .16) transparent}
-  /* ── launch-directory browser ── */
-  .dir-presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px}
-  .dir-chip{border:1px solid var(--hair);border-radius:6px;background:transparent;
-    color:var(--ink-dim);font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;
-    padding:4px 9px;cursor:pointer;transition:border-color .12s,color .12s}
-  .dir-chip:hover{border-color:rgb(var(--theme-accent-rgb) / .4);color:var(--ink)}
-  .dir-chip.sel{border-color:var(--amber);color:var(--amber);background:var(--amber-glow)}
-  .dir-crumbs{display:flex;align-items:baseline;flex-wrap:wrap;gap:1px;
-    padding:6px 9px;border:1px solid var(--hair);border-radius:7px 7px 0 0;
-    background:var(--bg);font-family:var(--mono);font-size:11px}
-  .crumb{border:0;background:transparent;color:var(--ink-dim);cursor:pointer;
-    font-family:var(--mono);font-size:11px;padding:1px 3px;border-radius:4px}
-  .crumb:hover{color:var(--amber)}
-  .crumb.here{color:var(--ink);font-weight:600}
-  .crumb-sep{color:var(--ink-faint)}
-  .dir-list{max-height:264px;overflow-y:auto;border:1px solid var(--hair);border-top:0;
-    border-radius:0 0 7px 7px;background:var(--bg);
-    scrollbar-color:rgb(var(--theme-ink-rgb) / .16) transparent}
-  .dir-row{display:flex;align-items:center;gap:7px;width:100%;text-align:left;
-    border:0;background:transparent;color:var(--ink-dim);cursor:pointer;
-    font-family:var(--mono);font-size:11px;padding:5px 10px}
-  .dir-row:hover{background:rgb(var(--theme-accent-rgb) / .06);color:var(--ink)}
-  .dir-row .dr-arrow{color:var(--ink-faint);font-size:9px}
-  .dir-err{padding:8px 10px;color:var(--ink-faint);font-size:10px}
-  .agent-pick{flex:0 0 auto;width:46px;cursor:pointer;text-align:center;border:0;background:none;padding:0}
-  .agent-pick img,.agent-pick .cp-auto{width:38px;height:38px;border-radius:50%;
-    border:2px solid transparent;transition:border-color .12s,transform .12s;display:block;margin:0 auto}
-  .agent-pick .cp-auto{display:flex;align-items:center;justify-content:center;font-size:16px;
-    border:2px dashed var(--hair);color:var(--ink-dim)}
-  .agent-pick:hover img,.agent-pick:hover .cp-auto{transform:translateY(-2px)}
-  .agent-pick.sel img{border-color:var(--amber);box-shadow:0 0 10px rgb(var(--theme-accent-rgb) / .35)}
-  .agent-pick.sel .cp-auto{border-color:var(--amber);border-style:solid;color:var(--amber)}
-  .agent-pick .cp-lab{display:block;font-size:7px;letter-spacing:.03em;color:var(--ink-faint);
-    margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .agent-pick.sel .cp-lab{color:var(--amber)}
-  .provider-tabs{display:flex;gap:0;margin-bottom:8px;border:1px solid var(--hair);
-    border-radius:7px;overflow:hidden;width:max-content}
-  .provider-tabs button{border:0;background:transparent;color:var(--ink-dim);cursor:pointer;
-    font-size:10px;letter-spacing:.14em;text-transform:uppercase;padding:6px 14px;
-    font-family:var(--mono)}
-  .provider-tabs button+button{border-left:1px solid var(--hair)}
-  .provider-tabs button.sel{background:var(--amber-glow);color:var(--amber)}
-  .effort-row{display:flex;align-items:flex-start;gap:9px;margin-top:8px}
-  .effort-row[hidden]{display:none}
-  .effort-lab{padding-top:8px;font-size:8.5px;letter-spacing:.2em;color:var(--ink-faint)}
-  .model-badge{font-size:8px;letter-spacing:.08em;color:var(--ink-faint);margin-left:5px}
-  .model-choices{display:flex;gap:8px;flex-wrap:wrap}
-  .model-choices label{
-    flex:1;min-width:150px;display:flex;align-items:center;padding:9px 10px;border:1px solid var(--hair);border-radius:7px;
-    color:var(--ink-dim);letter-spacing:0;text-transform:none;cursor:pointer;
-  }
-  .model-choices label:has(input:checked){border-color:rgb(var(--theme-accent-rgb) / .4);color:var(--ink)}
-  .model-choices input{accent-color:var(--amber);margin-right:7px}
-  .model-choices .model-choice{position:relative;align-items:flex-start;min-width:176px;min-height:58px}
-  .model-choice input{margin-top:3px}
-  .model-choice-copy{display:flex;min-width:0;flex-direction:column;gap:4px}
-  .model-choice-name{font-size:10.5px;color:var(--ink);letter-spacing:.03em}
-  .model-choice-note{font-size:8px;letter-spacing:.09em;line-height:1.35;color:var(--ink-faint)}
-  /* previous models fold under the current ones, closed unless one is selected */
-  .model-overflow{flex:1 1 100%;min-width:0}
-  .model-overflow>summary{display:flex;align-items:baseline;gap:8px;padding:4px 0 2px;
-    color:var(--ink-faint);cursor:pointer;list-style:none;font-size:8.5px;letter-spacing:.16em;text-transform:uppercase}
-  .model-overflow>summary::-webkit-details-marker{display:none}
-  .model-overflow>summary::before{content:'+';width:10px;color:var(--amber);font-size:11px;line-height:1}
-  .model-overflow[open]>summary::before{content:'—'}
-  .model-overflow>summary:hover,.model-overflow>summary:focus-visible{color:var(--ink-dim)}
-  .model-overflow>.model-choices{margin-top:8px}
-  .model-overflow .model-choice{min-height:40px}
-  .model-error{flex:1 1 100%;font-size:9px;letter-spacing:.08em;color:var(--amber)}
-  .model-choices .effort-choice{flex:0 1 auto;min-width:0;padding:6px 8px;font-size:9px}
-  .effort-caption{margin:6px 0 0 0;font-size:9px;letter-spacing:.04em;color:var(--ink-dim)}
-  .effort-caption b{font-weight:500;color:var(--amber);letter-spacing:.1em;text-transform:uppercase}
-  .worktree-line{display:flex;align-items:center;gap:8px;color:var(--ink-dim);font-size:10.5px}
-  .worktree-line input{accent-color:var(--amber)}
-  .worktree-base{display:none;margin-top:7px}
-  .worktree-base.on{display:block}
-  .modal-foot{display:flex;align-items:center;gap:10px;padding:13px 19px;border-top:1px solid var(--hair)}
-  .spawn-status{margin-right:auto;color:var(--ink-faint);font-size:9.5px;letter-spacing:.04em}
   .modal-btn{
     border:1px solid var(--hair);border-radius:6px;background:transparent;padding:7px 11px;
     color:var(--ink-dim);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
@@ -1224,7 +1098,6 @@
   }
   @media(max-width:680px){
     .grid{grid-template-columns:1fr}.col.roster,.col.mail{display:none}
-    .spawn-grid,.advanced-grid{grid-template-columns:1fr}.field.full{grid-column:auto}
   }
   /* Same bottom-right seat geometry as the telemetry provider badge,
      scaled from a 26px network portrait to this 46px medallion. */
@@ -1289,7 +1162,7 @@
       <div class="colhead roster-head"><span class="colhead-title">Agent</span><span class="actions">
         <span class="tag roster-status" id="rosterTag" role="status" hidden></span>
         <button class="roster-select" id="rosterSelectBtn" type="button" aria-pressed="false">Select</button>
-        <button class="new-agent" id="newAgentBtn" type="button">+ New Agent</button></span></div>
+        <button class="new-agent" id="newAgentBtn" type="button" aria-haspopup="dialog">+ New Agent</button></span></div>
       <div class="roster-filter"><input id="rosterFilter" type="search" autocomplete="off"
         aria-label="Filter agent" placeholder="filter agent · task / role / cwd…">
         <div class="roster-filter-status" id="rosterFilterStatus" role="status" hidden>
@@ -1525,115 +1398,118 @@
   </section>
 </div>
 
-<div class="overlay" id="spawnOverlay" role="dialog" aria-modal="true"
-     aria-labelledby="spawnTitle" aria-hidden="true">
-  <form class="modal" id="spawnForm">
-    <div class="modal-head">
-      <div><div class="modal-title" id="spawnTitle">Spawn Agent</div>
-        <div class="modal-sub">register · message · tmux</div></div>
-      <button class="modal-close" id="spawnClose" type="button" aria-label="Close spawn modal">×</button>
-    </div>
-    <div class="spawn-grid">
-      <!-- WHO — pick the scientist, the adjective rolls itself -->
-      <div class="field full agentpick">
-        <span class="field-label">Agent name</span>
-        <div class="namecard">
-          <span class="spawn-identity-face"><img class="nc-portrait" id="ncPortrait" alt="" hidden>
-            <span class="nc-dice-face" id="ncDiceFace">🎲</span>
-            <span class="provider-badge" id="spawnMakerBadge" hidden><img class="provider-logo" alt=""></span></span>
-          <div class="nc-name-wrap">
-            <div class="nc-name" id="ncName">auto-generated name</div>
-            <div class="nc-hint" id="ncHint">pick a scientist below, or leave it to fate</div>
-          </div>
-          <div class="nc-adj" id="ncAdjWrap" hidden>
-            <input id="spawnAdjective" type="text" maxlength="24" autocomplete="off"
-                   aria-label="Adjective" placeholder="adjective" list="adjOptions">
-            <datalist id="adjOptions"></datalist>
-            <button type="button" class="nc-dice" id="adjDice" title="re-roll adjective">🎲</button>
-          </div>
+<div class="overlay" id="spawnOverlay" role="dialog" aria-modal="true" aria-label="New agent" aria-hidden="true">
+  <svg class="spawn-symbols" width="0" height="0" aria-hidden="true">
+    <symbol id="spawn-icon-dice" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3" transform="rotate(-12 12 12)"/><path d="M8.5 8.5h.01M15.5 8.5h.01M12 12h.01M8.5 15.5h.01M15.5 15.5h.01"/></symbol>
+    <symbol id="spawn-icon-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="spawn-icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/></symbol>
+    <symbol id="spawn-icon-computer" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4m-4 0h8"/></symbol>
+    <symbol id="spawn-icon-browser" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01m3 0h.01"/></symbol>
+    <symbol id="spawn-icon-browse" viewBox="0 0 24 24"><path d="M5 4v13h14M5 8h14M9 12h10M9 17v3"/></symbol>
+    <symbol id="spawn-icon-back" viewBox="0 0 24 24"><path d="m11 6-6 6 6 6m-6-6h14"/></symbol>
+    <symbol id="spawn-icon-settings" viewBox="0 0 24 24"><path d="M10 3h4l.6 2.4 1.6.9 2.4-.7 2 3.4-1.8 1.8v2.4l1.8 1.8-2 3.4-2.4-.7-1.6.9-.6 2.4h-4l-.6-2.4-1.6-.9-2.4.7-2-3.4 1.8-1.8v-2.4L3.4 9l2-3.4 2.4.7 1.6-.9z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+    <symbol id="spawn-icon-reset" viewBox="0 0 24 24"><path d="M5 5v5h5M5 10a7 7 0 1 1 1 7"/></symbol>
+    <symbol id="spawn-icon-recent" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></symbol>
+    <symbol id="spawn-icon-preset" viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/></symbol>
+    <symbol id="spawn-icon-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.6 2.3c-.7.35-1.1.8-1.1 1.7m0 3h.01"/></symbol>
+    <symbol id="spawn-icon-local" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/></symbol>
+  </svg>
+  <form id="spawnForm">
+    <div class="spawn-launcher" id="spawnLauncher">
+      <textarea id="spawnTask" rows="2" maxlength="4000" required aria-label="Task" placeholder="What should it do?"></textarea>
+      <div class="spawn-status" id="spawnStatus" role="alert" hidden></div>
+      <div class="spawn-row">
+        <button class="spawn-chip spawn-name-chip" id="spawnNameButton" type="button" aria-expanded="false" aria-controls="spawnNameSheet" title="Agent name" aria-label="Agent name">
+          <img id="ncPortrait" alt="" hidden><span id="ncDiceFace"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-dice"/></svg></span><span id="ncName" hidden></span>
+        </button>
+        <button class="spawn-chip" id="spawnModelButton" type="button" aria-expanded="false" aria-controls="spawnModelSheet" title="Model and effort" aria-label="Model and effort">
+          <span id="spawnModelMark"></span><span id="spawnModelLabel">Model</span><span class="spawn-pips" id="spawnPips" hidden aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+        </button>
+        <button class="spawn-chip" id="spawnDirButton" type="button" aria-expanded="false" aria-controls="spawnDirSheet" title="Folder" aria-label="Folder">
+          <svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-folder"/></svg><span id="spawnDirSelected">Folder</span>
+        </button>
+        <div class="spawn-tools" id="spawnTools" role="group" aria-label="Agent tools" hidden>
+          <button type="button" role="switch" id="spawnComputerUse" aria-label="Computer use" title="Computer use" aria-checked="false"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-computer"/></svg></button>
+          <button type="button" role="switch" id="spawnBrowserUse" aria-label="Browser" title="Browser" aria-checked="false"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-browser"/></svg></button>
         </div>
-        <details class="spawn-identity-options" open><summary>Choose a scientist</summary>
-          <div class="agent-strip" id="agentStrip" role="listbox" aria-label="Choose a scientist"></div></details>
+        <button id="spawnSubmit" type="submit" title="Launch (⌘↵)" disabled>Launch<span id="spawnLaunchFill" aria-hidden="true"></span></button>
       </div>
-      <div class="spawn-picker" aria-label="Model and Harness">
-        <section class="spawn-column"><div class="spawn-column-head"><h3>Model</h3><p>Choose a family</p></div>
-          <div class="spawn-column-body"><div class="provider-tabs" id="providerTabs" aria-label="Model families"></div>
-            <p class="spawn-family-note">Choose a model, then its Harness.</p></div></section>
-        <section class="spawn-column"><div class="spawn-column-head"><div class="spawn-model-heading"><h3 id="spawnModelsTitle">Models</h3><span class="spawn-catalog-state" id="spawnCatalogState" role="status" hidden></span></div><p id="spawnModelsHint">Available from your catalog</p></div>
-          <div class="spawn-column-body"><input class="spawn-search" id="spawnModelSearch" type="search" placeholder="Search models or servers" aria-label="Search local models" hidden>
-            <div class="spawn-model-scroll"><div class="model-choices" id="modelChoices"></div></div></div></section>
-        <section class="spawn-column"><div class="spawn-column-head"><h3>Harness</h3><p id="spawnHarnessHint">For the selected model</p></div>
-          <div class="spawn-column-body"><div id="spawnHarnesses" aria-label="Harness choices"></div>
-            <div><div class="spawn-tools" id="spawnTools" role="group" aria-label="Agent tools" hidden>
-              <button type="button" role="switch" id="spawnComputerUse" aria-label="Computer use" title="Computer use" aria-checked="false">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4m-4 0h8"/></svg>
-                <span class="spawn-tool-track" aria-hidden="true"></span>
-              </button>
-              <button type="button" role="switch" id="spawnBrowserUse" aria-label="Browser" title="Browser" aria-checked="false">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01m3 0h.01"/></svg>
-                <span class="spawn-tool-track" aria-hidden="true"></span>
-              </button>
-            </div><div id="spawnHelperField"><label class="spawn-settings-label" for="spawnHelper">Helper model</label>
-              <select class="spawn-helper" id="spawnHelper"><option value="same">Same as main</option></select>
-              <p class="spawn-default-note" id="spawnHelperNote">Default: Same as main</p></div>
-              <div class="effort-row" id="effortRow"><span class="effort-lab">Effort</span>
-                <div id="effortChoices"></div></div></div>
-            <div class="spawn-summary" id="spawnSummary" aria-live="polite"></div></div></section>
-      </div>
-      <div class="spawn-context">
-      <!-- WHERE -->
-      <div class="field full"><span class="field-label">Launch directory</span>
-        <button type="button" class="spawn-dir-trigger" id="spawnDirButton" aria-haspopup="dialog" aria-controls="spawnDirDialog">
-          <span id="spawnDirSelected">Choose a folder</span><span aria-hidden="true">▾</span></button>
-      </div>
-      <div class="field full"><label for="spawnTask">Task description</label>
-        <textarea id="spawnTask" maxlength="4000" required
-                  placeholder="What should the agent do?"></textarea></div>
-      </div>
-      <details class="spawn-advanced" id="spawnAdvanced">
-        <summary>Advanced <small>lineage · labels · isolation · terminal</small></summary>
+    </div>
+    <section class="spawn-sheet" id="spawnNameSheet" aria-label="Agent name" hidden>
+      <div class="spawn-sheet-in">
+        <div class="spawn-sheet-bar">
+          <div class="nc-adj" id="ncAdjWrap" hidden>
+            <input id="spawnAdjective" type="text" maxlength="24" autocomplete="off" aria-label="Adjective" placeholder="Adjective" list="adjOptions">
+            <datalist id="adjOptions"></datalist>
+            <button type="button" class="spawn-icon-button" id="adjDice" aria-label="Roll adjective" title="Roll adjective"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-dice"/></svg></button>
+          </div>
+          <button type="button" class="spawn-icon-button" id="spawnAdvancedButton" aria-expanded="false" aria-controls="spawnAdvanced" aria-label="Launch settings" title="Launch settings"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-settings"/></svg></button>
+        </div>
+        <div class="agent-strip" id="agentStrip" role="listbox" aria-label="Scientists"></div>
+        <div id="spawnAdvanced" hidden>
         <div class="advanced-grid">
           <div class="field"><label for="spawnParent">Lineage</label>
             <select id="spawnParent"></select></div>
-          <div class="field"><label for="spawnGroup">Group · optional</label>
-            <input id="spawnGroup" type="text" maxlength="24" placeholder="cycle-3"></div>
-          <div class="field"><span class="field-label">Role / emoji · optional</span>
-            <div class="field-row"><input id="spawnRole" type="text" maxlength="40" aria-label="Role" placeholder="implementation">
-              <input id="spawnEmoji" type="text" maxlength="8" aria-label="Emoji" placeholder="🔧"></div></div>
-          <div class="field"><span class="field-label">Isolation</span>
+          <div class="field"><label for="spawnGroup">Group</label>
+            <input id="spawnGroup" type="text" maxlength="24"></div>
+          <div class="field"><span class="field-label">Role / emoji</span>
+            <div class="field-row"><input id="spawnRole" type="text" maxlength="40" aria-label="Role">
+              <input id="spawnEmoji" type="text" maxlength="8" aria-label="Emoji"></div></div>
+          <div class="field">
             <label class="worktree-line"><input id="spawnWorktree" type="checkbox">Run in isolated worktree</label>
             <div class="worktree-base" id="spawnWorktreeBaseWrap">
-              <input id="spawnWorktreeBase" type="text" placeholder="base rev (default: HEAD)">
+              <input id="spawnWorktreeBase" type="text" placeholder="Base revision" aria-label="Base revision" title="Default: HEAD">
             </div></div>
-          <div class="field"><span class="field-label">Terminal</span>
+          <div class="field">
             <label class="worktree-line"><input id="spawnGhostty" type="checkbox">Open a Ghostty window</label></div>
         </div>
-      </details>
-    </div>
-    <div class="modal-foot">
-      <span class="spawn-status" id="spawnStatus">ready</span>
-      <button class="modal-btn" id="spawnCancel" type="button">Cancel</button>
-      <button class="modal-btn primary" id="spawnSubmit" type="submit">Spawn Agent</button>
-    </div>
-    <dialog id="spawnDirDialog" aria-labelledby="spawnDirTitle">
-      <div class="spawn-dir-head"><h2 id="spawnDirTitle">Choose launch directory</h2>
-        <button type="button" class="modal-close" id="spawnDirClose" aria-label="Close directory picker">×</button></div>
-      <div class="dir-search">
-        <div class="dir-search-field">
-          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>
-          <input id="spawnDirSearch" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false"
-            aria-controls="spawnDirResults" aria-label="Search folders" title="Search folders" placeholder="Search folders"
-            maxlength="255" autocomplete="off" spellcheck="false" autofocus>
         </div>
-        <div id="spawnDirResults" class="dir-search-results" role="listbox" aria-label="Matching folders" hidden></div>
-        <div id="spawnDirSearchStatus" class="dir-search-status" role="status"></div>
       </div>
-      <div class="dir-presets" id="dirPresets"></div>
-      <div class="dir-crumbs" id="dirCrumbs" aria-label="Current directory"></div>
-      <div class="dir-list" id="dirList" role="listbox" aria-label="Subdirectories"></div>
-      <div class="spawn-dir-foot"><button type="button" class="modal-btn" id="spawnDirCancel">Cancel</button>
-        <button type="button" class="modal-btn primary" id="spawnDirUse">Use this folder</button></div>
-    </dialog>
+    </section>
+    <section class="spawn-sheet" id="spawnModelSheet" aria-label="Model and effort" hidden>
+      <div class="spawn-sheet-in">
+        <div class="spawn-segment" id="providerTabs" role="group" aria-label="Providers"></div>
+        <label class="spawn-search" id="spawnModelSearchField" hidden>
+          <svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-search"/></svg><input id="spawnModelSearch" type="search" placeholder="Find a model" aria-label="Find a model" autocomplete="off">
+        </label>
+        <div class="spawn-model-scroll"><div class="model-choices" id="modelChoices" role="radiogroup" aria-label="Models"></div></div>
+        <div class="spawn-sheet-bar" id="spawnHarnessBar" hidden>
+          <div class="spawn-segment" id="spawnHarnesses" role="group" aria-label="Harnesses" hidden></div>
+          <a class="spawn-icon-button" id="spawnHarnessHelp" href="https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md"
+             target="_blank" rel="noopener noreferrer" aria-label="Harness setup" title="Harness setup" hidden>
+            <svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-help"/></svg>
+          </a>
+        </div>
+        <div id="spawnHelperField" hidden>
+          <select class="spawn-helper" id="spawnHelper" aria-label="Helper model" title="Helper model"><option value="same">Same as main</option></select>
+        </div>
+        <div id="effortRow" hidden><div id="effortChoices"></div></div>
+      </div>
+    </section>
+    <section class="spawn-sheet" id="spawnDirSheet" aria-label="Folder" hidden>
+      <div class="spawn-sheet-in">
+        <div id="spawnDirFind">
+          <div class="spawn-sheet-bar">
+            <label class="spawn-search"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-search"/></svg>
+              <input id="spawnDirSearch" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false"
+                aria-controls="spawnDirResults" aria-label="Find a folder" placeholder="Find a folder"
+                maxlength="255" autocomplete="off" spellcheck="false">
+            </label>
+            <button class="spawn-icon-button" id="spawnDirBrowse" type="button" aria-label="Browse folders" title="Browse folders"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-browse"/></svg></button>
+          </div>
+          <div id="spawnDirResults" class="dir-search-results" role="listbox" aria-label="Matching folders" hidden></div>
+          <div id="spawnDirSearchStatus" class="dir-search-status" role="status"></div>
+        </div>
+        <div id="spawnDirTree" hidden>
+          <div class="spawn-sheet-bar">
+            <button class="spawn-icon-button" id="spawnDirBack" type="button" aria-label="Back to folder search" title="Back to folder search"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-back"/></svg></button>
+            <div class="dir-crumbs" id="dirCrumbs" aria-label="Current directory"></div>
+          </div>
+          <div class="dir-list" id="dirList" aria-label="Subdirectories"></div>
+          <button type="button" class="spawn-sheet-action" id="spawnDirUse">Use this folder</button>
+        </div>
+      </div>
+    </section>
   </form>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -2603,277 +2479,7 @@
           },
           {
             "property": "color",
-            "selector": ".palette-empty",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border",
-            "selector": ".modal",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "background",
-            "selector": ".modal",
-            "value": "var(--panel)"
-          },
-          {
-            "property": "border-bottom",
-            "selector": ".modal-head",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".modal-sub",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
             "selector": ".modal-close",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".field label,.field .field-label",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border",
-            "selector": ".field input[type=\"text\"],.field select,.field textarea",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "background",
-            "selector": ".field input[type=\"text\"],.field select,.field textarea",
-            "value": "var(--bg)"
-          },
-          {
-            "property": "color",
-            "selector": ".field input[type=\"text\"],.field select,.field textarea",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "border-top",
-            "selector": ".spawn-advanced",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "color",
-            "selector": ".spawn-advanced summary",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".spawn-advanced summary small",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border",
-            "selector": ".namecard",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "background",
-            "selector": ".namecard",
-            "value": "var(--bg)"
-          },
-          {
-            "property": "border",
-            "selector": ".nc-dice-face",
-            "value": "2px dashed var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".nc-name",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".nc-hint",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border",
-            "selector": ".nc-adj input",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "background",
-            "selector": ".nc-adj input",
-            "value": "var(--panel)"
-          },
-          {
-            "property": "color",
-            "selector": ".nc-adj input",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "border",
-            "selector": ".nc-dice",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "border",
-            "selector": ".dir-chip",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".dir-chip",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".dir-chip:hover",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "border",
-            "selector": ".dir-crumbs",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "background",
-            "selector": ".dir-crumbs",
-            "value": "var(--bg)"
-          },
-          {
-            "property": "color",
-            "selector": ".crumb",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".crumb.here",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".crumb-sep",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border",
-            "selector": ".dir-list",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "background",
-            "selector": ".dir-list",
-            "value": "var(--bg)"
-          },
-          {
-            "property": "color",
-            "selector": ".dir-row",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".dir-row:hover",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".dir-row .dr-arrow",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".dir-err",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border",
-            "selector": ".agent-pick .cp-auto",
-            "value": "2px dashed var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".agent-pick .cp-auto",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".agent-pick .cp-lab",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border",
-            "selector": ".provider-tabs",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".provider-tabs button",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "border-left",
-            "selector": ".provider-tabs button+button",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".effort-lab",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".model-badge",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border",
-            "selector": ".model-choices label",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".model-choices label",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".model-choices label:has(input:checked)",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".model-choice-name",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".model-choice-note",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".model-overflow>summary",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".model-overflow>summary:hover,.model-overflow>summary:focus-visible",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".effort-caption",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".worktree-line",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "border-top",
-            "selector": ".modal-foot",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".spawn-status",
             "value": "var(--ink-faint)"
           },
           {
@@ -3940,127 +3546,7 @@
           },
           {
             "property": "color",
-            "selector": ".palette-empty",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".modal-sub",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
             "selector": ".modal-close",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".field label,.field .field-label",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".spawn-advanced summary",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".spawn-advanced summary small",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".nc-hint",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".dir-chip",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".crumb",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".crumb-sep",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".dir-row",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".dir-row .dr-arrow",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".dir-err",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".agent-pick .cp-auto",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".agent-pick .cp-lab",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".provider-tabs button",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".effort-lab",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".model-badge",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".model-choices label",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".model-choice-note",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".model-overflow>summary",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".model-overflow>summary:hover,.model-overflow>summary:focus-visible",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".effort-caption",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".worktree-line",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".spawn-status",
             "value": "var(--ink-faint)"
           },
           {
@@ -4368,7 +3854,7 @@
           },
           {
             "property": "box-shadow",
-            "selector": ".agent-pick.sel img",
+            "selector": ".agent-pick[aria-selected=\"true\"] img",
             "value": ""
           },
           {
@@ -4385,7 +3871,7 @@
         "unit": "computed-target"
       },
       "mutation": {
-        "digest": "b54aa530c7bd16b60c6fe517e4f27064b0ff143723d91666d589615736cb19d5",
+        "digest": "63a11507ba5c06bff5a99abe403ab6c7b15a5d4b183e5d4cdaf318130b345c4d",
         "records": [
           ":root\u0000--amber-glow",
           ".miniorrery.telemetry-network\u0000background",
@@ -4402,7 +3888,7 @@
           ".split-cell.drop-target\u0000box-shadow",
           ".split-drag-ghost\u0000box-shadow",
           ".split-divider:hover::after,.split-divider.dragging::after\u0000box-shadow",
-          ".agent-pick.sel img\u0000box-shadow",
+          ".agent-pick[aria-selected=\"true\"] img\u0000box-shadow",
           "@keyframes mail-ember\u0000box-shadow",
           "@keyframes bulkarm\u0000box-shadow",
           "@keyframes bulkarm\u0000box-shadow"
@@ -4410,7 +3896,7 @@
         "unit": "effect-component"
       },
       "source": {
-        "digest": "e505204581e87036ac52ce863273784947e7c34e6c558bfb76ffc16cd0ad599e",
+        "digest": "5e61cbcb787eabb80edb087426b5643a2c60cd8a2d6085b500bef5251c7a3807",
         "records": [
           ":root\u0000--amber-glow",
           ".miniorrery.telemetry-network\u0000background",
@@ -4452,8 +3938,8 @@
           ".pane-float\u0000box-shadow",
           ".palette\u0000box-shadow",
           ".palette-row.sel\u0000box-shadow",
-          ".modal\u0000box-shadow",
-          ".agent-pick.sel img\u0000box-shadow",
+          ".spawn-launcher,.spawn-sheet\u0000box-shadow",
+          ".agent-pick[aria-selected=\"true\"] img\u0000box-shadow",
           ".settings-popover\u0000box-shadow",
           ".usage-popover\u0000box-shadow",
           ".settings-range::-webkit-slider-thumb\u0000box-shadow",
@@ -4474,7 +3960,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "71d7e767fa6ea1cea99b0e68e698fc04cfa5ab8c7f557b68034a24960d7c6520",
+        "digest": "a6f142255f6188a32d123c00166487cf1e40a0578ea26388b6a7912e109f9059",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4537,32 +4023,6 @@
           ".keycap\u0000font-size",
           ".palette-kind\u0000font-size",
           ".palette-meta\u0000font-size",
-          ".palette-empty\u0000font-size",
-          ".modal-sub\u0000font-size",
-          ".field label,.field .field-label\u0000font-size",
-          ".spawn-advanced summary\u0000font-size",
-          ".spawn-advanced summary small\u0000font-size",
-          ".nc-hint\u0000font-size",
-          ".nc-adj input\u0000font-size",
-          ".dir-chip\u0000font-size",
-          ".dir-crumbs\u0000font-size",
-          ".crumb\u0000font-size",
-          ".dir-row\u0000font-size",
-          ".dir-row .dr-arrow\u0000font-size",
-          ".dir-err\u0000font-size",
-          ".agent-pick .cp-lab\u0000font-size",
-          ".provider-tabs button\u0000font-size",
-          ".effort-lab\u0000font-size",
-          ".model-badge\u0000font-size",
-          ".model-choice-name\u0000font-size",
-          ".model-choice-note\u0000font-size",
-          ".model-overflow>summary\u0000font-size",
-          ".model-overflow>summary::before\u0000font-size",
-          ".model-error\u0000font-size",
-          ".model-choices .effort-choice\u0000font-size",
-          ".effort-caption\u0000font-size",
-          ".worktree-line\u0000font-size",
-          ".spawn-status\u0000font-size",
           ".modal-btn\u0000font-size",
           ".settings-kicker\u0000font-size",
           ".settings-section-title\u0000font-size",
@@ -4629,7 +4089,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "66526de70311cef000a7c2942ed0df3fa0f8b2182a574e85ad0eec73d837e522",
+        "digest": "889588ac0acea76b9c1ca5fe524f3d1981feb952b6348c698936a5e42795f789",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4649,14 +4109,6 @@
           ".network-note\u0000letter-spacing",
           ".pane-bottom-jump\u0000letter-spacing",
           ".palette-kind\u0000letter-spacing",
-          ".modal-sub\u0000letter-spacing",
-          ".field label,.field .field-label\u0000letter-spacing",
-          ".spawn-advanced summary\u0000letter-spacing",
-          ".provider-tabs button\u0000letter-spacing",
-          ".effort-lab\u0000letter-spacing",
-          ".model-choice-note\u0000letter-spacing",
-          ".model-overflow>summary\u0000letter-spacing",
-          ".effort-caption b\u0000letter-spacing",
           ".modal-btn\u0000letter-spacing",
           ".settings-kicker\u0000letter-spacing",
           ".settings-section-title\u0000letter-spacing",
@@ -4678,9 +4130,9 @@
       }
     }
   },
-  "inventory_digest": "986907fd3248db0dfbc38beeb1af5d587179d0bf1a4cf353b2a8e390297ba360",
+  "inventory_digest": "69e780969be0c89cfdc61aae206e4ec55b5477c170f0b10ca2c3aecda4712e1f",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "fe3b1869d4d8eb9b4bfef2605716c4ad1d4fc40c8c652698bd945728568375b7",
+  "source_digest": "b996646a2b3d3d736fc6215d49ba9d805707f36391efb83a757d8d36ec4c0be4",
   "surface": "cockpit",
   "version": 1
 }
@@ -5527,8 +4979,8 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   ['.pane-float','box-shadow',['elevation'],'preserve'],
   ['.palette','box-shadow',['elevation'],'preserve'],
   ['.palette-row.sel','box-shadow',['state'],'preserve'],
-  ['.modal','box-shadow',['elevation'],'preserve'],
-  ['.agent-pick.sel img','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .agent-pick.sel img'],
+  ['.spawn-launcher, .spawn-sheet','box-shadow',['elevation'],'preserve'],
+  ['.agent-pick[aria-selected="true"] img','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .agent-pick[aria-selected="true"] img'],
   ['.settings-popover','box-shadow',['elevation'],'preserve'],
   ['.usage-popover','box-shadow',['elevation'],'preserve'],
   ['.settings-range::-webkit-slider-thumb','box-shadow',['state'],'preserve'],
@@ -8860,6 +8312,8 @@ function applyHostPlatform(raw){
   hostPlatform=normalizeHostPlatform(raw);
   const sig=document.querySelector('#paletteOverlay .palette-search .sig');
   if(sig)sig.textContent=paletteShortcutLabel(hostPlatform);
+  const launchButton=document.getElementById('spawnSubmit');
+  if(launchButton)launchButton.title=usesAltShortcuts(hostPlatform)?'Launch (Ctrl+Enter)':'Launch (⌘↵)';
   const spawnLabel=document.getElementById('spawnGhostty');
   if(spawnLabel&&spawnLabel.parentElement)spawnLabel.parentElement.lastChild.textContent=terminalSpawnLabel(hostPlatform);
   if(stageEmpty&&stageEmpty.innerHTML.includes('adds it to a split'))stageEmpty.innerHTML=stageEmptyHtml();
@@ -10071,24 +9525,21 @@ let paletteMatches=[],paletteIndex=0,paletteLastFocus=null;
 function renderPalette(){
   const catalog=paletteCatalog(
     currentAgents,[...availableSessions.values()],[...attachedSessions],[...requestedSessions]);
-  paletteMatches=fuzzyPaletteItems(catalog,paletteInput.value);
+  const matches=fuzzyPaletteItems(catalog,paletteInput.value);
+  const launcher={kind:'spawn',name:'New agent'};
+  paletteMatches=matches.some(item=>item.kind==='agent')?[...matches,launcher]:[launcher,...matches];
   paletteIndex=Math.max(0,Math.min(paletteIndex,paletteMatches.length-1));
   paletteResults.innerHTML='';
-  if(!paletteMatches.length){
-    const empty=document.createElement('div');empty.className='palette-empty';
-    empty.textContent='no matching agent or tmux sessions';paletteResults.appendChild(empty);
-    paletteInput.removeAttribute('aria-activedescendant');return;
-  }
   paletteMatches.forEach((item,index)=>{
     const row=document.createElement('button');row.type='button';row.className='palette-row';
     row.id=`palette-option-${index}`;row.setAttribute('role','option');
     row.setAttribute('aria-selected',String(index===paletteIndex));
     row.classList.toggle('sel',index===paletteIndex);
     const kind=document.createElement('span');kind.className='palette-kind';
-    kind.textContent=item.kind==='agent'?'AGENT':'TMUX';
+    kind.textContent=item.kind==='agent'?'AGENT':item.kind==='spawn'?'+':'TMUX';
     const name=document.createElement('span');name.className='palette-name';name.textContent=item.name;
     const meta=document.createElement('span');meta.className='palette-meta';
-    meta.textContent=item.ctx==null?item.state:`${item.state} · CTX ${item.ctx}%`;
+    meta.textContent=item.kind==='spawn'?'':item.ctx==null?item.state:`${item.state} · CTX ${item.ctx}%`;
     row.append(kind,name,meta);
     row.addEventListener('mouseenter',()=>{paletteIndex=index;renderPaletteSelection();});
     row.addEventListener('click',()=>activatePaletteItem(item));
@@ -10122,6 +9573,10 @@ function closePalette(restoreFocus=true){
 }
 function activatePaletteItem(item){
   if(!item)return;
+  if(item.kind==='spawn'){
+    openSpawnModal({from:paletteOverlay.querySelector('.palette').getBoundingClientRect(),task:paletteInput.value,restoreFocus:paletteLastFocus});
+    return;
+  }
   closePalette(false);
   if(item.kind==='agent')jumpToAgent(item.name);
   else jumpToSessionTarget(item.name);
@@ -10145,20 +9600,104 @@ const spawnAdvanced=document.getElementById('spawnAdvanced');
 const spawnSubmit=document.getElementById('spawnSubmit');
 const spawnStatus=document.getElementById('spawnStatus');
 const toastEl=document.getElementById('toast');
-let spawnBusy=false,toastTimer=null,spawnLastFocus=null;
-const SPAWN_ADVANCED_STORAGE_KEY='orrery.spawn-advanced.v1';
+const spawnLauncher=document.getElementById('spawnLauncher');
+const spawnNameButton=document.getElementById('spawnNameButton');
+const spawnModelButton=document.getElementById('spawnModelButton');
+const spawnAdvancedButton=document.getElementById('spawnAdvancedButton');
+const spawnNameSheet=document.getElementById('spawnNameSheet');
+const spawnModelSheet=document.getElementById('spawnModelSheet');
+let spawnBusy=false,toastTimer=null,spawnLastFocus=null,spawnProblem='',spawnResumeDraft=false;
+let spawnOpenSheet=null,spawnOpenChip=null;
+const spawnReducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+const spawnSheetAnimations=new WeakMap();
 
-try{spawnAdvanced.open=localStorage.getItem(SPAWN_ADVANCED_STORAGE_KEY)==='open';}catch(_){/* ephemeral preference */}
+function spawnIcon(name){
+  const icon=svgEl('svg',{class:'spawn-icon','aria-hidden':'true'});
+  icon.append(svgEl('use',{href:'#spawn-icon-'+name}));
+  return icon;
+}
+function spawnSpring(){
+  return getComputedStyle(spawnOverlay).getPropertyValue('--spawn-spring').trim();
+}
+function spawnAnchor(rect){
+  return {x:rect.left+rect.width/2,y:rect.top+rect.height/2};
+}
+function positionSpawnSheet(sheet,chip){
+  const rect=chip.getBoundingClientRect(),gap=8,margin=16;
+  const below=innerHeight-rect.bottom-gap-margin,above=rect.top-gap-margin;
+  const topSide=below<240&&above>below;
+  sheet.style.left=Math.max(margin,Math.min(rect.left,innerWidth-sheet.offsetWidth-margin))+'px';
+  sheet.style.setProperty('--spawn-sheet-height',Math.max(60,topSide?above:below)+'px');
+  sheet.style.top=(topSide?rect.top-gap-sheet.offsetHeight:rect.bottom+gap)+'px';
+}
+function morphSpawnSheet(sheet,chip,opening){
+  spawnSheetAnimations.get(sheet)?.forEach(animation=>animation.cancel());
+  const box=sheet.getBoundingClientRect(),anchor=chip.getBoundingClientRect();
+  const chipShape=`inset(${anchor.top-box.top}px ${box.right-anchor.right}px ${box.bottom-anchor.bottom}px ${anchor.left-box.left}px round 999px)`;
+  const shape=[{clipPath:chipShape,opacity:.4},{clipPath:'inset(0 round 16px)',opacity:1}];
+  const fade=[{opacity:0},{opacity:1}];
+  const frames=spawnReducedMotion.matches?fade:shape;
+  const direction=opening?'normal':'reverse';
+  const animation=sheet.animate(frames,{
+    duration:spawnReducedMotion.matches?120:opening?520:300,
+    easing:opening&&!spawnReducedMotion.matches?spawnSpring():'ease-out',direction,fill:'both',
+  });
+  const animations=[animation];
+  if(!spawnReducedMotion.matches){
+    animations.push(sheet.firstElementChild.animate([{opacity:0,transform:'translateY(-6px)'},{opacity:1}],{
+      duration:opening?260:140,delay:opening?90:0,direction,easing:'ease-out',fill:'both',
+    }));
+  }
+  spawnSheetAnimations.set(sheet,animations);
+  animation.onfinish=()=>{
+    if(!opening)sheet.hidden=true;
+    animations.forEach(item=>item.cancel());
+    spawnSheetAnimations.delete(sheet);
+  };
+}
+function dismissSpawnSheet(restoreFocus=false){
+  if(!spawnOpenSheet)return;
+  const sheet=spawnOpenSheet,chip=spawnOpenChip;
+  if(sheet===spawnDirSheet){
+    ++spawnDirBrowseEpoch;++spawnDirSearchEpoch;clearTimeout(spawnDirSearchTimer);
+  }
+  spawnOpenSheet=spawnOpenChip=null;
+  if(restoreFocus)chip.focus({preventScroll:true});
+  chip.setAttribute('aria-expanded','false');
+  sheet.inert=true;
+  morphSpawnSheet(sheet,chip,false);
+}
+function toggleSpawnSheet(sheet,chip,focus){
+  if(spawnBusy)return;
+  if(spawnOpenSheet===sheet){dismissSpawnSheet(true);return;}
+  dismissSpawnSheet();
+  spawnOpenSheet=sheet;spawnOpenChip=chip;
+  sheet.hidden=false;sheet.inert=false;chip.setAttribute('aria-expanded','true');
+  positionSpawnSheet(sheet,chip);
+  morphSpawnSheet(sheet,chip,true);
+  focus?.focus({preventScroll:true});
+}
+window.addEventListener('resize',()=>{
+  if(spawnOpenSheet)positionSpawnSheet(spawnOpenSheet,spawnOpenChip);
+});
+spawnForm.addEventListener('pointerdown',event=>{
+  if(spawnOpenSheet&&!spawnOpenSheet.contains(event.target)&&!spawnOpenChip.contains(event.target))dismissSpawnSheet();
+});
+spawnAdvancedButton.addEventListener('click',()=>{
+  spawnAdvanced.hidden=!spawnAdvanced.hidden;
+  spawnAdvancedButton.setAttribute('aria-expanded',String(!spawnAdvanced.hidden));
+  positionSpawnSheet(spawnNameSheet,spawnNameButton);
+});
 
 function populateSpawnParents(){
   const previous=spawnParent.value;
   const parents=spawnParentCandidates(currentAgents);
   spawnParent.innerHTML='';
   const solo=document.createElement('option');solo.value='';
-  solo.textContent='⭑ standalone — root agent';spawnParent.appendChild(solo);
+  solo.textContent='Standalone';spawnParent.appendChild(solo);
   parents.forEach(agent=>{
     const option=document.createElement('option');option.value=agent.name;
-    option.textContent=`child of ${agent.name} · ${agent.act_state||'live'}`;spawnParent.appendChild(option);
+    option.textContent=agent.name;spawnParent.appendChild(option);
   });
   if(previous&&parents.some(agent=>agent.name===previous))spawnParent.value=previous;
   updateSpawnAvailability();
@@ -10175,42 +9714,49 @@ const SPAWN_RECENT_STORAGE_KEY='orrery.spawn-local-recent.v1';
 const SPAWN_SEARCH_STORAGE_KEY='orrery.spawn-local-search.v1';
 const SPAWN_DIR_RECENT_KEY='orrery.spawn-dir-recent.v1';
 let spawnViewerStorage=null;try{spawnViewerStorage=window.localStorage;}catch(_){/* viewer history is optional */}
-const dirPresets=document.getElementById('dirPresets');
 const dirCrumbs=document.getElementById('dirCrumbs');
 const dirList=document.getElementById('dirList');
-const spawnDirDialog=document.getElementById('spawnDirDialog');
+const spawnDirSheet=document.getElementById('spawnDirSheet');
+const spawnDirFind=document.getElementById('spawnDirFind');
+const spawnDirTree=document.getElementById('spawnDirTree');
+const spawnDirBrowseButton=document.getElementById('spawnDirBrowse');
 const spawnDirButton=document.getElementById('spawnDirButton');
 const spawnDirUse=document.getElementById('spawnDirUse');
 const spawnDirSearch=document.getElementById('spawnDirSearch');
 const spawnDirResults=document.getElementById('spawnDirResults');
 const spawnDirSearchStatus=document.getElementById('spawnDirSearchStatus');
-let spawnDirPath='',spawnDirBrowsePath='',spawnDirBrowseEpoch=0;
+let spawnDirPath='',spawnDirBrowsePath='',spawnDirBrowseEpoch=0,spawnDirDefaultEpoch=0;
 let spawnDirSearchEpoch=0,spawnDirSearchTimer,spawnDirActive=-1;
 function renderSpawnDirPath(){
   const label=document.getElementById('spawnDirSelected');
-  label.textContent=spawnDirPath||'Choose a folder';label.title=spawnDirPath;
+  label.textContent=spawnDirPath||'Folder';spawnDirButton.title=spawnDirPath||'Folder';
 }
 function openSpawnDirPicker(){
-  if(!spawnDirDialog.open)spawnDirDialog.showModal();
-  spawnDirSearch.value='';
+  if(spawnOpenSheet===spawnDirSheet){dismissSpawnSheet(true);return;}
+  if(spawnBusy)return;
+  spawnDirSearch.value='';spawnDirFind.hidden=false;spawnDirTree.hidden=true;
   updateSpawnDirSearch();
-  spawnDirSearch.focus();
-  browseDir(spawnDirPath||'~');
-}
-function closeSpawnDirPicker(){
-  ++spawnDirBrowseEpoch;
-  ++spawnDirSearchEpoch;
-  clearTimeout(spawnDirSearchTimer);
-  if(spawnDirDialog.open)spawnDirDialog.close();
+  toggleSpawnSheet(spawnDirSheet,spawnDirButton,spawnDirSearch);
 }
 function chooseSpawnDir(path){
-  spawnDirPath=path;renderSpawnDirPath();closeSpawnDirPicker();
+  spawnDirPath=path;renderSpawnDirPath();dismissSpawnSheet(true);
+  if(spawnProblem){spawnProblem='';updateSpawnAvailability();}
 }
 spawnDirButton.addEventListener('click',openSpawnDirPicker);
-document.getElementById('spawnDirClose').addEventListener('click',closeSpawnDirPicker);
-document.getElementById('spawnDirCancel').addEventListener('click',closeSpawnDirPicker);
-spawnDirDialog.addEventListener('cancel',event=>{event.preventDefault();closeSpawnDirPicker();});
-spawnDirDialog.addEventListener('close',()=>{if(spawnOverlay.classList.contains('on'))spawnDirButton.focus({preventScroll:true});});
+spawnDirBrowseButton.addEventListener('click',()=>{
+  ++spawnDirSearchEpoch;clearTimeout(spawnDirSearchTimer);
+  spawnDirFind.hidden=true;spawnDirTree.hidden=false;
+  browseDir(spawnDirPath||'~');
+  positionSpawnSheet(spawnDirSheet,spawnDirButton);
+  document.getElementById('spawnDirBack').focus();
+});
+document.getElementById('spawnDirBack').addEventListener('click',()=>{
+  ++spawnDirBrowseEpoch;
+  spawnDirTree.hidden=true;spawnDirFind.hidden=false;
+  updateSpawnDirSearch();
+  positionSpawnSheet(spawnDirSheet,spawnDirButton);
+  spawnDirSearch.focus();
+});
 spawnDirUse.addEventListener('click',()=>{
   if(spawnDirUse.disabled||!spawnDirBrowsePath)return;
   chooseSpawnDir(spawnDirBrowsePath);
@@ -10226,12 +9772,17 @@ function activeSpawnDirResult(index,scroll=false){
 }
 function renderSpawnDirResults(paths,status='',activePath){
   spawnDirResults.replaceChildren();
+  const recent=SpawnPicker.recent(spawnViewerStorage,SPAWN_DIR_RECENT_KEY);
   Array.from(new Set(paths)).forEach((path,index)=>{
     const cleanPath=path.replace(/\/+$/,'')||'/';
     const slash=cleanPath.lastIndexOf('/');
     const row=document.createElement('button');row.type='button';row.tabIndex=-1;
     row.id='spawnDirResult'+index;row.className='dir-search-result';row.title=path;
     row.setAttribute('role','option');
+    const preset=(spawnCatalog?.dirs||[]).some(dir=>dir.path===path);
+    row.setAttribute('aria-label',path);
+    row.dataset.current=String(path===spawnDirPath);
+    row.append(spawnIcon(recent.includes(path)?'recent':preset?'preset':'folder'));
     const name=document.createElement('span');name.textContent=cleanPath.slice(slash+1)||'/';
     row.append(name);
     if(slash>=0&&cleanPath!=='/'){
@@ -10253,10 +9804,10 @@ function updateSpawnDirSearch(){
   clearTimeout(spawnDirSearchTimer);
   const query=spawnDirSearch.value.trim();
   const foldedQuery=query.normalize().toLowerCase();
-  const presets=query?(spawnCatalog?.dirs||[]).filter(dir=>dir.exists!==false).map(dir=>dir.path):[];
+  const presets=(spawnCatalog?.dirs||[]).filter(dir=>dir.exists!==false).map(dir=>dir.path);
   const localPaths=[...SpawnPicker.recent(spawnViewerStorage,SPAWN_DIR_RECENT_KEY),...presets]
     .filter(path=>path&&path.replace(/\/+$/,'').split('/').pop().normalize().toLowerCase().includes(foldedQuery));
-  renderSpawnDirResults(localPaths,query&&!localPaths.length?'Searching folders…':'');
+  renderSpawnDirResults(localPaths);
   if(!query)return;
   spawnDirSearchTimer=setTimeout(async()=>{
     try{
@@ -10266,16 +9817,16 @@ function updateSpawnDirSearch(){
       if(epoch!==spawnDirSearchEpoch)return;
       const paths=[...localPaths,...dirs.map(dir=>dir.path)];
       const activePath=spawnDirResults.children[spawnDirActive]?.title;
-      const status=paths.length?'':truncated?'No matches in the folders searched.':'No matching folders.';
+      const status=paths.length?'':truncated?'Search a narrower folder name.':'No folders found. Try another name.';
       renderSpawnDirResults(paths,status,activePath);
     }catch(_){
-      if(epoch===spawnDirSearchEpoch)spawnDirSearchStatus.textContent='Folder search is unavailable.';
+      if(epoch===spawnDirSearchEpoch)spawnDirSearchStatus.textContent='Folder search failed. Try browsing.';
     }
   },150);
 }
 spawnDirSearch.addEventListener('input',updateSpawnDirSearch);
 spawnDirSearch.addEventListener('keydown',event=>{
-  if(event.isComposing)return;
+  if(event.isComposing||event.metaKey||event.ctrlKey)return;
   const count=spawnDirResults.children.length;
   if(event.key==='Enter'){
     event.preventDefault();
@@ -10296,6 +9847,8 @@ const effortChoices=document.getElementById('effortChoices');
 const spawnModelSearch=document.getElementById('spawnModelSearch');
 const spawnHelper=document.getElementById('spawnHelper');
 const spawnHarnesses=document.getElementById('spawnHarnesses');
+const spawnHarnessHelp=document.getElementById('spawnHarnessHelp');
+const spawnHarnessBar=document.getElementById('spawnHarnessBar');
 const spawnTools=document.getElementById('spawnTools');
 const spawnComputerUse=document.getElementById('spawnComputerUse');
 const spawnBrowserUse=document.getElementById('spawnBrowserUse');
@@ -10307,7 +9860,6 @@ for(const control of spawnToolSwitches){
 const ncPortrait=document.getElementById('ncPortrait');
 const ncDiceFace=document.getElementById('ncDiceFace');
 const ncName=document.getElementById('ncName');
-const ncHint=document.getElementById('ncHint');
 const ncAdjWrap=document.getElementById('ncAdjWrap');
 let spawnCatalogSignature=null;
 const spawnCatalogLoader=SpawnCatalogLoader.create({
@@ -10320,15 +9872,13 @@ const spawnCatalogLoader=SpawnCatalogLoader.create({
   onState:({catalog,status})=>{
     const data=catalog||{providers:[],dirs:[],naming:{adjectives:[],scientists:[],taken:[]}};
     spawnCatalog={...data,stale:status==='stale',loading:status==='loading',unavailable:status==='unavailable'};
-    const badge=document.getElementById('spawnCatalogState');
-    badge.hidden=status!=='stale'&&status!=='loading';badge.textContent=status==='stale'?'stale':'Loading…';
     const signature=(catalog?'':status)+JSON.stringify(data);
-    if(!spawnBusy)spawnStatus.textContent=spawnCatalog.unavailable?'Telemetry unavailable':spawnCatalog.loading?'Loading model catalog…':'ready';
     if(signature===spawnCatalogSignature){updateSpawnAvailability();return;}
     spawnCatalogSignature=signature;
     spawnTaken=new Set(((data.naming||{}).taken||[]).map(n=>String(n).toLowerCase()));
     renderProviderTabs();renderAgentStrip();
     if(catalog)renderDirs();
+    if(spawnOpenSheet)positionSpawnSheet(spawnOpenSheet,spawnOpenChip);
   },
 });
 function loadSpawnCatalog(){
@@ -10336,79 +9886,117 @@ function loadSpawnCatalog(){
   return spawnCatalogLoader.refresh();
 }
 function providerById(id){return (spawnCatalog&&spawnCatalog.providers||[]).find(p=>p.id===id)||null;}
+const spawnFamilies=[{id:'claude',asset:'anthropic.svg',label:'Claude'},
+  {id:'codex',asset:'openai.svg',label:'Codex'},{id:'deepseek',asset:'deepseek.svg',label:'DeepSeek'},
+  {id:'local',label:'Local models'}];
+const spawnModelMark=document.getElementById('spawnModelMark');
+const spawnModelLabel=document.getElementById('spawnModelLabel');
+const spawnPips=document.getElementById('spawnPips');
+const spawnModelSearchField=document.getElementById('spawnModelSearchField');
+const spawnProviderMarker=document.createElement('span'),spawnHarnessMarker=document.createElement('span');
+for(const marker of [spawnProviderMarker,spawnHarnessMarker]){
+  marker.className='spawn-segment-marker';marker.setAttribute('aria-hidden','true');
+}
+const spawnSearchThreshold=8;
+function spawnBrand(asset){
+  const img=document.createElement('img');
+  img.className='spawn-brand'+(['anthropic.svg','openai.svg','deepseek.svg'].includes(asset)?' mono':'');
+  img.src='cockpit-assets/'+asset;img.alt='';return img;
+}
+function moveSpawnMarker(group,marker){
+  const selected=group.querySelector('button[aria-pressed="true"]');
+  marker.hidden=!selected;
+  if(!selected||!group.offsetWidth)return;
+  marker.style.width=selected.offsetWidth+'px';
+  marker.style.transform=`translateX(${selected.offsetLeft}px)`;
+}
 function renderProviderTabs(){
   const entries=SpawnPicker.entries(spawnCatalog);
-  const families=[{id:'claude',asset:'anthropic.svg'},
-    {id:'codex',asset:'openai.svg'},
-    {id:'deepseek',asset:'deepseek.svg'},
-    {id:'local',label:'Local models'}];
-  for(const entry of entries)if(!families.some(f=>f.id===entry.family))families.push({id:entry.family,label:entry.provider.label||entry.family});
-  families.forEach(f=>{const p=(spawnCatalog.providers||[]).find(p=>SpawnPicker.family(p,{})===f.id);if(f.id!=='local')f.label=p&&(p.label||p.id)||f.id;});
-  const hasFamily=id=>entries.some(e=>e.family===id)||(spawnCatalog.providers||[]).some(p=>SpawnPicker.family(p,{})===id);
+  const providers=spawnCatalog.providers||[];
+  const families=spawnFamilies.map(f=>({...f}));
+  for(const provider of providers){
+    const id=SpawnPicker.family(provider,{});
+    const family=families.find(f=>f.id===id);
+    if(!family)families.push({id,label:provider.label||id});
+    else if(id!=='local'&&provider.label)family.label=provider.label;
+  }
+  for(const entry of entries)if(!families.some(f=>f.id===entry.family)){
+    families.push({id:entry.family,label:entry.provider.label||entry.family});
+  }
+  const hasFamily=id=>entries.some(e=>e.family===id)||providers.some(p=>SpawnPicker.family(p,{})===id);
   if(!selFamily||!hasFamily(selFamily))selFamily=(families.find(f=>hasFamily(f.id))||families[0]).id;
-  providerTabs.replaceChildren();
+  providerTabs.replaceChildren(spawnProviderMarker);
   families.forEach(f=>{
     const b=document.createElement('button');b.type='button';b.dataset.family=f.id;
-    b.classList.toggle('sel',f.id===selFamily);b.setAttribute('aria-pressed',String(f.id===selFamily));
-    b.disabled=!hasFamily(f.id);
-    if(f.asset){const img=document.createElement('img');img.className='spawn-brand';img.src='cockpit-assets/'+f.asset;img.alt='';b.append(img);}
-    else if(f.id==='local'){const hex=document.createElement('span');hex.className='spawn-local-symbol';hex.textContent='⬡';b.append(hex);}
-    const copy=document.createElement('span');copy.className='spawn-family-copy';
-    const name=document.createElement('span');name.textContent=f.label;
-    const origin=document.createElement('small');origin.textContent=f.id==='local'?'LOCAL':'CLOUD';origin.classList.toggle('local-label',f.id==='local');
-    copy.append(name,origin);b.append(copy);
-    b.addEventListener('click',()=>{selFamily=f.id;selProvider=null;selModel=null;selUrlIndex=null;selUrlKey=null;selEffort=null;selHarness=null;spawnToolsRoute=null;renderProviderTabs();});
+    b.setAttribute('aria-pressed',String(f.id===selFamily));
+    b.disabled=!hasFamily(f.id);b.title=f.label;b.setAttribute('aria-label',f.label);
+    if(f.asset)b.append(spawnBrand(f.asset));
+    else if(f.id==='local')b.append(spawnIcon('local'));
+    else{
+      const name=document.createElement('span');name.textContent=f.label;b.append(name);
+    }
+    b.addEventListener('click',()=>{
+      if(selFamily===f.id)return;
+      selFamily=f.id;selProvider=null;selModel=null;selUrlIndex=null;selUrlKey=null;
+      selEffort=null;selHarness=null;spawnToolsRoute=null;spawnProblem='';
+      if(f.id!=='local')spawnModelSearch.value='';
+      else restoreSpawnModelSearch();
+      renderProviderTabs();
+      providerTabs.querySelector('[aria-pressed="true"]')?.focus({preventScroll:true});
+    });
     providerTabs.append(b);
   });
-  const local=selFamily==='local';spawnModelSearch.hidden=!local;
-  const choices=entries.filter(e=>e.family===selFamily);
+  const local=selFamily==='local',choices=entries.filter(e=>e.family===selFamily);
+  spawnModelSearch.hidden=spawnModelSearchField.hidden=!local&&choices.length<spawnSearchThreshold;
   const hadDynamicSelection=Number.isInteger(selUrlIndex);
   let selected=choices.find(e=>e.provider.id===selProvider&&e.model.id===selModel&&
     (!Number.isInteger(e.model.url_index)||e.model.url_index===selUrlIndex)&&(!e.model.url_key||e.model.url_key===selUrlKey));
   if(!selected&&!hadDynamicSelection)selected=choices.find(e=>e.model.default&&SpawnPicker.harnesses(e.provider,e.model).some(h=>h.available))||choices.find(e=>SpawnPicker.harnesses(e.provider,e.model).some(h=>h.available))||choices.find(e=>!e.provider.dynamic_models);
-  selProvider=selected?selected.provider.id:((spawnCatalog.providers||[]).find(p=>SpawnPicker.family(p,{})===selFamily)||{}).id||null;selModel=selected?selected.model.id:null;
+  selProvider=selected?selected.provider.id:(providers.find(p=>SpawnPicker.family(p,{})===selFamily)||{}).id||null;
+  selModel=selected?selected.model.id:null;
   selUrlIndex=selected&&Number.isInteger(selected.model.url_index)?selected.model.url_index:hadDynamicSelection?selUrlIndex:null;
   selUrlKey=selected?selected.model.url_key??null:hadDynamicSelection?selUrlKey:null;
-  document.getElementById('spawnModelsTitle').textContent=local?'Local models':(families.find(f=>f.id===selFamily)||{}).label||'Models';
-  document.getElementById('spawnModelsHint').textContent=local?'Find a model on your servers':'Choose a model';
   if(local)renderLocalModels();else renderModels();
   renderHarnesses();
+  moveSpawnMarker(providerTabs,spawnProviderMarker);
+}
+function restoreSpawnModelSearch(){
+  try{spawnModelSearch.value=spawnViewerStorage?.getItem(SPAWN_SEARCH_STORAGE_KEY)||'';}
+  catch(_){spawnModelSearch.value='';}
 }
 function renderLocalModels(){
   const entries=SpawnPicker.entries(spawnCatalog).filter(e=>e.family==='local');
   const query=spawnModelSearch.value.trim().toLowerCase();
   const matches=entries.filter(e=>`${e.model.display_name||''} ${e.model.id} ${SpawnPicker.metadata(e.provider,e.model)}`.toLowerCase().includes(query));
   modelChoices.replaceChildren();
+  const recent=SpawnPicker.recent(spawnViewerStorage,SPAWN_RECENT_STORAGE_KEY);
+  const rank=entry=>recent.includes(entry.key)?recent.indexOf(entry.key):recent.length;
+  const sorted=[...matches].sort((a,b)=>rank(a)-rank(b));
   const add=entry=>{
     const label=document.createElement('label');label.className='model-choice';
     const selected=selProvider===entry.provider.id&&selModel===entry.model.id&&
       (!Number.isInteger(entry.model.url_index)||entry.model.url_index===selUrlIndex)&&(!entry.model.url_key||entry.model.url_key===selUrlKey);
-    label.classList.toggle('sel',selected);
     const input=document.createElement('input');input.type='radio';input.name='spawnModel';input.value=entry.model.id;
     input.dataset.connection=entry.provider.id;input.dataset.urlIndex=entry.model.url_index??'';
     input.checked=selected;
     input.disabled=!SpawnPicker.harnesses(entry.provider,entry.model).some(h=>h.available);
     label.classList.toggle('unavailable',input.disabled);
-    input.addEventListener('change',()=>{selProvider=entry.provider.id;selModel=entry.model.id;selUrlIndex=entry.model.url_index??null;selUrlKey=entry.model.url_key??null;selEffort=null;selHarness=null;renderLocalModels();renderHarnesses();});
-    const copy=document.createElement('span');copy.className='model-choice-copy';
+    input.addEventListener('change',()=>{
+      selProvider=entry.provider.id;selModel=entry.model.id;selUrlIndex=entry.model.url_index??null;
+      selUrlKey=entry.model.url_key??null;selEffort=null;selHarness=null;spawnProblem='';renderHarnesses();
+    });
     const name=document.createElement('span');name.className='model-choice-name';name.textContent=entry.model.display_name||entry.model.id;
     const note=document.createElement('span');note.className='model-choice-note';note.textContent=SpawnPicker.metadata(entry.provider,entry.model);
-    copy.append(name,note);label.append(input,copy);
-    if(entry.provider.dynamic_models){const state=document.createElement('span');state.className='spawn-model-state';state.textContent=entry.model.model_state==='unloaded'?'Not loaded':input.disabled?'Unavailable':entry.model.model_state==='loaded'?'Loaded':'Available';label.append(state);}
-    if(SpawnPicker.value(entry.provider,entry.model,'vision')===true){const vision=document.createElement('span');vision.className='model-badge';vision.textContent='Vision';label.append(vision);}
-    modelChoices.append(label);
+    label.title=[entry.model.id,note.textContent,input.disabled?'Unavailable':entry.model.model_state==='unloaded'?'Not loaded':'',
+      SpawnPicker.value(entry.provider,entry.model,'vision')===true?'Vision':''].filter(Boolean).join(' · ');
+    label.append(input,name,note);modelChoices.append(label);
   };
-  const recent=SpawnPicker.recent(spawnViewerStorage,SPAWN_RECENT_STORAGE_KEY).map(key=>matches.find(e=>e.key===key)).filter(Boolean);
-  const heading=text=>{const title=document.createElement('div');title.className='spawn-model-group';title.textContent=text;modelChoices.append(title);};
-  if(recent.length){heading('Recently used');recent.forEach(add);}
-  (spawnCatalog.providers||[]).filter(p=>SpawnPicker.family(p,{})==='local').forEach(provider=>{
-    const rows=matches.filter(e=>e.provider.id===provider.id);
-    if(query&&!rows.length)return;
-    heading(provider.label||provider.id);rows.forEach(add);
-    const failures=(provider.endpoints||[]).filter(e=>e.reason);
-    if(provider.model_error||failures.length){const message=document.createElement('p');message.className='spawn-empty';message.textContent=provider.model_error?'Unavailable · '+provider.model_error.replaceAll('_',' '):failures.map(e=>'URL '+(e.url_index+1)+' unavailable').join(' · ');modelChoices.append(message);}
-  });
-  if(!matches.length){const empty=document.createElement('p');empty.className='spawn-empty';empty.textContent=query?'No models match your search.':'No local models are available in your catalog.';modelChoices.append(empty);}
+  sorted.forEach(add);
+  if(!matches.length){
+    const empty=document.createElement('p');empty.className='spawn-empty';
+    empty.textContent=query?'No models found. Try another name.':'No local models available.';
+    modelChoices.append(empty);
+  }
 }
 function selectedSpawnModel(){const p=providerById(selProvider);return p&&(p.models||[]).find(m=>m.id===selModel&&(!Number.isInteger(m.url_index)||m.url_index===selUrlIndex)&&(!m.url_key||m.url_key===selUrlKey))||null;}
 function renderSpawnTools(){
@@ -10439,25 +10027,28 @@ function spawnToolOptions(){
 }
 function renderHarnesses(){
   const p=providerById(selProvider),model=selectedSpawnModel();
-  spawnHarnesses.replaceChildren();
+  spawnHarnesses.replaceChildren(spawnHarnessMarker);
   const choices=p&&model?SpawnPicker.harnesses(p,model):[];
   if(!choices.some(h=>h.id===selHarness&&h.available))selHarness=(choices.find(h=>h.default&&h.available)||choices.find(h=>h.available)||{}).id||null;
-  document.getElementById('spawnHarnessHint').textContent=model?'For '+model.id:'Choose a model first';
+  spawnHarnesses.hidden=choices.length<2;
+  spawnHarnessHelp.hidden=!choices.some(h=>!h.available);
+  spawnHarnessBar.hidden=spawnHarnesses.hidden&&spawnHarnessHelp.hidden;
   choices.forEach(h=>{
     const button=document.createElement('button');button.type='button';button.className='spawn-harness';
     button.dataset.harness=h.id;button.disabled=!h.available;button.classList.toggle('sel',h.id===selHarness);
     button.setAttribute('aria-pressed',String(h.id===selHarness));
     const info=SpawnPicker.harnessInfo(h.id);
-    if(info.asset){const img=document.createElement('img');img.src='cockpit-assets/'+info.asset;img.alt='';img.className='spawn-brand'+(['hermes','dsh'].includes(SpawnPicker.harnessKey(h.id))?' harness-art':'');button.append(img);}
-    const label=document.createElement('span');label.textContent=(h.default?'Default: ':'')+h.label;button.append(label);
-    if(!h.available){const note=document.createElement('small');note.textContent=SpawnPicker.unavailableReason(h);button.append(note);}
-    button.addEventListener('click',()=>{selHarness=h.id;spawnToolsRoute=null;renderHarnesses();});spawnHarnesses.append(button);
+    if(info.asset)button.append(spawnBrand(info.asset));
+    const label=document.createElement('span');label.textContent=h.label;button.append(label);
+    button.title=h.available?h.label:`${h.label}: ${SpawnPicker.unavailableReason(h)}`;
+    button.addEventListener('click',()=>{
+      if(selHarness===h.id)return;
+      selHarness=h.id;spawnToolsRoute=null;spawnProblem='';renderHarnesses();
+      spawnHarnesses.querySelector('[aria-pressed="true"]')?.focus({preventScroll:true});
+    });
+    spawnHarnesses.append(button);
   });
-  if(choices.some(h=>!h.available)){
-    const help=document.createElement('a');help.className='spawn-setup-help';help.textContent='Setup and compatibility guide';
-    help.href='https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md';
-    help.target='_blank';help.rel='noopener noreferrer';spawnHarnesses.append(help);
-  }
+  moveSpawnMarker(spawnHarnesses,spawnHarnessMarker);
   const previous=spawnHelper.value,helpers=p&&model?SpawnPicker.helperModels(p,model,selHarness):[];
   spawnHelper.replaceChildren();
   const same=document.createElement('option');same.value='same';same.textContent='Same as main';spawnHelper.append(same);
@@ -10465,44 +10056,70 @@ function renderHarnesses(){
   const hasHelpers=helpers.some(h=>h.id!=='same'&&h.id!==model?.id);
   spawnHelper.disabled=!hasHelpers;document.getElementById('spawnHelperField').hidden=!hasHelpers;
   if([...spawnHelper.options].some(o=>o.value===previous))spawnHelper.value=previous;
-  document.getElementById('spawnHelperNote').textContent='Default: Same as main';
-  renderSpawnTools();renderEfforts(p);renderSpawnSummary();paintSpawnMaker(p,model);updateNameCard();updateSpawnAvailability();
+  renderSpawnTools();renderEfforts(p);renderSpawnModelChip();updateSpawnAvailability();
+  if(spawnOpenSheet===spawnModelSheet)positionSpawnSheet(spawnModelSheet,spawnModelButton);
 }
-function paintSpawnMaker(provider,model){
-  const badge=document.getElementById('spawnMakerBadge'),image=badge.querySelector('img');
+function renderSpawnModelChip(){
+  const provider=providerById(selProvider),model=selectedSpawnModel();
+  const family=spawnFamilies.find(f=>f.id===selFamily);
   const local=Boolean(provider&&model&&SpawnPicker.locality(provider,model)==='local');
-  const key=provider&&model?rosterProviderKey({provider:local?'local':provider.id,model:model.id}):'';
-  const maker=ROSTER_PROVIDER[key];badge.hidden=!maker&&!local;
-  badge.classList.toggle('local-provider-badge',local);
-  let rim=badge.querySelector('.local-provider-rim');
-  if(local&&!rim){rim=svgEl('svg',{class:'local-provider-rim',viewBox:'0 0 100 100','aria-hidden':'true'});
-    rim.appendChild(svgEl('polygon',{points:'50,4 90,27 90,73 50,96 10,73 10,27'}));badge.prepend(rim);}
-  if(!local&&rim)rim.remove();
-  image.hidden=!maker;if(maker){image.src='cockpit-assets/'+maker.asset+'.svg';image.alt=maker.label;badge.title=maker.label+(local?' · Local':'');}
-  else{image.removeAttribute('src');image.alt='';badge.title=local?'Local model':'';}
+  const maker=local?ROSTER_PROVIDER[rosterProviderKey({provider:'local',model:model.id})]:null;
+  const mark=family?.asset?spawnBrand(family.asset):spawnIcon('local');
+  spawnModelMark.replaceChildren(mark);
+  if(maker)spawnModelMark.append(spawnBrand(maker.asset+'.svg'));
+  spawnModelMark.classList.toggle('spawn-local-maker',Boolean(maker));
+  spawnModelMark.title=maker?maker.label+' · Local':'';
+  const name=model?.display_name||model?.id||'Model';
+  spawnModelLabel.textContent=name.replace(/^(?:claude|deepseek)-/i,'');
+  const info=effortsForModel(provider,selModel);
+  const effort=effectiveSpawnEffort(provider,selModel);
+  const harness=provider&&model&&SpawnPicker.harnesses(provider,model).find(h=>h.id===selHarness);
+  const description=[name,spawnModelMark.title,harness?.label,effort].filter(Boolean).join(' · ');
+  spawnModelButton.title=description;spawnModelButton.setAttribute('aria-label','Model and effort: '+description);
+  spawnPips.hidden=!info.efforts?.length;
+  const index=info.efforts?.indexOf(effort)??-1;
+  const lit=index<0?0:info.efforts.length===1?5:1+Math.round(index*4/(info.efforts.length-1));
+  [...spawnPips.children].forEach((pip,i)=>pip.classList.toggle('on',i<lit));
 }
 function updateSpawnAvailability(){
-  const p=spawnCatalog&&providerById(selProvider),model=selectedSpawnModel();
-  const missingEffort=p&&model&&spawnExplicitEffortMissing(p,selModel);
-  const ready=Boolean(p&&model&&SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available)&&!missingEffort);
-  spawnSubmit.disabled=spawnBusy||!ready;
-  if(!spawnBusy&&['ready','Choose an effort','Choose a model','No available harness for this model','Telemetry unavailable','Loading model catalog…'].includes(spawnStatus.textContent))spawnStatus.textContent=spawnCatalog&&spawnCatalog.loading?'Loading model catalog…':spawnCatalog&&spawnCatalog.unavailable?'Telemetry unavailable':missingEffort?'Choose an effort':ready?'ready':model?'No available harness for this model':'Choose a model';
-}
-function renderSpawnSummary(){
-  const p=providerById(selProvider),model=selectedSpawnModel(),summary=document.getElementById('spawnSummary');
-  summary.replaceChildren();if(!p||!model)return;
-  const title=document.createElement('strong');title.textContent=model.display_name||model.id;summary.append(title);
-  const h=SpawnPicker.harnesses(p,model).find(h=>h.id===selHarness);
-  const effort=effortsForModel(p,selModel);
-  const details=[SpawnPicker.metadata(p,model),h?(h.default?'':'Harness: '+h.label):'Harness: Unavailable',selEffort?'Effort: '+selEffort:effectiveSpawnEffort(p,selModel)?'Effort: Default ('+effectiveSpawnEffort(p,selModel)+')':effort.efforts||effort.source==='unknown'?'Effort: Default':'Effort: Not supported',
-    !spawnHelper.disabled?'Helper: '+spawnHelper.selectedOptions[0].textContent:''];
-  details.filter(Boolean).forEach(text=>{const line=document.createElement('span');line.textContent=text;summary.append(line);});
+  const provider=providerById(selProvider),model=selectedSpawnModel();
+  const harnesses=provider&&model?SpawnPicker.harnesses(provider,model):[];
+  const harness=harnesses.find(h=>h.id===selHarness&&h.available);
+  const unavailable=harnesses.find(h=>!h.available);
+  const missingEffort=provider&&model&&spawnExplicitEffortMissing(provider,selModel);
+  const issue=spawnCatalog?.unavailable?'Model catalog unavailable. Open the model sheet to retry.':
+    provider?.model_error&&!model?`${provider.model_error}. Check model settings.`:
+    model&&!harness?(unavailable?`${SpawnPicker.unavailableReason(unavailable)}. Open model settings for setup.`:'No available harness. Choose another model.'):
+    !model&&Number.isInteger(selUrlIndex)?'Model unavailable. Choose another model.':
+    missingEffort?'Choose an effort in the model sheet.':'';
+  const message=spawnProblem||issue;
+  spawnSubmit.disabled=spawnBusy||!spawnTask.value.trim()||!harness||Boolean(missingEffort);
+  spawnStatus.textContent=message;spawnStatus.title=message;spawnStatus.hidden=!message;
 }
 spawnModelSearch.addEventListener('input',()=>{
-  try{spawnViewerStorage?.setItem(SPAWN_SEARCH_STORAGE_KEY,spawnModelSearch.value);}catch(_){}
-  renderLocalModels();
+  if(selFamily==='local'){
+    try{spawnViewerStorage?.setItem(SPAWN_SEARCH_STORAGE_KEY,spawnModelSearch.value);}catch(_){}
+    renderLocalModels();
+  }else renderModels();
+  if(spawnOpenSheet===spawnModelSheet)positionSpawnSheet(spawnModelSheet,spawnModelButton);
 });
-spawnHelper.addEventListener('change',renderSpawnSummary);
+spawnTask.addEventListener('input',()=>{
+  sizeSpawnTask();updateSpawnAvailability();
+});
+function sizeSpawnTask(){
+  spawnTask.style.height='';
+  spawnTask.style.height=spawnTask.scrollHeight+2+'px';
+  if(spawnOpenSheet)positionSpawnSheet(spawnOpenSheet,spawnOpenChip);
+}
+spawnModelButton.addEventListener('click',()=>{
+  toggleSpawnSheet(spawnModelSheet,spawnModelButton,spawnModelSearchField.hidden?
+    providerTabs.querySelector('[aria-pressed="true"]:enabled')||modelChoices.querySelector('button'):spawnModelSearch);
+  moveSpawnMarker(providerTabs,spawnProviderMarker);
+  moveSpawnMarker(spawnHarnesses,spawnHarnessMarker);
+});
+spawnNameButton.addEventListener('click',()=>{
+  toggleSpawnSheet(spawnNameSheet,spawnNameButton,agentStrip.querySelector('[aria-selected="true"]'));
+});
 /* Prefer structured catalog versions when present. Current Telemetry supplies
    model IDs, so parse the two cloud naming schemes without a release list.
    Unknown names stay visible rather than being guessed into a family. */
@@ -10542,50 +10159,49 @@ function splitOverflowModels(provider){
   return {current:models.filter(m=>!older(m)),older:models.filter(older)};
 }
 function renderModels(){
-  const p=providerById(selProvider)||{models:[]};
-  const models=(p.models||[]).filter(m=>(m.locality||p.locality||'cloud')!=='local');
-  if(!selModel||!models.some(m=>m.id===selModel)){
-    selModel=((models.find(m=>m.default)||models[0])||{}).id||null;
+  const provider=providerById(selProvider)||{models:[]};
+  const models=(provider.models||[]).filter(model=>(model.locality||provider.locality||'cloud')!=='local');
+  if(!selModel||!models.some(model=>model.id===selModel)){
+    selModel=(models.find(model=>model.default)||models[0])?.id||null;
   }
-  modelChoices.innerHTML='';
-  const {current,older}=splitOverflowModels({...p,models});
-  let into=modelChoices;
-  const addModel=m=>{
-    const lab=document.createElement('label');
+  modelChoices.replaceChildren();
+  const query=spawnModelSearch.hidden?'':spawnModelSearch.value.trim().toLowerCase();
+  const {current,older}=splitOverflowModels({...provider,models});
+  const addModel=(parent,model)=>{
+    const label=document.createElement('label');label.className='model-choice';
     const input=document.createElement('input');
-    input.type='radio';input.name='spawnModel';input.value=m.id;input.checked=m.id===selModel;
-    input.addEventListener('change',()=>{selModel=m.id;selHarness=null;renderHarnesses();});
-    lab.className='model-choice';
-    const copy=document.createElement('span');copy.className='model-choice-copy';
-    const name=document.createElement('span');name.className='model-choice-name';name.textContent=m.id;
-    copy.appendChild(name);
-    lab.append(input,copy);
-    if(m.badge){const b=document.createElement('span');b.className='model-badge';b.textContent=m.badge;lab.appendChild(b);}
-    into.appendChild(lab);
+    input.type='radio';input.name='spawnModel';input.value=model.id;input.checked=model.id===selModel;
+    input.addEventListener('change',()=>{
+      selModel=model.id;selHarness=null;spawnProblem='';renderHarnesses();
+    });
+    const name=document.createElement('span');name.className='model-choice-name';name.textContent=model.id;
+    label.append(input,name);
+    label.title=[model.id,model.badge].filter(Boolean).join(' · ');
+    parent.appendChild(label);
   };
-  current.forEach(addModel);
-  if(older.length){
-    const fold=document.createElement('details');fold.className='model-overflow';
-    fold.open=older.some(m=>m.id===selModel);
-    const summary=document.createElement('summary');summary.textContent=`More models · ${older.length}`;
-    into=document.createElement('div');into.className='model-choices';
-    fold.append(summary,into);modelChoices.appendChild(fold);
-    older.forEach(addModel);
+  if(query){
+    const matches=[...current,...older].filter(model=>model.id.toLowerCase().includes(query));
+    matches.forEach(model=>addModel(modelChoices,model));
+    if(!matches.length){
+      const empty=document.createElement('p');empty.className='spawn-empty';empty.textContent='No models found. Try another name.';
+      modelChoices.append(empty);
+    }
+  }else{
+    current.forEach(model=>addModel(modelChoices,model));
+    if(older.length){
+      const fold=document.createElement('details');fold.className='model-overflow';
+      fold.open=older.some(model=>model.id===selModel);
+      const summary=document.createElement('summary');summary.textContent=`More models (${older.length})`;
+      const list=document.createElement('div');list.className='model-choices';
+      fold.append(summary,list);modelChoices.appendChild(fold);
+      older.forEach(model=>addModel(list,model));
+    }
   }
-  if(!models.length&&spawnCatalog.loading){
-    const loading=document.createElement('p');loading.className='spawn-empty';loading.textContent='Loading model catalog…';modelChoices.append(loading);
-  }else if(!models.length&&spawnCatalog.unavailable){
-    const error=document.createElement('div');error.className='spawn-empty';error.setAttribute('role','alert');
-    error.textContent='Telemetry unavailable';
-    const retry=document.createElement('button');retry.type='button';retry.className='modal-btn';retry.textContent='Retry';
+  if(!models.length&&spawnCatalog.unavailable){
+    const retry=document.createElement('button');retry.type='button';retry.className='spawn-sheet-action';retry.textContent='Retry catalog';
     retry.addEventListener('click',()=>{retry.disabled=true;loadSpawnCatalog();});
-    modelChoices.append(error,retry);
-  }else if(!models.length&&p.model_error){
-    const error=document.createElement('div');error.className='model-error';error.setAttribute('role','alert');
-    error.textContent=`CONFIGURATION ERROR · ${p.model_error}`;
-    modelChoices.appendChild(error);
+    modelChoices.append(retry);
   }
-  renderEfforts(p);
 }
 /* The telemetry's per-model effort list wins over the provider's; an empty
    per-model list means "send no effort, let the CLI decide". */
@@ -10623,42 +10239,24 @@ function effectiveSpawnEffort(provider,model){
   return resolveSpawnEffort(info.efforts,selEffort,info.fallback);
 }
 function renderEfforts(p){
-  const {efforts,source,fallback}=effortsForModel(p,selModel);
-  effortRow.hidden=false;
-  // Null keeps the control in Default mode. Send only a reported, supported
-  // catalog default; a missing default keeps the harness settings.
+  const {efforts,fallback}=effortsForModel(p,selModel);
+  effortRow.hidden=!efforts;
   if(!efforts||!efforts.includes(selEffort))selEffort=null;
-  EffortSlider.mount(effortChoices,{levels:efforts,value:selEffort,onChange:value=>{
-    selEffort=value;
-    const caption=effortChoices.querySelector('.effort-caption');
-    if(caption&&value===null){const initial=effectiveSpawnEffort(p,selModel);caption.textContent=spawnExplicitEffortMissing(p,selModel)?'Choose an effort':initial?'Uses catalog default: '+initial:'Uses your settings';}
-    renderSpawnSummary();updateSpawnAvailability();
+  EffortSlider.mount(effortChoices,{levels:efforts,value:selEffort,fallback:efforts?.includes(fallback)?fallback:null,onChange:value=>{
+    selEffort=value;spawnProblem='';renderSpawnModelChip();updateSpawnAvailability();
   }});
-  const caption=effortChoices.querySelector('.effort-caption');
-  if(caption&&selEffort===null){
-    const value=effectiveSpawnEffort(p,selModel);
-    caption.textContent=spawnExplicitEffortMissing(p,selModel)?'Choose an effort':value?'Uses catalog default: '+value:'Uses your settings';
-  }
-  if(!efforts&&source==='unknown'&&effortChoices.firstChild)effortChoices.firstChild.textContent='Uses harness default';
 }
-/* directory browser — navigate like a file manager instead of typing paths.
-   Presets jump, crumbs ascend, the list descends; the chosen dir is simply
-   where you are (always exists, no validation dance). */
 function renderDirs(){
-  const dirs=(spawnCatalog.dirs||[]).filter(d=>d.exists!==false);
-  dirPresets.innerHTML='';
-  dirs.forEach(d=>{
-    const chip=document.createElement('button');chip.type='button';
-    chip.className='dir-chip';chip.textContent=d.label||d.path;
-    chip.dataset.path=d.path;
-    chip.addEventListener('click',()=>browseDir(d.path));
-    dirPresets.appendChild(chip);
-  });
-  if(!spawnDirPath)browseDir((dirs[0]||{}).path||'~');
-  else browseDir(spawnDirPath);
+  if(spawnOpenSheet===spawnDirSheet&&!spawnDirFind.hidden)updateSpawnDirSearch();
+  if(!spawnDirPath){
+    const preset=(spawnCatalog.dirs||[]).find(dir=>dir.exists!==false);
+    browseDir(preset?.path||'~',false,true);
+  }
 }
-async function browseDir(path,confirm=false){
-  const epoch=++spawnDirBrowseEpoch,selecting=spawnDirDialog.open;
+async function browseDir(path,confirm=false,initial=false){
+  const epoch=initial?++spawnDirDefaultEpoch:++spawnDirBrowseEpoch;
+  const stillCurrent=()=>epoch===(initial?spawnDirDefaultEpoch:spawnDirBrowseEpoch);
+  const selecting=!initial&&spawnOpenSheet===spawnDirSheet;
   if(confirm)spawnDirSearchStatus.textContent='';
   if(selecting)spawnDirUse.disabled=true;
   let payload=null;
@@ -10668,27 +10266,27 @@ async function browseDir(path,confirm=false){
     if(!r.ok)throw new Error(payload.error||'browse failed');
     if(!payload.path)throw new Error('Folder unavailable');
   }catch(err){
-    if(epoch!==spawnDirBrowseEpoch)return;
+    if(!stillCurrent()||initial)return;
     if(confirm){
       spawnDirUse.disabled=!spawnDirBrowsePath;
-      spawnDirSearchStatus.textContent='This folder is no longer available.';
+      spawnDirSearchStatus.textContent='Folder unavailable. Choose another folder.';
       return;
     }
     spawnDirBrowsePath='';
     dirList.innerHTML='';
-    const row=document.createElement('div');row.className='dir-err';
-    row.textContent=String(err&&err.message||err);
+    const row=document.createElement('div');row.className='dir-error';
+    row.textContent=`${err.message||'Folder unavailable'}. Choose another folder.`;
     dirList.appendChild(row);return;
   }
-  if(epoch!==spawnDirBrowseEpoch)return;
+  if(!stillCurrent())return;
+  if(initial){
+    if(!spawnDirPath){spawnDirPath=payload.path;renderSpawnDirPath();}
+    return;
+  }
   if(confirm){chooseSpawnDir(payload.path);return;}
   const currentPath=payload.path;spawnDirBrowsePath=currentPath;
   if(!selecting){spawnDirPath=currentPath;renderSpawnDirPath();}
-  if(selecting&&spawnDirDialog.open)spawnDirUse.disabled=false;
-  [...dirPresets.children].forEach(chip=>
-    chip.classList.toggle('sel',chip.dataset.path&&
-      chip.dataset.path.replace(/^~/,'')&&currentPath===chip.dataset.path||
-      currentPath===chip.dataset.path));
+  if(selecting&&spawnOpenSheet===spawnDirSheet)spawnDirUse.disabled=false;
   // Render the selected directory as clickable path segments.
   dirCrumbs.innerHTML='';
   const segments=currentPath.split('/').filter(Boolean);
@@ -10713,17 +10311,13 @@ async function browseDir(path,confirm=false){
   dirList.innerHTML='';
   (payload.dirs||[]).forEach(d=>{
     const row=document.createElement('button');row.type='button';
-    row.className='dir-row';row.setAttribute('role','option');
-    row.innerHTML='<span class="dr-arrow">▸</span>';
+    row.className='dir-row';
+    row.append(spawnIcon('folder'));
     row.appendChild(document.createTextNode(d.name));
     row.addEventListener('click',()=>browseDir(d.path));
     dirList.appendChild(row);
   });
-  if(!(payload.dirs||[]).length){
-    const empty=document.createElement('div');empty.className='dir-err';
-    empty.textContent='No subdirectories. Choose “Use this folder” to select this directory.';
-    dirList.appendChild(empty);
-  }
+  if(spawnOpenSheet===spawnDirSheet)positionSpawnSheet(spawnDirSheet,spawnDirButton);
 }
 
 /* agent picker — every registered name is consumed forever, so the adjective
@@ -10739,27 +10333,35 @@ function rollAdjective(){
   return free[Math.floor(Math.random()*free.length)];
 }
 function renderAgentStrip(){
-  const scientists=((spawnCatalog.naming||{}).scientists)||[];
+  const scientists=spawnCatalog?.naming?.scientists||[];
   agentStrip.innerHTML='';
   const auto=document.createElement('button');auto.type='button';
-  auto.className='agent-pick'+(selScientist===''?' sel':'');
-  auto.innerHTML='<span class="cp-auto">🎲</span><span class="cp-lab">AUTO</span>';
-  auto.addEventListener('click',()=>{selScientist='';renderAgentStrip();updateNameCard();});
+  auto.className='agent-pick';auto.setAttribute('role','option');
+  auto.setAttribute('aria-selected',String(!selScientist));
+  auto.title='Generate a name';auto.setAttribute('aria-label',auto.title);
+  const dice=document.createElement('span');dice.className='cp-auto';dice.append(spawnIcon('dice'));auto.append(dice);
+  auto.addEventListener('click',()=>{
+    selScientist='';spawnProblem='';renderAgentStrip();updateNameCard();dismissSpawnSheet(true);
+  });
   agentStrip.appendChild(auto);
   scientists.forEach(s=>{
     const b=document.createElement('button');b.type='button';
-    b.className='agent-pick'+(selScientist===s?' sel':'');
-    b.setAttribute('role','option');
+    b.className='agent-pick';b.setAttribute('role','option');
+    b.setAttribute('aria-selected',String(selScientist===s));
     const img=document.createElement('img');
     img.src=`/telemetry/portrait?v=3&name=${encodeURIComponent(s)}&hi=1`;
-    img.alt=s;img.loading='lazy';
-    img.onerror=()=>{img.remove();};
+    img.alt='';img.loading='lazy';
+    img.onerror=()=>{
+      const initial=document.createElement('span');initial.className='cp-fallback';initial.textContent=s[0];
+      img.replaceWith(initial);
+    };
     const lab=document.createElement('span');lab.className='cp-lab';lab.textContent=s;
     b.append(img,lab);
     b.addEventListener('click',()=>{
       selScientist=s;
       spawnAdjective.value=rollAdjective();
-      renderAgentStrip();updateNameCard();
+      spawnProblem='';renderAgentStrip();updateNameCard();
+      spawnAdjective.focus({preventScroll:true});
     });
     agentStrip.appendChild(b);
   });
@@ -10773,50 +10375,62 @@ function updateNameCard(){
   ncAdjWrap.hidden=isAuto;
   ncPortrait.hidden=isAuto;ncDiceFace.hidden=!isAuto;
   adjOptions.innerHTML='';
+  ncName.hidden=isAuto;
   if(isAuto){
-    ncName.textContent='auto-generated name';ncName.classList.remove('collide');
-    ncHint.textContent='pick a scientist below, or leave it to fate';
-    ncHint.classList.remove('collide');
-    return;
+    ncName.textContent='';ncName.classList.remove('collide');
+    spawnNameButton.title='Generate a name';spawnNameButton.setAttribute('aria-label','Agent name: automatic');
+  }else{
+    freeAdjectivesFor(selScientist).forEach(adjective=>{
+      const option=document.createElement('option');option.value=adjective;adjOptions.appendChild(option);
+    });
+    ncPortrait.src=`/telemetry/portrait?v=3&name=${encodeURIComponent(selScientist)}&hi=1`;
+    const name=composedName(),collide=spawnTaken.has(name.toLowerCase());
+    ncName.textContent=name;ncName.classList.toggle('collide',collide);
+    spawnNameButton.title=collide?`${name} is taken. Roll another name.`:name;
+    spawnNameButton.setAttribute('aria-label','Agent name: '+spawnNameButton.title);
   }
-  freeAdjectivesFor(selScientist).forEach(a=>{
-    const o=document.createElement('option');o.value=a;adjOptions.appendChild(o);
-  });
-  ncPortrait.src=`/telemetry/portrait?v=3&name=${encodeURIComponent(selScientist)}&hi=1`;
-  const name=composedName();
-  ncName.textContent=name||selScientist;
-  const collide=name&&spawnTaken.has(name.toLowerCase());
-  ncName.classList.toggle('collide',Boolean(collide));
-  ncHint.classList.toggle('collide',Boolean(collide));
-  ncHint.textContent=collide?'name already taken — roll again':
-    (spawnAdjective.value.trim()?'this agent reports for duty':'add an adjective (🎲 rolls one)');
+  updateSpawnAvailability();
+  if(spawnOpenSheet===spawnNameSheet)positionSpawnSheet(spawnNameSheet,spawnNameButton);
 }
-spawnAdjective&&spawnAdjective.addEventListener('input',updateNameCard);
+spawnAdjective.addEventListener('input',()=>{spawnProblem='';updateNameCard();});
 document.getElementById('adjDice').addEventListener('click',()=>{
-  spawnAdjective.value=rollAdjective();updateNameCard();
+  spawnAdjective.value=rollAdjective();spawnProblem='';updateNameCard();
 });
 
-function openSpawnModal(){
-  closePalette(false);spawnLastFocus=document.activeElement;spawnForm.reset();
-  spawnForm.querySelector('.spawn-identity-options').open=true;
-  spawnAdvanced.open=false;
-  spawnWorktreeBaseWrap.classList.remove('on');spawnStatus.textContent='ready';
-  selScientist='';selProvider=null;selModel=null;selEffort=null;selFamily=null;selHarness=null;
-  renderSpawnTools();
-  selUrlIndex=null;
-  selUrlKey=null;
-  try{spawnModelSearch.value=spawnViewerStorage?.getItem(SPAWN_SEARCH_STORAGE_KEY)||'';}catch(_){spawnModelSearch.value='';}
+function openSpawnModal({from=document.getElementById('newAgentBtn').getBoundingClientRect(),task='',restoreFocus=document.activeElement}={}){
+  if(spawnOverlay.classList.contains('on'))return;
+  closePalette(false);
+  spawnLastFocus=restoreFocus;
+  if(!spawnBusy&&!spawnResumeDraft){
+    spawnForm.reset();spawnTask.value=task.slice(0,spawnTask.maxLength);
+    spawnAdvanced.hidden=true;spawnAdvancedButton.setAttribute('aria-expanded','false');
+    spawnWorktreeBaseWrap.classList.remove('on');spawnProblem='';
+    selScientist='';selProvider=null;selModel=null;selEffort=null;selFamily=null;selHarness=null;
+    selUrlIndex=null;selUrlKey=null;spawnModelSearch.value='';
+    renderSpawnTools();renderSpawnModelChip();updateNameCard();
+  }
+  spawnResumeDraft=false;
   populateSpawnParents();
+  const origin=spawnAnchor(from);
+  spawnLauncher.style.setProperty('--spawn-origin-x',(origin.x-spawnLauncher.offsetLeft)+'px');
+  spawnLauncher.style.setProperty('--spawn-origin-y',(origin.y-spawnLauncher.offsetTop)+'px');
   spawnOverlay.classList.add('on');spawnOverlay.setAttribute('aria-hidden','false');
-  loadSpawnCatalog().then(updateNameCard);
-  requestAnimationFrame(()=>spawnForm.querySelector('.spawn-identity-options summary').focus({preventScroll:true}));
+  sizeSpawnTask();
+  if(!spawnBusy)loadSpawnCatalog().then(()=>{
+    if(selFamily==='local'){restoreSpawnModelSearch();renderLocalModels();}
+    updateNameCard();
+  });
+  requestAnimationFrame(()=>{
+    if(spawnOverlay.classList.contains('on'))spawnTask.focus({preventScroll:true});
+  });
 }
-function closeSpawnModal(force=false){
-  if(spawnBusy&&!force)return;
-  spawnCatalogLoader.stop();
-  closeSpawnDirPicker();
+function closeSpawnModal(){
+  spawnCatalogLoader.stop();++spawnDirDefaultEpoch;
+  dismissSpawnSheet();
+  if(!spawnOverlay.classList.contains('on'))return;
   spawnOverlay.classList.remove('on');spawnOverlay.setAttribute('aria-hidden','true');
-  if(spawnLastFocus&&spawnLastFocus.isConnected)spawnLastFocus.focus();
+  if(spawnLastFocus&&spawnLastFocus.isConnected)spawnLastFocus.focus({preventScroll:true});
+  else document.activeElement?.blur();
 }
 function showToast(message,isError=false,ms=4200){
   clearTimeout(toastTimer);toastEl.textContent=message;
@@ -10834,7 +10448,7 @@ function spawnPayloadFromForm(){
     harness:selHarness&&SpawnPicker.harnessKey(selHarness)!==legacyHarness?selHarness:null,
     helper_model:!spawnHelper.disabled?spawnHelper.value:null,
     ...spawnToolOptions(),
-    model:selModel||(spawnForm.querySelector('input[name="spawnModel"]:checked')||{}).value,
+    model:selModel,
     url_index:selectedSpawnModel()?.url_index,
     url_key:selectedSpawnModel()?.url_key,
     effort:effectiveSpawnEffort(providerById(selProvider),selModel),
@@ -10843,7 +10457,7 @@ function spawnPayloadFromForm(){
     open_ghostty:spawnGhostty.checked,
   });
 }
-// Poll the dashboard's background verdict for an async spawn.
+// Poll until the registered child is ready, keeping the task available on failure.
 async function watchSpawnLaunch(name,deadlineSeconds){
   const waitSeconds=Number.isFinite(deadlineSeconds)&&deadlineSeconds>0?deadlineSeconds:140;
   const started=Date.now();
@@ -10855,30 +10469,86 @@ async function watchSpawnLaunch(name,deadlineSeconds){
       status=await r.json();
     }catch(_){continue;}
     if(!status||!status.ok||status.state==='launching')continue;
-    if(status.state==='ready'){showToast(`SPAWNED · ${name}`);document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}));}
-    // The launcher's reason can be a few sentences of what to do; leave it
-    // up long enough to read (the default 4.2s is for one-line notices).
-    else showToast(`SPAWN FAILED · ${name} · ${status.error||'launcher failed'}`,true,20000);
-    return;
+    if(status.state==='ready')return;
+    throw new Error(status.error||'The launcher failed');
   }
-  showToast(`SPAWN · ${name} · no verdict after ${waitSeconds}s`,true);
+  throw new Error(`No launch result after ${waitSeconds}s. Check the agent list before retrying.`);
+}
+function spawnTarget(name){
+  const selector=`[data-agent="${CSS.escape(name)}"]`;
+  const candidates=[
+    document.querySelector(`#planetariumOverlay.on ${selector} .planet-portrait`),
+    document.querySelector(`#orrery ${selector} .mini-portrait`),
+    tiles.get(name)?.querySelector('.face'),
+  ];
+  return candidates.find(target=>{
+    if(!target||target.checkVisibility?.()===false)return false;
+    const {x,y,width,height}=target.getBoundingClientRect();
+    const centerX=x+width/2,centerY=y+height/2;
+    if(!width||!height||centerX<0||centerY<0||centerX>=innerWidth||centerY>=innerHeight)return false;
+    const hit=document.elementFromPoint(centerX,centerY);
+    const row=target.closest('[data-agent]');
+    return row?.contains(hit);
+  });
+}
+function flySpawnPortrait(name,origin){
+  if(!origin)return;
+  const land=()=>{
+    const target=spawnTarget(name);
+    if(!target)return false;
+    const box=target.getBoundingClientRect(),end=spawnAnchor(box);
+    const dx=end.x-origin.x,dy=end.y-origin.y;
+    const bendX=dx/2+(dy>0?120:-120),bendY=Math.min(0,dy)-140;
+    const flyer=document.createElement('img');
+    flyer.className='spawn-flyer';flyer.alt='';flyer.setAttribute('aria-hidden','true');
+    flyer.src='/telemetry/portrait?v=3&hi=1&name='+encodeURIComponent(name);
+    flyer.style.left=origin.x+'px';flyer.style.top=origin.y+'px';
+    document.body.append(flyer);
+    const frames=Array.from({length:25},(_,index)=>{
+      const t=index/24;
+      const x=2*(1-t)*t*bendX+t*t*dx,y=2*(1-t)*t*bendY+t*t*dy;
+      const scale=t<.75?.4+.6*Math.sin(t/.75*Math.PI/2):1+(box.width/46-1)*(t-.75)/.25;
+      return {transform:`translate(${x}px,${y}px) scale(${scale})`,opacity:t<.92?1:(1-t)/.08};
+    });
+    if(spawnReducedMotion.matches){
+      flyer.style.left=end.x+'px';flyer.style.top=end.y+'px';
+      flyer.animate([{opacity:0},{opacity:1},{opacity:0}],{duration:150}).onfinish=()=>flyer.remove();
+    }else flyer.animate(frames,{duration:900,easing:'cubic-bezier(.45,0,.2,1)'}).onfinish=()=>flyer.remove();
+    return true;
+  };
+  requestAnimationFrame(()=>{
+    if(land())return;
+    let frame=0;
+    const retry=()=>{if(!frame)frame=requestAnimationFrame(()=>{frame=0;if(land())cleanup();});};
+    const timer=setTimeout(()=>cleanup(),12000);
+    const cleanup=()=>{clearTimeout(timer);cancelAnimationFrame(frame);document.removeEventListener('oc:agents',retry);};
+    document.addEventListener('oc:agents',retry);
+  });
+}
+function fillSpawnButton(event){
+  if(spawnSubmit.disabled||spawnReducedMotion.matches)return;
+  const fill=document.getElementById('spawnLaunchFill'),rect=spawnSubmit.getBoundingClientRect();
+  spawnSubmit.style.setProperty('--spawn-press-x',event?event.clientX-rect.left+'px':'50%');
+  spawnSubmit.style.setProperty('--spawn-press-y',event?event.clientY-rect.top+'px':'50%');
+  fill.getAnimations().forEach(animation=>animation.cancel());
+  fill.animate([{transform:'scale(0)',opacity:1},{transform:'scale(30)',opacity:0}],{duration:520,easing:'ease-out'});
 }
 async function submitSpawn(event){
-  event.preventDefault();if(spawnBusy)return;
+  event.preventDefault();if(spawnBusy||!spawnTask.value.trim())return;
   const p=providerById(selProvider),model=selectedSpawnModel();
-  if(!p||!model||!SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available)){spawnStatus.textContent='Choose an available model and Harness';return;}
-  if(spawnExplicitEffortMissing(p,selModel)){spawnStatus.textContent='Choose an effort';return;}
+  if(!p||!model||!SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available)||spawnExplicitEffortMissing(p,selModel))return;
   const payload=spawnPayloadFromForm();
   const validationError=validateSpawnPayload(payload,spawnTaken);
   if(validationError){
-    spawnStatus.textContent=validationError;showToast(`SPAWN FAILED · ${validationError}`,true);
-    spawnTask.focus();return;
+    spawnProblem=payload.name&&spawnTaken.has(payload.name.toLowerCase())?`${validationError}. Roll another name.`:
+      validationError.startsWith('name ')?'Use 3–64 letters or digits in the name.':validationError+'. Choose a folder.';
+    updateSpawnAvailability();spawnTask.focus();return;
   }
-  spawnBusy=true;spawnSubmit.disabled=true;spawnStatus.textContent='launching…';
+  const origin=spawnOverlay.classList.contains('on')?spawnAnchor(spawnSubmit.getBoundingClientRect()):null;
+  dismissSpawnSheet();
+  spawnBusy=true;spawnProblem='';spawnForm.setAttribute('aria-busy','true');
+  spawnTask.readOnly=true;updateSpawnAvailability();
   try{
-    // async: the dashboard answers once the child is registered and the
-    // launcher is running; the readiness verdict is read back from
-    // spawn-status, so the modal closes now instead of after the REPL is up.
     const response=await fetch('/telemetry/spawn',{
       method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,async:true}),
     });
@@ -10888,21 +10558,20 @@ async function submitSpawn(event){
     SpawnPicker.remember(spawnViewerStorage,SPAWN_DIR_RECENT_KEY,payload.dir);
     if(SpawnPicker.locality(p,model)==='local')SpawnPicker.remember(spawnViewerStorage,SPAWN_RECENT_STORAGE_KEY,
       JSON.stringify([p.id,model.id,...(Number.isInteger(model.url_index)?[model.url_index]:[]),...(model.url_key?[model.url_key]:[])]));
-    spawnBusy=false;closeSpawnModal(true);
-    const childName=result.child_name||result.tmux_session||'new agent';
-    if(result.pending){
-      showToast(`LAUNCHING · ${childName}`);
-      watchSpawnLaunch(childName,result.verdict_deadline_seconds);
-    }else{
-      showToast(`SPAWNED · ${childName}`);
-      document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}));
-    }
-    // The regular roster poll is the only discovery path for the new child.
+    const childName=result.child_name||result.tmux_session;
+    if(result.pending)await watchSpawnLaunch(childName,result.verdict_deadline_seconds);
+    spawnResumeDraft=false;
+    closeSpawnModal();
+    if(childName)flySpawnPortrait(childName,origin);
+    document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}));
   }catch(error){
-    spawnStatus.textContent=String(error&&error.message||error||'spawn failed');
-    showToast(`SPAWN FAILED · ${spawnStatus.textContent}`,true);
+    const reason=String(error?.message||'Could not launch').replace(/\s+/g,' ').trim();
+    spawnProblem=/[.!?]$/.test(reason)?reason:`${reason}. Check launch settings and retry.`;
+    spawnResumeDraft=!spawnOverlay.classList.contains('on');
+    if(!spawnResumeDraft)spawnTask.focus({preventScroll:true});
   }finally{
-    spawnBusy=false;populateSpawnParents();
+    spawnBusy=false;spawnTask.readOnly=false;spawnForm.removeAttribute('aria-busy');
+    populateSpawnParents();
   }
 }
 /* ── NETWORK view: full telemetry dashboard embedded same-origin ──
@@ -10998,38 +10667,67 @@ window.addEventListener('message',e=>{
     document.dispatchEvent(new CustomEvent('oc:telemetry-return',{detail:{name:d.name}}));
     jumpToAgent(d.name);
   }
-  // NEW AGENT inside the embed opens the cockpit's own spawn modal —
-  // one modal to maintain, and it already knows the catalog + name picker.
+  // The embedded dashboard uses the same launcher and catalog.
   if(d&&d.type==='orrery-spawn'){closeNetwork();openSpawnModal();}
 });
 /* ?session=<name> deep link — honored once, after the first roster arrives */
 let deepLinkSession=new URLSearchParams(location.search).get('session')||'';
 
-document.getElementById('newAgentBtn').addEventListener('click',openSpawnModal);
-document.getElementById('spawnClose').addEventListener('click',()=>closeSpawnModal());
-document.getElementById('spawnCancel').addEventListener('click',()=>closeSpawnModal());
+document.getElementById('newAgentBtn').addEventListener('click',event=>openSpawnModal({restoreFocus:event.currentTarget}));
 spawnOverlay.addEventListener('mousedown',event=>{if(event.target===spawnOverlay)closeSpawnModal();});
 spawnWorktree.addEventListener('change',()=>{
   spawnWorktreeBaseWrap.classList.toggle('on',spawnWorktree.checked);
   if(spawnWorktree.checked)spawnWorktreeBase.focus();
 });
-spawnAdvanced.addEventListener('toggle',()=>{
-  try{localStorage.setItem(SPAWN_ADVANCED_STORAGE_KEY,spawnAdvanced.open?'open':'closed');}catch(_){/* ephemeral preference */}
-});
+spawnSubmit.addEventListener('pointerdown',fillSpawnButton);
+spawnSubmit.addEventListener('click',event=>{if(event.detail===0)fillSpawnButton();});
 spawnForm.addEventListener('submit',submitSpawn);
-
-window.addEventListener('keydown',event=>{
-  if(spawnDirDialog.open){
-    if(event.key==='Escape'){event.preventDefault();closeSpawnDirPicker();}
-    return;
+spawnForm.addEventListener('keydown',event=>{
+  if(!event.isComposing&&event.key==='Enter'&&!event.metaKey&&!event.ctrlKey&&event.target.matches('input[type="text"],input[type="search"]')){
+    event.preventDefault();
+    if(event.target===spawnAdjective)dismissSpawnSheet(true);
   }
+});
+spawnModelSearch.addEventListener('keydown',event=>{
+  if(event.isComposing||event.metaKey||event.ctrlKey||!['ArrowDown','ArrowUp','Enter'].includes(event.key))return;
+  const options=[...modelChoices.querySelectorAll('input:enabled')].filter(input=>input.getClientRects().length);
+  if(!options.length)return;
+  event.preventDefault();
+  if(event.key==='Enter'){options[0].click();return;}
+  (event.key==='ArrowDown'?options[0]:options.at(-1)).focus();
+});
+window.addEventListener('keydown',event=>{
+  if(event.isComposing)return;
+  if(event.key==='Escape'&&paletteOverlay.classList.contains('on')){
+    event.preventDefault();event.stopImmediatePropagation();closePalette();return;
+  }
+  if(!spawnOverlay.classList.contains('on'))return;
+  if(event.key==='Escape'){
+    event.preventDefault();event.stopImmediatePropagation();
+    if(spawnOpenSheet)dismissSpawnSheet(true);
+    else closeSpawnModal();
+  }else if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){
+    event.preventDefault();event.stopImmediatePropagation();
+    if(!spawnSubmit.disabled){fillSpawnButton();spawnForm.requestSubmit(spawnSubmit);}
+  }else if(event.key==='Tab'){
+    const controls=[...spawnForm.querySelectorAll('button,input,select,textarea,summary,a[href]')]
+      .filter(control=>!control.disabled&&control.tabIndex>=0&&!control.closest('[hidden],[inert]')&&control.getClientRects().length);
+    const options=controls.filter(control=>control.name==='spawnModel');
+    const currentOption=options.find(control=>control.checked)||options[0];
+    const tabStops=controls.filter(control=>control.name!=='spawnModel'||control===currentOption);
+    const first=tabStops[0],last=tabStops.at(-1),active=document.activeElement;
+    if(event.shiftKey?active===first:active===last){
+      event.preventDefault();(event.shiftKey?last:first)?.focus();
+    }
+  }
+},true);
+window.addEventListener('keydown',event=>{
+  if(event.isComposing)return;
   if(isPaletteShortcut(event,hostPlatform)){
     event.preventDefault();openPalette();return;
   }
   if(event.key==='Escape'){
-    if(spawnOverlay.classList.contains('on')){event.preventDefault();closeSpawnModal();return;}
     if(networkOverlay.classList.contains('on')){event.preventDefault();closeNetwork();return;}
-    if(paletteOverlay.classList.contains('on')){event.preventDefault();closePalette();return;}
     if(rosterSelectMode&&!event.defaultPrevented){
       event.preventDefault();setRosterSelectMode(false);return;
     }

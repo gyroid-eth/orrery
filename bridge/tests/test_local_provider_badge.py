@@ -173,7 +173,7 @@ def test_picker_glm_and_deepseek_models_use_local_maker_badges(tour_browser):
       spawnModelSearch.value='';renderProviderTabs();
       return ['glm-5.3-flash','deepseek-v4.1-flash'].map(model=>{
         modelChoices.querySelector('input[value="'+model+'"]').click();
-        const badge=document.getElementById('spawnMakerBadge');
+        const badge=document.getElementById('spawnModelMark');
         return {model,title:badge.title,src:badge.querySelector('img').getAttribute('src')};
       });
     })()""")

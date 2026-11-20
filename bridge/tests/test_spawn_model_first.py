@@ -145,15 +145,15 @@ def test_dynamic_local_real_controls_keep_route_and_refuse_lost_selection(tour_b
          models:[row(0),row(1),row(2),row(2,'sleeping','unloaded')]}]};
       selFamily='local';selProvider=null;selModel=null;selUrlIndex=null;selUrlKey=null;selHarness=null;spawnModelSearch.value='';renderProviderTabs();
       modelChoices.querySelector('[data-connection=workstation][data-url-index="2"]').click();
-      const payload=spawnPayloadFromForm(),summary=document.getElementById('spawnSummary').textContent;
+      const payload=spawnPayloadFromForm(),metadata=modelChoices.querySelector('input:checked').closest('label').title;
       const disabled=[...modelChoices.querySelectorAll('input')].find(e=>e.value==='sleeping').disabled;
       spawnCatalog.providers[1].models=spawnCatalog.providers[1].models.filter(m=>m.url_index!==2);
       renderProviderTabs();renderProviderTabs();
-      return {payload,summary,disabled,lost:selModel===null,blocked:spawnSubmit.disabled};
+      return {payload,metadata,disabled,lost:selModel===null,blocked:spawnSubmit.disabled};
     })()''')
     assert (result['payload']['provider'],result['payload']['model'],result['payload']['url_index'])==('workstation','shared-model',2)
     assert result['payload']['url_key']=='2'*64
-    assert 'Workstation' in result['summary'] and 'URL 3' in result['summary']
+    assert 'Workstation' in result['metadata'] and 'URL 3' in result['metadata']
     assert result['disabled'] and result['lost'] and result['blocked']
 
 
@@ -166,13 +166,14 @@ def test_picker_defaults_local_search_and_capability_updates_in_browser(tour_bro
         {id:'local-server',locality:'local',program:'codex-cli',server:'test-server',
           models:[{id:'Qwen-one',context:'32K',vision:true},{id:'Qwen-two'}],
           harnesses:[{id:'hermes',label:'Hermes',default:true,available:false}]}],naming:{},dirs:[]};
+      spawnTask.value='Fixture task';
       selFamily=null;selProvider=null;selModel=null;selHarness=null;renderProviderTabs();
       const initial={provider:selProvider,model:selModel,harness:selHarness,payload:spawnPayloadFromForm(),
-        order:[...providerTabs.children].map(b=>b.dataset.family)};
+        order:[...providerTabs.querySelectorAll('button')].map(b=>b.dataset.family)};
       providerTabs.querySelector('[data-family="local"]').click();
       const unavailable=spawnSubmit.disabled&&spawnHarnesses.querySelector('[data-harness="hermes"]').disabled;
       spawnModelSearch.value='not-present';spawnModelSearch.dispatchEvent(new Event('input'));
-      const empty=modelChoices.textContent.includes('No models match');
+      const empty=modelChoices.textContent.includes('No models found');
       spawnModelSearch.value='test-server';spawnModelSearch.dispatchEvent(new Event('input'));
       const visible=modelChoices.querySelectorAll('input[name="spawnModel"]').length;
       spawnCatalog.providers[2].harnesses[0].available=true;renderHarnesses();
@@ -302,88 +303,64 @@ def test_empty_provider_keeps_its_configuration_error_visible(tour_browser):
     result = evaluate('''(()=>{
       spawnCatalog={providers:[{id:'claude',program:'claude-code',models:[],model_error:'Fixture configuration error'}],naming:{},dirs:[]};
       selFamily=null;selProvider=null;selModel=null;selHarness=null;renderProviderTabs();
-      return {text:modelChoices.textContent,disabled:spawnSubmit.disabled};
+      return {text:spawnStatus.textContent,disabled:spawnSubmit.disabled};
     })()''')
     assert 'Fixture configuration error' in result['text']
     assert result['disabled']
 
 
-def test_picker_controls_fit_a_small_viewport_and_footer_stays_visible(tour_browser):
-    client, evaluate = tour_browser
-    client.call('Emulation.setDeviceMetricsOverride',width=390,height=844,deviceScaleFactor=1,mobile=False)
-    result=evaluate('''(async()=>{
-      spawnCatalog={providers:[{id:'local-one',locality:'local',program:'codex-cli',
-        models:[{id:'Qwen-fixture',default:true}],helper_models:['fixture-small'],efforts:['low','medium','high']}],naming:{},dirs:[]};
-      selFamily=null;selProvider=null;selModel=null;selHarness=null;renderProviderTabs();
-      spawnOverlay.classList.add('on');
-      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
-      const form=spawnForm.getBoundingClientRect(),picker=document.querySelector('.spawn-picker').getBoundingClientRect(),
-        submit=spawnSubmit.getBoundingClientRect();
-      return {form:form.width,pickerRight:picker.right,footerBottom:submit.bottom,width:innerWidth,height:innerHeight,
-        helperWidth:spawnHelper.getBoundingClientRect().width};
-    })()''')
-    assert result['form'] <= result['width']
-    assert result['pickerRight'] <= result['width']
-    assert result['footerBottom'] <= result['height']
-    assert result['helperWidth'] > 0
-
-
 @pytest.mark.parametrize('width', [1600, 390])
-def test_effort_slider_fits_and_scientists_open_on_each_modal_open(tour_browser, width):
+def test_launcher_and_model_sheet_fit_and_name_options_reset(tour_browser, width):
     client,evaluate=tour_browser
     client.call('Emulation.setDeviceMetricsOverride',width=width,height=844,deviceScaleFactor=1,mobile=False)
     result=evaluate('''(async()=>{
       const originalFetch=window.fetch;
-      const catalog={providers:[{id:'codex',program:'codex-cli',models:[{id:'gpt-fixture-with-an-intentionally-long-model-identifier',default:true}],
-        efforts:['low','medium','high','xhigh','max','ultra'],effort_default:'xhigh'}],naming:{scientists:['Curie','Noether'],adjectives:['Calm']},dirs:[]};
+      const catalog={providers:[{id:'lab',locality:'local',program:'codex-cli',
+        models:[{id:'intentionally-long-local-model-identifier-and-server',default:true}],helper_models:['fixture-small'],
+        efforts:['low','medium','high','xhigh','max','ultra'],effort_default:'xhigh'}],
+        naming:{scientists:['Curie','Noether'],adjectives:['Calm']},dirs:[]};
       window.fetch=async(url)=>({ok:true,json:async()=>url.startsWith('/telemetry/fs/dirs')?{path:'/workspace',dirs:[]}:catalog});
+      const settle=()=>new Promise(r=>setTimeout(r,530));
+      const within=element=>{const box=element.getBoundingClientRect();return box.width>0&&box.left>=0&&box.right<=innerWidth&&box.bottom<=innerHeight;};
       try{
-        openSpawnModal();await new Promise(r=>setTimeout(r,30));
-        const details=spawnForm.querySelector('.spawn-identity-options');
-        const initiallyOpen=details.open;details.open=false;spawnAdvanced.open=true;closeSpawnModal(true);
-        openSpawnModal();await new Promise(r=>setTimeout(r,30));
-        effortChoices.scrollIntoView({block:'center'});
+        openSpawnModal();await settle();
+        const normal={name:spawnNameSheet.hidden,model:spawnModelSheet.hidden,advanced:spawnAdvanced.hidden,disabled:spawnSubmit.disabled};
+        spawnNameButton.click();const options=agentStrip.querySelectorAll('[role=option]').length;
+        spawnAdvancedButton.click();const advancedOpen=!spawnAdvanced.hidden;
+        closeSpawnModal();openSpawnModal();await settle();
+        const reset=spawnAdvanced.hidden&&spawnNameSheet.hidden;
+        const before=spawnSubmit.getBoundingClientRect();
+        spawnModelButton.click();await settle();
         const range=effortChoices.querySelector('input[type=range]');
-        const slider={max:Number(range.max),value:range.getAttribute('aria-valuetext'),
-          height:effortRow.getBoundingClientRect().height,
-          client:effortChoices.clientWidth,scroll:effortChoices.scrollWidth,
-          stops:effortChoices.querySelectorAll('.effort-stop').length,modelFits:modelChoices.scrollWidth<=modelChoices.clientWidth,
-          columns:[...document.querySelectorAll('.spawn-column')].map(el=>el.getBoundingClientRect().width),
-          contentFits:document.querySelector('.spawn-picker').scrollHeight<=document.querySelector('.spawn-picker').clientHeight+1,
-          noOverlap:document.querySelector('.spawn-context').getBoundingClientRect().top>=document.querySelector('.spawn-picker').getBoundingClientRect().bottom};
-        const body=spawnForm.querySelector('.spawn-grid'),head=spawnForm.querySelector('.modal-head'),foot=spawnForm.querySelector('.modal-foot');
-        const before={head:head.getBoundingClientRect().top,foot:foot.getBoundingClientRect().bottom};
-        body.scrollTop=body.scrollHeight;
-        const pathBox=spawnDirButton.getBoundingClientRect(),taskBox=spawnTask.getBoundingClientRect();
-        return {initiallyOpen,reopened:details.open,advancedClosed:!spawnAdvanced.open,contextAligned:Math.abs(pathBox.left-taskBox.left)<1&&Math.abs(pathBox.width-taskBox.width)<1,slider,
-          fixed:head.getBoundingClientRect().top===before.head&&foot.getBoundingClientRect().bottom===before.foot,
-          footer:foot.getBoundingClientRect().bottom,height:innerHeight};
+        const after=spawnSubmit.getBoundingClientRect();
+        return {normal,options,advancedOpen,reset,helper:within(spawnHelper),sheet:within(spawnModelSheet),
+          launcher:within(spawnLauncher),fixed:before.bottom===after.bottom&&before.left===after.left,
+          range:{max:Number(range.max),value:Number(range.value),label:range.getAttribute('aria-valuetext'),
+            stops:effortChoices.querySelectorAll('.effort-stop').length,modelFits:modelChoices.scrollWidth<=modelChoices.clientWidth}};
       }finally{window.fetch=originalFetch;}
     })()''')
-    assert result['initiallyOpen'] and result['reopened'] and result['advancedClosed'] and result['contextAligned']
-    assert result['slider']['max'] == 5 and result['slider']['stops'] == 6
-    assert result['slider']['value'] == 'Default' and result['slider']['height'] <= 120
-    assert result['slider']['scroll'] == result['slider']['client'] and result['slider']['modelFits'] and result['slider']['contentFits'] and result['slider']['noOverlap']
-    if width==1600:
-        assert result['slider']['columns'][2] >= 330 and result['slider']['columns'][1] >= 280
-    assert result['fixed'] and result['footer'] <= result['height']
+    assert result['normal'] == dict(name=True, model=True, advanced=True, disabled=True)
+    assert result['options'] == 3 and result['advancedOpen'] and result['reset']
+    assert all(result[k] for k in ['helper','sheet','launcher','fixed'])
+    assert result['range'] == dict(max=5, value=3, label='Default (xhigh)', stops=6, modelFits=True)
 
 
-def test_directory_dialog_commits_only_on_confirmation_and_escape_keeps_parent(tour_browser):
+def test_directory_sheet_commits_only_on_confirmation_and_escape_keeps_launcher(tour_browser):
     _,evaluate=tour_browser
     result=evaluate('''(async()=>{
       const originalFetch=window.fetch;
       window.fetch=async(url)=>({ok:true,json:async()=>url.startsWith('/telemetry/fs/dirs')?
         {path:decodeURIComponent(url.split('path=')[1]),dirs:[]}:{providers:[],naming:{},dirs:[]}});
+      const esc=()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
       try{
         spawnDirPath='/workspace';renderSpawnDirPath();spawnOverlay.classList.add('on');
-        openSpawnDirPicker();await browseDir('/workspace/docs');
-        const before=spawnDirPath;document.getElementById('spawnDirCancel').click();
+        openSpawnDirPicker();spawnDirBrowseButton.click();await browseDir('/workspace/docs');
+        const before=spawnDirPath;esc();
         const cancelled=spawnDirPath;
-        openSpawnDirPicker();await browseDir('/workspace/tools');spawnDirUse.click();
+        openSpawnDirPicker();spawnDirBrowseButton.click();await browseDir('/workspace/tools');spawnDirUse.click();
         const confirmed=spawnDirPath,label=document.getElementById('spawnDirSelected').textContent;
-        openSpawnDirPicker();window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
-        return {before,cancelled,confirmed,label,closed:!spawnDirDialog.open,parent:spawnOverlay.classList.contains('on'),payload:spawnPayloadFromForm().dir};
+        openSpawnDirPicker();esc();
+        return {before,cancelled,confirmed,label,closed:spawnOpenSheet!==spawnDirSheet,parent:spawnOverlay.classList.contains('on'),payload:spawnPayloadFromForm().dir};
       }finally{window.fetch=originalFetch;}
     })()''')
     assert result['before'] == result['cancelled'] == '/workspace'
@@ -414,15 +391,15 @@ def test_directory_search_orders_sources_and_commits_with_keyboard(tour_browser)
           for(let attempt=0;attempt<50&&!test();attempt++)await new Promise(resolve=>setTimeout(resolve,20));
         };
         await waitFor(()=>spawnDirResults.children.length===3);
-        const paths=Array.from(spawnDirResults.children,row=>[row.title,row.firstChild.textContent,row.lastChild.textContent]);
+        const paths=Array.from(spawnDirResults.children,row=>[row.title,row.querySelector('span').textContent,row.lastChild.textContent]);
         const press=key=>spawnDirSearch.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true,cancelable:true}));
         const first=spawnDirSearch.getAttribute('aria-activedescendant');
         press('ArrowUp');
         const last=spawnDirSearch.getAttribute('aria-activedescendant');
-        const retained=dirCrumbs.lastChild.textContent==='workspace'&&!dirList.hidden;
-        press('Enter');await waitFor(()=>!spawnDirDialog.open);
+        const retained=spawnDirPath==='/workspace'&&spawnDirTree.hidden;
+        press('Enter');await waitFor(()=>spawnOpenSheet!==spawnDirSheet);
         const picked=spawnDirPath;
-        openSpawnDirPicker();press('Enter');await waitFor(()=>!spawnDirDialog.open);
+        openSpawnDirPicker();press('Enter');await waitFor(()=>spawnOpenSheet!==spawnDirSheet);
         return {focus,paths,first,last,retained,picked,defaultPick:spawnDirPath};
       }finally{window.fetch=originalFetch;}
     })()''')
@@ -449,8 +426,9 @@ def test_effort_sends_catalog_default_and_reset_restores_default(tour_browser,pr
     evaluate('''(()=>{
       spawnCatalog=CATALOG;selFamily=null;selProvider=null;selModel=null;selHarness=null;selEffort=null;
       renderProviderTabs();spawnOverlay.classList.add('on');spawnTask.value='Fixture task';spawnDirPath='/workspace';
+      spawnModelButton.click();
     })()'''.replace('CATALOG',json.dumps(catalog)))
-    assert evaluate("({specified:Object.hasOwn(spawnPayloadFromForm(),'effort'),label:effortChoices.querySelector('input').getAttribute('aria-valuetext')})") == dict(specified=True,label='Default')
+    assert evaluate("({specified:Object.hasOwn(spawnPayloadFromForm(),'effort'),label:effortChoices.querySelector('input').getAttribute('aria-valuetext')})") == dict(specified=True,label='Default (low)')
     evaluate("effortChoices.querySelector('input').focus()")
     def key(name,code):
         for event in ('keyDown','keyUp'):
@@ -461,17 +439,18 @@ def test_effort_sends_catalog_default_and_reset_restores_default(tour_browser,pr
         key('ArrowLeft',37)
     assert evaluate('spawnPayloadFromForm().effort') == 'high'
     # Returning to the starting neutral position still sends an explicit effort.
-    assert evaluate("effortChoices.querySelector('.effort-reset').hidden") is False
+    assert evaluate("effortChoices.querySelector('.effort-reset').disabled") is False
     evaluate("effortChoices.querySelector('.effort-reset').click()")
-    assert evaluate("({specified:Object.hasOwn(spawnPayloadFromForm(),'effort'),label:effortChoices.querySelector('input').getAttribute('aria-valuetext'),focused:document.activeElement.type})") == dict(specified=True,label='Default',focused='range')
+    assert evaluate("({specified:Object.hasOwn(spawnPayloadFromForm(),'effort'),label:effortChoices.querySelector('input').getAttribute('aria-valuetext'),focused:document.activeElement.type})") == dict(specified=True,label='Default (low)',focused='range')
+    evaluate('Promise.all(spawnModelSheet.getAnimations().map(animation=>animation.finished))')
     center=evaluate("(()=>{const r=effortChoices.querySelector('input').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()")
     client.call('Input.dispatchMouseEvent',type='mousePressed',button='left',buttons=1,clickCount=1,**center)
     client.call('Input.dispatchMouseEvent',type='mouseReleased',button='left',buttons=0,clickCount=1,**center)
-    assert evaluate('spawnPayloadFromForm().effort') == 'high'
+    assert evaluate('spawnPayloadFromForm().effort') == levels[len(levels)//2]
     key('Home',36)
     assert evaluate('spawnPayloadFromForm().effort') == levels[0]
     evaluate("modelChoices.querySelector('input[value=unsupported]').click()")
-    assert evaluate("({specified:Object.hasOwn(spawnPayloadFromForm(),'effort'),inputs:effortChoices.querySelectorAll('input').length,text:effortChoices.textContent})") == dict(specified=False,inputs=0,text='Not supported')
+    assert evaluate("({specified:Object.hasOwn(spawnPayloadFromForm(),'effort'),inputs:effortChoices.querySelectorAll('input').length,text:effortChoices.textContent})") == dict(specified=False,inputs=0,text='')
     evaluate("modelChoices.querySelector('input[value=fixture]').click()")
     assert evaluate('spawnPayloadFromForm().effort') == 'low'
 
@@ -494,7 +473,7 @@ def test_catalog_failure_has_no_fabricated_models_and_retry_recovers(tour_browse
         return originalFetch(url,options);
       };
       try{
-        await loadSpawnCatalog();
+        spawnTask.value='Fixture task';await loadSpawnCatalog();
         const failed={count:modelChoices.querySelectorAll('input[name=spawnModel]').length,
           providers:spawnCatalog.providers.length,message:modelChoices.textContent,disabled:spawnSubmit.disabled,
           model:spawnPayloadFromForm().model,status:spawnStatus.textContent};
@@ -508,11 +487,11 @@ def test_catalog_failure_has_no_fabricated_models_and_retry_recovers(tour_browse
     })()'''.replace('FAILURE',json.dumps(failure)))
     assert result['failed']['count'] == result['failed']['providers'] == result['posts'] == 0
     assert result['failed']['disabled'] and result['failed']['model'] == ''
-    assert 'Telemetry unavailable' in result['failed']['message'] and 'Retry' in result['failed']['message']
-    assert result['recovered'] == dict(model='telemetry-current',disabled=False,status='ready',labels=['telemetry-current'],notes=0)
+    assert 'Model catalog unavailable' in result['failed']['status'] and 'Retry' in result['failed']['message']
+    assert result['recovered'] == dict(model='telemetry-current',disabled=False,status='',labels=['telemetry-current'],notes=0)
 
 
-def test_model_ids_are_used_in_picker_summary_harness_helper_and_roster(tour_browser):
+def test_model_ids_are_used_in_sheet_chip_helper_and_roster(tour_browser):
     _,evaluate=tour_browser
     result=evaluate('''(()=>{
       spawnCatalog={providers:[{id:'codex',label:'Codex from telemetry',program:'codex-cli',
@@ -521,14 +500,15 @@ def test_model_ids_are_used_in_picker_summary_harness_helper_and_roster(tour_bro
       selFamily=null;selProvider=null;selModel=null;selHarness=null;renderProviderTabs();
       const a={name:'FixtureModel',category:'agent',running:true,provider:'openai',model:'Friendly display',model_raw:'raw-model-id'};
       currentAgents=[a];rosterEl.append(tileFor(a));
-      return {notes:modelChoices.querySelectorAll('.model-choice-note').length,tooltip:modelChoices.querySelector('.model-choice').title,name:modelChoices.querySelector('.model-choice-name').textContent,harness:document.getElementById('spawnHarnessHint').textContent,
-        summary:document.getElementById('spawnSummary').querySelector('strong').textContent,
-        helper:[...spawnHelper.options].map(o=>o.textContent),provider:providerTabs.querySelector('[data-family=codex] .spawn-family-copy>span').textContent,
-        case:getComputedStyle(document.querySelector('[data-agent="FixtureModel"] .pill.model')).textTransform,roster:document.querySelector('[data-agent="FixtureModel"] .pill.model')?.textContent};
+      return {notes:modelChoices.querySelectorAll('.model-choice-note').length,tooltip:modelChoices.querySelector('.model-choice').title,name:modelChoices.querySelector('.model-choice-name').textContent,harnessHidden:spawnHarnesses.hidden,
+        chip:spawnModelLabel.textContent,
+        helper:[...spawnHelper.options].map(o=>o.textContent),provider:providerTabs.querySelector('[data-family=codex]').getAttribute('aria-label'),
+        case:getComputedStyle(document.querySelector('[data-agent="FixtureModel"] .pill.model')).textTransform,roster:document.querySelector('[data-agent="FixtureModel"] .pill.model')?.textContent,rosterTooltip:document.querySelector('[data-agent="FixtureModel"] .pill.model')?.title};
     })()''')
-    assert result['name']==result['summary']==result['roster']=='raw-model-id'
-    assert result['harness']=='For raw-model-id' and result['helper']==['Same as main','raw-helper-id']
-    assert result['provider']=='Codex from telemetry' and result['notes']==0 and result['tooltip']=='' and result['case']=='none'
+    assert result['name']==result['chip']=='raw-model-id'
+    assert result['roster']=='Friendly display' and 'raw-model-id' in result['rosterTooltip']
+    assert result['harnessHidden'] and result['helper']==['Same as main','raw-helper-id']
+    assert result['provider']=='Codex from telemetry' and result['notes']==0 and result['tooltip']=='raw-model-id' and result['case']=='none'
 
 
 @pytest.mark.parametrize('levels,value,fallback,expected', [
@@ -617,3 +597,38 @@ def test_required_effort_requires_explicit_choice_before_button_and_post(tour_br
     assert 'effort' not in result['reset']['payload']
     assert result['invalid']['disabled'] and result['invalid']['posts']==1
     assert 'effort' not in result['invalid']['payload']
+
+
+def test_palette_keeps_agent_search_and_launches_from_an_unmatched_query(tour_browser):
+    _, evaluate = tour_browser
+    result = evaluate('''(async()=>{
+      const original=window.fetch,posts=[];
+      const catalog={providers:[{id:'claude',program:'claude-code',models:[{id:'fixture'}]}],naming:{},dirs:[]};
+      window.fetch=async(url,options)=>{
+        if(url==='/telemetry/spawn'){posts.push(JSON.parse(options.body));return {ok:true,json:async()=>({ok:true,child_name:'FixtureOnly'})};}
+        if(url==='/telemetry/spawn-catalog')return {ok:true,json:async()=>catalog};
+        if(url.startsWith('/telemetry/fs/dirs'))return {ok:true,json:async()=>({path:'/workspace',dirs:[]})};
+        return original(url,options);
+      };
+      const key=(key,metaKey=false)=>window.dispatchEvent(new KeyboardEvent('keydown',{key,metaKey,bubbles:true,cancelable:true}));
+      const search=value=>{paletteInput.value=value;paletteInput.dispatchEvent(new Event('input'));};
+      try{
+        currentAgents=[{name:'CalmCurie',running:true,category:'agent'}];
+        key('k',true);search('Curie');
+        const matched=paletteResults.firstElementChild?.querySelector('.palette-name').textContent;
+        search('Review the launcher');
+        const unmatched=paletteResults.firstElementChild?.querySelector('.palette-name').textContent;
+        const anchor=spawnAnchor(paletteOverlay.querySelector('.palette').getBoundingClientRect());
+        key('Enter');
+        const task=spawnTask.value, paletteClosed=!paletteOverlay.classList.contains('on');
+        const fromPalette=Math.abs(parseFloat(spawnLauncher.style.getPropertyValue('--spawn-origin-x'))+spawnLauncher.offsetLeft-anchor.x)<1;
+        await loadSpawnCatalog();key('Enter',true);
+        await new Promise(r=>setTimeout(r,40));
+        return {matched,unmatched,task,paletteClosed,fromPalette,posts,open:spawnOverlay.classList.contains('on')};
+      }finally{window.fetch=original;}
+    })()''')
+    assert result['matched'] == 'CalmCurie'
+    assert result['unmatched'] == 'New agent'
+    assert result['task'] == 'Review the launcher'
+    assert result['paletteClosed'] and result['fromPalette'] and not result['open']
+    assert len(result['posts']) == 1 and result['posts'][0]['task'] == result['task']
