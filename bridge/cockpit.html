@@ -378,6 +378,9 @@
   .bulk-exit:hover,.bulk-exit:focus-visible{border-color:var(--amber);background:var(--amber-glow);outline:none}
   .bulk-exit.arm{background:var(--amber);color:var(--bg);animation:bulkarm .72s ease-in-out infinite}
   .bulk-exit:disabled{opacity:.5;cursor:wait;animation:none}
+  .bulk-actions{display:flex;align-items:center;gap:6px}
+  .bulk-reboot{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-width:29px;white-space:nowrap}
+  .bulk-reboot svg{width:13px;height:13px;flex:none}
 
   /* portrait medallion */
   .medal{position:relative;width:46px;height:46px}
@@ -1029,6 +1032,7 @@
     opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .2s,transform .2s;
   }
   .toast.on{opacity:1;transform:none}
+  .toast.on.multiline{white-space:pre-line;overflow-wrap:anywhere;max-height:50vh;overflow:auto;pointer-events:auto}
   /* A path to open by hand: wrap it anywhere and let it be selected. */
   .toast.on.selectable{pointer-events:auto;user-select:text;-webkit-user-select:text;overflow-wrap:anywhere}
   .toast.error{border-color:rgb(var(--theme-accent-rgb) / .45);animation:blinkring .22s steps(1) 2}
@@ -1172,7 +1176,13 @@
         </div></div>
       <div class="roster-bulkbar" id="rosterBulkBar" hidden>
         <span class="bulk-count" id="rosterBulkCount" aria-live="polite">0 selected</span>
-        <button class="bulk-exit" id="rosterBulkExit" type="button">Exit</button>
+        <span class="bulk-actions">
+          <button class="bulk-exit" id="rosterBulkExit" type="button">Exit</button>
+          <button class="bulk-exit bulk-reboot" id="rosterBulkReboot" type="button" title="Reboot" aria-label="Reboot">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4v5h5M3 9a9 9 0 1 1 0 6"/></svg>
+            <span id="rosterBulkRebootLabel" hidden></span>
+          </button>
+        </span>
       </div>
       <div class="scroll" id="roster"></div>
     </div>
@@ -3931,7 +3941,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "a6f142255f6188a32d123c00166487cf1e40a0578ea26388b6a7912e109f9059",
+        "digest": "0652b66a30fae25a135f27105c4e8f1d17e71f027ff3bbecc13dd8d3c79f4d54",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4060,7 +4070,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "889588ac0acea76b9c1ca5fe524f3d1981feb952b6348c698936a5e42795f789",
+        "digest": "3ef535fd5f9d1eb7a2fc87e1fe78ed21e7a32b13a049b4b0fea99416b1424919",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4101,9 +4111,9 @@
       }
     }
   },
-  "inventory_digest": "d834aa6bc92b4ff22b525604ee80a919accd5de941c2dc5d9ab5ab2f28abf96c",
+  "inventory_digest": "2ad16adceef416d894669b639dc3067df3ce42b28a2ad18ed685eb77c3a589da",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "f895cb8364e0e138a25457b9fcc2542edcc4f9f8f044c2a35099aa644d3583f6",
+  "source_digest": "83ade2e2c762a4ec37471f5e32023ac7126f10a3756bdfd481834e223d163142",
   "surface": "cockpit",
   "version": 1
 }
@@ -8829,6 +8839,8 @@ const rosterSelectBtn=document.getElementById('rosterSelectBtn');
 const rosterBulkBar=document.getElementById('rosterBulkBar');
 const rosterBulkCount=document.getElementById('rosterBulkCount');
 const rosterBulkExit=document.getElementById('rosterBulkExit');
+const rosterBulkReboot=document.getElementById('rosterBulkReboot');
+const rosterBulkRebootLabel=document.getElementById('rosterBulkRebootLabel');
 const tiles=new Map();   // name -> tile element
 const PINNED_AGENT_KEY='oc-pinned-agents';
 const pinnedAgents=new Set();
@@ -8850,8 +8862,19 @@ const DESCRIPTOR_TASK_KEY='oc-descriptor-task',DESCRIPTOR_TASK_MAX=400;
 let descriptorTaskState={},descriptorTaskDirty=false,descriptorTaskSaveAt=0;
 try{descriptorTaskState=JSON.parse(localStorage.getItem(DESCRIPTOR_TASK_KEY)||'{}')||{};}catch(_){descriptorTaskState={};}
 const bulkSelectedAgents=new Set();
-const BULK_EXIT_ARM_MS=3000;
-let rosterSelectMode=false,bulkExitArmed=false,bulkExitBusy=false,bulkExitArmTimer=null;
+const BULK_ACTION_ARM_MS=3000;
+let rosterSelectMode=false,bulkActionArmed=null,bulkActionBusy=null,bulkActionArmTimer=null;
+let liveRosterAgents=[],stoppedSelectAgents=[],stoppedSelectRequest=null;
+
+function isBulkSelectableAgent(agent){
+  return Boolean(agent&&agent.name&&agent.lifecycle!=='persistent'&&agent.category!=='warmup'&&
+    (agent.category==='agent'||isBulkExitEligibleAgent(agent)));
+}
+function isBulkAgentRunning(agent){
+  if(!agent)return false;
+  const state=normalizeSearchText(agent.state);
+  return agent.running??(state==='run'||state==='running');
+}
 
 function selectAgent(name){selectedAgent=name;tiles.forEach((el,n)=>el.classList.toggle('sel',n===name));
   // Choosing an agent in the roster also points the mail rail at it; the rail
@@ -8874,7 +8897,7 @@ function applyRosterAnnotation(name,annotation){
   document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
 }
 function paintBulkTileState(el,agent){
-  const eligible=isBulkExitEligibleAgent(agent);
+  const eligible=isBulkSelectableAgent(agent);
   const selected=eligible&&bulkSelectedAgents.has(agent.name);
   el.classList.toggle('bulk-ineligible',rosterSelectMode&&!eligible);
   el.classList.toggle('bulk-selected',rosterSelectMode&&selected);
@@ -8888,34 +8911,59 @@ function paintBulkTileState(el,agent){
 function refreshBulkTileStates(){
   tiles.forEach((el,name)=>paintBulkTileState(el,currentAgentNamed(name)||{name}));
 }
-function clearBulkExitArm(){
-  if(bulkExitArmTimer){clearTimeout(bulkExitArmTimer);bulkExitArmTimer=null;}
-  bulkExitArmed=false;rosterBulkExit.classList.remove('arm');
+function clearBulkActionArm(){
+  clearTimeout(bulkActionArmTimer);
+  bulkActionArmTimer=null;bulkActionArmed=null;
+}
+function confirmBulkAction(action){
+  if(bulkActionArmed===action)return true;
+  clearBulkActionArm();bulkActionArmed=action;updateRosterBulkUI();
+  bulkActionArmTimer=setTimeout(()=>{clearBulkActionArm();updateRosterBulkUI();},BULK_ACTION_ARM_MS);
+  return false;
 }
 function updateRosterBulkUI(){
   const count=bulkSelectedAgents.size;
+  const exitCount=[...bulkSelectedAgents].filter(name=>{
+    const agent=currentAgentNamed(name);
+    return isBulkSelectableAgent(agent)&&isBulkExitEligibleAgent(agent);
+  }).length;
+  const busy=Boolean(bulkActionBusy);
   setHidden(rosterBulkBar,count===0);
   setText(rosterBulkCount,`${count} selected`);
-  setText(rosterBulkExit,bulkExitBusy?'Exiting…':
-    bulkExitArmed?`Confirm Exit (${count})`:'Exit');
-  if(rosterBulkExit.disabled!==(bulkExitBusy||count===0))rosterBulkExit.disabled=bulkExitBusy||count===0;
-  if(rosterSelectBtn.disabled!==bulkExitBusy)rosterSelectBtn.disabled=bulkExitBusy;
+  setText(rosterBulkExit,bulkActionBusy==='exit'?'Exiting…':
+    bulkActionArmed==='exit'?`Confirm Exit (${exitCount})`:'Exit');
+  const rebootLabel=bulkActionBusy==='reboot'?'Rebooting…':
+    bulkActionArmed==='reboot'?`Confirm Reboot (${count})`:'';
+  setText(rosterBulkRebootLabel,bulkActionArmed==='reboot'?'Confirm':rebootLabel);
+  setHidden(rosterBulkRebootLabel,!rebootLabel);
+  setTitle(rosterBulkReboot,rebootLabel||'Reboot');
+  setAttr(rosterBulkReboot,'aria-label',rebootLabel||'Reboot');
+  rosterBulkExit.classList.toggle('arm',bulkActionArmed==='exit');
+  rosterBulkReboot.classList.toggle('arm',bulkActionArmed==='reboot');
+  if(rosterBulkExit.disabled!==(busy||exitCount===0))rosterBulkExit.disabled=busy||exitCount===0;
+  if(rosterBulkReboot.disabled!==(busy||count===0))rosterBulkReboot.disabled=busy||count===0;
+  if(rosterSelectBtn.disabled!==busy)rosterSelectBtn.disabled=busy;
 }
 function setRosterSelectMode(on){
+  if(bulkActionBusy||rosterSelectMode===Boolean(on))return;
   if(on)rosterEditor.close(false);
-  if(bulkExitBusy)return;
   rosterSelectMode=Boolean(on);
   if(!rosterSelectMode)bulkSelectedAgents.clear();
-  clearBulkExitArm();
+  clearBulkActionArm();
   rosterCol.classList.toggle('select-mode',rosterSelectMode);
   rosterSelectBtn.classList.toggle('on',rosterSelectMode);
   rosterSelectBtn.setAttribute('aria-pressed',String(rosterSelectMode));
+  if(rosterSelectMode)loadStoppedSelectAgents();
+  else{
+    stoppedSelectRequest?.abort();stoppedSelectRequest=null;
+    if(stoppedSelectAgents.length){stoppedSelectAgents=[];renderRoster();return;}
+  }
   refreshBulkTileStates();updateRosterBulkUI();
 }
 function toggleBulkAgent(name){
   const agent=currentAgentNamed(name);
-  if(!rosterSelectMode||!isBulkExitEligibleAgent(agent))return;
-  clearBulkExitArm();
+  if(!rosterSelectMode||bulkActionBusy||!isBulkSelectableAgent(agent))return;
+  clearBulkActionArm();
   if(bulkSelectedAgents.has(name))bulkSelectedAgents.delete(name);
   else bulkSelectedAgents.add(name);
   refreshBulkTileStates();updateRosterBulkUI();
@@ -8928,48 +8976,98 @@ function handleRosterTileClick(name,event){
   jumpToAgent(name,event);
 }
 function reconcileBulkSelection(agents){
-  const eligible=new Set(agents.filter(isBulkExitEligibleAgent).map(agent=>agent.name));
-  let changed=false;
-  bulkSelectedAgents.forEach(name=>{
-    if(!eligible.has(name)){bulkSelectedAgents.delete(name);changed=true;}
-  });
-  if(changed)clearBulkExitArm();
+  if(!bulkActionBusy){
+    const eligible=new Set(agents.filter(isBulkSelectableAgent).map(agent=>agent.name));
+    bulkSelectedAgents.forEach(name=>{
+      if(!eligible.has(name)){bulkSelectedAgents.delete(name);clearBulkActionArm();}
+    });
+  }
   refreshBulkTileStates();updateRosterBulkUI();
 }
+async function postBulkAgentAction(action,body){
+  const response=await fetch(`/api/${action}`,{
+    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),
+  });
+  const result=await response.json().catch(()=>null);
+  if(!response.ok||!result?.ok)throw new Error(result?.error||`HTTP ${response.status}`);
+  return result;
+}
 async function runBulkExit(){
-  if(bulkExitBusy)return;
-  const names=[...bulkSelectedAgents].filter(name=>isBulkExitEligibleAgent(currentAgentNamed(name)));
-  if(!names.length){setRosterSelectMode(false);return;}
-  if(!bulkExitArmed){
-    bulkExitArmed=true;rosterBulkExit.classList.add('arm');updateRosterBulkUI();
-    bulkExitArmTimer=setTimeout(()=>{clearBulkExitArm();updateRosterBulkUI();},BULK_EXIT_ARM_MS);
-    return;
-  }
-  clearBulkExitArm();bulkExitBusy=true;updateRosterBulkUI();
-  rosterBulkExit.textContent='Exiting…';
+  if(bulkActionBusy)return;
+  const names=[...bulkSelectedAgents].filter(name=>{
+    const agent=currentAgentNamed(name);
+    return isBulkSelectableAgent(agent)&&isBulkExitEligibleAgent(agent);
+  });
+  if(!names.length||!confirmBulkAction('exit'))return;
+  clearBulkActionArm();bulkActionBusy='exit';updateRosterBulkUI();
   let succeeded=0,failed=0;
   const failures=[];
   for(const name of names){
     try{
-      const response=await fetch('/api/exit',{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({session:name}),
-      });
-      let result={};
-      try{result=await response.json();}catch(_){/* status still identifies failure */}
-      if(response.ok&&result.ok)succeeded+=1;
-      else{
-        failed+=1;failures.push(`${name}: ${result.error||`HTTP ${response.status}`}`);
-      }
+      await postBulkAgentAction('exit',{session:name});
+      succeeded+=1;
     }catch(error){
       failed+=1;failures.push(`${name}: ${String(error&&error.message||error)}`);
     }
   }
   if(failures.length)console.warn('bulk exit failures',failures);
-  bulkExitBusy=false;setRosterSelectMode(false);
+  bulkActionBusy=null;setRosterSelectMode(false);
   // The first failure's reason, not only a count: "1 failed" alone sent the
   // 2026-10-01 seminar looking for a bug in the wrong place.
   showToast(`BULK EXIT · ${succeeded} succeeded${failed?` · ${failed} failed — ${failures[0]}`:''}`,failed>0,failed?9000:4200);
+}
+async function waitForBulkRebootExit(name,timeoutMs=30000,pollMs=1500){
+  const controller=new AbortController();
+  const deadline=performance.now()+timeoutMs;
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{
+    while(!controller.signal.aborted){
+      const response=await fetch('/telemetry/agents?scope=live',{
+        cache:'no-store',signal:controller.signal,
+      }).catch(()=>null);
+      if(response?.ok){
+        const roster=await response.json().catch(()=>null);
+        if(Array.isArray(roster?.agents)&&!controller.signal.aborted){
+          const agent=roster.agents.find(row=>row?.name===name);
+          // The live scope omits stopped rows. Older dashboards return them.
+          const state=normalizeSearchText(agent?.category||agent?.state);
+          if(!agent||(!isBulkAgentRunning(agent)&&['finished','gone','retired'].includes(state)))return;
+        }
+      }
+      const remaining=deadline-performance.now();
+      if(controller.signal.aborted||remaining<=0)break;
+      await new Promise(resolve=>setTimeout(resolve,Math.min(pollMs,remaining)));
+    }
+    throw new Error('timed out waiting for exit');
+  }finally{clearTimeout(timer);}
+}
+async function runBulkReboot(){
+  if(bulkActionBusy)return;
+  const names=[...bulkSelectedAgents].filter(name=>isBulkSelectableAgent(currentAgentNamed(name)));
+  if(!names.length||!confirmBulkAction('reboot'))return;
+  clearBulkActionArm();bulkActionBusy='reboot';updateRosterBulkUI();
+  const failures=[];
+  for(const name of names){
+    try{
+      const agent=currentAgentNamed(name);
+      if(agent&&!isBulkSelectableAgent(agent))throw new Error('agent is protected');
+      if(isBulkAgentRunning(agent)){
+        await postBulkAgentAction('exit',{session:name});
+        await waitForBulkRebootExit(name);
+      }
+      // Current dashboards read `open`; keep the explicit terminal preference for both API forms.
+      const result=await postBulkAgentAction('jump',{session:name,open_terminal:false,open:false});
+      if(result.action==='already_running')throw new Error('previous session is still running');
+    }catch(error){
+      const reason=String(error?.message||error).replace(/\s+/g,' ').trim();
+      failures.push(`${name}: ${reason}`);
+    }
+  }
+  bulkActionBusy=null;setRosterSelectMode(false);
+  const failed=failures.length;
+  showToast([`Reboot · ${names.length-failed} succeeded${failed?` · ${failed} failed`:''}`,...failures].join('\n'),
+    failed>0,failed?9000:4200);
+  if(failed)toastEl.classList.add('multiline');
 }
 /* ── who needs a person ──
    A running agent is in one of three states worth counting: it is working,
@@ -9016,6 +9114,7 @@ rosterFilterClear.addEventListener('click',()=>{
 });
 rosterSelectBtn.addEventListener('click',()=>setRosterSelectMode(!rosterSelectMode));
 rosterBulkExit.addEventListener('click',runBulkExit);
+rosterBulkReboot.addEventListener('click',runBulkReboot);
 
 function detailTimestamp(ts){
   const seconds=Number(ts);if(!Number.isFinite(seconds)||seconds<=0)return'';
@@ -9349,6 +9448,45 @@ function reorderRoster(live){
   paintPinnedBoundary();
   rosterEditor.reposition();
 }
+function prepareRosterRow(agent){
+  agent.registered_task=agent.task||'';
+  agent.task=OrreryRosterEdit.effectiveTask(agent);
+  return agent;
+}
+function renderRoster(){
+  const seen=new Set(liveRosterAgents.map(agent=>agent.name));
+  const agents=liveRosterAgents.concat(stoppedSelectAgents.filter(agent=>!seen.has(agent.name)));
+  noteDescriptorTasks(agents);
+  descriptorStore.retain(agents.map(agent=>agent.name));
+  agents.forEach(agent=>{agent.descriptor=descriptorStore.get(agent,agents);});
+  currentAgents=agents;
+  assignLineageHues(agents);
+  agents.forEach(agent=>{tileFor(agent);seen.add(agent.name);});
+  tiles.forEach((el,name)=>{if(!seen.has(name)){hideAgentDetail(el);el.remove();tiles.delete(name);}});
+  reconcileBulkSelection(agents);
+  noteActivity(liveRosterAgents);
+  reorderRoster(agents);
+  renderCrewCounts(liveRosterAgents);
+  paintSplitRoles(liveRosterAgents);
+  refreshPaneHeadings();
+  applyRosterFilter();
+  document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:liveRosterAgents}}));
+  if(paletteOverlay.classList.contains('on'))renderPalette();
+}
+async function loadStoppedSelectAgents(){
+  // The default roster stays live-only. Fetch finished sessions once for Select.
+  const controller=new AbortController();stoppedSelectRequest=controller;
+  try{
+    const response=await fetch('/telemetry/agents',{cache:'no-store',signal:controller.signal});
+    if(!response.ok)return;
+    const roster=await response.json();
+    if(controller.signal.aborted||!Array.isArray(roster?.agents))return;
+    stoppedSelectAgents=roster.agents.filter(agent=>agent?.category==='finished'&&isBulkSelectableAgent(agent))
+      .map(prepareRosterRow);
+    if(stoppedSelectAgents.length)renderRoster();
+  }catch(_){/* live selections remain available if the history request fails */}
+  finally{if(stoppedSelectRequest===controller)stoppedSelectRequest=null;}
+}
 async function pollAgents(){
   const annotationEpoch=rosterAnnotationEpoch;
   try{
@@ -9371,27 +9509,10 @@ async function pollAgents(){
     // warmup(warm-*/pending-*) はプール予熱でありエージェントではない。
     // 従来は名前順で最下部に沈んで見えなかったが、recency ソート導入で
     // 浮上するようになったため明示除外（claim され改名された時点で現れる）。
-    const live=(d.agents||[]).filter(a=>
-      (a.running||a.category==='agent')&&a.category!=='warmup');
-    live.forEach(agent=>{agent.registered_task=agent.task||'';agent.task=OrreryRosterEdit.effectiveTask(agent);});
-    noteDescriptorTasks(live);
-    descriptorStore.retain(live.map(agent=>agent.name));
-    live.forEach(agent=>{agent.descriptor=descriptorStore.get(agent,live);});
-    currentAgents=live;
-    assignLineageHues(live);
-    const seen=new Set();
-    live.forEach(a=>{tileFor(a);seen.add(a.name);});
-    tiles.forEach((el,n)=>{if(!seen.has(n)){hideAgentDetail(el);el.remove();tiles.delete(n);}});
-    reconcileBulkSelection(live);
-    noteActivity(live);        // must run before the sort that reads it
-    reorderRoster(live);
-    renderCrewCounts(live);
+    liveRosterAgents=(d.agents||[]).filter(a=>
+      (a.running||a.category==='agent')&&a.category!=='warmup').map(prepareRosterRow);
+    renderRoster();
     rosterTag.hidden=true;rosterTag.textContent='';agentDot.className='dot open';
-    paintSplitRoles(live);
-    refreshPaneHeadings();
-    applyRosterFilter();
-    document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:live}}));
-    if(paletteOverlay.classList.contains('on'))renderPalette();
   }catch(e){rosterTag.hidden=false;rosterTag.textContent='dashboard offline';agentDot.className='dot error';return false;}
 }
 
