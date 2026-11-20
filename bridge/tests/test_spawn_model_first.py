@@ -239,7 +239,7 @@ def test_submit_cloud_defaults_and_optional_local_parameters_without_real_spawn(
           {id:'local-fixture',locality:'local',program:'codex-cli',models:[{id:'local-one',default:true}],
             harnesses:[{id:'example-tool',default:true,available:true}],helper_models:['small']}],naming:{},dirs:[]};
         selFamily=null;selProvider=null;selModel=null;selHarness=null;selScientist='';
-        spawnDirPath='/workspace';spawnTask.value='Test accepted launch';populateSpawnParents();renderProviderTabs();
+        spawnDirPath='/workspace';spawnTask.value='Test accepted launch';renderProviderTabs();
         const cloudModels=[...modelChoices.querySelectorAll('input[name="spawnModel"]')].map(i=>i.value);
         await submitSpawn(new Event('submit',{cancelable:true}));
         providerTabs.querySelector('[data-family="codex"]').click();
@@ -324,23 +324,26 @@ def test_launcher_and_model_sheet_fit_and_name_options_reset(tour_browser, width
       const within=element=>{const box=element.getBoundingClientRect();return box.width>0&&box.left>=0&&box.right<=innerWidth&&box.bottom<=innerHeight;};
       try{
         openSpawnModal();await settle();
-        const normal={name:spawnNameSheet.hidden,model:spawnModelSheet.hidden,advanced:spawnAdvanced.hidden,disabled:spawnSubmit.disabled};
-        spawnNameButton.click();const options=agentStrip.querySelectorAll('[role=option]').length;
-        spawnAdvancedButton.click();const advancedOpen=!spawnAdvanced.hidden;
+        const normal={name:spawnNameSheet.hidden,model:spawnModelSheet.hidden,disabled:spawnSubmit.disabled};
+        spawnNameButton.click();await settle();
+        const options=agentStrip.querySelectorAll('[role=option]').length;
+        const fieldsFit=within(spawnNameSearch)&&within(spawnRole);
+        spawnRole.value='Review';spawnRole.dispatchEvent(new Event('input'));
+        const preview=ncRole.textContent;
         closeSpawnModal();openSpawnModal();await settle();
-        const reset=spawnAdvanced.hidden&&spawnNameSheet.hidden;
+        const reset=spawnNameSheet.hidden&&ncRole.hidden&&spawnRole.value==='';
         const before=spawnSubmit.getBoundingClientRect();
         spawnModelButton.click();await settle();
         const range=effortChoices.querySelector('input[type=range]');
         const after=spawnSubmit.getBoundingClientRect();
-        return {normal,options,advancedOpen,reset,helper:within(spawnHelper),sheet:within(spawnModelSheet),
+        return {normal,options,fieldsFit,preview,reset,helper:within(spawnHelper),sheet:within(spawnModelSheet),
           launcher:within(spawnLauncher),fixed:before.bottom===after.bottom&&before.left===after.left,
           range:{max:Number(range.max),value:Number(range.value),label:range.getAttribute('aria-valuetext'),
             stops:effortChoices.querySelectorAll('.effort-stop').length,modelFits:modelChoices.scrollWidth<=modelChoices.clientWidth}};
       }finally{window.fetch=originalFetch;}
     })()''')
-    assert result['normal'] == dict(name=True, model=True, advanced=True, disabled=True)
-    assert result['options'] == 3 and result['advancedOpen'] and result['reset']
+    assert result['normal'] == dict(name=True, model=True, disabled=True)
+    assert result['options'] == 2 and result['fieldsFit'] and result['reset'] and result['preview']=='Review'
     assert all(result[k] for k in ['helper','sheet','launcher','fixed'])
     assert result['range'] == dict(max=5, value=3, label='Default (xhigh)', stops=6, modelFits=True)
 
@@ -632,3 +635,49 @@ def test_palette_keeps_agent_search_and_launches_from_an_unmatched_query(tour_br
     assert result['task'] == 'Review the launcher'
     assert result['paletteClosed'] and result['fromPalette'] and not result['open']
     assert len(result['posts']) == 1 and result['posts'][0]['task'] == result['task']
+
+
+def test_scientist_grid_scrolls_filters_and_remembers_successful_names(tour_browser):
+    client,evaluate=tour_browser
+    names=sorted(p.stem for p in (BRIDGE.parent/'assets'/'portraits').glob('*.png'))
+    assert len(names)==50
+    catalog=dict(providers=[dict(id='claude',program='claude-code',models=[dict(id='fixture')])],
+        naming=dict(scientists=names,adjectives=['Calm']),dirs=[])
+    evaluate('''(async()=>{
+      const catalog=CATALOG;
+      window.fetch=async url=>({ok:true,json:async()=>url==='/telemetry/spawn'?{ok:true, child_name:'CalmCurie'}:
+        url.startsWith('/telemetry/fs/dirs')?{path:'/work',dirs:[]}:catalog});
+      SpawnPicker.remember(spawnViewerStorage,SPAWN_NAME_RECENT_KEY,'Noether');
+      openSpawnModal();await loadSpawnCatalog();
+      spawnNameButton.click();
+      await new Promise(resolve=>setTimeout(resolve,550));
+    })()'''.replace('CATALOG',json.dumps(catalog)))
+    initial=evaluate('''(()=>{
+      const options=spawnScientistOptions(),box=agentStrip.getBoundingClientRect();
+      const visibleRows=new Set(options.filter(option=>option.getBoundingClientRect().bottom<=box.bottom+1)
+        .map(option=>option.offsetTop));
+      return {focused:document.activeElement===spawnNameSearch,count:options.length,rows:visibleRows.size,
+        first:options[0].dataset.scientist,remainingStartsSecond:options[1].offsetTop>options[0].offsetTop,
+        scrolls:agentStrip.scrollHeight>agentStrip.clientHeight};
+    })()''')
+    assert initial == dict(focused=True,count=50,rows=4,first='Noether',remainingStartsSecond=True,scrolls=True)
+    for key,code,expected in [('ArrowDown',40,'Noether'),('ArrowDown',40,'Archimedes'),('ArrowRight',39,'Arrhenius')]:
+        client.call('Input.dispatchKeyEvent',type='keyDown',key=key,code=key,windowsVirtualKeyCode=code)
+        client.call('Input.dispatchKeyEvent',type='keyUp',key=key,code=key,windowsVirtualKeyCode=code)
+        assert evaluate('document.activeElement.dataset.scientist')==expected
+    evaluate("""spawnNameSearch.focus();spawnNameSearch.value='Cu';spawnNameSearch.dispatchEvent(new Event('input'))""")
+    assert evaluate('spawnScientistOptions().map(option=>option.dataset.scientist)')==['Curie']
+    for key,code in [('ArrowDown',40),('Enter',13)]:
+        client.call('Input.dispatchKeyEvent',type='keyDown',key=key,code=key,windowsVirtualKeyCode=code)
+        client.call('Input.dispatchKeyEvent',type='keyUp',key=key,code=key,windowsVirtualKeyCode=code)
+    assert evaluate("({chosen:selScientist,name:composedName(),option:spawnScientistOptions()[0].getAttribute('aria-selected')})")==dict(chosen='Curie',name='CalmCurie',option='true')
+    assert evaluate("spawnNameSheet.querySelectorAll('svg use[href=\"#spawn-icon-dice\"]').length")==1
+    assert evaluate("spawnScientistOptions()[0].click();spawnPayloadFromForm().name") is None
+    assert evaluate("spawnScientistOptions()[0].click();spawnPayloadFromForm().name")=='CalmCurie'
+    saved=evaluate('''(async()=>{
+      spawnTask.value='Review the launcher';await submitSpawn(new Event('submit',{cancelable:true}));
+      openSpawnModal();await loadSpawnCatalog();spawnNameButton.click();
+      return {history:SpawnPicker.recent(spawnViewerStorage,SPAWN_NAME_RECENT_KEY),
+        top:spawnScientistOptions().slice(0,2).map(option=>option.dataset.scientist)};
+    })()''')
+    assert saved==dict(history=['Curie','Noether'],top=['Curie','Noether'])

@@ -52,8 +52,7 @@ def catalog():
 
 @pytest.mark.parametrize('provider,harness', [('claude','claude-code'),('codex','codex-cli'),('gemini','gemini'),
     ('deepseek','dsh'),('deepseek','hermes'),('strata','dsh'),('strata','hermes')])
-@pytest.mark.parametrize('parent', ['', 'OtherHarnessParent'])
-def test_all_families_use_the_same_form_payload_and_parent_candidates(tour_browser,provider,harness,parent):
+def test_all_families_use_the_same_standalone_form_payload(tour_browser,provider,harness):
     _,evaluate=tour_browser
     result=evaluate('''(async()=>{
       const original=window.fetch,posts=[];
@@ -62,34 +61,30 @@ def test_all_families_use_the_same_form_payload_and_parent_candidates(tour_brows
         :original(url,options);
       try{
         spawnCatalog=CATALOG;
-        currentAgents=[{name:'OtherHarnessParent',program:'hermes',provider:'local',running:true,category:'agent'},
-          {name:'ClaudeParent',program:'claude-code',provider:'anthropic',running:true,category:'agent'},
-          {name:'Stopped',running:false,category:'agent'},{name:'Human',running:true,category:'human'}];
         selFamily=null;selProvider=null;selModel=null;selHarness=null;selScientist='';
-        spawnOverlay.classList.add('on');populateSpawnParents();renderProviderTabs();renderAgentStrip();
+        spawnOverlay.classList.add('on');renderProviderTabs();renderAgentStrip();
         providerTabs.querySelector('[data-family="'+FAMILY+'"]').click();
         spawnHarnesses.querySelector('[data-harness="'+HARNESS+'"]').click();
-        spawnParent.value=PARENT;
         spawnNameButton.click();agentStrip.querySelector('[role=option]:has(.cp-lab)').click();spawnAdjective.value='Bold';updateNameCard();
-        spawnTask.value='Use the selected folder';spawnDirPath='/source';spawnRole.value='research';spawnEmoji.value='🔭';
-        spawnWorktree.checked=Boolean(PARENT);spawnGhostty.checked=Boolean(PARENT);
+        spawnTask.value='Use the selected folder';spawnDirPath='/source';spawnRole.value=' research ';spawnRole.dispatchEvent(new Event('input'));
         const controls={picker:spawnOpenSheet===spawnNameSheet,portrait:!ncPortrait.hidden,
-          worktreeEnabled:!spawnWorktree.disabled,terminalEnabled:!spawnGhostty.disabled,advanced:!spawnAdvanced.hidden,harnessHidden:spawnHarnesses.hidden,
-          checks:!!document.getElementById('spawnManagedFields'),launchRows:!!document.getElementById('spawnLaunches'),
+          role:ncRole.textContent,harnessHidden:spawnHarnesses.hidden,
+          removed:['spawnParent','spawnGroup','spawnEmoji','spawnWorktree','spawnGhostty','spawnAdvanced','spawnManagedFields','spawnLaunches']
+            .every(id=>!document.getElementById(id)),
           helperHidden:document.getElementById('spawnHelperField').hidden,
-          parents:[...spawnParent.options].map(o=>o.value),harnesses:[...spawnHarnesses.querySelectorAll('button')].map(b=>b.dataset.harness)};
+          harnesses:[...spawnHarnesses.querySelectorAll('button')].map(b=>b.dataset.harness)};
         await submitSpawn(new Event('submit',{cancelable:true}));
         return {posts,controls};
       }finally{window.fetch=original;}
     })()'''.replace('CATALOG',json.dumps(catalog())).replace('FAMILY',json.dumps('local' if provider=='strata' else provider))
-        .replace('HARNESS',json.dumps(harness)).replace('PARENT',json.dumps(parent)))
+        .replace('HARNESS',json.dumps(harness)))
     assert len(result['posts'])==1
     payload=result['posts'][0]
     assert payload['provider']==provider and payload['model']==provider+'-model'
     assert payload['name']=='BoldTesla' and payload['task']=='Use the selected folder'
-    assert payload['parent']==(parent or None) and payload['standalone'] is (not bool(parent))
-    assert payload['worktree'] is bool(parent) and payload['headless'] is (not bool(parent))
-    assert payload['dir']=='/source' and payload['role']=='research' and payload['emoji']=='🔭'
+    assert payload['parent'] is None and payload['standalone'] is True
+    assert payload['worktree'] is False and payload['worktree_base']=='' and payload['headless'] is True
+    assert payload['dir']=='/source' and payload['role']=='research' and payload['emoji']=='' and payload['group']==''
     assert payload['async'] is True
     assert payload['effort']=='high'
     assert not {'attempt_id','managed','task_mode','report_policy','allowed_paths','expected','family','locality'} & payload.keys()
@@ -98,10 +93,8 @@ def test_all_families_use_the_same_form_payload_and_parent_candidates(tour_brows
     else:
         assert 'harness' not in payload
     controls=result['controls']
-    assert controls['picker'] and controls['portrait'] and controls['worktreeEnabled'] and controls['terminalEnabled']
-    assert not controls['advanced'] and not controls['checks'] and not controls['launchRows']
-    assert controls['helperHidden']
-    assert set(controls['parents'])=={'','OtherHarnessParent','ClaudeParent'}
+    assert controls['picker'] and controls['portrait'] and controls['removed'] and controls['helperHidden']
+    assert controls['role']=='research'
     assert controls['harnessHidden'] is (provider not in ('deepseek','strata'))
     assert controls['harnesses']==(['dsh','hermes'] if provider in ('deepseek','strata') else [harness])
 
@@ -145,7 +138,7 @@ def test_standard_async_status_is_queried_by_child_name(tour_browser,verdict):
       };
       try{
         spawnCatalog=CATALOG;selFamily='deepseek';selProvider='deepseek';selModel='deepseek-model';selHarness='dsh';selScientist='';renderProviderTabs();
-        spawnOverlay.classList.add('on');spawnParent.value='';spawnTask.value='Initial task';spawnDirPath='/source';
+        spawnOverlay.classList.add('on');spawnTask.value='Initial task';spawnDirPath='/source';
         const completion=submitSpawn(new Event('submit',{cancelable:true}));
         await new Promise(r=>setTimeout(r,50));
         const busy=spawnSubmit.disabled&&spawnForm.getAttribute('aria-busy')==='true'&&started===0;

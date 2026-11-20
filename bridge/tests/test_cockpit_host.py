@@ -249,13 +249,13 @@ def test_shortcuts_follow_the_host():
 
 def test_labels_follow_the_host():
     r = _run("""const h=normalizeHostPlatform;return {
-      mac:[paletteShortcutLabel(h(MAC)),splitClickLabel(h(MAC)),terminalActionText(h(MAC)),terminalSpawnLabel(h(MAC))],
-      linux:[paletteShortcutLabel(h(LINUX)),terminalActionText(h(LINUX)),terminalSpawnLabel(h(LINUX))],
-      wsl:[paletteShortcutLabel(h(WSL)),splitClickLabel(h(WSL)),terminalActionText(h(WSL)),terminalSpawnLabel(h(WSL))],
+      mac:[paletteShortcutLabel(h(MAC)),splitClickLabel(h(MAC)),terminalActionText(h(MAC))],
+      linux:[paletteShortcutLabel(h(LINUX)),terminalActionText(h(LINUX))],
+      wsl:[paletteShortcutLabel(h(WSL)),splitClickLabel(h(WSL)),terminalActionText(h(WSL))],
     };""")
-    assert r["mac"] == ["⌘K", "⌘+click", "GHOSTTY", "Open a Ghostty window"]
-    assert r["linux"] == ["⌘K", "GHOSTTY", "Open a Ghostty window"]
-    assert r["wsl"] == ["Alt+K", "Ctrl+click", "WIN TERMINAL", "Open a Windows Terminal tab"]
+    assert r["mac"] == ["⌘K", "⌘+click", "GHOSTTY"]
+    assert r["linux"] == ["⌘K", "GHOSTTY"]
+    assert r["wsl"] == ["Alt+K", "Ctrl+click", "WIN TERMINAL"]
 
 
 def test_the_shortcuts_are_wired_to_the_page_and_the_terminal():

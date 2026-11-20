@@ -1407,7 +1407,6 @@
     <symbol id="spawn-icon-browser" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01m3 0h.01"/></symbol>
     <symbol id="spawn-icon-browse" viewBox="0 0 24 24"><path d="M5 4v13h14M5 8h14M9 12h10M9 17v3"/></symbol>
     <symbol id="spawn-icon-back" viewBox="0 0 24 24"><path d="m11 6-6 6 6 6m-6-6h14"/></symbol>
-    <symbol id="spawn-icon-settings" viewBox="0 0 24 24"><path d="M10 3h4l.6 2.4 1.6.9 2.4-.7 2 3.4-1.8 1.8v2.4l1.8 1.8-2 3.4-2.4-.7-1.6.9-.6 2.4h-4l-.6-2.4-1.6-.9-2.4.7-2-3.4 1.8-1.8v-2.4L3.4 9l2-3.4 2.4.7 1.6-.9z"/><circle cx="12" cy="12" r="2.8"/></symbol>
     <symbol id="spawn-icon-reset" viewBox="0 0 24 24"><path d="M5 5v5h5M5 10a7 7 0 1 1 1 7"/></symbol>
     <symbol id="spawn-icon-recent" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></symbol>
     <symbol id="spawn-icon-preset" viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/></symbol>
@@ -1420,7 +1419,8 @@
       <div class="spawn-status" id="spawnStatus" role="alert" hidden></div>
       <div class="spawn-row">
         <button class="spawn-chip spawn-name-chip" id="spawnNameButton" type="button" aria-expanded="false" aria-controls="spawnNameSheet" title="Agent name" aria-label="Agent name">
-          <img id="ncPortrait" alt="" hidden><span id="ncDiceFace"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-dice"/></svg></span><span id="ncName" hidden></span>
+          <img id="ncPortrait" alt="" hidden><span id="ncDiceFace"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-dice"/></svg></span>
+          <span class="spawn-name-copy" id="spawnNameCopy" hidden><span id="ncName" hidden></span><span id="ncRole" hidden></span></span>
         </button>
         <button class="spawn-chip" id="spawnModelButton" type="button" aria-expanded="false" aria-controls="spawnModelSheet" title="Model and effort" aria-label="Model and effort">
           <span id="spawnModelMark"></span><span id="spawnModelLabel">Model</span><span class="spawn-pips" id="spawnPips" hidden aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
@@ -1437,33 +1437,18 @@
     </div>
     <section class="spawn-sheet" id="spawnNameSheet" aria-label="Agent name" hidden>
       <div class="spawn-sheet-in">
-        <div class="spawn-sheet-bar">
-          <div class="nc-adj" id="ncAdjWrap" hidden>
-            <input id="spawnAdjective" type="text" maxlength="24" autocomplete="off" aria-label="Adjective" placeholder="Adjective" list="adjOptions">
-            <datalist id="adjOptions"></datalist>
-            <button type="button" class="spawn-icon-button" id="adjDice" aria-label="Roll adjective" title="Roll adjective"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-dice"/></svg></button>
-          </div>
-          <button type="button" class="spawn-icon-button" id="spawnAdvancedButton" aria-expanded="false" aria-controls="spawnAdvanced" aria-label="Launch settings" title="Launch settings"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-settings"/></svg></button>
+        <label class="spawn-search">
+          <svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-search"/></svg>
+          <input id="spawnNameSearch" type="search" placeholder="Find a name" aria-label="Find a name" aria-controls="agentStrip" autocomplete="off" spellcheck="false">
+        </label>
+        <input id="spawnRole" type="text" maxlength="40" aria-label="Role" placeholder="Role" autocomplete="off">
+        <div class="nc-adj" id="ncAdjWrap" hidden>
+          <input id="spawnAdjective" type="text" maxlength="24" autocomplete="off" aria-label="Adjective" placeholder="Adjective" list="adjOptions">
+          <datalist id="adjOptions"></datalist>
+          <button type="button" class="spawn-icon-button" id="adjDice" aria-label="Roll adjective" title="Roll adjective"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-dice"/></svg></button>
         </div>
         <div class="agent-strip" id="agentStrip" role="listbox" aria-label="Scientists"></div>
-        <div id="spawnAdvanced" hidden>
-        <div class="advanced-grid">
-          <div class="field"><label for="spawnParent">Lineage</label>
-            <select id="spawnParent"></select></div>
-          <div class="field"><label for="spawnGroup">Group</label>
-            <input id="spawnGroup" type="text" maxlength="24"></div>
-          <div class="field"><span class="field-label">Role / emoji</span>
-            <div class="field-row"><input id="spawnRole" type="text" maxlength="40" aria-label="Role">
-              <input id="spawnEmoji" type="text" maxlength="8" aria-label="Emoji"></div></div>
-          <div class="field">
-            <label class="worktree-line"><input id="spawnWorktree" type="checkbox">Run in isolated worktree</label>
-            <div class="worktree-base" id="spawnWorktreeBaseWrap">
-              <input id="spawnWorktreeBase" type="text" placeholder="Base revision" aria-label="Base revision" title="Default: HEAD">
-            </div></div>
-          <div class="field">
-            <label class="worktree-line"><input id="spawnGhostty" type="checkbox">Open a Ghostty window</label></div>
-        </div>
-        </div>
+        <p class="spawn-empty" id="spawnNameEmpty" role="status" hidden>No matching names.</p>
       </div>
     </section>
     <section class="spawn-sheet" id="spawnModelSheet" aria-label="Model and effort" hidden>
@@ -4130,9 +4115,9 @@
       }
     }
   },
-  "inventory_digest": "69e780969be0c89cfdc61aae206e4ec55b5477c170f0b10ca2c3aecda4712e1f",
+  "inventory_digest": "7c5b12fdf7fe6bdc02a6d39ad188523f1fdd56693530c090860a3f05b2027044",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "b996646a2b3d3d736fc6215d49ba9d805707f36391efb83a757d8d36ec4c0be4",
+  "source_digest": "94ed3739c4317d329f0b82d3a658e6f8522b046b689c23078c637a80a8500018",
   "surface": "cockpit",
   "version": 1
 }
@@ -4252,10 +4237,6 @@ function fuzzyPaletteItems(items,query,limit=18){
     .filter(hit=>hit.score!==null)
     .sort((a,b)=>b.score-a.score||a.index-b.index)
     .slice(0,limit).map(hit=>hit.item);
-}
-function spawnParentCandidates(agents){
-  return agents.filter(agent=>agent.name&&agent.running&&agent.category==='agent').sort((a,b)=>
-    Number(b.last_active||0)-Number(a.last_active||0)||a.name.localeCompare(b.name));
 }
 function buildSpawnPayload(values){
   const source=values&&typeof values==='object'?values:{};
@@ -4666,9 +4647,6 @@ function terminalYieldsHostShortcut(event,host){
 function paletteShortcutLabel(host){return usesAltShortcuts(host)?'Alt+K':'⌘K';}
 function splitClickLabel(host){return usesAltShortcuts(host)?'Ctrl+click':'⌘+click';}
 function terminalActionText(host){return usesAltShortcuts(host)?'WIN TERMINAL':'GHOSTTY';}
-function terminalSpawnLabel(host){
-  return host&&host.terminal&&host.terminal.kind==='wt'?'Open a Windows Terminal tab':'Open a Ghostty window';
-}
 /* File, image and file:// pastes need a clipboard reader in the backend: the
    macOS pasteboard, or under WSL the Windows clipboard via powershell.exe
    (file_paste says whether that one can run). */
@@ -8314,8 +8292,6 @@ function applyHostPlatform(raw){
   if(sig)sig.textContent=paletteShortcutLabel(hostPlatform);
   const launchButton=document.getElementById('spawnSubmit');
   if(launchButton)launchButton.title=usesAltShortcuts(hostPlatform)?'Launch (Ctrl+Enter)':'Launch (⌘↵)';
-  const spawnLabel=document.getElementById('spawnGhostty');
-  if(spawnLabel&&spawnLabel.parentElement)spawnLabel.parentElement.lastChild.textContent=terminalSpawnLabel(hostPlatform);
   if(stageEmpty&&stageEmpty.innerHTML.includes('adds it to a split'))stageEmpty.innerHTML=stageEmptyHtml();
   const p=panes.get(activeId);
   paintGhosttyAction(p?{paneId:activeId,session:p.session}:null);
@@ -9429,7 +9405,6 @@ async function pollAgents(){
     refreshPaneHeadings();
     applyRosterFilter();
     document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:live}}));
-    if(spawnOverlay.classList.contains('on'))populateSpawnParents();
     if(paletteOverlay.classList.contains('on'))renderPalette();
   }catch(e){rosterTag.hidden=false;rosterTag.textContent='dashboard offline';agentDot.className='dot error';return false;}
 }
@@ -9587,23 +9562,14 @@ paletteOverlay.addEventListener('mousedown',event=>{if(event.target===paletteOve
 /* ── new-agent spawn modal ── */
 const spawnOverlay=document.getElementById('spawnOverlay');
 const spawnForm=document.getElementById('spawnForm');
-const spawnParent=document.getElementById('spawnParent');
 const spawnTask=document.getElementById('spawnTask');
 const spawnRole=document.getElementById('spawnRole');
-const spawnEmoji=document.getElementById('spawnEmoji');
-const spawnGroup=document.getElementById('spawnGroup');
-const spawnWorktree=document.getElementById('spawnWorktree');
-const spawnGhostty=document.getElementById('spawnGhostty');
-const spawnWorktreeBase=document.getElementById('spawnWorktreeBase');
-const spawnWorktreeBaseWrap=document.getElementById('spawnWorktreeBaseWrap');
-const spawnAdvanced=document.getElementById('spawnAdvanced');
 const spawnSubmit=document.getElementById('spawnSubmit');
 const spawnStatus=document.getElementById('spawnStatus');
 const toastEl=document.getElementById('toast');
 const spawnLauncher=document.getElementById('spawnLauncher');
 const spawnNameButton=document.getElementById('spawnNameButton');
 const spawnModelButton=document.getElementById('spawnModelButton');
-const spawnAdvancedButton=document.getElementById('spawnAdvancedButton');
 const spawnNameSheet=document.getElementById('spawnNameSheet');
 const spawnModelSheet=document.getElementById('spawnModelSheet');
 let spawnBusy=false,toastTimer=null,spawnLastFocus=null,spawnProblem='',spawnResumeDraft=false;
@@ -9683,26 +9649,6 @@ window.addEventListener('resize',()=>{
 spawnForm.addEventListener('pointerdown',event=>{
   if(spawnOpenSheet&&!spawnOpenSheet.contains(event.target)&&!spawnOpenChip.contains(event.target))dismissSpawnSheet();
 });
-spawnAdvancedButton.addEventListener('click',()=>{
-  spawnAdvanced.hidden=!spawnAdvanced.hidden;
-  spawnAdvancedButton.setAttribute('aria-expanded',String(!spawnAdvanced.hidden));
-  positionSpawnSheet(spawnNameSheet,spawnNameButton);
-});
-
-function populateSpawnParents(){
-  const previous=spawnParent.value;
-  const parents=spawnParentCandidates(currentAgents);
-  spawnParent.innerHTML='';
-  const solo=document.createElement('option');solo.value='';
-  solo.textContent='Standalone';spawnParent.appendChild(solo);
-  parents.forEach(agent=>{
-    const option=document.createElement('option');option.value=agent.name;
-    option.textContent=agent.name;spawnParent.appendChild(option);
-  });
-  if(previous&&parents.some(agent=>agent.name===previous))spawnParent.value=previous;
-  updateSpawnAvailability();
-}
-
 /* ── spawn catalog: providers/models/efforts/dirs/naming, all declarative ──
    adding a future AI = a catalog entry on the dashboard + a launcher branch
    in spawn_child.sh; this UI renders whatever the catalog says. */
@@ -9713,6 +9659,8 @@ let selUrlIndex=null,selUrlKey=null;
 const SPAWN_RECENT_STORAGE_KEY='orrery.spawn-local-recent.v1';
 const SPAWN_SEARCH_STORAGE_KEY='orrery.spawn-local-search.v1';
 const SPAWN_DIR_RECENT_KEY='orrery.spawn-dir-recent.v1';
+const SPAWN_NAME_RECENT_KEY='orrery.spawn-scientist-recent.v1';
+const SPAWN_SCIENTIST_COLUMNS=5;
 let spawnViewerStorage=null;try{spawnViewerStorage=window.localStorage;}catch(_){/* viewer history is optional */}
 const dirCrumbs=document.getElementById('dirCrumbs');
 const dirList=document.getElementById('dirList');
@@ -9840,6 +9788,10 @@ spawnDirSearch.addEventListener('keydown',event=>{
 const spawnAdjective=document.getElementById('spawnAdjective');
 const adjOptions=document.getElementById('adjOptions');
 const agentStrip=document.getElementById('agentStrip');
+const spawnNameSearch=document.getElementById('spawnNameSearch');
+const spawnNameEmpty=document.getElementById('spawnNameEmpty');
+const spawnNameCopy=document.getElementById('spawnNameCopy');
+const ncRole=document.getElementById('ncRole');
 const providerTabs=document.getElementById('providerTabs');
 const modelChoices=document.getElementById('modelChoices');
 const effortRow=document.getElementById('effortRow');
@@ -10118,7 +10070,10 @@ spawnModelButton.addEventListener('click',()=>{
   moveSpawnMarker(spawnHarnesses,spawnHarnessMarker);
 });
 spawnNameButton.addEventListener('click',()=>{
-  toggleSpawnSheet(spawnNameSheet,spawnNameButton,agentStrip.querySelector('[aria-selected="true"]'));
+  if(spawnOpenSheet!==spawnNameSheet){
+    spawnNameSearch.value='';filterSpawnScientists();agentStrip.scrollTop=0;
+  }
+  toggleSpawnSheet(spawnNameSheet,spawnNameButton,spawnNameSearch);
 });
 /* Prefer structured catalog versions when present. Current Telemetry supplies
    model IDs, so parse the two cloud naming schemes without a release list.
@@ -10332,40 +10287,86 @@ function rollAdjective(){
   if(!free.length)return '';
   return free[Math.floor(Math.random()*free.length)];
 }
+function spawnScientistOptions(){
+  return Array.from(agentStrip.querySelectorAll('button:not([hidden])'));
+}
+function filterSpawnScientists(){
+  const query=spawnNameSearch.value.trim().normalize('NFKC').toLowerCase();
+  agentStrip.classList.toggle('filtering',Boolean(query));
+  for(const button of agentStrip.children){
+    button.hidden=Boolean(query)&&!button.dataset.scientist.normalize('NFKC').toLowerCase().startsWith(query);
+  }
+  spawnNameEmpty.hidden=spawnScientistOptions().length>0;
+}
 function renderAgentStrip(){
   const scientists=spawnCatalog?.naming?.scientists||[];
-  agentStrip.innerHTML='';
-  const auto=document.createElement('button');auto.type='button';
-  auto.className='agent-pick';auto.setAttribute('role','option');
-  auto.setAttribute('aria-selected',String(!selScientist));
-  auto.title='Generate a name';auto.setAttribute('aria-label',auto.title);
-  const dice=document.createElement('span');dice.className='cp-auto';dice.append(spawnIcon('dice'));auto.append(dice);
-  auto.addEventListener('click',()=>{
-    selScientist='';spawnProblem='';renderAgentStrip();updateNameCard();dismissSpawnSheet(true);
-  });
-  agentStrip.appendChild(auto);
-  scientists.forEach(s=>{
-    const b=document.createElement('button');b.type='button';
-    b.className='agent-pick';b.setAttribute('role','option');
-    b.setAttribute('aria-selected',String(selScientist===s));
+  const recent=SpawnPicker.recent(spawnViewerStorage,SPAWN_NAME_RECENT_KEY)
+    .filter(name=>scientists.includes(name)).slice(0,SPAWN_SCIENTIST_COLUMNS);
+  agentStrip.replaceChildren();
+  const names=[...recent,...scientists.filter(name=>!recent.includes(name))];
+  names.forEach((scientist,index)=>{
+    const button=document.createElement('button');button.type='button';
+    button.className='agent-pick';button.dataset.scientist=scientist;
+    if(recent.length&&index===recent.length)button.classList.add('cp-after-recent');
+    button.setAttribute('role','option');
+    paintSpawnScientistOption(button);
+    button.addEventListener('click',()=>{
+      selScientist=selScientist===scientist?'':scientist;spawnProblem='';
+      for(const option of agentStrip.children)paintSpawnScientistOption(option);
+      if(selScientist)spawnAdjective.value=rollAdjective();
+      updateNameCard();
+      if(selScientist)spawnAdjective.focus({preventScroll:true});
+    });
     const img=document.createElement('img');
-    img.src=`/telemetry/portrait?v=3&name=${encodeURIComponent(s)}&hi=1`;
+    img.src=`/telemetry/portrait?v=3&name=${encodeURIComponent(scientist)}&hi=1`;
     img.alt='';img.loading='lazy';
     img.onerror=()=>{
-      const initial=document.createElement('span');initial.className='cp-fallback';initial.textContent=s[0];
+      const initial=document.createElement('span');initial.className='cp-fallback';initial.textContent=scientist[0];
       img.replaceWith(initial);
     };
-    const lab=document.createElement('span');lab.className='cp-lab';lab.textContent=s;
-    b.append(img,lab);
-    b.addEventListener('click',()=>{
-      selScientist=s;
-      spawnAdjective.value=rollAdjective();
-      spawnProblem='';renderAgentStrip();updateNameCard();
-      spawnAdjective.focus({preventScroll:true});
-    });
-    agentStrip.appendChild(b);
+    const label=document.createElement('span');label.className='cp-lab';label.textContent=scientist;
+    button.append(img,label);agentStrip.append(button);
   });
+  filterSpawnScientists();
 }
+function paintSpawnScientistOption(button){
+  const {scientist}=button.dataset,selected=selScientist===scientist;
+  button.setAttribute('aria-selected',String(selected));
+  button.title=selected?`${scientist} · Select again for an automatic name`:scientist;
+}
+spawnNameSearch.addEventListener('input',()=>{
+  filterSpawnScientists();agentStrip.scrollTop=0;
+  if(spawnOpenSheet===spawnNameSheet)positionSpawnSheet(spawnNameSheet,spawnNameButton);
+});
+spawnNameSearch.addEventListener('keydown',event=>{
+  if(event.isComposing||event.metaKey||event.ctrlKey)return;
+  const options=spawnScientistOptions();
+  if(!options.length)return;
+  if(event.key==='Enter'){event.preventDefault();options[0].click();}
+  else if(event.key==='ArrowDown'||event.key==='ArrowUp'){
+    event.preventDefault();(event.key==='ArrowDown'?options[0]:options.at(-1)).focus();
+  }
+});
+agentStrip.addEventListener('keydown',event=>{
+  const current=event.target.closest('button');
+  if(!current||event.isComposing||event.metaKey||event.ctrlKey)return;
+  if(event.key==='Enter'){event.preventDefault();current.click();return;}
+  if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return;
+  event.preventDefault();
+  const options=spawnScientistOptions(),index=options.indexOf(current);
+  if(event.key==='ArrowLeft'||event.key==='ArrowRight'){
+    options[index+(event.key==='ArrowLeft'?-1:1)]?.focus();
+    return;
+  }
+  const direction=event.key==='ArrowUp'?-1:1;
+  const rows=options.filter(option=>(option.offsetTop-current.offsetTop)*direction>0);
+  if(!rows.length){if(direction<0)spawnNameSearch.focus();return;}
+  const nextTop=(direction<0?rows.at(-1):rows[0]).offsetTop;
+  const sameRow=rows.filter(option=>option.offsetTop===nextTop);
+  const nearest=sameRow.reduce((best,option)=>
+    Math.abs(option.offsetLeft-current.offsetLeft)<Math.abs(best.offsetLeft-current.offsetLeft)?option:best);
+  nearest.focus();
+});
 function composedName(){
   if(!selScientist)return '';
   return `${(spawnAdjective.value||'').trim()}${selScientist}`;
@@ -10378,7 +10379,6 @@ function updateNameCard(){
   ncName.hidden=isAuto;
   if(isAuto){
     ncName.textContent='';ncName.classList.remove('collide');
-    spawnNameButton.title='Generate a name';spawnNameButton.setAttribute('aria-label','Agent name: automatic');
   }else{
     freeAdjectivesFor(selScientist).forEach(adjective=>{
       const option=document.createElement('option');option.value=adjective;adjOptions.appendChild(option);
@@ -10386,12 +10386,19 @@ function updateNameCard(){
     ncPortrait.src=`/telemetry/portrait?v=3&name=${encodeURIComponent(selScientist)}&hi=1`;
     const name=composedName(),collide=spawnTaken.has(name.toLowerCase());
     ncName.textContent=name;ncName.classList.toggle('collide',collide);
-    spawnNameButton.title=collide?`${name} is taken. Roll another name.`:name;
-    spawnNameButton.setAttribute('aria-label','Agent name: '+spawnNameButton.title);
   }
-  updateSpawnAvailability();
+  updateSpawnRoleChip();updateSpawnAvailability();
+}
+function updateSpawnRoleChip(){
+  const role=spawnRole.value.trim(),name=ncName.textContent;
+  ncRole.textContent=role;ncRole.hidden=!role;
+  spawnNameCopy.hidden=!name&&!role;
+  const nameTitle=ncName.classList.contains('collide')?`${name} is taken. Roll another name.`:name;
+  spawnNameButton.title=[nameTitle||'Generate a name',role].filter(Boolean).join(' · ');
+  spawnNameButton.setAttribute('aria-label','Agent name: '+[name||'automatic',role].filter(Boolean).join(' · '));
   if(spawnOpenSheet===spawnNameSheet)positionSpawnSheet(spawnNameSheet,spawnNameButton);
 }
+spawnRole.addEventListener('input',updateSpawnRoleChip);
 spawnAdjective.addEventListener('input',()=>{spawnProblem='';updateNameCard();});
 document.getElementById('adjDice').addEventListener('click',()=>{
   spawnAdjective.value=rollAdjective();spawnProblem='';updateNameCard();
@@ -10400,17 +10407,20 @@ document.getElementById('adjDice').addEventListener('click',()=>{
 function openSpawnModal({from=document.getElementById('newAgentBtn').getBoundingClientRect(),task='',restoreFocus=document.activeElement}={}){
   if(spawnOverlay.classList.contains('on'))return;
   closePalette(false);
+  for(const sheet of [spawnNameSheet,spawnModelSheet,spawnDirSheet]){
+    spawnSheetAnimations.get(sheet)?.forEach(animation=>animation.cancel());
+    spawnSheetAnimations.delete(sheet);sheet.hidden=true;
+  }
   spawnLastFocus=restoreFocus;
   if(!spawnBusy&&!spawnResumeDraft){
     spawnForm.reset();spawnTask.value=task.slice(0,spawnTask.maxLength);
-    spawnAdvanced.hidden=true;spawnAdvancedButton.setAttribute('aria-expanded','false');
-    spawnWorktreeBaseWrap.classList.remove('on');spawnProblem='';
+    spawnProblem='';
     selScientist='';selProvider=null;selModel=null;selEffort=null;selFamily=null;selHarness=null;
     selUrlIndex=null;selUrlKey=null;spawnModelSearch.value='';
     renderSpawnTools();renderSpawnModelChip();updateNameCard();
   }
   spawnResumeDraft=false;
-  populateSpawnParents();
+  updateSpawnAvailability();
   const origin=spawnAnchor(from);
   spawnLauncher.style.setProperty('--spawn-origin-x',(origin.x-spawnLauncher.offsetLeft)+'px');
   spawnLauncher.style.setProperty('--spawn-origin-y',(origin.y-spawnLauncher.offsetTop)+'px');
@@ -10421,7 +10431,7 @@ function openSpawnModal({from=document.getElementById('newAgentBtn').getBounding
     updateNameCard();
   });
   requestAnimationFrame(()=>{
-    if(spawnOverlay.classList.contains('on'))spawnTask.focus({preventScroll:true});
+    if(spawnOverlay.classList.contains('on')&&!spawnOpenSheet)spawnTask.focus({preventScroll:true});
   });
 }
 function closeSpawnModal(){
@@ -10441,8 +10451,7 @@ function spawnPayloadFromForm(){
   const dir=spawnDirPath;
   const legacyHarness={claude:'claude-code',codex:'codex',gemini:'gemini'}[selProvider];
   return buildSpawnPayload({
-    parent:spawnParent.value,task:spawnTask.value,role:spawnRole.value,emoji:spawnEmoji.value,
-    group:spawnGroup.value,
+    task:spawnTask.value,role:spawnRole.value,
     name:composedName(),
     provider:selProvider,
     harness:selHarness&&SpawnPicker.harnessKey(selHarness)!==legacyHarness?selHarness:null,
@@ -10453,8 +10462,6 @@ function spawnPayloadFromForm(){
     url_key:selectedSpawnModel()?.url_key,
     effort:effectiveSpawnEffort(providerById(selProvider),selModel),
     dir,
-    worktree:spawnWorktree.checked,worktree_base:spawnWorktreeBase.value,
-    open_ghostty:spawnGhostty.checked,
   });
 }
 // Poll until the registered child is ready, keeping the task available on failure.
@@ -10560,6 +10567,10 @@ async function submitSpawn(event){
       JSON.stringify([p.id,model.id,...(Number.isInteger(model.url_index)?[model.url_index]:[]),...(model.url_key?[model.url_key]:[])]));
     const childName=result.child_name||result.tmux_session;
     if(result.pending)await watchSpawnLaunch(childName,result.verdict_deadline_seconds);
+    const normalizedName=String(childName||'').toLowerCase();
+    const scientist=selScientist||(spawnCatalog?.naming?.scientists||[])
+      .find(name=>normalizedName.endsWith(name.toLowerCase()));
+    if(scientist)SpawnPicker.remember(spawnViewerStorage,SPAWN_NAME_RECENT_KEY,scientist);
     spawnResumeDraft=false;
     closeSpawnModal();
     if(childName)flySpawnPortrait(childName,origin);
@@ -10571,7 +10582,7 @@ async function submitSpawn(event){
     if(!spawnResumeDraft)spawnTask.focus({preventScroll:true});
   }finally{
     spawnBusy=false;spawnTask.readOnly=false;spawnForm.removeAttribute('aria-busy');
-    populateSpawnParents();
+    updateSpawnAvailability();
   }
 }
 /* ── NETWORK view: full telemetry dashboard embedded same-origin ──
@@ -10675,10 +10686,6 @@ let deepLinkSession=new URLSearchParams(location.search).get('session')||'';
 
 document.getElementById('newAgentBtn').addEventListener('click',event=>openSpawnModal({restoreFocus:event.currentTarget}));
 spawnOverlay.addEventListener('mousedown',event=>{if(event.target===spawnOverlay)closeSpawnModal();});
-spawnWorktree.addEventListener('change',()=>{
-  spawnWorktreeBaseWrap.classList.toggle('on',spawnWorktree.checked);
-  if(spawnWorktree.checked)spawnWorktreeBase.focus();
-});
 spawnSubmit.addEventListener('pointerdown',fillSpawnButton);
 spawnSubmit.addEventListener('click',event=>{if(event.detail===0)fillSpawnButton();});
 spawnForm.addEventListener('submit',submitSpawn);

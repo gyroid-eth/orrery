@@ -73,10 +73,12 @@ html[data-color-theme="light"] #spawnOverlay {
 #spawnForm .spawn-chip:active {transform:scale(.95)}
 #spawnForm .spawn-chip[aria-expanded="true"] {border-color:var(--amber);background:color-mix(in srgb,var(--amber) 10%,var(--spawn-control-surface))}
 #spawnForm .spawn-name-chip {padding:0 8px}
-#spawnForm .spawn-name-chip:has(#ncName:not([hidden])) {padding-right:11px}
+#spawnForm .spawn-name-chip:has(.spawn-name-copy:not([hidden])) {padding-right:11px}
 #ncDiceFace,#spawnModelMark {display:flex;flex:none;color:var(--ink-dim)}
 #ncPortrait {width:22px;height:22px;border-radius:50%;object-fit:cover}
-#ncName {font:15px var(--serif)}
+.spawn-name-copy {display:flex;flex-direction:column;align-items:flex-start;min-width:0}
+#ncName {font:15px/1 var(--serif);max-width:100%}
+#ncRole {color:var(--ink-dim);font-size:10px;line-height:1.1;max-width:min(100%,18ch);overflow:hidden;text-overflow:ellipsis}
 #ncName.collide {color:var(--theme-status-alert,#e0655f)}
 #spawnDirButton {flex:0 1 auto;color:var(--ink-dim)}
 #spawnDirSelected {font:12.5px var(--mono)}
@@ -126,7 +128,6 @@ html[data-color-theme="light"] #spawnOverlay {
 #spawnOverlay.on .spawn-sheet:not([inert]) {pointer-events:auto}
 .spawn-sheet-in {padding:10px;max-height:var(--spawn-sheet-height,60vh);overflow:auto;overscroll-behavior:contain;scrollbar-color:var(--hair) transparent}
 .spawn-sheet-bar {display:flex;align-items:center;gap:8px}
-#spawnAdvancedButton {margin-left:auto}
 .spawn-search {
   display:flex;align-items:center;gap:8px;flex:1;min-width:0;height:40px;padding:0 10px;
   border-radius:10px;background:var(--spawn-control-surface);color:var(--ink-dim);
@@ -186,7 +187,7 @@ html[data-color-theme="light"] .spawn-brand.mono {filter:invert(.82) sepia(.2)}
 #spawnHarnesses {flex:1}
 #spawnHarnessHelp {margin-left:auto}
 #spawnHelperField {margin-top:8px}
-.spawn-helper,#spawnForm .advanced-grid :is(input[type="text"],select),#spawnAdjective {
+.spawn-helper,#spawnRole,#spawnAdjective {
   min-width:0;width:100%;height:34px;padding:0 9px;border:1px solid var(--hair);
   border-radius:8px;background:var(--spawn-control-surface);color:var(--ink);font:inherit;
 }
@@ -211,26 +212,27 @@ html[data-color-theme="light"] .spawn-brand.mono {filter:invert(.82) sepia(.2)}
 .effort-orbit:hover .effort-value,.effort-orbit:focus-within .effort-value {opacity:1}
 #spawnForm .effort-reset {width:28px;height:28px}
 #spawnForm .effort-reset:disabled {visibility:hidden}
-.agent-strip {display:grid;grid-template-columns:repeat(auto-fill,minmax(65px,1fr));gap:8px;padding:8px 0 3px;max-height:min(42dvh,290px);overflow:auto}
+#spawnRole {margin-block:6px;border-radius:999px;padding-inline:12px}
+#spawnRole::placeholder {color:var(--ink-dim)}
+.agent-strip {
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-auto-rows:64px;align-content:start;
+  gap:6px;padding:4px 2px;max-height:282px;overflow:auto;overscroll-behavior:contain;
+  scrollbar-color:var(--hair) transparent;
+}
+.agent-strip:not(.filtering) .cp-after-recent {grid-column-start:1}
 #spawnForm .agent-pick {
-  display:grid;justify-items:center;align-content:start;gap:4px;padding:3px 0;border:0;border-radius:8px;background:none;color:var(--ink-dim);cursor:pointer;
+  display:grid;justify-items:center;align-content:start;gap:4px;padding:5px 0 2px;border:0;border-radius:8px;background:none;color:var(--ink-dim);cursor:pointer;
 }
 #spawnForm .agent-pick:hover {background:var(--spawn-control-surface);color:var(--ink)}
-.agent-pick img,.agent-pick .cp-auto,.agent-pick .cp-fallback {
+.agent-pick img,.agent-pick .cp-fallback {
   width:38px;height:38px;object-fit:cover;border-radius:50%;border:2px solid transparent;
-  display:grid;place-items:center;transition:transform .4s var(--spawn-spring);
+  display:grid;place-items:center;transition:transform .4s var(--spawn-spring),scale .4s var(--spawn-spring);
 }
 .agent-pick .cp-fallback {font-family:var(--serif);background:var(--spawn-control-surface)}
-.agent-pick:hover img,.agent-pick:hover .cp-auto {transform:translateY(-2px)}
-.agent-pick[aria-selected="true"] :is(img,.cp-auto,.cp-fallback) {border-color:var(--amber)}
+.agent-pick:hover img {transform:translateY(-2px)}
+.agent-pick[aria-selected="true"] :is(img,.cp-fallback) {border-color:var(--amber);scale:1.12}
 .agent-pick .cp-lab {font:12px var(--serif);max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .nc-adj {display:flex;align-items:center;gap:6px;min-width:0}
-.advanced-grid {display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;padding:10px 2px 3px}
-.advanced-grid .field {display:grid;align-content:start;gap:4px;min-width:0;font-size:12px;color:var(--ink-dim)}
-.advanced-grid .field-row {display:grid;grid-template-columns:1fr 42px;gap:4px}
-.worktree-line {display:flex;align-items:center;gap:5px}
-.worktree-line input {accent-color:var(--amber)}
-.worktree-base:not(.on) {display:none}
 .dir-search-results,.dir-list {margin-top:8px;max-height:min(34dvh,245px)}
 .dir-search-result small,.dir-crumbs,#spawnForm .dir-row {font-family:var(--mono)}
 .dir-search-result .spawn-icon {width:14px;height:14px}
@@ -257,7 +259,7 @@ html[data-color-theme="light"] .spawn-brand.mono {filter:invert(.82) sepia(.2)}
   .spawn-row {gap:5px;padding-inline:8px}
   #spawnForm .spawn-chip {gap:4px;padding-inline:6px}
   #spawnForm .spawn-name-chip {max-width:26%}
-  #spawnForm .spawn-name-chip:has(#ncName:not([hidden])) {padding-right:6px}
+  #spawnForm .spawn-name-chip:has(.spawn-name-copy:not([hidden])) {padding-right:6px}
   .spawn-tools {gap:4px}
   #spawnForm .spawn-tools button {width:30px;height:30px}
   #spawnForm #spawnSubmit {padding-inline:10px}
