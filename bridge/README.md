@@ -61,8 +61,10 @@ or failure summaries. Messages are shortened beyond 64 Ki characters.
 
 - **Codex:** existing byte cursor behavior and protected fresh projection remain.
 - **Claude:** complete JSONL record/block cursors; native `sessionId` is checked.
-  Sidechain/meta records and thinking blocks are excluded. `Read`, `Write` and
-  `Edit` calls can produce confined file chips and recorded edit-request diffs.
+  Non-empty thinking blocks on assistant records with `thinkingDisplay: "updates"`
+  appear as text events with `variant: "update"`. Other thinking blocks and
+  sidechain/meta records are excluded. `Read`, `Write` and `Edit` calls can
+  produce confined file chips and recorded edit-request diffs.
 - **dsh:** V4 only, human-source user messages and assembled assistant text.
   This is a **recorded append timeline**, not reconstruction of the model's
   current context: replacement/compaction/injection events are excluded.

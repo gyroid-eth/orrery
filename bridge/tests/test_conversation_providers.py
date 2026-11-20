@@ -43,6 +43,49 @@ def test_claude_visible_blocks_tools_results_and_recorded_edit(tmp_path):
     assert '-before\n+after' in event['diff']
     assert store.read(event['references'][0]['id'],r)['text']=='current'
 
+def test_claude_progress_update_is_assistant_text_on_cursor_pages(tmp_path):
+    path = tmp_path / 'fixture.jsonl'
+    path.write_bytes(line(claude('user', 'question')))
+    source = row(path, 'claude-code')
+    before_append = page(source)['after']
+    with path.open('ab') as stream:
+        stream.write(line(claude('assistant', [
+            dict(type='thinking', thinking='確認を進めています。', signature='PRIVATE_SIGNATURE'),
+            dict(type='text', text='確認しました。'),
+        ], thinkingDisplay='updates')))
+
+    update, answer = page(source, after=before_append)['events']
+    assert (update['kind'], update['role'], update['variant'], update['text']) == (
+        'text', 'assistant', 'update', '確認を進めています。',
+    )
+    assert 'PRIVATE_SIGNATURE' not in json.dumps(update)
+    assert 'variant' not in answer
+    assert page(source, before=answer['cursor_before'], limit=1)['events'] == [update]
+
+def test_claude_thinking_without_top_level_updates_marker_is_hidden(tmp_path):
+    path = tmp_path / 'fixture.jsonl'
+    thinking = [dict(type='thinking', thinking='private reasoning')]
+    nested = claude('assistant', thinking)
+    nested['message']['thinkingDisplay'] = 'updates'
+    path.write_bytes(b''.join(line(item) for item in [
+        claude('assistant', thinking),
+        claude('assistant', thinking, thinkingDisplay='full'),
+        nested,
+        claude('user', thinking, thinkingDisplay='updates'),
+    ]))
+
+    assert page(row(path, 'claude-code'))['events'] == []
+
+def test_claude_empty_progress_updates_are_hidden(tmp_path):
+    path = tmp_path / 'fixture.jsonl'
+    path.write_bytes(line(claude('assistant', [
+        dict(type='thinking', thinking='', signature='PRIVATE_SIGNATURE'),
+        dict(type='thinking', thinking=' \n\t'),
+        dict(type='thinking', thinking=None),
+    ], thinkingDisplay='updates')))
+
+    assert page(row(path, 'claude-code'))['events'] == []
+
 def test_claude_block_paging_has_no_gaps_and_waits_for_newline(tmp_path):
     path=tmp_path/'fixture.jsonl'
     path.write_bytes(line(claude('user','first'))+line(claude('assistant',[

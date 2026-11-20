@@ -179,6 +179,11 @@ def normalize(item,p,sid):
                     # do not duplicate the image references on the text event.
                     if images and event and event.get('role')=='user' and event.get('kind')=='text':event['input_image_count']=images
                     add(i,event)
+                elif b.get('type')=='thinking' and role=='assistant' and item.get('thinkingDisplay')=='updates':
+                    event=text_event(b.get('thinking'),role,ts)
+                    if event:
+                        event['variant']='update'
+                        add(i,event)
                 elif b.get('type')=='tool_use' and role=='assistant':
                     event=sent(tool_event(b.get('name'),ts),b.get('name'),b.get('input'))
                     step=claude_call(b,ts)
