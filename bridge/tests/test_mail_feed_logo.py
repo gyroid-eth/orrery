@@ -64,3 +64,39 @@ def test_logo_click_and_keyboard_still_open_the_message(cockpit):
     client.call('Input.dispatchKeyEvent',type='keyUp',key='Enter',code='Enter',windowsVirtualKeyCode=13)
     wait("document.querySelector('#mail .maildrawer').classList.contains('open')")
     assert not js("document.querySelector('#mail .maildrawer .conversation-avatar')")
+
+
+def test_thread_preview_and_live_arrival_preserve_the_open_message(cockpit):
+    js,wait,_,_=prepare(cockpit)
+    js(r"""const originalFetch=window.fetch;
+      window.fetch=(url,...args)=>{
+        if(String(url).startsWith('/telemetry/mail/message')){
+          const message={...feedMessages[0],thread_id:'fixture-thread',
+            body_md:'A long generated message for the mail reader.\n'.repeat(120)};
+          return Promise.resolve(new Response(JSON.stringify({message})));
+        }
+        if(String(url).startsWith('/telemetry/mail/thread')){
+          return new Promise(resolve=>window.finishThread=()=>resolve(
+            new Response(JSON.stringify({messages:feedMessages.slice(0,1)}))));
+        }
+        return originalFetch(url,...args);
+      };
+      window.openedCard=document.querySelector('#mail .msg[data-mid="101"]');
+      openedCard.focus();
+      openedCard.click();
+    """)
+    wait("typeof finishThread==='function'&&document.querySelector('.drawer-mode').textContent==='thread (…)'")
+    assert js("document.activeElement===document.querySelector('.drawer-back')")
+    js("""window.openedScroll=document.querySelector('.drawer-scroll');
+      openedScroll.scrollTop=200;
+      document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages:[
+        {...feedMessages[0],id:104,ts:feedMessages[0].ts+10,subject:'New live message'}
+      ]}}));
+      finishThread();
+    """)
+    wait("document.querySelector('.drawer-mode').textContent==='thread (1)'")
+    assert js("document.querySelector('#mail .msg').dataset.mid==='104'")
+    assert js("openedScroll===document.querySelector('.drawer-scroll')&&openedScroll.scrollTop===200")
+    assert js("document.activeElement===document.querySelector('.drawer-back')")
+    js("document.querySelector('.drawer-back').click()")
+    assert js("document.activeElement===openedCard")
