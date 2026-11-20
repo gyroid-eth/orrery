@@ -1405,11 +1405,7 @@
     <symbol id="spawn-icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/></symbol>
     <symbol id="spawn-icon-computer" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4m-4 0h8"/></symbol>
     <symbol id="spawn-icon-browser" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01m3 0h.01"/></symbol>
-    <symbol id="spawn-icon-browse" viewBox="0 0 24 24"><path d="M5 4v13h14M5 8h14M9 12h10M9 17v3"/></symbol>
-    <symbol id="spawn-icon-back" viewBox="0 0 24 24"><path d="m11 6-6 6 6 6m-6-6h14"/></symbol>
     <symbol id="spawn-icon-reset" viewBox="0 0 24 24"><path d="M5 5v5h5M5 10a7 7 0 1 1 1 7"/></symbol>
-    <symbol id="spawn-icon-recent" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></symbol>
-    <symbol id="spawn-icon-preset" viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/></symbol>
     <symbol id="spawn-icon-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.6 2.3c-.7.35-1.1.8-1.1 1.7m0 3h.01"/></symbol>
     <symbol id="spawn-icon-local" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/></symbol>
   </svg>
@@ -1473,26 +1469,16 @@
     </section>
     <section class="spawn-sheet" id="spawnDirSheet" aria-label="Folder" hidden>
       <div class="spawn-sheet-in">
-        <div id="spawnDirFind">
-          <div class="spawn-sheet-bar">
-            <label class="spawn-search"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-search"/></svg>
-              <input id="spawnDirSearch" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false"
-                aria-controls="spawnDirResults" aria-label="Find a folder" placeholder="Find a folder"
-                maxlength="255" autocomplete="off" spellcheck="false">
-            </label>
-            <button class="spawn-icon-button" id="spawnDirBrowse" type="button" aria-label="Browse folders" title="Browse folders"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-browse"/></svg></button>
-          </div>
-          <div id="spawnDirResults" class="dir-search-results" role="listbox" aria-label="Matching folders" hidden></div>
-          <div id="spawnDirSearchStatus" class="dir-search-status" role="status"></div>
-        </div>
-        <div id="spawnDirTree" hidden>
-          <div class="spawn-sheet-bar">
-            <button class="spawn-icon-button" id="spawnDirBack" type="button" aria-label="Back to folder search" title="Back to folder search"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-back"/></svg></button>
-            <div class="dir-crumbs" id="dirCrumbs" aria-label="Current directory"></div>
-          </div>
-          <div class="dir-list" id="dirList" aria-label="Subdirectories"></div>
-          <button type="button" class="spawn-sheet-action" id="spawnDirUse">Use this folder</button>
-        </div>
+        <div class="dir-crumbs" id="dirCrumbs" aria-label="Current directory"></div>
+        <label class="spawn-search">
+          <svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-search"/></svg>
+          <input id="spawnDirSearch" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false"
+            aria-controls="spawnDirResults" aria-label="Find a folder" placeholder="Find a folder"
+            maxlength="255" autocomplete="off" spellcheck="false">
+        </label>
+        <div id="spawnDirResults" class="dir-search-results" role="listbox" aria-label="Folders" hidden></div>
+        <div id="spawnDirSearchStatus" class="dir-search-status" role="status"></div>
+        <button type="button" class="spawn-sheet-action" id="spawnDirUse" disabled>Use this folder</button>
       </div>
     </section>
   </form>
@@ -4115,9 +4101,9 @@
       }
     }
   },
-  "inventory_digest": "67b03d7218c841cf7e51f320067c405b79ee82ac463cf09adaa54d2f8963b86c",
+  "inventory_digest": "d834aa6bc92b4ff22b525604ee80a919accd5de941c2dc5d9ab5ab2f28abf96c",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "ca5bee25b28a4fcf02205deafc2bfa38d35bbba07e10182e5c7da9f67f50551a",
+  "source_digest": "f895cb8364e0e138a25457b9fcc2542edcc4f9f8f044c2a35099aa644d3583f6",
   "surface": "cockpit",
   "version": 1
 }
@@ -9658,23 +9644,18 @@ let selFamily=null,selHarness=null;
 let selUrlIndex=null,selUrlKey=null;
 const SPAWN_RECENT_STORAGE_KEY='orrery.spawn-local-recent.v1';
 const SPAWN_SEARCH_STORAGE_KEY='orrery.spawn-local-search.v1';
-const SPAWN_DIR_RECENT_KEY='orrery.spawn-dir-recent.v1';
 const SPAWN_NAME_RECENT_KEY='orrery.spawn-scientist-recent.v1';
 const SPAWN_SCIENTIST_COLUMNS=5;
 let spawnViewerStorage=null;try{spawnViewerStorage=window.localStorage;}catch(_){/* viewer history is optional */}
 const dirCrumbs=document.getElementById('dirCrumbs');
-const dirList=document.getElementById('dirList');
 const spawnDirSheet=document.getElementById('spawnDirSheet');
-const spawnDirFind=document.getElementById('spawnDirFind');
-const spawnDirTree=document.getElementById('spawnDirTree');
-const spawnDirBrowseButton=document.getElementById('spawnDirBrowse');
 const spawnDirButton=document.getElementById('spawnDirButton');
 const spawnDirUse=document.getElementById('spawnDirUse');
 const spawnDirSearch=document.getElementById('spawnDirSearch');
 const spawnDirResults=document.getElementById('spawnDirResults');
 const spawnDirSearchStatus=document.getElementById('spawnDirSearchStatus');
 let spawnDirPath='',spawnDirHome='',spawnDirBrowsePath='',spawnDirBrowseEpoch=0,spawnDirDefaultEpoch=0;
-let spawnDirSearchEpoch=0,spawnDirSearchTimer,spawnDirActive=-1;
+let spawnDirChildren=[],spawnDirSearchEpoch=0,spawnDirSearchTimer,spawnDirActive=-1;
 function renderSpawnDirPath(){
   const label=document.getElementById('spawnDirSelected');
   const path=spawnDirPath.replace(/\/+$/,'')||(spawnDirPath?'/':'');
@@ -9685,29 +9666,17 @@ function renderSpawnDirPath(){
 function openSpawnDirPicker(){
   if(spawnOpenSheet===spawnDirSheet){dismissSpawnSheet(true);return;}
   if(spawnBusy)return;
-  spawnDirSearch.value='';spawnDirFind.hidden=false;spawnDirTree.hidden=true;
+  spawnDirSearch.value='';spawnDirBrowsePath='';spawnDirChildren=[];
+  dirCrumbs.replaceChildren();spawnDirUse.disabled=true;
   updateSpawnDirSearch();
   toggleSpawnSheet(spawnDirSheet,spawnDirButton,spawnDirSearch);
+  browseDir(spawnDirPath||'~');
 }
 function chooseSpawnDir(path){
   spawnDirPath=path;renderSpawnDirPath();dismissSpawnSheet(true);
   if(spawnProblem){spawnProblem='';updateSpawnAvailability();}
 }
 spawnDirButton.addEventListener('click',openSpawnDirPicker);
-spawnDirBrowseButton.addEventListener('click',()=>{
-  ++spawnDirSearchEpoch;clearTimeout(spawnDirSearchTimer);
-  spawnDirFind.hidden=true;spawnDirTree.hidden=false;
-  browseDir(spawnDirPath||'~');
-  positionSpawnSheet(spawnDirSheet,spawnDirButton);
-  document.getElementById('spawnDirBack').focus();
-});
-document.getElementById('spawnDirBack').addEventListener('click',()=>{
-  ++spawnDirBrowseEpoch;
-  spawnDirTree.hidden=true;spawnDirFind.hidden=false;
-  updateSpawnDirSearch();
-  positionSpawnSheet(spawnDirSheet,spawnDirButton);
-  spawnDirSearch.focus();
-});
 spawnDirUse.addEventListener('click',()=>{
   if(spawnDirUse.disabled||!spawnDirBrowsePath)return;
   chooseSpawnDir(spawnDirBrowsePath);
@@ -9721,27 +9690,16 @@ function activeSpawnDirResult(index,scroll=false){
     if(scroll)rows[index].scrollIntoView({block:'nearest'});
   }else spawnDirSearch.removeAttribute('aria-activedescendant');
 }
-function renderSpawnDirResults(paths,status='',activePath){
+function renderSpawnDirResults(entries,status='',activePath,select=false){
   spawnDirResults.replaceChildren();
-  const recent=SpawnPicker.recent(spawnViewerStorage,SPAWN_DIR_RECENT_KEY);
-  Array.from(new Set(paths)).forEach((path,index)=>{
-    const cleanPath=path.replace(/\/+$/,'')||'/';
-    const slash=cleanPath.lastIndexOf('/');
+  entries.forEach(({path,label},index)=>{
     const row=document.createElement('button');row.type='button';row.tabIndex=-1;
     row.id='spawnDirResult'+index;row.className='dir-search-result';row.title=path;
-    row.setAttribute('role','option');
-    const preset=(spawnCatalog?.dirs||[]).some(dir=>dir.path===path);
-    row.setAttribute('aria-label',path);
-    row.dataset.current=String(path===spawnDirPath);
-    row.append(spawnIcon(recent.includes(path)?'recent':preset?'preset':'folder'));
-    const name=document.createElement('span');name.textContent=cleanPath.slice(slash+1)||'/';
-    row.append(name);
-    if(slash>=0&&cleanPath!=='/'){
-      const parent=document.createElement('small');parent.textContent=cleanPath.slice(0,slash)||'/';
-      row.append(parent);
-    }
+    row.setAttribute('role','option');row.dataset.current=String(path===spawnDirPath);
+    row.append(spawnIcon('folder'));
+    const name=document.createElement('span');name.textContent=label;row.append(name);
     row.addEventListener('mousedown',event=>event.preventDefault());
-    row.addEventListener('click',()=>browseDir(path,true));
+    row.addEventListener('click',()=>browseDir(path,select));
     spawnDirResults.append(row);
   });
   spawnDirResults.hidden=!spawnDirResults.children.length;
@@ -9749,29 +9707,31 @@ function renderSpawnDirResults(paths,status='',activePath){
   const activeIndex=Array.from(spawnDirResults.children).findIndex(row=>row.title===activePath);
   activeSpawnDirResult(spawnDirResults.hidden?-1:Math.max(activeIndex,0));
   spawnDirSearchStatus.textContent=status;
+  if(spawnOpenSheet===spawnDirSheet)positionSpawnSheet(spawnDirSheet,spawnDirButton);
 }
 function updateSpawnDirSearch(){
   const epoch=++spawnDirSearchEpoch;
   clearTimeout(spawnDirSearchTimer);
-  const query=spawnDirSearch.value.trim();
-  const foldedQuery=query.normalize().toLowerCase();
-  const presets=(spawnCatalog?.dirs||[]).filter(dir=>dir.exists!==false).map(dir=>dir.path);
-  const localPaths=[...SpawnPicker.recent(spawnViewerStorage,SPAWN_DIR_RECENT_KEY),...presets]
-    .filter(path=>path&&path.replace(/\/+$/,'').split('/').pop().normalize().toLowerCase().includes(foldedQuery));
-  renderSpawnDirResults(localPaths);
-  if(!query)return;
+  const query=spawnDirSearch.value.trim(),under=spawnDirBrowsePath;
+  spawnDirUse.hidden=Boolean(query);
+  if(!query){renderSpawnDirResults(spawnDirChildren);return;}
+  const activePath=spawnDirResults.children[spawnDirActive]?.title;
+  renderSpawnDirResults([]);
+  if(!under)return;
   spawnDirSearchTimer=setTimeout(async()=>{
     try{
-      const response=await fetch('/telemetry/fs/dir-search?q='+encodeURIComponent(query));
+      const parameters=new URLSearchParams({q:query,under});
+      const response=await fetch('/telemetry/fs/dir-search?'+parameters);
       if(!response.ok)throw new Error('Folder search unavailable');
       const {dirs,truncated}=await response.json();
       if(epoch!==spawnDirSearchEpoch)return;
-      const paths=[...localPaths,...dirs.map(dir=>dir.path)];
-      const activePath=spawnDirResults.children[spawnDirActive]?.title;
-      const status=paths.length?'':truncated?'Search a narrower folder name.':'No folders found. Try another name.';
-      renderSpawnDirResults(paths,status,activePath);
+      const prefix=under.endsWith('/')?under:under+'/';
+      const paths=[...new Set(dirs.map(dir=>dir.path).filter(path=>path.startsWith(prefix)&&path!==under))];
+      const matches=paths.map(path=>({path,label:path.slice(prefix.length)}));
+      const status=matches.length?'':truncated?'Search a narrower folder name.':'No folders found. Try another name.';
+      renderSpawnDirResults(matches,status,activePath,true);
     }catch(_){
-      if(epoch===spawnDirSearchEpoch)spawnDirSearchStatus.textContent='Folder search failed. Try browsing.';
+      if(epoch===spawnDirSearchEpoch)renderSpawnDirResults([],'Folder search failed. Try another location.');
     }
   },150);
 }
@@ -10211,7 +10171,6 @@ function renderEfforts(p){
   }});
 }
 function renderDirs(){
-  if(spawnOpenSheet===spawnDirSheet&&!spawnDirFind.hidden)updateSpawnDirSearch();
   if(!spawnDirPath){
     const preset=(spawnCatalog.dirs||[]).find(dir=>dir.exists!==false);
     browseDir(preset?.path||'~',false,true);
@@ -10221,26 +10180,21 @@ async function browseDir(path,confirm=false,initial=false){
   const epoch=initial?++spawnDirDefaultEpoch:++spawnDirBrowseEpoch;
   const stillCurrent=()=>epoch===(initial?spawnDirDefaultEpoch:spawnDirBrowseEpoch);
   const selecting=!initial&&spawnOpenSheet===spawnDirSheet;
-  if(confirm)spawnDirSearchStatus.textContent='';
-  if(selecting)spawnDirUse.disabled=true;
-  let payload=null;
+  if(selecting){
+    spawnDirUse.disabled=true;spawnDirSearchStatus.textContent='';
+    if(!confirm){++spawnDirSearchEpoch;clearTimeout(spawnDirSearchTimer);}
+  }
+  let payload;
   try{
-    const r=await fetch('/telemetry/fs/dirs?path='+encodeURIComponent(path));
-    payload=await r.json();
-    if(!r.ok)throw new Error(payload.error||'browse failed');
-    if(!payload.path)throw new Error('Folder unavailable');
-  }catch(err){
-    if(!stillCurrent()||initial)return;
-    if(confirm){
-      spawnDirUse.disabled=!spawnDirBrowsePath;
-      spawnDirSearchStatus.textContent='Folder unavailable. Choose another folder.';
-      return;
-    }
-    spawnDirBrowsePath='';
-    dirList.innerHTML='';
-    const row=document.createElement('div');row.className='dir-error';
-    row.textContent=`${err.message||'Folder unavailable'}. Choose another folder.`;
-    dirList.appendChild(row);return;
+    const response=await fetch('/telemetry/fs/dirs?path='+encodeURIComponent(path));
+    payload=await response.json();
+    if(!response.ok||!payload.path)throw new Error('Folder unavailable');
+  }catch(_){
+    if(!stillCurrent()||!selecting)return;
+    if(!spawnDirBrowsePath&&path!=='~'&&!confirm){browseDir('~');return;}
+    spawnDirUse.disabled=!spawnDirBrowsePath;
+    spawnDirSearchStatus.textContent='Folder unavailable. Choose another folder.';
+    return;
   }
   if(!stillCurrent())return;
   spawnDirHome=typeof payload.home==='string'?payload.home:(path==='~'?payload.path:spawnDirHome);
@@ -10249,40 +10203,36 @@ async function browseDir(path,confirm=false,initial=false){
     return;
   }
   if(confirm){chooseSpawnDir(payload.path);return;}
-  const currentPath=payload.path;spawnDirBrowsePath=currentPath;
-  if(!selecting){spawnDirPath=currentPath;renderSpawnDirPath();}
-  if(selecting&&spawnOpenSheet===spawnDirSheet)spawnDirUse.disabled=false;
-  // Render the selected directory as clickable path segments.
-  dirCrumbs.innerHTML='';
-  const segments=currentPath.split('/').filter(Boolean);
-  const rootBtn=document.createElement('button');rootBtn.type='button';
-  rootBtn.className='crumb';rootBtn.textContent='/';
-  rootBtn.addEventListener('click',()=>browseDir('/'));
-  dirCrumbs.appendChild(rootBtn);
-  let acc='';
-  segments.forEach((seg,i)=>{
-    acc+='/'+seg;
-    const target=acc;
-    const b=document.createElement('button');b.type='button';
-    b.className='crumb'+(i===segments.length-1?' here':'');
-    b.textContent=seg;
-    b.addEventListener('click',()=>browseDir(target));
-    dirCrumbs.appendChild(b);
-    if(i<segments.length-1){
-      const sep=document.createElement('span');sep.className='crumb-sep';
-      sep.textContent='/';dirCrumbs.appendChild(sep);
-    }
-  });
-  dirList.innerHTML='';
-  (payload.dirs||[]).forEach(d=>{
-    const row=document.createElement('button');row.type='button';
-    row.className='dir-row';
-    row.append(spawnIcon('folder'));
-    row.appendChild(document.createTextNode(d.name));
-    row.addEventListener('click',()=>browseDir(d.path));
-    dirList.appendChild(row);
-  });
-  if(spawnOpenSheet===spawnDirSheet)positionSpawnSheet(spawnDirSheet,spawnDirButton);
+  if(!selecting){spawnDirPath=payload.path;renderSpawnDirPath();return;}
+  const query=spawnDirBrowsePath? '':spawnDirSearch.value;
+  spawnDirBrowsePath=payload.path;
+  spawnDirChildren=(payload.dirs||[]).map(dir=>({path:dir.path,label:dir.name}));
+  renderSpawnDirCrumbs(payload.path);
+  spawnDirUse.disabled=false;
+  spawnDirSearch.value=query;
+  updateSpawnDirSearch();
+}
+function renderSpawnDirCrumbs(path){
+  dirCrumbs.replaceChildren();
+  const addCrumb=(label,target,current)=>{
+    const button=document.createElement('button');button.type='button';
+    button.className='crumb';button.textContent=label;button.title=target;
+    if(current){button.classList.add('here');button.setAttribute('aria-current','location');}
+    else button.addEventListener('click',()=>browseDir(target));
+    dirCrumbs.append(button);
+  };
+  addCrumb('/','/',path==='/');
+  let current='';
+  if(spawnDirHome&&spawnDirHome!=='/'&&(path===spawnDirHome||path.startsWith(spawnDirHome+'/'))){
+    current=spawnDirHome;addCrumb('~',current,current===path);
+  }
+  for(const segment of path.slice(current.length).split('/').filter(Boolean)){
+    const separator=document.createElement('span');separator.className='crumb-sep';
+    separator.textContent='/';separator.setAttribute('aria-hidden','true');
+    if(current)dirCrumbs.append(separator);
+    current+='/'+segment;addCrumb(segment,current,current===path);
+  }
+  dirCrumbs.scrollLeft=dirCrumbs.scrollWidth;
 }
 
 /* agent picker — every registered name is consumed forever, so the adjective
@@ -10572,7 +10522,6 @@ async function submitSpawn(event){
     let result={};
     try{result=await response.json();}catch(_){/* HTTP status is still useful */}
     if(!response.ok||!result.ok)throw new Error(result.error||`HTTP ${response.status}`);
-    SpawnPicker.remember(spawnViewerStorage,SPAWN_DIR_RECENT_KEY,payload.dir);
     if(SpawnPicker.locality(p,model)==='local')SpawnPicker.remember(spawnViewerStorage,SPAWN_RECENT_STORAGE_KEY,
       JSON.stringify([p.id,model.id,...(Number.isInteger(model.url_index)?[model.url_index]:[]),...(model.url_key?[model.url_key]:[])]));
     const childName=result.child_name||result.tmux_session;

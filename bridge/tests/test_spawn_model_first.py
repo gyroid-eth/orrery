@@ -357,10 +357,10 @@ def test_directory_sheet_commits_only_on_confirmation_and_escape_keeps_launcher(
       const esc=()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
       try{
         spawnDirPath='/workspace';renderSpawnDirPath();spawnOverlay.classList.add('on');
-        openSpawnDirPicker();spawnDirBrowseButton.click();await browseDir('/workspace/docs');
+        openSpawnDirPicker();await browseDir('/workspace/docs');
         const before=spawnDirPath;esc();
         const cancelled=spawnDirPath;
-        openSpawnDirPicker();spawnDirBrowseButton.click();await browseDir('/workspace/tools');spawnDirUse.click();
+        openSpawnDirPicker();await browseDir('/workspace/tools');spawnDirUse.click();
         const confirmed=spawnDirPath,label=document.getElementById('spawnDirSelected').textContent,title=spawnDirButton.title;
         openSpawnDirPicker();esc();
         return {before,cancelled,confirmed,label,title,closed:spawnOpenSheet!==spawnDirSheet,parent:spawnOverlay.classList.contains('on'),payload:spawnPayloadFromForm().dir};
@@ -372,50 +372,89 @@ def test_directory_sheet_commits_only_on_confirmation_and_escape_keeps_launcher(
     assert result['closed'] and result['parent']
 
 
-def test_directory_search_orders_sources_and_commits_with_keyboard(tour_browser):
+def test_directory_sheet_scopes_search_to_current_breadcrumb_and_lists_children(tour_browser):
     _,evaluate=tour_browser
     result=evaluate('''(async()=>{
-      const originalFetch=window.fetch;
+      const original=window.fetch,requests=[];
+      const vault='/work/Notes',projects=vault+'/Code Projects';
+      const other=vault+'/Archive',project=projects+'/plotter',archived=other+'/plotter';
+      let releaseOld;
+      const folder=path=>({path,name:path.split('/').at(-1)});
+      const directories={[vault]:[projects,other],[projects]:[project], [project]:[]};
       window.fetch=async(url)=>{
-        const request=new URL(url,location.origin);
+        const request=new URL(url,location.origin),parameters=request.searchParams;
         if(request.pathname==='/telemetry/fs/dir-search'){
-          const q=request.searchParams.get('q');
-          return {ok:true,json:async()=>({dirs:q==='pro'?[
-            {path:'/recent/Project'},{path:'/projects/work/Project'}]:[]})};
+          const q=parameters.get('q'),under=parameters.get('under');
+          requests.push({q,under});
+          if(q==='later')await new Promise(resolve=>{releaseOld=resolve;});
+          const dirs=under===vault?[project,archived,'/outside/plotter']:[project];
+          return {ok:true,json:async()=>({dirs:dirs.map(folder)})};
         }
-        return {ok:true,json:async()=>({path:request.searchParams.get('path'),dirs:[]})};
+        const path=parameters.get('path');
+        return {ok:true,json:async()=>({path,dirs:(directories[path]||[]).map(folder)})};
       };
+      const rows=()=>Array.from(spawnDirResults.children,row=>row.querySelector('span').textContent);
+      const waitFor=async condition=>{
+        for(let attempt=0;attempt<100&&!condition();attempt++)await new Promise(resolve=>setTimeout(resolve,20));
+      };
+      const type=value=>{spawnDirSearch.value=value;spawnDirSearch.dispatchEvent(new Event('input'));};
+      const press=key=>spawnDirSearch.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true,cancelable:true}));
       try{
-        SpawnPicker.remember(spawnViewerStorage,SPAWN_DIR_RECENT_KEY,'/recent/Project');
-        spawnCatalog={dirs:[{path:'/preset/Projects'}]};
-        spawnDirPath='/workspace';spawnOverlay.classList.add('on');openSpawnDirPicker();
-        const focus=document.activeElement===spawnDirSearch;
-        spawnDirSearch.value='pro';spawnDirSearch.dispatchEvent(new Event('input'));
-        const waitFor=async test=>{
-          for(let attempt=0;attempt<50&&!test();attempt++)await new Promise(resolve=>setTimeout(resolve,20));
-        };
-        await waitFor(()=>spawnDirResults.children.length===3);
-        const paths=Array.from(spawnDirResults.children,row=>[row.title,row.querySelector('span').textContent,row.lastChild.textContent]);
-        const press=key=>spawnDirSearch.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true,cancelable:true}));
-        const first=spawnDirSearch.getAttribute('aria-activedescendant');
-        press('ArrowUp');
-        const last=spawnDirSearch.getAttribute('aria-activedescendant');
-        const retained=spawnDirPath==='/workspace'&&spawnDirTree.hidden;
-        press('Enter');await waitFor(()=>spawnOpenSheet!==spawnDirSheet);
-        const picked=spawnDirPath;
-        openSpawnDirPicker();press('Enter');await waitFor(()=>spawnOpenSheet!==spawnDirSheet);
-        return {focus,paths,first,last,retained,picked,defaultPick:spawnDirPath};
-      }finally{window.fetch=originalFetch;}
+        spawnDirPath=vault;spawnOverlay.classList.add('on');openSpawnDirPicker();
+        await waitFor(()=>rows().length===2);
+        const focus=document.activeElement===spawnDirSearch,children=rows();
+        type('plotter');await waitFor(()=>rows().length===2&&rows()[0].endsWith('/plotter'));
+        const rootMatches=rows(),first=spawnDirSearch.getAttribute('aria-activedescendant'),scopeActionHidden=spawnDirUse.hidden;
+        press('ArrowDown');const second=spawnDirSearch.getAttribute('aria-activedescendant');
+        type('');press('Enter');await waitFor(()=>spawnDirBrowsePath===projects);
+        const projectChildren=rows(),crumb=dirCrumbs.querySelector('[aria-current]').textContent;
+        type('later');await waitFor(()=>typeof releaseOld==='function');
+        [...dirCrumbs.querySelectorAll('button')].find(button=>button.title===vault).click();
+        await waitFor(()=>spawnDirBrowsePath===vault);releaseOld();
+        await new Promise(resolve=>setTimeout(resolve,30));
+        const ignoredStale=rows().join(' ')==='Code Projects Archive';
+        press('Enter');await waitFor(()=>spawnDirBrowsePath===projects);
+        type('plotter');await waitFor(()=>requests.at(-1)?.q==='plotter'&&rows().length===1);
+        const narrowed=rows();press('Enter');await waitFor(()=>spawnOpenSheet!==spawnDirSheet);
+        return {focus,children,rootMatches,first,second,projectChildren,crumb,ignoredStale,narrowed,scopeActionHidden,
+          picked:spawnPayloadFromForm().dir,requests};
+      }finally{window.fetch=original;}
     })()''')
-    assert result['focus'] and result['retained']
-    assert result['paths'] == [
-        ['/recent/Project','Project','/recent'],
-        ['/preset/Projects','Projects','/preset'],
-        ['/projects/work/Project','Project','/projects/work'],
-    ]
-    assert result['first'] == 'spawnDirResult0' and result['last'] == 'spawnDirResult2'
-    assert result['picked'] == '/projects/work/Project'
-    assert result['defaultPick'] == '/recent/Project'
+    vault='/work/Notes'
+    projects=vault+'/Code Projects'
+    assert result['focus'] and result['ignoredStale'] and result['scopeActionHidden']
+    assert result['children']==['Code Projects','Archive']
+    assert result['rootMatches']==['Code Projects/plotter','Archive/plotter']
+    assert result['projectChildren']==result['narrowed']==['plotter']
+    assert result['crumb']=='Code Projects'
+    assert result['first']=='spawnDirResult0' and result['second']=='spawnDirResult1'
+    assert result['picked']==projects+'/plotter'
+    assert result['requests']==[dict(q='plotter',under=vault),dict(q='later',under=projects),dict(q='plotter',under=projects)]
+
+
+def test_directory_search_proxy_preserves_scope_and_empty_or_repeated_parameters(monkeypatch):
+    from aiohttp import ClientSession, web
+    from aiohttp.test_utils import TestClient, TestServer
+
+    async def run():
+        async def echo(request):
+            return web.json_response(list(request.query.items()))
+
+        upstream=web.Application()
+        upstream.router.add_get('/api/fs/dir-search', echo)
+        async with TestServer(upstream) as source, ClientSession() as session:
+            monkeypatch.setattr(ob,'DASHBOARD_URL',str(source.make_url('')).rstrip('/'))
+            app=web.Application()
+            app[ob.HTTP_SESSION_KEY]=session
+            app[ob.TMUX_BIN_KEY]='unused'
+            app.router.add_get('/telemetry/fs/dir-search',ob.proxy_dashboard)
+            async with TestClient(TestServer(app)) as client:
+                params=[('q',''),('under','/Work/Code Projects'),('under','')]
+                async with client.get('/telemetry/fs/dir-search',params=params) as response:
+                    assert response.status==200
+                    return await response.json()
+
+    assert asyncio.run(run())==[['q',''],['under','/Work/Code Projects'],['under','']]
 
 
 @pytest.mark.parametrize('provider,levels', [
