@@ -376,8 +376,8 @@ def test_directory_sheet_scopes_search_to_current_breadcrumb_and_lists_children(
     _,evaluate=tour_browser
     result=evaluate('''(async()=>{
       const original=window.fetch,requests=[];
-      const vault='/work/Obsidian_for_Xiaomi',projects=vault+'/21_Coding Projects';
-      const other=vault+'/Archive',project=projects+'/tm3000',archived=other+'/tm3000';
+      const vault='/work/Notes',projects=vault+'/Code Projects';
+      const other=vault+'/Archive',project=projects+'/plotter',archived=other+'/plotter';
       let releaseOld;
       const folder=path=>({path,name:path.split('/').at(-1)});
       const directories={[vault]:[projects,other],[projects]:[project], [project]:[]};
@@ -387,7 +387,7 @@ def test_directory_sheet_scopes_search_to_current_breadcrumb_and_lists_children(
           const q=parameters.get('q'),under=parameters.get('under');
           requests.push({q,under});
           if(q==='later')await new Promise(resolve=>{releaseOld=resolve;});
-          const dirs=under===vault?[project,archived,'/outside/tm3000']:[project];
+          const dirs=under===vault?[project,archived,'/outside/plotter']:[project];
           return {ok:true,json:async()=>({dirs:dirs.map(folder)})};
         }
         const path=parameters.get('path');
@@ -403,7 +403,7 @@ def test_directory_sheet_scopes_search_to_current_breadcrumb_and_lists_children(
         spawnDirPath=vault;spawnOverlay.classList.add('on');openSpawnDirPicker();
         await waitFor(()=>rows().length===2);
         const focus=document.activeElement===spawnDirSearch,children=rows();
-        type('tm3000');await waitFor(()=>rows().length===2&&rows()[0].endsWith('/tm3000'));
+        type('plotter');await waitFor(()=>rows().length===2&&rows()[0].endsWith('/plotter'));
         const rootMatches=rows(),first=spawnDirSearch.getAttribute('aria-activedescendant'),scopeActionHidden=spawnDirUse.hidden;
         press('ArrowDown');const second=spawnDirSearch.getAttribute('aria-activedescendant');
         type('');press('Enter');await waitFor(()=>spawnDirBrowsePath===projects);
@@ -412,24 +412,24 @@ def test_directory_sheet_scopes_search_to_current_breadcrumb_and_lists_children(
         [...dirCrumbs.querySelectorAll('button')].find(button=>button.title===vault).click();
         await waitFor(()=>spawnDirBrowsePath===vault);releaseOld();
         await new Promise(resolve=>setTimeout(resolve,30));
-        const ignoredStale=rows().join(' ')==='21_Coding Projects Archive';
+        const ignoredStale=rows().join(' ')==='Code Projects Archive';
         press('Enter');await waitFor(()=>spawnDirBrowsePath===projects);
-        type('tm3000');await waitFor(()=>requests.at(-1)?.q==='tm3000'&&rows().length===1);
+        type('plotter');await waitFor(()=>requests.at(-1)?.q==='plotter'&&rows().length===1);
         const narrowed=rows();press('Enter');await waitFor(()=>spawnOpenSheet!==spawnDirSheet);
         return {focus,children,rootMatches,first,second,projectChildren,crumb,ignoredStale,narrowed,scopeActionHidden,
           picked:spawnPayloadFromForm().dir,requests};
       }finally{window.fetch=original;}
     })()''')
-    vault='/work/Obsidian_for_Xiaomi'
-    projects=vault+'/21_Coding Projects'
+    vault='/work/Notes'
+    projects=vault+'/Code Projects'
     assert result['focus'] and result['ignoredStale'] and result['scopeActionHidden']
-    assert result['children']==['21_Coding Projects','Archive']
-    assert result['rootMatches']==['21_Coding Projects/tm3000','Archive/tm3000']
-    assert result['projectChildren']==result['narrowed']==['tm3000']
-    assert result['crumb']=='21_Coding Projects'
+    assert result['children']==['Code Projects','Archive']
+    assert result['rootMatches']==['Code Projects/plotter','Archive/plotter']
+    assert result['projectChildren']==result['narrowed']==['plotter']
+    assert result['crumb']=='Code Projects'
     assert result['first']=='spawnDirResult0' and result['second']=='spawnDirResult1'
-    assert result['picked']==projects+'/tm3000'
-    assert result['requests']==[dict(q='tm3000',under=vault),dict(q='later',under=projects),dict(q='tm3000',under=projects)]
+    assert result['picked']==projects+'/plotter'
+    assert result['requests']==[dict(q='plotter',under=vault),dict(q='later',under=projects),dict(q='plotter',under=projects)]
 
 
 def test_directory_search_proxy_preserves_scope_and_empty_or_repeated_parameters(monkeypatch):
@@ -449,12 +449,12 @@ def test_directory_search_proxy_preserves_scope_and_empty_or_repeated_parameters
             app[ob.TMUX_BIN_KEY]='unused'
             app.router.add_get('/telemetry/fs/dir-search',ob.proxy_dashboard)
             async with TestClient(TestServer(app)) as client:
-                params=[('q',''),('under','/Work/21_Coding Projects'),('under','')]
+                params=[('q',''),('under','/Work/Code Projects'),('under','')]
                 async with client.get('/telemetry/fs/dir-search',params=params) as response:
                     assert response.status==200
                     return await response.json()
 
-    assert asyncio.run(run())==[['q',''],['under','/Work/21_Coding Projects'],['under','']]
+    assert asyncio.run(run())==[['q',''],['under','/Work/Code Projects'],['under','']]
 
 
 @pytest.mark.parametrize('provider,levels', [
