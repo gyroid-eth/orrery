@@ -169,6 +169,32 @@ def test_picker_defaults_local_search_and_capability_updates_in_browser(tour_bro
     assert result['codex']['payload']['effort']=='high'
 
 
+def test_tool_defaults_follow_harness_and_keep_manual_choices_on_render(tour_browser):
+    _, evaluate = tour_browser
+    result = evaluate('''(()=>{
+      const model={id:'fixture',default:true};
+      spawnCatalog={providers:[
+        {id:'claude',program:'claude-code',models:[model]},
+        {id:'codex',program:'codex-cli',models:[model]},
+        {id:'deepseek',program:'dsh',models:[model],harnesses:[
+          {id:'dsh',available:true,default:true},{id:'hermes',available:true}]}]};
+      const select=family=>providerTabs.querySelector(`[data-family="${family}"]`).click();
+      const states=()=>spawnToolSwitches.map(control=>control.getAttribute('aria-checked')==='true');
+      renderProviderTabs();
+      const claude=states();
+      spawnComputerUse.click();
+      renderProviderTabs();
+      const edited=states();
+      select('codex');const codex=states();
+      select('deepseek');const dsh=states();
+      spawnHarnesses.querySelector('[data-harness="hermes"]').click();const hermes=states();
+      spawnHarnesses.querySelector('[data-harness="dsh"]').click();
+      return {claude,edited,codex,dsh,hermes,dshAgain:states()};
+    })()''')
+    assert result == dict(claude=[True, True], edited=[False, True], codex=[True, True],
+                         dsh=[False, False], hermes=[True, True], dshAgain=[False, False])
+
+
 def test_submit_cloud_defaults_and_optional_local_parameters_without_real_spawn(tour_browser):
     _, evaluate = tour_browser
     result = evaluate('''(async()=>{
@@ -181,6 +207,7 @@ def test_submit_cloud_defaults_and_optional_local_parameters_without_real_spawn(
         spawnCatalog={providers:[
           {id:'claude',program:'claude-code',models:[{id:'claude-fixture',default:true},{id:'local-override',locality:'local'}]},
           {id:'codex',program:'codex-cli',models:[{id:'gpt-fixture',default:true}],efforts:['low','high'],effort_default:'high'},
+          {id:'deepseek',program:'dsh',models:[{id:'deepseek-fixture',default:true}]},
           {id:'local-fixture',locality:'local',program:'codex-cli',models:[{id:'local-one',default:true}],
             harnesses:[{id:'example-tool',default:true,available:true}],helper_models:['small']}],naming:{},dirs:[]};
         selFamily=null;selProvider=null;selModel=null;selHarness=null;selScientist='';
@@ -188,20 +215,34 @@ def test_submit_cloud_defaults_and_optional_local_parameters_without_real_spawn(
         const cloudModels=[...modelChoices.querySelectorAll('input[name="spawnModel"]')].map(i=>i.value);
         await submitSpawn(new Event('submit',{cancelable:true}));
         providerTabs.querySelector('[data-family="codex"]').click();
+        spawnComputerUse.click();
+        await submitSpawn(new Event('submit',{cancelable:true}));
+        spawnBrowserUse.click();
+        await submitSpawn(new Event('submit',{cancelable:true}));
+        providerTabs.querySelector('[data-family="deepseek"]').click();
+        await submitSpawn(new Event('submit',{cancelable:true}));
+        spawnComputerUse.click();spawnBrowserUse.click();
         await submitSpawn(new Event('submit',{cancelable:true}));
         providerTabs.querySelector('[data-family="local"]').click();
         spawnHelper.value='small';
+        const hidden=spawnTools.hidden;
         await submitSpawn(new Event('submit',{cancelable:true}));
-        return {posted,cloudModels,recent:SpawnPicker.recent(localStorage,SPAWN_RECENT_STORAGE_KEY)};
+        return {posted,cloudModels,hidden,recent:SpawnPicker.recent(localStorage,SPAWN_RECENT_STORAGE_KEY)};
       }finally{window.fetch=originalFetch;}
     })()''')
-    claude,codex,local=result['posted']
+    claude,codex,codex_off,dsh_off,dsh_on,local=result['posted']
     assert result['cloudModels'] == ['claude-fixture']
     assert claude['provider'] == 'claude' and 'effort' not in claude
     assert codex['provider'] == 'codex' and codex['effort']=='high'
     assert 'harness' not in claude and 'helper_model' not in claude
     assert 'harness' not in codex and 'helper_model' not in codex
+    assert claude['tools'] == {'mcp': ['cua-driver'], 'browser': {}}
+    assert codex['tools'] == {'browser': {}} and codex['base'] == 'mail-only'
+    assert codex_off['tools'] == {} and codex_off['base'] == 'mail-only'
+    assert dsh_off['tools'] == {} and dsh_off['base'] == 'mail-only'
+    assert dsh_on['tools'] == {'mcp': ['cua-driver', 'chrome-devtools']}
     assert local['provider'] == 'local-fixture' and local['harness'] == 'example-tool' and local['helper_model'] == 'small'
+    assert result['hidden'] and 'tools' not in local
     assert result['recent'][0] == json.dumps(['local-fixture','local-one'],separators=(',',':'))
 
 

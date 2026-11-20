@@ -41,6 +41,14 @@
 .spawn-harness small{margin-left:auto;color:var(--ink-faint);font-size:9px}
 .spawn-harness:disabled{cursor:default;color:var(--ink-faint)}
 .spawn-harness:disabled .spawn-brand{opacity:.4}
+.spawn-tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.spawn-tools button{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:0 7px;border:1px solid var(--hair);border-radius:5px;background:var(--bg);color:var(--ink-dim);cursor:pointer}
+.spawn-tools button:hover{border-color:var(--ink-dim)}
+.spawn-tools button[aria-checked="true"]{border-color:var(--amber);color:var(--amber)}
+.spawn-tools svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.spawn-tool-track{display:flex;align-items:center;box-sizing:border-box;width:21px;height:12px;padding:2px;border:1px solid currentColor;border-radius:99px}
+.spawn-tool-track::after{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.spawn-tools button[aria-checked="true"] .spawn-tool-track{justify-content:flex-end}
 .spawn-setup-help{display:block;padding:9px;color:var(--amber);font:11px var(--sans);text-decoration:underline;text-underline-offset:3px}
 .spawn-default-harness{color:var(--ink-dim);font-size:11px}
 .spawn-settings-label{display:block;font:12px var(--sans);margin:16px 0 8px}
