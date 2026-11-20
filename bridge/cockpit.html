@@ -4668,9 +4668,9 @@
       }
     }
   },
-  "inventory_digest": "9efce5ac0a61f8982a278845f0019f248934b6c85e9af3b01097b8904bb98e7a",
+  "inventory_digest": "6af8ebefa0b8eb2298300e090b2883c3d87989401fccf625028884772a5e6424",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "c983e2ff46e0e45bb513ef1c2d39b079c9beeda3c1a39b9171614b62159829e8",
+  "source_digest": "336fdc75a6a873e1954ab6cc3b3773b21fd25af06e446e47dccc1945be1a6dea",
   "surface": "cockpit",
   "version": 1
 }
@@ -10319,7 +10319,7 @@ function renderLocalModels(){
 function selectedSpawnModel(){const p=providerById(selProvider);return p&&(p.models||[]).find(m=>m.id===selModel&&(!Number.isInteger(m.url_index)||m.url_index===selUrlIndex)&&(!m.url_key||m.url_key===selUrlKey))||null;}
 function renderSpawnTools(){
   const harness=SpawnPicker.harnessKey(selHarness);
-  spawnTools.hidden=!['claude-code','codex','dsh','hermes'].includes(harness);
+  spawnTools.hidden=spawnCatalog?.runtime_mode==='fresh'||!['claude-code','codex','dsh','hermes'].includes(harness);
   const route=spawnTools.hidden?null:JSON.stringify([selProvider,harness]);
   if(route===spawnToolsRoute)return;
   spawnToolsRoute=route;
@@ -10328,7 +10328,7 @@ function renderSpawnTools(){
   }
 }
 function spawnToolOptions(){
-  if(spawnTools.hidden)return {};
+  if(spawnCatalog?.runtime_mode==='fresh'||spawnTools.hidden)return {};
   const harness=SpawnPicker.harnessKey(selHarness);
   const native=harness==='dsh'||harness==='hermes';
   const computer=spawnComputerUse.getAttribute('aria-checked')==='true';
