@@ -35,18 +35,19 @@ def test_unavailable_harness_explains_preparation_and_recovers_when_ready(tour_b
     result = evaluate('''(()=>{
       spawnCatalog={providers:[{id:'deepseek',models:[{id:'deepseek-fixture',
         harnesses:[{id:'dsh',available:false,reason:'runtime_not_prepared'}]}]}],naming:{},dirs:[]};
-      selFamily=null;selProvider=null;selModel=null;selHarness=null;spawnStatus.textContent='ready';
+      selFamily=null;selProvider=null;selModel=null;selHarness=null;spawnTask.value='Fixture task';
       renderProviderTabs();
-      const blocked={text:spawnHarnesses.textContent,disabled:spawnSubmit.disabled,
-        link:spawnHarnesses.querySelector('a').href,status:spawnStatus.textContent};
+      const blocked={reason:spawnHarnesses.querySelector('button').title,disabled:spawnSubmit.disabled,
+        link:spawnHarnessHelp.href,linkVisible:!spawnHarnessHelp.hidden,harnessHidden:spawnHarnesses.hidden,status:spawnStatus.textContent};
       spawnCatalog.providers[0].models[0].harnesses[0].available=true;
       renderHarnesses();
       return {blocked,ready:!spawnSubmit.disabled,status:spawnStatus.textContent,
-        staleHelp:Boolean(spawnHarnesses.querySelector('a'))};
+        staleHelp:!spawnHarnessHelp.hidden};
     })()''')
     assert result['blocked']['disabled']
-    assert 'Install or repair this harness' in result['blocked']['text']
+    assert 'Install or repair this harness' in result['blocked']['reason']
     assert result['blocked']['link'].endswith('/docs/native-setup.en.md')
-    assert result['blocked']['status'] == 'No available harness for this model'
-    assert result['ready'] and result['status'] == 'ready'
+    assert result['blocked']['linkVisible'] and result['blocked']['harnessHidden']
+    assert result['blocked']['status'] == 'Install or repair this harness. Open model settings for setup.'
+    assert result['ready'] and result['status'] == ''
     assert not result['staleHelp']

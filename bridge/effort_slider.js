@@ -1,44 +1,62 @@
-/* Optional effort stays separate from the slider's neutral display position. */
+/* Keep the catalog default separate from an explicit detent, even when they
+   share a position. That distinction is required by some launch routes. */
 window.EffortSlider={
-  mount(host,{levels,value,onChange}){
+  mount(host,{levels,value,fallback,onChange}){
     host.replaceChildren();
     const choices=[...new Set((levels||[]).filter(v=>typeof v==='string'&&v))];
-    const element=(tag,className,text)=>{const e=document.createElement(tag);e.className=className;if(text)e.textContent=text;return e;};
-    if(!choices.length){host.append(element('span','effort-not-supported','Not supported'));return;}
-    const title=v=>v==='xhigh'?'X-high':v[0].toUpperCase()+v.slice(1);
+    if(!choices.length)return;
+    const element=(tag,className)=>{
+      const node=document.createElement(tag);
+      node.className=className;
+      return node;
+    };
+    const position=index=>choices.length===1?50:index/(choices.length-1)*100;
     let selected=choices.includes(value)?value:null;
-    const control=element('div','effort-orbit'),output=element('output','effort-value');
-    const input=element('input','effort-range');input.type='range';input.name='spawnEffort';
-    input.min=0;input.max=choices.length-1;input.step=1;input.setAttribute('aria-label','Effort');
-    const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');
-    svg.setAttribute('viewBox','0 0 300 36');svg.setAttribute('preserveAspectRatio','none');svg.setAttribute('aria-hidden','true');
-    const shape=(tag,attrs)=>{const e=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v));svg.append(e);return e;};
-    const path='M14 24 Q150 10 286 24';
-    shape('path',{d:path,class:'effort-track',fill:'none'});
-    shape('path',{d:'M14 29 Q150 15 286 29',class:'effort-guide',fill:'none'});
-    const progress=shape('path',{d:path,class:'effort-progress',fill:'none',pathLength:100});
-    const position=i=>14+(choices.length>1?i/(choices.length-1):.5)*272;
-    const y=x=>17+7*((x-150)/136)**2;
-    choices.forEach((choice,i)=>shape('circle',{cx:position(i),cy:y(position(i)),r:1.8,class:'effort-stop'}));
-    const halo=shape('circle',{r:8,class:'effort-halo'}),ring=shape('circle',{r:4.5,class:'effort-ring'}),dot=shape('circle',{r:1.7,class:'effort-dot'});
-    const ends=element('div','effort-ends');ends.append(element('span','',title(choices[0])),element('span','',title(choices.at(-1))));
-    const foot=element('div','effort-foot'),caption=element('span','effort-caption'),reset=element('button','effort-reset','Use default');reset.type='button';
-    foot.append(caption,reset);control.append(output,svg,ends,input);host.append(control,foot);
+    const defaultIndex=choices.indexOf(fallback);
+    const control=element('div','effort-control'),track=element('div','effort-orbit');
+    const input=element('input','effort-range'),output=element('span','effort-value');
+    input.type='range';input.name='spawnEffort';input.min=0;input.max=choices.length-1;input.step=1;
+    input.setAttribute('aria-label','Effort');
+    output.setAttribute('aria-hidden','true');
+    const reset=element('button','spawn-icon-button effort-reset');reset.type='button';
+    reset.title='Use default effort';reset.setAttribute('aria-label',reset.title);
+    reset.innerHTML='<svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-reset"/></svg>';
+    const ticks=choices.map((_,index)=>{
+      const tick=element('span','effort-stop');
+      tick.style.setProperty('--effort-pos',position(index)+'%');
+      return tick;
+    });
+    const thumb=element('span','effort-thumb');
+    track.append(element('span','effort-track'),element('span','effort-progress'),...ticks,thumb,output,input);
+    control.append(track,reset);host.append(control);
     function paint(){
-      const neutral=selected===null,index=neutral?(choices.length-1)/2:choices.indexOf(selected),x=position(index);
-      control.classList.toggle('is-default',neutral);
-      input.value=neutral?Math.floor(choices.length/2):index;
-      input.setAttribute('aria-valuetext',neutral?'Default':title(selected));
-      output.textContent=neutral?'Default':title(selected);
-      output.style.left=`clamp(36px, ${x/3}%, calc(100% - 36px))`;
-      [halo,ring,dot].forEach(e=>{e.setAttribute('cx',x);e.setAttribute('cy',y(x));});
-      progress.setAttribute('stroke-dasharray',(neutral||choices.length===1?0:index/(choices.length-1)*100)+' 100');
-      caption.textContent=neutral?'Uses your settings':'Custom setting';reset.hidden=neutral;
+      const index=selected===null?defaultIndex:choices.indexOf(selected);
+      input.value=index<0?Math.floor(choices.length/2):index;
+      input.setAttribute('aria-valuetext',selected===null?(fallback?'Default ('+fallback+')':'Default'):selected);
+      output.textContent=input.getAttribute('aria-valuetext');
+      track.style.setProperty('--effort-pos',(index<0?50:position(index))+'%');
+      track.style.setProperty('--effort-fill',(index<0?0:position(index))+'%');
+      ticks.forEach((tick,i)=>tick.classList.toggle('on',i<=index));
+      reset.disabled=selected===null;
     }
-    function choose(){selected=choices[Number(input.value)];paint();onChange(selected);}
+    function choose(){
+      const next=choices[Number(input.value)];
+      if(selected===next)return;
+      selected=next;paint();onChange(selected);
+      if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+        const spring=getComputedStyle(host).getPropertyValue('--spawn-spring').trim();
+        thumb.getAnimations().forEach(animation=>animation.cancel());
+        thumb.animate([{scale:'1.25'},{scale:'1'}],{duration:380,easing:spring||'ease-out'});
+      }
+    }
     input.addEventListener('input',choose);
-    // A click on the neutral stop also explicitly chooses that effort.
     input.addEventListener('pointerup',()=>{if(selected===null)choose();});
+    // With a single detent the native range has no value change to report.
+    input.addEventListener('keydown',event=>{
+      if(selected===null&&['Enter',' '].includes(event.key)&&!event.metaKey&&!event.ctrlKey){
+        event.preventDefault();choose();
+      }
+    });
     reset.addEventListener('click',()=>{selected=null;paint();onChange(null);input.focus({preventScroll:true});});
     paint();
   },

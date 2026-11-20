@@ -101,20 +101,21 @@ def test_open_dialog_automatically_recovers_and_keeps_a_stale_selection(tour_bro
         return original(url,options);
       };
       try{
-        spawnOverlay.classList.add('on');await loadSpawnCatalog();
-        const loading={text:modelChoices.textContent,disabled:spawnSubmit.disabled};
+        spawnOverlay.classList.add('on');spawnTask.value='Fixture task';await loadSpawnCatalog();
+        spawnModelButton.click();
+        const loading={listed:modelChoices.querySelectorAll('input').length,disabled:spawnSubmit.disabled,status:spawnStatus.textContent};
         mode='good';await new Promise(r=>setTimeout(r,1150));
         const recovered={model:selModel,disabled:spawnSubmit.disabled,status:spawnStatus.textContent};
         mode='fail';await loadSpawnCatalog();
         const input=effortChoices.querySelector('input');input.focus();
         await new Promise(r=>setTimeout(r,1150));
-        const stale={model:selModel,disabled:spawnSubmit.disabled,badge:document.getElementById('spawnCatalogState').textContent,
+        const stale={model:selModel,disabled:spawnSubmit.disabled,catalogStale:spawnCatalog.stale,
           same:input===effortChoices.querySelector('input'),focus:document.activeElement===input};
         const before=calls;closeSpawnModal(true);await new Promise(r=>setTimeout(r,1200));
         return {loading,recovered,stale,stopped:calls===before};
       }finally{spawnCatalogLoader.stop();window.fetch=original;}
     })()''')
-    assert 'Loading model catalog' in result['loading']['text'] and result['loading']['disabled']
-    assert result['recovered']==dict(model='last-good',disabled=False,status='ready')
-    assert result['stale']==dict(model='last-good',disabled=False,badge='stale',same=True,focus=True)
+    assert result['loading']==dict(listed=0,disabled=True,status='')
+    assert result['recovered']==dict(model='last-good',disabled=False,status='')
+    assert result['stale']==dict(model='last-good',disabled=False,catalogStale=True,same=True,focus=True)
     assert result['stopped']
