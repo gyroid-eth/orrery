@@ -3247,6 +3247,7 @@ def host_platform() -> dict[str, Any]:
         "host": kind,
         "distro": wsl_distro() if kind == "wsl" else None,
         "windows_interop": interop,
+        "home_dir": str(Path.home()),
         "terminal": terminal,
         # The macOS pasteboard reader, or Windows PowerShell under WSL.
         "file_paste": kind == "mac" or (kind == "wsl" and windows_clipboard_problem() is None),
