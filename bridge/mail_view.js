@@ -13,6 +13,8 @@ if(!mailEl||!OC)return;
 
 const byId=new Map();
 const mailItems=[];
+const cardsByKey=new Map();
+const movingCards=new Map();
 let activeFilter='';
 let drawerOpen=false;
 let drawerMode='detail';
@@ -198,66 +200,157 @@ function appendPeer(container,name){
   const label=document.createElement('span');label.className='mail-peer-name';label.textContent=name;
   peer.appendChild(label);container.appendChild(peer);
 }
-function refreshPeerAvatars(){
-  if(typeof OC.renderPeerAvatar!=='function')return;
-  cardsEl.querySelectorAll('.mail-peer').forEach(peer=>{
-    const previous=peer.querySelector('.conversation-avatar'),avatar=OC.renderPeerAvatar(peer.dataset.peerName,previous);
-    if(avatar!==previous){if(previous)previous.remove();if(avatar)peer.prepend(avatar);}
-  });
-  layoutRecipients();
+function refreshPeerAvatars(heads,initial=false){
+  const resized=[];
+  for(const head of heads){
+    let changed=initial;
+    if(typeof OC.renderPeerAvatar==='function'){
+      for(const peer of head.querySelectorAll('.mail-peer')){
+        const previous=peer.querySelector('.conversation-avatar'),avatar=OC.renderPeerAvatar(peer.dataset.peerName,previous);
+        if(avatar!==previous){
+          if(previous)previous.remove();
+          if(avatar)peer.prepend(avatar);
+          changed=true;
+        }
+      }
+    }
+    if(changed)resized.push(head);
+  }
+  layoutRecipients(resized);
 }
 
 let recipientFrame=null;
-const recipientObserver=typeof ResizeObserver==='function'?new ResizeObserver(scheduleRecipientLayout):null;
-function scheduleRecipientLayout(){
-  if(recipientFrame!==null)return;
-  recipientFrame=requestAnimationFrame(()=>{recipientFrame=null;layoutRecipients();});
+const pendingRecipientHeads=new Set();
+const recipientWidths=new WeakMap();
+const recipientObserver=typeof ResizeObserver==='function'?new ResizeObserver(entries=>{
+  scheduleRecipientLayout(entries
+    .filter(({target,contentRect})=>Math.round(contentRect.width)!==recipientWidths.get(target))
+    .map(({target})=>target));
+}):null;
+function scheduleRecipientLayout(heads){
+  for(const head of heads)pendingRecipientHeads.add(head);
+  if(recipientFrame!==null||!pendingRecipientHeads.size)return;
+  recipientFrame=requestAnimationFrame(()=>{
+    recipientFrame=null;
+    const connected=[...pendingRecipientHeads].filter(head=>head.isConnected);
+    pendingRecipientHeads.clear();
+    layoutRecipients(connected);
+  });
 }
-function layoutRecipients(){
-  for(const head of cardsEl.querySelectorAll('.mtop')){
+function layoutRecipients(heads){
+  if(!heads.length)return;
+  // Measure all headers at each stage before writing styles for the next one.
+  const headers=heads.map(head=>{
     const from=head.querySelector('.from'),to=head.querySelector('.to'),more=to.querySelector('.mail-more');
-    const peers=[...to.querySelectorAll('.mail-peer')],multiple=peers.length>1;
+    const peers=[...to.querySelectorAll('.mail-peer')];
     to.classList.remove('is-stacked');more.hidden=true;
     peers.forEach(peer=>{peer.hidden=false;peer.classList.remove('is-first');});
-    const natural=peer=>{
-      const range=document.createRange();range.selectNodeContents(peer.querySelector('.mail-peer-name'));
-      return range.getBoundingClientRect().width+(peer.querySelector('.conversation-avatar')?22:0);
-    };
+    return {head,from,to,more,peers};
+  });
+  const range=document.createRange();
+  const natural=peer=>{
+    range.selectNodeContents(peer.querySelector('.mail-peer-name'));
+    return range.getBoundingClientRect().width+(peer.querySelector('.conversation-avatar')?22:0);
+  };
+  const sizes=headers.map(({head,from,to,peers})=>{
     const gap=parseFloat(getComputedStyle(head).columnGap)||0;
-    const available=Math.max(0,head.clientWidth-head.querySelector('.arrow').offsetWidth-head.querySelector('.imp').offsetWidth-gap*3);
+    const width=head.clientWidth;
+    recipientWidths.set(head,width);
+    const available=Math.max(0,width-head.querySelector('.arrow').offsetWidth-head.querySelector('.imp').offsetWidth-gap*3);
     const sender=natural(from.querySelector('.mail-peer'));
     const names=peers.reduce((sum,peer)=>sum+natural(peer),0)+
       [...to.querySelectorAll('.mail-separator')].reduce((sum,part)=>sum+part.getBoundingClientRect().width,0);
-    if(multiple&&sender+names>available){
+    return {available,sender,stacked:peers.length>1&&sender+names>available};
+  });
+  const stacked=[];
+  headers.forEach(({from,to,more,peers},index)=>{
+    const {available,sender,stacked:needsStack}=sizes[index];
+    if(needsStack){
       to.classList.add('is-stacked');more.hidden=false;more.textContent='+'+peers.length;
-      const counter=more.getBoundingClientRect().width;
-      from.style.maxWidth=Math.max(0,Math.min(sender,available-counter-3))+'px';
-      const room=Math.max(0,to.clientWidth-3),known=peers.filter(peer=>peer.querySelector('.conversation-avatar'));
-      const extent=n=>n?18+(n-1)*14+3:0;
-      let count=known.length;
-      if(count!==peers.length||extent(count)>room){
-        count=Math.max(0,Math.min(count,Math.floor((room-counter-4-21)/14)+1));
-      }
-      const shown=new Set(known.slice(0,count));
-      peers.forEach(peer=>{peer.hidden=!shown.has(peer);});
-      if(count)known[0].classList.add('is-first');
-      const hidden=peers.filter(peer=>!shown.has(peer));
-      more.hidden=!hidden.length;more.textContent='+'+hidden.length;
-      more.title=hidden.map(peer=>peer.dataset.peerName).join(', ');
-      more.classList.toggle('is-only',count===0);
+      stacked.push({from,to,more,peers,available,sender});
     }else{
       const minimum=peers[0]?.querySelector('.conversation-avatar')?34:12;
       from.style.maxWidth=Math.max(0,Math.min(sender,available-minimum-3))+'px';
     }
-  }
+  });
+  const counters=stacked.map(({more})=>more.getBoundingClientRect().width);
+  stacked.forEach(({from,available,sender},index)=>{
+    from.style.maxWidth=Math.max(0,Math.min(sender,available-counters[index]-3))+'px';
+  });
+  const rooms=stacked.map(({to})=>Math.max(0,to.clientWidth-3));
+  stacked.forEach(({more,peers},index)=>{
+    const room=rooms[index],counter=counters[index];
+    const known=peers.filter(peer=>peer.querySelector('.conversation-avatar'));
+    const extent=known.length?18+(known.length-1)*14+3:0;
+    let count=known.length;
+    if(count!==peers.length||extent>room){
+      count=Math.max(0,Math.min(count,Math.floor((room-counter-4-21)/14)+1));
+    }
+    const shown=new Set(known.slice(0,count));
+    peers.forEach(peer=>{peer.hidden=!shown.has(peer);});
+    if(count)known[0].classList.add('is-first');
+    const hidden=peers.filter(peer=>!shown.has(peer));
+    more.hidden=!hidden.length;more.textContent='+'+hidden.length;
+    more.title=hidden.map(peer=>peer.dataset.peerName).join(', ');
+    more.classList.toggle('is-only',count===0);
+  });
 }
-document.fonts?.ready.then(scheduleRecipientLayout);
-document.fonts?.addEventListener('loadingdone',scheduleRecipientLayout);
+const scheduleAllRecipientLayouts=()=>scheduleRecipientLayout(cardsEl.querySelectorAll('.mtop'));
+document.fonts?.ready.then(scheduleAllRecipientLayouts);
+document.fonts?.addEventListener('loadingdone',scheduleAllRecipientLayouts);
+
+function cardSubject(message){
+  return message.subject||message.excerpt||'(no subject)';
+}
+
+function sameCardContent(previous,message){
+  if(previous===message)return true;
+  if(previous.sender!==message.sender||cardSubject(previous)!==cardSubject(message)||
+    previous.importance!==message.importance)return false;
+  const before=recipientNames(previous),after=recipientNames(message);
+  return before.length===after.length&&before.every((name,index)=>name===after[index]);
+}
+
+function makeCard(message,index){
+  const card=document.createElement('button');
+  const recipients=recipientNames(message);
+  const importance=message.importance||'normal';
+  card.type='button';
+  // first paint: staggered rise for everything. After boot, only a card
+  // never shown before gets the landing+ember entrance — the rest keep
+  // still (renderMail FLIPs them to their new slots instead).
+  const fresh=!shownIds.has(message.id);
+  if(fresh)shownIds.add(message.id);
+  card.className='msg '+(booted?(fresh?'landing':'settled'):'');
+  card.dataset.mid=message.id;
+  card.style.animationDelay=booted?'0s':(Math.min(index,12)*.03)+'s';
+  card.innerHTML='<span class="mtop"><span class="from"></span>'+
+    '<span class="arrow">→</span><span class="to"></span>'+
+    '<span class="imp '+(highImportance(importance)?'hi':'')+'">'+E(importance)+'</span></span>'+
+    '<span class="body">'+E(cardSubject(message))+'</span>'+
+    '<span class="time">'+E(relativeLabel(message.ts))+'</span>';
+  appendPeer(card.querySelector('.from'),message.sender||'unknown');
+  const to=card.querySelector('.to');
+  to.setAttribute('role','group');to.title=to.ariaLabel=recipients.join(', ')||'—';
+  (recipients.length?recipients:['—']).forEach((name,index)=>{
+    if(index){const separator=document.createElement('span');separator.className='mail-separator';separator.textContent=', ';to.appendChild(separator);}
+    appendPeer(to,name);
+  });
+  const more=document.createElement('span');more.className='mail-more';more.hidden=true;more.setAttribute('aria-hidden','true');to.appendChild(more);
+  card.addEventListener('click',()=>openMessage(message.id,card));
+  return card;
+}
 
 function renderCards(items){
-  recipientObserver?.disconnect();
-  cardsEl.innerHTML='';
   const visible=items.filter(message=>messageIncludesAgent(message,activeFilter));
+  const keys=new Set(visible.map(message=>message.key));
+  for(const [key,{card,head}] of cardsByKey){
+    if(keys.has(key))continue;
+    recipientObserver?.unobserve(head);
+    card.remove();
+    cardsByKey.delete(key);
+  }
+  cardsEl.querySelector('.mailempty')?.remove();
   if(!visible.length){
     const empty=document.createElement('div');
     empty.className='mailempty';
@@ -266,64 +359,62 @@ function renderCards(items){
     cardsEl.appendChild(empty);
     return;
   }
+  const addedHeads=[];
+  let next=cardsEl.firstElementChild;
   visible.forEach((message,index)=>{
-    const card=document.createElement('button');
-    const recipients=recipientNames(message);
-    const importance=message.importance||'normal';
-    card.type='button';
-    // first paint: staggered rise for everything. After boot, only a card
-    // never shown before gets the landing+ember entrance — the rest keep
-    // still (renderMail FLIPs them to their new slots instead).
-    const fresh=!shownIds.has(message.id);
-    if(fresh)shownIds.add(message.id);
-    card.className='msg '+(booted?(fresh?'landing':'settled'):'');
-    card.dataset.mid=message.id;
-    card.style.animationDelay=booted?'0s':(Math.min(index,12)*.03)+'s';
-    card.innerHTML='<span class="mtop"><span class="from"></span>'+
-      '<span class="arrow">→</span><span class="to"></span>'+
-      '<span class="imp '+(highImportance(importance)?'hi':'')+'">'+E(importance)+'</span></span>'+
-      '<span class="body">'+E(message.subject||message.excerpt||'(no subject)')+'</span>'+
-      '<span class="time">'+E(relativeLabel(message.ts))+'</span>';
-    appendPeer(card.querySelector('.from'),message.sender||'unknown');
-    const to=card.querySelector('.to');
-    to.setAttribute('role','group');to.title=to.ariaLabel=recipients.join(', ')||'—';
-    (recipients.length?recipients:['—']).forEach((name,index)=>{
-      if(index){const separator=document.createElement('span');separator.className='mail-separator';separator.textContent=', ';to.appendChild(separator);}
-      appendPeer(to,name);
-    });
-    const more=document.createElement('span');more.className='mail-more';more.hidden=true;more.setAttribute('aria-hidden','true');to.appendChild(more);
-    card.addEventListener('click',()=>openMessage(message.id,card));
-    cardsEl.appendChild(card);
-    recipientObserver?.observe(card.querySelector('.mtop'));
+    let entry=cardsByKey.get(message.key);
+    if(!entry||!sameCardContent(entry.message,message)){
+      const card=makeCard(message,index),head=card.querySelector('.mtop');
+      if(entry){
+        recipientObserver?.unobserve(entry.head);
+        if(next===entry.card)next=card;
+        entry.card.replaceWith(card);
+      }
+      entry={message,card,head};
+      cardsByKey.set(message.key,entry);
+      addedHeads.push(head);
+      recipientObserver?.observe(head);
+    }else{
+      entry.message=message;
+      const time=entry.card.querySelector('.time'),label=relativeLabel(message.ts);
+      if(time.textContent!==label)time.textContent=label;
+    }
+    const {card}=entry;
+    if(card!==next)cardsEl.insertBefore(card,next);
+    else next=next.nextElementSibling;
   });
-  refreshPeerAvatars();
+  refreshPeerAvatars(addedHeads,true);
 }
 
 let booted=false;
 const shownIds=new Set();
 function renderMail(){
-  // FLIP: remember where every card sat, rebuild, then slide survivors from
-  // their old slot to the new one — a fresh card pushes the list down
-  // smoothly instead of the whole rail re-rising.
+  // FLIP the cards on screen using their current positions. The list keeps
+  // the other cards in place without starting animations off screen.
   const before=new Map();
-  cardsEl.querySelectorAll('.msg[data-mid]').forEach(el=>
-    before.set(el.dataset.mid,el.getBoundingClientRect().top));
+  const viewport=listEl.getBoundingClientRect();
+  for(const [key,{card}] of cardsByKey){
+    const rect=card.getBoundingClientRect();
+    if(rect.bottom>=viewport.top&&rect.top<=viewport.bottom)before.set(key,rect.top);
+  }
+  for(const animation of movingCards.values())animation.cancel();
+  movingCards.clear();
   const items=newestFirst();
   renderFilters(items);
   renderCards(items);
-  cardsEl.querySelectorAll('.msg.settled[data-mid]').forEach(el=>{
-    const prev=before.get(el.dataset.mid);
-    if(prev==null)return;
-    const delta=prev-el.getBoundingClientRect().top;
-    if(!delta)return;
-    el.style.transition='none';
-    el.style.transform=`translateY(${delta}px)`;
-    requestAnimationFrame(()=>{
-      el.style.transition='transform .45s cubic-bezier(.2,.8,.2,1)';
-      el.style.transform='';
-      el.addEventListener('transitionend',()=>{el.style.transition='';},{once:true});
-    });
-  });
+  const moves=[];
+  for(const [key,previous] of before){
+    const card=cardsByKey.get(key)?.card;
+    if(!card)continue;
+    const delta=previous-card.getBoundingClientRect().top;
+    if(delta)moves.push({card,delta});
+  }
+  for(const {card,delta} of moves){
+    const animation=card.animate([{transform:`translateY(${delta}px)`},{transform:'none'}],
+      {duration:450,easing:'cubic-bezier(.2,.8,.2,1)'});
+    movingCards.set(card,animation);
+    animation.onfinish=()=>movingCards.delete(card);
+  }
   booted=true;
 }
 
@@ -451,15 +542,23 @@ function threadHtml(){
   }).join('')+'</div>';
 }
 
+function threadButtonLabel(){
+  if(threadLoading)return'thread (…)';
+  if(threadReady)return'thread ('+threadItems.length+')';
+  return'thread';
+}
+
+function updateThreadButton(){
+  const button=drawerEl.querySelector('[data-action="thread"]');
+  if(button)button.textContent=threadButtonLabel();
+}
+
 function renderDrawer(){
   if(!drawerOpen||!currentMessage)return;
   const hasThread=Boolean(threadKeyOf(currentMessage.thread_id));
-  let threadLabel='thread';
-  if(threadLoading)threadLabel='thread (…)';
-  else if(threadReady)threadLabel='thread ('+threadItems.length+')';
   const modeButton=hasThread?(drawerMode==='thread'?
     '<button type="button" class="drawer-mode" data-action="detail">message</button>':
-    '<button type="button" class="drawer-mode" data-action="thread">'+E(threadLabel)+'</button>'):'';
+    '<button type="button" class="drawer-mode" data-action="thread">'+E(threadButtonLabel())+'</button>'):'';
   drawerEl.innerHTML='<div class="drawer-head"><button type="button" class="drawer-back" data-action="close" title="Back to mail list">←</button>'+
     '<span class="drawer-label">'+(drawerMode==='thread'?'THREAD':'MESSAGE')+'</span>'+modeButton+'</div>'+
     '<div class="drawer-scroll">'+(drawerMode==='thread'?threadHtml():detailHtml(currentMessage))+'</div>';
@@ -478,7 +577,7 @@ function closeDrawer(){
   drawerEl.setAttribute('aria-hidden','true');
   listEl.removeAttribute('aria-hidden');
   listEl.inert=false;
-  if(lastTrigger&&lastTrigger.isConnected)lastTrigger.focus();
+  cardsByKey.get(lastTrigger?.dataset.mid)?.card.focus();
 }
 
 async function fetchJson(url){
@@ -518,7 +617,7 @@ async function openMessage(id,trigger){
   }
   renderDrawer();
   const back=drawerEl.querySelector('.drawer-back');
-  if(trigger&&back)back.focus();
+  if(trigger&&back)back.focus({preventScroll:true});
   if(threadKey)loadThread(false);
 }
 
@@ -531,7 +630,7 @@ async function loadThread(showWhenReady){
   showThreadWhenReady=showThreadWhenReady||showWhenReady;
   if(threadLoading)return;
   threadLoading=true;
-  renderDrawer();
+  updateThreadButton();
   const requestedKey=threadKey;
   const request=++threadRequest;
   const data=await fetchJson('/telemetry/mail/thread?thread_id='+encodeURIComponent(currentMessage.thread_id)+'&limit=50');
@@ -540,10 +639,15 @@ async function loadThread(showWhenReady){
   if(data&&Array.isArray(data.messages)){
     threadItems=data.messages.map(normalizeMessage).filter(Boolean).sort((a,b)=>(a.ts-b.ts)||a.key.localeCompare(b.key));
     threadReady=true;
-    if(showThreadWhenReady)drawerMode='thread';
   }
+  const switchToThread=showThreadWhenReady&&threadReady;
   showThreadWhenReady=false;
-  renderDrawer();
+  if(switchToThread){
+    drawerMode='thread';
+    renderDrawer();
+  }else{
+    updateThreadButton();
+  }
 }
 
 drawerEl.addEventListener('click',event=>{
@@ -572,7 +676,7 @@ document.addEventListener('keydown',event=>{
 },true);
 
 document.addEventListener('oc:mail',event=>ingest(event.detail&&event.detail.messages));
-document.addEventListener('oc:agents',refreshPeerAvatars);
+document.addEventListener('oc:agents',()=>refreshPeerAvatars(cardsEl.querySelectorAll('.mtop')));
 document.addEventListener('oc:filter-agent',event=>{
   selectMailFilter(event.detail&&event.detail.agent);
 });
