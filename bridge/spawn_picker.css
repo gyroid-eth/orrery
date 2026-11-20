@@ -159,14 +159,14 @@ html[data-color-theme="light"] #spawnOverlay {
 #spawnModelMark.spawn-local-maker {position:relative}
 #spawnModelMark.spawn-local-maker .spawn-brand {position:absolute;inset:4px;width:10px;height:10px}
 html[data-color-theme="light"] .spawn-brand.mono {filter:invert(.82) sepia(.2)}
-.spawn-model-scroll,.dir-search-results,.dir-list {overflow:auto;overscroll-behavior:contain;scrollbar-color:var(--hair) transparent}
+.spawn-model-scroll,.dir-search-results {overflow:auto;overscroll-behavior:contain;scrollbar-color:var(--hair) transparent}
 .spawn-model-scroll {max-height:min(31dvh,270px);margin:8px 0 4px}
-.model-choice,.dir-search-result,#spawnForm .dir-row {
+.model-choice,.dir-search-result {
   position:relative;display:flex;align-items:center;gap:10px;min-height:38px;width:100%;
   padding:6px 12px;border:0;border-radius:9px;background:none;color:var(--ink-dim);
   text-align:left;cursor:pointer;
 }
-.model-choice:hover,.model-choice:focus-within,.dir-search-result:hover,.dir-search-result[aria-selected="true"],#spawnForm .dir-row:hover {background:var(--spawn-control-surface);color:var(--ink)}
+.model-choice:hover,.model-choice:focus-within,.dir-search-result:hover,.dir-search-result[aria-selected="true"] {background:var(--spawn-control-surface);color:var(--ink)}
 .model-choice.unavailable {opacity:.48;cursor:default}
 .model-choice input {position:absolute;opacity:0;width:1px;height:1px}
 .model-choice:has(input:focus-visible) {outline:2px solid var(--amber);outline-offset:-2px}
@@ -175,15 +175,14 @@ html[data-color-theme="light"] .spawn-brand.mono {filter:invert(.82) sepia(.2)}
   content:"";width:6px;height:6px;margin-left:auto;flex:none;border-radius:50%;background:var(--amber);
 }
 .model-choice-name,.dir-search-result > span {font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.model-choice-note,.dir-search-result small {color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.model-choice-note {color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
 .model-choice-note {flex:none;max-width:35%}
 .model-overflow summary {display:flex;align-items:center;gap:8px;min-height:34px;padding:0 12px;cursor:pointer;color:var(--ink-dim);list-style:none}
 .model-overflow summary::-webkit-details-marker {display:none}
 .model-overflow summary::before {content:"+"}
 .model-overflow[open] summary::before {content:"−"}
-.spawn-empty,.dir-search-status,.dir-error {padding:6px 12px;margin:0;color:var(--ink-dim);font-size:12px}
+.spawn-empty,.dir-search-status {padding:6px 12px;margin:0;color:var(--ink-dim);font-size:12px}
 .dir-search-status:empty {display:none}
-.dir-error {color:var(--theme-status-alert,#e0655f)}
 #spawnHarnesses {flex:1}
 #spawnHarnessHelp {margin-left:auto}
 #spawnHelperField {margin-top:8px}
@@ -233,13 +232,12 @@ html[data-color-theme="light"] .spawn-brand.mono {filter:invert(.82) sepia(.2)}
 .agent-pick[aria-selected="true"] :is(img,.cp-fallback) {border-color:var(--amber);scale:1.12}
 .agent-pick .cp-lab {font:12px var(--serif);max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .nc-adj {display:flex;align-items:center;gap:6px;min-width:0}
-.dir-search-results,.dir-list {margin-top:8px;max-height:min(34dvh,245px)}
-.dir-search-result small,.dir-crumbs,#spawnForm .dir-row {font-family:var(--mono)}
+.dir-search-results {margin-top:8px;max-height:min(34dvh,245px)}
+.dir-crumbs,#spawnForm .dir-search-result {font-family:var(--mono)}
 .dir-search-result .spawn-icon {width:14px;height:14px}
-.dir-crumbs {display:flex;flex-wrap:wrap;align-items:center;min-width:0;font-size:11px;color:var(--ink-dim);overflow-wrap:anywhere}
-#spawnForm .crumb {border:0;border-radius:4px;background:none;color:inherit;padding:3px;cursor:pointer}
+.dir-crumbs {display:flex;align-items:center;min-width:0;margin-bottom:6px;overflow-x:auto;white-space:nowrap;scrollbar-color:var(--hair) transparent;font-size:11px;color:var(--ink-dim)}
+#spawnForm .crumb {flex:none;border:0;border-radius:4px;background:none;color:inherit;padding:3px;cursor:pointer}
 #spawnForm .crumb:hover,#spawnForm .crumb.here {color:var(--ink)}
-#spawnForm .dir-row {min-height:32px;font-size:12px;overflow-wrap:anywhere}
 #spawnForm .spawn-sheet-action {
   border:0;border-radius:8px;background:var(--spawn-control-surface);color:var(--ink);font-size:12px;padding:7px 10px;cursor:pointer;
 }
