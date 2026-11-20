@@ -52,44 +52,67 @@ SOFTWARE.
     if(!['Claude','Codex'].includes(provider))return {groups:[],consumed:new Set()};
     const enabled=events.some(e=>e.step||e.step_turn||e.step_boundary);
     if(!enabled)return {groups:[],consumed:new Set()};
-    const groups=new Map(),consumed=new Set(),calls=new Map(),results=new Map();
-    let current=null;
-    function group(id){
-      if(!groups.has(id))groups.set(id,{id,steps:new Map(),started:NaN,ended:NaN,last:NaN,
-        duration:null,closed:false,anchor:null,orphans:0});
-      return groups.get(id);
+    const groups=[],consumed=new Set(),calls=new Map(),results=new Map(),completions=new Map();
+    let current=null,segment='partial',turn=null;
+    function cut(event){
+      if(current)current.closed=true;
+      current=null;segment='after:'+event.id;
     }
-    function active(){return current||(current=group('partial'));}
-    for(const event of events){
-      if(provider==='Claude'&&event.step_boundary){
-        if(current)current.closed=true;
-        current=group('prompt:'+event.id);current.started=time(event.ts);
+    function startTurn(event,id,started){
+      cut(event);turn={id,started,groups:[]};
+    }
+    function active(){
+      if(!current){
+        current={id:segment,steps:new Map(),started:NaN,ended:NaN,duration:null,
+          closed:false,anchor:null,orphans:0};
+        groups.push(current);turn?.groups.push(current);
       }
+      return current;
+    }
+    for(const event of events){
       const boundary=event.step_turn;
       if(provider==='Codex'&&boundary&&key(boundary.id)){
-        current=group(boundary.id);consumed.add(event.id);
-        if(Number.isFinite(time(boundary.started)))current.started=time(boundary.started);
-        if(boundary.phase==='end'){
-          current.closed=true;current.ended=time(boundary.ended)||time(event.ts);
-          if(typeof boundary.duration==='number'){current.duration=boundary.duration/1000;current.explicitDuration=true;}
-        }else if(!Number.isFinite(current.started))current.started=time(event.ts);
+        consumed.add(event.id);
+        if(boundary.phase==='start'){
+          startTurn(event,boundary.id,boundary.started??event.ts);
+        }else if(!turn||turn.id===boundary.id){
+          // The native elapsed time describes the whole turn. It applies to
+          // a card only when the turn has a single run of operations.
+          if(turn?.groups.length===1){
+            const [only]=turn.groups;
+            only.started=time(boundary.started??turn.started);
+            only.ended=time(boundary.ended??event.ts);
+            if(typeof boundary.duration==='number')only.duration=boundary.duration/1000;
+          }
+          cut(event);turn=null;
+        }
+        continue;
       }
-      if(current&&event.kind==='text'&&event.role==='assistant')current.last=time(event.ts);
       if(provider==='Codex'&&event.step_wrapper===true)consumed.add(event.id);
       const step=event.step;
-      if(!step||!key(step.id))continue;
-      if(step.phase==='call'&&provider==='Claude'){
-        const owner=active();owner.anchor??=event.id;
-        calls.set(step.id,{step,event,owner});
-      }else if(step.phase==='result'&&provider==='Claude'){
-        consumed.add(event.id);
-        results.set(step.id,{step,event,owner:active()});
-      }else if(step.phase==='complete'&&provider==='Codex'){
-        consumed.add(event.id);
-        const owner=key(step.turn)?group(step.turn):active();
-        current=owner;owner.anchor??=event.id;
-        owner.steps.set(step.id,{...step,eventId:event.id});
+      if(step&&key(step.id)){
+        if(step.phase==='call'&&provider==='Claude'){
+          const owner=active();owner.anchor??=event.id;
+          calls.set(step.id,{step,event,owner});
+        }else if(step.phase==='result'&&provider==='Claude'){
+          consumed.add(event.id);
+          results.set(step.id,{step,event,owner:calls.has(step.id)?null:active()});
+        }else if(step.phase==='complete'&&provider==='Codex'){
+          consumed.add(event.id);
+          const id=key(step.turn)?step.turn:turn?.id;
+          const completionKey=(id||'')+':'+step.id;
+          let completion=completions.get(completionKey);
+          if(!completion){
+            if(id&&turn?.id!==id)startTurn(event,id);
+            const owner=active();owner.anchor??=event.id;
+            completion={owner,eventId:event.id};completions.set(completionKey,completion);
+          }
+          completion.owner.steps.set(step.id,{...step,eventId:completion.eventId});
+        }
       }
+      // A tool request can also emit a visible Mail card. Record its step
+      // before the separator so subsequent requests start below the card.
+      if(event.step_boundary)cut(event);
     }
     for(const [id,call] of calls){
       const result=results.get(id);
@@ -102,18 +125,17 @@ SOFTWARE.
     for(const [id,result] of results)if(!calls.has(id)){
       result.owner.orphans++;result.owner.anchor??=result.event.id;
     }
-    const values=[...groups.values()];
-    values.forEach((g,i)=>{
-      if(i<values.length-1)g.closed=true;
+    if(!current&&(provider==='Claude'||turn))active();
+    for(const g of groups){
       g.steps=[...g.steps.values()];
       const starts=g.steps.map(s=>time(s.started)).filter(Number.isFinite);
       const ends=g.steps.map(s=>time(s.ended)).filter(Number.isFinite);
       if(!Number.isFinite(g.started)&&starts.length)g.started=Math.min(...starts);
-      if(!Number.isFinite(g.ended)&&ends.length)g.ended=Math.max(...ends,Number.isFinite(g.last)?g.last:0);
+      if(!Number.isFinite(g.ended)&&ends.length)g.ended=Math.max(...ends);
       if(g.duration===null&&Number.isFinite(g.started)&&Number.isFinite(g.ended)&&g.ended>=g.started)
         g.duration=(g.ended-g.started)/1000;
-    });
-    return {groups:values,consumed};
+    }
+    return {groups,consumed};
   }
 
   function mount({host,mutate=fn=>fn(),onFocusLost=()=>{}}){
@@ -189,7 +211,7 @@ SOFTWARE.
         }
         card.working=working;card.waiting=waiting;
         const compacting=working&&current.reader_phase==='compacting';
-        const finished=g.explicitDuration?g.duration:card.lastWork??g.duration;
+        const finished=g.closed?(g.duration??card.lastWork):(card.lastWork??g.duration);
         title(card,working?(compacting?'Compacting context…':'Working…'):waiting?'Waiting for you':
           finished!==null?'Worked for '+duration(finished):'Recorded work',working&&!compacting);
         changed(card.clock,working&&card.lastWork!==null?duration(card.lastWork):'');

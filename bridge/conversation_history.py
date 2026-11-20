@@ -15,7 +15,7 @@ from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from conversation_mail import received, sent
 from conversation_artifacts import SHOW_FILES, completed_show_files
-from conversation_steps import codex_completed, codex_turn
+from conversation_steps import codex_completed, codex_turn, mark_step_boundary
 
 MAX_SCAN = 4 * 1024 * 1024
 MAX_TEXT = 64 * 1024
@@ -127,6 +127,10 @@ def codex_event(raw: bytes, offset: int) -> dict | None:
         item = json.loads(raw)
     except (ValueError, UnicodeDecodeError, RecursionError):
         return None
+    return mark_step_boundary(_codex_event(item, offset))
+
+
+def _codex_event(item, offset):
     turn = codex_turn(item)
     if turn:
         return dict(id=str(offset), ts=str(item.get('timestamp') or '')[:128],

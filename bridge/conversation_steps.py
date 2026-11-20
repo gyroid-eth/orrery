@@ -10,6 +10,14 @@ import re
 from urllib.parse import urlsplit
 
 
+def mark_step_boundary(event):
+    """Use the visible Reader projection to delimit native operation runs."""
+    if event and not event.get('step_turn') and (
+            event.get('mail') or event['kind'] not in {'tool', 'tool_result'}):
+        event['step_boundary'] = True
+    return event
+
+
 def label(value, limit=160):
     return re.sub(r'[\x00-\x1f\x7f]', ' ', value)[:limit] if isinstance(value, str) else ''
 
