@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from urllib.parse import quote
 from conversation_mail import received, sent
 from conversation_images import hermes_content
-from conversation_steps import claude_call, claude_result
+from conversation_steps import claude_call, claude_result, mark_step_boundary
 
 from conversation_history import (HistoryUnavailable, MAX_SCAN, MAX_TEXT, PAGE_SIZE,
     open_bound_transcript, assert_transcript_identity, read_codex_page, recorded_model)
@@ -143,10 +143,7 @@ def normalize(item,p,sid):
     """Return (block-index,event) pairs; hidden/reasoning/raw tool bodies excluded."""
     out=[]
     def add(index,event):
-        if (event and p=='claude' and event.get('kind')=='text' and event.get('role')=='user'
-                and item.get('type')=='user' and not any(e.get('step_boundary') for _,e in out)):
-            event['step_boundary']=True
-        if event:out.append((index,event))
+        if event:out.append((index,mark_step_boundary(event) if p=='claude' else event))
     if p=='claude':
         if (item.get('sessionId')!=sid or item.get('isSidechain') or
                 item.get('isMeta') and not (item.get('type')=='user' and item.get('isCompactSummary') is True)):return []

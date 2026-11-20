@@ -82,7 +82,7 @@ def test_consumed_prompt_uses_attachment_timestamp_and_literal_text():
     event = normalize(queued(text), 'claude', 'fixture-session')
     assert len(event) == 1 and event[0][0] == 0
     assert event[0][1] == dict(kind='text', role='user', text=text,
-                             ts='2026-11-04T07:00:01.125Z', truncated=False)
+                              ts='2026-11-04T07:00:01.125Z', truncated=False, step_boundary=True)
 
 
 @pytest.mark.parametrize('stamp', [None, ''])
@@ -111,12 +111,9 @@ def test_queued_images_keep_normal_user_block_indexes_and_attachment_display():
     consumed = normalize(queued(content), 'claude', 'fixture-session')
     ordinary = normalize(dict(claude('user', content), timestamp='2026-11-04T07:00:01.125Z'),
                          'claude', 'fixture-session')
-    # Images/text keep the same display and block indexes. Only an ordinary
-    # prompt starts a turn; a consumed mid-turn prompt must not split steps.
-    assert ordinary[0][1].get('step_boundary') is True
-    assert all(not event.get('step_boundary') for _, event in consumed)
-    assert consumed == [(i, {k: v for k, v in event.items() if k != 'step_boundary'})
-                        for i, event in ordinary]
+    # Both prompts interrupt the visible step run at the same block indexes.
+    assert consumed == ordinary
+    assert all(event.get('step_boundary') is True for _, event in consumed)
     assert [i for i, _ in consumed] == [0, 1]
 
 
