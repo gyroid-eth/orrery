@@ -7,6 +7,7 @@ import conversation_history as history
 
 ENVIRONMENT = '<environment_context>\n<cwd>/workspace/project</cwd>\n</environment_context>'
 INSTRUCTIONS = '# AGENTS.md instructions\n\n<INSTRUCTIONS>\nUse the project guide.\n</INSTRUCTIONS>'
+SKILL = '<skill>\n<name>log</name>\n<path>/skills/log/SKILL.md</path>\nWrite a log.\n</skill>'
 
 
 def message(texts, kinds=None, role='user'):
@@ -22,6 +23,8 @@ def message(texts, kinds=None, role='user'):
     ([INSTRUCTIONS], ['agents_md.instructions']),
     ([INSTRUCTIONS, ENVIRONMENT], ['agents_md.instructions', 'environments.environment_context']),
     (['Generated workspace permissions.'], ['environments.environment_context']),
+    ([SKILL], ['skills.selected_skill_instructions']),
+    ([SKILL], None),
 ])
 def test_native_injected_context_is_one_expandable_system_notice(tmp_path, texts, kinds):
     path = tmp_path / 'rollout.jsonl'
@@ -31,7 +34,7 @@ def test_native_injected_context_is_one_expandable_system_notice(tmp_path, texts
     assert event['system_detail'] == '\n'.join(texts)
 
 
-@pytest.mark.parametrize('text', [ENVIRONMENT, INSTRUCTIONS,
+@pytest.mark.parametrize('text', [ENVIRONMENT, INSTRUCTIONS, SKILL,
                                       '<user_instructions>Literal instructions</user_instructions>'])
 def test_native_human_marker_keeps_the_same_literal_context_text(tmp_path, text):
     path = tmp_path / 'rollout.jsonl'
