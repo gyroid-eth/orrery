@@ -631,7 +631,7 @@ def normalize_spawn_catalog(remote: Any) -> dict[str, Any] | None:
     return remote
 
 
-def merge_spawn_catalog(payload: bytes) -> bytes:
+def merge_spawn_catalog(payload: bytes, *, runtime_mode: str | None = None) -> bytes:
     """Normalize telemetry data without local model or provider name overrides."""
     try:
         remote = normalize_spawn_catalog(json.loads(payload))
@@ -639,6 +639,8 @@ def merge_spawn_catalog(payload: bytes) -> bytes:
         return payload
     if remote is None:
         return payload
+    if runtime_mode is not None:
+        remote["runtime_mode"] = runtime_mode
     return json.dumps(remote, ensure_ascii=False).encode("utf-8")
 
 
@@ -1758,7 +1760,8 @@ async def fetch_proxied(
         labels = await annotations_by_agent(http_session)
         body = await asyncio.to_thread(prepare_agents_payload, body, labels, tmux_bin)
     if path == "/telemetry/spawn-catalog" and status == 200:
-        body = merge_spawn_catalog(body)
+        mode = 'fresh' if isinstance(tmux_bin, FreshTargetBoundary) else 'legacy'
+        body = merge_spawn_catalog(body, runtime_mode=mode)
     return body, status, content_type
 
 

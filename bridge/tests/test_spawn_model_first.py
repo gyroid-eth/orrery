@@ -1,4 +1,5 @@
 """Catalog capabilities, model identity and request compatibility for the picker."""
+import asyncio
 import json
 import re
 import subprocess
@@ -25,6 +26,32 @@ def test_legacy_catalog_gets_its_existing_launch_path_without_model_changes():
     assert provider['locality'] == 'cloud'
     assert provider['harnesses'] == [dict(id='claude-code', label='Claude Code', available=True, default=True)]
     assert provider['models'][0] == dict(id='claude-sonnet-5', label='claude-sonnet-5')
+
+
+def test_proxied_catalog_mode_comes_from_the_runtime_boundary():
+    class Response:
+        status = 200
+        headers = {'Content-Type': 'application/json'}
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def read(self):
+            return b'{"providers":[],"runtime_mode":"unknown"}'
+
+    class Session:
+        def get(self, *_args, **_kwargs):
+            return Response()
+
+    fresh = object.__new__(ob.FreshTargetBoundary)
+    for boundary, mode in [(object(), 'legacy'), (fresh, 'fresh')]:
+        body, status, _ = asyncio.run(ob.fetch_proxied(
+            Session(), '/telemetry/spawn-catalog', 'http://fixture.invalid', boundary))
+        assert status == 200
+        assert json.loads(body)['runtime_mode'] == mode
 
 
 def test_model_capabilities_override_provider_and_empty_means_unavailable():
@@ -244,6 +271,30 @@ def test_submit_cloud_defaults_and_optional_local_parameters_without_real_spawn(
     assert local['provider'] == 'local-fixture' and local['harness'] == 'example-tool' and local['helper_model'] == 'small'
     assert result['hidden'] and 'tools' not in local
     assert result['recent'][0] == json.dumps(['local-fixture','local-one'],separators=(',',':'))
+
+
+def test_fresh_spawn_omits_unsupported_tool_options(tour_browser):
+    _, evaluate = tour_browser
+    result = evaluate('''(async()=>{
+      const originalFetch=window.fetch,posted=[];
+      window.fetch=async(url,options)=>{
+        if(url==='/telemetry/spawn'){posted.push(JSON.parse(options.body));return {ok:true,json:async()=>({ok:true,child_name:'FixtureOnly'})};}
+        return originalFetch(url,options);
+      };
+      try{
+        const catalog={providers:[{id:'claude',program:'claude-code',models:[{id:'claude-fixture',default:true}]}],naming:{},dirs:[]};
+        spawnCatalog={...catalog,runtime_mode:'legacy'};renderProviderTabs();
+        const legacyVisible=!spawnTools.hidden;
+        spawnCatalog={...catalog,runtime_mode:'fresh'};renderProviderTabs();
+        const freshHidden=spawnTools.hidden;
+        spawnDirPath='/workspace';spawnTask.value='Fixture task';
+        await submitSpawn(new Event('submit',{cancelable:true}));
+        return {legacyVisible,freshHidden,posted};
+      }finally{window.fetch=originalFetch;}
+    })()''')
+    assert result['legacyVisible'] and result['freshHidden']
+    assert len(result['posted']) == 1
+    assert {'tools', 'base'}.isdisjoint(result['posted'][0])
 
 
 def test_empty_provider_keeps_its_configuration_error_visible(tour_browser):
