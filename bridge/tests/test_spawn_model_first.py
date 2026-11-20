@@ -391,6 +391,52 @@ def test_directory_dialog_commits_only_on_confirmation_and_escape_keeps_parent(t
     assert result['closed'] and result['parent']
 
 
+def test_directory_search_orders_sources_and_commits_with_keyboard(tour_browser):
+    _,evaluate=tour_browser
+    result=evaluate('''(async()=>{
+      const originalFetch=window.fetch;
+      window.fetch=async(url)=>{
+        const request=new URL(url,location.origin);
+        if(request.pathname==='/telemetry/fs/dir-search'){
+          const q=request.searchParams.get('q');
+          return {ok:true,json:async()=>({dirs:q==='pro'?[
+            {path:'/recent/Project'},{path:'/projects/work/Project'}]:[]})};
+        }
+        return {ok:true,json:async()=>({path:request.searchParams.get('path'),dirs:[]})};
+      };
+      try{
+        SpawnPicker.remember(spawnViewerStorage,SPAWN_DIR_RECENT_KEY,'/recent/Project');
+        spawnCatalog={dirs:[{path:'/preset/Projects'}]};
+        spawnDirPath='/workspace';spawnOverlay.classList.add('on');openSpawnDirPicker();
+        const focus=document.activeElement===spawnDirSearch;
+        spawnDirSearch.value='pro';spawnDirSearch.dispatchEvent(new Event('input'));
+        const waitFor=async test=>{
+          for(let attempt=0;attempt<50&&!test();attempt++)await new Promise(resolve=>setTimeout(resolve,20));
+        };
+        await waitFor(()=>spawnDirResults.children.length===3);
+        const paths=Array.from(spawnDirResults.children,row=>[row.title,row.firstChild.textContent,row.lastChild.textContent]);
+        const press=key=>spawnDirSearch.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true,cancelable:true}));
+        const first=spawnDirSearch.getAttribute('aria-activedescendant');
+        press('ArrowUp');
+        const last=spawnDirSearch.getAttribute('aria-activedescendant');
+        const retained=dirCrumbs.lastChild.textContent==='workspace'&&!dirList.hidden;
+        press('Enter');await waitFor(()=>!spawnDirDialog.open);
+        const picked=spawnDirPath;
+        openSpawnDirPicker();press('Enter');await waitFor(()=>!spawnDirDialog.open);
+        return {focus,paths,first,last,retained,picked,defaultPick:spawnDirPath};
+      }finally{window.fetch=originalFetch;}
+    })()''')
+    assert result['focus'] and result['retained']
+    assert result['paths'] == [
+        ['/recent/Project','Project','/recent'],
+        ['/preset/Projects','Projects','/preset'],
+        ['/projects/work/Project','Project','/projects/work'],
+    ]
+    assert result['first'] == 'spawnDirResult0' and result['last'] == 'spawnDirResult2'
+    assert result['picked'] == '/projects/work/Project'
+    assert result['defaultPick'] == '/recent/Project'
+
+
 @pytest.mark.parametrize('provider,levels', [
     ('codex',['off','low','medium','high','xhigh','max','ultra']),
     ('claude',['low','medium','high','xhigh','max']),
