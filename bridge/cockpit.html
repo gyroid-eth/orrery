@@ -1564,7 +1564,16 @@
             <div class="spawn-model-scroll"><div class="model-choices" id="modelChoices"></div></div></div></section>
         <section class="spawn-column"><div class="spawn-column-head"><h3>Harness</h3><p id="spawnHarnessHint">For the selected model</p></div>
           <div class="spawn-column-body"><div id="spawnHarnesses" aria-label="Harness choices"></div>
-            <div><div id="spawnHelperField"><label class="spawn-settings-label" for="spawnHelper">Helper model</label>
+            <div><div class="spawn-tools" id="spawnTools" role="group" aria-label="Agent tools" hidden>
+              <button type="button" role="switch" id="spawnComputerUse" aria-label="Computer use" title="Computer use" aria-checked="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4m-4 0h8"/></svg>
+                <span class="spawn-tool-track" aria-hidden="true"></span>
+              </button>
+              <button type="button" role="switch" id="spawnBrowserUse" aria-label="Browser" title="Browser" aria-checked="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01m3 0h.01"/></svg>
+                <span class="spawn-tool-track" aria-hidden="true"></span>
+              </button>
+            </div><div id="spawnHelperField"><label class="spawn-settings-label" for="spawnHelper">Helper model</label>
               <select class="spawn-helper" id="spawnHelper"><option value="same">Same as main</option></select>
               <p class="spawn-default-note" id="spawnHelperNote">Default: Same as main</p></div>
               <div class="effort-row" id="effortRow"><span class="effort-lab">Effort</span>
@@ -4659,9 +4668,9 @@
       }
     }
   },
-  "inventory_digest": "eae386ab127eed9ac41d88b737605d0e68b34d25826fb69503fc7c8840c1a7c0",
+  "inventory_digest": "07297db1bee9414582eb09ecb7deabcbf1b38c65fb23c2f8025c6223b10fc959",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "5434471ac96662bcaaa7623366b07f1916ed79d5235dc882986a70688d5c9954",
+  "source_digest": "954e5f4a025d5221c5a8d105e61efd6647991ee0352fbcc4a715e9e9f95131d5",
   "surface": "cockpit",
   "version": 1
 }
@@ -4796,6 +4805,8 @@ function buildSpawnPayload(values){
     provider:String(source.provider||'claude').trim(),
     ...(source.harness?{harness:String(source.harness)}:{}),
     ...(source.helper_model&&source.helper_model!=='same'?{helper_model:String(source.helper_model)}:{}),
+    ...(source.base?{base:source.base}:{}),
+    ...(source.tools?{tools:source.tools}:{}),
     ...(Number.isInteger(source.url_index)?{url_index:source.url_index}:{}),
     ...(typeof source.url_key==='string'?{url_key:source.url_key}:{}),
     model:String(source.model||'').trim(),
@@ -10191,6 +10202,14 @@ const effortChoices=document.getElementById('effortChoices');
 const spawnModelSearch=document.getElementById('spawnModelSearch');
 const spawnHelper=document.getElementById('spawnHelper');
 const spawnHarnesses=document.getElementById('spawnHarnesses');
+const spawnTools=document.getElementById('spawnTools');
+const spawnComputerUse=document.getElementById('spawnComputerUse');
+const spawnBrowserUse=document.getElementById('spawnBrowserUse');
+const spawnToolSwitches=[spawnComputerUse,spawnBrowserUse];
+let spawnToolsRoute=null;
+for(const control of spawnToolSwitches){
+  control.addEventListener('click',()=>control.setAttribute('aria-checked',String(control.getAttribute('aria-checked')!=='true')));
+}
 const ncPortrait=document.getElementById('ncPortrait');
 const ncDiceFace=document.getElementById('ncDiceFace');
 const ncName=document.getElementById('ncName');
@@ -10244,7 +10263,7 @@ function renderProviderTabs(){
     const name=document.createElement('span');name.textContent=f.label;
     const origin=document.createElement('small');origin.textContent=f.id==='local'?'LOCAL':'CLOUD';origin.classList.toggle('local-label',f.id==='local');
     copy.append(name,origin);b.append(copy);
-    b.addEventListener('click',()=>{selFamily=f.id;selProvider=null;selModel=null;selUrlIndex=null;selUrlKey=null;selEffort=null;selHarness=null;renderProviderTabs();});
+    b.addEventListener('click',()=>{selFamily=f.id;selProvider=null;selModel=null;selUrlIndex=null;selUrlKey=null;selEffort=null;selHarness=null;spawnToolsRoute=null;renderProviderTabs();});
     providerTabs.append(b);
   });
   const local=selFamily==='local';spawnModelSearch.hidden=!local;
@@ -10298,6 +10317,32 @@ function renderLocalModels(){
   if(!matches.length){const empty=document.createElement('p');empty.className='spawn-empty';empty.textContent=query?'No models match your search.':'No local models are available in your catalog.';modelChoices.append(empty);}
 }
 function selectedSpawnModel(){const p=providerById(selProvider);return p&&(p.models||[]).find(m=>m.id===selModel&&(!Number.isInteger(m.url_index)||m.url_index===selUrlIndex)&&(!m.url_key||m.url_key===selUrlKey))||null;}
+function renderSpawnTools(){
+  const harness=SpawnPicker.harnessKey(selHarness);
+  spawnTools.hidden=!['claude-code','codex','dsh','hermes'].includes(harness);
+  const route=spawnTools.hidden?null:JSON.stringify([selProvider,harness]);
+  if(route===spawnToolsRoute)return;
+  spawnToolsRoute=route;
+  for(const control of spawnToolSwitches){
+    control.setAttribute('aria-checked',String(Boolean(route)&&harness!=='dsh'));
+  }
+}
+function spawnToolOptions(){
+  if(spawnTools.hidden)return {};
+  const harness=SpawnPicker.harnessKey(selHarness);
+  const native=harness==='dsh'||harness==='hermes';
+  const computer=spawnComputerUse.getAttribute('aria-checked')==='true';
+  const browser=spawnBrowserUse.getAttribute('aria-checked')==='true';
+  const mcp=[];
+  if(computer)mcp.push('cua-driver');
+  // Native harnesses can copy an MCP server without the per-tool approvals that tools.browser requests.
+  if(browser&&native)mcp.push('chrome-devtools');
+  return {
+    // The default base can inherit Chrome, and Codex can also inherit cua-driver.
+    ...(!browser||(harness==='codex'&&!computer)?{base:'mail-only'}:{}),
+    tools:{...(mcp.length?{mcp}:{}),...(browser&&!native?{browser:{}}:{})},
+  };
+}
 function renderHarnesses(){
   const p=providerById(selProvider),model=selectedSpawnModel();
   spawnHarnesses.replaceChildren();
@@ -10312,7 +10357,7 @@ function renderHarnesses(){
     if(info.asset){const img=document.createElement('img');img.src='cockpit-assets/'+info.asset;img.alt='';img.className='spawn-brand'+(['hermes','dsh'].includes(SpawnPicker.harnessKey(h.id))?' harness-art':'');button.append(img);}
     const label=document.createElement('span');label.textContent=(h.default?'Default: ':'')+h.label;button.append(label);
     if(!h.available){const note=document.createElement('small');note.textContent=SpawnPicker.unavailableReason(h);button.append(note);}
-    button.addEventListener('click',()=>{selHarness=h.id;renderHarnesses();});spawnHarnesses.append(button);
+    button.addEventListener('click',()=>{selHarness=h.id;spawnToolsRoute=null;renderHarnesses();});spawnHarnesses.append(button);
   });
   if(choices.some(h=>!h.available)){
     const help=document.createElement('a');help.className='spawn-setup-help';help.textContent='Setup and compatibility guide';
@@ -10327,7 +10372,7 @@ function renderHarnesses(){
   spawnHelper.disabled=!hasHelpers;document.getElementById('spawnHelperField').hidden=!hasHelpers;
   if([...spawnHelper.options].some(o=>o.value===previous))spawnHelper.value=previous;
   document.getElementById('spawnHelperNote').textContent='Default: Same as main';
-  renderEfforts(p);renderSpawnSummary();paintSpawnMaker(p,model);updateNameCard();updateSpawnAvailability();
+  renderSpawnTools();renderEfforts(p);renderSpawnSummary();paintSpawnMaker(p,model);updateNameCard();updateSpawnAvailability();
 }
 function paintSpawnMaker(provider,model){
   const badge=document.getElementById('spawnMakerBadge'),image=badge.querySelector('img');
@@ -10654,6 +10699,7 @@ function openSpawnModal(){
   spawnAdvanced.open=false;
   spawnWorktreeBaseWrap.classList.remove('on');spawnStatus.textContent='ready';
   selScientist='';selProvider=null;selModel=null;selEffort=null;selFamily=null;selHarness=null;
+  renderSpawnTools();
   selUrlIndex=null;
   selUrlKey=null;
   try{spawnModelSearch.value=spawnViewerStorage?.getItem(SPAWN_SEARCH_STORAGE_KEY)||'';}catch(_){spawnModelSearch.value='';}
@@ -10684,6 +10730,7 @@ function spawnPayloadFromForm(){
     provider:selProvider,
     harness:selHarness&&SpawnPicker.harnessKey(selHarness)!==legacyHarness?selHarness:null,
     helper_model:!spawnHelper.disabled?spawnHelper.value:null,
+    ...spawnToolOptions(),
     model:selModel||(spawnForm.querySelector('input[name="spawnModel"]:checked')||{}).value,
     url_index:selectedSpawnModel()?.url_index,
     url_key:selectedSpawnModel()?.url_key,
