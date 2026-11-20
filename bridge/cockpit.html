@@ -1618,6 +1618,16 @@
     <dialog id="spawnDirDialog" aria-labelledby="spawnDirTitle">
       <div class="spawn-dir-head"><h2 id="spawnDirTitle">Choose launch directory</h2>
         <button type="button" class="modal-close" id="spawnDirClose" aria-label="Close directory picker">×</button></div>
+      <div class="dir-search">
+        <div class="dir-search-field">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>
+          <input id="spawnDirSearch" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false"
+            aria-controls="spawnDirResults" aria-label="Search folders" title="Search folders" placeholder="Search folders"
+            maxlength="255" autocomplete="off" spellcheck="false" autofocus>
+        </div>
+        <div id="spawnDirResults" class="dir-search-results" role="listbox" aria-label="Matching folders" hidden></div>
+        <div id="spawnDirSearchStatus" class="dir-search-status" role="status"></div>
+      </div>
       <div class="dir-presets" id="dirPresets"></div>
       <div class="dir-crumbs" id="dirCrumbs" aria-label="Current directory"></div>
       <div class="dir-list" id="dirList" role="listbox" aria-label="Subdirectories"></div>
@@ -4668,9 +4678,9 @@
       }
     }
   },
-  "inventory_digest": "6af8ebefa0b8eb2298300e090b2883c3d87989401fccf625028884772a5e6424",
+  "inventory_digest": "986907fd3248db0dfbc38beeb1af5d587179d0bf1a4cf353b2a8e390297ba360",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "336fdc75a6a873e1954ab6cc3b3773b21fd25af06e446e47dccc1945be1a6dea",
+  "source_digest": "fe3b1869d4d8eb9b4bfef2605716c4ad1d4fc40c8c652698bd945728568375b7",
   "surface": "cockpit",
   "version": 1
 }
@@ -10163,6 +10173,7 @@ let selFamily=null,selHarness=null;
 let selUrlIndex=null,selUrlKey=null;
 const SPAWN_RECENT_STORAGE_KEY='orrery.spawn-local-recent.v1';
 const SPAWN_SEARCH_STORAGE_KEY='orrery.spawn-local-search.v1';
+const SPAWN_DIR_RECENT_KEY='orrery.spawn-dir-recent.v1';
 let spawnViewerStorage=null;try{spawnViewerStorage=window.localStorage;}catch(_){/* viewer history is optional */}
 const dirPresets=document.getElementById('dirPresets');
 const dirCrumbs=document.getElementById('dirCrumbs');
@@ -10170,18 +10181,30 @@ const dirList=document.getElementById('dirList');
 const spawnDirDialog=document.getElementById('spawnDirDialog');
 const spawnDirButton=document.getElementById('spawnDirButton');
 const spawnDirUse=document.getElementById('spawnDirUse');
+const spawnDirSearch=document.getElementById('spawnDirSearch');
+const spawnDirResults=document.getElementById('spawnDirResults');
+const spawnDirSearchStatus=document.getElementById('spawnDirSearchStatus');
 let spawnDirPath='',spawnDirBrowsePath='',spawnDirBrowseEpoch=0;
+let spawnDirSearchEpoch=0,spawnDirSearchTimer,spawnDirActive=-1;
 function renderSpawnDirPath(){
   const label=document.getElementById('spawnDirSelected');
   label.textContent=spawnDirPath||'Choose a folder';label.title=spawnDirPath;
 }
 function openSpawnDirPicker(){
   if(!spawnDirDialog.open)spawnDirDialog.showModal();
+  spawnDirSearch.value='';
+  updateSpawnDirSearch();
+  spawnDirSearch.focus();
   browseDir(spawnDirPath||'~');
 }
 function closeSpawnDirPicker(){
   ++spawnDirBrowseEpoch;
+  ++spawnDirSearchEpoch;
+  clearTimeout(spawnDirSearchTimer);
   if(spawnDirDialog.open)spawnDirDialog.close();
+}
+function chooseSpawnDir(path){
+  spawnDirPath=path;renderSpawnDirPath();closeSpawnDirPicker();
 }
 spawnDirButton.addEventListener('click',openSpawnDirPicker);
 document.getElementById('spawnDirClose').addEventListener('click',closeSpawnDirPicker);
@@ -10190,7 +10213,78 @@ spawnDirDialog.addEventListener('cancel',event=>{event.preventDefault();closeSpa
 spawnDirDialog.addEventListener('close',()=>{if(spawnOverlay.classList.contains('on'))spawnDirButton.focus({preventScroll:true});});
 spawnDirUse.addEventListener('click',()=>{
   if(spawnDirUse.disabled||!spawnDirBrowsePath)return;
-  spawnDirPath=spawnDirBrowsePath;renderSpawnDirPath();closeSpawnDirPicker();
+  chooseSpawnDir(spawnDirBrowsePath);
+});
+function activeSpawnDirResult(index,scroll=false){
+  const rows=spawnDirResults.children;
+  spawnDirActive=index;
+  Array.from(rows).forEach((row,i)=>row.setAttribute('aria-selected',String(i===index)));
+  if(rows[index]){
+    spawnDirSearch.setAttribute('aria-activedescendant',rows[index].id);
+    if(scroll)rows[index].scrollIntoView({block:'nearest'});
+  }else spawnDirSearch.removeAttribute('aria-activedescendant');
+}
+function renderSpawnDirResults(paths,status='',activePath){
+  spawnDirResults.replaceChildren();
+  Array.from(new Set(paths)).forEach((path,index)=>{
+    const cleanPath=path.replace(/\/+$/,'')||'/';
+    const slash=cleanPath.lastIndexOf('/');
+    const row=document.createElement('button');row.type='button';row.tabIndex=-1;
+    row.id='spawnDirResult'+index;row.className='dir-search-result';row.title=path;
+    row.setAttribute('role','option');
+    const name=document.createElement('span');name.textContent=cleanPath.slice(slash+1)||'/';
+    row.append(name);
+    if(slash>=0&&cleanPath!=='/'){
+      const parent=document.createElement('small');parent.textContent=cleanPath.slice(0,slash)||'/';
+      row.append(parent);
+    }
+    row.addEventListener('mousedown',event=>event.preventDefault());
+    row.addEventListener('click',()=>browseDir(path,true));
+    spawnDirResults.append(row);
+  });
+  spawnDirResults.hidden=!spawnDirResults.children.length;
+  spawnDirSearch.setAttribute('aria-expanded',String(!spawnDirResults.hidden));
+  const activeIndex=Array.from(spawnDirResults.children).findIndex(row=>row.title===activePath);
+  activeSpawnDirResult(spawnDirResults.hidden?-1:Math.max(activeIndex,0));
+  spawnDirSearchStatus.textContent=status;
+}
+function updateSpawnDirSearch(){
+  const epoch=++spawnDirSearchEpoch;
+  clearTimeout(spawnDirSearchTimer);
+  const query=spawnDirSearch.value.trim();
+  const foldedQuery=query.normalize().toLowerCase();
+  const presets=query?(spawnCatalog?.dirs||[]).filter(dir=>dir.exists!==false).map(dir=>dir.path):[];
+  const localPaths=[...SpawnPicker.recent(spawnViewerStorage,SPAWN_DIR_RECENT_KEY),...presets]
+    .filter(path=>path&&path.replace(/\/+$/,'').split('/').pop().normalize().toLowerCase().includes(foldedQuery));
+  renderSpawnDirResults(localPaths,query&&!localPaths.length?'Searching folders…':'');
+  if(!query)return;
+  spawnDirSearchTimer=setTimeout(async()=>{
+    try{
+      const response=await fetch('/telemetry/fs/dir-search?q='+encodeURIComponent(query));
+      if(!response.ok)throw new Error('Folder search unavailable');
+      const {dirs,truncated}=await response.json();
+      if(epoch!==spawnDirSearchEpoch)return;
+      const paths=[...localPaths,...dirs.map(dir=>dir.path)];
+      const activePath=spawnDirResults.children[spawnDirActive]?.title;
+      const status=paths.length?'':truncated?'No matches in the folders searched.':'No matching folders.';
+      renderSpawnDirResults(paths,status,activePath);
+    }catch(_){
+      if(epoch===spawnDirSearchEpoch)spawnDirSearchStatus.textContent='Folder search is unavailable.';
+    }
+  },150);
+}
+spawnDirSearch.addEventListener('input',updateSpawnDirSearch);
+spawnDirSearch.addEventListener('keydown',event=>{
+  if(event.isComposing)return;
+  const count=spawnDirResults.children.length;
+  if(event.key==='Enter'){
+    event.preventDefault();
+    if(count)spawnDirResults.children[spawnDirActive].click();
+  }else if(count&&(event.key==='ArrowDown'||event.key==='ArrowUp')){
+    event.preventDefault();
+    const step=event.key==='ArrowDown'?1:-1;
+    activeSpawnDirResult((spawnDirActive+step+count)%count,true);
+  }
 });
 const spawnAdjective=document.getElementById('spawnAdjective');
 const adjOptions=document.getElementById('adjOptions');
@@ -10563,22 +10657,31 @@ function renderDirs(){
   if(!spawnDirPath)browseDir((dirs[0]||{}).path||'~');
   else browseDir(spawnDirPath);
 }
-async function browseDir(path){
+async function browseDir(path,confirm=false){
   const epoch=++spawnDirBrowseEpoch,selecting=spawnDirDialog.open;
+  if(confirm)spawnDirSearchStatus.textContent='';
   if(selecting)spawnDirUse.disabled=true;
   let payload=null;
   try{
     const r=await fetch('/telemetry/fs/dirs?path='+encodeURIComponent(path));
     payload=await r.json();
     if(!r.ok)throw new Error(payload.error||'browse failed');
+    if(!payload.path)throw new Error('Folder unavailable');
   }catch(err){
     if(epoch!==spawnDirBrowseEpoch)return;
+    if(confirm){
+      spawnDirUse.disabled=!spawnDirBrowsePath;
+      spawnDirSearchStatus.textContent='This folder is no longer available.';
+      return;
+    }
+    spawnDirBrowsePath='';
     dirList.innerHTML='';
     const row=document.createElement('div');row.className='dir-err';
     row.textContent=String(err&&err.message||err);
     dirList.appendChild(row);return;
   }
   if(epoch!==spawnDirBrowseEpoch)return;
+  if(confirm){chooseSpawnDir(payload.path);return;}
   const currentPath=payload.path;spawnDirBrowsePath=currentPath;
   if(!selecting){spawnDirPath=currentPath;renderSpawnDirPath();}
   if(selecting&&spawnDirDialog.open)spawnDirUse.disabled=false;
@@ -10782,6 +10885,7 @@ async function submitSpawn(event){
     let result={};
     try{result=await response.json();}catch(_){/* HTTP status is still useful */}
     if(!response.ok||!result.ok)throw new Error(result.error||`HTTP ${response.status}`);
+    SpawnPicker.remember(spawnViewerStorage,SPAWN_DIR_RECENT_KEY,payload.dir);
     if(SpawnPicker.locality(p,model)==='local')SpawnPicker.remember(spawnViewerStorage,SPAWN_RECENT_STORAGE_KEY,
       JSON.stringify([p.id,model.id,...(Number.isInteger(model.url_index)?[model.url_index]:[]),...(model.url_key?[model.url_key]:[])]));
     spawnBusy=false;closeSpawnModal(true);
