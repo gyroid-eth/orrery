@@ -27,16 +27,21 @@
 .msg{
   width:100%;display:block;padding:11px 12px;border-radius:10px;text-align:left;font:inherit;color:inherit;
   background:var(--panel-2);border:1px solid var(--hair-2);cursor:pointer;
-  opacity:0;transform:translateY(8px);animation:rise .6s cubic-bezier(.2,.7,.2,1) forwards;
+  /* Keep off-screen card contents out of layout and paint during drawer transitions. */
+  content-visibility:auto;contain-intrinsic-block-size:auto 60px;
+  animation:mail-rise .6s cubic-bezier(.2,.7,.2,1) backwards;
   transition:border-color .2s,background .2s,transform .2s;
 }
+@keyframes mail-rise{
+  from{opacity:0;transform:translateY(8px)}
+  to{opacity:1;transform:none}}
 .msg:hover,.msg:focus-visible{border-color:var(--hair);background:var(--elev);outline:none}
 /* live arrival: the card lands where the comet pointed — it slides in from
    above while its border carries the comet's heat, cooling over ~2.4s.
    Cards already on screen never re-run the entrance; they FLIP-slide down. */
 .msg.settled{animation:none;opacity:1;transform:none}
 .msg.landing{
-  animation:mail-land .5s cubic-bezier(.2,.75,.25,1) forwards,
+  animation:mail-land .5s cubic-bezier(.2,.75,.25,1),
             mail-ember 2.4s ease-out}
 @keyframes mail-land{
   from{opacity:0;transform:translateY(-14px)}

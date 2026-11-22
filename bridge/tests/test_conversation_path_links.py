@@ -15,6 +15,7 @@ from PIL import Image
 from test_preview_markdown_document import run, html
 from test_conversation_review_regressions import cockpit, stable_roster
 from test_conversation_history import start
+from test_conversation_inline_images import message, prepare, shown
 import conversation_preview as preview
 import orrery_backend as backend
 
@@ -204,6 +205,58 @@ def test_browser_paths_all_surfaces_enter_middle_focus_and_missing(cockpit,tmp_p
     js('document.querySelector(".conversation-preview-close").click();OrreryConversationSource.Source.prototype.pathImage=async()=>{throw new Error("This file exceeds the preview size or pixel limit.")};document.querySelector("[data-event-id=path-user] a").click()')
     wait('document.querySelector(".conversation-preview-content").textContent.includes("pixel limit")')
     assert js('pathReveals.length')==1
+
+
+@pytest.mark.parametrize('filename', ['plot.png', 'measurements.txt'])
+def test_body_path_reply_cites_the_clicked_message(cockpit, filename):
+    path = '/fixture/' + filename
+    text = f'[Results](<{path}>)'
+    first = message('first-path', text)
+    clicked = message('clicked-path', text)
+    clicked['ts'] = '2026-11-01T04:15:00Z'
+    js, wait, _ = prepare(cockpit, [message('intro', 'Results')])
+    js('conversationView.close();inlineEvents='+json.dumps([first, clicked])+''';
+      OrreryConversationSource.Source.prototype.probePaths=async texts=>texts.map(path=>({shown:path,path}));
+      OrreryConversationSource.Source.prototype.pathImage=async()=>inlineData;
+      window.revealedPaths=[];
+      OrreryConversationSource.Source.prototype.revealPath=async path=>revealedPaths.push(path);
+      conversationView.open();''')
+    wait('document.querySelectorAll("a[data-local-path]").length===2')
+    js('document.querySelector("[data-event-id=clicked-path] a").click()')
+    if filename.endswith('.png'):
+        wait('document.querySelector(".conversation-preview-image")?.naturalWidth===640')
+    else:
+        assert js('document.querySelector(".conversation-preview-text").textContent') == path
+        assert js('revealedPaths') == []
+        js('document.querySelector(".conversation-reveal").click()')
+        assert js('revealedPaths') == [path]
+    assert js('document.querySelector(".conversation-preview-reply").getAttribute("aria-label")') == 'Reply with reference'
+    js('promptInput.value="Please check these results.";document.querySelector(".conversation-preview-reply").click()')
+    assert js('document.querySelector(".conversation-preview").hidden')
+    assert js('document.querySelector(".conversation-reply-quote").textContent') == path
+    assert 'ReviewFixture · File reference' in js('document.querySelector(".conversation-reply-label").textContent')
+    assert js('packets.filter(p=>p.type==="input")') == []
+    js('sendPrompt()')
+    wait('packets.filter(p=>p.type==="input").length===2')
+    assert js('packets.find(p=>p.type==="input").data') == (
+        '\x1b[200~Reference: ReviewFixture · assistant · 2026-11-01T04:15:00Z\n'
+        f'Recorded message: clicked-path\n> {path}\n\nPlease check these results.\x1b[201~'
+    )
+
+
+def test_path_in_preview_without_origin_has_no_reply_button(cockpit):
+    js, wait, _ = prepare(cockpit, [shown()])
+    payload = json.dumps(dict(kind='text', text='See /fixture/plot.png'))
+    js('OrreryConversationSource.Source.prototype.reference=async()=>('+payload+');'+
+       'OrreryConversationSource.Source.prototype.probePaths=async texts=>texts.map(path=>({shown:path,path}));'+
+       'OrreryConversationSource.Source.prototype.pathImage=async()=>inlineData;'+
+       'document.querySelector(".conversation-tool-group").click();'+
+       'document.querySelector(".conversation-files button[data-ref-id^=z]").click();')
+    wait('document.querySelector(".conversation-preview a[data-local-path]")!==null')
+    assert js('!!document.querySelector(".conversation-preview-reply")')
+    js('document.querySelector(".conversation-preview a[data-local-path]").click()')
+    wait('document.querySelector(".conversation-preview-image")?.naturalWidth===640')
+    assert not js('!!document.querySelector(".conversation-preview-reply")')
 
 
 def test_browser_preview_prose_paths_and_screenshots(cockpit,tmp_path):

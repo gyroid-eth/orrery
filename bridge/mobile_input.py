@@ -377,7 +377,7 @@ class InputCoordinator:
     async def request(self,operation,payload, *, expanded_preview=False):
         fields={'capability':set(),'targets':{'name'},'preview':{'choice'},'prepare':{'choice','revision','text'},
                 'commit':{'intent','confirmation'},'cancel':{'intent'},'status':{'intent'},
-                'image':{'choice','revision','image'}}
+                'image':{'choice','revision','image'},'file':{'choice','revision','file'}}
         if self.fresh and operation=='targets' and isinstance(payload,dict) and ('mail_instance_id' in payload or 'mail_agent_id' in payload):
             fields['targets']|={'mail_instance_id','mail_agent_id'}
             if not _matches(EPOCH,payload.get('mail_instance_id')) or not _integer(payload.get('mail_agent_id')):
@@ -392,23 +392,27 @@ class InputCoordinator:
         if operation=='capability':return self._reply(api=34 if self.fresh else 31,enabled=self.enabled,
             supported='fresh-managed-pane' if self.fresh else 'legacy-managed-pane',ack='tmux-command-accepted')
         if payload['epoch']!=self.epoch:raise InputRefused('input_epoch_changed')
-        if operation in {'targets','preview','prepare','image'} and not self.enabled:raise InputRefused('input_disabled')
-        if operation=='image':
+        if operation in {'targets','preview','prepare','image','file'} and not self.enabled:raise InputRefused('input_disabled')
+        if operation in {'image','file'}:
             import mobile_image
+            import mobile_file
             row=await self._choice(payload['choice'],scope)
             proof=await self._read(row,time.monotonic()+3)
             if (row['proof'] is None or proof!=row['proof'] or payload['revision']!=revision(proof)):
                 raise InputRefused('input_target_changed')
             target=dict(row['target'],revision=revision(proof))
-            root=(await self.image_workspace(row)) if mobile_image.available() and self.image_workspace else None
+            supported=operation=='file' or mobile_image.available()
+            root=(await self.image_workspace(row)) if supported and self.image_workspace else None
             # Resolve the same pane again after the workspace binding read.
             if (not self.enabled or self.choices.get(payload['choice']) is not row or self.clock()>=row['expires']
                     or await self._bridge(row) is not row['bridge'] or await self._read(row,time.monotonic()+3)!=proof):
                 raise InputRefused('input_target_changed')
-            if payload['image'] is None:return self._reply(target=target,enabled=root is not None)
-            if root is None:raise InputRefused('image_workspace_unavailable')
-            try:path=mobile_image.save_image(root,payload['image'])
-            except (ValueError,OSError) as error:raise InputRefused(str(error) if isinstance(error,ValueError) else 'image_save_failed') from None
+            upload=payload[operation]
+            if upload is None:return self._reply(target=target,enabled=root is not None)
+            if root is None:raise InputRefused(operation+'_workspace_unavailable')
+            save=mobile_image.save_image if operation=='image' else mobile_file.save_file
+            try:path=save(root,upload)
+            except (ValueError,OSError) as error:raise InputRefused(str(error) if isinstance(error,ValueError) else operation+'_save_failed') from None
             return self._reply(target=target,enabled=True,path=path)
         if operation=='targets':
             name=payload['name']
@@ -417,9 +421,9 @@ class InputCoordinator:
             bridge=await self.get_bridge(name,ref) if self.fresh else await self.get_bridge(name)
             if not self.enabled:raise InputRefused('input_disabled')
             if (bridge is None or bridge._closed or bridge.master_fd is None or bridge.config.session!=name):raise InputRefused('input_target_unavailable')
-            # Old catalog handles for this reader are retired; prepared intents
-            # retain their independent immutable descriptor and original expiry.
-            self.choices={k:v for k,v in self.choices.items() if v['scope']!=scope}
+            # Retire this agent's previous catalog. Other Readers in the same
+            # phone workspace are still using their own choices.
+            self.choices={k:v for k,v in self.choices.items() if (v['scope'],v['name'])!=(scope,name)}
             available=max(0,128-len(self.choices));targets=[]
             for pane_id,info in sorted(bridge.panes.items())[:available]:
                 if not re.fullmatch(r'%[0-9]+',pane_id):continue
@@ -538,8 +542,10 @@ class InputCoordinator:
 def install_routes(app,coordinator):
     """Install only the finite loopback protocol, with its own request boundary."""
     from aiohttp import web
-    operations={'capability','targets','preview','prepare','commit','cancel','status','image'}
+    operations={'capability','targets','preview','prepare','commit','cancel','status','image','file'}
     from mobile_image import MAX_IMAGE_JSON
+    from mobile_file import MAX_FILE_JSON
+    attachment_limits={'image':MAX_IMAGE_JSON,'file':MAX_FILE_JSON}
     headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
              'Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"}
     def reply(value,status=200):
@@ -560,15 +566,15 @@ def install_routes(app,coordinator):
                 'Upgrade','Expect','X-HTTP-Method-Override','X-Method-Override','X-HTTP-Method',
                 'Forwarded','X-Forwarded-Host','X-Forwarded-Proto','Tailscale-User-Login')): return False
         lengths=request.headers.getall('Content-Length',[])
-        limit=MAX_IMAGE_JSON if operation=='image' else MAX_JSON_BYTES
+        limit=attachment_limits.get(operation,MAX_JSON_BYTES)
         return (len(lengths)==1 and re.fullmatch(r'[0-9]{1,8}',lengths[0]) is not None and 0<int(lengths[0])<=limit
                 and request.headers.get('Sec-Fetch-Site','').lower() in {'','none','same-origin'})
     async def handler(request):
         operation=request.match_info['operation']
         if not admitted(request,operation): return reply({'error':'input_request_denied'},403)
         try:
-            limit=MAX_IMAGE_JSON if operation=='image' else MAX_JSON_BYTES
-            data=await asyncio.wait_for(request.content.readexactly(int(request.headers['Content-Length'])),20 if operation=='image' else 5)
+            limit=attachment_limits.get(operation,MAX_JSON_BYTES)
+            data=await asyncio.wait_for(request.content.readexactly(int(request.headers['Content-Length'])),20 if operation in attachment_limits else 5)
             payload=decode_json(data,max_bytes=limit)
         except (Exception,asyncio.CancelledError):
             return reply({'error':'input_request_invalid'},400)
@@ -579,7 +585,7 @@ def install_routes(app,coordinator):
             options={'expanded_preview':True} if limits else {}
             return reply(await coordinator.request(operation,payload,**options))
         except InputRefused as error:
-            reason=str(error) if operation=='image' and str(error).startswith('image_') else 'input_unavailable'
+            reason=str(error) if operation in attachment_limits and str(error).startswith(operation+'_') else 'input_unavailable'
             return reply({'error':reason},403)
         except Exception:
             return reply({'error':'input_unavailable'},503)

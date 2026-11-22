@@ -8,7 +8,7 @@ import time
 import pytest
 
 from test_conversation_review_regressions import cockpit, stable_roster, wait_reading_layout
-from test_conversation_steps import c, claude_events, native, project
+from test_conversation_steps import c, claude_events, native, project, segmented_records
 
 
 def events(provider, complete=True, prefix='one'):
@@ -34,9 +34,39 @@ def prepare(cockpit, provider='claude', rows=None, theme='dark', working=True):
                  events=events(provider) if rows is None else rows,after='tail',has_older=False)
     js('window.stepsPage='+json.dumps(payload)+';OrreryConversationSource.Source.prototype.read=async()=>stepsPage;'+
        'OrreryColorTheme.setPreference('+json.dumps(theme)+');conversationView.open()')
-    wait("document.querySelector('.conversation-steps')!==null")
+    wait("document.querySelector('.conversation-event')!==null")
     wait_reading_layout(js)
     return js,wait,client
+
+
+@pytest.mark.parametrize('provider,separator', [('claude', 'mail'), ('codex', 'assistant')])
+def test_step_cards_split_in_order_on_delta_and_reload(cockpit, provider, separator):
+    first, boundary, last = segmented_records(provider, separator)
+    records = first + boundary + last
+    rows = claude_events(records) if provider == 'claude' else [project(record, i) for i, record in enumerate(records)]
+    projected_count = len(first)
+    initial, separator_row, tail = rows[:projected_count], rows[projected_count], rows[projected_count+1:]
+    js, wait, _ = prepare(cockpit, provider, rows=initial)
+    js("""window.firstCard=document.querySelector('.conversation-steps');
+      window.deltaPage={...stepsPage,events:[],after:'tail'};
+      OrreryConversationSource.Source.prototype.read=async(name,{after}={})=>after?deltaPage:stepsPage;
+      window.stepOrder=()=>[...firstCard.parentElement.children].filter(row=>!row.hidden).map(row=>
+        row.matches('.conversation-steps')?row.querySelectorAll('.conversation-step').length:row.dataset.eventId);
+    """)
+    assert js('stepOrder()') == [initial[1 if provider == 'codex' else 0]['id'], 3]
+    js('deltaPage={...deltaPage,events:'+json.dumps([separator_row])+',after:"separator"};conversationView.refresh()')
+    wait("document.querySelectorAll('.conversation-steps').length===2")
+    assert js("firstCard.querySelector('.conversation-steps-toggle').getAttribute('aria-expanded')") == 'false'
+    js('deltaPage={...deltaPage,events:'+json.dumps(tail)+',after:"end"};conversationView.refresh()')
+    wait("document.querySelectorAll('.conversation-step').length===5")
+    expected = [initial[1 if provider == 'codex' else 0]['id'], 3, separator_row['id'], 2]
+    assert js('stepOrder()') == expected
+    assert js("firstCard===document.querySelector('.conversation-steps')")
+    js('stepsPage={...stepsPage,events:'+json.dumps(rows)+',after:"end"};'+
+       'deltaPage={...deltaPage,events:[]};conversationView.close();conversationView.open()')
+    wait("document.querySelectorAll('.conversation-step').length===5")
+    js("firstCard=document.querySelector('.conversation-steps')")
+    assert js('stepOrder()') == expected
 
 
 @pytest.mark.parametrize('theme',['light','dark'])
@@ -127,6 +157,7 @@ def test_codex_unmatched_tools_remain_in_existing_group(cockpit, unknown):
         assert project(native('Extension',kind='unknown'),22) is None
     rows.append(project(dict(type='event_msg',payload=dict(type='task_complete',turn_id='turn-one')),23))
     js,wait,client=prepare(cockpit,'codex',rows=rows,working=False)
+    assert js("document.querySelectorAll('.conversation-steps:not([hidden])').length")==0
     assert js("document.querySelectorAll('.conversation-step').length")==0
     assert js("document.querySelectorAll('.conversation-tool-group').length")==1
     js("document.querySelector('.conversation-tool-group').click()")

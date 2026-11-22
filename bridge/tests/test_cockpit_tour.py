@@ -178,16 +178,15 @@ def test_talk_completes_only_for_a_sent_nonempty_unguarded_prompt():
     assert prompt(guarded=True)['events'] == []
 
 
-def test_pending_spawn_does_not_complete_until_ready():
+def test_pending_spawn_wait_resolves_for_ready_and_rejects_for_failure():
     source = (BRIDGE / 'cockpit.html').read_text()
-    watch = re.search(r'async function watchSpawnLaunch\(name,deadlineSeconds\)\{.*?(?=\nasync function submitSpawn)', source, re.S).group()
-    for verdict, expected in [('ready', ['start']), ('failed', [])]:
-        actual = node("const events=[];const document={dispatchEvent:e=>events.push(e.detail.id)};"
-                      "class CustomEvent{constructor(_,v){this.detail=v.detail;}}"
-                      "function showToast(){}function setTimeout(fn){fn();}"
+    watch = re.search(r'async function watchSpawnLaunch\(name,deadlineSeconds\)\{.*?(?=\nfunction spawnTarget)', source, re.S).group()
+    for verdict in ('ready', 'failed'):
+        actual = node("function setTimeout(fn){fn();}"
                       f"async function fetch(){{return {{json:async()=>({{ok:true,state:'{verdict}'}})}};}}"
-                      + watch + ";watchSpawnLaunch('Test').then(()=>console.log(JSON.stringify(events)));")
-        assert actual == expected
+                      + watch + ";watchSpawnLaunch('Test').then(()=>console.log(JSON.stringify('ready')),"
+                      "e=>console.log(JSON.stringify(e.message)));")
+        assert actual == ('ready' if verdict == 'ready' else 'The launcher failed')
 
 
 @pytest.fixture

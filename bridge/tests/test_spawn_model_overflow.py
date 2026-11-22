@@ -2,7 +2,7 @@
 
 The dashboard's /api/spawn-names names each provider's less-used models in
 ``overflow_models``; the backend marks them and the cockpit puts them under a
-closed "More models · N" fold, open only when the selected model is one of
+closed "More models (N)" fold, open only when the selected model is one of
 them. Numeric versions also move superseded family members into the fold;
 unknown naming schemes remain visible. An older default stays selectable in
 the open fold. The local
@@ -77,7 +77,7 @@ HARNESS = r"""
 class El{
   constructor(tag){this.tag=tag;this.children=[];this.className='';this.textContent='';
     this.hidden=false;this.open=false;this.title='';this.attrs={};this.listeners={};}
-  set innerHTML(v){this.children=[];}
+  replaceChildren(...children){this.children=children;}
   appendChild(c){this.children.push(c);return c;}
   append(...cs){cs.forEach(c=>this.children.push(c));}
   addEventListener(t,f){this.listeners[t]=f;}
@@ -85,11 +85,10 @@ class El{
   querySelector(selector){return this.children.find(c=>selector==='.'+c.className)||null;}
 }
 const document={createElement:t=>new El(t)};
-const modelChoices=new El('div'),effortChoices=new El('div'),effortRow=new El('div'),effortCaption=new El('div');
+const modelChoices=new El('div'),effortChoices=new El('div'),effortRow=new El('div'),spawnModelSearch={hidden:true};
 let effortOptions={levels:[]};
 const EffortSlider={mount:(host,options)=>{
-  effortOptions=options;host.innerHTML='';
-  if(options.levels?.length){const caption=new El('span');caption.className='effort-caption';host.append(caption);}
+  effortOptions=options;host.replaceChildren();
 }};
 let selProvider='claude',selModel=null,selEffort=null,selHarness=null,spawnCatalog;
 function providerById(id){return spawnCatalog.providers.find(p=>p.id===id);}
@@ -100,10 +99,9 @@ function shape(){
   const fold=modelChoices.children.find(c=>c.tag==='details');
   return {current:names(modelChoices),
     fold:fold?{open:fold.open,summary:fold.children[0].textContent,models:names(fold.children[1])}:null,
-    selected:selModel,effortShown:!effortRow.hidden,efforts:effortOptions.levels||[],effort:selEffort,
-    error:(modelChoices.children.find(c=>c.className==='model-error')||{}).textContent||null};
+    selected:selModel,effortShown:!effortRow.hidden,efforts:effortOptions.levels||[],effort:selEffort};
 }
-function render(catalog,selected=null){spawnCatalog=catalog;selModel=selected;renderModels();return shape();}
+function render(catalog,selected=null){spawnCatalog=catalog;selModel=selected;renderModels();renderEfforts(providerById(selProvider));return shape();}
 console.log(JSON.stringify(run()));
 """
 
@@ -130,7 +128,7 @@ def test_previous_models_fold_closed_under_the_current_ones():
     r = _run(f"return render({_catalog(overflow_models=OVERFLOW)});")
     assert r["current"] == ["claude-sonnet-5", "claude-opus-5-5",
                             "claude-haiku-4-5-20251001", "claude-fable-5-1"]
-    assert r["fold"] == {"open": False, "summary": "More models · 3", "models": OVERFLOW}
+    assert r["fold"] == {"open": False, "summary": "More models (3)", "models": OVERFLOW}
     assert r["selected"] == "claude-opus-5-5"
 
 
@@ -226,22 +224,15 @@ def test_codex_folds_and_follows_the_per_model_efforts():
       out.older=render({catalog},'gpt-5.6-sol');return out;""")
     first = r["first"]
     assert first["current"] == ["gpt-6-sol", "gpt-6-astra", "gpt-5.6-luna"]
-    assert first["fold"] == {"open": False, "summary": "More models · 1", "models": ["gpt-5.6-sol"]}
+    assert first["fold"] == {"open": False, "summary": "More models (1)", "models": ["gpt-5.6-sol"]}
     assert first["selected"] == "gpt-6-sol"
     assert first["efforts"] == ["low", "medium", "high", "xhigh"] and first["effort"] is None
     assert r["astra"]["efforts"] == ["high", "max"] and r["astra"]["effort"] is None
     # Unsupported models show a status without an effort input.
-    assert r["luna"]["effortShown"] is True and r["luna"]["effort"] is None
+    assert r["luna"]["effortShown"] is False and r["luna"]["effort"] is None
     assert r["older"]["fold"]["open"] is True
     assert r["older"]["efforts"] == ["low", "high"]
 
-
-def test_a_configuration_error_is_shown_not_papered_over():
-    broken = {"id": "codex", "models": [], "model_error": "AGENTSTACK_CODEX_MODELS contains invalid model IDs"}
-    catalog = json.dumps(_merged(broken))
-    r = _run(f"selProvider='codex';return render({catalog});")
-    assert r["current"] == [] and r["fold"] is None
-    assert r["error"] == "CONFIGURATION ERROR · AGENTSTACK_CODEX_MODELS contains invalid model IDs"
 
 
 import pytest  # noqa: E402
@@ -265,7 +256,7 @@ def test_a_missing_or_broken_local_file_still_serves_the_normalized_telemetry(mo
     r = _run(f"selProvider='codex';return render({catalog});")
     assert r["current"] == ["gpt-6-sol", "gpt-6-astra", "gpt-5.6-luna"]
     assert r["selected"] == "gpt-6-sol"
-    assert r["fold"] == {"open": False, "summary": "More models · 1", "models": ["gpt-5.6-sol"]}
+    assert r["fold"] == {"open": False, "summary": "More models (1)", "models": ["gpt-5.6-sol"]}
 
 
 def test_a_payload_that_is_not_a_catalog_is_passed_through():

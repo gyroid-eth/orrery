@@ -50,6 +50,66 @@ def claude_events(records):
             for index, event in normalize(record, 'claude', 'synthetic')]
 
 
+def segmented_records(provider, separator='assistant'):
+    notice = ('ORRERY Mail notification: message from PeerFixture [normal]: Review ready. '
+              'Body (complete; no inbox fetch needed): The fixture is ready.')
+    role, text = {
+        'assistant': ('assistant', 'The first checks passed. I will verify the output.'),
+        'user': ('user', 'Please verify the output as well.'),
+        'mail': ('user', notice),
+    }.get(separator, ('assistant', ''))
+    if provider == 'claude':
+        def tools(names):
+            return [record for name in names for record in (
+                c('assistant', [dict(type='tool_use', id=name, name='Read',
+                                     input={'file_path': f'/fixture/{name}.txt'})]),
+                c('user', [dict(type='tool_result', tool_use_id=name)]))]
+
+        first = [c('assistant', 'I will check the generated files.')] + tools(['input', 'config', 'schema'])
+        return first, [c(role, text)], tools(['output', 'report'])
+
+    def message(role, text):
+        return dict(type='response_item', timestamp='2026-11-15T01:00:01Z',
+                    payload=dict(type='message', role=role, content=text))
+
+    def tools(names):
+        return [native('CommandExecution', ident=name, command=[name], status='completed') for name in names]
+
+    first = [dict(type='event_msg', payload=dict(type='task_started', turn_id='turn-one')),
+             message('assistant', 'I will check the generated files.')] + tools(['input', 'config', 'schema'])
+    boundary = message(role, text)
+    if separator == 'mail-sent':
+        args = dict(to=['PeerFixture'], subject='Review ready', body_md='The fixture is ready.')
+        boundary = dict(type='response_item', payload=dict(type='custom_tool_call', name='exec',
+                        input='await tools.mcp__orrery_mail__send_message('+json.dumps(args)+');'))
+    return first, [boundary], tools(['output', 'report'])
+
+
+@pytest.mark.parametrize('provider,separator', [('claude', 'assistant'), ('codex', 'assistant'),
+                                               ('claude', 'mail'), ('codex', 'user'), ('codex', 'mail-sent')])
+def test_visible_output_splits_native_steps_in_reload_and_delta(tmp_path, provider, separator):
+    first, boundary, last = segmented_records(provider, separator)
+    path = tmp_path / 'synthetic.jsonl'
+    path.write_bytes(b''.join(map(line, first)))
+    row = dict(program='claude-code' if provider == 'claude' else 'codex', history_binding='bound',
+               transcript_path=str(path), history_session_id='synthetic', history_receipt_ts='fixture')
+    with open_reader(row) as reader:
+        initial = reader.read_page()
+    with path.open('ab') as transcript:
+        transcript.write(b''.join(map(line, boundary + last)))
+    with open_reader(row) as reader:
+        delta = reader.read_page(after=initial['after'])
+        full = reader.read_page()
+
+    live = model(initial['events'] + delta['events'], provider.title())
+    assert live == model(full['events'], provider.title())
+    assert [len(run['steps']) for run in live['groups']] == [3, 2]
+    first_run, second_run = live['groups']
+    assert first_run['closed'] and not second_run['closed']
+    for run, events in ((first_run, initial['events']), (second_run, delta['events'][1:])):
+        assert any(event['id'] == run['anchor'] for event in events)
+
+
 @pytest.mark.parametrize('kind,fields,tool,status', [
     ('CommandExecution', dict(command=['zsh','-lc','pytest -q SECRET_VALUE'],status='completed',exit_code=0), 'Shell','done'),
     ('CommandExecution', dict(command=['python','SECRET_VALUE'],status='completed',exit_code=1), 'Shell','failed'),
@@ -111,7 +171,7 @@ def test_claude_matches_ids_not_result_order_and_never_publishes_bodies():
     assert [(s['tool'],s['status']) for s in steps] == [('Read','done'),('Bash','failed')]
     assert steps[0]['detail'] == 'a.py' and steps[1]['detail'] == 'pytest'
     assert 'SECRET_VALUE' not in json.dumps(events)
-    assert sum(bool(e.get('step_boundary')) for e in events) == 1
+    assert [e['kind'] for e in events if e.get('step_boundary')] == ['text']
 
 
 def test_claude_pair_survives_native_page_boundaries_and_earlier_loading(tmp_path):
@@ -155,7 +215,7 @@ def test_codex_turn_ids_and_pages_dedup_completed_operation(tmp_path):
     assert grouped['groups'][1]['closed'] is False
 
 
-def test_claude_mid_turn_mail_system_and_queued_prompt_do_not_split_turn():
+def test_consecutive_claude_outputs_do_not_create_empty_intermediate_runs():
     events=claude_events([
         c('user','Generated task'),
         c('user','ORRERY Mail notification: message from Fixture [normal]: title. Body (complete; no inbox fetch needed): body'),
@@ -167,6 +227,7 @@ def test_claude_mid_turn_mail_system_and_queued_prompt_do_not_split_turn():
         c('user','The next generated task'),
     ])
     grouped=model(events,'Claude')
+    assert [e['kind'] for e in events if e.get('step_boundary')] == ['text', 'mail', 'system', 'text', 'text']
     assert len(grouped['groups']) == 2
     assert grouped['groups'][0]['closed'] is True
     assert len(grouped['groups'][0]['steps']) == 1
