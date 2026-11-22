@@ -498,14 +498,50 @@
     background:linear-gradient(180deg,rgba(31,35,43,.98),rgba(17,20,25,.98));
     box-shadow:0 14px 38px rgba(0,0,0,.48),0 0 0 1px rgba(255,255,255,.025);
     -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
-    color:var(--ink);pointer-events:none;
+    color:var(--ink);font-size:12px;line-height:1.4;
   }
   .agent-detail[hidden]{display:none}
-  .agent-detail-name{font-family:var(--serif);font-size:15px;line-height:1.2;color:var(--amber)}
-  .agent-detail-primary{margin-top:7px;font-size:11.5px;line-height:1.55;overflow-wrap:anywhere}
-  .agent-detail-grid{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 11px;margin-top:11px;padding-top:10px;border-top:1px solid var(--hair)}
-  .agent-detail-label{color:var(--ink-faint);font-size:8.5px;line-height:1.45;letter-spacing:.1em;text-transform:uppercase}
-  .agent-detail-value{min-width:0;color:var(--ink-dim);font-size:10px;line-height:1.45;overflow-wrap:anywhere}
+  .agent-detail-name{font-family:var(--serif);font-size:19px;line-height:1.2;color:var(--amber);overflow-wrap:anywhere}
+  .agent-detail-identity,.agent-detail-runtime{
+    display:flex;flex-wrap:wrap;align-items:center;gap:5px 11px;color:var(--ink-dim);
+  }
+  .agent-detail-identity{margin-top:6px}
+  .agent-detail-meta{display:grid;gap:6px;margin-top:9px}
+  .agent-detail-item{display:flex;align-items:flex-start;gap:6px;min-width:0;max-width:100%}
+  .agent-detail-icon{flex:none;width:15px;height:15px;margin-top:1px;color:var(--ink-dim)}
+  .agent-detail-value{min-width:0;overflow-wrap:anywhere}
+  .agent-detail-model{font-weight:500}
+  .agent-detail-directory{color:var(--ink-dim)}
+  .agent-detail-permissions{
+    display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:9px;padding:6px 8px;
+    border:1px solid rgb(var(--theme-accent-rgb) / .26);border-radius:7px;
+    background:rgb(var(--theme-accent-rgb) / .06);
+  }
+  .agent-detail-permissions .agent-detail-item{align-items:center;min-height:24px}
+  .agent-detail-permissions .agent-detail-icon{margin-top:0}
+  .agent-detail-permissions .agent-detail-item+.agent-detail-item{padding-left:10px;border-left:1px solid var(--hair)}
+  .agent-detail-modes{display:flex;align-items:center;flex-wrap:wrap;gap:1px;color:var(--ink-dim)}
+  .agent-detail-modes span{padding:2px 5px}
+  .agent-detail-modes .current{
+    border-radius:3px;color:var(--amber);font-weight:600;background:rgb(var(--theme-accent-rgb) / .13);
+  }
+  .agent-detail-switch{
+    width:28px;height:16px;display:flex;align-items:center;padding:2px;
+    border:1px solid var(--hair);border-radius:999px;background:var(--panel-2);
+  }
+  .agent-detail-switch::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--ink-dim)}
+  .agent-detail-switch.on{
+    justify-content:flex-end;border-color:rgb(var(--theme-local-rgb) / .35);background:rgb(var(--theme-local-rgb) / .16);
+  }
+  .agent-detail-switch.on::before{background:var(--ln-local)}
+  .agent-detail-context{display:flex;flex:1;align-items:center;gap:7px;min-width:0}
+  .agent-detail-context strong{font-weight:600;white-space:nowrap}
+  .agent-detail-meter{flex:1;height:4px;border-radius:3px;overflow:hidden;background:rgb(var(--theme-accent-rgb) / .18)}
+  .agent-detail-meter i{display:block;height:100%;border-radius:3px;background:var(--amber)}
+  .agent-detail-meter.hot i{background:var(--theme-status-alert,#d2685e)}
+  @media(max-width:360px){
+    .agent-detail-permissions .agent-detail-item+.agent-detail-item{padding-left:0;border-left:0}
+  }
 
   /* ── terminal cockpit ──────────────────── */
   .term{display:flex;flex-direction:column;min-height:0;background:
@@ -1984,18 +2020,43 @@
             "value": "var(--ink)"
           },
           {
-            "property": "border-top",
-            "selector": ".agent-detail-grid",
+            "property": "color",
+            "selector": ".agent-detail-identity,.agent-detail-runtime",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail-icon",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail-directory",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border-left",
+            "selector": ".agent-detail-permissions .agent-detail-item+.agent-detail-item",
             "value": "1px solid var(--hair)"
           },
           {
             "property": "color",
-            "selector": ".agent-detail-label",
-            "value": "var(--ink-faint)"
+            "selector": ".agent-detail-modes",
+            "value": "var(--ink-dim)"
           },
           {
-            "property": "color",
-            "selector": ".agent-detail-value",
+            "property": "border",
+            "selector": ".agent-detail-switch",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".agent-detail-switch",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "background",
+            "selector": ".agent-detail-switch::before",
             "value": "var(--ink-dim)"
           },
           {
@@ -3357,12 +3418,27 @@
           },
           {
             "property": "color",
-            "selector": ".agent-detail-label",
-            "value": "var(--ink-faint)"
+            "selector": ".agent-detail-identity,.agent-detail-runtime",
+            "value": "var(--ink-dim)"
           },
           {
             "property": "color",
-            "selector": ".agent-detail-value",
+            "selector": ".agent-detail-icon",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail-directory",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail-modes",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "background",
+            "selector": ".agent-detail-switch::before",
             "value": "var(--ink-dim)"
           },
           {
@@ -3941,7 +4017,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "0652b66a30fae25a135f27105c4e8f1d17e71f027ff3bbecc13dd8d3c79f4d54",
+        "digest": "795d63240e981a13f47a90f35c45e4ffa0ea9350684901a3ae7a94bd1a90ffad",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -3974,9 +4050,6 @@
           ".usage-popover .up-foot\u0000font-size",
           ".cstate\u0000font-size",
           ".descriptor-updated\u0000font-size",
-          ".agent-detail-primary\u0000font-size",
-          ".agent-detail-label\u0000font-size",
-          ".agent-detail-value\u0000font-size",
           ".split-chip\u0000font-size",
           ".layout-picker-title\u0000font-size",
           ".layout-option\u0000font-size",
@@ -4070,7 +4143,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "3ef535fd5f9d1eb7a2fc87e1fe78ed21e7a32b13a049b4b0fea99416b1424919",
+        "digest": "60c1c54f8c6f05d15fc2aa72560cbf80c36a90941886230b369c87fc15745da1",
         "records": [
           ".colhead\u0000letter-spacing",
           ".roster-head .colhead-title\u0000letter-spacing",
@@ -4082,7 +4155,6 @@
           ".usage-pill .up-k\u0000letter-spacing",
           ".usage-popover .dial .lab\u0000letter-spacing",
           ".usage-popover .up-sub\u0000letter-spacing",
-          ".agent-detail-label\u0000letter-spacing",
           ".layout-picker-title\u0000letter-spacing",
           ".layout-option\u0000letter-spacing",
           ".promptmeta .plab\u0000letter-spacing",
@@ -4111,9 +4183,9 @@
       }
     }
   },
-  "inventory_digest": "2ad16adceef416d894669b639dc3067df3ce42b28a2ad18ed685eb77c3a589da",
+  "inventory_digest": "a11188e056ecda59ed6288914a1459245d0224840722e430910682262a788777",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "83ade2e2c762a4ec37471f5e32023ac7126f10a3756bdfd481834e223d163142",
+  "source_digest": "a842603983ef31936ccd8e28b0b99e5258f402f402410d877a5050b50259e72d",
   "surface": "cockpit",
   "version": 1
 }
@@ -4621,6 +4693,7 @@ function normalizeHostPlatform(raw){
   return {host:raw.host,
     terminal:{kind:String(t.kind||'ghostty'),label:String(t.label||'Ghostty'),
       available:t.available!==false,reason:t.reason?String(t.reason):null},
+    home_dir:typeof raw.home_dir==='string'?raw.home_dir:null,
     file_paste:Boolean(raw.file_paste)};
 }
 function usesAltShortcuts(host){return Boolean(host&&host.host==='wsl');}
@@ -8850,9 +8923,8 @@ try{
 }catch(_){/* malformed or unavailable storage: start with no pins */}
 const agentDetail=document.createElement('div');
 agentDetail.id='agentDetail';agentDetail.className='agent-detail';agentDetail.setAttribute('role','tooltip');agentDetail.hidden=true;
-agentDetail.innerHTML='<div class="agent-detail-name"></div><div class="agent-detail-primary"></div><div class="agent-detail-grid"></div>';
 document.body.appendChild(agentDetail);
-let detailAnchor=null;
+let detailAnchor=null,detailHideTimer=0,detailRendered='';
 let selectedAgent=null,currentAgents=[];
 const descriptorStore=RosterDescriptor.createStableDescriptorStore();
 let rosterAnnotationEpoch=0;
@@ -9116,76 +9188,124 @@ rosterSelectBtn.addEventListener('click',()=>setRosterSelectMode(!rosterSelectMo
 rosterBulkExit.addEventListener('click',runBulkExit);
 rosterBulkReboot.addEventListener('click',runBulkReboot);
 
-function detailTimestamp(ts){
-  const seconds=Number(ts);if(!Number.isFinite(seconds)||seconds<=0)return'';
-  return new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'medium'}).format(new Date(seconds*1000));
+const AGENT_DETAIL_HARNESSES=new Map([['claude','Claude Code'],['codex','Codex CLI'],['dsh','dsh'],['hermes','Hermes']]);
+const AGENT_DETAIL_COMPUTER=new Map([['off','Off'],['view','View'],['control','Control']]);
+const AGENT_DETAIL_TOKENS=new Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1});
+const AGENT_DETAIL_ICONS={
+  role:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M5.5 16a3.5 3.5 0 0 1 7 0m3-6h2.5m-2.5 4H18"/>',
+  top:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2"/>',
+  parent:'<circle cx="12" cy="5" r="2"/><rect x="3" y="16" width="5" height="4" rx="1"/><rect x="16" y="16" width="5" height="4" rx="1"/><path d="M12 7v5m-6.5 4v-4h13v4"/>',
+  computer:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4m-4 0h8"/>',
+  browser:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01m3 0h.01"/>',
+  model:'<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 3v3m6-3v3M9 18v3m6-3v3M3 9h3m-3 6h3m12-6h3m-3 6h3"/><rect x="10" y="10" width="4" height="4" rx=".5"/>',
+  effort:'<path d="m13 2-8 12h7l-1 8 8-12h-7l1-8Z"/>',
+  harness:'<rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="m7 9 3 3-3 3m6 0h4"/>',
+  context:'<rect x="3" y="6" width="17" height="12" rx="2"/><path d="M22 10v4M7 10v4m4-4v4m4-4v4"/>',
+  directory:'<path d="M2.5 17.5v-11a1 1 0 0 1 1-1h5l2 2h10a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1Z"/>'
+};
+function agentDetailModel(a,homeDir){
+  const text=value=>typeof value==='string'&&value.trim()?value:null;
+  const cwd=text(a.cwd),home=homeDir?.replace(/\/+$/,'');
+  const directory=cwd&&home&&(cwd===home||cwd.startsWith(home+'/'))?'~'+cwd.slice(home.length):cwd;
+  return {
+    name:a.name,role:text(a.annot?.role),
+    parentState:a.parent_state,parent:a.parent_state==='child'?text(a.parent_agent):null,
+    computer:AGENT_DETAIL_COMPUTER.get(a.computer_use)??null,
+    browser:typeof a.browser_use==='boolean'?a.browser_use:null,
+    model:text(a.model_id),harness:AGENT_DETAIL_HARNESSES.get(a.harness_kind)??null,effort:text(a.effort),
+    tokens:Number.isSafeInteger(a.ctx_window_tokens)&&a.ctx_window_tokens>0?a.ctx_window_tokens:null,
+    used:Number.isFinite(a.ctx_used)&&a.ctx_used>=0&&a.ctx_used<=100?a.ctx_used:null,
+    directory,cwd
+  };
 }
-function detailElapsed(ts){
-  const seconds=Number(ts);if(!Number.isFinite(seconds)||seconds<=0)return'';
-  return relTime(seconds)+' ago';
+function agentDetailItem(icon,label,body=''){
+  const description=esc(label);
+  return `<div class="agent-detail-item" role="group" title="${description}" aria-label="${description}">
+    <svg class="agent-detail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${AGENT_DETAIL_ICONS[icon]}</svg>${body}</div>`;
 }
-function agentDetailModel(a,agents){
-  const descriptor=a.descriptor||RosterDescriptor.deriveRosterDescriptor(a,agents);
-  const rows=[];
-  const add=(label,value)=>{const text=String(value==null?'':value).trim();if(text)rows.push([label,text]);};
-  const paneTitle=RosterDescriptor.stableLiveText(a);
-  const instruction=typeof a.instruction==='string'?a.instruction:a.instruction&&a.instruction.subject;
-  add('Pane title',paneTitle);
-  add('Latest mail',instruction);
-  if(Number(a.observed_active)>0)add('Observed activity',`${detailElapsed(a.observed_active)} · ${detailTimestamp(a.observed_active)}`);
-  if(Number(a.mail_active)>0)add('Agent-mail registration',`${detailElapsed(a.mail_active)} · ${detailTimestamp(a.mail_active)}`);
-  if(Number(a.created)>0)add('Started',`${detailElapsed(a.created)} · ${detailTimestamp(a.created)}`);
-  const runtime=[a.provider,a.model_raw||a.model,a.cmd].map(value=>String(value||'').trim()).filter(Boolean);
-  add('Runtime',[...new Set(runtime)].join(' · '));
-  // Only when there are some. "Deliverables 0" is a row on 31 of 35 cards
-  // that says nothing, and the card's rule is to omit what it does not have.
-  if(a.deliv)add('Deliverables',a.deliv);
-  add('Description source',descriptor.provenance);
-  add('Description quality',descriptor.quality);
-  return {name:a.name,primary:descriptor.primary,rows};
-}
-function addAgentDetailRow(label,value){
-  const text=String(value==null?'':value).trim();if(!text)return;
-  const key=document.createElement('div');key.className='agent-detail-label';key.textContent=label;
-  const val=document.createElement('div');val.className='agent-detail-value';val.textContent=text;
-  agentDetail.querySelector('.agent-detail-grid').append(key,val);
+function agentDetailHTML(detail){
+  const group=(name,content)=>content?`<div class="agent-detail-${name}">${content}</div>`:'';
+  const text=(icon,label,value)=>{
+    if(!value)return'';
+    const content=icon==='directory'?esc(value).replaceAll('/','/<wbr>'):esc(value);
+    return agentDetailItem(icon,`${label}: ${icon==='directory'?detail.cwd:value}`,
+      `<span class="agent-detail-value agent-detail-${icon}">${content}</span>`);
+  };
+  let lineage='';
+  if(detail.parentState==='top')lineage=agentDetailItem('top','Top level');
+  if(detail.parentState==='child')lineage=detail.parent?text('parent','Parent',detail.parent):agentDetailItem('parent','Child agent');
+  const computer=detail.computer?agentDetailItem('computer',`Computer use: ${detail.computer}`,
+    `<span class="agent-detail-modes" aria-hidden="true">${[...AGENT_DETAIL_COMPUTER.values()].map(mode=>
+      `<span${mode===detail.computer?' class="current"':''}>${mode}</span>`).join('')}</span>`):'';
+  const browser=detail.browser===null?'':agentDetailItem('browser','Browser use: '+(detail.browser?'On':'Off'),
+    `<span class="agent-detail-switch${detail.browser?' on':''}" aria-hidden="true"></span>`);
+  const context=[];
+  if(detail.tokens!==null)context.push(detail.tokens.toLocaleString('en')+' tokens');
+  if(detail.used!==null)context.push(detail.used+'% used');
+  const contextRow=context.length?agentDetailItem('context','Context window: '+context.join(', '),
+    `<span class="agent-detail-context">
+      ${detail.tokens===null?'':`<span>${AGENT_DETAIL_TOKENS.format(detail.tokens)}</span>`}
+      ${detail.used===null?'':`<span class="agent-detail-meter${detail.used>65?' hot':''}" aria-hidden="true"><i style="width:${detail.used}%"></i></span><strong>${detail.used}%</strong>`}
+    </span>`):'';
+  const runtime=text('harness','Harness',detail.harness)+text('effort','Effort',detail.effort);
+  return `<div class="agent-detail-name">${esc(detail.name)}</div>
+    ${group('identity',text('role','Role',detail.role)+lineage)}
+    ${group('permissions',computer+browser)}
+    ${group('meta',text('model','Model',detail.model)+group('runtime',runtime)+contextRow+text('directory','Working directory',detail.directory))}`;
 }
 function positionAgentDetail(el){
   const gap=10,edge=12,anchor=el.getBoundingClientRect();
   const card=agentDetail.getBoundingClientRect();
-  let left=anchor.right+gap;
-  if(left+card.width>window.innerWidth-edge)left=anchor.left-card.width-gap;
+  let left=anchor.right+gap,top=anchor.top;
+  if(left+card.width>window.innerWidth-edge){
+    left=anchor.left-card.width-gap;
+    if(left<edge){
+      left=anchor.left;
+      if(anchor.bottom+gap+card.height<=window.innerHeight-edge)top=anchor.bottom+gap;
+      else if(anchor.top-card.height-gap>=edge)top=anchor.top-card.height-gap;
+    }
+  }
   left=Math.max(edge,Math.min(left,window.innerWidth-card.width-edge));
-  const top=Math.max(edge,Math.min(anchor.top,window.innerHeight-card.height-edge));
-  agentDetail.style.left=left+'px';agentDetail.style.top=top+'px';
+  top=Math.max(edge,Math.min(top,window.innerHeight-card.height-edge));
+  setBox(agentDetail,'left',left+'px');
+  setBox(agentDetail,'top',top+'px');
 }
 function showAgentDetail(el){
   const a=currentAgentNamed(el&&el.dataset.agent);if(!a)return;
-  if(rosterEditor.isEditing(a.name))return;
-  const detail=agentDetailModel(a,currentAgents);
+  if(rosterEditor.isEditing(a.name)||el.classList.contains('filtered-out')){hideAgentDetail(el);return;}
+  if(detailAnchor!==el)clearTimeout(detailHideTimer);
   detailAnchor=el;
-  agentDetail.querySelector('.agent-detail-name').textContent=detail.name;
-  agentDetail.querySelector('.agent-detail-primary').textContent=detail.primary;
-  agentDetail.querySelector('.agent-detail-grid').replaceChildren();
-  detail.rows.forEach(([label,value])=>addAgentDetailRow(label,value));
-  agentDetail.hidden=false;positionAgentDetail(el);
+  const html=agentDetailHTML(agentDetailModel(a,hostPlatform.home_dir));
+  if(detailRendered!==html){agentDetail.innerHTML=html;detailRendered=html;}
+  setHidden(agentDetail,false);positionAgentDetail(el);
 }
 function hideAgentDetail(el){
   if(detailAnchor!==el)return;
+  clearTimeout(detailHideTimer);
   detailAnchor=null;agentDetail.hidden=true;
 }
+function scheduleAgentDetailHide(el){
+  clearTimeout(detailHideTimer);
+  detailHideTimer=setTimeout(()=>{
+    if(document.activeElement!==el&&!el.matches(':hover')&&!agentDetail.matches(':hover'))hideAgentDetail(el);
+  },160);
+}
+agentDetail.addEventListener('mouseenter',()=>clearTimeout(detailHideTimer));
+agentDetail.addEventListener('mouseleave',()=>{if(detailAnchor)scheduleAgentDetailHide(detailAnchor);});
 function bindAgentDetail(el){
   el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-describedby',agentDetail.id);
   el.addEventListener('mouseenter',()=>showAgentDetail(el));
-  el.addEventListener('mouseleave',()=>{if(document.activeElement!==el)hideAgentDetail(el);});
+  el.addEventListener('mouseleave',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
   el.addEventListener('focus',()=>showAgentDetail(el));
-  el.addEventListener('blur',()=>{if(!el.matches(':hover'))hideAgentDetail(el);});
+  el.addEventListener('blur',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
   el.addEventListener('keydown',event=>{
     if(event.target!==el)return;
     if(event.key!=='Enter'&&event.key!==' ')return;
     event.preventDefault();handleRosterTileClick(el.dataset.agent,event);
   });
 }
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&detailAnchor)hideAgentDetail(detailAnchor);});
 window.addEventListener('resize',()=>{if(detailAnchor)positionAgentDetail(detailAnchor);});
 rosterEl.addEventListener('scroll',()=>{if(detailAnchor)positionAgentDetail(detailAnchor);},{passive:true});
 
@@ -9470,6 +9590,7 @@ function renderRoster(){
   paintSplitRoles(liveRosterAgents);
   refreshPaneHeadings();
   applyRosterFilter();
+  if(detailAnchor)showAgentDetail(detailAnchor);
   document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:liveRosterAgents}}));
   if(paletteOverlay.classList.contains('on'))renderPalette();
 }
