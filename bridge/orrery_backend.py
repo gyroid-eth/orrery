@@ -2371,11 +2371,15 @@ async def serve_conversation(request: web.Request) -> web.Response:
                 raise HistoryUnavailable("history_changed")
             if not isinstance(payload, dict) or payload.get("ok") is not True:
                 raise HistoryUnavailable("history_unavailable")
-            if payload.get("source") == "claude":
+            source = payload.get("source")
+            if source == "claude":
                 raise HistoryUnavailable("claude_next_phase")
-            if (payload.get("source") != "codex" or payload.get("history_binding") != "bound"
+            # Codex and Hermes are the fresh providers whose history the
+            # dashboard projects from a verified native receipt.
+            if (source not in {"codex", "hermes"} or payload.get("history_binding") != "bound"
                     or any(payload.get(key) != value for key, value in target.ref.items())):
                 raise HistoryUnavailable("history_unconfirmed")
+            provider = source
             events = []
             occurrences: dict[str, int] = {}
             for event in payload.get("events", []):
