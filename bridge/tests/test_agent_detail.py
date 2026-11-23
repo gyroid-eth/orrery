@@ -12,10 +12,10 @@ RENDERER = SOURCE.split("const AGENT_DETAIL_HARNESSES=", 1)[1].split("function p
 ESCAPE = re.search(r"^function esc\(s\).*", SOURCE, re.MULTILINE).group()
 
 
-def render(agent, home="/home/fixture"):
+def render(agent, home="/home/fixture", api=45):
     script = (
         ESCAPE + "\nconst AGENT_DETAIL_HARNESSES=" + RENDERER
-        + f"process.stdout.write(agentDetailHTML(agentDetailModel({json.dumps(agent)}, {json.dumps(home)})));"
+        + f"process.stdout.write(agentDetailHTML(agentDetailModel({json.dumps(agent)}, {json.dumps(home)}, [], {api})));"
     )
     return subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True, timeout=10).stdout
 
@@ -25,7 +25,8 @@ def test_card_displays_current_values_and_permission_controls():
         "name": "FixtureAgent", "annot": {"role": "画像 <確認>"}, "parent_state": "child",
         "parent_agent": "FixtureParent", "computer_use": "off", "browser_use": False,
         "model_id": "fixture-model-id", "harness_kind": "codex", "effort": "xhigh",
-        "running": True, "history_binding": "bound",
+        "category": "retired", "running": False, "history_binding": "bound",
+        "history_session_id": "01234567-1234-1234-1234-012345678901", "resume_capability": "ready",
         "ctx_window_tokens": 262144, "ctx_used": 0, "cwd": "/home/fixture/long directory/project",
     })
     expected_labels = (
@@ -49,20 +50,25 @@ def test_card_displays_current_values_and_permission_controls():
 
 
 def test_unsupported_agents_explain_why_controls_are_disabled():
-    base = {"name": "FixtureAgent", "running": True, "parent_state": "child",
-            "harness_kind": "claude", "history_binding": "bound", "browser_use": True}
+    base = {"name": "FixtureAgent", "category": "retired", "running": False, "parent_state": "child",
+            "harness_kind": "claude", "history_binding": "bound", "browser_use": True,
+            "history_session_id": "01234567-1234-1234-1234-012345678901", "resume_capability": "ready"}
     for fields, reason in [
         ({"lifecycle": "persistent"}, "Persistent agent"),
         ({"parent_state": "top"}, "Standalone agent"),
         ({"surface": "codex-app"}, "Codex App"),
         ({"harness_kind": "dsh"}, "Requires a Claude Code or Codex CLI child"),
         ({"harness_kind": "hermes"}, "Requires a Claude Code or Codex CLI child"),
+        ({"category": "agent", "running": True}, "Exit this agent first"),
+        ({"category": "finished"}, "Exit this agent first"),
+        ({"resume_mode": "conversation_only"}, "Conversation-only resume has no saved permissions"),
         ({"history_binding": "unbound"}, "No verified child conversation"),
         ({"running": False, "resume_capability": "no_history"}, "Conversation cannot be resumed"),
     ]:
         markup = render(base | fields)
         assert markup.count(' disabled') == 4
         assert f'title="Browser use: On ({reason})"' in markup
+    assert 'title="Browser use: On (Requires Telemetry API 45)"' in render(base, api=44)
 
 
 def test_unknown_fields_leave_no_rows_and_legacy_fields_never_render():

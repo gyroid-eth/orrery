@@ -372,7 +372,8 @@
   .roster.select-mode .agent.bulk-selected{background:var(--rail-selection)}
   .roster.select-mode .agent.bulk-selected .bulk-check{border-color:var(--amber);background:var(--amber)}
   .roster.select-mode .agent.bulk-selected .bulk-check::after{opacity:1}
-  .roster.select-mode .agent.bulk-ineligible{opacity:.38!important;cursor:not-allowed;filter:saturate(.45)}
+  .roster.select-mode .agent.bulk-ineligible:not(.permission-target){opacity:.38!important;cursor:not-allowed;filter:saturate(.45)}
+  .roster.select-mode .agent.permission-target{cursor:default}
   .agent.offline-hint .agent-status{border-color:var(--theme-status-alert,#ff6a5d)}
   .roster-bulkbar{
     margin:8px 10px 0;padding:8px 9px;display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -525,6 +526,7 @@
   }
   .agent-permission-confirm::backdrop{background:rgb(0 0 0 / .42)}
   .agent-permission-confirm p{margin:0;overflow-wrap:anywhere}
+  .agent-permission-confirm [hidden]{display:none}
   .agent-permission-confirm .agent-detail-permissions{margin:12px 0}
   .agent-permission-confirm select,.agent-permission-confirm button{
     min-height:28px;border:1px solid var(--hair);border-radius:5px;padding:2px 7px;
@@ -3830,7 +3832,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "f3bba1ee9fd010590ce5154df53593e9ff5213f8f9aab29187b296fc74ba90b8",
+        "digest": "ea0f8ba32fa2f25584d32e6bcb685f5b401f681fc938956488f7ae1181fb62ca",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -3931,7 +3933,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "8cd11ad89118d9b6f83f8725c6e81b6de1c5d06ff465fb8a5ba3754f0ce68cd8",
+        "digest": "9db0a4338b327f093405ecad746c91fd955c649098c84a6e03152d79fb95aeed",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -3964,9 +3966,9 @@
       }
     }
   },
-  "inventory_digest": "a0ff8c56ec6dd6a9984c096ce646d7880e48a6898b6b59d7de36fb0bfaae3e53",
+  "inventory_digest": "6764dea4db4b88523683acd729a2d8f72cb8ef4aa3822a13fa049165ec72d168",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "f35cde6edc81e285ebcf0a074387c00a880da2609729980b5b19c8d99ce0ad8b",
+  "source_digest": "5cd19ff22eb3e042540d896860cd6ca0de812228d9448da8501ca18d61b51f0b",
   "surface": "cockpit",
   "version": 1
 }
@@ -8734,6 +8736,7 @@ function paintBulkTileState(el,agent){
   const eligible=isBulkSelectableAgent(agent);
   const selected=eligible&&bulkSelectedAgents.has(agent.name);
   el.classList.toggle('bulk-ineligible',rosterSelectMode&&!eligible);
+  el.classList.toggle('permission-target',rosterSelectMode&&!eligible&&!agentPermissionBlockReason(agent,permissionApi));
   el.classList.toggle('bulk-selected',rosterSelectMode&&selected);
   if(rosterSelectMode){
     el.setAttribute('aria-selected',String(selected));
@@ -8876,16 +8879,6 @@ async function waitForBulkRebootExit(name,timeoutMs=30000,pollMs=1500){
     throw new Error('timed out waiting for exit');
   }finally{clearTimeout(timer);}
 }
-async function restartRosterAgent(name,running,options={}){
-  if(running){
-    await postBulkAgentAction('exit',{session:name});
-    await waitForBulkRebootExit(name);
-  }
-  // Current dashboards read `open`; keep the explicit terminal preference for both API forms.
-  const result=await postBulkAgentAction('jump',{session:name,open_terminal:false,open:false,...options});
-  if(result.action==='already_running')throw new Error('previous session is still running');
-  return result;
-}
 async function runBulkReboot(){
   if(bulkActionBusy||permissionChangeBusy)return;
   const names=[...bulkSelectedAgents].filter(name=>isBulkSelectableAgent(currentAgentNamed(name)));
@@ -8896,7 +8889,13 @@ async function runBulkReboot(){
     try{
       const agent=currentAgentNamed(name);
       if(agent&&!isBulkSelectableAgent(agent))throw new Error('agent is protected');
-      await restartRosterAgent(name,isBulkAgentRunning(agent));
+      if(isBulkAgentRunning(agent)){
+        await postBulkAgentAction('exit',{session:name});
+        await waitForBulkRebootExit(name);
+      }
+      // Current dashboards read `open`; keep the explicit terminal preference for both API forms.
+      const result=await postBulkAgentAction('jump',{session:name,open_terminal:false,open:false});
+      if(result.action==='already_running')throw new Error('previous session is still running');
     }catch(error){
       const reason=String(error?.message||error).replace(/\s+/g,' ').trim();
       failures.push(`${name}: ${reason}`);
@@ -8990,18 +8989,20 @@ function permissionConversationOnly(a){
 function agentPermissionBlockReason(a,api){
   if(a.lifecycle==='persistent')return 'Persistent agent';
   if(a.surface==='codex-app'||a.program==='codex-app')return 'Codex App';
-  const conversationOnly=permissionConversationOnly(a);
   if(a.parent_state==='top'||a.parentless===true||a.standalone===true)return 'Standalone agent';
-  if(!['claude','codex'].includes(a.harness_kind)&&!(conversationOnly&&!a.harness_kind)){
+  if(permissionConversationOnly(a))return 'Conversation-only resume has no saved permissions';
+  if(!['claude','codex'].includes(a.harness_kind)){
     return 'Requires a Claude Code or Codex CLI child';
   }
-  if(!conversationOnly&&(a.parent_state!=='child'||a.history_binding!=='bound')){
+  if(a.running!==false||a.category==='finished')return 'Exit this agent first';
+  if(!['gone','retired'].includes(a.category))return 'Agent is not confirmed stopped';
+  if(a.parent_state!=='child'||a.history_binding!=='bound'||!a.history_session_id){
     return 'No verified child conversation';
   }
-  if(!a.running&&!['ready','verification_required'].includes(a.resume_capability)){
+  if(!['ready','verification_required'].includes(a.resume_capability)){
     return 'Conversation cannot be resumed';
   }
-  if(conversationOnly&&api!=null&&api<43)return 'Requires Telemetry API 43';
+  if(!(api>=45))return 'Requires Telemetry API 45';
   return '';
 }
 function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false){
@@ -9016,7 +9017,6 @@ function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false){
     permissions:Boolean(a.harness_kind||a.lifecycle==='persistent'||a.surface==='codex-app'||permissionConversationOnly(a)||
       a.computer_use||typeof a.browser_use==='boolean'),
     permissionReason:agentPermissionBlockReason(a,api)||(busy?'Agent action in progress':''),
-    viewReason:api!=null&&api<42?'Requires Telemetry API 42':'',
     model:text(a.model_id),harness:AGENT_DETAIL_HARNESSES.get(a.harness_kind)??null,effort:text(a.effort),
     tokens:Number.isSafeInteger(a.ctx_window_tokens)&&a.ctx_window_tokens>0?a.ctx_window_tokens:null,
     used:Number.isFinite(a.ctx_used)&&a.ctx_used>=0&&a.ctx_used<=100?a.ctx_used:null,
@@ -9038,7 +9038,7 @@ function agentDetailPermissions(detail){
   const title=(label,reason)=>esc(reason?`${label} (${reason})`:label);
   const computer=detail.computer?AGENT_DETAIL_COMPUTER.get(detail.computer):'Unknown';
   const modes=[...AGENT_DETAIL_COMPUTER].map(([value,label])=>{
-    const reason=detail.permissionReason||(value==='view'?detail.viewReason:'');
+    const reason=detail.permissionReason;
     const current=value===detail.computer;
     return `<button type="button" data-computer="${value}" aria-pressed="${current}"
       aria-label="Computer use: ${label}" title="${title(`Computer use: ${label}`,reason)}"
@@ -9121,7 +9121,7 @@ function showAgentDetail(el){
   }
   if(agentDetail.contains(focused)&&focused!==document.activeElement)focused.focus({preventScroll:true});
   setHidden(agentDetail,false);positionAgentDetail(el);
-  if(permissionApi===null&&!agentPermissionBlockReason(a,permissionApi))loadPermissionApi();
+  if(permissionApi===null&&!agentPermissionBlockReason(a,45))loadPermissionApi();
 }
 function hideAgentDetail(el){
   if(detailAnchor!==el)return;
@@ -9158,13 +9158,13 @@ document.addEventListener('keydown',event=>{
 window.addEventListener('resize',()=>{if(detailAnchor)positionAgentDetail(detailAnchor);});
 rosterEl.addEventListener('scroll',()=>{if(detailAnchor)positionAgentDetail(detailAnchor);},{passive:true});
 
-function loadPermissionApi(){
-  if(permissionApi!==null)return Promise.resolve(permissionApi);
+function loadPermissionApi(refresh=false){
+  if(!refresh&&permissionApi!==null)return Promise.resolve(permissionApi);
   permissionApiRequest??=fetch('/api/version',{cache:'no-store'})
     .then(response=>response.ok?response.json():null)
     .then(version=>{
       if(Number.isInteger(version?.api)){
-        permissionApi=version.api;
+        permissionApi=version.runtime_mode&&version.runtime_mode!=='legacy'?0:version.api;
         if(detailAnchor)showAgentDetail(detailAnchor);
       }
       return permissionApi;
@@ -9192,7 +9192,7 @@ permissionConfirm.innerHTML=`<form method="dialog">
   </div>
   <div class="agent-permission-actions">
     <button type="submit" value="cancel" autofocus formnovalidate>Cancel</button>
-    <button type="submit" value="apply">Restart</button>
+    <button type="submit" value="apply">Resume</button>
   </div>
 </form>`;
 document.body.appendChild(permissionConfirm);
@@ -9208,48 +9208,44 @@ agentDetail.addEventListener('click',event=>{
     agentPermissionBlockReason(a,permissionApi))return;
   const computer=button.dataset.computer;
   if(computer&&computer===a.computer_use)return;
-  const browser=computer?a.browser_use:typeof a.browser_use==='boolean'?!a.browser_use:null;
-  permissionComputer.querySelector('[value="view"]').disabled=permissionApi!==null&&permissionApi<42;
-  permissionComputer.value=computer||(AGENT_DETAIL_COMPUTER.has(a.computer_use)?a.computer_use:'');
-  permissionBrowser.value=typeof browser==='boolean'?(browser?'on':'off'):'';
-  pendingPermissionChange=a;
+  permissionComputer.parentElement.hidden=permissionComputer.disabled=!computer;
+  permissionBrowser.parentElement.hidden=permissionBrowser.disabled=Boolean(computer);
+  permissionComputer.value=computer||'';
+  permissionBrowser.value=typeof a.browser_use==='boolean'?(a.browser_use?'off':'on'):'';
+  pendingPermissionChange={agent:a,key:computer?'computer_use':'browser_use'};
   const name=OrreryDemo.mask(a.name);
-  setText(permissionConfirm.querySelector('p'),a.running
-    ?`Restart ${name} to resume the same conversation with these permissions. Any work in progress will be interrupted.`
-    :`Resume ${name} with these permissions in the same conversation.`);
-  setText(permissionApply,a.running?'Restart':'Resume');
+  setText(permissionConfirm.querySelector('p'),`Resume ${name} in the same conversation with this permission change.`);
   permissionConfirm.showModal();
 });
 permissionConfirm.addEventListener('cancel',()=>{pendingPermissionChange=null;});
 permissionConfirm.addEventListener('submit',event=>{
   event.preventDefault();
-  const a=pendingPermissionChange;
+  const change=pendingPermissionChange;
   pendingPermissionChange=null;
   permissionConfirm.close();
-  if(a&&event.submitter===permissionApply){
-    changeAgentPermissions(a,permissionComputer.value,permissionBrowser.value==='on');
+  if(change&&event.submitter===permissionApply){
+    const {agent,key}=change;
+    changeAgentPermission(agent,key,key==='computer_use'?permissionComputer.value:permissionBrowser.value==='on');
   }
 });
-async function changeAgentPermissions(original,computer,browser){
+async function changeAgentPermission(original,key,value){
   const {name}=original;
   if(permissionChangeBusy||bulkActionBusy)return;
   permissionChangeBusy=true;updateRosterBulkUI();
   if(detailAnchor)showAgentDetail(detailAnchor);
   try{
-    const conversationOnly=permissionConversationOnly(original);
-    const requiredApi=conversationOnly?43:computer==='view'?42:0;
-    if(requiredApi&&(await loadPermissionApi())<requiredApi)throw new Error(`requires Telemetry API ${requiredApi}`);
+    const api=await loadPermissionApi(true);
+    if(!(api>=45))throw new Error('Requires Telemetry API 45');
     const agent=currentAgentNamed(name);
     if(!agent)throw new Error('agent left the roster');
-    const reason=agentPermissionBlockReason(agent,permissionApi);
+    const reason=agentPermissionBlockReason(agent,api);
     if(reason)throw new Error(reason);
-    if(['history_session_id','created','running','computer_use','browser_use','mail_status','resume_mode'].some(
+    if(['history_session_id','created','category',key].some(
       key=>agent[key]!==original[key]))throw new Error('agent changed while confirming. Choose permissions again');
-    if(computer===agent.computer_use&&browser===agent.browser_use)return;
-    const options=agentToolSelection(agent.harness_kind,computer,browser,conversationOnly);
-    if(agent.running)showToast(`Restarting ${name}…`);
-    const result=await restartRosterAgent(name,agent.running,{base:'default',...options});
-    if(result.action!=='resumed'||(conversationOnly?result.resume_mode!=='conversation_only'||!result.tools:!result.tools_changed)){
+    if(value===agent[key])return;
+    const permission={history_session_id:agent.history_session_id,[key]:value};
+    const result=await postBulkAgentAction('jump',{session:name,open:false,permission});
+    if(result.action!=='resumed'||!result.tools_changed){
       throw new Error('Telemetry did not confirm the new permissions');
     }
     showToast(`Resume accepted for ${name} with updated permissions.`);
@@ -9662,14 +9658,17 @@ function renderRoster(){
   if(paletteOverlay.classList.contains('on'))renderPalette();
 }
 async function loadStoppedSelectAgents(){
-  // The default roster stays live-only. Fetch finished sessions once for Select.
+  // The default roster stays live-only. Select also shows historical permission targets.
   const controller=new AbortController();stoppedSelectRequest=controller;
   try{
-    const response=await fetch('/telemetry/agents',{cache:'no-store',signal:controller.signal});
+    const [response,api]=await Promise.all([
+      fetch('/telemetry/agents',{cache:'no-store',signal:controller.signal}),loadPermissionApi(),
+    ]);
     if(!response.ok)return;
     const roster=await response.json();
     if(controller.signal.aborted||!Array.isArray(roster?.agents))return;
-    stoppedSelectAgents=roster.agents.filter(agent=>agent?.category==='finished'&&isBulkSelectableAgent(agent))
+    stoppedSelectAgents=roster.agents.filter(agent=>agent&&(agent.category==='finished'&&isBulkSelectableAgent(agent)||
+      !agentPermissionBlockReason(agent,api)))
       .map(prepareRosterRow);
     if(stoppedSelectAgents.length)renderRoster();
   }catch(_){/* live selections remain available if the history request fails */}
@@ -10237,23 +10236,17 @@ function renderSpawnTools(){
 function spawnToolOptions(){
   if(spawnCatalog?.runtime_mode==='fresh'||spawnTools.hidden)return {};
   const harness=SpawnPicker.harnessKey(selHarness);
-  const computer=spawnComputerUse.getAttribute('aria-checked')==='true'?'control':'off';
-  const browser=spawnBrowserUse.getAttribute('aria-checked')==='true';
-  return agentToolSelection(harness,computer,browser);
-}
-function agentToolSelection(harness,computer,browser,conversationOnly=false){
   const native=harness==='dsh'||harness==='hermes';
-  // Conversation-only Claude can only use the managed screen relay.
-  const screen=computer==='view'||(conversationOnly&&computer==='control')
-    ?{server:'orrery-screen',access:computer==='view'?'read':'operate'}:null;
+  const computer=spawnComputerUse.getAttribute('aria-checked')==='true';
+  const browser=spawnBrowserUse.getAttribute('aria-checked')==='true';
   const mcp=[];
-  if(computer==='control'&&!screen)mcp.push('cua-driver');
+  if(computer)mcp.push('cua-driver');
   // Native harnesses can copy an MCP server without the per-tool approvals that tools.browser requests.
   if(browser&&native)mcp.push('chrome-devtools');
   return {
     // The default base can inherit Chrome, and Codex can also inherit cua-driver.
-    ...(!conversationOnly&&(!browser||(harness==='codex'&&computer==='off'))?{base:'mail-only'}:{}),
-    tools:{...(mcp.length?{mcp}:{}),...(browser&&!native?{browser:{}}:{}),...(screen?{screen}:{})},
+    ...(!browser||(harness==='codex'&&!computer)?{base:'mail-only'}:{}),
+    tools:{...(mcp.length?{mcp}:{}),...(browser&&!native?{browser:{}}:{})},
   };
 }
 function renderHarnesses(){

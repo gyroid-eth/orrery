@@ -26,17 +26,19 @@ CHILD = dict(harness_kind='codex', parent_state='child', history_binding='bound'
              computer_use='off', browser_use=False)
 ACTIVE = agent('CopperFixture', **CHILD)
 STOPPED = agent('QuartzFixture', 'finished', **CHILD, resume_capability='ready')
+SID = '01234567-1234-1234-1234-012345678901'
+RETIRED = agent('SlateFixture', 'retired', **CHILD, history_session_id=SID, resume_capability='ready')
 PERSISTENT = agent('BeaconFixture', **CHILD, lifecycle='persistent')
 CONVERSATION = agent('AmberFixture', mail_status='unavailable', browser_use=True, computer_use='off')
 
 
 @pytest.fixture
-def roster():
+def roster(request):
     cdp = os.environ.get('ORRERY_CDP_URL')
     if not cdp:
         pytest.skip('set ORRERY_CDP_URL to an existing test browser')
     live = [ACTIVE, PERSISTENT, CONVERSATION]
-    state = {'trace': [], 'checks': [], 'failures': {}, 'api': 44}
+    state = {'trace': [], 'checks': [], 'failures': {}, 'api': getattr(request, 'param', 45)}
 
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
@@ -57,7 +59,7 @@ def roster():
             path = urlsplit(self.path)
             if path.path == '/telemetry/agents':
                 if path.query != 'scope=live':
-                    self.answer({'agents': [*live, STOPPED]})
+                    self.answer({'agents': [*live, STOPPED, RETIRED]})
                     return
                 status, rows = state['checks'].pop(0) if state['checks'] else (200, live)
                 state['trace'].append(('roster', status, [row['category'] for row in rows]))
@@ -75,10 +77,8 @@ def roster():
             error = state['failures'].get((self.path, body['session']))
             if error:
                 self.answer({'ok': False, 'error': error})
-            elif self.path == '/api/jump' and 'tools' in body:
-                result = ({'resume_mode': 'conversation_only'} if body['session'] == CONVERSATION['name']
-                          else {'tools_changed': True})
-                self.answer({'ok': True, 'action': 'resumed', 'tools': body['tools'], **result})
+            elif self.path == '/api/jump' and 'permission' in body:
+                self.answer({'ok': True, 'action': 'resumed', 'tools_changed': True})
             else:
                 self.answer({'ok': True})
 
@@ -194,14 +194,14 @@ def open_permissions(js, name, selector):
     js(f"showAgentDetail(tiles.get({json.dumps(name)}));agentDetail.querySelector({json.dumps(selector)}).click()")
 
 
-def permission_jump(name, base, tools):
-    return '/api/jump', {**jump(name)[1], 'base': base, 'tools': tools}
+def permission_jump(**permission):
+    return '/api/jump', {'session': 'SlateFixture', 'open': False,
+                         'permission': {'history_session_id': SID, **permission}}
 
 
-def test_permission_restart_waits_for_exit_and_uses_spawn_selection(roster):
+def test_permission_resume_sends_only_one_change_from_the_keyboard(roster):
     js, wait, state = roster
-    state['checks'] = [(200, [ACTIVE]), (200, [agent('CopperFixture', 'finished')])]
-    js("rosterSelectBtn.click();tiles.get('CopperFixture').focus()")
+    js("tiles.get('SlateFixture').focus()")
     assert js("""(()=>{
       const button=agentDetail.querySelector('[data-browser]');
       const box=button.getBoundingClientRect();
@@ -218,15 +218,11 @@ def test_permission_restart_waits_for_exit_and_uses_spawn_selection(roster):
     js.client.call('Input.dispatchKeyEvent', type='keyUp', key='Enter', code='Enter', windowsVirtualKeyCode=13)
     assert js('permissionConfirm.open')
     assert 'same conversation' in js('permissionConfirm.textContent')
-    assert 'work in progress will be interrupted' in js('permissionConfirm.textContent')
+    assert js('permissionComputer.disabled')
     assert state['trace'] == []
     js("permissionApply.click()")
     wait("toastEl.textContent.startsWith('Resume accepted')")
-    assert state['trace'] == [
-        ('/api/exit', {'session': 'CopperFixture'}),
-        ('roster', 200, ['agent']), ('roster', 200, ['finished']),
-        permission_jump('CopperFixture', 'mail-only', {'browser': {}}),
-    ]
+    assert state['trace'] == [permission_jump(browser_use=True)]
 
 
 def test_cancel_and_disabled_permissions_send_no_actions(roster):
@@ -234,7 +230,7 @@ def test_cancel_and_disabled_permissions_send_no_actions(roster):
     open_permissions(js, 'BeaconFixture', '[data-computer="control"]')
     assert js("agentDetail.querySelector('[data-computer=control]').title").endswith('(Persistent agent)')
     assert not js('permissionConfirm.open')
-    open_permissions(js, 'CopperFixture', '[data-computer="control"]')
+    open_permissions(js, 'SlateFixture', '[data-computer="control"]')
     assert js("document.activeElement.value") == 'cancel'
     js.client.call('Input.dispatchKeyEvent', type='keyDown', key='Escape', code='Escape', windowsVirtualKeyCode=27)
     js.client.call('Input.dispatchKeyEvent', type='keyUp', key='Escape', code='Escape', windowsVirtualKeyCode=27)
@@ -243,54 +239,59 @@ def test_cancel_and_disabled_permissions_send_no_actions(roster):
     assert state['trace'] == []
 
 
-def test_conversation_only_resume_uses_the_screen_relay_and_explicit_default_base(roster):
+def test_active_finished_husk_and_conversation_only_controls_are_disabled(roster):
     js, wait, state = roster
-    state['checks'] = [(200, [])]
-    open_permissions(js, 'AmberFixture', '[data-computer="control"]')
-    js('permissionApply.click()')
-    wait("toastEl.textContent.startsWith('Resume accepted')")
-    assert state['trace'] == [
-        ('/api/exit', {'session': 'AmberFixture'}), ('roster', 200, []),
-        permission_jump('AmberFixture', 'default', {
-            'screen': {'access': 'operate', 'server': 'orrery-screen'}, 'browser': {},
-        }),
-    ]
+    for name, reason in [('CopperFixture', 'Exit this agent first'), ('QuartzFixture', 'Exit this agent first'),
+                         ('AmberFixture', 'Conversation-only resume has no saved permissions')]:
+        open_permissions(js, name, '[data-computer="control"]')
+        assert not js('permissionConfirm.open')
+        assert js("agentDetail.querySelector('[data-computer=control]').title").endswith(f'({reason})')
+    assert state['trace'] == []
 
 
 def test_stopped_agent_view_resumes_directly_and_reports_api_refusal(roster):
     js, wait, state = roster
-    state['failures'][('/api/jump', 'QuartzFixture')] = 'Screen relay unavailable'
-    open_permissions(js, 'QuartzFixture', '[data-computer="view"]')
+    state['failures'][('/api/jump', 'SlateFixture')] = 'Screen relay unavailable'
+    open_permissions(js, 'SlateFixture', '[data-computer="view"]')
     assert js('permissionApply.textContent') == 'Resume'
     js('permissionApply.click()')
     wait("toastEl.textContent.includes('Screen relay unavailable')")
-    assert state['trace'] == [permission_jump('QuartzFixture', 'mail-only', {
-        'screen': {'access': 'read', 'server': 'orrery-screen'},
-    })]
+    assert state['trace'] == [permission_jump(computer_use='view')]
 
 
-def test_older_telemetry_disables_view_before_any_exit(roster):
+@pytest.mark.parametrize('roster', [44], indirect=True)
+def test_older_telemetry_does_not_offer_historical_permission_targets(roster):
     js, wait, state = roster
-    state['api'] = 41
-    js("showAgentDetail(tiles.get('CopperFixture'))")
-    wait('permissionApi===41')
-    assert js("agentDetail.querySelector('[data-computer=view]').disabled")
-    assert js("agentDetail.querySelector('[data-computer=view]').title").endswith('(Requires Telemetry API 42)')
-    assert not js("agentDetail.querySelector('[data-computer=control]').disabled")
+    assert js('permissionApi===44')
+    assert not js("tiles.has('SlateFixture')")
     assert state['trace'] == []
 
 
-def test_unknown_permission_requires_an_explicit_choice_before_restart(roster):
+def test_unknown_browser_requires_an_explicit_choice(roster):
     js, wait, state = roster
-    state['checks'] = [(200, [])]
-    js("currentAgentNamed('CopperFixture').browser_use=null")
-    open_permissions(js, 'CopperFixture', '[data-computer="control"]')
+    js("currentAgentNamed('SlateFixture').browser_use=null")
+    open_permissions(js, 'SlateFixture', '[data-browser]')
     js('permissionApply.click()')
     assert js("permissionConfirm.open&&permissionBrowser.value===''&&!permissionBrowser.validity.valid")
     assert state['trace'] == []
     js("permissionBrowser.value='on';permissionApply.click()")
     wait("toastEl.textContent.startsWith('Resume accepted')")
-    assert state['trace'] == [
-        ('/api/exit', {'session': 'CopperFixture'}), ('roster', 200, []),
-        permission_jump('CopperFixture', 'default', {'mcp': ['cua-driver'], 'browser': {}}),
-    ]
+    assert state['trace'] == [permission_jump(browser_use=True)]
+
+
+def test_permission_confirmation_rechecks_a_new_live_row(roster):
+    js, wait, state = roster
+    open_permissions(js, 'SlateFixture', '[data-computer="control"]')
+    js("currentAgents=currentAgents.map(a=>a.name==='SlateFixture'?{...a,category:'agent',running:true}:a);")
+    js('permissionApply.click()')
+    wait("toastEl.textContent.includes('Exit this agent first')")
+    assert state['trace'] == []
+
+
+def test_permission_confirmation_checks_the_current_api_generation(roster):
+    js, wait, state = roster
+    open_permissions(js, 'SlateFixture', '[data-computer="control"]')
+    state['api'] = 44
+    js('permissionApply.click()')
+    wait("toastEl.textContent.includes('Requires Telemetry API 45')")
+    assert state['trace'] == []
