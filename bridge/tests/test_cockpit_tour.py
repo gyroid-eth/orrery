@@ -332,17 +332,17 @@ MAP_LAYOUT = """new Promise(resolve=>{
 })"""
 
 
-# A smaller window keeps the leaders and sets the notes smaller, in steps; the
-# smallest step's text is 9px (1200x680 needs it).
-@pytest.mark.parametrize('width,height,scale,text', [
-    (1920, 1080, '0', 12), (1600, 1000, '0', 12), (1440, 900, '0', 12),
-    (1400, 860, '1', 10.5), (1280, 800, '1', 10.5), (1200, 680, '3', 9)])
-def test_dom_map_annotates_every_control_with_a_leader(tour_browser, width, height, scale, text):
+# The map chooses its scale from the measured control and note positions.
+# Check the readability floor and the geometry at each window size.
+@pytest.mark.parametrize('width,height,min_text', [
+    (1920, 1080, 12), (1600, 1000, 12), (1440, 900, 12),
+    (1400, 860, 10.5), (1280, 800, 10.5), (1200, 680, 9)])
+def test_dom_map_annotates_every_control_with_a_leader(tour_browser, width, height, min_text):
     client, evaluate = tour_browser
     client.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=1, mobile=False)
     result = evaluate(MAP_LAYOUT)
     assert result['compact'] is False, result
-    assert (result['scale'], result['smallest']) == (scale, text)
+    assert result['smallest'] >= min_text, result
     assert (result['count'], result['frames'], result['overlap'], result['within'], result['vertically'], result['copy']) == (10, 10, False, True, True, True)
     assert sorted(l['id'] for l in result['leaders']) == sorted(['start', 'select', 'choose', 'talk', 'mail', 'crew', 'usage', 'telemetry', 'planetarium', 'settings'])
     assert all(l['fromTarget'] and l['toNote'] for l in result['leaders']), result['leaders']
@@ -356,18 +356,25 @@ def test_dom_map_never_draws_crossing_leaders_while_the_window_changes(tour_brow
     1160 and the steps on either side of it."""
     client, evaluate = tour_browser
     seen, bad = set(), []
+
+    def check(width, height):
+        client.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=1, mobile=False)
+        result = evaluate(MAP_LAYOUT)
+        seen.add('legend' if result['compact'] else 'scale' + result['scale'])
+        ok = not result['crossings'] and (result['compact'] or (
+            not result['overlap'] and result['within'] and result['vertically']
+            and all(l['fromTarget'] and l['toNote'] for l in result['leaders'])))
+        if not ok:
+            bad.append((width, height, result))
+
     for width in range(1120, 1441, 40):
         for height in (660, 720, 800, 880, 940):
-            client.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=1, mobile=False)
-            result = evaluate(MAP_LAYOUT)
-            seen.add('legend' if result['compact'] else 'scale' + result['scale'])
-            ok = not result['crossings'] and (result['compact'] or (
-                not result['overlap'] and result['within'] and result['vertically']
-                and all(l['fromTarget'] and l['toNote'] for l in result['leaders'])))
-            if not ok:
-                bad.append((width, height, result['scale'], result['crossings']))
+            check(width, height)
+    # The expanded mini graph moves the Mail target down and exercises the
+    # smallest labelled layout in a window that can still draw all the leaders.
+    evaluate("document.getElementById('helpMapBtn').click();document.getElementById('mailGraphBtn').click()")
+    check(1200, 680)
     assert bad == []
-    # The sweep passes through every size of the map, and the legend.
     assert seen >= {'scale0', 'scale1', 'scale2', 'scale3', 'legend'}, seen
 
 
@@ -456,6 +463,8 @@ def test_dom_a_step_is_chosen_by_click_or_key_and_only_actions_complete_it(tour_
         'openTab': 0, 'openLabel': 'Go to step: Talk to it', 'currentDisabled': 'true'}
 
 
+HERE_ARROWS = {'below': '▲ HERE', 'above': '▼ HERE', 'right': '◀ HERE', 'left': 'HERE ▶'}
+
 RING_STATE = """(()=>{
   const ring=document.querySelector('.flight-ring:not([hidden])'),here=document.querySelector('.flight-here:not([hidden])');
   if(!ring)return {ring:false,here:!!here};
@@ -467,13 +476,23 @@ RING_STATE = """(()=>{
   const panels=[...document.querySelectorAll('.flight-guide:not([hidden]) .flight-panel :is(h2,button,.flight-meta,li)')]
     .filter(e=>e.getBoundingClientRect().width>0).map(rect);
   const h=here&&rect(here);
+  const cx=(g.l+g.r)/2,cy=(g.t+g.b)/2;
+  const side=h&&[
+    ['above', h.b<=g.t&&h.l<=cx&&cx<=h.r],
+    ['below', h.t>=g.b&&h.l<=cx&&cx<=h.r],
+    ['right', h.l>=g.r&&h.t<=cy&&cy<=h.b],
+    ['left', h.r<=g.l&&h.t<=cy&&cy<=h.b],
+  ].find(([,aligned])=>aligned)?.[0];
+  const overlaps=p=>p.r>p.l&&p.b>p.t&&h.l<p.r&&h.r>p.l&&h.t<p.b&&h.b>p.t;
+  const controls=[...document.querySelectorAll('.col.roster :is(button,input,[role="button"])')];
   return {ring:true,target:target.id||target.className,
     around:g.l<=t.l&&g.t<=t.t&&g.r>=t.r&&g.b>=t.b,
     colour:getComputedStyle(ring).borderTopColor,
     pulse:getComputedStyle(ring,'::after').animationName,
-    here:!!here,label:here&&here.textContent,
+    here:!!here,label:here&&here.textContent,hereSide:side||null,
     hereOnScreen:!h||(h.l>=0&&h.t>=0&&h.r<=innerWidth&&h.b<=innerHeight),
-    hereClearOfPanel:!h||!panels.some(p=>h.l<p.r&&h.r>p.l&&h.t<p.b&&h.b>p.t)};
+    hereClearOfPanel:!h||!panels.some(overlaps),
+    hereClearOfControls:!h||!controls.map(rect).some(overlaps)};
 })()"""
 
 
@@ -481,10 +500,9 @@ def test_dom_the_next_control_gets_a_cyan_ring_and_a_here_tag(tour_browser):
     client, evaluate = tour_browser
     evaluate("OrreryTour.firstFlight.reset();OrreryTour.firstFlight.show()")
     shown = evaluate(RING_STATE)
-    # Below NEW AGENT is the roster filter, which the tag must not cover.
-    assert shown == {'ring': True, 'target': 'newAgentBtn', 'around': True, 'colour': 'rgb(63, 210, 230)',
-                     'pulse': 'flight-ring-pulse', 'here': True, 'label': '◀ HERE',
-                     'hereOnScreen': True, 'hereClearOfPanel': True}
+    assert all(shown.get(key) for key in ('ring', 'around', 'here', 'hereOnScreen', 'hereClearOfPanel', 'hereClearOfControls')), shown
+    assert (shown['target'], shown['colour'], shown['pulse']) == ('newAgentBtn', 'rgb(63, 210, 230)', 'flight-ring-pulse'), shown
+    assert (shown['hereSide'], shown['label']) == ('below', HERE_ARROWS['below']), shown
     # Light theme: a darker cyan that holds on paper.
     light = evaluate("document.documentElement.dataset.colorTheme='light';" + RING_STATE)
     evaluate("delete document.documentElement.dataset.colorTheme")
@@ -496,6 +514,14 @@ def test_dom_the_next_control_gets_a_cyan_ring_and_a_here_tag(tour_browser):
     finally:
         client.call('Emulation.setEmulatedMedia', features=[])
     assert (still['ring'], still['pulse']) == (True, 'none')
+    # Search or a roster row takes the space below the button.
+    for layout in (
+        "document.getElementById('rosterSearchBtn').click();",
+        "toggleRosterSearch(false);tileFor({name:'FixtureAgent',running:true,act_state:'wait',annot:{role:'Review'}});",
+    ):
+        state = evaluate(layout + "document.dispatchEvent(new Event('scroll'));" + RING_STATE)
+        assert all(state.get(key) for key in ('ring', 'around', 'here', 'hereOnScreen', 'hereClearOfPanel', 'hereClearOfControls')), state
+        assert (state['target'], state['hereSide'], state['label']) == ('newAgentBtn', 'right', HERE_ARROWS['right']), state
 
 
 def test_dom_the_here_arrow_always_matches_the_side_it_is_on(tour_browser):
@@ -517,9 +543,8 @@ def test_dom_the_here_arrow_always_matches_the_side_it_is_on(tour_browser):
       qa.destroy();localStorage.removeItem('oc-review-pointer-pos');localStorage.removeItem('oc-review-pointer');
       return out;
     })()""")
-    arrow = {'below': '▲ HERE', 'above': '▼ HERE', 'right': '◀ HERE', 'left': 'HERE ▶'}
     assert result['side'] == result['actual'], result
-    assert result['label'] == arrow[result['actual']], result
+    assert result['label'] == HERE_ARROWS[result['actual']], result
 
 
 def test_dom_the_ring_leaves_a_covered_or_folded_control(tour_browser):
