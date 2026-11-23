@@ -3023,46 +3023,6 @@
           },
           {
             "property": "color",
-            "selector": ".mail-md",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md h1,.mail-md h2,.mail-md h3,.mail-md h4",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md strong",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "border",
-            "selector": ".mail-md code",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md code",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "border",
-            "selector": ".mail-md pre",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md pre code",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".md-marker",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
             "selector": ".md-empty",
             "value": "var(--ink-faint)"
           },
@@ -3650,21 +3610,6 @@
           },
           {
             "property": "color",
-            "selector": ".mail-md",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md pre code",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".md-marker",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
             "selector": ".md-empty",
             "value": "var(--ink-faint)"
           },
@@ -3973,9 +3918,9 @@
       }
     }
   },
-  "inventory_digest": "c519f6d8e48ae11f37a5a5a2a684f228831acbdd655a5e9d6215e62309d69d65",
+  "inventory_digest": "11177d836a7b897024add4a1375ff700667527d8cb644fa838c102a8b560d21d",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "24de04f45e014c3f46331ffcdba88bdf8f911dd0d90a51fdc91563785d03c593",
+  "source_digest": "79c290726ce81c303f62e38f7fadcb172fa5453ead45be82fe15d99ba3158f5c",
   "surface": "cockpit",
   "version": 1
 }
@@ -11479,13 +11424,31 @@ document.addEventListener('visibilitychange',()=>{syncPageHidden();if(!document.
 syncPageHidden();
 kickPolls();
 </script>
+<script>
+/* Reader and the Mail drawer share these assets. Load them on first use. */
+const cockpitAssets=new Map();
+function loadCockpitAsset(tag,attribute,url){
+  if(!cockpitAssets.has(url))cockpitAssets.set(url,new Promise((resolve,reject)=>{
+    const el=document.createElement(tag);el[attribute]=url;
+    if(tag==='link')el.rel='stylesheet';
+    el.onload=resolve;el.onerror=()=>{cockpitAssets.delete(url);el.remove();reject(new Error('Could not load '+url));};
+    document.head.appendChild(el);
+  }));
+  return cockpitAssets.get(url);
+}
+function loadCockpitMarkdown(){
+  return Promise.all([loadCockpitAsset('link','href','conversation_view.css'),
+    loadCockpitAsset('script','src','conversation_source.js'),
+    loadCockpitAsset('script','src','conversation_markdown.js')]);
+}
+</script>
 <script src="orrery_view.js"></script>
 <script src="mail_view.js"></script>
 <script src="cockpit_tour.js"></script>
 <script src="cockpit_full_tour.js"></script>
 <script src="phone_settings.js"></script>
 <script>
-/* Opt-in bootstrap: no conversation assets or API calls while disabled. */
+/* The Reader loads its view and starts history reads only when enabled. */
 const conversationView=(()=>{
   const key='oc-term-conversation-enabled',setting=document.getElementById('conversationEnabled');
   let instance=null,loading=null;
@@ -11493,26 +11456,19 @@ const conversationView=(()=>{
   // "0" (also synced through prefs) stays off.
   try{if(localStorage.getItem(key)===null)localStorage.setItem(key,'1');}catch(_){}
   const enabled=()=>{try{return localStorage.getItem(key)==='1';}catch(_){return false;}};
-  function asset(tag,attribute,url){return new Promise((resolve,reject)=>{
-    const el=document.createElement(tag);el[attribute]=url;
-    if(tag==='link')el.rel='stylesheet';
-    el.onload=resolve;el.onerror=()=>{el.remove();reject(new Error('Reader could not be loaded.'));};
-    document.head.appendChild(el);
-  });}
+  const asset=loadCockpitAsset;
   async function ensure(){
     if(instance)return instance;
     if(!enabled())return null;
     if(loading)return loading;
     loading=(async()=>{
-      await asset('link','href','conversation_view.css');
+      await loadCockpitMarkdown();
       await asset('link','href','conversation_steps.css');
       await asset('script','src','conversation_steps.js');
-      await asset('script','src','conversation_source.js');
       await asset('script','src','conversation_preview.js');
       await asset('script','src','conversation_mail.js');
       await asset('script','src','conversation_speaker.js');
       await asset('script','src','conversation_terminal.js');
-      await asset('script','src','conversation_markdown.js');
       await asset('script','src','conversation_view.js');
       await asset('script','src','conversation_reply.js');
       await asset('script','src','reader_activity.js');
