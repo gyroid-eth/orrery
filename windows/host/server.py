@@ -1,0 +1,262 @@
+"""The Windows host: agent terminals over WebSocket plus a small JSON API.
+
+    python windows/host/server.py [--port 8791]
+
+Listens on 127.0.0.1 only. A web page from another site must not be able to
+type into an agent's terminal, so every request must carry this host as its
+Host header (no DNS rebinding), any Origin must be this host's own page,
+and state-changing requests must carry the custom ``X-Orrery`` header,
+which a cross-site form or simple request cannot send.
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import os
+import sys
+from pathlib import Path
+
+from aiohttp import WSMsgType, web
+
+WINDOWS = Path(__file__).resolve().parent.parent
+REPO = WINDOWS.parent
+sys.path.insert(0, str(WINDOWS))
+from hub.db import HubError  # noqa: E402
+from host import programs  # noqa: E402
+from host.sessions import Manager  # noqa: E402
+
+WEB = WINDOWS / "web"
+VENDOR = REPO / "bridge" / "vendor"
+ICONS = REPO / "bridge" / "assets"
+MANAGER = web.AppKey("manager", Manager)
+SETTINGS = web.AppKey("settings", dict)
+
+
+def allowed(app) -> tuple[set[str], set[str]]:
+    port = app[SETTINGS]["port"]
+    hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+    return hosts, {f"http://{h}" for h in hosts}
+
+
+@web.middleware
+async def guard(request: web.Request, handler):
+    hosts, origins = allowed(request.app)
+    if request.host not in hosts:
+        return web.json_response(dict(error="host_not_allowed"), status=403)
+    origin = request.headers.get("Origin")
+    if origin is not None and origin not in origins:
+        return web.json_response(dict(error="origin_not_allowed"), status=403)
+    if request.method not in ("GET", "HEAD", "OPTIONS") and request.headers.get("X-Orrery") != "1":
+        return web.json_response(dict(error="missing_x_orrery_header"), status=403)
+    response = await handler(request)
+    if isinstance(response, web.StreamResponse) and not isinstance(response, web.WebSocketResponse):
+        response.headers.setdefault("Cache-Control", "no-store")
+    return response
+
+
+def error(message: str, status: int = 400) -> web.Response:
+    return web.json_response(dict(error=message), status=status)
+
+
+async def body(request: web.Request) -> dict:
+    try:
+        value = await request.json()
+    except (ValueError, UnicodeDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+async def index(request):
+    return web.FileResponse(WEB / "index.html")
+
+
+async def state(request):
+    app = request.app
+    return web.json_response(dict(
+        agents=app[MANAGER].snapshot(),
+        agy_hub=app[SETTINGS].get("agy_hub"),
+        programs={p: programs.find_executable(p) is not None for p in programs.PROGRAMS},
+        hub_db=str(app[MANAGER].hub.path)))
+
+
+async def create_agent(request):
+    data = await body(request)
+    manager = request.app[MANAGER]
+    try:
+        agent = manager.create(str(data.get("name", "")), str(data.get("program", "")),
+                               str(data.get("cwd", "")))
+        if data.get("start", True):
+            manager.start(agent.name, resume=bool(data.get("resume")),
+                          rows=int(data.get("rows") or 30), cols=int(data.get("cols") or 120))
+    except (HubError, FileNotFoundError, ValueError) as exc:
+        return error(str(exc))
+    except OSError as exc:
+        return error(f"could not start: {exc}", 500)
+    return web.json_response(dict(ok=True, name=agent.name))
+
+
+async def start_agent(request):
+    data = await body(request)
+    try:
+        request.app[MANAGER].start(request.match_info["name"], resume=bool(data.get("resume")),
+                                   rows=int(data.get("rows") or 30), cols=int(data.get("cols") or 120))
+    except KeyError:
+        return error("no such agent", 404)
+    except (FileNotFoundError, ValueError) as exc:
+        return error(str(exc))
+    except OSError as exc:
+        return error(f"could not start: {exc}", 500)
+    return web.json_response(dict(ok=True))
+
+
+async def stop_agent(request):
+    try:
+        await asyncio.get_running_loop().run_in_executor(
+            None, request.app[MANAGER].stop, request.match_info["name"])
+    except KeyError:
+        return error("no such agent", 404)
+    return web.json_response(dict(ok=True))
+
+
+async def remove_agent(request):
+    manager = request.app[MANAGER]
+    try:
+        # Terminating blocks briefly; the roster itself changes on the loop.
+        await asyncio.get_running_loop().run_in_executor(None, manager.stop, request.match_info["name"])
+        manager.remove(request.match_info["name"])
+    except KeyError:
+        return error("no such agent", 404)
+    return web.json_response(dict(ok=True))
+
+
+async def mail_recent(request):
+    try:
+        limit = int(request.query.get("limit", "50"))
+    except ValueError:
+        return error("limit must be an integer")
+    return web.json_response(dict(messages=request.app[MANAGER].hub.recent(limit=limit)))
+
+
+async def register_agy(request):
+    loop = asyncio.get_running_loop()
+    try:
+        await loop.run_in_executor(None, programs.register_agy_hub)
+    except (FileNotFoundError, RuntimeError, OSError) as exc:
+        return error(str(exc), 500)
+    request.app[SETTINGS]["agy_hub"] = await loop.run_in_executor(None, programs.agy_hub_registered)
+    return web.json_response(dict(ok=True, agy_hub=request.app[SETTINGS]["agy_hub"]))
+
+
+async def terminal(request):
+    """Replay, then live output; input and resize come back as JSON messages."""
+    try:
+        session = request.app[MANAGER].session(request.match_info["name"])
+    except KeyError:
+        return error("no such agent", 404)
+    ws = web.WebSocketResponse(heartbeat=30, max_msg_size=1 << 20)
+    await ws.prepare(request)
+    queue: asyncio.Queue = asyncio.Queue()
+    session.viewers.add(queue)
+
+    async def pump():
+        await ws.send_json(dict(type="hello", status=session.status, exit_code=session.exit_code,
+                                rows=session.rows, cols=session.cols))
+        replay = session.replay()
+        if replay:
+            await ws.send_json(dict(type="output", data=replay))
+        while True:
+            events = [await queue.get()]
+            while not queue.empty():
+                events.append(queue.get_nowait())
+            pending: list[str] = []  # Consecutive output becomes one frame.
+            for kind, value in events + [("flush", None)]:
+                if kind == "output":
+                    pending.append(value)
+                    continue
+                if pending:
+                    await ws.send_json(dict(type="output", data="".join(pending)))
+                    pending = []
+                if kind == "reset":
+                    await ws.send_json(dict(type="reset"))
+                elif kind == "exit":
+                    await ws.send_json(dict(type="exit", exit_code=value))
+
+    sender = asyncio.create_task(pump())
+    try:
+        async for message in ws:
+            if message.type != WSMsgType.TEXT:
+                continue
+            try:
+                data = json.loads(message.data)
+            except ValueError:
+                continue
+            if data.get("type") == "input" and isinstance(data.get("data"), str):
+                session.write(data["data"])
+            elif data.get("type") == "resize":
+                try:
+                    session.resize(int(data.get("rows")), int(data.get("cols")))
+                except (TypeError, ValueError):
+                    pass
+    finally:
+        session.viewers.discard(queue)
+        sender.cancel()
+    return ws
+
+
+async def on_startup(app):
+    loop = asyncio.get_running_loop()
+    settings = app[SETTINGS]
+    app[MANAGER] = Manager(loop, hub_db=settings.get("hub_db"),
+                           host_url=f"http://127.0.0.1:{settings['port']}",
+                           builder=settings.get("builder"))
+    if settings.get("check_agy", True):
+        settings["agy_hub"] = await loop.run_in_executor(None, programs.agy_hub_registered)
+
+
+async def on_shutdown(app):
+    await asyncio.get_running_loop().run_in_executor(None, app[MANAGER].stop_all)
+
+
+async def on_cleanup(app):
+    app[MANAGER].hub.close()
+
+
+async def favicon(request):
+    return web.FileResponse(REPO / "bridge" / "orbit.svg")
+
+
+def make_app(port: int, hub_db: str | None = None, *, builder=None,
+             check_agy: bool = True) -> web.Application:
+    app = web.Application(middlewares=[guard], client_max_size=1 << 20)
+    app[SETTINGS] = dict(port=port, hub_db=hub_db, builder=builder, check_agy=check_agy)
+    app.on_startup.append(on_startup)
+    app.on_shutdown.append(on_shutdown)
+    app.on_cleanup.append(on_cleanup)
+    app.router.add_get("/", index)
+    app.router.add_get("/favicon.svg", favicon)
+    app.router.add_get("/api/state", state)
+    app.router.add_post("/api/agents", create_agent)
+    app.router.add_post("/api/agents/{name}/start", start_agent)
+    app.router.add_post("/api/agents/{name}/stop", stop_agent)
+    app.router.add_delete("/api/agents/{name}", remove_agent)
+    app.router.add_get("/api/mail/recent", mail_recent)
+    app.router.add_post("/api/agy/register-hub", register_agy)
+    app.router.add_get("/ws/{name}", terminal)
+    app.router.add_static("/web/", WEB)
+    app.router.add_static("/vendor/", VENDOR)
+    app.router.add_static("/icons/", ICONS)
+    return app
+
+
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser(description="ORRERY for Windows host")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("ORRERY_WIN_PORT", "8791")))
+    parser.add_argument("--hub-db", default=os.environ.get("ORRERY_HUB_DB"))
+    args = parser.parse_args(argv)
+    print(f"ORRERY for Windows: http://127.0.0.1:{args.port}/", flush=True)
+    web.run_app(make_app(args.port, args.hub_db), host="127.0.0.1", port=args.port, print=None)
+
+
+if __name__ == "__main__":
+    main()
