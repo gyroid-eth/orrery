@@ -58,8 +58,15 @@ button,input,select{font:inherit;color:inherit}
 .cmeta{grid-column:2;color:var(--ink-faint);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .status{grid-row:1;grid-column:3;display:flex;gap:6px;align-items:center}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--ink-faint)}
-.dot.running{background:var(--ok);box-shadow:0 0 6px rgb(131 176 106 / .6)}
+.dot.idle{background:var(--ok);box-shadow:0 0 6px rgb(131 176 106 / .6)}
+.dot.busy{background:var(--amber);animation:pulse 1.6s ease-in-out infinite}
+.dot.attention{background:var(--amber);box-shadow:0 0 10px var(--amber);animation:blink 1s steps(2,start) infinite}
+.dot.starting{background:var(--ink-dim)}
 .dot.exited{background:var(--bad)}
+@keyframes pulse{50%{opacity:.35}}
+@keyframes blink{to{visibility:hidden}}
+.tag{border:1px solid var(--hair);border-radius:9px;padding:0 6px;font-size:10px;color:var(--ink-dim)}
+.tag.warn{color:var(--bad);border-color:rgb(217 115 95 / .5)}
 .badge{background:var(--amber);color:#1a1408;border-radius:9px;padding:0 6px;font-size:10px;font-weight:600}
 .hint{color:var(--ink-faint);padding:0 16px;line-height:1.6}
 

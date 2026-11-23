@@ -24,6 +24,7 @@ REPO = WINDOWS.parent
 sys.path.insert(0, str(WINDOWS))
 from hub.db import HubError  # noqa: E402
 from host import programs  # noqa: E402
+from host.dispatcher import Dispatcher  # noqa: E402
 from host.sessions import Manager  # noqa: E402
 
 WEB = WINDOWS / "web"
@@ -77,6 +78,8 @@ async def state(request):
         agents=app[MANAGER].snapshot(),
         agy_hub=app[SETTINGS].get("agy_hub"),
         programs={p: programs.find_executable(p) is not None for p in programs.PROGRAMS},
+        # xterm.js leaves reflow to ConPTY when it knows the Windows build.
+        windows_build=sys.getwindowsversion().build if sys.platform == "win32" else None,
         hub_db=str(app[MANAGER].hub.path)))
 
 
@@ -130,6 +133,26 @@ async def remove_agent(request):
     return web.json_response(dict(ok=True))
 
 
+async def screen(request):
+    """The host's rendering of an agent's screen as plain text rows."""
+    try:
+        session = request.app[MANAGER].session(request.match_info["name"])
+    except KeyError:
+        return error("no such agent", 404)
+    return web.json_response(dict(rows=session.screen_rows(), size=[session.rows, session.cols],
+                                  activity=session.activity, hook=session.hook_state))
+
+
+async def hook(request):
+    """Claude hooks (host/hook.py): SessionStart, UserPromptSubmit, Stop."""
+    data = await body(request)
+    session = request.app[MANAGER].sessions.get(str(data.get("agent", "")).lower())
+    if session is None:
+        return error("no such session", 404)
+    session.hook(str(data.get("event", "")))
+    return web.json_response(dict(ok=True, activity=session.activity))
+
+
 async def mail_recent(request):
     try:
         limit = int(request.query.get("limit", "50"))
@@ -160,9 +183,9 @@ async def terminal(request):
     session.viewers.add(queue)
 
     async def pump():
-        await ws.send_json(dict(type="hello", status=session.status, exit_code=session.exit_code,
-                                rows=session.rows, cols=session.cols))
         replay = session.replay()
+        await ws.send_json(dict(type="hello", status=session.status, exit_code=session.exit_code,
+                                rows=session.rows, cols=session.cols, replay=bool(replay)))
         if replay:
             await ws.send_json(dict(type="output", data=replay))
         while True:
@@ -192,14 +215,16 @@ async def terminal(request):
             except ValueError:
                 continue
             if data.get("type") == "input" and isinstance(data.get("data"), str):
-                session.write(data["data"])
+                session.viewer_input(queue, data["data"])
             elif data.get("type") == "resize":
                 try:
-                    session.resize(int(data.get("rows")), int(data.get("cols")))
+                    session.viewer_resize(queue, int(data.get("rows")), int(data.get("cols")))
                 except (TypeError, ValueError):
                     pass
     finally:
         session.viewers.discard(queue)
+        if session.owner is queue:
+            session.owner = None
         sender.cancel()
     return ws
 
@@ -210,11 +235,16 @@ async def on_startup(app):
     app[MANAGER] = Manager(loop, hub_db=settings.get("hub_db"),
                            host_url=f"http://127.0.0.1:{settings['port']}",
                            builder=settings.get("builder"))
+    dispatcher = Dispatcher(app[MANAGER], **settings.get("dispatcher", {}))
+    settings["dispatcher_task"] = loop.create_task(dispatcher.run())
     if settings.get("check_agy", True):
         settings["agy_hub"] = await loop.run_in_executor(None, programs.agy_hub_registered)
 
 
 async def on_shutdown(app):
+    task = app[SETTINGS].get("dispatcher_task")
+    if task is not None:
+        task.cancel()
     await asyncio.get_running_loop().run_in_executor(None, app[MANAGER].stop_all)
 
 
@@ -227,9 +257,10 @@ async def favicon(request):
 
 
 def make_app(port: int, hub_db: str | None = None, *, builder=None,
-             check_agy: bool = True) -> web.Application:
+             check_agy: bool = True, dispatcher: dict | None = None) -> web.Application:
     app = web.Application(middlewares=[guard], client_max_size=1 << 20)
-    app[SETTINGS] = dict(port=port, hub_db=hub_db, builder=builder, check_agy=check_agy)
+    app[SETTINGS] = dict(port=port, hub_db=hub_db, builder=builder, check_agy=check_agy,
+                         dispatcher=dispatcher or {})
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
     app.on_cleanup.append(on_cleanup)
@@ -240,6 +271,8 @@ def make_app(port: int, hub_db: str | None = None, *, builder=None,
     app.router.add_post("/api/agents/{name}/start", start_agent)
     app.router.add_post("/api/agents/{name}/stop", stop_agent)
     app.router.add_delete("/api/agents/{name}", remove_agent)
+    app.router.add_get("/api/agents/{name}/screen", screen)
+    app.router.add_post("/api/hook", hook)
     app.router.add_get("/api/mail/recent", mail_recent)
     app.router.add_post("/api/agy/register-hub", register_agy)
     app.router.add_get("/ws/{name}", terminal)

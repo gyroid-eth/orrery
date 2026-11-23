@@ -18,6 +18,8 @@ from pathlib import Path
 
 WINDOWS = Path(__file__).resolve().parent.parent
 MCP_SERVER = WINDOWS / "hub" / "mcp_server.py"
+HOOK = Path(__file__).resolve().parent / "hook.py"
+HOOK_EVENTS = ("SessionStart", "UserPromptSubmit", "Stop")
 MCP_NAME = "orrery-hub"
 PROGRAMS = ("claude", "agy")
 
@@ -106,6 +108,15 @@ def build(program: str, name: str, *, resume: bool = False, hub_db: str | None =
         mcp.write_text(json.dumps({"mcpServers": {MCP_NAME: {
             "type": "stdio", "command": sys.executable, "args": server_args}}}), encoding="utf-8")
         argv = [exe, "--mcp-config", str(mcp), "--allowedTools", f"mcp__{MCP_NAME}"]
+        if host_url:
+            # Hooks report idle/busy to the host. Forward slashes and quotes
+            # work in both Git Bash and cmd, which Claude may use for hooks.
+            command = f'"{Path(sys.executable).as_posix()}" "{HOOK.as_posix()}"'
+            hooks = {event: [{"hooks": [{"type": "command", "command": command, "timeout": 5}]}]
+                     for event in HOOK_EVENTS}
+            settings = folder / "claude-settings.json"
+            settings.write_text(json.dumps({"hooks": hooks}), encoding="utf-8")
+            argv += ["--settings", str(settings)]
         if resume:
             argv.append("--continue")
     else:

@@ -10,15 +10,43 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import threading
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+import pyte
+
 from hub.db import Hub, HubError, check_name
-from host import programs
+from host import activity, programs
 
 REPLAY_CHARS = 400_000
+# Escape sequences a viewer sends without anyone typing: the browser
+# terminal answers the TUI's queries (device attributes, cursor position)
+# and reports focus and the mouse. Arrow keys are CSI too. None of them can
+# leave a half-written prompt, so only what remains counts as typing.
+ESCAPES = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?"
+                     r"|\x1b[PX^_][^\x1b]*(?:\x1b\\)?|\x1bO.|\x1b.", re.DOTALL)
+
+
+def typed(data: str) -> bool:
+    return bool(ESCAPES.sub("", data))
+
+
+# Queries a TUI sends its terminal (cursor position, device attributes,
+# colours, window size). Antigravity asks for the cursor position before
+# every redraw. A late viewer replaying old output must not answer old
+# queries: the stale answers would reach the live program as input and it
+# would draw at the wrong place.
+QUERIES = re.compile(r"\x1b\[[?>=]?\d*[nc]|\x1b\[\??u|\x1b\[1[48]t"
+                     r"|\x1b\][0-9]+;\?(?:\x07|\x1b\\)", re.DOTALL)
+
+
+def without_queries(data: str) -> str:
+    return QUERIES.sub("", data)
+HOOK_GRACE = 15.0  # Claude without any hook by then: fall back to the screen.
+STUCK_BUSY = 30.0  # Claude busy by hook but quiet at its prompt this long: idle.
 
 
 @dataclass
@@ -29,11 +57,27 @@ class Agent:
 
 
 class Session:
-    """One ConPTY child and the viewers attached to it."""
+    """One ConPTY child, its rendered screen and the viewers attached to it.
 
-    def __init__(self, name: str, loop: asyncio.AbstractEventLoop):
-        self.name, self.loop = name, loop
+    ``activity`` is what the dispatcher needs: 'starting', 'busy' or 'idle'
+    (waiting at its prompt since ``idle_since``). Claude reports it through
+    hooks; Antigravity has none, so its screen decides. Either way a dialog
+    or a busy marker on screen wins.
+    """
+
+    def __init__(self, name: str, loop: asyncio.AbstractEventLoop, program: str = "claude"):
+        self.name, self.loop, self.program = name, loop, program
         self.proc = None
+        self.screen = pyte.Screen(120, 30)
+        self.stream = pyte.Stream(self.screen)
+        self.hook_state: str | None = None  # Last state a Claude hook reported.
+        self.activity = "starting"
+        self.idle_since: float | None = None
+        self.hold_until = 0.0  # After an injected notice: busy until the CLI redraws.
+        self.injecting = False
+        # The viewer that last typed or resized. Only it may send the
+        # terminal's automatic answers, so two open tabs never answer twice.
+        self.owner = None
         self.chunks: list[str] = []
         self.chars = 0
         self.viewers: set[asyncio.Queue] = set()
@@ -51,6 +95,9 @@ class Session:
         self.proc = PtyProcess.spawn(launch.argv, cwd=cwd, env=launch.env, dimensions=(rows, cols))
         self.status, self.exit_code, self.started_ts = "running", None, time.time()
         self.chunks, self.chars = [], 0
+        self.screen = pyte.Screen(cols, rows)
+        self.stream = pyte.Stream(self.screen)
+        self.hook_state, self.activity, self.idle_since, self.hold_until = None, "starting", None, 0.0
         self.broadcast(("reset", None))
         threading.Thread(target=self._read, args=(self.proc,), daemon=True,
                          name=f"pty-{self.name}").start()
@@ -69,6 +116,10 @@ class Session:
         if proc is not self.proc:
             return
         self.last_output = time.time()
+        try:
+            self.stream.feed(data)
+        except Exception:  # A sequence pyte cannot parse must not stop the terminal.
+            pass
         self.chunks.append(data)
         self.chars += len(data)
         while self.chars > REPLAY_CHARS and len(self.chunks) > 1:
@@ -83,7 +134,7 @@ class Session:
             self.exit_code = proc.exitstatus
         except Exception:
             self.exit_code = None
-        self.status = "exited"
+        self.status, self.activity, self.idle_since = "exited", "stopped", None
         self.broadcast(("exit", self.exit_code))
 
     def broadcast(self, event) -> None:
@@ -91,18 +142,79 @@ class Session:
             queue.put_nowait(event)
 
     def replay(self) -> str:
-        return "".join(self.chunks)
+        return without_queries("".join(self.chunks))
 
-    def write(self, data: str) -> None:
+    def write(self, data: str, *, user: bool = True) -> None:
+        """``user=False`` for the host's own notices: they are not someone typing."""
         if self.status == "running" and self.proc is not None:
-            self.last_input = time.time()
+            if user and typed(data):
+                self.last_input = time.time()
             self.proc.write(data)
+
+    def viewer_input(self, viewer, data: str) -> None:
+        """Input from a browser view: typing from anyone, answers from the owner only."""
+        if typed(data):
+            self.owner = viewer
+        elif viewer is not self.owner:
+            return
+        self.write(data)
+
+    def viewer_resize(self, viewer, rows: int, cols: int) -> None:
+        self.owner = viewer
+        self.resize(rows, cols)
 
     def resize(self, rows: int, cols: int) -> None:
         rows, cols = max(5, min(int(rows), 500)), max(20, min(int(cols), 1000))
         if (rows, cols) != (self.rows, self.cols) and self.status == "running":
             self.rows, self.cols = rows, cols
             self.proc.setwinsize(rows, cols)
+            self.screen.resize(rows, cols)
+
+    # Activity -----------------------------------------------------------
+
+    def screen_rows(self) -> list[str]:
+        return activity.lines(self.screen)
+
+    def hook(self, event: str) -> None:
+        """A Claude hook: SessionStart/Stop mean idle, UserPromptSubmit busy."""
+        if event in ("SessionStart", "Stop"):
+            self.hook_state = "idle"
+        elif event == "UserPromptSubmit":
+            self.hook_state = "busy"
+        self.refresh()
+
+    def refresh(self, now: float | None = None) -> str:
+        if self.status != "running":
+            return self.activity
+        now = time.time() if now is None else now
+        seen = activity.screen_state(self.program, self.screen_rows())
+        quiet = now - self.last_output
+        if seen == "dialog":
+            state = "attention"  # A question for the person; never type into it.
+        elif now < self.hold_until or seen == "busy":
+            state = "busy"
+        elif self.program == "claude" and self.hook_state == "busy" and quiet < STUCK_BUSY:
+            # No Stop yet. An interrupted turn sends none, so a long-quiet
+            # prompt counts as idle after STUCK_BUSY seconds.
+            state = "busy"
+        elif (self.program == "claude" and self.hook_state is None
+              and now - (self.started_ts or now) < HOOK_GRACE):
+            state = "starting"  # Give SessionStart its chance before trusting the screen.
+        else:
+            state = "idle"
+        if state == "idle" and self.activity != "idle":
+            self.idle_since = now
+        elif state != "idle":
+            self.idle_since = None
+        self.activity = state
+        return state
+
+    def notified(self, now: float | None = None) -> None:
+        """A notice was just typed: busy until the CLI has had time to take it."""
+        now = time.time() if now is None else now
+        self.hold_until = now + 3.0
+        self.hook_state = "busy" if self.hook_state else None
+        self.activity, self.idle_since = "busy", None
 
     def stop(self) -> None:
         proc = self.proc
@@ -116,6 +228,9 @@ class Session:
 class Manager:
     def __init__(self, loop: asyncio.AbstractEventLoop, *, hub_db: str | None = None,
                  host_url: str | None = None, builder=None):
+        self.queued: dict[str, int] = {}  # Pending notices per agent, set by the dispatcher.
+        self.waiting: dict[str, str] = {}  # Why those notices wait.
+        self.paused: set[str] = set()  # Agents whose wake budget ran out.
         self.loop, self.hub_db, self.host_url = loop, hub_db, host_url
         self.builder = builder or programs.build  # Tests launch a stand-in program.
         self.hub = Hub(hub_db)
@@ -179,7 +294,7 @@ class Manager:
         agent = self.get(name)
         key = agent.name.lower()
         if key not in self.sessions:
-            self.sessions[key] = Session(agent.name, self.loop)
+            self.sessions[key] = Session(agent.name, self.loop, agent.program)
         return self.sessions[key]
 
     def start(self, name: str, *, resume: bool = False, rows: int = 30, cols: int = 120) -> Session:
@@ -212,5 +327,7 @@ class Manager:
                             exit_code=session.exit_code if session else None,
                             started_ts=session.started_ts if session else None,
                             last_output=session.last_output if session else None,
-                            unread=unread.get(key, 0)))
+                            activity=session.activity if session else "stopped",
+                            unread=unread.get(key, 0), queued=self.queued.get(key, 0),
+                            waiting=self.waiting.get(key), paused=key in self.paused))
         return out
