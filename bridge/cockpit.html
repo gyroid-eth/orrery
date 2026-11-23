@@ -497,7 +497,13 @@
   .agent-detail-permissions .agent-detail-icon{margin-top:0}
   .agent-detail-permissions .agent-detail-item+.agent-detail-item{padding-left:10px;border-left:1px solid var(--hair)}
   .agent-detail-modes{display:flex;align-items:center;flex-wrap:wrap;gap:1px;color:var(--ink-dim)}
-  .agent-detail-modes span{padding:2px 5px}
+  .agent-detail-modes button,.agent-detail-browser-toggle{
+    min-height:24px;padding:2px 5px;border:0;border-radius:4px;background:transparent;
+    color:inherit;font:inherit;cursor:pointer;
+  }
+  .agent-detail-permissions button:not(:disabled):hover{background:var(--rail-selection);color:var(--amber)}
+  .agent-detail-permissions button:focus-visible{outline:1px solid var(--amber);outline-offset:1px}
+  .agent-detail-permissions button:disabled{opacity:.55;cursor:not-allowed}
   .agent-detail-modes .current{
     border-radius:3px;color:var(--amber);font-weight:600;background:rgb(var(--theme-accent-rgb) / .13);
   }
@@ -510,6 +516,24 @@
     justify-content:flex-end;border-color:rgb(var(--theme-local-rgb) / .35);background:rgb(var(--theme-local-rgb) / .16);
   }
   .agent-detail-switch.on::before{background:var(--ln-local)}
+  .agent-detail-browser-toggle{color:var(--ink-dim)}
+  .agent-detail-switch.unknown{justify-content:center}
+  .agent-detail-switch.unknown::before{width:8px;height:1px}
+  .agent-permission-confirm{
+    width:min(390px,calc(100vw - 24px));margin:auto;padding:16px;border:1px solid var(--hair);border-radius:10px;
+    color:var(--ink);background:var(--panel);font:13px/1.45 var(--rail-sans);
+  }
+  .agent-permission-confirm::backdrop{background:rgb(0 0 0 / .42)}
+  .agent-permission-confirm p{margin:0;overflow-wrap:anywhere}
+  .agent-permission-confirm .agent-detail-permissions{margin:12px 0}
+  .agent-permission-confirm select,.agent-permission-confirm button{
+    min-height:28px;border:1px solid var(--hair);border-radius:5px;padding:2px 7px;
+    color:var(--ink);background:var(--panel-2);font:inherit;
+  }
+  .agent-permission-confirm :is(button,select):focus-visible{outline:1px solid var(--amber);outline-offset:1px}
+  .agent-permission-actions{display:flex;justify-content:flex-end;gap:6px}
+  .agent-permission-actions button{cursor:pointer}
+  .agent-permission-actions button[value="apply"]{color:var(--amber);border-color:rgb(var(--theme-accent-rgb) / .42)}
   .agent-detail-context{display:flex;flex:1;align-items:center;gap:7px;min-width:0}
   .agent-detail-context strong{font-weight:600;white-space:nowrap}
   .agent-detail-meter{flex:1;height:4px;border-radius:3px;overflow:hidden;background:rgb(var(--theme-accent-rgb) / .18)}
@@ -1986,6 +2010,41 @@
             "value": "var(--ink-dim)"
           },
           {
+            "property": "color",
+            "selector": ".agent-detail-browser-toggle",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".agent-permission-confirm",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-permission-confirm",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".agent-permission-confirm",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "border",
+            "selector": ".agent-permission-confirm select,.agent-permission-confirm button",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-permission-confirm select,.agent-permission-confirm button",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".agent-permission-confirm select,.agent-permission-confirm button",
+            "value": "var(--panel-2)"
+          },
+          {
             "property": "background",
             "selector": ".term",
             "value": "radial-gradient(ellipse 100% 70% at 50% 0%, rgba(28,33,42,.55), transparent 70%),var(--bg)"
@@ -3249,6 +3308,11 @@
           },
           {
             "property": "color",
+            "selector": ".agent-detail-browser-toggle",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
             "selector": ".layout-chip",
             "value": "var(--ink-dim)"
           },
@@ -3766,7 +3830,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "33486b46b134ae740cded34d0d789709abd5400270ebe3f33e3663d1e98a5ff1",
+        "digest": "f3bba1ee9fd010590ce5154df53593e9ff5213f8f9aab29187b296fc74ba90b8",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -3867,7 +3931,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "cd8ae08f3209680861392c86e7efc61a4110155a9a1e2c21bfb297d9819bca67",
+        "digest": "8cd11ad89118d9b6f83f8725c6e81b6de1c5d06ff465fb8a5ba3754f0ce68cd8",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -3900,9 +3964,9 @@
       }
     }
   },
-  "inventory_digest": "56869467b667dccc5a80defc30f75ae1fdec6caed59473b48e2d5b1887b3a658",
+  "inventory_digest": "a0ff8c56ec6dd6a9984c096ce646d7880e48a6898b6b59d7de36fb0bfaae3e53",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "55c55ae1091789340cbbb1cac43045248c9b2b71ed5d7381ecab111a2536fabd",
+  "source_digest": "f35cde6edc81e285ebcf0a074387c00a880da2609729980b5b19c8d99ce0ad8b",
   "surface": "cockpit",
   "version": 1
 }
@@ -8622,9 +8686,10 @@ function storedRosterNames(key){
 const pinnedAgents=storedRosterNames(PINNED_AGENT_KEY),foldedAgents=storedRosterNames(ROSTER_FOLD_KEY);
 let rosterRows=[],rosterRowsByName=new Map();
 const agentDetail=document.createElement('div');
-agentDetail.id='agentDetail';agentDetail.className='agent-detail';agentDetail.setAttribute('role','tooltip');agentDetail.hidden=true;
-document.body.appendChild(agentDetail);
+agentDetail.id='agentDetail';agentDetail.className='agent-detail';agentDetail.setAttribute('role','group');
+agentDetail.setAttribute('aria-labelledby','agentDetailName');agentDetail.hidden=true;
 let detailAnchor=null,detailHideTimer=0,detailRendered='';
+let permissionChangeBusy=false,permissionApi=null,permissionApiRequest=null;
 let selectedAgent=null,currentAgents=[];
 const descriptorStore=RosterDescriptor.createStableDescriptorStore();
 let rosterAnnotationEpoch=0;
@@ -8696,7 +8761,7 @@ function updateRosterBulkUI(){
     const agent=currentAgentNamed(name);
     return isBulkSelectableAgent(agent)&&isBulkExitEligibleAgent(agent);
   }).length;
-  const busy=Boolean(bulkActionBusy);
+  const busy=Boolean(bulkActionBusy||permissionChangeBusy);
   setHidden(rosterBulkBar,count===0);
   setText(rosterBulkCount,`${count} selected`);
   setText(rosterBulkExit,bulkActionBusy==='exit'?'Exiting…':
@@ -8763,7 +8828,7 @@ async function postBulkAgentAction(action,body){
   return result;
 }
 async function runBulkExit(){
-  if(bulkActionBusy)return;
+  if(bulkActionBusy||permissionChangeBusy)return;
   const names=[...bulkSelectedAgents].filter(name=>{
     const agent=currentAgentNamed(name);
     return isBulkSelectableAgent(agent)&&isBulkExitEligibleAgent(agent);
@@ -8811,8 +8876,18 @@ async function waitForBulkRebootExit(name,timeoutMs=30000,pollMs=1500){
     throw new Error('timed out waiting for exit');
   }finally{clearTimeout(timer);}
 }
+async function restartRosterAgent(name,running,options={}){
+  if(running){
+    await postBulkAgentAction('exit',{session:name});
+    await waitForBulkRebootExit(name);
+  }
+  // Current dashboards read `open`; keep the explicit terminal preference for both API forms.
+  const result=await postBulkAgentAction('jump',{session:name,open_terminal:false,open:false,...options});
+  if(result.action==='already_running')throw new Error('previous session is still running');
+  return result;
+}
 async function runBulkReboot(){
-  if(bulkActionBusy)return;
+  if(bulkActionBusy||permissionChangeBusy)return;
   const names=[...bulkSelectedAgents].filter(name=>isBulkSelectableAgent(currentAgentNamed(name)));
   if(!names.length||!confirmBulkAction('reboot'))return;
   clearBulkActionArm();bulkActionBusy='reboot';updateRosterBulkUI();
@@ -8821,13 +8896,7 @@ async function runBulkReboot(){
     try{
       const agent=currentAgentNamed(name);
       if(agent&&!isBulkSelectableAgent(agent))throw new Error('agent is protected');
-      if(isBulkAgentRunning(agent)){
-        await postBulkAgentAction('exit',{session:name});
-        await waitForBulkRebootExit(name);
-      }
-      // Current dashboards read `open`; keep the explicit terminal preference for both API forms.
-      const result=await postBulkAgentAction('jump',{session:name,open_terminal:false,open:false});
-      if(result.action==='already_running')throw new Error('previous session is still running');
+      await restartRosterAgent(name,isBulkAgentRunning(agent));
     }catch(error){
       const reason=String(error?.message||error).replace(/\s+/g,' ').trim();
       failures.push(`${name}: ${reason}`);
@@ -8915,26 +8984,79 @@ const AGENT_DETAIL_ICONS={
   context:'<rect x="3" y="6" width="17" height="12" rx="2"/><path d="M22 10v4M7 10v4m4-4v4m4-4v4"/>',
   directory:'<path d="M2.5 17.5v-11a1 1 0 0 1 1-1h5l2 2h10a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1Z"/>'
 };
-function agentDetailModel(a,homeDir,hiddenChildren=[]){
+function permissionConversationOnly(a){
+  return a.resume_mode==='conversation_only'||a.mail_status==='unavailable';
+}
+function agentPermissionBlockReason(a,api){
+  if(a.lifecycle==='persistent')return 'Persistent agent';
+  if(a.surface==='codex-app'||a.program==='codex-app')return 'Codex App';
+  const conversationOnly=permissionConversationOnly(a);
+  if(a.parent_state==='top'||a.parentless===true||a.standalone===true)return 'Standalone agent';
+  if(!['claude','codex'].includes(a.harness_kind)&&!(conversationOnly&&!a.harness_kind)){
+    return 'Requires a Claude Code or Codex CLI child';
+  }
+  if(!conversationOnly&&(a.parent_state!=='child'||a.history_binding!=='bound')){
+    return 'No verified child conversation';
+  }
+  if(!a.running&&!['ready','verification_required'].includes(a.resume_capability)){
+    return 'Conversation cannot be resumed';
+  }
+  if(conversationOnly&&api!=null&&api<43)return 'Requires Telemetry API 43';
+  return '';
+}
+function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false){
   const text=value=>typeof value==='string'&&value.trim()?value:null;
   const cwd=text(a.cwd),home=homeDir?.replace(/\/+$/,'');
   const directory=cwd&&home&&(cwd===home||cwd.startsWith(home+'/'))?'~'+cwd.slice(home.length):cwd;
   return {
     name:a.name,role:text(a.annot?.role),
     parentState:a.parent_state,parent:a.parent_state==='child'?text(a.parent_agent):null,
-    computer:AGENT_DETAIL_COMPUTER.get(a.computer_use)??null,
+    computer:AGENT_DETAIL_COMPUTER.has(a.computer_use)?a.computer_use:null,
     browser:typeof a.browser_use==='boolean'?a.browser_use:null,
+    permissions:Boolean(a.harness_kind||a.lifecycle==='persistent'||a.surface==='codex-app'||permissionConversationOnly(a)||
+      a.computer_use||typeof a.browser_use==='boolean'),
+    permissionReason:agentPermissionBlockReason(a,api)||(busy?'Agent action in progress':''),
+    viewReason:api!=null&&api<42?'Requires Telemetry API 42':'',
     model:text(a.model_id),harness:AGENT_DETAIL_HARNESSES.get(a.harness_kind)??null,effort:text(a.effort),
     tokens:Number.isSafeInteger(a.ctx_window_tokens)&&a.ctx_window_tokens>0?a.ctx_window_tokens:null,
     used:Number.isFinite(a.ctx_used)&&a.ctx_used>=0&&a.ctx_used<=100?a.ctx_used:null,
     directory,cwd,hiddenChildren
   };
 }
+function agentDetailIcon(icon){
+  return `<svg class="agent-detail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${AGENT_DETAIL_ICONS[icon]}</svg>`;
+}
 function agentDetailItem(icon,label,body=''){
   const description=esc(label);
   return `<div class="agent-detail-item" role="group" title="${description}" aria-label="${description}">
-    <svg class="agent-detail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
-      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${AGENT_DETAIL_ICONS[icon]}</svg>${body}</div>`;
+    ${agentDetailIcon(icon)}${body}</div>`;
+}
+function agentDetailPermissions(detail){
+  if(!detail.permissions)return '';
+  const disabled=reason=>reason?' disabled':'';
+  const title=(label,reason)=>esc(reason?`${label} (${reason})`:label);
+  const computer=detail.computer?AGENT_DETAIL_COMPUTER.get(detail.computer):'Unknown';
+  const modes=[...AGENT_DETAIL_COMPUTER].map(([value,label])=>{
+    const reason=detail.permissionReason||(value==='view'?detail.viewReason:'');
+    const current=value===detail.computer;
+    return `<button type="button" data-computer="${value}" aria-pressed="${current}"
+      aria-label="Computer use: ${label}" title="${title(`Computer use: ${label}`,reason)}"
+      ${current?'class="current"':''}${disabled(reason)}>${label}</button>`;
+  }).join('');
+  const browserLabel=`Browser use: ${detail.browser===null?'Unknown':detail.browser?'On':'Off'}`;
+  const switchState=detail.browser===null?' unknown':detail.browser?' on':'';
+  return `<div class="agent-detail-permissions" role="group" aria-label="Permissions">
+    <div class="agent-detail-item" role="group" aria-label="Computer use" title="${title(`Computer use: ${computer}`,detail.permissionReason)}">
+      ${agentDetailIcon('computer')}<span class="agent-detail-modes">${modes}</span>
+    </div>
+    <div class="agent-detail-item" title="${title(browserLabel,detail.permissionReason)}">
+      ${agentDetailIcon('browser')}<button class="agent-detail-browser-toggle" type="button" data-browser
+        ${detail.browser===null?'':`role="switch" aria-checked="${detail.browser}"`}
+        aria-label="${detail.browser===null?browserLabel:'Browser use'}" title="${title(browserLabel,detail.permissionReason)}"${disabled(detail.permissionReason)}>
+        <span class="agent-detail-switch${switchState}" aria-hidden="true"></span></button>
+    </div>
+  </div>`;
 }
 function agentDetailHTML(detail){
   const group=(name,content)=>content?`<div class="agent-detail-${name}">${content}</div>`:'';
@@ -8948,11 +9070,6 @@ function agentDetailHTML(detail){
   if(detail.parentState==='top')lineage=agentDetailItem('top','Top level');
   if(detail.parentState==='child')lineage=detail.parent?text('parent','Parent',detail.parent):agentDetailItem('parent','Child agent');
   if(detail.hiddenChildren?.length)lineage+=text('children','Hidden descendants',detail.hiddenChildren.join(', '));
-  const computer=detail.computer?agentDetailItem('computer',`Computer use: ${detail.computer}`,
-    `<span class="agent-detail-modes" aria-hidden="true">${[...AGENT_DETAIL_COMPUTER.values()].map(mode=>
-      `<span${mode===detail.computer?' class="current"':''}>${mode}</span>`).join('')}</span>`):'';
-  const browser=detail.browser===null?'':agentDetailItem('browser','Browser use: '+(detail.browser?'On':'Off'),
-    `<span class="agent-detail-switch${detail.browser?' on':''}" aria-hidden="true"></span>`);
   const context=[];
   if(detail.tokens!==null)context.push(detail.tokens.toLocaleString('en')+' tokens');
   if(detail.used!==null)context.push(detail.used+'% used');
@@ -8962,9 +9079,9 @@ function agentDetailHTML(detail){
       ${detail.used===null?'':`<span class="agent-detail-meter${detail.used>65?' hot':''}" aria-hidden="true"><i style="width:${detail.used}%"></i></span><strong>${detail.used}%</strong>`}
     </span>`):'';
   const runtime=text('harness','Harness',detail.harness)+text('effort','Effort',detail.effort);
-  return `<div class="agent-detail-name">${esc(detail.name)}</div>
+  return `<div class="agent-detail-name" id="agentDetailName">${esc(detail.name)}</div>
     ${group('identity',text('role','Role',detail.role)+lineage)}
-    ${group('permissions',computer+browser)}
+    ${agentDetailPermissions(detail)}
     ${group('meta',text('model','Model',detail.model)+group('runtime',runtime)+contextRow+text('directory','Working directory',detail.directory))}`;
 }
 function positionAgentDetail(el){
@@ -8991,9 +9108,20 @@ function showAgentDetail(el){
   detailAnchor=el;
   const row=rosterRowsByName.get(a.name);
   const hiddenChildren=row?.folded?rosterRows.slice(row.index+1,row.end).map(child=>child.name):[];
-  const html=agentDetailHTML(agentDetailModel(a,hostPlatform.home_dir,hiddenChildren));
-  if(detailRendered!==html){agentDetail.innerHTML=html;detailRendered=html;}
+  const html=agentDetailHTML(agentDetailModel(a,hostPlatform.home_dir,hiddenChildren,permissionApi,
+    bulkActionBusy||permissionChangeBusy));
+  const focused=agentDetail.contains(document.activeElement)?document.activeElement:null;
+  if(el.nextElementSibling!==agentDetail)el.after(agentDetail);
+  if(detailRendered!==html){
+    agentDetail.innerHTML=html;detailRendered=html;
+    const replacement=focused?.matches('[data-browser]')?agentDetail.querySelector('[data-browser]'):
+      focused&&agentDetail.querySelector(`[data-computer="${focused.dataset.computer}"]`);
+    if(replacement?.disabled)el.focus({preventScroll:true});
+    else replacement?.focus({preventScroll:true});
+  }
+  if(agentDetail.contains(focused)&&focused!==document.activeElement)focused.focus({preventScroll:true});
   setHidden(agentDetail,false);positionAgentDetail(el);
+  if(permissionApi===null&&!agentPermissionBlockReason(a,permissionApi))loadPermissionApi();
 }
 function hideAgentDetail(el){
   if(detailAnchor!==el)return;
@@ -9003,26 +9131,137 @@ function hideAgentDetail(el){
 function scheduleAgentDetailHide(el){
   clearTimeout(detailHideTimer);
   detailHideTimer=setTimeout(()=>{
-    if(document.activeElement!==el&&!el.matches(':hover')&&!agentDetail.matches(':hover'))hideAgentDetail(el);
+    if(!el.contains(document.activeElement)&&!agentDetail.contains(document.activeElement)&&
+      !el.matches(':hover')&&!agentDetail.matches(':hover'))hideAgentDetail(el);
   },160);
 }
 agentDetail.addEventListener('mouseenter',()=>clearTimeout(detailHideTimer));
 agentDetail.addEventListener('mouseleave',()=>{if(detailAnchor)scheduleAgentDetailHide(detailAnchor);});
+agentDetail.addEventListener('focusout',()=>{if(detailAnchor)scheduleAgentDetailHide(detailAnchor);});
 function bindAgentDetail(el){
-  el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-describedby',agentDetail.id);
+  el.tabIndex=0;el.setAttribute('role','button');
   el.addEventListener('mouseenter',()=>showAgentDetail(el));
   el.addEventListener('mouseleave',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
-  el.addEventListener('focus',()=>showAgentDetail(el));
-  el.addEventListener('blur',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
+  el.addEventListener('focusin',()=>showAgentDetail(el));
+  el.addEventListener('focusout',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
   el.addEventListener('keydown',event=>{
     if(event.target!==el)return;
     if(event.key!=='Enter'&&event.key!==' ')return;
     event.preventDefault();handleRosterTileClick(el.dataset.agent,event);
   });
 }
-document.addEventListener('keydown',event=>{if(event.key==='Escape'&&detailAnchor)hideAgentDetail(detailAnchor);});
+document.addEventListener('keydown',event=>{
+  if(event.key!=='Escape'||!detailAnchor||permissionConfirm.open)return;
+  if(agentDetail.contains(document.activeElement))detailAnchor.focus({preventScroll:true});
+  hideAgentDetail(detailAnchor);
+});
 window.addEventListener('resize',()=>{if(detailAnchor)positionAgentDetail(detailAnchor);});
 rosterEl.addEventListener('scroll',()=>{if(detailAnchor)positionAgentDetail(detailAnchor);},{passive:true});
+
+function loadPermissionApi(){
+  if(permissionApi!==null)return Promise.resolve(permissionApi);
+  permissionApiRequest??=fetch('/api/version',{cache:'no-store'})
+    .then(response=>response.ok?response.json():null)
+    .then(version=>{
+      if(Number.isInteger(version?.api)){
+        permissionApi=version.api;
+        if(detailAnchor)showAgentDetail(detailAnchor);
+      }
+      return permissionApi;
+    }).catch(()=>null).finally(()=>{permissionApiRequest=null;});
+  return permissionApiRequest;
+}
+
+const permissionConfirm=document.createElement('dialog');
+permissionConfirm.className='agent-permission-confirm';
+permissionConfirm.setAttribute('aria-labelledby','permissionMessage');
+permissionConfirm.innerHTML=`<form method="dialog">
+  <p id="permissionMessage"></p>
+  <div class="agent-detail-permissions" role="group" aria-label="Permissions">
+    <div class="agent-detail-item">${agentDetailIcon('computer')}
+      <select name="computer" title="Computer use" aria-label="Computer use" required>
+        <option value="">Choose a level</option>
+        ${[...AGENT_DETAIL_COMPUTER].map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}
+      </select>
+    </div>
+    <div class="agent-detail-item">${agentDetailIcon('browser')}
+      <select name="browser" title="Browser use" aria-label="Browser use" required>
+        <option value="">Choose a setting</option><option value="off">Off</option><option value="on">On</option>
+      </select>
+    </div>
+  </div>
+  <div class="agent-permission-actions">
+    <button type="submit" value="cancel" autofocus formnovalidate>Cancel</button>
+    <button type="submit" value="apply">Restart</button>
+  </div>
+</form>`;
+document.body.appendChild(permissionConfirm);
+const permissionComputer=permissionConfirm.querySelector('[name="computer"]');
+const permissionBrowser=permissionConfirm.querySelector('[name="browser"]');
+const permissionApply=permissionConfirm.querySelector('[value="apply"]');
+let pendingPermissionChange=null;
+permissionConfirm.addEventListener('keydown',event=>event.stopPropagation());
+agentDetail.addEventListener('click',event=>{
+  const button=event.target.closest('[data-computer],[data-browser]');
+  const a=currentAgentNamed(detailAnchor?.dataset.agent);
+  if(!button||button.disabled||!a||permissionConfirm.open||bulkActionBusy||permissionChangeBusy||
+    agentPermissionBlockReason(a,permissionApi))return;
+  const computer=button.dataset.computer;
+  if(computer&&computer===a.computer_use)return;
+  const browser=computer?a.browser_use:typeof a.browser_use==='boolean'?!a.browser_use:null;
+  permissionComputer.querySelector('[value="view"]').disabled=permissionApi!==null&&permissionApi<42;
+  permissionComputer.value=computer||(AGENT_DETAIL_COMPUTER.has(a.computer_use)?a.computer_use:'');
+  permissionBrowser.value=typeof browser==='boolean'?(browser?'on':'off'):'';
+  pendingPermissionChange=a;
+  const name=OrreryDemo.mask(a.name);
+  setText(permissionConfirm.querySelector('p'),a.running
+    ?`Restart ${name} to resume the same conversation with these permissions. Any work in progress will be interrupted.`
+    :`Resume ${name} with these permissions in the same conversation.`);
+  setText(permissionApply,a.running?'Restart':'Resume');
+  permissionConfirm.showModal();
+});
+permissionConfirm.addEventListener('cancel',()=>{pendingPermissionChange=null;});
+permissionConfirm.addEventListener('submit',event=>{
+  event.preventDefault();
+  const a=pendingPermissionChange;
+  pendingPermissionChange=null;
+  permissionConfirm.close();
+  if(a&&event.submitter===permissionApply){
+    changeAgentPermissions(a,permissionComputer.value,permissionBrowser.value==='on');
+  }
+});
+async function changeAgentPermissions(original,computer,browser){
+  const {name}=original;
+  if(permissionChangeBusy||bulkActionBusy)return;
+  permissionChangeBusy=true;updateRosterBulkUI();
+  if(detailAnchor)showAgentDetail(detailAnchor);
+  try{
+    const conversationOnly=permissionConversationOnly(original);
+    const requiredApi=conversationOnly?43:computer==='view'?42:0;
+    if(requiredApi&&(await loadPermissionApi())<requiredApi)throw new Error(`requires Telemetry API ${requiredApi}`);
+    const agent=currentAgentNamed(name);
+    if(!agent)throw new Error('agent left the roster');
+    const reason=agentPermissionBlockReason(agent,permissionApi);
+    if(reason)throw new Error(reason);
+    if(['history_session_id','created','running','computer_use','browser_use','mail_status','resume_mode'].some(
+      key=>agent[key]!==original[key]))throw new Error('agent changed while confirming. Choose permissions again');
+    if(computer===agent.computer_use&&browser===agent.browser_use)return;
+    const options=agentToolSelection(agent.harness_kind,computer,browser,conversationOnly);
+    if(agent.running)showToast(`Restarting ${name}…`);
+    const result=await restartRosterAgent(name,agent.running,{base:'default',...options});
+    if(result.action!=='resumed'||(conversationOnly?result.resume_mode!=='conversation_only'||!result.tools:!result.tools_changed)){
+      throw new Error('Telemetry did not confirm the new permissions');
+    }
+    showToast(`Resume accepted for ${name} with updated permissions.`);
+  }catch(error){
+    const reason=String(error?.message||error).replace(/\s+/g,' ').trim();
+    showToast(`Permission change failed for ${name} · ${reason}`,true,9000);
+    toastEl.classList.add('multiline');
+  }finally{
+    permissionChangeBusy=false;updateRosterBulkUI();
+    if(detailAnchor)showAgentDetail(detailAnchor);
+  }
+}
 
 /* Writes that skip a value the node already has. A roster poll that finds
    nothing changed (most rows, most of the time) then leaves the DOM alone:
@@ -9998,17 +10237,23 @@ function renderSpawnTools(){
 function spawnToolOptions(){
   if(spawnCatalog?.runtime_mode==='fresh'||spawnTools.hidden)return {};
   const harness=SpawnPicker.harnessKey(selHarness);
-  const native=harness==='dsh'||harness==='hermes';
-  const computer=spawnComputerUse.getAttribute('aria-checked')==='true';
+  const computer=spawnComputerUse.getAttribute('aria-checked')==='true'?'control':'off';
   const browser=spawnBrowserUse.getAttribute('aria-checked')==='true';
+  return agentToolSelection(harness,computer,browser);
+}
+function agentToolSelection(harness,computer,browser,conversationOnly=false){
+  const native=harness==='dsh'||harness==='hermes';
+  // Conversation-only Claude can only use the managed screen relay.
+  const screen=computer==='view'||(conversationOnly&&computer==='control')
+    ?{server:'orrery-screen',access:computer==='view'?'read':'operate'}:null;
   const mcp=[];
-  if(computer)mcp.push('cua-driver');
+  if(computer==='control'&&!screen)mcp.push('cua-driver');
   // Native harnesses can copy an MCP server without the per-tool approvals that tools.browser requests.
   if(browser&&native)mcp.push('chrome-devtools');
   return {
     // The default base can inherit Chrome, and Codex can also inherit cua-driver.
-    ...(!browser||(harness==='codex'&&!computer)?{base:'mail-only'}:{}),
-    tools:{...(mcp.length?{mcp}:{}),...(browser&&!native?{browser:{}}:{})},
+    ...(!conversationOnly&&(!browser||(harness==='codex'&&computer==='off'))?{base:'mail-only'}:{}),
+    tools:{...(mcp.length?{mcp}:{}),...(browser&&!native?{browser:{}}:{}),...(screen?{screen}:{})},
   };
 }
 function renderHarnesses(){
