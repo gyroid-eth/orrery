@@ -1,7 +1,8 @@
 /* Inert record renderer and preview outlet. Recorded references retain their
-   grants; an explicit body-path click has a separate image-only boundary. */
+   grants; an explicit body-path click uses the local preview route. */
 (function(root){
   'use strict';
+  const MAX_TEXT=131072;
   function mount({host,source,onActivate=()=>{},onBeforeOpen=()=>{},onClose=()=>{},onReference=null}){
     // sourceView: this reader's last Markdown/Source choice for .md previews.
     let request=null,generation=0,objectUrl=null,selected=null,sourceView=false;
@@ -282,17 +283,14 @@
         });
         head.insertBefore(reveal,closeButton);
       }
-      if(ref.path&&ref.kind==='file'){
-        body.replaceChildren(create('div','conversation-preview-text',ref.path));
-        addReveal();
-        return;
-      }
+      if(ref.path)addReveal();
       request=new AbortController();
       try{
-        const data=await (ref.path?source.pathImage(ref.path,{signal:request.signal}):source.reference(ref.id,{signal:request.signal}));
+        const data=await (ref.path?source.pathPreview(ref.path,{signal:request.signal}):source.reference(ref.id,{signal:request.signal}));
         if(token!==generation)return;
         body.replaceChildren();
-        if(data.kind==='text'&&typeof data.text==='string'&&data.text.length<=131072){
+        if(data.kind==='text'&&typeof data.text==='string'&&data.text.length<=MAX_TEXT*2&&
+           (data.text.length<=MAX_TEXT||[...data.text].length<=MAX_TEXT)){
           const raw=create('pre','conversation-preview-text',data.text),markdown=root.OrreryConversationMarkdown;
           if(markdown){raw.textContent='';markdown.renderText(data.text,raw);}
           if(/\.(?:md|markdown)$/i.test(ref.label)&&typeof markdown?.renderDocument==='function'){
@@ -326,8 +324,15 @@
           head.insertBefore(iconButton('conversation-preview-fullscreen','fullscreen','Full screen',()=>openLightbox('button')),closeButton);
           if(lightbox)setImage(current);
         }else throw new Error('Unsupported preview response.');
-        if(!ref.input_image)addReveal();
-      }catch(error){if(token===generation&&error.name!=='AbortError'){body.textContent=error.message;if(lightbox)lbMessage(error.message);}}
+        if(!ref.path&&!ref.input_image)addReveal();
+      }catch(error){
+        if(token!==generation||error.name==='AbortError')return;
+        if(ref.path){
+          notice.textContent=error.message;
+          body.replaceChildren(create('div','conversation-preview-text',ref.path));
+        }else body.textContent=error.message;
+        if(lightbox)lbMessage(error.message);
+      }
       finally{if(token===generation)request=null;}
     }
     function render(event,article){

@@ -1,4 +1,4 @@
-"""Explicit body-path links: literal probes, isolated image reads and activation."""
+"""Explicit body-path links: literal probes, guarded reads and activation."""
 import asyncio
 import base64
 import io
@@ -81,48 +81,95 @@ def test_clicked_images_outside_workspace_aliases_metadata_and_limits(tmp_path, 
         folder=Path(folder).resolve(); image=folder/'plot.png'
         Image.new('RGB',(24,16),'teal').save(image)
         if folder.parent == Path('/private/tmp'):assert preview.root_path(str(folder.parent)) is None
-        result=preview.clicked_image(str(image))
+        result=preview.clicked_path(str(image))
         assert result['mime']=='image/png' and (result['width'],result['height'])==(24,16)
         assert Image.open(io.BytesIO(base64.b64decode(result['data']))).size==(24,16)
         link=folder/'alias.png';link.symlink_to(image)
-        assert preview.clicked_image(str(link))['width']==24
+        assert preview.clicked_path(str(link))['width']==24
         nested=folder/'nested';nested.mkdir()
-        assert preview.clicked_image(str(nested/'..'/'plot.png'))['height']==16
+        assert preview.clicked_path(str(nested/'..'/'plot.png'))['height']==16
     monkeypatch.setenv('HOME',str(tmp_path))
     Image.new('RGB',(2,3)).save(tmp_path/'home.png')
-    assert preview.clicked_image('~/home.png')['height']==3
+    assert preview.clicked_path('~/home.png')['height']==3
     bad=tmp_path/'fake.png';bad.write_text('<svg onload="evil()"/>')
     for value, code in [(str(bad),'preview_type_denied'), (str(tmp_path/'missing.png'),'preview_unavailable'),
-                        (str(tmp_path/'home.txt'),'preview_type_denied'), ('relative.png','preview_path_denied'),
+                        ('relative.png','preview_path_denied'),
                         (str(bad)+'\n','preview_path_denied')]:
-        with pytest.raises(preview.PreviewUnavailable,match=code):preview.clicked_image(value)
+        with pytest.raises(preview.PreviewUnavailable,match=code):preview.clicked_path(value)
     large=tmp_path/'large.png'
     with large.open('wb') as stream:stream.truncate(preview.MAX_IMAGE+1)
-    with pytest.raises(preview.PreviewUnavailable,match='preview_too_large'):preview.clicked_image(str(large))
+    with pytest.raises(preview.PreviewUnavailable,match='preview_too_large'):preview.clicked_path(str(large))
     Image.new('RGB',(8193,1)).save(large)
-    with pytest.raises(preview.PreviewUnavailable,match='preview_too_large'):preview.clicked_image(str(large))
+    with pytest.raises(preview.PreviewUnavailable,match='preview_too_large'):preview.clicked_path(str(large))
     Image.new('1',(4001,4000)).save(large)
-    with pytest.raises(preview.PreviewUnavailable,match='preview_too_large'):preview.clicked_image(str(large))
+    with pytest.raises(preview.PreviewUnavailable,match='preview_too_large'):preview.clicked_path(str(large))
 
 
-def test_clicked_image_unreadable_special_files_and_alias_swap(tmp_path, monkeypatch):
-    image=tmp_path/'plot.png';Image.new('RGB',(2,2)).save(image)
-    fifo=tmp_path/'pipe.png';os.mkfifo(fifo)
-    with pytest.raises(preview.PreviewUnavailable,match='preview_type_denied'):preview.clicked_image(str(fifo))
+@pytest.mark.parametrize('extension', ['png', 'txt'])
+def test_clicked_path_unreadable_special_files_and_alias_swap(tmp_path, monkeypatch, extension):
+    target=tmp_path/f'original.{extension}'
+    other=tmp_path/f'other.{extension}'
+    if extension=='png':
+        Image.new('RGB',(2,2)).save(target)
+        Image.new('RGB',(3,3)).save(other)
+    else:
+        target.write_text('original',encoding='utf-8')
+        other.write_text('other',encoding='utf-8')
+    fifo=tmp_path/f'pipe.{extension}';os.mkfifo(fifo)
+    with pytest.raises(preview.PreviewUnavailable,match='preview_type_denied'):preview.clicked_path(str(fifo))
     original=preview.os.open
     def deny(path,*args,**kwargs):
-        if path=='plot.png':raise PermissionError('fixture denied')
+        if path==target.name:raise PermissionError('fixture denied')
         return original(path,*args,**kwargs)
     monkeypatch.setattr(preview.os,'open',deny)
-    with pytest.raises(preview.PreviewUnavailable,match='preview_unavailable'):preview.clicked_image(str(image))
+    with pytest.raises(preview.PreviewUnavailable,match='preview_unavailable'):preview.clicked_path(str(target))
     monkeypatch.setattr(preview.os,'open',original)
-    other=tmp_path/'other.png';Image.new('RGB',(3,3)).save(other)
-    link=tmp_path/'alias.png';link.symlink_to(image)
+    link=tmp_path/f'alias.{extension}';link.symlink_to(target)
+    assert preview.clicked_path(str(link))==preview.clicked_path(str(target))
     read=preview.ReferenceStore.read_file
     def swap(self,path):
         result=read(self,path);link.unlink();link.symlink_to(other);return result
     monkeypatch.setattr(preview.ReferenceStore,'read_file',swap)
-    with pytest.raises(preview.PreviewUnavailable,match='preview_changed'):preview.clicked_image(str(link))
+    with pytest.raises(preview.PreviewUnavailable,match='preview_changed'):preview.clicked_path(str(link))
+
+
+@pytest.mark.parametrize('name', ['draft.md', 'notes.txt', 'build.log', 'LICENSE'])
+def test_clicked_path_reads_utf8_text_without_a_reference(tmp_path, name):
+    path=tmp_path/name
+    text='# Draft\n\n日本語の例。\n'
+    path.write_text(text,encoding='utf-8')
+    assert preview.clicked_path(str(path))==dict(kind='text',mime='text/plain',text=text,label=name)
+
+
+@pytest.mark.parametrize('character', ['a', '漢', '🎵'])
+def test_clicked_path_text_limit_counts_characters(tmp_path, character):
+    path=tmp_path/'notes.txt'
+    text=character*preview.MAX_TEXT
+    path.write_text(text,encoding='utf-8')
+    assert preview.clicked_path(str(path))['text']==text
+    path.write_text(text+character,encoding='utf-8')
+    with pytest.raises(preview.PreviewUnavailable,match='preview_text_too_large'):
+        preview.clicked_path(str(path))
+
+
+@pytest.mark.parametrize('data', [b'\xffinvalid UTF-8', b'valid UTF-8 with a binary\x00 byte'])
+def test_clicked_path_rejects_nontext_files(tmp_path, data):
+    path=tmp_path/'fixture.bin'
+    path.write_bytes(data)
+    with pytest.raises(preview.PreviewUnavailable,match='preview_not_text'):
+        preview.clicked_path(str(path))
+
+
+def test_clicked_text_changed_during_read_is_refused(tmp_path, monkeypatch):
+    path=tmp_path/'note.txt';path.write_text('before',encoding='utf-8')
+    original=preview.os.read
+    def replace_after_read(fd,size):
+        data=original(fd,size)
+        path.write_text('different contents',encoding='utf-8')
+        return data
+    monkeypatch.setattr(preview.os,'read',replace_after_read)
+    with pytest.raises(preview.PreviewUnavailable,match='preview_changed'):
+        preview.clicked_path(str(path))
 
 
 def test_path_api_same_origin_json_only_read_after_click_and_reveal_stub(tmp_path, monkeypatch):
@@ -130,9 +177,9 @@ def test_path_api_same_origin_json_only_read_after_click_and_reveal_stub(tmp_pat
     note=tmp_path/'note.txt';note.write_text('fixture')
     revealed=[];reads=[]
     monkeypatch.setattr(backend,'reveal_in_finder',lambda path:revealed.append(str(path)) or 'file')
-    original=backend.clicked_image
+    original=backend.clicked_path
     def read(value):reads.append(value);return original(value)
-    monkeypatch.setattr(backend,'clicked_image',read)
+    monkeypatch.setattr(backend,'clicked_path',read)
     async def main():
         app=web.Application(middlewares=[backend.own_page_only,backend.json_writes_only])
         app.router.add_post('/telemetry/conversation/path-probe',backend.probe_conversation_paths)
@@ -148,10 +195,17 @@ def test_path_api_same_origin_json_only_read_after_click_and_reveal_stub(tmp_pat
                 async with client.post(url+'/telemetry/conversation/path-image',json={'path':str(image)}) as response:
                     data=await response.json();assert response.status==200 and data['width']==4
                     assert response.headers['Cache-Control']=='no-store' and response.headers['X-Content-Type-Options']=='nosniff'
+                async with client.post(url+'/telemetry/conversation/path-image',json={'path':str(note)}) as response:
+                    data=await response.json();assert response.status==200 and data['text']=='fixture'
+                    assert response.headers['Cache-Control']=='no-store'
+                    assert response.headers['Content-Security-Policy']=="default-src 'none'; frame-ancestors 'none'"
+                assert reads==[str(image),str(note)]
                 async with client.post(url+'/telemetry/reveal-path',json={'path':str(note),'literal':True}) as response:assert response.status==200
                 assert revealed==[str(note)]
-                for body in [{'path':str(note)},{'path':str(image),'ref':'x'},{'path':str(tmp_path/'missing.png')}]:
-                    async with client.post(url+'/telemetry/conversation/path-image',json=body) as response:assert response.status==400
+                for body,error in [({'path':str(image),'ref':'x'},'invalid_query'),
+                                   ({'path':str(tmp_path/'missing.txt')},'preview_unavailable')]:
+                    async with client.post(url+'/telemetry/conversation/path-image',json=body) as response:
+                        assert response.status==400 and (await response.json())['error']==error
                 async with client.post(url+'/telemetry/conversation/path-image',json={'path':str(image)},headers={'Origin':'https://example.test'}) as response:assert response.status==403
                 async with client.post(url+'/telemetry/conversation/path-image',data=json.dumps({'path':str(image)})) as response:assert response.status==415
                 async with client.get(url+'/telemetry/conversation/path-image') as response:assert response.status==405
@@ -176,7 +230,7 @@ def prepare_paths(cockpit, tmp_path):
     js('conversationView.close();window.pathProbes=[];window.pathReads=[];window.pathReveals=[];window.pathJumps=[];window.pathEvents='+json.dumps(events)+';window.pathPayload='+json.dumps(payload)+';'+
        'OrreryConversationSource.Source.prototype.read=async()=>({events:pathEvents,after:"paths:1"});'+
        'OrreryConversationSource.Source.prototype.probePaths=async texts=>{pathProbes.push(texts);return texts.map(text=>text.includes("absent")?null:({shown:text,path:text.startsWith("~/")?"/fixture/home/note.txt":text}));};'+
-       'OrreryConversationSource.Source.prototype.pathImage=async path=>{pathReads.push(path);return pathPayload};'+
+       'OrreryConversationSource.Source.prototype.pathPreview=async path=>{pathReads.push(path);return path.endsWith(".txt")?{kind:"text",text:"Fixture note"}:pathPayload};'+
        'OrreryConversationSource.Source.prototype.revealPath=async path=>{pathReveals.push(path);return {ok:true}};'+
        'window.pathReader=OrreryConversation.mount({getContext:()=>({...currentAgents[0],terminalPaneId:"%901"}),bindToggle:false,jumpToEvent:event=>pathJumps.push(event)});pathReader.open()')
     wait('document.querySelectorAll("[data-local-path]").length===5')
@@ -197,13 +251,18 @@ def test_browser_paths_all_surfaces_enter_middle_focus_and_missing(cockpit,tmp_p
     js('document.querySelector(".conversation-preview-close").click();document.querySelectorAll("[data-event-id=path-assistant] a")[1].focus()')
     client.call('Input.dispatchKeyEvent',type='keyDown',key='Enter',windowsVirtualKeyCode=13)
     client.call('Input.dispatchKeyEvent',type='keyUp',key='Enter',windowsVirtualKeyCode=13)
-    wait('pathReveals.length===1')
+    wait('document.querySelector(".conversation-preview-text")?.textContent==="Fixture note"')
+    assert js('pathReads')==[text,'/fixture/home/note.txt']
+    assert js('pathReveals')==[]
+    js('document.querySelector(".conversation-reveal").click();document.querySelector(".conversation-preview-close").click()')
     assert js('pathReveals')==['/fixture/home/note.txt']
     js('document.querySelector("[data-event-id=path-user] a").dispatchEvent(new MouseEvent("auxclick",{bubbles:true,cancelable:true,button:1}))')
-    wait('pathReads.length===2')
+    wait('pathReads.length===3')
     assert js('pathJumps')==[]
-    js('document.querySelector(".conversation-preview-close").click();OrreryConversationSource.Source.prototype.pathImage=async()=>{throw new Error("This file exceeds the preview size or pixel limit.")};document.querySelector("[data-event-id=path-user] a").click()')
-    wait('document.querySelector(".conversation-preview-content").textContent.includes("pixel limit")')
+    js('document.querySelector(".conversation-preview-close").click();OrreryConversationSource.Source.prototype.pathPreview=async()=>{throw new Error("This file exceeds the preview size or pixel limit.")};document.querySelector("[data-event-id=path-user] a").click()')
+    wait('document.querySelector(".conversation-preview-notice").textContent.includes("pixel limit")')
+    assert js('document.querySelector(".conversation-preview-content").textContent')==text
+    assert js('!!document.querySelector(".conversation-reveal")')
     assert js('pathReveals.length')==1
 
 
@@ -217,7 +276,7 @@ def test_body_path_reply_cites_the_clicked_message(cockpit, filename):
     js, wait, _ = prepare(cockpit, [message('intro', 'Results')])
     js('conversationView.close();inlineEvents='+json.dumps([first, clicked])+''';
       OrreryConversationSource.Source.prototype.probePaths=async texts=>texts.map(path=>({shown:path,path}));
-      OrreryConversationSource.Source.prototype.pathImage=async()=>inlineData;
+      OrreryConversationSource.Source.prototype.pathPreview=async path=>path.endsWith('.txt')?{kind:'text',text:'Fixture measurements'}:inlineData;
       window.revealedPaths=[];
       OrreryConversationSource.Source.prototype.revealPath=async path=>revealedPaths.push(path);
       conversationView.open();''')
@@ -226,7 +285,7 @@ def test_body_path_reply_cites_the_clicked_message(cockpit, filename):
     if filename.endswith('.png'):
         wait('document.querySelector(".conversation-preview-image")?.naturalWidth===640')
     else:
-        assert js('document.querySelector(".conversation-preview-text").textContent') == path
+        wait('document.querySelector(".conversation-preview-text")?.textContent==="Fixture measurements"')
         assert js('revealedPaths') == []
         js('document.querySelector(".conversation-reveal").click()')
         assert js('revealedPaths') == [path]
@@ -249,7 +308,7 @@ def test_path_in_preview_without_origin_has_no_reply_button(cockpit):
     payload = json.dumps(dict(kind='text', text='See /fixture/plot.png'))
     js('OrreryConversationSource.Source.prototype.reference=async()=>('+payload+');'+
        'OrreryConversationSource.Source.prototype.probePaths=async texts=>texts.map(path=>({shown:path,path}));'+
-       'OrreryConversationSource.Source.prototype.pathImage=async()=>inlineData;'+
+       'OrreryConversationSource.Source.prototype.pathPreview=async()=>inlineData;'+
        'document.querySelector(".conversation-tool-group").click();'+
        'document.querySelector(".conversation-files button[data-ref-id^=z]").click();')
     wait('document.querySelector(".conversation-preview a[data-local-path]")!==null')
@@ -283,7 +342,7 @@ def test_browser_preview_prose_paths_and_screenshots(cockpit,tmp_path):
 
 @pytest.fixture
 def path_backend():
-    """Private real image/probe HTTP routes, no live services or OS opener."""
+    """Private real preview/probe routes, no live services or OS opener."""
     import queue
     import threading
     ready=queue.Queue()
@@ -291,12 +350,12 @@ def path_backend():
     async def main():
         stop=asyncio.Event()
         app=web.Application(middlewares=[backend.own_page_only,backend.json_writes_only])
-        async def image(request):
+        async def clicked(request):
             reads.append(True)
             return await backend.preview_clicked_path(request)
         async def empty(request):return web.json_response({'agents':[],'prefs':{}})
         app.router.add_post('/telemetry/conversation/path-probe',backend.probe_conversation_paths)
-        app.router.add_post('/telemetry/conversation/path-image',image)
+        app.router.add_post('/telemetry/conversation/path-image',clicked)
         app.router.add_post('/telemetry/path-probe',backend.path_probe)
         for path in backend.PUBLIC_FILES:app.router.add_get(path,backend.serve_public_file)
         app.router.add_route('*','/{tail:.*}',empty)
@@ -308,6 +367,74 @@ def path_backend():
     url,loop,stop=ready.get(timeout=10)
     try:yield url,reads
     finally:loop.call_soon_threadsafe(stop.set);thread.join(timeout=10)
+
+
+def test_real_body_path_text_roundtrip(cockpit, path_backend, tmp_path):
+    js,wait,client,_,enable=cockpit
+    origin,reads=path_backend
+    draft=tmp_path/'release-draft.md'
+    note=tmp_path/'verification.txt'
+    large=tmp_path/'oversized.log'
+    binary=tmp_path/'archive.bin'
+    missing=tmp_path/'removed.txt'
+    markdown=(
+        '# Release draft\n\n'
+        'The desktop build is ready for review.\n\n'
+        '## Verification\n\n'
+        '| Check | Status |\n| --- | --- |\n| Desktop | **Passed** |\n| Packaging | Ready |\n\n'
+        '## Before publishing\n\n'
+        '- Confirm the release notes.\n- Attach the signed build.\n'
+    )
+    draft.write_text(markdown,encoding='utf-8')
+    note.write_text('# This is literal text\n日本語の記録',encoding='utf-8')
+    large.write_text('a'*(preview.MAX_TEXT+1),encoding='utf-8')
+    binary.write_bytes(b'binary with \x00 content')
+    missing.touch()
+    files=[draft,note,large,binary,missing]
+    events=[message(f'file-{i}',f'Preview <{path}>') for i,path in enumerate(files)]
+
+    client.call('Page.navigate',url=origin+'/cockpit.html')
+    wait("typeof conversationView!=='undefined'&&typeof createPane==='function'")
+    js('clearTimeout(reconnectTimer);scheduleReconnect=()=>{}')
+    stable_roster(js);enable(count=1)
+    js('conversationView.close();window.textEvents='+json.dumps(events)+';'
+       'OrreryConversationSource.Source.prototype.read=async()=>({events:textEvents,after:"text:1"});'
+       'conversationView.open()')
+    wait('document.querySelectorAll("[data-event-id^=file-] a[data-local-path]").length===5')
+    assert reads==[]
+    missing.unlink()
+
+    body='document.querySelector(".conversation-preview-content")'
+    notice='document.querySelector(".conversation-preview-notice")'
+    source='document.querySelector(".conversation-preview-source")'
+    def open_file(index):
+        js('document.querySelector(".conversation-preview-close")?.click();'
+           f'document.querySelector("[data-event-id=file-{index}] a[data-local-path]").click()')
+
+    open_file(0)
+    wait(body+'?.querySelector("h1")?.textContent==="Release draft"')
+    assert js(body+'.querySelector("td strong").textContent')=='Passed'
+    assert js(source+'.getAttribute("aria-pressed")')=='false'
+    output=os.environ.get('ORRERY_PATH_SCREENSHOTS')
+    if output:
+        (Path(output)/'reader-path-markdown.png').write_bytes(base64.b64decode(client.call('Page.captureScreenshot',format='png')['data']))
+    js(source+'.click()')
+    assert js(body+'.querySelector("pre").textContent')==markdown
+    assert js(source+'.getAttribute("aria-pressed")')=='true'
+    if output:
+        (Path(output)/'reader-path-source.png').write_bytes(base64.b64decode(client.call('Page.captureScreenshot',format='png')['data']))
+    assert len(reads)==1
+
+    open_file(1)
+    wait(body+'?.querySelector("pre")!==null')
+    assert js(body+'.querySelector("pre").textContent')=='# This is literal text\n日本語の記録'
+    assert js(source) is None
+    for index,reason in [(2,'131,072-character preview limit'),(3,'binary or is not UTF-8'),(4,'could not be opened')]:
+        open_file(index)
+        wait(notice+'.textContent.includes('+json.dumps(reason)+')')
+        assert js(body+'.textContent')==str(files[index])
+        assert js('!!document.querySelector(".conversation-reveal")')
+    assert len(reads)==len(files)
 
 
 @pytest.mark.parametrize('document', [False, True])
@@ -402,7 +529,7 @@ def test_real_body_path_image_roundtrip_dark_light(cockpit,path_backend,tmp_path
 def test_clicked_supported_raster_formats(extension,format,tmp_path):
     target=tmp_path/('plot.'+extension)
     Image.new('RGB',(7,5),'teal').save(target,format=format)
-    result=preview.clicked_image(str(target))
+    result=preview.clicked_path(str(target))
     assert result['kind']=='image' and result['mime']=='image/png' and result['width']==7
 
 
