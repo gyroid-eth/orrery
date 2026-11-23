@@ -25,7 +25,7 @@ const XTERM_THEME = {
   brightMagenta: '#c9a6ea', brightCyan: '#7fc8ba', brightWhite: '#fffaf0',
 };
 
-let state = {agents: [], portraits: []};
+let state = {agents: []};
 // ?agent=NAME opens that agent (links, screenshots); otherwise the last one viewed.
 let selected = new URLSearchParams(location.search).get('agent')
   || localStorage.getItem('orrery-win.selected') || null;
@@ -55,13 +55,11 @@ function current() { return state.agents.find((a) => same(a.name, selected)) || 
 function agentNamed(name) { return state.agents.find((a) => same(a.name, name)) || null; }
 function stateOf(agent) { return agent.status === 'running' ? agent.activity : agent.status; }
 
-// A stable portrait per name, from the repository's public-domain set.
+// The host picks each agent's portrait (host/portraits.py): its namesake's
+// from the repository's public-domain set, or a stable one by hash.
 function portraitFor(name) {
-  const list = state.portraits || [];
-  if (!list.length || !agentNamed(name)) return null;
-  let hash = 0;
-  for (const ch of name.toLowerCase()) hash = (hash * 31 + ch.codePointAt(0)) >>> 0;
-  return `/portraits/${encodeURIComponent(list[hash % list.length])}.png`;
+  const agent = agentNamed(name);
+  return agent && agent.portrait ? `/portraits/${encodeURIComponent(agent.portrait)}.png` : null;
 }
 
 function face(name, cls = 'face') {
@@ -397,17 +395,37 @@ $('create-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = new FormData(event.target);
   try {
-    await api('POST', '/api/agents', {
+    // A blank name is fine: the host then picks a scientist's name.
+    const created = await api('POST', '/api/agents', {
       name: form.get('name').trim(), program: form.get('program'), cwd: form.get('cwd').trim(),
       resume: form.get('resume') === 'on', start: true, ...size(),
     });
     $('create').close();
     event.target.reset();
-    selected = form.get('name').trim();
+    selected = created.name;
     await refresh();
   } catch (error) {
     $('create-error').textContent = error.message;
     $('create-error').hidden = false;
+  }
+});
+
+// 参照…: the host opens Windows' own folder dialog on this desktop (a page
+// cannot learn a folder's full path itself). It starts from what is typed,
+// else the folder of the agent on stage.
+$('browse').addEventListener('click', async () => {
+  const input = $('create-form').elements.cwd;
+  const button = $('browse');
+  button.disabled = true;
+  $('create-error').hidden = true;
+  try {
+    const {path} = await api('POST', '/api/pick-folder', {initial: input.value.trim() || (current() || {}).cwd || ''});
+    if (path) input.value = path;
+  } catch (error) {
+    $('create-error').textContent = error.message;
+    $('create-error').hidden = false;
+  } finally {
+    button.disabled = false;
   }
 });
 

@@ -31,14 +31,14 @@ WINDOWS = Path(__file__).resolve().parent.parent
 REPO = WINDOWS.parent
 sys.path.insert(0, str(WINDOWS))
 from hub.db import HubError  # noqa: E402
-from host import programs  # noqa: E402
+from host import folders, portraits, programs  # noqa: E402
 from host.dispatcher import Dispatcher  # noqa: E402
 from host.sessions import Manager  # noqa: E402
 
 WEB = WINDOWS / "web"
 VENDOR = REPO / "bridge" / "vendor"
 ICONS = REPO / "bridge" / "assets"
-PORTRAITS = REPO / "assets" / "portraits_64"  # Public-domain portraits, see CREDITS.md.
+PORTRAITS = portraits.PORTRAITS  # Public-domain portraits, see CREDITS.md.
 # Files of the original cockpit (bridge/) that this page loads unchanged.
 # Only these: bridge/ also holds the macOS backend's Python sources.
 BRIDGE = REPO / "bridge"
@@ -87,22 +87,32 @@ async def index(request):
 
 async def state(request):
     app = request.app
+    agents = [dict(a, portrait=portraits.portrait_stem(a["name"])) for a in app[MANAGER].snapshot()]
     return web.json_response(dict(
-        agents=app[MANAGER].snapshot(),
+        agents=agents,
         agy_hub=app[SETTINGS].get("agy_hub"),
         programs={p: programs.find_executable(p) is not None for p in programs.PROGRAMS},
         # xterm.js leaves reflow to ConPTY when it knows the Windows build.
         windows_build=sys.getwindowsversion().build if sys.platform == "win32" else None,
-        portraits=sorted(p.stem for p in PORTRAITS.glob("*.png")),
         hub_db=str(app[MANAGER].hub.path)))
+
+
+def unused_name(manager) -> str:
+    """A scientist's name for an agent created without one.
+
+    Names the hub already knows are skipped too: a removed agent's mail
+    stays in hub.db, and a newcomer must not inherit it.
+    """
+    taken = set(manager.agents) | {a["name"] for a in manager.hub.agents()}
+    return portraits.random_name(taken)
 
 
 async def create_agent(request):
     data = await body(request)
     manager = request.app[MANAGER]
+    name = str(data.get("name") or "").strip() or unused_name(manager)
     try:
-        agent = manager.create(str(data.get("name", "")), str(data.get("program", "")),
-                               str(data.get("cwd", "")))
+        agent = manager.create(name, str(data.get("program", "")), str(data.get("cwd", "")))
         if data.get("start", True):
             manager.start(agent.name, resume=bool(data.get("resume")),
                           rows=int(data.get("rows") or 30), cols=int(data.get("cols") or 120))
@@ -111,6 +121,23 @@ async def create_agent(request):
     except OSError as exc:
         return error(f"could not start: {exc}", 500)
     return web.json_response(dict(ok=True, name=agent.name))
+
+
+async def pick_folder(request):
+    """Open Windows' folder dialog on this desktop; answer with the chosen path or null."""
+    settings = request.app[SETTINGS]
+    if settings["picking"]:
+        return error("a folder dialog is already open", 409)
+    data = await body(request)
+    initial = str(data.get("initial") or "")
+    settings["picking"] = True
+    try:
+        path = await asyncio.get_running_loop().run_in_executor(None, settings["picker"], initial)
+    except Exception as exc:  # Tk missing or the dialog failing must not take the host down.
+        return error(f"could not open the folder dialog: {exc}", 500)
+    finally:
+        settings["picking"] = False
+    return web.json_response(dict(ok=True, path=path))
 
 
 async def start_agent(request):
@@ -192,24 +219,16 @@ async def telemetry_mail_recent(request):
     return web.json_response(dict(ok=True, now=int(time.time() * 1000), messages=messages))
 
 
-def portrait_index(name: str, count: int) -> int:
-    """Which portrait an agent wears; the same hash as portraitFor() in app.js."""
-    value = 0
-    for ch in name.lower():
-        value = (value * 31 + ord(ch)) & 0xFFFFFFFF
-    return value % count
-
-
 async def telemetry_portrait(request):
     name = request.query.get("name", "")
     try:
-        request.app[MANAGER].get(name)
+        agent = request.app[MANAGER].get(name)
     except KeyError:
         return error("no such agent", 404)
-    portraits = sorted(PORTRAITS.glob("*.png"))
-    if not portraits:
+    stem = portraits.portrait_stem(agent.name)
+    if stem is None:
         return error("no portraits", 404)
-    return web.FileResponse(portraits[portrait_index(name, len(portraits))])
+    return web.FileResponse(PORTRAITS / f"{stem}.png")
 
 
 async def bridge_file(request):
@@ -336,10 +355,13 @@ async def favicon(request):
 
 
 def make_app(port: int, hub_db: str | None = None, *, builder=None,
-             check_agy: bool = True, dispatcher: dict | None = None) -> web.Application:
+             check_agy: bool = True, dispatcher: dict | None = None,
+             picker=None) -> web.Application:
+    """``picker`` stands in for the folder dialog in tests: (initial) -> path or None."""
     app = web.Application(middlewares=[guard], client_max_size=1 << 20)
     app[SETTINGS] = dict(port=port, hub_db=hub_db, builder=builder, check_agy=check_agy,
-                         dispatcher=dispatcher or {})
+                         dispatcher=dispatcher or {}, picker=picker or folders.pick_folder,
+                         picking=False)
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
     app.on_cleanup.append(on_cleanup)
@@ -347,6 +369,7 @@ def make_app(port: int, hub_db: str | None = None, *, builder=None,
     app.router.add_get("/favicon.svg", favicon)
     app.router.add_get("/api/state", state)
     app.router.add_post("/api/agents", create_agent)
+    app.router.add_post("/api/pick-folder", pick_folder)
     app.router.add_post("/api/agents/{name}/start", start_agent)
     app.router.add_post("/api/agents/{name}/stop", stop_agent)
     app.router.add_delete("/api/agents/{name}", remove_agent)

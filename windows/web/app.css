@@ -147,4 +147,6 @@ dialog label{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;color
 dialog label.check{flex-direction:row;align-items:center}
 dialog input:not([type=checkbox]),dialog select{background:var(--panel-2);border:1px solid var(--hair);border-radius:6px;padding:7px 9px;color:var(--ink)}
 dialog .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+dialog .path-row{display:flex;gap:6px}
+dialog .path-row input{flex:1;min-width:0}
 .error{color:var(--bad);font-size:12px;white-space:pre-wrap}

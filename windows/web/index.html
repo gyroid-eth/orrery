@@ -64,14 +64,19 @@
 <dialog id="create">
   <form method="dialog" id="create-form">
     <h2>NEW AGENT</h2>
-    <label>名前<input name="name" required pattern="[A-Za-z][A-Za-z0-9_.\-]{0,63}" placeholder="alice" autocomplete="off"></label>
+    <label>名前<input name="name" pattern="[A-Za-z][A-Za-z0-9_.\-]{0,63}" placeholder="空欄なら偉人の名前から選びます（例: Curie）" autocomplete="off"></label>
     <label>CLI
       <select name="program">
         <option value="claude">Claude Code</option>
         <option value="agy">Antigravity</option>
       </select>
     </label>
-    <label>作業フォルダ<input name="cwd" required placeholder="C:\path\to\project" autocomplete="off"></label>
+    <label>作業フォルダ
+      <span class="path-row">
+        <input name="cwd" required placeholder="C:\path\to\project" autocomplete="off">
+        <button type="button" id="browse" class="btn">参照…</button>
+      </span>
+    </label>
     <label class="check"><input type="checkbox" name="resume"> そのフォルダの直前の会話を続ける</label>
     <p id="create-error" class="error" hidden></p>
     <div class="actions">

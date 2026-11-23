@@ -130,16 +130,49 @@ class HostTest(unittest.IsolatedAsyncioTestCase):
         async with self.http.get(self.base + "/telemetry/portrait?name=nobody") as response:
             self.assertEqual(response.status, 404)  # The graph then shows the initial.
 
-    def test_portrait_matches_the_page(self):
-        """The host picks the same portrait as portraitFor() in web/app.js (values from node)."""
-        from host.server import portrait_index
+    async def test_blank_name_gets_an_unused_scientist(self):
+        from host import portraits
+        from host.server import MANAGER
 
-        for name, small, large in (("tech", 67, 555981), ("Philosophy", 17, 677445),
-                                   ("writer", 37, 382594),
-                                   ("a-very_long.agent-name-0123456789abcdefghijklmnopqrstuvwxyz",
-                                    74, 491843)):
-            self.assertEqual((portrait_index(name, 97), portrait_index(name, 1000003)),
-                             (small, large), name)
+        scientists = {s.lower() for s in portraits.stems()}
+        self.app[MANAGER].hub.register("Curie")  # Known to the hub only, e.g. removed with mail left.
+        names = []
+        for _ in range(3):
+            status, data = await self.post("/api/agents", dict(
+                name="  ", program="claude", cwd=self.tmp.name, start=False))
+            self.assertEqual(status, 200, data)
+            names.append(data["name"])
+        self.assertTrue({n.lower() for n in names} <= scientists, names)
+        self.assertEqual(len({n.lower() for n in names}), 3)
+        self.assertNotIn("curie", {n.lower() for n in names})
+        async with self.http.get(self.base + "/api/state") as response:
+            agents = (await response.json())["agents"]
+        self.assertEqual({a["name"]: a["portrait"] for a in agents}, {n: n for n in names})
+
+    async def test_pick_folder_answers_with_the_choice(self):
+        from host.server import SETTINGS
+
+        asked = []
+        release = asyncio.Event()
+        loop = asyncio.get_running_loop()
+
+        def picker(initial):
+            asked.append(initial)
+            asyncio.run_coroutine_threadsafe(release.wait(), loop).result(10)
+            return r"C:\chosen"
+
+        self.app[SETTINGS]["picker"] = picker
+        first = asyncio.create_task(self.post("/api/pick-folder", dict(initial=r"C:\start")))
+        while not asked:
+            await asyncio.sleep(0.01)
+        status, data = await self.post("/api/pick-folder")
+        self.assertEqual(status, 409, data)  # One dialog at a time.
+        release.set()
+        self.assertEqual(await first, (200, dict(ok=True, path=r"C:\chosen")))
+        self.assertEqual(asked, [r"C:\start"])
+
+        self.app[SETTINGS]["picker"] = lambda initial: None
+        self.assertEqual(await self.post("/api/pick-folder"), (200, dict(ok=True, path=None)))
 
     async def test_create_validates(self):
         status, data = await self.post("/api/agents", dict(name="9bad", program="claude", cwd=self.tmp.name))
