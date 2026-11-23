@@ -339,10 +339,11 @@ function renderMail() {
 }
 
 // Agents on an orbit; a line for each pair that has written, thicker for
-// more messages and brighter for recent ones.
+// more messages and brighter for recent ones. Only agents on the roster get a
+// node: mail outlives a removed agent, and its name should not linger here.
 function renderOrbit() {
   const box = $('orbit');
-  const names = participants();
+  const names = state.agents.map((agent) => agent.name);
   const cx = 150, cy = 85, rx = 112, ry = 58;
   const nodes = new Map(names.map((name, i) => {
     const angle = -Math.PI / 2 + (2 * Math.PI * i) / Math.max(names.length, 1);
