@@ -83,6 +83,19 @@ class HostTest(unittest.IsolatedAsyncioTestCase):
                                  headers={"Origin": f"http://localhost:{self.port}"}) as response:
             self.assertEqual(response.status, 200)
 
+    async def test_second_start_finds_the_running_host(self):
+        from host import server
+
+        loop = asyncio.get_running_loop()
+        self.assertEqual(await loop.run_in_executor(None, server.probe, self.port), "orrery")
+        self.assertEqual(await loop.run_in_executor(None, server.probe, free_port()), "free")
+        other = await asyncio.start_server(lambda r, w: w.close(), "127.0.0.1", 0)
+        try:
+            port = other.sockets[0].getsockname()[1]
+            self.assertEqual(await loop.run_in_executor(None, server.probe, port), "other")
+        finally:
+            other.close()
+
     async def test_create_validates(self):
         status, data = await self.post("/api/agents", dict(name="9bad", program="claude", cwd=self.tmp.name))
         self.assertEqual(status, 400)

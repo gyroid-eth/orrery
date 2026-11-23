@@ -1,6 +1,9 @@
 """The Windows host: agent terminals over WebSocket plus a small JSON API.
 
-    python windows/host/server.py [--port 8791]
+    python windows/host/server.py [--port 8791] [--open]
+
+windows/start.cmd runs this with --open. If a host is already listening on
+the port, a second start only opens the page.
 
 Listens on 127.0.0.1 only. A web page from another site must not be able to
 type into an agent's terminal, so every request must carry this host as its
@@ -14,7 +17,12 @@ import argparse
 import asyncio
 import json
 import os
+import socket
 import sys
+import threading
+import time
+import urllib.request
+import webbrowser
 from pathlib import Path
 
 from aiohttp import WSMsgType, web
@@ -293,14 +301,58 @@ def make_app(port: int, hub_db: str | None = None, *, builder=None,
     return app
 
 
-def main(argv=None) -> None:
+def probe(port: int) -> str:
+    """What answers on the port: "free", "orrery" (a host already running) or "other"."""
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=1):
+            pass
+    except OSError:
+        return "free"
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(f"http://127.0.0.1:{port}/api/state", timeout=3) as response:
+            data = json.load(response)
+        return "orrery" if isinstance(data, dict) and "agents" in data and "hub_db" in data else "other"
+    except Exception:
+        return "other"
+
+
+def open_when_listening(url: str, port: int, timeout: float = 30) -> None:
+    def wait_and_open():
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if probe(port) == "orrery":
+                webbrowser.open(url)
+                return
+            time.sleep(0.3)
+    threading.Thread(target=wait_and_open, daemon=True).start()
+
+
+def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="ORRERY for Windows host")
     parser.add_argument("--port", type=int, default=int(os.environ.get("ORRERY_WIN_PORT", "8791")))
     parser.add_argument("--hub-db", default=os.environ.get("ORRERY_HUB_DB"))
+    parser.add_argument("--open", action="store_true", help="open the page in the default browser")
     args = parser.parse_args(argv)
-    print(f"ORRERY for Windows: http://127.0.0.1:{args.port}/", flush=True)
+    url = f"http://127.0.0.1:{args.port}/"
+    found = probe(args.port)
+    if found == "orrery":
+        # One host per PC owns the terminals; a second one would only fail to bind.
+        print(f"ORRERY for Windows is already running: {url}", flush=True)
+        if args.open:
+            webbrowser.open(url)
+        return 0
+    if found == "other":
+        print(f"Port {args.port} is used by another program. Use --port or ORRERY_WIN_PORT.",
+              file=sys.stderr, flush=True)
+        return 1
+    print(f"ORRERY for Windows: {url}", flush=True)
+    print("Closing this window stops the host and every agent it started.", flush=True)
+    if args.open:
+        open_when_listening(url, args.port)
     web.run_app(make_app(args.port, args.hub_db), host="127.0.0.1", port=args.port, print=None)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
