@@ -33,6 +33,13 @@ AGY_TRUST = ["Do you trust the contents of this project?", "> Yes, I trust this 
 CLAUDE_IDLE = [" ▐▛███▜▌   Claude Code v2.1", RULE, '❯ Try "fix lint errors"', RULE,
                "  ⏵⏵ auto mode on (shift+tab to cycle)"]
 CLAUDE_BUSY = ["❯ do the thing", "✻ Thinking… (esc to interrupt)", RULE, "❯", RULE]
+# Claude Code can draw its prompt as ">" (read from a live agent, 2.1.330).
+CLAUDE_IDLE_GT = ["> あれ，動いてる？", "", "● 動いています。", "",
+                  "✻ Cogitated for 1m 1s · done 22:50", "", RULE, "> ", RULE,
+                  "  ⏵⏵ auto mode on (shift+tab to cycle)"]
+# Old prompts and quoted lines in the scrollback are not the live prompt.
+CLAUDE_NO_PROMPT = ["> あれ，動いてる？", "", "● 引用します:", "  > a quoted line", "",
+                    "  ⏵⏵ auto mode on (shift+tab to cycle)"]
 CLAUDE_PERMISSION = ["Do you want to proceed?", "❯ 1. Yes", "  2. No"]
 CLAUDE_TRUST = [" Quick safety check: Is this a project you created or one you trust?",
                 " ❯ No, exit", "   Yes, I trust this folder", " Enter to confirm · Esc to cancel"]
@@ -50,6 +57,12 @@ class ScreenStateTest(unittest.TestCase):
         self.assertEqual(activity.screen_state("claude", CLAUDE_BUSY), "busy")
         self.assertEqual(activity.screen_state("claude", CLAUDE_PERMISSION), "dialog")
         self.assertEqual(activity.screen_state("claude", CLAUDE_TRUST), "dialog")
+
+    def test_claude_prompt_mark_greater_than(self):
+        self.assertEqual(activity.screen_state("claude", CLAUDE_IDLE_GT), "idle")
+        typed = CLAUDE_IDLE_GT[:-3] + [RULE, "> writerのノートできた？", RULE, CLAUDE_IDLE_GT[-1]]
+        self.assertEqual(activity.screen_state("claude", typed), "idle")
+        self.assertEqual(activity.screen_state("claude", CLAUDE_NO_PROMPT), "busy")
 
 
 class TypedTest(unittest.TestCase):
