@@ -21,6 +21,8 @@
   --eng-google:#6f9bd1;
   --mono:'IBM Plex Mono',ui-monospace,monospace;
   --serif:'Fraunces',Georgia,serif;
+  /* bridge/orrery_view.css writes its node captions in this face, as cockpit.html defines it. */
+  --rail-sans:'IBM Plex Sans','IBM Plex Sans JP',system-ui,sans-serif;
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
