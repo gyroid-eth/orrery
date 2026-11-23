@@ -1,4 +1,4 @@
-"""Recorded references and bounded previews, plus explicit local image clicks.
+"""Recorded references and bounded previews, plus explicit local file clicks.
 
 No path registration API. An ID is useful only with the same authoritative
 agent binding, pinned transcript inode and unchanged originating record.
@@ -37,20 +37,20 @@ TEXT_EXT={'.txt','.md','.py','.js','.mjs','.cjs','.ts','.tsx','.jsx','.css','.sc
 IMAGE_EXT={'.png','.jpg','.jpeg','.gif','.webp'}
 
 
-def clicked_image(value):
-    """Explicit local path click: image-only, independent of record grants.
+def clicked_path(value):
+    """Explicit local path click, independent of record grants.
 
     Resolve aliases first, then use the same no-follow descriptor walk and
-    raster limits as recorded previews. Recheck the alias after the read.
+    preview limits as recorded references. Recheck the alias after the read.
     """
     if (not isinstance(value,str) or len(value)>2000
             or not value.startswith(('/', '~/')) or re.search(r'[\x00-\x1f\x7f]',value)):
         raise PreviewUnavailable('preview_path_denied')
-    original=Path(value).expanduser()
-    if original.suffix.lower() not in IMAGE_EXT:raise PreviewUnavailable('preview_type_denied')
     try:
+        original=Path(value).expanduser()
         path=original.resolve(strict=True)
-        if path.suffix.lower() not in IMAGE_EXT:raise PreviewUnavailable('preview_type_denied')
+        if (original.suffix.lower() in IMAGE_EXT)!=(path.suffix.lower() in IMAGE_EXT):
+            raise PreviewUnavailable('preview_type_denied')
         result=ReferenceStore().read_file(path)
         if original.resolve(strict=True)!=path:raise PreviewUnavailable('preview_changed')
         result.pop('notice',None)
@@ -289,17 +289,19 @@ class ReferenceStore:
 
     def read_file(self,path,*,thumbnail=False,mobile=False,image_digest=None):
         is_image=image_digest is not None or path.suffix.lower() in IMAGE_EXT
-        maximum=MAX_IMAGE if is_image else MAX_TEXT
+        maximum=MAX_IMAGE if is_image else MAX_TEXT*4  # Up to four UTF-8 bytes per character.
+        too_large='preview_too_large' if is_image else 'preview_text_too_large'
         with open_file(path) as (fd,info):
-            if info.st_size>maximum:raise PreviewUnavailable('preview_too_large')
+            if info.st_size>maximum:raise PreviewUnavailable(too_large)
             data=os.read(fd,maximum+1)
-            if len(data)>maximum:raise PreviewUnavailable('preview_too_large')
+            if len(data)>maximum:raise PreviewUnavailable(too_large)
             if image_digest is not None and hashlib.sha256(data).hexdigest()!=image_digest:raise PreviewUnavailable('preview_changed')
             if is_image:result=self.raster(data,thumbnail=thumbnail,mobile=mobile)
             else:
                 try:text=data.decode('utf-8')
-                except UnicodeError:raise PreviewUnavailable('preview_type_denied') from None
-                if '\x00' in text or any(ord(c)<32 and c not in '\n\r\t' for c in text):raise PreviewUnavailable('preview_type_denied')
+                except UnicodeError:raise PreviewUnavailable('preview_not_text') from None
+                if len(text)>MAX_TEXT:raise PreviewUnavailable(too_large)
+                if any(ord(c)<32 and c not in '\n\r\t' for c in text):raise PreviewUnavailable('preview_not_text')
                 result=dict(kind='text',mime='text/plain',text=text)
             after=os.fstat(fd)
             with open_file(path) as (_,current):

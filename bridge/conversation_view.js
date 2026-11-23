@@ -193,8 +193,7 @@
         event.preventDefault();const path=link.dataset.localPath;
         const article=link.closest('.conversation-event');
         const origin=eventsEl.contains(article)?events.get(article.dataset.eventId):null;
-        const kind=/\.(png|jpe?g|gif|webp)$/i.test(path)?'image':'file';
-        if(kind==='image'||(onReference&&origin))preview?.open({path,label:path.split('/').pop(),kind,origin});
+        if(preview&&(origin||/\.(png|jpe?g|gif|webp)$/i.test(path)))preview.open({path,label:path.split('/').pop(),origin});
         else source.revealPath(path).catch(error=>message(error.message));
         return;
       }

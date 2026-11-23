@@ -21,7 +21,7 @@ ORRERY cockpit puts the roster on the left, the terminal in the center, the ORRE
 | See how much of the Claude / Codex quota is left | Look at the `LEFT` pill in the header. Click it for the remaining amount per window | [Usage (remaining quota)](#usage-remaining-quota) |
 | Go back to the end of the terminal from past output | `↓ BOTTOM`, `Cmd+↓`, or click the active session label / pane tab again | [Terminal](#terminal) |
 | Start a new agent | `+ NEW AGENT`, then choose the engine, directory, and task | [NEW AGENT](#new-agent) |
-| Read the conversation between agents | Open a card in the right mail rail. To follow two agents, click an edge in the TELEMETRY NETWORK | [Agent Mail](#agent-mail) · [TELEMETRY](#telemetry) |
+| Read the conversation between agents | Open a card in the right mail rail. To follow two agents, click an edge in the TELEMETRY NETWORK | [ORRERY Mail](#orrery-mail) · [TELEMETRY](#telemetry) |
 | See the spawn parent–child relationships and recent traffic | Look at the mini-orrery. Open the Planetarium with `PLANETARIUM` in the header or `⤢` | [Mini-orrery](#mini-orrery) · [Planetarium](#planetarium) |
 | Open the terminal of an agent you found in TELEMETRY | Select the agent in TELEMETRY and press `OPEN IN COCKPIT` | [Open in cockpit from TELEMETRY](#open-in-cockpit-from-telemetry) |
 | Use it on Windows (WSL2) | Shortcuts use `Alt`; windows open in Windows Terminal | [Differences on Windows (WSL2)](#differences-on-windows-wsl2) |
@@ -68,8 +68,8 @@ The following are available in the implementation, but have no permanent on-scre
 | The `?session=` deep link and the development-only `?ws=` override | No UI entry point | [Jump palette and shortcuts](#jump-palette-and-shortcuts) |
 | Hover a mini-orrery node for identity / role / model; click for the mail filter and terminal jump | Nodes have no text label | [Mini-orrery](#mini-orrery) |
 | `⤢` on the mini-orrery opens the Planetarium; close with `Esc` or a click outside | The glyph has no text label | [Planetarium](#planetarium) |
-| Click a mail card for the body, `thread` for the thread, `Esc` to close the drawer | No details until you open a card / the drawer | [Agent Mail](#agent-mail) |
-| The mail rail filter follows the focus of a roster tile / mini-orrery node / terminal | Only the selected filter chip changes | [Agent Mail](#agent-mail) |
+| Click a mail card for the body, `thread` for the thread, `Esc` to close the drawer | No details until you open a card / the drawer | [ORRERY Mail](#orrery-mail) |
+| The mail rail filter follows the focus of a roster tile / mini-orrery node / terminal | Only the selected filter chip changes | [ORRERY Mail](#orrery-mail) |
 | After choosing a scientist in NEW AGENT, re-roll an unused adjective with 🎲 | Only the icon and a tooltip | [NEW AGENT](#new-agent) |
 | Click an edge in the TELEMETRY NETWORK for a mail drawer between two agents | Not visible from the ORRERY-side buttons | [TELEMETRY](#telemetry) |
 | `OPEN IN COCKPIT` in TELEMETRY's agent panel moves to that agent's terminal | Not visible until you open TELEMETRY and select an agent | [Open in cockpit from TELEMETRY](#open-in-cockpit-from-telemetry) |
@@ -470,7 +470,7 @@ Open the overlay with `PLANETARIUM` in the header, or `⤢` at the top right of 
 
 Clicking a node moves to that agent's terminal and closes the overlay. `Esc`, a click outside, or `⤢` at the top right also closes it. Even if you set the mini-orrery to the Telemetry network view in Settings, the Planetarium always draws the spawn forest. The Planetarium is a lineage exploration inside the cockpit. Its role differs from the full NETWORK / DIGEST REPLAY of the ORRERY Telemetry dashboard.
 
-## Agent Mail
+## ORRERY Mail
 
 The right rail merges the live message window of ORRERY Telemetry with the recent 40 items that ORRERY fetches from the read-only SQLite, removing duplicates.
 

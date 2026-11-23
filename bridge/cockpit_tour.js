@@ -7,7 +7,7 @@ const STEPS=Object.freeze([
   {id:'start',title:'Start an agent',label:'New agent',target:'#newAgentBtn',copy:'Start an agent here. Give it a task and choose a model.'},
   {id:'choose',title:'Choose your agent',label:'Agent list',target:'.col.roster',copy:'Choose an agent on the left to open its terminal.'},
   {id:'talk',title:'Talk to it',label:'Terminal and input',target:'.promptbar',copy:'Read the agent’s work in the center. Type below and press Enter to talk to it.'},
-  {id:'mail',title:'Read Agent Mail',label:'Agent mail',target:'#mail',manual:'Mark as read',copy:'Follow messages exchanged between agents on the right.'},
+  {id:'mail',title:'Read ORRERY Mail',label:'ORRERY Mail',target:'#mail',manual:'Mark as read',copy:'Follow messages exchanged between agents on the right.'},
   {id:'telemetry',title:'Open Telemetry',label:'Telemetry',target:'#networkBtn',copy:"Cockpit is for working with agents; Telemetry shows everyone's status and history, with RESUME / EXIT."},
   {id:'planetarium',title:'Explore Planetarium',label:'Planetarium',target:'#planetariumBtn',copy:'See who spawned whom in the full agent family tree.'},
   {id:'settings',title:'Make it comfortable',label:'Settings',target:'#settingsBtn',copy:'Adjust the theme, terminal text size, and mini view.'},
@@ -252,7 +252,7 @@ function mountChecklist(definition){
     const shown=(Math.min(W,b.right)-Math.max(0,b.left))*(Math.min(H,b.bottom)-Math.max(0,b.top));
     if(shown>=.9*W*H)return hide();
     // A control under something else (a dialog opened over it) is not pointed
-    // at. The tour's own panel does not count: Agent Mail sits under it.
+    // at. The tour's own panel does not count: ORRERY Mail sits under it.
     const cx=Math.min(W-1,Math.max(0,(b.left+b.right)/2)),cy=Math.min(H-1,Math.max(0,(b.top+b.bottom)/2));
     const top=doc.elementFromPoint(cx,cy);
     if(top&&top!==highlight&&!highlight.contains(top)&&!top.closest('.flight-guide'))return hide();
