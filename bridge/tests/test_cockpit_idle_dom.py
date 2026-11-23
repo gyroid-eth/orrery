@@ -90,6 +90,7 @@ def cockpit():
                 return
             time.sleep(.05)
         raise AssertionError(expression)
+    js.client = client
     try:
         client.call('Page.navigate', url=f'http://127.0.0.1:{server.server_port}/cockpit.html')
         wait(f"typeof currentAgents!=='undefined'&&currentAgents.length=={len(NAMES)}")
@@ -142,7 +143,13 @@ def test_a_changed_row_repaints_only_that_tile(cockpit):
     state['agents'][3]['ctx_used'] = 77
     js(POLL)
     assert js("tiles.get('DeltaNode')===capturedTile")
-    assert js("capturedTile.querySelector('.ctx,.pill.model,.statetext')") is None
+    assert js("capturedTile.querySelector('.statetext')") is None
+    assert js("capturedTile.querySelector('.roster-model').textContent") == 'fixture-model'
+    assert js("""(()=>{
+      const context=capturedTile.querySelector('.roster-context'),meter=context.firstElementChild;
+      return [context.hidden,context.getAttribute('aria-valuenow'),meter.classList.contains('hot'),
+        meter.firstElementChild.style.width,context.lastElementChild.textContent];
+    })()""") == [False, '77', True, '77%', '77%']
     assert js("rosterEl.querySelector('.agent').dataset.agent") == 'DeltaNode'
     state['agents'][4]['act_state'] = 'work'
     js(POLL)
@@ -207,9 +214,12 @@ def test_roster_keeps_descendants_together_and_orders_siblings_by_activity(cockp
 
 def test_folded_descendants_are_counted_and_revealed_for_search_or_select(cockpit):
     js, _, state = cockpit
-    state['agents'][2].update(parent_state='child', parent_agent='AlphaNode')
+    state['agents'][0]['act_state'] = 'wait'
+    state['agents'][2].update(parent_state='child', parent_agent='AlphaNode', act_state='work')
     state['agents'][3].update(parent_state='child', parent_agent='GammaNode')
     js("""pollAgents()""")
+    js("""window.ringStyle=(name)=>getComputedStyle(tiles.get(name).querySelector('.medal .ring'),'::after');""")
+    assert js("ringStyle('GammaNode').animationName") == 'spin'
     js("""window.fold=tiles.get('AlphaNode').querySelector('.roster-fold');
       fold.focus();fold.click()""")
     assert js("fold.getAttribute('aria-expanded')") == 'false'
@@ -217,6 +227,12 @@ def test_folded_descendants_are_counted_and_revealed_for_search_or_select(cockpi
     assert js("document.activeElement===fold")
     assert js("JSON.parse(localStorage.getItem('oc-roster-folds'))") == ['AlphaNode']
     assert js("tiles.get('DeltaNode').getClientRects().length") == 0
+    assert js("tiles.get('AlphaNode').hasAttribute('data-folded-working')")
+    assert js("ringStyle('AlphaNode').animationName") == 'spin'
+    js.client.call('Emulation.setEmulatedMedia', features=[{'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    assert js("ringStyle('AlphaNode').animationName") == 'none'
+    assert js("ringStyle('AlphaNode').borderTopColor !== 'rgba(0, 0, 0, 0)'")
+    js.client.call('Emulation.setEmulatedMedia', features=[{'name': 'prefers-reduced-motion', 'value': 'no-preference'}])
     js("showAgentDetail(tiles.get('AlphaNode'))")
     assert js("agentDetail.querySelector('.agent-detail-children').textContent") == 'GammaNode, DeltaNode'
     assert js(POLL)['roster'] == 0
@@ -238,4 +254,5 @@ def test_folded_descendants_are_counted_and_revealed_for_search_or_select(cockpi
     assert js("tiles.get('DeltaNode').getClientRects().length") == 0
     js("fold.click()")
     assert js("fold.getAttribute('aria-expanded')") == 'true'
+    assert js("ringStyle('AlphaNode').animationName") == 'none'
     assert js("tiles.get('DeltaNode').getClientRects().length") == 1
