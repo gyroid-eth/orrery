@@ -22,6 +22,7 @@ from hub.db import Hub, HubError, check_name
 from host import activity, programs
 
 REPLAY_CHARS = 400_000
+ENTER_DELAY = 0.5  # Between a submitted prompt and its Enter, as two separate writes.
 # Escape sequences a viewer sends without anyone typing: the browser
 # terminal answers the TUI's queries (device attributes, cursor position)
 # and reports focus and the mouse. Arrow keys are CSI too. None of them can
@@ -163,21 +164,35 @@ class Session:
         self.owner = viewer
         self.resize(rows, cols)
 
+    @property
+    def bracketed_paste(self) -> bool:
+        """The program turned on bracketed paste (ESC[?2004h); pyte keeps private modes << 5."""
+        return (2004 << 5) in self.screen.mode
+
+    def pasted(self, text: str) -> str:
+        """Text to write so it lands at the prompt as one piece, without submitting.
+
+        Claude Code takes a fast burst of plain input for a paste and folds an
+        Enter that follows soon after into it as a newline, so whenever the
+        program understands bracketed paste the text is marked as one.
+        Several lines are always bracketed, so their newlines do not submit early.
+        """
+        if self.bracketed_paste or "\n" in text:
+            return "\x1b[200~" + text.replace("\n", "\r") + "\x1b[201~"
+        return text
+
     async def submit(self, viewer, text: str) -> None:
         """A finished prompt from the composer: the text, then Enter.
 
         The person wrote it outside the terminal, so nothing half-written
         is left at the agent's prompt and notices may follow as usual.
-        Several lines go as one bracketed paste, so their newlines do not
-        submit early.
         """
         text = text.replace("\r\n", "\n").replace("\r", "\n").strip("\n")
         if not text or self.status != "running":
             return
         self.owner = viewer
-        payload = "\x1b[200~" + text.replace("\n", "\r") + "\x1b[201~" if "\n" in text else text
-        self.write(payload, user=False)
-        await asyncio.sleep(0.3)
+        self.write(self.pasted(text), user=False)
+        await asyncio.sleep(ENTER_DELAY)
         self.write("\r", user=False)
 
     def resize(self, rows: int, cols: int) -> None:

@@ -11,6 +11,11 @@ into it since it became idle (a person's half-written prompt must never
 get a notice appended). Otherwise the mail waits; it is never lost, since
 it stays unread in hub.db.
 
+A notice can be lost: Antigravity sometimes fails to start the turn
+("backend returned an empty conversation id") and goes back to its prompt
+with the mail still unread. So mail still unread RENOTIFY seconds after its
+notice is announced again, at most RETRIES times, once the agent is idle.
+
 Agents answering each other could wake each other forever, so each agent
 has a wake budget per hour. When it runs out the agent is paused (shown in
 the UI) until the window frees up.
@@ -22,11 +27,14 @@ import re
 import sys
 import time
 from collections import defaultdict, deque
+from datetime import datetime, timezone
 
 SETTLE = 1.5          # Seconds idle and quiet before a notice may be typed.
 ENTER_DELAY = 0.4     # Text and Enter as separate writes, so it is not a paste.
 BUDGET = 30           # Notices per agent per window.
 WINDOW = 3600.0
+RENOTIFY = 60.0       # Still unread this long after its notice: announce it again,
+RETRIES = 2           # at most this many times (counted per host run).
 CONTROL = re.compile(r"[\x00-\x1f\x7f]+")
 
 
@@ -37,22 +45,32 @@ def clean(text: str, limit: int) -> str:
 
 def notice(messages: list[dict]) -> str:
     """One line, no control characters: it is typed into a prompt."""
+    fresh = "New" if any(not m.get("notified_ts") for m in messages) else "Unread"
     if len(messages) == 1:
         m = messages[0]
         urgent = f" [{m['importance']}]" if m["importance"] in ("high", "urgent") else ""
-        return (f"[ORRERY] New mail{urgent} from {clean(m['sender'], 64)}: "
+        return (f"[ORRERY] {fresh} mail{urgent} from {clean(m['sender'], 64)}: "
                 f"\"{clean(m['subject'], 100)}\". Call fetch_inbox to read it, then act on it.")
     senders = ", ".join(dict.fromkeys(clean(m["sender"], 64) for m in messages))
-    return (f"[ORRERY] {len(messages)} new messages (from {senders}). "
+    return (f"[ORRERY] {len(messages)} {fresh.lower()} messages (from {senders}). "
             "Call fetch_inbox to read them, then act on them.")
+
+
+def hub_time(epoch: float) -> str:
+    """An epoch time in hub.db's timestamp format, for comparing with notified_ts."""
+    moment = datetime.fromtimestamp(epoch, timezone.utc)
+    return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 class Dispatcher:
     def __init__(self, manager, *, interval: float = 1.0, settle: float = SETTLE,
-                 budget: int = BUDGET, window: float = WINDOW, enter_delay: float = ENTER_DELAY):
+                 budget: int = BUDGET, window: float = WINDOW, enter_delay: float = ENTER_DELAY,
+                 renotify: float = RENOTIFY, retries: int = RETRIES):
         self.manager, self.interval, self.settle = manager, interval, settle
         self.budget, self.window, self.enter_delay = budget, window, enter_delay
+        self.renotify, self.retries = renotify, retries
         self.sent: dict[str, deque] = defaultdict(deque)  # agent -> notice times
+        self.repeated: dict[tuple[int, str], int] = defaultdict(int)  # (message, agent) -> retries
         self.tasks: set[asyncio.Task] = set()
 
     async def run(self) -> None:
@@ -93,8 +111,11 @@ class Dispatcher:
         for session in manager.sessions.values():
             session.refresh(now)
         groups: dict[str, list[dict]] = defaultdict(list)
-        for row in manager.hub.pending_notifications():
-            groups[row["recipient"].lower()].append(row)
+        for row in manager.hub.pending_notifications(renotify_before=hub_time(now - self.renotify)):
+            key = row["recipient"].lower()
+            if row["notified_ts"] and self.repeated[(row["message_id"], key)] >= self.retries:
+                continue  # Announced enough; it stays unread for the agent to find.
+            groups[key].append(row)
         manager.queued = {key: len(rows) for key, rows in groups.items()}
         manager.waiting = {}
         woken = []
@@ -110,6 +131,9 @@ class Dispatcher:
                 continue
             manager.paused.discard(key)
             self.sent[key].append(now)
+            for row in rows:
+                if row["notified_ts"]:
+                    self.repeated[(row["message_id"], key)] += 1
             session.injecting = True
             session.notified(now)
             task = asyncio.get_running_loop().create_task(self.type_notice(session, rows))
@@ -120,7 +144,7 @@ class Dispatcher:
 
     async def type_notice(self, session, rows: list[dict]) -> None:
         try:
-            session.write(notice(rows), user=False)
+            session.write(session.pasted(notice(rows)), user=False)
             await asyncio.sleep(self.enter_delay)
             session.write("\r", user=False)
             for row in rows:

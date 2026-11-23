@@ -6,6 +6,7 @@ import os
 import socket
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -87,6 +88,19 @@ class ReplayAndViewersTest(unittest.TestCase):
         self.assertEqual(written, ["hi", "\x1b[5;1R", "\x1b[7;1R"])
         session.loop.close()
 
+    def test_bracketed_paste_once_the_program_asks_for_it(self):
+        import asyncio as _asyncio
+        from host.sessions import Session
+
+        session = Session("alice", _asyncio.new_event_loop(), "claude")
+        self.assertEqual(session.pasted("one line"), "one line")
+        self.assertEqual(session.pasted("a\nb"), "\x1b[200~a\rb\x1b[201~")
+        session.stream.feed("\x1b[?2004h")  # Claude Code and Antigravity both send this.
+        self.assertEqual(session.pasted("one line"), "\x1b[200~one line\x1b[201~")
+        session.stream.feed("\x1b[?2004l")
+        self.assertEqual(session.pasted("one line"), "one line")
+        session.loop.close()
+
 
 class NoticeTest(unittest.TestCase):
     def test_single_line_without_control_characters(self):
@@ -119,6 +133,9 @@ class FakeSession:
     def write(self, data, *, user=True):
         assert not user
         self.written.append(data)
+
+    def pasted(self, text):
+        return text
 
 
 class FakeManager:
@@ -177,6 +194,27 @@ class DispatcherTest(unittest.IsolatedAsyncioTestCase):
         self.hub.send("bob", "alice", "hello", "body")
         self.assertEqual(self.dispatcher.tick(self.now), [])
         self.assertEqual(len(self.hub.pending_notifications()), 1)
+
+    async def test_lost_notice_is_repeated_a_few_times(self):
+        # Antigravity can drop a notice ("empty conversation id") and leave the mail unread.
+        start = time.time()  # notified_ts is stamped with the real clock.
+        self.hub.send("alice", "bob", "hello", "body")
+        self.bob.idle_since = self.bob.last_output = start - 10
+        self.assertEqual(self.dispatcher.tick(start), ["bob"])
+        await self.drain()
+        self.assertIn("New mail", self.bob.written[0])
+        self.bob.activity, self.bob.idle_since = "idle", start + 20
+        self.assertEqual(self.dispatcher.tick(start + 30), [])  # Too soon to repeat.
+        for attempt in (1, 2):
+            later = start + 100 * attempt
+            self.bob.activity, self.bob.idle_since = "idle", later - 10
+            self.assertEqual(self.dispatcher.tick(later), ["bob"])
+            await self.drain()
+            self.assertIn('Unread mail from alice: "hello"', self.bob.written[-2])
+        self.bob.activity, self.bob.idle_since = "idle", start + 290
+        self.assertEqual(self.dispatcher.tick(start + 300), [])  # Gave up; it stays unread.
+        self.hub.inbox("bob")
+        self.assertEqual(self.hub.pending_notifications(renotify_before="9999"), [])
 
     async def test_wake_budget_pauses_runaway_agents(self):
         dispatcher = Dispatcher(self.manager, enter_delay=0, budget=2, window=60)

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -136,9 +137,12 @@ class McpServerTest(unittest.TestCase):
             proc.stdout.close()
         self.tmp.cleanup()
 
-    def start(self, *args):
+    def start(self, *args, env=None):
+        # An agent the host started has ORRERY_AGENT set; the server must not inherit it here.
+        env = {k: v for k, v in os.environ.items() if k != "ORRERY_AGENT"} if env is None else env
         proc = subprocess.Popen([sys.executable, str(SERVER), "--db", self.db, *args],
-                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=self.tmp.name)
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=self.tmp.name,
+                                env=env)
         self.procs.append(proc)
         return proc
 
