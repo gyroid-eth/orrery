@@ -30,9 +30,11 @@ INSTRUCTIONS = (
     "ORRERY hub: mail between the agents on this PC, plus a shared whiteboard. "
     "Address other agents by name (list_agents shows them). When you are told "
     "you have mail, call fetch_inbox, act on it, and answer with send_message "
-    "using reply_to so the thread stays together. Use the board for notes "
-    "several agents should see (plans, decisions, status), not for messages "
-    "to one agent.")
+    "using reply_to so the thread stays together. Every message wakes its "
+    "recipient, so reply only when there is an answer, a result or a question; "
+    "never send thanks or acknowledgements alone, and end a finished exchange "
+    "by not replying. Use the board for notes several agents should see "
+    "(plans, decisions, status), not for messages to one agent.")
 
 # Plain schemas only: Gemini-based clients reject anyOf/oneOf and some
 # other JSON Schema keywords. A single recipient may also be a bare string.

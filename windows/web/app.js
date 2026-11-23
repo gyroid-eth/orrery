@@ -6,6 +6,16 @@
 const $ = (id) => document.getElementById(id);
 const ICONS = {claude: '/icons/anthropic.svg', agy: '/icons/google.svg'};
 const LABELS = {claude: 'Claude Code', agy: 'Antigravity'};
+const ACTIVITY = {
+  idle: '待機中', busy: '作業中', attention: 'あなたの判断を待っています', starting: '起動中',
+  stopped: '停止', exited: '終了',
+};
+const WAITING = {
+  'not running': '起動していません', 'typing a notice': '通知を入力中', busy: '作業が終わるのを待っています',
+  'needs you': 'あなたの判断が終わるのを待っています', starting: '起動を待っています',
+  'you typed in this terminal': 'このターミナルに入力があったため、次の待機まで待っています',
+  settling: 'まもなく通知します', 'wake limit reached': '1 時間に起こせる回数の上限に達しました',
+};
 const XTERM_THEME = {
   background: '#0b0d11', foreground: '#ece5d6', cursor: '#f2b65a', cursorAccent: '#0b0d11',
   selectionBackground: 'rgba(242,182,90,.28)',
@@ -16,7 +26,9 @@ const XTERM_THEME = {
 };
 
 let state = {agents: []};
-let selected = localStorage.getItem('orrery-win.selected') || null;
+// ?agent=NAME opens that agent (links, screenshots); otherwise the last one viewed.
+let selected = new URLSearchParams(location.search).get('agent')
+  || localStorage.getItem('orrery-win.selected') || null;
 const terminals = new Map();  // lower-case name -> {term, fit, ws, el, name}
 
 async function api(method, path, body) {
@@ -43,8 +55,12 @@ function renderRoster() {
   $('empty').hidden = state.agents.length > 0;
   for (const agent of state.agents) {
     const status = el('span', {className: 'status'});
+    if (agent.paused) status.append(el('span', {className: 'tag warn', textContent: 'PAUSED', title: '1 時間に起こせる回数の上限に達しました。時間が経つと再開します。'}));
+    if (agent.queued) status.append(el('span', {className: 'tag', textContent: `✉ ${agent.queued}`,
+      title: `配送待ち: ${WAITING[agent.waiting] || agent.waiting || '待機中になったら通知します'}`}));
     if (agent.unread) status.append(el('span', {className: 'badge', textContent: agent.unread, title: '未読メール'}));
-    status.append(el('span', {className: `dot ${agent.status}`, title: agent.status}));
+    const state = agent.status === 'running' ? agent.activity : agent.status;
+    status.append(el('span', {className: `dot ${state}`, title: ACTIVITY[state] || state}));
     const card = el('li', {className: 'card' + (same(agent.name, selected) ? ' selected' : '')},
       el('img', {className: 'icon', src: ICONS[agent.program], alt: ''}),
       el('span', {className: 'cname', textContent: agent.name}),
@@ -61,7 +77,8 @@ function current() { return state.agents.find((a) => same(a.name, selected)) || 
 function renderStage() {
   const agent = current();
   $('stage-title').textContent = agent ? agent.name : '—';
-  $('stage-meta').textContent = agent ? `${LABELS[agent.program]} · ${agent.cwd} · ${agent.status}` : '';
+  const state = agent && (agent.status === 'running' ? agent.activity : agent.status);
+  $('stage-meta').textContent = agent ? `${LABELS[agent.program]} · ${ACTIVITY[state] || state} · ${agent.cwd}` : '';
   const running = agent && agent.status === 'running';
   $('btn-start').hidden = !agent || running;
   $('btn-resume').hidden = !agent || running;
@@ -90,6 +107,9 @@ function attach(name) {
   const term = new Terminal({
     fontFamily: "'IBM Plex Mono', Consolas, monospace", fontSize: 13, lineHeight: 1.0,
     cursorBlink: true, scrollback: 6000, theme: XTERM_THEME, allowProposedApi: true,
+    // ConPTY reflows its own buffer on resize and repaints only what changed;
+    // xterm.js must not reflow too, or the two screens disagree.
+    windowsPty: {backend: 'conpty', buildNumber: state.windows_build || 22621},
   });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
@@ -97,21 +117,30 @@ function attach(name) {
   term.open(holder);
   const view = {name, term, fit, el: holder, ws: null, retry: 0};
   terminals.set(key, view);
-  term.onData((data) => send(view, {type: 'input', data}));
+  // Before the replay is drawn, anything xterm "types" is its own answers to
+  // queries in old output; the live program must not receive those.
+  term.onData((data) => { if (view.synced) send(view, {type: 'input', data}); });
   new ResizeObserver(() => { if (!holder.hidden) fitView(view); }).observe(holder);
   connect(view);
-  requestAnimationFrame(() => fitView(view));
   return view;
 }
 
+// ConPTY's output is itself a drawing of its screen at its current size, so
+// the replay is drawn at exactly that size first. Only then does this view
+// fit its own box; the resize makes ConPTY repaint the screen to match.
 function connect(view) {
   const ws = new WebSocket(`ws://${location.host}/ws/${encodeURIComponent(view.name)}`);
   view.ws = ws;
-  ws.onopen = () => { view.retry = 0; sendSize(view); };
+  view.synced = false;
+  ws.onopen = () => { view.retry = 0; };
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
-    if (message.type === 'hello') view.term.reset();
-    else if (message.type === 'reset') view.term.reset();
+    if (message.type === 'hello') {
+      view.term.reset();
+      view.term.resize(message.cols, message.rows);
+      if (!message.replay) sync(view);
+    } else if (message.type === 'reset') view.term.reset();
+    else if (message.type === 'output' && !view.synced) view.term.write(message.data, () => sync(view));
     else if (message.type === 'output') view.term.write(message.data);
     else if (message.type === 'exit') {
       view.term.write(`\r\n\x1b[2m[exited${message.exit_code == null ? '' : ' ' + message.exit_code}]\x1b[0m\r\n`);
@@ -129,7 +158,14 @@ function send(view, message) {
   if (view.ws && view.ws.readyState === WebSocket.OPEN) view.ws.send(JSON.stringify(message));
 }
 
+function sync(view) {
+  if (view.synced) return;
+  view.synced = true;
+  fitView(view);
+}
+
 function fitView(view) {
+  if (!view.synced || view.el.hidden) return;  // Until the replay is drawn, keep ConPTY's size.
   try { view.fit.fit(); } catch (_) { return; }
   sendSize(view);
 }
