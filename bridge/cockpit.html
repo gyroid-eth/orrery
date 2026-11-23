@@ -198,10 +198,25 @@
   .clock{font-variant-numeric:tabular-nums;color:var(--ink);letter-spacing:.08em;font-size:12px}
 
   /* ── body grid ─────────────────────────── */
-  .grid{display:grid;grid-template-columns:272px minmax(0,1fr) minmax(318px,24vw);height:100%;min-height:0}
+  .grid{
+    --roster-width:272px;--mail-min-width:260px;--center-min-width:360px;
+    --mail-width:max(318px,24vw);
+    --mail-track:clamp(var(--mail-min-width),var(--mail-width),calc(100% - var(--roster-width) - var(--center-min-width)));
+    display:grid;grid-template-columns:var(--roster-width) minmax(0,1fr) var(--mail-track);
+    height:100%;min-height:0;
+  }
   .col{min-height:0;display:flex;flex-direction:column;overflow:hidden}
   .col.roster{border-right:1px solid var(--hair)}
-  .col.mail{border-left:1px solid var(--hair)}
+  .col.mail{grid-column:3;grid-row:1;border-left:1px solid var(--hair)}
+  .mail-divider{
+    position:relative;z-index:4;grid-column:3;grid-row:1;justify-self:start;translate:-50% 0;width:12px;
+    cursor:col-resize;touch-action:none;outline:none;
+  }
+  .mail-divider::after{
+    content:"";position:absolute;left:50%;top:50%;translate:-50% -50%;
+    width:2px;height:32px;border-radius:2px;background:var(--ink-faint);
+  }
+  .mail-divider:is(:hover,:focus-visible,.dragging)::after{background:var(--amber);width:3px}
 
   .colhead{
     display:flex;align-items:center;justify-content:space-between;
@@ -1084,7 +1099,7 @@
   /* ── pane windows: a session out of the cockpit ── */
   /* the page itself in solo mode: only the terminal and its composer */
   html.pane-window .app{grid-template-rows:1fr}
-  html.pane-window header,html.pane-window .col.roster,html.pane-window .col.mail,
+  html.pane-window header,html.pane-window .col.roster,html.pane-window .col.mail,html.pane-window .mail-divider,
   html.pane-window .tabstrip{display:none}
   html.pane-window .grid{grid-template-columns:1fr}
   html.pane-window .screen{margin:0;border-radius:0;border:0}
@@ -1127,7 +1142,7 @@
   .pane-out-chip .back{font-family:var(--mono);font-size:11px;color:var(--ink-faint);padding:0 2px}
   .pane-out-chip .back:hover{color:var(--amber)}
   @media(max-width:1000px){
-    .grid{grid-template-columns:250px 1fr}.col.mail{display:none}
+    .grid{grid-template-columns:250px 1fr}.col.mail,.mail-divider{display:none}
     header{gap:8px;padding:0 14px}.brand .sub,.topstat:nth-of-type(2){display:none}
   }
   @media(max-width:680px){
@@ -1274,7 +1289,10 @@
     </div>
 
     <!-- ─── MAIL / TELEMETRY (demo data this slice) ─── -->
-    <div class="col mail">
+    <div class="mail-divider" id="mailDivider" role="separator" tabindex="0" aria-orientation="vertical"
+         aria-controls="mailRail" aria-label="Resize Agent Mail"
+         title="Resize Agent Mail with arrow keys or drag. Enter or double-click to reset."></div>
+    <div class="col mail" id="mailRail">
       <div class="colhead mail-head">
         <span>Agent Mail</span>
         <span class="tag" id="mailTag" role="status" hidden></span>
@@ -1637,6 +1655,11 @@
             "property": "border-left",
             "selector": ".col.mail",
             "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mail-divider::after",
+            "value": "var(--ink-faint)"
           },
           {
             "property": "color",
@@ -2744,14 +2767,19 @@
             "value": "var(--ink)"
           },
           {
-            "property": "fill",
-            "selector": ".orrery-hover-label",
+            "property": "color",
+            "selector": ".orrery-caption",
             "value": "var(--ink)"
           },
           {
-            "property": "stroke",
-            "selector": ".orrery-hover-label",
-            "value": "var(--bg)"
+            "property": "text-shadow",
+            "selector": ".orrery-caption",
+            "value": "0 1px var(--bg),0 -1px var(--bg),1px 0 var(--bg),-1px 0 var(--bg)"
+          },
+          {
+            "property": "color",
+            "selector": ".orrery-caption-role",
+            "value": "var(--ink-dim)"
           },
           {
             "property": "fill",
@@ -2817,41 +2845,6 @@
             "property": "fill",
             "selector": ".planet-initials",
             "value": "var(--ink)"
-          },
-          {
-            "property": "fill",
-            "selector": ".planet-agent-name",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "stroke",
-            "selector": ".planet-agent-name",
-            "value": "var(--bg)"
-          },
-          {
-            "property": "fill",
-            "selector": ".planet-agent-role",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "stroke",
-            "selector": ".planet-agent-role",
-            "value": "var(--bg)"
-          },
-          {
-            "property": "fill",
-            "selector": ".planet-agent-model",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "stroke",
-            "selector": ".planet-agent-model",
-            "value": "var(--bg)"
-          },
-          {
-            "property": "stroke",
-            "selector": ".planet-agent-state",
-            "value": "var(--bg)"
           },
           {
             "property": "stroke",
@@ -3104,6 +3097,11 @@
             "property": "color",
             "selector": ".sesschip",
             "value": "var(--ink-dim)"
+          },
+          {
+            "property": "background",
+            "selector": ".mail-divider::after",
+            "value": "var(--ink-faint)"
           },
           {
             "property": "color",
@@ -3531,6 +3529,11 @@
             "value": "var(--ink-faint)"
           },
           {
+            "property": "color",
+            "selector": ".orrery-caption-role",
+            "value": "var(--ink-dim)"
+          },
+          {
             "property": "fill",
             "selector": ".orrery-expand text",
             "value": "var(--ink-faint)"
@@ -3539,16 +3542,6 @@
             "property": "color",
             "selector": ".planetarium-note",
             "value": "var(--ink-faint)"
-          },
-          {
-            "property": "fill",
-            "selector": ".planet-agent-role",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "fill",
-            "selector": ".planet-agent-model",
-            "value": "var(--ink-dim)"
           },
           {
             "property": "color",
@@ -3734,13 +3727,14 @@
         "unit": "effect-component"
       },
       "source": {
-        "digest": "74e0dae4da56a7c3536fcad44ef908e1dbfb3698b37c6355b5114b16ae9078ad",
+        "digest": "483e1e0152588dc18b5bfc9078ca36a7d8bb8999836a99a6fa763326568d34ac",
         "records": [
           ":root\u0000--amber-glow",
           ".miniorrery.telemetry-network\u0000background",
           ".miniorrery.telemetry-network .mini-agent.is-network-focus .mini-lineage-ring\u0000filter",
           ".orrery-state-glyph.attention text\u0000filter",
           ".orrery-state-glyph.question text\u0000filter",
+          ".orrery-caption\u0000text-shadow",
           ".planetarium-panel\u0000box-shadow",
           ".mailfilters\u0000box-shadow",
           "body::before\u0000background",
@@ -3794,7 +3788,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "c86587ccc8fbe3b7a4f6103976fbb776384b302de4089aad8e92138ba7622132",
+        "digest": "42f3795ea89e311c0c18bcca4571b238365fe906ec1f12da1f1433928e34c26d",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -3873,13 +3867,11 @@
           ".pane-out-chip .where\u0000font-size",
           ".pane-out-chip .back\u0000font-size",
           ".mini-initial\u0000font-size",
-          ".orrery-hover-label\u0000font-size",
+          ".orrery-caption-role\u0000font-size",
+          ".planet-agent .orrery-caption-role\u0000font-size",
           ".orrery-expand text\u0000font-size",
           ".orrery-comet-label\u0000font-size",
           ".planetarium-note\u0000font-size",
-          ".planet-agent-role\u0000font-size",
-          ".planet-agent-model\u0000font-size",
-          ".planet-agent-state\u0000font-size",
           ".mini-provider-fallback\u0000font-size",
           ".mailview-host time\u0000font-size"
         ],
@@ -3895,7 +3887,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "3d0c5bc3119ddb93dc2b16707c97f49b4b061aca60c285c5e512940ffdcaaa9d",
+        "digest": "5eccbb3a4e666f9903df40ba60053bacf2171b1245b29484cbcdb3584ffe4916",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -3920,17 +3912,15 @@
           ".pane-drag-ghost small\u0000letter-spacing",
           ".pane-out-chip .where\u0000letter-spacing",
           ".planetarium-note\u0000letter-spacing",
-          ".planetarium-telemetry\u0000letter-spacing",
-          ".planet-agent-model\u0000letter-spacing",
-          ".planet-agent-state\u0000letter-spacing"
+          ".planetarium-telemetry\u0000letter-spacing"
         ],
         "unit": "declaration"
       }
     }
   },
-  "inventory_digest": "302d58ed66be599ec5b1065408611ab0a7f4f2df2d94cf5f1a427c5159647f6f",
+  "inventory_digest": "02f23f275016c6db52ea65867dfc1b7ecceea07bb78a6b5d0d800e5890a9f73d",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "5051f3f33ba8ff6ab7c4219de5200b5dc6cfdc66b00738ddfb2cdb470a6d035d",
+  "source_digest": "094353352049e4b3642a534ee9b3388d2c874078a27c11788f97c6b69b113a8e",
   "surface": "cockpit",
   "version": 1
 }
@@ -4621,6 +4611,13 @@ function paneSessionAllowed(session){
 const tabsEl=document.getElementById('tabs');
 const tabstripEl=document.getElementById('tabstrip');
 const stageEl=document.getElementById('termstage');
+const mailDivider=document.getElementById('mailDivider'),mailRail=document.getElementById('mailRail');
+const cockpitGrid=mailRail.parentElement,MAIL_WIDTH_KEY='oc-mail-pane-ratio';
+let mailDividerDrag=null,mailPaneRatio=null;
+try{
+  const stored=Number(localStorage.getItem(MAIL_WIDTH_KEY));
+  if(stored>0&&stored<1)mailPaneRatio=stored;
+}catch(_){/* preference unavailable */}
 const stageEmpty=document.getElementById('stageEmpty');
 /* Set while a terminal-less agent is selected.  The stage must stay empty in
    that state even though panes are still open, otherwise the previous agent's
@@ -4736,6 +4733,7 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   ['.miniorrery.telemetry-network .mini-agent.is-network-focus .mini-lineage-ring','filter',['state','emissive'],'scale','html[data-theme-axis="glow"] .miniorrery.telemetry-network .mini-agent.is-network-focus .mini-lineage-ring'],
   ['.orrery-state-glyph.attention text','filter',['state'],'preserve'],
   ['.orrery-state-glyph.question text','filter',['state'],'preserve'],
+  ['.orrery-caption','text-shadow',['state'],'preserve'],
   ['.planetarium-panel','box-shadow',['elevation'],'preserve'],
   ['.mailfilters','box-shadow',['elevation'],'preserve'],
   ['body::before','background',['emissive'],'scale','html[data-theme-axis="glow"] body::before'],
@@ -4906,29 +4904,6 @@ function numericFontWeight(value){
   if(value==='bold')return 700;
   const numeric=Number(value);
   return Number.isFinite(numeric)?numeric:400;
-}
-function restoreThemeAxisSmallSvgOffsets(){
-  document.querySelectorAll('[data-oc-axis-small-svg-x]').forEach(element=>{
-    element.setAttribute('x',element.dataset.ocAxisSmallSvgX);
-    if(element.dataset.ocAxisSmallSvgY)element.setAttribute('y',element.dataset.ocAxisSmallSvgY);
-    delete element.dataset.ocAxisSmallSvgX;
-    delete element.dataset.ocAxisSmallSvgY;
-  });
-}
-function fitThemeAxisSmallSvgLabel(element){
-  if(!element.matches('.miniorrery .orrery-hover-label')||typeof element.getBBox!=='function')return;
-  const svg=element.ownerSVGElement;
-  const width=svg&&svg.viewBox&&svg.viewBox.baseVal.width;
-  if(!(width>0))return;
-  if(!element.dataset.ocAxisSmallSvgX)element.dataset.ocAxisSmallSvgX=element.getAttribute('x')||'0';
-  if(!element.dataset.ocAxisSmallSvgY)element.dataset.ocAxisSmallSvgY=element.getAttribute('y')||'0';
-  element.setAttribute('x',element.dataset.ocAxisSmallSvgX);
-  element.setAttribute('y',String(Number(element.dataset.ocAxisSmallSvgY)-12));
-  const box=element.getBBox(),margin=2;
-  let shift=0;
-  if(box.x<margin)shift=margin-box.x;
-  if(box.x+box.width+shift>width-margin)shift-=box.x+box.width+shift-(width-margin);
-  if(Math.abs(shift)>.01)element.setAttribute('x',String(Number(element.dataset.ocAxisSmallSvgX)+shift));
 }
 function themeAxisStyleInventory(){
   const rules=[],keyframes=new Set(),keyframeRules=new Map();
@@ -5159,7 +5134,6 @@ function annotateThemeAxisTargets(root=document.body,{
       element.style.setProperty('--oc-axis-tracking-size',`${spacing.toFixed(3)}px`);
     });
   });
-  smallRecords.forEach(record=>{if(!record.pseudo)fitThemeAxisSmallSvgLabel(record.element);});
   return total;
 }
 function stopThemeAxisTargetWatch(){
@@ -5649,7 +5623,6 @@ function applyThemeAxisState({broadcast=true,negativeTrackingBaseline=false}={})
   themeAxisRuntimeMutationCounts=renderThemeAxisRuntimeStyle(axis,value);
   if(axes.some(current=>THEME_PROFILE_AXES.includes(current)))startThemeAxisTargetWatch({negativeTrackingBaseline});
   else{stopThemeAxisTargetWatch();clearThemeAxisTargetAnnotations();}
-  if(!axes.includes('small-text'))restoreThemeAxisSmallSvgOffsets();
   const terminalTheme=currentTerminalTheme();
   panes.forEach(pane=>{pane.term.options.theme=terminalTheme;});
   refreshThemeAxisReports();
@@ -6159,7 +6132,11 @@ function clearSplitDividers(){
   splitDividers.splice(0,splitDividers.length).forEach(divider=>divider.remove());
 }
 function dividerDragActive(){
-  return splitDividers.some(divider=>Boolean(divider._drag));
+  return Boolean(mailDividerDrag)||splitDividers.some(divider=>Boolean(divider._drag));
+}
+function cancelStageFit(){
+  if(stageFitFrame){cancelAnimationFrame(stageFitFrame);stageFitFrame=null;}
+  clearTimeout(resizeTimer);
 }
 function updateDividerDrag(event,divider){
   const drag=divider._drag;
@@ -6188,8 +6165,7 @@ function finishDividerDrag(event,divider){
 function beginDividerDrag(event,divider,track){
   if(event.button!==0)return;
   event.preventDefault();
-  if(stageFitFrame){cancelAnimationFrame(stageFitFrame);stageFitFrame=null;}
-  clearTimeout(resizeTimer);
+  cancelStageFit();
   const count=splitSessions.length,preset=currentSplitPreset(count);
   const rect=stageEl.getBoundingClientRect();
   const size=Math.max(1,track.axis==='col'?rect.width:rect.height);
@@ -6239,6 +6215,97 @@ function visiblePaneIds(){
   if(!splitVisible||!splitSessions.length)return activeId&&panes.has(activeId)?[activeId]:[];
   return splitSessions.map(paneIdForSession).filter(Boolean);
 }
+function mailPaneBounds(){
+  const style=getComputedStyle(cockpitGrid);
+  const available=cockpitGrid.clientWidth-parseFloat(style.getPropertyValue('--roster-width'));
+  const min=parseFloat(style.getPropertyValue('--mail-min-width'));
+  const max=available-parseFloat(style.getPropertyValue('--center-min-width'));
+  return {available,min,max};
+}
+function syncMailDivider(bounds=mailPaneBounds(),width=mailRail.getBoundingClientRect().width){
+  if(!width)return;
+  const percent=value=>Math.round(100*value/bounds.available);
+  setAttr(mailDivider,'aria-valuemin',percent(bounds.min));
+  setAttr(mailDivider,'aria-valuemax',percent(bounds.max));
+  setAttr(mailDivider,'aria-valuenow',percent(width));
+  setAttr(mailDivider,'aria-valuetext',`${Math.round(width)} pixels`);
+}
+function applyMailPaneRatio(){
+  if(mailPaneRatio===null)cockpitGrid.style.removeProperty('--mail-width');
+  else setBox(cockpitGrid,'--mail-width',`calc((100% - var(--roster-width)) * ${mailPaneRatio})`);
+}
+function setMailPaneWidth(width,bounds){
+  const clamped=Math.max(bounds.min,Math.min(bounds.max,width));
+  mailPaneRatio=clamped/bounds.available;
+  applyMailPaneRatio();
+  syncMailDivider(bounds,clamped);
+}
+function persistMailPaneRatio(){
+  try{
+    if(mailPaneRatio===null)localStorage.removeItem(MAIL_WIDTH_KEY);
+    else localStorage.setItem(MAIL_WIDTH_KEY,String(mailPaneRatio));
+  }catch(_){/* keep the live ratio */}
+}
+function resetMailPaneWidth(){
+  mailPaneRatio=null;
+  applyMailPaneRatio();syncMailDivider();persistMailPaneRatio();scheduleFit();
+}
+mailDivider.addEventListener('pointerdown',event=>{
+  if(event.button!==0||dividerDragActive())return;
+  event.preventDefault();
+  cancelStageFit();
+  mailDividerDrag={id:event.pointerId,x:event.clientX,width:mailRail.getBoundingClientRect().width,
+    ratio:mailPaneRatio,bounds:mailPaneBounds()};
+  mailDivider.focus({preventScroll:true});
+  mailDivider.classList.add('dragging');
+  mailDivider.setPointerCapture(event.pointerId);
+});
+function moveMailDivider(event){
+  const drag=mailDividerDrag;
+  if(!drag||event.pointerId!==drag.id)return;
+  if(event.clientX!==drag.x)setMailPaneWidth(drag.width+drag.x-event.clientX,drag.bounds);
+  else{
+    mailPaneRatio=drag.ratio;
+    applyMailPaneRatio();syncMailDivider(drag.bounds,drag.width);
+  }
+}
+mailDivider.addEventListener('pointermove',moveMailDivider);
+function finishMailDivider(event){
+  const drag=mailDividerDrag;
+  if(!drag||event.pointerId!==drag.id)return;
+  if(event.type==='pointerup'){
+    moveMailDivider(event);persistMailPaneRatio();
+  }else{
+    mailPaneRatio=drag.ratio;
+    applyMailPaneRatio();syncMailDivider();
+  }
+  mailDividerDrag=null;
+  mailDivider.classList.remove('dragging');
+  scheduleFit();
+}
+mailDivider.addEventListener('pointerup',finishMailDivider);
+mailDivider.addEventListener('pointercancel',finishMailDivider);
+mailDivider.addEventListener('lostpointercapture',finishMailDivider);
+mailDivider.addEventListener('dblclick',resetMailPaneWidth);
+mailDivider.addEventListener('keydown',event=>{
+  if(mailDividerDrag)return;
+  const bounds=mailPaneBounds(),width=mailRail.getBoundingClientRect().width;
+  const step=event.shiftKey?64:24;
+  let target;
+  switch(event.key){
+    case 'ArrowLeft':target=width+step;break;
+    case 'ArrowRight':target=width-step;break;
+    case 'Home':target=bounds.min;break;
+    case 'End':target=bounds.max;break;
+    case 'Enter':event.preventDefault();resetMailPaneWidth();return;
+    default:return;
+  }
+  event.preventDefault();
+  setMailPaneWidth(target,bounds);persistMailPaneRatio();scheduleFit();
+});
+applyMailPaneRatio();
+syncMailDivider();
+window.addEventListener('resize',()=>syncMailDivider());
 function queueStageFit(focusPaneId=null){
   if(dividerDragActive())return;
   if(stageFitFrame)cancelAnimationFrame(stageFitFrame);
