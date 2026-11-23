@@ -118,6 +118,25 @@ def test_cache_honours_a_back_off_and_keeps_the_stale_snapshot_meanwhile():
     assert again.status == "stale" and again.windows == good.windows
 
 
+def test_newer_stale_dashboard_observation_replaces_pre_reset_usage():
+    cache = up.UsageCache(ttl_seconds=60)
+    before = up.ProviderUsage("claude", "stale", 1000, (
+        up.UsageWindow("seven_day", "7d", 27.0, 604800, 1100),
+    ), reason="account_refresh_scheduled")
+    after = up.ProviderUsage("claude", "stale", 1200, (
+        up.UsageWindow("seven_day", "7d", 100.0, 604800, 7200),
+    ), reason="account_refresh_scheduled")
+
+    cache.put(before, now=1000)
+    assert cache.put(after, now=1200) is after
+    assert cache.get("claude", now=1201).windows[0].remaining_percent == 100.0
+    assert cache.put(before, now=1261).windows == after.windows
+
+    failure = up.ProviderUsage("claude", "unavailable", None, reason="probe_failed")
+    retained = cache.put(failure, now=1322)
+    assert retained.status == "stale" and retained.windows == after.windows
+
+
 # --- reading the dashboard instead of the provider endpoints ---------------
 
 def _quota_entry(provider, buckets, **kwargs):
