@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ORRERY · Windows</title>
+<link rel="icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/vendor/xterm-5.5.0/xterm.css">
+<link rel="stylesheet" href="/web/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">ORR<span class="e">E</span>RY</div>
+  <div class="sub">AGENT COCKPIT · WINDOWS</div>
+  <div class="spacer"></div>
+  <div id="notice" class="notice" hidden></div>
+  <div id="summary" class="summary"></div>
+  <div id="clock" class="clock"></div>
+</header>
+<main class="layout">
+  <aside class="pane roster">
+    <div class="head"><span>AGENT</span><button id="new-agent" class="btn accent">+ NEW AGENT</button></div>
+    <div class="filter"><input id="filter" placeholder="filter agent · cli / folder…" autocomplete="off"></div>
+    <ul id="agents" class="cards"></ul>
+    <p id="empty" class="hint" hidden>まだエージェントがいません。<br>+ NEW AGENT から作成してください。</p>
+  </aside>
+  <section class="pane stage">
+    <div class="head" id="stage-head">
+      <span id="stage-title" class="title">—</span>
+      <span id="stage-meta" class="meta"></span>
+      <div class="spacer"></div>
+      <button id="btn-start" class="btn" hidden>START</button>
+      <button id="btn-resume" class="btn" hidden>RESUME</button>
+      <button id="btn-stop" class="btn" hidden>STOP AGENT</button>
+      <button id="btn-remove" class="btn danger" hidden>REMOVE</button>
+    </div>
+    <div class="term-frame"><div id="terminals" class="terminals"></div></div>
+    <form id="composer" class="composer" hidden>
+      <div class="who">
+        <span class="label">PROMPT</span>
+        <span class="who-row"><img id="composer-face" class="face sm" alt=""><span id="composer-name"></span></span>
+        <span class="keys">⏎ send · ⇧⏎ newline · esc interrupt</span>
+      </div>
+      <textarea id="prompt" rows="3" placeholder="ここに書いて送ります。通知の打ち込みとぶつかりません。⏎ で送信、⇧⏎ で改行、Esc で中断。"></textarea>
+      <div class="send">
+        <button type="button" id="btn-interrupt" class="btn">⊘ STOP</button>
+        <button type="submit" class="btn accent">SEND ⏎</button>
+      </div>
+    </form>
+  </section>
+  <aside class="pane mail">
+    <div class="head"><span>AGENT MAIL</span><span id="mail-count" class="meta"></span></div>
+    <svg id="orbit" class="orbit" viewBox="0 0 300 170" role="img" aria-label="mail between agents"></svg>
+    <div id="chips" class="chips"></div>
+    <ul id="mail" class="mail-list"></ul>
+  </aside>
+</main>
+
+<dialog id="create">
+  <form method="dialog" id="create-form">
+    <h2>NEW AGENT</h2>
+    <label>名前<input name="name" required pattern="[A-Za-z][A-Za-z0-9_.\-]{0,63}" placeholder="alice" autocomplete="off"></label>
+    <label>CLI
+      <select name="program">
+        <option value="claude">Claude Code</option>
+        <option value="agy">Antigravity</option>
+      </select>
+    </label>
+    <label>作業フォルダ<input name="cwd" required placeholder="C:\path\to\project" autocomplete="off"></label>
+    <label class="check"><input type="checkbox" name="resume"> そのフォルダの直前の会話を続ける</label>
+    <p id="create-error" class="error" hidden></p>
+    <div class="actions">
+      <button value="cancel" class="btn" formnovalidate>CANCEL</button>
+      <button value="ok" class="btn accent" id="create-ok">CREATE</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/vendor/xterm-5.5.0/xterm.js"></script>
+<script src="/vendor/addon-fit-0.10.0/addon-fit.js"></script>
+<script src="/vendor/addon-web-links-0.11.0/addon-web-links.js"></script>
+<script src="/web/app.js"></script>
+</body>
+</html>
