@@ -241,6 +241,12 @@ References expire after 15 minutes, are capped at 4096 and are revalidated
 against the live binding, pinned transcript inode and original record digest
 for every read. Browser input cannot register a reference or broaden a root.
 
+Bound history can include `markdown_images: [{target, id}]` on an event.
+`target` preserves the spelling inside the Markdown image destination, including `~/` and spaces inside angle brackets.
+The first eight distinct local raster targets in assistant text and recorded Mail bodies are eligible.
+Only targets with a supported image header and a safely opened file receive an ID.
+The phone uses the existing preview endpoint with the ID, and the server rechecks the original record and the resolved image path before returning PNG.
+
 会話内では、`show_files` の画像と、人の入力として記録された画像を小さく表示し、
 クリックで既存の拡大 preview を開きます。`?ref=<id>&thumbnail=1` は同じ許可を
 確認してから 320×200 以内の PNG を返します。元の chip は tool の中に残ります。
@@ -248,7 +254,7 @@ for every read. Browser input cannot register a reference or broaden a root.
 
 入力画像は Claude の base64 image block、Codex の input_image、dsh の
 content-addressed attachment、Hermes の構造化 image_url を、固定した会話記録から
-参照します。外部 URL は取得せず、本文中の任意の path も自動では開きません。
+参照します。入力画像の参照には外部 URL や本文中の path を使いません。
 bridge が保存した clipboard / `.orrery-input-images` の画像だけは、保存成功時の
 プロセス内の path・ファイル情報と本文を照合します。bridge 再起動前の保存は
 自動表示しません。既存の record 上限（構造化抽出1 MiB、Hermes content 65537以内）

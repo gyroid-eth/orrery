@@ -2289,10 +2289,10 @@ async def conversation_full_read(request, name, query, cursor, limit, polls, sta
                 return polls.remember(name,row,result,signature,verified,digest,provider=provider,fingerprint=fingerprint),True
         store=request.app.get(CONVERSATION_REFERENCES_KEY)
         if store is not None:
-            tools=[event for event in result['events'] if event['kind'] in {'tool','tool_result'} or
-                   event['kind']=='text' and event['role']=='user']
-            if tools:
-                await asyncio.to_thread(store.decorate_all,row,reader,tools)
+            candidates=[event for event in result['events'] if event['kind'] in {'tool','tool_result','mail'} or
+                        event['kind']=='text' and (event['role']=='user' or '![' in event['text'])]
+            if candidates:
+                await asyncio.to_thread(store.decorate_all,row,reader,candidates)
         checked=polls.clock() if polls is not None else 0.0
         try:
             current=await bound_row(asyncio.get_running_loop().time())

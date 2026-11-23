@@ -78,9 +78,9 @@
       if(!response.ok||payload.ok!==true){const error=new Error(MESSAGES[payload.error]||'Preview is unavailable.');error.code=payload.error;throw error;}
       return payload;
     }
-    async pathRequest(url,body,{signal}={}){
+    async pathRequest(url,body,{signal,background=false}={}){
       const response=await this.fetcher(url,{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(body),cache:'no-store',signal});
+        body:JSON.stringify(body),cache:'no-store',signal,...(background&&{backgroundPreview:true})});
       const payload=await response.json();
       if(!response.ok||payload.ok!==true){const error=new Error(MESSAGES[payload.error]||payload.error||'Path is unavailable.');error.code=payload.error;throw error;}
       return payload;

@@ -657,22 +657,23 @@ class Reader:
         if self.provider!='hermes':return None
         return self.rows_digest(*self.snapshot_rows())
 
-    def record_at(self,event_id,cache=None):
+    def record_at(self,event_id,cache=None,*,normalized=False):
         """`cache` (one page's decoration only) shares a record among its blocks."""
         try:pos,line,index=map(int,event_id.split(':'))
         except (ValueError,AttributeError):raise HistoryUnavailable('reference_expired') from None
         if cache is not None:
             if (pos,line) not in cache:
-                try:cache[(pos,line)]=self.record((pos,line))
+                try:cache[(pos,line)]=self.record((pos,line),include_events=True)
                 except HistoryUnavailable as exc:cache[(pos,line)]=exc
             found=cache[(pos,line)]
             if isinstance(found,HistoryUnavailable):raise HistoryUnavailable(str(found))
-            item,raw,indexes=found
-        else:item,raw,indexes=self.record((pos,line))
-        if index not in indexes:raise HistoryUnavailable('reference_expired')
-        return artifact_item(item,self.provider,index),hashlib.sha256(raw).digest()
+            item,raw,events=found
+        else:item,raw,events=self.record((pos,line),include_events=True)
+        if index not in events:raise HistoryUnavailable('reference_expired')
+        projection=events[index] if normalized else artifact_item(item,self.provider,index)
+        return projection,hashlib.sha256(raw).digest()
 
-    def record(self,location):
+    def record(self,location,*,include_events=False):
         pos,line=location
         if self.provider=='hermes':
             self.db.row_factory=sqlite3.Row
@@ -699,7 +700,8 @@ class Reader:
             if line or pos and os.pread(self.fileno(),1,pos-1)!=b'\n':raise HistoryUnavailable('reference_expired')
             raw=os.pread(self.fileno(),MAX_RECORD+1,pos).split(b'\n',1)[0];item=parse(raw)
         if len(raw)>MAX_RECORD:raise HistoryUnavailable('reference_expired')
-        return item,raw,frozenset(dict(normalize(item,self.provider,self.sid)))
+        events=dict(normalize(item,self.provider,self.sid))
+        return item,raw,events if include_events else frozenset(events)
 
     def close(self):
         if self.db is not None:self.db.close()
