@@ -620,7 +620,9 @@ def open_agents_fixture(cockpit, programs, *, reader_enabled=True, unavailable=F
     stable_roster(js)
     roster = [dict(name=name, program=program, running=True, history_binding='bound',
                    transcript_path='/fixture/agent.jsonl') for name, program in programs.items()]
+    # A roster request started before stable_roster can still return an empty list.
     js("""window.packets=[];window.send=packet=>{packets.push(packet);return true};
+      rosterAnnotationEpoch++;
       liveRosterAgents=""" + json.dumps(roster) + """;
       renderRoster();handleSessions(liveRosterAgents.map(agent=>agent.name));
       window.finishAgentAttach=(name,number)=>{
