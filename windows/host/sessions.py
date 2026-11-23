@@ -13,13 +13,14 @@ import os
 import re
 import threading
 import time
+from collections import deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import pyte
 
 from hub.db import Hub, HubError, check_name
-from host import activity, programs
+from host import activity, conversations, programs
 
 REPLAY_CHARS = 400_000
 ENTER_DELAY = 0.5  # Between a submitted prompt and its Enter, as two separate writes.
@@ -55,6 +56,7 @@ class Agent:
     name: str
     program: str
     cwd: str
+    conversation: str | None = None  # Its own conversation, which RESUME reopens.
 
 
 class Session:
@@ -87,6 +89,7 @@ class Session:
         self.started_ts: float | None = None
         self.last_output = 0.0
         self.last_input = 0.0
+        self.enters: deque[float] = deque(maxlen=20)  # When Enter was typed, by anyone.
         self.rows, self.cols = 30, 120
 
     def start(self, launch: programs.Launch, cwd: str, rows: int, cols: int) -> None:
@@ -150,6 +153,8 @@ class Session:
         if self.status == "running" and self.proc is not None:
             if user and typed(data):
                 self.last_input = time.time()
+            if "\r" in data:
+                self.enters.append(time.time())
             self.proc.write(data)
 
     def viewer_input(self, viewer, data: str) -> None:
@@ -283,6 +288,8 @@ class Manager:
                 agent = Agent(check_name(row["name"]), row["program"], row["cwd"])
             except (KeyError, TypeError, HubError):
                 continue
+            if conversations.valid(row.get("conversation")):
+                agent.conversation = row["conversation"].lower()
             if agent.program in programs.PROGRAMS:
                 self.agents[agent.name.lower()] = agent
 
@@ -334,11 +341,51 @@ class Manager:
         session = self.session(name)
         if session.status == "running":
             return session
-        launch = self.builder(agent.program, agent.name, resume=resume, hub_db=self.hub_db,
+        launch = self.builder(agent.program, agent.name, resume=resume,
+                              conversation=agent.conversation, hub_db=self.hub_db,
                               host_url=self.host_url)
         self.hub.register(agent.name, program=agent.program, cwd=agent.cwd)
         session.start(launch, agent.cwd, rows, cols)
+        if launch.conversation != agent.conversation:
+            agent.conversation = launch.conversation
+            self.save()
         return session
+
+    def conversation_seen(self, name: str, conversation: str) -> None:
+        """The agent is now in ``conversation`` (a Claude hook reported it)."""
+        agent = self.agents.get(str(name).lower())
+        if agent is not None and conversations.valid(conversation):
+            conversation = conversation.lower()
+            if agent.conversation != conversation:
+                agent.conversation = conversation
+                self.save()
+
+    def track_agy(self) -> None:
+        """Give each running Antigravity agent the conversation it just began.
+
+        Blocking (file and SQLite reads): run it in an executor. A file is
+        taken only if it is newer than the agent's current conversation,
+        appeared within AFTER_ENTER seconds of an Enter typed into that
+        agent, is in the agent's folder, and is nobody else's.
+        """
+        running = [(self.agents[key], s) for key, s in self.sessions.items()
+                   if key in self.agents and s.program == "agy" and s.status == "running"]
+        if not running:
+            return
+        found = conversations.new_agy_conversations(min(s.started_ts or 0 for _, s in running) - 1)
+        claimed = {a.conversation for a in self.agents.values() if a.conversation}
+        times = {cid: when for cid, when, _ in found}
+        for agent, session in running:
+            current = times.get(agent.conversation or "", 0.0)
+            for cid, when, path in reversed(found):  # Newest first.
+                if cid in claimed or when <= current or when < (session.started_ts or 0) - 1:
+                    continue
+                if not any(-2 <= when - enter <= conversations.AFTER_ENTER for enter in session.enters):
+                    continue
+                if conversations.agy_workspace_is(path, agent.cwd):
+                    self.loop.call_soon_threadsafe(self.conversation_seen, agent.name, cid)
+                    claimed.add(cid)
+                    break
 
     def stop(self, name: str) -> None:
         session = self.sessions.get(self.get(name).name.lower())

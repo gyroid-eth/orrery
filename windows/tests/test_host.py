@@ -190,7 +190,8 @@ class LauncherTest(unittest.TestCase):
                     else:
                         os.environ[key] = value
             self.assertEqual(launch.env["ORRERY_AGENT"], "alice")
-            self.assertIn("--continue", launch.argv)
+            self.assertNotIn("--continue", launch.argv)  # Could open someone else's conversation.
+            self.assertEqual(launch.argv[launch.argv.index("--session-id") + 1], launch.conversation)
             config = json.loads(Path(launch.argv[launch.argv.index("--mcp-config") + 1]).read_text())
             self.assertEqual(config["mcpServers"]["orrery-hub"]["args"][-2:], ["--agent", "alice"])
 
