@@ -77,6 +77,8 @@
       const url=new URL(typeof input==='string'?input:input.url,root.location.href);
       const method=String(init?.method||(typeof input==='string'?'GET':input.method)||'GET').toUpperCase();
       if(url.origin!==origin)return false;
+      // Markdown images load in the background. Opening one still yields held polls.
+      if(init?.backgroundPreview===true&&url.pathname==='/telemetry/conversation/path-image')return false;
       if(method==='GET')return USER_GETS.has(url.pathname);
       return (frame?FRAME_POSTS:USER_POSTS).has(url.pathname);
     }catch(_){return false;}
