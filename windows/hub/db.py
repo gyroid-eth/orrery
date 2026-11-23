@@ -14,7 +14,7 @@ import os
 import re
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 SCHEMA_VERSION = 1
@@ -77,8 +77,10 @@ def default_path() -> Path:
     return Path(base) / "orrery-win" / "hub.db"
 
 
-def now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+def now(offset: float = 0.0) -> str:
+    """UTC timestamp, ``offset`` seconds from now; such strings sort in time order."""
+    moment = datetime.now(timezone.utc) + timedelta(seconds=offset)
+    return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def check_name(name: object) -> str:
@@ -240,13 +242,20 @@ class Hub:
         oldest = rows[-1][0]
         return list(reversed(self._messages("m.id>=?", (oldest,), limit)))
 
-    def pending_notifications(self) -> list[dict]:
-        """Unread mail nobody has been told about yet, for the host's dispatcher."""
+    def pending_notifications(self, renotify_before: str | None = None) -> list[dict]:
+        """Unread mail nobody has been told about yet, for the host's dispatcher.
+
+        With ``renotify_before`` (a timestamp like ``now()``), mail that was
+        notified before then and is still unread comes too: the notice may
+        have been lost, for example when the CLI failed to start its turn.
+        """
         rows = self.db.execute(
-            "SELECT r.message_id, a.name AS recipient, s.name AS sender, m.subject, m.importance"
+            "SELECT r.message_id, a.name AS recipient, s.name AS sender, m.subject, m.importance,"
+            " r.notified_ts"
             " FROM message_recipients r JOIN agents a ON a.id=r.agent_id"
             " JOIN messages m ON m.id=r.message_id JOIN agents s ON s.id=m.sender_id"
-            " WHERE r.read_ts IS NULL AND r.notified_ts IS NULL ORDER BY r.message_id")
+            " WHERE r.read_ts IS NULL AND (r.notified_ts IS NULL OR r.notified_ts < ?)"
+            " ORDER BY r.message_id", (renotify_before or "",))
         return [dict(row) for row in rows]
 
     def mark_notified(self, message_id: int, recipient: str) -> None:

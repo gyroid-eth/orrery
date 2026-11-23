@@ -51,18 +51,34 @@ host は、未読のメールがあるエージェントが待機中になると
 
 配送待ちの通知は roster に `✉ N` と出ます。カーソルを合わせると待っている理由が分かります。
 
+**通知のやり直し**
+
+通知を打ち込んでも、エージェントが動けないことがあります。例えば Antigravity は、`Failed to start a conversation: backend returned an empty conversation id` で始められずにプロンプトへ戻ることがあります。そこで、通知から 60 秒たっても未読のままなら、待機中になったときに `[ORRERY] Unread mail from ...` ともう一度通知します。やり直しは一通につき 2 回までです（host を起動し直すと数え直し）。それでも読まれないメールは、未読のまま残ります。
+
+**打ち込み方**
+
+通知も PROMPT 欄の内容も、プログラムが bracketed paste を有効にしている（`ESC[?2004h`。Claude Code と Antigravity はどちらも有効）ときは、一つの貼り付けとして送り、少し間をおいて Enter を送ります。Claude Code は、続けて届いた入力を貼り付けとみなします。そのため、印のない長い文の直後に送った Enter が改行として取り込まれ、送信されないことがあったからです。
+
 **記録の流し直し**
 
 ブラウザで開き直したときの記録の流し直しは、ConPTY の大きさで描いてから自分の大きさに合わせます。ConPTY は自分の画面を描く命令を出しているので、大きさが違う端末にそのまま流すと崩れるためです。流し直す記録からは、端末への問い合わせ（カーソル位置など）を取り除きます。古い問い合わせへの答えが、今動いているプログラムに届かないようにするためです。複数のタブで同じエージェントを開いたときに自動応答を返すのは、最後に入力したタブか、大きさを変えたタブだけです。
 
 ## 始め方
 
+[start.cmd](start.cmd) をダブルクリックします。host が起動し、既定のブラウザで http://127.0.0.1:8791/ が開きます。**NEW AGENT** から名前、CLI（Claude Code / Antigravity）、作業フォルダを指定します。プロジェクトのフォルダに置くファイルはありません。
+
+- Python は 3.11 以上が必要です。`python`、`py -3` の順に、実際に動いて 3.11 以上のものを探します（Microsoft Store の仮の `python.exe` や古い Python は飛ばします）。決めたいときは環境変数 `ORRERY_PYTHON` に `python.exe` のパスを入れます。
+- 必要なパッケージ（[requirements.txt](requirements.txt)）が無いか古いときは、その場で `pip install` します。
+- 開いた黒い窓が host です。**窓を閉じると、host と、host が起動したエージェントがすべて終了します。** roster は残るので、次に起動したら **RESUME** で再開できます。
+- host がもう動いているときに start.cmd を開くと、二つ目は起動せず、ページだけを開きます。
+- host のオプションはそのまま渡せます（例：`start.cmd --port 8800`）。
+
+手で起動する場合はこうです。
+
 ```
 pip install -r windows\requirements.txt
-python windows\host\server.py
+python windows\host\server.py [--open]
 ```
-
-ブラウザで http://127.0.0.1:8791/ を開き、**NEW AGENT** から名前、CLI（Claude Code / Antigravity）、作業フォルダを指定します。
 
 - host が各エージェントのターミナル（ConPTY）を持ちます。ブラウザを閉じたり再読み込みしたりしても、エージェントは止まりません。開き直すと直近の出力が流し直されます。
 - host を止めると、エージェントも終了します。roster は残るので、**RESUME** を押すとそのフォルダの直前の会話から再開します（`--continue`）。
