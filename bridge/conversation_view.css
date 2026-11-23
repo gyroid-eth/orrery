@@ -48,6 +48,7 @@
 .conversation-event[data-role="user"] .conversation-role{color:var(--ink)}
 .conversation-time{margin-left:auto;color:var(--ink-faint);font-variant-numeric:tabular-nums}
 .conversation-text{margin:0;white-space:pre-wrap;font:12px/1.85 var(--mono);color:var(--ink);tab-size:2}
+.conversation-live .conversation-text::after{content:"";display:inline-block;width:1px;height:.95em;margin-left:2px;vertical-align:-.1em;background:currentColor;opacity:.65}
 .conversation-event[data-kind="tool"]{padding:11px 0}
 .conversation-event[data-kind="tool"] .conversation-byline{margin:0}
 .conversation-tool-name{color:var(--ink-dim);font:11px/1.6 var(--mono);overflow-wrap:anywhere}

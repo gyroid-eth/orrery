@@ -273,6 +273,28 @@
       if(atBottom)scroll.scrollTop=scroll.scrollHeight;else restoreAnchor(saved,top);
       position();remember(true);
     }
+    function paintLiveText(current=getContext()||{}){
+      const sample=opened&&presented&&!document.hidden&&mode&&!paused&&current.running===true&&
+        fingerprint(current)===contextKey?current.reader_live_text:null;
+      if(liveSample?.id===sample?.id&&liveSample?.text===sample?.text)return;
+      const newSample=sample&&liveSample?.id!==sample.id;
+      if(!sample||sample.id===consumedLiveId||newSample&&[...events.values()].slice(-16).some(event=>liveMatches(event,sample))){
+        if(liveRow)changeTail(()=>{liveRow.remove();liveRow=null;liveSample=null;empty.hidden=events.size>0||submissions.length>0;});
+        return;
+      }
+      changeTail(()=>{
+        if(newSample){
+          liveRow?.remove();
+          liveRow=node({role:'assistant',kind:'text',text:sample.text,ts:sample.at},{live:true});
+          eventsEl.appendChild(liveRow);
+        }else{
+          const body=liveRow.querySelector('.conversation-text').firstChild;
+          if(root.OrreryDemo?.on)body.data=sample.text;
+          else body.appendData(sample.text.slice(liveSample.text.length));
+        }
+        liveSample=sample;empty.hidden=true;
+      });
+    }
     function paintSubmissionExpansion(){
       for(const row of pendingEl.children){
         const text=row.querySelector('.conversation-submission-text'),more=row.querySelector('.conversation-submission-more');
@@ -414,6 +436,10 @@
     let layoutTimer=0,layoutFrame=0,layoutPending=false,restoring=false,userScrolling=false,layoutStarted=0;
     panel.dataset.conversationLayout="idle";
     let contextKey='',boundContext={},paused=false,retainedBytes=0,providerLabel='Codex',followPending=false,jumpTimer=0;
+    let liveRow=null,liveSample=null,consumedLiveId=null;
+    const assistantText=event=>event.role==='assistant'&&event.kind==='text'&&event.variant!=='update';
+    const liveMatches=(event,sample)=>assistantText(event)&&
+      event.text.replace(/\s+/gu,' ').trim().startsWith(sample.text.replace(/\s+/gu,' ').trim());
     const stepView=root.OrreryConversationSteps?.mount({host:eventsEl,
       mutate:fn=>changeTail(fn,false),onFocusLost:()=>scroll.focus({preventScroll:true})});
     const byteSize=event=>new TextEncoder().encode(JSON.stringify(event)).byteLength;
@@ -479,7 +505,7 @@
     }
     function modeMessage(text){if(!text&&document.activeElement===modeInfo&&opened)scroll.focus({preventScroll:true});modeInfo.title=text;modeInfo.setAttribute('aria-label',text);paintStatus();}
     function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;sessionReloadAttempted=false;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=holding=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
-    function clear({keepSubmissions=false}={}){hideSelection();closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();stepView?.reset();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();preview?.resetInline();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
+    function clear({keepSubmissions=false}={}){hideSelection();closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();stepView?.reset();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();preview?.resetInline();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();liveRow=null;liveSample=null;before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
       if(tableMutating)return;
@@ -494,8 +520,8 @@
       });};
       apply();tableFrame=requestAnimationFrame(()=>{tableFrame=0;apply();tableMutating=false;});
     }
-    function draw(event){
-      const article=renderEvent?renderEvent(event,node):node(event);
+    function draw(event,reuse){
+      const article=renderEvent?renderEvent(event,node):node(event,{article:reuse});
       article.querySelectorAll('.conversation-table-scroll').forEach((table,index)=>{
         table.addEventListener('scroll',()=>{
           if(!tableMutating&&table.isConnected&&table.getClientRects().length)tablePositions.set(tableKey(article,index),table.scrollLeft);
@@ -506,7 +532,8 @@
     // Keep message nodes in place so selections and previews survive polling.
     const rawRows=()=>[...eventsEl.children].filter(child=>child.dataset.eventId!==undefined);
     const visibleRows=()=>[...eventsEl.children,...pendingEl.children,activityEl].filter(child=>!child.hidden);
-    const rowKey=child=>JSON.stringify(child.dataset.stepsGroup?['steps',child.dataset.stepsGroup]:child.dataset.inlineFor?['images',child.dataset.inlineFor]:child.dataset.toolGroup?['tools',child.dataset.toolGroup]:child.dataset.receiptKey?['receipt',child.dataset.receiptKey]:child===activityEl?['activity']:['event',child.dataset.eventId]);
+    const liveKey=JSON.stringify(['live']);
+    const rowKey=child=>child===liveRow?liveKey:JSON.stringify(child.dataset.stepsGroup?['steps',child.dataset.stepsGroup]:child.dataset.inlineFor?['images',child.dataset.inlineFor]:child.dataset.toolGroup?['tools',child.dataset.toolGroup]:child.dataset.receiptKey?['receipt',child.dataset.receiptKey]:child===activityEl?['activity']:['event',child.dataset.eventId]);
     function setGroupOpen(group,open){
       saveTables();const top=group.button.getBoundingClientRect().top;
       group.open=open;group.button.setAttribute('aria-expanded',String(open));
@@ -701,9 +728,10 @@
       }
       return removed;
     }
-    function node(event){
-      const article=document.createElement('article');article.className='conversation-event';
-      article.dataset.eventId=event.id;article.dataset.role=event.role;article.dataset.kind=event.kind;
+    function node(event,{article=document.createElement('article'),live=false}={}){
+      article.replaceChildren();article.className='conversation-event';
+      if(live)article.classList.add('conversation-live');else article.dataset.eventId=event.id;
+      article.dataset.role=event.role;article.dataset.kind=event.kind;
       if(event.step_turn){article.hidden=true;return article;}
       if(event.kind==='system'){
         const toggle=document.createElement('button');toggle.type='button';toggle.className='conversation-system-toggle';toggle.setAttribute('aria-expanded','false');
@@ -734,7 +762,8 @@
       byline.appendChild(time);article.appendChild(byline);
       if(!['tool','tool_result'].includes(event.kind)){
         const text=document.createElement('div');text.className='conversation-text';
-        if(event.role==='assistant'&&root.OrreryConversationMarkdown){
+        if(live)text.textContent=event.text;
+        else if(event.role==='assistant'&&root.OrreryConversationMarkdown){
           text.className+=' conversation-markdown';root.OrreryConversationMarkdown.renderDocument(event.text,text,{codeControls:true});
           // A single paragraph needs no block wrapper in a conversation row.
           if(text.childNodes.length===1&&text.firstChild.nodeName==='P')text.replaceChildren(...text.firstChild.childNodes);
@@ -742,6 +771,7 @@
         else if(root.OrreryConversationMarkdown){if(!root.OrreryConversationMarkdown.renderCommand(event.text,text))root.OrreryConversationMarkdown.renderText(event.text,text);}
         else text.textContent=event.text;article.appendChild(text);
       }
+      if(live)return article;
       if(event.truncated){const note=document.createElement('div');note.className='conversation-truncated';note.textContent='Long message shortened in this reader.';article.appendChild(note);}
       const target=article.querySelector('.conversation-text')||byline;
       if(jumpToEvent){
@@ -880,7 +910,7 @@
         const additions=incoming.filter(event=>!events.has(event.id));
         if(!fresh&&direction==='newer'&&!atBottom&&
           (events.size+additions.length>MAX_EVENTS||retainedBytes+additions.reduce((n,event)=>n+byteSize(event),0)>MAX_BYTES)){
-          paused=true;message('Updates paused at reader limit. Scroll to the bottom or select Latest to resume.','Updates paused');position();return;
+          paused=true;paintLiveText();message('Updates paused at reader limit. Scroll to the bottom or select Latest to resume.','Updates paused');position();return;
         }
         // Native snapshots repeat their current window. Leave an identical
         // window attached so a poll neither clears a text selection nor lays
@@ -888,6 +918,24 @@
         const snapshot=fresh?incoming.slice(-200):null,previousRows=fresh?[...events.values()]:null;
         const unchangedSnapshot=fresh&&snapshot.length===previousRows.length&&snapshot.every((event,index)=>
           event.id===previousRows[index].id&&JSON.stringify(event)===JSON.stringify(previousRows[index]));
+        let replacement=null,reused=null;
+        if(liveSample&&direction!=='older'){
+          const recorded=(fresh?snapshot:additions).filter(event=>assistantText(event)&&
+            (!events.has(event.id)||fresh&&events.get(event.id).text!==event.text));
+          if(recorded.length){
+            const matching=recorded.filter(event=>liveMatches(event,liveSample));
+            replacement=matching.length===1?matching[0]:null;
+            consumedLiveId=liveSample.id;
+            if(replacement&&!renderEvent)reused=liveRow;else liveRow.remove();
+            if(replacement){
+              const id=JSON.stringify(['event',replacement.id]);
+              if(saved?.id===liveKey)saved.id=id;
+              if(saved?.next?.id===liveKey)saved.next.id=id;
+            }
+            liveRow=null;liveSample=null;
+          }
+        }
+        const drawRecorded=event=>draw(event,event===replacement?reused:undefined);
         if(!unchangedSnapshot){saveTables();tableMutating=true;}
         const fragment=document.createDocumentFragment(),focusedGroup=toolGroups.find(group=>group.button===document.activeElement);let added=0;
         if(fresh&&!unchangedSnapshot){
@@ -899,15 +947,16 @@
           for(const event of snapshot){
             if(events.has(event.id))continue;
             events.set(event.id,event);retainedBytes+=byteSize(event);
-            fragment.appendChild(existing.has(event.id)&&JSON.stringify(previous.get(event.id))===JSON.stringify(event)?existing.get(event.id):draw(event));if(!previous.has(event.id))added++;
+            fragment.appendChild(existing.has(event.id)&&JSON.stringify(previous.get(event.id))===JSON.stringify(event)?existing.get(event.id):drawRecorded(event));if(!previous.has(event.id))added++;
           }
+          if(liveRow)fragment.appendChild(liveRow);
           eventsEl.replaceChildren(fragment);
         }else if(!fresh){
-          for(const event of additions){fragment.appendChild(draw(event));added++;}
+          for(const event of additions){fragment.appendChild(drawRecorded(event));added++;}
           if(direction==='older'){
             events=new Map([...additions.map(event=>[event.id,event]),...events]);eventsEl.prepend(fragment);
           }else{
-            additions.forEach(event=>events.set(event.id,event));eventsEl.appendChild(fragment);
+            additions.forEach(event=>events.set(event.id,event));eventsEl.insertBefore(fragment,liveRow);
           }
           retainedBytes+=additions.reduce((n,event)=>n+byteSize(event),0);
         }
@@ -918,7 +967,7 @@
         for(const key of tablePositions.keys())if(!events.has(JSON.parse(key)[0]))tablePositions.delete(key);
         if(!unchangedSnapshot)restoreTables();
         reconcileSubmissions(incoming,direction,sequence);
-        empty.hidden=events.size>0||submissions.length>0;empty.textContent='No conversation messages in this portion yet.';
+        empty.hidden=events.size>0||submissions.length>0||Boolean(liveRow);empty.textContent='No conversation messages in this portion yet.';
         if(direction==='initial'||direction==='newer'&&atBottom)scroll.scrollTop=scroll.scrollHeight;
         else if(direction==='older')restoreAnchor(saved,Math.max(0,oldTop+scroll.scrollHeight-oldHeight));
         else{restoreAnchor(saved,oldTop);newCount+=added;}
@@ -930,6 +979,7 @@
           page.skipped_large_record?'A large record was skipped. Load earlier to continue.':'',
           paused?'Updates paused':trimmed&&!fresh?'Older released':page.skipped_large_record?'Record skipped':'');
         position();if(direction==='initial'||direction==='newer'&&atBottom)remember(true);
+        paintLiveText();
         if(direction!=='older')last.rows=added;
       }catch(error){
         waiting.delete(holder);
@@ -972,7 +1022,7 @@
       root.OrreryConversationMail?.refreshPeers?.(panel,renderPeerAvatar);
       for(const heading of panel.querySelectorAll('.conversation-speaker'))root.OrreryConversationSpeaker?.paint(heading,
         {name:agent,model:heading.dataset.recordedModel,harness:heading.dataset.harness,context:current,renderAvatar});
-      if(name===agent&&key===contextKey){paintActivity(current);return;}
+      if(name===agent&&key===contextKey){paintActivity(current);paintLiveText(current);return;}
       readContext(current);
     }
     function readContext(current,op=null){
@@ -1107,10 +1157,10 @@
     listen(document,'oc:stage-agent',context);
     listen(document,'oc:focus-agent',context);
     listen(document,'oc:agents',context);
-    listen(document,'oc:reader-activity',()=>{if(opened&&presented)paintActivity();});
+    listen(document,'oc:reader-activity',()=>{if(opened&&presented){const current=getContext()||{};paintActivity(current);paintLiveText(current);}});
     // A hidden tab keeps no held poll: end one that is waiting, so its
     // browser connection and the server's slot are returned at once.
-    listen(document,'visibilitychange',()=>{preview?.setVisible(opened&&presented&&!document.hidden);paintActivity();if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
+    listen(document,'visibilitychange',()=>{preview?.setVisible(opened&&presented&&!document.hidden);paintActivity();paintLiveText();if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
     preference();paintControls();
     return Object.freeze({open,close,relocate,reconcile:context,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
       dispose(){cancelAnimationFrame(selectionFrame);stopPathLinks?.();ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();submissionObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});preview?.dispose();clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();noticeMenu.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
