@@ -18,6 +18,7 @@ const peerAvatars=new Map();
 const motion=matchMedia('(prefers-reduced-motion: reduce)');
 let activeFilter='',waitingOnly=false,filterRequest=0;
 let drawer=null,drawerMotion=null,drawerMotionTimer=0,replyRequest=0;
+let paintedBody=null,observingPaths=false;
 let hoveredRoute=null,focusedRoute=null;
 let manualGraphOpen=false;
 const VIEW_KEY='oc-mail-view';
@@ -579,89 +580,6 @@ function ingest(list,{live=false}={}){
   }
   renderMail({animate:fresh.size>0,fresh});
 }
-/* Escape the complete source before introducing our own small, fixed tag set.
-   Link destinations and raw HTML are never emitted into the DOM. */
-function plainMarkdownLinks(source){
-  let result='';
-  let index=0;
-  while(index<source.length){
-    const image=source[index]==='!'&&source[index+1]==='[';
-    const labelStart=image?index+1:index;
-    if(source[labelStart]==='['){
-      const labelEnd=source.indexOf(']',labelStart+1);
-      if(labelEnd>=0&&source[labelEnd+1]==='('){
-        let cursor=labelEnd+2;
-        let depth=1;
-        while(cursor<source.length&&depth){
-          if(source[cursor]==='\\'){cursor+=2;continue;}
-          if(source[cursor]==='(')depth++;
-          else if(source[cursor]===')')depth--;
-          cursor++;
-        }
-        if(depth===0){
-          result+=source.slice(labelStart+1,labelEnd);
-          index=cursor;
-          continue;
-        }
-      }
-    }
-    result+=source[index];
-    index++;
-  }
-  return result;
-}
-
-function inlineMarkdown(escaped){
-  const code=[];
-  let value=escaped.replace(/`([^`\n]+)`/g,(_,contents)=>{
-    const index=code.push('<code>'+contents+'</code>')-1;
-    return '\uE000'+index+'\uE001';
-  });
-  value=plainMarkdownLinks(value);
-  value=value.replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>');
-  value=value.replace(/__([^_\n]+)__/g,'<strong>$1</strong>');
-  return value.replace(/\uE000(\d+)\uE001/g,(_,index)=>code[Number(index)]||'');
-}
-
-function renderMarkdown(source){
-  const escaped=E(text(source).replace(/\r\n?/g,'\n'));
-  const lines=escaped.split('\n');
-  const html=[];
-  let fenced=false;
-  let code=[];
-  const flushCode=()=>{
-    html.push('<pre><code>'+code.join('\n')+'</code></pre>');
-    code=[];
-  };
-  lines.forEach(line=>{
-    if(/^\s*```/.test(line)){
-      if(fenced){flushCode();fenced=false;}else{fenced=true;code=[];}
-      return;
-    }
-    if(fenced){code.push(line);return;}
-    const heading=line.match(/^(#{1,6})\s+(.+)$/);
-    if(heading){
-      const level=Math.min(heading[1].length,4);
-      html.push('<h'+level+'>'+inlineMarkdown(heading[2])+'</h'+level+'>');
-      return;
-    }
-    const unordered=line.match(/^\s*[-+*]\s+(.+)$/);
-    if(unordered){
-      html.push('<div class="md-list-row"><span class="md-marker">•</span><span>'+inlineMarkdown(unordered[1])+'</span></div>');
-      return;
-    }
-    const ordered=line.match(/^\s*(\d+)[.)]\s+(.+)$/);
-    if(ordered){
-      html.push('<div class="md-list-row"><span class="md-marker">'+E(ordered[1])+'.</span><span>'+inlineMarkdown(ordered[2])+'</span></div>');
-      return;
-    }
-    if(!line.trim()){html.push('<div class="md-space"></div>');return;}
-    html.push('<p>'+inlineMarkdown(line)+'</p>');
-  });
-  if(fenced)flushCode();
-  return html.join('');
-}
-
 function peerHtml(name,fallback,title=''){
   const portrait=name?'<span class="mail-peer-avatar" aria-hidden="true" data-mail-peer="'+E(name)+'"></span>':'';
   return '<span class="mail-peer"'+(title?' title="'+E(title)+'"':'')+'>'+portrait+
@@ -676,9 +594,26 @@ function routeHtml(message){
   return '<div class="drawer-route">'+routePeople(message.sender,message.recipients)+timeHtml(message.ts)+'</div>';
 }
 function detailHtml(message){
-  const body=message.body_md??message.excerpt;
-  return routeHtml(message)+'<h2>'+E(titleFor(message))+'</h2>'+
-    '<div class="mail-md">'+(body?renderMarkdown(body):'<p class="md-empty">No message text</p>')+'</div>';
+  return routeHtml(message)+'<h2>'+E(titleFor(message))+'</h2><div class="mail-md conversation-text"></div>';
+}
+function renderDrawerBody(message){
+  const host=drawerBody.querySelector('.mail-md'),body=message.body_md??message.excerpt;
+  if(paintedBody?.host===host&&paintedBody.body===body)return;
+  const item={host,body};paintedBody=item;
+  host.textContent=body||'No message text';
+  host.classList.toggle('md-empty',!body);
+  host.classList.remove('conversation-markdown');
+  if(!body)return;
+  loadCockpitMarkdown().then(()=>{
+    if(paintedBody!==item)return;
+    const markdown=window.OrreryConversationMarkdown;
+    host.replaceChildren();host.classList.add('conversation-markdown');
+    markdown.renderDocument(body,host,{codeControls:true});
+    if(!observingPaths){
+      markdown.observePaths(drawerBody,new OrreryConversationSource.Source());
+      observingPaths=true;
+    }
+  },()=>{if(paintedBody===item)paintedBody=null;});
 }
 function replyHtml(message,inferred=false){
   return '<button type="button" class="thread-item" data-reply="'+E(message.key)+'">'+routeHtml(message)+
@@ -718,9 +653,11 @@ function renderDrawer({initial=false}={}){
   const head=drawerLinkSource(assignment,message)+(message?control('thread','Back to request','thread'):'')+
     control('close','Close mail','close');
   if(drawerHead.markup!==head){drawerHead.innerHTML=head;drawerHead.markup=head;}
-  const body=detailHtml(message||state.request||assignment.request)+
+  const shown=message||state.request||assignment.request;
+  const body=detailHtml(shown)+
     (state.failed?'<p class="drawer-empty" role="status">Could not load the full message. Reopen it to retry.</p>':'');
   paintPeerMarkup(drawerBody,body);
+  renderDrawerBody(shown);
   drawerChain.hidden=Boolean(message||!entries.length);
   const inferred=new Set(assignment.inferred);
   const chain=entries.map(item=>replyHtml(item,inferred.has(item))).join('');
@@ -873,6 +810,19 @@ drawerEl.addEventListener('click',event=>{
     renderDrawer({initial:true});drawerScroll.scrollTop=0;
   }else if(button?.dataset.reply!==undefined)openReply(drawer.entries.find(item=>item.key===button.dataset.reply));
 });
+function activateMailLink(event){
+  if(!drawer||event.type==='auxclick'&&event.button!==1)return;
+  const link=event.target.closest('.mail-md a');
+  if(!link)return;
+  if(event.detail>1||!window.getSelection()?.isCollapsed){event.preventDefault();return;}
+  if(link.dataset.localPath){
+    event.preventDefault();revealLocalPath(link.dataset.localPath,{literal:true});
+  }else if(/^https?:$/i.test(link.protocol)){
+    event.preventDefault();openExternalUrl(link.href);
+  }
+}
+drawerBody.addEventListener('click',activateMailLink);
+drawerBody.addEventListener('auxclick',activateMailLink);
 
 document.addEventListener('keydown',event=>{
   if(event.key!=='Escape'||document.querySelector('.overlay.on'))return;

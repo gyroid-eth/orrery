@@ -2,8 +2,8 @@
   "axes": {
     "background": {
       "effect": {
-        "digest": "804a9e92de687a96f7aa137b204e08c87c161c6b88c8214710217004c395dc2a",
-        "expected": 292,
+        "digest": "c377e0e2c09500040f4cc82bff083ae09f10639500ef1ba510e7435a0015d248",
+        "expected": 284,
         "records": [
           {
             "property": "background",
@@ -1392,46 +1392,6 @@
           },
           {
             "property": "color",
-            "selector": ".mail-md",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md h1,.mail-md h2,.mail-md h3,.mail-md h4",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md strong",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "border",
-            "selector": ".mail-md code",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md code",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "border",
-            "selector": ".mail-md pre",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md pre code",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".md-marker",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
             "selector": ".md-empty",
             "value": "var(--ink-faint)"
           },
@@ -1611,8 +1571,8 @@
     },
     "dim-contrast": {
       "effect": {
-        "digest": "6bf3d49b4d6cc75faacd06753f58ac2db3a3c996279232305fdb2ac2616625aa",
-        "expected": 109,
+        "digest": "06096c1ab57b68ab7ea64e13d87172f4953cc5486ae28dfb8993947572200d44",
+        "expected": 106,
         "records": [
           {
             "property": "color",
@@ -2133,21 +2093,6 @@
             "property": "color",
             "selector": ".drawer-link-source",
             "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md pre code",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".md-marker",
-            "value": "var(--ink-faint)"
           },
           {
             "property": "color",
@@ -3575,7 +3520,7 @@
       }
     }
   },
-  "inventory_digest": "2b68c8ca3b9751c630b2af651976386ca9861de41ca4382ce9f73af1f9b63309",
+  "inventory_digest": "e32ca45de252e55fc232324b5e24e981820aa54dd52d77d6d5a75690b0d75b05",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -3587,10 +3532,10 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "9b37fc6ca4a4b1b09988a1b5b515b3c5eb60f2e9d8525c87bbcaf3024faf2045",
+  "source_digest": "6b24d829c5f07afa8ad910d03fe0d956b0b5a2d2446c75f834a058ffdeecff4d",
   "source_files": {
-    "bridge/cockpit.html": "1170e5255a7eb643ba0d4fb49e2a19100396af1b2a2eac9fb757422554b6e6b0",
-    "bridge/mail_view.css": "2290150b6e944c57194f5ec3200fda98d3c1f94d057a78a32395ab028c7be924",
+    "bridge/cockpit.html": "578641e9415b569498f1fb302fa68d58b1098e5f4eef4e7d1a469acd1d2240c7",
+    "bridge/mail_view.css": "0fd1dc4ca605a3e49c5742fcc790beff1b9ded955d8eba0b0b0da99ab3afb227",
     "bridge/orrery_view.css": "1ed647e68a0e856403545f04dbfb5d331fb7c4e1b8fef3ccc94d18cfc76d6775"
   },
   "surface": "cockpit",
