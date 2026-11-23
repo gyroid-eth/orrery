@@ -30,6 +30,7 @@ from host.sessions import Manager  # noqa: E402
 WEB = WINDOWS / "web"
 VENDOR = REPO / "bridge" / "vendor"
 ICONS = REPO / "bridge" / "assets"
+PORTRAITS = REPO / "assets" / "portraits_64"  # Public-domain portraits, see CREDITS.md.
 MANAGER = web.AppKey("manager", Manager)
 SETTINGS = web.AppKey("settings", dict)
 
@@ -80,6 +81,7 @@ async def state(request):
         programs={p: programs.find_executable(p) is not None for p in programs.PROGRAMS},
         # xterm.js leaves reflow to ConPTY when it knows the Windows build.
         windows_build=sys.getwindowsversion().build if sys.platform == "win32" else None,
+        portraits=sorted(p.stem for p in PORTRAITS.glob("*.png")),
         hub_db=str(app[MANAGER].hub.path)))
 
 
@@ -206,6 +208,7 @@ async def terminal(request):
                     await ws.send_json(dict(type="exit", exit_code=value))
 
     sender = asyncio.create_task(pump())
+    submits: set[asyncio.Task] = set()
     try:
         async for message in ws:
             if message.type != WSMsgType.TEXT:
@@ -216,6 +219,13 @@ async def terminal(request):
                 continue
             if data.get("type") == "input" and isinstance(data.get("data"), str):
                 session.viewer_input(queue, data["data"])
+            elif data.get("type") == "interrupt":
+                session.owner = queue
+                session.write("\x1b", user=False)  # Esc: both CLIs stop the current turn.
+            elif data.get("type") == "submit" and isinstance(data.get("text"), str):
+                submits.add(asyncio.create_task(session.submit(queue, data["text"][:65536])))
+                for done in [task for task in submits if task.done()]:
+                    submits.discard(done)
             elif data.get("type") == "resize":
                 try:
                     session.viewer_resize(queue, int(data.get("rows")), int(data.get("cols")))
@@ -279,6 +289,7 @@ def make_app(port: int, hub_db: str | None = None, *, builder=None,
     app.router.add_static("/web/", WEB)
     app.router.add_static("/vendor/", VENDOR)
     app.router.add_static("/icons/", ICONS)
+    app.router.add_static("/portraits/", PORTRAITS)
     return app
 
 
