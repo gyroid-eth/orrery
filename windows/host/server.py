@@ -156,10 +156,12 @@ async def screen(request):
 async def hook(request):
     """Claude hooks (host/hook.py): SessionStart, UserPromptSubmit, Stop."""
     data = await body(request)
-    session = request.app[MANAGER].sessions.get(str(data.get("agent", "")).lower())
+    manager = request.app[MANAGER]
+    session = manager.sessions.get(str(data.get("agent", "")).lower())
     if session is None:
         return error("no such session", 404)
     session.hook(str(data.get("event", "")))
+    manager.conversation_seen(session.name, str(data.get("session_id") or ""))
     return web.json_response(dict(ok=True, activity=session.activity))
 
 
@@ -255,14 +257,27 @@ async def on_startup(app):
                            builder=settings.get("builder"))
     dispatcher = Dispatcher(app[MANAGER], **settings.get("dispatcher", {}))
     settings["dispatcher_task"] = loop.create_task(dispatcher.run())
+    settings["tracker_task"] = loop.create_task(track_conversations(app[MANAGER]))
     if settings.get("check_agy", True):
         settings["agy_hub"] = await loop.run_in_executor(None, programs.agy_hub_registered)
 
 
+async def track_conversations(manager, interval: float = 3.0):
+    """Keep each Antigravity agent's conversation id current (Manager.track_agy)."""
+    loop = asyncio.get_running_loop()
+    while True:
+        try:
+            await loop.run_in_executor(None, manager.track_agy)
+        except Exception as exc:  # A bad scan must not stop the next one.
+            print(f"conversation tracker: {exc!r}", file=sys.stderr, flush=True)
+        await asyncio.sleep(interval)
+
+
 async def on_shutdown(app):
-    task = app[SETTINGS].get("dispatcher_task")
-    if task is not None:
-        task.cancel()
+    for name in ("dispatcher_task", "tracker_task"):
+        task = app[SETTINGS].get(name)
+        if task is not None:
+            task.cancel()
     await asyncio.get_running_loop().run_in_executor(None, app[MANAGER].stop_all)
 
 

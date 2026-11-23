@@ -81,7 +81,11 @@ python windows\host\server.py [--open]
 ```
 
 - host が各エージェントのターミナル（ConPTY）を持ちます。ブラウザを閉じたり再読み込みしたりしても、エージェントは止まりません。開き直すと直近の出力が流し直されます。
-- host を止めると、エージェントも終了します。roster は残るので、**RESUME** を押すとそのフォルダの直前の会話から再開します（`--continue`）。
+- host を止めると、エージェントも終了します。roster は残るので、**RESUME** を押すとそのエージェント自身の会話から再開します。
+  - 会話は ID で開きます（Claude Code は `--resume <id>`、Antigravity は `--conversation <id>`）。ID は roster（`agents.json` の `conversation`）に残します。
+  - `--continue` は使いません。`--continue` はそのフォルダで一番新しい会話を開くので、同じリポジトリで VS Code のパネルなど別の Claude Code を使っていると、その会話をエージェントが乗っ取ってしまうためです（実際に起きました）。
+  - Claude Code：初回の起動で host が ID を決めて渡します（`--session-id`）。`/clear` や `/resume` で会話が変わると、SessionStart の hook が新しい ID を知らせます。
+  - Antigravity：ID を指定して始める方法がありません。最初のプロンプトを送ると会話のファイル（`~/.gemini/antigravity-cli/conversations/<id>.db`）ができるので、そのエージェントの作業フォルダの会話で、Enter を打ってから 30 秒以内にできたものをそのエージェントの会話とみなします。まだ一度もプロンプトを送っていないエージェントの RESUME は、新しい会話になります。
 - 起動したエージェントは、hub の MCP（`orrery-hub`）に自分の名前で参加しています。Claude Code には起動のたびに `--mcp-config` で渡すので、全体設定への登録は要りません。Antigravity は全体登録が必要です。未登録なら画面上部に **REGISTER** が出ます。
 - host は 127.0.0.1 でだけ待ち受けます。他のサイトのページからは操作できないように、Host / Origin と専用ヘッダー（`X-Orrery`）を確認しています。
 - 状態は `%LOCALAPPDATA%\orrery-win\` に置かれます（`agents.json`、各エージェントの設定ファイル、`hub.db`）。ポートは `--port`、もしくは環境変数 `ORRERY_WIN_PORT` で変えられます。

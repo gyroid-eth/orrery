@@ -13,8 +13,11 @@ import re
 import shutil
 import subprocess
 import sys
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
+
+from host import conversations
 
 WINDOWS = Path(__file__).resolve().parent.parent
 MCP_SERVER = WINDOWS / "hub" / "mcp_server.py"
@@ -85,10 +88,19 @@ def clean_environment(env: dict[str, str]) -> dict[str, str]:
 class Launch:
     argv: list[str]
     env: dict[str, str]
+    conversation: str | None = None  # The conversation this run opens, when known up front.
 
 
-def build(program: str, name: str, *, resume: bool = False, hub_db: str | None = None,
-          host_url: str | None = None, extra_args: list[str] | None = None) -> Launch:
+def build(program: str, name: str, *, resume: bool = False, conversation: str | None = None,
+          hub_db: str | None = None, host_url: str | None = None,
+          extra_args: list[str] | None = None) -> Launch:
+    """The command line for one agent.
+
+    ``resume`` reopens ``conversation``, the agent's own. Never ``--continue``:
+    it takes the folder's newest conversation, which may belong to someone
+    else (see conversations.py). Without a conversation to reopen, a new one
+    starts.
+    """
     if program not in PROGRAMS:
         raise ValueError(f"unsupported program {program!r}")
     exe = find_executable(program)
@@ -117,16 +129,24 @@ def build(program: str, name: str, *, resume: bool = False, hub_db: str | None =
             settings = folder / "claude-settings.json"
             settings.write_text(json.dumps({"hooks": hooks}), encoding="utf-8")
             argv += ["--settings", str(settings)]
-        if resume:
-            argv.append("--continue")
+        if resume and conversations.claude_saved(conversation or ""):
+            argv += ["--resume", conversation]
+        else:
+            # Claude saves nothing until the first prompt, so an id that was
+            # never used is simply given again.
+            if not (resume and conversations.valid(conversation)):
+                conversation = str(uuid.uuid4())
+            argv += ["--session-id", conversation]
     else:
         settings = folder / "agy-settings.json"
         settings.write_text(json.dumps({"permissions": {"allow": [f"mcp({MCP_NAME}/*)"]}}),
                             encoding="utf-8")
         argv = [exe, "--settings", str(settings)]
-        if resume:
-            argv.append("--continue")
-    return Launch(argv=argv + list(extra_args or []), env=env)
+        if resume and conversations.valid(conversation):
+            argv += ["--conversation", conversation]
+        else:
+            conversation = None  # Found once its file appears (Manager.track_agy).
+    return Launch(argv=argv + list(extra_args or []), env=env, conversation=conversation)
 
 
 def agy_hub_registered() -> bool | None:
