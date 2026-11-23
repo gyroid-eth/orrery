@@ -1,5 +1,5 @@
-/* Small inert Markdown projection. Never parse HTML, load images or run inline
-   JS: every piece of text reaches the page as a text node. */
+/* Small inert Markdown projection. Never parse HTML or fetch image URLs.
+   The Reader can resolve local image links through its preview service. */
 (function(root){
   'use strict';
   function cells(line){
@@ -206,6 +206,21 @@
   const STRIKE=/~~(?=\S)([\s\S]{0,2000}?\S)~~/y;
   const EMPHASIS=/([*_])(?=\S)([\s\S]{0,2000}?\S)\1/y;
   function at(pattern,text,i){pattern.lastIndex=i;return pattern.exec(text);}
+  function imageLink(alt,target,linked){
+    const caption=alt?alt+' · '+target:target;
+    if(!linked){
+      const href=safeUrl(target);
+      if(href&&/^https?:/i.test(href)){
+        const node=anchor(href);node.className='markdown-image';node.textContent=caption;return node;
+      }
+      if(/^(?:\/(?!\/)|~\/)/.test(target)&&!/[\x00-\x1f\x7f]/.test(target)&&/\.(?:png|jpe?g|gif|webp)$/i.test(target)){
+        const node=el('a','markdown-image');node.href='#';node.dataset.localPath=target;node.dataset.markdownImage=alt;
+        node.title='Preview '+target;
+        const label=el('span','markdown-image-label');label.textContent=caption;node.appendChild(label);return node;
+      }
+    }
+    const label=el('span','markdown-image');label.textContent='[image'+(alt?': '+alt:'')+']';label.title=target;return label;
+  }
   function inline(text,host,depth=0,inLink=false){
     let plain='';
     // Next `]`, next newline, the `]` whose target already failed, and the
@@ -223,7 +238,6 @@
     }
     const flush=()=>{if(plain){host.appendChild(document.createTextNode(plain));plain='';}};
     const wrap=(tag,inner,cls)=>{flush();const node=el(tag,cls);if(depth<MAX_DEPTH)inline(inner,node,depth+1,inLink||tag==='a');else node.textContent=inner;host.appendChild(node);return node;};
-    const image=(alt,target)=>{const label=el('span','markdown-image');label.textContent='[image'+(alt?': '+alt:'')+']';label.title=target;return label;};
     function link(target,fill){
       flush();const href=safeUrl(target),path=!href&&barePath(target,0),node=path?.path&&path.last===target.length?pathNode(target,''):el(href?'a':'span',href?'':'markdown-link-text');
       if(href){node.href=href;node.target='_blank';node.rel='noopener noreferrer';node.referrerPolicy='no-referrer';node.title=href;}
@@ -255,12 +269,12 @@
         }
         plain+='`'.repeat(run);i+=run;continue;
       }
-      if(ch==='!'&&text[i+1]==='['&&(m=bracket(i+2,500,true))){flush();host.appendChild(image(m.label,m.target));i=m.end;continue;}
+      if(ch==='!'&&text[i+1]==='['&&(m=bracket(i+2,500,true))){flush();host.appendChild(imageLink(m.label,m.target,inLink));i=m.end;continue;}
       if(ch==='['&&!inLink){
         // A badge: [![alt](image)](link) is a link whose label is the image's.
         if(text[i+1]==='!'&&text[i+2]==='['){
           const inner=bracket(i+3,500,true),outer=inner&&text[inner.end]===']'?at(TARGET,text,inner.end):null;
-          if(outer){link(outer[1]??outer[2],node=>node.appendChild(image(inner.label,inner.target)));i=inner.end+outer[0].length;continue;}
+          if(outer){link(outer[1]??outer[2],node=>node.appendChild(imageLink(inner.label,inner.target,true)));i=inner.end+outer[0].length;continue;}
         }
         if((m=bracket(i+1,1000,false))){link(m.target,label(m.label));i=m.end;continue;}
       }
