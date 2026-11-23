@@ -1,4 +1,4 @@
-/* Agent Mail groups a request and its replies under each direct recipient.
+/* Agent Mail shows requests and replies by recipient or in time order.
    The transport has delivery metadata and thread IDs, but no task completion
    state. The rail shows whether a reply has arrived. */
 (function(){
@@ -6,6 +6,10 @@
 const OC=window.OC;
 const mailEl=document.getElementById('mail');
 const filterButton=document.getElementById('mailFilterBtn');
+const viewButton=document.getElementById('mailViewBtn');
+const graphButton=document.getElementById('mailGraphBtn');
+const graph=document.getElementById('orrery');
+const selectedGraph=document.getElementById('mailSelectedRoute');
 if(!mailEl||!OC||!filterButton)return;
 
 const byId=new Map(),groupsByName=new Map(),rowsByKey=new Map();
@@ -14,6 +18,10 @@ const motion=matchMedia('(prefers-reduced-motion: reduce)');
 let activeFilter='',waitingOnly=false,filterRequest=0;
 let drawer=null,drawerMotion=null,drawerMotionTimer=0,replyRequest=0;
 let hoveredRoute=null,focusedRoute=null;
+let manualGraphOpen=false;
+const VIEW_KEY='oc-mail-view';
+let timeline=false;
+try{timeline=localStorage.getItem(VIEW_KEY)==='timeline';}catch(_){/* preference unavailable */}
 let seeded=false;
 
 mailEl.classList.add('mailview-host');
@@ -38,6 +46,7 @@ const icons={
   open:'<path d="m9 6 6 6-6 6"/>',
   close:'<path d="m6 6 12 12M18 6 6 18"/>',
   thread:'<path d="M5 5v14h6M5 12h6"/><circle cx="14" cy="12" r="2"/><circle cx="14" cy="19" r="2"/>',
+  group:'<circle cx="7" cy="6" r="2"/><circle cx="7" cy="15" r="2"/><path d="M12 6h7m-7 9h7m-7 4h5"/>',
   reverse:'<path d="M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4"/>',
 };
 function icon(name){
@@ -192,6 +201,28 @@ function visibleAssignments(){
     (!activeFilter||[a.request,...a.replies,...a.followups].some(m=>includesAgent(m,activeFilter))));
 }
 
+function assignmentsForView(source){
+  if(!timeline)return source;
+  const byRequest=new Map();
+  for(const a of source){
+    const key='timeline:'+a.request.key;
+    const record=byRequest.get(key);
+    if(!record){
+      byRequest.set(key,{...a,key,deliveries:[a.recipient],replies:new Map(a.replies.map(m=>[m.key,m])),
+        followups:new Map(a.followups.map(m=>[m.key,m]))});
+      continue;
+    }
+    record.deliveries.push(a.recipient);
+    if(expectsReply(a))record.recipient=a.recipient;
+    for(const m of a.replies)record.replies.set(m.key,m);
+    for(const m of a.followups)record.followups.set(m.key,m);
+  }
+  return [...byRequest.values()].sort((a,b)=>chronological(b.request,a.request)).map(a=>({
+    ...a,replies:[...a.replies.values()].sort(chronological),
+    followups:[...a.followups.values()].sort(chronological)
+  }));
+}
+
 function filterChoice(label,pressed,activate){
   const option=document.createElement('button');
   option.type='button';option.textContent=label;option.setAttribute('aria-pressed',String(pressed));
@@ -243,7 +274,7 @@ async function selectMailFilter(agent,{requireExisting=false}={}){
 }
 
 function emitRoute(){
-  document.dispatchEvent(new CustomEvent('oc:mail-route',{detail:hoveredRoute||focusedRoute}));
+  document.dispatchEvent(new CustomEvent('oc:mail-route',{detail:selectedRoute()||hoveredRoute||focusedRoute}));
 }
 function bindRoute(button,message){
   button.addEventListener('pointerenter',()=>{hoveredRoute=message();emitRoute();});
@@ -251,8 +282,51 @@ function bindRoute(button,message){
   button.addEventListener('focus',()=>{focusedRoute=message();emitRoute();});
   button.addEventListener('blur',()=>{focusedRoute=null;emitRoute();});
 }
-function assignmentRoute(a){return {sender:a.request.sender,recipients:[a.recipient]};}
+function assignmentRoute(a){return {sender:a.request.sender,recipients:(a.deliveries||[a.recipient]).filter(Boolean)};}
 function messageRoute(m){return m?{sender:m.sender,recipients:recipientNames(m)}:null;}
+function selectedRoute(){
+  if(!drawer)return null;
+  if(drawer.message)return messageRoute(drawer.message);
+  const route=assignmentRoute(drawer.assignment);
+  return route.recipients.length?route:messageRoute(drawer.request);
+}
+function paintGraph(){
+  const route=selectedRoute();
+  const showGraph=manualGraphOpen&&!route;
+  graph.toggleAttribute('hidden',!showGraph);
+  graphButton.hidden=Boolean(route);
+  graphButton.setAttribute('aria-expanded',String(showGraph));
+  graphButton.title=showGraph?'Hide mini graph':'Show mini graph';
+  graphButton.setAttribute('aria-label',graphButton.title);
+  selectedGraph.hidden=!route;
+  if(!route)return;
+  const stop=name=>'<span class="mail-route-stop">'+
+    '<span aria-hidden="true"></span>'+E(name)+'</span>';
+  const markup=stop(route.sender||'Unknown sender')+icon('arrow')+
+    '<span class="mail-route-destinations">'+(route.recipients.length
+      ?route.recipients.map(stop).join(''):stop('No direct recipient'))+'</span>';
+  if(selectedGraph.markup===markup)return;
+  selectedGraph.innerHTML=markup;
+  selectedGraph.markup=markup;
+  selectedGraph.setAttribute('role','img');
+  selectedGraph.setAttribute('aria-label',(route.sender||'Unknown sender')+' to '+
+    (route.recipients.join(', ')||'no direct recipient'));
+}
+graphButton.addEventListener('click',()=>{manualGraphOpen=!manualGraphOpen;paintGraph();});
+
+function paintView(){
+  viewButton.title=timeline?'Group by recipient':'Show thread timeline';
+  viewButton.setAttribute('aria-label',viewButton.title);
+  viewButton.innerHTML=icon(timeline?'group':'thread');
+}
+viewButton.addEventListener('click',()=>{
+  if(drawer)closeDrawer(false);
+  timeline=!timeline;
+  try{localStorage.setItem(VIEW_KEY,timeline?'timeline':'recipient');}catch(_){/* preference unavailable */}
+  paintView();
+  renderMail();
+  listEl.scrollTop=0;
+});
 
 function paintPortrait(group){
   const {name,heading,fallback}=group;
@@ -276,11 +350,11 @@ function makeGroup(name){
 function makeRow(assignment){
   const el=document.createElement('article');
   el.className='mail-assignment';
-  el.innerHTML='<button class="mail-request" type="button" aria-haspopup="true"></button>'+
-    '<button class="mail-reply" type="button" aria-haspopup="true" hidden></button>';
-  const row={el,request:el.firstElementChild,reply:el.lastElementChild,assignment};
+  el.innerHTML='<button class="mail-request" type="button" aria-haspopup="dialog"></button>'+
+    '<button class="mail-reply" type="button" aria-haspopup="dialog" title="Open reply" hidden></button>';
+  const row={el,request:el.firstElementChild,reply:el.lastElementChild,history:null,assignment};
   row.request.addEventListener('click',()=>openThread(row.assignment,row.request));
-  row.reply.addEventListener('click',()=>openThread(row.assignment,row.reply));
+  row.reply.addEventListener('click',()=>openThread(row.assignment,row.reply,row.assignment.replies.at(-1)));
   bindRoute(row.request,()=>assignmentRoute(row.assignment));
   bindRoute(row.reply,()=>messageRoute(row.assignment.replies.at(-1)));
   return row;
@@ -293,20 +367,60 @@ function paintRow(row,assignment){
     latest?'Reply received':'Awaiting a reply';
   const sender=request.sender||'Unknown sender';
   const urgency=[request,latest].some(m=>m&&highImportance(m.importance));
-  const label=`${titleFor(request)}, ${sender} to ${assignment.recipient||'no direct recipient'}. ${state}${urgency?', high importance':''}`;
-  if(row.request.getAttribute('aria-label')!==label)row.request.setAttribute('aria-label',label);
-  if(row.request.title!==state)row.request.title=state;
+  const direct=assignmentRoute(assignment).recipients;
+  const recipients=(timeline&&!direct.length?recipientNames(request):direct).join(', ')||'no direct recipient';
+  const action=awaitsReply?'Open request':'Open message';
+  const label=`${action}: ${titleFor(request)}, ${sender} to ${recipients}. ${state}${urgency?', high importance':''}`;
+  if(row.label!==label){
+    row.request.setAttribute('aria-label',label);
+    row.label=label;
+  }
+  const title=action+'. '+state;
+  if(row.request.title!==title)row.request.title=title;
+  const parties=timeline?'<span class="mail-route">'+E(sender)+icon('arrow')+E(recipients)+'</span>'
+    :icon('from')+'<span>'+E(sender)+'</span>';
+  const senderLine='<span class="mail-requester">'+parties+timeHtml(request.ts)+'</span>';
+  const delivery=timeline?'<span class="mail-timeline-start">'+senderLine+
+    (request.excerpt?'<span class="thread-excerpt">'+E(request.excerpt)+'</span>':'')+'</span>':senderLine;
   const requestHtml='<span class="mail-state'+(latest?' replied':'')+(urgency?' important':'')+
     (awaitsReply?'':' no-reply')+'" aria-hidden="true"></span>'+
-    '<span class="mail-subject">'+E(titleFor(request))+'</span><span class="mail-open">'+icon('open')+'</span>'+
-    '<span class="mail-requester">'+icon('from')+'<span>'+E(sender)+'</span>'+timeHtml(request.ts)+'</span>';
+    '<span class="mail-subject">'+E(titleFor(request))+'</span><span class="mail-open">'+icon('open')+'</span>'+delivery;
   if(row.requestHtml!==requestHtml){row.request.innerHTML=requestHtml;row.requestHtml=requestHtml;}
+  if(timeline){
+    paintTimelineReplies(row);
+    return;
+  }
   if(row.reply.hidden!==!latest)row.reply.hidden=!latest;
   if(!latest)return;
   const replyHtml='<span class="mail-route">'+E(latest.sender||'Unknown sender')+
     icon('arrow')+E(recipientNames(latest).join(', '))+'</span>'+timeHtml(latest.ts)+
     '<span class="mail-reply-excerpt">'+E(latest.excerpt||titleFor(latest))+'</span>';
   if(row.replyHtml!==replyHtml){row.reply.innerHTML=replyHtml;row.replyHtml=replyHtml;}
+}
+function paintTimelineReplies(row){
+  const entries=row.entries=threadEntries(row.assignment);
+  if(row.history)row.history.hidden=!entries.length;
+  if(!entries.length)return;
+  if(!row.history){
+    row.history=document.createElement('div');
+    row.history.className='mail-timeline-replies';
+    row.el.appendChild(row.history);
+    row.history.addEventListener('click',event=>{
+      const button=event.target.closest('[data-reply]');
+      const message=button&&row.entries.find(m=>m.key===button.dataset.reply);
+      if(message)openThread(row.assignment,button,message);
+    });
+  }
+  const markup=entries.map(replyHtml).join('');
+  if(row.history.markup===markup)return;
+  const focused=row.history.contains(document.activeElement)?document.activeElement.dataset.reply:null;
+  row.history.innerHTML=markup;
+  row.history.markup=markup;
+  for(const button of row.history.children){
+    button.title='Open message';
+    bindRoute(button,()=>messageRoute(row.entries.find(m=>m.key===button.dataset.reply)));
+    if(button.dataset.reply===focused)button.focus({preventScroll:true});
+  }
 }
 function reconcile(parent,want){
   const keep=new Set(want);
@@ -318,27 +432,23 @@ function reconcile(parent,want){
   }
 }
 function originFor(sender){
-  const graph=document.getElementById('orrery');
-  const node=[...graph.querySelectorAll('[data-agent]')].find(el=>el.dataset.agent===sender)
-    ||[...document.querySelectorAll('#roster .agent:not(.filtered-out)')].find(el=>el.dataset.agent===sender);
-  const rect=node?.getBoundingClientRect();
+  const selector='[data-agent="'+CSS.escape(sender)+'"]';
+  const node=(!graph.hasAttribute('hidden')&&graph.querySelector(selector))
+    ||document.querySelector('#roster .agent'+selector+':not(.filtered-out,.folded-out)');
+  const rect=node?.getBoundingClientRect?.();
   return rect?.width&&rect.height?rect:null;
 }
 
 function renderMail({animate=false,fresh=new Set()}={}){
   filterButton.toggleAttribute('data-filtered',Boolean(activeFilter||waitingOnly));
-  const visible=visibleAssignments();
+  const visible=assignmentsForView(visibleAssignments());
   const focus=cardsEl.contains(document.activeElement)?document.activeElement:null;
   const moving=animate?OC.railPositions([
     ...[...groupsByName.values()].map(group=>group.el),
     ...[...rowsByKey.values()].map(row=>row.el)
   ],listEl):null;
-  const groups=new Map(),used=new Set(),arrivals=[];
+  const groups=new Map(),used=new Set(),arrivals=[],timelineRows=[];
   for(const a of visible){
-    const newGroup=!groupsByName.has(a.recipient);
-    const group=groupsByName.get(a.recipient)||makeGroup(a.recipient);
-    groupsByName.set(a.recipient,group);
-    if(!groups.has(group))groups.set(group,[]);
     const existing=rowsByKey.get(a.key);
     const row=existing||makeRow(a);
     const lastReply=existing?.assignment.replies.at(-1)?.key;
@@ -346,6 +456,19 @@ function renderMail({animate=false,fresh=new Set()}={}){
     rowsByKey.set(a.key,row);
     used.add(a.key);
     paintRow(row,a);
+    if(timeline){
+      timelineRows.push(row.el);
+      if(!existing&&fresh.has(a.request.key))arrivals.push([row.el,a.request.sender]);
+      else if(latest&&lastReply!==latest.key&&fresh.has(latest.key)){
+        const button=row.history?.querySelector('[data-reply="'+CSS.escape(latest.key)+'"]');
+        if(button)arrivals.push([button,latest.sender]);
+      }
+      continue;
+    }
+    const newGroup=!groupsByName.has(a.recipient);
+    const group=groupsByName.get(a.recipient)||makeGroup(a.recipient);
+    groupsByName.set(a.recipient,group);
+    if(!groups.has(group))groups.set(group,[]);
     groups.get(group).push(row.el);
     if((newGroup||!existing)&&fresh.has(a.request.key))arrivals.push([newGroup?group.el:row.el,a.request.sender]);
     else if(latest&&lastReply!==latest.key&&fresh.has(latest.key))arrivals.push([row.reply,latest.sender]);
@@ -354,7 +477,7 @@ function renderMail({animate=false,fresh=new Set()}={}){
   const visibleGroups=new Set(groups.keys());
   for(const [name,group] of groupsByName)if(!visibleGroups.has(group))groupsByName.delete(name);
   for(const key of rowsByKey.keys())if(!used.has(key))rowsByKey.delete(key);
-  const display=[...groups.keys()].map(group=>group.el);
+  const display=timeline?timelineRows:[...groups.keys()].map(group=>group.el);
   if(!display.length){
     const empty=cardsEl.querySelector('.mailempty')||document.createElement('p');
     empty.className='mailempty';
@@ -364,7 +487,7 @@ function renderMail({animate=false,fresh=new Set()}={}){
   }
   reconcile(cardsEl,display);
   if(focus?.isConnected&&focus!==document.activeElement)focus.focus({preventScroll:true});
-  else if(focus&&!focus.isConnected){hoveredRoute=focusedRoute=null;emitRoute();}
+  else if(focus&&!cardsEl.contains(document.activeElement)){hoveredRoute=focusedRoute=null;emitRoute();}
   if(moving)OC.railMoveRows(moving);
   for(const [node,sender] of arrivals)OC.railArrive(node,originFor(sender),listEl);
 }
@@ -476,6 +599,9 @@ function replyHtml(message){
   return '<button type="button" class="thread-item" data-reply="'+E(message.key)+'">'+routeHtml(message)+
     '<span class="thread-excerpt">'+E(message.excerpt||titleFor(message))+'</span></button>';
 }
+function threadEntries(assignment){
+  return [...assignment.followups,...assignment.replies].sort(chronological);
+}
 
 function drawerLinkSource(assignment){
   if(!assignment.replies.length&&!assignment.followups.length)return '';
@@ -488,6 +614,8 @@ function drawerLinkSource(assignment){
 function renderDrawer({initial=false}={}){
   const state=drawer;
   if(!state)return;
+  paintGraph();
+  emitRoute();
   const focused=document.activeElement;
   const focusAction=drawerHead.contains(focused)?focused.dataset.action:'';
   const focusReply=drawerChain.contains(focused)?focused.dataset.reply:'';
@@ -561,17 +689,17 @@ async function messageBody(message){
   const normalized=normalizeMessage(data?.message);
   return normalized?mergeMessage(normalized):null;
 }
-async function openThread(assignment,anchor){
+async function openThread(assignment,anchor,selectedMessage=null){
   setFilterOpen(false);
-  const entries=[...assignment.followups,...assignment.replies].sort(chronological);
+  const entries=threadEntries(assignment);
   const state={assignment,anchor,request:assignment.request,entries,message:null,failed:false};
   drawer=state;
   hoveredRoute=focusedRoute=null;
-  emitRoute();
   drawerEl.hidden=false;
   drawerEl.inert=false;
   listEl.inert=true;
-  renderDrawer({initial:true});
+  if(selectedMessage)openReply(selectedMessage);
+  else renderDrawer({initial:true});
   drawerScroll.scrollTop=0;
   morphDrawer(anchor,true);
 
@@ -593,24 +721,24 @@ async function openThread(assignment,anchor){
       const normalized=normalizeMessage(raw);
       if(normalized)mergeMessage(normalized);
     }
-    const updatedAssignments=assignments();
+    const updatedAssignments=assignmentsForView(assignments());
     const updated=updatedAssignments.find(a=>a.key===assignment.key)||
-      updatedAssignments.find(a=>a.recipient===assignment.request.sender&&
+      updatedAssignments.find(a=>assignmentRoute(a).recipients.includes(assignment.request.sender)&&
         a.replies.some(m=>m.key===assignment.request.key));
     if(updated){
       original=updated.request;
       if(original.key!==assignment.request.key)fullRequest=await messageBody(original);
       if(drawer!==state)return;
       state.assignment=updated;
-      state.entries=[...updated.followups,...updated.replies].sort(chronological);
+      state.entries=threadEntries(updated);
     }
   }
   state.request=fullRequest||original;
   state.requestFailed=!fullRequest;
   if(!state.message){
     state.failed=state.requestFailed;
-    renderDrawer();
   }
+  renderDrawer();
 }
 async function openReply(item){
   if(!item)return;
@@ -623,17 +751,18 @@ async function openReply(item){
   state.message=message||item;state.failed=!message;
   renderDrawer();
 }
-function closeDrawer(){
+function closeDrawer(restoreFocus=true){
   if(!drawer)return;
   const {anchor}=drawer;
   ++replyRequest;
   drawer=null;
   hoveredRoute=focusedRoute=null;
+  paintGraph();
   emitRoute();
   morphDrawer(anchor,false);
   listEl.inert=false;
   renderMail();
-  (anchor?.isConnected?anchor:filterButton).focus({preventScroll:true});
+  if(restoreFocus)(anchor?.isConnected?anchor:filterButton).focus({preventScroll:true});
 }
 drawerEl.addEventListener('click',event=>{
   if(!drawer)return;
@@ -654,6 +783,7 @@ document.addEventListener('oc:mail',event=>ingest(event.detail?.messages,{live:t
 document.addEventListener('oc:agents',()=>groupsByName.forEach(paintPortrait));
 document.addEventListener('oc:filter-agent',event=>selectMailFilter(event.detail?.agent));
 document.addEventListener('oc:focus-agent',event=>selectMailFilter(event.detail?.name,{requireExisting:true}));
+paintView();
 ingest(OC.mailBacklog());
 fetchJson('/telemetry/mail/recent?limit=40').then(data=>{
   if(Array.isArray(data?.messages))ingest(data.messages);

@@ -203,3 +203,39 @@ def test_roster_keeps_descendants_together_and_orders_siblings_by_activity(cockp
       reorderRoster(currentAgents);
       return new Set([...rosterEl.querySelectorAll('.agent')].map(el=>el.dataset.agent)).size;
     })()""") == len(NAMES)
+
+
+def test_folded_descendants_are_counted_and_revealed_for_search_or_select(cockpit):
+    js, _, state = cockpit
+    state['agents'][2].update(parent_state='child', parent_agent='AlphaNode')
+    state['agents'][3].update(parent_state='child', parent_agent='GammaNode')
+    js("""pollAgents()""")
+    js("""window.fold=tiles.get('AlphaNode').querySelector('.roster-fold');
+      fold.focus();fold.click()""")
+    assert js("fold.getAttribute('aria-expanded')") == 'false'
+    assert js("fold.textContent.trim()") == '2'
+    assert js("document.activeElement===fold")
+    assert js("JSON.parse(localStorage.getItem('oc-roster-folds'))") == ['AlphaNode']
+    assert js("tiles.get('DeltaNode').getClientRects().length") == 0
+    js("showAgentDetail(tiles.get('AlphaNode'))")
+    assert js("agentDetail.querySelector('.agent-detail-children').textContent") == 'GammaNode, DeltaNode'
+    assert js(POLL)['roster'] == 0
+
+    state['agents'][3]['act_state'] = 'ask'
+    js("pollAgents()")
+    assert js("fold.dataset.activity") == 'input'
+    assert 'need input' in js("fold.getAttribute('aria-label')")
+    js("rosterFilter.value='delta';applyRosterFilter(true)")
+    assert js("tiles.get('DeltaNode').getClientRects().length") == 1
+    assert js("rosterEl.querySelectorAll('.agent:not(.filtered-out)').length") == 1
+    js("rosterFilter.value='';applyRosterFilter(true)")
+    assert js("tiles.get('DeltaNode').getClientRects().length") == 0
+
+    js("setRosterSelectMode(true);tiles.get('DeltaNode').click()")
+    assert js("tiles.get('DeltaNode').getClientRects().length") == 1
+    assert js("bulkSelectedAgents.has('DeltaNode')&&(!rosterBulkReboot.disabled)")
+    js("setRosterSelectMode(false)")
+    assert js("tiles.get('DeltaNode').getClientRects().length") == 0
+    js("fold.click()")
+    assert js("fold.getAttribute('aria-expanded')") == 'true'
+    assert js("tiles.get('DeltaNode').getClientRects().length") == 1

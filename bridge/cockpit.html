@@ -267,7 +267,7 @@
     cursor:pointer;transition:background .16s;
   }
   .agent:hover{background:rgb(var(--theme-ink-rgb) / .05)}
-  .agent.filtered-out{display:none}
+  .agent:is(.filtered-out,.folded-out){display:none}
   .agent.sel{background:var(--rail-selection)}
   .agent.sel > .medal .ring{border-color:var(--amber)}
   .agent[data-roster-child]::before{
@@ -288,7 +288,22 @@
   }
   .agent:not(.pinned):is(:hover,:focus-within) .agent-status,.agent.pinned .agent-status,
   .roster.select-mode .agent-status{opacity:0}
-  .agent .crow1{align-items:center;gap:3px}
+  .agent .crow1{align-items:center;gap:2px}
+  .roster-fold{
+    display:inline-flex;align-items:center;justify-content:center;flex:none;
+    min-width:18px;min-height:24px;padding:0 2px;border:0;border-radius:4px;
+    background:transparent;color:var(--ink-dim);font:11px var(--rail-sans);cursor:pointer;
+  }
+  .roster-fold[hidden]{display:none}
+  .roster-fold svg{
+    flex:none;width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round;
+  }
+  .roster-fold[aria-expanded="true"] svg{transform:rotate(90deg)}
+  .roster-fold:hover,.roster-fold:focus-visible{background:var(--rail-selection);color:var(--amber)}
+  .roster-fold:focus-visible{outline:1px solid var(--amber)}
+  .roster-fold[data-activity="active"]{color:var(--amber)}
+  .roster-fold[data-activity="input"]{color:var(--theme-status-alert,#ff6a5d)}
   .roster-role{
     font:13px/1.3 var(--rail-sans);color:var(--ink-dim);
     min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
@@ -1245,11 +1260,16 @@
       <div class="colhead mail-head">
         <span>Agent Mail</span>
         <span class="tag" id="mailTag" role="status" hidden></span>
+        <button class="rail-icon" id="mailViewBtn" type="button" aria-label="Show thread timeline" title="Show thread timeline"></button>
+        <button class="rail-icon" id="mailGraphBtn" type="button" aria-label="Show mini graph" title="Show mini graph" aria-expanded="false" aria-controls="orrery">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 11 8-5m-8 8 8 4"/><circle cx="6" cy="12" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="18" cy="19" r="2"/></svg>
+        </button>
         <button class="rail-icon" id="mailFilterBtn" type="button" aria-label="Filter agent mail" title="Filter agent mail" aria-expanded="false" aria-controls="mailFilters">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg>
         </button>
       </div>
-      <svg class="miniorrery" viewBox="0 0 280 120" id="orrery"></svg>
+      <svg class="miniorrery" viewBox="0 0 280 120" id="orrery" hidden></svg>
+      <div class="mail-selected-route" id="mailSelectedRoute" hidden></div>
       <div class="scroll" id="mail"></div>
       <!-- legend removed (2026-07-30 product decision): the design should be self-evident;
            the network view's ? popover keeps the key for newcomers -->
@@ -1678,6 +1698,11 @@
           {
             "property": "background",
             "selector": ".agent.working .agent-status",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-fold",
             "value": "var(--ink-dim)"
           },
           {
@@ -2816,6 +2841,11 @@
             "value": "var(--ink)"
           },
           {
+            "property": "border-bottom",
+            "selector": ".mail-selected-route",
+            "value": "1px solid var(--hair)"
+          },
+          {
             "property": "background",
             "selector": ".mailfilters",
             "value": "var(--elev)"
@@ -2868,6 +2898,21 @@
           {
             "property": "color",
             "selector": ".mail-reply-excerpt",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border-left",
+            "selector": ".mail-timeline-start",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "border-left",
+            "selector": ".mail-timeline-replies",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mail-timeline-start::before,.mail-timeline-replies .thread-item::before",
             "value": "var(--ink-dim)"
           },
           {
@@ -3070,6 +3115,11 @@
           {
             "property": "background",
             "selector": ".agent.working .agent-status",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-fold",
             "value": "var(--ink-dim)"
           },
           {
@@ -3498,6 +3548,11 @@
             "value": "var(--ink-dim)"
           },
           {
+            "property": "background",
+            "selector": ".mail-timeline-start::before,.mail-timeline-replies .thread-item::before",
+            "value": "var(--ink-dim)"
+          },
+          {
             "property": "color",
             "selector": ".mailempty",
             "value": "var(--ink-dim)"
@@ -3711,7 +3766,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "1082075effcdf29a7cbf542e340d08083df3f418cd41d37aea5405a341629b2b",
+        "digest": "78efef38e00a1c176b850e9964ccf205b723ad23c4593a7e4b4492caa83db19f",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -3812,7 +3867,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "1139e1b9dbfee36309f226df9338824576210c0dabb5f6774306eb8cfffe5eec",
+        "digest": "cd8ae08f3209680861392c86e7efc61a4110155a9a1e2c21bfb297d9819bca67",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -3845,9 +3900,9 @@
       }
     }
   },
-  "inventory_digest": "d41837d6c7134a866f45278859eea697f8e9830a65d5ade1be6ae848187482a0",
+  "inventory_digest": "e23e409253d771c179391b7ca75ac41edd35b34491013b2119fe8f6c71b4e742",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "72efdd27ffa42870eaf377306b26236190548cad99d36ab2f8216c6eedfee61e",
+  "source_digest": "15d0a9d79d944517c607249cfb4275e98883ea0c5cce154b57bf57e5119fd085",
   "surface": "cockpit",
   "version": 1
 }
@@ -8556,12 +8611,16 @@ const rosterBulkExit=document.getElementById('rosterBulkExit');
 const rosterBulkReboot=document.getElementById('rosterBulkReboot');
 const rosterBulkRebootLabel=document.getElementById('rosterBulkRebootLabel');
 const tiles=new Map();   // name -> tile element
-const PINNED_AGENT_KEY='oc-pinned-agents';
-const pinnedAgents=new Set();
-try{
-  const storedPins=JSON.parse(localStorage.getItem(PINNED_AGENT_KEY)||'[]');
-  if(Array.isArray(storedPins))storedPins.forEach(name=>{if(typeof name==='string'&&name)pinnedAgents.add(name);});
-}catch(_){/* malformed or unavailable storage: start with no pins */}
+const PINNED_AGENT_KEY='oc-pinned-agents',ROSTER_FOLD_KEY='oc-roster-folds';
+function storedRosterNames(key){
+  try{
+    const names=JSON.parse(localStorage.getItem(key)||'[]');
+    if(Array.isArray(names))return new Set(names.filter(name=>typeof name==='string'&&name));
+  }catch(_){/* malformed or unavailable storage */}
+  return new Set();
+}
+const pinnedAgents=storedRosterNames(PINNED_AGENT_KEY),foldedAgents=storedRosterNames(ROSTER_FOLD_KEY);
+let rosterRows=[],rosterRowsByName=new Map();
 const agentDetail=document.createElement('div');
 agentDetail.id='agentDetail';agentDetail.className='agent-detail';agentDetail.setAttribute('role','tooltip');agentDetail.hidden=true;
 document.body.appendChild(agentDetail);
@@ -8603,7 +8662,7 @@ function applyRosterAnnotation(name,annotation){
   const agent=currentAgentNamed(name);if(!agent)return;
   agent.annot=annotation;agent.task=OrreryRosterEdit.effectiveTask(agent);
   agent.descriptor=descriptorStore.get(agent,currentAgents);
-  paintTile(tiles.get(name),agent);paintSplitRoles(currentAgents);applyRosterFilter();
+  paintTile(tiles.get(name),agent);paintSplitRoles(currentAgents);applyRosterFilter(true);
   document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
 }
 function paintBulkTileState(el,agent){
@@ -8668,6 +8727,7 @@ function setRosterSelectMode(on){
     stoppedSelectRequest?.abort();stoppedSelectRequest=null;
     if(stoppedSelectAgents.length){stoppedSelectAgents=[];renderRoster();return;}
   }
+  reorderRoster(currentAgents);
   refreshBulkTileStates();updateRosterBulkUI();
 }
 function toggleBulkAgent(name){
@@ -8796,8 +8856,8 @@ function renderCrewCounts(live){
   setHidden(chip,need===0);
   if(!need&&needOnly){needOnly=false;chip.setAttribute('aria-pressed','false');}
 }
-function applyRosterFilter(animate=false){
-  const positions=animate?railPositions(tiles.values(),rosterEl):null;
+function applyRosterFilter(animate=false,positions=null){
+  if(animate)positions??=railPositions(tiles.values(),rosterEl);
   const query=rosterFilter.value;
   let shown=0;
   const byName=new Map((currentAgents||[]).map(a=>[a.name,a]));
@@ -8810,9 +8870,7 @@ function applyRosterFilter(animate=false){
   const filtering=Boolean(normalizeSearchText(query));
   if(filtering)rosterTag.textContent=`${shown}/${tiles.size}`;
   rosterFilterStatus.hidden=!filtering||shown!==0;
-  paintPinnedBoundary();
-  rosterEditor.reposition();
-  if(positions)railMoveRows(positions);
+  reorderRoster(currentAgents,positions);
 }
 function toggleRosterSearch(on){
   setHidden(rosterSearch,!on);
@@ -8847,6 +8905,7 @@ const AGENT_DETAIL_TOKENS=new Intl.NumberFormat('en',{notation:'compact',maximum
 const AGENT_DETAIL_ICONS={
   role:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M5.5 16a3.5 3.5 0 0 1 7 0m3-6h2.5m-2.5 4H18"/>',
   top:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2"/>',
+  children:'<path d="M6 5v14h7M6 12h7"/><circle cx="16" cy="12" r="2"/><circle cx="16" cy="19" r="2"/>',
   parent:'<circle cx="12" cy="5" r="2"/><rect x="3" y="16" width="5" height="4" rx="1"/><rect x="16" y="16" width="5" height="4" rx="1"/><path d="M12 7v5m-6.5 4v-4h13v4"/>',
   computer:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4m-4 0h8"/>',
   browser:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01m3 0h.01"/>',
@@ -8856,7 +8915,7 @@ const AGENT_DETAIL_ICONS={
   context:'<rect x="3" y="6" width="17" height="12" rx="2"/><path d="M22 10v4M7 10v4m4-4v4m4-4v4"/>',
   directory:'<path d="M2.5 17.5v-11a1 1 0 0 1 1-1h5l2 2h10a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1Z"/>'
 };
-function agentDetailModel(a,homeDir){
+function agentDetailModel(a,homeDir,hiddenChildren=[]){
   const text=value=>typeof value==='string'&&value.trim()?value:null;
   const cwd=text(a.cwd),home=homeDir?.replace(/\/+$/,'');
   const directory=cwd&&home&&(cwd===home||cwd.startsWith(home+'/'))?'~'+cwd.slice(home.length):cwd;
@@ -8868,7 +8927,7 @@ function agentDetailModel(a,homeDir){
     model:text(a.model_id),harness:AGENT_DETAIL_HARNESSES.get(a.harness_kind)??null,effort:text(a.effort),
     tokens:Number.isSafeInteger(a.ctx_window_tokens)&&a.ctx_window_tokens>0?a.ctx_window_tokens:null,
     used:Number.isFinite(a.ctx_used)&&a.ctx_used>=0&&a.ctx_used<=100?a.ctx_used:null,
-    directory,cwd
+    directory,cwd,hiddenChildren
   };
 }
 function agentDetailItem(icon,label,body=''){
@@ -8888,6 +8947,7 @@ function agentDetailHTML(detail){
   let lineage='';
   if(detail.parentState==='top')lineage=agentDetailItem('top','Top level');
   if(detail.parentState==='child')lineage=detail.parent?text('parent','Parent',detail.parent):agentDetailItem('parent','Child agent');
+  if(detail.hiddenChildren?.length)lineage+=text('children','Hidden descendants',detail.hiddenChildren.join(', '));
   const computer=detail.computer?agentDetailItem('computer',`Computer use: ${detail.computer}`,
     `<span class="agent-detail-modes" aria-hidden="true">${[...AGENT_DETAIL_COMPUTER.values()].map(mode=>
       `<span${mode===detail.computer?' class="current"':''}>${mode}</span>`).join('')}</span>`):'';
@@ -8926,10 +8986,12 @@ function positionAgentDetail(el){
 }
 function showAgentDetail(el){
   const a=currentAgentNamed(el&&el.dataset.agent);if(!a)return;
-  if(rosterEditor.isEditing(a.name)||el.classList.contains('filtered-out')){hideAgentDetail(el);return;}
+  if(rosterEditor.isEditing(a.name)||el.matches('.filtered-out,.folded-out')){hideAgentDetail(el);return;}
   if(detailAnchor!==el)clearTimeout(detailHideTimer);
   detailAnchor=el;
-  const html=agentDetailHTML(agentDetailModel(a,hostPlatform.home_dir));
+  const row=rosterRowsByName.get(a.name);
+  const hiddenChildren=row?.folded?rosterRows.slice(row.index+1,row.end).map(child=>child.name):[];
+  const html=agentDetailHTML(agentDetailModel(a,hostPlatform.home_dir,hiddenChildren));
   if(detailRendered!==html){agentDetail.innerHTML=html;detailRendered=html;}
   setHidden(agentDetail,false);positionAgentDetail(el);
 }
@@ -8984,7 +9046,10 @@ function tileFor(a){
         <div class="face"><span class="ini"></span><img alt="" referrerpolicy="no-referrer"></div><span class="provider-badge" hidden><img class="provider-logo" alt=""></span></div>
       <span class="pill eng" hidden></span>
       <div class="cbody">
-        <div class="crow1"><span class="cname"></span><button class="name-copy" type="button">
+        <div class="crow1"><span class="cname"></span><button class="roster-fold" type="button" hidden>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
+          <span aria-hidden="true"></span>
+        </button><button class="name-copy" type="button">
           <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/></svg>
         </button></div>
         <span class="roster-role" hidden></span>
@@ -8997,6 +9062,13 @@ function tileFor(a){
     el.onclick=event=>handleRosterTileClick(a.name,event);
     el.dataset.agent=a.name;
     el.querySelector('.pin-toggle').onclick=event=>handlePinToggle(a.name,event);
+    el.querySelector('.roster-fold').onclick=event=>{
+      event.stopPropagation();
+      if(foldedAgents.has(a.name))foldedAgents.delete(a.name);
+      else foldedAgents.add(a.name);
+      try{localStorage.setItem(ROSTER_FOLD_KEY,JSON.stringify([...foldedAgents]));}catch(_){/* live-only preference */}
+      reorderRoster(currentAgents);
+    };
     const copyButton=el.querySelector('.name-copy');
     copyButton.setAttribute('aria-label',`Copy name ${a.name}`);copyButton.title=`Copy name · ${a.name}`;
     copyButton.onclick=event=>handleNameCopy(a.name,event);
@@ -9039,7 +9111,7 @@ function paintPinnedTileState(el,name){
   setTitle(button,`${pinned?'Unpin':'Pin'} ${name}`);
 }
 function paintPinnedBoundary(){
-  const visible=[...rosterEl.querySelectorAll(':scope > .agent:not(.filtered-out)')];
+  const visible=[...rosterEl.querySelectorAll(':scope > .agent:not(.filtered-out,.folded-out)')];
   const boundary=visible.findIndex(el=>!el.hasAttribute('data-pinned-branch'));
   const lastPinned=boundary>0?visible[boundary-1]:null;
   tiles.forEach(el=>el.classList.toggle('pinned-boundary',el===lastPinned));
@@ -9220,7 +9292,7 @@ function rosterParent(a){
   return a?.parent_state==='top'?'':a?.parent_state==='child'&&a.parent_agent
     ?a.parent_agent:lineageParent.get(a?.name)||'';
 }
-function rosterOrder(agents){
+function rosterOrder(agents,reveal){
   const sorted=agents.slice().sort((a,b)=>activityOf(b)-activityOf(a)||a.name.localeCompare(b.name));
   const names=new Set(sorted.map(a=>a.name)),children=new Map(),roots=[],pinned=[];
   for(const a of sorted){
@@ -9232,12 +9304,23 @@ function rosterOrder(agents){
       children.get(parent).push(a);
     }
   }
-  const visited=new Set(),rows=[];
-  const visit=(a,depth,isPinned)=>{
-    if(visited.has(a.name))return;
+  const visited=new Set(),rows=[],recent=Date.now()-60000;
+  const visit=(a,depth,isPinned,hidden=false)=>{
+    if(visited.has(a.name))return 0;
     visited.add(a.name);
-    rows.push({name:a.name,depth,isPinned});
-    for(const child of children.get(a.name)||[])visit(child,depth+1,isPinned);
+    const folded=!reveal&&foldedAgents.has(a.name);
+    const row={name:a.name,depth,isPinned,hidden,index:rows.length};
+    rows.push(row);
+    let activity=0;
+    for(const child of children.get(a.name)||[]){
+      activity=Math.max(activity,visit(child,depth+1,isPinned,hidden||folded));
+    }
+    row.end=rows.length;
+    row.folded=folded&&row.end>row.index+1;
+    row.activity=activity;
+    if(!a.running)return activity;
+    if(agentNeedsYou(a))return 2;
+    return Math.max(activity,a.act_state==='work'||activityOf(a)>recent?1:0);
   };
   for(const a of pinned)visit(a,0,true);
   for(const a of roots)visit(a,0,false);
@@ -9245,32 +9328,58 @@ function rosterOrder(agents){
   for(const a of sorted)visit(a,0,false);
   return rows;
 }
+function paintRosterFold(el,row,reveal){
+  const button=el.querySelector('.roster-fold');
+  const count=row.end-row.index-1;
+  setHidden(button,reveal||!count);
+  if(button.hidden)return;
+  const activity=row.folded?['','active','input'][row.activity]:'';
+  if(activity)setAttr(button,'data-activity',activity);
+  else button.removeAttribute('data-activity');
+  const hint=activity==='input'?'. Hidden agents need input':activity==='active'?'. Hidden agents active':'';
+  const label=row.folded
+    ?`Expand ${row.name}, ${count} hidden ${count===1?'agent':'agents'}${hint}`
+    :`Collapse ${row.name}'s agents`;
+  setAttr(button,'aria-expanded',!row.folded);
+  if(button.foldLabel!==label){
+    button.foldLabel=label;
+    setAttr(button,'aria-label',label);
+    setTitle(button,label);
+  }
+  setText(button.lastElementChild,row.folded?count:'');
+}
 function reorderRoster(live,positions=null){
-  const want=rosterOrder(live);
+  const reveal=rosterSelectMode||needOnly||Boolean(normalizeSearchText(rosterFilter.value));
+  const want=rosterOrder(live,reveal);
   const current=[...rosterEl.querySelectorAll(':scope > .agent')];
-  const different=want.length!==current.length||want.some((row,i)=>row.name!==current[i].dataset.agent||
+  const orderChanged=want.length!==current.length||want.some((row,i)=>row.name!==current[i].dataset.agent||
     row.depth!==Number(current[i].dataset.rosterDepth));
-  if(different){
-    positions??=railPositions(current,rosterEl);
-    const focus=rosterEl.contains(document.activeElement)?document.activeElement:null;
-    let next=rosterEl.firstElementChild;
-    for(const {name,depth,isPinned} of want){
+  const foldChanged=want.some(row=>row.hidden!==tiles.get(row.name).classList.contains('folded-out'));
+  if(orderChanged||foldChanged)positions??=railPositions(current,rosterEl);
+  const focus=rosterEl.contains(document.activeElement)?document.activeElement:null;
+  rosterRows=want;
+  rosterRowsByName=new Map(want.map(row=>[row.name,row]));
+  let next=rosterEl.firstElementChild;
+  for(const row of want){
+    const {name,depth,isPinned,hidden}=row,el=tiles.get(name);
+    el.classList.toggle('folded-out',hidden);
+    el.toggleAttribute('data-pinned-branch',isPinned);
+    paintRosterFold(el,row,reveal);
+    if(orderChanged){
       while(next&&!next.classList.contains('agent'))next=next.nextElementSibling;
-      const el=tiles.get(name);
       setAttr(el,'data-roster-depth',depth);
       el.toggleAttribute('data-roster-child',depth>0);
-      el.toggleAttribute('data-pinned-branch',isPinned);
       setBox(el,'--roster-indent',Math.min(depth,4)*15+'px');
       if(el!==next)rosterEl.insertBefore(el,next);
       next=el.nextElementSibling;
     }
-    if(focus?.isConnected&&focus!==document.activeElement)focus.focus({preventScroll:true});
-  }else{
-    for(const {name,isPinned} of want)tiles.get(name).toggleAttribute('data-pinned-branch',isPinned);
+    if(hidden||el.classList.contains('filtered-out'))hideAgentDetail(el);
   }
+  if(orderChanged&&focus?.getClientRects().length&&focus!==document.activeElement)focus.focus({preventScroll:true});
   paintPinnedBoundary();
   rosterEditor.reposition();
-  if(different){
+  if(detailAnchor&&(foldChanged||orderChanged))showAgentDetail(detailAnchor);
+  if(positions){
     railMoveRows(positions);
     const anchor=detailAnchor,animation=anchor&&railMoves.get(anchor);
     animation?.finished.then(()=>{if(detailAnchor===anchor)positionAgentDetail(anchor);},()=>{});
@@ -9301,8 +9410,7 @@ function renderRoster(){
   reconcileBulkSelection(agents);
   noteActivity(liveRosterAgents);
   renderCrewCounts(liveRosterAgents);
-  applyRosterFilter();
-  reorderRoster(agents,positions);
+  applyRosterFilter(false,positions);
   paintSplitRoles(liveRosterAgents);
   refreshPaneHeadings();
   if(positions){

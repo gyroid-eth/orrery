@@ -4,10 +4,22 @@
   position:relative;flex:1;min-height:0;display:block;overflow:hidden;padding:0;
   font:14px/1.4 var(--rail-sans);font-variant-numeric:tabular-nums;
 }
-.mailview-host [hidden],.mailfilters[hidden] {display:none!important}
+.mailview-host [hidden],.mailfilters[hidden],.mail .miniorrery[hidden],
+.mail-selected-route[hidden],#mailGraphBtn[hidden] {display:none!important}
 .mailview-list {height:100%;overflow-y:auto;padding:9px 16px 20px}
 .mail-head {position:relative;gap:8px}
 .mail-head .tag {margin-left:auto;font:12px var(--rail-sans);color:var(--theme-status-alert,#ff6a5d)}
+.mail-head > :first-child {margin-right:auto}
+.mail-selected-route {
+  flex:none;display:flex;align-items:flex-start;gap:8px;
+  padding:10px 16px;border-bottom:1px solid var(--hair);font:13px/1.4 var(--rail-sans);
+}
+.mail-route-destinations {display:grid;gap:4px;min-width:0}
+.mail-route-stop {display:flex;align-items:baseline;gap:6px;min-width:0;overflow-wrap:anywhere}
+.mail-route-stop > span {
+  flex:none;width:7px;height:7px;border-radius:50%;border:1px solid var(--amber);
+}
+.mail-selected-route > .mail-icon {margin-top:2px;color:var(--amber)}
 .mailfilters {
   position:absolute;z-index:5;inset:calc(100% - 3px) 9px auto auto;width:min(224px,calc(100% - 18px));
   max-height:min(320px,55dvh);overflow:auto;padding:6px;border-radius:12px;background:var(--elev);
@@ -28,7 +40,7 @@
 .mail-assignee + .mail-assignee {margin-top:14px}
 .mail-assignee-name {
   display:flex;align-items:center;gap:8px;min-height:29px;margin:0;
-  font:500 18px/1.2 var(--serif);
+  font:500 16px/1.2 var(--serif);
 }
 .mail-assignee-name > :last-child {min-width:0;overflow-wrap:anywhere}
 .mail-assignee-name .conversation-avatar.medal,.mail-assignee-fallback {
@@ -46,7 +58,7 @@
   width:100%;padding:5px 7px;border:0;border-radius:8px;
   background:transparent;color:var(--ink);text-align:left;cursor:pointer;
 }
-.mail-request:hover,.mail-reply:hover,.thread-item:hover {background:var(--rail-selection)}
+.mail-request:is(:hover,:focus-visible),.mail-reply:hover,.thread-item:hover {background:var(--rail-selection)}
 .mail-request {
   display:grid;grid-template-columns:12px minmax(0,1fr) 12px;
   gap:3px 5px;align-items:center;
@@ -57,8 +69,12 @@
 .mail-state.replied {background:linear-gradient(90deg,currentColor 50%,transparent 50%)}
 .mail-state.no-reply {visibility:hidden}
 .mail-state.important {color:var(--theme-status-alert,#ff6a5d)}
-.mail-open {opacity:0;color:var(--ink-dim)}
-.mail-request:is(:hover,:focus-visible) .mail-open {opacity:1}
+.mail-open {display:flex;justify-content:center;color:var(--ink-dim)}
+.mail-request:is(:hover,:focus-visible) .mail-open {color:var(--amber)}
+@media (prefers-reduced-motion: no-preference) {
+  .mail-open {transition:transform .15s ease}
+  .mail-request:is(:hover,:focus-visible) .mail-open {transform:translateX(2px)}
+}
 .mail-subject {font-weight:600;overflow-wrap:anywhere}
 .mail-requester {
   grid-column:2 / -1;display:flex;align-items:center;gap:5px;color:var(--ink-dim);font-size:13px;
@@ -73,6 +89,19 @@
 .mail-route {min-width:0;overflow-wrap:anywhere;font-weight:500}
 .mail-route .mail-icon {display:inline-block;vertical-align:middle;margin:0 4px;color:var(--ink-dim)}
 .mail-reply-excerpt {grid-column:1 / -1;color:var(--ink-dim);overflow-wrap:anywhere}
+.mailcards > .mail-assignment + .mail-assignment {margin-top:12px}
+.mail-timeline-start {
+  position:relative;grid-column:2 / -1;min-width:0;margin:0 0 -5px -10px;padding:0 0 5px 9px;
+  border-left:1px solid var(--hair);
+}
+.mail-timeline-replies {margin-left:14px;padding-left:9px;border-left:1px solid var(--hair)}
+.mail-timeline-replies .thread-item {position:relative;padding:5px 7px 5px 0}
+.mail-timeline-start::before,.mail-timeline-replies .thread-item::before {
+  content:"";position:absolute;width:5px;height:5px;border-radius:50%;background:var(--ink-dim);
+}
+.mail-timeline-start::before {top:7px;left:-2px}
+.mail-timeline-replies .thread-item::before {top:12px;left:-12px}
+.mail-timeline-start .thread-excerpt {margin-top:2px}
 .mailempty {color:var(--ink-dim);font-size:13px;margin:6px 0}
 
 .maildrawer {

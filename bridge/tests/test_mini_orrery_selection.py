@@ -19,6 +19,7 @@ def mini_browser(tour_browser):
     client, evaluate = tour_browser
     evaluate("""(()=>{
       document.querySelectorAll('.flight-close').forEach(e=>e.click());
+      document.getElementById('mailGraphBtn').click();
       setMiniViewMode('orrery');
       const names=['Pilot','Helper','Watcher'];
       currentAgents=names.map(name=>({name,category:'agent',running:true,
