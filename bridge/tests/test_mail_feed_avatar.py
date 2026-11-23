@@ -53,3 +53,34 @@ def test_recipient_portraits_work_with_reader_off(cockpit):
     assert js("Boolean(groupFor('AuditNode').querySelector('.conversation-avatar'))")
     assert not js("conversationEnabled.checked")
     assert not js("[...document.querySelectorAll('link')].some(l=>l.getAttribute('href')==='conversation_view.css')")
+
+
+def test_route_portraits_follow_the_roster_in_both_views_and_detail(cockpit):
+    js, wait = prepare(cockpit, width=240)
+    js("""currentAgents.push({name:'LaunchNode',provider:'anthropic',running:true});
+      document.dispatchEvent(new Event('oc:agents'));
+      document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages:[
+        {id:202,sender:'BuildNode',recipients:['LaunchNode'],subject:'Reply',ts:2000000001,body_md:'Fixture reply'},
+        {id:203,sender:'LaunchNode',subject:'Unaddressed',ts:2000000002,body_md:'Fixture notice'}
+      ]}}));
+      window.portraits=selector=>[...document.querySelectorAll(selector+' [data-mail-peer]')].map(slot=>[
+        slot.dataset.mailPeer,slot.querySelector('.provider-badge img')?.getAttribute('src')||null
+      ]);""")
+    animated = [['LaunchNode', 'cockpit-assets/anthropic.svg'], ['BuildNode', 'cockpit-assets/openai.svg']]
+    reply = list(reversed(animated))
+    assert js("portraits('#mail .mail-assignee:nth-child(2) .mail-request')") == animated
+    assert js("portraits('#mail .mail-reply:not([hidden])')") == reply
+    assert js("groupFor('No direct recipient').querySelectorAll('.mail-route-recipients [data-mail-peer]').length") == 0
+
+    js("document.getElementById('mailViewBtn').click()")
+    assert js("portraits('.mail-timeline-replies')") == reply
+    assert js("""[...document.querySelectorAll('.mail-route')].every(
+      route=>route.scrollWidth<=route.clientWidth+1)""")
+    assert js("portraits('.mail-timeline-start').find(peer=>peer[0]==='ExternalNode')") == ['ExternalNode', None]
+    js("document.querySelector('.mail-timeline-replies button').click()")
+    wait("document.querySelector('.mail-md').textContent==='Fixture reply'")
+    assert js("portraits('#mailSelectedRoute')") == reply
+    assert js("portraits('.drawer-body')") == reply
+    js("""currentAgents.find(a=>a.name==='BuildNode').provider='anthropic';
+      document.dispatchEvent(new Event('oc:agents'));""")
+    assert js("portraits('.drawer-body')[0]") == ['BuildNode', 'cockpit-assets/anthropic.svg']

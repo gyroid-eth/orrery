@@ -53,7 +53,7 @@ console.log(JSON.stringify([detailHtml(message), replyHtml(message), drawerLinkS
 })]));
 """
     allowed = {
-        'div': {'class'}, 'span': {'class', 'title', 'role', 'aria-label'},
+        'div': {'class'}, 'span': {'class', 'title', 'role', 'aria-label', 'aria-hidden', 'data-mail-peer'},
         'h2': set(), 'p': set(), 'code': set(), 'strong': set(),
         'time': {'title'}, 'button': {'class', 'type', 'data-reply'},
         'svg': {'class', 'viewbox', 'aria-hidden'}, 'path': {'d'},
@@ -68,7 +68,8 @@ console.log(JSON.stringify([detailHtml(message), replyHtml(message), drawerLinkS
     parsed = Tags()
     parsed.feed(details)
     assert ''.join(parsed.text).count(value) == 4  # sender, recipient, subject and body
-    assert ('span', {'title': value.upper()}) in parsed.tags
+    assert ('span', {'class': 'mail-peer', 'title': value.upper()}) in parsed.tags
+    assert [attrs['data-mail-peer'] for _, attrs in parsed.tags if 'data-mail-peer' in attrs] == [value, value]
     parsed = Tags()
     parsed.feed(reply)
     assert parsed.tags[0] == ('button', {'class': 'thread-item', 'type': 'button', 'data-reply': value})

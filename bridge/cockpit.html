@@ -2892,8 +2892,18 @@
           },
           {
             "property": "color",
-            "selector": ".mail-route .mail-icon",
+            "selector": ".mail-route > .mail-icon",
             "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".mail-peer-avatar:empty",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mail-peer-avatar:empty",
+            "value": "var(--panel-2)"
           },
           {
             "property": "color",
@@ -2928,11 +2938,6 @@
           {
             "property": "color",
             "selector": ".drawer-link-source",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".drawer-route .mail-icon,.drawer-recipients",
             "value": "var(--ink-dim)"
           },
           {
@@ -3539,7 +3544,7 @@
           },
           {
             "property": "color",
-            "selector": ".mail-route .mail-icon",
+            "selector": ".mail-route > .mail-icon",
             "value": "var(--ink-dim)"
           },
           {
@@ -3560,11 +3565,6 @@
           {
             "property": "color",
             "selector": ".drawer-link-source",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".drawer-route .mail-icon,.drawer-recipients",
             "value": "var(--ink-dim)"
           },
           {
@@ -3706,7 +3706,7 @@
         "unit": "effect-component"
       },
       "source": {
-        "digest": "d05909991384b5c6167a414ab34753b48e12f4e8e3e8b757d82a7c0d407901db",
+        "digest": "74e0dae4da56a7c3536fcad44ef908e1dbfb3698b37c6355b5114b16ae9078ad",
         "records": [
           ":root\u0000--amber-glow",
           ".miniorrery.telemetry-network\u0000background",
@@ -3719,7 +3719,7 @@
           ".topstat .dot.open\u0000box-shadow",
           ".roster-filter input:focus\u0000box-shadow",
           ".medal .face\u0000box-shadow",
-          ".mail-assignee-name .conversation-avatar .face\u0000box-shadow",
+          ":is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .face\u0000box-shadow",
           ".medal .face::after\u0000background",
           ".agent-detail\u0000box-shadow",
           ".term\u0000background",
@@ -3766,7 +3766,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "78efef38e00a1c176b850e9964ccf205b723ad23c4593a7e4b4492caa83db19f",
+        "digest": "33486b46b134ae740cded34d0d789709abd5400270ebe3f33e3663d1e98a5ff1",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -3900,9 +3900,9 @@
       }
     }
   },
-  "inventory_digest": "e23e409253d771c179391b7ca75ac41edd35b34491013b2119fe8f6c71b4e742",
+  "inventory_digest": "56869467b667dccc5a80defc30f75ae1fdec6caed59473b48e2d5b1887b3a658",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "15d0a9d79d944517c607249cfb4275e98883ea0c5cce154b57bf57e5119fd085",
+  "source_digest": "55c55ae1091789340cbbb1cac43045248c9b2b71ed5d7381ecab111a2536fabd",
   "surface": "cockpit",
   "version": 1
 }
@@ -4714,7 +4714,7 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   ['.topstat .dot.open','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .topstat .dot.open'],
   ['.roster-filter input:focus','box-shadow',['focus'],'preserve'],
   ['.medal .face','box-shadow',['state'],'preserve'],
-  ['.mail-assignee-name .conversation-avatar .face','box-shadow',['state'],'preserve'],
+  [':is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .face','box-shadow',['state'],'preserve'],
   ['.medal .face::after','background',['elevation'],'preserve'],
   ['.agent-detail','box-shadow',['elevation'],'preserve'],
   ['.term','background',['elevation'],'preserve'],

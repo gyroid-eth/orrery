@@ -2,8 +2,8 @@
   "axes": {
     "background": {
       "effect": {
-        "digest": "927c3a2147d5f3a80c2648ea3ebcb195520580ac7708a4817ffa13937dd29d17",
-        "expected": 295,
+        "digest": "866d68af877759d896624c206380b0a74b5cdcec24a8fdee7ecf412d9714aae6",
+        "expected": 296,
         "records": [
           {
             "property": "background",
@@ -1362,8 +1362,18 @@
           },
           {
             "property": "color",
-            "selector": ".mail-route .mail-icon",
+            "selector": ".mail-route > .mail-icon",
             "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".mail-peer-avatar:empty",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mail-peer-avatar:empty",
+            "value": "var(--panel-2)"
           },
           {
             "property": "color",
@@ -1398,11 +1408,6 @@
           {
             "property": "color",
             "selector": ".drawer-link-source",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".drawer-route .mail-icon,.drawer-recipients",
             "value": "var(--ink-dim)"
           },
           {
@@ -1626,8 +1631,8 @@
     },
     "dim-contrast": {
       "effect": {
-        "digest": "42023d9289fd685520805de74263a3ded53766242813fc0fbceb8d98c7f25675",
-        "expected": 109,
+        "digest": "4554b6dfee9a5e6f48eddea47e48b5aaedb9ec4dced07ee6e1920c1fece7552a",
+        "expected": 108,
         "records": [
           {
             "property": "color",
@@ -2121,7 +2126,7 @@
           },
           {
             "property": "color",
-            "selector": ".mail-route .mail-icon",
+            "selector": ".mail-route > .mail-icon",
             "value": "var(--ink-dim)"
           },
           {
@@ -2142,11 +2147,6 @@
           {
             "property": "color",
             "selector": ".drawer-link-source",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".drawer-route .mail-icon,.drawer-recipients",
             "value": "var(--ink-dim)"
           },
           {
@@ -2397,7 +2397,7 @@
         "unit": "effect-component"
       },
       "source": {
-        "digest": "d05909991384b5c6167a414ab34753b48e12f4e8e3e8b757d82a7c0d407901db",
+        "digest": "74e0dae4da56a7c3536fcad44ef908e1dbfb3698b37c6355b5114b16ae9078ad",
         "expected": 45,
         "records": [
           {
@@ -2501,7 +2501,7 @@
             ],
             "mode": "preserve",
             "property": "box-shadow",
-            "selector": ".mail-assignee-name .conversation-avatar .face"
+            "selector": ":is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .face"
           },
           {
             "categories": [
@@ -2801,7 +2801,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "78efef38e00a1c176b850e9964ccf205b723ad23c4593a7e4b4492caa83db19f",
+        "digest": "33486b46b134ae740cded34d0d789709abd5400270ebe3f33e3663d1e98a5ff1",
         "expected": 86,
         "records": [
           {
@@ -3400,7 +3400,7 @@
             "value": "6px"
           },
           {
-            "line": 125,
+            "line": 130,
             "property": "font-size",
             "selector": ".mail-md h4",
             "source": "bridge/mail_view.css",
@@ -3610,7 +3610,7 @@
       }
     }
   },
-  "inventory_digest": "e23e409253d771c179391b7ca75ac41edd35b34491013b2119fe8f6c71b4e742",
+  "inventory_digest": "56869467b667dccc5a80defc30f75ae1fdec6caed59473b48e2d5b1887b3a658",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -3622,10 +3622,10 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "15d0a9d79d944517c607249cfb4275e98883ea0c5cce154b57bf57e5119fd085",
+  "source_digest": "55c55ae1091789340cbbb1cac43045248c9b2b71ed5d7381ecab111a2536fabd",
   "source_files": {
-    "bridge/cockpit.html": "6c3026b799a91c73e20431d2f6612779cee2bfa63b55c31d1a3b9e27b467a557",
-    "bridge/mail_view.css": "7c9f4e3b2de9cb592bcc5254447b5eebed1ce61b5dc93a9435298477743901ff",
+    "bridge/cockpit.html": "0534cbb9a716d30297b809b44a6d2d58127bca05d876711b7a8285475013ec7c",
+    "bridge/mail_view.css": "7171141d067cf641aeff0b9784a83155e57c0a4873b313d8424e73559457137f",
     "bridge/orrery_view.css": "213aada88d21c009b3bfe715588aaebb0bf6b24d86d80cc2c149fdb805f804c4"
   },
   "surface": "cockpit",
