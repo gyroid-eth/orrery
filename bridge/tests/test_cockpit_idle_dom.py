@@ -138,10 +138,12 @@ def test_an_unchanged_roster_writes_nothing_to_the_roster(cockpit):
 def test_a_changed_row_repaints_only_that_tile(cockpit):
     js, wait, state = cockpit
     settle(js)
+    js("window.capturedTile=tiles.get('DeltaNode')")
     state['agents'][3]['ctx_used'] = 77
-    r = js(POLL)
-    assert r['rosterTiles'] == ['DeltaNode'], r
-    assert js("tiles.get('DeltaNode').querySelector('.pct').textContent") == '77%'
+    js(POLL)
+    assert js("tiles.get('DeltaNode')===capturedTile")
+    assert js("capturedTile.querySelector('.ctx,.pill.model,.statetext')") is None
+    assert js("rosterEl.querySelector('.agent').dataset.agent") == 'DeltaNode'
     state['agents'][4]['act_state'] = 'work'
     js(POLL)
     assert js("tiles.get('EpsilonNode').classList.contains('working')") is True
@@ -173,3 +175,31 @@ def test_a_mail_event_draws_a_line_between_the_two_agents(cockpit):
     js("""document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages:[{id:1,
       sender:'AlphaNode',recipients:[{name:'BetaNode',kind:'to'}],ts:Math.floor(Date.now()/1000),subject:'x'}]}}))""")
     wait("document.querySelectorAll('#orrery .orrery-comm-edge').length>0")
+
+
+def test_roster_keeps_descendants_together_and_orders_siblings_by_activity(cockpit):
+    js, wait, state = cockpit
+    js("""(()=>{
+      const parent = (name) => currentAgents.find(a=>a.name===name);
+      parent('BetaNode').parent_agent='AlphaNode';
+      parent('BetaNode').parent_state='child';
+      parent('GammaNode').parent_agent='AlphaNode';
+      parent('GammaNode').parent_state='child';
+      parent('DeltaNode').parent_agent='GammaNode';
+      parent('DeltaNode').parent_state='child';
+      lastActivity.AlphaNode=10;
+      lastActivity.BetaNode=20;
+      lastActivity.GammaNode=30;
+    })()""")
+    rows = js("""(()=>{
+      reorderRoster(currentAgents);
+      return [...rosterEl.querySelectorAll('.agent')].slice(0,4)
+        .map(el=>[el.dataset.agent,Number(el.dataset.rosterDepth)]);
+    })()""")
+    assert rows == [['AlphaNode',0],['GammaNode',1],['DeltaNode',2],['BetaNode',1]]
+    assert js("""(()=>{
+      currentAgents.find(a=>a.name==='AlphaNode').parent_state='child';
+      currentAgents.find(a=>a.name==='AlphaNode').parent_agent='DeltaNode';
+      reorderRoster(currentAgents);
+      return new Set([...rosterEl.querySelectorAll('.agent')].map(el=>el.dataset.agent)).size;
+    })()""") == len(NAMES)

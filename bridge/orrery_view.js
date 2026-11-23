@@ -43,6 +43,7 @@ let planetarium=null;
 let planetSvg=null;
 let planetLastFocus=null;
 let activeComets=0;
+let activeMailRoute=null;
 const commPairs=new Map();
 let commRefreshTimer=null;
 let motionFrameId=null;
@@ -502,6 +503,7 @@ function updateSurfaceGeometry(surface){
         (.58*life*Math.min(from.opacity,to.opacity)).toFixed(3));
     });
   }
+  if(activeMailRoute)renderMailFocus(surface);
 }
 function finishSurfaceMotion(surface){
   const removing=[];
@@ -1050,6 +1052,42 @@ function commPathBetween(from,to,dimensions){
     },
   };
 }
+function renderMailFocus(surface){
+  const target=surface?.target;
+  if(!target)return;
+  let layer=target.querySelector('.orrery-mail-focus');
+  if(!activeMailRoute){
+    layer?.remove();
+    return;
+  }
+  const from=surface.states.get(activeMailRoute.sender);
+  if(!layer){
+    layer=svgEl('g',{class:'orrery-mail-focus','aria-hidden':'true'});
+    target.insertBefore(layer,target.querySelector('.orrery-node-layer'));
+  }
+  layer.replaceChildren();
+  if(!from||from.removing)return;
+  const dimensions=surface.layoutDimensions||surface.dimensions;
+  for(const name of activeMailRoute.recipients||[]){
+    const to=surface.states.get(name);
+    if(!to||to.removing||to===from)continue;
+    const curve=commPathBetween(from,to,dimensions);
+    const distance=Math.hypot(to.x-from.x,to.y-from.y);
+    const t=Math.max(.45,1-(dimensions.large?27:14)/Math.max(distance,1));
+    const tip=curve.point(t),base=curve.point(t-.05);
+    const angle=Math.atan2(tip.y-base.y,tip.x-base.x),length=dimensions.large?9:5;
+    const wing=turn=>`${tip.x-length*Math.cos(angle+turn)} ${tip.y-length*Math.sin(angle+turn)}`;
+    layer.append(
+      svgEl('path',{d:curve.d}),
+      svgEl('path',{d:`M ${wing(.58)} L ${tip.x} ${tip.y} L ${wing(-.58)}`})
+    );
+  }
+}
+document.addEventListener('oc:mail-route',event=>{
+  activeMailRoute=event.detail;
+  renderMailFocus(miniMotion);
+  if(planetarium?.classList.contains('on'))renderMailFocus(planetMotion);
+});
 /* A spawn always carries its task message, so a parent and its child are a
    mail pair by definition. Drawing both a spawn line and a mail curve for
    them puts two lines where there is one relationship. Hand the mail to the
