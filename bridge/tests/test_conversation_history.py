@@ -134,7 +134,8 @@ async def start(app):
     return runner, f"http://127.0.0.1:{site._server.sockets[0].getsockname()[1]}"
 
 
-def run_api(tmp_path, monkeypatch, scenario, *, row_update=None, fresh=False, change_binding=False):
+def run_api(tmp_path, monkeypatch, scenario, *, row_update=None, fresh=False, change_binding=False,
+            fresh_source="codex"):
     async def main():
         file = tmp_path / "bound.jsonl"
         file.write_bytes(record("bound conversation"))
@@ -154,7 +155,7 @@ def run_api(tmp_path, monkeypatch, scenario, *, row_update=None, fresh=False, ch
         async def fresh_history(request):
             reads.append(request.path_qs)
             assert set(request.query) == {"session", "mail_instance_id", "mail_agent_id", "limit"}
-            return web.json_response(dict(ok=True, source="codex", history_binding="bound", has_more=True,
+            return web.json_response(dict(ok=True, source=fresh_source, history_binding="bound", has_more=True,
                 mail_instance_id="f" * 32, mail_agent_id=7,
                 events=[dict(role="assistant", kind="text", ts="2026-11-04T04:00:00Z", text="projected text")]))
         upstream = web.Application()
@@ -227,7 +228,8 @@ def test_binding_change_during_read_returns_no_events(tmp_path, monkeypatch):
     run_api(tmp_path, monkeypatch, scenario, change_binding=True)
 
 
-def test_fresh_uses_protected_projected_history_without_raw_file_reads(tmp_path, monkeypatch):
+@pytest.mark.parametrize("source", ["codex", "hermes"])
+def test_fresh_uses_protected_projected_history_without_raw_file_reads(tmp_path, monkeypatch, source):
     def forbidden(*args, **kwargs):
         raise AssertionError("Fresh must not read a raw transcript")
     monkeypatch.setattr(backend, "open_reader", forbidden)
@@ -235,10 +237,25 @@ def test_fresh_uses_protected_projected_history_without_raw_file_reads(tmp_path,
         async with client.get(url + "/telemetry/conversation?agent=BoundAgent") as response:
             payload = await response.json()
             assert response.status == 200
+            assert payload["provider"] == source
             assert payload["mode"] == "fresh_tail" and payload["limited"]
             assert payload["before"] is None and not payload["has_older"]
             assert payload["events"][0]["text"] == "projected text"
         assert len(reads) == 1 and reads[0].startswith("/api/history?")
         async with client.get(url + "/telemetry/conversation?agent=BoundAgent&before=anything") as response:
             assert response.status == 409
-    run_api(tmp_path, monkeypatch, scenario, fresh=True)
+    run_api(tmp_path, monkeypatch, scenario, fresh=True, fresh_source=source)
+
+
+@pytest.mark.parametrize("source,error", [
+    ("claude", "claude_next_phase"),
+    ("dsh", "history_unconfirmed"),
+    (None, "history_unconfirmed"),
+])
+def test_fresh_refuses_history_from_other_sources(tmp_path, monkeypatch, source, error):
+    async def scenario(client, url, reads):
+        async with client.get(url + "/telemetry/conversation?agent=BoundAgent") as response:
+            payload = await response.json()
+            assert payload == dict(ok=False, error=error)
+            assert "events" not in payload
+    run_api(tmp_path, monkeypatch, scenario, fresh=True, fresh_source=source)
