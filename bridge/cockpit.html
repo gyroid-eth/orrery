@@ -1336,6 +1336,15 @@
         </label>
       </div>
       <div class="settings-row">
+        <label class="settings-toggle-row" for="agentDefaultView">
+          <span class="settings-row-name">Open agents in</span>
+          <select class="settings-select" id="agentDefaultView">
+            <option value="terminal">Terminal</option>
+            <option value="reader">Reader</option>
+          </select>
+        </label>
+      </div>
+      <div class="settings-row">
         <label class="settings-toggle-row" for="colorThemePreference">
           <span class="settings-toggle-copy">
             <span class="settings-row-name">Color theme</span>
@@ -3918,9 +3927,9 @@
       }
     }
   },
-  "inventory_digest": "2b68c8ca3b9751c630b2af651976386ca9861de41ca4382ce9f73af1f9b63309",
+  "inventory_digest": "35bb305d5ab0859ac3f7f17f9d57f1a006c39c806c462f1a65f6041543616808",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "9b37fc6ca4a4b1b09988a1b5b515b3c5eb60f2e9d8525c87bbcaf3024faf2045",
+  "source_digest": "f671e8631ff6d6071662521022da988cb7c50583ba41aeff0b23cc316cf728a1",
   "surface": "cockpit",
   "version": 1
 }
@@ -11430,11 +11439,17 @@ kickPolls();
 /* Opt-in bootstrap: no conversation assets or API calls while disabled. */
 const conversationView=(()=>{
   const key='oc-term-conversation-enabled',setting=document.getElementById('conversationEnabled');
+  const defaultViewKey='oc-term-default-view',defaultViewSetting=document.getElementById('agentDefaultView');
   let instance=null,loading=null;
   // On by default: a browser that never chose keeps the panel; an explicit
   // "0" (also synced through prefs) stays off.
   try{if(localStorage.getItem(key)===null)localStorage.setItem(key,'1');}catch(_){}
   const enabled=()=>{try{return localStorage.getItem(key)==='1';}catch(_){return false;}};
+  function defaultView(){
+    try{return localStorage.getItem(defaultViewKey)==='reader'?'reader':'terminal';}
+    catch(_){return 'terminal';}
+  }
+  function syncDefaultView(){defaultViewSetting.value=defaultView();}
   function asset(tag,attribute,url){return new Promise((resolve,reject)=>{
     const el=document.createElement(tag);el[attribute]=url;
     if(tag==='link')el.rel='stylesheet';
@@ -11492,6 +11507,7 @@ const conversationView=(()=>{
         frame?.addEventListener('load',wrapFrame);wrapFrame();
       }
       instance=OrreryConversation.mountWorkspace({
+        defaultView,
         getContext:(selected)=>{const name=selected||activeSession(),paneId=paneIdForSession(name);
           return {...(currentAgents.find(a=>a.name===name)||{name}),terminalPaneId:paneId,...readerActivity.current(panes.get(paneId))};},
         getSlots:()=>splitVisible?splitSessions.map(name=>({name,host:splitCells.get(name),controlHost:splitCells.get(name)?._actions})).filter(slot=>slot.host?.isConnected):[],
@@ -11513,8 +11529,15 @@ const conversationView=(()=>{
     try{localStorage.setItem(key,setting.checked?'1':'0');}catch(_){}
     if(setting.checked)ensure();
   });
-  document.addEventListener('oc:prefs-changed',()=>{if(enabled())ensure();});
-  window.addEventListener('storage',event=>{if(event.key===key&&enabled())ensure();});
+  syncDefaultView();
+  defaultViewSetting.addEventListener('change',()=>{
+    try{localStorage.setItem(defaultViewKey,defaultViewSetting.value);}catch(_){syncDefaultView();}
+  });
+  document.addEventListener('oc:prefs-changed',()=>{syncDefaultView();if(enabled())ensure();});
+  window.addEventListener('storage',event=>{
+    if(event.key===defaultViewKey||event.key===null)syncDefaultView();
+    if(event.key===key&&enabled())ensure();
+  });
   if(enabled())ensure();
   return Object.freeze({ready:ensure,open:async()=>{const view=await ensure();if(view&&enabled())view.open();},
     close:()=>instance&&instance.close(),refresh:()=>instance&&instance.refresh()});

@@ -4,6 +4,9 @@
 (function(root){
   'use strict';
   const KEY='oc-term-conversation-enabled';
+  const READER_PROGRAMS=new Set(['codex','codex-cli','claude','claude-code','dsh','hermes']);
+  const READER_UNAVAILABLE=new Set(['provider_unavailable','claude_next_phase','dashboard_upgrade_required',
+    'dsh_decoder_unavailable','history_format_unsupported']);
   const MAX_EVENTS=800,MAX_BYTES=2*1024*1024;
   // One Load earlier gathers about OLDER_EVENTS events with up to OLDER_READS
   // pages of OLDER_LIMIT (the server's cap). Tool calls and results are one
@@ -407,7 +410,7 @@
         if(event&&reference(event,ref.path||ref.label,'file'))preview.close();
       }:null});
     const stopPathLinks=root.OrreryConversationMarkdown?.observePaths?.(panel,source);
-    let enabled=false,opened=false,agent='',generation=0,controller=null,timer=0,busy=false,sessionReloadAttempted=false;
+    let enabled=false,opened=false,automaticOpening=false,agent='',generation=0,controller=null,timer=0,busy=false,sessionReloadAttempted=false;
     let before=null,after=null,hasOlder=false,mode='',newCount=0,events=new Map();
     let presented=true,lastPosition=null,lastWidth=0,lastHeight=0,lastFocused=null;
     let layoutTimer=0,layoutFrame=0,layoutPending=false,restoring=false,userScrolling=false,layoutStarted=0;
@@ -863,6 +866,7 @@
         const page=direction==='older'?await readOlder(name,options,token):await source.read(name,options);
         waiting.delete(holder);
         if(token!==generation||!opened||!enabled)return;
+        automaticOpening=false;
         holding=false;
         if(page.hold===true)last.hold=true;
         last.slot=page.slot===true;last.refused=Boolean(options.wait)&&!last.slot;
@@ -935,6 +939,9 @@
         if(token!==generation)return;
         holding=false;
         if(error.name==='AbortError')return;
+        if(automaticOpening&&READER_UNAVAILABLE.has(error.code)){
+          close({focus:false});return;
+        }
         last.failed=true;
         if(error.code==='history_changed'){
           // One short retry for a changed binding; repeated changes use the
@@ -944,7 +951,7 @@
           if(!sessionReloadAttempted){sessionReloadAttempted=true;reloadDelay=250;}
           position();
         }else{
-          pollAgain=!['record_too_large','provider_unavailable','claude_next_phase','dashboard_upgrade_required','dsh_decoder_unavailable','history_format_unsupported'].includes(error.code);
+          pollAgain=error.code!=='record_too_large'&&!READER_UNAVAILABLE.has(error.code);
           retry.hidden=false;message(error.message,'Read failed');
           if(BINDING_ERRORS.includes(error.code)){
             // Never retain content from a stale, unbound or different native session.
@@ -991,17 +998,21 @@
     function close({focus=true}={}){
       if(!opened)return;
       hideSelection();
-      stop();opened=false;agent='';panel.hidden=true;preview?.setVisible(false);screen.classList.remove('conversation-open','conversation-full');
+      stop();opened=false;automaticOpening=false;agent='';panel.hidden=true;preview?.setVisible(false);screen.classList.remove('conversation-open','conversation-full');
       screen.style.removeProperty('--conversation-viewport-height');screen.style.removeProperty('--conversation-viewport-top');
       toggle.setAttribute('aria-expanded','false');paintControls();clear({keepSubmissions:true});onState();const target=typeof focusControl==='function'?focusControl():focusControl||toggle;
       if(focus&&target&&!target.hidden&&target.getClientRects().length)target.focus();
     }
-    function open(){
+    function open({automatic=false}={}){
       if(!enabled)return;
-      if(opened){onActivate();return;}
-      onActivate();opened=true;panel.hidden=false;preview?.setVisible(presented&&!document.hidden);screen.classList.add('conversation-open');screen.classList.toggle('conversation-full',fullWidth);
+      if(!automatic)onActivate();
+      if(opened)return;
+      automaticOpening=automatic;
+      opened=true;panel.hidden=false;preview?.setVisible(presented&&!document.hidden);screen.classList.add('conversation-open');screen.classList.toggle('conversation-full',fullWidth);
       viewport();const rect=screen.getBoundingClientRect();lastWidth=rect.width;lastHeight=rect.height;
-      toggle.setAttribute('aria-expanded','true');paintControls();readContext(getContext()||{});scroll.focus();onState();
+      toggle.setAttribute('aria-expanded','true');paintControls();readContext(getContext()||{});
+      if(!automatic)scroll.focus();
+      onState();
     }
     function preference(){
       try{enabled=localStorage.getItem(KEY)==='1';}catch(_){enabled=false;}
@@ -1114,7 +1125,7 @@
     return Object.freeze({open,close,relocate,reconcile:context,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
       dispose(){cancelAnimationFrame(selectionFrame);stopPathLinks?.();ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();submissionObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});preview?.dispose();clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();noticeMenu.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
   }
-  function mountWorkspace({getContext,getSlots,getOwner=name=>getContext(name)?.terminalPaneId,activate,...options}){
+  function mountWorkspace({getContext,getSlots,getOwner=name=>getContext(name)?.terminalPaneId,activate,defaultView=()=> 'terminal',...options}){
     const screen=document.querySelector('.screen'),toggle=document.getElementById('conversationToggle');
     // Keep one reader per live pane. A split cell is only a display destination.
     // Detached readers retain bounded DOM/cursors; inactive readers do not poll.
@@ -1139,7 +1150,7 @@
         focusControl:()=>control.getClientRects().length?control:toggle,
         onActivate:()=>{if((getContext()||{}).name!==name)activate(name);},onState:paint});
       view.relocate(park,{visible:false});
-      const entry={name,owner,view,park,host:park,control,expandControl,visible:false};views.set(name,entry);return entry;
+      const entry={name,owner,view,park,host:park,control,expandControl,visible:false,initialViewPending:true};views.set(name,entry);return entry;
     }
     function sync(){
       if(syncing)return;syncing=true;
@@ -1181,6 +1192,10 @@
           if(target.host===screen||!screen.classList.contains('split-pane-headers'))toggle.after(entry.expandControl);
           else entry.control.after(entry.expandControl);
           entry.view.relocate(target.host,{visible:true,focus:name===selected,noticeAnchor:target.host===screen||!screen.classList.contains('split-pane-headers')?toggle:entry.control});entry.host=target.host;entry.visible=true;
+          if(entry.initialViewPending){
+            entry.initialViewPending=false;
+            if(defaultView()==='reader'&&READER_PROGRAMS.has(getContext(name)?.program))entry.view.open({automatic:true});
+          }
         }
         paint();
       }finally{syncing=false;}
