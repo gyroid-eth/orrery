@@ -20,8 +20,10 @@
     preview_path_denied:'This file is outside the permitted preview folders.',
     preview_type_denied:'This file type cannot be previewed safely.',
     preview_too_large:'This file exceeds the preview size or pixel limit.',
+    preview_text_too_large:'This file exceeds the 131,072-character preview limit.',
+    preview_not_text:'This file is binary or is not UTF-8 text.',
     preview_changed:'The file changed during this read. Select it again.',
-    preview_unavailable:'This recorded reference cannot be previewed.',
+    preview_unavailable:'This file could not be opened.',
   };
   const REASONS=Object.create(null);
   function reasons(codes,text){for(const code of codes.split(' '))REASONS[code]=text;}
@@ -84,7 +86,7 @@
       return payload;
     }
     async probePaths(texts,options){return (await this.pathRequest('/telemetry/conversation/path-probe',{texts},options)).paths;}
-    pathImage(path,options){return this.pathRequest('/telemetry/conversation/path-image',{path},options);}
+    pathPreview(path,options){return this.pathRequest('/telemetry/conversation/path-image',{path},options);}
     revealPath(path,options){return this.pathRequest('/telemetry/reveal-path',{path,literal:true},options);}
   }
   root.OrreryConversationSource=Object.freeze({Source,MESSAGES,REASONS,bindingMessage});
