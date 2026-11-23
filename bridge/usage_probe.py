@@ -429,6 +429,15 @@ class UsageCache:
             previous = self.entries.get(snapshot.provider)
             if snapshot.retry_after_seconds > 0:
                 self.blocked_until[snapshot.provider] = now + snapshot.retry_after_seconds
+            if snapshot.status == "stale" and snapshot.windows and snapshot.observed_at is not None and (
+                previous is None or previous[1].observed_at is None
+                or snapshot.observed_at > previous[1].observed_at
+            ):
+                # The dashboard may have a newer observation while its next
+                # provider fetch is scheduled. Keep that newer value as stale
+                # rather than pinning an older pre-reset reading forever.
+                self.entries[snapshot.provider] = (now, snapshot)
+                return snapshot
             if snapshot.measurement_kind != "balance" and snapshot.status != "ok" and previous and previous[1].status in ("ok", "stale"):
                 kept = ProviderUsage(snapshot.provider, "stale", previous[1].observed_at,
                                      previous[1].windows, snapshot.reason, snapshot.retry_after_seconds)

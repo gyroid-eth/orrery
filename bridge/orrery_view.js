@@ -15,16 +15,18 @@ if(!miniSvg||!OC)return;
 
 const SVG_NS='http://www.w3.org/2000/svg';
 const MINI={
-  width:280,height:200,large:false,dynamic:false,
-  xPadding:17,topPadding:31,bottomPadding:14,
-  treePitchX:34,treePitchY:43,singlePitchX:35,singlePitchY:32,
-  singleColumns:7,sectionGap:34,treeGapUnits:.55,promoteComms:true,
+  width:280,height:200,large:false,
+  xPadding:34,topPadding:46,bottomPadding:46,
+  treePitchX:66,treePitchY:64,singlePitchX:66,singlePitchY:64,
+  singleColumns:5,sectionGap:64,treeGapUnits:.55,promoteComms:true,
+  captionWidth:62,captionTop:15,captionHeight:20,nodeAbove:20,
 };
 const PLANET={
-  width:1000,height:620,large:true,dynamic:true,
-  xPadding:64,topPadding:58,bottomPadding:74,
-  treePitchX:112,treePitchY:122,singlePitchX:112,singlePitchY:100,
+  width:1000,height:620,large:true,
+  xPadding:64,topPadding:90,bottomPadding:80,
+  treePitchX:112,treePitchY:122,singlePitchX:112,singlePitchY:122,
   singleColumns:8,sectionGap:128,treeGapUnits:.55,promoteComms:false,
+  captionWidth:104,captionTop:37,captionHeight:34,nodeAbove:37,
 };
 const MAIL_EDGE_LIFETIME=90000;
 const COMM_PROMOTION_HYSTERESIS=4000;
@@ -43,6 +45,7 @@ let planetarium=null;
 let planetSvg=null;
 let planetLastFocus=null;
 let activeComets=0;
+let activeMailRoute=null;
 const commPairs=new Map();
 let commRefreshTimer=null;
 let motionFrameId=null;
@@ -171,40 +174,39 @@ function activePromotionPartners(forest,now=Date.now()){
   return new Map([...strongest].map(([name,value])=>[name,value.partner]));
 }
 
+function captionClearance(dimensions){
+  return [dimensions.captionWidth+4,dimensions.nodeAbove+dimensions.captionTop+dimensions.captionHeight+2];
+}
 function promotedPosition(name,partnerPosition,occupied,dimensions){
-  const radius=dimensions.large?76:27;
+  const [horizontal,vertical]=captionClearance(dimensions);
   const angles=[0,Math.PI,-Math.PI/2,Math.PI/2,-Math.PI/4,Math.PI/4,
     -3*Math.PI/4,3*Math.PI/4];
   const seed=[...String(name)].reduce((sum,char)=>sum+char.codePointAt(0),0);
   const ordered=angles.map((_,index)=>angles[(index+seed)%angles.length]);
   let best=null;
-  ordered.forEach((angle,index)=>{
-    const x=partnerPosition.x+Math.cos(angle)*radius;
-    const y=partnerPosition.y+Math.sin(angle)*radius;
-    const edgeMargin=dimensions.large?38:14;
-    if(x<edgeMargin||x>dimensions.width-edgeMargin||
-       y<edgeMargin||y>dimensions.height-edgeMargin)return;
-    const clearance=occupied.reduce((nearest,position)=>
-      Math.min(nearest,Math.hypot(x-position.x,y-position.y)),Infinity);
-    const candidate={x,y,score:clearance-index*.001};
-    if(!best||candidate.score>best.score)best=candidate;
-  });
-  if(best)return best;
-  return {
-    x:Math.max(14,Math.min(dimensions.width-14,partnerPosition.x+radius)),
-    y:Math.max(14,Math.min(dimensions.height-14,partnerPosition.y)),
-  };
+  for(const angle of ordered){
+    const x=partnerPosition.x+Math.cos(angle)*vertical;
+    const y=partnerPosition.y+Math.sin(angle)*vertical;
+    if(x<dimensions.xPadding||x>dimensions.width-dimensions.xPadding||
+       y<dimensions.topPadding||y>dimensions.height-dimensions.bottomPadding)continue;
+    let nearest=Infinity;
+    for(const [other,position] of occupied){
+      if(other===name)continue;
+      const clearance=Math.max(Math.abs(x-position.x)/horizontal,Math.abs(y-position.y)/vertical);
+      nearest=Math.min(nearest,clearance);
+    }
+    if(nearest>=1&&(!best||nearest>best.score))best={x,y,score:nearest};
+  }
+  return best;
 }
 
-/* Shared forest layout. The rail compresses into its fixed 280×200 viewBox;
-   the planetarium grows its coordinate space instead, preserving >=112 px
-   horizontal pitch (comfortably above the 96 px label-clearance contract). */
+/* Keep each portrait and its caption in a separate cell. The SVG viewport
+   fits the resulting coordinate space on both surfaces. */
 function layoutAgents(live,dimensions){
   const forest=buildForest(live);
   const promotionPartners=dimensions.promoteComms
     ?activePromotionPartners(forest):new Map();
-  const waitingSingletons=forest.singletons.filter(name=>
-    !promotionPartners.has(name));
+  const promotions=new Map();
   const spanCache=new Map();
   function treeSpan(name){
     if(spanCache.has(name))return spanCache.get(name);
@@ -243,9 +245,7 @@ function layoutAgents(live,dimensions){
   const rawMin=rawXs.length?Math.min(...rawXs):0;
   const rawMax=rawXs.length?Math.max(...rawXs):0;
   const rawTreeWidth=rawMax-rawMin;
-  // Promotions leave a deterministic hole in the waiting grid. Keeping the
-  // original grid dimensions/indices prevents one conversation from shifting
-  // the spawn forest or every unrelated singleton.
+  // Reserve every singleton's cell before selecting promotion destinations.
   const singletonCount=forest.singletons.length;
   const singletonColumns=singletonCount
     ?Math.min(singletonCount,dimensions.singleColumns):0;
@@ -255,17 +255,8 @@ function layoutAgents(live,dimensions){
   const desiredSingletonWidth=Math.max(
     0,(singletonColumns-1)*dimensions.singlePitchX);
   const desiredContentWidth=Math.max(desiredTreeWidth,desiredSingletonWidth);
-  const width=dimensions.dynamic
-    ?Math.max(dimensions.width,desiredContentWidth+dimensions.xPadding*2)
-    :dimensions.width;
-  const innerWidth=width-dimensions.xPadding*2;
-  const treePitchX=rawTreeWidth
-    ?(dimensions.dynamic
-      ?dimensions.treePitchX
-      :Math.min(dimensions.treePitchX,innerWidth/rawTreeWidth))
-    :0;
-  const treeWidth=rawTreeWidth*treePitchX;
-  const treeLeft=(width-treeWidth)/2;
+  const width=Math.max(dimensions.width,desiredContentWidth+dimensions.xPadding*2);
+  const treeLeft=(width-desiredTreeWidth)/2;
   const singletonWidth=(singletonColumns-1)*dimensions.singlePitchX;
   const singletonLeft=(width-singletonWidth)/2;
 
@@ -276,66 +267,48 @@ function layoutAgents(live,dimensions){
   const idealGap=rawTreePositions.size&&singletonCount
     ?dimensions.sectionGap:0;
   const idealContentHeight=idealTreeHeight+idealGap+idealSingletonHeight;
-  const height=dimensions.dynamic
-    ?Math.max(dimensions.height,
-      idealContentHeight+dimensions.topPadding+dimensions.bottomPadding)
-    :dimensions.height;
-  const innerHeight=height-dimensions.topPadding-dimensions.bottomPadding;
-  const verticalScale=!dimensions.dynamic&&idealContentHeight>innerHeight
-    ?innerHeight/idealContentHeight:1;
-  const treePitchY=dimensions.treePitchY*verticalScale;
-  const singletonPitchY=dimensions.singlePitchY*verticalScale;
-  const sectionGap=idealGap*verticalScale;
-  const contentHeight=idealTreeHeight*verticalScale+
-    sectionGap+idealSingletonHeight*verticalScale;
-  const top=dimensions.topPadding+Math.max(0,(innerHeight-contentHeight)/2);
-  const singletonTop=top+idealTreeHeight*verticalScale+sectionGap;
+  const minimumHeight=idealContentHeight+dimensions.topPadding+dimensions.bottomPadding;
+  const height=Math.max(dimensions.height,minimumHeight);
+  const top=dimensions.topPadding+(height-minimumHeight)/2;
+  const singletonTop=top+idealTreeHeight+idealGap;
 
   const positions=new Map();
   rawTreePositions.forEach((raw,name)=>{
     const agent=forest.byName.get(name);
     positions.set(name,{
-      x:treeLeft+(raw.unitX-rawMin)*treePitchX,
-      y:top+raw.depth*treePitchY,
+      x:treeLeft+(raw.unitX-rawMin)*dimensions.treePitchX,
+      y:top+raw.depth*dimensions.treePitchY,
       agent,
       hue:OC.lineageHue.get(name)||'#7a8794',
       working:agent.act_state==='work',
     });
   });
-  waitingSingletons.forEach(name=>{
+  forest.singletons.forEach((name,index)=>{
     const agent=forest.byName.get(name);
-    const index=forest.singletons.indexOf(name);
     const column=index%singletonColumns;
     const row=Math.floor(index/singletonColumns);
     positions.set(name,{
       x:singletonLeft+column*dimensions.singlePitchX,
-      y:singletonTop+row*singletonPitchY,
+      y:singletonTop+row*dimensions.singlePitchY,
       agent,
       hue:OC.lineageHue.get(name)||'#7a8794',
       working:agent.act_state==='work',
     });
   });
-  const occupied=[...positions.values()];
   [...promotionPartners].sort(([a],[b])=>a.localeCompare(b))
     .forEach(([name,partner])=>{
-      const agent=forest.byName.get(name);
       const partnerPosition=positions.get(partner);
-      if(!agent||!partnerPosition)return;
-      const target=promotedPosition(name,partnerPosition,occupied,{
+      if(!partnerPosition)return;
+      const target=promotedPosition(name,partnerPosition,positions,{
         ...dimensions,width,height,
       });
-      const position={
-        x:target.x,y:target.y,agent,
-        hue:OC.lineageHue.get(name)||'#7a8794',
-        working:agent.act_state==='work',
-        promoted:true,promotionPartner:partner,
-      };
-      positions.set(name,position);occupied.push(position);
+      if(!target)return;
+      Object.assign(positions.get(name),{x:target.x,y:target.y,promoted:true,promotionPartner:partner});
+      promotions.set(name,partner);
     });
   return {
     width,height,positions,parentOf:forest.parentOf,
-    trees:forest.trees,singletons:waitingSingletons,
-    promotions:promotionPartners,
+    trees:forest.trees,singletons:forest.singletons.filter(name=>!promotions.has(name)),promotions,
   };
 }
 
@@ -373,21 +346,30 @@ function telemetryMiniLayout(live,focus,depth,dimensions){
   if(!subset)return layoutAgents(live,dimensions);
   const names=[...subset.visible].sort((a,b)=>a.localeCompare(b));
   const others=names.filter(name=>name!==focus);
-  const width=dimensions.width,height=dimensions.height;
-  const centerX=width/2,centerY=height/2;
+  const rx=Math.min(102,dimensions.width*.36),ry=Math.min(69,dimensions.height*.34);
+  const offsets=[{name:focus,x:0,y:0}];
+  others.forEach((name,index)=>{
+    const angle=-Math.PI/2+(Math.PI*2*index)/others.length;
+    offsets.push({name,x:Math.cos(angle)*rx,y:Math.sin(angle)*ry});
+  });
+  const [horizontal,vertical]=captionClearance(dimensions);
+  let scale=1;
+  for(let i=0;i<offsets.length;i++){
+    for(let j=0;j<i;j++){
+      const dx=Math.abs(offsets[i].x-offsets[j].x),dy=Math.abs(offsets[i].y-offsets[j].y);
+      scale=Math.max(scale,Math.min(horizontal/dx,vertical/dy));
+    }
+  }
+  const width=Math.max(dimensions.width,2*rx*scale+2*dimensions.xPadding);
+  const height=Math.max(dimensions.height,2*ry*scale+dimensions.topPadding+dimensions.bottomPadding);
+  const centerX=width/2,centerY=(height+dimensions.topPadding-dimensions.bottomPadding)/2;
   const positions=new Map();
   const positionFor=(name,x,y,networkFocus=false)=>{
     const agent=subset.byName.get(name);
     positions.set(name,{x,y,agent,hue:OC.lineageHue.get(name)||'#7a8794',
       working:agent.act_state==='work',networkFocus});
   };
-  positionFor(focus,centerX,centerY,true);
-  const rx=dimensions.large?Math.min(330,width*.34):Math.min(102,width*.36);
-  const ry=dimensions.large?Math.min(215,height*.34):Math.min(69,height*.34);
-  others.forEach((name,index)=>{
-    const angle=-Math.PI/2+(Math.PI*2*index)/Math.max(1,others.length);
-    positionFor(name,centerX+Math.cos(angle)*rx,centerY+Math.sin(angle)*ry);
-  });
+  offsets.forEach(({name,x,y})=>positionFor(name,centerX+x*scale,centerY+y*scale,name===focus));
   const parentOf=new Map();
   OC.lineageParent.forEach((parent,child)=>{
     if(positions.has(parent)&&positions.has(child))parentOf.set(child,parent);
@@ -502,6 +484,7 @@ function updateSurfaceGeometry(surface){
         (.58*life*Math.min(from.opacity,to.opacity)).toFixed(3));
     });
   }
+  if(activeMailRoute)renderMailFocus(surface);
 }
 function finishSurfaceMotion(surface){
   const removing=[];
@@ -611,6 +594,31 @@ function drawProviderBadge(group,agent,x,y,portraitRadius,size=14){
   group.appendChild(seat);
   return label;
 }
+function drawAgentCaption(group,{agent,x,y},dimensions,provider){
+  const role=roleOf(agent);
+  const title=svgEl('title');
+  title.textContent=[agent.name,role,modelOf(agent),provider].filter(Boolean).join(' · ');
+  group.prepend(title);
+
+  // Keep the full text in the DOM so Demo can mask whole names before the
+  // browser clips them to the cell.
+  const caption=svgEl('foreignObject',{x:x-dimensions.captionWidth/2,y:y+dimensions.captionTop,
+    width:dimensions.captionWidth,height:dimensions.captionHeight,'aria-hidden':'true'});
+  const text=document.createElement('div');
+  text.className='orrery-caption';
+  const name=document.createElement('div');
+  name.className='orrery-caption-name';
+  name.textContent=agent.name;
+  text.appendChild(name);
+  if(role){
+    const roleLabel=document.createElement('div');
+    roleLabel.className='orrery-caption-role';
+    roleLabel.textContent=role;
+    text.appendChild(roleLabel);
+  }
+  caption.appendChild(text);
+  group.appendChild(caption);
+}
 function drawMiniAgent(target,defs,position,index,dimensions){
   const {agent,x,y,hue,working}=position;
   const portraitRadius=8.5;
@@ -660,17 +668,7 @@ function drawMiniAgent(target,defs,position,index,dimensions){
   // silently painted over by the face (2026-08-06).
   const providerLabel=drawProviderBadge(group,agent,x,y,portraitRadius);
   drawStateGlyph(group,agent,x,y,false);
-  const rightSide=x<=dimensions.width/2;
-  const below=y<28;
-  const label=svgEl('text',{
-    class:'orrery-hover-label',
-    x:x+(rightSide?15:-15),
-    y:y+(below?17:-13),
-    'text-anchor':rightSide?'start':'end',
-  });
-  const role=roleOf(agent),model=modelOf(agent);
-  label.textContent=`${agent.name}${role?` · ${role}`:''} · ${model} · ${providerLabel}`;
-  group.appendChild(label);
+  drawAgentCaption(group,position,dimensions,providerLabel);
   target.appendChild(group);
   return group;
 }
@@ -688,10 +686,6 @@ function drawPlanetAgent(target,defs,position,index){
     'data-agent':agent.name,
   });
   makeInteractive(group,agent);
-  const title=svgEl('title');
-  const role=roleOf(agent),model=modelOf(agent);
-  title.textContent=`${agent.name} · ${model}${role?` · ${role}`:''}`;
-  group.appendChild(title);
   group.appendChild(svgEl('circle',{class:'orrery-hit',cx:x,cy:y,r:radius+8}));
   group.appendChild(svgEl('circle',{
     class:'planet-portrait-fallback',cx:x,cy:y,r:portraitRadius,
@@ -725,34 +719,8 @@ function drawPlanetAgent(target,defs,position,index){
   // After the motion ring, not before: the rotating arc was painting over the
   // state orbit that sits just outside it.
   const providerLabel=drawProviderBadge(group,agent,x,y,portraitRadius,26);
-  title.textContent+=` · ${providerLabel}`;
   drawStateGlyph(group,agent,x,y,true);
-  const name=svgEl('text',{
-    class:'planet-agent-name',x,y:y+radius+19,'text-anchor':'middle',
-  });
-  name.textContent=agent.name;
-  group.appendChild(name);
-  if(role){
-    const roleLabel=svgEl('text',{
-      class:'planet-agent-role',x,y:y+radius+32,'text-anchor':'middle',
-    });
-    roleLabel.textContent=role;
-    group.appendChild(roleLabel);
-  }
-  const modelLabel=svgEl('text',{
-    class:'planet-agent-model',x,y:y-radius-10,'text-anchor':'middle',
-  });
-  modelLabel.textContent=model;
-  group.appendChild(modelLabel);
-  // state caption retired with the medallion language — working is the
-  // amber arc, only ask (needs a human) earns a caption.
-  if(stateOf(agent)==='ask'){
-    const state=svgEl('text',{
-      class:'planet-agent-state',x,y:y+radius+(role?44:33),'text-anchor':'middle',
-    });
-    state.textContent='ask';
-    group.appendChild(state);
-  }
+  drawAgentCaption(group,position,PLANET,providerLabel);
   target.appendChild(group);
   return group;
 }
@@ -815,10 +783,7 @@ function renderMini(){
     ?telemetryMiniLayout(liveAgents,miniFocusName,miniNetworkDepth,MINI)
     :layoutAgents(liveAgents,MINI);
   prepareMotion(miniMotion,layout);
-  // Expand the clipping viewport, not the layout. The matching CSS uses the
-  // rail's existing margins, preserving node positions and the mail boundary.
-  const padding=miniMode==='orrery'?8:0;
-  miniSvg.setAttribute('viewBox',`${-padding} 0 ${MINI.width+padding*2} ${MINI.height+padding}`);
+  miniSvg.setAttribute('viewBox',`0 0 ${layout.width} ${layout.height}`);
   miniSvg.classList.toggle('orrery-mode',miniMode==='orrery');
   miniSvg.classList.toggle('telemetry-network',Boolean(layout.networkFocus));
   miniSvg.setAttribute('aria-label',layout.networkFocus
@@ -838,7 +803,7 @@ function renderMini(){
     miniMotion.nodes.set(name,group);
   });
   miniSvg.appendChild(nodes);
-  addExpandAffordance(miniSvg,MINI,false);
+  addExpandAffordance(miniSvg,{...MINI,width:layout.width,height:layout.height},false);
   flights.forEach(flight=>miniSvg.appendChild(flight));
   miniMotion.spawnEdges=[...spawnLayer.children];
   syncMiniSelection();
@@ -1050,6 +1015,42 @@ function commPathBetween(from,to,dimensions){
     },
   };
 }
+function renderMailFocus(surface){
+  const target=surface?.target;
+  if(!target)return;
+  let layer=target.querySelector('.orrery-mail-focus');
+  if(!activeMailRoute){
+    layer?.remove();
+    return;
+  }
+  const from=surface.states.get(activeMailRoute.sender);
+  if(!layer){
+    layer=svgEl('g',{class:'orrery-mail-focus','aria-hidden':'true'});
+    target.insertBefore(layer,target.querySelector('.orrery-node-layer'));
+  }
+  layer.replaceChildren();
+  if(!from||from.removing)return;
+  const dimensions=surface.layoutDimensions||surface.dimensions;
+  for(const name of activeMailRoute.recipients||[]){
+    const to=surface.states.get(name);
+    if(!to||to.removing||to===from)continue;
+    const curve=commPathBetween(from,to,dimensions);
+    const distance=Math.hypot(to.x-from.x,to.y-from.y);
+    const t=Math.max(.45,1-(dimensions.large?27:14)/Math.max(distance,1));
+    const tip=curve.point(t),base=curve.point(t-.05);
+    const angle=Math.atan2(tip.y-base.y,tip.x-base.x),length=dimensions.large?9:5;
+    const wing=turn=>`${tip.x-length*Math.cos(angle+turn)} ${tip.y-length*Math.sin(angle+turn)}`;
+    layer.append(
+      svgEl('path',{d:curve.d}),
+      svgEl('path',{d:`M ${wing(.58)} L ${tip.x} ${tip.y} L ${wing(-.58)}`})
+    );
+  }
+}
+document.addEventListener('oc:mail-route',event=>{
+  activeMailRoute=event.detail;
+  renderMailFocus(miniMotion);
+  if(planetarium?.classList.contains('on'))renderMailFocus(planetMotion);
+});
 /* A spawn always carries its task message, so a parent and its child are a
    mail pair by definition. Drawing both a spawn line and a mail curve for
    them puts two lines where there is one relationship. Hand the mail to the
@@ -1103,7 +1104,7 @@ function refreshCommEdges(){
       (!liveAgents.some(agent=>agent.name===pair.a)||!liveAgents.some(agent=>agent.name===pair.b));
     if(expired||absentFromLive){commPairs.delete(key);layoutChanged=true;}
   });
-  renderCommLayer(miniSvg,miniPositions,MINI);
+  renderCommLayer(miniSvg,miniPositions,miniMotion.layoutDimensions||MINI);
   if(planetarium&&planetarium.classList.contains('on')){
     renderCommLayer(
       planetSvg,planetPositions,
@@ -1184,7 +1185,7 @@ function animateComet(target,positions,fromName,toName,message,large){
         :1-Math.pow(-2*progress+2,3)/2;
       const point=commPathBetween(
         from,to,large&&planetMotion
-          ?planetMotion.layoutDimensions||PLANET:MINI).point(eased);
+          ?planetMotion.layoutDimensions||PLANET:miniMotion.layoutDimensions||MINI).point(eased);
       const envelope=cometEnvelope(progress);
       const angle=Math.atan2(to.y-from.y,to.x-from.x)*180/Math.PI;
       flight.setAttribute('transform',`translate(${point.x} ${point.y}) scale(${envelope.scale})`);

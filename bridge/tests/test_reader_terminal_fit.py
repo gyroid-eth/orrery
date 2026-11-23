@@ -156,6 +156,59 @@ def test_rapid_reader_toggles_send_only_the_settled_grid(cockpit, split):
 
 
 @pytest.mark.parametrize('split', [False, True])
+def test_mail_divider_drags_and_refits_only_after_release(cockpit, split):
+    js, wait, client = prepare(cockpit, split)
+    js("""window.mailSize=()=>mailRail.getBoundingClientRect().width;
+      window.splitTracks=stageEl.style.gridTemplateColumns;
+      window.originalMailSize=mailSize();""")
+    before = js('fitMetrics()')
+    x, y = js("""(()=>{
+      const r=mailDivider.getBoundingClientRect();return [r.left+r.width/2,r.top+120];
+    })()""")
+    client.call('Input.dispatchMouseEvent', type='mousePressed', x=x, y=y, button='left', buttons=1, clickCount=1)
+    client.call('Input.dispatchMouseEvent', type='mouseMoved', x=x-120, y=y, button='left', buttons=1)
+    wait('mailSize()>=originalMailSize+119')
+    time.sleep(.2)
+    assert js("packets.filter(p=>p.type==='resize')") == []
+    client.call('Input.dispatchMouseEvent', type='mouseReleased', x=x-120, y=y, button='left', clickCount=1)
+    wait(f'fitTarget.term.cols<{before["cols"]}')
+    assert js("document.activeElement===mailDivider&&stageEl.style.gridTemplateColumns===splitTracks")
+    assert js("packets.filter(p=>p.type==='resize').length") == (2 if split else 1)
+    if split:
+        assert js('fitMetrics().others[0]') < before['others'][0]
+    assert float(js("localStorage.getItem('oc-mail-pane-ratio')")) > 0
+    for click_count in (1, 2):
+        client.call('Input.dispatchMouseEvent', type='mousePressed', x=x-120, y=y,
+                    button='left', buttons=1, clickCount=click_count)
+        client.call('Input.dispatchMouseEvent', type='mouseReleased', x=x-120, y=y,
+                    button='left', clickCount=click_count)
+    wait(f'fitTarget.term.cols==={before["cols"]}')
+    assert js('mailSize()===originalMailSize')
+    assert js("localStorage.getItem('oc-mail-pane-ratio')") is None
+
+
+def test_mail_divider_keyboard_clamps_and_restores_saved_ratio(cockpit):
+    js, wait, client = prepare(cockpit, split=False)
+    js("mailDivider.focus()")
+    def key(name, code):
+        client.call('Input.dispatchKeyEvent', type='keyDown', key=name, windowsVirtualKeyCode=code)
+        client.call('Input.dispatchKeyEvent', type='keyUp', key=name, windowsVirtualKeyCode=code)
+    key('Home', 36)
+    assert js("mailRail.getBoundingClientRect().width") == 260
+    key('End', 35)
+    assert js("cockpitGrid.querySelector('.col.term').getBoundingClientRect().width") == pytest.approx(360, abs=.05)
+    assert js("mailDivider.getAttribute('aria-valuenow')===mailDivider.getAttribute('aria-valuemax')")
+    key('ArrowRight', 39)
+    assert js("cockpitGrid.querySelector('.col.term').getBoundingClientRect().width") == pytest.approx(384, abs=.05)
+    ratio = float(js("localStorage.getItem('oc-mail-pane-ratio')"))
+    js("window.mailDividerBeforeReload=true")
+    client.call('Page.addScriptToEvaluateOnNewDocument', source=f"localStorage.setItem('oc-mail-pane-ratio','{ratio}');")
+    client.call('Page.reload', ignoreCache=True)
+    wait("!window.mailDividerBeforeReload&&document.getElementById('mailDivider')?.getAttribute('aria-valuenow')")
+    assert js("document.querySelector('.col.term').getBoundingClientRect().width") == pytest.approx(384, abs=.05)
+
+
+@pytest.mark.parametrize('split', [False, True])
 def test_reader_resize_reaches_tmux_despite_other_control_client(cockpit, endpoint, split):
     """Replay real browser sizes through the production claim path on a private socket."""
     from control_server import ControlConfig

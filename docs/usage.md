@@ -21,7 +21,7 @@ ORRERY cockpit は、左の roster、中央の terminal、右の ORRERY Mail rai
 | Claude / Codex の利用枠の残りを知りたい | header の `LEFT` pill を見る。クリックで window ごとの残量 | [Usage（残量表示）](#usage残量表示) |
 | terminal の過去出力から末尾へ戻りたい | `↓ BOTTOM`、`Cmd+↓`、または active な session label / pane tab を再クリック | [Terminal](#terminal) |
 | agent を新しく起動したい | `+ NEW AGENT` で engine、directory、task を指定 | [NEW AGENT](#new-agent) |
-| agent 間の会話を読みたい | 右 mail rail の card を開く。二者間を追う場合は TELEMETRY の NETWORK edge をクリック | [Agent Mail](#agent-mail)・[TELEMETRY](#telemetry) |
+| agent 間の会話を読みたい | 右 mail rail の card を開く。二者間を追う場合は TELEMETRY の NETWORK edge をクリック | [ORRERY Mail](#orrery-mail)・[TELEMETRY](#telemetry) |
 | spawn の親子関係と最近の通信を見たい | mini-orrery を見る。header の `PLANETARIUM` か `⤢` で Planetarium を開く | [Mini-orrery](#mini-orrery)・[Planetarium](#planetarium) |
 | TELEMETRY で見つけた agent の terminal を開きたい | TELEMETRY で agent を選び `OPEN IN COCKPIT` | [TELEMETRY から cockpit で開く](#telemetry-から-cockpit-で開く) |
 | Windows（WSL2）で使う | shortcut は `Alt`、窓は Windows Terminal で開く | [Windows（WSL2）での違い](#windowswsl2での違い) |
@@ -68,8 +68,8 @@ ORRERY cockpit は、左の roster、中央の terminal、右の ORRERY Mail rai
 | `?session=` deep link と開発用 `?ws=` override | UI 入口なし | [Jump palette と shortcut](#jump-palette-と-shortcut) |
 | mini-orrery node の hover で identity / role / model、click で mail filter と terminal jump | node に text label なし | [Mini-orrery](#mini-orrery) |
 | mini-orrery の `⤢` で Planetarium、`Esc` または外側 click で閉じる | glyph の text label なし | [Planetarium](#planetarium) |
-| mail card click で本文、`thread` で thread、`Esc` で drawer を閉じる | card / drawer を開くまで詳細なし | [Agent Mail](#agent-mail) |
-| roster tile / mini-orrery node / terminal の focus に合わせて mail rail の filter が切り替わる | filter chip の選択が変わるだけ | [Agent Mail](#agent-mail) |
+| mail card click で本文、`thread` で thread、`Esc` で drawer を閉じる | card / drawer を開くまで詳細なし | [ORRERY Mail](#orrery-mail) |
+| roster tile / mini-orrery node / terminal の focus に合わせて mail rail の filter が切り替わる | filter chip の選択が変わるだけ | [ORRERY Mail](#orrery-mail) |
 | NEW AGENT の scientist 選択後、🎲 で未使用 adjective を再抽選 | icon と tooltip のみ | [NEW AGENT](#new-agent) |
 | TELEMETRY NETWORK の edge click で二者間 mail drawer | ORRERY 側の button からは分からない | [TELEMETRY](#telemetry) |
 | TELEMETRY の agent panel の `OPEN IN COCKPIT` で、その agent の terminal へ移る | TELEMETRY を開いて agent を選ぶまで見えない | [TELEMETRY から cockpit で開く](#telemetry-から-cockpit-で開く) |
@@ -472,7 +472,7 @@ header の `PLANETARIUM`、または mini-orrery 右上の `⤢` で overlay を
 
 node をクリックすると、その agent の terminal へ移り、overlay を閉じます。`Esc`、外側の click、または右上の `⤢` でも閉じます。mini-orrery を Settings で Telemetry network 表示にしていても、Planetarium は常に spawn forest を描きます。Planetarium は cockpit 内の系譜探索です。ORRERY Telemetry dashboard の full NETWORK / DIGEST REPLAY とは役割が異なります。
 
-## Agent Mail
+## ORRERY Mail
 
 右 rail は ORRERY Telemetry の live message window と、ORRERY が read-only SQLite から取得する recent 40件を merge / dedupe します。
 

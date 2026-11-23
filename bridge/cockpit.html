@@ -6,7 +6,7 @@
 <title>ORRERY · agent cockpit</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+JP:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="vendor/xterm-5.5.0/xterm.css">
 <link rel="stylesheet" href="orrery_view.css">
 <link rel="stylesheet" href="mail_view.css">
@@ -60,6 +60,8 @@
     --eng-google:#6f9bd1;
     --mono:'IBM Plex Mono',ui-monospace,monospace;
     --serif:'Fraunces',Georgia,serif;
+    --rail-sans:'IBM Plex Sans','IBM Plex Sans JP',system-ui,sans-serif;
+    --rail-selection:rgb(var(--theme-accent-rgb) / .10);
   }
   /* Vision A/B lab. No selector below matches the default document: A/current
      deliberately means that the original cascade above remains untouched. */
@@ -82,17 +84,8 @@
     font-size:var(--oc-axis-small-text-size)!important;
     font-weight:var(--oc-axis-small-text-weight)!important;
   }
-  :is(html[data-theme-axis="small-text"],html[data-theme-small-text="true"]) .agent.offline-hint::after{
-    font-size:var(--oc-axis-small-after-size)!important;
-    font-weight:var(--oc-axis-small-after-weight)!important;
-  }
-  :is(html[data-theme-axis="small-text"],html[data-theme-small-text="true"])[data-theme-axis-positive="true"] .mailchip{max-width:none}
-  :is(html[data-theme-axis="small-text"],html[data-theme-small-text="true"])[data-theme-axis-positive="true"] .msg .body{display:block;overflow:visible;-webkit-line-clamp:unset}
   :is(html[data-theme-axis="tracking"],html[data-theme-tracking="true"],html[data-theme-small-text="true"]) .oc-axis-tracking-target{
     letter-spacing:var(--oc-axis-tracking-size)!important;
-  }
-  :is(html[data-theme-axis="tracking"],html[data-theme-tracking="true"],html[data-theme-small-text="true"]) .agent.offline-hint::after{
-    letter-spacing:var(--oc-axis-tracking-after-size)!important;
   }
   html[data-theme-axis="glow"]{--amber-glow:rgb(var(--theme-accent-rgb) / .044)}
   html[data-theme-axis="glow"] body::before{
@@ -104,10 +97,6 @@
     background:radial-gradient(ellipse 70% 50% at 50% 0%,rgb(var(--theme-accent-rgb) / .008),transparent 60%);
   }
   html[data-theme-axis="glow"] .topstat .dot.open{box-shadow:0 0 2px rgb(var(--theme-local-rgb) / .08)}
-  html[data-theme-axis="glow"] .agent.sel::before{box-shadow:0 0 2.5px var(--amber-glow)}
-  html[data-theme-axis="glow"] .roster.select-mode .agent.bulk-selected{
-    box-shadow:0 0 0 1px rgb(var(--theme-accent-rgb) / .16),0 0 4.5px rgb(var(--theme-accent-rgb) / .016);
-  }
   html[data-theme-axis="glow"] .layout-picker{
     box-shadow:0 12px 32px rgba(0,0,0,.48),0 0 4px rgb(var(--theme-accent-rgb) / .012);
   }
@@ -133,13 +122,6 @@
     50%{box-shadow:0 0 0 1px rgb(var(--theme-accent-rgb) / .036)}
   }
   html[data-theme-axis="glow"] .bulk-exit.arm{animation-name:theme-axis-bulkarm}
-  @keyframes theme-axis-mail-ember{
-    0%{border-color:rgb(var(--theme-accent-rgb) / .55);background:rgb(var(--theme-accent-rgb) / .055);box-shadow:0 0 4.5px rgb(var(--theme-accent-rgb) / .026)}
-    100%{border-color:var(--hair-2);box-shadow:none}
-  }
-  html[data-theme-axis="glow"] .msg.landing{
-    animation:mail-land .5s cubic-bezier(.2,.75,.25,1) forwards,theme-axis-mail-ember 2.4s ease-out;
-  }
   html[data-theme-axis="background"] header{
     background:linear-gradient(180deg,var(--panel),var(--oc-theme-header-fade,rgba(31,34,39,.6)));
   }
@@ -216,10 +198,25 @@
   .clock{font-variant-numeric:tabular-nums;color:var(--ink);letter-spacing:.08em;font-size:12px}
 
   /* ── body grid ─────────────────────────── */
-  .grid{display:grid;grid-template-columns:288px 1fr 318px;height:100%;min-height:0}
+  .grid{
+    --roster-width:272px;--mail-min-width:260px;--center-min-width:360px;
+    --mail-width:max(318px,24vw);
+    --mail-track:clamp(var(--mail-min-width),var(--mail-width),calc(100% - var(--roster-width) - var(--center-min-width)));
+    display:grid;grid-template-columns:var(--roster-width) minmax(0,1fr) var(--mail-track);
+    height:100%;min-height:0;
+  }
   .col{min-height:0;display:flex;flex-direction:column;overflow:hidden}
   .col.roster{border-right:1px solid var(--hair)}
-  .col.mail{border-left:1px solid var(--hair)}
+  .col.mail{grid-column:3;grid-row:1;border-left:1px solid var(--hair)}
+  .mail-divider{
+    position:relative;z-index:4;grid-column:3;grid-row:1;justify-self:start;translate:-50% 0;width:12px;
+    cursor:col-resize;touch-action:none;outline:none;
+  }
+  .mail-divider::after{
+    content:"";position:absolute;left:50%;top:50%;translate:-50% -50%;
+    width:2px;height:32px;border-radius:2px;background:var(--ink-faint);
+  }
+  .mail-divider:is(:hover,:focus-visible,.dragging)::after{background:var(--amber);width:3px}
 
   .colhead{
     display:flex;align-items:center;justify-content:space-between;
@@ -230,7 +227,17 @@
   .colhead .tag{color:var(--ink-dim);letter-spacing:.04em;text-transform:none;font-size:11px}
   .colhead .actions{display:flex;align-items:center;gap:8px}
   .roster-head{padding:0 11px 0 16px}
-  .roster-head .colhead-title{color:var(--ink-dim);letter-spacing:.28em}
+  .roster-head,.mail-head{font:500 15px var(--rail-sans);letter-spacing:0;text-transform:none;color:var(--ink);border-bottom:0}
+  .rail-icon{
+    display:inline-grid;place-items:center;flex:none;width:32px;height:32px;padding:0;
+    background:transparent;border:0;border-radius:8px;color:var(--ink-dim);cursor:pointer;
+  }
+  .rail-icon svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+  .rail-icon:hover,.rail-icon[aria-expanded="true"],.rail-icon[aria-pressed="true"]{color:var(--amber);background:var(--rail-selection)}
+  .rail-icon:focus-visible{outline:1px solid var(--amber);outline-offset:2px}
+  .rail-icon:active svg{scale:.92}
+  .roster-select.rail-icon{width:32px;padding:0;border:0;background:transparent}
+  .roster-head #newAgentBtn{font:500 12px var(--rail-sans);letter-spacing:0;text-transform:none}
   .roster-head .actions{gap:6px}
   .roster-status{max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .roster-status[hidden]{display:none}
@@ -244,27 +251,19 @@
   .new-agent:hover,.new-agent:focus-visible{border-color:var(--amber);background:var(--amber-glow);outline:none}
   .header-utility{display:inline-flex;align-items:center;gap:6px;border-color:var(--hair);color:var(--ink-dim)}
   .header-utility:hover,.header-utility:focus-visible{color:var(--ink);border-color:rgb(var(--theme-accent-rgb) / .42);background:rgb(var(--theme-accent-rgb) / .07)}
-  .roster-select{
-    border:1px solid var(--hair);border-radius:5px;padding:4px 7px;
-    background:transparent;color:var(--ink-dim);font-size:9px;letter-spacing:.14em;
-    text-transform:uppercase;cursor:pointer;transition:border-color .2s,background .2s,color .2s;
-  }
-  .roster-select:hover,.roster-select:focus-visible{border-color:var(--amber);color:var(--amber);outline:none}
-  .roster-select.on{border-color:var(--amber);background:var(--amber);color:var(--bg)}
   .roster-select:disabled{opacity:.45;cursor:wait}
-  /* Heading buttons share the tab's 10px corner and a 30px height. */
-  .roster-head .roster-select,.roster-head .new-agent{
-    height:30px;box-sizing:border-box;padding:0 10px;border-radius:10px;
-    font-size:10px;letter-spacing:.04em;text-transform:none;white-space:nowrap;flex:none}
+  .roster-head .new-agent{
+    height:32px;padding:0 9px;border-radius:8px;white-space:nowrap;flex:none;
+  }
   .roster-head .colhead-title{white-space:nowrap;margin-right:6px}
   .roster-head .actions{min-width:0}
   .roster-head .roster-status{flex:0 1 auto;min-width:0}
-  .roster-head .roster-select{background:var(--panel-2)}
   .roster-head .new-agent{background:rgb(var(--theme-accent-rgb) / .08);border-color:rgb(var(--theme-accent-rgb) / .38)}
   .roster-head .new-agent:hover,.roster-head .new-agent:focus-visible{background:var(--amber-glow)}
 
   /* ── agent tiles ────────────────────────── */
-  .roster-filter{padding:9px 10px 0}
+  .roster-filter{padding:0 12px 6px;font-family:var(--rail-sans)}
+  .roster-filter[hidden]{display:none}
   .roster-filter input{
     width:100%;height:31px;padding:0 10px;border:1px solid var(--hair);border-radius:7px;
     background:rgba(17,20,25,.76);color:var(--ink);font-size:10.5px;letter-spacing:.03em;outline:none;
@@ -275,31 +274,84 @@
   .roster-filter-status[hidden]{display:none}
   .roster-filter-status button{border:0;padding:0;background:transparent;color:var(--amber);cursor:pointer}
   .roster-filter-status button:hover,.roster-filter-status button:focus-visible{text-decoration:underline;outline:none}
-  .roster .scroll{overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:9px}
+  .roster .scroll{overflow-y:auto;padding:5px 12px 12px;display:flex;flex-direction:column;gap:2px}
   .agent{
-    position:relative;display:grid;grid-template-columns:46px 1fr;gap:13px;
-    padding:13px 13px 12px;border-radius:11px;
-    background:linear-gradient(180deg,var(--panel-2),var(--panel));
-    border:1px solid var(--hair-2);
-    cursor:pointer;transition:border-color .25s,transform .25s,background .25s;
-    opacity:0;transform:translateY(9px);
-    animation:rise .6s cubic-bezier(.2,.7,.2,1) forwards;
+    position:relative;display:grid;grid-template-columns:34px minmax(0,1fr);align-items:center;gap:10px;
+    flex:none;min-height:55px;margin-inline-start:var(--roster-indent,0px);
+    padding:6px 24px 6px 6px;border-radius:8px;
+    cursor:pointer;transition:background .16s;
   }
-  .agent:hover{border-color:var(--hair);transform:translateY(-1px)}
-  .agent.filtered-out{display:none}
-  .agent.sel{border-color:rgb(var(--theme-accent-rgb) / .4);background:linear-gradient(180deg,var(--elev),var(--panel-2))}
-  .agent.sel::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:2px;border-radius:2px;background:var(--amber);box-shadow:0 0 10px var(--amber-glow)}
-  .agent .crow1{padding-right:24px}
+  .agent:hover{background:rgb(var(--theme-ink-rgb) / .05)}
+  .agent:is(.filtered-out,.folded-out){display:none}
+  .agent.sel{background:var(--rail-selection)}
+  .agent.sel > .medal .ring{border-color:var(--amber)}
+  .agent[data-roster-child]::before{
+    content:"";position:absolute;left:-9px;top:16px;width:8px;height:12px;
+    border-left:1px solid var(--hair);border-bottom:1px solid var(--hair);
+    border-bottom-left-radius:4px;pointer-events:none;
+  }
+  .agent > .medal{width:34px;height:34px}
+  .agent > .medal .ring{inset:-2px}
+  .agent:is(.working,[data-folded-working]) > .medal .ring::after{
+    content:"";position:absolute;inset:-2px;border:1.5px solid transparent;border-radius:50%;
+    border-top-color:var(--amber);border-right-color:var(--amber);pointer-events:none;
+  }
+  @media (prefers-reduced-motion:no-preference){
+    .agent:is(.working,[data-folded-working]) > .medal .ring::after{animation:spin 2.8s linear infinite}
+  }
+  .agent .pill.eng{display:none}
+  .agent-status{
+    position:absolute;right:11px;top:50%;translate:0 -50%;width:7px;height:7px;border-radius:50%;
+    border:1px solid var(--ink-dim);
+  }
+  .agent.working .agent-status{background:var(--ink-dim)}
+  .agent.ask .agent-status,.agent.question .agent-status{
+    background:var(--theme-status-alert,#ff6a5d);border-color:var(--theme-status-alert,#ff6a5d)
+  }
+  .agent:not(.pinned):is(:hover,:focus-within) .agent-status,.agent.pinned .agent-status,
+  .roster.select-mode .agent-status{opacity:0}
+  .agent .crow1{align-items:center;gap:2px}
+  .roster-fold{
+    display:inline-flex;align-items:center;justify-content:center;flex:none;
+    min-width:18px;min-height:24px;padding:0 2px;border:0;border-radius:4px;
+    background:transparent;color:var(--ink-dim);font:11px var(--rail-sans);cursor:pointer;
+  }
+  .roster-fold[hidden]{display:none}
+  .roster-fold svg{
+    flex:none;width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round;
+  }
+  .roster-fold[aria-expanded="true"] svg{transform:rotate(90deg)}
+  .roster-fold:hover,.roster-fold:focus-visible{background:var(--rail-selection);color:var(--amber)}
+  .roster-fold:focus-visible{outline:1px solid var(--amber)}
+  .roster-fold[data-activity="active"]{color:var(--amber)}
+  .roster-fold[data-activity="input"]{color:var(--theme-status-alert,#ff6a5d)}
+  .roster-role{
+    font:13px/1.3 var(--rail-sans);color:var(--ink-dim);
+    min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .roster-role[hidden]{display:none}
+  .roster-runtime{
+    display:flex;align-items:center;gap:7px;min-width:0;
+    font:11px/1.3 var(--rail-sans);color:var(--ink-dim);
+  }
+  .roster-runtime[hidden],.roster-context[hidden],.roster-model[hidden]{display:none}
+  .roster-model{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .roster-context{
+    display:flex;align-items:center;flex:0 1 64px;min-width:42px;gap:5px;
+    font-variant-numeric:tabular-nums;white-space:nowrap;
+  }
+  .roster-context .agent-detail-meter{min-width:16px}
   .pin-toggle{
-    position:absolute;right:8px;top:8px;width:24px;height:24px;display:grid;place-items:center;
+    position:absolute;right:2px;top:50%;translate:0 -50%;width:24px;height:24px;display:grid;place-items:center;
     padding:0;border:0;border-radius:5px;background:transparent;color:var(--ink-faint);
-    opacity:.42;cursor:pointer;transition:opacity .16s,background .16s,color .16s;
+    opacity:0;cursor:pointer;transition:opacity .16s,background .16s,color .16s;
   }
   .pin-toggle svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round}
-  .agent:hover .pin-toggle,.pin-toggle:focus-visible{opacity:1;background:rgb(var(--theme-ink-rgb) / .06);color:var(--ink);outline:none}
+  .agent:hover .pin-toggle,.agent:focus-within .pin-toggle{opacity:1;background:rgb(var(--theme-ink-rgb) / .06);color:var(--ink);outline:none}
   .agent.pinned .pin-toggle{opacity:1;color:var(--ink)}
   .agent.pinned .pin-toggle svg{fill:currentColor}
-  .agent.pinned-boundary{margin-bottom:8px}
+  .agent.pinned-boundary{margin-bottom:9px}
   .agent.pinned-boundary::after{
     content:"";position:absolute;left:10px;right:10px;bottom:-9px;border-bottom:1px solid var(--hair);pointer-events:none;
   }
@@ -346,22 +398,15 @@
     transform:rotate(42deg);opacity:0;
   }
   .roster.select-mode .agent.sel:not(.bulk-selected){
-    border-color:var(--hair-2);background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    background:transparent;
   }
-  .roster.select-mode .agent.sel:not(.bulk-selected)::before{display:none}
+  .roster.select-mode .agent.sel:not(.bulk-selected) > .medal .ring{border-color:var(--hair)}
   .roster.select-mode .agent:not(.bulk-ineligible) .bulk-check{opacity:1}
-  .roster.select-mode .agent.bulk-selected{
-    border-color:var(--amber);background:linear-gradient(180deg,var(--elev),var(--panel-2));
-    box-shadow:0 0 0 1px rgb(var(--theme-accent-rgb) / .16),0 0 18px rgb(var(--theme-accent-rgb) / .08);
-  }
+  .roster.select-mode .agent.bulk-selected{background:var(--rail-selection)}
   .roster.select-mode .agent.bulk-selected .bulk-check{border-color:var(--amber);background:var(--amber)}
   .roster.select-mode .agent.bulk-selected .bulk-check::after{opacity:1}
   .roster.select-mode .agent.bulk-ineligible{opacity:.38!important;cursor:not-allowed;filter:saturate(.45)}
-  .agent.offline-hint::after{
-    content:"offline";position:absolute;right:10px;top:9px;
-    padding:2px 6px;border:1px solid var(--hair);border-radius:4px;
-    color:var(--ink-dim);background:var(--panel);font-size:9px;letter-spacing:.12em;text-transform:uppercase;
-  }
+  .agent.offline-hint .agent-status{border-color:var(--theme-status-alert,#ff6a5d)}
   .roster-bulkbar{
     margin:8px 10px 0;padding:8px 9px;display:flex;align-items:center;justify-content:space-between;gap:10px;
     border:1px solid rgba(255,255,255,.09);border-top-color:rgb(var(--theme-accent-rgb) / .55);border-radius:7px;
@@ -397,43 +442,14 @@
   .medal .face::after{content:"";position:absolute;inset:0;z-index:3;background:
     radial-gradient(circle at 30% 25%, rgba(255,255,255,.35), transparent 45%),
     radial-gradient(circle at 70% 85%, rgba(0,0,0,.3), transparent 50%);mix-blend-mode:soft-light}
-  /* state ring: animated only when working */
-  .agent.working .medal .ring{
-    border-color:transparent;
-    background:conic-gradient(from 0deg,var(--amber),transparent 32%,transparent);
-    -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 2px));
-            mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 2px));
-    animation:spin 1.5s linear infinite;
-  }
-  /* 承認待ち=赤・質問待ち=シアン。orrery / telemetry のグリフと同じ2色に揃える
-     （左ペインだけ琥珀のままで、同じ状態が場所によって別の色で出ていた・
-     2026-08-06 maintainer 指摘）。literal color なのは、暖色テーマが --cyan を
-     --amber に alias しており、変数だとまさに区別が要る場面で区別が消えるため。 */
-  .agent.ask .medal .ring{border-color:#ff6a5d;animation:blinkring 1s steps(1) infinite}
-  .agent.question .medal .ring{border-color:#36e8ff;animation:breathring 3.6s ease-in-out infinite}
-  @keyframes breathring{0%,100%{opacity:.35}50%{opacity:1}}
-  @media (prefers-reduced-motion: reduce){.agent.question .medal .ring{animation:none;opacity:1}}
-
-  .cbody{min-width:0;display:flex;flex-direction:column;gap:6px}
+  .cbody{min-width:0;display:flex;flex-direction:column;gap:3px}
   .crow1{display:flex;align-items:baseline;gap:8px}
   .cname{font-family:var(--serif);font-size:16px;font-weight:500;letter-spacing:.01em;line-height:1;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .cmeta{display:flex;gap:6px;flex-wrap:wrap;margin-top:1px}
   .pill{font-size:9.5px;letter-spacing:.07em;padding:2px 6px;border-radius:4px;border:1px solid var(--hair);color:var(--ink-dim);text-transform:uppercase;white-space:nowrap}
-  .pill.model{text-transform:none;letter-spacing:.02em}
   .pill.eng-claude{color:var(--ln-local);border-color:rgb(var(--theme-local-rgb) / .3)}
   .pill.eng-codex{color:var(--ln-delegate);border-color:rgb(var(--theme-delegate-rgb) / .3)}
   .pill.eng-gemini{color:var(--eng-google);border-color:rgb(var(--theme-google-rgb) / .3)}
   .pill.eng-grok{color:var(--ink);border-color:rgb(var(--theme-ink-rgb) / .3)}
-  .pill.role{color:var(--ink-dim);border-color:rgb(var(--theme-ink-rgb) / .14);text-transform:none}
-  .pill.role[hidden]{display:none}
-  /* ctx telemetry bar */
-  .ctx{display:flex;align-items:center;gap:7px;margin-top:1px}
-  .ctx .lab{font-size:9px;letter-spacing:.18em;color:var(--ink-faint)}
-  .ctx .track{flex:1;height:3px;border-radius:2px;background:rgb(var(--theme-ink-rgb) / .08);overflow:hidden}
-  .ctx .fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--ink-dim),var(--ink));width:0;transition:width .7s cubic-bezier(.2,.7,.2,1)}
-  .ctx .fill.hot{background:linear-gradient(90deg,#caa24f,var(--amber))}
-  .ctx.none .track{opacity:.4}
-  .ctx .pct{font-size:10px;color:var(--ink-dim);font-variant-numeric:tabular-nums;min-width:30px;text-align:right}
   /* usage: a header pill beside Settings carries the binding window per
      provider (the lowest remaining %); the popover opens the dials. */
   .usage-pill .up-k{color:var(--ink-faint);letter-spacing:.18em;font-size:9px;margin-right:2px}
@@ -484,13 +500,6 @@
   .usage-popover .up-untouched{font-size:10px;color:var(--ink-dim);margin:2px 0 4px}
   .usage-popover .up-empty{font-size:10px;color:var(--ink-faint);padding:4px 0 8px}
   .usage-popover .up-foot{font-size:9px;color:var(--ink-faint);letter-spacing:.04em;line-height:1.5;margin-top:8px}
-  /* state line + bubble */
-  .cstate{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-dim);min-height:15px}
-  .glyph{width:12px;text-align:center;color:var(--ink-faint)}
-  .agent.working .glyph{color:var(--amber)}
-  .statetext{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .descriptor-updated{flex:0 0 auto;color:var(--ink-faint);font-size:9px;white-space:nowrap}
-  .descriptor-updated[hidden]{display:none}
   .agent:focus-visible{outline:1px solid var(--amber);outline-offset:2px}
   .agent-detail{
     position:fixed;z-index:70;width:min(390px,calc(100vw - 24px));max-height:calc(100vh - 24px);
@@ -1090,7 +1099,7 @@
   /* ── pane windows: a session out of the cockpit ── */
   /* the page itself in solo mode: only the terminal and its composer */
   html.pane-window .app{grid-template-rows:1fr}
-  html.pane-window header,html.pane-window .col.roster,html.pane-window .col.mail,
+  html.pane-window header,html.pane-window .col.roster,html.pane-window .col.mail,html.pane-window .mail-divider,
   html.pane-window .tabstrip{display:none}
   html.pane-window .grid{grid-template-columns:1fr}
   html.pane-window .screen{margin:0;border-radius:0;border:0}
@@ -1133,7 +1142,7 @@
   .pane-out-chip .back{font-family:var(--mono);font-size:11px;color:var(--ink-faint);padding:0 2px}
   .pane-out-chip .back:hover{color:var(--amber)}
   @media(max-width:1000px){
-    .grid{grid-template-columns:250px 1fr}.col.mail{display:none}
+    .grid{grid-template-columns:250px 1fr}.col.mail,.mail-divider{display:none}
     header{gap:8px;padding:0 14px}.brand .sub,.topstat:nth-of-type(2){display:none}
   }
   @media(max-width:680px){
@@ -1199,15 +1208,19 @@
   <div class="grid">
     <!-- ─── ROSTER (telemetry — demo data this slice) ─── -->
     <div class="col roster">
-      <div class="colhead roster-head"><span class="colhead-title">Agent</span><span class="actions">
+      <div class="colhead roster-head"><span class="colhead-title">Agents</span><span class="actions">
         <span class="tag roster-status" id="rosterTag" role="status" hidden></span>
-        <button class="roster-select" id="rosterSelectBtn" type="button" aria-pressed="false">Select</button>
-        <button class="new-agent" id="newAgentBtn" type="button" aria-haspopup="dialog">+ New Agent</button></span></div>
-      <div class="roster-filter"><input id="rosterFilter" type="search" autocomplete="off"
-        aria-label="Filter agent" placeholder="filter agent · task / role / cwd…">
+        <button class="rail-icon" id="rosterSearchBtn" type="button" aria-label="Find agents" title="Find agents" aria-expanded="false" aria-controls="rosterSearch">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4 4"/></svg>
+        </button>
+        <button class="roster-select rail-icon" id="rosterSelectBtn" type="button" aria-label="Select agents" title="Select agents" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 2.5 2.5L16 9"/></svg>
+        </button>
+        <button class="new-agent" id="newAgentBtn" type="button" aria-haspopup="dialog">New agent</button></span></div>
+      <div class="roster-filter" id="rosterSearch" hidden><input id="rosterFilter" type="search" autocomplete="off"
+        aria-label="Find agents" placeholder="Find an agent">
         <div class="roster-filter-status" id="rosterFilterStatus" role="status" hidden>
-          <span id="rosterFilterSummary"></span><span aria-hidden="true">·</span>
-          <span>searched: task, role, cwd</span><span aria-hidden="true">·</span>
+          <span>No matching agents</span>
           <button id="rosterFilterClear" type="button">Clear</button>
         </div></div>
       <div class="roster-bulkbar" id="rosterBulkBar" hidden>
@@ -1276,9 +1289,23 @@
     </div>
 
     <!-- ─── MAIL / TELEMETRY (demo data this slice) ─── -->
-    <div class="col mail">
-      <div class="colhead"><span>Agent&nbsp;Mail</span><span class="tag" id="mailTag">live · 5m</span></div>
-      <svg class="miniorrery" viewBox="0 0 280 120" id="orrery"></svg>
+    <div class="mail-divider" id="mailDivider" role="separator" tabindex="0" aria-orientation="vertical"
+         aria-controls="mailRail" aria-label="Resize ORRERY Mail"
+         title="Resize ORRERY Mail with arrow keys or drag. Enter or double-click to reset."></div>
+    <div class="col mail" id="mailRail">
+      <div class="colhead mail-head">
+        <span>ORRERY Mail</span>
+        <span class="tag" id="mailTag" role="status" hidden></span>
+        <button class="rail-icon" id="mailViewBtn" type="button" aria-label="Group by recipient" title="Group by recipient"></button>
+        <button class="rail-icon" id="mailGraphBtn" type="button" aria-label="Show mini graph" title="Show mini graph" aria-expanded="false" aria-controls="orrery">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 11 8-5m-8 8 8 4"/><circle cx="6" cy="12" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="18" cy="19" r="2"/></svg>
+        </button>
+        <button class="rail-icon" id="mailFilterBtn" type="button" aria-label="Filter agent mail" title="Filter agent mail" aria-expanded="false" aria-controls="mailFilters">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg>
+        </button>
+      </div>
+      <svg class="miniorrery" viewBox="0 0 280 120" id="orrery" hidden></svg>
+      <div class="mail-selected-route" id="mailSelectedRoute" hidden></div>
       <div class="scroll" id="mail"></div>
       <!-- legend removed (2026-07-30 product decision): the design should be self-evident;
            the network view's ? popover keeps the key for newcomers -->
@@ -1630,6 +1657,11 @@
             "value": "1px solid var(--hair)"
           },
           {
+            "property": "background",
+            "selector": ".mail-divider::after",
+            "value": "var(--ink-faint)"
+          },
+          {
             "property": "color",
             "selector": ".colhead",
             "value": "var(--ink-faint)"
@@ -1646,7 +1678,12 @@
           },
           {
             "property": "color",
-            "selector": ".roster-head .colhead-title",
+            "selector": ".roster-head,.mail-head",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".rail-icon",
             "value": "var(--ink-dim)"
           },
           {
@@ -1663,26 +1700,6 @@
             "property": "color",
             "selector": ".header-utility:hover,.header-utility:focus-visible",
             "value": "var(--ink)"
-          },
-          {
-            "property": "border",
-            "selector": ".roster-select",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".roster-select",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".roster-select.on",
-            "value": "var(--bg)"
-          },
-          {
-            "property": "background",
-            "selector": ".roster-head .roster-select",
-            "value": "var(--panel-2)"
           },
           {
             "property": "border",
@@ -1705,24 +1722,39 @@
             "value": "var(--ink-dim)"
           },
           {
-            "property": "background",
-            "selector": ".agent",
-            "value": "linear-gradient(180deg,var(--panel-2),var(--panel))"
+            "property": "border-left",
+            "selector": ".agent[data-roster-child]::before",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": ".agent[data-roster-child]::before",
+            "value": "1px solid var(--hair)"
           },
           {
             "property": "border",
-            "selector": ".agent",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "border-color",
-            "selector": ".agent:hover",
-            "value": "var(--hair)"
+            "selector": ".agent-status",
+            "value": "1px solid var(--ink-dim)"
           },
           {
             "property": "background",
-            "selector": ".agent.sel",
-            "value": "linear-gradient(180deg,var(--elev),var(--panel-2))"
+            "selector": ".agent.working .agent-status",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-fold",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-role",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-runtime",
+            "value": "var(--ink-dim)"
           },
           {
             "property": "color",
@@ -1731,7 +1763,7 @@
           },
           {
             "property": "color",
-            "selector": ".agent:hover .pin-toggle,.pin-toggle:focus-visible",
+            "selector": ".agent:hover .pin-toggle,.agent:focus-within .pin-toggle",
             "value": "var(--ink)"
           },
           {
@@ -1831,33 +1863,8 @@
           },
           {
             "property": "border-color",
-            "selector": ".roster.select-mode .agent.sel:not(.bulk-selected)",
-            "value": "var(--hair-2)"
-          },
-          {
-            "property": "background",
-            "selector": ".roster.select-mode .agent.sel:not(.bulk-selected)",
-            "value": "linear-gradient(180deg,var(--panel-2),var(--panel))"
-          },
-          {
-            "property": "background",
-            "selector": ".roster.select-mode .agent.bulk-selected",
-            "value": "linear-gradient(180deg,var(--elev),var(--panel-2))"
-          },
-          {
-            "property": "border",
-            "selector": ".agent.offline-hint::after",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "color",
-            "selector": ".agent.offline-hint::after",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "background",
-            "selector": ".agent.offline-hint::after",
-            "value": "var(--panel)"
+            "selector": ".roster.select-mode .agent.sel:not(.bulk-selected) > .medal .ring",
+            "value": "var(--hair)"
           },
           {
             "property": "color",
@@ -1903,26 +1910,6 @@
             "property": "color",
             "selector": ".pill.eng-grok",
             "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".pill.role",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".ctx .lab",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "background",
-            "selector": ".ctx .fill",
-            "value": "linear-gradient(90deg,var(--ink-dim),var(--ink))"
-          },
-          {
-            "property": "color",
-            "selector": ".ctx .pct",
-            "value": "var(--ink-dim)"
           },
           {
             "property": "color",
@@ -1997,21 +1984,6 @@
           {
             "property": "color",
             "selector": ".usage-popover .up-foot",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".cstate",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".glyph",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".descriptor-updated",
             "value": "var(--ink-faint)"
           },
           {
@@ -2795,14 +2767,19 @@
             "value": "var(--ink)"
           },
           {
-            "property": "fill",
-            "selector": ".orrery-hover-label",
+            "property": "color",
+            "selector": ".orrery-caption",
             "value": "var(--ink)"
           },
           {
-            "property": "stroke",
-            "selector": ".orrery-hover-label",
-            "value": "var(--bg)"
+            "property": "text-shadow",
+            "selector": ".orrery-caption",
+            "value": "0 1px var(--bg),0 -1px var(--bg),1px 0 var(--bg),-1px 0 var(--bg)"
+          },
+          {
+            "property": "color",
+            "selector": ".orrery-caption-role",
+            "value": "var(--ink-dim)"
           },
           {
             "property": "fill",
@@ -2870,41 +2847,6 @@
             "value": "var(--ink)"
           },
           {
-            "property": "fill",
-            "selector": ".planet-agent-name",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "stroke",
-            "selector": ".planet-agent-name",
-            "value": "var(--bg)"
-          },
-          {
-            "property": "fill",
-            "selector": ".planet-agent-role",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "stroke",
-            "selector": ".planet-agent-role",
-            "value": "var(--bg)"
-          },
-          {
-            "property": "fill",
-            "selector": ".planet-agent-model",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "stroke",
-            "selector": ".planet-agent-model",
-            "value": "var(--bg)"
-          },
-          {
-            "property": "stroke",
-            "selector": ".planet-agent-state",
-            "value": "var(--bg)"
-          },
-          {
             "property": "stroke",
             "selector": ".mini-selection-ring",
             "value": "var(--ink)"
@@ -2915,104 +2857,94 @@
             "value": "var(--ink)"
           },
           {
-            "property": "background",
-            "selector": ".mailfilters",
-            "value": "linear-gradient(180deg,var(--panel) 76%,rgba(17,20,25,.86))"
-          },
-          {
             "property": "border-bottom",
-            "selector": ".mailfilters",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "border",
-            "selector": ".mailchip",
+            "selector": ".mail-selected-route",
             "value": "1px solid var(--hair)"
           },
           {
-            "property": "color",
-            "selector": ".mailchip",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".mailchip:hover,.mailchip:focus-visible",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".mailchip.on",
-            "value": "var(--ink)"
-          },
-          {
             "property": "background",
-            "selector": ".mailchip.on",
+            "selector": ".mailfilters",
             "value": "var(--elev)"
-          },
-          {
-            "property": "background",
-            "selector": ".msg",
-            "value": "var(--panel-2)"
-          },
-          {
-            "property": "border",
-            "selector": ".msg",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "border-color",
-            "selector": ".msg:hover,.msg:focus-visible",
-            "value": "var(--hair)"
-          },
-          {
-            "property": "background",
-            "selector": ".msg:hover,.msg:focus-visible",
-            "value": "var(--elev)"
-          },
-          {
-            "property": "color",
-            "selector": ".msg .from",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".msg .arrow",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".msg .to",
-            "value": "var(--ink-dim)"
           },
           {
             "property": "box-shadow",
-            "selector": ".msg .conversation-avatar .face",
-            "value": "0 0 0 1px var(--hair)"
+            "selector": ".mailfilters",
+            "value": "0 0 0 1px var(--hair),0 10px 24px var(--theme-shadow-low,rgb(0 0 0 / .28))"
           },
           {
             "property": "border",
-            "selector": ".mailview-host .imp",
+            "selector": ".mail-assignee-fallback",
             "value": "1px solid var(--hair)"
           },
           {
-            "property": "color",
-            "selector": ".mailview-host .imp",
-            "value": "var(--ink-faint)"
+            "property": "background",
+            "selector": ".mail-assignee-fallback",
+            "value": "var(--panel-2)"
           },
           {
             "property": "color",
-            "selector": ".msg .body",
+            "selector": ".mail-request,.mail-reply",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-state",
             "value": "var(--ink-dim)"
           },
           {
             "property": "color",
-            "selector": ".msg .time",
-            "value": "var(--ink-faint)"
+            "selector": ".mail-open",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-requester",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mailview-host time",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-route > .mail-icon",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".mail-peer-avatar:empty",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mail-peer-avatar:empty",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-reply-excerpt",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border-left",
+            "selector": ".mail-timeline-start",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "border-left",
+            "selector": ".mail-timeline-replies",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mail-timeline-start::before,.mail-timeline-replies .thread-item::before",
+            "value": "var(--ink-dim)"
           },
           {
             "property": "color",
             "selector": ".mailempty",
-            "value": "var(--ink-faint)"
+            "value": "var(--ink-dim)"
           },
           {
             "property": "background",
@@ -3020,64 +2952,9 @@
             "value": "var(--panel)"
           },
           {
-            "property": "border-left",
-            "selector": ".maildrawer",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "border-bottom",
-            "selector": ".drawer-head",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "border",
-            "selector": ".drawer-back,.drawer-mode",
-            "value": "1px solid var(--hair)"
-          },
-          {
             "property": "color",
-            "selector": ".drawer-back,.drawer-mode",
+            "selector": ".drawer-link-source",
             "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".drawer-back:hover,.drawer-back:focus-visible,.drawer-mode:hover,.drawer-mode:focus-visible",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".drawer-label",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".drawer-sender",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".drawer-arrow",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".drawer-recipients",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".recipient-kind",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".drawer-meta",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".maildrawer h2",
-            "value": "var(--ink)"
           },
           {
             "property": "color",
@@ -3125,44 +3002,14 @@
             "value": "var(--ink-faint)"
           },
           {
-            "property": "color",
-            "selector": ".drawer-empty",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border",
-            "selector": ".thread-item",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "background",
-            "selector": ".thread-item",
-            "value": "var(--panel-2)"
-          },
-          {
-            "property": "border-color",
-            "selector": ".thread-item:hover,.thread-item:focus-visible",
-            "value": "var(--hair)"
-          },
-          {
-            "property": "background",
-            "selector": ".thread-item:hover,.thread-item:focus-visible",
-            "value": "var(--elev)"
-          },
-          {
-            "property": "box-shadow",
-            "selector": ".thread-item.current",
-            "value": "inset 2px 0 0 var(--ink-dim)"
+            "property": "border-left",
+            "selector": ".thread-chain",
+            "value": "1px solid var(--hair)"
           },
           {
             "property": "color",
-            "selector": ".thread-from",
+            "selector": ".thread-item",
             "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".thread-time",
-            "value": "var(--ink-faint)"
           },
           {
             "property": "color",
@@ -3188,7 +3035,7 @@
         "unit": "computed-target"
       },
       "mutation": {
-        "digest": "68b836989ba046086954b62542f97b59f68102e0a6369c18c2cb6ab7c6dad107",
+        "digest": "262247a142bb7e5da6624bbeeccfdf285ac113681f1fef9f5559b7a73bcefe29",
         "records": [
           ":root[data-theme-axis=\"background\"]\u0000--bg",
           ":root[data-theme-axis=\"background\"]\u0000--panel",
@@ -3203,7 +3050,7 @@
         "unit": "token-write"
       },
       "source": {
-        "digest": "68b836989ba046086954b62542f97b59f68102e0a6369c18c2cb6ab7c6dad107",
+        "digest": "262247a142bb7e5da6624bbeeccfdf285ac113681f1fef9f5559b7a73bcefe29",
         "records": [
           ":root[data-theme-axis=\"background\"]\u0000--bg",
           ":root[data-theme-axis=\"background\"]\u0000--panel",
@@ -3252,6 +3099,11 @@
             "value": "var(--ink-dim)"
           },
           {
+            "property": "background",
+            "selector": ".mail-divider::after",
+            "value": "var(--ink-faint)"
+          },
+          {
             "property": "color",
             "selector": ".colhead",
             "value": "var(--ink-faint)"
@@ -3263,17 +3115,12 @@
           },
           {
             "property": "color",
-            "selector": ".roster-head .colhead-title",
+            "selector": ".rail-icon",
             "value": "var(--ink-dim)"
           },
           {
             "property": "color",
             "selector": ".header-utility",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".roster-select",
             "value": "var(--ink-dim)"
           },
           {
@@ -3284,6 +3131,31 @@
           {
             "property": "color",
             "selector": ".roster-filter-status",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".agent-status",
+            "value": "1px solid var(--ink-dim)"
+          },
+          {
+            "property": "background",
+            "selector": ".agent.working .agent-status",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-fold",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-role",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-runtime",
             "value": "var(--ink-dim)"
           },
           {
@@ -3323,37 +3195,12 @@
           },
           {
             "property": "color",
-            "selector": ".agent.offline-hint::after",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
             "selector": ".bulk-count",
             "value": "var(--ink-dim)"
           },
           {
             "property": "color",
             "selector": ".pill",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".pill.role",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".ctx .lab",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "background",
-            "selector": ".ctx .fill",
-            "value": "linear-gradient(90deg,var(--ink-dim),var(--ink))"
-          },
-          {
-            "property": "color",
-            "selector": ".ctx .pct",
             "value": "var(--ink-dim)"
           },
           {
@@ -3399,21 +3246,6 @@
           {
             "property": "color",
             "selector": ".usage-popover .up-foot",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".cstate",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".glyph",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".descriptor-updated",
             "value": "var(--ink-faint)"
           },
           {
@@ -3697,6 +3529,11 @@
             "value": "var(--ink-faint)"
           },
           {
+            "property": "color",
+            "selector": ".orrery-caption-role",
+            "value": "var(--ink-dim)"
+          },
+          {
             "property": "fill",
             "selector": ".orrery-expand text",
             "value": "var(--ink-faint)"
@@ -3707,79 +3544,49 @@
             "value": "var(--ink-faint)"
           },
           {
-            "property": "fill",
-            "selector": ".planet-agent-role",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "fill",
-            "selector": ".planet-agent-model",
+            "property": "color",
+            "selector": ".mail-state",
             "value": "var(--ink-dim)"
           },
           {
             "property": "color",
-            "selector": ".mailchip",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".msg .arrow",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".msg .to",
+            "selector": ".mail-open",
             "value": "var(--ink-dim)"
           },
           {
             "property": "color",
-            "selector": ".mailview-host .imp",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".msg .body",
+            "selector": ".mail-requester",
             "value": "var(--ink-dim)"
           },
           {
             "property": "color",
-            "selector": ".msg .time",
-            "value": "var(--ink-faint)"
+            "selector": ".mailview-host time",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-route > .mail-icon",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-reply-excerpt",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "background",
+            "selector": ".mail-timeline-start::before,.mail-timeline-replies .thread-item::before",
+            "value": "var(--ink-dim)"
           },
           {
             "property": "color",
             "selector": ".mailempty",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".drawer-back,.drawer-mode",
             "value": "var(--ink-dim)"
           },
           {
             "property": "color",
-            "selector": ".drawer-label",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".drawer-arrow",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".drawer-recipients",
+            "selector": ".drawer-link-source",
             "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".recipient-kind",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".drawer-meta",
-            "value": "var(--ink-faint)"
           },
           {
             "property": "color",
@@ -3803,21 +3610,6 @@
           },
           {
             "property": "color",
-            "selector": ".drawer-empty",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "box-shadow",
-            "selector": ".thread-item.current",
-            "value": "inset 2px 0 0 var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".thread-time",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
             "selector": ".thread-excerpt",
             "value": "var(--ink-dim)"
           }
@@ -3825,7 +3617,7 @@
         "unit": "computed-target"
       },
       "mutation": {
-        "digest": "523e1677c8f12259f2eae922b79d185978ba5935c2fe77bb3110856ad8e77f9f",
+        "digest": "9cb47bd1cbbf1ab3bc37ed08550904f493f8789fe63bd397e254eb5664f50474",
         "records": [
           ":root[data-theme-axis=\"dim-contrast\"]\u0000--ink-dim",
           ":root[data-theme-axis=\"dim-contrast\"]\u0000--ink-faint"
@@ -3833,7 +3625,7 @@
         "unit": "token-write"
       },
       "source": {
-        "digest": "523e1677c8f12259f2eae922b79d185978ba5935c2fe77bb3110856ad8e77f9f",
+        "digest": "9cb47bd1cbbf1ab3bc37ed08550904f493f8789fe63bd397e254eb5664f50474",
         "records": [
           ":root[data-theme-axis=\"dim-contrast\"]\u0000--ink-dim",
           ":root[data-theme-axis=\"dim-contrast\"]\u0000--ink-faint"
@@ -3862,16 +3654,6 @@
           {
             "property": "box-shadow",
             "selector": ".topstat .dot.open",
-            "value": ""
-          },
-          {
-            "property": "box-shadow",
-            "selector": ".agent.sel::before",
-            "value": ""
-          },
-          {
-            "property": "box-shadow",
-            "selector": ".roster.select-mode .agent.bulk-selected",
             "value": ""
           },
           {
@@ -3916,11 +3698,6 @@
           },
           {
             "property": "box-shadow",
-            "selector": ".msg.landing",
-            "value": ""
-          },
-          {
-            "property": "box-shadow",
             "selector": ".bulk-exit.arm",
             "value": ""
           }
@@ -3928,7 +3705,7 @@
         "unit": "computed-target"
       },
       "mutation": {
-        "digest": "63a11507ba5c06bff5a99abe403ab6c7b15a5d4b183e5d4cdaf318130b345c4d",
+        "digest": "f968eb7ec987d691bc02c3d1911594fad0f8591ec905385b934bc89a07f08a47",
         "records": [
           ":root\u0000--amber-glow",
           ".miniorrery.telemetry-network\u0000background",
@@ -3936,8 +3713,6 @@
           "body::before\u0000background",
           "body::before\u0000background",
           ".topstat .dot.open\u0000box-shadow",
-          ".agent.sel::before\u0000box-shadow",
-          ".roster.select-mode .agent.bulk-selected\u0000box-shadow",
           ".layout-picker\u0000box-shadow",
           ".tab.on .led\u0000box-shadow",
           ".tab.active-pane .led\u0000box-shadow",
@@ -3946,30 +3721,27 @@
           ".split-drag-ghost\u0000box-shadow",
           ".split-divider:hover::after,.split-divider.dragging::after\u0000box-shadow",
           ".agent-pick[aria-selected=\"true\"] img\u0000box-shadow",
-          "@keyframes mail-ember\u0000box-shadow",
           "@keyframes bulkarm\u0000box-shadow",
           "@keyframes bulkarm\u0000box-shadow"
         ],
         "unit": "effect-component"
       },
       "source": {
-        "digest": "5e61cbcb787eabb80edb087426b5643a2c60cd8a2d6085b500bef5251c7a3807",
+        "digest": "483e1e0152588dc18b5bfc9078ca36a7d8bb8999836a99a6fa763326568d34ac",
         "records": [
           ":root\u0000--amber-glow",
           ".miniorrery.telemetry-network\u0000background",
           ".miniorrery.telemetry-network .mini-agent.is-network-focus .mini-lineage-ring\u0000filter",
           ".orrery-state-glyph.attention text\u0000filter",
           ".orrery-state-glyph.question text\u0000filter",
+          ".orrery-caption\u0000text-shadow",
           ".planetarium-panel\u0000box-shadow",
-          ".maildrawer\u0000box-shadow",
-          ".thread-item.current\u0000box-shadow",
+          ".mailfilters\u0000box-shadow",
           "body::before\u0000background",
           ".topstat .dot.open\u0000box-shadow",
           ".roster-filter input:focus\u0000box-shadow",
-          ".agent.sel::before\u0000box-shadow",
-          ".roster.select-mode .agent.bulk-selected\u0000box-shadow",
           ".medal .face\u0000box-shadow",
-          ".msg .conversation-avatar .face\u0000box-shadow",
+          ":is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .face\u0000box-shadow",
           ".medal .face::after\u0000background",
           ".agent-detail\u0000box-shadow",
           ".term\u0000background",
@@ -4002,7 +3774,6 @@
           ".settings-range::-webkit-slider-thumb\u0000box-shadow",
           ".settings-switch input:focus-visible\u0000box-shadow",
           ".toast\u0000box-shadow",
-          "@keyframes mail-ember\u0000box-shadow",
           "@keyframes bulkarm\u0000box-shadow"
         ],
         "unit": "declaration"
@@ -4017,7 +3788,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "795d63240e981a13f47a90f35c45e4ffa0ea9350684901a3ae7a94bd1a90ffad",
+        "digest": "42f3795ea89e311c0c18bcca4571b238365fe906ec1f12da1f1433928e34c26d",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -4025,19 +3796,14 @@
           ".colhead\u0000font-size",
           ".colhead .tag\u0000font-size",
           ".new-agent\u0000font-size",
-          ".roster-select\u0000font-size",
-          ".roster-head .roster-select,.roster-head .new-agent\u0000font-size",
           ".roster-filter input\u0000font-size",
           ".roster-filter-status\u0000font-size",
           ".roster-edit label\u0000font-size",
           ".roster-edit-hint\u0000font-size",
           ".roster-edit-status\u0000font-size",
-          ".agent.offline-hint::after\u0000font-size",
           ".bulk-count\u0000font-size",
           ".bulk-exit\u0000font-size",
           ".pill\u0000font-size",
-          ".ctx .lab\u0000font-size",
-          ".ctx .pct\u0000font-size",
           ".usage-pill .up-k\u0000font-size",
           ".usage-pill .up-p b\u0000font-size",
           ".usage-popover .up-reset\u0000font-size",
@@ -4048,8 +3814,6 @@
           ".usage-popover .up-untouched\u0000font-size",
           ".usage-popover .up-empty\u0000font-size",
           ".usage-popover .up-foot\u0000font-size",
-          ".cstate\u0000font-size",
-          ".descriptor-updated\u0000font-size",
           ".split-chip\u0000font-size",
           ".layout-picker-title\u0000font-size",
           ".layout-option\u0000font-size",
@@ -4103,33 +3867,13 @@
           ".pane-out-chip .where\u0000font-size",
           ".pane-out-chip .back\u0000font-size",
           ".mini-initial\u0000font-size",
-          ".orrery-hover-label\u0000font-size",
+          ".orrery-caption-role\u0000font-size",
+          ".planet-agent .orrery-caption-role\u0000font-size",
           ".orrery-expand text\u0000font-size",
           ".orrery-comet-label\u0000font-size",
           ".planetarium-note\u0000font-size",
-          ".planet-agent-role\u0000font-size",
-          ".planet-agent-model\u0000font-size",
-          ".planet-agent-state\u0000font-size",
           ".mini-provider-fallback\u0000font-size",
-          ".mailchip\u0000font-size",
-          ".msg .arrow\u0000font-size",
-          ".msg .to\u0000font-size",
-          ".msg .conversation-avatar .face\u0000font-size",
-          ".mailview-host .imp\u0000font-size",
-          ".msg .body\u0000font-size",
-          ".msg .time\u0000font-size",
-          ".mailempty\u0000font-size",
-          ".drawer-mode\u0000font-size",
-          ".drawer-label\u0000font-size",
-          ".drawer-arrow\u0000font-size",
-          ".drawer-recipient\u0000font-size",
-          ".recipient-kind\u0000font-size",
-          ".drawer-meta\u0000font-size",
-          ".mail-md\u0000font-size",
-          ".mail-md h4\u0000font-size",
-          ".drawer-empty\u0000font-size",
-          ".thread-time\u0000font-size",
-          ".thread-excerpt\u0000font-size"
+          ".mailview-host time\u0000font-size"
         ],
         "unit": "declaration"
       }
@@ -4143,15 +3887,11 @@
         "unit": "element"
       },
       "source": {
-        "digest": "60c1c54f8c6f05d15fc2aa72560cbf80c36a90941886230b369c87fc15745da1",
+        "digest": "5eccbb3a4e666f9903df40ba60053bacf2171b1245b29484cbcdb3584ffe4916",
         "records": [
           ".colhead\u0000letter-spacing",
-          ".roster-head .colhead-title\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
-          ".roster-select\u0000letter-spacing",
-          ".agent.offline-hint::after\u0000letter-spacing",
           ".bulk-exit\u0000letter-spacing",
-          ".ctx .lab\u0000letter-spacing",
           ".usage-pill .up-k\u0000letter-spacing",
           ".usage-popover .dial .lab\u0000letter-spacing",
           ".usage-popover .up-sub\u0000letter-spacing",
@@ -4172,20 +3912,15 @@
           ".pane-drag-ghost small\u0000letter-spacing",
           ".pane-out-chip .where\u0000letter-spacing",
           ".planetarium-note\u0000letter-spacing",
-          ".planetarium-telemetry\u0000letter-spacing",
-          ".planet-agent-model\u0000letter-spacing",
-          ".planet-agent-state\u0000letter-spacing",
-          ".mailview-host .imp\u0000letter-spacing",
-          ".drawer-label\u0000letter-spacing",
-          ".recipient-kind\u0000letter-spacing"
+          ".planetarium-telemetry\u0000letter-spacing"
         ],
         "unit": "declaration"
       }
     }
   },
-  "inventory_digest": "d608fb68a71c5082f2b72b40b242c9c28221b69f540d37eb9cb69de93b6ff06d",
+  "inventory_digest": "ff9c675e49e137aa085c8cfff7b11f21fd22fd376a90b357a1f19d1df0c5c8ff",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "7dddafe613fdb22da7f794e67d46057b04705dfe2cd32a1a0e3c276871a3ab71",
+  "source_digest": "85be45b987e59a4327f59a9bf33f80764d82e5e177e4870f3ae51681614422bf",
   "surface": "cockpit",
   "version": 1
 }
@@ -4876,6 +4611,13 @@ function paneSessionAllowed(session){
 const tabsEl=document.getElementById('tabs');
 const tabstripEl=document.getElementById('tabstrip');
 const stageEl=document.getElementById('termstage');
+const mailDivider=document.getElementById('mailDivider'),mailRail=document.getElementById('mailRail');
+const cockpitGrid=mailRail.parentElement,MAIL_WIDTH_KEY='oc-mail-pane-ratio';
+let mailDividerDrag=null,mailPaneRatio=null;
+try{
+  const stored=Number(localStorage.getItem(MAIL_WIDTH_KEY));
+  if(stored>0&&stored<1)mailPaneRatio=stored;
+}catch(_){/* preference unavailable */}
 const stageEmpty=document.getElementById('stageEmpty');
 /* Set while a terminal-less agent is selected.  The stage must stay empty in
    that state even though panes are still open, otherwise the previous agent's
@@ -4991,16 +4733,14 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   ['.miniorrery.telemetry-network .mini-agent.is-network-focus .mini-lineage-ring','filter',['state','emissive'],'scale','html[data-theme-axis="glow"] .miniorrery.telemetry-network .mini-agent.is-network-focus .mini-lineage-ring'],
   ['.orrery-state-glyph.attention text','filter',['state'],'preserve'],
   ['.orrery-state-glyph.question text','filter',['state'],'preserve'],
+  ['.orrery-caption','text-shadow',['state'],'preserve'],
   ['.planetarium-panel','box-shadow',['elevation'],'preserve'],
-  ['.maildrawer','box-shadow',['elevation'],'preserve'],
-  ['.thread-item.current','box-shadow',['state'],'preserve'],
+  ['.mailfilters','box-shadow',['elevation'],'preserve'],
   ['body::before','background',['emissive'],'scale','html[data-theme-axis="glow"] body::before'],
   ['.topstat .dot.open','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .topstat .dot.open'],
   ['.roster-filter input:focus','box-shadow',['focus'],'preserve'],
-  ['.agent.sel::before','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .agent.sel::before'],
-  ['.roster.select-mode .agent.bulk-selected','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .roster.select-mode .agent.bulk-selected'],
   ['.medal .face','box-shadow',['state'],'preserve'],
-  ['.msg .conversation-avatar .face','box-shadow',['state'],'preserve'],
+  [':is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .face','box-shadow',['state'],'preserve'],
   ['.medal .face::after','background',['elevation'],'preserve'],
   ['.agent-detail','box-shadow',['elevation'],'preserve'],
   ['.term','background',['elevation'],'preserve'],
@@ -5033,7 +4773,6 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   ['.settings-range::-webkit-slider-thumb','box-shadow',['state'],'preserve'],
   ['.settings-switch input:focus-visible','box-shadow',['focus'],'preserve'],
   ['.toast','box-shadow',['elevation'],'preserve'],
-  ['@keyframes mail-ember','box-shadow',['state','emissive'],'scale','@keyframes theme-axis-mail-ember','.msg.landing','animation'],
   ['@keyframes bulkarm','box-shadow',['state','emissive'],'scale','@keyframes theme-axis-bulkarm','.bulk-exit.arm','animation-name'],
 ].map(([selector,property,categories,mode,overrideSelector,activationSelector,activationProperty])=>Object.freeze({
   selector,property,categories:Object.freeze(categories),mode,overrideSelector,activationSelector,activationProperty,
@@ -5165,29 +4904,6 @@ function numericFontWeight(value){
   if(value==='bold')return 700;
   const numeric=Number(value);
   return Number.isFinite(numeric)?numeric:400;
-}
-function restoreThemeAxisSmallSvgOffsets(){
-  document.querySelectorAll('[data-oc-axis-small-svg-x]').forEach(element=>{
-    element.setAttribute('x',element.dataset.ocAxisSmallSvgX);
-    if(element.dataset.ocAxisSmallSvgY)element.setAttribute('y',element.dataset.ocAxisSmallSvgY);
-    delete element.dataset.ocAxisSmallSvgX;
-    delete element.dataset.ocAxisSmallSvgY;
-  });
-}
-function fitThemeAxisSmallSvgLabel(element){
-  if(!element.matches('.miniorrery .orrery-hover-label')||typeof element.getBBox!=='function')return;
-  const svg=element.ownerSVGElement;
-  const width=svg&&svg.viewBox&&svg.viewBox.baseVal.width;
-  if(!(width>0))return;
-  if(!element.dataset.ocAxisSmallSvgX)element.dataset.ocAxisSmallSvgX=element.getAttribute('x')||'0';
-  if(!element.dataset.ocAxisSmallSvgY)element.dataset.ocAxisSmallSvgY=element.getAttribute('y')||'0';
-  element.setAttribute('x',element.dataset.ocAxisSmallSvgX);
-  element.setAttribute('y',String(Number(element.dataset.ocAxisSmallSvgY)-12));
-  const box=element.getBBox(),margin=2;
-  let shift=0;
-  if(box.x<margin)shift=margin-box.x;
-  if(box.x+box.width+shift>width-margin)shift-=box.x+box.width+shift-(width-margin);
-  if(Math.abs(shift)>.01)element.setAttribute('x',String(Number(element.dataset.ocAxisSmallSvgX)+shift));
 }
 function themeAxisStyleInventory(){
   const rules=[],keyframes=new Set(),keyframeRules=new Map();
@@ -5352,13 +5068,6 @@ function themeAxisLiveCandidates(axis,root=document.body){
       }
     }
   });
-  const pseudoHosts=(root.matches&&root.matches('.agent.offline-hint')?[root]:[])
-    .concat([...root.querySelectorAll('.agent.offline-hint')]);
-  pseudoHosts.forEach(element=>{
-    const computed=getComputedStyle(element,'::after');
-    if(axis==='small-text')records.push({element,pseudo:'::after',fontSize:parseFloat(computed.fontSize),fontWeight:numericFontWeight(computed.fontWeight)});
-    else records.push({element,pseudo:'::after',fontSize:parseFloat(computed.fontSize),spacing:parseFloat(computed.letterSpacing)});
-  });
   return records;
 }
 function themeAxisSameTarget(first,second){
@@ -5425,7 +5134,6 @@ function annotateThemeAxisTargets(root=document.body,{
       element.style.setProperty('--oc-axis-tracking-size',`${spacing.toFixed(3)}px`);
     });
   });
-  smallRecords.forEach(record=>{if(!record.pseudo)fitThemeAxisSmallSvgLabel(record.element);});
   return total;
 }
 function stopThemeAxisTargetWatch(){
@@ -5915,7 +5623,6 @@ function applyThemeAxisState({broadcast=true,negativeTrackingBaseline=false}={})
   themeAxisRuntimeMutationCounts=renderThemeAxisRuntimeStyle(axis,value);
   if(axes.some(current=>THEME_PROFILE_AXES.includes(current)))startThemeAxisTargetWatch({negativeTrackingBaseline});
   else{stopThemeAxisTargetWatch();clearThemeAxisTargetAnnotations();}
-  if(!axes.includes('small-text'))restoreThemeAxisSmallSvgOffsets();
   const terminalTheme=currentTerminalTheme();
   panes.forEach(pane=>{pane.term.options.theme=terminalTheme;});
   refreshThemeAxisReports();
@@ -6425,7 +6132,11 @@ function clearSplitDividers(){
   splitDividers.splice(0,splitDividers.length).forEach(divider=>divider.remove());
 }
 function dividerDragActive(){
-  return splitDividers.some(divider=>Boolean(divider._drag));
+  return Boolean(mailDividerDrag)||splitDividers.some(divider=>Boolean(divider._drag));
+}
+function cancelStageFit(){
+  if(stageFitFrame){cancelAnimationFrame(stageFitFrame);stageFitFrame=null;}
+  clearTimeout(resizeTimer);
 }
 function updateDividerDrag(event,divider){
   const drag=divider._drag;
@@ -6454,8 +6165,7 @@ function finishDividerDrag(event,divider){
 function beginDividerDrag(event,divider,track){
   if(event.button!==0)return;
   event.preventDefault();
-  if(stageFitFrame){cancelAnimationFrame(stageFitFrame);stageFitFrame=null;}
-  clearTimeout(resizeTimer);
+  cancelStageFit();
   const count=splitSessions.length,preset=currentSplitPreset(count);
   const rect=stageEl.getBoundingClientRect();
   const size=Math.max(1,track.axis==='col'?rect.width:rect.height);
@@ -6505,6 +6215,97 @@ function visiblePaneIds(){
   if(!splitVisible||!splitSessions.length)return activeId&&panes.has(activeId)?[activeId]:[];
   return splitSessions.map(paneIdForSession).filter(Boolean);
 }
+function mailPaneBounds(){
+  const style=getComputedStyle(cockpitGrid);
+  const available=cockpitGrid.clientWidth-parseFloat(style.getPropertyValue('--roster-width'));
+  const min=parseFloat(style.getPropertyValue('--mail-min-width'));
+  const max=available-parseFloat(style.getPropertyValue('--center-min-width'));
+  return {available,min,max};
+}
+function syncMailDivider(bounds=mailPaneBounds(),width=mailRail.getBoundingClientRect().width){
+  if(!width)return;
+  const percent=value=>Math.round(100*value/bounds.available);
+  setAttr(mailDivider,'aria-valuemin',percent(bounds.min));
+  setAttr(mailDivider,'aria-valuemax',percent(bounds.max));
+  setAttr(mailDivider,'aria-valuenow',percent(width));
+  setAttr(mailDivider,'aria-valuetext',`${Math.round(width)} pixels`);
+}
+function applyMailPaneRatio(){
+  if(mailPaneRatio===null)cockpitGrid.style.removeProperty('--mail-width');
+  else setBox(cockpitGrid,'--mail-width',`calc((100% - var(--roster-width)) * ${mailPaneRatio})`);
+}
+function setMailPaneWidth(width,bounds){
+  const clamped=Math.max(bounds.min,Math.min(bounds.max,width));
+  mailPaneRatio=clamped/bounds.available;
+  applyMailPaneRatio();
+  syncMailDivider(bounds,clamped);
+}
+function persistMailPaneRatio(){
+  try{
+    if(mailPaneRatio===null)localStorage.removeItem(MAIL_WIDTH_KEY);
+    else localStorage.setItem(MAIL_WIDTH_KEY,String(mailPaneRatio));
+  }catch(_){/* keep the live ratio */}
+}
+function resetMailPaneWidth(){
+  mailPaneRatio=null;
+  applyMailPaneRatio();syncMailDivider();persistMailPaneRatio();scheduleFit();
+}
+mailDivider.addEventListener('pointerdown',event=>{
+  if(event.button!==0||dividerDragActive())return;
+  event.preventDefault();
+  cancelStageFit();
+  mailDividerDrag={id:event.pointerId,x:event.clientX,width:mailRail.getBoundingClientRect().width,
+    ratio:mailPaneRatio,bounds:mailPaneBounds()};
+  mailDivider.focus({preventScroll:true});
+  mailDivider.classList.add('dragging');
+  mailDivider.setPointerCapture(event.pointerId);
+});
+function moveMailDivider(event){
+  const drag=mailDividerDrag;
+  if(!drag||event.pointerId!==drag.id)return;
+  if(event.clientX!==drag.x)setMailPaneWidth(drag.width+drag.x-event.clientX,drag.bounds);
+  else{
+    mailPaneRatio=drag.ratio;
+    applyMailPaneRatio();syncMailDivider(drag.bounds,drag.width);
+  }
+}
+mailDivider.addEventListener('pointermove',moveMailDivider);
+function finishMailDivider(event){
+  const drag=mailDividerDrag;
+  if(!drag||event.pointerId!==drag.id)return;
+  if(event.type==='pointerup'){
+    moveMailDivider(event);persistMailPaneRatio();
+  }else{
+    mailPaneRatio=drag.ratio;
+    applyMailPaneRatio();syncMailDivider();
+  }
+  mailDividerDrag=null;
+  mailDivider.classList.remove('dragging');
+  scheduleFit();
+}
+mailDivider.addEventListener('pointerup',finishMailDivider);
+mailDivider.addEventListener('pointercancel',finishMailDivider);
+mailDivider.addEventListener('lostpointercapture',finishMailDivider);
+mailDivider.addEventListener('dblclick',resetMailPaneWidth);
+mailDivider.addEventListener('keydown',event=>{
+  if(mailDividerDrag)return;
+  const bounds=mailPaneBounds(),width=mailRail.getBoundingClientRect().width;
+  const step=event.shiftKey?64:24;
+  let target;
+  switch(event.key){
+    case 'ArrowLeft':target=width+step;break;
+    case 'ArrowRight':target=width-step;break;
+    case 'Home':target=bounds.min;break;
+    case 'End':target=bounds.max;break;
+    case 'Enter':event.preventDefault();resetMailPaneWidth();return;
+    default:return;
+  }
+  event.preventDefault();
+  setMailPaneWidth(target,bounds);persistMailPaneRatio();scheduleFit();
+});
+applyMailPaneRatio();
+syncMailDivider();
+window.addEventListener('resize',()=>syncMailDivider());
 function queueStageFit(focusPaneId=null){
   if(dividerDragActive())return;
   if(stageFitFrame)cancelAnimationFrame(stageFitFrame);
@@ -7638,9 +7439,9 @@ function applyAutoClaims(){
 function showOfflineHint(name){
   const tile=tiles.get(name);if(!tile)return;
   tile.classList.add('offline-hint');
-  if(tile.animate)tile.animate(
-    [{transform:'translateX(0)'},{transform:'translateX(-4px)'},{transform:'translateX(4px)'},{transform:'translateX(0)'}],
-    {duration:320,easing:'ease-out'});
+  if(railMotionPreference.matches)tile.animate([{opacity:.65},{opacity:1}],{duration:90});
+  else tile.animate([{transform:'translateX(-4px)'},{transform:'translateX(4px)'},{transform:'none'}],
+    {duration:215,easing:'ease-out'});
   clearTimeout(tile._offlineTimer);
   tile._offlineTimer=setTimeout(()=>tile.classList.remove('offline-hint'),900);
 }
@@ -8864,17 +8665,6 @@ function paintRosterProvider(el,agent){
   if(image.getAttribute('src')!==src)image.src=src;
   else if(image.complete&&!image.naturalWidth){badge.hidden=true;pill.hidden=false;}
 }
-function paintRosterHarness(el,agent){
-  const chip=el.querySelector('.roster-harness');if(!chip)return;
-  const h=SpawnPicker.rosterHarness(agent);
-  const harnessKey=h?h.id+'|'+h.label+'|'+(h.asset||''):'';
-  if(chip.dataset.harnessKey===harnessKey)return;chip.dataset.harnessKey=harnessKey;
-  chip.replaceChildren();chip.hidden=!h;if(!h)return;
-  if(h.asset){const image=document.createElement('img');image.src='cockpit-assets/'+h.asset;image.alt='';
-    if(['hermes','dsh'].includes(h.id))image.className='harness-art';chip.append(image);}
-  chip.append(document.createTextNode(h.label));chip.title='Harness: '+h.label;
-}
-const ACT={work:{cls:"working",glyph:"◇"},ask:{cls:"ask",glyph:"⏎"},question:{cls:"question",glyph:"?"},wait:{cls:"",glyph:"·"}};
 // spawn-lineage palette — muted instrument hues, one per spawn-tree root.
 const LINEAGE_PALETTE=["#5fb3a3","#b58be0","#83b06a","#e0a45f","#6f9bd1","#cf7f9c",
                        "#7ec8b1","#bfa14a","#9d8cd0","#6fbf8f","#d09a6f","#8fb0cf"];
@@ -8905,7 +8695,8 @@ const rosterTag=document.getElementById('rosterTag');
 const agentDot=document.getElementById('agentDot');
 const rosterFilter=document.getElementById('rosterFilter');
 const rosterFilterStatus=document.getElementById('rosterFilterStatus');
-const rosterFilterSummary=document.getElementById('rosterFilterSummary');
+const rosterSearch=document.getElementById('rosterSearch');
+const rosterSearchBtn=document.getElementById('rosterSearchBtn');
 const rosterFilterClear=document.getElementById('rosterFilterClear');
 const rosterCol=rosterEl.closest('.roster');
 const rosterSelectBtn=document.getElementById('rosterSelectBtn');
@@ -8915,12 +8706,16 @@ const rosterBulkExit=document.getElementById('rosterBulkExit');
 const rosterBulkReboot=document.getElementById('rosterBulkReboot');
 const rosterBulkRebootLabel=document.getElementById('rosterBulkRebootLabel');
 const tiles=new Map();   // name -> tile element
-const PINNED_AGENT_KEY='oc-pinned-agents';
-const pinnedAgents=new Set();
-try{
-  const storedPins=JSON.parse(localStorage.getItem(PINNED_AGENT_KEY)||'[]');
-  if(Array.isArray(storedPins))storedPins.forEach(name=>{if(typeof name==='string'&&name)pinnedAgents.add(name);});
-}catch(_){/* malformed or unavailable storage: start with no pins */}
+const PINNED_AGENT_KEY='oc-pinned-agents',ROSTER_FOLD_KEY='oc-roster-folds';
+function storedRosterNames(key){
+  try{
+    const names=JSON.parse(localStorage.getItem(key)||'[]');
+    if(Array.isArray(names))return new Set(names.filter(name=>typeof name==='string'&&name));
+  }catch(_){/* malformed or unavailable storage */}
+  return new Set();
+}
+const pinnedAgents=storedRosterNames(PINNED_AGENT_KEY),foldedAgents=storedRosterNames(ROSTER_FOLD_KEY);
+let rosterRows=[],rosterRowsByName=new Map();
 const agentDetail=document.createElement('div');
 agentDetail.id='agentDetail';agentDetail.className='agent-detail';agentDetail.setAttribute('role','tooltip');agentDetail.hidden=true;
 document.body.appendChild(agentDetail);
@@ -8930,9 +8725,6 @@ const descriptorStore=RosterDescriptor.createStableDescriptorStore();
 let rosterAnnotationEpoch=0;
 const rosterEditor=OrreryRosterEdit.mount({container:rosterEl,getAgent:currentAgentNamed,onSave:applyRosterAnnotation,
   onOpen:()=>{if(detailAnchor)hideAgentDetail(detailAnchor);},onError:message=>showToast(message,true),isSelecting:()=>rosterSelectMode});
-const DESCRIPTOR_TASK_KEY='oc-descriptor-task',DESCRIPTOR_TASK_MAX=400;
-let descriptorTaskState={},descriptorTaskDirty=false,descriptorTaskSaveAt=0;
-try{descriptorTaskState=JSON.parse(localStorage.getItem(DESCRIPTOR_TASK_KEY)||'{}')||{};}catch(_){descriptorTaskState={};}
 const bulkSelectedAgents=new Set();
 const BULK_ACTION_ARM_MS=3000;
 let rosterSelectMode=false,bulkActionArmed=null,bulkActionBusy=null,bulkActionArmTimer=null;
@@ -8964,8 +8756,8 @@ function applyRosterAnnotation(name,annotation){
   rosterAnnotationEpoch++;
   const agent=currentAgentNamed(name);if(!agent)return;
   agent.annot=annotation;agent.task=OrreryRosterEdit.effectiveTask(agent);
-  agent.descriptor=descriptorStore.get(agent,currentAgents);noteDescriptorTasks(currentAgents);
-  paintTile(tiles.get(name),agent);paintSplitRoles(currentAgents);applyRosterFilter();
+  agent.descriptor=descriptorStore.get(agent,currentAgents);
+  paintTile(tiles.get(name),agent);paintSplitRoles(currentAgents);applyRosterFilter(true);
   document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
 }
 function paintBulkTileState(el,agent){
@@ -9030,6 +8822,7 @@ function setRosterSelectMode(on){
     stoppedSelectRequest?.abort();stoppedSelectRequest=null;
     if(stoppedSelectAgents.length){stoppedSelectAgents=[];renderRoster();return;}
   }
+  reorderRoster(currentAgents);
   refreshBulkTileStates();updateRosterBulkUI();
 }
 function toggleBulkAgent(name){
@@ -9158,7 +8951,8 @@ function renderCrewCounts(live){
   setHidden(chip,need===0);
   if(!need&&needOnly){needOnly=false;chip.setAttribute('aria-pressed','false');}
 }
-function applyRosterFilter(){
+function applyRosterFilter(animate=false,positions=null){
+  if(animate)positions??=railPositions(tiles.values(),rosterEl);
   const query=rosterFilter.value;
   let shown=0;
   const byName=new Map((currentAgents||[]).map(a=>[a.name,a]));
@@ -9171,18 +8965,30 @@ function applyRosterFilter(){
   const filtering=Boolean(normalizeSearchText(query));
   if(filtering)rosterTag.textContent=`${shown}/${tiles.size}`;
   rosterFilterStatus.hidden=!filtering||shown!==0;
-  rosterFilterSummary.textContent=`${shown}/${tiles.size}`;
-  paintPinnedBoundary();
-  rosterEditor.reposition();
+  reorderRoster(currentAgents,positions);
 }
-rosterFilter.addEventListener('input',applyRosterFilter);
+function toggleRosterSearch(on){
+  setHidden(rosterSearch,!on);
+  setAttr(rosterSearchBtn,'aria-expanded',on);
+  if(on)rosterFilter.focus();
+  else{
+    rosterFilter.value='';
+    applyRosterFilter(true);
+    rosterSearchBtn.focus({preventScroll:true});
+  }
+}
+rosterSearchBtn.addEventListener('click',()=>toggleRosterSearch(rosterSearch.hidden));
+rosterFilter.addEventListener('input',()=>applyRosterFilter(true));
+rosterFilter.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&!event.isComposing){event.stopPropagation();toggleRosterSearch(false);}
+});
 document.getElementById('needChip').addEventListener('click',()=>{
   needOnly=!needOnly;
   document.getElementById('needChip').setAttribute('aria-pressed',needOnly?'true':'false');
-  applyRosterFilter();
+  applyRosterFilter(true);
 });
 rosterFilterClear.addEventListener('click',()=>{
-  rosterFilter.value='';applyRosterFilter();rosterFilter.focus();
+  rosterFilter.value='';applyRosterFilter(true);rosterFilter.focus();
 });
 rosterSelectBtn.addEventListener('click',()=>setRosterSelectMode(!rosterSelectMode));
 rosterBulkExit.addEventListener('click',runBulkExit);
@@ -9194,6 +9000,7 @@ const AGENT_DETAIL_TOKENS=new Intl.NumberFormat('en',{notation:'compact',maximum
 const AGENT_DETAIL_ICONS={
   role:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M5.5 16a3.5 3.5 0 0 1 7 0m3-6h2.5m-2.5 4H18"/>',
   top:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2"/>',
+  children:'<path d="M6 5v14h7M6 12h7"/><circle cx="16" cy="12" r="2"/><circle cx="16" cy="19" r="2"/>',
   parent:'<circle cx="12" cy="5" r="2"/><rect x="3" y="16" width="5" height="4" rx="1"/><rect x="16" y="16" width="5" height="4" rx="1"/><path d="M12 7v5m-6.5 4v-4h13v4"/>',
   computer:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4m-4 0h8"/>',
   browser:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01m3 0h.01"/>',
@@ -9203,7 +9010,11 @@ const AGENT_DETAIL_ICONS={
   context:'<rect x="3" y="6" width="17" height="12" rx="2"/><path d="M22 10v4M7 10v4m4-4v4m4-4v4"/>',
   directory:'<path d="M2.5 17.5v-11a1 1 0 0 1 1-1h5l2 2h10a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1Z"/>'
 };
-function agentDetailModel(a,homeDir){
+const CONTEXT_HOT_PERCENT=65;
+function agentContextUsed(a){
+  return Number.isFinite(a.ctx_used)&&a.ctx_used>=0&&a.ctx_used<=100?a.ctx_used:null;
+}
+function agentDetailModel(a,homeDir,hiddenChildren=[]){
   const text=value=>typeof value==='string'&&value.trim()?value:null;
   const cwd=text(a.cwd),home=homeDir?.replace(/\/+$/,'');
   const directory=cwd&&home&&(cwd===home||cwd.startsWith(home+'/'))?'~'+cwd.slice(home.length):cwd;
@@ -9214,8 +9025,8 @@ function agentDetailModel(a,homeDir){
     browser:typeof a.browser_use==='boolean'?a.browser_use:null,
     model:text(a.model_id),harness:AGENT_DETAIL_HARNESSES.get(a.harness_kind)??null,effort:text(a.effort),
     tokens:Number.isSafeInteger(a.ctx_window_tokens)&&a.ctx_window_tokens>0?a.ctx_window_tokens:null,
-    used:Number.isFinite(a.ctx_used)&&a.ctx_used>=0&&a.ctx_used<=100?a.ctx_used:null,
-    directory,cwd
+    used:agentContextUsed(a),
+    directory,cwd,hiddenChildren
   };
 }
 function agentDetailItem(icon,label,body=''){
@@ -9235,6 +9046,7 @@ function agentDetailHTML(detail){
   let lineage='';
   if(detail.parentState==='top')lineage=agentDetailItem('top','Top level');
   if(detail.parentState==='child')lineage=detail.parent?text('parent','Parent',detail.parent):agentDetailItem('parent','Child agent');
+  if(detail.hiddenChildren?.length)lineage+=text('children','Hidden descendants',detail.hiddenChildren.join(', '));
   const computer=detail.computer?agentDetailItem('computer',`Computer use: ${detail.computer}`,
     `<span class="agent-detail-modes" aria-hidden="true">${[...AGENT_DETAIL_COMPUTER.values()].map(mode=>
       `<span${mode===detail.computer?' class="current"':''}>${mode}</span>`).join('')}</span>`):'';
@@ -9246,7 +9058,7 @@ function agentDetailHTML(detail){
   const contextRow=context.length?agentDetailItem('context','Context window: '+context.join(', '),
     `<span class="agent-detail-context">
       ${detail.tokens===null?'':`<span>${AGENT_DETAIL_TOKENS.format(detail.tokens)}</span>`}
-      ${detail.used===null?'':`<span class="agent-detail-meter${detail.used>65?' hot':''}" aria-hidden="true"><i style="width:${detail.used}%"></i></span><strong>${detail.used}%</strong>`}
+      ${detail.used===null?'':`<span class="agent-detail-meter${detail.used>CONTEXT_HOT_PERCENT?' hot':''}" aria-hidden="true"><i style="width:${detail.used}%"></i></span><strong>${detail.used}%</strong>`}
     </span>`):'';
   const runtime=text('harness','Harness',detail.harness)+text('effort','Effort',detail.effort);
   return `<div class="agent-detail-name">${esc(detail.name)}</div>
@@ -9273,10 +9085,12 @@ function positionAgentDetail(el){
 }
 function showAgentDetail(el){
   const a=currentAgentNamed(el&&el.dataset.agent);if(!a)return;
-  if(rosterEditor.isEditing(a.name)||el.classList.contains('filtered-out')){hideAgentDetail(el);return;}
+  if(rosterEditor.isEditing(a.name)||el.matches('.filtered-out,.folded-out')){hideAgentDetail(el);return;}
   if(detailAnchor!==el)clearTimeout(detailHideTimer);
   detailAnchor=el;
-  const html=agentDetailHTML(agentDetailModel(a,hostPlatform.home_dir));
+  const row=rosterRowsByName.get(a.name);
+  const hiddenChildren=row?.folded?rosterRows.slice(row.index+1,row.end).map(child=>child.name):[];
+  const html=agentDetailHTML(agentDetailModel(a,hostPlatform.home_dir,hiddenChildren));
   if(detailRendered!==html){agentDetail.innerHTML=html;detailRendered=html;}
   setHidden(agentDetail,false);positionAgentDetail(el);
 }
@@ -9326,18 +9140,25 @@ function tileFor(a){
   if(!el){
     el=document.createElement('div');
     el.className='agent';el.dataset.name=a.name;
-    el.style.animation='rise .6s cubic-bezier(.2,.7,.2,1) forwards';
     el.innerHTML=`
       <div class="medal"><div class="ring"></div>
         <div class="face"><span class="ini"></span><img alt="" referrerpolicy="no-referrer"></div><span class="provider-badge" hidden><img class="provider-logo" alt=""></span></div>
+      <span class="pill eng" hidden></span>
       <div class="cbody">
-        <div class="crow1"><span class="cname"></span><button class="name-copy" type="button">
+        <div class="crow1"><span class="cname"></span><button class="roster-fold" type="button" hidden>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
+          <span aria-hidden="true"></span>
+        </button><button class="name-copy" type="button">
           <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/></svg>
         </button></div>
-        <div class="cmeta"><span class="roster-harness" hidden></span><span class="pill eng"></span><span class="pill model"></span><span class="pill role" hidden></span></div>
-        <div class="ctx"><span class="lab">CTX</span><div class="track"><div class="fill"></div></div><span class="pct"></span></div>
-        <div class="cstate"><span class="glyph"></span><span class="statetext"></span><span class="descriptor-updated" hidden></span></div>
+        <span class="roster-role" hidden></span>
+        <span class="roster-runtime" hidden><span class="roster-model" hidden></span>
+          <span class="roster-context" role="meter" aria-label="Context usage" aria-valuemin="0" aria-valuemax="100" hidden>
+            <span class="agent-detail-meter" aria-hidden="true"><i></i></span><span aria-hidden="true"></span>
+          </span>
+        </span>
       </div>
+      <span class="agent-status" role="img"></span>
       <button class="pin-toggle" type="button" aria-pressed="false">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 1.5h4l-.5 3 2.5 2v1H9v3.2L8 13l-1-2.3V7.5H4v-1l2.5-2z"/></svg>
       </button>
@@ -9345,6 +9166,13 @@ function tileFor(a){
     el.onclick=event=>handleRosterTileClick(a.name,event);
     el.dataset.agent=a.name;
     el.querySelector('.pin-toggle').onclick=event=>handlePinToggle(a.name,event);
+    el.querySelector('.roster-fold').onclick=event=>{
+      event.stopPropagation();
+      if(foldedAgents.has(a.name))foldedAgents.delete(a.name);
+      else foldedAgents.add(a.name);
+      try{localStorage.setItem(ROSTER_FOLD_KEY,JSON.stringify([...foldedAgents]));}catch(_){/* live-only preference */}
+      reorderRoster(currentAgents);
+    };
     const copyButton=el.querySelector('.name-copy');
     copyButton.setAttribute('aria-label',`Copy name ${a.name}`);copyButton.title=`Copy name · ${a.name}`;
     copyButton.onclick=event=>handleNameCopy(a.name,event);
@@ -9357,38 +9185,42 @@ function tileFor(a){
 }
 
 function paintTile(el,a){
-  const act=ACT[a.act_state]||ACT.wait;
-  // only the classes this function owns are set, so the others a tile carries
-  // (pinned, filtered-out, bulk-*) stay as they are and an unchanged row writes nothing
-  {const own=a.running?act.cls:'';
-   ['working','ask','question'].forEach(c=>el.classList.toggle(c,c===own));
-   el.classList.toggle('sel',a.name===selectedAgent);}
-  // Roster rings are neutral (2026-07-30 product decision: lineage hue in a flat list
-  // reads as random color noise — lineage color lives in the graph views,
-  // where the tree gives it meaning).
-  {const face=el.querySelector('.face');if(face.style.getPropertyValue('--lineage-ring'))face.style.removeProperty('--lineage-ring');}
+  el.classList.toggle('working',a.running&&a.act_state==='work');
+  el.classList.toggle('ask',a.running&&a.act_state==='ask');
+  el.classList.toggle('question',a.running&&a.act_state==='question');
+  el.classList.toggle('sel',a.name===selectedAgent);
+  const status=!a.running?'Offline':agentNeedsYou(a)?'Needs your input':a.act_state==='work'?'Working':'Waiting';
+  const dot=el.querySelector('.agent-status');
+  setAttr(dot,'aria-label',status);
+  setTitle(dot,status);
   paintAgentPortrait(el.querySelector('.face'),a.name);
   setText(el.querySelector('.cname'),a.name);
-  paintRosterProvider(el,a);paintRosterHarness(el,a);
-  const modelLabel=paneHeadingModel(a),modelPill=el.querySelector('.pill.model');
-  setText(modelPill,(modelLabel.text||a.model_raw||a.cmd||'—')+(a.ctx_window?(' · '+a.ctx_window):''));
-  setTitle(modelPill,modelLabel.title||a.model_raw||a.cmd||'');
-  const descriptor=a.descriptor||RosterDescriptor.deriveRosterDescriptor(a,currentAgents);
-  const secondary=descriptor.secondary;
-  const rolePill=el.querySelector('.pill.role');setHidden(rolePill,!secondary);setText(rolePill,secondary);
-  const ctxEl=el.querySelector('.ctx'),fill=el.querySelector('.fill'),pct=el.querySelector('.pct');
-  if(typeof a.ctx_used==='number'){if(ctxEl.classList.contains('none'))ctxEl.classList.remove('none');setBox(fill,'width',a.ctx_used+'%');
-    fill.classList.toggle('hot',a.ctx_used>65);setText(pct,a.ctx_used+'%');}
-  else{if(!ctxEl.classList.contains('none'))ctxEl.classList.add('none');setBox(fill,'width','0%');setText(pct,'—');}
-  setText(el.querySelector('.glyph'),act.glyph);
-  setText(el.querySelector('.statetext'),descriptor.primary);
-  setTitle(el.querySelector('.statetext'),OrreryRosterEdit.taskTitle(a));
-  const updated=el.querySelector('.descriptor-updated');
-  const updatedAt=descriptorTaskState[a.name]&&descriptorTaskState[a.name].updatedAt;
-  setHidden(updated,!updatedAt);setText(updated,updatedAt?`updated ${relTime(updatedAt/1000)} ago`:'');
+  paintRosterProvider(el,a);
+  const role=el.querySelector('.roster-role'),value=a.annot?.role||'';
+  setHidden(role,!value);
+  setText(role,value);
+  setTitle(role,value);
+  paintRosterRuntime(el,a);
   paintPinnedTileState(el,a.name);
-  el.classList.toggle('filtered-out',!rosterNameMatches(a.name,rosterFilter.value,currentAgents));
   paintBulkTileState(el,a);
+}
+function paintRosterRuntime(el,agent){
+  const runtime=el.querySelector('.roster-runtime'),model=runtime.firstElementChild,context=runtime.lastElementChild;
+  const heading=paneHeadingModel(agent);
+  const name=heading.text||[agent.model_id,agent.model_raw].find(value=>typeof value==='string'&&value.trim())||'';
+  const used=agentContextUsed(agent);
+  setHidden(runtime,!name&&used===null);
+  setHidden(model,!name);
+  setText(model,name);
+  setTitle(model,heading.title||name);
+  setHidden(context,used===null);
+  if(used===null)return;
+  setAttr(context,'aria-valuenow',used);
+  setTitle(context,`Context window: ${used}% used`);
+  setText(context.lastElementChild,used+'%');
+  const meter=context.firstElementChild;
+  meter.classList.toggle('hot',used>CONTEXT_HOT_PERCENT);
+  setBox(meter.firstElementChild,'width',used+'%');
 }
 
 function persistPinnedAgents(){
@@ -9402,14 +9234,10 @@ function paintPinnedTileState(el,name){
   setTitle(button,`${pinned?'Unpin':'Pin'} ${name}`);
 }
 function paintPinnedBoundary(){
-  let lastPinned=null,hasVisibleUnpinned=false;
-  [...rosterEl.querySelectorAll(':scope > .agent')].forEach(el=>{
-    el.classList.toggle('pinned-boundary',false);   // toggle writes nothing when the class is already absent
-    if(el.classList.contains('filtered-out'))return;
-    if(pinnedAgents.has(el.dataset.agent))lastPinned=el;
-    else hasVisibleUnpinned=true;
-  });
-  if(lastPinned&&hasVisibleUnpinned)lastPinned.classList.add('pinned-boundary');
+  const visible=[...rosterEl.querySelectorAll(':scope > .agent:not(.filtered-out,.folded-out)')];
+  const boundary=visible.findIndex(el=>!el.hasAttribute('data-pinned-branch'));
+  const lastPinned=boundary>0?visible[boundary-1]:null;
+  tiles.forEach(el=>el.classList.toggle('pinned-boundary',el===lastPinned));
 }
 /* The copied text is the agent's name exactly as Mail and spawn know it — no
    emoji, role or decoration — so it can go straight into a recipient field.
@@ -9461,26 +9289,6 @@ function pruneRetiredPins(roster){
   let dirty=false;
   retiredNamesOf(roster).forEach(name=>{if(pinnedAgents.delete(name))dirty=true;});
   if(dirty)persistPinnedAgents();
-}
-
-function noteDescriptorTasks(agents){
-  const seen=new Set();
-  for(const agent of agents){
-    const name=String(agent&&agent.name||'');if(!name)continue;
-    seen.add(name);
-    const hash=RosterDescriptor.taskFingerprint(agent.task);
-    const prior=descriptorTaskState[name];
-    if(!prior){descriptorTaskState[name]={hash,updatedAt:null};descriptorTaskDirty=true;}
-    else if(prior.hash!==hash){descriptorTaskState[name]={hash,updatedAt:Date.now()};descriptorTaskDirty=true;}
-  }
-  const names=Object.keys(descriptorTaskState);
-  if(names.length>DESCRIPTOR_TASK_MAX){
-    names.filter(name=>!seen.has(name)).slice(0,names.length-DESCRIPTOR_TASK_MAX)
-      .forEach(name=>{delete descriptorTaskState[name];descriptorTaskDirty=true;});
-  }
-  if(!descriptorTaskDirty||Date.now()-descriptorTaskSaveAt<15000)return;
-  descriptorTaskSaveAt=Date.now();descriptorTaskDirty=false;
-  try{localStorage.setItem(DESCRIPTOR_TASK_KEY,JSON.stringify(descriptorTaskState));}catch(_){/* quota */}
 }
 
 /* When did this agent last actually do something?
@@ -9552,21 +9360,159 @@ function activityOf(a){
   return Math.max(lastActivity[a.name]||0,serverActivity(a));
 }
 
-/* attention first: approval-waiting, then working, then idle; ties by when the
-   agent was last actually active, then name.
-   Reordering uses appendChild on existing tiles (moves, no re-create) and only
-   runs when the order actually changed, so hover/animation state survives. */
-const ACT_RANK={ask:0,question:0,work:1};
-function rosterRank(a){return (a.act_state in ACT_RANK?ACT_RANK[a.act_state]:2)+(a.running?0:3);}
-function reorderRoster(live){
-  const want=live.slice().sort((a,b)=>Number(pinnedAgents.has(b.name))-Number(pinnedAgents.has(a.name))
-    ||rosterRank(a)-rosterRank(b)
-    ||activityOf(b)-activityOf(a)||a.name.localeCompare(b.name));
-  const current=[...rosterEl.querySelectorAll(':scope > .agent')].map(el=>el.dataset.agent);
-  if(!(want.length===current.length&&want.every((a,i)=>a.name===current[i])))
-    want.forEach(a=>{const el=tiles.get(a.name);if(el)rosterEl.appendChild(el);});
+const railMotionPreference=matchMedia('(prefers-reduced-motion: reduce)');
+const railMoves=new WeakMap();
+const RAIL_SPRING='linear(0,.035 5%,.141 10%,.43 20%,.75 35%,.97 52%,1.025 66%,1.008 82%,1)';
+const railEase=CSS.supports('animation-timing-function',RAIL_SPRING)?RAIL_SPRING:'cubic-bezier(.2,.8,.2,1)';
+function railPositions(elements,viewport){
+  const positions=new Map();
+  if(railMotionPreference.matches||document.hidden||!viewport?.getClientRects().length)return positions;
+  const bounds=viewport.getBoundingClientRect();
+  for(const el of elements){
+    if(!el.getClientRects().length)continue;
+    const rect=el.getBoundingClientRect();
+    if(rect.bottom>=bounds.top&&rect.top<=bounds.bottom)positions.set(el,rect);
+  }
+  return positions;
+}
+function railMoveRows(positions){
+  // Batch reads around the DOM writes and keep the on-screen position of
+  // an interrupted animation as the next animation's starting point.
+  for(const el of positions.keys())railMoves.get(el)?.cancel();
+  const deltas=new Map();
+  for(const [el,from] of positions){
+    if(!el.isConnected||!el.getClientRects().length)continue;
+    const end=el.getBoundingClientRect();
+    deltas.set(el,{x:from.left-end.left,y:from.top-end.top});
+  }
+  for(const [el,delta] of deltas){
+    let parent=el.parentElement;
+    while(parent&&!deltas.has(parent))parent=parent.parentElement;
+    const outer=deltas.get(parent);
+    const x=delta.x-(outer?.x||0),y=delta.y-(outer?.y||0);
+    if(Math.abs(x)+Math.abs(y)<=1)continue;
+    railMoves.set(el,el.animate([{transform:`translate(${x}px,${y}px)`},{transform:'none'}],
+      {duration:275,easing:railEase}));
+  }
+}
+function railArrive(el,source,viewport){
+  if(document.hidden||!el.getClientRects().length)return;
+  const bounds=viewport.getBoundingClientRect(),end=el.getBoundingClientRect();
+  if(end.bottom<bounds.top||end.top>bounds.bottom)return;
+  if(railMotionPreference.matches||!source){
+    el.animate([{opacity:.65},{opacity:1}],{duration:90});
+    return;
+  }
+  const x=source.left+source.width/2-end.left-14,y=source.top-end.top;
+  const frames=[
+    {transform:`translate(${x}px,${y}px) scale(.94)`,opacity:0},
+    {transform:'translateX(-8px)',opacity:.35,offset:.55},
+    {transform:'none',opacity:1}
+  ];
+  railMoves.set(el,el.animate(frames,{duration:285,easing:railEase}));
+}
+function rosterParent(a){
+  return a?.parent_state==='top'?'':a?.parent_state==='child'&&a.parent_agent
+    ?a.parent_agent:lineageParent.get(a?.name)||'';
+}
+function rosterOrder(agents,reveal){
+  const sorted=agents.slice().sort((a,b)=>activityOf(b)-activityOf(a)||a.name.localeCompare(b.name));
+  const names=new Set(sorted.map(a=>a.name)),children=new Map(),roots=[],pinned=[];
+  for(const a of sorted){
+    const parent=rosterParent(a);
+    if(pinnedAgents.has(a.name))pinned.push(a);
+    else if(!names.has(parent)||parent===a.name)roots.push(a);
+    else{
+      if(!children.has(parent))children.set(parent,[]);
+      children.get(parent).push(a);
+    }
+  }
+  const visited=new Set(),rows=[],recent=Date.now()-60000;
+  const visit=(a,depth,isPinned,hidden=false)=>{
+    if(visited.has(a.name))return null;
+    visited.add(a.name);
+    const folded=!reveal&&foldedAgents.has(a.name);
+    const row={name:a.name,depth,isPinned,hidden,index:rows.length};
+    rows.push(row);
+    let activity=0,hasWorkingChild=false;
+    for(const child of children.get(a.name)||[]){
+      const branch=visit(child,depth+1,isPinned,hidden||folded);
+      if(!branch)continue;
+      activity=Math.max(activity,branch.activity);
+      hasWorkingChild||=branch.working;
+    }
+    const ownWork=a.running&&a.act_state==='work';
+    row.end=rows.length;
+    row.folded=folded&&row.end>row.index+1;
+    row.activity=activity;
+    row.foldedWorking=row.folded&&hasWorkingChild;
+    const ownActivity=a.running&&(ownWork||activityOf(a)>recent)?1:0;
+    return {activity:Math.max(activity,agentNeedsYou(a)?2:ownActivity),working:ownWork||hasWorkingChild};
+  };
+  for(const a of pinned)visit(a,0,true);
+  for(const a of roots)visit(a,0,false);
+  // A stale cycle can leave no root. Keep all affected agents selectable.
+  for(const a of sorted)visit(a,0,false);
+  return rows;
+}
+function paintRosterFold(el,row,reveal){
+  const button=el.querySelector('.roster-fold');
+  const count=row.end-row.index-1;
+  setHidden(button,reveal||!count);
+  if(button.hidden)return;
+  const activity=row.folded?['','active','input'][row.activity]:'';
+  if(activity)setAttr(button,'data-activity',activity);
+  else button.removeAttribute('data-activity');
+  const hint=activity==='input'?'. Hidden agents need input':
+    row.foldedWorking?'. Hidden agents working':activity==='active'?'. Hidden agents active':'';
+  const label=row.folded
+    ?`Expand ${row.name}, ${count} hidden ${count===1?'agent':'agents'}${hint}`
+    :`Collapse ${row.name}'s agents`;
+  setAttr(button,'aria-expanded',!row.folded);
+  if(button.foldLabel!==label){
+    button.foldLabel=label;
+    setAttr(button,'aria-label',label);
+    setTitle(button,label);
+  }
+  setText(button.lastElementChild,row.folded?count:'');
+}
+function reorderRoster(live,positions=null){
+  const reveal=rosterSelectMode||needOnly||Boolean(normalizeSearchText(rosterFilter.value));
+  const want=rosterOrder(live,reveal);
+  const current=[...rosterEl.querySelectorAll(':scope > .agent')];
+  const orderChanged=want.length!==current.length||want.some((row,i)=>row.name!==current[i].dataset.agent||
+    row.depth!==Number(current[i].dataset.rosterDepth));
+  const foldChanged=want.some(row=>row.hidden!==tiles.get(row.name).classList.contains('folded-out'));
+  if(orderChanged||foldChanged)positions??=railPositions(current,rosterEl);
+  const focus=rosterEl.contains(document.activeElement)?document.activeElement:null;
+  rosterRows=want;
+  rosterRowsByName=new Map(want.map(row=>[row.name,row]));
+  let next=rosterEl.firstElementChild;
+  for(const row of want){
+    const {name,depth,isPinned,hidden}=row,el=tiles.get(name);
+    el.classList.toggle('folded-out',hidden);
+    el.toggleAttribute('data-folded-working',row.foldedWorking);
+    el.toggleAttribute('data-pinned-branch',isPinned);
+    paintRosterFold(el,row,reveal);
+    if(orderChanged){
+      while(next&&!next.classList.contains('agent'))next=next.nextElementSibling;
+      setAttr(el,'data-roster-depth',depth);
+      el.toggleAttribute('data-roster-child',depth>0);
+      setBox(el,'--roster-indent',Math.min(depth,4)*15+'px');
+      if(el!==next)rosterEl.insertBefore(el,next);
+      next=el.nextElementSibling;
+    }
+    if(hidden||el.classList.contains('filtered-out'))hideAgentDetail(el);
+  }
+  if(orderChanged&&focus?.getClientRects().length&&focus!==document.activeElement)focus.focus({preventScroll:true});
   paintPinnedBoundary();
   rosterEditor.reposition();
+  if(detailAnchor&&(foldChanged||orderChanged))showAgentDetail(detailAnchor);
+  if(positions){
+    railMoveRows(positions);
+    const anchor=detailAnchor,animation=anchor&&railMoves.get(anchor);
+    animation?.finished.then(()=>{if(detailAnchor===anchor)positionAgentDetail(anchor);},()=>{});
+  }
 }
 function prepareRosterRow(agent){
   agent.registered_task=agent.task||'';
@@ -9574,9 +9520,16 @@ function prepareRosterRow(agent){
   return agent;
 }
 function renderRoster(){
+  const knownNames=new Set(tiles.keys());
+  const incoming=knownNames.size?liveRosterAgents.filter(agent=>!knownNames.has(agent.name)):[];
+  const positions=knownNames.size?(incoming.length?railPositions(tiles.values(),rosterEl):null):new Map();
+  const arrivalPortraits=new Map();
+  for(const a of incoming){
+    const parent=tiles.get(rosterParent(a));
+    if(positions.has(parent))arrivalPortraits.set(a.name,parent.querySelector('.medal').getBoundingClientRect());
+  }
   const seen=new Set(liveRosterAgents.map(agent=>agent.name));
   const agents=liveRosterAgents.concat(stoppedSelectAgents.filter(agent=>!seen.has(agent.name)));
-  noteDescriptorTasks(agents);
   descriptorStore.retain(agents.map(agent=>agent.name));
   agents.forEach(agent=>{agent.descriptor=descriptorStore.get(agent,agents);});
   currentAgents=agents;
@@ -9585,11 +9538,15 @@ function renderRoster(){
   tiles.forEach((el,name)=>{if(!seen.has(name)){hideAgentDetail(el);el.remove();tiles.delete(name);}});
   reconcileBulkSelection(agents);
   noteActivity(liveRosterAgents);
-  reorderRoster(agents);
   renderCrewCounts(liveRosterAgents);
+  applyRosterFilter(false,positions);
   paintSplitRoles(liveRosterAgents);
   refreshPaneHeadings();
-  applyRosterFilter();
+  if(positions){
+    for(const a of incoming){
+      railArrive(tiles.get(a.name),arrivalPortraits.get(a.name),rosterEl);
+    }
+  }
   if(detailAnchor)showAgentDetail(detailAnchor);
   document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:liveRosterAgents}}));
   if(paletteOverlay.classList.contains('on'))renderPalette();
@@ -9693,6 +9650,7 @@ function assignLineageHues(live){
    They subscribe to 'oc:agents' / 'oc:mail' document events for updates. */
 window.OC=Object.freeze({
   esc,relTime,jumpToAgent,rootOf,providerPresentation,
+  railPositions,railMoveRows,railArrive,
   renderPeerAvatar:(name,existing)=>currentAgentNamed(name)?conversationAvatar(name,'',existing):null,
   lineageHue,                       // Map: agent name -> lineage hex
   get lineageParent(){return lineageParent;},  // Map: child -> parent
@@ -9708,7 +9666,7 @@ async function showMailConfigurationState(){
     const data=await response.json();
     if(!data||data.ok!==false||data.error!=='project key not configured')return;
     const tag=document.getElementById('mailTag');
-    if(tag){tag.textContent=data.error;tag.title=data.error;}
+    if(tag){tag.textContent='Mail project is not configured';tag.title=tag.textContent;tag.hidden=false;}
     const cards=document.querySelector('#mail .mailcards');
     if(cards){
       cards.innerHTML='';
