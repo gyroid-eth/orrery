@@ -104,6 +104,8 @@ class HostTest(unittest.IsolatedAsyncioTestCase):
             await ws.send_str(json.dumps(dict(type="resize", rows=30, cols=100)))
             await ws.send_str(json.dumps(dict(type="input", data="hello\r")))
             await self.read_until(ws, "GOT HELLO")
+            await ws.send_str(json.dumps(dict(type="submit", text="from composer")))
+            await self.read_until(ws, "GOT FROM COMPOSER")
 
         async with self.http.get(self.base + "/api/state") as response:
             state = await response.json()

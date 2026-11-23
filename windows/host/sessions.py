@@ -163,6 +163,23 @@ class Session:
         self.owner = viewer
         self.resize(rows, cols)
 
+    async def submit(self, viewer, text: str) -> None:
+        """A finished prompt from the composer: the text, then Enter.
+
+        The person wrote it outside the terminal, so nothing half-written
+        is left at the agent's prompt and notices may follow as usual.
+        Several lines go as one bracketed paste, so their newlines do not
+        submit early.
+        """
+        text = text.replace("\r\n", "\n").replace("\r", "\n").strip("\n")
+        if not text or self.status != "running":
+            return
+        self.owner = viewer
+        payload = "\x1b[200~" + text.replace("\n", "\r") + "\x1b[201~" if "\n" in text else text
+        self.write(payload, user=False)
+        await asyncio.sleep(0.3)
+        self.write("\r", user=False)
+
     def resize(self, rows: int, cols: int) -> None:
         rows, cols = max(5, min(int(rows), 500)), max(20, min(int(cols), 1000))
         if (rows, cols) != (self.rows, self.cols) and self.status == "running":
