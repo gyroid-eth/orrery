@@ -39,6 +39,10 @@ WEB = WINDOWS / "web"
 VENDOR = REPO / "bridge" / "vendor"
 ICONS = REPO / "bridge" / "assets"
 PORTRAITS = REPO / "assets" / "portraits_64"  # Public-domain portraits, see CREDITS.md.
+# Files of the original cockpit (bridge/) that this page loads unchanged.
+# Only these: bridge/ also holds the macOS backend's Python sources.
+BRIDGE = REPO / "bridge"
+BRIDGE_FILES = frozenset({"orrery_view.js", "orrery_view.css"})
 MANAGER = web.AppKey("manager", Manager)
 SETTINGS = web.AppKey("settings", dict)
 
@@ -171,6 +175,48 @@ async def mail_recent(request):
     except ValueError:
         return error("limit must be an integer")
     return web.json_response(dict(messages=request.app[MANAGER].hub.recent(limit=limit)))
+
+
+# The original cockpit's view modules (bridge/orrery_view.js) ask the macOS
+# backend for these /telemetry/ paths. The host answers the few they read,
+# in the shapes they expect.
+
+async def telemetry_mail_recent(request):
+    """Recent mail as orrery_view.js reads it: recipients as a list, ``now`` in ms."""
+    try:
+        limit = int(request.query.get("limit", "40"))
+    except ValueError:
+        return error("limit must be an integer")
+    messages = [dict(m, recipients=[r for r in (m["recipients"] or "").split(", ") if r])
+                for m in request.app[MANAGER].hub.recent(limit=limit)]
+    return web.json_response(dict(ok=True, now=int(time.time() * 1000), messages=messages))
+
+
+def portrait_index(name: str, count: int) -> int:
+    """Which portrait an agent wears; the same hash as portraitFor() in app.js."""
+    value = 0
+    for ch in name.lower():
+        value = (value * 31 + ord(ch)) & 0xFFFFFFFF
+    return value % count
+
+
+async def telemetry_portrait(request):
+    name = request.query.get("name", "")
+    try:
+        request.app[MANAGER].get(name)
+    except KeyError:
+        return error("no such agent", 404)
+    portraits = sorted(PORTRAITS.glob("*.png"))
+    if not portraits:
+        return error("no portraits", 404)
+    return web.FileResponse(portraits[portrait_index(name, len(portraits))])
+
+
+async def bridge_file(request):
+    name = request.match_info["name"]
+    if name not in BRIDGE_FILES:
+        return error("not found", 404)
+    return web.FileResponse(BRIDGE / name)
 
 
 async def register_agy(request):
@@ -309,6 +355,10 @@ def make_app(port: int, hub_db: str | None = None, *, builder=None,
     app.router.add_get("/api/mail/recent", mail_recent)
     app.router.add_post("/api/agy/register-hub", register_agy)
     app.router.add_get("/ws/{name}", terminal)
+    app.router.add_get("/telemetry/mail/recent", telemetry_mail_recent)
+    app.router.add_get("/telemetry/portrait", telemetry_portrait)
+    app.router.add_get("/bridge/{name}", bridge_file)
+    app.router.add_static("/cockpit-assets/", ICONS)  # Provider logos, by orrery_view.js's own path.
     app.router.add_static("/web/", WEB)
     app.router.add_static("/vendor/", VENDOR)
     app.router.add_static("/icons/", ICONS)

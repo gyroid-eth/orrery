@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/vendor/xterm-5.5.0/xterm.css">
 <link rel="stylesheet" href="/web/app.css">
+<link rel="stylesheet" href="/bridge/orrery_view.css">
 </head>
 <body>
 <header class="top">
@@ -17,6 +18,7 @@
   <div class="sub">AGENT COCKPIT · WINDOWS</div>
   <div class="spacer"></div>
   <div id="notice" class="notice" hidden></div>
+  <button id="planetarium-btn" class="btn" type="button" title="Planetarium — すべてのエージェントとメールを大きく表示">PLANETARIUM</button>
   <div id="summary" class="summary"></div>
   <div id="clock" class="clock"></div>
 </header>
@@ -53,7 +55,7 @@
   </section>
   <aside class="pane mail">
     <div class="head"><span>AGENT MAIL</span><span id="mail-count" class="meta"></span></div>
-    <svg id="orbit" class="orbit" viewBox="0 0 300 170" role="img" aria-label="mail between agents"></svg>
+    <svg class="miniorrery" viewBox="0 0 280 120" id="orrery"></svg>
     <div id="chips" class="chips"></div>
     <ul id="mail" class="mail-list"></ul>
   </aside>
@@ -83,5 +85,8 @@
 <script src="/vendor/addon-fit-0.10.0/addon-fit.js"></script>
 <script src="/vendor/addon-web-links-0.11.0/addon-web-links.js"></script>
 <script src="/web/app.js"></script>
+<!-- The original cockpit's graph, unchanged, through the Windows adapter. -->
+<script src="/web/oc.js"></script>
+<script src="/bridge/orrery_view.js"></script>
 </body>
 </html>

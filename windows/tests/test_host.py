@@ -53,6 +53,7 @@ class HostTest(unittest.IsolatedAsyncioTestCase):
         self.port = free_port()
         self.base = f"http://127.0.0.1:{self.port}"
         app = make_app(self.port, str(Path(self.tmp.name) / "hub.db"), builder=builder, check_agy=False)
+        self.app = app
         self.runner = web.AppRunner(app)
         await self.runner.setup()
         await web.TCPSite(self.runner, "127.0.0.1", self.port).start()
@@ -95,6 +96,50 @@ class HostTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await loop.run_in_executor(None, server.probe, port), "other")
         finally:
             other.close()
+
+    async def test_original_graph_module_is_served_and_fed(self):
+        """bridge/orrery_view.js loads unchanged and finds the /telemetry/ paths it reads."""
+        from host.server import MANAGER
+
+        for name in ("orrery_view.js", "orrery_view.css"):
+            async with self.http.get(f"{self.base}/bridge/{name}") as response:
+                self.assertEqual(response.status, 200, name)
+        # Only those two: bridge/ also holds the macOS backend's sources.
+        for name in ("orrery_backend.py", "cockpit.html", "..%2Fwindows%2Fhost%2Fserver.py"):
+            async with self.http.get(f"{self.base}/bridge/{name}") as response:
+                self.assertEqual(response.status, 404, name)
+        async with self.http.get(self.base + "/cockpit-assets/anthropic.svg") as response:
+            self.assertEqual(response.status, 200)
+
+        for name in ("alice", "bob"):
+            status, data = await self.post("/api/agents", dict(
+                name=name, program="claude", cwd=self.tmp.name, start=False))
+            self.assertEqual(status, 200, data)
+        self.app[MANAGER].hub.send("alice", ["bob", "alice"], "hello", "body")
+        async with self.http.get(self.base + "/telemetry/mail/recent?limit=40") as response:
+            data = await response.json()
+        self.assertTrue(data["ok"])
+        self.assertGreater(data["now"], 1e12)  # Milliseconds, as orrery_view.js reads it.
+        (message,) = data["messages"]
+        self.assertEqual((message["sender"], message["subject"]), ("alice", "hello"))
+        self.assertEqual(sorted(message["recipients"]), ["alice", "bob"])
+
+        async with self.http.get(self.base + "/telemetry/portrait?v=4&style=pixel&name=alice") as response:
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.content_type, "image/png")
+        async with self.http.get(self.base + "/telemetry/portrait?name=nobody") as response:
+            self.assertEqual(response.status, 404)  # The graph then shows the initial.
+
+    def test_portrait_matches_the_page(self):
+        """The host picks the same portrait as portraitFor() in web/app.js (values from node)."""
+        from host.server import portrait_index
+
+        for name, small, large in (("tech", 67, 555981), ("Philosophy", 17, 677445),
+                                   ("writer", 37, 382594),
+                                   ("a-very_long.agent-name-0123456789abcdefghijklmnopqrstuvwxyz",
+                                    74, 491843)):
+            self.assertEqual((portrait_index(name, 97), portrait_index(name, 1000003)),
+                             (small, large), name)
 
     async def test_create_validates(self):
         status, data = await self.post("/api/agents", dict(name="9bad", program="claude", cwd=self.tmp.name))

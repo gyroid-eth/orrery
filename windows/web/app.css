@@ -115,13 +115,17 @@ button,input,select,textarea{font:inherit;color:inherit}
 .composer .send{display:flex;flex-direction:column;justify-content:center;gap:8px}
 
 /* Mail ------------------------------------------------------------------ */
-.orbit{flex:none;width:100%;height:170px;border-bottom:1px solid var(--hair)}
-.orbit .ring{fill:none;stroke:rgb(var(--theme-ink-rgb) / .08)}
-.orbit .edge{stroke:var(--amber);stroke-linecap:round}
-.orbit .node-ring{fill:var(--panel-2);stroke:rgb(var(--theme-ink-rgb) / .3)}
-.orbit .node-ring.busy{stroke:var(--amber)}
-.orbit .node-label{fill:var(--ink-dim);font-family:var(--mono);font-size:8px;text-anchor:middle}
-.orbit .initial{fill:var(--ink-dim);font-family:var(--serif);font-size:11px;text-anchor:middle;dominant-baseline:central}
+/* The graph is bridge/orrery_view.js with bridge/orrery_view.css. Only what
+   cockpit.html itself gives it lives here: its .overlay contract (the
+   planetarium reuses it), and the rail's dividing line. */
+.miniorrery{border-bottom:1px solid var(--hair)}
+.overlay{
+  position:fixed;inset:0;z-index:1100;display:none;align-items:flex-start;justify-content:center;
+  padding:11vh 24px 24px;background:rgba(8,9,13,.55);backdrop-filter:blur(10px) saturate(1.05);
+}
+.overlay.on{display:flex}
+/* No telemetry dashboard on Windows. */
+.planetarium-telemetry{display:none}
 .chips{display:flex;gap:6px;padding:10px 10px 4px;overflow-x:auto;flex:none}
 .chips button{border:1px solid var(--hair);border-radius:12px;background:transparent;padding:2px 10px;font-size:10px;color:var(--ink-dim);cursor:pointer;white-space:nowrap}
 .chips button.on{background:var(--elev);color:var(--ink);border-color:rgb(var(--theme-ink-rgb) / .2)}
