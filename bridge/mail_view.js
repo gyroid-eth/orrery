@@ -38,6 +38,7 @@ const icons={
   open:'<path d="m9 6 6 6-6 6"/>',
   close:'<path d="m6 6 12 12M18 6 6 18"/>',
   thread:'<path d="M5 5v14h6M5 12h6"/><circle cx="14" cy="12" r="2"/><circle cx="14" cy="19" r="2"/>',
+  reverse:'<path d="M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4"/>',
 };
 function icon(name){
   return '<svg class="mail-icon" viewBox="0 0 24 24" aria-hidden="true">'+icons[name]+'</svg>';
@@ -115,34 +116,71 @@ function timeHtml(ts){
 }
 function titleFor(message){return message.subject||message.excerpt||'(No subject)';}
 
+function directRecipients(message){
+  const direct=[...new Set(message.recipients.filter(r=>r.kind==='to').map(r=>r.name))];
+  // Keep a message with only copied recipients accessible without assigning
+  // it to an observer.
+  return direct.length?direct:[''];
+}
+function routeKey(sender,recipient){return JSON.stringify([sender,recipient]);}
+function makeAssignment(key,message,recipient){
+  return {key,recipient,request:message,latest:message,replies:[],followups:[]};
+}
+function expectsReply(assignment){
+  return Boolean(assignment.recipient&&assignment.recipient!==assignment.request.sender);
+}
+function addReply(assignment,message){
+  assignment.replies.push(message);
+  assignment.latest=message;
+}
+
 function assignments(){
-  const threads=new Map();
+  const threads=new Map(),pending=new Map(),result=[];
   for(const message of [...byId.values()].sort(chronological)){
-    const key=message.thread?'thread:'+message.thread:'message:'+message.key;
-    if(!threads.has(key))threads.set(key,[]);
-    threads.get(key).push(message);
+    if(message.thread){
+      if(!threads.has(message.thread))threads.set(message.thread,[]);
+      threads.get(message.thread).push(message);
+      continue;
+    }
+
+    const recipients=directRecipients(message);
+    let linked=false;
+    for(const recipient of recipients){
+      if(!recipient||recipient===message.sender)continue;
+      const key=routeKey(recipient,message.sender);
+      const requests=pending.get(key);
+      if(!requests)continue;
+      addReply(requests.pop(),message);
+      if(!requests.length)pending.delete(key);
+      linked=true;
+    }
+    // A delivery linked as a reply may also address other peers. Those
+    // recipients can still read the route, but do not create new requests.
+    if(linked)continue;
+
+    for(const recipient of recipients){
+      const route=routeKey(message.sender,recipient);
+      const assignment=makeAssignment(JSON.stringify(['message:'+message.key,route]),message,recipient);
+      result.push(assignment);
+      if(expectsReply(assignment)){
+        if(!pending.has(route))pending.set(route,[]);
+        pending.get(route).push(assignment);
+      }
+    }
   }
-  const result=[];
+
   for(const [thread,messages] of threads){
     const routes=new Map();
     for(const message of messages){
-      const direct=[...new Set(message.recipients.filter(r=>r.kind==='to').map(r=>r.name))];
-      // Without a direct recipient, keep the message accessible but do not
-      // turn a copied observer into an assignee.
-      for(const name of direct.length?direct:['']){
-        const route=JSON.stringify([message.sender,name]);
-        const reverse=message.sender!==name&&routes.get(JSON.stringify([name,message.sender]));
-        if(reverse){
-          reverse.replies.push(message);
-          reverse.latest=message;
-        }else if(routes.has(route)){
+      for(const name of directRecipients(message)){
+        const route=routeKey(message.sender,name);
+        const reverse=message.sender!==name&&routes.get(routeKey(name,message.sender));
+        if(reverse)addReply(reverse,message);
+        else if(routes.has(route)){
           const assignment=routes.get(route);
           assignment.followups.push(message);
           assignment.latest=message;
-        }else{
-          routes.set(route,{key:JSON.stringify([thread,route]),recipient:name,request:message,
-            latest:message,replies:[],followups:[]});
-        }
+        }else routes.set(route,makeAssignment(JSON.stringify(['thread:'+thread,route]),message,name));
       }
     }
     result.push(...routes.values());
@@ -150,7 +188,7 @@ function assignments(){
   return result.sort((a,b)=>chronological(b.latest,a.latest));
 }
 function visibleAssignments(){
-  return assignments().filter(a=>(!waitingOnly||(a.recipient&&!a.replies.length))&&
+  return assignments().filter(a=>(!waitingOnly||(expectsReply(a)&&!a.replies.length))&&
     (!activeFilter||[a.request,...a.replies,...a.followups].some(m=>includesAgent(m,activeFilter))));
 }
 
@@ -250,14 +288,16 @@ function makeRow(assignment){
 function paintRow(row,assignment){
   row.assignment=assignment;
   const {request,replies}=assignment;
-  const latest=replies.at(-1),state=!assignment.recipient?'No direct recipient':latest?'Reply received':'Awaiting a reply';
+  const latest=replies.at(-1),awaitsReply=expectsReply(assignment);
+  const state=!assignment.recipient?'No direct recipient':!awaitsReply?'Self-addressed notice':
+    latest?'Reply received':'Awaiting a reply';
   const sender=request.sender||'Unknown sender';
   const urgency=[request,latest].some(m=>m&&highImportance(m.importance));
   const label=`${titleFor(request)}, ${sender} to ${assignment.recipient||'no direct recipient'}. ${state}${urgency?', high importance':''}`;
   if(row.request.getAttribute('aria-label')!==label)row.request.setAttribute('aria-label',label);
   if(row.request.title!==state)row.request.title=state;
   const requestHtml='<span class="mail-state'+(latest?' replied':'')+(urgency?' important':'')+
-    (assignment.recipient?'':' no-recipient')+'" aria-hidden="true"></span>'+
+    (awaitsReply?'':' no-reply')+'" aria-hidden="true"></span>'+
     '<span class="mail-subject">'+E(titleFor(request))+'</span><span class="mail-open">'+icon('open')+'</span>'+
     '<span class="mail-requester">'+icon('from')+'<span>'+E(sender)+'</span>'+timeHtml(request.ts)+'</span>';
   if(row.requestHtml!==requestHtml){row.request.innerHTML=requestHtml;row.requestHtml=requestHtml;}
@@ -437,6 +477,14 @@ function replyHtml(message){
     '<span class="thread-excerpt">'+E(message.excerpt||titleFor(message))+'</span></button>';
 }
 
+function drawerLinkSource(assignment){
+  if(!assignment.replies.length&&!assignment.followups.length)return '';
+  const threaded=Boolean(assignment.request.thread);
+  const label=threaded?'Linked by thread':'Linked by reverse delivery direction (inferred)';
+  return '<span class="drawer-link-source" role="img" title="'+label+'" aria-label="'+label+'">'+
+    icon(threaded?'thread':'reverse')+'</span>';
+}
+
 function renderDrawer({initial=false}={}){
   const state=drawer;
   if(!state)return;
@@ -444,7 +492,8 @@ function renderDrawer({initial=false}={}){
   const focusAction=drawerHead.contains(focused)?focused.dataset.action:'';
   const focusReply=drawerChain.contains(focused)?focused.dataset.reply:'';
   const {message,assignment,entries}=state;
-  const head=(message?control('thread','Back to request','thread'):'')+control('close','Close mail','close');
+  const head=drawerLinkSource(assignment)+(message?control('thread','Back to request','thread'):'')+
+    control('close','Close mail','close');
   if(drawerHead.markup!==head){drawerHead.innerHTML=head;drawerHead.markup=head;}
   const body=detailHtml(message||state.request||assignment.request)+
     (state.failed?'<p class="drawer-empty" role="status">Could not load the full message. Reopen it to retry.</p>':'');
@@ -552,6 +601,7 @@ async function openThread(assignment,anchor){
       original=updated.request;
       if(original.key!==assignment.request.key)fullRequest=await messageBody(original);
       if(drawer!==state)return;
+      state.assignment=updated;
       state.entries=[...updated.followups,...updated.replies].sort(chronological);
     }
   }

@@ -128,3 +128,59 @@ def test_older_request_outside_recent_window_is_restored_in_detail(cockpit):
     wait("document.querySelector('.mail-md').textContent==='Original request body'")
     assert js("document.querySelector('.drawer-body h2').textContent") == 'Request outside list window'
     assert js("document.querySelector('.thread-item').dataset.reply") == '203'
+
+
+def test_threadless_reports_pair_with_latest_unanswered_request(cockpit):
+    js, _, _ = prepare(cockpit)
+    js("""window.unthreaded=[
+      {id:201,ts:2000000010,thread_id:null,sender:'LeadNode',recipient:'BuildNode',subject:'Check the older run'},
+      {id:202,ts:2000000011,thread_id:'',sender:'LeadNode',recipients:['BuildNode'],subject:'Check the newer run',
+        body_md:'Review both generated logs.'},
+      {id:203,ts:2000000012,sender:'BuildNode',recipients:['LeadNode','WatchNode'],subject:'Generated report',
+        excerpt:'The newer run passed.',body_md:'The newer run passed all eight checks.'},
+      {id:204,ts:2000000013,sender:'WatchNode',recipients:['WatchNode'],subject:'Release notice',
+        body_md:'The generated release was published.'}
+    ];
+    // Recent and live payloads can arrive out of order.
+    emitFixtureMail([...unthreaded].reverse());""")
+    assert js("findRequest('Check the older run').title") == 'Awaiting a reply'
+    assert js("findRequest('Check the newer run').title") == 'Reply received'
+    assert js("findRequest('Check the newer run').nextElementSibling.textContent.includes('The newer run passed.')")
+    assert not js("Boolean(findRequest('Generated report'))")
+    assert js("findRequest('Release notice').title") == 'Self-addressed notice'
+    assert js("getComputedStyle(findRequest('Release notice').querySelector('.mail-state')).visibility") == 'hidden'
+
+    js("""emitFixtureMail([{id:205,ts:2000000014,sender:'LeadNode',recipient:'BuildNode',subject:'One more check'}]);""")
+    assert js("findRequest('One more check').title") == 'Awaiting a reply'
+    js("""emitFixtureMail([{id:206,ts:2000000015,thread_id:null,sender:'BuildNode',recipient:'LeadNode',
+      subject:'Additional report',excerpt:'The extra check passed.'}]);""")
+    assert js("findRequest('One more check').title") == 'Reply received'
+    assert js("findRequest('Check the older run').title") == 'Awaiting a reply'
+    assert js("findRequest('Check the generated logs').title") == 'Awaiting a reply'
+    assert not js("Boolean(findRequest('Additional report'))")
+    js("""document.getElementById('mailFilterBtn').click();document.activeElement.click();""")
+    assert not js("Boolean(findRequest('Release notice'))")
+    assert js("Boolean(findRequest('Check the older run'))")
+
+
+def test_details_identify_explicit_and_inferred_reply_links(cockpit):
+    js, wait, _ = prepare(cockpit)
+    js("""emitFixtureMail([
+      {id:301,ts:2000000020,thread_id:null,sender:'LeadNode',recipient:'BuildNode',
+        subject:'Check the generated artifact',body_md:'Artifact path is available.'},
+      {id:302,ts:2000000021,thread_id:null,sender:'BuildNode',recipient:'LeadNode',
+        subject:'Artifact checked',excerpt:'The generated artifact opens.',body_md:'Full artifact report.'}
+    ]);
+    findRequest('Check the generated artifact').click();""")
+    label = 'Linked by reverse delivery direction (inferred)'
+    assert js("document.querySelector('.drawer-link-source').title") == label
+    assert js("document.querySelector('.drawer-link-source').getAttribute('aria-label')") == label
+    assert js("document.querySelector('.drawer-link-source').textContent") == ''
+    assert js("document.querySelector('.drawer-body .mail-md').textContent") == 'Artifact path is available.'
+    js("document.querySelector('[data-reply=\"302\"]').click()")
+    assert js("document.querySelector('.drawer-body .mail-md').textContent") == 'Full artifact report.'
+    assert js("document.querySelector('.drawer-link-source').title") == label
+    js("document.querySelector('[data-action=close]').click()")
+    wait("document.querySelector('.maildrawer').hidden")
+    js("findRequest('Review the fixture change').click()")
+    assert js("document.querySelector('.drawer-link-source').title") == 'Linked by thread'
