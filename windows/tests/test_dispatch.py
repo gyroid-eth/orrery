@@ -62,7 +62,49 @@ class ScreenStateTest(unittest.TestCase):
         self.assertEqual(activity.screen_state("claude", CLAUDE_IDLE_GT), "idle")
         typed = CLAUDE_IDLE_GT[:-3] + [RULE, "> writerのノートできた？", RULE, CLAUDE_IDLE_GT[-1]]
         self.assertEqual(activity.screen_state("claude", typed), "idle")
-        self.assertEqual(activity.screen_state("claude", CLAUDE_NO_PROMPT), "busy")
+        self.assertEqual(activity.screen_state("claude", CLAUDE_NO_PROMPT), "unclear")
+
+
+class ClaudeActivityTest(unittest.TestCase):
+    """The screen's busy marker beats a hook; a screen it cannot read does not."""
+
+    def setUp(self):
+        from host.sessions import Session
+
+        self.now = 1_000_000.0
+        self.session = Session("tech", asyncio.new_event_loop(), "claude")
+        self.session.status, self.session.started_ts = "running", self.now - 600
+        self.session.last_output = self.now - 5
+        self.rows = CLAUDE_NO_PROMPT
+        self.session.screen_rows = lambda: self.rows
+
+    def tearDown(self):
+        self.session.loop.close()
+
+    def state(self, hook):
+        self.session.hook_state = hook
+        return self.session.refresh(self.now)
+
+    def test_stop_hook_wins_over_an_unclear_screen(self):
+        self.assertEqual(self.state("idle"), "idle")
+
+    def test_unclear_screen_without_a_stop_stays_busy(self):
+        self.assertEqual(self.state("busy"), "busy")
+        self.session.last_output = self.now - 120  # Long quiet, still no prompt seen.
+        self.assertEqual(self.state("busy"), "busy")
+        self.assertEqual(self.state(None), "busy")  # No hooks at all: never guess idle.
+
+    def test_busy_marker_and_dialog_still_beat_the_hook(self):
+        self.rows = CLAUDE_BUSY
+        self.assertEqual(self.state("idle"), "busy")
+        self.rows = CLAUDE_PERMISSION
+        self.assertEqual(self.state("idle"), "attention")
+
+    def test_prompt_on_screen_is_idle(self):
+        self.rows = CLAUDE_IDLE_GT
+        self.assertEqual(self.state("idle"), "idle")
+        self.session.last_output = self.now - 120  # Interrupted turn: no Stop came.
+        self.assertEqual(self.state("busy"), "idle")
 
 
 class TypedTest(unittest.TestCase):

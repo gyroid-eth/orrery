@@ -34,7 +34,12 @@ def dialog(text: str) -> bool:
 
 
 def screen_state(program: str, rows: list[str]) -> str:
-    """'idle', 'busy' or 'dialog' from the screen alone."""
+    """'idle', 'busy' or 'dialog' from the screen alone.
+
+    For Claude, 'unclear' when the screen shows neither its busy marker nor
+    its prompt box: then the hooks decide (Session.refresh), since a change
+    in how Claude draws itself must not hide a finished turn.
+    """
     text = "\n".join(rows)
     if dialog(text):
         return "dialog"
@@ -45,7 +50,7 @@ def screen_state(program: str, rows: list[str]) -> str:
         return "idle" if AGY_IDLE_FOOTER.match(footer) else "busy"
     if CLAUDE_BUSY.search(text):
         return "busy"
-    return "idle" if claude_prompt(rows) else "busy"
+    return "idle" if claude_prompt(rows) else "unclear"
 
 
 def claude_prompt(rows: list[str]) -> bool:

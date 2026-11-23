@@ -65,7 +65,8 @@ class Session:
     ``activity`` is what the dispatcher needs: 'starting', 'busy' or 'idle'
     (waiting at its prompt since ``idle_since``). Claude reports it through
     hooks; Antigravity has none, so its screen decides. Either way a dialog
-    or a busy marker on screen wins.
+    or a busy marker on screen wins. A Claude screen that shows neither its
+    busy marker nor its prompt box does not overrule a Stop hook.
     """
 
     def __init__(self, name: str, loop: asyncio.AbstractEventLoop, program: str = "claude"):
@@ -237,6 +238,10 @@ class Session:
         elif (self.program == "claude" and self.hook_state is None
               and now - (self.started_ts or now) < HOOK_GRACE):
             state = "starting"  # Give SessionStart its chance before trusting the screen.
+        elif seen == "unclear" and self.hook_state != "idle":
+            # Claude shows neither its busy marker nor its prompt: only a
+            # Stop (or SessionStart) hook may call that idle.
+            state = "busy"
         else:
             state = "idle"
         if state == "idle" and self.activity != "idle":
