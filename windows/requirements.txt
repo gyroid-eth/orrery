@@ -1,0 +1,2 @@
+aiohttp>=3.9,<4
+pywinpty>=2.0,<4

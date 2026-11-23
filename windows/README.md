@@ -1,13 +1,29 @@
 # ORRERY for Windows
 
-ORRERY を Windows ネイティブ（WSL なし）で動かすための作り直しです。今の段階は Phase 1 で、エージェント同士がメールとホワイトボードでやり取りする hub ができています。
+ORRERY を Windows ネイティブ（WSL なし）で動かすための作り直しです。今は Phase 2 まで進んでいます。エージェント同士がメールとホワイトボードでやり取りする hub と、Claude Code と Antigravity をブラウザから起動・操作できる host ができています。
 
 | Phase | 内容 | 状態 |
 |---|---|---|
 | 1 | hub：共通の SQLite と MCP サーバー | できた |
-| 2 | host：ConPTY でエージェントを起動し、ブラウザの xterm で操作する | これから |
+| 2 | host：ConPTY でエージェントを起動し、ブラウザの xterm で操作する | できた |
 | 3 | 配送役：待機中の宛先に、PTY から通知を打ち込んで起こす | これから |
 | 4 | 画面：roster とメール一覧の見た目を ORRERY に揃える | これから |
+
+## 始め方
+
+```
+pip install -r windows\requirements.txt
+python windows\host\server.py
+```
+
+ブラウザで http://127.0.0.1:8791/ を開き、**NEW AGENT** から名前、CLI（Claude Code / Antigravity）、作業フォルダを指定します。
+
+- host が各エージェントのターミナル（ConPTY）を持ちます。ブラウザを閉じたり再読み込みしたりしても、エージェントは止まりません。開き直すと直近の出力が流し直されます。
+- host を止めると、エージェントも終了します。roster は残るので、**RESUME** を押すとそのフォルダの直前の会話から再開します（`--continue`）。
+- 起動したエージェントは、hub の MCP（`orrery-hub`）に自分の名前で参加しています。Claude Code には起動のたびに `--mcp-config` で渡すので、全体設定への登録は要りません。Antigravity は全体登録が必要です。未登録なら画面上部に **REGISTER** が出ます。
+- host は 127.0.0.1 でだけ待ち受けます。他のサイトのページからは操作できないように、Host / Origin と専用ヘッダー（`X-Orrery`）を確認しています。
+- 状態は `%LOCALAPPDATA%\orrery-win\` に置かれます（`agents.json`、各エージェントの設定ファイル、`hub.db`）。ポートは `--port`、もしくは環境変数 `ORRERY_WIN_PORT` で変えられます。
+- Claude Code の中（VS Code のパネルなど）から host を起動しても大丈夫です。親セッションの印になる環境変数（`CLAUDECODE` や `CLAUDE_CODE_SESSION_ID` など）は、子に渡す前に取り除きます。
 
 ## hub
 
@@ -71,4 +87,4 @@ python windows\hub\cli.py post --as me plan "今日の方針"
 python -m pytest windows/tests -q
 ```
 
-今の CI（ubuntu）はこのディレクトリのテストを実行しません。
+host のテスト（[tests/test_host.py](tests/test_host.py)）は、本物の CLI の代わりに小さな Python プログラムを ConPTY で起動して、入力の往復、再接続したときの流し直し、停止を確かめます。このテストは Windows と pywinpty が必要です。今の CI（ubuntu）は、このディレクトリのテストを実行しません。

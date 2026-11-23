@@ -230,6 +230,16 @@ class Hub:
     def thread(self, thread_id: str, *, limit: int = 50) -> list[dict]:
         return self._messages("m.thread_id=?", (str(thread_id),), max(1, min(int(limit), 200)))
 
+    def recent(self, *, limit: int = 50) -> list[dict]:
+        """The latest messages across every agent, newest first, for the host's UI."""
+        limit = max(1, min(int(limit), 200))
+        rows = self.db.execute(
+            "SELECT id FROM messages ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        if not rows:
+            return []
+        oldest = rows[-1][0]
+        return list(reversed(self._messages("m.id>=?", (oldest,), limit)))
+
     def pending_notifications(self) -> list[dict]:
         """Unread mail nobody has been told about yet, for the host's dispatcher."""
         rows = self.db.execute(
