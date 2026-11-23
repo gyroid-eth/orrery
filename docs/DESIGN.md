@@ -110,7 +110,7 @@ spawn forest を topology、最近の mail を一時的な edge / comet とし�
 
 多数 node で label が重なる場合は、常時 label を増やすのではなく hover / focus で詳細を開示します。
 
-## Agent Mail
+## ORRERY Mail
 
 mail card は subject、sender、importance、time を先に示し、本文は detail で開きます。Markdown は安全な限定 subset だけを描画します。
 

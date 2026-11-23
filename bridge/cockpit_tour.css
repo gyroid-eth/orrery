@@ -8,7 +8,7 @@
 .flight-guide{position:fixed;z-index:1150;right:0;bottom:0;width:318px;box-sizing:border-box;
   background:var(--panel);border-left:1px solid var(--hair)}
 @supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
-  /* Frosted: the cockpit (Agent Mail, usually) stays visible through the panel. */
+  /* Frosted: the cockpit (ORRERY Mail, usually) stays visible through the panel. */
   .flight-guide{background:color-mix(in srgb,var(--panel) 58%,transparent);
     -webkit-backdrop-filter:blur(5px) saturate(1.1);backdrop-filter:blur(5px) saturate(1.1)}
   html[data-color-theme="light"] .flight-guide{background:color-mix(in srgb,var(--panel) 64%,transparent)}
@@ -20,7 +20,7 @@
 .flight-guide.leaving{outline:1px dashed var(--amber);outline-offset:4px;opacity:.7}
 .flight-panel{display:flex;flex-direction:column;min-height:0;flex:1}
 .flight-guide.folded .flight-panel{display:none}
-/* Folded: one printed line, "Read Agent Mail …… now   3 / 7". */
+/* Folded: one printed line, "Read ORRERY Mail …… now   3 / 7". */
 .flight-band{display:flex;align-items:baseline;gap:8px;width:100%;height:44px;box-sizing:border-box;
   padding:0 18px!important;border-top:1px solid var(--amber)!important;text-align:left;cursor:grab!important}
 .flight-guide:not(.folded) .flight-band{display:none}

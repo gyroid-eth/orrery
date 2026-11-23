@@ -451,7 +451,7 @@ def test_dom_a_step_is_chosen_by_click_or_key_and_only_actions_complete_it(tour_
         currentDisabled:line('choose').getAttribute('aria-disabled')};
     })()""")
     assert result == {
-        'clicked': {'current': 'mail', 'done': 0, 'targeted': True, 'band': 'Read Agent Mail'},
+        'clicked': {'current': 'mail', 'done': 0, 'targeted': True, 'band': 'Read ORRERY Mail'},
         'keyed': 'choose', 'doneTab': -1, 'doneDisabled': 'true',
         'openTab': 0, 'openLabel': 'Go to step: Talk to it', 'currentDisabled': 'true'}
 
@@ -534,14 +534,14 @@ def test_dom_the_ring_leaves_a_covered_or_folded_control(tour_browser):
 
 
 def test_dom_a_control_under_the_tour_panel_keeps_its_ring(tour_browser):
-    # Agent Mail sits under the panel; the panel is the tour's, not a dialog.
+    # ORRERY Mail sits under the panel; the panel is the tour's, not a dialog.
     _, evaluate = tour_browser
     state = evaluate("(()=>{const f=OrreryTour.firstFlight;f.reset();f.show();f.state.goTo('mail');f.show();})();" + RING_STATE)
     assert (state['ring'], state['target'], state['around'], state['hereClearOfPanel']) == (True, 'mail', True, True)
 
 
 def test_dom_a_control_under_the_tour_panel_gets_no_here_tag(tour_browser):
-    # The recording showed the tag for Agent Mail on the terminal's input line.
+    # The recording showed the tag for ORRERY Mail on the terminal's input line.
     _, evaluate = tour_browser
     state = evaluate("(()=>{const f=OrreryTour.firstFlight;f.reset();f.show();f.state.goTo('mail');f.show();})();" + RING_STATE)
     assert (state['ring'], state['here']) == (True, False)
@@ -576,7 +576,7 @@ def test_dom_a_small_header_button_still_gets_its_tag(tour_browser, step, target
 
 
 def test_dom_the_shiritori_step_rings_where_the_prompt_is_sent(tour_browser):
-    # Agent Mail lies under the panel; the step's action is sending the prompt.
+    # ORRERY Mail lies under the panel; the step's action is sending the prompt.
     _, evaluate = tour_browser
     state = evaluate("""(()=>{OrreryTour.firstFlight.el.querySelector('.flight-close').click();
       const t=OrreryFullTour.checklist;t.state.reset();t.show();t.state.goTo('full-shiritori');t.show();})();""" + RING_STATE)
@@ -594,8 +594,8 @@ def _wait_dodge(evaluate, tour, want, seconds=3):
 
 
 def test_dom_the_panel_folds_out_of_the_way_of_a_control_under_it(tour_browser):
-    # First flight's Agent Mail lies under the panel: it folds to its band, the
-    # ring stays on Agent Mail, and nothing is saved as folded.
+    # First flight's ORRERY Mail lies under the panel: it folds to its band, the
+    # ring stays on ORRERY Mail, and nothing is saved as folded.
     _, evaluate = tour_browser
     evaluate("(()=>{const f=OrreryTour.firstFlight;f.reset();f.show();f.state.goTo('mail');f.show();})()")
     assert _wait_dodge(evaluate, 'OrreryTour.firstFlight', True)
@@ -620,7 +620,7 @@ def test_dom_the_panel_folds_out_of_the_way_of_a_control_under_it(tour_browser):
 def test_dom_a_folded_band_dragged_is_judged_where_it_would_open(tour_browser, spot, opens):
     # Review of #29: dragged clear, the band stayed folded because the check
     # kept the panel's old place, then its docked height. 'top' keeps the
-    # docked x at the top edge; bottom-right still lies over Agent Mail.
+    # docked x at the top edge; bottom-right still lies over ORRERY Mail.
     _, evaluate = tour_browser
     evaluate("(()=>{const f=OrreryTour.firstFlight;f.reset();f.show();f.state.goTo('mail');f.show();})()")
     assert _wait_dodge(evaluate, 'OrreryTour.firstFlight', True)

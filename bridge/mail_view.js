@@ -1,4 +1,4 @@
-/* Agent Mail shows requests and replies by recipient or in time order.
+/* ORRERY Mail shows requests and replies by recipient or in time order.
    The transport has delivery metadata and thread IDs, but no task completion
    state. The rail shows whether a reply has arrived. */
 (function(){

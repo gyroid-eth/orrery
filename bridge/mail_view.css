@@ -1,4 +1,4 @@
-/* Agent Mail sits below the graph. Indentation, rather than card outlines,
+/* ORRERY Mail sits below the graph. Indentation, rather than card outlines,
    shows who received a request and which reply belongs to it. */
 .mail .scroll.mailview-host {
   position:relative;flex:1;min-height:0;display:block;overflow:hidden;padding:0;

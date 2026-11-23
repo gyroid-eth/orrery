@@ -19,14 +19,14 @@ const MINI={
   xPadding:34,topPadding:46,bottomPadding:46,
   treePitchX:66,treePitchY:64,singlePitchX:66,singlePitchY:64,
   singleColumns:5,sectionGap:64,treeGapUnits:.55,promoteComms:true,
-  captionWidth:62,captionTop:22,captionHeight:20,nodeAbove:20,
+  captionWidth:62,captionTop:15,captionHeight:20,nodeAbove:20,
 };
 const PLANET={
   width:1000,height:620,large:true,
   xPadding:64,topPadding:90,bottomPadding:80,
   treePitchX:112,treePitchY:122,singlePitchX:112,singlePitchY:122,
   singleColumns:8,sectionGap:128,treeGapUnits:.55,promoteComms:false,
-  captionWidth:104,captionTop:43,captionHeight:34,nodeAbove:37,
+  captionWidth:104,captionTop:37,captionHeight:34,nodeAbove:37,
 };
 const MAIL_EDGE_LIFETIME=90000;
 const COMM_PROMOTION_HYSTERESIS=4000;

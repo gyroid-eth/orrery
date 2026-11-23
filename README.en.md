@@ -154,7 +154,7 @@ Agents ask, report, and point things out to each other through ORRERY Mail. That
 
 ![Two new Mails flow in and lines of traffic run across the mini-orrery. Clicking a card to read the body, reading a 4-message back-and-forth in time order with thread, and selecting PearlFaraday in the roster narrows the list to just that agent's Mail](docs/images/cockpit_mail.gif)
 
-→ [Usage: Agent Mail](docs/en/usage.md#agent-mail)
+→ [Usage: ORRERY Mail](docs/en/usage.md#orrery-mail)
 
 ### Pin the agents you watch most to the top (Pin)
 
