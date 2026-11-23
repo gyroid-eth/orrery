@@ -35,10 +35,6 @@ html[data-color-theme="light"] .medal .face::after{
 }
 html[data-color-theme="light"] .agent:hover .pin-toggle,
 html[data-color-theme="light"] .pin-toggle:focus-visible{background:rgb(var(--theme-ink-rgb)/.08)}
-html[data-color-theme="light"] .mailfilters{
-  background:linear-gradient(180deg,var(--panel) 76%,color-mix(in srgb,var(--panel) 86%,transparent));
-}
-html[data-color-theme="light"] .drawer-head{background:color-mix(in srgb,var(--panel) 92%,transparent)}
 html[data-color-theme="light"] .mail-md code{background:rgb(var(--theme-ink-rgb)/.06)}
 html[data-color-theme="light"] .modal,
 html[data-color-theme="light"] .palette,
@@ -65,14 +61,7 @@ html[data-color-theme="light"] .modal-btn,
 html[data-color-theme="light"] .settings-select,
 html[data-color-theme="light"] .settings-choice,
 html[data-color-theme="light"] .theme-axis-choice,
-html[data-color-theme="light"] .mailchip,
-html[data-color-theme="light"] .drawer-back,
-html[data-color-theme="light"] .drawer-mode,
-html[data-color-theme="light"] #promptInput,
-html[data-color-theme="light"] .msg,
-html[data-color-theme="light"] .thread-item{border-color:var(--theme-border-control)}
-html[data-color-theme="light"] .agent.ask .medal .ring{border-color:var(--theme-status-alert)}
-html[data-color-theme="light"] .agent.question .medal .ring{border-color:var(--theme-status-question)}
+html[data-color-theme="light"] #promptInput{border-color:var(--theme-border-control)}
 html[data-color-theme="light"] .topstat .dot.closed,
 html[data-color-theme="light"] .topstat .dot.error{background:var(--theme-status-alert)}
 html[data-color-theme="light"] .orrery-state-glyph.attention .orrery-state-orbit{stroke:var(--theme-status-alert)}
@@ -82,76 +71,10 @@ html[data-color-theme="light"] .orrery-state-glyph.question text{fill:var(--them
 html[data-color-theme="light"] .orrery-state-glyph text{stroke:var(--bg)}
 html[data-color-theme="light"] .topstat .dot.open,
 html[data-color-theme="light"] .tab.active-pane .led,
-html[data-color-theme="light"] .agent.sel::before,
 html[data-color-theme="light"] .tab.on .led{box-shadow:none}
-/* ── colour as area, not as line ──
-   Measured over the roster, dark and light carry almost exactly the same
-   amount of colour: 0.08% and 0.16% of pixels above OKLCH C .05.  What differs
-   is direction.  In dark the accent is lighter than its ground, so a hairline
-   of it reads as light; in light it is darker than its ground, so the same
-   hairline reads as nothing more than a dark line.  That is why changing which
-   brown the accent is moved 0.045 of a level out of 255 across the whole panel
-   — there was almost no coloured area for a hue to live in.
-   On paper, colour has to be carried by fills.  These rules give the pills and
-   the gauge an actual area, taking the share of coloured pixels from 0.76% to
-   3.5% of the roster.
-   The alpha is .14 throughout, which is the most that keeps every foreground
-   above 4.5:1 on its own tint — measured at 4.86 to 4.92 — while leaving the
-   tint itself visible against the panel at 1.22. */
-html[data-color-theme="light"] .agent .pill{
-  background:rgb(var(--theme-accent-rgb)/.14);
-  border-color:rgb(var(--theme-accent-rgb)/.34);
-  color:var(--amber);
-}
-/* The two engines already had hues here; they were just spent on the border. */
-html[data-color-theme="light"] .agent .pill.eng-claude{
-  background:rgb(var(--theme-local-rgb)/.14);
-  border-color:rgb(var(--theme-local-rgb)/.34);
-  color:var(--ln-local);
-}
-html[data-color-theme="light"] .agent .pill.eng-codex{
-  background:rgb(var(--theme-delegate-rgb)/.14);
-  border-color:rgb(var(--theme-delegate-rgb)/.34);
-  color:var(--ln-delegate);
-}
-html[data-color-theme="light"] .agent .pill.eng-gemini{
-  background:rgb(var(--theme-google-rgb)/.14);
-  border-color:rgb(var(--theme-google-rgb)/.34);
-  color:var(--eng-google);
-}
-html[data-color-theme="light"] .agent .pill.eng-grok{
-  background:rgb(var(--theme-ink-rgb)/.10);
-  border-color:rgb(var(--theme-ink-rgb)/.30);
-  color:var(--ink);
-}
-/* The role pill stays neutral so that a coloured pill always means the engine
-   and never merely decoration. */
-html[data-color-theme="light"] .agent .pill.role{
-  background:rgb(var(--theme-ink-rgb)/.09);
-  border-color:rgb(var(--theme-ink-rgb)/.20);
-  color:var(--ink-dim);
-}
-html[data-color-theme="light"] .ctx .track{
-  background:rgb(var(--theme-accent-rgb)/.16);
-  height:6px;border-radius:3px;
-}
-html[data-color-theme="light"] .ctx .fill{
-  background:var(--amber);border-radius:3px;
-}
-/* Dark can say "getting full" in amber because the bar is otherwise grey.
-   Here the bar is already amber, so the warning has to escalate past it. */
-html[data-color-theme="light"] .ctx .fill.hot{
-  background:var(--theme-status-alert);
-}
-html[data-color-theme="light"] .ctx .pct{color:var(--amber)}
 /* usage dials: the three tiers (emerald / amber / alert) are tokens that
    already resolve in light; only the track needs a paper-friendly tint. */
 html[data-color-theme="light"] .usage-popover .dial .t{stroke:rgb(var(--theme-ink-rgb)/.14)}
-html[data-color-theme="light"] .agent.sel{
-  background:
-    linear-gradient(180deg,rgb(var(--theme-accent-rgb)/.10),rgb(var(--theme-accent-rgb)/.06)),
-    linear-gradient(180deg,var(--elev),var(--panel-2));
-}
 html[data-color-theme="light"] ::-webkit-scrollbar-thumb{
   background:rgb(var(--theme-ink-rgb)/.34);border:2px solid transparent;background-clip:padding-box;
 }

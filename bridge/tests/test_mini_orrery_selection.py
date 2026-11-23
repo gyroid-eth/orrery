@@ -19,6 +19,7 @@ def mini_browser(tour_browser):
     client, evaluate = tour_browser
     evaluate("""(()=>{
       document.querySelectorAll('.flight-close').forEach(e=>e.click());
+      document.getElementById('mailGraphBtn').click();
       setMiniViewMode('orrery');
       const names=['Pilot','Helper','Watcher'];
       currentAgents=names.map(name=>({name,category:'agent',running:true,
@@ -176,7 +177,7 @@ def test_deep_and_wide_layouts_keep_the_whole_selected_ring_visible(mini_browser
         top:center.y-radius*matrix.d,bottom:center.y+radius*matrix.d};
       const rect=e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};
       return {bounds,viewport:rect(svg),rail:rect(svg.closest('.col')),
-        x:Number(ring.getAttribute('cx')),y:Number(ring.getAttribute('cy')),
+        centered:['cx','cy'].every(key=>ring.getAttribute(key)===ring.parentElement.querySelector('.orrery-hit').getAttribute(key)),
         workRadius:Number(ring.parentElement.querySelector('.orrery-motion-ring').getAttribute('r'))};
     })()""".replace('SHAPE', json.dumps(shape)))
     for clip in ['viewport', 'rail']:
@@ -185,9 +186,7 @@ def test_deep_and_wide_layouts_keep_the_whole_selected_ring_visible(mini_browser
         for side in ['right', 'bottom']:
             assert result['bounds'][side] <= result[clip][side], (shape, theme, clip, result)
     assert result['workRadius'] == 13.7
-    # Preserve the layout rather than moving edge nodes to fit the marker.
-    assert (result['x'], result['y']) == {
-        'chain': (140, 186), 'fan-left': (17, 130), 'fan-right': (263, 130)}[shape]
+    assert result['centered']
 
 
 def test_orrery_model_labels_keep_the_raw_id_instead_of_shortening_it(mini_browser):
@@ -201,3 +200,42 @@ def test_orrery_model_labels_keep_the_raw_id_instead_of_shortening_it(mini_brows
     })()""")
     assert 'gpt-fixture-long-model-id' in result['mini'] and 'gpt-fixture-long-model-id' in result['planet']
     assert 'Friendly display' not in str(result)
+
+
+@pytest.mark.parametrize('mode', ['orrery', 'network'])
+def test_graph_captions_fit_dense_layout_and_keep_the_full_tooltip(mini_browser, mode):
+    client, evaluate = mini_browser
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    result = evaluate("""(()=>{
+      const longName='ASyntheticAgentWithAnEspeciallyLongName';
+      const names=['Pilot',longName,...Array.from({length:14},(_,i)=>'FixtureAgent'+i)];
+      currentAgents=names.map((name,i)=>({name,category:'agent',running:true,act_state:'work',
+        provider:'openai',annot:i===0?{}:{role:'Fixture release review'}}));
+      OC.lineageParent.clear();
+      names.slice(1).forEach(name=>OC.lineageParent.set(name,'Pilot'));
+      setMiniViewMode(MODE);
+      document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      OrreryRail.openPlanetarium();
+      const overlaps=(a,b)=>a.x<b.x+b.width-.1&&b.x<a.x+a.width-.1&&
+        a.y<b.y+b.height-.1&&b.y<a.y+a.height-.1;
+      return ['#orrery','.planetarium-svg'].map(selector=>{
+        const svg=document.querySelector(selector),view=svg.viewBox.baseVal;
+        const nodes=[...svg.querySelectorAll('.orrery-agent')];
+        const boxes=nodes.map(node=>({caption:node.querySelector('foreignObject').getBBox(),
+          portrait:node.querySelector('.orrery-hit').getBBox()}));
+        const long=nodes.find(node=>node.dataset.agent===longName);
+        const name=long.querySelector('.orrery-caption-name');
+        const bounds=box=>box.x>=view.x&&box.y>=view.y&&box.x+box.width<=view.x+view.width+.1&&
+          box.y+box.height<=view.y+view.height+.1;
+        return {count:boxes.length,clear:boxes.every(({caption,portrait},i)=>bounds(caption)&&
+          caption.y>portrait.y+portrait.height&&boxes.every((other,j)=>i===j||
+            (!overlaps(caption,other.caption)&&!overlaps(caption,other.portrait)))),
+          ellipsis:getComputedStyle(name).textOverflow==='ellipsis'&&name.scrollWidth>name.clientWidth,
+          full:long.querySelector(':scope > title').textContent.includes(longName)&&
+            long.getAttribute('aria-label').includes(longName),
+          role:long.querySelector('.orrery-caption-role').textContent,
+          noRole:!nodes.find(node=>node.dataset.agent==='Pilot').querySelector('.orrery-caption-role')};
+      });
+    })()""".replace('MODE', json.dumps(mode)))
+    assert result == [dict(count=16, clear=True, ellipsis=True, full=True, role='Fixture release review', noRole=True)] * 2

@@ -158,7 +158,7 @@ agent は ORRERY Mail で互いに依頼し、報告し、指摘し合います�
 
 ![新しい Mail が2通流れてきて、mini-orrery に通信の線が走る。card をクリックして本文を読み、thread で4通の往復を時系列に読み、roster で PearlFaraday を選ぶとその Mail だけに絞られる](docs/images/cockpit_mail.gif)
 
-→ [使い方: Agent Mail](docs/usage.md#agent-mail)
+→ [使い方: ORRERY Mail](docs/usage.md#orrery-mail)
 
 ### よく見る agent を上に固定する（Pin）
 

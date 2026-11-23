@@ -3,7 +3,7 @@
 'use strict';
 const STEPS=Object.freeze([
   {id:'full-start',title:'Start an agent',target:'#newAgentBtn',copy:'Start an agent in your workshop folder with a signed-in CLI. Give it a simple task and wait until it is ready.'},
-  {id:'full-choose',title:'Choose your agent',target:'.col.roster',copy:'Choose your agent on the left. Its terminal opens in the center, and Agent Mail follows it.'},
+  {id:'full-choose',title:'Choose your agent',target:'.col.roster',copy:'Choose your agent on the left. Its terminal opens in the center, and ORRERY Mail follows it.'},
   {id:'full-talk',title:'Send a prompt',target:'.promptbar',copy:'Say hello in the input below the terminal and press Enter or SEND. Use Shift+Enter for another line.'},
   {id:'full-shiritori',title:'Delegate a game of shiritori',target:'#promptInput',copy:'Use the workshop prompt below and send it to your parent agent to create one child with the installed delegate skill and play over ORRERY Mail. This step checks off after a fresh parent–child Mail round trip; let all three rounds finish.'},
   {id:'full-split',title:'Work side by side',target:'.col.roster',copy:'Modifier-click your parent and child in the agent list to show both terminals together. Use ⌘click on macOS or Ctrl+click on WSL.'},

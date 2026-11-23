@@ -64,14 +64,14 @@
 .orrery-agent.is-working .orrery-motion-ring{
   opacity:.9;animation:orrery-spin 1.5s linear infinite;
 }
-.orrery-hover-label{
-  opacity:0;pointer-events:none;
-  fill:var(--ink);stroke:var(--bg);stroke-width:3px;paint-order:stroke;
-  font-family:var(--mono);font-size:7.5px;letter-spacing:.015em;
-  transition:opacity .14s ease;
+.orrery-caption{
+  font:600 9px/11px var(--rail-sans);color:var(--ink);text-align:center;
+  text-shadow:0 1px var(--bg),0 -1px var(--bg),1px 0 var(--bg),-1px 0 var(--bg);
 }
-.orrery-agent:hover .orrery-hover-label,
-.orrery-agent:focus-visible .orrery-hover-label{opacity:1}
+.orrery-caption-name,.orrery-caption-role{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.orrery-caption-role{font-size:7.5px;line-height:9px;font-weight:400;color:var(--ink-dim)}
+.planet-agent .orrery-caption{font-size:15px;line-height:19px}
+.planet-agent .orrery-caption-role{font-size:11px;line-height:15px}
 .orrery-expand rect{
   fill:rgba(17,20,25,.82);stroke:rgb(var(--theme-ink-rgb) / .14);stroke-width:1;
   transition:fill .16s ease,stroke .16s ease;
@@ -177,24 +177,6 @@
 .planet-agent:focus-visible .planet-lineage-ring{
   stroke:rgb(var(--theme-ink-rgb) / .55);stroke-width:2.4}
 .planet-motion-ring{stroke-width:2}
-.planet-agent-name{
-  fill:var(--ink);stroke:var(--bg);stroke-width:4px;paint-order:stroke;
-  font-family:var(--serif);font-size:16px;font-weight:500;pointer-events:none;
-}
-.planet-agent-role{
-  fill:var(--ink-dim);stroke:var(--bg);stroke-width:3px;paint-order:stroke;
-  font-family:var(--mono);font-size:8px;letter-spacing:.06em;pointer-events:none;
-}
-.planet-agent-model{
-  fill:var(--ink-dim);stroke:var(--bg);stroke-width:3px;paint-order:stroke;
-  font-family:var(--mono);font-size:8px;letter-spacing:.12em;pointer-events:none;
-}
-.planet-agent-state{
-  /* shown only for ask — it is an attention signal now */
-  fill:var(--amber,#f2b65a);stroke:var(--bg);stroke-width:3px;paint-order:stroke;
-  font-family:var(--mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;
-  pointer-events:none;
-}
 
 @keyframes orrery-spin{to{transform:rotate(360deg)}}
 @media(max-width:760px){
@@ -210,9 +192,6 @@
 .mini-selection-ring{
   fill:none;stroke:var(--ink);stroke-width:.75;pointer-events:none;
 }
-/* Fit the static ring at the layout edges without moving nodes or mail.
-   With viewBox -8 0 296 208, the existing 6px side / 10px bottom margins
-   become drawable space; the plot keeps its original scale and center. */
 .miniorrery.orrery-mode{
   width:100%;height:208px;flex-basis:208px;margin:4px 0 2px;
 }
@@ -226,3 +205,12 @@
 
 /* Local-profile shape and colour are independent of activity/lineage rings. */
 .local-provider-badge .mini-provider-seat{stroke:#c3d77b;stroke-width:1;stroke-linejoin:round}
+
+.orrery-mail-focus {
+  fill:none;
+  stroke:var(--amber);
+  stroke-width:1.5;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  pointer-events:none;
+}

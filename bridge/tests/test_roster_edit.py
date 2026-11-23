@@ -124,9 +124,14 @@ def test_editor_saves_role_and_task_without_changing_other_annotations(editor):
     assert state['agents'][0]['annot'] == {
         'role': 'reviewer', 'task': 'Review generated fixtures', 'emoji': '✳', 'group': 'fixtures',
     }
-    assert js("tiles.get('BuilderFixture').querySelector('.pill.role').textContent") == 'reviewer'
-    assert js("tiles.get('BuilderFixture').querySelector('.statetext').textContent") == 'Review generated fixtures'
-    assert js("tiles.get('BuilderFixture').querySelector('.statetext').title") == 'Edited in cockpit · registered: Build generated preview fixtures'
+    assert js("tiles.get('BuilderFixture').querySelector('.roster-role').textContent") == 'reviewer'
+    assert js("currentAgentNamed('BuilderFixture').task") == 'Review generated fixtures'
+    assert js("tiles.get('BuilderFixture').querySelector('.statetext')") is None
+    assert js("tiles.get('BuilderFixture').querySelector('.roster-model').textContent") == 'gpt-6'
+    open_editor(js, wait)
+    assert js("document.querySelector('.roster-edit-task').value") == 'Review generated fixtures'
+    js("document.querySelector('.roster-edit-cancel').click()")
+    wait("!document.querySelector('.roster-edit')")
 
 
 def key(client, name, code):
@@ -166,7 +171,7 @@ def test_empty_fields_restore_registered_task_and_leave_emoji_and_group(editor):
     js("document.querySelector('.roster-edit-role').value='';document.querySelector('.roster-edit-task').value='';document.querySelector('.roster-edit-save').click()")
     wait("!document.querySelector('.roster-edit')")
     assert js("currentAgentNamed('BuilderFixture').task") == AGENTS[0]['task']
-    assert js("tiles.get('BuilderFixture').querySelector('.statetext').title") == ''
+    assert js("tiles.get('BuilderFixture').querySelector('.roster-role').hidden") is True
     assert state['agents'][0]['annot']['emoji'] == '✳'
     assert state['agents'][0]['annot']['group'] == 'fixtures'
 
@@ -190,7 +195,7 @@ def test_failed_save_preserves_draft_and_cancel_sends_no_second_write(editor):
     js("document.querySelector('.roster-edit-role').value='reviewer';document.querySelector('.roster-edit-save').click()")
     wait("document.querySelector('.roster-edit-status')?.textContent==='Generated save failure'")
     assert js("document.querySelector('.roster-edit-role').value") == 'reviewer'
-    assert js("tiles.get('BuilderFixture').querySelector('.pill.role').textContent") == 'builder'
+    assert js("tiles.get('BuilderFixture').querySelector('.roster-role').textContent") == 'builder'
     js("document.querySelector('.roster-edit-cancel').click()")
     assert len(state['writes']) == 1
 
@@ -198,7 +203,7 @@ def test_failed_save_preserves_draft_and_cancel_sends_no_second_write(editor):
 def test_draft_stays_below_card_after_roster_reorder_and_filter(editor):
     js, wait, client, state = editor
     open_editor(js, wait)
-    js("document.querySelector('.roster-edit-role').value='reviewer';currentAgents[1].act_state='ask';reorderRoster(currentAgents)")
+    js("document.querySelector('.roster-edit-role').value='reviewer';lastActivity.ReviewFixture=Date.now();reorderRoster(currentAgents)")
     assert js("document.querySelector('.roster-edit').previousElementSibling.dataset.agent") == 'BuilderFixture'
     assert js("document.querySelector('.roster-edit-role').value") == 'reviewer'
     assert js("document.activeElement.classList.contains('roster-edit-role')")

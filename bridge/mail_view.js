@@ -1,434 +1,584 @@
-/* ── agent-mail rail (right rail, below the orrery) ──
-   Owns <div id="mail"> and everything rendered inside it.
-   Inputs (read-only):
-     window.OC — { esc, relTime, jumpToAgent, renderPeerAvatar, agents(), mailBacklog() }
-     document event 'oc:mail' detail:{messages} — NEW, deduped live messages.
-     document event 'oc:focus-agent' detail:{name} — follow active terminal pane.
-   All API and event message fields are untrusted. Rendering is escape-first. */
+/* ORRERY Mail shows requests and replies by recipient or in time order.
+   The transport has delivery metadata and thread IDs, but no task completion
+   state. The rail shows whether a reply has arrived. */
 (function(){
 'use strict';
 const OC=window.OC;
 const mailEl=document.getElementById('mail');
-if(!mailEl||!OC)return;
+const filterButton=document.getElementById('mailFilterBtn');
+const viewButton=document.getElementById('mailViewBtn');
+const graphButton=document.getElementById('mailGraphBtn');
+const graph=document.getElementById('orrery');
+const selectedGraph=document.getElementById('mailSelectedRoute');
+if(!mailEl||!OC||!filterButton)return;
 
-const byId=new Map();
-const mailItems=[];
-const cardsByKey=new Map();
-const movingCards=new Map();
-let activeFilter='';
-let drawerOpen=false;
-let drawerMode='detail';
-let currentMessage=null;
-let lastTrigger=null;
-let messageRequest=0;
-let threadRequest=0;
-let threadKey='';
-let threadItems=[];
-let threadReady=false;
-let threadLoading=false;
-let showThreadWhenReady=false;
+const byId=new Map(),groupsByName=new Map(),rowsByKey=new Map();
+const requestedAgents=new Map();
+const peerAvatars=new Map();
+const motion=matchMedia('(prefers-reduced-motion: reduce)');
+let activeFilter='',waitingOnly=false,filterRequest=0;
+let drawer=null,drawerMotion=null,drawerMotionTimer=0,replyRequest=0;
+let hoveredRoute=null,focusedRoute=null;
+let manualGraphOpen=false;
+const VIEW_KEY='oc-mail-view';
+let timeline=true;
+try{timeline=localStorage.getItem(VIEW_KEY)!=='recipient';}catch(_){/* preference unavailable */}
+let seeded=false;
 
 mailEl.classList.add('mailview-host');
-mailEl.innerHTML='<div class="mailview-list"><div class="mailfilters" role="toolbar" aria-label="Filter agent mail"></div>'+
-  '<div class="mailcards"></div></div><aside class="maildrawer" aria-hidden="true"></aside>';
+mailEl.innerHTML='<div class="mailview-list"><div class="mailcards"></div></div>'+
+  '<div class="mailfilters" id="mailFilters" role="group" aria-label="Filter agent mail" hidden></div>'+
+  '<aside class="maildrawer" role="dialog" aria-label="Mail thread" hidden>'+
+  '<div class="drawer-head"></div><div class="drawer-scroll">'+
+  '<div class="drawer-body"></div><div class="thread-chain" hidden></div></div></aside>';
 const listEl=mailEl.querySelector('.mailview-list');
 const filterEl=mailEl.querySelector('.mailfilters');
+filterButton.parentElement.appendChild(filterEl);
 const cardsEl=mailEl.querySelector('.mailcards');
 const drawerEl=mailEl.querySelector('.maildrawer');
+const drawerHead=drawerEl.querySelector('.drawer-head');
+const drawerScroll=drawerEl.querySelector('.drawer-scroll');
+const drawerBody=drawerEl.querySelector('.drawer-body');
+const drawerChain=drawerEl.querySelector('.thread-chain');
 
-function E(value){return OC.esc(value==null?'':String(value));}
+const icons={
+  arrow:'<path d="M4 12h15m-5-5 5 5-5 5"/>',
+  open:'<path d="m9 6 6 6-6 6"/>',
+  close:'<path d="m6 6 12 12M18 6 6 18"/>',
+  thread:'<path d="M5 5v14h6M5 12h6"/><circle cx="14" cy="12" r="2"/><circle cx="14" cy="19" r="2"/>',
+  group:'<circle cx="7" cy="6" r="2"/><circle cx="7" cy="15" r="2"/><path d="M12 6h7m-7 9h7m-7 4h5"/>',
+  reverse:'<path d="M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4"/>',
+};
+function icon(name){
+  return '<svg class="mail-icon" viewBox="0 0 24 24" aria-hidden="true">'+icons[name]+'</svg>';
+}
+function control(action,label,symbol){
+  return '<button class="rail-icon" type="button" data-action="'+action+'" title="'+label+'" aria-label="'+label+'">'+icon(symbol)+'</button>';
+}
 function text(value){return value==null?'':String(value);}
-function keyOf(value){return value==null?'':String(value);}
+function E(value){return OC.esc(text(value));}
 function highImportance(value){return value==='high'||value==='urgent';}
 function threadKeyOf(value){return value==null||value===''?'':String(value);}
 
 function normalizeRecipient(value){
   if(value==null)return null;
-  if(typeof value==='string'||typeof value==='number')return{name:text(value),kind:'to'};
-  const name=text(value.name==null?value.recipient:value.name);
-  if(!name)return null;
-  return{name,kind:text(value.kind)||'to'};
+  const name=typeof value==='object'?text(value.name??value.recipient):text(value);
+  return name?{name,kind:text(value.kind)||'to'}:null;
 }
-
-/* The live route expands one row per recipient (`recipient`), while /recent
-   returns a `recipients` array. Keep both shapes on one internal contract. */
-function normalizeMessage(raw){
-  if(!raw||raw.id==null)return null;
-  const recipients=[];
-  const source=Array.isArray(raw.recipients)?raw.recipients:[];
-  source.forEach(value=>{const recipient=normalizeRecipient(value);if(recipient)recipients.push(recipient);});
-  if(raw.recipient!=null){
-    const recipient=normalizeRecipient(raw.recipient);
-    if(recipient&&!recipients.some(r=>r.name===recipient.name&&r.kind===recipient.kind))recipients.push(recipient);
-  }
-  const parsedTs=Number(raw.ts);
-  return{
-    id:raw.id,key:keyOf(raw.id),
-    ts:Number.isFinite(parsedTs)?parsedTs:0,
-    sender:text(raw.sender),
-    recipients,
-    subject:text(raw.subject),
-    excerpt:text(raw.excerpt),
-    importance:text(raw.importance),
-    thread_id:raw.thread_id==null||raw.thread_id===''?null:raw.thread_id,
-    body_md:Object.prototype.hasOwnProperty.call(raw,'body_md')?text(raw.body_md):null,
-  };
-}
-
 function mergeRecipients(left,right){
   const merged=left.slice();
-  right.forEach(recipient=>{
+  for(const recipient of right){
     if(!merged.some(r=>r.name===recipient.name&&r.kind===recipient.kind))merged.push(recipient);
-  });
+  }
   return merged;
 }
-
+function normalizeMessage(raw){
+  if(!raw||raw.id==null)return null;
+  const recipients=(Array.isArray(raw.recipients)?raw.recipients:[]).map(normalizeRecipient).filter(Boolean);
+  const flat=raw.recipient;
+  const recipient=normalizeRecipient(flat==null||typeof flat==='object'?flat:{name:flat,kind:raw.kind});
+  return {
+    id:raw.id,key:String(raw.id),ts:Number(raw.ts)||0,sender:text(raw.sender),
+    recipients:mergeRecipients(recipients,recipient?[recipient]:[]),
+    subject:text(raw.subject),excerpt:text(raw.excerpt),importance:text(raw.importance),
+    thread:threadKeyOf(raw.thread_id),
+    body_md:Object.hasOwn(raw,'body_md')?text(raw.body_md):null,
+  };
+}
 function mergeMessage(next){
   const prior=byId.get(next.key);
-  if(!prior){
-    byId.set(next.key,next);
-    mailItems.push(next);
-    return next;
-  }
-  const merged={
-    ...prior,
-    ts:next.ts||prior.ts,
-    sender:next.sender||prior.sender,
+  if(prior)next={
+    ...prior,ts:next.ts||prior.ts,sender:next.sender||prior.sender,
     recipients:mergeRecipients(prior.recipients,next.recipients),
-    subject:next.subject||prior.subject,
-    excerpt:next.excerpt||prior.excerpt,
-    importance:next.importance||prior.importance,
-    thread_id:next.thread_id==null?prior.thread_id:next.thread_id,
-    body_md:next.body_md==null?prior.body_md:next.body_md,
+    subject:next.subject||prior.subject,excerpt:next.excerpt||prior.excerpt,
+    importance:next.importance||prior.importance,thread:next.thread||prior.thread,
+    body_md:next.body_md??prior.body_md,
   };
-  byId.set(next.key,merged);
-  const index=mailItems.indexOf(prior);
-  if(index>=0)mailItems[index]=merged;
-  return merged;
+  byId.set(next.key,next);
+  return next;
 }
-
-function newestFirst(){
-  return mailItems.slice().sort((a,b)=>(b.ts-a.ts)||b.key.localeCompare(a.key));
+function chronological(a,b){
+  return a.ts-b.ts||(Number(a.id)-Number(b.id))||a.key.localeCompare(b.key);
 }
-
 function recipientNames(message){
-  const names=[];
-  message.recipients.forEach(recipient=>{if(recipient.name&&!names.includes(recipient.name))names.push(recipient.name);});
-  return names;
+  return [...new Set(message.recipients.map(recipient=>recipient.name))];
 }
-
-function messageIncludesAgent(message,agent){
-  return !agent||message.sender===agent||message.recipients.some(recipient=>recipient.name===agent);
+function includesAgent(message,name){
+  return message.sender===name||message.recipients.some(r=>r.name===name);
 }
-
-function agentsByRecency(items){
-  const names=[];
-  items.forEach(message=>{
-    [message.sender,...recipientNames(message)].forEach(name=>{if(name&&!names.includes(name))names.push(name);});
-  });
-  return names;
-}
-function visibleFilterAgents(items,selected=''){
-  const agents=agentsByRecency(items);
-  const visible=agents.slice(0,8);
-  if(selected&&agents.includes(selected)&&!visible.includes(selected)){
-    visible[Math.max(0,visible.length-1)]=selected;
+function mailboxAgents(){
+  const names=new Set();
+  for(const m of [...byId.values()].sort((a,b)=>chronological(b,a))){
+    if(m.sender)names.add(m.sender);
+    recipientNames(m).forEach(name=>names.add(name));
   }
-  return visible;
+  return [...names];
 }
-/* The rail holds only the latest messages, so an agent that has been quiet
-   (a resident bot, say) is not in it. Ask the backend for that agent's own
-   recent mail before deciding there is nothing to show (2026-09-25). */
-const fetchedAgents=new Set();
-async function loadAgentMail(agent){
-  if(!agent||fetchedAgents.has(agent))return;
-  fetchedAgents.add(agent);
-  try{
-    const data=await fetchJson('/telemetry/mail/recent?limit=40&agent='+encodeURIComponent(agent));
-    if(data&&Array.isArray(data.messages))ingest(data.messages);
-  }catch(_){fetchedAgents.delete(agent);}
-}
-async function selectMailFilter(agent,{requireExisting=false}={}){
-  const next=text(agent);
-  const known=()=>agentsByRecency(newestFirst()).includes(next);
-  if(next&&!known())await loadAgentMail(next);
-  if(requireExisting&&!known())return false;
-  activeFilter=next;
-  renderMail();
-  return true;
-}
-
-function relativeLabel(ts){
-  const relative=OC.relTime(ts);
-  return relative?relative+' ago':'time unavailable';
-}
-
-function exactTime(ts){
-  if(!ts)return'';
+function clock(ts){
   const date=new Date(ts*1000);
-  if(Number.isNaN(date.getTime()))return'';
-  const two=value=>String(value).padStart(2,'0');
-  return date.getFullYear()+'-'+two(date.getMonth()+1)+'-'+two(date.getDate())+' '+
-    two(date.getHours())+':'+two(date.getMinutes())+':'+two(date.getSeconds());
+  if(!ts||Number.isNaN(date.getTime()))return null;
+  return {short:date.toTimeString().slice(0,5),full:date.toLocaleString('en')};
 }
+function timeHtml(ts){
+  const time=clock(ts);
+  return time?'<time title="'+E(time.full)+'">'+E(time.short)+'</time>':'';
+}
+function titleFor(message){return message.subject||message.excerpt||'(No subject)';}
 
-function renderFilters(items){
-  const agents=agentsByRecency(items);
-  const visible=visibleFilterAgents(items,activeFilter);
-  const choices=['',...visible];
-  filterEl.innerHTML='';
-  choices.forEach(agent=>{
-    const button=document.createElement('button');
-    button.type='button';
-    button.className='mailchip'+(activeFilter===agent?' on':'');
-    button.setAttribute('aria-pressed',String(activeFilter===agent));
-    button.innerHTML=agent?E(agent):'ALL';
-    button.addEventListener('click',()=>selectMailFilter(agent));
-    filterEl.appendChild(button);
-  });
-  const overflow=agents.length-visible.length;
-  if(overflow>0){
-    const more=document.createElement('span');
-    more.className='mailchip mailchip-more';
-    more.innerHTML='+'+E(overflow);
-    filterEl.appendChild(more);
+function directRecipients(message){
+  const direct=[...new Set(message.recipients.filter(r=>r.kind==='to').map(r=>r.name))];
+  // Keep a message with only copied recipients accessible without assigning
+  // it to an observer.
+  return direct.length?direct:[''];
+}
+function routeKey(sender,recipient){return JSON.stringify([sender,recipient]);}
+function makeAssignment(message,recipient,thread=message.thread,scope='message:'+message.key){
+  return {key:JSON.stringify([scope,routeKey(message.sender,recipient)]),recipient,thread,
+    request:message,latest:message,replies:[],inferred:[],followups:[]};
+}
+function expectsReply(assignment){
+  return Boolean(assignment.recipient&&assignment.recipient!==assignment.request.sender);
+}
+function addReply(assignment,message,inferred=false){
+  (inferred?assignment.inferred:assignment.replies).push(message);
+  if(chronological(message,assignment.latest)>0)assignment.latest=message;
+}
+function isMessageId(thread){
+  return /^[1-9][0-9]*$/.test(thread);
+}
+function collectThreadAssignments(thread,messages,remember){
+  const candidate=byId.get(thread);
+  // reply_message uses the unthreaded original's ID as the thread key.
+  const original=candidate&&!candidate.thread&&chronological(candidate,messages[0])<0?candidate:null;
+  const unresolved=isMessageId(thread)&&!original&&!messages.some(m=>m.key===thread);
+  const routes=new Map();
+  if(original){
+    for(const recipient of directRecipients(original)){
+      const assignment=makeAssignment(original,recipient,thread);
+      routes.set(routeKey(original.sender,recipient),assignment);
+      remember(assignment);
+    }
   }
-}
-
-function appendPeer(container,name){
-  const peer=document.createElement('span');peer.className='mail-peer';peer.dataset.peerName=name;
-  const label=document.createElement('span');label.className='mail-peer-name';label.textContent=name;
-  peer.appendChild(label);container.appendChild(peer);
-}
-function refreshPeerAvatars(heads,initial=false){
-  const resized=[];
-  for(const head of heads){
-    let changed=initial;
-    if(typeof OC.renderPeerAvatar==='function'){
-      for(const peer of head.querySelectorAll('.mail-peer')){
-        const previous=peer.querySelector('.conversation-avatar'),avatar=OC.renderPeerAvatar(peer.dataset.peerName,previous);
-        if(avatar!==previous){
-          if(previous)previous.remove();
-          if(avatar)peer.prepend(avatar);
-          changed=true;
+  for(const message of messages){
+    const recipients=directRecipients(message);
+    const linked=recipients.length>1&&recipients.some(name=>
+      name!==message.sender&&routes.has(routeKey(name,message.sender)));
+    for(const recipient of recipients){
+      const reverse=message.sender!==recipient&&routes.get(routeKey(recipient,message.sender));
+      if(reverse){
+        addReply(reverse,message);
+      }else if(original||unresolved){
+        // Only the delivery back to the original sender answers that request.
+        remember(makeAssignment(message,recipient));
+      }else{
+        const route=routeKey(message.sender,recipient);
+        const known=routes.get(route);
+        if(known&&linked){
+          remember(makeAssignment(message,recipient));
+        }else if(known){
+          known.followups.push(message);
+          known.latest=message;
+        }else{
+          const assignment=makeAssignment(message,recipient,thread,'thread:'+thread);
+          routes.set(route,assignment);
+          remember(assignment);
         }
       }
     }
-    if(changed)resized.push(head);
   }
-  layoutRecipients(resized);
 }
 
-let recipientFrame=null;
-const pendingRecipientHeads=new Set();
-const recipientWidths=new WeakMap();
-const recipientObserver=typeof ResizeObserver==='function'?new ResizeObserver(entries=>{
-  scheduleRecipientLayout(entries
-    .filter(({target,contentRect})=>Math.round(contentRect.width)!==recipientWidths.get(target))
-    .map(({target})=>target));
-}):null;
-function scheduleRecipientLayout(heads){
-  for(const head of heads)pendingRecipientHeads.add(head);
-  if(recipientFrame!==null||!pendingRecipientHeads.size)return;
-  recipientFrame=requestAnimationFrame(()=>{
-    recipientFrame=null;
-    const connected=[...pendingRecipientHeads].filter(head=>head.isConnected);
-    pendingRecipientHeads.clear();
-    layoutRecipients(connected);
-  });
-}
-function layoutRecipients(heads){
-  if(!heads.length)return;
-  // Measure all headers at each stage before writing styles for the next one.
-  const headers=heads.map(head=>{
-    const from=head.querySelector('.from'),to=head.querySelector('.to'),more=to.querySelector('.mail-more');
-    const peers=[...to.querySelectorAll('.mail-peer')];
-    to.classList.remove('is-stacked');more.hidden=true;
-    peers.forEach(peer=>{peer.hidden=false;peer.classList.remove('is-first');});
-    return {head,from,to,more,peers};
-  });
-  const range=document.createRange();
-  const natural=peer=>{
-    range.selectNodeContents(peer.querySelector('.mail-peer-name'));
-    return range.getBoundingClientRect().width+(peer.querySelector('.conversation-avatar')?22:0);
+function assignments(){
+  const messages=[...byId.values()].sort(chronological);
+  const threads=new Map(),explicit=new Map(),pending=new Map(),result=[];
+  for(const message of messages){
+    if(!message.thread)continue;
+    if(!threads.has(message.thread))threads.set(message.thread,[]);
+    threads.get(message.thread).push(message);
+  }
+  const remember=assignment=>{
+    const id=assignment.request.key;
+    if(!explicit.has(id))explicit.set(id,[]);
+    explicit.get(id).push(assignment);
+    result.push(assignment);
   };
-  const sizes=headers.map(({head,from,to,peers})=>{
-    const gap=parseFloat(getComputedStyle(head).columnGap)||0;
-    const width=head.clientWidth;
-    recipientWidths.set(head,width);
-    const available=Math.max(0,width-head.querySelector('.arrow').offsetWidth-head.querySelector('.imp').offsetWidth-gap*3);
-    const sender=natural(from.querySelector('.mail-peer'));
-    const names=peers.reduce((sum,peer)=>sum+natural(peer),0)+
-      [...to.querySelectorAll('.mail-separator')].reduce((sum,part)=>sum+part.getBoundingClientRect().width,0);
-    return {available,sender,stacked:peers.length>1&&sender+names>available};
-  });
-  const stacked=[];
-  headers.forEach(({from,to,more,peers},index)=>{
-    const {available,sender,stacked:needsStack}=sizes[index];
-    if(needsStack){
-      to.classList.add('is-stacked');more.hidden=false;more.textContent='+'+peers.length;
-      stacked.push({from,to,more,peers,available,sender});
-    }else{
-      const minimum=peers[0]?.querySelector('.conversation-avatar')?34:12;
-      from.style.maxWidth=Math.max(0,Math.min(sender,available-minimum-3))+'px';
+  for(const [thread,items] of threads)collectThreadAssignments(thread,items,remember);
+
+  const awaitReply=assignment=>{
+    if(!expectsReply(assignment)||assignment.replies.length)return;
+    const route=routeKey(assignment.request.sender,assignment.recipient);
+    // null marks an ambiguous route. Inference never clears a pending request.
+    pending.set(route,pending.has(route)?null:assignment);
+  };
+  for(const message of messages){
+    const known=explicit.get(message.key);
+    if(message.thread||known){
+      known?.forEach(awaitReply);
+      continue;
     }
-  });
-  const counters=stacked.map(({more})=>more.getBoundingClientRect().width);
-  stacked.forEach(({from,available,sender},index)=>{
-    from.style.maxWidth=Math.max(0,Math.min(sender,available-counters[index]-3))+'px';
-  });
-  const rooms=stacked.map(({to})=>Math.max(0,to.clientWidth-3));
-  stacked.forEach(({more,peers},index)=>{
-    const room=rooms[index],counter=counters[index];
-    const known=peers.filter(peer=>peer.querySelector('.conversation-avatar'));
-    const extent=known.length?18+(known.length-1)*14+3:0;
-    let count=known.length;
-    if(count!==peers.length||extent>room){
-      count=Math.max(0,Math.min(count,Math.floor((room-counter-4-21)/14)+1));
-    }
-    const shown=new Set(known.slice(0,count));
-    peers.forEach(peer=>{peer.hidden=!shown.has(peer);});
-    if(count)known[0].classList.add('is-first');
-    const hidden=peers.filter(peer=>!shown.has(peer));
-    more.hidden=!hidden.length;more.textContent='+'+hidden.length;
-    more.title=hidden.map(peer=>peer.dataset.peerName).join(', ');
-    more.classList.toggle('is-only',count===0);
-  });
-}
-const scheduleAllRecipientLayouts=()=>scheduleRecipientLayout(cardsEl.querySelectorAll('.mtop'));
-document.fonts?.ready.then(scheduleAllRecipientLayouts);
-document.fonts?.addEventListener('loadingdone',scheduleAllRecipientLayouts);
-
-function cardSubject(message){
-  return message.subject||message.excerpt||'(no subject)';
-}
-
-function sameCardContent(previous,message){
-  if(previous===message)return true;
-  if(previous.sender!==message.sender||cardSubject(previous)!==cardSubject(message)||
-    previous.importance!==message.importance)return false;
-  const before=recipientNames(previous),after=recipientNames(message);
-  return before.length===after.length&&before.every((name,index)=>name===after[index]);
-}
-
-function makeCard(message,index){
-  const card=document.createElement('button');
-  const recipients=recipientNames(message);
-  const importance=message.importance||'normal';
-  card.type='button';
-  // first paint: staggered rise for everything. After boot, only a card
-  // never shown before gets the landing+ember entrance — the rest keep
-  // still (renderMail FLIPs them to their new slots instead).
-  const fresh=!shownIds.has(message.id);
-  if(fresh)shownIds.add(message.id);
-  card.className='msg '+(booted?(fresh?'landing':'settled'):'');
-  card.dataset.mid=message.id;
-  card.style.animationDelay=booted?'0s':(Math.min(index,12)*.03)+'s';
-  card.innerHTML='<span class="mtop"><span class="from"></span>'+
-    '<span class="arrow">→</span><span class="to"></span>'+
-    '<span class="imp '+(highImportance(importance)?'hi':'')+'">'+E(importance)+'</span></span>'+
-    '<span class="body">'+E(cardSubject(message))+'</span>'+
-    '<span class="time">'+E(relativeLabel(message.ts))+'</span>';
-  appendPeer(card.querySelector('.from'),message.sender||'unknown');
-  const to=card.querySelector('.to');
-  to.setAttribute('role','group');to.title=to.ariaLabel=recipients.join(', ')||'—';
-  (recipients.length?recipients:['—']).forEach((name,index)=>{
-    if(index){const separator=document.createElement('span');separator.className='mail-separator';separator.textContent=', ';to.appendChild(separator);}
-    appendPeer(to,name);
-  });
-  const more=document.createElement('span');more.className='mail-more';more.hidden=true;more.setAttribute('aria-hidden','true');to.appendChild(more);
-  card.addEventListener('click',()=>openMessage(message.id,card));
-  return card;
-}
-
-function renderCards(items){
-  const visible=items.filter(message=>messageIncludesAgent(message,activeFilter));
-  const keys=new Set(visible.map(message=>message.key));
-  for(const [key,{card,head}] of cardsByKey){
-    if(keys.has(key))continue;
-    recipientObserver?.unobserve(head);
-    card.remove();
-    cardsByKey.delete(key);
-  }
-  cardsEl.querySelector('.mailempty')?.remove();
-  if(!visible.length){
-    const empty=document.createElement('div');
-    empty.className='mailempty';
-    empty.innerHTML=activeFilter?'no loaded mail involving '+E(activeFilter)+'.':
-      'waiting for agent-mail…<br>messages appear here as agents talk.';
-    cardsEl.appendChild(empty);
-    return;
-  }
-  const addedHeads=[];
-  let next=cardsEl.firstElementChild;
-  visible.forEach((message,index)=>{
-    let entry=cardsByKey.get(message.key);
-    if(!entry||!sameCardContent(entry.message,message)){
-      const card=makeCard(message,index),head=card.querySelector('.mtop');
-      if(entry){
-        recipientObserver?.unobserve(entry.head);
-        if(next===entry.card)next=card;
-        entry.card.replaceWith(card);
+    for(const recipient of directRecipients(message)){
+      // A direction gives a useful hint only when the pair has one open request.
+      const match=recipient&&recipient!==message.sender&&!pending.has(routeKey(message.sender,recipient))&&
+        pending.get(routeKey(recipient,message.sender));
+      if(match){
+        addReply(match,message,true);
+        continue;
       }
-      entry={message,card,head};
-      cardsByKey.set(message.key,entry);
-      addedHeads.push(head);
-      recipientObserver?.observe(head);
-    }else{
-      entry.message=message;
-      const time=entry.card.querySelector('.time'),label=relativeLabel(message.ts);
-      if(time.textContent!==label)time.textContent=label;
+      const assignment=makeAssignment(message,recipient);
+      result.push(assignment);
+      awaitReply(assignment);
     }
-    const {card}=entry;
-    if(card!==next)cardsEl.insertBefore(card,next);
-    else next=next.nextElementSibling;
-  });
-  refreshPeerAvatars(addedHeads,true);
+  }
+  return result.sort((a,b)=>chronological(b.latest,a.latest));
+}
+function visibleAssignments(){
+  return assignments().filter(a=>(!waitingOnly||(expectsReply(a)&&!a.replies.length))&&
+    (!activeFilter||[a.request,...a.replies,...a.inferred,...a.followups].some(m=>includesAgent(m,activeFilter))));
 }
 
-let booted=false;
-const shownIds=new Set();
-function renderMail(){
-  // FLIP the cards on screen using their current positions. The list keeps
-  // the other cards in place without starting animations off screen.
-  const before=new Map();
-  const viewport=listEl.getBoundingClientRect();
-  for(const [key,{card}] of cardsByKey){
-    const rect=card.getBoundingClientRect();
-    if(rect.bottom>=viewport.top&&rect.top<=viewport.bottom)before.set(key,rect.top);
+function assignmentsForView(source){
+  if(!timeline)return source;
+  const byRequest=new Map();
+  for(const a of source){
+    const key='timeline:'+a.request.key;
+    const record=byRequest.get(key);
+    if(!record){
+      byRequest.set(key,{...a,key,deliveries:[a.recipient],replies:new Map(a.replies.map(m=>[m.key,m])),
+        inferred:new Map(a.inferred.map(m=>[m.key,m])),
+        followups:new Map(a.followups.map(m=>[m.key,m]))});
+      continue;
+    }
+    record.deliveries.push(a.recipient);
+    if(expectsReply(a))record.recipient=a.recipient;
+    for(const m of a.replies)record.replies.set(m.key,m);
+    for(const m of a.inferred)record.inferred.set(m.key,m);
+    for(const m of a.followups)record.followups.set(m.key,m);
   }
-  for(const animation of movingCards.values())animation.cancel();
-  movingCards.clear();
-  const items=newestFirst();
-  renderFilters(items);
-  renderCards(items);
-  const moves=[];
-  for(const [key,previous] of before){
-    const card=cardsByKey.get(key)?.card;
-    if(!card)continue;
-    const delta=previous-card.getBoundingClientRect().top;
-    if(delta)moves.push({card,delta});
-  }
-  for(const {card,delta} of moves){
-    const animation=card.animate([{transform:`translateY(${delta}px)`},{transform:'none'}],
-      {duration:450,easing:'cubic-bezier(.2,.8,.2,1)'});
-    movingCards.set(card,animation);
-    animation.onfinish=()=>movingCards.delete(card);
-  }
-  booted=true;
+  return [...byRequest.values()].sort((a,b)=>chronological(b.request,a.request)).map(a=>({
+    ...a,replies:[...a.replies.values()].sort(chronological),
+    inferred:[...a.inferred.values()].sort(chronological),
+    followups:[...a.followups.values()].sort(chronological)
+  }));
 }
 
-function ingest(list){
-  let changed=false;
-  (Array.isArray(list)?list:[]).forEach(raw=>{
-    const message=normalizeMessage(raw);
-    if(!message)return;
-    mergeMessage(message);
-    changed=true;
-  });
-  if(changed)renderMail();
+function filterChoice(label,pressed,activate){
+  const option=document.createElement('button');
+  option.type='button';option.textContent=label;option.setAttribute('aria-pressed',String(pressed));
+  option.addEventListener('click',activate);
+  return option;
+}
+function setFilterOpen(open,restoreFocus=false){
+  filterEl.hidden=!open;
+  filterButton.setAttribute('aria-expanded',String(open));
+  if(open){
+    filterEl.replaceChildren(
+      filterChoice('Awaiting a reply',waitingOnly,()=>{
+        waitingOnly=!waitingOnly;setFilterOpen(false,true);renderMail({animate:true});
+      }),
+      ...['',...mailboxAgents()].map(agent=>filterChoice(agent||'All agents',activeFilter===agent,()=>{
+        selectMailFilter(agent);setFilterOpen(false,true);
+      }))
+    );
+    filterEl.querySelector('button')?.focus({preventScroll:true});
+    if(!document.hidden)filterEl.animate(motion.matches?[{opacity:0},{opacity:1}]:[
+      {opacity:.3,transform:'scale(.94)'},{opacity:1,transform:'none'}
+    ],{duration:motion.matches?90:160,easing:'ease-out'});
+  }else if(restoreFocus)filterButton.focus({preventScroll:true});
+}
+filterButton.addEventListener('click',()=>setFilterOpen(filterEl.hidden));
+document.addEventListener('pointerdown',event=>{
+  if(!filterEl.hidden&&!filterEl.contains(event.target)&&!filterButton.contains(event.target))setFilterOpen(false);
+});
+async function loadAgentMail(agent){
+  if(!requestedAgents.has(agent)){
+    const request=fetchJson('/telemetry/mail/recent?limit=40&agent='+encodeURIComponent(agent)).then(data=>{
+      if(!Array.isArray(data?.messages)){requestedAgents.delete(agent);return;}
+      ingest(data.messages);
+    });
+    requestedAgents.set(agent,request);
+  }
+  await requestedAgents.get(agent);
+}
+async function selectMailFilter(agent,{requireExisting=false}={}){
+  const request=++filterRequest,next=text(agent);
+  const known=()=>[...byId.values()].some(m=>includesAgent(m,next));
+  if(next&&!known())await loadAgentMail(next);
+  if(request!==filterRequest||(requireExisting&&!known()))return false;
+  if(activeFilter!==next){
+    activeFilter=next;
+    renderMail({animate:true});
+  }
+  return true;
 }
 
+function emitRoute(){
+  document.dispatchEvent(new CustomEvent('oc:mail-route',{detail:selectedRoute()||hoveredRoute||focusedRoute}));
+}
+function bindRoute(button,message){
+  button.addEventListener('pointerenter',()=>{hoveredRoute=message();emitRoute();});
+  button.addEventListener('pointerleave',()=>{hoveredRoute=null;emitRoute();});
+  button.addEventListener('focus',()=>{focusedRoute=message();emitRoute();});
+  button.addEventListener('blur',()=>{focusedRoute=null;emitRoute();});
+}
+function assignmentRoute(a){return {sender:a.request.sender,recipients:(a.deliveries||[a.recipient]).filter(Boolean)};}
+function messageRoute(m){return m?{sender:m.sender,recipients:recipientNames(m)}:null;}
+function selectedRoute(){
+  if(!drawer)return null;
+  if(drawer.message)return messageRoute(drawer.message);
+  const route=assignmentRoute(drawer.assignment);
+  return route.recipients.length?route:messageRoute(drawer.request);
+}
+function mountPortrait(slot,avatar){
+  slot.replaceChildren(...(avatar?[avatar.cloneNode(true)]:[]));
+}
+function paintPeerMarkup(host,markup){
+  if(host.markup===markup)return false;
+  host.innerHTML=markup;
+  host.markup=markup;
+  for(const slot of host.querySelectorAll('[data-mail-peer]')){
+    const name=slot.dataset.mailPeer;
+    if(!peerAvatars.has(name))peerAvatars.set(name,OC.renderPeerAvatar(name));
+    const avatar=peerAvatars.get(name);
+    if(avatar)mountPortrait(slot,avatar);
+  }
+  return true;
+}
+function refreshPeerAvatars(){
+  const known=new Set(OC.agents().map(agent=>agent.name));
+  for(const [name,previous] of peerAvatars){
+    if(!previous&&!known.has(name))continue;
+    const signature=previous?.dataset.readerIdentity;
+    const avatar=OC.renderPeerAvatar(name,previous);
+    if(avatar===previous&&avatar?.dataset.readerIdentity===signature)continue;
+    peerAvatars.set(name,avatar);
+    const selector='[data-mail-peer="'+CSS.escape(name)+'"]';
+    for(const host of [mailEl,selectedGraph]){
+      for(const slot of host.querySelectorAll(selector))mountPortrait(slot,avatar);
+    }
+  }
+}
+for(const host of [mailEl,selectedGraph]){
+  host.addEventListener('error',event=>{
+    if(event.target.closest?.('.mail-peer-avatar')&&event.target.tagName==='IMG')event.target.style.display='none';
+  },true);
+}
+function paintGraph(){
+  const route=selectedRoute();
+  const showGraph=manualGraphOpen&&!route;
+  graph.toggleAttribute('hidden',!showGraph);
+  graphButton.hidden=Boolean(route);
+  graphButton.setAttribute('aria-expanded',String(showGraph));
+  graphButton.title=showGraph?'Hide mini graph':'Show mini graph';
+  graphButton.setAttribute('aria-label',graphButton.title);
+  selectedGraph.hidden=!route;
+  if(!route)return;
+  const markup=routePeople(route.sender,route.recipients.map(name=>({name,kind:'to'})));
+  if(!paintPeerMarkup(selectedGraph,markup))return;
+  selectedGraph.setAttribute('role','img');
+  selectedGraph.setAttribute('aria-label',(route.sender||'Unknown sender')+' to '+
+    (route.recipients.join(', ')||'no direct recipient'));
+}
+graphButton.addEventListener('click',()=>{manualGraphOpen=!manualGraphOpen;paintGraph();});
+
+function paintView(){
+  viewButton.title=timeline?'Group by recipient':'Show thread timeline';
+  viewButton.setAttribute('aria-label',viewButton.title);
+  viewButton.innerHTML=icon(timeline?'group':'thread');
+}
+viewButton.addEventListener('click',()=>{
+  if(drawer)closeDrawer(false);
+  timeline=!timeline;
+  try{localStorage.setItem(VIEW_KEY,timeline?'timeline':'recipient');}catch(_){/* preference unavailable */}
+  paintView();
+  renderMail();
+  listEl.scrollTop=0;
+});
+
+function paintPortrait(group){
+  const {name,heading,fallback}=group;
+  const previous=heading.firstElementChild;
+  const avatar=name&&OC.renderPeerAvatar?.(name,previous===fallback?null:previous);
+  const next=avatar||fallback;
+  if(next!==previous){
+    next.setAttribute('aria-hidden','true');
+    previous.replaceWith(next);
+  }
+}
+function makeGroup(name){
+  const el=document.createElement('section');
+  el.className='mail-assignee';
+  el.innerHTML='<h3 class="mail-assignee-name"><span class="mail-assignee-fallback" aria-hidden="true"></span>'+
+    '<span>'+E(name||'No direct recipient')+'</span></h3><div class="mail-assignments"></div>';
+  const group={name,el,heading:el.firstElementChild,fallback:el.querySelector('.mail-assignee-fallback'),list:el.lastElementChild};
+  paintPortrait(group);
+  return group;
+}
+function makeRow(assignment){
+  const el=document.createElement('article');
+  el.className='mail-assignment';
+  el.innerHTML='<button class="mail-request" type="button" aria-haspopup="dialog"></button>'+
+    '<button class="mail-reply" type="button" aria-haspopup="dialog" title="Open reply" hidden></button>';
+  const row={el,request:el.firstElementChild,reply:el.lastElementChild,history:null,assignment};
+  row.request.addEventListener('click',()=>openThread(row.assignment,row.request));
+  row.reply.addEventListener('click',()=>openThread(row.assignment,row.reply,latestReply(row.assignment)));
+  bindRoute(row.request,()=>assignmentRoute(row.assignment));
+  bindRoute(row.reply,()=>messageRoute(latestReply(row.assignment)));
+  return row;
+}
+function latestReply(assignment){
+  const confirmed=assignment.replies.at(-1),possible=assignment.inferred.at(-1);
+  return possible&&(!confirmed||chronological(possible,confirmed)>0)?possible:confirmed;
+}
+function sameItems(left,right){
+  if(left===right)return true;
+  return Boolean(left&&right&&left.length===right.length&&left.every((item,index)=>item===right[index]));
+}
+function paintRow(row,assignment){
+  const previous=row.assignment;
+  row.assignment=assignment;
+  const {request,replies}=assignment;
+  const latest=latestReply(assignment),received=Boolean(replies.length),awaitsReply=expectsReply(assignment);
+  if(row.request.markup&&request===previous.request&&latest===latestReply(previous)&&
+    received===Boolean(previous.replies.length)&&
+    sameItems(assignment.deliveries,previous.deliveries))return;
+  const state=!assignment.recipient?'No direct recipient':!awaitsReply?'Self-addressed notice':
+    received?'Reply received':'Awaiting a reply';
+  const sender=request.sender||'Unknown sender';
+  const urgency=[request,latest].some(m=>m&&highImportance(m.importance));
+  const direct=assignmentRoute(assignment).recipients;
+  const targets=direct.length?direct.map(name=>({name,kind:'to'})):request.recipients;
+  const recipients=targets.map(({name})=>name).join(', ')||'no direct recipient';
+  const action=awaitsReply?'Open request':'Open message';
+  const label=`${action}: ${titleFor(request)}, ${sender} to ${recipients}. ${state}${urgency?', high importance':''}`;
+  if(row.label!==label){
+    row.request.setAttribute('aria-label',label);
+    row.label=label;
+  }
+  const title=action+'. '+state;
+  if(row.request.title!==title)row.request.title=title;
+  const parties=routePeople(request.sender,targets);
+  const senderLine='<span class="mail-requester">'+parties+timeHtml(request.ts)+'</span>';
+  const delivery=timeline?'<span class="mail-timeline-start">'+senderLine+
+    (request.excerpt?'<span class="thread-excerpt">'+E(request.excerpt)+'</span>':'')+'</span>':senderLine;
+  const requestHtml='<span class="mail-state'+(received?' replied':'')+(urgency?' important':'')+
+    (awaitsReply?'':' no-reply')+'" aria-hidden="true"></span>'+
+    '<span class="mail-subject">'+E(titleFor(request))+'</span><span class="mail-open">'+icon('open')+'</span>'+delivery;
+  paintPeerMarkup(row.request,requestHtml);
+  if(timeline)return;
+  if(row.reply.hidden!==!latest)row.reply.hidden=!latest;
+  if(!latest)return;
+  const inferred=assignment.inferred.includes(latest);
+  row.reply.title=inferred?'Open possible reply':'Open reply';
+  const replyHtml=routePeople(latest.sender,latest.recipients)+timeHtml(latest.ts)+
+    '<span class="mail-reply-excerpt">'+replyExcerpt(latest,inferred)+'</span>';
+  paintPeerMarkup(row.reply,replyHtml);
+}
+function paintTimelineReplies(row){
+  const entries=threadEntries(row.assignment);
+  if(sameItems(entries,row.entries))return;
+  row.entries=entries;
+  if(row.history)row.history.hidden=!entries.length;
+  if(!entries.length)return;
+  if(!row.history){
+    row.history=document.createElement('div');
+    row.history.className='mail-timeline-replies';
+    row.el.appendChild(row.history);
+    row.history.addEventListener('click',event=>{
+      const button=event.target.closest('[data-reply]');
+      const message=button&&row.entries.find(m=>m.key===button.dataset.reply);
+      if(message)openThread(row.assignment,button,message);
+    });
+  }
+  const inferred=new Set(row.assignment.inferred);
+  const markup=entries.map(message=>replyHtml(message,inferred.has(message))).join('');
+  const focused=row.history.contains(document.activeElement)?document.activeElement.dataset.reply:null;
+  if(!paintPeerMarkup(row.history,markup))return;
+  for(const button of row.history.children){
+    button.title='Open message';
+    bindRoute(button,()=>messageRoute(row.entries.find(m=>m.key===button.dataset.reply)));
+    if(button.dataset.reply===focused)button.focus({preventScroll:true});
+  }
+}
+function reconcile(parent,want){
+  const keep=new Set(want);
+  for(const old of [...parent.children]){if(!keep.has(old))old.remove();}
+  let next=parent.firstElementChild;
+  for(const node of want){
+    if(node!==next)parent.insertBefore(node,next);
+    next=node.nextElementSibling;
+  }
+}
+function originFor(sender){
+  const selector='[data-agent="'+CSS.escape(sender)+'"]';
+  const node=(!graph.hasAttribute('hidden')&&graph.querySelector(selector))
+    ||document.querySelector('#roster .agent'+selector+':not(.filtered-out,.folded-out)');
+  const rect=node?.getBoundingClientRect?.();
+  return rect?.width&&rect.height?rect:null;
+}
+
+function renderMail({animate=false,fresh=new Set()}={}){
+  filterButton.toggleAttribute('data-filtered',Boolean(activeFilter||waitingOnly));
+  const visible=assignmentsForView(visibleAssignments());
+  const focus=cardsEl.contains(document.activeElement)?document.activeElement:null;
+  const moving=animate?OC.railPositions([
+    ...[...groupsByName.values()].map(group=>group.el),
+    ...[...rowsByKey.values()].map(row=>row.el)
+  ],listEl):null;
+  const groups=new Map(),used=new Set(),arrivals=[],timelineRows=[];
+  for(const a of visible){
+    const existing=rowsByKey.get(a.key);
+    const row=existing||makeRow(a);
+    const lastReply=existing&&latestReply(existing.assignment)?.key;
+    const latest=latestReply(a);
+    rowsByKey.set(a.key,row);
+    used.add(a.key);
+    paintRow(row,a);
+    if(timeline){
+      paintTimelineReplies(row);
+      timelineRows.push(row.el);
+      if(!existing&&fresh.has(a.request.key))arrivals.push([row.el,a.request.sender]);
+      else if(latest&&lastReply!==latest.key&&fresh.has(latest.key)){
+        const button=row.history?.querySelector('[data-reply="'+CSS.escape(latest.key)+'"]');
+        if(button)arrivals.push([button,latest.sender]);
+      }
+      continue;
+    }
+    const newGroup=!groupsByName.has(a.recipient);
+    const group=groupsByName.get(a.recipient)||makeGroup(a.recipient);
+    groupsByName.set(a.recipient,group);
+    if(!groups.has(group))groups.set(group,[]);
+    groups.get(group).push(row.el);
+    if((newGroup||!existing)&&fresh.has(a.request.key))arrivals.push([newGroup?group.el:row.el,a.request.sender]);
+    else if(latest&&lastReply!==latest.key&&fresh.has(latest.key))arrivals.push([row.reply,latest.sender]);
+  }
+  for(const [group,rows] of groups)reconcile(group.list,rows);
+  const visibleGroups=new Set(groups.keys());
+  for(const [name,group] of groupsByName)if(!visibleGroups.has(group))groupsByName.delete(name);
+  for(const key of rowsByKey.keys())if(!used.has(key))rowsByKey.delete(key);
+  const display=timeline?timelineRows:[...groups.keys()].map(group=>group.el);
+  if(!display.length){
+    const empty=cardsEl.querySelector('.mailempty')||document.createElement('p');
+    empty.className='mailempty';
+    const text=activeFilter||waitingOnly?'No matching requests':'No agent mail yet';
+    if(empty.textContent!==text)empty.textContent=text;
+    display.push(empty);
+  }
+  reconcile(cardsEl,display);
+  if(focus?.isConnected&&focus!==document.activeElement)focus.focus({preventScroll:true});
+  else if(focus&&!cardsEl.contains(document.activeElement)){hoveredRoute=focusedRoute=null;emitRoute();}
+  if(moving)OC.railMoveRows(moving);
+  for(const [node,sender] of arrivals)OC.railArrive(node,originFor(sender),listEl);
+}
+function ingest(list,{live=false}={}){
+  const fresh=new Set();
+  for(const raw of Array.isArray(list)?list:[]){
+    const next=normalizeMessage(raw);
+    if(!next)continue;
+    if(live&&seeded&&!byId.has(next.key))fresh.add(next.key);
+    mergeMessage(next);
+  }
+  renderMail({animate:fresh.size>0,fresh});
+}
 /* Escape the complete source before introducing our own small, fixed tag set.
    Link destinations and raw HTML are never emitted into the DOM. */
 function plainMarkdownLinks(source){
@@ -512,183 +662,234 @@ function renderMarkdown(source){
   return html.join('');
 }
 
+function peerHtml(name,fallback,title=''){
+  const portrait=name?'<span class="mail-peer-avatar" aria-hidden="true" data-mail-peer="'+E(name)+'"></span>':'';
+  return '<span class="mail-peer"'+(title?' title="'+E(title)+'"':'')+'>'+portrait+
+    '<span>'+E(name||fallback)+'</span></span>';
+}
+function routePeople(sender,recipients){
+  const destinations=recipients.map(({name,kind})=>peerHtml(name,'No direct recipient',kind==='to'?'':kind.toUpperCase()));
+  return '<span class="mail-route">'+peerHtml(sender,'Unknown sender')+icon('arrow')+
+    '<span class="mail-route-recipients">'+(destinations.join(' ')||peerHtml('','No direct recipient'))+'</span></span>';
+}
 function routeHtml(message){
-  const recipients=message.recipients.length?message.recipients:
-    [{name:'—',kind:'to'}];
-  return '<div class="drawer-route"><span class="drawer-sender">'+E(message.sender||'unknown')+'</span>'+
-    '<span class="drawer-arrow">→</span><span class="drawer-recipients">'+recipients.map(recipient=>
-      '<span class="drawer-recipient"><span class="recipient-kind">'+E(recipient.kind||'to')+'</span> '+
-      E(recipient.name)+'</span>').join('')+'</span></div>';
+  return '<div class="drawer-route">'+routePeople(message.sender,message.recipients)+timeHtml(message.ts)+'</div>';
 }
-
 function detailHtml(message){
-  const importance=message.importance||'normal';
-  const body=message.body_md==null?message.excerpt:message.body_md;
-  return routeHtml(message)+'<div class="drawer-meta"><span>'+E(exactTime(message.ts))+'</span>'+
-    '<span>'+E(relativeLabel(message.ts))+'</span><span class="imp '+(highImportance(importance)?'hi':'')+'">'+
-    E(importance)+'</span></div><h2>'+E(message.subject||'(no subject)')+'</h2>'+
-    '<div class="mail-md">'+(body?renderMarkdown(body):'<p class="md-empty">(no body)</p>')+'</div>';
+  const body=message.body_md??message.excerpt;
+  return routeHtml(message)+'<h2>'+E(titleFor(message))+'</h2>'+
+    '<div class="mail-md">'+(body?renderMarkdown(body):'<p class="md-empty">No message text</p>')+'</div>';
+}
+function replyHtml(message,inferred=false){
+  return '<button type="button" class="thread-item" data-reply="'+E(message.key)+'">'+routeHtml(message)+
+    '<span class="thread-excerpt">'+replyExcerpt(message,inferred)+'</span></button>';
+}
+function replyExcerpt(message,inferred){
+  const mark=inferred?linkMark('Possible reply (linked by delivery direction)','reverse')+' ':'';
+  return mark+E(message.excerpt||titleFor(message));
+}
+function threadEntries(assignment){
+  return [...assignment.followups,...assignment.replies,...assignment.inferred].sort(chronological);
 }
 
-function threadHtml(){
-  if(!threadReady)return'<div class="drawer-empty">loading thread…</div>';
-  if(!threadItems.length)return'<div class="drawer-empty">no thread messages found.</div>';
-  return '<div class="thread-chain">'+threadItems.map(message=>{
-    const current=currentMessage&&message.key===currentMessage.key;
-    return '<button type="button" class="thread-item '+(current?'current':'')+'" data-message-id="'+E(message.key)+'">'+
-      '<span class="thread-top"><span class="thread-from">'+E(message.sender||'unknown')+'</span>'+
-      '<span class="thread-time">'+E(relativeLabel(message.ts))+'</span></span>'+
-      '<span class="thread-excerpt">'+E(message.excerpt||message.subject||'(no excerpt)')+'</span></button>';
-  }).join('')+'</div>';
+function linkMark(label,symbol,className=''){
+  const css=className?' class="'+className+'"':'';
+  return '<span'+css+' role="img" title="'+label+'" aria-label="'+label+'">'+icon(symbol)+'</span>';
+}
+function drawerLinkSource(assignment,message=null){
+  const threaded=assignment.replies.length>0||assignment.followups.length>0;
+  const inferred=message?assignment.inferred?.some(item=>item.key===message.key):assignment.inferred?.length;
+  if(inferred){
+    const label=threaded&&!message?'Linked by thread and inferred delivery direction':'Linked by reverse delivery direction (inferred)';
+    return linkMark(label,'reverse','drawer-link-source');
+  }
+  return threaded?linkMark('Linked by thread','thread','drawer-link-source'):'';
 }
 
-function threadButtonLabel(){
-  if(threadLoading)return'thread (…)';
-  if(threadReady)return'thread ('+threadItems.length+')';
-  return'thread';
+function renderDrawer({initial=false}={}){
+  const state=drawer;
+  if(!state)return;
+  paintGraph();
+  emitRoute();
+  const focused=document.activeElement;
+  const focusAction=drawerHead.contains(focused)?focused.dataset.action:'';
+  const focusReply=drawerChain.contains(focused)?focused.dataset.reply:'';
+  const {message,assignment,entries}=state;
+  const head=drawerLinkSource(assignment,message)+(message?control('thread','Back to request','thread'):'')+
+    control('close','Close mail','close');
+  if(drawerHead.markup!==head){drawerHead.innerHTML=head;drawerHead.markup=head;}
+  const body=detailHtml(message||state.request||assignment.request)+
+    (state.failed?'<p class="drawer-empty" role="status">Could not load the full message. Reopen it to retry.</p>':'');
+  paintPeerMarkup(drawerBody,body);
+  drawerChain.hidden=Boolean(message||!entries.length);
+  const inferred=new Set(assignment.inferred);
+  const chain=entries.map(item=>replyHtml(item,inferred.has(item))).join('');
+  if(paintPeerMarkup(drawerChain,chain)){
+    drawerChain.querySelectorAll('[data-reply]').forEach(button=>{
+      bindRoute(button,()=>messageRoute(drawer?.entries.find(m=>m.key===button.dataset.reply)));
+    });
+  }
+  if(initial||!focused?.isConnected){
+    const next=(focusAction&&drawerHead.querySelector('[data-action="'+focusAction+'"]'))||
+      (!drawerChain.hidden&&focusReply&&[...drawerChain.children].find(button=>button.dataset.reply===focusReply))||
+      drawerHead.querySelector('[data-action="close"]');
+    next.focus({preventScroll:true});
+  }
 }
-
-function updateThreadButton(){
-  const button=drawerEl.querySelector('[data-action="thread"]');
-  if(button)button.textContent=threadButtonLabel();
+function anchorClip(anchor){
+  if(!anchor?.isConnected||!anchor.getClientRects().length)return null;
+  const a=anchor.getBoundingClientRect(),b=drawerEl.getBoundingClientRect();
+  return `inset(${Math.max(0,a.top-b.top)}px ${Math.max(0,b.right-a.right)}px ${Math.max(0,b.bottom-a.bottom)}px ${Math.max(0,a.left-b.left)}px round 8px)`;
 }
-
-function renderDrawer(){
-  if(!drawerOpen||!currentMessage)return;
-  const hasThread=Boolean(threadKeyOf(currentMessage.thread_id));
-  const modeButton=hasThread?(drawerMode==='thread'?
-    '<button type="button" class="drawer-mode" data-action="detail">message</button>':
-    '<button type="button" class="drawer-mode" data-action="thread">'+E(threadButtonLabel())+'</button>'):'';
-  drawerEl.innerHTML='<div class="drawer-head"><button type="button" class="drawer-back" data-action="close" title="Back to mail list">←</button>'+
-    '<span class="drawer-label">'+(drawerMode==='thread'?'THREAD':'MESSAGE')+'</span>'+modeButton+'</div>'+
-    '<div class="drawer-scroll">'+(drawerMode==='thread'?threadHtml():detailHtml(currentMessage))+'</div>';
-  drawerEl.classList.add('open');
-  drawerEl.setAttribute('aria-hidden','false');
+function morphDrawer(anchor,open){
+  clearTimeout(drawerMotionTimer);
+  drawerMotion?.cancel();
+  drawerEl.inert=!open;
+  if(document.hidden){
+    drawerEl.hidden=!open;
+    return;
+  }
+  const origin=anchorClip(anchor);
+  const frames=!motion.matches&&origin
+    ?[{clipPath:origin,opacity:.35},{clipPath:'inset(0 round 0px)',opacity:1}]
+    :[{opacity:0},{opacity:1}];
+  const duration=motion.matches?90:open?260:215;
+  const animation=drawerEl.animate(open?frames:frames.reverse(),{
+    duration,easing:'cubic-bezier(.2,.8,.2,1)',fill:'both'
+  });
+  drawerMotion=animation;
+  const finish=()=>{
+    if(drawerMotion!==animation)return;
+    clearTimeout(drawerMotionTimer);
+    if(!open&&!drawer)drawerEl.hidden=true;
+    drawerMotion=null;
+    animation.cancel();
+  };
+  animation.onfinish=finish;
+  // A hidden or occluded compositor can suspend frame callbacks mid-close.
+  drawerMotionTimer=setTimeout(finish,duration+75);
 }
-
-function closeDrawer(){
-  if(!drawerOpen)return;
-  messageRequest++;
-  threadRequest++;
-  threadLoading=false;
-  showThreadWhenReady=false;
-  drawerOpen=false;
-  drawerEl.classList.remove('open');
-  drawerEl.setAttribute('aria-hidden','true');
-  listEl.removeAttribute('aria-hidden');
-  listEl.inert=false;
-  cardsByKey.get(lastTrigger?.dataset.mid)?.card.focus();
-}
-
 async function fetchJson(url){
   try{
     const response=await fetch(url,{cache:'no-store'});
     if(!response.ok)return null;
     const data=await response.json();
     return data&&data.ok!==false?data:null;
-  }catch(error){
-    return null;
-  }
+  }catch(_){return null;}
 }
+async function messageBody(message){
+  if(message.body_md!==null)return message;
+  const data=await fetchJson('/telemetry/mail/message?id='+encodeURIComponent(message.id));
+  const normalized=normalizeMessage(data?.message);
+  return normalized?mergeMessage(normalized):null;
+}
+async function openThread(assignment,anchor,selectedMessage=null){
+  setFilterOpen(false);
+  const entries=threadEntries(assignment);
+  const state={assignment,anchor,request:assignment.request,entries,message:null,failed:false};
+  drawer=state;
+  hoveredRoute=focusedRoute=null;
+  drawerEl.hidden=false;
+  drawerEl.inert=false;
+  listEl.inert=true;
+  if(selectedMessage)openReply(selectedMessage);
+  else renderDrawer({initial:true});
+  drawerScroll.scrollTop=0;
+  morphDrawer(anchor,true);
 
-async function openMessage(id,trigger){
-  const request=++messageRequest;
-  const data=await fetchJson('/telemetry/mail/message?id='+encodeURIComponent(id));
-  if(request!==messageRequest||!data||!data.message)return;
-  const normalized=normalizeMessage(data.message);
-  if(!normalized)return;
-  const message=mergeMessage(normalized);
-  const nextThreadKey=threadKeyOf(message.thread_id);
-  if(nextThreadKey!==threadKey){
-    threadRequest++;
-    threadKey=nextThreadKey;
-    threadItems=[];
-    threadReady=false;
-    threadLoading=false;
-    showThreadWhenReady=false;
+  const threadKey=assignment.thread;
+  const threadFetch=threadKey?fetchJson('/telemetry/mail/thread?thread_id='+
+    encodeURIComponent(threadKey)+'&limit=50'):null;
+  // The thread endpoint only returns records bearing that thread key.
+  const rootFetch=isMessageId(threadKey)&&!byId.has(threadKey)?
+    fetchJson('/telemetry/mail/message?id='+encodeURIComponent(threadKey)):null;
+  const request=await messageBody(assignment.request);
+  if(drawer!==state)return;
+  state.request=request||assignment.request;
+  state.requestFailed=!request;
+  if(!state.message){
+    state.failed=state.requestFailed;
+    renderDrawer();
   }
-  currentMessage=message;
-  drawerMode='detail';
-  if(trigger)lastTrigger=trigger;
-  if(!drawerOpen){
-    drawerOpen=true;
-    listEl.setAttribute('aria-hidden','true');
-    listEl.inert=true;
+  const [thread,rootData]=await Promise.all([threadFetch,rootFetch]);
+  if(drawer!==state)return;
+  let fullRequest=request,original=assignment.request;
+  const root=normalizeMessage(rootData?.message);
+  if(root||Array.isArray(thread?.messages)){
+    if(root)mergeMessage(root);
+    for(const raw of Array.isArray(thread?.messages)?thread.messages:[]){
+      const normalized=normalizeMessage(raw);
+      if(normalized)mergeMessage(normalized);
+    }
+    const updatedAssignments=assignmentsForView(assignments());
+    const updated=updatedAssignments.find(a=>a.key===assignment.key)||
+      updatedAssignments.find(a=>assignmentRoute(a).recipients.includes(assignment.request.sender)&&
+        a.replies.some(m=>m.key===assignment.request.key));
+    if(updated){
+      original=updated.request;
+      if(original.key!==assignment.request.key)fullRequest=await messageBody(original);
+      if(drawer!==state)return;
+      state.assignment=updated;
+      state.entries=threadEntries(updated);
+    }
+  }
+  state.request=fullRequest||original;
+  state.requestFailed=!fullRequest;
+  if(!state.message){
+    state.failed=state.requestFailed;
   }
   renderDrawer();
-  const back=drawerEl.querySelector('.drawer-back');
-  if(trigger&&back)back.focus({preventScroll:true});
-  if(threadKey)loadThread(false);
 }
-
-async function loadThread(showWhenReady){
-  if(!currentMessage||!threadKey)return;
-  if(threadReady){
-    if(showWhenReady){drawerMode='thread';renderDrawer();}
-    return;
-  }
-  showThreadWhenReady=showThreadWhenReady||showWhenReady;
-  if(threadLoading)return;
-  threadLoading=true;
-  updateThreadButton();
-  const requestedKey=threadKey;
-  const request=++threadRequest;
-  const data=await fetchJson('/telemetry/mail/thread?thread_id='+encodeURIComponent(currentMessage.thread_id)+'&limit=50');
-  if(request!==threadRequest||requestedKey!==threadKey)return;
-  threadLoading=false;
-  if(data&&Array.isArray(data.messages)){
-    threadItems=data.messages.map(normalizeMessage).filter(Boolean).sort((a,b)=>(a.ts-b.ts)||a.key.localeCompare(b.key));
-    threadReady=true;
-  }
-  const switchToThread=showThreadWhenReady&&threadReady;
-  showThreadWhenReady=false;
-  if(switchToThread){
-    drawerMode='thread';
-    renderDrawer();
-  }else{
-    updateThreadButton();
-  }
-}
-
-drawerEl.addEventListener('click',event=>{
-  const action=event.target.closest('[data-action]');
-  if(action){
-    if(action.dataset.action==='close')closeDrawer();
-    else if(action.dataset.action==='detail'){drawerMode='detail';renderDrawer();}
-    else if(action.dataset.action==='thread')loadThread(true);
-    return;
-  }
-  const item=event.target.closest('.thread-item');
+async function openReply(item){
   if(!item)return;
-  if(currentMessage&&item.dataset.messageId===currentMessage.key){
-    drawerMode='detail';
-    renderDrawer();
-    return;
-  }
-  openMessage(item.dataset.messageId,null);
+  const state=drawer,token=++replyRequest;
+  state.message=item;state.failed=false;
+  renderDrawer({initial:true});
+  drawerScroll.scrollTop=0;
+  const message=await messageBody(item);
+  if(token!==replyRequest||drawer!==state)return;
+  state.message=message||item;state.failed=!message;
+  renderDrawer();
+}
+function closeDrawer(restoreFocus=true){
+  if(!drawer)return;
+  const {anchor}=drawer;
+  ++replyRequest;
+  drawer=null;
+  hoveredRoute=focusedRoute=null;
+  paintGraph();
+  emitRoute();
+  morphDrawer(anchor,false);
+  listEl.inert=false;
+  renderMail();
+  if(restoreFocus)(anchor?.isConnected?anchor:filterButton).focus({preventScroll:true});
+}
+drawerEl.addEventListener('click',event=>{
+  if(!drawer)return;
+  const button=event.target.closest('button');
+  if(button?.dataset.action==='close')closeDrawer();
+  else if(button?.dataset.action==='thread'){
+    ++replyRequest;drawer.message=null;drawer.failed=drawer.requestFailed;
+    renderDrawer({initial:true});drawerScroll.scrollTop=0;
+  }else if(button?.dataset.reply!==undefined)openReply(drawer.entries.find(item=>item.key===button.dataset.reply));
 });
 
 document.addEventListener('keydown',event=>{
-  if(event.key!=='Escape'||!drawerOpen||document.querySelector('.overlay.on'))return;
-  event.preventDefault();
-  event.stopPropagation();
-  closeDrawer();
+  if(event.key!=='Escape'||document.querySelector('.overlay.on'))return;
+  if(drawer){event.preventDefault();event.stopPropagation();closeDrawer();}
+  else if(!filterEl.hidden){event.preventDefault();event.stopPropagation();setFilterOpen(false,true);}
 },true);
-
-document.addEventListener('oc:mail',event=>ingest(event.detail&&event.detail.messages));
-document.addEventListener('oc:agents',()=>refreshPeerAvatars(cardsEl.querySelectorAll('.mtop')));
-document.addEventListener('oc:filter-agent',event=>{
-  selectMailFilter(event.detail&&event.detail.agent);
+document.addEventListener('oc:mail',event=>ingest(event.detail?.messages,{live:true}));
+document.addEventListener('oc:agents',()=>{
+  groupsByName.forEach(paintPortrait);
+  refreshPeerAvatars();
 });
-document.addEventListener('oc:focus-agent',event=>{
-  selectMailFilter(event.detail&&event.detail.name,{requireExisting:true});
-});
-ingest(OC.mailBacklog());   // live messages the thin poller saw before module load
-renderMail();
-
-/* /mail routes may not exist during a staggered merge. A 404 or any malformed
-   response is intentionally ignored, leaving the live-only rail intact. */
+document.addEventListener('oc:filter-agent',event=>selectMailFilter(event.detail?.agent));
+document.addEventListener('oc:focus-agent',event=>selectMailFilter(event.detail?.name,{requireExisting:true}));
+paintView();
+ingest(OC.mailBacklog());
 fetchJson('/telemetry/mail/recent?limit=40').then(data=>{
-  if(data&&Array.isArray(data.messages))ingest(data.messages);
+  if(Array.isArray(data?.messages))ingest(data.messages);
+  seeded=true;
 });
 })();

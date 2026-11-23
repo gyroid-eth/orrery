@@ -114,7 +114,7 @@ The spawn forest is shown as the topology, and recent mail as temporary edges / 
 
 When labels overlap with many nodes, disclose details on hover / focus instead of adding always-on labels.
 
-## Agent Mail
+## ORRERY Mail
 
 A mail card shows the subject, sender, importance, and time first, and the body opens in the detail view. Markdown is rendered only as a safe, limited subset.
 

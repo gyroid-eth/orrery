@@ -40,7 +40,8 @@
         const focused=editing.form.contains(document.activeElement)?document.activeElement:null;
         tile.after(editing.form);focused?.focus({preventScroll:true});
       }
-      editing.form.hidden=tile.classList.contains('filtered-out');
+      const hidden=tile.matches('.filtered-out,.folded-out');
+      if(editing.form.hidden!==hidden)editing.form.hidden=hidden;
     }
     async function save(state){
       if(editing!==state||state.saving)return;

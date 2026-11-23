@@ -1,142 +1,134 @@
-/* ── readable agent-mail rail (right rail, below mini-orrery) ──
-   Owned by mail_view.js. Loaded from cockpit.html. */
-.mail .scroll.mailview-host{
+/* ORRERY Mail sits below the graph. Indentation, rather than card outlines,
+   shows who received a request and which reply belongs to it. */
+.mail .scroll.mailview-host {
   position:relative;flex:1;min-height:0;display:block;overflow:hidden;padding:0;
+  font:12px/1.45 var(--rail-sans);font-variant-numeric:tabular-nums;
 }
-.mailview-list{
-  height:100%;overflow-y:auto;padding:0 12px 12px;
+.mailview-host [hidden],.mailfilters[hidden],.mail .miniorrery[hidden],
+.mail-selected-route[hidden],#mailGraphBtn[hidden] {display:none!important}
+.mailview-list {height:100%;overflow-y:auto;padding:9px 16px 20px}
+.mail-head {position:relative;gap:8px}
+.mail .mail-head {font-size:13px}
+.mail-head .tag {margin-left:auto;font:11px var(--rail-sans);color:var(--theme-status-alert,#ff6a5d)}
+.mail-head > :first-child {margin-right:auto}
+.mail-selected-route {
+  flex:none;
+  padding:10px 16px;border-bottom:1px solid var(--hair);font:12px/1.45 var(--rail-sans);
 }
-.mailfilters{
-  position:sticky;z-index:4;top:0;display:flex;align-items:center;gap:5px;
-  margin:0 -12px 9px;padding:10px 12px 8px;overflow-x:auto;
-  background:linear-gradient(180deg,var(--panel) 76%,rgba(17,20,25,.86));
-  border-bottom:1px solid var(--hair-2);scrollbar-width:none;
+.mail-selected-route .mail-route > .mail-icon {color:var(--amber)}
+.mailfilters {
+  position:absolute;z-index:5;inset:calc(100% - 3px) 9px auto auto;width:min(224px,calc(100% - 18px));
+  max-height:min(320px,55dvh);overflow:auto;padding:6px;border-radius:12px;background:var(--elev);
+  transform-origin:top right;font:12px/1.45 var(--rail-sans);
+  box-shadow:0 0 0 1px var(--hair),0 10px 24px var(--theme-shadow-low,rgb(0 0 0 / .28));
 }
-.mailfilters::-webkit-scrollbar{display:none}
-.mailchip{
-  flex:0 0 auto;max-width:94px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  padding:3px 7px;border:1px solid var(--hair);border-radius:10px;background:transparent;
-  color:var(--ink-faint);font-size:8.5px;letter-spacing:.05em;cursor:pointer;
-  transition:border-color .18s,color .18s,background .18s;
+.mailfilters button {
+  display:block;width:100%;background:transparent;padding:6px 10px;border:0;
+  border-radius:6px;text-align:left;overflow-wrap:anywhere;cursor:pointer;
 }
-.mailchip:hover,.mailchip:focus-visible{color:var(--ink);border-color:rgba(236,229,214,.18);outline:none}
-.mailchip.on{color:var(--ink);background:var(--elev);border-color:rgba(236,229,214,.2)}
-.mailchip-more{cursor:default;max-width:none}
-.mailcards{display:flex;flex-direction:column;gap:10px}
+.mailfilters button:is(:hover,[aria-pressed="true"]) {background:var(--rail-selection);color:var(--amber)}
+.mail-head .rail-icon[data-filtered] {background:var(--rail-selection);color:var(--amber)}
+.mailview-host button:focus-visible,.mailfilters button:focus-visible {outline:1px solid var(--amber);outline-offset:-1px}
+.mail-icon {
+  flex:none;width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.55;
+  stroke-linecap:round;stroke-linejoin:round;
+}
+.mail-assignee + .mail-assignee {margin-top:14px}
+.mail-assignee-name {
+  display:flex;align-items:center;gap:8px;min-height:29px;margin:0;
+  font:500 13px/1.25 var(--serif);
+}
+.mail-assignee-name > :last-child {min-width:0;overflow-wrap:anywhere}
+.mail-assignee-name .conversation-avatar.medal,.mail-assignee-fallback {
+  flex:none;width:25px;height:25px;margin:0;
+}
+.mail-assignee-fallback {
+  border-radius:50%;border:1px solid var(--hair);background:var(--panel-2);
+}
+:is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .face {box-shadow:none;user-select:none}
+:is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .ini {visibility:hidden}
+:is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .provider-badge {
+  width:11px;height:11px;right:-3px;bottom:-2px;
+}
+:is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .provider-logo {height:7px;max-width:8px}
+.mail-assignments {margin-left:28px}
+.mail-assignment + .mail-assignment {margin-top:6px}
+.mail-request,.mail-reply {
+  width:100%;padding:5px 7px;border:0;border-radius:8px;
+  background:transparent;color:var(--ink);text-align:left;cursor:pointer;
+}
+.mail-request:is(:hover,:focus-visible),.mail-reply:hover,.thread-item:hover {background:var(--rail-selection)}
+.mail-request {
+  display:grid;grid-template-columns:12px minmax(0,1fr) 12px;
+  gap:3px 5px;align-items:center;
+}
+.mail-state {
+  width:9px;height:9px;border-radius:50%;border:1px solid currentColor;color:var(--ink-dim);
+}
+.mail-state.replied {background:linear-gradient(90deg,currentColor 50%,transparent 50%)}
+.mail-state.no-reply {visibility:hidden}
+.mail-state.important {color:var(--theme-status-alert,#ff6a5d)}
+.mail-open {display:flex;justify-content:center;color:var(--ink-dim)}
+.mail-request:is(:hover,:focus-visible) .mail-open {color:var(--amber)}
+@media (prefers-reduced-motion: no-preference) {
+  .mail-open {transition:transform .15s ease}
+  .mail-request:is(:hover,:focus-visible) .mail-open {transform:translateX(2px)}
+}
+.mail-subject {font-weight:600;overflow-wrap:anywhere}
+.mail-requester {
+  grid-column:2 / -1;display:flex;align-items:center;gap:5px;color:var(--ink-dim);
+}
+.mail-requester > span {min-width:0;overflow-wrap:anywhere}
+.mail-requester time {margin-left:auto}
+.mailview-host time {flex:none;color:var(--ink-dim);font-size:11px;white-space:nowrap}
+.mail-reply {
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 5px;
+  width:calc(100% - 17px);margin-left:17px;
+}
+.mail-route,.mail-route-recipients,.mail-peer {display:flex;align-items:center;min-width:0}
+.mail-route {gap:5px;font-weight:500}
+.mail-route-recipients {flex-wrap:wrap;gap:4px 7px}
+.mail-peer {gap:5px;max-width:100%;overflow-wrap:anywhere}
+.mail-route > .mail-icon {width:13px;height:13px;color:var(--ink-dim)}
+.mail-peer-avatar,.mail-peer-avatar .conversation-avatar.medal {flex:none;width:16px;height:16px}
+.mail-peer-avatar:empty {border:1px solid var(--hair);border-radius:50%;background:var(--panel-2)}
+.mail-peer-avatar .conversation-avatar.medal {display:block}
+.mail-peer-avatar .conversation-avatar .provider-badge {width:9px;height:9px}
+.mail-peer-avatar .conversation-avatar .provider-logo {height:6px;max-width:7px}
+.mail-reply-excerpt {grid-column:1 / -1;color:var(--ink-dim);overflow-wrap:anywhere}
+.mailcards > .mail-assignment + .mail-assignment {margin-top:12px}
+.mail-timeline-start {
+  position:relative;grid-column:2 / -1;min-width:0;margin:0 0 -5px -10px;padding:0 0 5px 9px;
+  border-left:1px solid var(--hair);
+}
+.mail-timeline-replies {margin-left:14px;padding-left:9px;border-left:1px solid var(--hair)}
+.mail-timeline-replies .thread-item {position:relative;padding:5px 7px 5px 0}
+.mail-timeline-start::before,.mail-timeline-replies .thread-item::before {
+  content:"";position:absolute;width:5px;height:5px;border-radius:50%;background:var(--ink-dim);
+}
+.mail-timeline-start::before {top:7px;left:-2px}
+.mail-timeline-replies .thread-item::before {top:12px;left:-12px}
+.mail-timeline-start .thread-excerpt {margin-top:2px}
+.mailempty {color:var(--ink-dim);margin:6px 0}
 
-.msg{
-  width:100%;display:block;padding:11px 12px;border-radius:10px;text-align:left;font:inherit;color:inherit;
-  background:var(--panel-2);border:1px solid var(--hair-2);cursor:pointer;
-  /* Keep off-screen card contents out of layout and paint during drawer transitions. */
-  content-visibility:auto;contain-intrinsic-block-size:auto 60px;
-  animation:mail-rise .6s cubic-bezier(.2,.7,.2,1) backwards;
-  transition:border-color .2s,background .2s,transform .2s;
+.maildrawer {
+  position:absolute;z-index:8;inset:0;display:flex;flex-direction:column;
+  background:var(--panel);overflow:hidden;
 }
-@keyframes mail-rise{
-  from{opacity:0;transform:translateY(8px)}
-  to{opacity:1;transform:none}}
-.msg:hover,.msg:focus-visible{border-color:var(--hair);background:var(--elev);outline:none}
-/* live arrival: the card lands where the comet pointed — it slides in from
-   above while its border carries the comet's heat, cooling over ~2.4s.
-   Cards already on screen never re-run the entrance; they FLIP-slide down. */
-.msg.settled{animation:none;opacity:1;transform:none}
-.msg.landing{
-  animation:mail-land .5s cubic-bezier(.2,.75,.25,1),
-            mail-ember 2.4s ease-out}
-@keyframes mail-land{
-  from{opacity:0;transform:translateY(-14px)}
-  to{opacity:1;transform:none}}
-@keyframes mail-ember{
-  0%{border-color:rgba(242,182,90,.55);background:rgba(242,182,90,.055);
-     box-shadow:0 0 18px rgba(242,182,90,.13)}
-  100%{border-color:var(--hair-2);box-shadow:none}}
-.msg:active{transform:translateY(1px)}
-.msg .mtop{display:flex;align-items:center;gap:7px;margin-bottom:5px;min-width:0}
-.msg .from{
-  flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font-family:var(--serif);font-size:12.5px;color:var(--ink);
+.drawer-head {
+  flex:none;display:flex;justify-content:flex-end;gap:4px;align-items:center;
+  min-height:39px;padding:3px 12px;
 }
-.msg .arrow{flex:0 0 auto;color:var(--ink-faint);font-size:11px}
-.msg .to{
-  flex:1 1 0;min-width:0;padding-right:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font-size:10.5px;color:var(--ink-dim);
-}
-.msg .mail-peer{display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:100%;vertical-align:middle;padding:2px 0}
-.msg .mail-peer-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.msg .mail-peer[hidden],.msg .mail-more[hidden]{display:none}
-.msg .to.is-stacked .mail-separator{display:none}
-.msg .to.is-stacked{display:flex;align-items:center}
-.msg .is-stacked .mail-peer{flex:none;max-width:none;margin-left:-4px}
-.msg .is-stacked .mail-peer.is-first{margin-left:0}
-.msg .is-stacked .mail-peer-name{display:none}
-.msg .mail-more{flex:none;margin-left:4px;font:10px var(--mono);white-space:nowrap}
-.msg .mail-more.is-only{margin-left:0}
-.msg .conversation-avatar.medal{flex:none;width:18px;height:18px;margin:0;-webkit-user-select:none;user-select:none}
-.msg .conversation-avatar .face{font-size:10px;box-shadow:0 0 0 1px var(--hair)}
-.msg .conversation-avatar .provider-badge{right:-3px;bottom:-2px;width:10px;height:10px;border-width:1px}
-.msg .conversation-avatar .provider-badge .provider-logo{height:7px;max-width:8px}
-.msg .conversation-avatar .pill.eng{display:none}
-.mailview-host .imp{
-  flex:0 0 auto;margin-left:auto;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;
-  padding:1px 5px;border-radius:3px;border:1px solid var(--hair);color:var(--ink-faint);
-}
-.mailview-host .imp.hi{color:var(--amber);border-color:rgba(242,182,90,.35)}
-.msg .body{
-  display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;
-  font-size:11.5px;line-height:1.5;color:var(--ink-dim);
-}
-.msg .time{display:block;font-size:9.5px;color:var(--ink-faint);margin-top:6px;letter-spacing:.05em}
-.mailempty{color:var(--ink-faint);font-size:11px;padding:14px 6px;letter-spacing:.03em;line-height:1.6}
-
-.maildrawer{
-  position:absolute;z-index:8;inset:0;display:flex;flex-direction:column;min-width:0;
-  background:var(--panel);border-left:1px solid var(--hair);
-  transform:translateX(102%);visibility:hidden;pointer-events:none;
-  transition:transform .28s cubic-bezier(.2,.72,.2,1),visibility 0s linear .28s;
-  box-shadow:-18px 0 45px rgba(0,0,0,.28);
-}
-.maildrawer.open{
-  transform:translateX(0);visibility:visible;pointer-events:auto;
-  transition:transform .28s cubic-bezier(.2,.72,.2,1);
-}
-.drawer-head{
-  flex:0 0 auto;display:flex;align-items:center;gap:9px;min-height:45px;padding:8px 11px;
-  border-bottom:1px solid var(--hair-2);background:rgba(17,20,25,.94);
-}
-.drawer-back,.drawer-mode{
-  border:1px solid var(--hair);background:transparent;color:var(--ink-dim);cursor:pointer;
-}
-.drawer-back{
-  width:28px;height:27px;border-radius:6px;font-size:15px;line-height:1;
-}
-.drawer-mode{
-  margin-left:auto;padding:4px 7px;border-radius:9px;font-size:8.5px;letter-spacing:.07em;
-  text-transform:uppercase;
-}
-.drawer-back:hover,.drawer-back:focus-visible,.drawer-mode:hover,.drawer-mode:focus-visible{
-  color:var(--ink);border-color:rgba(236,229,214,.2);outline:none;
-}
-.drawer-label{font-size:8.5px;letter-spacing:.22em;color:var(--ink-faint)}
-.drawer-scroll{flex:1;min-height:0;overflow-y:auto;padding:15px 14px 24px}
-.drawer-route{display:flex;align-items:flex-start;gap:7px;min-width:0;margin-bottom:9px}
-.drawer-sender{font-family:var(--serif);font-size:14px;line-height:1.25;color:var(--ink);overflow-wrap:anywhere}
-.drawer-arrow{color:var(--ink-faint);font-size:11px;line-height:1.6}
-.drawer-recipients{display:flex;flex-direction:column;gap:4px;min-width:0;color:var(--ink-dim)}
-.drawer-recipient{font-size:10.5px;line-height:1.35;overflow-wrap:anywhere}
-.recipient-kind{
-  color:var(--ink-faint);font-size:7.5px;letter-spacing:.1em;text-transform:uppercase;
-}
-.drawer-meta{display:flex;align-items:center;flex-wrap:wrap;gap:5px 8px;margin-bottom:13px;color:var(--ink-faint);font-size:8.5px}
-.drawer-meta .imp{margin-left:0}
-.maildrawer h2{
-  margin:0 0 15px;font-family:var(--serif);font-size:18px;font-weight:500;line-height:1.25;
-  letter-spacing:.01em;color:var(--ink);overflow-wrap:anywhere;
-}
-.mail-md{font-size:10.75px;line-height:1.62;color:var(--ink-dim);overflow-wrap:anywhere}
+.drawer-link-source {display:flex;margin-right:auto;padding:0 5px;color:var(--ink-dim)}
+.drawer-scroll {flex:1;min-height:0;overflow-y:auto;padding:0 17px 22px}
+.drawer-route {display:flex;align-items:flex-start;gap:5px;overflow-wrap:anywhere}
+.drawer-route time {margin-left:auto}
+.maildrawer h2 {margin:10px 0;font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+.mail-md{line-height:1.7;color:var(--ink-dim);overflow-wrap:anywhere}
 .mail-md h1,.mail-md h2,.mail-md h3,.mail-md h4{
-  margin:15px 0 6px;font-family:var(--serif);font-weight:500;line-height:1.25;color:var(--ink);
+  margin:15px 0 6px;font-weight:600;line-height:1.25;color:var(--ink);
 }
-.mail-md h1{font-size:16px}.mail-md h2{font-size:14.5px}.mail-md h3{font-size:13px}.mail-md h4{font-size:11.5px}
+.mail-md h1,.mail-md h2{font-size:13px}.mail-md h3,.mail-md h4{font-size:12px}
 .mail-md p{margin:0 0 5px;white-space:pre-wrap}
 .mail-md strong{font-weight:600;color:var(--ink)}
 .mail-md code{
@@ -152,28 +144,14 @@
 .md-marker{text-align:right;padding-right:5px;color:var(--ink-faint)}
 .md-space{height:7px}
 .md-empty{color:var(--ink-faint)}
-.drawer-empty{padding:18px 2px;color:var(--ink-faint);font-size:10.5px;line-height:1.6}
 
-.thread-chain{display:flex;flex-direction:column;gap:7px}
-.thread-item{
-  width:100%;display:block;padding:9px 10px;border:1px solid var(--hair-2);border-radius:8px;
-  background:var(--panel-2);color:inherit;text-align:left;font:inherit;cursor:pointer;
-  transition:border-color .18s,background .18s;
+.thread-chain {margin-top:14px;border-left:1px solid var(--hair);padding-left:6px}
+.thread-item {
+  display:block;width:100%;padding:7px;border:0;border-radius:7px;background:transparent;
+  text-align:left;color:var(--ink);cursor:pointer;
 }
-.thread-item:hover,.thread-item:focus-visible{border-color:var(--hair);background:var(--elev);outline:none}
-.thread-item.current{border-color:rgba(236,229,214,.2);box-shadow:inset 2px 0 0 var(--ink-dim)}
-.thread-top{display:flex;align-items:baseline;gap:8px;margin-bottom:4px}
-.thread-from{
-  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font-family:var(--serif);font-size:12px;color:var(--ink);
-}
-.thread-time{flex:0 0 auto;margin-left:auto;font-size:8.5px;color:var(--ink-faint)}
-.thread-excerpt{
-  display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;
-  font-size:10px;line-height:1.45;color:var(--ink-dim);
-}
-
-@media(prefers-reduced-motion:reduce){
-  .msg,.msg.landing{animation:none;opacity:1;transform:none}
-  .maildrawer,.maildrawer.open{transition:none}
+.thread-excerpt {display:block;color:var(--ink-dim);overflow-wrap:anywhere}
+.drawer-empty {color:var(--theme-status-alert,#ff6a5d)}
+@media (prefers-reduced-motion: reduce) {
+  .agent,.mailview-host button {transition:none}
 }
