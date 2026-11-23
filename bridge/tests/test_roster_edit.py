@@ -126,7 +126,8 @@ def test_editor_saves_role_and_task_without_changing_other_annotations(editor):
     }
     assert js("tiles.get('BuilderFixture').querySelector('.roster-role').textContent") == 'reviewer'
     assert js("currentAgentNamed('BuilderFixture').task") == 'Review generated fixtures'
-    assert js("tiles.get('BuilderFixture').querySelector('.statetext,.ctx,.pill.model')") is None
+    assert js("tiles.get('BuilderFixture').querySelector('.statetext')") is None
+    assert js("tiles.get('BuilderFixture').querySelector('.roster-model').textContent") == 'gpt-6'
     open_editor(js, wait)
     assert js("document.querySelector('.roster-edit-task').value") == 'Review generated fixtures'
     js("document.querySelector('.roster-edit-cancel').click()")

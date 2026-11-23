@@ -10,7 +10,8 @@ def prepare(cockpit, width=320, theme='dark'):
     js, wait, _, _, _ = cockpit
     stable_roster(js)
     wait("document.querySelector('#mail .mailcards')!==null")
-    js("""rosterAnnotationEpoch++;
+    js("""document.getElementById('mailViewBtn').click();
+      rosterAnnotationEpoch++;
       currentAgents=['BuildNode','AuditNode'].map(name=>({name,provider:'openai',running:true}));
       window.mailGroupFixture={id:201,sender:'LaunchNode',subject:'Inspect <img src=x> and the generated trace',
         recipients:['BuildNode','AuditNode','ExternalNode'],importance:'high',ts:2000000000};

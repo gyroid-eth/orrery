@@ -48,15 +48,15 @@ const message = {
   subject: value, excerpt: value, ts: 2000000000,
   body_md: "**bold** `code`\n" + value + "\n[label](javascript:marker())"
 };
-console.log(JSON.stringify([detailHtml(message), replyHtml(message), drawerLinkSource({
-  request: message, replies: [message], followups: []
+console.log(JSON.stringify([detailHtml(message), replyHtml(message, true), drawerLinkSource({
+  request: message, replies: [message], inferred: [], followups: []
 })]));
 """
     allowed = {
         'div': {'class'}, 'span': {'class', 'title', 'role', 'aria-label', 'aria-hidden', 'data-mail-peer'},
         'h2': set(), 'p': set(), 'code': set(), 'strong': set(),
         'time': {'title'}, 'button': {'class', 'type', 'data-reply'},
-        'svg': {'class', 'viewbox', 'aria-hidden'}, 'path': {'d'},
+        'svg': {'class', 'viewbox', 'aria-hidden'}, 'path': {'d'}, 'circle': {'cx', 'cy', 'r'},
     }
     details, reply, link = run_js(script)
     for rendered in (details, reply, link):

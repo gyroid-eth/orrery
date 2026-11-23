@@ -277,6 +277,13 @@
   }
   .agent > .medal{width:34px;height:34px}
   .agent > .medal .ring{inset:-2px}
+  .agent:is(.working,[data-folded-working]) > .medal .ring::after{
+    content:"";position:absolute;inset:-2px;border:1.5px solid transparent;border-radius:50%;
+    border-top-color:var(--amber);border-right-color:var(--amber);pointer-events:none;
+  }
+  @media (prefers-reduced-motion:no-preference){
+    .agent:is(.working,[data-folded-working]) > .medal .ring::after{animation:spin 2.8s linear infinite}
+  }
   .agent .pill.eng{display:none}
   .agent-status{
     position:absolute;right:11px;top:50%;translate:0 -50%;width:7px;height:7px;border-radius:50%;
@@ -309,6 +316,17 @@
     min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   }
   .roster-role[hidden]{display:none}
+  .roster-runtime{
+    display:flex;align-items:center;gap:7px;min-width:0;
+    font:11px/1.3 var(--rail-sans);color:var(--ink-dim);
+  }
+  .roster-runtime[hidden],.roster-context[hidden],.roster-model[hidden]{display:none}
+  .roster-model{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .roster-context{
+    display:flex;align-items:center;flex:0 1 64px;min-width:42px;gap:5px;
+    font-variant-numeric:tabular-nums;white-space:nowrap;
+  }
+  .roster-context .agent-detail-meter{min-width:16px}
   .pin-toggle{
     position:absolute;right:2px;top:50%;translate:0 -50%;width:24px;height:24px;display:grid;place-items:center;
     padding:0;border:0;border-radius:5px;background:transparent;color:var(--ink-faint);
@@ -1260,7 +1278,7 @@
       <div class="colhead mail-head">
         <span>Agent Mail</span>
         <span class="tag" id="mailTag" role="status" hidden></span>
-        <button class="rail-icon" id="mailViewBtn" type="button" aria-label="Show thread timeline" title="Show thread timeline"></button>
+        <button class="rail-icon" id="mailViewBtn" type="button" aria-label="Group by recipient" title="Group by recipient"></button>
         <button class="rail-icon" id="mailGraphBtn" type="button" aria-label="Show mini graph" title="Show mini graph" aria-expanded="false" aria-controls="orrery">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 11 8-5m-8 8 8 4"/><circle cx="6" cy="12" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="18" cy="19" r="2"/></svg>
         </button>
@@ -1708,6 +1726,11 @@
           {
             "property": "color",
             "selector": ".roster-role",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".roster-runtime",
             "value": "var(--ink-dim)"
           },
           {
@@ -3134,6 +3157,11 @@
           },
           {
             "property": "color",
+            "selector": ".roster-runtime",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
             "selector": ".pin-toggle",
             "value": "var(--ink-faint)"
           },
@@ -3766,7 +3794,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "33486b46b134ae740cded34d0d789709abd5400270ebe3f33e3663d1e98a5ff1",
+        "digest": "c86587ccc8fbe3b7a4f6103976fbb776384b302de4089aad8e92138ba7622132",
         "records": [
           ".topstat\u0000font-size",
           ".need-chip\u0000font-size",
@@ -3853,7 +3881,7 @@
           ".planet-agent-model\u0000font-size",
           ".planet-agent-state\u0000font-size",
           ".mini-provider-fallback\u0000font-size",
-          ".mail-md h4\u0000font-size"
+          ".mailview-host time\u0000font-size"
         ],
         "unit": "declaration"
       }
@@ -3867,7 +3895,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "cd8ae08f3209680861392c86e7efc61a4110155a9a1e2c21bfb297d9819bca67",
+        "digest": "3d0c5bc3119ddb93dc2b16707c97f49b4b061aca60c285c5e512940ffdcaaa9d",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -3900,9 +3928,9 @@
       }
     }
   },
-  "inventory_digest": "56869467b667dccc5a80defc30f75ae1fdec6caed59473b48e2d5b1887b3a658",
+  "inventory_digest": "302d58ed66be599ec5b1065408611ab0a7f4f2df2d94cf5f1a427c5159647f6f",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "55c55ae1091789340cbbb1cac43045248c9b2b71ed5d7381ecab111a2536fabd",
+  "source_digest": "5051f3f33ba8ff6ab7c4219de5200b5dc6cfdc66b00738ddfb2cdb470a6d035d",
   "surface": "cockpit",
   "version": 1
 }
@@ -8915,6 +8943,10 @@ const AGENT_DETAIL_ICONS={
   context:'<rect x="3" y="6" width="17" height="12" rx="2"/><path d="M22 10v4M7 10v4m4-4v4m4-4v4"/>',
   directory:'<path d="M2.5 17.5v-11a1 1 0 0 1 1-1h5l2 2h10a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1Z"/>'
 };
+const CONTEXT_HOT_PERCENT=65;
+function agentContextUsed(a){
+  return Number.isFinite(a.ctx_used)&&a.ctx_used>=0&&a.ctx_used<=100?a.ctx_used:null;
+}
 function agentDetailModel(a,homeDir,hiddenChildren=[]){
   const text=value=>typeof value==='string'&&value.trim()?value:null;
   const cwd=text(a.cwd),home=homeDir?.replace(/\/+$/,'');
@@ -8926,7 +8958,7 @@ function agentDetailModel(a,homeDir,hiddenChildren=[]){
     browser:typeof a.browser_use==='boolean'?a.browser_use:null,
     model:text(a.model_id),harness:AGENT_DETAIL_HARNESSES.get(a.harness_kind)??null,effort:text(a.effort),
     tokens:Number.isSafeInteger(a.ctx_window_tokens)&&a.ctx_window_tokens>0?a.ctx_window_tokens:null,
-    used:Number.isFinite(a.ctx_used)&&a.ctx_used>=0&&a.ctx_used<=100?a.ctx_used:null,
+    used:agentContextUsed(a),
     directory,cwd,hiddenChildren
   };
 }
@@ -8959,7 +8991,7 @@ function agentDetailHTML(detail){
   const contextRow=context.length?agentDetailItem('context','Context window: '+context.join(', '),
     `<span class="agent-detail-context">
       ${detail.tokens===null?'':`<span>${AGENT_DETAIL_TOKENS.format(detail.tokens)}</span>`}
-      ${detail.used===null?'':`<span class="agent-detail-meter${detail.used>65?' hot':''}" aria-hidden="true"><i style="width:${detail.used}%"></i></span><strong>${detail.used}%</strong>`}
+      ${detail.used===null?'':`<span class="agent-detail-meter${detail.used>CONTEXT_HOT_PERCENT?' hot':''}" aria-hidden="true"><i style="width:${detail.used}%"></i></span><strong>${detail.used}%</strong>`}
     </span>`):'';
   const runtime=text('harness','Harness',detail.harness)+text('effort','Effort',detail.effort);
   return `<div class="agent-detail-name">${esc(detail.name)}</div>
@@ -9053,6 +9085,11 @@ function tileFor(a){
           <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/></svg>
         </button></div>
         <span class="roster-role" hidden></span>
+        <span class="roster-runtime" hidden><span class="roster-model" hidden></span>
+          <span class="roster-context" role="meter" aria-label="Context usage" aria-valuemin="0" aria-valuemax="100" hidden>
+            <span class="agent-detail-meter" aria-hidden="true"><i></i></span><span aria-hidden="true"></span>
+          </span>
+        </span>
       </div>
       <span class="agent-status" role="img"></span>
       <button class="pin-toggle" type="button" aria-pressed="false">
@@ -9096,8 +9133,27 @@ function paintTile(el,a){
   setHidden(role,!value);
   setText(role,value);
   setTitle(role,value);
+  paintRosterRuntime(el,a);
   paintPinnedTileState(el,a.name);
   paintBulkTileState(el,a);
+}
+function paintRosterRuntime(el,agent){
+  const runtime=el.querySelector('.roster-runtime'),model=runtime.firstElementChild,context=runtime.lastElementChild;
+  const heading=paneHeadingModel(agent);
+  const name=heading.text||[agent.model_id,agent.model_raw].find(value=>typeof value==='string'&&value.trim())||'';
+  const used=agentContextUsed(agent);
+  setHidden(runtime,!name&&used===null);
+  setHidden(model,!name);
+  setText(model,name);
+  setTitle(model,heading.title||name);
+  setHidden(context,used===null);
+  if(used===null)return;
+  setAttr(context,'aria-valuenow',used);
+  setTitle(context,`Context window: ${used}% used`);
+  setText(context.lastElementChild,used+'%');
+  const meter=context.firstElementChild;
+  meter.classList.toggle('hot',used>CONTEXT_HOT_PERCENT);
+  setBox(meter.firstElementChild,'width',used+'%');
 }
 
 function persistPinnedAgents(){
@@ -9306,21 +9362,25 @@ function rosterOrder(agents,reveal){
   }
   const visited=new Set(),rows=[],recent=Date.now()-60000;
   const visit=(a,depth,isPinned,hidden=false)=>{
-    if(visited.has(a.name))return 0;
+    if(visited.has(a.name))return null;
     visited.add(a.name);
     const folded=!reveal&&foldedAgents.has(a.name);
     const row={name:a.name,depth,isPinned,hidden,index:rows.length};
     rows.push(row);
-    let activity=0;
+    let activity=0,hasWorkingChild=false;
     for(const child of children.get(a.name)||[]){
-      activity=Math.max(activity,visit(child,depth+1,isPinned,hidden||folded));
+      const branch=visit(child,depth+1,isPinned,hidden||folded);
+      if(!branch)continue;
+      activity=Math.max(activity,branch.activity);
+      hasWorkingChild||=branch.working;
     }
+    const ownWork=a.running&&a.act_state==='work';
     row.end=rows.length;
     row.folded=folded&&row.end>row.index+1;
     row.activity=activity;
-    if(!a.running)return activity;
-    if(agentNeedsYou(a))return 2;
-    return Math.max(activity,a.act_state==='work'||activityOf(a)>recent?1:0);
+    row.foldedWorking=row.folded&&hasWorkingChild;
+    const ownActivity=a.running&&(ownWork||activityOf(a)>recent)?1:0;
+    return {activity:Math.max(activity,agentNeedsYou(a)?2:ownActivity),working:ownWork||hasWorkingChild};
   };
   for(const a of pinned)visit(a,0,true);
   for(const a of roots)visit(a,0,false);
@@ -9336,7 +9396,8 @@ function paintRosterFold(el,row,reveal){
   const activity=row.folded?['','active','input'][row.activity]:'';
   if(activity)setAttr(button,'data-activity',activity);
   else button.removeAttribute('data-activity');
-  const hint=activity==='input'?'. Hidden agents need input':activity==='active'?'. Hidden agents active':'';
+  const hint=activity==='input'?'. Hidden agents need input':
+    row.foldedWorking?'. Hidden agents working':activity==='active'?'. Hidden agents active':'';
   const label=row.folded
     ?`Expand ${row.name}, ${count} hidden ${count===1?'agent':'agents'}${hint}`
     :`Collapse ${row.name}'s agents`;
@@ -9363,6 +9424,7 @@ function reorderRoster(live,positions=null){
   for(const row of want){
     const {name,depth,isPinned,hidden}=row,el=tiles.get(name);
     el.classList.toggle('folded-out',hidden);
+    el.toggleAttribute('data-folded-working',row.foldedWorking);
     el.toggleAttribute('data-pinned-branch',isPinned);
     paintRosterFold(el,row,reveal);
     if(orderChanged){
