@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from urllib.parse import quote
 from conversation_mail import received, sent
-from conversation_images import hermes_content
+from conversation_images import hermes_content, native_image
 from conversation_steps import claude_call, claude_result, mark_step_boundary
 
 from conversation_history import (HistoryUnavailable, MAX_SCAN, MAX_TEXT, PAGE_SIZE,
@@ -62,6 +62,16 @@ def epoch(value, divisor=1):
 def text_event(text,role,ts):
     if not isinstance(text,str) or not text.strip():return None
     return received(dict(kind='text',role=role,text=text[:MAX_TEXT],truncated=len(text)>MAX_TEXT,ts=ts))
+
+
+def input_event(content, provider, ts):
+    images = sum(native_image(block,provider) for block in content[:MAX_BLOCKS]) if isinstance(content,list) else 0
+    text = blocks_text(content)
+    event = text_event(text or ('[image attachment]' if images else ''),'user',ts)
+    if event and images:
+        marker = 'prefix' if provider=='dsh' else 'none'
+        event.update(input_image_count=images, input_image_marker=marker if text else 'single')
+    return event
 
 
 def tool_event(name,ts,*,result=False,failed=False):
@@ -166,15 +176,13 @@ def normalize(item,p,sid):
             add(0,claude_text(summary,role,ts,item));return out
         if isinstance(content,str):add(0,claude_text(content,role,ts,item))
         elif isinstance(content,list):
-            images=sum(isinstance(b,dict) and b.get('type')=='image' for b in content[:MAX_BLOCKS])
+            images=[]
+            first_text=None
             for i,b in enumerate(content[:MAX_BLOCKS]):
                 if not isinstance(b,dict):continue
                 if b.get('type')=='text':
                     event=claude_text(b.get('text'),role,ts,item)
-                    # Claude exposes text and attachments as separate events.
-                    # Keep their shared native provenance for send matching;
-                    # do not duplicate the image references on the text event.
-                    if images and event and event.get('role')=='user' and event.get('kind')=='text':event['input_image_count']=images
+                    if first_text is None and event and event['role']=='user' and event['kind']=='text':first_text=i
                     add(i,event)
                 elif b.get('type')=='thinking' and role=='assistant' and item.get('thinkingDisplay')=='updates':
                     event=text_event(b.get('thinking'),role,ts)
@@ -191,15 +199,24 @@ def normalize(item,p,sid):
                     step=claude_result(b,ts)
                     if step:event['step']=step
                     add(i,event)
-                elif b.get('type') in {'image','document'}:add(i,text_event('[attachment]',role,ts))
+                elif b.get('type')=='image' and role=='user':images.append(i)
+                elif b.get('type') in ('image','document'):add(i,text_event('[attachment]',role,ts))
+            if images:
+                # Keep the text block's original ID. With image-only input,
+                # the first attachment already owned the visible record.
+                if first_text is None:
+                    add(images[0],text_event('[attachment]',role,ts));out.sort(key=lambda pair:pair[0])
+                owner=images[0] if first_text is None else first_text
+                event=next(event for index,event in out if index==owner)
+                event.update(input_image_count=len(images),input_image_marker='single' if first_text is None else 'prefix',
+                             input_image_blocks=[index for index in images if index!=owner])
     elif p=='dsh':
         if item.get('surfaceOp','append')!='append':return []
         kind=item.get('type');data=item.get('data');ts=epoch(item.get('time'),1000)
         if not isinstance(data,dict):return []
         if kind=='user/message' and isinstance(data.get('source'),dict) and data['source'].get('kind')=='user':
             content=data.get('content')
-            images=isinstance(content,list) and any(isinstance(b,dict) and b.get('type')=='image' for b in content[:MAX_BLOCKS])
-            add(0,text_event(blocks_text(content) or ('[image attachment]' if images else ''),'user',ts))
+            add(0,input_event(content,'dsh',ts))
         elif kind=='assistant/message' and isinstance(data.get('message'),dict):
             add(0,text_event(blocks_text(data['message'].get('content')),'assistant',ts))
         elif kind=='tool/call':add(0,sent(tool_event(data.get('name'),ts),data.get('name'),data.get('arguments')))
@@ -213,8 +230,7 @@ def normalize(item,p,sid):
                        system_detail=text[:MAX_TEXT],truncated=len(text)>MAX_TEXT))
         elif role=='user':
             content=hermes_content(item.get('content'))
-            images=isinstance(content,list) and any(isinstance(b,dict) and b.get('type')=='image_url' for b in content[:MAX_BLOCKS])
-            add(0,text_event(blocks_text(content) or ('[image attachment]' if images else ''),role,ts))
+            add(0,input_event(content,'hermes',ts))
         elif role=='assistant':add(0,text_event(item.get('content'),role,ts))
         if role=='assistant':
             calls=item.get('tool_calls')
@@ -239,12 +255,15 @@ def normalize(item,p,sid):
     return out
 
 
-def artifact_item(item,p,index):
+def artifact_item(item,p,index,event=None):
     """既知の tool と入力画像の記録だけを渡す。通常の文を引数と解釈しない。"""
     name=value=None
     if p=='claude' and item.get('type')=='user':
         content=item.get('message',{}).get('content')
-        if isinstance(content,list):content=content[index:index+1]
+        if isinstance(content,list):
+            attachments=(event or {}).get('input_image_blocks')
+            if attachments:content=[content[block] for block in sorted([index,*attachments])]
+            else:content=content[index:index+1]
         return dict(type='recorded_user_input',provider=p,content=content)
     if p=='dsh' and item.get('type')=='user/message' and item.get('data',{}).get('source',{}).get('kind')=='user':
         return dict(type='recorded_user_input',provider=p,content=item['data'].get('content'))
@@ -550,6 +569,12 @@ class Reader:
                 if loc and (loc[1] or loc[0] and os.pread(self.fileno(),1,loc[0]-1)!=b'\n'):
                     raise HistoryUnavailable('invalid_cursor')
         entries=[]
+        def located(event,loc,next_loc):
+            row=dict(event,id=':'.join(map(str,loc)),cursor_before=self.cursor(loc),cursor_after=self.cursor(next_loc))
+            aliases=row.pop('input_image_blocks',())
+            if aliases:
+                row['input_image_aliases']=[':'.join(map(str,(*loc[:2],index))) for index in aliases]
+            return row
         if a is not None:
             records,first,last=self.zstd_records(start,end,True) if compressed else self.json_records(start,end,True)
             for n,(pos,line,raw,nxt) in enumerate(records):
@@ -560,8 +585,7 @@ class Reader:
                     elif compressed and n+1<len(records) and records[n+1][0]==pos:next_loc=(pos,records[n+1][1],0)
                     else:next_loc=(nxt,0,0)
                     if b is not None and loc>=b or loc<a:continue
-                    event=dict(event,id=':'.join(map(str,loc)),cursor_before=self.cursor(loc),cursor_after=self.cursor(next_loc))
-                    entries.append(event)
+                    entries.append(located(event,loc,next_loc))
         else:
             # Newest first, stopping at the page limit: the same page as the
             # whole window's last `limit` events, without parsing (or for
@@ -579,7 +603,7 @@ class Reader:
                     elif compressed and later is not None and later[0]==pos:next_loc=(pos,later[1],0)
                     else:next_loc=(nxt,0,0)
                     if b is not None and loc>=b:continue
-                    entries.append(dict(event,id=':'.join(map(str,loc)),cursor_before=self.cursor(loc),cursor_after=self.cursor(next_loc)))
+                    entries.append(located(event,loc,next_loc))
                 later=(pos,line)
                 if len(entries)>=limit:break
             entries.reverse()
@@ -670,7 +694,7 @@ class Reader:
             item,raw,events=found
         else:item,raw,events=self.record((pos,line),include_events=True)
         if index not in events:raise HistoryUnavailable('reference_expired')
-        projection=events[index] if normalized else artifact_item(item,self.provider,index)
+        projection=events[index] if normalized else artifact_item(item,self.provider,index,events[index])
         return projection,hashlib.sha256(raw).digest()
 
     def record(self,location,*,include_events=False):

@@ -15,6 +15,7 @@ from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from conversation_mail import received, sent
 from conversation_artifacts import SHOW_FILES, completed_show_files
+from conversation_images import native_image
 from conversation_steps import codex_completed, codex_turn, mark_step_boundary
 
 MAX_SCAN = 4 * 1024 * 1024
@@ -177,6 +178,7 @@ def _codex_event(item, offset):
         context = False
         if role == 'user':
             content, context = codex_user_content(content, payload)
+        image_count = 0
         if isinstance(content, str):
             text = content
         elif isinstance(content, list):
@@ -185,8 +187,8 @@ def _codex_event(item, offset):
                 if isinstance(b, dict) and isinstance(b.get("type"), str) and b["type"] in {"text", "input_text", "output_text"}
                 and isinstance(b.get("text"), str)
             )
-            if any(isinstance(b, dict) and isinstance(b.get("type"), str) and b["type"] in {"image", "input_image", "image_url"}
-                   for b in content):
+            image_count = sum(native_image(block, 'codex') for block in content)
+            if image_count:
                 text += "\n[image attachment]"
         else:
             return None
@@ -197,6 +199,8 @@ def _codex_event(item, offset):
                         system_detail=text[:MAX_TEXT], truncated=len(text)>MAX_TEXT)
         event = received(dict(base, kind="text", role=payload["role"], text=text[:MAX_TEXT],
                     truncated=len(text) > MAX_TEXT))
+        if role == 'user' and image_count:
+            event.update(input_image_count=min(64,image_count), input_image_marker='suffix')
         model = recorded_model(payload.get("model"))
         if event.get("kind") == "text" and role == "assistant" and model:
             event["model"] = model

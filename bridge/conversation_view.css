@@ -81,6 +81,10 @@
 .conversation-human .conversation-text{text-align:right}
 .conversation-human :is(.conversation-text,.conversation-truncated,.conversation-submission-more,.conversation-submission-note,.conversation-byline){color:inherit}
 .conversation-human .conversation-text a{color:inherit}
+.conversation-input-images{justify-content:flex-end;gap:6px;padding:6px 0 0;border:0}
+.conversation-input-images .conversation-inline-image{width:176px;border-color:var(--hair-2);background:transparent}
+.conversation-input-images :is(.conversation-inline-thumbnail,.conversation-inline-status){height:110px}
+.conversation-image-only:not(:has(> [data-input-image-marker]:not([hidden]))){display:none}
 .conversation-event[data-kind="tool"]{padding:11px 0}
 .conversation-event[data-kind="tool"] .conversation-byline{margin:0}
 .conversation-tool-name{color:var(--ink-dim);font:11px/1.6 var(--mono);overflow-wrap:anywhere}
