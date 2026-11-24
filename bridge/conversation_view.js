@@ -274,6 +274,9 @@
     workingSpeaker.className='conversation-working-speaker';workingByline.append(workingSpeaker);activityEl.prepend(workingByline);
     const process=el('.conversation-process'),processTime=el('.conversation-process-time');
     function paintActivity(current=getContext()||{},maintainPosition=true){
+      if(opened&&events.size&&stepView?.needsSync(current)){
+        if(maintainPosition)changeTail(()=>regroupTools());else regroupTools();
+      }
       const stepActivity=stepView?.activity(current,opened&&presented&&!document.hidden);
       const compacting=opened&&presented&&current.running===true&&current.reader_phase==='compacting';
       if(process.hidden===compacting)process.hidden=!compacting;
@@ -641,7 +644,9 @@
         const event=events.get(row.dataset.eventId);
         if(event&&stepRows.has(event.id)){
           finish();row.classList.add('conversation-step-record');
-          row.hidden=!row.querySelector('.conversation-files,.conversation-diff,.conversation-mail');continue;
+          const hidden=!row.querySelector('.conversation-files,.conversation-diff,.conversation-mail');
+          if(hidden)keepReaderFocus(row);
+          row.hidden=hidden;continue;
         }
         row.classList.remove('conversation-step-record');
         if(event&&['tool','tool_result'].includes(event.kind)&&!event.mail?.length)run.push(row);
@@ -673,7 +678,6 @@
       }
       if(focused&&(document.activeElement===document.body||document.activeElement===scroll))(groups.includes(focused)?focused.button:scroll).focus({preventScroll:true});
       preview?.syncInline(rawRows(),events);
-      paintActivity();
     }
     function anchor(){
       const top=scroll.getBoundingClientRect().top;
@@ -1186,6 +1190,7 @@
         if(direction!=='older')after=page.after;
         const trimmed=trim(direction!=='older');earlier.hidden=!hasOlder;
         if(!unchangedSnapshot)regroupTools(focusedGroup);
+        paintActivity(getContext()||{},false);
         updateReferenceCards();
         for(const key of tablePositions.keys())if(!events.has(JSON.parse(key)[0]))tablePositions.delete(key);
         if(!unchangedSnapshot)restoreTables();

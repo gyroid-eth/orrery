@@ -16,7 +16,7 @@ from pathlib import Path
 from conversation_mail import received, sent
 from conversation_artifacts import SHOW_FILES, completed_show_files
 from conversation_images import native_image
-from conversation_steps import codex_completed, codex_turn, mark_step_boundary
+from conversation_steps import codex_completed, codex_turn, mark_step_boundary, opaque
 
 MAX_SCAN = 4 * 1024 * 1024
 MAX_TEXT = 64 * 1024
@@ -142,8 +142,12 @@ def _codex_event(item, offset):
         # Keep show_files' established name and reference gate. Generic native
         # completions add inert summaries, never arguments or new file grants.
         name = 'mcp__orrery_mail__show_files' if completed_show_files(item) is not None else step['tool']
-        return dict(id=str(offset), ts=str(item.get('timestamp') or '')[:128],
-                    kind='tool', role='assistant', text=name, step=step)
+        event = dict(id=str(offset), ts=str(item.get('timestamp') or '')[:128],
+                     kind='tool', role='assistant', text=name, step=step)
+        call_id = opaque(item['payload'].get('call_id') or item['payload']['item'].get('call_id'))
+        if call_id:
+            event['tool_call_id'] = call_id
+        return event
     if isinstance(item, dict) and completed_show_files(item) is not None:
         # Code mode's wrapper is source text, not proof that a nested call ran.
         # This completion is its own pinned reference record; expose no result
@@ -216,6 +220,9 @@ def _codex_event(item, offset):
             if SHOW_FILES.fullmatch(name.split('.')[-1]):return None
             event = sent(dict(base, kind="tool", role="assistant", text=name[:160]),name,
                          payload.get('input',payload.get('arguments')))
+            call_id = opaque(payload.get('call_id'))
+            if call_id:
+                event['tool_call_id'] = call_id
             if name in {'exec', 'functions.exec'}:
                 event['step_wrapper'] = True
             return event
