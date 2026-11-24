@@ -3993,9 +3993,9 @@
       }
     }
   },
-  "inventory_digest": "a1b78928b7e8d9422d39798b18b09ba1e519fbc573a24a3508be62d3c1de7058",
+  "inventory_digest": "84b2ff9fc05b9ae1b8a360a14af2bf16e5dcdf7be08d4017a0c2edbd45acd188",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "5dc32cd3899a9c9529aa8f4599e2d29fba3f3256708a9255366a37cabbccab77",
+  "source_digest": "130472f9a7aa3c96a94de9826c0216c1941338e93278c209901c286ecac37d2d",
   "surface": "cockpit",
   "version": 1
 }
@@ -8799,7 +8799,7 @@ const agentDetail=document.createElement('div');
 agentDetail.id='agentDetail';agentDetail.className='agent-detail';agentDetail.setAttribute('role','group');
 agentDetail.setAttribute('aria-labelledby','agentDetailName');agentDetail.hidden=true;
 let detailAnchor=null,detailHideTimer=0,detailRendered='';
-let permissionChangeBusy=false,permissionApi=null,permissionApiRequest=null;
+let permissionChangeBusy=false,permissionApi=null,permissionApiRequest=null,permissionApiCheckedAt=-Infinity;
 let selectedAgent=null,currentAgents=[];
 const descriptorStore=RosterDescriptor.createStableDescriptorStore();
 let rosterAnnotationEpoch=0;
@@ -8938,6 +8938,12 @@ async function postBulkAgentAction(action,body){
   if(!response.ok||!result?.ok)throw new Error(result?.error||`HTTP ${response.status}`);
   return result;
 }
+const LIVE_AGENT_ROSTER='/telemetry/agents?scope=live';
+async function agentActionRoster(path,signal){
+  const response=await fetch(path,{cache:'no-store',signal}).catch(()=>null);
+  const roster=response?.ok?await response.json().catch(()=>null):null;
+  return Array.isArray(roster?.agents)?roster.agents:null;
+}
 async function runBulkExit(){
   if(bulkActionBusy||permissionChangeBusy)return;
   const names=[...bulkSelectedAgents].filter(name=>{
@@ -8962,22 +8968,19 @@ async function runBulkExit(){
   // 2026-10-01 seminar looking for a bug in the wrong place.
   showToast(`BULK EXIT · ${succeeded} succeeded${failed?` · ${failed} failed — ${failures[0]}`:''}`,failed>0,failed?9000:4200);
 }
-async function waitForBulkRebootExit(name,timeoutMs=30000,pollMs=1500){
+async function waitForBulkRebootExit(name,timeoutMs=30000,pollMs=1500,confirmStopped=null){
   const controller=new AbortController();
   const deadline=performance.now()+timeoutMs;
   const timer=setTimeout(()=>controller.abort(),timeoutMs);
   try{
     while(!controller.signal.aborted){
-      const response=await fetch('/telemetry/agents?scope=live',{
-        cache:'no-store',signal:controller.signal,
-      }).catch(()=>null);
-      if(response?.ok){
-        const roster=await response.json().catch(()=>null);
-        if(Array.isArray(roster?.agents)&&!controller.signal.aborted){
-          const agent=roster.agents.find(row=>row?.name===name);
-          // The live scope omits stopped rows. Older dashboards return them.
-          const state=normalizeSearchText(agent?.category||agent?.state);
-          if(!agent||(!isBulkAgentRunning(agent)&&['finished','gone','retired'].includes(state)))return;
+      const rows=await agentActionRoster(LIVE_AGENT_ROSTER,controller.signal);
+      if(rows&&!controller.signal.aborted){
+        const agent=rows.find(row=>row?.name===name);
+        // The live scope omits stopped rows. Older dashboards return them.
+        const state=normalizeSearchText(agent?.category||agent?.state);
+        if(!agent||(!isBulkAgentRunning(agent)&&['finished','gone','retired'].includes(state))){
+          if((!confirmStopped||await confirmStopped(controller.signal))&&!controller.signal.aborted)return;
         }
       }
       const remaining=deadline-performance.now();
@@ -9077,6 +9080,7 @@ rosterBulkReboot.addEventListener('click',runBulkReboot);
 
 const AGENT_DETAIL_HARNESSES=new Map([['claude','Claude Code'],['codex','Codex CLI'],['dsh','dsh'],['hermes','Hermes']]);
 const AGENT_DETAIL_COMPUTER=new Map([['off','Off'],['view','View'],['control','Control']]);
+const STANDALONE_PERMISSION_API=46;
 const AGENT_DETAIL_TOKENS=new Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1});
 const AGENT_DETAIL_ICONS={
   role:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M5.5 16a3.5 3.5 0 0 1 7 0m3-6h2.5m-2.5 4H18"/>',
@@ -9098,23 +9102,34 @@ function agentContextUsed(a){
 function permissionConversationOnly(a){
   return a.resume_mode==='conversation_only'||a.mail_status==='unavailable';
 }
+function permissionCli(a){
+  return a.harness_kind==='claude'||a.harness_kind==='codex';
+}
 function agentPermissionBlockReason(a,api){
   if(a.lifecycle==='persistent')return 'Persistent agent';
   if(a.surface==='codex-app'||a.program==='codex-app')return 'Codex App';
-  if(a.parent_state==='top'||a.parentless===true||a.standalone===true)return 'Standalone agent';
+  const standalone=a.parent_state==='top'||a.parentless===true||a.standalone===true;
+  if(standalone&&!(api>=STANDALONE_PERMISSION_API))return 'Standalone agent';
   if(permissionConversationOnly(a))return 'Conversation-only resume has no saved permissions';
-  if(!['claude','codex'].includes(a.harness_kind)){
+  if(!permissionCli(a)){
     return 'Requires a Claude Code or Codex CLI child';
   }
-  if(a.running!==false||a.category==='finished')return 'Exit this agent first';
-  if(!['gone','retired'].includes(a.category))return 'Agent is not confirmed stopped';
-  if(a.parent_state!=='child'||a.history_binding!=='bound'||!a.history_session_id){
-    return 'No verified child conversation';
+  if(!(api>=45))return 'Requires Telemetry API 45';
+  if(api>=STANDALONE_PERMISSION_API&&a.permission_resume_supported!==true){
+    const reason=typeof a.permission_resume_reason==='string'&&a.permission_resume_reason.trim();
+    if(reason)return reason;
+    if(standalone)return 'No saved launch settings. Use Resume.';
+    if(a.permission_resume_supported===false)return 'Permission changes are unavailable';
   }
+  if((!standalone&&a.parent_state!=='child')||a.history_binding!=='bound'||!a.history_session_id){
+    return standalone?'No verified conversation':'No verified child conversation';
+  }
+  if(a.category==='agent'&&a.running===true)return '';
+  if(a.category==='finished')return 'Exit this agent first';
+  if(a.running!==false||!['gone','retired'].includes(a.category))return 'Agent is not confirmed stopped';
   if(!['ready','verification_required'].includes(a.resume_capability)){
     return 'Conversation cannot be resumed';
   }
-  if(!(api>=45))return 'Requires Telemetry API 45';
   return '';
 }
 function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false){
@@ -9233,7 +9248,7 @@ function showAgentDetail(el){
   }
   if(agentDetail.contains(focused)&&focused!==document.activeElement)focused.focus({preventScroll:true});
   setHidden(agentDetail,false);positionAgentDetail(el);
-  if(permissionApi===null&&!agentPermissionBlockReason(a,45))loadPermissionApi();
+  if(permissionCli(a))loadPermissionApi();
 }
 function hideAgentDetail(el){
   if(detailAnchor!==el)return;
@@ -9271,16 +9286,17 @@ window.addEventListener('resize',()=>{if(detailAnchor)positionAgentDetail(detail
 rosterEl.addEventListener('scroll',()=>{if(detailAnchor)positionAgentDetail(detailAnchor);},{passive:true});
 
 function loadPermissionApi(refresh=false){
-  if(!refresh&&permissionApi!==null)return Promise.resolve(permissionApi);
+  if(!refresh&&performance.now()-permissionApiCheckedAt<30000)return Promise.resolve(permissionApi);
   permissionApiRequest??=fetch('/api/version',{cache:'no-store'})
     .then(response=>response.ok?response.json():null)
     .then(version=>{
-      if(Number.isInteger(version?.api)){
-        permissionApi=version.runtime_mode&&version.runtime_mode!=='legacy'?0:version.api;
-        if(detailAnchor)showAgentDetail(detailAnchor);
-      }
-      return permissionApi;
-    }).catch(()=>null).finally(()=>{permissionApiRequest=null;});
+      return Number.isInteger(version?.api)?
+        (version.runtime_mode&&version.runtime_mode!=='legacy'?0:version.api):null;
+    }).catch(()=>null).then(api=>{
+      permissionApi=api;permissionApiCheckedAt=performance.now();
+      if(detailAnchor)showAgentDetail(detailAnchor);
+      return api;
+    }).finally(()=>{permissionApiRequest=null;});
   return permissionApiRequest;
 }
 
@@ -9326,7 +9342,10 @@ agentDetail.addEventListener('click',event=>{
   permissionBrowser.value=typeof a.browser_use==='boolean'?(a.browser_use?'off':'on'):'';
   pendingPermissionChange={agent:a,key:computer?'computer_use':'browser_use'};
   const name=OrreryDemo.mask(a.name);
-  setText(permissionConfirm.querySelector('p'),`Resume ${name} in the same conversation with this permission change.`);
+  setText(permissionApply,a.running?'Restart':'Resume');
+  setText(permissionConfirm.querySelector('p'),a.running?
+    `Restart ${name} in the same conversation with this permission change? Any work in progress will be interrupted.`:
+    `Resume ${name} in the same conversation with this permission change?`);
   permissionConfirm.showModal();
 });
 permissionConfirm.addEventListener('cancel',()=>{pendingPermissionChange=null;});
@@ -9340,30 +9359,71 @@ permissionConfirm.addEventListener('submit',event=>{
     changeAgentPermission(agent,key,key==='computer_use'?permissionComputer.value:permissionBrowser.value==='on');
   }
 });
+function samePermissionConversation(a,b){
+  return ['history_session_id','harness_kind','parent_state','project_key'].every(key=>a[key]===b[key]);
+}
+async function confirmPermissionStop(original,api,signal){
+  // The live roster also omits finished tmux panes. Permission resumes need
+  // the retained conversation and a gone/retired row before trying jump.
+  const rows=await agentActionRoster('/telemetry/agents',signal);
+  const stopped=rows?.find(row=>row?.name===original.name);
+  if(!stopped||stopped.running!==false||!['gone','retired'].includes(stopped.category))return false;
+  if(!samePermissionConversation(stopped,original))throw new Error('The stopped conversation changed');
+  const reason=agentPermissionBlockReason(stopped,api);
+  if(reason)throw new Error(reason);
+  return true;
+}
 async function changeAgentPermission(original,key,value){
   const {name}=original;
-  if(permissionChangeBusy||bulkActionBusy)return;
+  if(permissionChangeBusy||bulkActionBusy||value===original[key])return;
   permissionChangeBusy=true;updateRosterBulkUI();
   if(detailAnchor)showAgentDetail(detailAnchor);
+  const label=OrreryDemo.mask(name),restart=original.running===true;
+  let stage='check';
+  showToast(`Checking ${label}…`,false,65000);
   try{
     const api=await loadPermissionApi(true);
+    if(api===null)throw new Error('Could not check the Telemetry API');
     if(!(api>=45))throw new Error('Requires Telemetry API 45');
-    const agent=currentAgentNamed(name);
-    if(!agent)throw new Error('agent left the roster');
+    const agent=restart?
+      (await agentActionRoster(LIVE_AGENT_ROSTER,AbortSignal.timeout(8000)))?.find(row=>row?.name===name):
+      currentAgentNamed(name);
+    if(!agent)throw new Error('Could not verify the agent in the roster');
     const reason=agentPermissionBlockReason(agent,api);
     if(reason)throw new Error(reason);
-    if(['history_session_id','created','category',key].some(
-      key=>agent[key]!==original[key]))throw new Error('agent changed while confirming. Choose permissions again');
-    if(value===agent[key])return;
+    if(!samePermissionConversation(agent,original)||['created','category','running',key].some(
+      key=>agent[key]!==original[key]))throw new Error('The agent changed. Choose permissions again');
     const permission={history_session_id:agent.history_session_id,[key]:value};
-    const result=await postBulkAgentAction('jump',{session:name,open:false,permission});
-    if(result.action!=='resumed'||!result.tools_changed){
+    const jump={session:name,open_terminal:false,open:false,permission};
+    if(restart){
+      const exit={session:name};
+      if(api>=STANDALONE_PERMISSION_API){
+        const checked=await postBulkAgentAction('jump',{...jump,check_only:true});
+        if(checked.action!=='validated')throw new Error('Telemetry did not confirm this restart is available');
+        exit.history_session_id=permission.history_session_id;
+      }
+      stage='exit';showToast(`Stopping ${label}…`,false,65000);
+      await postBulkAgentAction('exit',exit);
+      stage='wait';showToast(`Waiting for ${label} to stop…`,false,30000);
+      await waitForBulkRebootExit(name,30000,1500,signal=>confirmPermissionStop(agent,api,signal));
+    }
+    stage='resume';showToast(`Resuming ${label}…`,false,65000);
+    const result=await postBulkAgentAction('jump',jump);
+    if(result.action!=='resumed'||result.tools_changed!==true){
       throw new Error('Telemetry did not confirm the new permissions');
     }
-    showToast(`Resume accepted for ${name} with updated permissions.`);
+    showToast(`Resume accepted for ${label} with updated permissions.`);
   }catch(error){
-    const reason=String(error?.message||error).replace(/\s+/g,' ').trim();
-    showToast(`Permission change failed for ${name} · ${reason}`,true,9000);
+    const reason=OrreryDemo.mask(String(error?.message||error).replace(/\s+/g,' ').trim());
+    const message={
+      check:restart?`Restart check failed for ${label}`:`Permission change failed for ${label}`,
+      exit:`Exit request failed for ${label}`,
+      wait:`Could not confirm ${label} was ready to resume`,
+      resume:restart?`${label} stopped. Resume failed`:`Resume failed for ${label}`,
+    }[stage];
+    const recovery=stage==='wait'?'\nCheck the agent in Network before resuming.':
+      stage==='resume'?'\nUse Resume in Network if the agent is stopped.':'';
+    showToast(`${message} · ${reason}${recovery}`,true,9000);
     toastEl.classList.add('multiline');
   }finally{
     permissionChangeBusy=false;updateRosterBulkUI();
@@ -9810,7 +9870,7 @@ async function loadStoppedSelectAgents(){
     const roster=await response.json();
     if(controller.signal.aborted||!Array.isArray(roster?.agents))return;
     stoppedSelectAgents=roster.agents.filter(agent=>agent&&(agent.category==='finished'&&isBulkSelectableAgent(agent)||
-      !agentPermissionBlockReason(agent,api)))
+      agent.running===false&&!agentPermissionBlockReason(agent,api)))
       .map(prepareRosterRow);
     if(stoppedSelectAgents.length)renderRoster();
   }catch(_){/* live selections remain available if the history request fails */}

@@ -59,7 +59,7 @@ def test_unsupported_agents_explain_why_controls_are_disabled():
         ({"surface": "codex-app"}, "Codex App"),
         ({"harness_kind": "dsh"}, "Requires a Claude Code or Codex CLI child"),
         ({"harness_kind": "hermes"}, "Requires a Claude Code or Codex CLI child"),
-        ({"category": "agent", "running": True}, "Exit this agent first"),
+        ({"category": "agent", "running": True, "history_binding": "pending"}, "No verified child conversation"),
         ({"category": "finished"}, "Exit this agent first"),
         ({"resume_mode": "conversation_only"}, "Conversation-only resume has no saved permissions"),
         ({"history_binding": "unbound"}, "No verified child conversation"),
@@ -70,6 +70,25 @@ def test_unsupported_agents_explain_why_controls_are_disabled():
         assert f'title="Browser use: On ({reason})"' in markup
     assert 'title="Browser use: On (Requires Telemetry API 45)"' in render(base, api=44)
 
+
+def test_running_child_can_change_permissions_even_when_resume_is_not_required_yet():
+    markup = render({
+        "name": "FixtureAgent", "category": "agent", "running": True, "parent_state": "child",
+        "harness_kind": "codex", "history_binding": "bound", "browser_use": False,
+        "history_session_id": "01234567-1234-1234-1234-012345678901", "resume_capability": "not_required",
+    })
+    assert 'aria-label="Browser use" title="Browser use: Off"' in markup
+    assert ' disabled' not in markup
+
+
+def test_api46_permission_reason_is_rendered_as_text():
+    markup = render({
+        "name": "FixtureAgent", "category": "agent", "running": True, "parent_state": "top",
+        "harness_kind": "claude", "browser_use": True, "permission_resume_supported": False,
+        "permission_resume_reason": 'Missing "settings" <details>',
+    }, api=46)
+    assert 'title="Browser use: On (Missing &quot;settings&quot; &lt;details&gt;)"' in markup
+    assert markup.count(' disabled') == 4
 
 def test_unknown_fields_leave_no_rows_and_legacy_fields_never_render():
     markup = render({
