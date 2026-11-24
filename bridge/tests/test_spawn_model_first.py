@@ -214,12 +214,18 @@ def test_tool_defaults_follow_harness_and_keep_manual_choices_on_render(tour_bro
       renderProviderTabs();
       const edited=states();
       select('codex');const codex=states();
+      const codexTitle=spawnBrowserUse.title;
+      spawnBrowserUse.click();const codexNotice=spawnStatus.textContent;
       select('deepseek');const dsh=states();
+      const dshNotice=spawnStatus.textContent;
       spawnHarnesses.querySelector('[data-harness="hermes"]').click();const hermes=states();
       spawnHarnesses.querySelector('[data-harness="dsh"]').click();
-      return {claude,edited,codex,dsh,hermes,dshAgain:states()};
+      return {claude,edited,codex,dsh,hermes,dshAgain:states(),codexTitle,codexNotice,dshNotice};
     })()''')
-    assert result == dict(claude=[True, True], edited=[False, True], codex=[True, True],
+    assert "config.toml" in result.pop("codexTitle")
+    assert "chrome-devtools" in result.pop("codexNotice")
+    assert result.pop("dshNotice") == ""
+    assert result == dict(claude=[True, True], edited=[False, True], codex=[True, False],
                          dsh=[False, False], hermes=[True, True], dshAgain=[False, False])
 
 
@@ -258,7 +264,7 @@ def test_submit_cloud_defaults_and_optional_local_parameters_without_real_spawn(
         return {posted,cloudModels,hidden,recent:SpawnPicker.recent(localStorage,SPAWN_RECENT_STORAGE_KEY)};
       }finally{window.fetch=originalFetch;}
     })()''')
-    claude,codex,codex_off,dsh_off,dsh_on,local=result['posted']
+    claude,codex_off,codex,dsh_off,dsh_on,local=result['posted']
     assert result['cloudModels'] == ['claude-fixture']
     assert claude['provider'] == 'claude' and 'effort' not in claude
     assert codex['provider'] == 'codex' and codex['effort']=='high'
@@ -310,7 +316,7 @@ def test_empty_provider_keeps_its_configuration_error_visible(tour_browser):
 
 
 @pytest.mark.parametrize('width', [1600, 390])
-def test_launcher_and_model_sheet_fit_and_name_options_reset(tour_browser, width):
+def test_launcher_and_model_sheet_fit_and_name_draft_can_be_discarded(tour_browser, width):
     client,evaluate=tour_browser
     client.call('Emulation.setDeviceMetricsOverride',width=width,height=844,deviceScaleFactor=1,mobile=False)
     result=evaluate('''(async()=>{
@@ -331,20 +337,23 @@ def test_launcher_and_model_sheet_fit_and_name_options_reset(tour_browser, width
         spawnRole.value='Review';spawnRole.dispatchEvent(new Event('input'));
         const preview=ncRole.textContent;
         closeSpawnModal();openSpawnModal();await settle();
+        const restored=spawnNameSheet.hidden&&!ncRole.hidden&&spawnRole.value==='Review';
+        const discardFits=within(spawnDiscardDraft);
+        spawnDiscardDraft.click();
         const reset=spawnNameSheet.hidden&&ncRole.hidden&&spawnRole.value==='';
         const before=spawnSubmit.getBoundingClientRect();
         spawnModelButton.click();await settle();
         const range=effortChoices.querySelector('input[type=range]');
         const after=spawnSubmit.getBoundingClientRect();
-        return {normal,options,fieldsFit,preview,reset,helper:within(spawnHelper),sheet:within(spawnModelSheet),
+        return {normal,options,fieldsFit,preview,restored,discardFits,reset,helper:within(spawnHelper),sheet:within(spawnModelSheet),
           launcher:within(spawnLauncher),fixed:before.bottom===after.bottom&&before.left===after.left,
           range:{max:Number(range.max),value:Number(range.value),label:range.getAttribute('aria-valuetext'),
             stops:effortChoices.querySelectorAll('.effort-stop').length,modelFits:modelChoices.scrollWidth<=modelChoices.clientWidth}};
       }finally{window.fetch=originalFetch;}
     })()''')
     assert result['normal'] == dict(name=True, model=True, disabled=True)
-    assert result['options'] == 2 and result['fieldsFit'] and result['reset'] and result['preview']=='Review'
-    assert all(result[k] for k in ['helper','sheet','launcher','fixed'])
+    assert result['options'] == 2 and result['fieldsFit'] and result['preview']=='Review'
+    assert all(result[k] for k in ['restored','discardFits','reset','helper','sheet','launcher','fixed'])
     assert result['range'] == dict(max=5, value=3, label='Default (xhigh)', stops=6, modelFits=True)
 
 
@@ -542,11 +551,12 @@ def test_model_ids_are_used_in_sheet_chip_helper_and_roster(tour_browser):
         helper_models:[{id:'raw-helper-id',label:'Friendly helper'}]}],naming:{},dirs:[]};
       selFamily=null;selProvider=null;selModel=null;selHarness=null;renderProviderTabs();
       const a={name:'FixtureModel',category:'agent',running:true,provider:'openai',model:'Friendly display',model_raw:'raw-model-id'};
-      currentAgents=[a];rosterEl.append(tileFor(a));
+      currentAgents=[a];tileFor(a);
+      const rosterModel=document.querySelector('[data-agent="FixtureModel"] .roster-model');
       return {notes:modelChoices.querySelectorAll('.model-choice-note').length,tooltip:modelChoices.querySelector('.model-choice').title,name:modelChoices.querySelector('.model-choice-name').textContent,harnessHidden:spawnHarnesses.hidden,
         chip:spawnModelLabel.textContent,
         helper:[...spawnHelper.options].map(o=>o.textContent),provider:providerTabs.querySelector('[data-family=codex]').getAttribute('aria-label'),
-        case:getComputedStyle(document.querySelector('[data-agent="FixtureModel"] .pill.model')).textTransform,roster:document.querySelector('[data-agent="FixtureModel"] .pill.model')?.textContent,rosterTooltip:document.querySelector('[data-agent="FixtureModel"] .pill.model')?.title};
+        case:getComputedStyle(rosterModel).textTransform,roster:rosterModel.textContent,rosterTooltip:rosterModel.title};
     })()''')
     assert result['name']==result['chip']=='raw-model-id'
     assert result['roster']=='Friendly display' and 'raw-model-id' in result['rosterTooltip']

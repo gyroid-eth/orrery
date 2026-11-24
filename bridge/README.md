@@ -257,9 +257,20 @@ content-addressed attachment、Hermes の構造化 image_url を、固定した�
 参照します。入力画像の参照には外部 URL や本文中の path を使いません。
 bridge が保存した clipboard / `.orrery-input-images` の画像だけは、保存成功時の
 プロセス内の path・ファイル情報と本文を照合します。bridge 再起動前の保存は
-自動表示しません。既存の record 上限（構造化抽出1 MiB、Hermes content 65537以内）
-を超える入力画像は表示しません。native の `^V` は変更せず、paste 直後の通知は
-貼り付け操作を送ったことだけを示し、会話に記録されて初めて timeline に画像が出ます。
+この照合では自動表示しません。Composer が付けた独立した添付サフィックスは、
+会話に結び付いた作業フォルダ内の ORRERY 添付ストアを照合します。確認できた分は
+元のファイル名の札または縮小図に置き換え、送信控えの照合には元の入力を使います。
+保存時に名前の無かった添付は種類がわかる番号付きの名前で出します。
+既存の record 上限（構造化抽出1 MiB、Hermes content 65537以内）
+を超える入力画像は表示しません。
+
+Cockpit の入力欄に貼り付けたファイルと画像は、クリップで選んだ添付と同じ札に
+なります。macOS の Finder と WSL の Explorer でコピーしたファイル、クリップボードの
+スクリーンショットに対応します。ブラウザが直接バイトを渡せないときは、ホストから
+コピー済みの項目を読み取ります。画像は縮小図と名前が出て、どの添付も × で外せます。
+下書き中はブラウザ内にあり、送信時に送り先ごとの作業フォルダへ保存します。通常の
+テキストは入力欄に貼り付けられます。Claude Code には区切り付きの `@path` で送り、
+ほかの CLI には作業フォルダ内の参照として渡します。
 
 The default preview root is the bound native workspace: Codex's
 `session_meta.payload.cwd`, Claude's first native message `cwd`, dsh's session

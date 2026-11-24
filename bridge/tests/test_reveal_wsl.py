@@ -216,6 +216,15 @@ def test_the_opener_runs_with_the_answering_socket(monkeypatch, short_dir, tmp_p
         live.close()
 
 
+def test_the_opener_passes_literal_input_to_the_windows_process(monkeypatch, tmp_path):
+    _wsl(monkeypatch, tmp=tmp_path)
+    out = tmp_path / "url.txt"
+    url = "https://example.com/?a=1&b=%22'語".encode()
+    ob.run_opener(["sh", "-c", 'cat > "$1"', "fixture", str(out)],
+                  input_data=url, confirm=True)
+    assert out.read_bytes() == url
+
+
 # --- the exit status explorer.exe does not give -------------------------------
 
 
@@ -371,11 +380,11 @@ def test_a_windows_drive_file_is_selected_by_its_drive_path(monkeypatch, tmp_pat
     target = tmp_path / "note.md"
     target.write_text("x")
     _wsl(monkeypatch, tmp=tmp_path)
-    _windows_path(monkeypatch, r"C:\Users\u\note.md")
+    _windows_path(monkeypatch, r"C:\Sample folder\note.md")
     calls = []
     monkeypatch.setattr(ob, "run_opener", lambda argv, **kw: calls.append(argv))
     assert ob.reveal_in_finder(target) == "file"
-    assert calls == [[EXPLORER, "/select,", r"C:\Users\u\note.md"]]
+    assert calls == [[EXPLORER, "/select,", r"C:\Sample folder\note.md"]]
 
 
 def test_explorer_failing_to_start_hands_back_the_windows_path(monkeypatch, tmp_path):
@@ -468,6 +477,32 @@ def _cockpit_functions(*names: str) -> str:
 
 
 NODE = shutil.which("node")
+
+
+@pytest.mark.skipif(NODE is None, reason="no node")
+@pytest.mark.parametrize("blocked", [False, True])
+def test_browser_fallback_after_an_unavailable_windows_desktop(blocked):
+    script = _cockpit_functions("openExternalUrl") + """
+const actions=[];
+const popup={opener:{},location:{replace:(url)=>actions.push(['navigate',url,popup.opener])}};
+globalThis.window={open:(...args)=>{
+  actions.push(['open',...args]);return BLOCKED?null:popup;
+}};
+globalThis.fetch=async()=>({ok:false,status:500,
+  json:async()=>({ok:false,error:'The backend cannot reach the Windows desktop.'})});
+function appInvoke(){return null;}
+function showToast(message,error){actions.push(['toast',message,error]);}
+openExternalUrl('https://example.com/?a=1&b=2').then(ok=>console.log(JSON.stringify({ok,actions})));
+""".replace("BLOCKED", json.dumps(blocked))
+    result = subprocess.run([NODE, "-e", script], check=True, capture_output=True, text=True, timeout=20)
+    assert json.loads(result.stdout) == {
+        "ok": not blocked,
+        "actions": [
+            ["open", "about:blank", "_blank"],
+            ["toast", "OPEN URL FAILED · The backend cannot reach the Windows desktop.", True]
+            if blocked else ["navigate", "https://example.com/?a=1&b=2", None],
+        ],
+    }
 
 
 def _run_reveal(host: str, response: dict, status: int, clipboard) -> dict:

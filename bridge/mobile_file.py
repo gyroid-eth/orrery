@@ -12,7 +12,7 @@ MAX_FILE_BASE64 = 4 * ((MAX_FILE_BYTES + 2) // 3)
 MAX_FILE_JSON = MAX_FILE_BASE64 + 16384
 
 
-def save_file(workspace, upload):
+def save_file(workspace, upload, *, label=None):
     if not isinstance(upload, dict) or set(upload) != {'format', 'data'}:
         raise ValueError('file_invalid')
     extension, encoded = upload['format'], upload['data']
@@ -40,4 +40,4 @@ def save_file(workspace, upload):
             raise ValueError('file_format_unsupported') from None
         if re.search(br'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', raw):
             raise ValueError('file_format_unsupported')
-    return store(workspace, 'file', extension, raw)
+    return store(workspace, 'file', extension, raw, label=label)

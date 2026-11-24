@@ -4,6 +4,33 @@
   const imageTypes=new Set(['jpg','jpeg','png','webp']);
   const fileTypes=new Set(['pdf','txt','md','csv','json']);
   const maxFiles=5,mebibyte=1024*1024;
+  const clipboardImageExtensions={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'};
+  function eventFiles(data){
+    const files=Array.from(data?.files||[]);
+    if(!files.length)for(const item of Array.from(data?.items||[])){
+      const file=item.kind==='file'&&item.getAsFile();
+      if(file)files.push(file);
+    }
+    return files.map(file=>{
+      const extension=clipboardImageExtensions[file.type];
+      if(!extension||kindFor(file)?.kind==='image')return file;
+      return new File([file],file.name?file.name+'.'+extension:'Clipboard image.'+extension,
+        {type:file.type,lastModified:file.lastModified});
+    });
+  }
+  function snapshotFiles(attachments){
+    if(!Array.isArray(attachments))return [];
+    return attachments.slice(0,maxFiles).flatMap(item=>{
+      if(typeof item?.name!=='string'||item.name.length>256||/[\\/]/u.test(item.name)||
+         typeof item.data!=='string'||!item.data)return [];
+      const format=kindFor({name:item.name});
+      if(!format||item.data.length>4*Math.ceil(format.maxBytes/3))return [];
+      try{
+        const bytes=Uint8Array.from(atob(item.data),value=>value.charCodeAt(0));
+        return [new File([bytes],item.name,{type:item.type||'',lastModified:item.modified||0})];
+      }catch(_){return [];}
+    });
+  }
   function kindFor(file){
     const extension=file.name.split('.').pop().toLowerCase();
     if(imageTypes.has(extension))return {kind:'image',extension,maxBytes:10*mebibyte};
@@ -19,7 +46,7 @@
     });
   }
   function mount({host,clip,picker,list,onChange,onError,mayEdit}){
-    let entries=[],dragDepth=0;
+    let entries=[],dragDepth=0,pending=false;
     const node=(tag,cls)=>{
       const el=document.createElement(tag);el.className=cls;return el;
     };
@@ -97,13 +124,32 @@
       event.preventDefault();dragDepth=0;host.removeAttribute('data-dragging');
       add(event.dataTransfer.files);
     });
-    return {clear,get entries(){return entries.slice();}};
+    async function paste(read){
+      if(pending||!mayEdit())return;
+      pending=true;onChange();
+      try{
+        const result=await read();
+        if(!mayEdit())return;
+        const snapshot=Array.isArray(result.attachments)?result.attachments:[];
+        const files=snapshotFiles(snapshot);
+        if(files.length)add(files);
+        const skipped=(result.skipped||0)+snapshot.length-files.length;
+        if(result.error&&!files.length)onError('Could not read clipboard attachments.');
+        else if(skipped)onError(skipped===1?'1 clipboard item could not be attached.':skipped+' clipboard items could not be attached.');
+        else if(!files.length)onError('No supported files or images on the clipboard.');
+      }catch(_){
+        if(mayEdit())onError('Could not read clipboard attachments.');
+      }finally{
+        pending=false;onChange();
+      }
+    }
+    return {add,clear,paste,get pending(){return pending;},get entries(){return entries.slice();}};
   }
   async function upload(target,entries){
     const paths=[];
     for(const entry of entries){
       const data=await dataFor(entry.file);
-      const body={...target,kind:entry.kind,data};
+      const body={...target,kind:entry.kind,data,label:entry.file.name.slice(0,256)};
       if(entry.kind==='file')body.format=entry.extension;
       const response=await fetch('/telemetry/prompt-attachment',{
         method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),
@@ -115,5 +161,5 @@
     }
     return paths;
   }
-  root.OrreryPromptAttachments=Object.freeze({mount,upload});
+  root.OrreryPromptAttachments=Object.freeze({mount,upload,eventFiles});
 })(window);

@@ -215,6 +215,54 @@ def test_cockpit_workspace_passes_its_external_opener(cockpit):
     assert 'Keep reading history here' not in js('document.querySelector(".conversation-toolbar").textContent')
 
 
+def test_terminal_plain_and_osc8_links_use_only_the_http_opener(cockpit):
+    js, wait, client, _, _ = cockpit
+    url = 'https://example.com/?a=1&b=2'
+    frame = (
+        f'Plain {url}\r\n'
+        f'OSC 8 \x1b]8;;{url}\x1b\\Open report\x1b]8;;\x1b\\ /fixture/Folder with spaces\r\n'
+        '\x1b]8;;file:///fixture/report.txt\x1b\\Unsupported file scheme\x1b]8;;\x1b\\\r\n'
+    )
+    js("""window.linkEffects=[];
+      window.confirm=message=>{linkEffects.push({kind:'confirm'});return true;};
+      window.open=()=>{linkEffects.push({kind:'popup'});return null;};
+      const fetchBeforeLinkFixture=window.fetch;
+      window.fetch=(input,options)=>{
+        if(['/telemetry/open-url','/telemetry/reveal-path'].includes(input)){
+          linkEffects.push({kind:input,...JSON.parse(options.body)});
+          return Promise.resolve(new Response('{"ok":true}'));
+        }
+        return fetchBeforeLinkFixture(input,options);
+      };
+      applyHostPlatform({host:'wsl'});
+      createPane('LinkFixture',{paneId:'%777',width:80,height:20});
+      setActive('%777');
+      window.linkPaneFixture=panes.get('%777');
+      window.terminalLinkRow=text=>[...linkPaneFixture.host.querySelectorAll('.xterm-rows > div')]
+        .find(row=>row.textContent.includes(text));
+      writePaneOutput(linkPaneFixture,{snapshot:true,data:""" + json.dumps(frame) + """})""")
+
+    def click(text, column):
+        row = f'terminalLinkRow({json.dumps(text)})'
+        wait(f'Boolean({row})')
+        point = js(f"""(()=>{{
+          const row={row};
+          const rect=row.getBoundingClientRect();
+          const width=linkPaneFixture.term._core._renderService.dimensions.css.cell.width;
+          return {{x:Math.round(rect.left+({column}+.5)*width),y:Math.round(rect.top+rect.height/2)}};
+        }})()""")
+        client.call('Input.dispatchMouseEvent', type='mouseMoved', **point)
+        client.call('Input.dispatchMouseEvent', type='mousePressed', button='left', clickCount=1, **point)
+        client.call('Input.dispatchMouseEvent', type='mouseReleased', button='left', clickCount=1, **point)
+
+    click('Plain', 8)
+    wait('linkEffects.length===1')
+    click('OSC', 9)
+    wait('linkEffects.length===2')
+    click('Unsupported', 4)
+    assert js('linkEffects') == [{'kind': '/telemetry/open-url', 'url': url}] * 2
+
+
 def test_standalone_reader_falls_back_to_browser_open(cockpit):
     js, wait, client = prepare(cockpit)
     js('readerLinks.dispose();window.browserLinks=[];window.open=(...args)=>browserLinks.push(args);readerLinks=OrreryConversation.mount({getContext:()=>({...currentAgents[0],terminalPaneId:"%901"}),bindToggle:false});readerLinks.open()')

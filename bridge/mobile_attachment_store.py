@@ -31,7 +31,13 @@ def _ignore(directory, kind):
             stream.write(b'*\n')
 
 
-def store(workspace, kind, extension, data):
+def attachment_label(value):
+    if not isinstance(value, str):
+        return ''
+    return re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', value.replace('\\', '/').rsplit('/', 1)[-1]).strip()[:160]
+
+
+def store(workspace, kind, extension, data, *, label=None):
     root = Path(workspace)
     if not root.is_absolute() or not root.is_dir():
         raise ValueError(kind + '_workspace_unavailable')
@@ -66,6 +72,10 @@ def store(workspace, kind, extension, data):
                         continue
                     if info.st_mtime < cutoff:
                         os.unlink(name, dir_fd=directory)
+                        try:
+                            os.unlink(name+'.label', dir_fd=directory)
+                        except FileNotFoundError:
+                            pass
                     else:
                         count += 1
                 except FileNotFoundError:
@@ -77,8 +87,17 @@ def store(workspace, kind, extension, data):
             try:
                 with os.fdopen(fd, 'wb') as stream:
                     stream.write(data)
+                if cleaned := attachment_label(label):
+                    label_fd = os.open(name+'.label', os.O_WRONLY | os.O_CREAT | os.O_EXCL | NO_FOLLOW,
+                                       0o600, dir_fd=directory)
+                    with os.fdopen(label_fd, 'w', encoding='utf-8') as stream:
+                        stream.write(cleaned)
             except BaseException:
                 os.unlink(name, dir_fd=directory)
+                try:
+                    os.unlink(name+'.label', dir_fd=directory)
+                except FileNotFoundError:
+                    pass
                 raise
             return str(root / folder / name)
         finally:
