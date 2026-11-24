@@ -155,12 +155,13 @@
     replyButton.textContent='Reply with reference';replyButton.hidden=true;panel.append(replyButton);
     let selectedPassage=null,selectionFrame=0;
     function hideSelection(){replyButton.hidden=true;selectedPassage=null;}
-    function reference(event,text,kind='text'){
+    function reference(event,text,kind,beforeFocus){
       const key=contextKey,signature=JSON.stringify(event),owner=agent;
       const value={agent:owner,eventId:event.id,role:event.role||'assistant',ts:event.ts||'',text,kind,
         isCurrent:()=>fingerprint(getContext()||{})===key&&(!events.has(event.id)||JSON.stringify(events.get(event.id))===signature)};
-      hideSelection();onActivate();
-      return onReference?.(value)===true;
+      return onReference?.(value,()=>{
+        hideSelection();onActivate();beforeFocus();
+      })===true;
     }
     function selection(){
       selectionFrame=0;
@@ -187,7 +188,8 @@
     listen(replyButton,'pointerdown',event=>{event.preventDefault();event.stopPropagation();});
     listen(replyButton,'click',event=>{
       event.stopPropagation();clearTimeout(jumpTimer);
-      const selected=selectedPassage;if(selected&&reference(selected.event,selected.text))root.getSelection()?.removeAllRanges();
+      const selected=selectedPassage;
+      if(selected)reference(selected.event,selected.text,'text',()=>root.getSelection()?.removeAllRanges());
     });
     let linkPress=null;
     listen(panel,'pointerdown',event=>{linkPress={x:event.clientX,y:event.clientY,selected:!root.getSelection()?.isCollapsed};});
@@ -486,7 +488,7 @@
     const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onBeforeOpen:layoutChanged,onClose:layoutChanged,onActivate:()=>expand(true),mutate:changeTail,
       onReference:onReference?ref=>{
         const event=ref.path?ref.origin:[...events.values()].find(event=>event.references?.some(value=>value.id===ref.id));
-        if(event&&reference(event,ref.path||ref.label,'file'))preview.close();
+        if(event)reference(event,ref.path||ref.label,'file',()=>preview.close());
       }:null});
     const stopPathLinks=root.OrreryConversationMarkdown?.observePaths?.(panel,source);
     let enabled=false,opened=false,automaticOpening=false,agent='',generation=0,controller=null,timer=0,busy=false,sessionReloadAttempted=false;
