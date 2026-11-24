@@ -48,12 +48,13 @@ SOFTWARE.
     const match=/^\s*(?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s)?\s*$/.exec(value);
     return match&&match.slice(1).some(Boolean)?Number(match[1]||0)*3600+Number(match[2]||0)*60+Number(match[3]||0):null;
   }
-  function collect(events,provider){
-    if(!['Claude','Codex'].includes(provider))return {groups:[],consumed:new Set()};
-    const enabled=events.some(e=>e.step||e.step_turn||e.step_boundary);
-    if(!enabled)return {groups:[],consumed:new Set()};
+  function collect(events,provider,{working=false,native=true,activeCalls=new Set()}={}){
+    const enabled=native&&['Claude','Codex'].includes(provider)&&events.some(e=>e.step||e.step_turn||e.step_boundary);
+    const pending=new Set();
+    if(!enabled&&!working)return {groups:[],consumed:new Set(),pending};
     const groups=[],consumed=new Set(),calls=new Map(),results=new Map(),completions=new Map();
-    let current=null,segment='partial',turn=null;
+    const codexCalls=new Map(),recordOrder=new Map();
+    let current=null,segment='partial',turn=null,tail=[];
     function cut(event){
       if(current)current.closed=true;
       current=null;segment='after:'+event.id;
@@ -69,7 +70,16 @@ SOFTWARE.
       }
       return current;
     }
-    for(const event of events){
+    for(const [index,event] of events.entries()){
+      recordOrder.set(event.id,index);
+      if(working){
+        if(['tool','tool_result'].includes(event.kind))tail.push(event);
+        else tail=[];
+      }
+      if(!enabled){
+        if(!['tool','tool_result'].includes(event.kind))cut(event);
+        continue;
+      }
       const boundary=event.step_turn;
       if(provider==='Codex'&&boundary&&key(boundary.id)){
         consumed.add(event.id);
@@ -90,6 +100,8 @@ SOFTWARE.
       }
       if(provider==='Codex'&&event.step_wrapper===true)consumed.add(event.id);
       const step=event.step;
+      if(provider==='Codex'&&event.kind==='tool'&&key(event.tool_call_id)&&!step&&!event.step_wrapper)
+        codexCalls.set(event.tool_call_id,event);
       if(step&&key(step.id)){
         if(step.phase==='call'&&provider==='Claude'){
           const owner=active();owner.anchor??=event.id;
@@ -99,15 +111,18 @@ SOFTWARE.
           results.set(step.id,{step,event,owner:calls.has(step.id)?null:active()});
         }else if(step.phase==='complete'&&provider==='Codex'){
           consumed.add(event.id);
+          const request=codexCalls.get(event.tool_call_id||step.id);
+          if(request)consumed.add(request.id);
           const id=key(step.turn)?step.turn:turn?.id;
           const completionKey=(id||'')+':'+step.id;
           let completion=completions.get(completionKey);
           if(!completion){
             if(id&&turn?.id!==id)startTurn(event,id);
-            const owner=active();owner.anchor??=event.id;
-            completion={owner,eventId:event.id};completions.set(completionKey,completion);
+            const owner=active();owner.anchor??=request?.id||event.id;
+            completion={owner,eventId:request?.id||event.id};completions.set(completionKey,completion);
           }
-          completion.owner.steps.set(step.id,{...step,eventId:completion.eventId});
+          const stepId=request?'record:'+request.id:step.id;
+          completion.owner.steps.set(stepId,{...step,id:stepId,eventId:completion.eventId});
         }
       }
       // A tool request can also emit a visible Mail card. Record its step
@@ -120,14 +135,34 @@ SOFTWARE.
         consumed.add(call.event.id);
         call.owner.steps.set(id,{...call.step,...result.step,phase:'complete',
           eventId:call.event.id,resultId:result.event.id});
+      }else if(working&&call.owner===current||activeCalls.has(id)){
+        // An idle observation can arrive before the transcript's result.
+        // Keep a displayed request in its original run until it resolves.
+        pending.add(id);
+        consumed.add(call.event.id);
+        call.owner.steps.set(id,{...call.step,status:working?'running':'observed',eventId:call.event.id});
       }
     }
     for(const [id,result] of results)if(!calls.has(id)){
       result.owner.orphans++;result.owner.anchor??=result.event.id;
     }
-    if(!current&&(provider==='Claude'||turn))active();
+    if(working){
+      const unprojected=tail.filter(event=>!consumed.has(event.id));
+      const requests=unprojected.filter(event=>event.kind==='tool');
+      if(requests.length){
+        const owner=active();
+        for(const event of requests){
+          consumed.add(event.id);
+          owner.anchor??=event.id;
+          owner.steps.set('record:'+event.id,{id:'record:'+event.id,tool:event.text,
+            status:'observed',started:event.ts,eventId:event.id});
+        }
+        for(const event of unprojected)if(event.kind==='tool_result')consumed.add(event.id);
+      }
+    }
+    if(enabled&&!current&&(provider==='Claude'||turn))active();
     for(const g of groups){
-      g.steps=[...g.steps.values()];
+      g.steps=[...g.steps.values()].sort((a,b)=>recordOrder.get(a.eventId)-recordOrder.get(b.eventId));
       const starts=g.steps.map(s=>time(s.started)).filter(Number.isFinite);
       const ends=g.steps.map(s=>time(s.ended)).filter(Number.isFinite);
       if(!Number.isFinite(g.started)&&starts.length)g.started=Math.min(...starts);
@@ -135,18 +170,26 @@ SOFTWARE.
       if(g.duration===null&&Number.isFinite(g.started)&&Number.isFinite(g.ended)&&g.ended>=g.started)
         g.duration=(g.ended-g.started)/1000;
     }
-    return {groups,consumed};
+    return {groups,consumed,pending};
   }
 
   function mount({host,mutate=fn=>fn(),onFocusLost=()=>{}}){
-    const cards=new Map();let model={groups:[],consumed:new Set()},current={},visible=false,timer=0,serial=0;
+    const cards=new Map();let model={groups:[],consumed:new Set()},current={},visible=false,timer=0,serial=0,workingModel=false;
+    function activityState(context){
+      // A missed terminal sample does not end the recorded run.
+      return context?.running===true?(context.act_state||current.act_state):null;
+    }
+    const doingWork=context=>['work','ask','question'].includes(activityState(context));
+    function setActivity(context,isVisible){
+      current={...context,act_state:activityState(context)};visible=isVisible;
+    }
     const heightSpring=root.OrreryConversationMotion?.spring(260,24);
     const reduced=root.matchMedia?.('(prefers-reduced-motion: reduce)');
     const make=(tag,cls,value)=>{const node=root.document.createElement(tag);node.className=cls;if(value!==undefined)node.textContent=value;return node;};
     function changed(node,value){if(node.textContent!==value)node.textContent=value;}
     function icon(status){
       const node=make('span','conversation-step-icon '+status);node.setAttribute('aria-hidden','true');
-      node.innerHTML=status==='observed'?'<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.5"/></svg>':
+      node.innerHTML=['observed','running'].includes(status)?'<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.5"/></svg>':
         status==='failed'?'<svg viewBox="0 0 16 16"><path d="M4.5 4.5 11.5 11.5M11.5 4.5 4.5 11.5"/></svg>':
         '<svg viewBox="0 0 16 16"><path class="conversation-step-check" pathLength="1" d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg>';
       return node;
@@ -188,18 +231,26 @@ SOFTWARE.
       button.addEventListener('click',()=>mutate(()=>setOpen(card,!card.open,true)));
       setOpen(card,false);return card;
     }
-    function row(step,animate){
+    function createRow(animate){
       const node=make('li','conversation-step'+(animate?' is-new':''));
-      const status=['done','failed'].includes(step.status)?step.status:'observed';
       const copy=make('div','conversation-step-copy'),top=make('div','conversation-step-top');
-      const tool=make('span','conversation-step-tool',text(step.tool).split('__').at(-1));
-      const outcome=make('span','conversation-step-outcome',status==='failed'?'Failed':status==='observed'?'Observed':'');
+      const tool=make('span','conversation-step-tool'),outcome=make('span','conversation-step-outcome');
+      const clock=make('span','conversation-step-duration'),detail=make('div','conversation-step-target');
+      top.append(tool,outcome,clock);copy.append(top,detail);node.append(copy);
+      return {node,tool,outcome,clock,detail,icon:null,status:'',fingerprint:''};
+    }
+    function updateRow(record,step){
+      const status=['done','failed','running'].includes(step.status)?step.status:'observed';
+      if(record.status!==status){
+        const symbol=icon(status);
+        if(record.icon)record.icon.replaceWith(symbol);else record.node.prepend(symbol);
+        record.icon=symbol;record.status=status;
+      }
+      changed(record.tool,text(step.tool).split('__').at(-1));
+      changed(record.outcome,status==='failed'?'Failed':status==='running'?'Running…':status==='observed'?'Observed':'');
       const start=time(step.started),end=time(step.ended);
-      top.append(tool,outcome,make('span','conversation-step-duration',
-        Number.isFinite(start)&&Number.isFinite(end)&&end>=start?duration((end-start)/1000):''));
-      copy.append(top);
-      if(step.detail)copy.append(make('div','conversation-step-target',text(step.detail)));
-      node.append(icon(status),copy);return node;
+      changed(record.clock,Number.isFinite(start)&&Number.isFinite(end)&&end>=start?duration((end-start)/1000):'');
+      changed(record.detail,text(step.detail));record.detail.hidden=!step.detail;
     }
     function paint(){
       const last=model.groups.at(-1);let ticking=false;
@@ -220,7 +271,8 @@ SOFTWARE.
         const compacting=working&&current.reader_phase==='compacting';
         const finished=g.closed?(g.duration??card.lastWork):(card.lastWork??g.duration);
         const status=working?(compacting?'Compacting context…':'Working…'):waiting?'Waiting for you':'';
-        const count=g.steps.length+(g.steps.length===1?' step':' steps');
+        const unit=now?'step':'tool call';
+        const count=g.steps.length+' '+unit+(g.steps.length===1?'':'s');
         const secondsShown=working?card.lastWork:finished;
         const clock=secondsShown===null?'':', '+duration(secondsShown);
         changed(card.heading,status);card.heading.hidden=!status;
@@ -237,8 +289,10 @@ SOFTWARE.
       if(!ticking&&timer){root.clearInterval(timer);timer=0;}
     }
     function sync({events,provider,mode,rows,context,isVisible}){
-      current=context||{};visible=isVisible;
-      model=['snapshot','fresh_tail'].includes(mode)?{groups:[],consumed:new Set()}:collect(events,provider);
+      setActivity(context,isVisible);
+      workingModel=doingWork(current);
+      model=collect(events,provider,{working:workingModel,native:!['snapshot','fresh_tail'].includes(mode),
+        activeCalls:model.pending});
       const wanted=new Set(model.groups.map(g=>g.id)),byId=new Map(rows.map(r=>[r.dataset.eventId,r]));
       for(const [id,card] of cards)if(!wanted.has(id)){
         if(card.node.contains(root.document.activeElement))onFocusLost();card.animation?.cancel();card.node.remove();cards.delete(id);
@@ -248,12 +302,10 @@ SOFTWARE.
         const ids=new Set(g.steps.map(s=>s.id));
         for(const [id,record] of card.rows)if(!ids.has(id)){record.node.remove();card.rows.delete(id);}
         for(const [index,step] of g.steps.entries()){
-          const fingerprint=JSON.stringify(step),record=card.rows.get(step.id);
-          if(!record||record.fingerprint!==fingerprint){
-            const node=row(step,existed);if(record)record.node.replaceWith(node);
-            card.rows.set(step.id,{node,fingerprint});
-          }
-          const node=card.rows.get(step.id).node;
+          const fingerprint=JSON.stringify(step),record=card.rows.get(step.id)||createRow(existed);
+          if(record.fingerprint!==fingerprint){updateRow(record,step);record.fingerprint=fingerprint;}
+          card.rows.set(step.id,record);
+          const node=record.node;
           if(card.list.children[index]!==node)card.list.insertBefore(node,card.list.children[index]||null);
         }
         card.notice.hidden=!g.orphans;
@@ -263,9 +315,9 @@ SOFTWARE.
       }
       paint();return model.consumed;
     }
-    return Object.freeze({sync,
-      activity(context,isVisible){current=context||{};visible=isVisible;paint();return [...cards.values()].some(c=>!c.node.hidden&&(c.working||c.waiting));},
-      reset(){if(timer)root.clearInterval(timer);timer=0;for(const card of cards.values()){card.animation?.cancel();card.node.remove();}cards.clear();model={groups:[],consumed:new Set()};},
+    return Object.freeze({sync,needsSync:context=>workingModel!==doingWork(context),
+      activity(context,isVisible){setActivity(context,isVisible);paint();return [...cards.values()].some(c=>!c.node.hidden&&(c.working||c.waiting));},
+      reset(){if(timer)root.clearInterval(timer);timer=0;for(const card of cards.values()){card.animation?.cancel();card.node.remove();}cards.clear();model={groups:[],consumed:new Set()};current={};workingModel=false;},
     });
   }
   const api={collect,duration,elapsed,mount};
