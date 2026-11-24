@@ -17,7 +17,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from urllib.parse import quote
-from conversation_mail import received, sent
+from conversation_mail import received, received_queued, sent
 from conversation_images import hermes_content, native_image
 from conversation_steps import claude_call, claude_result, mark_step_boundary
 
@@ -59,9 +59,10 @@ def epoch(value, divisor=1):
     except (ValueError,TypeError,OverflowError,OSError):return ''
 
 
-def text_event(text,role,ts):
+def text_event(text,role,ts,*,queued=False):
     if not isinstance(text,str) or not text.strip():return None
-    return received(dict(kind='text',role=role,text=text[:MAX_TEXT],truncated=len(text)>MAX_TEXT,ts=ts))
+    event=dict(kind='text',role=role,text=text[:MAX_TEXT],truncated=len(text)>MAX_TEXT,ts=ts)
+    return received_queued(event) if queued else received(event)
 
 
 def input_event(content, provider, ts):
@@ -110,7 +111,7 @@ def claude_pasted_text(text):
     return re.sub(r'\A\r?\n|\r?\n\Z', '', match[2])
 
 
-def claude_text(text, role, ts, item):
+def claude_text(text, role, ts, item, *, queued=False):
     """Keep harness notices out of human prompts and send matching."""
     if role != 'user' or not isinstance(text, str):
         return text_event(text, role, ts)
@@ -127,7 +128,7 @@ def claude_text(text, role, ts, item):
     if origin == 'human' or not (item.get('promptSource') == 'system' or
             origin in {'task-notification', 'system'} or
             body.startswith(('<task-notification>', '<system-reminder>'))):
-        return text_event(claude_pasted_text(text), role, ts)
+        return text_event(claude_pasted_text(text), role, ts, queued=queued)
     def field(name):
         start = body.find('<' + name + '>')
         if start < 0:
@@ -154,6 +155,19 @@ def claude_text(text, role, ts, item):
                 system_detail=detail[:MAX_TEXT], truncated=len(text)>MAX_TEXT)
 
 
+def claude_queued_prompt(item):
+    if item.get('type')!='attachment':
+        return None
+    queued=item.get('attachment')
+    # Queue operations also cover ordinary turns. Only consumed human prompts
+    # belong in the timeline or in the native input-image preview.
+    if (isinstance(queued,dict) and queued.get('type')=='queued_command'
+            and queued.get('commandMode')=='prompt' and not queued.get('isMeta')
+            and isinstance(queued.get('origin'),dict) and queued['origin'].get('kind')=='human'):
+        return queued
+    return None
+
+
 def normalize(item,p,sid):
     """Return (block-index,event) pairs; hidden/reasoning/raw tool bodies excluded."""
     out=[]
@@ -163,14 +177,9 @@ def normalize(item,p,sid):
         if (item.get('sessionId')!=sid or item.get('isSidechain') or
                 item.get('isMeta') and not (item.get('type')=='user' and item.get('isCompactSummary') is True)):return []
         role=item.get('type');message=item.get('message')
+        queued=claude_queued_prompt(item)
         if role=='attachment':
-            queued=item.get('attachment')
-            # Mid-turn human prompts are recorded as consumed attachments,
-            # not user messages. Queue operations also cover ordinary turns;
-            # rendering those would duplicate their eventual user record.
-            if (not isinstance(queued,dict) or queued.get('type')!='queued_command'
-                    or queued.get('commandMode')!='prompt' or queued.get('isMeta')
-                    or not isinstance(queued.get('origin'),dict) or queued['origin'].get('kind')!='human'):
+            if queued is None:
                 return []
             role='user';message=dict(role=role,content=queued.get('prompt'))
             item=dict(item,origin=queued['origin'],timestamp=queued.get('timestamp') or item.get('timestamp'))
@@ -179,14 +188,14 @@ def normalize(item,p,sid):
         summary=blocks_text(content,block_limit=MAX_TEXT+1) if role=='user' and isinstance(content,list) else None
         if summary is not None and is_claude_summary(summary,item):
             add(0,claude_text(summary,role,ts,item));return out
-        if isinstance(content,str):add(0,claude_text(content,role,ts,item))
+        if isinstance(content,str):add(0,claude_text(content,role,ts,item,queued=queued is not None))
         elif isinstance(content,list):
             images=[]
             first_text=None
             for i,b in enumerate(content[:MAX_BLOCKS]):
                 if not isinstance(b,dict):continue
                 if b.get('type')=='text':
-                    event=claude_text(b.get('text'),role,ts,item)
+                    event=claude_text(b.get('text'),role,ts,item,queued=queued is not None)
                     if first_text is None and event and event['role']=='user' and event['kind']=='text':first_text=i
                     add(i,event)
                 elif b.get('type')=='thinking' and role=='assistant' and item.get('thinkingDisplay')=='updates':
@@ -268,8 +277,9 @@ def normalize(item,p,sid):
 def artifact_item(item,p,index,event=None):
     """既知の tool と入力画像の記録だけを渡す。通常の文を引数と解釈しない。"""
     name=value=None
-    if p=='claude' and item.get('type')=='user':
-        content=item.get('message',{}).get('content')
+    queued=claude_queued_prompt(item) if p=='claude' else None
+    if p=='claude' and (item.get('type')=='user' or queued is not None):
+        content=queued.get('prompt') if queued is not None else item.get('message',{}).get('content')
         if isinstance(content,list):
             attachments=(event or {}).get('input_image_blocks')
             if attachments:content=[content[block] for block in sorted([index,*attachments])]

@@ -117,7 +117,9 @@ def cockpit(request):
         def enable(*, claimed=False, mode="cursor", count=80, text_size=120):
             js("conversationEnabled.checked=true;conversationEnabled.dispatchEvent(new Event('change'))")
             wait("typeof OrreryConversationSource!=='undefined'&&typeof OrreryConversation!=='undefined'")
-            js("""window.packets=[];window.send=p=>{packets.push(p);return true};
+            js("""window.packets=[];window.send=p=>{packets.push(p);
+              if(p.type==='submit-prompt')queueMicrotask(()=>handle({type:'input-ack',paneId:p.paneId,id:p.inputAck,status:'accepted'}));
+              return true};
               currentAgents=[{name:'ReviewFixture',program:'codex',provider:'openai',history_binding:'bound',transcript_path:'/fixture/one.jsonl'}];
               createPane('ReviewFixture',{paneId:'%901',windowId:'@901',width:80,height:20,alternateOn:true,mouseTracking:false});
               setActive('%901');window.pageNumber=0;
@@ -368,7 +370,7 @@ def test_full_history_keeps_original_composer_usable_and_guarded(cockpit):
     client.call('Input.dispatchKeyEvent',type='keyDown',key='Enter',windowsVirtualKeyCode=13)
     client.call('Input.dispatchKeyEvent',type='keyUp',key='Enter',windowsVirtualKeyCode=13)
     assert not js("packets.some(p=>p.type==='input')")
-    js("promptInput.focus();promptInput.value='/logout';promptSend.click()")
+    js("promptInput.focus();promptInput.value='/logout';promptInput.dispatchEvent(new Event('input'));promptSend.click()")
     assert js("!sendGuard.hidden")
     assert not js("packets.some(p=>p.type==='input')")
     # IME confirmation must not submit; Shift+Enter remains a newline.
@@ -379,11 +381,9 @@ def test_full_history_keeps_original_composer_usable_and_guarded(cockpit):
     time.sleep(.1)
     client.call('Input.dispatchKeyEvent',type='keyDown',key='Enter',windowsVirtualKeyCode=13,modifiers=8)
     assert not js("packets.some(p=>p.type==='input')")
-    js("promptInput.value='fixture prompt';promptSend.click()")
-    wait("packets.filter(p=>p.type==='input').length===2")
-    assert js("packets.filter(p=>p.type==='input')")==[
-        dict(type='input',paneId='%901',data='\x1b[200~fixture prompt\x1b[201~'),
-        dict(type='input',paneId='%901',data='\r')]
+    js("promptInput.value='fixture prompt';promptInput.dispatchEvent(new Event('input'));promptSend.click()")
+    wait("packets.filter(p=>p.type==='submit-prompt').length===1")
+    assert js("packets.filter(p=>p.type==='submit-prompt').map(p=>[p.paneId,p.data])")==[['%901','fixture prompt']]
     assert js("document.querySelector('.screen').classList.contains('conversation-full')")
     assert not js("packets.some(p=>p.type==='resize')")
     assert js("promptInput.value")==''
@@ -528,9 +528,9 @@ def test_split_history_is_per_cell_and_focus_keeps_existing_prompt_route(cockpit
     client.call('Input.dispatchKeyEvent',type='keyDown',key='ArrowUp',windowsVirtualKeyCode=38)
     client.call('Input.dispatchKeyEvent',type='keyUp',key='ArrowUp',windowsVirtualKeyCode=38)
     assert not js("packets.some(p=>p.type==='input')")
-    js("promptInput.focus();promptInput.value='split fixture prompt';promptSend.click()")
-    wait("packets.filter(p=>p.type==='input').length===2")
-    assert js("packets.filter(p=>p.type==='input').map(p=>p.paneId)")==['%901','%901']
+    js("promptInput.focus();promptInput.value='split fixture prompt';promptInput.dispatchEvent(new Event('input'));promptSend.click()")
+    wait("packets.filter(p=>p.type==='submit-prompt').length===1")
+    assert js("packets.filter(p=>p.type==='submit-prompt').map(p=>p.paneId)")==['%901']
     js("document.querySelector('.split-cell .split-history-toggle').click();document.querySelectorAll('.split-cell')[1].querySelector('.conversation-file').click()")
     wait("document.querySelectorAll('.split-cell')[1].querySelector('.conversation-preview-text')!==null")
     assert js('promptTarget.textContent')==names[1]
@@ -574,7 +574,7 @@ def test_submitted_prompt_resumes_following_from_older_position(cockpit, mode):
     js("document.querySelector('.conversation-scroll').scrollTop=120")
     assert js("(()=>{const s=document.querySelector('.conversation-scroll');return s.scrollHeight-s.clientHeight-s.scrollTop>45})()")
     js("promptInput.value='Generated prompt for follow regression';sendPrompt()")
-    wait("packets.some(p=>p.type==='input'&&p.data==='\\r')")
+    wait("packets.some(p=>p.type==='submit-prompt')")
     wait("pageNumber>=2")
     assert js("(()=>{const s=document.querySelector('.conversation-scroll');return s.scrollHeight-s.clientHeight-s.scrollTop<45})()")
     assert js("document.querySelector('.conversation-latest').getAttribute('aria-label')") == 'Latest'
@@ -589,7 +589,7 @@ def test_submitted_prompt_resumes_reader_paused_at_retention_limit(cockpit):
     wait("document.querySelector('.conversation-latest').getAttribute('aria-label').includes('resume')")
     old_page = js('pageNumber')
     js("promptInput.value='Generated prompt after reader limit';sendPrompt()")
-    wait("packets.some(p=>p.type==='input'&&p.data==='\\r')")
+    wait("packets.some(p=>p.type==='submit-prompt')")
     wait('pageNumber>'+str(old_page))
     assert js("document.querySelector('.conversation-latest').getAttribute('aria-label')") == 'Latest'
     assert js("document.querySelectorAll('.conversation-event').length>0")
@@ -621,7 +621,9 @@ def open_agents_fixture(cockpit, programs, *, reader_enabled=True, unavailable=F
     roster = [dict(name=name, program=program, running=True, history_binding='bound',
                    transcript_path='/fixture/agent.jsonl') for name, program in programs.items()]
     # A roster request started before stable_roster can still return an empty list.
-    js("""window.packets=[];window.send=packet=>{packets.push(packet);return true};
+    js("""window.packets=[];window.send=packet=>{packets.push(packet);
+              if(packet.type==='submit-prompt')queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'}));
+              return true};
       rosterAnnotationEpoch++;
       liveRosterAgents=""" + json.dumps(roster) + """;
       renderRoster();handleSessions(liveRosterAgents.map(agent=>agent.name));
@@ -687,7 +689,7 @@ def test_default_view_applies_to_single_agent_and_keeps_manual_toggle(cockpit, v
     if full:
         assert js(f'{panel}.getBoundingClientRect().bottom<=promptInput.getBoundingClientRect().top')
     js("promptInput.value='Generated prompt from Reader';sendPrompt()")
-    wait("packets.filter(p=>p.type==='input'&&p.paneId==='%901').length===2")
+    wait("packets.filter(p=>p.type==='submit-prompt'&&p.paneId==='%901').length===1")
     assert js("(()=>{const count=readerOpens.length;conversationToggle.click();renderStage();return readerOpens.length===count;})()")
     assert js(panel + '.hidden')
 
@@ -760,8 +762,8 @@ def test_prompt_enter_keeps_original_target_after_focus_moves(cockpit):
     js, wait, client, requests, enable = cockpit
     enable()
     js("createPane('OtherFixture',{paneId:'%902',windowId:'@902',width:80,height:20});setActive('%901');packets.length=0;promptInput.value='Generated target regression';sendPrompt();setActive('%902')")
-    wait("packets.filter(p=>p.type==='input').length===2")
-    assert js("packets.filter(p=>p.type==='input').map(p=>p.paneId)") == ['%901', '%901']
+    wait("packets.filter(p=>p.type==='submit-prompt').length===1")
+    assert js("packets.filter(p=>p.type==='submit-prompt').map(p=>p.paneId)") == ['%901']
 
 
 @pytest.mark.parametrize('change', ['removed', 'replaced', 'session', 'connection'])
@@ -772,8 +774,8 @@ def test_prompt_enter_cancels_when_original_target_changes(cockpit, change):
               'session':"panes.get('%901').session='ReplacementFixture'", 'connection':"socket=null"}[change]
     js("packets.length=0;promptInput.value='Generated cancelled regression';sendPrompt();"+action)
     time.sleep(.4)
-    assert js("packets.filter(p=>p.type==='input').length") == 1
-    assert js("toastEl.textContent.includes('send cancelled')")
+    assert js("packets.filter(p=>p.type==='submit-prompt').length") == 0
+    assert js("promptInput.value") == 'Generated cancelled regression'
 
 
 @pytest.mark.parametrize('reject', [False, True])
@@ -819,7 +821,7 @@ def test_submit_in_split_follows_only_original_history_after_focus_moves(cockpit
       focusSplitSession('ReviewFixture');packets.length=0;promptInput.value='Generated split send';sendPrompt();
       document.querySelectorAll('.split-cell .conversation-scroll')[1].dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));""")
     assert js('activeSession()') == 'OtherFixture'
-    wait("packets.filter(p=>p.type==='input').length===2")
+    wait("packets.filter(p=>p.type==='submit-prompt').length===1")
     assert js("packets.filter(p=>p.type==='input').map(p=>p.paneId)") == ['%901','%901']
     assert js("(()=>{const s=document.querySelectorAll('.split-cell .conversation-scroll')[0];return s.scrollHeight-s.clientHeight-s.scrollTop<45})()")
     assert js("document.querySelectorAll('.split-cell .conversation-scroll')[1].scrollTop") == 120
@@ -844,7 +846,7 @@ def test_submit_while_older_request_pending_must_not_repause(cockpit):
       document.querySelector('.conversation-older').click();
       promptInput.value='Generated send during older read';sendPrompt();
     """)
-    wait("packets.some(p=>p.type==='input'&&p.data==='\\r')")
+    wait("packets.some(p=>p.type==='submit-prompt')")
     # A slow older response arrives after submission and causes retention trim.
     # It is the record's start, so this Load earlier reads no further page.
     js("""resolveOlder({events:Array.from({length:80},(_,i)=>({id:'old-'+i,kind:'text',role:'assistant',text:'old'.repeat(300),cursor_before:'old:'+i,cursor_after:'old:'+(i+1)})),before:'older-start',after:'older-end',has_older:false});""")

@@ -10,6 +10,7 @@ import pytest
 from PIL import Image
 
 from test_conversation_providers import row, page, line, claude, dsh, make_db
+from test_conversation_queued import queued
 from conversation_history import open_reader
 from conversation_preview import ReferenceStore, PreviewUnavailable
 
@@ -72,6 +73,29 @@ def test_native_input_image_uses_a_record_bound_reference(tmp_path,program):
     if program=='dsh':
         image.write_bytes(b'changed')
         with pytest.raises(PreviewUnavailable):store.read(ref['id'],r)
+
+
+@pytest.mark.parametrize('image_first',[False,True])
+def test_consumed_claude_image_has_desktop_and_mobile_previews(tmp_path,image_first):
+    path=tmp_path/'claude.jsonl'
+    attachment=dict(type='image',source=dict(type='base64',media_type='image/png',
+                                            data=base64.b64encode(png()).decode()))
+    content=[dict(type='text',text='画像を見てください。'),attachment]
+    if image_first:content.reverse()
+    path.write_bytes(line(claude('user','Initial message',cwd=str(tmp_path)))+
+                     line(queued(content,imagePasteIds=[1])))
+    binding=row(path,'claude-code')
+    store,events=decorate(binding)
+    event=events[-1]
+    assert event['text']=='画像を見てください。'
+    assert event['id'].endswith(':'+str(int(image_first)))
+    ref,=event['references']
+    assert ref['input_image'] and ref['input_image_slot']==1
+    assert base64.b64encode(png()).decode() not in json.dumps(events)
+    for mobile in (False,True):
+        result=store.read(ref['id'],binding,thumbnail=True,mobile=mobile)
+        assert result['kind']=='image'
+        assert Image.open(io.BytesIO(base64.b64decode(result['data']))).size==(320,200)
 
 
 @pytest.mark.parametrize('saving',['mobile','clipboard'])

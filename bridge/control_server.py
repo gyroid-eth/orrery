@@ -1633,6 +1633,82 @@ class TmuxControlBridge:
                 # A partial write can leave the control command stream misaligned.
                 self._abort_mobile_stream()
                 return 'unknown'
+
+    async def submit_prompt(self, pane_id: str, text: str, *, proof=None) -> str:
+        """Bracketed paste and Enter on one tmux queue, including across clients."""
+        if not re.fullmatch(r'%[0-9]+', pane_id):
+            return 'refused'
+        target = self.config.tmux_bin
+        if isinstance(target, FreshPaneBoundary) and (
+                proof is None or proof.target is not target or proof.purpose != 'input' or pane_id != target.pane_id):
+            raise TargetRefused('FRESH_TMUX_TARGET_CHANGED')
+
+        buffer = 'orrery-compose-' + uuid.uuid4().hex
+        paste = ['paste-buffer', '-r', '-p', '-d', '-b', buffer, '-t', pane_id]
+        enter = ['send-keys', '-t', pane_id, 'C-m']
+        deadline = time.monotonic() + 4
+
+        def ticket():
+            pending = asyncio.get_running_loop().create_future()
+            self._bounded_blocks[pending] = 4096
+            self._pending_blocks.append(pending)
+            return pending
+
+        async with self._write_lock:
+            if self.master_fd is None or self._closed or time.monotonic() >= deadline:
+                return 'refused'
+            loaded = dispatching = False
+            try:
+                with tempfile.TemporaryDirectory(prefix='orrery-compose-') as temp:
+                    path = Path(temp) / 'prompt'
+                    path.write_bytes(text.encode('utf-8', errors='replace'))
+                    load = ['load-buffer', '-b', buffer, str(path)]
+                    pending = ticket()
+                    dispatching = True
+                    await self._write_master((make_tmux_command(load) + '\n').encode('utf-8'))
+                    result = await asyncio.wait_for(pending, 2)
+                    dispatching = False
+                    if not result.ok:
+                        return 'refused'
+                    loaded = True
+                if proof is None:
+                    await asyncio.to_thread(admit_command, target, paste, session=self.config.session)
+                else:
+                    await proof.check()
+                    if proof.closed:
+                        raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
+                if self.master_fd is None or self._closed or time.monotonic() >= deadline:
+                    return 'refused'
+                paste_result, enter_result = ticket(), ticket()
+                dispatching = True
+                command = make_tmux_command(paste) + ' ; ' + make_tmux_command(enter) + '\n'
+                await self._write_master(command.encode('ascii'))
+                pasted = await asyncio.wait_for(paste_result, max(0, deadline-time.monotonic()))
+                if not pasted.ok:
+                    # tmux dropped Enter, so its result will never arrive.
+                    self._pending_blocks.remove(enter_result)
+                    self._bounded_blocks.pop(enter_result, None)
+                    enter_result.cancel()
+                    dispatching = False
+                    return 'refused'
+                loaded = False  # paste-buffer -d consumed it.
+                entered = await asyncio.wait_for(enter_result, max(0, deadline-time.monotonic()))
+                dispatching = False
+                return 'accepted' if entered.ok and not entered.overflow and not pasted.overflow else 'unknown'
+            except (OSError, RuntimeError, asyncio.TimeoutError, asyncio.CancelledError):
+                if dispatching:
+                    self._abort_mobile_stream()
+                    return 'unknown'
+                return 'refused'
+            finally:
+                if loaded and self.master_fd is not None and not self._closed:
+                    self._pending_blocks.append(None)
+                    try:
+                        cleanup = make_tmux_command(['delete-buffer', '-b', buffer]) + '\n'
+                        await asyncio.wait_for(self._write_master(cleanup.encode('ascii')), .5)
+                    except (OSError, RuntimeError, asyncio.TimeoutError, asyncio.CancelledError):
+                        self._abort_mobile_stream()
+
     async def capture_mobile_preview(self, pane_id: str, height: int, *, deadline: float, max_lines: int = 40) -> CommandResult:
         """One finite raw capture; never recorder or restored-history output."""
         from mobile_input import InputRefused, _deadline, MAX_CAPTURE_BYTES, MAX_PREVIEW_LINES

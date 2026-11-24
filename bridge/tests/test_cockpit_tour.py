@@ -157,20 +157,21 @@ def prompt(connected=True, pane=True, text='Hello', guarded=False):
     fn = re.search(r'function captureComposerTarget\([^)]*\)\{.*?(?=\nfunction sendInterrupt)', source, re.S).group()
     return node("const events=[];const activeId='pane';const socket={};"
                 f"const promptInput={{value:{json.dumps(text)}}};"
-                f"const panes=new Map({json.dumps([['pane', {'session': 'Test'}]] if pane else [])});"
+                f"const panes=new Map({json.dumps([['pane', {'session': 'Test', 'meta': {}}]] if pane else [])});"
                 "const sessionGroups=new Map(),promptRecipientPins=new Map();"
                 "const promptFiles={entries:[],clear(){}};"
-                "const promptRecipients={names:[],close(){}};"
+                "const promptRecipients={names:[],close(){},set(){}};"
+                "const promptCard={refresh(){}};const targetProgram=()=> 'claude';"
                 "function composerVocabulary(){return {program:'claude'};}"
                 # Only the tour step counts here; the receipt events are for the Reader.
-                "const document={dispatchEvent:e=>{if(e.type==='oc:tour-action')events.push(e.detail.id);}};"
+                "const document={getElementById:()=>({}),dispatchEvent:e=>{if(e.type==='oc:tour-action')events.push(e.detail.id);}};"
                 "class CustomEvent{constructor(type,v){this.type=type;this.detail=v.detail;}}"
-                f"function send(){{return {str(connected).lower()};}}"
+                f"function send(p){{if(!{str(connected).lower()})return false;"
+                "queueMicrotask(()=>receiveComposerAck({id:p.inputAck,paneId:p.paneId,status:'accepted'}));return true;}"
                 f"function inspectPrompt(){{return {'{}' if guarded else 'null'};}}"
                 "function showToast(){}function showSendGuard(){}function hideSendGuard(){}"
-                "function pushPromptHistory(){}function saveDraft(){}function closeSlashMenu(){}"
-                "function setTimeout(fn){fn();}"
-                + fn + ";sendPrompt();console.log(JSON.stringify({events,value:promptInput.value}));")
+                "function pushPromptHistory(){}function saveDraft(){}function closeSlashMenu(){}const toastEl={classList:{add(){}}};"
+                + fn + ";Promise.resolve(sendPrompt()).then(()=>console.log(JSON.stringify({events,value:promptInput.value})));")
 
 
 def test_talk_completes_only_for_a_sent_nonempty_unguarded_prompt():

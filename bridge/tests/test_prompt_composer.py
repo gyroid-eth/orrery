@@ -8,7 +8,9 @@ from test_conversation_review_regressions import cockpit, stable_roster
 def terminal(cockpit):
     js, wait, client, *_ = cockpit
     stable_roster(js)
-    js("""window.packets=[];window.send=packet=>{packets.push(packet);return true};
+    js("""window.packets=[];window.send=packet=>{packets.push(packet);
+              if(packet.type==='submit-prompt')queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'}));
+              return true};
         rosterAnnotationEpoch++;currentAgents=[{name:'ReviewFixture',running:true,program:'codex'}];
         createPane('ReviewFixture',{paneId:'%901',windowId:'@901',width:80,height:20});
         setActive('%901');packets.length=0;""")
@@ -47,9 +49,9 @@ def test_action_switches_to_stop_only_for_an_empty_working_draft(cockpit, reduce
     if reduced:
         assert js('promptInput.clientHeight') == 56
     js("packets.length=0;promptSendBtn.click()")
-    wait("packets.filter(packet=>packet.type==='input').length===2")
-    assert js("packets.filter(packet=>packet.type==='input').map(packet=>packet.data)") == [
-        '\x1b[200~First line\nSecond line\x1b[201~', '\r',
+    wait("packets.filter(packet=>packet.type==='submit-prompt').length===1")
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        'First line\nSecond line',
     ]
 
 
@@ -105,7 +107,10 @@ def test_roster_selection_sends_each_agent_once_and_keeps_only_failed_targets(co
     wait("!promptBusy")
     assert js('activeId') == '%901'
     expected = ['%901', '%903'] if rejected else ['%901', '%902', '%903']
-    assert js(r"packets.filter(packet=>packet.data==='\r').map(packet=>packet.paneId)") == expected
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.paneId)") == ['%901','%902','%903']
+    assert js("receipts.map(receipt=>receipt.name)") == [
+        {'%901':'ReviewFixture','%902':'QuietCopernicus','%903':'EmeraldBose'}[pane] for pane in expected
+    ]
     assert js("receipts.map(receipt=>receipt.broadcastCount)") == [len(expected)] * len(expected)
     assert js('promptRecipients.names') == (['QuietCopernicus'] if rejected else [])
     assert js('promptInput.value') == ('Shared draft' if rejected else '')
@@ -144,8 +149,8 @@ def test_attachment_drop_remove_and_delivery_per_cli(cockpit):
         ['ReviewFixture', 'txt', 'Fixture data'], ['QuietCopernicus', 'txt', 'Fixture data'],
     ]
     assert js("packets.filter(packet=>packet.data?.includes('Read this')).map(packet=>packet.data)") == [
-        '\x1b[200~Read this\n\n./.orrery-input-files/' + 'a' * 32 + '.txt\x1b[201~',
-        '\x1b[200~Read this\n\n@./.orrery-input-files/' + 'a' * 32 + '.txt\x1b[201~',
+        'Read this\n\n./.orrery-input-files/' + 'a' * 32 + '.txt',
+        'Read this\n\n@./.orrery-input-files/' + 'a' * 32 + '.txt',
     ]
     assert js("document.querySelector('.prompt-attachments').hidden")
 
@@ -177,14 +182,14 @@ def test_skill_kind_namespace_retry_switch_and_multiline_fix(cockpit):
     js("draft('/sta')")
     assert js("slashMenu.querySelector('.sm-name').textContent") == '/status'
     js("draft('/status');sendPrompt()")
-    wait(r"packets.some(packet=>packet.data==='\r')")
-    assert js("packets.filter(packet=>packet.type==='input')[0].data") == '\x1b[200~/status\x1b[201~'
+    wait(r"packets.some(packet=>packet.type==='submit-prompt')")
+    assert js("packets.find(packet=>packet.type==='submit-prompt').data") == '/status'
     js(r"packets.length=0;draft('  /release-check extra\nsecond note');sendPrompt()")
     assert js('!sendGuard.hidden')
     assert js('guardArmed.fix') == '  $release-check extra\nsecond note'
     js('sendGuardFix.click()')
-    wait(r"packets.some(packet=>packet.data==='\r')")
-    assert js("packets.filter(packet=>packet.type==='input')[0].data") == '\x1b[200~  $release-check extra\nsecond note\x1b[201~'
+    wait(r"packets.some(packet=>packet.type==='submit-prompt')")
+    assert js("packets.find(packet=>packet.type==='submit-prompt').data") == '  $release-check extra\nsecond note'
     js("draft('/log');sendPrompt()")
     assert js('guardArmed.fix') == '$log'
     js("setActive('%902');draft('/ops:')")

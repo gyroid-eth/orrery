@@ -52,7 +52,7 @@ def test_selection_stages_without_sending_and_reply_uses_original_target(cockpit
     wait("!document.querySelector('.conversation-reply-reference').hidden")
     js('document.fonts.ready;new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
     assert js('promptInput.value')=='Please check this part again.'
-    assert js("packets.filter(p=>p.type==='input').length")==0
+    assert js("packets.filter(p=>p.type==='submit-prompt').length")==0
     assert 'Message reference' in js("document.querySelector('.conversation-reply-label').textContent")
     assert 'Keep the original image pixels unchanged' in js("document.querySelector('.conversation-reply-quote').textContent")
     if layout=='phone':
@@ -61,14 +61,13 @@ def test_selection_stages_without_sending_and_reply_uses_original_target(cockpit
     if capture:
         (folder/(layout+'-reply.png')).write_bytes(base64.b64decode(client.call('Page.captureScreenshot',format='png')['data']))
     js('sendPrompt()')
-    wait("packets.filter(p=>p.type==='input').length===2")
-    sent=js("packets.filter(p=>p.type==='input')")
-    assert sent[0]['paneId']==sent[1]['paneId']=='%901'
+    wait("packets.filter(p=>p.type==='submit-prompt').length===1")
+    sent=js("packets.filter(p=>p.type==='submit-prompt')")
+    assert sent[0]['paneId']=='%901'
     assert '> Keep the original image pixels unchanged' in sent[0]['data']
     assert 'Recorded message: quote' in sent[0]['data']
     assert 'Use the saved source' not in sent[0]['data']
-    assert sent[0]['data'].endswith('Please check this part again.\x1b[201~')
-    assert sent[1]['data']=='\r'
+    assert sent[0]['data'].endswith('Please check this part again.')
     assert js("document.querySelector('.conversation-reply-reference').hidden")
 
 
@@ -76,7 +75,7 @@ def test_selection_stages_without_sending_and_reply_uses_original_target(cockpit
 def test_changed_conversation_or_target_blocks_reference_send(cockpit,change):
     js,wait,client=ready(cockpit);stage(js,wait,client)
     js("promptInput.value='Preserve this draft';"+change+";packets.length=0;sendPrompt()")
-    assert js("packets.filter(p=>p.type==='input').length")==0
+    assert js("packets.filter(p=>p.type==='submit-prompt').length")==0
     assert js('promptInput.value')=='Preserve this draft'
     assert not js("document.querySelector('.conversation-reply-reference').hidden")
 
@@ -85,7 +84,7 @@ def test_reference_does_not_hide_destructive_command_guard_or_clear_draft(cockpi
     js,wait,client=ready(cockpit);stage(js,wait,client)
     js("promptInput.value='/logout';sendPrompt()")
     assert js('!sendGuard.hidden')
-    assert js("packets.filter(p=>p.type==='input').length")==0
+    assert js("packets.filter(p=>p.type==='submit-prompt').length")==0
     js("sendGuardCancel.click();document.querySelector('.conversation-reply-remove').click()")
     assert js('promptInput.value')=='/logout'
     assert js("document.querySelector('.conversation-reply-reference').hidden")
@@ -99,17 +98,16 @@ def test_file_preview_reference_is_explicit_and_does_not_send(cockpit):
     wait("!document.querySelector('.conversation-reply-reference').hidden")
     assert js("document.querySelector('.conversation-reply-quote').textContent")=='figure.png'
     assert 'File reference' in js("document.querySelector('.conversation-reply-label').textContent")
-    assert js("packets.filter(p=>p.type==='input').length")==0
+    assert js("packets.filter(p=>p.type==='submit-prompt').length")==0
 
 
-def test_binding_change_between_paste_and_enter_cancels_submission(cockpit):
+def test_binding_change_before_dispatch_cancels_submission(cockpit):
     js,wait,client=ready(cockpit);stage(js,wait,client)
-    js("promptInput.value='Check this reference';sendPrompt();currentAgents[0].history_session_id='changed-before-enter'")
+    js("promptInput.value='Check this reference';sendPrompt();currentAgents[0].history_session_id='changed-before-submit'")
     js('new Promise(resolve=>setTimeout(resolve,350))')
-    sent=js("packets.filter(p=>p.type==='input')")
-    assert len(sent)==1
-    assert sent[0]['data'].startswith('\x1b[200~Reference:')
-    assert all(p['data']!='\r' for p in sent)
+    sent=js("packets.filter(p=>p.type==='submit-prompt')")
+    assert sent==[]
+    assert js("promptInput.value")=='Check this reference'
 
 
 @pytest.mark.parametrize('cockpit',[True],indirect=True)
@@ -156,7 +154,7 @@ def test_recorded_reference_shows_one_line_and_keyboard_jumps_to_source(cockpit)
     wait(ORIGIN + '.classList.contains("conversation-reference-target")')
     assert js('document.activeElement.dataset.eventId') == 'source'
     assert js(READER + '.scrollTop') < 40
-    assert js("packets.filter(p=>p.type==='input').length") == 0
+    assert js("packets.filter(p=>p.type==='submit-prompt').length") == 0
     wait('!' + ORIGIN + '.classList.contains("conversation-reference-target")')
 
 

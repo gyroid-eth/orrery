@@ -1501,7 +1501,7 @@ class SessionBridgeManager:
                 await state.bridge.refresh_panes(send_captures=True)
             return
 
-        if message_type not in {"input", "codex-page", "resize", "release", "split", "close", "approval-inspect", "approval-answer"}:
+        if message_type not in {"input", "submit-prompt", "codex-page", "resize", "release", "split", "close", "approval-inspect", "approval-answer"}:
             await send_error(peer, None, "unsupported message type")
             return
 
@@ -1510,8 +1510,9 @@ class SessionBridgeManager:
             await send_error(peer, None, "paneId must be a string")
             return
 
-        ack = payload.get('inputAck') if message_type == 'input' else None
-        if ack is not None and (not isinstance(ack, str) or not re.fullmatch(r'[0-9]{1,16}:[0-9]{1,12}', ack)):
+        submit = message_type == 'submit-prompt'
+        ack = payload.get('inputAck') if submit or message_type == 'input' else None
+        if (submit or ack is not None) and (not isinstance(ack, str) or not re.fullmatch(r'[0-9]{1,16}:[0-9]{1,12}', ack)):
             await send_error(peer, None, "invalid input receipt request")
             return
         state = self._find_attached_pane(attached, pane_id)
@@ -1561,14 +1562,16 @@ class SessionBridgeManager:
                     and isinstance(data, str) and data
                     and len(data.encode('utf-8', errors='replace')) <= 262144):
                 target = bridge.config.tmux_bin
+                write = bridge.submit_prompt if submit else bridge.send_input
+                options = {} if submit else {'acknowledge': True}
                 try:
                     if isinstance(target, FreshPaneBoundary):
                         proofs = bridge._fresh_peer_proofs.get(peer)
                         if proofs is None or any(payload.get(key) != value for key, value in target.ref.items()):
                             raise TargetRefused('FRESH_TMUX_TARGET_CHANGED')
-                        status = await bridge.send_input(target.pane_id, data, proof=proofs[0], acknowledge=True)
+                        status = await write(target.pane_id, data, proof=proofs[0], **options)
                     else:
-                        status = await bridge.send_input(pane_id, data, acknowledge=True)
+                        status = await write(pane_id, data, **options)
                 except (TargetRefused, OSError, RuntimeError):
                     status = 'refused'
             await peer.send_json(dict(type='input-ack', id=ack, paneId=pane_id, status=status))
