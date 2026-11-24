@@ -7,6 +7,8 @@
   More words to hide (a person's name in Mail, say): the Settings field (kept
   in this browser), plus ?mask=word,word in the URL for one page. The words
   are hidden like the user name; see demo_mask.js for how a word matches.
+  The cockpit can also replace URLs and paths with fixed labels. That
+  switch is saved in the local browser and only applies in Demo mode.
 
    Fail closed. The page stays hidden until the backend has said which names
    to hide; if it cannot (no answer, an error, a timeout), the page stays
@@ -31,13 +33,15 @@
   'use strict';
   const STORAGE_KEY='orrery.demo-mode.v1';
   const WORDS_KEY='orrery.demo-mask-words.v1';
+  const LOCATIONS_KEY='orrery.demo-mask-locations.v1';
   const SHARED_KEY='orrery.demo.shared.v1';
   const bootstrap=window.OrreryDemoBootstrap||null;
-  const ATTRIBUTES=['title','aria-label','alt','placeholder','data-tip','data-tooltip'];
+  const ATTRIBUTES=['title','aria-label','aria-description','alt','placeholder','data-tip','data-tooltip','data-title'];
   const SKIP=new Set(['SCRIPT','STYLE','NOSCRIPT','TEXTAREA']);
   const IDENTITY_TIMEOUT_MS=5000;
 
   function stored(){try{return localStorage.getItem(STORAGE_KEY)==='1';}catch(_){return false;}}
+  function storedLocations(){try{return !bootstrap&&localStorage.getItem(LOCATIONS_KEY)==='1';}catch(_){return false;}}
   function parseWords(text){
     return String(text||'').split(/[,\n]/).map(word=>word.trim()).filter(word=>word.length>=2);
   }
@@ -69,11 +73,14 @@
     });
   }
   let resolveReady=null;
+  const unchanged=text=>({text,ranges:[]});
   const api={
     on:requested(location.search),
     known:false,
     ready:Promise.resolve(),
     mask:text=>text,
+    project:unchanged,
+    terminalMask:text=>text,
     /* The real text of a DOM selection or a masked string that came from a
        text node on this page (see realSelectionText). */
     stored,
@@ -99,6 +106,13 @@
     requested,
     parseWords,
     storedWords,
+    storedLocations,
+    setLocations(value){
+      try{localStorage.setItem(LOCATIONS_KEY,value?'1':'0');}
+      catch(_){window.showToast?.('Could not save this Demo mode setting.',true);return false;}
+      if(api.on)location.reload();
+      return true;
+    },
     /* Saved words; demo mode reloads to redraw the terminals with them. */
     setWords(list,{reload=true}={}){
       try{localStorage.setItem(WORDS_KEY,JSON.stringify(parseWords((list||[]).join(','))));}catch(_){/* not kept */}
@@ -160,7 +174,7 @@
         text+=' '.repeat(group.pads[i]||0);
       });
       text+=group.after||'';
-      const masked=api.mask(text);
+      const masked=api.terminalMask(text);
       for(const {node,at,real} of parts){
         const shown=masked.slice(at,at+real.length);
         if(shown!==real)rowOriginals.set(node,{original:real,masked:shown});else rowOriginals.delete(node);
@@ -186,8 +200,10 @@
     // Our own write comes back through the observer: nothing to do.
     if(!remasking&&kept&&kept.masked===shown)return;
     const value=kept&&kept.masked===shown?kept.original:shown;
-    const masked=api.mask(value);
-    if(masked!==value){originals.set(node,{original:value,masked});node.nodeValue=masked;}
+    const wholePath=node.parentElement?.hasAttribute('data-demo-path');
+    const literalPath=node.parentElement?.getAttribute('data-demo-path-value');
+    const {text:masked,ranges}=api.project(value,{wholePath,literalPath});
+    if(masked!==value){originals.set(node,{original:value,masked,ranges});node.nodeValue=masked;}
     else{originals.delete(node);if(node.nodeValue!==value)node.nodeValue=value;}
   }
   function maskAttributes(element){
@@ -197,7 +213,9 @@
       const value=element.getAttribute&&element.getAttribute(name);
       if(!value){kept.delete(name);continue;}
       const original=kept.get(name),real=original&&original.masked===value?original.original:value;
-      const masked=api.mask(real);
+      const literalPath=element.getAttribute('data-demo-path-value');
+      const wholePath=name==='alt'&&element.hasAttribute('data-demo-path');
+      const {text:masked}=api.project(real,{literalPath,wholePath});
       if(masked!==real)kept.set(name,{original:real,masked});else kept.delete(name);
       if(masked!==value)element.setAttribute(name,masked);
     }
@@ -247,7 +265,9 @@
         const to=node===range.endContainer?range.endOffset:node.nodeValue.length;
         if(to<=from)continue;
         const shownPart=node.nodeValue.slice(from,to);
-        const realPart=kept&&kept.masked===node.nodeValue?kept.original.slice(from,to):shownPart;
+        const offset=window.OrreryDemoMask.originalOffset;
+        const realPart=kept&&kept.masked===node.nodeValue
+          ?kept.original.slice(offset(from,kept.ranges),offset(to,kept.ranges,true)):shownPart;
         pieces.push({masked:shownPart,original:realPart});
       }
     }
@@ -408,6 +428,11 @@
   }
 
   // ---------------------------------------------------------------- start
+  function useMasker(masker){
+    api.project=masker?.project||unchanged;
+    api.mask=text=>api.project(text).text;
+    api.terminalMask=masker?.terminal||(text=>text);
+  }
   function fail(reason){
     html.setAttribute('data-demo','failed');
     let panel=document.querySelector('.demo-status');
@@ -435,9 +460,9 @@
     }))
       .then(identity=>{
         clearTimeout(timer);
-        const masker=window.OrreryDemoMask.create({...(identity||{}),words:words(location.search)});
+        const masker=window.OrreryDemoMask.create({...(identity||{}),words:words(location.search),hideLocations:storedLocations()});
         if(!masker.active)throw new Error('the backend returned no names');
-        api.known=true;api.mask=masker.mask;
+        api.known=true;useMasker(masker);
         const start=()=>{
           observe(document);
           const badge=document.createElement('div');
@@ -457,9 +482,9 @@
       });
   }
   api.refresh=function({on,identity,words:extra}){
-    const masker=on?window.OrreryDemoMask.create({...identity,words:extra}):null;
+    const masker=on?window.OrreryDemoMask.create({...identity,words:extra,hideLocations:storedLocations()}):null;
     if(on&&!masker.active)throw new Error('No names to mask');
-    api.on=on;api.mask=on?masker.mask:text=>text;remasking=true;
+    api.on=on;useMasker(masker);remasking=true;
     try{
       const visit=doc=>{walk(doc.documentElement);for(const frame of doc.querySelectorAll('iframe')){try{if(frame.contentDocument)visit(frame.contentDocument);}catch(_){}}};
       visit(document);for(const field of fields)syncField(field);

@@ -149,3 +149,54 @@ def test_negative_an_added_latin_word_inside_another_word_is_left_alone(text):
 
 def test_negative_one_letter_words_and_blank_entries_are_ignored():
     assert words_mask(["a", " ", ""], "a cat") == ["a cat"]
+
+
+@pytest.mark.parametrize(("raw", "shown"), [
+    ("Go to https://demo.invalid:8443/private?a=secret&b=long#fragment.", "Go to [URL]."),
+    ("(wss://demo.invalid/folder[a](b)) and www.demo.invalid/private", "([URL]) and [URL]"),
+    ("mailto:someone@desk.invalid", "[URL]"),
+    ("file:///var/link%20target/report.png", "[path]"),
+    ("file://private-host/shares/report.png", "[path]"),
+    ("file:///C:/Users/mira/a.png", "[path]"),
+    ("Read /var/lab/private.png then continue", "Read [path] then continue"),
+    ("~/secret/日本語.txt", "[path]"),
+    (r"Try C:\Program Files\Private\report name.png now", "Try [path] now"),
+    (r"Copy \\private-host\shared\report.txt", "Copy [path]"),
+    (r"Open /tmp/Red\ Room/private.png and /tmp/other", "Open [path] and [path]"),
+    ('Use "/tmp/Red Room/no extension" and continue', 'Use "[path]" and continue'),
+    ("<script>alert(1)</script> <img src=\"/tmp/private.png\" onerror=\"alert(2)\">",
+     '<script>alert(1)</script> <img src="[path]" onerror="alert(2)">'),
+])
+def test_strict_location_mask_uses_fixed_labels(raw, shown):
+    assert run("""
+      const strict=M.create({...D.id,hideLocations:true});
+      console.log(JSON.stringify(strict.mask(D.raw)));
+    """, id=IDENTITY, raw=raw) == shown
+
+
+def test_strict_clipboard_offsets_and_known_labels():
+    result = run("""
+      const strict=M.create({...D.id,hideLocations:true});
+      const result=strict.project(D.raw);
+      const src=(start,end)=>D.raw.slice(M.originalOffset(start,result.ranges),
+        M.originalOffset(end,result.ranges,true));
+      console.log(JSON.stringify([
+        result.text,src(3,5),src(9,14),src(0,result.text.length),
+        strict.project('Preview notes without suffix',{literalPath:'notes without suffix'}).text,
+        strict.project('Only a file name',{wholePath:true}).text
+      ]));
+    """, id=IDENTITY, raw="a https://secret.invalid/a + /very/long/filename b")
+    assert result == ["a [URL] + [path] b", "https://secret.invalid/a",
+                      " /very/long/filename", "a https://secret.invalid/a + /very/long/filename b",
+                      "Preview [path]", "[path]"]
+
+
+def test_terminal_renders_fixed_markers_in_original_columns():
+    url = "https://secret.invalid/abc"
+    raw = f"Go {url} then \x1b[31m~/private/日本語.txt\x1b[0m!"
+    result = run("""
+      let strict=M.create({...D.id,hideLocations:true});
+      let out=strict.terminal(D.raw);
+      console.log(JSON.stringify([out, D.raw.length===out.length]));
+    """, id=IDENTITY, raw=raw)
+    assert result == ["Go <>" + " " * (len(url) - 2) + " then \x1b[31m[]        \u3000\u3000\u3000    \x1b[0m!", True]
