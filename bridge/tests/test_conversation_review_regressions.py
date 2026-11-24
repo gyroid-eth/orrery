@@ -95,7 +95,7 @@ def cockpit(request):
     bootstrap = "localStorage.clear();localStorage.setItem('oc-first-flight-v1',JSON.stringify({seen:true,open:false}));"
     if preference == 'disabled':
         bootstrap += "localStorage.setItem('oc-term-conversation-enabled','0');"
-    client.call("Page.addScriptToEvaluateOnNewDocument", source=bootstrap)
+    storage_bootstrap = client.call("Page.addScriptToEvaluateOnNewDocument", source=bootstrap)
     def js(expression):
         result = client.call("Runtime.evaluate", expression=expression, returnByValue=True, awaitPromise=True)
         assert not result.get("exceptionDetails"), result.get("exceptionDetails")
@@ -107,6 +107,7 @@ def cockpit(request):
                 return
             time.sleep(.03)
         raise AssertionError(expression)
+    js.storage_bootstrap = storage_bootstrap["identifier"]
     try:
         client.call("Page.navigate", url=f"http://127.0.0.1:{server.server_port}/cockpit.html")
         wait("typeof conversationView!=='undefined'&&typeof createPane==='function'")
@@ -612,6 +613,102 @@ def stable_roster(js):
     js("""window.originalFetch=window.fetch;window.fetch=(url,...args)=>String(url).startsWith('/telemetry/agents')
       ?Promise.resolve(new Response(JSON.stringify({agents:currentAgents.map(a=>({...a,running:true}))}),{headers:{'Content-Type':'application/json'}}))
       :originalFetch(url,...args)""")
+
+
+def open_agents_fixture(cockpit, programs, *, reader_enabled=True, unavailable=False):
+    js, wait, _, _, _ = cockpit
+    stable_roster(js)
+    roster = [dict(name=name, program=program, running=True, history_binding='bound',
+                   transcript_path='/fixture/agent.jsonl') for name, program in programs.items()]
+    # A roster request started before stable_roster can still return an empty list.
+    js("""window.packets=[];window.send=packet=>{packets.push(packet);return true};
+      rosterAnnotationEpoch++;
+      liveRosterAgents=""" + json.dumps(roster) + """;
+      renderRoster();handleSessions(liveRosterAgents.map(agent=>agent.name));
+      window.finishAgentAttach=(name,number)=>{
+        handle({type:'reset',session:name,panes:[{paneId:'%'+number,windowId:'@'+number,width:90,height:30}]});
+      };
+      window.openFixtureAgent=(name,split=false)=>{
+        rosterEl.querySelector('[data-agent="'+name+'"]').dispatchEvent(new MouseEvent('click',{bubbles:true,ctrlKey:split}));
+      };""")
+    if reader_enabled:
+        assert js('conversationView.ready().then(Boolean)')
+        js("""window.readerOpens=[];OrreryConversationSource.Source.prototype.read=async name=>{
+          readerOpens.push(name);
+          if(""" + str(unavailable).lower() + """)throw Object.assign(new Error('History requires a newer Telemetry.'),{code:'dashboard_upgrade_required'});
+          return {mode:'cursor',after:'fixture:1',events:[{id:'1',kind:'text',role:'assistant',text:'Generated Reader for '+name}]};
+        };""")
+    return js, wait
+
+
+def test_default_view_setting_is_saved_and_restored(cockpit):
+    js, wait, client, _, _ = cockpit
+    assert js("agentDefaultView.value") == 'terminal'
+    assert js("OrreryPrefs.synced('oc-term-default-view')")
+    js("agentDefaultView.value='reader';agentDefaultView.dispatchEvent(new Event('change'))")
+    assert js("localStorage.getItem('oc-term-default-view')") == 'reader'
+    client.call('Page.removeScriptToEvaluateOnNewDocument', identifier=js.storage_bootstrap)
+    js('window.beforeDefaultViewReload=true')
+    client.call('Page.reload', ignoreCache=True)
+    wait("!window.beforeDefaultViewReload&&document.getElementById('agentDefaultView')?.value==='reader'")
+    js("localStorage.setItem('oc-term-default-view','terminal');document.dispatchEvent(new Event('oc:prefs-changed'))")
+    assert js("agentDefaultView.value") == 'terminal'
+
+
+@pytest.mark.parametrize('view', ['terminal', 'reader'])
+def test_default_view_applies_to_single_agent_and_keeps_manual_toggle(cockpit, view):
+    js, wait = open_agents_fixture(cockpit, {'FirstFixture': 'codex'})
+    if view == 'reader':
+        js("agentDefaultView.value='reader';agentDefaultView.dispatchEvent(new Event('change'))")
+    js("openFixtureAgent('FirstFixture');finishAgentAttach('FirstFixture',901)")
+    panel = 'document.querySelector(".screen > .conversation-panel")'
+    wait(f'!!{panel}')
+    assert js(panel + '.hidden') == (view == 'terminal')
+    if view == 'terminal':
+        assert js('readerOpens') == []
+        js('conversationToggle.click()')
+    wait(f'{panel}.textContent.includes("Generated Reader for FirstFixture")')
+    assert js('promptInput.getBoundingClientRect().height>0 && promptTarget.textContent==="FirstFixture"')
+    js("promptInput.value='Generated prompt from Reader';sendPrompt()")
+    wait("packets.filter(p=>p.type==='input'&&p.paneId==='%901').length===2")
+    assert js("(()=>{const count=readerOpens.length;conversationToggle.click();renderStage();return readerOpens.length===count;})()")
+    assert js(panel + '.hidden')
+
+
+def test_default_reader_opens_split_cells_without_moving_the_focus(cockpit):
+    js, wait = open_agents_fixture(cockpit, {'FirstFixture': 'codex', 'SecondFixture': 'claude-code'})
+    js("""agentDefaultView.value='reader';agentDefaultView.dispatchEvent(new Event('change'));
+      openFixtureAgent('FirstFixture',true);openFixtureAgent('SecondFixture',true);
+      finishAgentAttach('SecondFixture',902);promptInput.focus();finishAgentAttach('FirstFixture',901);""")
+    wait('document.querySelectorAll(".split-cell .conversation-panel:not([hidden]) .conversation-event").length===2')
+    assert js('activeSession()') == 'SecondFixture'
+    assert js('document.activeElement===promptInput')
+    assert sorted(js('readerOpens')) == ['FirstFixture', 'SecondFixture']
+    js('document.querySelector(".split-cell[data-session=FirstFixture] .split-history-toggle").click();renderStage()')
+    assert js('document.querySelector(".split-cell[data-session=FirstFixture] .conversation-panel").hidden')
+    assert not js('document.querySelector(".split-cell[data-session=SecondFixture] .conversation-panel").hidden')
+
+
+@pytest.mark.parametrize('cockpit', ['disabled'], indirect=True)
+def test_default_reader_respects_reader_off(cockpit):
+    js, wait = open_agents_fixture(cockpit, {'FirstFixture': 'codex'}, reader_enabled=False)
+    js("""agentDefaultView.value='reader';agentDefaultView.dispatchEvent(new Event('change'));
+      openFixtureAgent('FirstFixture');finishAgentAttach('FirstFixture',901);""")
+    wait('activeSession()==="FirstFixture"')
+    assert js('!conversationEnabled.checked&&conversationToggle.hidden&&!document.querySelector(".conversation-panel")')
+    assert not any(route.startswith('/conversation_view.') for route in cockpit[3])
+
+
+@pytest.mark.parametrize('program,attempts', [('shell', 0), ('claude-code', 1)])
+def test_default_reader_falls_back_to_terminal_when_reader_is_unavailable(cockpit, program, attempts):
+    js, wait = open_agents_fixture(cockpit, {'FirstFixture': program}, unavailable=True)
+    js("""agentDefaultView.value='reader';agentDefaultView.dispatchEvent(new Event('change'));
+      openFixtureAgent('FirstFixture');finishAgentAttach('FirstFixture',901);""")
+    wait('activeSession()==="FirstFixture" && document.querySelector(".screen > .conversation-panel")?.hidden')
+    assert len(js('readerOpens')) == attempts
+    js('renderStage()')
+    assert js('document.querySelector(".screen > .conversation-panel").hidden')
+    assert len(js('readerOpens')) == attempts
 
 
 def test_prompt_enter_keeps_original_target_after_focus_moves(cockpit):

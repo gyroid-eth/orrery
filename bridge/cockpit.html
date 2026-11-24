@@ -162,6 +162,7 @@
     background:linear-gradient(180deg,var(--panel),rgba(17,20,25,.6));
     backdrop-filter:blur(6px);
   }
+  .cockpit-header{gap:24px;padding-inline:22px 20px;font-family:var(--rail-sans)}
   .brand{display:flex;align-items:center;gap:11px}
   .brand-orbit{width:32px;height:32px;flex:none}
   .brand-orbit-light{display:none}
@@ -172,9 +173,11 @@
     color:var(--ink);
   }
   .brand .mark b{color:var(--amber);font-weight:600}
-  .brand .sub{font-size:10.5px;letter-spacing:.34em;text-transform:uppercase;color:var(--ink-faint)}
+  .brand .sub{font-size:12px;color:var(--ink-dim)}
   .topgap{flex:1}
-  .topstat{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-dim);letter-spacing:.04em}
+  .header-status,.header-actions{display:flex;align-items:center;gap:14px;min-width:0}
+  .header-actions{gap:4px}
+  .topstat{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-dim);white-space:nowrap;font-variant-numeric:tabular-nums}
   .topstat .num{color:var(--ink);font-weight:600}
   .topstat .of{color:var(--ink-faint);margin:0 -3px}
   .topstat[hidden]{display:none}  /* display:flex above would otherwise beat the hidden attribute */
@@ -183,10 +186,14 @@
   .topstat .dot.open{background:var(--ln-local);box-shadow:0 0 8px rgb(var(--theme-local-rgb) / .4);animation:breathe 2.4s ease-in-out infinite}
   .topstat .dot.connecting{background:var(--amber);animation:blink 1s steps(1) infinite}
   .topstat .dot.closed,.topstat .dot.error{background:#d2685e}
-  .topstat .sep{color:var(--ink-faint);margin:0 2px}
-  .topstat.crew .num:first-of-type{color:var(--amber)}
+  .crew{gap:13px}
+  .crew-count{display:inline-flex;align-items:center;gap:4px}
+  .crew-state{display:grid;place-items:center;width:14px;height:14px;overflow:hidden}
+  .crew-state #agentDot{width:4px;height:4px;outline:1px solid var(--hair);outline-offset:2px}
+  .crew-state #agentDot.open{background:var(--amber);outline-color:color-mix(in srgb,var(--amber) 45%,transparent);animation:none}
+  .crew-state svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round}
   /* the one count a person must answer: a chip that is absent at zero */
-  .need-chip{font:inherit;font-size:11px;letter-spacing:.04em;cursor:pointer;
+  .need-chip{font:inherit;font-size:12px;cursor:pointer;
     padding:4px 10px;border-radius:999px;color:var(--ink);
     background:rgb(210 104 94 / .14);border:1px solid rgb(210 104 94 / .55)}
   .need-chip .dot{background:var(--theme-status-alert,#d2685e);animation:blink 1s steps(1) infinite}
@@ -195,7 +202,7 @@
   @media (prefers-reduced-motion:reduce){.need-chip .dot{animation:none}}
   .sesschip{font-size:11px;color:var(--ink-dim);padding:5px 11px;border:1px solid var(--hair);border-radius:6px;letter-spacing:.05em}
   .sesschip b{color:var(--ln-local)}
-  .clock{font-variant-numeric:tabular-nums;color:var(--ink);letter-spacing:.08em;font-size:12px}
+  .clock{font-variant-numeric:tabular-nums;color:var(--ink-dim);font-size:13px;font-weight:500;white-space:nowrap}
 
   /* ── body grid ─────────────────────────── */
   .grid{
@@ -249,8 +256,12 @@
     text-transform:uppercase;cursor:pointer;transition:border-color .2s,background .2s;
   }
   .new-agent:hover,.new-agent:focus-visible{border-color:var(--amber);background:var(--amber-glow);outline:none}
-  .header-utility{display:inline-flex;align-items:center;gap:6px;border-color:var(--hair);color:var(--ink-dim)}
-  .header-utility:hover,.header-utility:focus-visible{color:var(--ink);border-color:rgb(var(--theme-accent-rgb) / .42);background:rgb(var(--theme-accent-rgb) / .07)}
+  .header-utility{display:inline-flex;flex:none;align-items:center;justify-content:center;min-height:32px;border:0;border-radius:7px;background:transparent;color:var(--ink-dim);cursor:pointer}
+  .header-action{width:32px;padding:0}
+  .header-icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
+  .header-utility:hover,.header-utility:focus-visible,.header-utility[aria-expanded="true"]{color:var(--ink);background:rgb(var(--theme-ink-rgb) / .067)}
+  .header-utility:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  .header-action:active .header-icon{scale:.92}
   .roster-select:disabled{opacity:.45;cursor:wait}
   .roster-head .new-agent{
     height:32px;padding:0 9px;border-radius:8px;white-space:nowrap;flex:none;
@@ -452,19 +463,25 @@
   .pill.eng-grok{color:var(--ink);border-color:rgb(var(--theme-ink-rgb) / .3)}
   /* usage: a header pill beside Settings carries the binding window per
      provider (the lowest remaining %); the popover opens the dials. */
-  .usage-pill .up-k{color:var(--ink-faint);letter-spacing:.18em;font-size:9px;margin-right:2px}
-  .usage-pill .up-p{display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
-  .usage-pill .up-p+.up-p{margin-left:12px}
+  .usage-pill{min-height:40px;min-width:32px;padding:0 4px;gap:13px}
+  .usage-pill .up-p{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;--usage-accent:var(--ln-local)}
   .usage-pill .up-p[hidden]{display:none}
+  .usage-pill:has(.up-p:not([hidden])) .usage-fallback{display:none}
   /* the provider is named by its logo (bridge/assets: CC0 marks from Simple Icons and SVG Logos; see CREDITS.md) */
   .up-logo{width:16px;height:16px;object-fit:contain;flex:none}
+  .up-mark{position:relative;display:grid;place-items:center;width:28px;height:28px}
+  .up-mark .up-logo{width:14px;height:14px}
+  .up-meter{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;fill:none;stroke-width:1.8}
+  .up-meter-track{stroke:rgb(var(--theme-ink-rgb) / .14)}
+  .up-meter-fill{stroke:var(--usage-accent);stroke-linecap:round;stroke-dasharray:var(--usage-left,0) 100}
+  .usage-pill .up-p.none .up-meter-fill{display:none}
   .usage-pill .up-p.none .up-logo{opacity:.5}
   .usage-popover .up-name .up-logo{width:20px;height:20px;margin-right:8px;vertical-align:-4px}
-  /* the number takes the tmux chip's emerald while there is room, amber at
-     half, and the alert red near the floor — the same three tiers as the dials */
-  .usage-pill .up-p b{font-weight:600;color:var(--ln-local);font-size:11px}
-  .usage-pill .up-p.warn b{color:var(--amber)}
-  .usage-pill .up-p.low b{color:var(--theme-status-alert,#d2685e)}
+  /* The arc uses the ledger's three tiers. Balances have only the numeric value. */
+  .usage-pill .up-p b{font-weight:600;color:var(--ink);font-size:13px;font-variant-numeric:tabular-nums}
+  .usage-pill .up-p.warn{--usage-accent:var(--amber)}
+  .usage-pill .up-p.low{--usage-accent:var(--theme-status-alert,#d2685e)}
+  .usage-pill .up-p:is(.warn,.low) b{color:var(--usage-accent)}
   .usage-pill .up-p.none b{color:var(--ink-faint);font-weight:500}
   .usage-pill.stale .up-p b{opacity:.55}
   .usage-popover{position:fixed;inset:62px 18px auto auto;width:min(430px,calc(100vw - 28px));margin:0;
@@ -982,7 +999,6 @@
   .modal-btn:hover,.modal-btn:focus-visible{border-color:var(--amber);outline:none}
   .modal-btn:disabled{opacity:.4;cursor:wait}
   /* ── settings popover: a compact, extensible home for cockpit prefs ── */
-  .settings-trigger{min-width:auto}
   .settings-popover{
     position:fixed;inset:62px 18px auto auto;width:min(360px,calc(100vw - 28px));margin:0;
     color:var(--ink);border:1px solid rgba(255,255,255,.1);border-radius:13px;
@@ -1143,10 +1159,45 @@
   .pane-out-chip .back:hover{color:var(--amber)}
   @media(max-width:1000px){
     .grid{grid-template-columns:250px 1fr}.col.mail,.mail-divider{display:none}
-    header{gap:8px;padding:0 14px}.brand .sub,.topstat:nth-of-type(2){display:none}
+    header{gap:8px;padding:0 14px}
+  }
+  @media(max-width:1100px){
+    .cockpit-header{gap:8px;padding:0 14px}
+    .brand .sub{display:none}
+    .header-status{gap:8px}
+    .usage-pill{gap:7px}
+    .crew-label,.need-label,#linkText{
+      position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);
+    }
+  }
+  @media(max-width:900px){
+    .cockpit-header{
+      display:grid;grid-template-columns:repeat(12,minmax(0,1fr));
+      gap:3px 6px;height:auto;padding:4px 12px;
+    }
+    .cockpit-header .topgap{display:none}
+    .cockpit-header .brand{grid-column:1/6;gap:7px}
+    .cockpit-header .brand-orbit{width:26px;height:26px}
+    .cockpit-header .brand .mark{font-size:18px}
+    .header-actions{grid-column:6/10;justify-self:end}
+    .cockpit-header .clock{grid-column:10/-1;justify-self:end}
+    .header-status{grid-column:1/5;grid-row:2;flex-wrap:wrap;gap:3px 5px}
+    .crew{gap:5px}
+    .usage-pill{grid-column:5/-1;grid-row:2;justify-self:end;max-width:100%;min-height:32px;flex-wrap:wrap;gap:2px 7px;padding:0}
+    .usage-pill .up-mark{width:24px;height:24px}
+    .settings-popover,.usage-popover{inset-block-start:84px;max-height:calc(100vh - 102px)}
   }
   @media(max-width:680px){
     .grid{grid-template-columns:1fr}.col.roster,.col.mail{display:none}
+  }
+  @media(max-width:360px){
+    .cockpit-header .brand .mark{font-size:16px}
+    .header-actions{gap:1px}
+    .header-action{width:26px}
+    .usage-pill{gap:2px 5px}
+    .usage-pill .up-p{gap:3px}
+    .usage-pill .up-mark{width:20px;height:20px}
+    .usage-pill .up-p b{font-size:12px}
   }
   /* Same bottom-right seat geometry as the telemetry provider badge,
      scaled from a 26px network portrait to this 46px medallion. */
@@ -1174,7 +1225,7 @@
 </head>
 <body>
 <div class="app">
-  <header>
+  <header class="cockpit-header">
     <div class="brand">
       <img class="brand-orbit brand-orbit-dark" src="orbit.svg" alt="" width="32" height="32">
       <img class="brand-orbit brand-orbit-light" src="orbit-light.svg" alt="" width="32" height="32">
@@ -1182,26 +1233,45 @@
       <span class="sub">agent cockpit</span>
     </div>
     <div class="topgap"></div>
-    <!-- what a person has to act on comes first, and disappears at zero;
-         the rest of the roster is two numbers, not a ratio of itself -->
-    <button class="topstat need-chip" id="needChip" type="button" hidden aria-pressed="false"
-            title="agents waiting on you — click to show only these">
-      <span class="dot"></span><span class="num" id="needCount">0</span> need you</button>
-    <div class="topstat crew" title="agents working / agents waiting"><span class="dot" id="agentDot"></span><span class="num" id="crewWork">0</span> working<span class="sep">·</span><span class="num" id="crewWait">0</span> waiting</div>
-    <!-- the backend link shows only while it is not live; a healthy cockpit says nothing -->
-    <div class="topstat link" id="linkStat" hidden><span class="dot connecting" id="linkDot"></span><span id="linkText">connecting</span></div>
-    <button class="new-agent header-utility usage-pill" id="usageBtn" type="button"
+    <div class="header-status">
+      <button class="topstat need-chip" id="needChip" type="button" hidden aria-pressed="false"
+              title="Agents waiting on you. Show only these agents.">
+        <span class="dot"></span><span class="num" id="needCount">0</span> <span class="need-label">need you</span>
+      </button>
+      <div class="topstat crew" title="Agents working and waiting">
+        <span class="crew-count">
+          <span class="crew-state" aria-hidden="true"><span class="dot" id="agentDot"></span></span>
+          <span class="num" id="crewWork">0</span> <span class="crew-label">working</span>
+        </span>
+        <span class="crew-count">
+          <span class="crew-state" aria-hidden="true">
+            <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="4.4"/><path d="M10 7.4V10l1.7 1"/></svg>
+          </span>
+          <span class="num" id="crewWait">0</span> <span class="crew-label">waiting</span>
+        </span>
+      </div>
+      <div class="topstat link" id="linkStat" title="connecting" hidden><span class="dot connecting" id="linkDot"></span><span id="linkText">connecting</span></div>
+    </div>
+    <button class="header-utility usage-pill" id="usageBtn" type="button"
             popovertarget="usagePopover" aria-haspopup="dialog"
-            aria-label="Account usage: percent left for Claude and Codex" title="Percent of each account window still left — click for every window">
-      <span class="up-k">LEFT</span><span class="up-p none" data-provider="claude"><img class="up-logo" src="assets/anthropic.svg" alt="Claude"><b>—</b></span><span class="up-p none" data-provider="codex"><img class="up-logo" src="assets/openai.svg" alt="Codex"><b>—</b></span></button>
-    <button class="new-agent header-utility settings-trigger" id="settingsBtn" type="button"
-            popovertarget="settingsPopover" aria-haspopup="dialog"
-            aria-label="Open cockpit settings" title="Cockpit settings">⚙ Settings</button>
-    <button class="new-agent header-utility" id="planetariumBtn" type="button"
-            aria-label="Open the planetarium — the whole spawn lineage"
-            title="Planetarium — who spawned whom">Planetarium</button>
-    <button class="new-agent header-utility" id="networkBtn" type="button"
-            aria-label="Open telemetry dashboard" title="Open telemetry dashboard">Telemetry</button>
+            aria-label="Usage left" title="Usage left">
+      <svg class="header-icon usage-fallback" viewBox="0 0 20 20" aria-hidden="true"><path d="M4.2 14.4a7 7 0 1 1 11.6 0M10 10l2.6-2.8"/><circle cx="10" cy="10" r="1"/></svg>
+    </button>
+    <div class="header-actions" role="group" aria-label="Cockpit views and settings">
+      <button class="header-utility header-action" id="settingsBtn" type="button"
+              popovertarget="settingsPopover" aria-haspopup="dialog"
+              aria-label="Open cockpit settings" title="Settings">
+        <svg class="header-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M9.3 3.5h1.4l.4 1.7 1.4.8 1.7-.5.7 1.2-1.2 1.2v1.6l1.2 1.2-.7 1.2-1.7-.5-1.4.8-.4 1.7H9.3l-.4-1.7-1.4-.8-1.7.5-.7-1.2 1.2-1.2V7.9L5.1 6.7l.7-1.2 1.7.5 1.4-.8z"/><circle cx="10" cy="8.7" r="1.7"/></svg>
+      </button>
+      <button class="header-utility header-action" id="planetariumBtn" type="button"
+              aria-label="Open the planetarium" title="Planetarium">
+        <svg class="header-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="9.4" r="4.2"/><ellipse cx="10" cy="9.4" rx="7" ry="2.6" transform="rotate(-34 10 9.4)"/><circle cx="15.7" cy="5.8" r=".7" fill="currentColor"/></svg>
+      </button>
+      <button class="header-utility header-action" id="networkBtn" type="button"
+              aria-label="Open telemetry dashboard" title="Telemetry">
+        <svg class="header-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m8.5 8-3-3m6.3 3 2.8-2.2M9.7 11l-3.4 3.4m5.2-3 3.1 2.9"/><circle cx="10" cy="9.5" r="2"/><circle cx="4.4" cy="4" r="1.65"/><circle cx="15.8" cy="4.8" r="1.65"/><circle cx="5" cy="15.8" r="1.65"/><circle cx="15.8" cy="15.8" r="1.65"/></svg>
+      </button>
+    </div>
     <div class="clock" id="clock">––:––:––</div>
   </header>
 
@@ -1336,6 +1406,15 @@
         </label>
       </div>
       <div class="settings-row">
+        <label class="settings-toggle-row" for="agentDefaultView">
+          <span class="settings-row-name">Open agents in</span>
+          <select class="settings-select" id="agentDefaultView">
+            <option value="terminal">Terminal</option>
+            <option value="reader">Reader</option>
+          </select>
+        </label>
+      </div>
+      <div class="settings-row">
         <label class="settings-toggle-row" for="colorThemePreference">
           <span class="settings-toggle-copy">
             <span class="settings-row-name">Color theme</span>
@@ -1372,7 +1451,7 @@
     </section>
     <section aria-labelledby="usageSettingsTitle">
       <div class="settings-section-title" id="usageSettingsTitle">Usage</div>
-      <div class="settings-help">Choose providers shown in LEFT and Usage left. Saved in this browser.</div>
+      <div class="settings-help">Choose which providers appear in the header and its usage details.</div>
       <div id="usageProviderRows"></div>
     </section>
     <section aria-labelledby="terminalSettingsTitle">
@@ -1599,7 +1678,7 @@
           {
             "property": "color",
             "selector": ".brand .sub",
-            "value": "var(--ink-faint)"
+            "value": "var(--ink-dim)"
           },
           {
             "property": "color",
@@ -1622,9 +1701,9 @@
             "value": "var(--ink-faint)"
           },
           {
-            "property": "color",
-            "selector": ".topstat .sep",
-            "value": "var(--ink-faint)"
+            "property": "outline",
+            "selector": ".crew-state #agentDot",
+            "value": "1px solid var(--hair)"
           },
           {
             "property": "color",
@@ -1644,7 +1723,7 @@
           {
             "property": "color",
             "selector": ".clock",
-            "value": "var(--ink)"
+            "value": "var(--ink-dim)"
           },
           {
             "property": "border-right",
@@ -1687,18 +1766,13 @@
             "value": "var(--ink-dim)"
           },
           {
-            "property": "border-color",
-            "selector": ".header-utility",
-            "value": "var(--hair)"
-          },
-          {
             "property": "color",
             "selector": ".header-utility",
             "value": "var(--ink-dim)"
           },
           {
             "property": "color",
-            "selector": ".header-utility:hover,.header-utility:focus-visible",
+            "selector": ".header-utility:hover,.header-utility:focus-visible,.header-utility[aria-expanded=\"true\"]",
             "value": "var(--ink)"
           },
           {
@@ -1913,8 +1987,8 @@
           },
           {
             "property": "color",
-            "selector": ".usage-pill .up-k",
-            "value": "var(--ink-faint)"
+            "selector": ".usage-pill .up-p b",
+            "value": "var(--ink)"
           },
           {
             "property": "color",
@@ -2958,46 +3032,6 @@
           },
           {
             "property": "color",
-            "selector": ".mail-md",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md h1,.mail-md h2,.mail-md h3,.mail-md h4",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md strong",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "border",
-            "selector": ".mail-md code",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md code",
-            "value": "var(--ink)"
-          },
-          {
-            "property": "border",
-            "selector": ".mail-md pre",
-            "value": "1px solid var(--hair-2)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md pre code",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".md-marker",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
             "selector": ".md-empty",
             "value": "var(--ink-faint)"
           },
@@ -3071,7 +3105,7 @@
           {
             "property": "color",
             "selector": ".brand .sub",
-            "value": "var(--ink-faint)"
+            "value": "var(--ink-dim)"
           },
           {
             "property": "color",
@@ -3090,12 +3124,12 @@
           },
           {
             "property": "color",
-            "selector": ".topstat .sep",
-            "value": "var(--ink-faint)"
+            "selector": ".sesschip",
+            "value": "var(--ink-dim)"
           },
           {
             "property": "color",
-            "selector": ".sesschip",
+            "selector": ".clock",
             "value": "var(--ink-dim)"
           },
           {
@@ -3202,11 +3236,6 @@
             "property": "color",
             "selector": ".pill",
             "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".usage-pill .up-k",
-            "value": "var(--ink-faint)"
           },
           {
             "property": "color",
@@ -3590,21 +3619,6 @@
           },
           {
             "property": "color",
-            "selector": ".mail-md",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".mail-md pre code",
-            "value": "var(--ink-dim)"
-          },
-          {
-            "property": "color",
-            "selector": ".md-marker",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
             "selector": ".md-empty",
             "value": "var(--ink-faint)"
           },
@@ -3788,10 +3802,8 @@
         "unit": "element"
       },
       "source": {
-        "digest": "42f3795ea89e311c0c18bcca4571b238365fe906ec1f12da1f1433928e34c26d",
+        "digest": "244e4893a3dfe93165c157b39afa2da77fdebd4d46f9391321eb7905a18f6f44",
         "records": [
-          ".topstat\u0000font-size",
-          ".need-chip\u0000font-size",
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
           ".colhead .tag\u0000font-size",
@@ -3804,8 +3816,6 @@
           ".bulk-count\u0000font-size",
           ".bulk-exit\u0000font-size",
           ".pill\u0000font-size",
-          ".usage-pill .up-k\u0000font-size",
-          ".usage-pill .up-p b\u0000font-size",
           ".usage-popover .up-reset\u0000font-size",
           ".usage-popover .dial .u\u0000font-size",
           ".usage-popover .dial .lab\u0000font-size",
@@ -3887,12 +3897,11 @@
         "unit": "element"
       },
       "source": {
-        "digest": "5eccbb3a4e666f9903df40ba60053bacf2171b1245b29484cbcdb3584ffe4916",
+        "digest": "5ae50d8cb52787c6605b56af761cfc1ed2e53d0961d6b07cd67301e948c9fa76",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
           ".bulk-exit\u0000letter-spacing",
-          ".usage-pill .up-k\u0000letter-spacing",
           ".usage-popover .dial .lab\u0000letter-spacing",
           ".usage-popover .up-sub\u0000letter-spacing",
           ".layout-picker-title\u0000letter-spacing",
@@ -3918,9 +3927,9 @@
       }
     }
   },
-  "inventory_digest": "ff9c675e49e137aa085c8cfff7b11f21fd22fd376a90b357a1f19d1df0c5c8ff",
+  "inventory_digest": "f3ab68238250afd96d42328b69108af5a5f7a4656ef3a95aa42b08ee12224dd8",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "85be45b987e59a4327f59a9bf33f80764d82e5e177e4870f3ae51681614422bf",
+  "source_digest": "10d7d7195c988cca2adb47a86d65f16e1891fa9a524c4325723074f18a0002e9",
   "surface": "cockpit",
   "version": 1
 }
@@ -4649,7 +4658,6 @@ const terminalSettingsReset=document.getElementById('terminalSettingsReset');
 const miniViewOrrery=document.getElementById('miniViewOrrery');
 const miniViewNetwork=document.getElementById('miniViewNetwork');
 const miniNetworkDepthSelect=document.getElementById('miniNetworkDepth');
-const settingsBtn=document.getElementById('settingsBtn');
 const tabsEmpty=document.createElement('span');
 tabsEmpty.className='empty';tabsEmpty.textContent='waiting for sessions…';tabsEl.appendChild(tabsEmpty);
 
@@ -5593,9 +5601,6 @@ function themeAxisProfileLabel(values=themeAxisState.values){
   if(!axes.length)return 'A · Current';
   return axes.map(axis=>`${axis} ${formatThemeAxisValue(values[axis])}`).join(' / ');
 }
-function paintThemeAxisControls(){
-  settingsBtn.textContent='⚙ Settings';settingsBtn.title='Cockpit settings';
-}
 function postThemeAxisToTelemetry(axis,value){
   const frame=document.getElementById('networkFrame');
   if(!frame||!frame.contentWindow)return false;
@@ -5626,7 +5631,6 @@ function applyThemeAxisState({broadcast=true,negativeTrackingBaseline=false}={})
   const terminalTheme=currentTerminalTheme();
   panes.forEach(pane=>{pane.term.options.theme=terminalTheme;});
   refreshThemeAxisReports();
-  paintThemeAxisControls();
   document.dispatchEvent(new CustomEvent('oc:theme-axis',{detail:{axis,value,values:{...themeAxisState.values}}}));
   if(broadcast)postThemeAxesToTelemetry();
 }
@@ -5680,7 +5684,7 @@ function restoreThemeValuesTransaction(transaction){
   themeAxisEffectSnapshots.clear();transaction.previousEffectSnapshots.forEach((snapshot,key)=>themeAxisEffectSnapshots.set(key,snapshot));
   applyThemeAxisState({broadcast:false});
   themeAxisTransactionActive=false;finishThemeAxisSettledTransaction(transaction);
-  if(rollbackSettled)rollbackSettled();paintThemeAxisControls();
+  if(rollbackSettled)rollbackSettled();
 }
 function beginThemeValuesTransaction(values,{negativeTrackingBaseline=false}={}){
   const activeAxes=THEME_AXIS_IDS.filter(axis=>values[axis]!==null);
@@ -5723,7 +5727,7 @@ function beginThemeValuesTransaction(values,{negativeTrackingBaseline=false}={})
 }
 function commitThemeValuesTransaction(transaction){
   themeAxisCommittedState=normalizeThemeAxisState(themeAxisState);
-  themeAxisTransactionActive=false;finishThemeAxisSettledTransaction(transaction);paintThemeAxisControls();
+  themeAxisTransactionActive=false;finishThemeAxisSettledTransaction(transaction);
 }
 function setThemeAxis(axis,value){
   const nextValue=normalizeThemeAxisValue(value);
@@ -5739,7 +5743,7 @@ function setThemeAxis(axis,value){
 applyThemeAxisState({broadcast:false});
 
 function setLink(state,label){linkDot.className='dot '+state;linkText.textContent=label;
-  const stat=document.getElementById('linkStat');if(stat)stat.hidden=(state==='open');}
+  const stat=document.getElementById('linkStat');if(stat){stat.hidden=(state==='open');stat.title=label;}}
 let readerApproval=null;
 let readerActivity=null;
 function send(payload){
@@ -8361,17 +8365,22 @@ function usageMainWindows(prov){
 function usageBinding(prov){
   const windows=prov.provider==='antigravity'?usageVisibleWindows(prov):usageMainWindows(prov);
   return windows.slice().sort((a,b)=>a.remaining_percent-b.remaining_percent)[0]||null;}
+function usageHeaderSlot(provider){
+  const slot=document.createElement('span');slot.className='up-p none';slot.dataset.provider=provider;
+  const mark=document.createElement('span');mark.className='up-mark';
+  if(provider!=='dsh')mark.innerHTML='<svg class="up-meter" viewBox="0 0 28 28" aria-hidden="true"><circle class="up-meter-track" cx="14" cy="14" r="11.5"/><circle class="up-meter-fill" cx="14" cy="14" r="11.5" pathLength="100" transform="rotate(-90 14 14)"/></svg>';
+  const logo=document.createElement('img');logo.className='up-logo';logo.src=USAGE_LOGO[provider];logo.alt=usageProviderName(provider);
+  mark.appendChild(logo);slot.append(mark,document.createElement('b'));return slot;
+}
 function renderUsagePill(){
   const pill=document.getElementById('usageBtn');
   pill.classList.toggle('stale',!!usageData&&usageData.providers.filter(usageShown).some(p=>p.status==='stale'));
-  for(const provider of ['antigravity','dsh']){
-    const reported=usageData?.providers.some(p=>p.provider===provider&&(provider!=='dsh'||p.measurement_kind==='balance'));
-    let slot=pill.querySelector(`[data-provider="${provider}"]`);
-    if(reported&&!slot){
-      slot=document.createElement('span');slot.className='up-p';slot.dataset.provider=provider;
-      const logo=document.createElement('img');logo.className='up-logo';logo.src=USAGE_LOGO[provider];logo.alt=usageProviderName(provider);
-      slot.append(logo,document.createElement('b'));pill.appendChild(slot);
-    }else if(!reported&&slot)slot.remove();
+  for(const provider of Object.keys(USAGE_LOGO)){
+    const shownByDefault=provider==='claude'||provider==='codex';
+    const reported=shownByDefault||usageData?.providers.some(p=>p.provider===provider&&(provider!=='dsh'||p.measurement_kind==='balance'));
+    const slot=pill.querySelector(`[data-provider="${provider}"]`);
+    if(reported&&!slot)pill.appendChild(usageHeaderSlot(provider));
+    else if(!reported&&slot)slot.remove();
   }
   for(const slot of pill.querySelectorAll('.up-p')){
     const prov=usageData&&usageData.providers.find(p=>p.provider===slot.dataset.provider);
@@ -8389,9 +8398,13 @@ function renderUsagePill(){
     slot.classList.toggle('none',!bind);
     for(const t of ['warn','low'])slot.classList.toggle(t,!!bind&&usageTier(bind.remaining_percent)===t);
     b.textContent=bind?Math.round(bind.remaining_percent)+'%':'—';
+    setBox(slot,'--usage-left',bind?Math.max(0,Math.min(100,bind.remaining_percent)):0);
     slot.title=bind?`${usageProviderName(prov.provider)} ${bind.limit?bind.limit+' · ':''}${bind.label}: ${Math.round(bind.remaining_percent)}% left`
       +(bind.resets_at?`, resets in ${usageUntil(bind.resets_at)}`:''):(prov?USAGE_REASON[prov.reason]||'unavailable':'waiting for update');
   }
+  const values=[...pill.querySelectorAll('.up-p:not([hidden])')].map(slot=>
+    usageProviderName(slot.dataset.provider)+' '+slot.querySelector('b').textContent);
+  setAttr(pill,'aria-label',values.length?'Usage left. '+values.join(', '):'Usage left');
 }
 function usageDial(w,label=w.label){
   const R=25,C=2*Math.PI*R,tier=usageTier(w.remaining_percent);
@@ -8493,7 +8506,7 @@ document.getElementById('usagePopover').addEventListener('toggle',e=>{
   else if(e.newState==='closed')emitFullTourAction('full-usage');});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)pollUsage(false);});
 /* a pane window shows one terminal: no usage, lineage or mail polling there */
-if(!soloSession){pollUsage(false);setInterval(()=>{if(!document.hidden)pollUsage(false);},USAGE_POLL_MS);}
+if(!soloSession){renderUsagePill();pollUsage(false);setInterval(()=>{if(!document.hidden)pollUsage(false);},USAGE_POLL_MS);}
 
 /* ════════════════════════════════════════════════════════════════════
    LIVE TELEMETRY — roster + mail + mini-orrery, read through the unified
@@ -10824,7 +10837,6 @@ window.addEventListener('message',e=>{
       const mutation=d.mutation||{unit:'items',expected:d.expected??0,applied:d.applied??0};
       const effect=d.effect||null;
       telemetryThemeAxisReports.set(axis,{ok:d.ok===true,source,mutation,effect,reason:d.reason||null});
-      paintThemeAxisControls();
     }
     return;
   }
@@ -11421,40 +11433,57 @@ document.addEventListener('visibilitychange',()=>{syncPageHidden();if(!document.
 syncPageHidden();
 kickPolls();
 </script>
+<script>
+/* Reader and the Mail drawer share these assets. Load them on first use. */
+const cockpitAssets=new Map();
+function loadCockpitAsset(tag,attribute,url){
+  if(!cockpitAssets.has(url))cockpitAssets.set(url,new Promise((resolve,reject)=>{
+    const el=document.createElement(tag);el[attribute]=url;
+    if(tag==='link')el.rel='stylesheet';
+    el.onload=resolve;el.onerror=()=>{cockpitAssets.delete(url);el.remove();reject(new Error('Could not load '+url));};
+    document.head.appendChild(el);
+  }));
+  return cockpitAssets.get(url);
+}
+function loadCockpitMarkdown(){
+  return Promise.all([loadCockpitAsset('link','href','conversation_view.css'),
+    loadCockpitAsset('script','src','conversation_source.js'),
+    loadCockpitAsset('script','src','conversation_markdown.js')]);
+}
+</script>
 <script src="orrery_view.js"></script>
 <script src="mail_view.js"></script>
 <script src="cockpit_tour.js"></script>
 <script src="cockpit_full_tour.js"></script>
 <script src="phone_settings.js"></script>
 <script>
-/* Opt-in bootstrap: no conversation assets or API calls while disabled. */
+/* The Reader loads its view and starts history reads only when enabled. */
 const conversationView=(()=>{
   const key='oc-term-conversation-enabled',setting=document.getElementById('conversationEnabled');
+  const defaultViewKey='oc-term-default-view',defaultViewSetting=document.getElementById('agentDefaultView');
   let instance=null,loading=null;
   // On by default: a browser that never chose keeps the panel; an explicit
   // "0" (also synced through prefs) stays off.
   try{if(localStorage.getItem(key)===null)localStorage.setItem(key,'1');}catch(_){}
   const enabled=()=>{try{return localStorage.getItem(key)==='1';}catch(_){return false;}};
-  function asset(tag,attribute,url){return new Promise((resolve,reject)=>{
-    const el=document.createElement(tag);el[attribute]=url;
-    if(tag==='link')el.rel='stylesheet';
-    el.onload=resolve;el.onerror=()=>{el.remove();reject(new Error('Reader could not be loaded.'));};
-    document.head.appendChild(el);
-  });}
+  const asset=loadCockpitAsset;
+  function defaultView(){
+    try{return localStorage.getItem(defaultViewKey)==='reader'?'reader':'terminal';}
+    catch(_){return 'terminal';}
+  }
+  function syncDefaultView(){defaultViewSetting.value=defaultView();}
   async function ensure(){
     if(instance)return instance;
     if(!enabled())return null;
     if(loading)return loading;
     loading=(async()=>{
-      await asset('link','href','conversation_view.css');
+      await loadCockpitMarkdown();
       await asset('link','href','conversation_steps.css');
       await asset('script','src','conversation_steps.js');
-      await asset('script','src','conversation_source.js');
       await asset('script','src','conversation_preview.js');
       await asset('script','src','conversation_mail.js');
       await asset('script','src','conversation_speaker.js');
       await asset('script','src','conversation_terminal.js');
-      await asset('script','src','conversation_markdown.js');
       await asset('script','src','conversation_view.js');
       await asset('script','src','conversation_reply.js');
       await asset('script','src','reader_activity.js');
@@ -11495,6 +11524,7 @@ const conversationView=(()=>{
         frame?.addEventListener('load',wrapFrame);wrapFrame();
       }
       instance=OrreryConversation.mountWorkspace({
+        defaultView,
         getContext:(selected)=>{const name=selected||activeSession(),paneId=paneIdForSession(name);
           return {...(currentAgents.find(a=>a.name===name)||{name}),terminalPaneId:paneId,...readerActivity.current(panes.get(paneId))};},
         getSlots:()=>splitVisible?splitSessions.map(name=>({name,host:splitCells.get(name),controlHost:splitCells.get(name)?._actions})).filter(slot=>slot.host?.isConnected):[],
@@ -11516,8 +11546,15 @@ const conversationView=(()=>{
     try{localStorage.setItem(key,setting.checked?'1':'0');}catch(_){}
     if(setting.checked)ensure();
   });
-  document.addEventListener('oc:prefs-changed',()=>{if(enabled())ensure();});
-  window.addEventListener('storage',event=>{if(event.key===key&&enabled())ensure();});
+  syncDefaultView();
+  defaultViewSetting.addEventListener('change',()=>{
+    try{localStorage.setItem(defaultViewKey,defaultViewSetting.value);}catch(_){syncDefaultView();}
+  });
+  document.addEventListener('oc:prefs-changed',()=>{syncDefaultView();if(enabled())ensure();});
+  window.addEventListener('storage',event=>{
+    if(event.key===defaultViewKey||event.key===null)syncDefaultView();
+    if(event.key===key&&enabled())ensure();
+  });
   if(enabled())ensure();
   return Object.freeze({ready:ensure,open:async()=>{const view=await ensure();if(view&&enabled())view.open();},
     close:()=>instance&&instance.close(),refresh:()=>instance&&instance.refresh()});

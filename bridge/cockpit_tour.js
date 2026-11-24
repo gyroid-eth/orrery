@@ -18,7 +18,7 @@ const STEPS=Object.freeze([
 const MAP_EXTRA=Object.freeze([
   {id:'select',label:'Select',target:'#rosterSelectBtn',copy:'Turn on Select to pick several agents in the list, then exit them together.'},
   {id:'crew',label:'Working and waiting',target:'.topstat.crew',copy:'How many of your running agents are working right now, and how many are waiting for their next instruction.'},
-  {id:'usage',label:'Usage left',target:'#usageBtn',copy:'LEFT shows how much account allowance remains for Claude and Codex. Open it to see each window and when it resets.'},
+  {id:'usage',label:'Usage left',target:'#usageBtn',copy:'The rings show how much of each account allowance remains. Open them to see each window and when it resets.'},
 ]);
 const MAP_ORDER=['start','select','choose','talk','mail','crew','usage','telemetry','planetarium','settings'];
 const MAP_NOTES=Object.freeze(MAP_ORDER.map(id=>STEPS.find(s=>s.id===id)||MAP_EXTRA.find(s=>s.id===id)));
@@ -287,9 +287,12 @@ function mountChecklist(definition){
     const label=side=>side==='below'?'▲ HERE':side==='above'?'▼ HERE':side==='right'?'◀ HERE':'HERE ▶';
     // The arrow depends on the side and the size on the arrow: measure the
     // finished tag, and settle when its side gives back the same label.
+    const inHeader=!!highlight.closest('.cockpit-header');
     let spot=null;here.textContent=here.textContent||label('below');
     for(let i=0;i<3;i++){
-      spot=placeHereTag(r,{w:here.offsetWidth,h:here.offsetHeight},{w:W,h:H},avoid,8,6,blocked);
+      const size={w:here.offsetWidth,h:here.offsetHeight},view={w:W,h:H};
+      spot=placeHereTag(r,size,view,avoid,8,6,blocked);
+      if(!spot&&inHeader)spot=placeHereTag(r,size,view,avoid,3,6,blocked);
       if(!spot||label(spot.side)===here.textContent)break;
       here.textContent=label(spot.side);
     }

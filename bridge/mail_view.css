@@ -124,25 +124,9 @@
 .drawer-route {display:flex;align-items:flex-start;gap:5px;overflow-wrap:anywhere}
 .drawer-route time {margin-left:auto}
 .maildrawer h2 {margin:10px 0;font-size:13px;line-height:1.35;overflow-wrap:anywhere}
-.mail-md{line-height:1.7;color:var(--ink-dim);overflow-wrap:anywhere}
-.mail-md h1,.mail-md h2,.mail-md h3,.mail-md h4{
-  margin:15px 0 6px;font-weight:600;line-height:1.25;color:var(--ink);
-}
-.mail-md h1,.mail-md h2{font-size:13px}.mail-md h3,.mail-md h4{font-size:12px}
-.mail-md p{margin:0 0 5px;white-space:pre-wrap}
-.mail-md strong{font-weight:600;color:var(--ink)}
-.mail-md code{
-  padding:1px 4px;border:1px solid var(--hair-2);border-radius:3px;background:rgba(236,229,214,.04);
-  color:var(--ink);font-family:var(--mono);font-size:.92em;
-}
-.mail-md pre{
-  margin:9px 0;padding:9px 10px;overflow-x:auto;border:1px solid var(--hair-2);border-radius:7px;
-  background:#0a0c10;white-space:pre;tab-size:2;
-}
-.mail-md pre code{padding:0;border:0;background:transparent;color:var(--ink-dim)}
-.md-list-row{display:grid;grid-template-columns:20px 1fr;gap:2px;margin:2px 0}
-.md-marker{text-align:right;padding-right:5px;color:var(--ink-faint)}
-.md-space{height:7px}
+.mail-md{min-width:0;overflow-wrap:anywhere}
+.mail-md:not(.conversation-markdown){white-space:pre-wrap}
+.mail-md a{color:var(--amber);text-decoration:underline;text-underline-offset:2px}
 .md-empty{color:var(--ink-faint)}
 
 .thread-chain {margin-top:14px;border-left:1px solid var(--hair);padding-left:6px}

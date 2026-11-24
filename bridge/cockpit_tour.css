@@ -14,6 +14,10 @@
   html[data-color-theme="light"] .flight-guide{background:color-mix(in srgb,var(--panel) 64%,transparent)}
 }
 .flight-guide:not(.folded){top:53px;display:flex;flex-direction:column}
+@media(min-width:720px) and (max-width:900px){
+  /* The cockpit header uses two rows here, above the side checklist. */
+  body:has(.cockpit-header) .flight-guide:not(.folded,.placed){top:76px}
+}
 .flight-guide.placed{right:auto;bottom:auto;border:1px solid var(--hair)}
 .flight-guide.placed:not(.folded){max-height:calc(100vh - 24px)}
 .flight-guide.dragging{opacity:.92;cursor:grabbing;user-select:none}

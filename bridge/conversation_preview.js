@@ -2,7 +2,7 @@
    grants; an explicit body-path click uses the local preview route. */
 (function(root){
   'use strict';
-  const MAX_TEXT=131072;
+  const MAX_TEXT=131072,INLINE_MARGIN=200;
   function mount({host,source,onActivate=()=>{},onBeforeOpen=()=>{},onClose=()=>{},onReference=null}){
     // sourceView: this reader's last Markdown/Source choice for .md previews.
     let request=null,generation=0,objectUrl=null,selected=null,sourceView=false;
@@ -28,37 +28,65 @@
       const el=button('conversation-preview-icon '+cls,'',action);
       el.appendChild(svgIcon(icon));el.setAttribute('aria-label',name);el.title=name;return el;
     };
-    const scroll=host.closest('.conversation-panel').querySelector('.conversation-scroll');
-    const inlineRows=new Map(),near=new Set();let visible=false,loading=0,frame=0;
-    const observer=new IntersectionObserver(changes=>{
-      for(const change of changes){const entry=change.target.inlineEntry;if(entry.alive&&change.isIntersecting)near.add(entry);else near.delete(entry);}
+    const panel=host.closest('.conversation-panel'),scroll=panel.querySelector('.conversation-scroll');
+    const inlineRows=new Map(),markdownImages=new Map(),near=new Set();let visible=false,loading=0,inlineTimer=0;
+    function onIntersection(changes){
+      for(const change of changes){const entry=change.target.inlineEntry;if(entry?.alive&&change.isIntersecting)near.add(entry);else near.delete(entry);}
       schedule();
-    },{root:scroll,rootMargin:'200px'});
-    function schedule(){if(!frame)frame=requestAnimationFrame(()=>{frame=0;pump();});}
+    }
+    const observer=new IntersectionObserver(onIntersection,{root:scroll,rootMargin:INLINE_MARGIN+'px'});
+    const previewObserver=new IntersectionObserver(onIntersection,{root:host,rootMargin:INLINE_MARGIN+'px'});
+    function schedule(){if(!inlineTimer)inlineTimer=setTimeout(()=>{inlineTimer=0;pump();},0);}
     function release(entry){
       entry.request?.abort();entry.request=null;
       if(entry.url)URL.revokeObjectURL(entry.url);entry.url=null;
       entry.image.removeAttribute('src');entry.image.hidden=true;entry.status.hidden=false;
     }
-    function forget(row){for(const entry of row.entries){entry.alive=false;observer.unobserve(entry.button);near.delete(entry);release(entry);}row.node.remove();}
-    function resetInline(){observer.disconnect();near.clear();for(const row of inlineRows.values())forget(row);inlineRows.clear();cancelAnimationFrame(frame);frame=0;}
+    function forgetEntry(entry){
+      entry.alive=false;entry.observer.unobserve(entry.button);near.delete(entry);release(entry);
+      delete entry.button.inlineEntry;
+    }
+    function forget(row){for(const entry of row.entries)forgetEntry(entry);row.node.remove();}
+    function* inlineEntries(){for(const row of inlineRows.values())yield* row.entries;yield* markdownImages.values();}
+    function observeEntry(entry){
+      entry.observer.observe(entry.button);
+      if(!entry.ref.path)return;
+      // On insertion the DOM already has bounds. Start nearby Markdown
+      // images while waiting for the observer's first rendered frame.
+      const viewport=(entry.observer===previewObserver?host:scroll).getBoundingClientRect();
+      const rect=entry.button.getBoundingClientRect();
+      if(rect.width&&rect.height&&viewport.width&&viewport.height&&rect.bottom>=viewport.top-INLINE_MARGIN&&
+         rect.top<=viewport.bottom+INLINE_MARGIN&&rect.right>=viewport.left-INLINE_MARGIN&&rect.left<=viewport.right+INLINE_MARGIN)near.add(entry);
+    }
+    function resetInline(){
+      observer.disconnect();previewObserver.disconnect();near.clear();
+      for(const row of inlineRows.values())forget(row);inlineRows.clear();
+      for(const entry of markdownImages.values()){forgetEntry(entry);entry.image.remove();}markdownImages.clear();
+      clearTimeout(inlineTimer);inlineTimer=0;
+    }
     function setVisible(value){
-      if(visible===value)return;visible=value;observer.disconnect();near.clear();
-      for(const row of inlineRows.values())for(const entry of row.entries){
-        if(value)observer.observe(entry.button);else{entry.request?.abort();entry.request=null;}
+      if(visible===value)return;visible=value;observer.disconnect();previewObserver.disconnect();near.clear();
+      for(const entry of inlineEntries()){
+        if(value)observeEntry(entry);else{entry.request?.abort();entry.request=null;}
       }
       schedule();
+    }
+    function pngUrl(data){
+      const bytes=Uint8Array.from(atob(data),char=>char.charCodeAt(0));
+      return URL.createObjectURL(new Blob([bytes],{type:'image/png'}));
     }
     async function loadInline(entry){
       const request=new AbortController();entry.request=request;loading++;
       try{
-        const data=await source.reference(entry.ref.id,{signal:request.signal,thumbnail:true});
+        const data=await (entry.ref.path?source.pathPreview(entry.ref.path,{signal:request.signal,background:true}):
+          source.reference(entry.ref.id,{signal:request.signal,thumbnail:true}));
         if(entry.request!==request||!visible||!entry.button.isConnected)return;
         if(data.kind!=='image'||data.mime!=='image/png'||typeof data.data!=='string'||data.data.length>=12*1024*1024)throw new Error('Preview unavailable');
-        const bytes=Uint8Array.from(atob(data.data),char=>char.charCodeAt(0));
-        entry.url=URL.createObjectURL(new Blob([bytes],{type:'image/png'}));
+        entry.url=pngUrl(data.data);
         entry.image.src=entry.url;entry.image.hidden=false;entry.status.hidden=true;
-      }catch(error){if(entry.request===request&&error.name!=='AbortError'){entry.failed=true;entry.status.textContent='Preview unavailable · click to retry';}}
+      }catch(error){if(entry.request===request&&error.name!=='AbortError'){
+        entry.failed=true;if(!entry.ref.path)entry.status.textContent='Preview unavailable · click to retry';
+      }}
       finally{loading--;if(entry.request===request)entry.request=null;schedule();}
     }
     function pump(){
@@ -67,9 +95,33 @@
       const top=scroll.getBoundingClientRect().top;
       const wanted=new Set([...near].filter(entry=>entry.button.isConnected).sort((a,b)=>
         Math.abs(a.button.getBoundingClientRect().top-top)-Math.abs(b.button.getBoundingClientRect().top-top)).slice(0,8));
-      for(const row of inlineRows.values())for(const entry of row.entries)if(!wanted.has(entry))release(entry);
+      for(const entry of inlineEntries())if(!wanted.has(entry))release(entry);
       for(const entry of wanted)if(loading<2&&!entry.url&&!entry.request&&!entry.failed)loadInline(entry);
     }
+    const markdownSelector='a[data-markdown-image]';
+    function syncMarkdown(){
+      const added=[];
+      for(const [link,entry] of markdownImages)if(!panel.contains(link)){
+        forgetEntry(entry);entry.image.remove();markdownImages.delete(link);
+      }
+      for(const link of panel.querySelectorAll(markdownSelector)){
+        if(markdownImages.has(link))continue;
+        const path=link.dataset.localPath,status=link.querySelector('.markdown-image-label');
+        const image=create('img','conversation-markdown-image');image.alt=link.dataset.markdownImage||path.split('/').pop();
+        image.hidden=true;image.draggable=false;link.prepend(image);
+        const entry={ref:{path},button:link,image,status,observer:host.contains(link)?previewObserver:observer,
+          url:null,request:null,failed:false,alive:true};
+        link.inlineEntry=entry;markdownImages.set(link,entry);
+        image.addEventListener('error',()=>{if(entry.url){entry.failed=true;release(entry);}});
+        added.push(entry);
+      }
+      if(visible&&added.length){for(const entry of added)observeEntry(entry);schedule();}
+    }
+    const markdownObserver=new MutationObserver(records=>{
+      const hasLink=node=>node.nodeType===1&&(node.matches(markdownSelector)||node.querySelector(markdownSelector));
+      if(records.some(record=>[...record.addedNodes,...record.removedNodes].some(hasLink)))syncMarkdown();
+    });
+    markdownObserver.observe(panel,{childList:true,subtree:true});
     scroll.addEventListener('scroll',schedule,{passive:true});
     function syncInline(rows,events){
       const keep=new Set();
@@ -93,7 +145,7 @@
             const image=create('img','conversation-inline-thumbnail');image.alt='';image.hidden=true;image.draggable=false;
             const status=create('span','conversation-inline-status','Preview image');
             control.append(image,status,create('span','conversation-inline-label',ref.label));
-            const entry={ref,button:control,image,status,url:null,request:null,failed:false,alive:true};control.inlineEntry=entry;
+            const entry={ref,button:control,image,status,observer,url:null,request:null,failed:false,alive:true};control.inlineEntry=entry;
             record.entries.push(entry);node.appendChild(control);if(visible)observer.observe(control);
           }
         }
@@ -312,8 +364,7 @@
             show();head.insertBefore(toggle,closeButton);
           }else body.appendChild(raw);
         }else if(data.kind==='image'&&data.mime==='image/png'&&typeof data.data==='string'&&data.data.length<12*1024*1024){
-          const bytes=Uint8Array.from(atob(data.data),char=>char.charCodeAt(0));
-          objectUrl=URL.createObjectURL(new Blob([bytes],{type:'image/png'}));
+          objectUrl=pngUrl(data.data);
           const image=create('img','conversation-preview-image');image.alt=ref.label;image.src=objectUrl;image.draggable=false;
           body.appendChild(image);notice.textContent+=(ref.path?'':' · ')+data.width+' × '+data.height;
           current={ref,url:objectUrl,width:data.width,height:data.height};
@@ -362,7 +413,7 @@
       return article;
     }
     return Object.freeze({render,open,close,syncInline,setVisible,resetInline,
-      dispose(){resetInline();scroll.removeEventListener('scroll',schedule);close();},get selected(){return selected;}});
+      dispose(){markdownObserver.disconnect();resetInline();scroll.removeEventListener('scroll',schedule);close();},get selected(){return selected;}});
   }
   root.OrreryConversationPreview=Object.freeze({mount});
 })(window);

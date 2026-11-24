@@ -335,7 +335,9 @@ html[data-color-theme="light"] .conversation-activity[data-state="work"]{color:#
 .conversation-preview-markdown .markdown-front-matter{color:var(--ink-dim)}
 .conversation-preview-markdown hr{margin:16px 0;border:0;border-top:1px solid var(--hair)}
 .conversation-panel a{color:var(--amber);text-decoration:underline;text-underline-offset:2px}
-.conversation-preview-markdown :is(.markdown-link-text,.markdown-image){color:var(--ink-dim);text-decoration:underline dotted;text-underline-offset:2px}
+.conversation-preview-markdown :is(.markdown-link-text,.markdown-image:not(a)){color:var(--ink-dim);text-decoration:underline dotted;text-underline-offset:2px}
+.conversation-panel [data-markdown-image]{display:inline-block;max-width:100%;vertical-align:top;overflow-wrap:anywhere}
+.conversation-markdown-image{display:block;width:auto;height:auto;max-width:100%;max-height:320px;border-radius:4px;cursor:zoom-in}
 .conversation-preview-source[aria-pressed="true"]{border-color:var(--amber);color:var(--amber)}
 .conversation-selection-reply{position:absolute;z-index:12;padding:8px 12px;border-radius:7px;
   color:var(--bg);border-color:var(--amber);background:var(--amber);box-shadow:0 4px 18px rgb(0 0 0 / .25);font:11px/1.5 var(--mono)}

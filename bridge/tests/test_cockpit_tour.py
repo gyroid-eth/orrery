@@ -350,10 +350,11 @@ def test_dom_map_annotates_every_control_with_a_leader(tour_browser, width, heig
 
 
 def test_dom_map_never_draws_crossing_leaders_while_the_window_changes(tour_browser):
-    """Review of #25: at 1160px the header's Settings wraps onto two lines and
-    its leader's track passed its neighbour's, so two leaders crossed at the
-    smallest step. A layout whose leaders cross is not used; the sweep covers
-    1160 and the steps on either side of it."""
+    """Check all labelled sizes and the compact legend across window changes.
+
+    At 1160px the old wrapped Settings label exposed crossing leader tracks.
+    Keep that width and its neighbours in the sweep as the header evolves.
+    """
     client, evaluate = tour_browser
     seen, bad = set(), []
 
@@ -373,7 +374,7 @@ def test_dom_map_never_draws_crossing_leaders_while_the_window_changes(tour_brow
     # The expanded mini graph moves the Mail target down and exercises the
     # smallest labelled layout in a window that can still draw all the leaders.
     evaluate("document.getElementById('helpMapBtn').click();document.getElementById('mailGraphBtn').click()")
-    check(1200, 680)
+    check(1200, 600)
     assert bad == []
     assert seen >= {'scale0', 'scale1', 'scale2', 'scale3', 'legend'}, seen
 
