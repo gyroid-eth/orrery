@@ -290,9 +290,9 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 .conversation-activity[data-state="work"] .conversation-activity-copy{margin-inline-start:27px}
 .conversation-activity[data-state="work"] .conversation-activity-label{color:var(--ink-dim)}
 @keyframes conversation-working-shimmer{to{background-position:-200% 0}}
-.conversation-activity:not([hidden])[data-state="work"] .conversation-activity-label{background:linear-gradient(90deg,var(--ink-dim) 20%,var(--ink) 50%,var(--ink-dim) 80%) 0 0/200% 100%;background-clip:text;color:transparent;animation:conversation-working-shimmer 1.4s linear infinite}
+.conversation-activity:not([hidden])[data-state="work"] .conversation-activity-label,.conversation-steps-heading.is-working{background:linear-gradient(90deg,var(--ink-dim) 20%,var(--ink) 50%,var(--ink-dim) 80%) 0 0/200% 100%;background-clip:text;color:transparent;animation:conversation-working-shimmer 1.4s linear infinite}
 .conversation-activity.activity-paused[data-state="work"] .conversation-activity-label{animation-play-state:paused}
-@media(prefers-reduced-motion:reduce){.conversation-activity:not([hidden])[data-state="work"] .conversation-activity-label{animation:none;background:none;color:var(--ink-dim)}}
+@media(prefers-reduced-motion:reduce){.conversation-activity:not([hidden])[data-state="work"] .conversation-activity-label,.conversation-steps-heading.is-working{animation:none;background:none;color:var(--ink-dim)}}
 .conversation-submission{max-width:min(84%,70ch);margin:0 0 24px auto}
 .conversation-submission-text{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .submission-expanded .conversation-submission-text{-webkit-line-clamp:unset}

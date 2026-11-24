@@ -130,5 +130,5 @@
       dispose(){stop();reduced.removeEventListener('change',stop);},
     };
   }
-  root.OrreryConversationMotion=Object.freeze({mount,stepSpring,pieces,promptAuthor});
+  root.OrreryConversationMotion=Object.freeze({mount,spring,stepSpring,pieces,promptAuthor});
 })(typeof window!=='undefined'?window:globalThis);

@@ -140,6 +140,8 @@ SOFTWARE.
 
   function mount({host,mutate=fn=>fn(),onFocusLost=()=>{}}){
     const cards=new Map();let model={groups:[],consumed:new Set()},current={},visible=false,timer=0,serial=0;
+    const heightSpring=root.OrreryConversationMotion?.spring(260,24);
+    const reduced=root.matchMedia?.('(prefers-reduced-motion: reduce)');
     const make=(tag,cls,value)=>{const node=root.document.createElement(tag);node.className=cls;if(value!==undefined)node.textContent=value;return node;};
     function changed(node,value){if(node.textContent!==value)node.textContent=value;}
     function icon(status){
@@ -149,25 +151,41 @@ SOFTWARE.
         '<svg viewBox="0 0 16 16"><path class="conversation-step-check" pathLength="1" d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg>';
       return node;
     }
-    function setOpen(card,open){
+    function setOpen(card,open,animate=false){
+      const {body}=card;
+      const from=animate&&visible&&heightSpring&&!reduced?.matches?body.getBoundingClientRect().height:null;
+      card.animation?.cancel();card.animation=null;
       if(!open&&card.body.contains(root.document.activeElement))card.button.focus({preventScroll:true});
       card.open=open;card.node.classList.toggle('is-open',open);card.button.setAttribute('aria-expanded',String(open));
-      card.body.inert=!open;
+      body.inert=!open;
+      if(from===null)return;
+      const to=body.getBoundingClientRect().height;
+      if(Math.abs(to-from)<.5)return;
+      const animation=body.animate(heightSpring.map(value=>({height:Math.max(0,from+(to-from)*value)+'px'})),
+        {duration:(heightSpring.length-1)*1000/60,fill:'backwards'});
+      card.animation=animation;
+      const forget=()=>{if(card.animation===animation)card.animation=null;};
+      animation.finished.then(forget,forget);
     }
     function create(id){
       const node=make('section','conversation-steps');node.dataset.stepsGroup=id;node.setAttribute('aria-label','Agent steps');
       const button=make('button','conversation-steps-toggle');button.type='button';
-      const heading=make('span','conversation-steps-heading'),clock=make('span','conversation-steps-time');
-      const count=make('span','conversation-steps-count'),chevron=make('span','conversation-steps-chevron','⌄');chevron.setAttribute('aria-hidden','true');
-      button.append(heading,clock,count,chevron);
+      const symbol=make('span','conversation-steps-symbol');symbol.setAttribute('aria-hidden','true');
+      symbol.innerHTML='<svg viewBox="0 0 16 16"><path d="M5 4h8M5 8h8M5 12h8M2.5 4h.01m-.01 4h.01m-.01 4h.01"/></svg>';
+      const heading=make('span','conversation-steps-heading');
+      const summary=make('span','conversation-steps-summary'),count=make('span','conversation-steps-count'),clock=make('span','conversation-steps-time');
+      summary.append(count,clock);
+      const chevron=make('span','conversation-steps-chevron');chevron.setAttribute('aria-hidden','true');
+      chevron.innerHTML='<svg viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></svg>';
+      button.append(symbol,heading,summary,chevron);
       const body=make('div','conversation-steps-expansion'),inner=make('div','conversation-steps-inner');
       body.id='conversation-steps-'+(++serial)+'-'+Math.random().toString(36).slice(2);button.setAttribute('aria-controls',body.id);
-      const label=make('div','conversation-steps-label','Agent steps'),list=make('ol','conversation-steps-list');
+      const list=make('ol','conversation-steps-list');
       const notice=make('p','conversation-steps-notice','Load earlier to see the matching tool requests.');notice.hidden=true;
-      inner.append(label,list,notice);body.append(inner);node.append(button,body);
+      inner.append(list,notice);body.append(inner);node.append(button,body);
       const card={node,button,heading,clock,count,body,list,notice,rows:new Map(),open:false,working:false,waiting:false,
         clockValue:null,clockAt:0,lastWork:null,lastInput:null};
-      button.addEventListener('click',()=>mutate(()=>setOpen(card,!card.open)));
+      button.addEventListener('click',()=>mutate(()=>setOpen(card,!card.open,true)));
       setOpen(card,false);return card;
     }
     function row(step,animate){
@@ -183,15 +201,6 @@ SOFTWARE.
       if(step.detail)copy.append(make('div','conversation-step-target',text(step.detail)));
       node.append(icon(status),copy);return node;
     }
-    function title(card,value,working){
-      if(card.title===value&&card.wave===working)return;
-      card.title=value;card.wave=working;card.heading.replaceChildren();
-      if(working){
-        Array.from('Working…').forEach((char,index)=>{
-          const span=make('span','conversation-steps-letter',char);span.style.animationDelay=(index*.05)+'s';card.heading.append(span);
-        });
-      }else card.heading.textContent=value;
-    }
     function paint(){
       const last=model.groups.at(-1);let ticking=false;
       for(const g of model.groups){
@@ -206,18 +215,22 @@ SOFTWARE.
           card.lastWork=card.clockValue===null?null:card.clockValue+(Date.now()-card.clockAt)/1000;
         }
         const was=card.working||card.waiting,now=working||waiting;
-        if(!card.initialized||was!==now){
-          setOpen(card,now);card.initialized=true;
-        }
+        if(was&&!now&&card.open)setOpen(card,false);
         card.working=working;card.waiting=waiting;
         const compacting=working&&current.reader_phase==='compacting';
         const finished=g.closed?(g.duration??card.lastWork):(card.lastWork??g.duration);
-        title(card,working?(compacting?'Compacting context…':'Working…'):waiting?'Waiting for you':
-          finished!==null?'Worked for '+duration(finished):'Recorded work',working&&!compacting);
-        changed(card.clock,working&&card.lastWork!==null?duration(card.lastWork):'');
-        changed(card.count,'· '+g.steps.length+(g.steps.length===1?' step':' steps'));
+        const status=working?(compacting?'Compacting context…':'Working…'):waiting?'Waiting for you':'';
+        const count=g.steps.length+(g.steps.length===1?' step':' steps');
+        const secondsShown=working?card.lastWork:finished;
+        const clock=secondsShown===null?'':', '+duration(secondsShown);
+        changed(card.heading,status);card.heading.hidden=!status;
+        changed(card.count,count);changed(card.clock,clock);
+        const label=(status?status+' ':'')+count+clock;
+        if(card.button.title!==label){card.button.title=label;card.button.setAttribute('aria-label',label);}
+        card.heading.classList.toggle('is-working',working&&!compacting);
         card.node.classList.toggle('is-paused',!visible);
         card.node.hidden=!g.steps.length&&!g.orphans&&!now;
+        if(!visible)card.animation?.cancel();
         ticking=ticking||working&&visible;
       }
       if(ticking&&!timer)timer=root.setInterval(paint,500);
@@ -228,7 +241,7 @@ SOFTWARE.
       model=['snapshot','fresh_tail'].includes(mode)?{groups:[],consumed:new Set()}:collect(events,provider);
       const wanted=new Set(model.groups.map(g=>g.id)),byId=new Map(rows.map(r=>[r.dataset.eventId,r]));
       for(const [id,card] of cards)if(!wanted.has(id)){
-        if(card.node.contains(root.document.activeElement))onFocusLost();card.node.remove();cards.delete(id);
+        if(card.node.contains(root.document.activeElement))onFocusLost();card.animation?.cancel();card.node.remove();cards.delete(id);
       }
       for(const g of model.groups){
         const existed=cards.has(g.id),card=cards.get(g.id)||create(g.id);cards.set(g.id,card);
@@ -243,7 +256,6 @@ SOFTWARE.
           const node=card.rows.get(step.id).node;
           if(card.list.children[index]!==node)card.list.insertBefore(node,card.list.children[index]||null);
         }
-        const nodes=[...card.list.children];nodes.forEach((node,index)=>node.classList.toggle('has-next',index<nodes.length-1));
         card.notice.hidden=!g.orphans;
         const anchor=byId.get(g.anchor);
         if(anchor){if(card.node.nextSibling!==anchor)anchor.before(card.node);}
@@ -253,7 +265,7 @@ SOFTWARE.
     }
     return Object.freeze({sync,
       activity(context,isVisible){current=context||{};visible=isVisible;paint();return [...cards.values()].some(c=>!c.node.hidden&&(c.working||c.waiting));},
-      reset(){if(timer)root.clearInterval(timer);timer=0;for(const card of cards.values())card.node.remove();cards.clear();model={groups:[],consumed:new Set()};},
+      reset(){if(timer)root.clearInterval(timer);timer=0;for(const card of cards.values()){card.animation?.cancel();card.node.remove();}cards.clear();model={groups:[],consumed:new Set()};},
     });
   }
   const api={collect,duration,elapsed,mount};
