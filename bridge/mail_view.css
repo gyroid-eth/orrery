@@ -86,9 +86,12 @@
   width:calc(100% - 17px);margin-left:17px;
 }
 .mail-route,.mail-route-recipients,.mail-peer {display:flex;align-items:center;min-width:0}
-.mail-route {gap:5px;font-weight:500}
-.mail-route-recipients {flex-wrap:wrap;gap:4px 7px}
-.mail-peer {gap:5px;max-width:100%;overflow-wrap:anywhere}
+.mail-route {flex-wrap:wrap;gap:5px;font-weight:500}
+.mail-route-recipients {flex:1 1 min(100%,6em);flex-wrap:wrap;gap:4px 7px}
+.mail-peer {gap:5px;max-width:100%}
+/* Reserve room for a short sender and its arrow. Recipients can continue below. */
+.mail-route > .mail-peer {flex:none;max-width:min(calc(100% - 18px),max(50%,6.5em))}
+.mail-peer > :last-child {white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mail-route > .mail-icon {width:13px;height:13px;color:var(--ink-dim)}
 .mail-peer-avatar,.mail-peer-avatar .conversation-avatar.medal {flex:none;width:16px;height:16px}
 .mail-peer-avatar:empty {border:1px solid var(--hair);border-radius:50%;background:var(--panel-2)}
