@@ -54,6 +54,7 @@ from usage_probe import (
 from conversation_history import (HistoryUnavailable, UnchangedPolls, bound_agent, bound_signature, conversation_binding, open_reader)
 from conversation_mail import received as recorded_mail
 from conversation_preview import ReferenceStore, PreviewUnavailable, clicked_path
+from conversation_markdown_images import may_have_image_targets
 from conversation_step_diff import encode as encode_step_diff
 
 DEFAULT_HOST = "127.0.0.1"
@@ -2339,7 +2340,7 @@ async def conversation_full_read(request, name, query, cursor, limit, polls, sta
         store=request.app.get(CONVERSATION_REFERENCES_KEY)
         if store is not None:
             candidates=[event for event in result['events'] if event['kind'] in {'tool','tool_result','mail'} or
-                        event['kind']=='text' and (event['role']=='user' or '![' in event['text'])]
+                        event['kind']=='text' and (event['role']=='user' or may_have_image_targets(event['text']))]
             if candidates:
                 await asyncio.to_thread(store.decorate_all,row,reader,candidates)
         checked=polls.clock() if polls is not None else 0.0
