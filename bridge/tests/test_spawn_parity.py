@@ -129,11 +129,13 @@ def test_standard_async_status_is_queried_by_child_name(tour_browser,verdict):
     _,evaluate=tour_browser
     result=evaluate('''(async()=>{
       const original=window.fetch,originalWatch=watchSpawnLaunch,queries=[];let posts=0,deadline=null,started=0;
+      let releaseStatus;
+      const waitForStatus=new Promise(resolve=>{releaseStatus=resolve;});
       document.addEventListener('oc:tour-action',e=>{if(e.detail.id==='start')started++;});
       watchSpawnLaunch=(name,seconds)=>{deadline=seconds;return originalWatch(name,seconds);};
       window.fetch=async(url,options)=>{
         if(url==='/telemetry/spawn'){posts++;return {ok:true,json:async()=>({ok:true,child_name:'StandardChild',tmux_session:'StandardChild',pending:true,verdict_deadline_seconds:170})};}
-        if(String(url).startsWith('/telemetry/spawn-status?')){queries.push(String(url));return {ok:true,json:async()=>({ok:true,state:VERDICT,error:VERDICT==='failed'?'Fixture failed':null})};}
+        if(String(url).startsWith('/telemetry/spawn-status?')){queries.push(String(url));await waitForStatus;return {ok:true,json:async()=>({ok:true,state:VERDICT,error:VERDICT==='failed'?'Fixture failed':null})};}
         return original(url,options);
       };
       try{
@@ -142,6 +144,7 @@ def test_standard_async_status_is_queried_by_child_name(tour_browser,verdict):
         const completion=submitSpawn(new Event('submit',{cancelable:true}));
         await new Promise(r=>setTimeout(r,50));
         const busy=spawnSubmit.disabled&&spawnForm.getAttribute('aria-busy')==='true'&&started===0;
+        releaseStatus();
         await completion;
         return {posts,queries,deadline,busy,started,open:spawnOverlay.classList.contains('on'),
           error:spawnStatus.textContent,task:spawnTask.value};
