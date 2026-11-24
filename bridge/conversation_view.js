@@ -1179,11 +1179,12 @@
       toggle.setAttribute('aria-expanded','false');paintControls();clear({keepSubmissions:true});onState();const target=typeof focusControl==='function'?focusControl():focusControl||toggle;
       if(focus&&target&&!target.hidden&&target.getClientRects().length)target.focus();
     }
-    function open({automatic=false}={}){
+    function open({automatic=false,full=fullWidth}={}){
       if(!enabled)return;
       if(!automatic)onActivate();
       if(opened)return;
       automaticOpening=automatic;
+      fullWidth=full;
       opened=true;panel.hidden=false;preview?.setVisible(presented&&!document.hidden);screen.classList.add('conversation-open');screen.classList.toggle('conversation-full',fullWidth);
       viewport();const rect=screen.getBoundingClientRect();lastWidth=rect.width;lastHeight=rect.height;
       toggle.setAttribute('aria-expanded','true');paintControls();readContext(getContext()||{});
@@ -1370,7 +1371,10 @@
           entry.view.relocate(target.host,{visible:true,focus:name===selected,noticeAnchor:target.host===screen||!screen.classList.contains('split-pane-headers')?toggle:entry.control});entry.host=target.host;entry.visible=true;
           if(entry.initialViewPending){
             entry.initialViewPending=false;
-            if(defaultView()==='reader'&&READER_PROGRAMS.has(getContext(name)?.program))entry.view.open({automatic:true});
+            const mode=defaultView();
+            if((mode==='reader'||mode==='reader-full')&&READER_PROGRAMS.has(getContext(name)?.program)){
+              entry.view.open({automatic:true,full:mode==='reader-full'});
+            }
           }
         }
         paint();
