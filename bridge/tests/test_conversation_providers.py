@@ -224,6 +224,30 @@ def test_hermes_hidden_reasoning_and_malformed_tools(tmp_path):
     con.commit();con.close()
     assert [e['text'] for e in page(row(path,'hermes'))['events']]==['visible']
 
+def test_claude_file_references_survive_receipt_refresh_but_not_a_relaunch(tmp_path):
+    path = tmp_path / 'history.jsonl'
+    report = tmp_path / 'report.txt'
+    report.write_text('Generated labels')
+    path.write_bytes(line(claude('assistant', [
+        dict(type='tool_use', id='fixture-call', name='Read', input={'file_path': str(report)})
+    ])))
+    original = dict(row(path, 'claude-code'), created=100)
+    refreshed = dict(original, history_receipt_ts='2026-11-04T07:00:10Z')
+    relaunched = dict(refreshed, created=200)
+    store = ReferenceStore(workspace_roots=[str(tmp_path)])
+    with history.open_reader(original) as reader:
+        first = reader.read_page()
+        event = first['events'][0]
+        store.decorate(original, reader, event)
+    ref = event['references'][0]['id']
+    assert store.read(ref, refreshed)['text'] == 'Generated labels'
+    assert not page(refreshed, after=first['after'])['events']
+    with pytest.raises(PreviewUnavailable, match='reference_expired'):
+        store.read(ref, relaunched)
+    with pytest.raises(history.HistoryUnavailable, match='history_changed'):
+        page(relaunched, after=first['after'])
+
+
 def test_old_dashboard_keeps_codex_only(tmp_path):
     for program in ['claude-code','dsh','hermes']:
         with pytest.raises(history.HistoryUnavailable,match='dashboard_upgrade_required'):

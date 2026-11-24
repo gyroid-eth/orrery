@@ -4,7 +4,7 @@
   const MESSAGES={
     claude_next_phase:'Claude history is unavailable through this protected fresh projection.',
     provider_unavailable:'This provider has no supported conversation reader.',
-    dashboard_upgrade_required:'This dashboard supports Codex history only. Claude, dsh and Hermes need telemetry API 35 or later.',
+    dashboard_upgrade_required:'Update ORRERY Telemetry to read this agent\'s history.',
     history_stale:'Previous conversation · this record predates the current launch. Its contents are hidden.',
     dsh_decoder_unavailable:'dsh is unsupported on this cockpit: install the pinned zstandard dependency.',
     history_format_unsupported:'This native history format is not supported.',
@@ -45,6 +45,13 @@
     if(!['history_unconfirmed','history_stale'].includes(payload.error))return own(MESSAGES,payload.error)||'Reader could not be loaded.';
     return own(REASONS,payload.reason_code)||(payload.error==='history_stale'?REASONS.receipt_predates_session:
       'Reader has no verified recording for this launch; retry after startup or use a newly launched child.');
+  }
+  function bindingIdentity(current={}){
+    const nativeClaude=['claude','claude-code'].includes(current.program)&&current.history_binding==='bound'&&
+      current.history_session_id&&current.transcript_path;
+    return JSON.stringify(['name','program','provider','history_binding','transcript_path','native_session_id',
+      'history_session_id','created','mail_instance_id','mail_agent_id','terminalPaneId']
+      .map(key=>current[key]??null).concat(nativeClaude?null:(current.history_receipt_ts??null)));
   }
   class Source {
     constructor(fetcher=root.fetch.bind(root)){this.fetcher=fetcher;}
@@ -89,6 +96,6 @@
     pathPreview(path,options){return this.pathRequest('/telemetry/conversation/path-image',{path},options);}
     revealPath(path,options){return this.pathRequest('/telemetry/reveal-path',{path,literal:true},options);}
   }
-  root.OrreryConversationSource=Object.freeze({Source,MESSAGES,REASONS,bindingMessage});
-  if(typeof module!=='undefined')module.exports={Source,MESSAGES,REASONS,bindingMessage};
+  root.OrreryConversationSource=Object.freeze({Source,MESSAGES,REASONS,bindingMessage,bindingIdentity});
+  if(typeof module!=='undefined')module.exports={Source,MESSAGES,REASONS,bindingMessage,bindingIdentity};
 })(typeof window==='undefined'?globalThis:window);

@@ -50,9 +50,9 @@ from usage_probe import (
     UsageCache,
     provider_from_quota_payload,
 )
-from conversation_history import (HistoryUnavailable, UnchangedPolls, bound_agent, bound_signature, open_reader)
+from conversation_history import (HistoryUnavailable, UnchangedPolls, bound_agent, bound_signature, conversation_binding, open_reader)
 from conversation_mail import received as recorded_mail
-from conversation_preview import ReferenceStore, PreviewUnavailable, clicked_path, binding as conversation_binding
+from conversation_preview import ReferenceStore, PreviewUnavailable, clicked_path
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8791
@@ -2088,11 +2088,10 @@ async def conversation_bound_row(request: web.Request, name: str, not_before: fl
             except (ClientError,asyncio.TimeoutError,ValueError):found=_BINDING_ROUTE_UNAVAILABLE
             stats=conversation_stats(request.app)
             if found is not _BINDING_ROUTE_UNAVAILABLE:
-                # The route itself exists only from API 36: its answer is the
-                # confirmation, whatever the cached generation says.
+                # Keep the negotiated generation for newer provider contracts.
                 stats['binding_route']+=1
                 return bound_agent({'agents':[found] if found else []},name,
-                                   api_generation=DASHBOARD_BINDING_ROUTE_API)
+                                   api_generation=api)
             stats['binding_route_fallback']+=1
     cached=shared.get('version') if shared is not None else None
     version=None
@@ -2335,8 +2334,8 @@ async def conversation_full_read(request, name, query, cursor, limit, polls, sta
         await asyncio.to_thread(manager.__exit__,None,None,None)
     result.setdefault('mode','cursor')
     if polls is not None:
-        polls.remember_row(name,row,inode,checked)
-        polls.remember(name,row,result,signature,checked,digest,provider=provider,fingerprint=fingerprint)
+        polls.remember_row(name,current,inode,checked)
+        polls.remember(name,current,result,signature,checked,digest,provider=provider,fingerprint=fingerprint)
     for index,event in enumerate(result['events']):
         event=recorded_mail(event);result['events'][index]=event
     empty=(cursor is not None and query.get('before') is None and not result['events']

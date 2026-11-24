@@ -4,7 +4,8 @@
 (function(root){
   'use strict';
   const KEY='oc-term-conversation-enabled';
-  const READER_PROGRAMS=new Set(['codex','codex-cli','claude','claude-code','dsh','hermes']);
+  const AGY_PROGRAMS=new Set(['agy','antigravity','antigravity-cli','antigravity-agent']);
+  const READER_PROGRAMS=new Set(['codex','codex-cli','claude','claude-code','dsh','hermes',...AGY_PROGRAMS]);
   const READER_UNAVAILABLE=new Set(['provider_unavailable','claude_next_phase','dashboard_upgrade_required',
     'dsh_decoder_unavailable','history_format_unsupported']);
   const MAX_EVENTS=800,MAX_BYTES=2*1024*1024;
@@ -149,7 +150,15 @@
     const scroll=el('.conversation-scroll'),eventsEl=el('.conversation-events');
     const motion=root.OrreryConversationMotion?.mount({
       visible:()=>opened&&presented&&!document.hidden,
-      follow:()=>{if(opened&&presented)scroll.scrollTop=scroll.scrollHeight;},
+      follow:({settled=false}={})=>{
+        if(!opened||!presented||motion?.followingReply())return;
+        scroll.scrollTop=scroll.scrollHeight;
+        if(settled){position();remember(true);}
+      },
+      followReply:word=>{
+        const cue=word.getBoundingClientRect(),viewport=scroll.getBoundingClientRect();
+        if(cue.bottom>viewport.bottom-22)scroll.scrollTop+=cue.bottom-viewport.bottom+22;
+      },
     });
     const replyButton=document.createElement('button');replyButton.type='button';replyButton.className='cockpit-control conversation-selection-reply';
     replyButton.textContent='Reply with reference';replyButton.hidden=true;panel.append(replyButton);
@@ -274,6 +283,9 @@
     workingSpeaker.className='conversation-working-speaker';workingByline.append(workingSpeaker);activityEl.prepend(workingByline);
     const process=el('.conversation-process'),processTime=el('.conversation-process-time');
     function paintActivity(current=getContext()||{},maintainPosition=true){
+      if(opened&&events.size&&stepView?.needsSync(current)){
+        if(maintainPosition)changeTail(()=>regroupTools());else regroupTools();
+      }
       const stepActivity=stepView?.activity(current,opened&&presented&&!document.hidden);
       const compacting=opened&&presented&&current.running===true&&current.reader_phase==='compacting';
       if(process.hidden===compacting)process.hidden=!compacting;
@@ -313,6 +325,7 @@
       const newSample=sample&&liveSample?.id!==sample.id;
       if(!sample||sample.id===consumedLiveId||newSample&&[...events.values()].slice(-16).some(event=>liveMatches(event,sample))){
         if(liveRow)changeTail(()=>{
+          revealedLiveText=motion?.visiblePrefix()??seenLiveText;
           motion?.stopReply();liveRow.remove();liveRow=null;liveSample=null;
           empty.hidden=events.size>0||submissions.length>0;paintActivity(current,false);
         });
@@ -355,8 +368,13 @@
       const text=content.querySelector(':scope > .conversation-text');
       if(text)showBroadcast(content,count,text);
     }
+    function submissionPreview(text){
+      const reference=root.OrreryConversationReply?.parse(text),body=reference?.reply??text;
+      return {reference,preview:body.slice(0,1000)+(body.length>1000?'…':'')};
+    }
     function renderSubmissions({preserve=true}={}){
       clearTimeout(submissionTimer);submissionTimer=0;
+      const flights=[];
       const paint=()=>{
         const existing=new Map([...pendingEl.children].map(row=>[row.dataset.receiptKey,row]));
         const items=[...submissions,...sending.values()].sort((a,b)=>a.at-b.at);let next=Infinity,previous=null;
@@ -371,6 +389,12 @@
           if(fresh){
             row=document.createElement('article');row.className='conversation-submission';row.dataset.receiptKey=key;
             humanBubble(row);
+            let wash=row;
+            if(item.reference){
+              row.classList.add('conversation-has-reference');
+              wash=document.createElement('div');wash.className='conversation-reference-body';
+              row.append(referenceCard(item.reference),wash);
+            }
             const text=document.createElement('p');text.className='conversation-text conversation-submission-text';
             if(root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.renderText(item.preview,text);else text.textContent=item.preview;
             text.addEventListener('focusin',event=>{
@@ -383,7 +407,7 @@
             const label=document.createElement('div');label.className='conversation-byline';
             label.innerHTML='<span class="conversation-submission-mark" aria-hidden="true"></span><span class="conversation-submission-state"></span><span class="conversation-submission-recipient"></span>';
             const note=document.createElement('div');note.className='conversation-submission-note';
-            row.append(text,more,label,note);
+            wash.append(text,more,label,note);
           }
           const elapsed=Date.now()-item.at,state=item.sending?'sending':item.unmatched?'unmatched':elapsed>=60000?'late':'awaiting';
           const status=state==='sending'?'Sending…':state==='unmatched'?'Record not matched':state==='late'?'Not recorded yet':'Awaiting record';
@@ -404,21 +428,24 @@
           note.title=item.unmatched?'A user record arrived after this send, but it cannot be matched to this text.':'';
           const after=previous?previous.nextElementSibling:pendingEl.firstElementChild;
           if(row!==after){keepReaderFocus(row);pendingEl.insertBefore(row,after);}
-          if(fresh)motion?.prompt(row);
+          if(fresh&&item.origin){flights.push([row,item.origin]);item.origin=null;}
           previous=row;
           if(!item.sending&&!item.unmatched&&elapsed<60000)next=Math.min(next,60000-elapsed);
         }
+        updateReferenceCards();
         paintSubmissionExpansion();
         if(Number.isFinite(next))submissionTimer=setTimeout(()=>renderSubmissions(),Math.max(1,next));
       };
       if(preserve)changeTail(paint);else paint();
+      for(const [row,origin] of flights)motion?.flyPrompt(row,origin);
     }
     function clearSubmissions(){
       submissions=[];sending.clear();observedIds.clear();matchedSubmissions.clear();broadcasted.clear();clearTimeout(submissionTimer);clearTimeout(flashTimer);
       flashTimer=0;screen.classList.remove('conversation-just-submitted');renderSubmissions();
     }
     function reconcileSubmissions(incoming,direction,sequence){
-      if(!submissions.length)return;
+      const landings=[];
+      if(!submissions.length)return landings;
       for(const event of incoming){
         if(event.role!=='user'||event.kind!=='text'||matchedSubmissions.has(event.id))continue;
         const ts=Date.parse(event.ts),text=normalizePrompt(event.text),imageText=imagePromptText(event);
@@ -450,10 +477,13 @@
         }
         if(candidates.length){
           const receipt=candidates[0];
+          const record=rawRows().find(row=>row.dataset.eventId===event.id);
+          const pending=[...pendingEl.children].find(row=>row.dataset.submissionId===receipt.id);
+          const flight=pending&&motion?.promptPosition(pending);
+          if(record&&flight)landings.push([record,flight]);
           if(receipt.broadcastCount>1){
             broadcasted.set(event.id,receipt.broadcastCount);
-            const row=rawRows().find(row=>row.dataset.eventId===event.id);
-            showRecordedBroadcast(row,receipt.broadcastCount);
+            showRecordedBroadcast(record,receipt.broadcastCount);
           }
           submissions.splice(submissions.indexOf(receipt),1);matchedSubmissions.add(event.id);
         }else if(eligible.length){
@@ -463,6 +493,7 @@
         }
       }
       renderSubmissions({preserve:false});
+      return landings;
     }
     function viewport(){
       if(!opened||!enabled||!presented)return;
@@ -497,18 +528,17 @@
     let layoutTimer=0,layoutFrame=0,layoutPending=false,restoring=false,userScrolling=false,layoutStarted=0;
     panel.dataset.conversationLayout="idle";
     let contextKey='',boundContext={},paused=false,retainedBytes=0,providerLabel='Codex',followPending=false,jumpTimer=0;
-    let liveRow=null,liveSample=null,consumedLiveId=null,seenLiveText='',lastReplyPoll=null;
+    let liveRow=null,liveSample=null,consumedLiveId=null,seenLiveText='',revealedLiveText='',lastReplyPoll=null;
     const assistantText=event=>event.role==='assistant'&&event.kind==='text'&&event.variant!=='update';
     const liveMatches=(event,sample)=>assistantText(event)&&
       event.text.replace(/\s+/gu,' ').trim().startsWith(sample.text.replace(/\s+/gu,' ').trim());
     const stepView=root.OrreryConversationSteps?.mount({host:eventsEl,
       mutate:fn=>changeTail(fn,false),onFocusLost:()=>scroll.focus({preventScroll:true})});
     const byteSize=event=>new TextEncoder().encode(JSON.stringify(event)).byteLength;
-    const fingerprint=current=>JSON.stringify(['name','program','provider','history_binding','transcript_path',
-      'native_session_id','history_session_id','history_receipt_ts','created','mail_instance_id','mail_agent_id','terminalPaneId'].map(key=>current[key]??null));
+    const fingerprint=root.OrreryConversationSource.bindingIdentity;
     function nearBottom(){return scroll.scrollHeight-scroll.clientHeight-scroll.scrollTop<45;}
     function position(){
-      const atBottom=nearBottom();
+      const atBottom=nearBottom()||motion?.followingReply();
       if(atBottom)newCount=0;
       el('.conversation-bottom').hidden=!events.size||atBottom&&!paused;
       latest.title=paused?'Latest · resume':newCount?'Latest · '+newCount+' new messages':'Latest';
@@ -567,7 +597,7 @@
     function modeMessage(text){if(!text&&document.activeElement===modeInfo&&opened)scroll.focus({preventScroll:true});modeInfo.title=text;modeInfo.setAttribute('aria-label',text);paintStatus();}
     function resetReplyMotion(){lastReplyPoll=null;motion?.stop();}
     function stop(keepFollow=false){resetReplyMotion();clearReferenceFlash();referenceJump=null;clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;sessionReloadAttempted=false;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=holding=false;cancelEarlier();if(!keepFollow)followPending=false;}
-    function clear({keepSubmissions=false}={}){hideSelection();closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();stepView?.reset();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();preview?.resetInline();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();motion?.stopReply();liveRow=null;liveSample=null;seenLiveText='';before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
+    function clear({keepSubmissions=false}={}){hideSelection();closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();stepView?.reset();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();preview?.resetInline();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();motion?.stopReply();liveRow=null;liveSample=null;seenLiveText=revealedLiveText='';before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
       if(tableMutating)return;
@@ -641,7 +671,9 @@
         const event=events.get(row.dataset.eventId);
         if(event&&stepRows.has(event.id)){
           finish();row.classList.add('conversation-step-record');
-          row.hidden=!row.querySelector('.conversation-files,.conversation-diff,.conversation-mail');continue;
+          const hidden=!row.querySelector('.conversation-files,.conversation-diff,.conversation-mail');
+          if(hidden)keepReaderFocus(row);
+          row.hidden=hidden;continue;
         }
         row.classList.remove('conversation-step-record');
         if(event&&['tool','tool_result'].includes(event.kind)&&!event.mail?.length)run.push(row);
@@ -673,7 +705,6 @@
       }
       if(focused&&(document.activeElement===document.body||document.activeElement===scroll))(groups.includes(focused)?focused.button:scroll).focus({preventScroll:true});
       preview?.syncInline(rawRows(),events);
-      paintActivity();
     }
     function anchor(){
       const top=scroll.getBoundingClientRect().top;
@@ -725,6 +756,7 @@
     }
     function restoreReading(){
       if(!opened||!presented||!lastPosition||!scroll.getClientRects().length)return;
+      if(motion?.followingReply()&&motion.keepReplyInView())return;
       if(lastPosition.bottom){scroll.scrollTop=scroll.scrollHeight;return;}
       const article=visibleRows().find(child=>rowKey(child)===lastPosition.id);
       if(!article)return;
@@ -822,8 +854,9 @@
       return hasOlder&&typeof before==='string'&&before!==ref.failedCursor&&events.size<MAX_EVENTS&&retainedBytes<MAX_BYTES;
     }
     function updateReferenceCards(){
-      for(const button of eventsEl.querySelectorAll('.conversation-reference-link')){
+      for(const button of panel.querySelectorAll('.conversation-reference-link')){
         const ref=referenceCards.get(button);
+        if(!ref)continue;
         const available=Boolean(referenceRow(ref.id)||canReadReference(ref));
         button.setAttribute('aria-disabled',String(!available));
         button.title=ref.label+'\n'+ref.quote+(available?'':'\n\n'+missingReference);
@@ -1095,12 +1128,12 @@
         if(direction!=='older'&&presented&&!document.hidden&&(!page.has_newer||replySince!==null))lastReplyPoll=started;
         // The server saw no change since this cursor: keep every row as is.
         if(page.unchanged===true&&direction==='newer'&&page.after===after){message('');return;}
-        const atBottom=nearBottom(),oldHeight=scroll.scrollHeight,oldTop=scroll.scrollTop,saved=anchor();
+        const atBottom=nearBottom()||motion?.followingReply(),oldHeight=scroll.scrollHeight,oldTop=scroll.scrollTop,saved=anchor();
         const incoming=page.events.filter(event=>event&&typeof event.id==='string'&&typeof event.text==='string');
         for(const event of incoming)observedIds.add(event.id);
         const previousMode=mode;
         mode=page.mode||'cursor';
-        providerLabel=({codex:'Codex',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[page.provider]||providerLabel;
+        providerLabel=({codex:'Codex',claude:'Claude',dsh:'dsh',hermes:'Hermes',antigravity:'Antigravity'})[page.provider]||providerLabel;
         const fresh=['fresh_tail','snapshot'].includes(mode);
         const additions=incoming.filter(event=>!events.has(event.id));
         if(!fresh&&direction==='newer'&&!atBottom&&
@@ -1113,16 +1146,17 @@
         const snapshot=fresh?incoming.slice(-200):null,previousRows=fresh?[...events.values()]:null;
         const unchangedSnapshot=fresh&&snapshot.length===previousRows.length&&snapshot.every((event,index)=>
           event.id===previousRows[index].id&&JSON.stringify(event)===JSON.stringify(previousRows[index]));
-        let replacement=null,reused,projectedMatches=[];
+        let replacement=null,reused,visiblePrefix='';
         const previewed=liveSample||(seenLiveText?{text:seenLiveText}:null);
         if(previewed&&direction!=='older'){
           const recorded=(fresh?snapshot:additions).filter(event=>assistantText(event)&&
             (!events.has(event.id)||fresh&&events.get(event.id).text!==event.text));
           if(recorded.length){
-            projectedMatches=recorded.filter(event=>liveMatches(event,previewed));
-            replacement=projectedMatches.length===1?projectedMatches[0]:null;
+            const matches=recorded.filter(event=>liveMatches(event,previewed));
+            replacement=matches.length===1?matches[0]:null;
             if(liveSample)consumedLiveId=liveSample.id;
-            motion?.stopReply();seenLiveText='';
+            visiblePrefix=liveRow?(motion?.visiblePrefix()??previewed.text):revealedLiveText;
+            motion?.stopReply();seenLiveText=revealedLiveText='';
             if(replacement&&!renderEvent&&liveRow)reused=liveRow;else liveRow?.remove();
             if(replacement){
               const id=JSON.stringify(['event',replacement.id]);
@@ -1132,18 +1166,21 @@
             liveRow=null;liveSample=null;
           }
         }
-        const arrivingPrompts=[],arrivingReplies=[];
+        const arrivingPrompts=[],arrivingReplies=[],arrivingMail=[];
         const tail=fresh?snapshot.findLastIndex(event=>events.has(event.id)):-1;
         const selected=root.getSelection();
         const followReplies=replySince!==null&&direction==='newer'&&atBottom&&mode===previousMode&&
           (!fresh||tail>=0||!events.size)&&!(selected&&!selected.isCollapsed&&eventsEl.contains(selected.anchorNode));
-        const replies=followReplies?new Set((fresh?snapshot.slice(tail+1):additions)
-          .filter(event=>assistantText(event)&&Date.parse(event.ts)>=replySince)):null;
+        const arrivals=followReplies?new Set((fresh?snapshot.slice(tail+1):additions)
+          .filter(event=>Date.parse(event.ts)>=replySince)):null;
         const arrivingIds=direction==='newer'&&atBottom?new Set(additions.map(event=>event.id)):null;
         const drawRecorded=event=>{
           const article=draw(event,event===replacement?reused:undefined);
           if(arrivingIds?.has(event.id)&&article.classList.contains('conversation-human'))arrivingPrompts.push(article);
-          if(replies?.has(event))arrivingReplies.push({article,prefix:projectedMatches.includes(event)?previewed.text:''});
+          if(arrivals?.has(event)){
+            if(assistantText(event))arrivingReplies.push({article,prefix:event===replacement?visiblePrefix:''});
+            if(event.mail?.length)arrivingMail.push(article);
+          }
           return article;
         };
         if(!unchangedSnapshot){saveTables();tableMutating=true;}
@@ -1186,16 +1223,21 @@
         if(direction!=='older')after=page.after;
         const trimmed=trim(direction!=='older');earlier.hidden=!hasOlder;
         if(!unchangedSnapshot)regroupTools(focusedGroup);
+        paintActivity(getContext()||{},false);
         updateReferenceCards();
         for(const key of tablePositions.keys())if(!events.has(JSON.parse(key)[0]))tablePositions.delete(key);
         if(!unchangedSnapshot)restoreTables();
-        reconcileSubmissions(incoming,direction,sequence);
+        const landings=reconcileSubmissions(incoming,direction,sequence);
         for(const article of arrivingPrompts)if(!matchedSubmissions.has(article.dataset.eventId))motion?.prompt(article);
         for(const {article,prefix} of arrivingReplies)motion?.revealReply(article.querySelector('.conversation-text'),prefix);
+        for(const article of arrivingMail)motion?.revealMail(article);
         empty.hidden=events.size>0||submissions.length>0||Boolean(liveRow);empty.textContent='No conversation messages in this portion yet.';
-        if(direction==='initial'||direction==='newer'&&atBottom)scroll.scrollTop=scroll.scrollHeight;
+        if(direction==='initial'||direction==='newer'&&atBottom){
+          if(!motion?.keepReplyInView())scroll.scrollTop=scroll.scrollHeight;
+        }
         else if(direction==='older')restoreAnchor(saved,Math.max(0,oldTop+scroll.scrollHeight-oldHeight));
         else{restoreAnchor(saved,oldTop);newCount+=added;}
+        for(const [row,flight] of landings)motion?.flyPrompt(row,flight,flight.remaining);
         modeMessage(mode==='snapshot'?page.notice||'Recent provider snapshot.':
           fresh?(page.limited||trimmed?'Fresh · limited recent snapshot; earlier history and tools need telemetry support.':'Fresh · recent snapshot (up to 200 messages).'):
           page.notice||'');
@@ -1262,7 +1304,8 @@
       paintActivity(current);
       panel.setAttribute('aria-label',agent?'Reader for '+agent:'Reader');message('');
       if(!agent){empty.textContent='Select an agent pane to read its conversation.';message('No agent selected');endOp(op);return;}
-      providerLabel=({'claude-code':'Claude',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[current.program]||'Codex';
+      providerLabel=AGY_PROGRAMS.has(current.program)?'Antigravity':
+        ({'claude-code':'Claude',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[current.program]||'Codex';
       load('initial',op);
     }
     function retryRead(){
@@ -1328,6 +1371,7 @@
     }
     listen(latest,'click',()=>{
       if(!resumePaused()){
+        motion?.finishRecorded();
         scroll.scrollTop=scroll.scrollHeight;newCount=0;position();remember(true);
         if(!busy)plan();
       }
@@ -1342,7 +1386,9 @@
     listen(document,'oc:prompt-sending',event=>{
       const detail=event.detail;
       if(!opened||!enabled||detail?.name!==agent||typeof detail.attemptId!=='string'||typeof detail.text!=='string')return;
-      sending.set(detail.attemptId,{id:detail.attemptId,attemptId:detail.attemptId,name:agent,sending:true,known:new Set(observedIds),nextRead:readSequence+1,at:Number.isFinite(detail.startedAt)?detail.startedAt:Date.now(),preview:detail.text.slice(0,1000)+(detail.text.length>1000?'…':'')});
+      sending.set(detail.attemptId,{id:detail.attemptId,attemptId:detail.attemptId,name:agent,sending:true,
+        known:new Set(observedIds),nextRead:readSequence+1,at:Number.isFinite(detail.startedAt)?detail.startedAt:Date.now(),
+        origin:detail.origin,...submissionPreview(detail.text)});
       renderSubmissions();empty.hidden=true;
     });
     listen(document,'oc:prompt-send-cancelled',event=>{if(sending.delete(event.detail?.attemptId))renderSubmissions();});
@@ -1352,12 +1398,15 @@
       if(!opened||!enabled||detail?.name!==agent||attempt&&!pending){if(pending)renderSubmissions();return;}
       if(typeof detail.text==='string'&&typeof detail.id==='string'&&!submissions.some(item=>item.id===detail.id)){
         const text=normalizePrompt(detail.text);
+        const preview=pending?{reference:pending.reference,preview:pending.preview}:submissionPreview(detail.text);
         submissions.push({id:detail.id,attemptId:pending?attempt:null,name:agent,at:Number.isFinite(detail.submittedAt)?detail.submittedAt:Date.now(),
-          text:text.slice(0,65536),length:text.length,matchable:text.length<=65536,preview:detail.text.slice(0,1000)+(detail.text.length>1000?'…':''),
+          text:text.slice(0,65536),length:text.length,matchable:text.length<=65536,...preview,
           known:detail.broadcastCount>1&&pending?pending.known:new Set(observedIds),uncertain:new Set(),
           nextRead:detail.broadcastCount>1&&pending?pending.nextRead:readSequence+1,broadcastCount:detail.broadcastCount});
         if(detail.broadcastCount>1)reconcileSubmissions([...events.values()],'newer',readSequence);
         renderSubmissions();empty.hidden=true;
+        const speakers=[...eventsEl.querySelectorAll('.conversation-event[data-role="assistant"][data-kind="text"]:not([hidden]) .conversation-speaker')];
+        motion?.acknowledge(speakers.at(-1));
         screen.classList.add('conversation-just-submitted');clearTimeout(flashTimer);
         flashTimer=setTimeout(()=>{flashTimer=0;screen.classList.remove('conversation-just-submitted');},1800);
       }
