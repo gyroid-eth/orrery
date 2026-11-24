@@ -11,6 +11,52 @@ from test_conversation_inline_images import prepare,message
 from test_conversation_reply import PASSAGE,stage
 
 
+RULE = '─' * 64
+CLAUDE_COMPACT = [
+    '❯ /compact Keep the labels.',
+    '✶ Compacting conversation… (12s)',
+    '  ⎿ \u00a0Tip: Use Plan Mode to prepare for a complex request before',
+    '     making changes. Press shift+tab twice to enable.',
+    '                                               ● high · /effort',
+    RULE, '❯', RULE,
+    '  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt',
+]
+DSH_COMPACT = [
+    '● Summarizing earlier turns… · reading context… · 12s · Esc cancels',
+    '╭'+RULE+'╮', '  ⌸ ❯                                                         ⛶',
+    '╰'+RULE+'╯', 'ctx 19% (24k/128k)',
+]
+HERMES_COMPACT = ['─ ☤ compacting…      · 12s │ fixture-model │ 19%', ' ❯']
+
+
+@pytest.mark.parametrize('program,provider,native,done', [
+    ('claude', 'anthropic', CLAUDE_COMPACT, [RULE, '❯', RULE, '  ⏵⏵ auto mode on (shift+tab to cycle)']),
+    ('claude-code', 'anthropic', CLAUDE_COMPACT, [RULE, '❯', RULE, '  ⏵⏵ auto mode on (shift+tab to cycle)']),
+    ('dsh', 'deepseek', DSH_COMPACT, DSH_COMPACT[1:]),
+    ('dsh', 'local', DSH_COMPACT, DSH_COMPACT[1:]),
+    ('hermes', 'local', HERMES_COMPACT, ['─ ready │ fixture-model │ 19%', ' ❯']),
+])
+def test_native_compaction_uses_the_same_reader_status(cockpit, program, provider, native, done):
+    js,wait,_ = prepare(cockpit,[message('answer','This stays visible during compaction.')])
+    js(f"""currentAgents[0]={{...currentAgents[0],program:{json.dumps(program)},provider:{json.dumps(provider)},
+      running:true,act_state:'wait'}};
+      document.dispatchEvent(new Event('oc:agents'))""")
+    wait("Boolean(document.querySelector('[data-event-id=answer]'))")
+
+    def terminal(rows):
+        frame = '\x1b[H\x1b[2J' + '\r\n'.join(rows)
+        js("writePaneOutput(panes.get('%901'),{snapshot:true,data:"+json.dumps(frame)+"})")
+
+    terminal(native)
+    wait("!document.querySelector('.conversation-process').hidden")
+    assert js("document.querySelector('.conversation-process-label').textContent") == 'Compacting context…'
+    assert js("document.querySelector('.conversation-process-time').textContent") == '12s'
+    assert js("document.querySelector('.conversation-activity').hidden")
+    terminal(done)
+    wait("document.querySelector('.conversation-process').hidden")
+    assert js("packets.filter(p=>p.type==='input').length") == 0
+
+
 @pytest.mark.parametrize('cockpit,layout',[(False,'desktop'),(True,'phone')],indirect=['cockpit'])
 def test_compaction_is_visible_above_history_and_clears_on_completion(cockpit,layout):
     events=[message('quote',PASSAGE)]+[message(str(i),'Earlier conversation paragraph.\n\n'+('Keep reading while the agent makes room to continue. '*6)) for i in range(30)]

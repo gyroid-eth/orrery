@@ -3,9 +3,15 @@
   'use strict';
   const codexPrompt=/^\s*›(?:\s|$)/u;
   const codexFooter=/^(?:gpt-\S+\s+(?:default|low|medium|high|xhigh|max|ultra)\b|\? for shortcuts\b|(?:Context\s+)?\d{1,3}%?\s+context left\b|Context\s+\d{1,3}%\s+(?:left|used)\b)/i;
+  const duration=/^(?:\d+h(?: \d+m)?(?: \d+s)?|\d+m(?: \d+s)?|\d+s)$/;
+  const phase=elapsed=>({reader_phase:'compacting',reader_phase_elapsed:elapsed});
   function compaction(text,program){
-    if(program!=='codex'||typeof text!=='string'||text.length>65536)return null;
+    if(typeof text!=='string'||text.length>65536)return null;
     const rows=text.split('\n').slice(-40).map(row=>row.trimEnd());
+    if(program==='claude'||program==='claude-code')return claudeCompaction(rows);
+    if(program==='dsh')return dshCompaction(rows);
+    if(program==='hermes')return hermesCompaction(rows);
+    if(program!=='codex')return null;
     let prompt=-1;
     for(let i=rows.length-1;i>=0;i--)if(codexPrompt.test(rows[i])){prompt=i;break;}
     if(prompt<0)return null;
@@ -17,7 +23,7 @@
     // Only the adjacent current control block counts; a later reply clears it.
     for(let width=1;width<=Math.min(3,block.length);width++){
       const match=/^[•▌●]\s+Compacting context\s*\(((?:\d{1,4}h\s*)?(?:\d{1,3}m\s*)?\d{1,2}s)\s*[•·]\s*esc to interrupt\)$/u.exec(block.slice(-width).join(' '));
-      if(match)return {reader_phase:'compacting',reader_phase_elapsed:match[1].replace(/\s+/g,' ')};
+      if(match)return phase(match[1].replace(/\s+/g,' '));
     }
     return null;
   }
@@ -25,6 +31,46 @@
   const markers={claude:claudeMarker,'claude-code':claudeMarker,codex:/^•(?: |$)/u,dsh:/^ {0,3}[●⏺](?: |$)/u};
   const divider=/^\s*[─━═]{8,}\s*$/u;
   const dshPromptTop=/^\s*╭─{8,}.*╮$/u,dshPromptBottom=/^\s*╰─{8,}╯$/u;
+  function claudeCompaction(rows){
+    // Claude Code 2.1.331: the spinner is above optional tip/effort chrome.
+    // The bordered input below it owns the current interrupt hint.
+    const input=rows.findLastIndex((row,index)=>/^\s*❯(?:\s|$)/u.test(row)&&divider.test(rows[index-1]));
+    if(input<0)return null;
+    const lower=rows.findIndex((row,index)=>index>input&&divider.test(row));
+    if(lower<0||!/(?:^|·)\s*esc to interrupt\s*(?:·|$)/u.test(rows.slice(lower+1).join(' ').trim()))return null;
+    const block=rows.slice(0,input-1).filter(row=>row.trim()&&!/^\s+● \S+ · \/effort$/u.test(row));
+    const tip=block.findLastIndex(row=>/^\s+⎿\s+Tip:/u.test(row));
+    if(tip>=0&&block.slice(tip+1).every(row=>/^ {4,}\S/u.test(row)))block.length=tip;
+    const match=/^[✢✳✶✻✽·]\s+Compacting conversation\u2026 \(([^()]+)\)$/u.exec(block.at(-1)||'');
+    return match&&duration.test(match[1])?phase(match[1]):null;
+  }
+  function dshCompaction(rows){
+    // dsh-tui 0.16.1 CompactionStatusRow and Chat's busy compaction badge.
+    const block=rows.map(row=>row.trim()).filter(Boolean);
+    const input=block.findLastIndex((row,index)=>dshPromptTop.test(row)&&
+      /^(?:⌸\s+)?❯(?:\s|$)/u.test(block[index+1]||'')&&dshPromptBottom.test(block[index+2]||''));
+    if(input<1||block.length-input>9)return null;
+    const status=block[input-1];
+    const manual=/^\S{1,10}\s+(?:Summarizing earlier turns\u2026|\u6b63\u5728\u538b\u7f29\u4f1a\u8bdd\u2026) · (?:(?:reading context\u2026|\u8bfb\u53d6\u4e0a\u4e0b\u6587\u2026|↓ [\d.]+[kmb]? tokens) · )?([^·]+?)(?: · (?:Esc cancels|Esc \u53d6\u6d88))?$/u.exec(status);
+    const busy=/^\S{1,10}\s+.+\u2026\s*\((?:compacting|\u538b\u7f29\u4e2d) · ([\dhms ]+)(?: · [^()]*)?\)$/u.exec(status)||
+      /^\S{1,10}\s+.+(?:total |\u603b)([\dhms ]+).* · (?:compacting|\u538b\u7f29\u4e2d)$/u.exec(status);
+    const elapsed=(manual||busy)?.[1]?.trim().replace(/([hm])(?=\d)/gu,'$1 ');
+    return elapsed&&duration.test(elapsed)?phase(elapsed):null;
+  }
+  function hermesCompaction(rows){
+    // The managed Ink TUI renders the current FaceTicker on the status
+    // rule adjacent to the composer, with the compaction verb frozen.
+    const block=rows.map(row=>row.trim()).filter(Boolean);
+    const input=block.findLastIndex(row=>/^(?:\S+\s+)?❯(?:\s|$)/u.test(row));
+    if(input<0)return null;
+    for(const status of [block[input-1],block[input+1]]){
+      const match=/^─\s+.+?\s+compacting\u2026\s*·\s*([^│]+?)\s*│\s*\S/u.exec(status||'');
+      if(match&&duration.test(match[1]))return phase(match[1]);
+      // An idle /compress has a status notice in place of a running FaceTicker.
+      if(/^─\s+(?:⠋ compressing \d+ messages \(~[\d,]+ tok\)|🗜️ Compacting context — (?:still )?summarizing earlier conversation).*\s│\s+\S/u.test(status||''))return phase('');
+    }
+    return null;
+  }
   const codexStatus=/^[•▌●]\s+.*\(.*\besc to interrupt\)$/u;
   const codexTool=/^(?:Ran|Running|Called|Calling|Explored|Exploring|Searched|Searching|Applied|Edited|Updated Plan|Waiting for)\b/u;
   const claudeStatus=/^(?:[✢✳✶✻✽·] [^…]+…(?: \(.*)?|\s+● \S+ · \/effort)$/u;
