@@ -71,6 +71,7 @@ client operations:
 - attach / detach
 - refresh
 - input
+- submit-prompt
 - resize
 - release
 - close
@@ -84,6 +85,8 @@ server events:
 - operation result / error
 
 An unknown session returns an error. Each browser client is limited to 12 sessions for attach / split.
+
+`submit-prompt` checks the attached session, pane, and incarnation. It locks the pane using the same lock as the Mail watcher and sends Enter after the pasted text appears in the previously empty editor. An `input-ack` of `accepted` confirms that the editor cleared after Enter. Reader separately reconciles the receipt with the provider’s recording.
 
 ## tmux safety
 

@@ -39,7 +39,12 @@ def test_queued_turn_keeps_receipt_until_exact_new_user_record(cockpit,provider)
     assert js("reader.querySelector('.conversation-submission').textContent.includes('ReviewFixture')")
     assert not js("reader.querySelector('.conversation-submission img')")
     assert js("reader.parentElement.classList.contains('conversation-just-submitted')")
-    assert js("reader.querySelector('.conversation-submission').getBoundingClientRect().bottom<=reader.querySelector('.conversation-scroll').getBoundingClientRect().bottom")
+    # The receipt starts at the composer and moves into the Reader. Check its
+    # final position after that flight has brought it inside the scroll area.
+    wait("""(()=>{const el=reader.querySelector('.conversation-submission');
+        return el&&el.getAnimations().every(animation=>animation.playState==='finished')&&
+          el.getBoundingClientRect().bottom<=reader.querySelector('.conversation-scroll').getBoundingClientRect().bottom;
+      })()""")
     js("clock+=60001;receiptTimers.forEach(f=>f());conversationView.refresh()")
     assert js("reader.querySelector('.conversation-submission').textContent.includes('Not recorded yet')")
     js("clock+=600000;conversationView.refresh()")
@@ -49,7 +54,7 @@ def test_queued_turn_keeps_receipt_until_exact_new_user_record(cockpit,provider)
     assert js("reader.querySelectorAll('.conversation-submission').length")==0
     js('conversationView.refresh()')
     assert js("reader.querySelectorAll('[data-event-id=new]').length")==1
-    assert js("packets.filter(p=>p.type==='input').map(p=>p.paneId)")==['%901','%901']
+    assert js("packets.filter(p=>p.type==='submit-prompt').map(p=>p.paneId)")==['%901']
 
 
 def test_split_receipt_stays_on_sent_pane_when_focus_moves(cockpit):
@@ -59,14 +64,15 @@ def test_split_receipt_stays_on_sent_pane_when_focus_moves(cockpit):
     assert js("document.querySelectorAll('.split-cell[data-session=ReviewFixture] .conversation-submission').length")==1
     assert js("document.querySelectorAll('.split-cell[data-session=OtherFixture] .conversation-submission').length")==0
     assert js('promptTarget.textContent')=='OtherFixture'
-    assert js("packets.filter(p=>p.type==='input').map(p=>p.paneId)")==['%901','%901']
+    assert js("packets.filter(p=>p.type==='submit-prompt').map(p=>p.paneId)")==['%901']
 
 
-@pytest.mark.parametrize('failure',['paste','enter','removed','guard'])
+@pytest.mark.parametrize('failure',['disconnected','refused','removed','guard'])
 def test_failed_or_guarded_send_never_claims_sent(cockpit,failure):
     js,wait,client=prepare(cockpit)
-    if failure=='paste':js("send=()=>false")
-    if failure=='enter':js("send=p=>p.data!=='\\r'")
+    if failure=='disconnected':js("send=()=>false")
+    if failure=='refused':
+        js("send=p=>{queueMicrotask(()=>handle({type:'input-ack',paneId:p.paneId,id:p.inputAck,status:'refused'}));return true}")
     js("promptInput.value="+('"/logout"' if failure=='guard' else 'sentText')+";sendPrompt()"+(";panes.delete('%901')" if failure=='removed' else ''))
     time.sleep(.35)
     assert js('receipts.length')==0

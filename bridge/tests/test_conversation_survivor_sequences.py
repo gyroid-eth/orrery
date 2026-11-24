@@ -12,7 +12,7 @@ OUT=Path(os.environ['ORRERY_SURVIVOR_CAPTURE_DIR']) if os.environ.get('ORRERY_SU
 def prepare(cockpit,count):
     js,wait,client=setup(cockpit,count)
     js(r"""window.sequenceReads=[];window.sequenceSent=false;
-      const oldSend=window.send;window.send=p=>{if(p.type==='input'&&p.data.includes('survivor prompt'))sequenceSent=true;return oldSend(p)};
+      const oldSend=window.send;window.send=p=>{if(p.type==='submit-prompt'&&p.data.includes('survivor prompt'))sequenceSent=true;return oldSend(p)};
       OrreryConversationSource.Source.prototype.reference=async()=>({kind:'text',text:'Synthetic retained preview'});
       OrreryConversationSource.Source.prototype.read=async(name,options)=>{
         sequenceReads.push({name,before:options.before,after:options.after});
@@ -63,10 +63,10 @@ def test_full_mail_past_close_other_send_then_split_and_close_owner(cockpit):
     assert js("savedMail.isConnected&&savedMail.open&&sequencePanels.ReviewFixture.querySelector('.conversation-mail')===savedMail")
     verify_anchor(js,name,saved)
     screenshot(js,client,'sequence-mail-survivor.png')
-    js("packets.length=0;promptInput.value='survivor prompt';promptSend.click()")
+    js("packets.length=0;promptInput.value='survivor prompt';promptInput.dispatchEvent(new Event('input'));promptSend.click()")
     wait("sequencePanels.ReviewFixture.querySelector('[data-event-id=ReviewFixture-response]')!==null")
     assert js("(()=>{const s=sequencePanels.ReviewFixture.querySelector('.conversation-scroll');return s.scrollHeight-s.clientHeight-s.scrollTop<45})()")
-    assert js("packets.filter(p=>p.type==='input').every(p=>p.paneId==='%901')&&packets.filter(p=>p.type==='input').length===2")
+    assert js("packets.filter(p=>p.type==='submit-prompt').every(p=>p.paneId==='%901')&&packets.filter(p=>p.type==='submit-prompt').length===1")
     js("currentAgents.push({name:'ThirdFixture',program:'codex',history_binding:'bound'});createPane('ThirdFixture',{paneId:'%903',windowId:'@903',width:80,height:20});replaceSplitSessions(['ReviewFixture','ThirdFixture']);splitVisible=true;focusSplitSession('ThirdFixture')")
     open_reader(js,wait,'ThirdFixture')
     assert js('sequencePanels.ReviewFixture.isConnected&&!sequencePanels.ReviewFixture.hidden&&savedMail.open')

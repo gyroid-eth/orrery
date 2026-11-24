@@ -4175,9 +4175,9 @@
       }
     }
   },
-  "inventory_digest": "3a273dcc26471aeff3f47d4c8cf0333ef43f1cd3b3664b955b3dd435cd076035",
+  "inventory_digest": "0605f81a7ba45281809fb0d1a25b028fc1720ac01a6a25942d12d075d831e151",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "5f92169c22f1d8104d64db91abd0ec89fcf77f82529aafd8e5fae5af6bb07753",
+  "source_digest": "ee37ea17ddd3fc6d70c333c519090f5bdcbda93e5fbf4ea493fbe13909e28d00",
   "surface": "cockpit",
   "version": 1
 }
@@ -11755,16 +11755,16 @@ function receiveComposerAck(message){
 function cancelComposerAcks(){
   for(const pending of composerAcks.values())pending.done('unknown');
 }
-function confirmedComposerInput(target,data){
+function submitComposerPrompt(target,data){
   return new Promise(resolve=>{
     const id=Date.now()+':'+(++promptAckSequence);
     const done=status=>{
       clearTimeout(timer);composerAcks.delete(id);
       resolve(status==='accepted'||status==='refused'?status:'unknown');
     };
-    const timer=setTimeout(()=>done('unknown'),4500);
+    const timer=setTimeout(()=>done('unknown'),6500);
     composerAcks.set(id,{done,paneId:target.paneId});
-    const payload={type:'input',paneId:target.paneId,session:target.session,incarnation:target.incarnation,inputAck:id,data};
+    const payload={type:'submit-prompt',paneId:target.paneId,session:target.session,incarnation:target.incarnation,inputAck:id,data};
     for(const key of ['mail_instance_id','mail_agent_id']){
       if(target.pane.meta[key])payload[key]=target.pane.meta[key];
     }
@@ -11783,8 +11783,8 @@ function recipientRefusal(agent){
   return '';
 }
 function sameRecipient(record,target=null){
-  const agent=currentAgentNamed(record.name);
   if(record.singlePane)return Boolean(record.target)&&targetProgram(record.name)===record.vocabulary.program;
+  const agent=currentAgentNamed(record.name);
   const stable=!recipientRefusal(agent)&&targetProgram(record.name)===record.vocabulary.program&&
     ['mail_instance_id','mail_agent_id','created'].every(key=>record[key]===agent[key]);
   return stable&&(!target||['mail_instance_id','mail_agent_id'].every(key=>
@@ -11832,23 +11832,9 @@ function trackPrompt(target,text,displayText=text,attachments=[]){
     },
   };
 }
-function pastePayload(text){return "\x1b[200~"+text+"\x1b[201~";}
 function clearSentDraft(text){
   pushPromptHistory(text);
   promptInput.value='';readerReply?.clear();promptFiles.clear();saveDraft();closeSlashMenu();promptRecipients.close();
-}
-function sendSinglePrompt(target,text,referenceGuard){
-  if(!send({type:'input',paneId:target.paneId,data:pastePayload(text)})){
-    showToast('Not connected. Try again.',true);return;
-  }
-  const receipt=trackPrompt(target,text);
-  setTimeout(()=>{
-    if(!composerTargetPresent(target)||referenceGuard&&!referenceGuard(target)){receipt.cancel();return;}
-    if(send({type:'input',paneId:target.paneId,data:"\r"})){
-      receipt.publish(1);showToast(`Sent to ${target.session}`);
-    }else{receipt.cancel();showToast(`Disconnected before sending to ${target.session}`,true);}
-  },250);
-  clearSentDraft(text);
 }
 async function sendPreparedPrompt(records,draft,compose,stillValid,entries,explicit){
   const clip=document.getElementById('promptClip');
@@ -11878,12 +11864,7 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
         const body=[record.draft,references].filter(Boolean).join('\n\n');
         const text=compose(body);
         receipt=trackPrompt(target,text,compose(record.draft),entries);
-        status=await confirmedComposerInput(target,pastePayload(text));
-        if(status==='accepted'){
-          await new Promise(resolve=>setTimeout(resolve,250));
-          const entered=valid()&&await confirmedComposerInput(target,"\r")==='accepted';
-          status=entered?'accepted':'unknown';
-        }
+        status=await submitComposerPrompt(target,text);
       }
       if(status!=='accepted')receipt?.cancel();
       results.push({...record,status,receipt});
@@ -11901,8 +11882,8 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
     ].filter(Boolean).join(' · ');
     showToast(summary,Boolean(refused.length||unknown.length),7000);
     if(summary.length>70)toastEl.classList.add('multiline');
-    if(refused.length){
-      if(explicit)promptRecipients.set(refused.map(record=>record.name));
+    if(refused.length||unknown.length){
+      if(explicit)promptRecipients.set(results.filter(record=>record.status!=='accepted').map(record=>record.name));
       if(sent.length)pushPromptHistory(draft);
     }else{
       promptRecipients.set([]);clearSentDraft(draft);
@@ -11942,7 +11923,6 @@ function sendPrompt(opts={}){
   return deliver();
   function deliver(){
     hideSendGuard();
-    if(!names.length&&!entries.length)return sendSinglePrompt(target,readerReply?.compose(draft)??draft,referenceGuard);
     const plain=readerReply?.compose('')||'';
     return sendPreparedPrompt(records,draft,value=>plain+value,()=>!referenceGuard||referenceGuard(target),entries,Boolean(names.length));
   }

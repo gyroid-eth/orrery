@@ -22,15 +22,18 @@ def test_prompt_flies_from_real_composer_with_structured_pending_reference(cockp
         return animate.call(this,frames,options);
       };
       document.addEventListener('oc:prompt-sending',e=>wire.push(e.detail));
-      window.finishEnter=null;
-      const nativeTimeout=window.setTimeout;
-      window.setTimeout=(fn,ms,...args)=>ms===250?(window.finishEnter=fn,0):nativeTimeout(fn,ms,...args);
+      window.send=packet=>{
+        packets.push(packet);
+        if(packet.type==='submit-prompt')
+          window.finishPrompt=()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'});
+        return true;
+      };
       window.draft='Confirm the chart with Fixture Person.';
     """)
     if with_reference:
         js("""readerReply.add({agent:'ReviewFixture',role:'assistant',eventId:'old',text:'Fixture Person checked the labels.',
           ts:'2026-11-24T01:00:00Z',isCurrent:()=>true});""")
-    js("promptInput.value=draft;sendPrompt()")
+    js("promptInput.value=draft;void sendPrompt()")
     assert js("wire[0].origin.width>0 && Number.isFinite(wire[0].origin.top)")
     assert js("sendFrames.length")==1
     [flight] = js("sendFrames")
@@ -42,7 +45,7 @@ def test_prompt_flies_from_real_composer_with_structured_pending_reference(cockp
     assert js("wire[0].text.startsWith('Reference: ')")==with_reference
     js("""window.pendingRow=reader.querySelector('.conversation-submission');
       const flight=pendingRow.getAnimations()[0];flight.currentTime=120;flight.updatePlaybackRate(.05);
-      window.newRecord.text=wire[0].text;finishEnter();""")
+      window.newRecord.text=wire[0].text;finishPrompt();""")
     wait("receipts.length===1")
     assert js("pendingRow===reader.querySelector('.conversation-submission')&&pendingRow.dataset.state==='awaiting'")
     js("turnDone=true;conversationView.refresh()")
@@ -51,7 +54,8 @@ def test_prompt_flies_from_real_composer_with_structured_pending_reference(cockp
     assert js(f"Boolean({dom_row('new')}.querySelector('.conversation-reference-link'))")==with_reference
     assert js(f"!{dom_row('new')}.textContent.includes('Recorded message:')")
     assert js("sendFrames.length===2 && sendFrames[1].duration<610")
-    assert js("packets.filter(p=>p.type==='input').length")==2
+    assert js("packets.filter(p=>p.type==='submit-prompt').map(p=>p.data)")==js("[wire[0].text]")
+    assert js("packets.filter(p=>p.type==='input')")==[]
 
 
 @pytest.mark.parametrize('reduced', [False, True])
