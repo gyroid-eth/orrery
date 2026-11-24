@@ -4162,9 +4162,9 @@
       }
     }
   },
-  "inventory_digest": "54e30274f55d79ef3f902ac52247ae3b83a29936332915158ee051cf3a834f3c",
+  "inventory_digest": "d16327ad430304c9344af6d2e25e7fb2921bd30b03b0cc294a64a5f9b4b957aa",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "e0b24a1087d27978597e3508bf61ffd0605ae7b34a26d5f128a0ed594d576933",
+  "source_digest": "5dd70be2025fa28de99ce81f4fab97a67f3c235e6e5e0df9d515897d99d7e0ec",
   "surface": "cockpit",
   "version": 1
 }
@@ -12273,7 +12273,7 @@ const conversationView=(()=>{
       await asset('script','src','conversation_reply.js');
       await asset('script','src','reader_activity.js');
       readerReply=OrreryConversationReply.mount({host:promptInput.closest('.promptbar'),input:promptInput,
-        getTarget:captureComposerTarget,onError:text=>showToast(text,true)});
+        getTarget:namedComposerTarget,onError:text=>showToast(text,true)});
       readerActivity=OrreryReaderActivity.mount({getPanes:()=>panes.values(),
         getProgram:pane=>currentAgents.find(agent=>agent.name===pane.session)?.program,
         getBinding:pane=>{const agent=currentAgents.find(agent=>agent.name===pane.session);
@@ -12319,7 +12319,7 @@ const conversationView=(()=>{
         openExternalUrl,
         renderPeerAvatar:conversationPeerAvatar,
         renderAvatar:conversationAvatar,
-        onReference:value=>readerReply.add(value),
+        onReference:(value,beforeFocus)=>readerReply.add(value,beforeFocus),
       });
       return instance;
     })().catch(error=>{loading=null;showToast(error.message,true);return null;});
