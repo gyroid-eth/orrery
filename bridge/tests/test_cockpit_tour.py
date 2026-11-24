@@ -184,7 +184,10 @@ def test_talk_completes_only_for_a_sent_nonempty_unguarded_prompt():
 
 def test_pending_spawn_wait_resolves_for_ready_and_rejects_for_failure():
     source = (BRIDGE / 'cockpit.html').read_text()
-    watch = re.search(r'async function watchSpawnLaunch\(name,deadlineSeconds\)\{.*?(?=\nfunction spawnTarget)', source, re.S).group()
+    # The poller calls the same failure formatter as the initial launch request.
+    watch = re.search(
+        r'function spawnFailureReason\([^)]*\)\{.*?(?=\nfunction spawnTarget\b)', source, re.S
+    ).group()
     for verdict in ('ready', 'failed'):
         actual = node("function setTimeout(fn){fn();}"
                       f"async function fetch(){{return {{json:async()=>({{ok:true,state:'{verdict}'}})}};}}"
