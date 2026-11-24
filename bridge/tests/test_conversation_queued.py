@@ -105,16 +105,22 @@ def test_queued_prompt_keeps_existing_session_and_visibility_rules(flag):
     assert normalize(item, 'claude', 'fixture-session') == []
 
 
-def test_queued_images_keep_normal_user_block_indexes_and_attachment_display():
-    content = [dict(type='text', text='Generated image instruction'),
-               dict(type='image', source=dict(type='base64', data='unused'))]
+@pytest.mark.parametrize('image_first', [False, True])
+def test_queued_images_keep_normal_user_block_indexes_and_attachment_display(image_first):
+    text = 'Generated image instruction'
+    content = [dict(type='text', text=text), dict(type='image', source=dict(type='base64', data='unused'))]
+    if image_first:
+        content.reverse()
     consumed = normalize(queued(content), 'claude', 'fixture-session')
     ordinary = normalize(dict(claude('user', content), timestamp='2026-11-04T07:00:01.125Z'),
                          'claude', 'fixture-session')
-    # Both prompts interrupt the visible step run at the same block indexes.
+    # Both prompts keep the native text index and the image's old index as an alias.
     assert consumed == ordinary
-    assert all(event.get('step_boundary') is True for _, event in consumed)
-    assert [i for i, _ in consumed] == [0, 1]
+    (index, event), = consumed
+    assert index == int(image_first)
+    assert event['text'] == text and event['step_boundary'] is True
+    assert event['input_image_count'] == 1 and event['input_image_marker'] == 'prefix'
+    assert event['input_image_blocks'] == [1 - index]
 
 
 def test_tail_forward_and_older_pages_have_identical_stable_ids_without_queue_duplicates(tmp_path):

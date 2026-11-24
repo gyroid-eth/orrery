@@ -1497,6 +1497,17 @@
         </label>
       </div>
       <div class="settings-row">
+        <label class="settings-toggle-row" for="readerTextSize">
+          <span class="settings-row-name">Reader text size</span>
+          <select class="settings-select" id="readerTextSize">
+            <option value="12" title="12 px">Small</option>
+            <option value="13" title="13 px">Default</option>
+            <option value="14" title="14 px">Large</option>
+            <option value="15" title="15 px">Larger</option>
+          </select>
+        </label>
+      </div>
+      <div class="settings-row">
         <label class="settings-toggle-row" for="colorThemePreference">
           <span class="settings-toggle-copy">
             <span class="settings-row-name">Color theme</span>
@@ -4140,9 +4151,9 @@
       }
     }
   },
-  "inventory_digest": "09e8afc7beebb81c3342f08c5fa3300bbedc3ed3d83102690c7694ef998f3e46",
+  "inventory_digest": "c9ba769e87297c96e6e851b2f1c32469ea1e5f618b93002ff5e71008dd210603",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "122a3f4d0caed943d3fa33e6dfb4bf18a1f60e0927064f81c8f87a2111f11584",
+  "source_digest": "bc1c133a7a8634ca47311d8bbca7e69bd574301979c0ce5ddaf2e7a7d9d632ae",
   "surface": "cockpit",
   "version": 1
 }
@@ -12176,6 +12187,7 @@ function loadCockpitMarkdown(){
 const conversationView=(()=>{
   const key='oc-term-conversation-enabled',setting=document.getElementById('conversationEnabled');
   const defaultViewKey='oc-term-default-view',defaultViewSetting=document.getElementById('agentDefaultView');
+  const textSizeKey='oc-term-reader-text-size',textSizeSetting=document.getElementById('readerTextSize');
   let instance=null,loading=null;
   // On by default: a browser that never chose keeps the panel; an explicit
   // "0" (also synced through prefs) stays off.
@@ -12190,6 +12202,14 @@ const conversationView=(()=>{
     catch(_){return 'terminal';}
   }
   function syncDefaultView(){defaultViewSetting.value=defaultView();}
+  function applyTextSize(value){
+    if(value===undefined){
+      try{value=localStorage.getItem(textSizeKey);}catch(_){}
+    }
+    textSizeSetting.value=value||'13';
+    if(!textSizeSetting.value)textSizeSetting.value='13';
+    document.documentElement.style.setProperty('--reader-text-size',textSizeSetting.value+'px');
+  }
   async function ensure(){
     if(instance)return instance;
     if(!enabled())return null;
@@ -12202,13 +12222,17 @@ const conversationView=(()=>{
       await asset('script','src','conversation_mail.js');
       await asset('script','src','conversation_speaker.js');
       await asset('script','src','conversation_terminal.js');
+      await asset('script','src','conversation_motion.js');
       await asset('script','src','conversation_view.js');
       await asset('script','src','conversation_reply.js');
       await asset('script','src','reader_activity.js');
       readerReply=OrreryConversationReply.mount({host:promptInput.closest('.promptbar'),input:promptInput,
         getTarget:captureComposerTarget,onError:text=>showToast(text,true)});
       readerActivity=OrreryReaderActivity.mount({getPanes:()=>panes.values(),
-        getProgram:pane=>currentAgents.find(agent=>agent.name===pane.session)?.program});
+        getProgram:pane=>currentAgents.find(agent=>agent.name===pane.session)?.program,
+        getBinding:pane=>{const agent=currentAgents.find(agent=>agent.name===pane.session);
+          return JSON.stringify([pane.session,agent?.history_binding,agent?.history_session_id,
+            agent?.native_session_id,agent?.history_receipt_ts,agent?.transcript_path,agent?.created]);}});
       await asset('link','href','reader_approval.css');
       await asset('script','src','reader_approval.js');
       readerApproval=OrreryReaderApproval.mount({
@@ -12265,9 +12289,15 @@ const conversationView=(()=>{
   defaultViewSetting.addEventListener('change',()=>{
     try{localStorage.setItem(defaultViewKey,defaultViewSetting.value);}catch(_){syncDefaultView();}
   });
-  document.addEventListener('oc:prefs-changed',()=>{syncDefaultView();if(enabled())ensure();});
+  applyTextSize();
+  textSizeSetting.addEventListener('change',()=>{
+    try{localStorage.setItem(textSizeKey,textSizeSetting.value);}catch(_){}
+    applyTextSize(textSizeSetting.value);
+  });
+  document.addEventListener('oc:prefs-changed',()=>{syncDefaultView();applyTextSize();if(enabled())ensure();});
   window.addEventListener('storage',event=>{
     if(event.key===defaultViewKey||event.key===null)syncDefaultView();
+    if(event.key===textSizeKey||event.key===null)applyTextSize();
     if(event.key===key&&enabled())ensure();
   });
   if(enabled())ensure();

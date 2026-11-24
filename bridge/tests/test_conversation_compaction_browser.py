@@ -26,7 +26,7 @@ def test_compaction_is_one_expandable_system_row_beside_a_human_prompt(cockpit, 
        ",provider:'claude',after:'end'});conversationView.open()")
     wait("document.querySelectorAll('.conversation-event').length===2")
     assert js("document.querySelector('.conversation-system-toggle').textContent") == '▸Context compacted'
-    assert js("[...document.querySelectorAll('.conversation-role')].map(e=>e.textContent)") == ['You']
+    assert js("[...document.querySelectorAll('.conversation-human')].map(e=>e.getAttribute('aria-label'))") == ['You']
     assert js("document.querySelector('.conversation-system-detail').hidden")
     js("document.querySelector('.conversation-system-toggle').focus()")
     client.call('Input.dispatchKeyEvent', type='keyDown', key='Enter', code='Enter', windowsVirtualKeyCode=13, text='\r')

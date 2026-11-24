@@ -15,13 +15,15 @@ def send(js,wait,text='Generated prompt to check the Reader layout.'):
 
 @pytest.mark.parametrize('theme',['dark','light'])
 @pytest.mark.parametrize('split',[False,True])
-def test_sent_bubble_has_no_dashed_frame_and_promotes_only_after_enter(cockpit,theme,split):
+def test_sent_prompt_uses_wash_and_promotes_only_after_enter(cockpit,theme,split):
     js,wait,client=prepare(cockpit,split=split)
     js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
     if split:client.call('Emulation.setDeviceMetricsOverride',width=390,height=844,deviceScaleFactor=1,mobile=False)
     send(js,wait)
-    style=js("(()=>{const s=getComputedStyle(reader.querySelector('.conversation-submission'));return {border:s.borderTopStyle,radius:parseFloat(s.borderTopLeftRadius)}})()")
-    assert style['border']=='solid' and style['radius']>=10
+    style=js("""(()=>{const el=reader.querySelector('.conversation-submission'),s=getComputedStyle(el);
+      return {border:s.borderTopStyle, fill:s.backgroundImage, name:el.getAttribute('aria-label')};
+    })()""")
+    assert style['border']=='none' and style['fill'].startswith('linear-gradient(') and style['name']=='You'
     assert js("reader.querySelector('.conversation-submission-note').hidden")
     js('clock+=60001;receiptTimers.forEach(f=>f())')
     assert js("reader.querySelector('.conversation-submission').dataset.state") == 'late'

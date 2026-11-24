@@ -4853,6 +4853,7 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "demo_mode.js", "orrery_view.js", "mail_view.js", "cockpit_tour.js",
     "cockpit_full_tour.js", "telemetry_light.js", "prompt_spring.js", "prompt_composer.js", "prompt_recipients.js", "prompt_attachments.js",
     "conversation_source.js", "conversation_view.js", "conversation_view.css", "conversation_preview.js", "conversation_reply.js",
+    "conversation_motion.js",
     "conversation_steps.js", "conversation_steps.css",
     "conversation_mail.js", "conversation_speaker.js", "conversation_terminal.js", "conversation_markdown.js",
     "reader_approval.js", "reader_approval.css", "reader_activity.js",

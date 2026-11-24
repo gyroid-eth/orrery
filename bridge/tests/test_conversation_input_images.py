@@ -59,6 +59,7 @@ def test_native_input_image_uses_a_record_bound_reference(tmp_path,program):
     assert len(images)==1
     ref=images[0]['references'][0]
     assert ref['input_image'] and ref['kind']=='image'
+    assert ref['input_image_slot']==1
     assert ref['label']=='Input image 1.png'
     assert url() not in json.dumps(events)
     result=store.read(ref['id'],r)
@@ -118,5 +119,26 @@ def test_remote_urls_arbitrary_paths_and_oversized_embedded_images_are_not_loade
     path.write_bytes(header+line(codex(content)))
     assert not decorate(row(path,'codex'))[1][0].get('references')
     # 既存の 1 MiB record 制限を維持する。
-    path.write_bytes(header+line(codex([dict(type='input_image',image_url='data:image/png;base64,'+'A'*(1024*1024))])))
-    assert all(not event.get('references') for event in decorate(row(path,'codex'))[1])
+    path.write_bytes(header+line(codex([dict(type='input_text',text='Keep this visible.'),
+                                        dict(type='input_image',image_url='data:image/png;base64,'+'A'*(1024*1024))])))
+    events=decorate(row(path,'codex'))[1]
+    assert events[0]['text']=='Keep this visible.\n[image attachment]'
+    assert not events[0].get('references')
+
+
+def test_claude_keeps_attachment_slots_and_caps_references_on_the_text_block(tmp_path):
+    encoded=base64.b64encode(png()).decode()
+    image=dict(type='image',source=dict(type='base64',media_type='image/png',data=encoded))
+    unsupported=dict(type='image',source=dict(type='url',url='https://example.test/remote.png'))
+    text=dict(type='text',text='[Image #1] [Image #2] Compare these fixtures.')
+    path=tmp_path/'claude.jsonl'
+    path.write_bytes(line(claude('user',[unsupported,text,*([image]*9)],cwd=str(tmp_path))))
+    store, events=decorate(row(path,'claude-code'))
+    assert len(events)==1
+    event=events[0]
+    assert event['id'].endswith(':1') and len(event['input_image_aliases'])==10
+    assert event['input_image_count']==10
+    assert event['input_image_marker']=='prefix'
+    assert event['text']==text['text']
+    assert [ref['input_image_slot'] for ref in event['references']]==list(range(2,10))
+    assert store.read(event['references'][0]['id'],row(path,'claude-code'),thumbnail=True)['kind']=='image'

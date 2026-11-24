@@ -22,7 +22,7 @@ from pathlib import Path
 
 from PIL import Image
 from conversation_artifacts import extract_artifacts
-from conversation_history import codex_event, open_bound_transcript, assert_transcript_identity, HistoryUnavailable, open_reader
+from conversation_history import codex_event, codex_user_content, open_bound_transcript, assert_transcript_identity, HistoryUnavailable, open_reader
 from conversation_images import input_images, saved_path, dsh_image_path
 from conversation_markdown_images import IMAGE_EXT, local_image_target, markdown_image_targets
 
@@ -89,6 +89,9 @@ def record_at(stream,offset,cache=None,*,normalized=False):
     if b'\n' not in data or len(raw)>MAX_RECORD:raise PreviewUnavailable('record_too_large')
     try:
         projection=codex_event(raw,offset) if normalized else json.loads(raw)
+        payload=projection.get('payload') if isinstance(projection,dict) else None
+        if isinstance(payload,dict) and payload.get('type')=='message' and payload.get('role')=='user':
+            payload['content'],_=codex_user_content(payload.get('content'),payload)
         return projection,hashlib.sha256(raw).digest()
     except (ValueError,UnicodeError,RecursionError):raise PreviewUnavailable('reference_expired') from None
 
@@ -291,7 +294,9 @@ class ReferenceStore:
                 self.refs[ref]=dict(key=key,row=binding(row),inode=identity(stream),offset=event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id']),
                                     digest=digest,index=index,input_image=True,expires=self.clock()+self.ttl)
                 self.refs.move_to_end(ref)
-                refs.append(dict(id=ref,label=f'Input image {index+1}.png',kind='image',input_image=True))
+                projected=dict(id=ref,label=f'Input image {index+1}.png',kind='image',input_image=True)
+                if 'slot' in image:projected['input_image_slot']=image['slot']
+                refs.append(projected)
             self.prune()
         if refs:event['references']=refs;event['input_images']=True
 

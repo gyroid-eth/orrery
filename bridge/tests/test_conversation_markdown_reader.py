@@ -163,7 +163,8 @@ def test_adjacent_bash_records_form_one_shell_entry_and_keep_human_prose(cockpit
     wait("document.querySelector('[data-event-id=shell-in]')!==null")
     js('window.keptCommand=document.querySelector(".conversation-command");shellRows.push(...'+json.dumps(records[1:])+');conversationView.refresh()')
     wait("document.querySelector('[data-event-id=human]')!==null")
-    assert js("[...document.querySelectorAll('.conversation-event .conversation-byline')].filter(e=>getComputedStyle(e).display!=='none').map(e=>e.textContent)") == ['Shell', 'You']
+    assert js("[...document.querySelectorAll('.conversation-event .conversation-byline')].filter(e=>getComputedStyle(e).display!=='none').map(e=>e.textContent)") == ['Shell']
+    assert js("[...document.querySelectorAll('.conversation-human')].map(e=>e.getAttribute('aria-label'))") == ['You']
     assert js("document.querySelector('[data-event-id=shell-out]').classList.contains('conversation-shell-continuation')")
     assert js("[...document.querySelectorAll('.conversation-command pre code')].map(e=>e.textContent)") == ['$ printf "ready"']
     assert js("document.querySelector('[data-event-id=shell-out] pre code').textContent") == 'result -> ready'
