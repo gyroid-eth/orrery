@@ -6,6 +6,8 @@ providers; the DOM fixture uses the shared CDP browser and a static checkout.
 import json
 from pathlib import Path
 
+import pytest
+
 from test_cockpit_tour import tour_browser
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'usage_without_deepseek.json'
@@ -65,9 +67,11 @@ def test_balance_read_failure_never_reuses_a_previous_success_as_current():
     good = up.provider_from_quota_payload(balance_entry())
     cache.put(good, 1000)
     absent_dashboard = cache.last('dsh')
-    assert absent_dashboard.status == 'unavailable' and absent_dashboard.balance is None
+    assert absent_dashboard.status == 'stale' and absent_dashboard.balance == good.balance
+    assert absent_dashboard.observed_at == good.observed_at
     failed = cache.put(up.provider_from_quota_payload(balance_entry(status='unavailable')), 1001)
     assert failed.status == 'unavailable' and failed.balance is None
+    assert cache.last('dsh') == failed
 
 
 class Dashboard:
@@ -117,7 +121,7 @@ def test_existing_backend_endpoint_is_unchanged_without_opt_in_and_uses_one_cach
     assert len(dashboard.urls) == 1 and dashboard.urls[0].endswith('/api/quotas')
 
 
-def test_optional_balance_survives_cache_hits_and_disappears_after_opt_out():
+def test_optional_balance_survives_one_omission_and_disappears_after_confirmed_opt_out(caplog):
     dashboard = Dashboard(dict(providers=QUOTAS + [balance_entry()]))
     request = request_for(dashboard)
     assert get_usage(request)[-1]['balance']['total_balance'] == '12.3400'
@@ -125,25 +129,70 @@ def test_optional_balance_survives_cache_hits_and_disappears_after_opt_out():
     assert len(dashboard.urls) == 1
     dashboard.payload = dict(providers=QUOTAS)
     request.query = dict(refresh='1')
+    missing = get_usage(request)[-1]
+    assert missing['provider'] == 'dsh' and missing['status'] == 'stale'
+    assert missing['reason'] == 'provider_not_reported'
+    assert missing['balance']['total_balance'] == '12.3400'
+    assert missing['observed_at'] == balance_entry()['observed_at']
+    assert 'omitted DeepSeek' in caplog.text
+    request.query = {}
+    assert get_usage(request)[-1] == missing
+    assert len(dashboard.urls) == 2
+    request.query = dict(refresh='1')
     assert [p['provider'] for p in get_usage(request)] == ['claude', 'codex']
     request.query = {}
     assert [p['provider'] for p in get_usage(request)] == ['claude', 'codex']
-    assert len(dashboard.urls) == 2
+    assert len(dashboard.urls) == 3
 
 
-def test_dashboard_failure_makes_a_cached_balance_unknown():
+@pytest.mark.parametrize('failure, diagnostic', [
+    ('read', 'read failed (ClientError)'),
+    ('http', 'returned HTTP 503'),
+    ('payload', 'returned an invalid provider list'),
+])
+def test_dashboard_failure_keeps_a_dated_stale_balance_until_recovery(failure, diagnostic, caplog):
     import orrery_backend as ob
     dashboard = Dashboard(dict(providers=QUOTAS + [balance_entry()]))
     request = request_for(dashboard)
-    get_usage(request)
-    dashboard.payload = None
+    good = get_usage(request)[-1]
+    if failure == 'read':
+        dashboard.payload = None
+    elif failure == 'http':
+        dashboard.status = 503
+    else:
+        dashboard.payload = {'providers': None}
     request.query = dict(refresh='1')
-    failed = get_usage(request)[-1]
-    assert failed['provider'] == 'dsh' and failed['status'] == 'unavailable'
-    assert failed['balance'] is None and failed['measurement_kind'] == 'balance'
+    stale = get_usage(request)[-1]
+    assert stale == {**good, 'status': 'stale', 'reason': 'telemetry_unavailable'}
+    assert diagnostic in caplog.text
     request.query = {}
-    assert get_usage(request)[-1]['balance'] is None
+    assert get_usage(request)[-1] == stale
+    assert len(dashboard.urls) == 2
+    dashboard.status = 200
+    dashboard.payload = dict(providers=QUOTAS + [{**balance_entry('7.44'), 'observed_at': good['observed_at'] + 60}])
+    request.query = dict(refresh='1')
+    current = get_usage(request)[-1]
+    assert current['status'] == 'ok' and current['balance']['total_balance'] == '7.44'
+    assert current['observed_at'] == good['observed_at'] + 60
     assert all(url == ob.DASHBOARD_URL + '/api/quotas' for url in dashboard.urls)
+
+
+def test_reappearance_resets_single_omission_and_explicit_unavailable_clears_balance():
+    dashboard = Dashboard(dict(providers=QUOTAS + [balance_entry()]))
+    request = request_for(dashboard)
+    request.query = dict(refresh='1')
+    assert get_usage(request)[-1]['status'] == 'ok'
+    for _ in range(2):
+        dashboard.payload = dict(providers=QUOTAS)
+        assert get_usage(request)[-1]['status'] == 'stale'
+        dashboard.payload = dict(providers=QUOTAS + [balance_entry()])
+        assert get_usage(request)[-1]['status'] == 'ok'
+    dashboard.payload = dict(providers=QUOTAS + [balance_entry(status='unavailable')])
+    failed = get_usage(request)[-1]
+    assert failed['status'] == 'unavailable' and failed['balance'] is None
+    assert failed['reason'] == 'balance_key_unavailable'
+    dashboard.payload = None
+    assert get_usage(request)[-1] == failed
 
 
 def test_balance_dom_uses_currency_not_percentage_and_renders_unknown(tour_browser):
@@ -169,7 +218,7 @@ def test_balance_dom_uses_currency_not_percentage_and_renders_unknown(tour_brows
     assert usage_dom(evaluate, dict(providers=old)) == json.loads(FIXTURE.read_text())['dom']
 
 
-def test_failed_cockpit_poll_clears_only_the_balance_amount(tour_browser):
+def test_failed_cockpit_poll_shows_balance_with_original_observation_as_stale(tour_browser):
     import usage_probe as up
     _, evaluate = tour_browser
     providers = [up.provider_from_quota_payload(e).to_json() for e in QUOTAS + [balance_entry()]]
@@ -179,7 +228,20 @@ def test_failed_cockpit_poll_clears_only_the_balance_amount(tour_browser):
       try{await pollUsage(false);return usageData.providers;}finally{fetch=saved;}
     })()""")
     assert after[:2] == providers[:2]
-    assert after[-1]['balance'] is None and after[-1]['status'] == 'unavailable'
+    assert after[-1] == {**providers[-1], 'status': 'stale', 'reason': 'telemetry_unavailable'}
+    result = evaluate("""(()=>{
+      renderUsagePopover();
+      const row=document.querySelector('#usageDials .up-prov:last-of-type');
+      const pill=document.getElementById('usageBtn');
+      const slot=pill.querySelector('[data-provider="dsh"]');
+      return {text:row.textContent,mark:!!row.querySelector('.up-name.stale'),name:row.ariaLabel,
+        pill:slot.querySelector('b').textContent,title:slot.title,description:pill.ariaLabel};
+    })()""")
+    assert '$12.34' in result['text'] and 'observed 12:00' in result['text']
+    assert result['mark'] and result['name'] == 'DeepSeek, stale'
+    assert result['pill'] == '$12'
+    assert '$12.34' in result['title'] and 'stale · observed ' in result['title'] and '12:00' in result['title']
+    assert 'DeepSeek $12 (stale · observed ' in result['description']
 
 
 def test_usd_display_truncates_header_to_dollars_and_ledger_to_cents(tour_browser):

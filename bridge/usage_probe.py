@@ -26,7 +26,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from queue import Empty, Queue
 from typing import Any, Mapping
@@ -55,7 +55,7 @@ class UsageWindow:
 @dataclass(frozen=True)
 class ProviderUsage:
     provider: str
-    status: str  # ok | unavailable
+    status: str  # ok | stale | unavailable
     observed_at: int | None
     windows: tuple[UsageWindow, ...] = ()
     reason: str = ""  # stable code, only when status != ok
@@ -386,16 +386,16 @@ def probe_codex(codex_bin: str | None, *, timeout: float = 20.0, now: float | No
 
 @dataclass
 class UsageCache:
-    """Per-provider memo with a TTL. Window failures keep the last good
-    snapshot as stale; failed balance observations are explicitly unknown."""
+    """Per-provider memo with dated fallbacks when the dashboard is missed."""
     ttl_seconds: float = 60.0
     entries: dict[str, tuple[float, ProviderUsage]] = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     blocked_until: dict[str, float] = field(default_factory=dict)
-    # Optional rows most recently reported by the dashboard. A successful
-    # response without one removes it from the cached response as well.
+    # Optional rows to display. Give one omission of a previously observed
+    # balance a chance to recover before treating it as an opt-out.
     reported_providers: tuple[str, ...] = ()
+    balance_omitted: bool = False
 
     def get(self, provider: str, now: float) -> ProviderUsage | None:
         with self.lock:
@@ -405,7 +405,7 @@ class UsageCache:
             return hit[1]
         return None
 
-    def last(self, provider: str) -> ProviderUsage | None:
+    def last(self, provider: str, *, balance_reason: str = "telemetry_unavailable") -> ProviderUsage | None:
         """The last snapshot for a provider, however old — marked stale.
 
         The source can go away (the dashboard is not running); showing what was
@@ -416,12 +416,10 @@ class UsageCache:
         if not hit:
             return None
         kept = hit[1]
-        if kept.measurement_kind == "balance":
-            return ProviderUsage(kept.provider, "unavailable", kept.observed_at,
-                                 reason="telemetry_unavailable", measurement_kind="balance")
+        if kept.balance is not None:
+            return replace(kept, status="stale", reason=balance_reason)
         if kept.status == "ok" and kept.windows:
-            return ProviderUsage(kept.provider, "stale", kept.observed_at, kept.windows,
-                                 "telemetry_unavailable", kept.retry_after_seconds)
+            return replace(kept, status="stale", reason="telemetry_unavailable")
         return kept
 
     def put(self, snapshot: ProviderUsage, now: float) -> ProviderUsage:
