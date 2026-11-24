@@ -2987,22 +2987,7 @@ async def serve_skills(request: web.Request) -> web.Response:
 # the first state and then quietly answers "clipboard is empty" forever
 # (2026-08-24: an 8-day-old sidecar returned [] for a pasteboard that a fresh
 # one read correctly).
-_CLIPBOARD_FILES_JXA = """
-ObjC.import("AppKit");
-const pb = $.NSPasteboard.generalPasteboard;
-const items = pb.pasteboardItems;
-const out = [];
-if (!items.isNil()) {
-  for (let i = 0; i < items.count; i++) {
-    const s = items.objectAtIndex(i).stringForType("public.file-url");
-    if (!s.isNil()) {
-      const p = $.NSURL.URLWithString(s).path;
-      if (!p.isNil()) out.push(ObjC.unwrap(p));
-    }
-  }
-}
-JSON.stringify({changeCount: Number(pb.changeCount) || 0, files: out});
-"""
+_CLIPBOARD_FILES_JXA = HERE / "clipboard_mac.jxa"
 
 
 # --- the Windows clipboard, read from WSL (2026-09-29) ------------------------
@@ -3010,9 +2995,9 @@ JSON.stringify({changeCount: Number(pb.changeCount) || 0, files: out});
 # screenshot was copied on Windows and the agent that must open it lives in
 # the distro. Windows PowerShell (always present, unlike pwsh) reads the
 # clipboard: a file copy comes back as Windows paths that `wslpath -u` turns
-# into paths the agent can open; image data (Win+Shift+S) is saved as a PNG in
-# the distro and its path is what gets pasted, because the TUI inside WSL
-# cannot read the Windows clipboard the way it reads the Mac's on ^V.
+# into paths in the distro. Image data (Win+Shift+S) is exported as PNG.
+# The composer snapshots file or image bytes so its draft is independent of
+# the host clipboard. The older paths endpoint can still stage a local PNG.
 #
 # The script travels as -EncodedCommand (UTF-16LE base64) because the WSL
 # interop re-quotes arguments, and it answers in tab-separated lines with the
@@ -3035,9 +3020,21 @@ try {
   if ($files.Count -eq 0) {
     $img = Get-Clipboard -Format Image
     if ($img) {
-      $ms = New-Object System.IO.MemoryStream
-      $img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-      Write-Output ("I`t" + [Convert]::ToBase64String($ms.ToArray()))
+      if ($orrerySnapshot -and ([long]$img.Width * $img.Height -gt 24000000)) {
+        Write-Output "L"
+      } else {
+        $ms = New-Object System.IO.MemoryStream
+        try {
+          $img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+          if ($orrerySnapshot -and ($ms.Length -gt 10MB)) {
+            Write-Output "L"
+          } else {
+            Write-Output ("I`t" + [Convert]::ToBase64String($ms.ToArray()))
+          }
+        } finally {
+          $ms.Dispose()
+        }
+      }
     }
   }
 } catch {
@@ -3155,12 +3152,13 @@ async def _wslpath_u(windows_path: str) -> str | None:
     return converted
 
 
-async def read_windows_clipboard() -> dict[str, Any]:
+async def read_windows_clipboard(*, snapshot: bool = False) -> dict[str, Any]:
     """The /telemetry/clipboard/files answer on WSL (same shape as the Mac's)."""
     problem = windows_clipboard_problem()
     if problem:
         return {"files": [], "error": "clipboard_unsupported", "detail": problem}
-    script = base64.b64encode(_WINDOWS_CLIPBOARD_PS.encode("utf-16-le")).decode("ascii")
+    code = ("$orrerySnapshot = $true\n" if snapshot else "") + _WINDOWS_CLIPBOARD_PS
+    script = base64.b64encode(code.encode("utf-16-le")).decode("ascii")
     try:
         rc, stdout, stderr = await _run_reader(
             [windows_powershell(), "-NoProfile", "-NonInteractive", "-STA",
@@ -3174,7 +3172,7 @@ async def read_windows_clipboard() -> dict[str, Any]:
         print(f"[clipboard] powershell failed rc={rc} stderr={detail!r}",
               file=sys.stderr, flush=True)
         return {"files": [], "error": "clipboard_unreadable", "detail": detail[:400]}
-    session, windows_paths, image = None, [], ""
+    session, windows_paths, image, oversized = None, [], "", False
     for line in stdout.decode("utf-8-sig", "replace").splitlines():
         tag, _, value = line.rstrip("\r").partition("\t")
         if tag == "S":
@@ -3183,6 +3181,17 @@ async def read_windows_clipboard() -> dict[str, Any]:
             windows_paths.append(value)
         elif tag == "I" and value:
             image = value.strip()
+        elif tag == "L":
+            oversized = True
+    if snapshot:
+        if session == "0":
+            return {"attachments": [], "error": "clipboard_no_session"}
+        if oversized:
+            return {"attachments": [], "skipped": 1}
+        if windows_paths:
+            paths = await asyncio.gather(*(_wslpath_u(path) for path in windows_paths[:5]))
+            files = [path for path in paths if path]
+            return await asyncio.to_thread(clipboard_file_snapshots, files, len(windows_paths) - len(files))
     files, skipped = [], []
     for windows_path in windows_paths:
         converted = await _wslpath_u(windows_path)
@@ -3195,6 +3204,16 @@ async def read_windows_clipboard() -> dict[str, Any]:
     if windows_paths:
         return {"files": [], "error": "clipboard_unreadable",
                 "detail": "wslpath could not convert: " + "; ".join(windows_paths)[:300]}
+    if image and snapshot:
+        from mobile_image import MAX_IMAGE_BYTES
+        max_encoded = 4 * ((MAX_IMAGE_BYTES + 2) // 3)
+        try:
+            data = base64.b64decode(image, validate=True) if len(image) <= max_encoded else b""
+            if 0 < len(data) <= MAX_IMAGE_BYTES and data.startswith(b"\x89PNG\r\n\x1a\n"):
+                return {"attachments": [{"name": "Clipboard image.png", "type": "image/png", "data": image}]}
+        except ValueError:
+            pass
+        return {"attachments": [], "skipped": 1}
     if image:
         try:
             saved = save_clipboard_image(base64.b64decode(image, validate=True))
@@ -3210,7 +3229,7 @@ async def read_windows_clipboard() -> dict[str, Any]:
               "(e.g. Windows Terminal), not over ssh",
               file=sys.stderr, flush=True)
         return {"files": [], "error": "clipboard_no_session"}
-    return {"files": []}
+    return {"attachments": []} if snapshot else {"files": []}
 
 
 async def serve_clipboard_files(request: web.Request) -> web.Response:
@@ -3227,7 +3246,7 @@ async def serve_clipboard_files(request: web.Request) -> web.Response:
         return web.json_response(await read_windows_clipboard())
     try:
         proc = await asyncio.create_subprocess_exec(
-            "osascript", "-l", "JavaScript", "-e", _CLIPBOARD_FILES_JXA,
+            "osascript", "-l", "JavaScript", "-e", _CLIPBOARD_FILES_JXA.read_text(encoding="utf-8"),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=4)
@@ -3262,6 +3281,67 @@ async def serve_clipboard_files(request: web.Request) -> web.Response:
               file=sys.stderr, flush=True)
         return web.json_response({"files": [], "error": "clipboard_no_session"})
     return web.json_response({"files": files})
+
+
+def clipboard_file_snapshots(paths, skipped=0):
+    """Read files returned by the OS clipboard reader, using the upload limits."""
+    from mobile_attachment_store import FORMATS
+    from mobile_file import MAX_FILE_BYTES
+    from mobile_image import MAX_IMAGE_BYTES
+
+    images = FORMATS['image'] | {'jpeg', 'webp'}
+    attachments = []
+    for path in map(Path, paths):
+        extension = path.suffix.lower().lstrip('.')
+        if not path.is_absolute() or extension not in images | FORMATS['file']:
+            skipped += 1
+            continue
+        limit = MAX_IMAGE_BYTES if extension in images else MAX_FILE_BYTES
+        try:
+            fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+            with os.fdopen(fd, 'rb') as handle:
+                info = os.fstat(handle.fileno())
+                if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= limit:
+                    raise ValueError('clipboard_file_size')
+                data = handle.read(limit + 1)
+            if not data or len(data) > limit:
+                raise ValueError('clipboard_file_size')
+        except (OSError, ValueError):
+            skipped += 1
+            continue
+        attachments.append({
+            'name': path.name, 'modified': info.st_mtime_ns // 1_000_000,
+            'data': base64.b64encode(data).decode('ascii'),
+        })
+    return {'attachments': attachments, 'skipped': skipped}
+
+
+async def serve_clipboard_attachments(request: web.Request) -> web.Response:
+    """Read the host clipboard once. The request cannot supply file paths."""
+    try:
+        if request.content_length is None or request.content_length > 64 or await request.json() != {}:
+            raise ValueError('unexpected_body')
+    except ValueError:
+        return web.json_response({'error': 'clipboard_request_invalid'}, status=400)
+
+    host = host_kind()
+    if host == 'wsl':
+        result = await read_windows_clipboard(snapshot=True)
+    elif host == 'mac':
+        try:
+            script = _CLIPBOARD_FILES_JXA.read_text(encoding='utf-8')
+            rc, output, _ = await _run_reader(
+                ['osascript', '-l', 'JavaScript', '-e', script, '--', 'snapshot'], 4)
+            result = json.loads(output) if rc == 0 else None
+        except (OSError, ValueError, asyncio.TimeoutError):
+            result = None
+        if not isinstance(result, dict) or not isinstance(result.get('attachments'), list):
+            result = {'error': 'clipboard_unavailable'}
+        elif result.pop('changeCount', 0) == 0:
+            result = {'error': 'clipboard_no_session'}
+    else:
+        result = {'error': 'clipboard_unsupported'}
+    return web.json_response(result, headers={'Cache-Control': 'no-store'})
 
 
 def tmux_has_non_control_client(tmux_bin: str, session: str) -> bool:
@@ -4963,6 +5043,7 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
     app.router.add_get("/telemetry/skills", serve_skills)
     app.router.add_post("/telemetry/prompt-attachment", serve_prompt_attachment)
     app.router.add_get("/telemetry/clipboard/files", serve_clipboard_files)
+    app.router.add_post("/telemetry/clipboard/attachments", serve_clipboard_attachments)
     app.router.add_get("/telemetry/fs/dirs", serve_fs_dirs)
     app.router.add_get("/telemetry/fs/dir-search", proxy_dashboard)
     app.router.add_route("*", "/network", proxy_dashboard_passthrough)

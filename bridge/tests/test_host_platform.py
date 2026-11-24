@@ -328,7 +328,8 @@ assert flag == "-u"
 if len(path) < 3 or path[1:3] != ":\\":
     sys.stderr.write("wslpath: " + path + ": Invalid argument\n")
     sys.exit(1)
-print("/mnt/" + path[0].lower() + "/" + path[3:].replace("\\", "/"))
+import os
+print(os.environ.get("FIXTURE_MOUNT","/mnt") + "/" + path[0].lower() + "/" + path[3:].replace("\\", "/"))
 """
 
 
@@ -348,10 +349,12 @@ def windows_clipboard(monkeypatch, tmp_path):
     out = tmp_path / "ps-out"
     monkeypatch.setenv("FAKE_PS_OUT", str(out))
 
-    def answer(stdout: bytes, **env):
+    def answer(stdout: bytes, *, snapshot=False, **env):
         out.write_bytes(stdout)
         for key, value in env.items():
             monkeypatch.setenv(key, value)
+        if snapshot:
+            return asyncio.run(ob.read_windows_clipboard(snapshot=True))
         response = asyncio.run(ob.serve_clipboard_files(None))
         return json.loads(response.text)
 
@@ -397,6 +400,42 @@ def test_a_windows_screenshot_is_saved_as_a_png_the_agent_can_open(windows_clipb
     assert Path(saved).name.startswith("clipboard-") and saved.endswith(".png")
     assert Path(saved).read_bytes() == PNG
     assert (windows_clipboard.images.stat().st_mode & 0o777) == 0o700
+
+
+def test_windows_explorer_files_snapshot_from_wsl_mount(windows_clipboard, tmp_path):
+    mount = tmp_path / 'mnt'
+    desktop = mount / 'c/Users/fixture/Desktop'
+    desktop.mkdir(parents=True)
+    document = desktop / '資料 1.md'
+    document.write_text('# synthetic', encoding='utf-8')
+    picture = desktop / 'Comparison.JPEG'
+    picture.write_bytes(b'fixture image bytes')
+    path = desktop / 'Link.md'
+    path.symlink_to(document)
+    copied = '\r\n'.join(['S\t1', 'F\tC:\\Users\\fixture\\Desktop\\資料 1.md',
+                          'F\tC:\\Users\\fixture\\Desktop\\Comparison.JPEG',
+                          'F\tC:\\Users\\fixture\\Desktop\\Link.md',
+                          'F\t\\\\server\\fixture\\cannot-convert.md']).encode('utf-8')
+    result = windows_clipboard(copied, snapshot=True, FIXTURE_MOUNT=str(mount))
+    assert result['skipped'] == 2
+    assert [(entry['name'], base64.b64decode(entry['data'])) for entry in result['attachments']] == [
+        (document.name, document.read_bytes()), (picture.name, picture.read_bytes())]
+
+
+@pytest.mark.parametrize('session, expected', [('1', True), ('0', False)])
+def test_windows_screenshot_snapshot_uses_png_bytes_without_staging(windows_clipboard, session, expected):
+    encoded = base64.b64encode(PNG)
+    body = windows_clipboard(b'S\t' + session.encode() + b'\r\nI\t' + encoded + b'\r\n', snapshot=True)
+    if expected:
+        [image] = body['attachments']
+        assert image == {'name': 'Clipboard image.png', 'type': 'image/png', 'data': encoded.decode()}
+    else:
+        assert body == {'attachments': [], 'error': 'clipboard_no_session'}
+    assert not windows_clipboard.images.exists()
+
+
+def test_windows_snapshot_reports_image_rejected_by_native_limits(windows_clipboard):
+    assert windows_clipboard(b'S\t1\r\nL\r\n', snapshot=True) == {'attachments': [], 'skipped': 1}
 
 
 def test_only_the_newest_pasted_images_are_kept(windows_clipboard, monkeypatch):

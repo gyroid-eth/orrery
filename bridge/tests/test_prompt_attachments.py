@@ -55,3 +55,29 @@ async def test_attachment_is_written_to_the_selected_workspace(monkeypatch, tmp_
                 assert picture.getpixel((0, 0)) == (0, 0, 128)
         else:
             assert saved.read_bytes() == data
+
+
+@pytest.mark.asyncio
+async def test_clipboard_snapshot_is_loopback_scoped_and_cannot_accept_paths(monkeypatch):
+    calls = []
+
+    async def read(*, snapshot):
+        assert snapshot is True
+        calls.append(snapshot)
+        return {'attachments': [{'name': 'file.md', 'data': 'IyBEcmFmdA=='}]}
+
+    monkeypatch.setattr(backend, 'host_kind', lambda: 'wsl')
+    monkeypatch.setattr(backend, 'read_windows_clipboard', read)
+    app = web.Application(middlewares=[backend.own_page_only, backend.json_writes_only])
+    app.router.add_post('/telemetry/clipboard/attachments', backend.serve_clipboard_attachments)
+    async with TestClient(TestServer(app)) as client:
+        foreign = await client.post('/telemetry/clipboard/attachments', json={},
+                                    headers={'Origin': 'https://elsewhere.invalid'})
+        assert foreign.status == 403
+        forged = await client.post('/telemetry/clipboard/attachments', json={'path': '/private/file.md'})
+        assert forged.status == 400
+        result = await client.post('/telemetry/clipboard/attachments', json={})
+        assert result.status == 200
+        assert result.headers['Cache-Control'] == 'no-store'
+        assert (await result.json())['attachments'] == [{'name': 'file.md', 'data': 'IyBEcmFmdA=='}]
+        assert calls == [True]

@@ -156,6 +156,7 @@ def test_what_counts_as_a_user_operation(cockpit):  # noqa: F811
         "['/api/exit',{method:'POST'}]": True,
         "['/telemetry/conversation/reveal',{method:'POST'}]": True,
         "['/telemetry/clipboard/files']": True,
+        "['/telemetry/clipboard/attachments',{method:'POST'}]": True,
         "['/telemetry/conversation/preview?ref=x']": True,
         "['/telemetry/path-probe',{method:'POST'}]": False,     # the terminal hover, not asked for
         "['/telemetry/conversation?agent=x']": False,           # History's own poll

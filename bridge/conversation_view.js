@@ -72,7 +72,8 @@
   // probe, and not the dashboard frame's automatic error report (/api/jserr):
   // nobody asked for those. From the NETWORK frame: the dashboard's actions.
   const USER_POSTS=new Set(['/telemetry/open-url','/telemetry/reveal-path','/telemetry/open-ghostty',
-    '/telemetry/spawn','/api/exit','/telemetry/conversation/reveal','/telemetry/conversation/path-image']);
+    '/telemetry/spawn','/api/exit','/telemetry/conversation/reveal','/telemetry/conversation/path-image',
+    '/telemetry/clipboard/attachments']);
   const FRAME_POSTS=new Set(['/api/jump','/api/kill','/api/exit','/api/annotate','/api/spawn','/api/reactivate']);
   const USER_GETS=new Set(['/telemetry/clipboard/files','/telemetry/conversation/preview']);
   function userRequest(input,init,{frame=false,origin=root.location?.origin}={}){
