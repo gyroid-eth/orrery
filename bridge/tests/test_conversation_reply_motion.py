@@ -138,6 +138,121 @@ def test_recent_confirmation_of_live_text_skips_second_reveal(cockpit, live_visi
     assert js(f"{dom_row('confirmed')}.querySelector('{WORD}')===null")
 
 
+@pytest.mark.parametrize('mode', ['cursor', 'snapshot', 'fresh_tail'])
+def test_finished_record_reveals_unseen_suffix_after_the_terminal_row_disappears(cockpit, mode):
+    js, wait, *_ = cockpit
+    open_fixture(cockpit, 'claude-code', 'anthropic', mode, count=1)
+    write_frame(js, frame('claude-code', SEED), snapshot=True)
+    write_frame(js, frame('claude-code', MORE))
+    assert js("Boolean(document.querySelector('.conversation-live'))")
+    # The native ready screen removes the public live candidate before a
+    # later History poll supplies the complete, wrapped authoritative record.
+    js("readerActivity.disconnected();window.oldRow=document.querySelector('[data-event-id=history-0]')")
+    assert not js("document.querySelector('.conversation-live')!==null")
+    js("""window.oldRowRemovals=0;
+      new MutationObserver(records=>{for(const m of records)if([...m.removedNodes].includes(oldRow))oldRowRemovals++;})
+        .observe(oldRow.parentElement,{childList:true});
+    """)
+    copy = MORE + '\n\nUse a vector export for the next report.'
+    js(f"""recorded={{id:'confirmed',kind:'text',role:'assistant',text:{json.dumps(copy)},ts:new Date().toISOString()}};
+      conversationView.refresh()""")
+    wait(f"Boolean({dom_row('confirmed')})")
+    assert js("oldRowRemovals") == 0
+    assert js(f"[...{dom_row('confirmed')}.querySelectorAll('{WORD}')].map(word=>word.textContent)") == (
+        'Use a vector export for the next report.'.split())
+
+
+def test_all_new_short_replies_in_a_single_poll_are_eligible(cockpit):
+    js, wait, _ = prepare(cockpit)
+    js("""replyPage=Array.from({length:5},(_,i)=>makeReply('batch-'+i,'A short reply '+i));
+      conversationView.refresh()""")
+    wait(f"Boolean({dom_row('batch-4')})")
+    assert js("startedAnimations.length") == 20
+
+
+@pytest.mark.parametrize('mode', ['snapshot', 'fresh_tail'])
+def test_sliding_snapshot_keeps_the_selected_text_node_and_its_position(cockpit, mode):
+    js, wait, _ = prepare(cockpit, mode)
+    js("""tailRows=Array.from({length:32},(_,i)=>makeReply('row-'+i,'Recorded passage '+i));
+      conversationView.refresh()""")
+    wait("!!document.querySelector('[data-event-id=row-31]')")
+    js("""window.selectedRow=document.querySelector('[data-event-id=row-10]');
+      const scroll=document.querySelector('.conversation-scroll');scroll.dispatchEvent(new WheelEvent('wheel'));
+      selectedRow.scrollIntoView({block:'center'});scroll.dispatchEvent(new Event('scroll'));
+      const range=document.createRange();range.selectNodeContents(selectedRow.querySelector('.conversation-text'));
+      getSelection().removeAllRanges();getSelection().addRange(range);
+      window.selectedNode=getSelection().anchorNode;window.selectedTop=selectedRow.getBoundingClientRect().top;
+      tailRows.shift();replyPage=[makeReply('later','A new recorded reply.')];conversationView.refresh();
+    """)
+    wait("!!document.querySelector('[data-event-id=later]')")
+    assert js("selectedRow.isConnected&&getSelection().anchorNode===selectedNode")
+    assert js("getSelection().toString()") == 'Recorded passage 10'
+    assert abs(js("selectedRow.getBoundingClientRect().top-selectedTop")) < 2
+
+
+@pytest.mark.parametrize('cockpit', ['reply-demo'], indirect=True)
+def test_demo_projects_recorded_words_and_clipboard_feedback_before_motion(cockpit):
+    js, wait, _ = prepare(cockpit)
+    wait("document.documentElement.dataset.demo==='on'")
+    js("""(()=>{window.maskedFrames=[];
+      const animate=Element.prototype.animate;
+      Element.prototype.animate=function(...args){
+        if(this.className==='conversation-reply-word'){
+          maskedFrames.push({word:this.textContent,body:this.closest('.conversation-text')?.textContent});
+        }
+        return animate.apply(this,args);
+      };})()
+    """)
+    copy = 'Review by Fixture Person at https://example.test/private. See /fixture/private/report.md for the chart.'
+    fenced = copy+'\n\n```sh\ncheck /fixture/private/report.md\n```'
+    js(f"""replyPage=[makeReply('masked',{json.dumps(fenced)})];
+       conversationView.refresh()""")
+    wait(f"Boolean({dom_row('masked')})")
+    values=js("maskedFrames")
+    assert values and any('*' in frame['word'] for frame in values)
+    assert all(not any(secret in frame['body'] for secret in ('Fixture Person','example.test','/fixture/')) for frame in values)
+    assert '[path]' in values[0]['body'] and '[URL]' in values[0]['body']
+    js(f"""window.safeCopy={dom_row('masked')}.querySelector('.conversation-code-copy');
+      Object.defineProperty(navigator,'clipboard',{{configurable:true,value:{{writeText:async value=>window.copyValue=value}}}});
+      safeCopy.click();
+    """)
+    wait("safeCopy.parentElement.dataset.result==='copied'")
+    assert js("copyValue") == 'check /fixture/private/report.md\n'
+    assert js("safeCopy.parentElement.getAnimations({subtree:true}).length") == 4
+
+
+@pytest.mark.parametrize('cockpit', ['reply-demo'], indirect=True)
+def test_demo_applies_complete_and_partial_masks_before_terminal_words(cockpit):
+    js, wait, *_ = cockpit
+    open_fixture(cockpit, 'codex', 'openai', 'cursor', count=1)
+    wait("document.documentElement.dataset.demo==='on'")
+    js("""window.liveCues=[];
+      const animate=Element.prototype.animate;
+      Element.prototype.animate=function(...args){
+        if(this.className==='conversation-stream-word')liveCues.push(this.textContent);
+        return animate.apply(this,args);
+      };
+    """)
+    seed = 'Review the chart with Fixt'
+    partial = seed + 'ure Per'
+    complete = partial + 'son in /fixture/private/chart.md'
+    write_frame(js, frame('codex', seed), snapshot=True)
+    write_frame(js, frame('codex', partial))
+    assert js("document.querySelector('.conversation-live').textContent.includes('***********')")
+    write_frame(js, frame('codex', complete))
+    assert js("document.querySelector('.conversation-live .conversation-text').textContent") == (
+        'Review the chart with ************** in [path]')
+    cues = js("liveCues")
+    assert cues and all(not any(token in cue for token in ('Fixt','Per','/fixture/')) for cue in cues)
+    js("""const body=document.querySelector('.conversation-live .conversation-text'),range=document.createRange();
+       range.selectNodeContents(body);getSelection().removeAllRanges();getSelection().addRange(range);
+       window.visibleSelection=getSelection().toString();
+       const event=new ClipboardEvent('copy',{clipboardData:new DataTransfer(),cancelable:true,bubbles:true});
+       body.dispatchEvent(event);window.liveCopy=event.clipboardData.getData('text/plain');
+    """)
+    assert js("liveCopy") == complete, js("visibleSelection")
+
+
 def test_clipboard_feedback_follows_success_failure_and_reduced_motion(cockpit):
     js, wait, client = prepare(cockpit)
     fenced = f'Check the chart.\n\n```sh\n{CODE}\n```'

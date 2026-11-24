@@ -75,35 +75,56 @@
       animation.finished.then(remove,remove);
       return animation;
     }
-    function revealReply(element){
+    function revealReply(element,prefix=''){
       if(!element?.isConnected||!allowed())return;
       const skip='pre, code, button, a, table, .conversation-code, .conversation-table, [aria-hidden="true"]';
-      const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT,{
-        acceptNode:node=>node.parentElement.closest(skip)?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT,
-      });
+      const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT);
+      const seen=prefixEnd(element.textContent,prefix);
+      const demo=root.OrreryDemo?.on?root.OrreryDemo:null;
+      demo?.maskContent?.(element);
       // Collect before replacing nodes so the walker keeps its original position.
       const runs=[];
-      let remaining=REPLY_STEPS;
+      let remaining=REPLY_STEPS,offset=0;
       for(let node=walker.nextNode();node&&remaining>0;node=walker.nextNode()){
+        const projection=demo?.projectText?.(node),shown=projection?.text??node.data;
+        const start=offset;offset+=projection?.originalLength??node.length;
+        if(node.parentElement.closest(skip))continue;
         const words=[];
-        for(const match of node.data.matchAll(/\S+/gu)){
+        for(const match of shown.matchAll(/\S+/gu)){
+          const end=match.index+match[0].length;
+          if(start+(projection?.offset(end,true)??end)<=seen)continue;
           words.push(match);
           if(--remaining===0)break;
         }
-        if(words.length)runs.push({node,words});
+        if(words.length)runs.push({node,words,shown,projection});
       }
       let index=0;
-      for(const {node,words} of runs){
+      for(const {node,words,shown,projection} of runs){
         const fragment=document.createDocumentFragment(),cues=[];
+        const part=(start,end)=>{
+          const text=document.createTextNode(shown.slice(start,end));
+          projection?.write(text,start,end);
+          return text;
+        };
         let offset=0;
         for(const match of words){
-          const word=span('conversation-reply-word',match[0]);
-          fragment.append(node.data.slice(offset,match.index),word);cues.push(word);
+          const word=span('conversation-reply-word');
+          word.append(part(match.index,match.index+match[0].length));
+          fragment.append(part(offset,match.index),word);cues.push(word);
           offset=match.index+match[0].length;
         }
-        fragment.append(node.data.slice(offset));node.replaceWith(fragment);
+        fragment.append(part(offset,shown.length));node.replaceWith(fragment);
         for(const cue of cues)animate(cue,recordedFrames,{duration:REPLY_MS,delay:index++*WORD});
       }
+    }
+    function prefixEnd(text,prefix){
+      if(!prefix)return 0;
+      const words=prefix.trim().split(/\s+/u);let index=0;
+      for(const match of text.matchAll(/\S+/gu)){
+        if(index===words.length-1)return match[0].startsWith(words[index])?match.index+words[index].length:0;
+        if(match[0]!==words[index++])return 0;
+      }
+      return 0;
     }
     function enhanceCopies(article){
       for(const button of article.querySelectorAll('.conversation-code-copy')){
@@ -170,33 +191,50 @@
       const release=()=>{if(heightAnimation===animation){heightAnimation=null;if(following)follow();}};
       animation.finished.then(release,release);
     }
-    function write(element,text,{seen=0,keepBottom=false,plain=false}={}){
+    function write(element,text,{seen=0,keepBottom=false}={}){
       if(element!==body){stopReply();body=element;}
-      if(plain||!allowed()){
+      const projection=root.OrreryDemo?.on?root.OrreryDemo.projectText?.(text,{streaming:true}):null;
+      const shown=projection?.text??text,seenOffset=projection?.shownOffset(seen)??seen;
+      const put=(node,start,end)=>{
+        if(projection)projection.write(node,start,end);
+        else node.data=shown.slice(start,end);
+      };
+      if(!allowed()){
         stopReply();
-        const node=element.firstChild;
-        if(node?.nodeType===3&&element.childNodes.length===1)node.data=text;
-        else element.textContent=text;
+        const old=element.firstChild;
+        if(old?.nodeType===3&&element.childNodes.length===1)put(old,0,shown.length);
+        else{
+          const node=document.createTextNode('');put(node,0,shown.length);element.replaceChildren(node);
+        }
         return;
       }
       const before=body.getBoundingClientRect().height;
       heightAnimation?.cancel();
-      const next=pieces(text);
+      const next=pieces(shown);
       if(!parts.length)body.replaceChildren();
-      // A provider often extends the last partial word on its next frame.
-      // Keep its element and its original animation.
-      const tail=parts.length-1;
-      if(tail>=0&&next[tail]!==parts[tail])body.lastChild.textContent=next[tail];
-      let offset=parts.join('').length+(tail>=0?next[tail].length-parts[tail].length:0);
+      let common=0;
+      while(common<parts.length&&parts[common]===next[common])common++;
+      // Keep the current animation when a partial word grows. Projection can
+      // also change the shape of an already delivered suffix, such as a path.
+      const extended=common===parts.length-1&&body.lastChild.nodeType===1&&next[common]?.trim();
+      if(extended)common++;
+      while(body.childNodes.length>common)body.lastChild.remove();
+      let offset=0;
+      for(let index=0;index<common;index++){
+        const child=body.childNodes[index],end=offset+next[index].length;
+        if(projection||extended&&index===common-1)put(child.nodeType===3?child:child.firstChild,offset,end);
+        offset=end;
+      }
       const fragment=document.createDocumentFragment(),now=performance.now();
       // A delayed terminal batch can contain many words. Paint the earliest
       // ones immediately and retain at most a second of stagger.
-      const motionStart=Math.max(parts.length,next.length-24);
-      for(let index=parts.length;index<next.length;index++){
+      const motionStart=Math.max(common,next.length-24);
+      for(let index=common;index<next.length;index++){
         const value=next[index],start=offset;offset+=value.length;
-        if(!value.trim()){fragment.append(value);continue;}
-        const word=document.createElement('span');word.className='conversation-stream-word';word.textContent=value;fragment.append(word);
-        if(start<seen||index<motionStart)continue;
+        const content=document.createTextNode('');put(content,start,offset);
+        if(!value.trim()){fragment.append(content);continue;}
+        const word=span('conversation-stream-word');word.append(content);fragment.append(word);
+        if(offset<=seenOffset||index<motionStart)continue;
         const delay=Math.max(0,wordTime-now);
         if(delay>980)continue;
         animate(word,wordFrames,{delay,group:replyAnimations});wordTime=now+delay+WORD;
@@ -209,7 +247,7 @@
     reduced.addEventListener('change',stop);
     return {
       write,revealReply,enhanceCopies,stopReply,stop,stopFollowing(){following=false;heightAnimation?.cancel();},
-      prompt:element=>animate(element,promptFrames),
+      prompt:element=>root.OrreryDemo?.on?null:animate(element,promptFrames),
       dispose(){stop();reduced.removeEventListener('change',stop);},
     };
   }
