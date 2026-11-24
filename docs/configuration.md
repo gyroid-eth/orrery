@@ -77,7 +77,7 @@ Finder から起動する desktop app と Python backend が同じ file を読�
 
 **Send from phone**を切り替えると、このbackendのadapterがその場で切り替わり（再起動なし）、上の`enable_mobile_terminal`も同じ値に書き換えます。ほかのkeyはそのまま残します。fileがJSONとして読めないときは書き換えず、その実行中だけ切り替えます。terminalで`agentstack-mobile off`などを実行した場合は、次にSettingsを開いたときにadapterと`enable_mobile_terminal`が揃います。ただし、手で起動したreaderが8781で動いている間（節に**MANUAL**と出る）と、Settingsを一度も使っていない間は、今までどおり`enable_mobile_terminal`の値のまま変えません。手で起動したreaderでTerminalを使っている人は、更新しても何も変わりません。
 
-demo modeでは、Phoneの節はTailscaleのlogin・スマホで開くaddress・ServeのURLを画面に出しません（demo modeが隠すのはユーザー名と機械名だけです）。そのためloginとaddressはdemo modeでは設定できず、未設定のまま**Phone access**を押すと、スイッチのすぐ下にdemo modeを切って1回設定するよう出ます（**Turn off demo mode**のボタン付き）。設定した後は、demo modeのままオン・オフできます。Telemetryが無いときは、節に「agentstack-mobile was not found」と出ます。手順と制限は[Telemetryのスマホ手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md#cockpitのsettingsからオンにする)を参照してください。
+demo modeでは、Phoneの節はTailscaleのlogin・スマホで開くaddress・ServeのURLを画面に出しません。そのためloginとaddressはdemo modeでは設定できず、未設定のまま**Phone access**を押すと、スイッチのすぐ下にdemo modeを切って1回設定するよう出ます（**Turn off demo mode**のボタン付き）。設定した後は、demo modeのままオン・オフできます。Telemetryが無いときは、節に「agentstack-mobile was not found」と出ます。手順と制限は[Telemetryのスマホ手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md#cockpitのsettingsからオンにする)を参照してください。
 
 ### Desktop app の environment
 
@@ -221,7 +221,9 @@ prompt composer は browser `localStorage` に draft と最大50件の送信履�
 
 ほかに伏せたい語（Mail の本文に書かれた人の名前、案件の名前など）は、Settings の「Also mask these words」に `,` 区切りで足します（browser の `localStorage` に保存）。足した語もユーザー名と同じように、同じ幅の `*` で、ターミナルの中身まで伏せ、クリックとコピーは本当の値に戻ります。英数字の語は、大文字小文字を区別せず、単語として出たときだけ伏せます（`Kobo` は `kobold` の中では伏せない）。日本語など、それ以外の文字を含む語は、単語の区切りが無いので、どこに出ても伏せます（`ミラノ` を足すと `ミラノさん` の `ミラノ` も伏せる）。1 文字の語は無視します。1 ページだけなら URL の `?mask=語,語` でも渡せますが、URL は履歴や共有に残るので、Settings の欄を使ってください。
 
-更新済みのスマホreaderは、デスクトップで有効にしたDemo modeと追加の伏せる語へ自動で追従します。Settingsのスイッチを切るとスマホ側も解除します。デスクトップを閉じても最後の明示状態を保持し、通常のオフ画面を別に開いただけでは解除しません。URLの `?demo=0` は従来どおりそのページだけに効きます。共有するのは表示設定とマスクに必要な名前だけで、入力文や履歴は共有しません。スマホの文章・添付は開いたまま保持し、コピーと送信は元の値を使います。両方を更新したうえで、Demo中のデスクトップとスマホを一度再読み込みしてください。
+**Hide URLs and file paths** を選ぶと、Demo mode 中に URL を `[URL]`、`file://` や絶対パス、`~/`、Windows のパスを `[path]` と表示します。ターミナルは `<>` と `[]` を使い、リンク・選択用に元のセル位置を保ちます。設定は cockpit を開いているブラウザーに保存します。空白を含むパスを文章に書く場合は、引用符やバッククォートで囲むと範囲が明確になります。
+
+更新済みのスマホreaderは、デスクトップで有効にしたDemo modeと追加の伏せる語へ自動で追従します。URL とパスの設定は cockpit 専用です。Settingsのスイッチを切るとスマホ側も解除します。デスクトップを閉じても最後の明示状態を保持し、通常のオフ画面を別に開いただけでは解除しません。URLの `?demo=0` は従来どおりそのページだけに効きます。共有するのは表示設定とマスクに必要な名前だけで、入力文や履歴は共有しません。スマホの文章・添付は開いたまま保持し、コピーと送信は元の値を使います。両方を更新したうえで、Demo中のデスクトップとスマホを一度再読み込みしてください。
 
 保存先と削除後に残る状態は[インストールの「データの置き場所とアンインストール」](install.md#データの置き場所とアンインストール)も参照してください。
 

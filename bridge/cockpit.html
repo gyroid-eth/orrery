@@ -1532,6 +1532,15 @@
         <div class="settings-help">Also on for one page with <code>?demo=1</code> in the URL (<code>?demo=0</code> turns it off).</div>
       </div>
       <div class="settings-row">
+        <label class="settings-toggle-row" for="demoMaskLocations">
+          <span class="settings-toggle-copy">
+            <span class="settings-row-name">Hide URLs and file paths</span>
+            <span class="settings-help">Shows fixed labels in Demo mode. Click and copy still use the original values.</span>
+          </span>
+          <span class="settings-switch"><input id="demoMaskLocations" type="checkbox"></span>
+        </label>
+      </div>
+      <div class="settings-row">
         <label class="settings-row-name" for="demoMaskWords">Also mask these words</label>
         <input class="settings-select" id="demoMaskWords" type="text" spellcheck="false" autocomplete="off"
                placeholder="a name, another name" aria-describedby="demoMaskWordsHelp">
@@ -4151,9 +4160,9 @@
       }
     }
   },
-  "inventory_digest": "c9ba769e87297c96e6e851b2f1c32469ea1e5f618b93002ff5e71008dd210603",
+  "inventory_digest": "388dc31c3d81f06e36362903d33aaf1fe31f4c3453bfa9c0dbd083d02881e199",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "bc1c133a7a8634ca47311d8bbca7e69bd574301979c0ce5ddaf2e7a7d9d632ae",
+  "source_digest": "b23efe265c7c6d849f396622bb16113828ede80e91b61a0c1be2dcb919603b3a",
   "surface": "cockpit",
   "version": 1
 }
@@ -6035,6 +6044,11 @@ terminalFontRange.addEventListener('input',()=>{
   persistTerminalSettings();applyTerminalSettings();
 });
 const demoMaskWords=document.getElementById('demoMaskWords');
+const demoMaskLocations=document.getElementById('demoMaskLocations');
+demoMaskLocations.checked=OrreryDemo.storedLocations();
+demoMaskLocations.addEventListener('change',()=>{
+  if(!OrreryDemo.setLocations(demoMaskLocations.checked))demoMaskLocations.checked=OrreryDemo.storedLocations();
+});
 if(demoMaskWords){
   demoMaskWords.value=OrreryDemo.storedWords().join(', ');
   demoMaskWords.addEventListener('change',()=>OrreryDemo.setWords(OrreryDemo.parseWords(demoMaskWords.value)));
@@ -9341,9 +9355,10 @@ function agentDetailIcon(icon){
   return `<svg class="agent-detail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${AGENT_DETAIL_ICONS[icon]}</svg>`;
 }
-function agentDetailItem(icon,label,body=''){
+function agentDetailItem(icon,label,body='',path=null){
   const description=esc(label);
-  return `<div class="agent-detail-item" role="group" title="${description}" aria-label="${description}">
+  const pathAttribute=path===null?'':` data-demo-path-value="${esc(path)}"`;
+  return `<div class="agent-detail-item" role="group" title="${description}" aria-label="${description}"${pathAttribute}>
     ${agentDetailIcon(icon)}${body}</div>`;
 }
 function agentDetailPermissions(detail){
@@ -9376,9 +9391,14 @@ function agentDetailHTML(detail){
   const group=(name,content)=>content?`<div class="agent-detail-${name}">${content}</div>`:'';
   const text=(icon,label,value)=>{
     if(!value)return'';
-    const content=icon==='directory'?esc(value).replaceAll('/','/<wbr>'):esc(value);
-    return agentDetailItem(icon,`${label}: ${icon==='directory'?detail.cwd:value}`,
-      `<span class="agent-detail-value agent-detail-${icon}">${content}</span>`);
+    const directory=icon==='directory';
+    const escaped=esc(value);
+    const demo=globalThis.OrreryDemo;
+    const maskedDirectory=directory&&demo?.on&&demo.storedLocations();
+    const content=directory&&!maskedDirectory?escaped.replaceAll('/','/<wbr>'):escaped;
+    return agentDetailItem(icon,`${label}: ${directory?detail.cwd:value}`,
+      `<span class="agent-detail-value agent-detail-${icon}"${maskedDirectory?' data-demo-path':''}>${content}</span>`,
+      maskedDirectory?detail.cwd:null);
   };
   let lineage='';
   if(detail.parentState==='top')lineage=agentDetailItem('top','Top level');
@@ -10358,7 +10378,9 @@ let spawnDirChildren=[],spawnDirSearchEpoch=0,spawnDirSearchTimer,spawnDirActive
 function renderSpawnDirPath(){
   const label=document.getElementById('spawnDirSelected');
   const path=spawnDirPath.replace(/\/+$/,'')||(spawnDirPath?'/':'');
+  label.toggleAttribute('data-demo-path',Boolean(path));
   label.textContent=path&&path===spawnDirHome?'~':path.split('/').at(-1)||path||'Folder';
+  spawnDirButton.dataset.demoPathValue=spawnDirPath;
   spawnDirButton.title=spawnDirPath||'Folder';
   spawnDirButton.setAttribute('aria-label',spawnDirPath?'Folder: '+spawnDirPath:'Folder');
 }
@@ -10394,16 +10416,17 @@ function renderSpawnDirResults(entries,status='',activePath,select=false){
   entries.forEach(({path,label},index)=>{
     const row=document.createElement('button');row.type='button';row.tabIndex=-1;
     row.id='spawnDirResult'+index;row.className='dir-search-result';row.title=path;
+    row.dataset.demoPathValue=path;
     row.setAttribute('role','option');row.dataset.current=String(path===spawnDirPath);
     row.append(spawnIcon('folder'));
-    const name=document.createElement('span');name.textContent=label;row.append(name);
+    const name=document.createElement('span');name.dataset.demoPath='';name.textContent=label;row.append(name);
     row.addEventListener('mousedown',event=>event.preventDefault());
     row.addEventListener('click',()=>browseDir(path,select));
     spawnDirResults.append(row);
   });
   spawnDirResults.hidden=!spawnDirResults.children.length;
   spawnDirSearch.setAttribute('aria-expanded',String(!spawnDirResults.hidden));
-  const activeIndex=Array.from(spawnDirResults.children).findIndex(row=>row.title===activePath);
+  const activeIndex=entries.findIndex(entry=>entry.path===activePath);
   activeSpawnDirResult(spawnDirResults.hidden?-1:Math.max(activeIndex,0));
   spawnDirSearchStatus.textContent=status;
   if(spawnOpenSheet===spawnDirSheet)positionSpawnSheet(spawnDirSheet,spawnDirButton);
@@ -10414,7 +10437,7 @@ function updateSpawnDirSearch(){
   const query=spawnDirSearch.value.trim(),under=spawnDirBrowsePath;
   spawnDirUse.hidden=Boolean(query);
   if(!query){renderSpawnDirResults(spawnDirChildren);return;}
-  const activePath=spawnDirResults.children[spawnDirActive]?.title;
+  const activePath=spawnDirResults.children[spawnDirActive]?.dataset.demoPathValue;
   renderSpawnDirResults([]);
   if(!under)return;
   spawnDirSearchTimer=setTimeout(async()=>{
@@ -10916,6 +10939,7 @@ function renderSpawnDirCrumbs(path){
   const addCrumb=(label,target,current)=>{
     const button=document.createElement('button');button.type='button';
     button.className='crumb';button.textContent=label;button.title=target;
+    button.dataset.demoPath='';button.dataset.demoPathValue=target;
     if(current){button.classList.add('here');button.setAttribute('aria-current','location');}
     else button.addEventListener('click',()=>browseDir(target));
     dirCrumbs.append(button);

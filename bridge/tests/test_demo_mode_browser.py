@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -31,8 +32,9 @@ BRIDGE = HERE.parent
 sys.path.insert(0, str(BRIDGE.parent))
 from tools import theme_axis_browser_test as cdp  # noqa: E402
 
-CHROME = cdp.find_chrome()
-pytestmark = pytest.mark.skipif(CHROME is None, reason="no Chromium (set ORRERY_CHROME)")
+SHARED_CDP = os.environ.get("ORRERY_CDP_URL")
+CHROME = None if SHARED_CDP else cdp.find_chrome()
+pytestmark = pytest.mark.skipif(not (SHARED_CDP or CHROME), reason="set ORRERY_CDP_URL or ORRERY_CHROME")
 
 IDENTITY = {"home": "/Users/mira", "users": ["mira", "anne"], "hosts": ["mira-studio"]}
 DRAFT = "Please read /Users/mira/private.txt on mira-studio"
@@ -94,12 +96,18 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 @contextlib.contextmanager
-def browser(identity_mode="ok"):
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    server.identity_mode = identity_mode
-    server.prefs = {}
-    server.prefs_rev = 0
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+def browser_client():
+    if SHARED_CDP:
+        request = urllib.request.Request(SHARED_CDP + "/json/new?about:blank", method="PUT")
+        with urllib.request.urlopen(request, timeout=5) as response:
+            tab = json.load(response)
+        try:
+            yield cdp._WebSocket(tab["webSocketDebuggerUrl"])
+        finally:
+            with contextlib.suppress(OSError):
+                urllib.request.urlopen(SHARED_CDP + "/json/close/" + tab["id"], timeout=5).close()
+        return
+
     port = cdp._free_port()
     profile = tempfile.mkdtemp(prefix="orrery-demo-cdp-")
     chrome_log = open(Path(profile) / "chrome.log", "w+")
@@ -109,9 +117,7 @@ def browser(identity_mode="ok"):
         stdout=chrome_log, stderr=subprocess.STDOUT)
     try:
         page = None
-        # A deadline, not a poll count: the first Chromium start on a fresh CI
-        # runner (no font or profile caches yet) took longer than 300 polls,
-        # while every later start in the same run came up at once.
+        # Cold Chrome starts on fresh CI images can take most of this deadline.
         started = time.monotonic()
         while time.monotonic() - started < CHROME_START_SECONDS:
             with contextlib.suppress(OSError, ValueError):
@@ -126,33 +132,48 @@ def browser(identity_mode="ok"):
             chrome_log.seek(0)
             raise RuntimeError(f"Chromium gave no page over CDP after {time.monotonic() - started:.1f}s "
                                f"(exit {process.poll()}):\n" + chrome_log.read()[-3000:])
-        client = cdp._WebSocket(page["webSocketDebuggerUrl"])
-        client.call("Page.enable")
-        client.call("Runtime.enable")
-        client.call("Page.addScriptToEvaluateOnNewDocument",
-                    source=f"localStorage.setItem('oc-prompt-draft',{json.dumps(DRAFT)});")
-
-        def go(query):
-            client.call("Page.navigate", url=f"http://127.0.0.1:{server.server_port}/cockpit.html?{query}")
-
-        def js(expression):
-            result = client.call("Runtime.evaluate", expression=expression, awaitPromise=True, returnByValue=True)
-            if result.get("exceptionDetails"):
-                raise AssertionError(result["exceptionDetails"])
-            return result.get("result", {}).get("value")
-
-        js.client = client  # for a screenshot when investigating
-        yield go, js
+        yield cdp._WebSocket(page["webSocketDebuggerUrl"])
     finally:
         process.terminate()
         with contextlib.suppress(subprocess.TimeoutExpired):
             process.wait(timeout=5)
         if process.poll() is None:
             process.kill()
-        server.shutdown()
-        server.server_close()
         chrome_log.close()
         shutil.rmtree(profile, ignore_errors=True)
+
+
+@contextlib.contextmanager
+def browser(identity_mode="ok"):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server.identity_mode = identity_mode
+    server.prefs = {}
+    server.prefs_rev = 0
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        with browser_client() as client:
+            client.call("Page.enable")
+            client.call("Runtime.enable")
+            client.call("Emulation.setFocusEmulationEnabled", enabled=True)
+            client.call("Emulation.setDeviceMetricsOverride", width=1400, height=900,
+                        deviceScaleFactor=1, mobile=False)
+            client.call("Page.addScriptToEvaluateOnNewDocument",
+                        source=f"localStorage.setItem('oc-prompt-draft',{json.dumps(DRAFT)});")
+
+            def go(query):
+                client.call("Page.navigate", url=f"http://127.0.0.1:{server.server_port}/cockpit.html?{query}")
+
+            def js(expression):
+                result = client.call("Runtime.evaluate", expression=expression, awaitPromise=True, returnByValue=True)
+                if result.get("exceptionDetails"):
+                    raise AssertionError(result["exceptionDetails"])
+                return result.get("result", {}).get("value")
+
+            js.client = client  # for a screenshot when investigating
+            yield go, js
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def wait(js, expression, seconds=8.0):
@@ -215,9 +236,12 @@ def start_pane(js, cols=None):
         time.sleep(.1)
 
 
-def open_demo(go, js):
-    go("demo=1")
-    assert wait(js, "document.documentElement.dataset.demo==='on'")
+DEMO_READY = "document.readyState!=='loading' && document.documentElement.dataset.demo==='on'"
+
+
+def open_demo(go, js, query="demo=1"):
+    go(query)
+    assert wait(js, DEMO_READY)
 
 
 def test_terminal_names_are_masked_where_drawn_split_slow_coloured_or_prompted():
@@ -335,8 +359,7 @@ def test_a_dom_copy_restores_each_node_at_its_own_place():
 def test_fields_show_the_mask_and_keep_the_real_value():
     """P2-2: a restored draft holding a home path and the host name."""
     with browser() as (go, js):
-        go("demo=1")
-        assert wait(js, "document.documentElement.dataset.demo==='on'")
+        open_demo(go, js)
         time.sleep(.5)
         field = js("""(()=>{const f=document.getElementById('promptInput');const o=f.__demoOverlay;
           return {value:f.value,overlay:o?o.textContent:null,color:getComputedStyle(f).color,
@@ -357,8 +380,7 @@ def test_fields_show_the_mask_and_keep_the_real_value():
 def test_the_telemetry_frame_is_never_shown_before_it_is_masked():
     """P2-1: the frame's document was painted before its load event."""
     with browser() as (go, js):
-        go("demo=1")
-        assert wait(js, "document.documentElement.dataset.demo==='on'")
+        open_demo(go, js)
         js("openNetwork({focus:''})")
         seen = []
         deadline = time.time() + 4.5
@@ -419,8 +441,7 @@ def test_saved_words_are_masked_on_screen_and_copied_as_they_are():
         go("demo=0")
         assert wait(js, "typeof OrreryDemo!=='undefined'")
         js("OrreryDemo.setWords(['Kobo'],{reload:false})")
-        go("demo=1")
-        assert wait(js, "document.documentElement.dataset.demo==='on'")
+        open_demo(go, js)
         assert js(WORD_CHECK) == ["Ask **** about kobold", "Ask Kobo about kobold"]
         start_pane(js)
         write(js, "mail from KOBO: hi\r\n")
@@ -434,8 +455,7 @@ def test_saved_words_are_masked_on_screen_and_copied_as_they_are():
 
 def test_words_in_the_url_count_for_that_page_and_its_pane_windows():
     with browser() as (go, js):
-        go("demo=1&mask=Kobo,%E3%83%9F%E3%83%A9%E3%83%8E")
-        assert wait(js, "document.documentElement.dataset.demo==='on'")
+        open_demo(go, js, "demo=1&mask=Kobo,%E3%83%9F%E3%83%A9%E3%83%8E")
         shown = js("""(async()=>{const d=document.createElement('div');d.textContent='Kobo and ミラノさん';
           document.body.appendChild(d);await new Promise(r=>setTimeout(r,50));return d.textContent;})()""")
         assert shown == "**** and ＊＊＊さん"
@@ -469,3 +489,97 @@ def test_a_wrapped_name_whose_other_rows_are_out_of_view_is_masked(scroll, shown
         leaks, _ = never_painted(js, "mira", "ira/")
         assert not leaks
         assert copy_rows(js, 0, 1) == "/Users/mira/x"
+
+
+def open_strict_demo(go, js):
+    go("demo=0")
+    assert wait(js, "document.readyState!=='loading' && window.OrreryDemo?.on===false")
+    js("document.getElementById('demoMaskLocations').click()")
+    assert js("OrreryDemo.storedLocations() && OrreryDemo.mask('https://fixture.invalid')==='https://fixture.invalid'")
+    open_demo(go, js)
+
+
+def test_location_switch_applies_only_in_demo_and_keeps_the_name_mask():
+    with browser() as (go, js):
+        open_strict_demo(go, js)
+        assert js("OrreryDemo.mask('/Users/mira/path https://fixture.invalid/secret')") == "[path] [URL]"
+        assert js("document.getElementById('demoMaskLocations').checked")
+        previous_document = js("performance.timeOrigin")
+        js("document.getElementById('demoMaskLocations').click()")
+        # Storage changes before the reload replaces the old mask.
+        assert wait(
+            js, f"performance.timeOrigin!=={previous_document} && {DEMO_READY}"
+            " && window.OrreryDemo?.known && !OrreryDemo.storedLocations()",
+        )
+        assert js("OrreryDemo.mask('/Users/mira/path https://fixture.invalid/secret')") == "/Users/****/path https://fixture.invalid/secret"
+
+
+def test_strict_rendered_markdown_and_hover_keep_real_copy_and_links():
+    url = "https://fixture.invalid/private?token=canary"
+    path = "/tmp/hidden folder/secret file.png"
+    body = f"[{url}]({url})\n\n![Screenshot](<{path}>)\n\n<svg onload=\"window.maskInjected=true\"></svg>"
+    with browser() as (go, js):
+        open_strict_demo(go, js)
+        js("window.demoBody=" + json.dumps(body) + ";window.demoPath=" + json.dumps(path))
+        js("""(async()=>{
+          await conversationView.ready();
+          window.maskFixture=document.createElement('div');
+          document.body.appendChild(maskFixture);
+          OrreryConversationMarkdown.renderDocument(demoBody,maskFixture);
+          const card=document.createElement('div');
+          card.innerHTML=agentDetailHTML(agentDetailModel({name:'FixtureAgent',cwd:demoPath},null));
+          maskFixture.appendChild(card);
+        })()""")
+        assert wait(js, "maskFixture.querySelector('a').textContent==='[URL]'")
+        actual = js("""(()=>{
+          const [remote,local]=maskFixture.querySelectorAll('a');
+          const item=maskFixture.querySelector('.agent-detail-directory');
+          const range=document.createRange();
+          range.setStart(remote.firstChild,1);range.setEnd(remote.firstChild,4);
+          const selection=getSelection();selection.removeAllRanges();selection.addRange(range);
+          const data=new DataTransfer();
+          remote.dispatchEvent(new ClipboardEvent('copy',{clipboardData:data,bubbles:true,cancelable:true}));
+          const copiedURL=data.getData('text/plain');
+          range.selectNodeContents(local.querySelector('.markdown-image-label'));selection.removeAllRanges();selection.addRange(range);
+          const pathData=new DataTransfer();
+          local.dispatchEvent(new ClipboardEvent('copy',{clipboardData:pathData,bubbles:true,cancelable:true}));
+          let clicked;
+          local.addEventListener('click',event=>{event.preventDefault();clicked=event.currentTarget.dataset.localPath},{once:true});
+          local.click();
+          return {remote:remote.href,title:remote.title,copiedURL,clicked,pathCopy:pathData.getData('text/plain'),
+            directory:item.textContent,directoryTitle:item.closest('[title]').title,
+            image:local.textContent,imageTitle:local.title,
+            safe:!maskFixture.querySelector('[onload]')&&!window.maskInjected&&maskFixture.textContent.includes('<svg onload=')};
+        })()""")
+        assert actual == dict(remote=url, title="[URL]", copiedURL=url, clicked=path,
+                              pathCopy=f"Screenshot · {path}", directory="[path]",
+                              directoryTitle="Working directory: [path]", image="Screenshot · [path]",
+                              imageTitle="Preview [path]", safe=True)
+
+
+def test_strict_terminal_masks_wrapped_and_coloured_locations_but_copies_and_opens_them():
+    url = "https://demo.invalid/private?token=terminal-canary"
+    path = "/tmp/private-report.png"
+    with browser() as (go, js):
+        open_strict_demo(go, js)
+        start_pane(js, cols=27)
+        write(js, "URL: https://demo.invalid/pri\x1b[31mvate?token=terminal-canary\x1b[0m\r\n")
+        write(js, path + "\r\n")
+        assert wait(js, "[...demoPane.host.querySelector('.xterm-rows').children].some(x=>x.textContent.includes('[]'))")
+        rows = drawn(js)
+        url_row, path_row = rows.index("URL: <>"), rows.index("[]")
+        def last_wrapped(first):
+            return js(f"""(()=>{{const b=demoPane.term.buffer.active;let i={first};
+              while(b.getLine(i+1)?.isWrapped)i++;return i;}})()""")
+        assert copy_rows(js, url_row, last_wrapped(url_row)) == "URL: " + url
+        assert copy_rows(js, path_row, last_wrapped(path_row)) == path
+        assert never_painted(js, "demo.invalid", "terminal-canary", "private-report")[0] == []
+        clicked = js("""(async()=>{window.demoClicked=[];revealLocalPath=p=>demoClicked.push(['path',p]);
+          openExternalUrl=u=>demoClicked.push(['url',u]);
+          for(const provider of demoPane.term._core._linkProviderService.linkProviders)
+            for(const y of """ + json.dumps([url_row + 1, path_row + 1]) + """){
+              const links=await new Promise(r=>provider.provideLinks(y,r));
+              for(const link of links||[])link.activate({preventDefault(){}},link.text);
+            }
+          return demoClicked;})()""")
+        assert sorted(clicked) == sorted([["url", url], ["path", path]])

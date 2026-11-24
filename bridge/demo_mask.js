@@ -13,9 +13,9 @@
    A word with any other character (Japanese has no spaces between words) is
    hidden wherever it appears.
 
-   Each hidden character becomes one mask character of the same width ("*" for
-   a narrow character, a full-width "＊" for a wide one), so a terminal keeps
-   its columns and a string keeps its length.
+   Names use one mask character of the same width ("*" for narrow characters,
+   "＊" for wide ones). The optional location mask uses fixed labels. In a
+   terminal, those labels occupy the original cells so links still line up.
 
    The masked text is never turned back into a name by its shape (two names
    of the same length look alike, and a user can type "****" too): callers
@@ -31,6 +31,9 @@
   const NARROW_MASK='*',WIDE_MASK='\uFF0A';
   const NAME_CHAR=/[A-Za-z0-9._-]/,HOST_CHAR=/[A-Za-z0-9-]/,WORD_CHAR=/[A-Za-z0-9_]/;
   const LATIN_WORD=/^[A-Za-z0-9_][A-Za-z0-9_ .'-]*$/;
+  const LOCATION=/(^|[\s([{=,:;<>"'`|])([a-z][a-z0-9+.-]*:\/\/|(?:data|mailto|blob|tel|urn|magnet):|www\.|[a-z]:[\\/]|(?:~|\.\.?)\/|\\\\|\/+)/gi;
+  const MARKER={url:'[URL]',path:'[path]'};
+  const TERMINAL_MARKER={url:'<>',path:'[]'};
 
   // East Asian Wide / Fullwidth ranges, enough for names and host names.
   function isWide(cp){
@@ -104,10 +107,62 @@
     return {text:shown.join(''),at,incomplete};
   }
 
+  function pathWithSpacesEnd(text,end){
+    // A later directory separator or filename suffix can identify spaces in
+    // a bare path. Stop before an independent location or shell delimiter.
+    const word=/ +([^\s<>"'`|;&]+)/y;
+    let last=end;
+    for(let count=0;count<16;count++){
+      word.lastIndex=end;
+      const next=word.exec(text);
+      if(!next||/^(?:[a-z][a-z0-9+.-]*:\/\/|[a-z]:[\\/]|[~\/\\]|www\.)/i.test(next[1]))break;
+      if(/[\\/]|\.[a-z0-9]{1,12}(?:[.,!?]|$)/i.test(next[1]))last=word.lastIndex;
+      end=word.lastIndex;
+    }
+    return last;
+  }
+
+  function locationSpans(text){
+    const found=[];
+    LOCATION.lastIndex=0;
+    for(let match;(match=LOCATION.exec(text));){
+      const start=match.index+match[1].length,prefix=match[2],before=match[1];
+      const kind=/^[a-z][a-z0-9+.-]*:\/\/|^(?:data|mailto|blob|tel|urn|magnet):|^www\./i.test(prefix)
+        &&!/^file:/i.test(prefix)?'url':'path';
+      let end=LOCATION.lastIndex;
+      const closing=({'<':'>','"':'"',"'":"'",'`':'`'})[before];
+      if(closing){
+        // Quoted file names and Markdown destinations can contain spaces.
+        const quoted=text.indexOf(closing,end);
+        const newline=text.indexOf('\n',end);
+        if(quoted>=0&&(newline<0||quoted<newline))end=quoted;
+      }
+      if(end===LOCATION.lastIndex){
+        const open={'(':0,'[':0,'{':0},pairs={')':'(',']':'[','}':'{'};
+        while(end<text.length){
+          const ch=text[end];
+          if(kind==='path'&&ch==='\\'&&text[end+1]===' '){end+=2;continue;}
+          if(/[\s<>"'`|]/.test(ch))break;
+          if(ch in open)open[ch]++;
+          if(ch in pairs&&--open[pairs[ch]]<0)break;
+          end++;
+        }
+        if(kind==='path'&&prefix.length+start<end)end=pathWithSpacesEnd(text,end);
+        while(end>LOCATION.lastIndex&&/[.,;!?]/.test(text[end-1]))end--;
+      }
+      if(end===LOCATION.lastIndex&&prefix==='/')continue;
+      if(before==='<'&&/^\/[a-z][\w-]*$/i.test(text.slice(start,end))&&text[end]==='>')continue;
+      found.push([start,end,kind]);
+      LOCATION.lastIndex=end;
+    }
+    return found;
+  }
+
   function create(identity){
     const users=unique((identity&&identity.users)||[]);
     const hosts=unique((identity&&identity.hosts)||[]);
     const words=unique((identity&&identity.words)||[]);
+    const hideLocations=identity?.hideLocations===true;
     const lowerUsers=users.map(u=>u.toLowerCase()),lowerHosts=hosts.map(h=>h.toLowerCase());
     // [lowercase word, whole-word only]
     const lowerWords=words.map(w=>[w.toLowerCase(),LATIN_WORD.test(w)]);
@@ -121,13 +176,20 @@
     for(const host of lowerHosts)needles.push({text:host,from:0,to:host.length,before:HOST_CHAR});
     for(const [word,whole] of lowerWords)needles.push({text:word,from:0,to:word.length,before:whole?WORD_CHAR:null});
 
-    /* Name spans [start, end) in shown text. The first `context` characters
-       are there only to decide word boundaries. */
-    function spans(text,context=0){
-      const lower=text.toLowerCase(),found=[];
+    /* Location ranges take precedence over names inside the same text. */
+    function spans(text,{literalPath,wholePath}={}){
+      const lower=text.toLowerCase(),found=hideLocations?locationSpans(text):[];
+      if(hideLocations&&wholePath&&text)return [[0,text.length,'path']];
+      if(hideLocations&&literalPath){
+        const start=text.lastIndexOf(literalPath),end=start+literalPath.length;
+        if(start>=0){
+          for(let i=found.length-1;i>=0;i--)if(found[i][0]<end&&found[i][1]>start)found.splice(i,1);
+          found.push([start,end,'path']);
+        }
+      }
       const take=(start,end)=>{
-        if(end<=context||found.some(([a,b])=>start<b&&end>a))return;
-        found.push([Math.max(start,context),end]);
+        if(found.some(([a,b])=>start<b&&end>a))return;
+        found.push([start,end,null]);
       };
       const each=(needle,fn)=>{for(let at=lower.indexOf(needle);at>=0;at=lower.indexOf(needle,at+1))fn(at);};
       for(const user of lowerUsers){
@@ -156,23 +218,58 @@
       return found.sort((a,b)=>a[0]-b[0]);
     }
 
-    /* Mask a plain string (DOM text, a tooltip, a field's value for its
-       overlay). Returns the same string when nothing is hidden. */
-    function mask(text){
-      if(typeof text!=='string'||!text||!needles.length)return text;
+    /* DOM ranges shrink to a fixed label. Keep their position map for copy. */
+    function project(text,options){
+      if(typeof text!=='string'||!text||!needles.length&&!hideLocations)return {text,ranges:[]};
       const view=scan(text);
-      const hide=new Set();
-      for(const [a,b] of spans(view.text))for(let k=a;k<b;k++)hide.add(view.at[k]);
-      if(!hide.size)return text;
-      let out='';
-      for(let i=0;i<text.length;i++)out+=hide.has(i)?maskUnit(text[i]):text[i];
-      return out;
+      const ranges=[];let out='',cursor=0;
+      for(const [a,b,kind] of spans(view.text,options)){
+        const from=view.at[a],to=view.at[b-1]+1;
+        out+=text.slice(cursor,from);
+        if(kind){
+          const start=out.length;
+          out+=MARKER[kind];ranges.push({from,to,start,end:out.length});
+        }else{
+          let at=from;
+          for(let k=a;k<b;k++){
+            const index=view.at[k];out+=text.slice(at,index)+maskUnit(text[index]);at=index+1;
+          }
+        }
+        cursor=to;
+      }
+      return {text:out+text.slice(cursor),ranges};
     }
 
-    return {active:users.length+hosts.length>0,users,hosts,words,mask,maskName,columns,scan};
+    /* The terminal keeps original columns for xterm links, selection and
+       cursor positioning. Only the two marker cells are visibly filled. */
+    function terminal(text){
+      if(!hideLocations)return project(text).text;
+      const view=scan(text),out=text.split('');
+      for(const [a,b,kind] of spans(view.text)){
+        for(let k=a;k<b;k++){
+          const at=view.at[k],unit=text[at];
+          out[at]=kind?TERMINAL_MARKER[kind][k-a]||(isWide(unit.charCodeAt(0))?'\u3000':' '):maskUnit(unit);
+        }
+      }
+      return out.join('');
+    }
+
+    return {active:users.length+hosts.length>0,users,hosts,words,mask:text=>project(text).text,
+      project,terminal,maskName,columns,scan};
   }
 
-  const api={create,maskName};
+  function originalOffset(offset,ranges,end=false){
+    let delta=0;
+    for(const range of ranges){
+      if(offset<range.start)break;
+      if(offset===range.start)return range.from;
+      if(offset<range.end)return end?range.to:range.from;
+      delta=range.to-range.end;
+    }
+    return offset+delta;
+  }
+
+  const api={create,maskName,originalOffset};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   else root.OrreryDemoMask=api;
 })(typeof window!=='undefined'?window:globalThis);
