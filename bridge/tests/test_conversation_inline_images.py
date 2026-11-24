@@ -142,10 +142,26 @@ def test_recorded_user_image_shares_inline_and_expanded_preview(cockpit):
     event.update(role='user',input_images=True,references=[dict(id='c'*32,label='入力画像.png',kind='image',input_image=True)])
     js,wait,_=prepare(cockpit,[event,message('reply','画像を確認します。')])
     wait("document.querySelector('.conversation-inline-thumbnail')?.naturalWidth>0")
-    assert js("document.querySelector('.conversation-inline-images').previousElementSibling.dataset.role")=='user'
+    assert js("document.querySelector('.conversation-inline-images').closest('.conversation-human').dataset.eventId")=='input'
+    assert js("document.querySelectorAll('[data-event-id=input] [data-ref-id]').length")==1
     assert js("document.querySelectorAll('.conversation-tool-group').length")==0
     js("document.querySelector('.conversation-inline-image').click()")
     wait("document.querySelector('.conversation-preview-image')?.naturalWidth>0")
     assert js("document.querySelector('.conversation-preview-notice').textContent.startsWith('Recorded input image')")
     assert not js("document.querySelector('.conversation-reveal')!==null")
     assert js("inlineCalls.map(c=>c.thumbnail)")==[True,False]
+
+
+def test_recorded_image_labels_follow_thumbnail_decode_only(cockpit):
+    event = dict(message('input', '[Image #8] [Image #9] <img src=x onerror=alert(1)>'), role='user',
+                 input_images=True, input_image_marker='prefix', input_image_count=2,
+                 references=[dict(id=char*32, label=f'Input image {slot}.png', kind='image',
+                                  input_image=True, input_image_slot=slot) for slot, char in enumerate('cd', 1)])
+    js, wait, _ = prepare(cockpit, [event], delayed=True)
+    wait('inlinePending.length===2')
+    assert js("document.querySelectorAll('[data-input-image-marker]:not([hidden])').length") == 2
+    js("inlinePending.shift()(inlineData);inlinePending.shift()({...inlineData,data:'YWJjZA=='})")
+    wait("Boolean(document.querySelector('[data-input-image-marker=\"1\"][hidden]'))")
+    wait("document.querySelector('[data-ref-id=d'+ 'd'.repeat(31) +'] .conversation-inline-status').textContent.includes('unavailable')")
+    assert js("document.querySelector('.conversation-text').innerText") == '[Image #9] <img src=x onerror=alert(1)>'
+    assert js("document.querySelectorAll('.conversation-text img').length") == 0

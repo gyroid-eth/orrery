@@ -11,6 +11,16 @@ import threading
 
 _saved = OrderedDict()
 _lock = threading.RLock()
+MAX_INPUT_IMAGES = 8
+NATIVE_IMAGE_TYPES = {
+    'claude': {'image'}, 'dsh': {'image'},
+    'codex': {'image', 'input_image', 'image_url'}, 'hermes': {'input_image', 'image_url'},
+}
+
+
+def native_image(block, provider):
+    return (isinstance(block, dict) and isinstance(block.get('type'), str)
+            and block['type'] in NATIVE_IMAGE_TYPES.get(provider, ()))
 
 
 def signature(path):
@@ -72,10 +82,14 @@ def input_images(item):
     if not isinstance(blocks, list):
         return []
     found = []
+    slot = 0
     for block in blocks[:64]:
         if not isinstance(block, dict):
             continue
         kind, url = block.get('type'), None
+        is_native = native_image(block, provider)
+        if is_native:
+            slot += 1
         if kind == 'image' and provider == 'claude':
             source = block.get('source')
             if isinstance(source, dict) and source.get('type') == 'base64':
@@ -88,9 +102,9 @@ def input_images(item):
         elif kind == 'image' and provider == 'dsh':
             attachment = block.get('attachment')
             if isinstance(attachment, dict) and re.fullmatch(r'sha256:[a-f0-9]{64}', str(attachment.get('attachmentId', ''))):
-                found.append(dict(kind='dsh', digest=attachment['attachmentId'][7:]))
+                found.append(dict(kind='dsh', digest=attachment['attachmentId'][7:], slot=slot))
         if isinstance(url, str) and re.fullmatch(r'data:image/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}', url):
-            found.append(dict(kind='data', url=url))
+            found.append(dict(kind='data', url=url, slot=slot))
         if kind in {'text', 'input_text'} and isinstance(block.get('text'), str):
             text = block['text']
             with _lock:
@@ -99,9 +113,9 @@ def input_images(item):
                 values={path,shlex.quote(path)}
                 if any(value in text and re.search(r'(?<![^\s\'"`\[(])' + re.escape(value) + r'(?=$|[\s\'"`\])])', text) for value in values) and saved_path(path):
                     found.append(dict(kind='saved', path=path))
-        if len(found) >= 8:
+        if len(found) >= MAX_INPUT_IMAGES:
             break
-    return found[:8]
+    return found[:MAX_INPUT_IMAGES]
 
 
 def dsh_image_path(transcript, digest):
