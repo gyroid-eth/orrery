@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from test_conversation_review_regressions import cockpit
+from test_conversation_review_regressions import cockpit, stable_roster
 from test_conversation_inline_images import message, prepare, shown
 
 PASSAGE='Keep the original image pixels unchanged.'
@@ -124,3 +124,79 @@ def test_reference_keeps_the_original_composer_visible_in_light_theme(cockpit):
     if capture:
         js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
         (Path(capture)/'phone-reply-light.png').write_bytes(base64.b64decode(client.call('Page.captureScreenshot',format='png')['data']))
+
+
+def recorded_reply(id, origin, *, timestamp=' · 2026-11-01T04:00:00Z', **extra):
+    text = ('Reference: ReviewFixture · assistant' + timestamp + '\r\n'
+            + 'Recorded message: ' + origin + '\r\n'
+            + '> <img src=x onerror=alert(1)>\r\n> \r\n> Second line\r\n\r\n'
+            + 'Keep `label` and https://example.test/path intact.')
+    return dict(message(id, text), role='user', **extra)
+
+
+CARD = 'document.querySelector("[data-event-id=reply] .conversation-reference-link")'
+READER = 'document.querySelector(".conversation-panel:not([hidden]) .conversation-scroll")'
+ORIGIN = 'document.querySelector("[data-event-id=source]")'
+
+
+def test_recorded_reference_shows_one_line_and_keyboard_jumps_to_source(cockpit):
+    events = [message('source', PASSAGE), message('gap', 'Additional context.\n' * 60), recorded_reply('reply', 'source')]
+    js, wait, client = prepare(cockpit, events)
+    assert js(CARD + '.querySelector(".conversation-reference-quote").textContent') == '<img src=x onerror=alert(1)>'
+    assert js(CARD + '.querySelectorAll("img:not(.conversation-avatar img), .conversation-reference-quote img").length') == 0
+    assert js(CARD + '.querySelector("svg").getAttribute("stroke-width")') == '1.5'
+    assert js(CARD + '.title').endswith('<img src=x onerror=alert(1)>\n\nSecond line')
+    assert js(CARD + '.ariaLabel') == 'Jump to quoted message from ReviewFixture at 13:00 JST'
+    assert js(CARD + '.nextElementSibling.querySelector(".conversation-text").textContent') == 'Keep `label` and https://example.test/path intact.'
+    assert js(CARD + '.nextElementSibling.querySelector(".conversation-text a").href') == 'https://example.test/path'
+    assert js(READER + '.scrollTop') > 200
+    js(CARD + '.focus({preventScroll:true})')
+    client.call('Input.dispatchKeyEvent', type='keyDown', key='Enter', code='Enter', windowsVirtualKeyCode=13, text='\r')
+    client.call('Input.dispatchKeyEvent', type='keyUp', key='Enter', code='Enter', windowsVirtualKeyCode=13)
+    wait(ORIGIN + '.classList.contains("conversation-reference-target")')
+    assert js('document.activeElement.dataset.eventId') == 'source'
+    assert js(READER + '.scrollTop') < 40
+    assert js("packets.filter(p=>p.type==='input').length") == 0
+    wait('!' + ORIGIN + '.classList.contains("conversation-reference-target")')
+
+
+def test_malformed_and_truncated_references_stay_in_the_original_body(cockpit):
+    truncated = recorded_reply('truncated', 'source', truncated=True)
+    invalid_date = recorded_reply('bad-date', 'source', timestamp=' · yesterday')
+    missing_id = dict(recorded_reply('bad-id', 'source'), text=truncated['text'].replace('Recorded message: source\r\n', ''))
+    non_user = dict(recorded_reply('assistant-quote', 'source'), role='assistant')
+    empty_body = dict(recorded_reply('empty-body', 'source'), text=truncated['text'].split('\r\n\r\n')[0] + '\r\n\r\n  ')
+    js, _, _ = prepare(cockpit, [truncated, invalid_date, missing_id, non_user, empty_body])
+    assert js("document.querySelectorAll('.conversation-reference-link').length") == 0
+    for event in [truncated, invalid_date, missing_id, non_user, empty_body]:
+        assert 'Reference: ReviewFixture' in js(f'document.querySelector("[data-event-id={event["id"]}] .conversation-text").textContent')
+
+
+@pytest.mark.parametrize('available', [True, False], ids=['older-source', 'unavailable'])
+def test_recorded_reference_uses_older_pages_in_same_conversation(cockpit, available):
+    js, wait, _, _, enable = cockpit
+    stable_roster(js)
+    enable(count=1)
+    replies = [message('gap', 'More detail.\n' * 60), recorded_reply('reply', 'source', timestamp='')]
+    older = [message('source', PASSAGE)] if available else [message('other-record', 'No source in this record.')]
+    js('conversationView.close();window.quoteTail=' + json.dumps(replies) + ';window.quoteOlder=' + json.dumps(older) + ''';
+      window.quoteReads=[];OrreryConversationSource.Source.prototype.read=async(name,options)=>{
+        quoteReads.push([name,options.before||null]);
+        if(options.after)return {unchanged:true,events:[],after:'tail'};
+        if(options.before)return {events:quoteOlder,before:'head',after:'tail',has_older:false};
+        return {events:quoteTail,before:'previous',after:'tail',has_older:true};
+      };conversationView.open();''')
+    wait('Boolean(' + CARD + ')')
+    assert js(CARD + '.ariaLabel') == 'Jump to quoted message from ReviewFixture'
+    js(CARD + '.click()')
+    wait('quoteReads.some(([,cursor])=>cursor==="previous") && !' + CARD + '.hasAttribute("aria-busy")')
+    names = js('quoteReads.map(([name])=>name)')
+    assert len(set(names)) == 1
+    if available:
+        assert js(ORIGIN + '.classList.contains("conversation-reference-target")')
+        assert js('document.activeElement.dataset.eventId') == 'source'
+    else:
+        assert js(CARD + '.getAttribute("aria-disabled")') == 'true'
+        assert 'not in the loaded part of this conversation' in js(CARD + '.title')
+        js(CARD + '.click()')
+        assert js('quoteReads.filter(([,cursor])=>cursor).length') == 1
