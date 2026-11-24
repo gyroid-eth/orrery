@@ -4162,9 +4162,9 @@
       }
     }
   },
-  "inventory_digest": "d16327ad430304c9344af6d2e25e7fb2921bd30b03b0cc294a64a5f9b4b957aa",
+  "inventory_digest": "2ae60edc2e7baa6b611880dc977dd8705ff046f7744c6d97fee35f1d37429faa",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "5dd70be2025fa28de99ce81f4fab97a67f3c235e6e5e0df9d515897d99d7e0ec",
+  "source_digest": "ec80e37143f45a05ac2b021ae2c2de81a3b5562324d614c5cf5a4724629761a0",
   "surface": "cockpit",
   "version": 1
 }
@@ -11657,7 +11657,8 @@ function trackPrompt(target,text){
   const submittedAt=Date.now();
   const attemptId=submittedAt+':attempt:'+(++promptAttemptSequence);
   const notify=(type,detail={})=>document.dispatchEvent(new CustomEvent(type,{detail:{attemptId,name:target.session,...detail}}));
-  notify('oc:prompt-sending',{text,startedAt:submittedAt});
+  const {top,right,width}=promptInput.getBoundingClientRect();
+  notify('oc:prompt-sending',{text,startedAt:submittedAt,origin:{top,right,width}});
   return {
     cancel:()=>notify('oc:prompt-send-cancelled'),
     publish:count=>{
