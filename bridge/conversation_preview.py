@@ -27,6 +27,7 @@ from conversation_history import codex_event, codex_user_content, open_bound_tra
 from conversation_history import conversation_binding as binding
 from conversation_images import input_images, saved_path, dsh_image_path
 from conversation_markdown_images import IMAGE_EXT, local_image_target, markdown_image_targets
+import conversation_step_diff as step_diff
 from mobile_attachment_store import DIRECTORIES, FORMATS, attachment_label
 
 MAX_RECORD=1024*1024
@@ -106,6 +107,17 @@ def workspace(stream):
         cwd=first['payload']['cwd'] if first.get('type')=='session_meta' else None
         return root_path(cwd) if isinstance(cwd,str) else None
     except (ValueError,KeyError,TypeError):return None
+
+
+def _step_diff_inputs(stream, event_id, call_id, records=None):
+    if stream.provider=='codex' and call_id is None:
+        item,digest=record_at(stream,int(event_id))
+        return (item,), (digest,)
+    if stream.provider=='claude' and call_id is not None:
+        call,_,call_digest=stream.claude_step_at(call_id,records)
+        result,metadata,digest=stream.claude_step_at(event_id,records)
+        return (call,result,metadata), (digest,call_digest)
+    raise PreviewUnavailable('reference_expired')
 
 
 def root_path(value):
@@ -271,6 +283,53 @@ class ReferenceStore:
                 try:cwd=workspace(stream)
                 except (PreviewUnavailable,ValueError):cwd=None
             self.decorate(row,stream,event,cwd=cwd,records=records,images=images)
+        self.decorate_step_diffs(row,stream,events,records)
+
+    def decorate_step_diffs(self,row,stream,events,records):
+        provider=getattr(stream,'provider',None)
+        calls={}
+        if provider=='claude':
+            seen={step['id']:event for event in events if (step:=event.get('step',{})).get('phase')=='call'}
+            calls={key:event['id'] for key,event in seen.items() if event['step'].get('tool') in step_diff.CLAUDE_EDIT_TOOLS}
+            missing={step['id']:int(event['id'].split(':',1)[0]) for event in events
+                     if (step:=event.get('step',{})).get('phase')=='result'
+                     and step.get('status')=='done' and step['id'] not in seen}
+            calls.update(stream.claude_edit_calls_before(missing))
+        elif provider!='codex':
+            return
+        owner,inode=binding(row),identity(stream)
+        grants=[]
+        for event in events:
+            step=event.get('step',{})
+            if step.get('status')!='done':continue
+            call=calls.get(step.get('id'))
+            if provider=='claude':
+                if step.get('phase')!='result' or call is None:continue
+                build=step_diff.claude_diff
+            else:
+                if step.get('tool')!='apply_patch':continue
+                build=step_diff.codex_diff
+            try:
+                inputs,digests=_step_diff_inputs(stream,event['id'],call,records)
+                changes=step_diff.stat(build(*inputs))
+            except (OSError,ValueError,UnicodeError,RecursionError):
+                continue
+            if changes is not None:
+                grants.append((event,call,digests,changes))
+        if not grants:return
+        with self.lock:
+            self.prune()
+            for event,call,digests,changes in grants:
+                event_id=event['id']
+                key=(owner,inode,'step_diff',event_id,call,digests)
+                ref=self.by_key.get(key)
+                if ref not in self.refs or self.refs[ref]['key']!=key:ref=secrets.token_urlsafe(24)
+                self.by_key[key]=ref
+                self.refs[ref]=dict(key=key,row=owner,inode=inode,step_diff=(event_id,call,digests),
+                                    expires=self.clock()+self.ttl)
+                self.refs.move_to_end(ref)
+                event['step']=dict(event['step'],diff_stat=changes,diff_ref=ref)
+            self.prune()
 
     def decorate(self,row,stream,event,*,cwd=False,records=None,images=None):
         """Only called on selected events from an already pinned bound transcript."""
@@ -280,7 +339,8 @@ class ReferenceStore:
             if targets:
                 self.decorate_markdown(row,stream,event,offset,targets,records,images)
             if event.get('kind')=='mail' or event.get('kind')=='text' and event.get('role')=='assistant':return
-            item,digest=record_at(stream,offset,records);projection=extract_artifacts(item)
+            item,digest=record_at(stream,offset,records)
+            projection=extract_artifacts(item)
             if cwd is False:cwd=workspace(stream)
         except ValueError:return
         if event.get('kind')=='text' and event.get('role')=='user':
@@ -431,7 +491,7 @@ class ReferenceStore:
     def read(self,ref,row,*,reveal=False,thumbnail=False,mobile=False):
         with self.lock:
             self.prune();entry=self.refs.get(ref)
-            if not entry or binding(row)!=entry['row']:raise PreviewUnavailable('reference_expired')
+            if not entry or 'step_diff' in entry or binding(row)!=entry['row']:raise PreviewUnavailable('reference_expired')
             entry=dict(entry)
         try:
             with open_reader(row) as stream:
@@ -478,6 +538,28 @@ class ReferenceStore:
             return path if reveal else result
         except (HistoryUnavailable,OSError,ValueError,KeyError,TypeError) as exc:
             if isinstance(exc,PreviewUnavailable):raise
+            raise PreviewUnavailable('reference_expired') from None
+
+    def read_step_diff(self,ref,row):
+        with self.lock:
+            self.prune()
+            entry=self.refs.get(ref)
+            if not entry or 'step_diff' not in entry or binding(row)!=entry['row']:
+                raise PreviewUnavailable('reference_expired')
+        event_id,call_id,expected=entry['step_diff']
+        try:
+            with open_reader(row,expect_inode=entry['inode']) as stream:
+                inputs,digests=_step_diff_inputs(stream,event_id,call_id)
+                if digests!=expected:raise PreviewUnavailable('reference_expired')
+                build=step_diff.claude_diff if stream.provider=='claude' else step_diff.codex_diff
+                files=build(*inputs)
+                if step_diff.stat(files) is None:raise PreviewUnavailable('reference_expired')
+                result=step_diff.detail(files)
+                if _step_diff_inputs(stream,event_id,call_id)[1]!=expected:
+                    raise PreviewUnavailable('reference_expired')
+                stream.assert_identity()
+                return result
+        except (OSError,ValueError,TypeError,KeyError,RecursionError):
             raise PreviewUnavailable('reference_expired') from None
 
     def owner(self,ref):

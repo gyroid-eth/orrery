@@ -21,6 +21,7 @@ from urllib.parse import quote
 from conversation_mail import received, received_queued, sent
 from conversation_images import hermes_content, native_image
 from conversation_steps import claude_call, claude_result, mark_step_boundary
+from conversation_step_diff import CLAUDE_EDIT_TOOLS
 
 from conversation_history import (AGY_PROGRAMS, HistoryUnavailable, MAX_SCAN, MAX_TEXT, PAGE_SIZE,
     open_bound_transcript, assert_transcript_identity, conversation_binding, read_codex_page, recorded_model)
@@ -784,7 +785,7 @@ class Reader:
         if self.provider!='hermes':return None
         return self.rows_digest(*self.snapshot_rows())
 
-    def record_at(self,event_id,cache=None,*,normalized=False):
+    def _located_record(self,event_id,cache):
         """`cache` (one page's decoration only) shares a record among its blocks."""
         try:pos,line,index=map(int,event_id.split(':'))
         except (ValueError,AttributeError):raise HistoryUnavailable('reference_expired') from None
@@ -797,8 +798,42 @@ class Reader:
             item,raw,events=found
         else:item,raw,events=self.record((pos,line),include_events=True)
         if index not in events:raise HistoryUnavailable('reference_expired')
-        projection=events[index] if normalized else artifact_item(item,self.provider,index,events[index])
+        return item,raw,index,events[index]
+
+    def record_at(self,event_id,cache=None,*,normalized=False):
+        item,raw,index,event=self._located_record(event_id,cache)
+        projection=event if normalized else artifact_item(item,self.provider,index,event)
         return projection,hashlib.sha256(raw).digest()
+
+    def claude_step_at(self,event_id,cache=None):
+        item,raw,index,event=self._located_record(event_id,cache)
+        if self.provider!='claude' or not event.get('step'):raise HistoryUnavailable('reference_expired')
+        blocks=item['message']['content']
+        block=blocks[index]
+        # A message-level result object is ambiguous with several tool results.
+        metadata=None
+        if block['type']=='tool_result' and sum(isinstance(value,dict) and value.get('type')=='tool_result'
+                                                for value in blocks)==1:
+            metadata=item.get('toolUseResult')
+        return block,metadata,hashlib.sha256(raw).digest()
+
+    def claude_edit_calls_before(self,positions):
+        """One bounded lookup for results arriving on a later page or poll."""
+        if self.provider!='claude' or not positions:return {}
+        end=max(positions.values())
+        records,_,_=self.json_records(max(0,end-MAX_SCAN),end)
+        found={}
+        for pos,_,raw,_ in reversed(records):
+            if b'"tool_use"' not in raw or not any(name in raw for name in (b'"Edit"',b'"MultiEdit"',b'"Write"')):
+                continue
+            for index,event in normalize(parse(raw),'claude',self.sid):
+                step=event.get('step',{})
+                key=step.get('id')
+                if (step.get('phase')=='call' and step.get('tool') in CLAUDE_EDIT_TOOLS
+                        and key in positions and key not in found and pos<positions[key]):
+                    found[key]=f'{pos}:0:{index}'
+            if len(found)==len(positions):break
+        return found
 
     def record(self,location,*,include_events=False):
         pos,line=location

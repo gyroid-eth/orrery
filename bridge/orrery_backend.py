@@ -54,6 +54,7 @@ from usage_probe import (
 from conversation_history import (HistoryUnavailable, UnchangedPolls, bound_agent, bound_signature, conversation_binding, open_reader)
 from conversation_mail import received as recorded_mail
 from conversation_preview import ReferenceStore, PreviewUnavailable, clicked_path
+from conversation_step_diff import encode as encode_step_diff
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8791
@@ -2509,6 +2510,30 @@ async def conversation_reference(request: web.Request, *, reveal: bool = False) 
 
 async def serve_conversation_preview(request: web.Request) -> web.Response:
     return await conversation_reference(request)
+
+
+async def serve_conversation_diff(request: web.Request) -> web.Response:
+    headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
+             'Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"}
+    query=request.query
+    refs=query.getall('ref',[])
+    if set(query)!={'ref'} or len(refs)!=1 or not re.fullmatch(r'[A-Za-z0-9_-]{32}',refs[0]):
+        return web.json_response({'ok':False,'error':'invalid_query'},status=400,headers=headers)
+    try:
+        if isinstance(request.app[TMUX_BIN_KEY],FreshTargetBoundary):
+            raise PreviewUnavailable('reference_expired')
+        store=request.app[CONVERSATION_REFERENCES_KEY]
+        name=store.owner(refs[0])
+        row=await conversation_bound_row(request,name)
+        result=await asyncio.to_thread(store.read_step_diff,refs[0],row)
+        current=await conversation_bound_row(request,name)
+        if conversation_binding(row)!=conversation_binding(current):
+            raise PreviewUnavailable('reference_expired')
+        return web.json_response(result,headers=headers,dumps=encode_step_diff)
+    except (PreviewUnavailable,HistoryUnavailable):
+        return web.json_response({'ok':False,'error':'reference_expired'},status=400,headers=headers)
+    except (ClientError,asyncio.TimeoutError):
+        return web.json_response({'ok':False,'error':'dashboard_unavailable'},status=502,headers=headers)
 
 
 async def reveal_conversation_reference(request: web.Request) -> web.Response:
@@ -5062,6 +5087,7 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
     app.router.add_get("/telemetry/conversation", serve_conversation)
     app.router.add_get("/telemetry/conversation/stats", serve_conversation_stats)
     app.router.add_get('/telemetry/conversation/preview', serve_conversation_preview)
+    app.router.add_get('/telemetry/conversation/diff', serve_conversation_diff)
     app.router.add_post('/telemetry/conversation/path-image', preview_clicked_path)
     app.router.add_post('/telemetry/conversation/path-probe', probe_conversation_paths)
     app.router.add_post('/telemetry/conversation/reveal', reveal_conversation_reference)
