@@ -3994,9 +3994,9 @@
       }
     }
   },
-  "inventory_digest": "520d8780211e38a6b0beb40286e2459f48458a713c74f663d2815af570af261f",
+  "inventory_digest": "1a777312b5027fa2fda998c2153cf8bda500f541fd4381fe4d16cfb371cf6afa",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "55da999b94e251251abaeb891c7395dbd98e368589f4239070be721fd9f84125",
+  "source_digest": "fa739560e963a429166d2583f0b9d7a1d136686d291970253ee438d7dfe8dfe5",
   "surface": "cockpit",
   "version": 1
 }
@@ -11791,13 +11791,17 @@ const conversationView=(()=>{
       await asset('script','src','conversation_mail.js');
       await asset('script','src','conversation_speaker.js');
       await asset('script','src','conversation_terminal.js');
+      await asset('script','src','conversation_motion.js');
       await asset('script','src','conversation_view.js');
       await asset('script','src','conversation_reply.js');
       await asset('script','src','reader_activity.js');
       readerReply=OrreryConversationReply.mount({host:promptInput.closest('.promptbar'),input:promptInput,
         getTarget:captureComposerTarget,onError:text=>showToast(text,true)});
       readerActivity=OrreryReaderActivity.mount({getPanes:()=>panes.values(),
-        getProgram:pane=>currentAgents.find(agent=>agent.name===pane.session)?.program});
+        getProgram:pane=>currentAgents.find(agent=>agent.name===pane.session)?.program,
+        getBinding:pane=>{const agent=currentAgents.find(agent=>agent.name===pane.session);
+          return JSON.stringify([pane.session,agent?.history_binding,agent?.history_session_id,
+            agent?.native_session_id,agent?.history_receipt_ts,agent?.transcript_path,agent?.created]);}});
       await asset('link','href','reader_approval.css');
       await asset('script','src','reader_approval.js');
       readerApproval=OrreryReaderApproval.mount({

@@ -22,7 +22,7 @@ def test_codex_injected_context_folds_but_literal_human_input_stays_visible(cock
     js('conversationView.close();OrreryConversationSource.Source.prototype.read=async()=>({events:' +
        json.dumps(events) + ',provider:"codex",after:"end"});conversationView.open()')
     wait("document.querySelectorAll('.conversation-event').length===2")
-    assert js("[...document.querySelectorAll('.conversation-role')].map(e=>e.textContent)") == ['You']
+    assert js("[...document.querySelectorAll('.conversation-human')].map(e=>e.getAttribute('aria-label'))") == ['You']
     assert js("document.querySelector('.conversation-system-toggle').textContent") == '▸System notice'
     assert js("document.querySelector('.conversation-system-detail').hidden")
     assert js("document.querySelector('.conversation-text').textContent") == ENVIRONMENT
@@ -65,10 +65,7 @@ def test_demo_copy_keeps_original_paths_when_only_some_candidates_exist(cockpit)
     enable(count=1)
     # Start demo mode with a synthetic identity, without any account lookup.
     js("""conversationView.close();
-      history.replaceState({},'',location.pathname+'?demo=1');
-      window.fetchBeforeDemo=window.fetch;window.fetch=(url,...args)=>String(url)==='/telemetry/identity'
-        ?Promise.resolve(new Response(JSON.stringify({users:['mira'],hosts:[]})))
-        :fetchBeforeDemo(url,...args);
+      window.OrreryDemoBootstrap={on:true,identity:{users:['mira'],hosts:[]},words:[]};
       document.head.appendChild(Object.assign(document.createElement('script'),{src:'demo_mode.js'}));
     """)
     wait('OrreryDemo.on&&OrreryDemo.known')

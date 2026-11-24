@@ -55,14 +55,16 @@ def prepare_speaker(cockpit, width=1600, theme='dark'):
     js,wait,client,requests,enable=cockpit
     client.call('Emulation.setDeviceMetricsOverride',width=width,height=1000,deviceScaleFactor=1,mobile=False)
     stable_roster(js);enable(count=1)
-    js("""conversationView.close();Object.assign(currentAgents[0],{program:'claude-code',provider:'anthropic',model:'Roster model'});
+    js("""conversationView.close();Object.assign(currentAgents[0],{program:'claude-code',provider:'anthropic',model:'Roster model',parent_agent:'FixtureParent'});
+      currentAgents.push({name:'FixtureParent',program:'codex',provider:'openai'});
       window.speakerRows=[{id:'first',kind:'text',role:'assistant',text:'First model',ts:'2026-11-09T13:20:00Z',model:'claude-opus-5-5'},
         {id:'second',kind:'text',role:'assistant',text:'Changed model',model:'gpt-6.1-sol'},
         {id:'third',kind:'text',role:'assistant',text:'Another provider',model:'deepseek-v4'},
         {id:'fallback',kind:'text',role:'assistant',text:'Roster fallback'},
         {id:'human',kind:'text',role:'user',text:'Human prompt'},
         {id:'shell',kind:'text',role:'user',text:'<bash-input>pwd</bash-input>'},
-        {id:'notice',kind:'system',role:'system',text:'Context compacted',system_detail:'Generated summary'}];
+        {id:'notice',kind:'system',role:'system',text:'Context compacted',system_detail:'Generated summary'},
+        {id:'parent',kind:'text',role:'user',text:'あなたは ReviewFixture（親: FixtureParent）。この起動は --embed-task mode です。ORRERY Mail への登録は親が完了済み・儀式不要です。 Generated task.'}];
       OrreryConversationSource.Source.prototype.read=async()=>({provider:'claude',mode:'cursor',events:speakerRows,after:'tail'});
       OrreryColorTheme.setPreference("""+json.dumps(theme)+""");conversationView.open();""")
     wait("document.querySelector('.conversation-event[data-event-id=fallback]')!==null")
@@ -83,7 +85,12 @@ def test_speaker_name_recorded_model_and_roster_fallback(cockpit):
     assert js("[...speakerReader.querySelectorAll('.conversation-speaker-name')].map(e=>e.textContent)")==['ReviewFixture']*4
     assert js("speakerReader.querySelector('.conversation-speaker-model')===null")
     assert all('Claude' in label for label in js("[...speakerReader.querySelectorAll('.conversation-speaker')].map(e=>e.ariaLabel)"))
-    assert js("speakerReader.querySelector('[data-event-id=human] .conversation-role').textContent")=='You'
+    assert js("speakerReader.querySelector('[data-event-id=human]').getAttribute('aria-label')")=='You'
+    assert js("speakerReader.querySelector('[data-event-id=human]').title.startsWith('You')")
+    assert js("speakerReader.querySelector('[data-event-id=human] .conversation-role')===null")
+    assert js("speakerReader.querySelector('[data-event-id=parent] .conversation-parent').getAttribute('aria-label')")=='FixtureParent'
+    assert js("!!speakerReader.querySelector('[data-event-id=parent] .conversation-avatar')")
+    assert not js("speakerReader.querySelector('[data-event-id=parent]').classList.contains('conversation-human')")
     assert js("speakerReader.querySelector('[data-event-id=shell] .conversation-role').textContent")=='Shell'
     assert not js("speakerReader.querySelector('[data-event-id=notice] .conversation-speaker')")
     wait("speakerReader.querySelector('[data-event-id=second] .provider-badge img')?.naturalWidth>0")
