@@ -285,6 +285,7 @@ def test_fresh_output_gap_uses_actual_caller_to_stop_only_affected_session_and_r
         functions.append(declaration.group(0))
     script = r'''
 const groups=new Map(),sessionGroups=groups,panes=new Map(),sent=[],toasts=[],links=[];
+const document={dispatchEvent(){}};  // the close handler tells the Reader the connection changed
 const attachedSessions=new Set(),requestedSessions=new Set(),availableSessions=new Map([['Alpha',{}],['Beta',{}]]);
 const manualDetached=new Set(),paneWindows=new Set(),selectedPaneBySession=new Map();
 let pendingJump=null,activeId=null,splitVisible=false,focusedSplitSession=null,paneWindowSelection=null;
