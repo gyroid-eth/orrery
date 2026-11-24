@@ -1436,7 +1436,8 @@
           <span class="settings-row-name">Open agents in</span>
           <select class="settings-select" id="agentDefaultView">
             <option value="terminal">Terminal</option>
-            <option value="reader">Reader</option>
+            <option value="reader">Reader (side panel)</option>
+            <option value="reader-full">Reader (full width)</option>
           </select>
         </label>
       </div>
@@ -3993,9 +3994,9 @@
       }
     }
   },
-  "inventory_digest": "34cf544786b696a692ebe28d159e911e1b2c646ab84ee863b2a4e11c32dd7a38",
+  "inventory_digest": "520d8780211e38a6b0beb40286e2459f48458a713c74f663d2815af570af261f",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "50055106c5e028872ecc7b0d5db7f1b89fd2d4e0d2a7b4d2f78b9c9c447af76e",
+  "source_digest": "55da999b94e251251abaeb891c7395dbd98e368589f4239070be721fd9f84125",
   "surface": "cockpit",
   "version": 1
 }
@@ -11771,7 +11772,10 @@ const conversationView=(()=>{
   const enabled=()=>{try{return localStorage.getItem(key)==='1';}catch(_){return false;}};
   const asset=loadCockpitAsset;
   function defaultView(){
-    try{return localStorage.getItem(defaultViewKey)==='reader'?'reader':'terminal';}
+    try{
+      const value=localStorage.getItem(defaultViewKey);
+      return value==='reader'||value==='reader-full'?value:'terminal';
+    }
     catch(_){return 'terminal';}
   }
   function syncDefaultView(){defaultViewSetting.value=defaultView();}
