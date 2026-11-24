@@ -51,6 +51,8 @@ def cockpit(request):
         pytest.skip("set ORRERY_CDP_URL to an existing private/shared CDP browser")
     preference = getattr(request, 'param', False)
     requests = []
+    demo_prefs = {'orrery.demo-mode.v1': '1', 'orrery.demo-mask-locations.v1': '1',
+                  'orrery.demo-mask-words.v1': json.dumps(['Fixture Person'])}
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(ROOT / "bridge"), **kwargs)
@@ -67,6 +69,11 @@ def cockpit(request):
                 status, data = (200, {"agents": [], "prefs": {}})
                 if path == '/telemetry/conversation' and callable(preference):
                     status, data = preference(parse_qs(url.query))
+                if preference == 'reply-demo':
+                    if path == '/telemetry/prefs':
+                        data = {'rev': 1, 'prefs': demo_prefs}
+                    if path == '/telemetry/identity':
+                        data = {'users': ['fixture-user'], 'hosts': ['fixture-host']}
                 raw = json.dumps(data).encode()
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
@@ -76,10 +83,15 @@ def cockpit(request):
             else:
                 super().do_GET()
         def do_PUT(self):
+            output = {'prefs': {}}
+            if preference == 'reply-demo':
+                payload = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+                demo_prefs.update(payload.get('set', {}))
+                output = {'rev': 1, 'prefs': demo_prefs}
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(b'{"prefs":{}}')
+            self.wfile.write(json.dumps(output).encode())
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -95,6 +107,8 @@ def cockpit(request):
     bootstrap = "localStorage.clear();localStorage.setItem('oc-first-flight-v1',JSON.stringify({seen:true,open:false}));"
     if preference == 'disabled':
         bootstrap += "localStorage.setItem('oc-term-conversation-enabled','0');"
+    if preference == 'reply-demo':
+        bootstrap += f"Object.entries({json.dumps(demo_prefs)}).forEach(([k,v])=>localStorage.setItem(k,v));"
     storage_bootstrap = client.call("Page.addScriptToEvaluateOnNewDocument", source=bootstrap)
     def js(expression):
         result = client.call("Runtime.evaluate", expression=expression, returnByValue=True, awaitPromise=True)

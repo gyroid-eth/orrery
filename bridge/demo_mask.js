@@ -177,7 +177,7 @@
     for(const [word,whole] of lowerWords)needles.push({text:word,from:0,to:word.length,before:whole?WORD_CHAR:null});
 
     /* Location ranges take precedence over names inside the same text. */
-    function spans(text,{literalPath,wholePath}={}){
+    function spans(text,{literalPath,wholePath,streaming}={}){
       const lower=text.toLowerCase(),found=hideLocations?locationSpans(text):[];
       if(hideLocations&&wholePath&&text)return [[0,text.length,'path']];
       if(hideLocations&&literalPath){
@@ -215,6 +215,16 @@
         }
         take(at,at+word.length);
       });
+      // A streaming sample can stop in the middle of a known name. Mask its
+      // possible continuation now and resolve it again with the next sample.
+      if(streaming)for(const needle of needles){
+        for(let length=Math.min(lower.length,needle.text.length-1);length>needle.from;length--){
+          const start=lower.length-length,previous=text[start-1];
+          if(needle.before&&previous!==undefined&&needle.before.test(previous))continue;
+          if(!lower.endsWith(needle.text.slice(0,length)))continue;
+          take(start+needle.from,lower.length);break;
+        }
+      }
       return found.sort((a,b)=>a[0]-b[0]);
     }
 
