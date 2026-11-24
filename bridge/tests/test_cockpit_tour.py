@@ -156,7 +156,8 @@ def prompt(connected=True, pane=True, text='Hello', guarded=False):
     # sendPrompt fixes its target pane when it starts; take those helpers as they are.
     fn = re.search(r'function captureComposerTarget\([^)]*\)\{.*?(?=\nfunction sendInterrupt)', source, re.S).group()
     return node("const events=[];const activeId='pane';const socket={};"
-                f"const promptInput={{value:{json.dumps(text)}}};"
+                f"const promptInput={{value:{json.dumps(text)},"
+                "getBoundingClientRect(){return {top:0,right:120,width:120};}};"
                 f"const panes=new Map({json.dumps([['pane', {'session': 'Test'}]] if pane else [])});"
                 "const sessionGroups=new Map(),promptRecipientPins=new Map();"
                 "const promptFiles={entries:[],clear(){}};"
@@ -184,7 +185,10 @@ def test_talk_completes_only_for_a_sent_nonempty_unguarded_prompt():
 
 def test_pending_spawn_wait_resolves_for_ready_and_rejects_for_failure():
     source = (BRIDGE / 'cockpit.html').read_text()
-    watch = re.search(r'async function watchSpawnLaunch\(name,deadlineSeconds\)\{.*?(?=\nfunction spawnTarget)', source, re.S).group()
+    # The poller calls the same failure formatter as the initial launch request.
+    watch = re.search(
+        r'function spawnFailureReason\([^)]*\)\{.*?(?=\nfunction spawnTarget\b)', source, re.S
+    ).group()
     for verdict in ('ready', 'failed'):
         actual = node("function setTimeout(fn){fn();}"
                       f"async function fetch(){{return {{json:async()=>({{ok:true,state:'{verdict}'}})}};}}"

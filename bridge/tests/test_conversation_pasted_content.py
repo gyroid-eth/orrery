@@ -13,6 +13,8 @@ from conversation_readers import normalize
 
 
 TEXT = 'Reference: Fixture · assistant · 2026-11-13T04:10:00Z\nRecorded message: quote\n> Keep this part.\n\nPlease check this reference.'
+MOBILE_TEXT = ('Reference: Fixture · assistant · 2026-11-13T04:10:00Z | Recorded message: quote'
+               ' | Quote: "Keep this part." | Reply: Please check this reference.')
 
 
 @pytest.mark.parametrize('mode',['turn','queued'])
@@ -49,9 +51,10 @@ def test_inner_whitespace_is_preserved_and_assistant_text_is_literal():
 
 
 @pytest.mark.parametrize('mode',['turn','queued'])
-def test_wrapped_native_record_reconciles_and_displays_without_tags(cockpit,tmp_path,monkeypatch,mode):
+@pytest.mark.parametrize('text',[TEXT,MOBILE_TEXT],ids=['multiline','one-line'])
+def test_wrapped_native_record_reconciles_and_displays_without_tags(cockpit,tmp_path,monkeypatch,mode,text):
     js,wait,client=prepare(cockpit,'claude')
-    js('sentText='+json.dumps(TEXT))
+    js('sentText='+json.dumps(text))
     timestamp=js('new Date(clock+1000).toISOString()')
     path=tmp_path/'history.jsonl'
     path.write_bytes(line(dict(claude('assistant','Ready for a reference.'),timestamp=js('new Date(clock-1000).toISOString()'))))
@@ -64,16 +67,18 @@ def test_wrapped_native_record_reconciles_and_displays_without_tags(cockpit,tmp_
         folder=os.environ.get('ORRERY_PASTED_CAPTURE_DIR')
         if folder:
             out=Path(folder);out.mkdir(parents=True,exist_ok=True)
-            (out/(mode+'-awaiting.png')).write_bytes(base64.b64decode(client.call('Page.captureScreenshot',format='png')['data']))
-        wrapped=('\n\n' if mode=='turn' else '')+'<pasted_content id="0c0d">\n'+TEXT+'\n</pasted_content id="0c0d">'
+            prefix=mode+('-one-line' if text==MOBILE_TEXT else '')
+            (out/(prefix+'-awaiting.png')).write_bytes(base64.b64decode(client.call('Page.captureScreenshot',format='png')['data']))
+        wrapped=('\n\n' if mode=='turn' else '')+'<pasted_content id="0c0d">\n'+text+'\n</pasted_content id="0c0d">'
         record=queued(wrapped,timestamp=timestamp) if mode=='queued' else dict(claude('user',wrapped),timestamp=timestamp)
         with path.open('ab') as stream:stream.write(line(record))
         js('conversationView.refresh()')
         wait("reader.querySelectorAll('.conversation-submission').length===0")
         assert js("reader.querySelector('.conversation-submission-dismiss')===null")
         assert '<pasted_content' not in js('reader.textContent')
-        assert 'Recorded message: quote' in js('reader.textContent')
+        assert js("reader.querySelector('.conversation-reference-quote').textContent")=='Keep this part.'
+        assert js("reader.querySelector('.conversation-reference-body .conversation-text').textContent")=='Please check this reference.'
         if folder:
             js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
-            (out/(mode+'-matched.png')).write_bytes(base64.b64decode(client.call('Page.captureScreenshot',format='png')['data']))
+            (out/(prefix+'-matched.png')).write_bytes(base64.b64decode(client.call('Page.captureScreenshot',format='png')['data']))
         assert calls

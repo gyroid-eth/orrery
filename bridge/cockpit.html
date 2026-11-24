@@ -1668,7 +1668,9 @@
   <form id="spawnForm">
     <div class="spawn-launcher" id="spawnLauncher">
       <textarea id="spawnTask" rows="2" maxlength="4000" required aria-label="Task" placeholder="What should it do?"></textarea>
-      <div class="spawn-status" id="spawnStatus" role="alert" hidden></div>
+      <button class="spawn-icon-button" id="spawnDiscardDraft" type="button" title="Discard draft" aria-label="Discard draft" hidden>
+        <svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-reset"/></svg>
+      </button>
       <div class="spawn-row">
         <button class="spawn-chip spawn-name-chip" id="spawnNameButton" type="button" aria-expanded="false" aria-controls="spawnNameSheet" title="Agent name" aria-label="Agent name">
           <img id="ncPortrait" alt="" hidden><span id="ncDiceFace"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-dice"/></svg></span>
@@ -1686,6 +1688,7 @@
         </div>
         <button id="spawnSubmit" type="submit" title="Launch (⌘↵)" disabled>Launch<span id="spawnLaunchFill" aria-hidden="true"></span></button>
       </div>
+      <div class="spawn-status" id="spawnStatus" role="alert" hidden></div>
     </div>
     <section class="spawn-sheet" id="spawnNameSheet" aria-label="Agent name" hidden>
       <div class="spawn-sheet-in">
@@ -3155,6 +3158,16 @@
           },
           {
             "property": "border",
+            "selector": ".mail-clear-filter",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-clear-filter",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
             "selector": ".mail-assignee-fallback",
             "value": "1px solid var(--hair)"
           },
@@ -4040,7 +4053,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "0231af1b70dd8b198b0da89f5a9660470c1d93c43f78d3bba67b994822e1ac19",
+        "digest": "1a98656e8fe5ea3db1e990b0b871d6f00c16644b01035b113c1b6b4438d35a38",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4162,9 +4175,9 @@
       }
     }
   },
-  "inventory_digest": "48b8bc7f6cceba419a6182f3357790da36a86e477572049fdd2dd39695ce7481",
+  "inventory_digest": "22d995c30730b2e8854bcc200ab0b262cbd4b28ac48c32c46bcc2c3c13b49926",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "b0abec067a7860983e73e277655a11887f454d229ee514d2dd26df0f67c2d555",
+  "source_digest": "f54f3f34dfac6e6079db1d0b02bed4f78400b800c1cbe7f976105f795c42bd36",
   "surface": "cockpit",
   "version": 1
 }
@@ -7278,11 +7291,14 @@ function createPane(session,meta){
   const host=document.createElement('div');
   host.className='termhost';host.dataset.paneId=meta.paneId;host.dataset.session=session;
   stageEl.appendChild(host);
+  const activateWebLink=(event,uri)=>{event.preventDefault();openExternalUrl(uri);};
   const term=new Terminal({
     cursorBlink:true,
     fontFamily:'"IBM Plex Mono", Menlo, Monaco, "DejaVu Sans Mono", monospace',
     fontSize:currentTerminalFontSize(),lineHeight:1.15,scrollback:6000,theme:currentTerminalTheme(),
     minimumContrastRatio:currentTerminalMinimumContrastRatio(),
+    // OSC 8 hyperlinks are handled by xterm before the plain-URL addon.
+    linkHandler:{activate:activateWebLink,allowNonHttpProtocols:false},
   });
   const fit=new FitAddon.FitAddon();
   term.loadAddon(fit);
@@ -7290,74 +7306,87 @@ function createPane(session,meta){
   // backend (the Tauri webview has no window.open handler, so a plain
   // addon default would do nothing there).
   if(window.WebLinksAddon&&WebLinksAddon.WebLinksAddon){
-    term.loadAddon(new WebLinksAddon.WebLinksAddon((event,uri)=>{event.preventDefault();openExternalUrl(uri);}));
+    term.loadAddon(new WebLinksAddon.WebLinksAddon(activateWebLink));
   }
   // Local paths in pane output: click → reveal in the file manager.
   // Single-line matches only; a path wrapped across rows is not linked.
-  term.registerLinkProvider({
-    provideLinks(y,cb){
-      const line=term.buffer.active.getLine(y-1);if(!line)return cb(undefined);
-      const text=line.translateToString(true);const pending=[];
-      // Deduplicate within this scan; the pane's cwd can change before the next scan.
-      const relativeProbes=new Map();
-      const re=/(["'`(<])([^/\s"'`()\[\]<>=:](?:[^/"'`()\[\]<>=:]*[^/\s"'`()\[\]<>=:])?\/[^/\s"'`()\[\]<>][^\s"'`()\[\]<>]*)|(^|[\s"'`(\[<=])((?:~|\/)[^\s"'`()\[\]<>]+|[^/\s"'`()\[\]<>=:]+\/[^/\s"'`()\[\]<>][^\s"'`()\[\]<>]*)/g;
-      let m,wrappedEnd=0;
-      const urls=[...text.matchAll(/[a-z][a-z\d+.-]*:\/\/[^\s"'`()<>]+/gi)];
-      // xterm measures ranges in cells, including text before the link.
-      const columns=[];
-      if(/[^\x00-\x7f]/.test(text)){
-        const cell=term.buffer.active.getNullCell();
-        for(let col=0,index=0;index<=text.length;){
-          columns[index]=col;if(index===text.length||!line.getCell(col,cell))break;
-          index+=cell.getChars().length||1;col+=cell.getWidth()||1;
-        }
+  function providePathLinks(y,cb,relativeOnly){
+    const line=term.buffer.active.getLine(y-1);if(!line)return cb(undefined);
+    const text=line.translateToString(true);const links=[];
+    // Deduplicate within this scan; the pane's cwd can change before the next scan.
+    const relativeProbes=new Map();
+    const re=/(["'`(<])([^/\s"'`()\[\]<>=:](?:[^/"'`()\[\]<>=:]*[^/\s"'`()\[\]<>=:])?\/[^/\s"'`()\[\]<>][^\s"'`()\[\]<>]*)|(^|[\s"'`(\[<=])((?:~|\/)[^\s"'`()\[\]<>]+|[^/\s"'`()\[\]<>=:]+\/[^/\s"'`()\[\]<>][^\s"'`()\[\]<>]*)/g;
+    let m,wrappedEnd=0;
+    const urls=[...text.matchAll(/[a-z][a-z\d+.-]*:\/\/[^\s"'`()<>]+/gi)];
+    // xterm measures ranges in cells, including text before the link.
+    const columns=[];
+    if(/[^\x00-\x7f]/.test(text)){
+      const cell=term.buffer.active.getNullCell();
+      for(let col=0,index=0;index<=text.length;){
+        columns[index]=col;if(index===text.length||!line.getCell(col,cell))break;
+        index+=cell.getChars().length||1;col+=cell.getWidth()||1;
       }
-      // `open` is what the click reveals. When the probe resolved the text
-      // (a shortened "…" path, or a real name with a "…" in it), that path is
-      // bound when the link is made and opened as it is — even when it is
-      // spelled like the text — so a later click never re-reads its "…".
-      const mk=(start,p,open=p,literal=false)=>({range:{start:{x:(columns[start]??start)+1,y},end:{x:columns[start+p.length]??start+p.length,y}},text:p,
-        activate:(event)=>{event.preventDefault();revealLocalPath(open,{literal});},
-        decorations:{pointerCursor:true,underline:true}});
-      while((m=re.exec(text))){
-        const before=m[1]??m[3],token=m[2]??m[4],start=m.index+before.length;
-        if(urls.some(url=>start>=url.index&&start<url.index+url[0].length))continue;
-        const relative=!/^[~/]/.test(token);
-        if(relative&&start<wrappedEnd)continue;
-        let p=token.replace(/[.,;:!?]+$/,'');
-        // Skip bare one-segment tokens such as Claude Code's /compact, /log or the
-        // statusline's /rc: a real path has a second separator or an extension.
-        if(!relative&&(p.length<2||!(p.indexOf('/',1)>0||/\.[A-Za-z0-9]+$/.test(p))))continue;
-        // Unquoted paths with spaces ("…/21_Coding Projects/orrery") end where the
-        // filesystem says they end: ask the backend for the longest existing prefix
-        // of the rest of the row. Rows without a further space need no probe.
-        const rest=text.slice(start).split(/["'`<>]/)[0];
-        if(relative){
-          const end=relativePathEnd(text,start,before);
-          if(end<0||start===0&&line.isWrapped||end===text.length&&term.buffer.active.getLine(y)?.isWrapped)continue;
-          const quoted=/^["'`(<]$/.test(before);
-          const candidate=quoted?text.slice(start,end):rest.slice(0,end-start);
-          if(quoted)wrappedEnd=end;
-          pending.push(probeLocalPath(candidate,{session,paneId:meta.paneId},relativeProbes).then(found=>
-            found?.resolved&&(!quoted||found.path===candidate)?mk(start,found.path,found.resolved,true):null));
-          continue;
-        }
-        if(!/[\s\u3000]|[^\x00-\x7f]/.test(rest)){pending.push(Promise.resolve(mk(start,p)));continue;}
-        pending.push(probeLocalPath(rest).then(found=>found
-          ?mk(start,found.path,found.resolved||found.path,Boolean(found.resolved))
-          :mk(start,p)));
-      }
-      if(!pending.length)return cb(undefined);
-      Promise.all(pending).then(links=>{
-        let end=0;
-        const disjoint=links.filter(link=>{
-          if(!link||link.range.start.x<=end)return false;
-          end=link.range.end.x;return true;
-        });
-        cb(disjoint.length?disjoint:undefined);
-      },()=>cb(undefined));
     }
-  });
+    // `open` is what the click reveals. When the probe resolved the text
+    // (a shortened "…" path, or a real name with a "…" in it), that path is
+    // bound when the link is made and opened as it is — even when it is
+    // spelled like the text — so a later click never re-reads its "…".
+    const mk=(start,p,open=p,literal=false)=>({range:{start:{x:(columns[start]??start)+1,y},end:{x:columns[start+p.length]??start+p.length,y}},text:p,
+      activate:(event)=>{event.preventDefault();revealLocalPath(open,{literal});},
+      decorations:{pointerCursor:true,underline:true}});
+    while((m=re.exec(text))){
+      const before=m[1]??m[3],token=m[2]??m[4],start=m.index+before.length;
+      if(urls.some(url=>start>=url.index&&start<url.index+url[0].length))continue;
+      if(start<wrappedEnd)continue;
+      const relative=!/^[~/]/.test(token);
+      const quoted=/^["'`<]$/.test(before);
+      if(!relative&&quoted)wrappedEnd=relativePathEnd(text,start,before);
+      if(relative!==relativeOnly)continue;
+      let p=token.replace(/[.,;:!?]+$/,'');
+      // Skip bare one-segment tokens such as Claude Code's /compact, /log or the
+      // statusline's /rc: a real path has a second separator or an extension.
+      if(!relative&&(p.length<2||!(p.indexOf('/',1)>0||/\.[A-Za-z0-9]+$/.test(p))))continue;
+      // Unquoted paths with spaces ("…/21_Coding Projects/orrery") end where the
+      // filesystem says they end: ask the backend for the longest existing prefix
+      // of the rest of the row. Rows without a further space need no probe.
+      const rest=text.slice(start).split(/["'`<>]/)[0];
+      if(relative){
+        const end=relativePathEnd(text,start,before);
+        if(end<0||start===0&&line.isWrapped||end===text.length&&term.buffer.active.getLine(y)?.isWrapped)continue;
+        const quoted=/^["'`(<]$/.test(before);
+        const candidate=quoted?text.slice(start,end):rest.slice(0,end-start);
+        if(quoted)wrappedEnd=end;
+        links.push(probeLocalPath(candidate,{session,paneId:meta.paneId},relativeProbes).then(found=>
+          found?.resolved&&(!quoted||found.path===candidate)?mk(start,found.path,found.resolved,true):null));
+        continue;
+      }
+      const link=mk(start,quoted&&wrappedEnd>=0?rest:p);
+      if(/[\s\u3000]|[^\x00-\x7f]/.test(rest)){
+        // xterm snapshots the hovered link at mousedown. Publish the link
+        // immediately and let activation await the same hover probe.
+        const probe=probeLocalPath(rest);
+        link.activate=async event=>{
+          event.preventDefault();
+          const found=await probe;
+          return revealLocalPath(found?.resolved||found?.path||p,{literal:Boolean(found?.resolved)});
+        };
+      }
+      links.push(link);
+    }
+    if(!links.length)return cb(undefined);
+    const finish=results=>{
+      let end=0;
+      const disjoint=results.filter(link=>{
+        if(!link||link.range.start.x<=end)return false;
+        end=link.range.end.x;return true;
+      });
+      cb(disjoint.length?disjoint:undefined);
+    };
+    if(relativeOnly)Promise.all(links).then(finish,()=>cb(undefined));
+    else finish(links);
+  }
+  term.registerLinkProvider({provideLinks:(y,cb)=>providePathLinks(y,cb,false)});
+  term.registerLinkProvider({provideLinks:(y,cb)=>providePathLinks(y,cb,true)});
   term.open(host);
   term.onData(data=>{if(activeId===meta.paneId)send({type:"input",paneId:meta.paneId,data});});
   // Classic (non-SGR) mouse reports: xterm emits them here, one char per byte.
@@ -7893,10 +7922,16 @@ async function openExternalUrl(uri){
     return true;
   }catch(error){
     // Browser-hosted cockpit (no backend opener or backend offline): let the
-    // page open the tab itself.
-    const opened=window.open(url,'_blank','noopener');
-    if(!opened)showToast(`OPEN URL FAILED · ${String(error&&error.message||error||'request failed')}${appError?` · app: ${appError}`:''}`,true);
-    return !!opened;
+    // page open the tab itself. Detach the opener before navigating so a
+    // successful tab can still be distinguished from a blocked popup.
+    const opened=window.open('about:blank','_blank');
+    if(opened){
+      opened.opener=null;
+      opened.location.replace(url);
+      return true;
+    }
+    showToast(`OPEN URL FAILED · ${String(error&&error.message||error||'request failed')}${appError?` · app: ${appError}`:''}`,true);
+    return false;
   }
 }
 
@@ -9405,11 +9440,12 @@ function agentDetailHTML(detail){
     const directory=icon==='directory';
     const escaped=esc(value);
     const demo=globalThis.OrreryDemo;
-    const maskedDirectory=directory&&demo?.on&&demo.storedLocations();
-    const content=directory&&!maskedDirectory?escaped.replaceAll('/','/<wbr>'):escaped;
+    const demoDirectory=directory&&demo?.on;
+    // Demo mode needs the whole path in one text node to match its home prefix.
+    const content=directory&&!demoDirectory?escaped.replaceAll('/','/<wbr>'):escaped;
     return agentDetailItem(icon,`${label}: ${directory?detail.cwd:value}`,
-      `<span class="agent-detail-value agent-detail-${icon}"${maskedDirectory?' data-demo-path':''}>${content}</span>`,
-      maskedDirectory?detail.cwd:null);
+      `<span class="agent-detail-value agent-detail-${icon}"${demoDirectory?' data-demo-path':''}>${content}</span>`,
+      demoDirectory?detail.cwd:null);
   };
   let lineage='';
   if(detail.parentState==='top')lineage=agentDetailItem('top','Top level');
@@ -10279,6 +10315,7 @@ paletteOverlay.addEventListener('mousedown',event=>{if(event.target===paletteOve
 const spawnOverlay=document.getElementById('spawnOverlay');
 const spawnForm=document.getElementById('spawnForm');
 const spawnTask=document.getElementById('spawnTask');
+const spawnDiscardDraft=document.getElementById('spawnDiscardDraft');
 const spawnRole=document.getElementById('spawnRole');
 const spawnSubmit=document.getElementById('spawnSubmit');
 const spawnStatus=document.getElementById('spawnStatus');
@@ -10288,7 +10325,7 @@ const spawnNameButton=document.getElementById('spawnNameButton');
 const spawnModelButton=document.getElementById('spawnModelButton');
 const spawnNameSheet=document.getElementById('spawnNameSheet');
 const spawnModelSheet=document.getElementById('spawnModelSheet');
-let spawnBusy=false,toastTimer=null,spawnLastFocus=null,spawnProblem='',spawnResumeDraft=false;
+let spawnAttempt=null,spawnFormRevision=0,toastTimer=null,spawnLastFocus=null,spawnProblem='';
 let spawnOpenSheet=null,spawnOpenChip=null;
 const spawnReducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 const spawnSheetAnimations=new WeakMap();
@@ -10349,8 +10386,9 @@ function dismissSpawnSheet(restoreFocus=false){
   sheet.inert=true;
   morphSpawnSheet(sheet,chip,false);
 }
+function spawnFormIsBusy(){return spawnAttempt?.revision===spawnFormRevision;}
 function toggleSpawnSheet(sheet,chip,focus){
-  if(spawnBusy)return;
+  if(spawnFormIsBusy())return;
   if(spawnOpenSheet===sheet){dismissSpawnSheet(true);return;}
   dismissSpawnSheet();
   spawnOpenSheet=sheet;spawnOpenChip=chip;
@@ -10375,8 +10413,10 @@ let selUrlIndex=null,selUrlKey=null;
 const SPAWN_RECENT_STORAGE_KEY='orrery.spawn-local-recent.v1';
 const SPAWN_SEARCH_STORAGE_KEY='orrery.spawn-local-search.v1';
 const SPAWN_NAME_RECENT_KEY='orrery.spawn-scientist-recent.v1';
+const SPAWN_DRAFT_KEY='orrery.spawn-draft.v1';
 const SPAWN_SCIENTIST_COLUMNS=5;
 let spawnViewerStorage=null;try{spawnViewerStorage=window.localStorage;}catch(_){/* viewer history is optional */}
+let spawnDraftFallback,spawnShownDraft=null,spawnPendingSelection=null;
 const dirCrumbs=document.getElementById('dirCrumbs');
 const spawnDirSheet=document.getElementById('spawnDirSheet');
 const spawnDirButton=document.getElementById('spawnDirButton');
@@ -10397,7 +10437,7 @@ function renderSpawnDirPath(){
 }
 function openSpawnDirPicker(){
   if(spawnOpenSheet===spawnDirSheet){dismissSpawnSheet(true);return;}
-  if(spawnBusy)return;
+  if(spawnFormIsBusy())return;
   spawnDirSearch.value='';spawnDirBrowsePath='';spawnDirChildren=[];
   dirCrumbs.replaceChildren();spawnDirUse.disabled=true;
   updateSpawnDirSearch();
@@ -10407,6 +10447,7 @@ function openSpawnDirPicker(){
 function chooseSpawnDir(path){
   spawnDirPath=path;renderSpawnDirPath();dismissSpawnSheet(true);
   if(spawnProblem){spawnProblem='';updateSpawnAvailability();}
+  saveSpawnDraft();
 }
 spawnDirButton.addEventListener('click',openSpawnDirPicker);
 spawnDirUse.addEventListener('click',()=>{
@@ -10501,10 +10542,17 @@ const spawnTools=document.getElementById('spawnTools');
 const spawnComputerUse=document.getElementById('spawnComputerUse');
 const spawnBrowserUse=document.getElementById('spawnBrowserUse');
 const spawnToolSwitches=[spawnComputerUse,spawnBrowserUse];
+const CODEX_BROWSER_REQUIREMENT='Codex Browser requires [mcp_servers.chrome-devtools] or a chrome-devtools-mcp server in config.toml.';
 let spawnToolsRoute=null;
 for(const control of spawnToolSwitches){
-  control.addEventListener('click',()=>control.setAttribute('aria-checked',String(control.getAttribute('aria-checked')!=='true')));
+  control.addEventListener('click',()=>{
+    // The submitted tools belong to the launch already waiting for a result.
+    if(spawnFormIsBusy())++spawnFormRevision;
+    control.setAttribute('aria-checked',String(control.getAttribute('aria-checked')!=='true'));
+    spawnProblem='';updateSpawnAvailability();saveSpawnDraft();
+  });
 }
+spawnHelper.addEventListener('change',saveSpawnDraft);
 const ncPortrait=document.getElementById('ncPortrait');
 const ncDiceFace=document.getElementById('ncDiceFace');
 const ncName=document.getElementById('ncName');
@@ -10524,7 +10572,9 @@ const spawnCatalogLoader=SpawnCatalogLoader.create({
     if(signature===spawnCatalogSignature){updateSpawnAvailability();return;}
     spawnCatalogSignature=signature;
     spawnTaken=new Set(((data.naming||{}).taken||[]).map(n=>String(n).toLowerCase()));
-    renderProviderTabs();renderAgentStrip();
+    if(catalog?.providers.length&&spawnPendingSelection)restoreSpawnSelection();
+    else renderProviderTabs();
+    renderAgentStrip();
     if(catalog)renderDirs();
     if(spawnOpenSheet)positionSpawnSheet(spawnOpenSheet,spawnOpenChip);
   },
@@ -10590,6 +10640,7 @@ function renderProviderTabs(){
       if(f.id!=='local')spawnModelSearch.value='';
       else restoreSpawnModelSearch();
       renderProviderTabs();
+      saveSpawnDraft();
       providerTabs.querySelector('[aria-pressed="true"]')?.focus({preventScroll:true});
     });
     providerTabs.append(b);
@@ -10632,6 +10683,7 @@ function renderLocalModels(){
     input.addEventListener('change',()=>{
       selProvider=entry.provider.id;selModel=entry.model.id;selUrlIndex=entry.model.url_index??null;
       selUrlKey=entry.model.url_key??null;selEffort=null;selHarness=null;spawnProblem='';renderHarnesses();
+      saveSpawnDraft();
     });
     const name=document.createElement('span');name.className='model-choice-name';name.textContent=entry.model.display_name||entry.model.id;
     const note=document.createElement('span');note.className='model-choice-note';note.textContent=SpawnPicker.metadata(entry.provider,entry.model);
@@ -10650,12 +10702,13 @@ function selectedSpawnModel(){const p=providerById(selProvider);return p&&(p.mod
 function renderSpawnTools(){
   const harness=SpawnPicker.harnessKey(selHarness);
   spawnTools.hidden=spawnCatalog?.runtime_mode==='fresh'||!['claude-code','codex','dsh','hermes'].includes(harness);
+  spawnBrowserUse.title=harness==='codex'?CODEX_BROWSER_REQUIREMENT:'Browser';
   const route=spawnTools.hidden?null:JSON.stringify([selProvider,harness]);
   if(route===spawnToolsRoute)return;
   spawnToolsRoute=route;
-  for(const control of spawnToolSwitches){
-    control.setAttribute('aria-checked',String(Boolean(route)&&harness!=='dsh'));
-  }
+  const defaultOn=Boolean(route)&&harness!=='dsh';
+  spawnComputerUse.setAttribute('aria-checked',String(defaultOn));
+  spawnBrowserUse.setAttribute('aria-checked',String(defaultOn&&harness!=='codex'));
 }
 function spawnToolOptions(){
   if(spawnCatalog?.runtime_mode==='fresh'||spawnTools.hidden)return {};
@@ -10692,6 +10745,7 @@ function renderHarnesses(){
     button.addEventListener('click',()=>{
       if(selHarness===h.id)return;
       selHarness=h.id;spawnToolsRoute=null;spawnProblem='';renderHarnesses();
+      saveSpawnDraft();
       spawnHarnesses.querySelector('[aria-pressed="true"]')?.focus({preventScroll:true});
     });
     spawnHarnesses.append(button);
@@ -10746,8 +10800,15 @@ function updateSpawnAvailability(){
     model&&!harness?(unavailable?`${SpawnPicker.unavailableReason(unavailable)}. Open model settings for setup.`:'No available harness. Choose another model.'):
     !model&&Number.isInteger(selUrlIndex)?'Model unavailable. Choose another model.':
     missingEffort?'Choose an effort in the model sheet.':'';
-  const message=spawnProblem||issue;
-  spawnSubmit.disabled=spawnBusy||!spawnTask.value.trim()||!harness||Boolean(missingEffort);
+  const browserNotice=!spawnTools.hidden&&SpawnPicker.harnessKey(selHarness)==='codex'&&
+    spawnBrowserUse.getAttribute('aria-checked')==='true'?CODEX_BROWSER_REQUIREMENT:'';
+  const message=spawnProblem||issue||browserNotice;
+  const busy=spawnFormIsBusy();
+  if(busy)spawnForm.setAttribute('aria-busy','true');
+  else spawnForm.removeAttribute('aria-busy');
+  spawnTask.readOnly=busy;
+  spawnSubmit.disabled=Boolean(spawnAttempt)||!spawnTask.value.trim()||!harness||Boolean(missingEffort);
+  spawnDiscardDraft.disabled=busy;spawnDiscardDraft.hidden=spawnShownDraft===null;
   spawnStatus.textContent=message;spawnStatus.title=message;spawnStatus.hidden=!message;
 }
 spawnModelSearch.addEventListener('input',()=>{
@@ -10758,7 +10819,7 @@ spawnModelSearch.addEventListener('input',()=>{
   if(spawnOpenSheet===spawnModelSheet)positionSpawnSheet(spawnModelSheet,spawnModelButton);
 });
 spawnTask.addEventListener('input',()=>{
-  sizeSpawnTask();updateSpawnAvailability();
+  sizeSpawnTask();updateSpawnAvailability();saveSpawnDraft();
 });
 function sizeSpawnTask(){
   spawnTask.style.height='';
@@ -10830,6 +10891,7 @@ function renderModels(){
     input.type='radio';input.name='spawnModel';input.value=model.id;input.checked=model.id===selModel;
     input.addEventListener('change',()=>{
       selModel=model.id;selHarness=null;spawnProblem='';renderHarnesses();
+      saveSpawnDraft();
     });
     const name=document.createElement('span');name.className='model-choice-name';name.textContent=model.id;
     label.append(input,name);
@@ -10900,7 +10962,7 @@ function renderEfforts(p){
   effortRow.hidden=!efforts;
   if(!efforts||!efforts.includes(selEffort))selEffort=null;
   EffortSlider.mount(effortChoices,{levels:efforts,value:selEffort,fallback:efforts?.includes(fallback)?fallback:null,onChange:value=>{
-    selEffort=value;spawnProblem='';renderSpawnModelChip();updateSpawnAvailability();
+    selEffort=value;spawnProblem='';renderSpawnModelChip();updateSpawnAvailability();saveSpawnDraft();
   }});
 }
 function renderDirs(){
@@ -10972,7 +11034,7 @@ function renderSpawnDirCrumbs(path){
 /* agent picker — every registered name is consumed forever, so the adjective
    suggestions only offer combinations that are still free */
 function freeAdjectivesFor(scientist){
-  const adjectives=((spawnCatalog.naming||{}).adjectives)||[];
+  const adjectives=spawnCatalog?.naming?.adjectives||[];
   if(!scientist)return adjectives;
   return adjectives.filter(a=>!spawnTaken.has((a+scientist).toLowerCase()));
 }
@@ -11009,6 +11071,7 @@ function renderAgentStrip(){
       for(const option of agentStrip.children)paintSpawnScientistOption(option);
       if(selScientist)spawnAdjective.value=rollAdjective();
       updateNameCard();
+      saveSpawnDraft();
       if(selScientist)spawnAdjective.focus({preventScroll:true});
     });
     const img=document.createElement('img');
@@ -11092,10 +11155,89 @@ function updateSpawnRoleChip(){
   spawnNameButton.setAttribute('aria-label','Agent name: '+[name||'automatic',role].filter(Boolean).join(' · '));
   if(spawnOpenSheet===spawnNameSheet)positionSpawnSheet(spawnNameSheet,spawnNameButton);
 }
-spawnRole.addEventListener('input',updateSpawnRoleChip);
-spawnAdjective.addEventListener('input',()=>{spawnProblem='';updateNameCard();});
+spawnRole.addEventListener('input',()=>{updateSpawnRoleChip();saveSpawnDraft();});
+spawnAdjective.addEventListener('input',()=>{spawnProblem='';updateNameCard();saveSpawnDraft();});
 document.getElementById('adjDice').addEventListener('click',()=>{
-  spawnAdjective.value=rollAdjective();spawnProblem='';updateNameCard();
+  spawnAdjective.value=rollAdjective();spawnProblem='';updateNameCard();saveSpawnDraft();
+});
+
+function readSpawnDraft(){
+  if(spawnDraftFallback!==undefined)return spawnDraftFallback;
+  try{return spawnViewerStorage?.getItem(SPAWN_DRAFT_KEY)??null;}catch(_){return null;}
+}
+function writeSpawnDraft(raw){
+  spawnDraftFallback=raw;
+  if(!spawnViewerStorage)return;
+  try{
+    if(raw===null)spawnViewerStorage.removeItem(SPAWN_DRAFT_KEY);
+    else spawnViewerStorage.setItem(SPAWN_DRAFT_KEY,raw);
+    spawnDraftFallback=undefined;
+  }catch(_){/* keep the draft in the current window when storage is denied */}
+}
+function saveSpawnDraft(){
+  if(!spawnOverlay.classList.contains('on')||spawnFormIsBusy())return;
+  const selection=spawnPendingSelection||{
+    family:selFamily,provider:selProvider,model:selModel,effort:selEffort,harness:selHarness,
+    urlIndex:selUrlIndex,urlKey:/^[a-f0-9]{64}$/.test(selUrlKey)?selUrlKey:null,
+    helper:spawnHelper.disabled?null:spawnHelper.value,
+    tools:spawnTools.hidden?null:spawnToolSwitches.map(control=>control.getAttribute('aria-checked')==='true'),
+  };
+  // Keep only editable draft fields in this viewer's storage.
+  spawnShownDraft=JSON.stringify({
+    task:spawnTask.value,role:spawnRole.value,adjective:spawnAdjective.value,scientist:selScientist,
+    dir:spawnDirPath,selection,
+  });
+  writeSpawnDraft(spawnShownDraft);
+  if(spawnDiscardDraft.hidden){spawnDiscardDraft.hidden=false;sizeSpawnTask();}
+}
+function spawnDraftText(value,fallback=''){return typeof value==='string'?value:fallback;}
+function restoreSpawnSelection(){
+  const saved=spawnPendingSelection;spawnPendingSelection=null;
+  selFamily=saved.family;selProvider=saved.provider;selModel=saved.model;
+  selEffort=saved.effort;selHarness=saved.harness;
+  selUrlIndex=saved.urlIndex;selUrlKey=saved.urlKey;
+  renderProviderTabs();
+  if(selProvider!==saved.provider||selHarness!==saved.harness)return;
+  if([...spawnHelper.options].some(option=>option.value===saved.helper))spawnHelper.value=saved.helper;
+  if(!spawnTools.hidden&&saved.tools){
+    spawnToolSwitches.forEach((control,index)=>control.setAttribute('aria-checked',String(saved.tools[index])));
+    updateSpawnAvailability();
+  }
+}
+function prepareSpawnForm(raw,task=''){
+  let draft=null;
+  try{draft=JSON.parse(raw);}catch(_){/* an old or corrupt draft cannot block the form */}
+  const saved=draft?.selection;
+  const opt=value=>spawnDraftText(value,null);
+  spawnPendingSelection=saved?{
+    family:opt(saved.family),provider:opt(saved.provider),model:opt(saved.model),
+    effort:opt(saved.effort),harness:opt(saved.harness),helper:opt(saved.helper),
+    urlIndex:Number.isInteger(saved.urlIndex)&&saved.urlIndex>=0?saved.urlIndex:null,
+    urlKey:/^[a-f0-9]{64}$/.test(saved.urlKey)?saved.urlKey:null,
+    tools:Array.isArray(saved.tools)&&saved.tools.length===spawnToolSwitches.length&&saved.tools.every(value=>typeof value==='boolean')?saved.tools:null,
+  }:null;
+  spawnShownDraft=draft&&typeof draft==='object'&&!Array.isArray(draft)?raw:null;
+  spawnForm.reset();
+  spawnTask.value=spawnDraftText(draft?.task,task).slice(0,spawnTask.maxLength);
+  spawnRole.value=spawnDraftText(draft?.role).slice(0,spawnRole.maxLength);
+  spawnAdjective.value=spawnDraftText(draft?.adjective).slice(0,spawnAdjective.maxLength);
+  selScientist=spawnDraftText(draft?.scientist);
+  ++spawnDirDefaultEpoch;
+  spawnDirPath=spawnDraftText(draft?.dir);renderSpawnDirPath();
+  spawnProblem='';
+  selProvider=selModel=selEffort=selFamily=selHarness=selUrlIndex=selUrlKey=spawnToolsRoute=null;
+  spawnModelSearch.value='';
+  renderSpawnTools();renderSpawnModelChip();updateNameCard();
+}
+function clearSpawnDraft(raw=spawnShownDraft){
+  // A later draft saved in another tab belongs to that edit.
+  if(readSpawnDraft()===raw)writeSpawnDraft(null);
+}
+spawnDiscardDraft.addEventListener('click',()=>{
+  if(spawnFormIsBusy())return;
+  clearSpawnDraft();dismissSpawnSheet();prepareSpawnForm(null);
+  if(spawnCatalog){renderProviderTabs();renderAgentStrip();renderDirs();}
+  sizeSpawnTask();spawnTask.focus({preventScroll:true});
 });
 
 function openSpawnModal({from=document.getElementById('newAgentBtn').getBoundingClientRect(),task='',restoreFocus=document.activeElement}={}){
@@ -11106,21 +11248,15 @@ function openSpawnModal({from=document.getElementById('newAgentBtn').getBounding
     spawnSheetAnimations.delete(sheet);sheet.hidden=true;
   }
   spawnLastFocus=restoreFocus;
-  if(!spawnBusy&&!spawnResumeDraft){
-    spawnForm.reset();spawnTask.value=task.slice(0,spawnTask.maxLength);
-    spawnProblem='';
-    selScientist='';selProvider=null;selModel=null;selEffort=null;selFamily=null;selHarness=null;
-    selUrlIndex=null;selUrlKey=null;spawnModelSearch.value='';
-    renderSpawnTools();renderSpawnModelChip();updateNameCard();
-  }
-  spawnResumeDraft=false;
+  prepareSpawnForm(readSpawnDraft(),task);
   updateSpawnAvailability();
   const origin=spawnAnchor(from);
   spawnLauncher.style.setProperty('--spawn-origin-x',(origin.x-spawnLauncher.offsetLeft)+'px');
   spawnLauncher.style.setProperty('--spawn-origin-y',(origin.y-spawnLauncher.offsetTop)+'px');
   spawnOverlay.classList.add('on');spawnOverlay.setAttribute('aria-hidden','false');
+  if(task&&spawnShownDraft===null)saveSpawnDraft();
   sizeSpawnTask();
-  if(!spawnBusy)loadSpawnCatalog().then(()=>{
+  loadSpawnCatalog().then(()=>{
     if(selFamily==='local'){restoreSpawnModelSearch();renderLocalModels();}
     updateNameCard();
   });
@@ -11132,6 +11268,7 @@ function closeSpawnModal(){
   spawnCatalogLoader.stop();++spawnDirDefaultEpoch;
   dismissSpawnSheet();
   if(!spawnOverlay.classList.contains('on'))return;
+  ++spawnFormRevision;
   spawnOverlay.classList.remove('on');spawnOverlay.setAttribute('aria-hidden','true');
   if(spawnLastFocus&&spawnLastFocus.isConnected)spawnLastFocus.focus({preventScroll:true});
   else document.activeElement?.blur();
@@ -11158,20 +11295,28 @@ function spawnPayloadFromForm(){
     dir,
   });
 }
+function spawnFailureReason(status,fallback){
+  const detail=status?.detail??status?.result?.detail;
+  // Legacy Telemetry supplies this launcher diagnostic in detail rather than error.
+  if(typeof detail==='string'&&detail.split('\n').some(line=>
+    line.startsWith('child_resume: tools.browser for a Codex child needs ')))return CODEX_BROWSER_REQUIREMENT;
+  return status?.error||status?.result?.error||fallback;
+}
 // Poll until the registered child is ready, keeping the task available on failure.
 async function watchSpawnLaunch(name,deadlineSeconds){
   const waitSeconds=Number.isFinite(deadlineSeconds)&&deadlineSeconds>0?deadlineSeconds:140;
   const started=Date.now();
   while(Date.now()-started<waitSeconds*1000){
-    await new Promise(r=>setTimeout(r,2000));
     let status=null;
     try{
       const r=await fetch('/telemetry/spawn-status?name='+encodeURIComponent(name),{cache:'no-store'});
       status=await r.json();
     }catch(_){continue;}
-    if(!status||!status.ok||status.state==='launching')continue;
-    if(status.state==='ready')return;
-    throw new Error(status.error||'The launcher failed');
+    if(status?.ok&&status.state==='ready')return;
+    if(status?.state==='failed'||(status?.ok&&status.state&&status.state!=='launching')){
+      throw new Error(spawnFailureReason(status,'The launcher failed'));
+    }
+    await new Promise(r=>setTimeout(r,2000));
   }
   throw new Error(`No launch result after ${waitSeconds}s. Check the agent list before retrying.`);
 }
@@ -11235,7 +11380,7 @@ function fillSpawnButton(event){
   fill.animate([{transform:'scale(0)',opacity:1},{transform:'scale(30)',opacity:0}],{duration:520,easing:'ease-out'});
 }
 async function submitSpawn(event){
-  event.preventDefault();if(spawnBusy||!spawnTask.value.trim())return;
+  event.preventDefault();if(spawnAttempt||!spawnTask.value.trim())return;
   const p=providerById(selProvider),model=selectedSpawnModel();
   if(!p||!model||!SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available)||spawnExplicitEffortMissing(p,selModel))return;
   const payload=spawnPayloadFromForm();
@@ -11246,35 +11391,42 @@ async function submitSpawn(event){
     updateSpawnAvailability();spawnTask.focus();return;
   }
   const origin=spawnOverlay.classList.contains('on')?spawnAnchor(spawnSubmit.getBoundingClientRect()):null;
+  const attempt={revision:spawnFormRevision,draft:spawnShownDraft,scientist:selScientist};
+  let childName=payload.name;
   dismissSpawnSheet();
-  spawnBusy=true;spawnProblem='';spawnForm.setAttribute('aria-busy','true');
-  spawnTask.readOnly=true;updateSpawnAvailability();
+  spawnAttempt=attempt;spawnProblem='';updateSpawnAvailability();
   try{
     const response=await fetch('/telemetry/spawn',{
       method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,async:true}),
     });
     let result={};
     try{result=await response.json();}catch(_){/* HTTP status is still useful */}
-    if(!response.ok||!result.ok)throw new Error(result.error||`HTTP ${response.status}`);
+    if(!response.ok||!result.ok)throw new Error(spawnFailureReason(result,`HTTP ${response.status}`));
     if(SpawnPicker.locality(p,model)==='local')SpawnPicker.remember(spawnViewerStorage,SPAWN_RECENT_STORAGE_KEY,
       JSON.stringify([p.id,model.id,...(Number.isInteger(model.url_index)?[model.url_index]:[]),...(model.url_key?[model.url_key]:[])]));
-    const childName=result.child_name||result.tmux_session;
+    childName=result.child_name||result.tmux_session;
     if(result.pending)await watchSpawnLaunch(childName,result.verdict_deadline_seconds);
     const normalizedName=String(childName||'').toLowerCase();
-    const scientist=selScientist||(spawnCatalog?.naming?.scientists||[])
+    const scientist=attempt.scientist||(spawnCatalog?.naming?.scientists||[])
       .find(name=>normalizedName.endsWith(name.toLowerCase()));
     if(scientist)SpawnPicker.remember(spawnViewerStorage,SPAWN_NAME_RECENT_KEY,scientist);
-    spawnResumeDraft=false;
-    closeSpawnModal();
-    if(childName)flySpawnPortrait(childName,origin);
+    clearSpawnDraft(attempt.draft);
+    if(attempt.revision===spawnFormRevision){
+      spawnShownDraft=null;closeSpawnModal();
+      if(childName)flySpawnPortrait(childName,origin);
+    }
     document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}));
   }catch(error){
     const reason=String(error?.message||'Could not launch').replace(/\s+/g,' ').trim();
-    spawnProblem=/[.!?]$/.test(reason)?reason:`${reason}. Check launch settings and retry.`;
-    spawnResumeDraft=!spawnOverlay.classList.contains('on');
-    if(!spawnResumeDraft)spawnTask.focus({preventScroll:true});
+    const message=/[.!?]$/.test(reason)?reason:`${reason}. Check launch settings and retry.`;
+    if(attempt.revision===spawnFormRevision){
+      spawnProblem=message;
+      if(spawnOverlay.classList.contains('on'))spawnTask.focus({preventScroll:true});
+    }else{
+      showToast(`Previous launch${childName?` (${childName})`:''} · ${message}`,true);
+    }
   }finally{
-    spawnBusy=false;spawnTask.readOnly=false;spawnForm.removeAttribute('aria-busy');
+    spawnAttempt=null;
     updateSpawnAvailability();
   }
 }

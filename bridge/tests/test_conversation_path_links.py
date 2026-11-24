@@ -471,9 +471,11 @@ def test_real_angle_paths_reader_and_pane_activation(cockpit, path_backend, tmp_
        'revealLocalPath=path=>angleOpened.push(path);'
        'anglePane.term.write('+json.dumps(text.replace('\n','\r\n'))+')')
     wait('anglePane.term.buffer.active.getLine(1).translateToString(true).startsWith("<")')
-    links = js('(async()=>{const provider=anglePane.term._core._linkProviderService.linkProviders.at(-1),out=[];'
-               'for(const y of [1,2]){const links=await new Promise(r=>provider.provideLinks(y,r));'
-               'for(const link of links||[]){out.push({text:link.text,range:link.range});link.activate({preventDefault(){}});}}return out;})()')
+    links = js('(async()=>{const providers=anglePane.term._core._linkProviderService.linkProviders,out=[];'
+               'for(const y of [1,2])for(const provider of providers){'
+               'const links=await new Promise(r=>provider.provideLinks(y,r));'
+               'for(const link of links||[]){out.push({text:link.text,range:link.range});'
+               'await link.activate({preventDefault(){}});}}return out;})()')
     assert [link['text'] for link in links] == [path, path]
     assert js('angleOpened') == ['https://example.com/source', path, path]
     for link, prefix in zip(links, ['[image](<', '<']):

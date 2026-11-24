@@ -294,7 +294,7 @@
       if(processTime.textContent!==phaseTime)processTime.textContent=phaseTime;
       const state=opened&&presented&&current.running===true&&['work','wait','ask','question'].includes(current.act_state)?
         (current.act_state==='ask'?'question':current.act_state):'';
-      const label=state==='work'?'Working':state==='wait'?'Waiting':state?'Waiting for you':'';
+      const label=state==='work'?'Working':state==='wait'?'Idle':state?'Waiting for you':'';
       const elapsed=state==='work'&&typeof current.work_disp==='string'?current.work_disp.trim():'';
       activityEl.classList.toggle('activity-paused',document.hidden||!presented||!opened);
       panel.classList.toggle('conversation-inactive',document.hidden||!presented||!opened);
