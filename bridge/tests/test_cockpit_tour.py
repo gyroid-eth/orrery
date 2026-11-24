@@ -156,7 +156,8 @@ def prompt(connected=True, pane=True, text='Hello', guarded=False):
     # sendPrompt fixes its target pane when it starts; take those helpers as they are.
     fn = re.search(r'function captureComposerTarget\([^)]*\)\{.*?(?=\nfunction sendInterrupt)', source, re.S).group()
     return node("const events=[];const activeId='pane';const socket={};"
-                f"const promptInput={{value:{json.dumps(text)}}};"
+                f"const promptInput={{value:{json.dumps(text)},"
+                "getBoundingClientRect(){return {top:0,right:120,width:120};}};"
                 f"const panes=new Map({json.dumps([['pane', {'session': 'Test'}]] if pane else [])});"
                 "const sessionGroups=new Map(),promptRecipientPins=new Map();"
                 "const promptFiles={entries:[],clear(){}};"

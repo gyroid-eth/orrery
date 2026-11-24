@@ -16,7 +16,7 @@ from pathlib import Path
 from conversation_mail import received, sent
 from conversation_artifacts import SHOW_FILES, completed_show_files
 from conversation_images import native_image
-from conversation_steps import codex_completed, codex_turn, mark_step_boundary
+from conversation_steps import codex_completed, codex_turn, mark_step_boundary, opaque
 
 MAX_SCAN = 4 * 1024 * 1024
 MAX_TEXT = 64 * 1024
@@ -142,8 +142,12 @@ def _codex_event(item, offset):
         # Keep show_files' established name and reference gate. Generic native
         # completions add inert summaries, never arguments or new file grants.
         name = 'mcp__orrery_mail__show_files' if completed_show_files(item) is not None else step['tool']
-        return dict(id=str(offset), ts=str(item.get('timestamp') or '')[:128],
-                    kind='tool', role='assistant', text=name, step=step)
+        event = dict(id=str(offset), ts=str(item.get('timestamp') or '')[:128],
+                     kind='tool', role='assistant', text=name, step=step)
+        call_id = opaque(item['payload'].get('call_id') or item['payload']['item'].get('call_id'))
+        if call_id:
+            event['tool_call_id'] = call_id
+        return event
     if isinstance(item, dict) and completed_show_files(item) is not None:
         # Code mode's wrapper is source text, not proof that a nested call ran.
         # This completion is its own pinned reference record; expose no result
@@ -216,6 +220,9 @@ def _codex_event(item, offset):
             if SHOW_FILES.fullmatch(name.split('.')[-1]):return None
             event = sent(dict(base, kind="tool", role="assistant", text=name[:160]),name,
                          payload.get('input',payload.get('arguments')))
+            call_id = opaque(payload.get('call_id'))
+            if call_id:
+                event['tool_call_id'] = call_id
             if name in {'exec', 'functions.exec'}:
                 event['step_wrapper'] = True
             return event
@@ -363,6 +370,19 @@ def bound_agent(payload: object, name: str, *, api_generation: int = 34) -> dict
 def bound_codex_agent(payload: object, name: str) -> dict:
     """Compatibility selector for callers using the pre-35 contract."""
     return bound_agent(payload,name)
+
+
+def conversation_binding(row):
+    """Identity of a verified record across authority checks and previews."""
+    keys = ('name', 'program', 'history_binding', 'transcript_path', 'native_session_id',
+            'history_session_id', 'created', 'mail_instance_id', 'mail_agent_id')
+    # Telemetry checks the self receipt's freshness before returning a bound
+    # Claude row. A newer receipt can still prove the same native session.
+    native_claude = (row.get('program') in ('claude', 'claude-code')
+                     and row.get('history_binding') == 'bound'
+                     and row.get('history_session_id') and row.get('transcript_path'))
+    receipt = None if native_claude else row.get('history_receipt_ts')
+    return (*[row.get(key) for key in keys], receipt)
 
 
 def open_reader(row, expect_inode=None):

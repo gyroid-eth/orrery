@@ -86,11 +86,25 @@ def test_current_turn_has_steps_and_no_duplicate_tool_group(cockpit,theme,provid
 
 
 @pytest.mark.parametrize('provider',['claude','codex'])
-def test_only_completed_operations_added_then_turn_folds_and_button_reopens(cockpit,provider):
+def test_operations_share_inline_row_through_completion_and_button_reopens(cockpit,provider):
     js,wait,client=prepare(cockpit,provider,rows=events(provider,False))
-    assert js("document.querySelectorAll('.conversation-step').length")==0
+    assert js("document.querySelectorAll('.conversation-step').length")==(1 if provider=='claude' else 0)
+    if provider=='claude':
+        assert js("document.querySelector('.conversation-step-outcome').textContent")=='Running…'
+        js("window.originalStep=document.querySelector('.conversation-step');window.originalCard=originalStep.closest('.conversation-steps')")
+        js("currentAgents[0].act_state=null;document.dispatchEvent(new CustomEvent('oc:agents'))")
+        assert js("originalCard.querySelector('.conversation-steps-count').textContent")=='1 step'
+        js("currentAgents[0].act_state='wait';document.dispatchEvent(new CustomEvent('oc:agents'))")
+        assert js("originalCard.querySelector('.conversation-steps-count').textContent")=='1 tool call'
+        assert js("document.querySelectorAll('.conversation-tool-group').length")==0
+        js("currentAgents[0].act_state='work';document.dispatchEvent(new CustomEvent('oc:agents'))")
+    assert js("document.querySelectorAll('.conversation-tool-group').length")==0
     js('stepsPage.events='+json.dumps(events(provider))+';conversationView.refresh()')
-    wait("document.querySelectorAll('.conversation-step').length===1")
+    wait("document.querySelectorAll('.conversation-step-icon.done').length===1")
+    if provider=='claude':
+        assert js("originalStep===document.querySelector('.conversation-step') && originalCard.isConnected")
+        assert js("document.querySelector('.conversation-steps-count').textContent")=='1 step'
+        assert js("document.querySelectorAll('.conversation-tool-group').length")==0
     js("document.querySelector('.conversation-steps-toggle').click()")
     assert js("document.querySelector('.conversation-steps-toggle').getAttribute('aria-expanded')")=='true'
     if provider=='codex':
@@ -99,7 +113,7 @@ def test_only_completed_operations_added_then_turn_folds_and_button_reopens(cock
     else:js("currentAgents[0].act_state='wait';document.dispatchEvent(new CustomEvent('oc:agents'))")
     wait("document.querySelector('.conversation-steps-toggle').getAttribute('aria-expanded')==='false'")
     assert js("document.querySelector('.conversation-steps-heading').hidden") is True
-    if provider=='codex':assert js("document.querySelector('.conversation-steps-toggle').ariaLabel")=='1 step, 2m 05s'
+    if provider=='codex':assert js("document.querySelector('.conversation-steps-toggle').ariaLabel")=='1 tool call, 2m 05s'
     js("document.querySelector('.conversation-steps-toggle').click()")
     assert js("document.querySelector('.conversation-steps-toggle').getAttribute('aria-expanded')")=='true'
     assert js("document.querySelector('.conversation-steps-expansion').inert") is False
@@ -250,11 +264,55 @@ def test_step_replacement_keeps_existing_file_and_recorded_mail_cards(cockpit):
 def test_non_legacy_modes_do_not_enable_native_steps(cockpit,mode):
     js,wait,client,requests,enable=cockpit
     stable_roster(js);enable(count=1)
-    js('conversationView.close();OrreryConversationSource.Source.prototype.read=async()=>('+
+    js('conversationView.close();currentAgents[0].act_state="wait";OrreryConversationSource.Source.prototype.read=async()=>('+
        json.dumps(dict(ok=True,mode=mode,provider='claude',events=events('claude'),after='tail'))+
        ');conversationView.open()')
     wait("document.querySelectorAll('.conversation-event').length>1")
     assert js("document.querySelectorAll('.conversation-steps').length")==0
+
+
+@pytest.mark.parametrize('provider,mode', [
+    ('codex','cursor'), ('dsh','cursor'), ('hermes','snapshot'), ('antigravity','cursor')])
+def test_generic_active_tool_fold_has_one_owner(cockpit,provider,mode):
+    from conversation_readers import normalize
+    now = '2026-11-24T01:00:00Z'
+    if provider == 'dsh':
+        _, call = normalize(dict(type='tool/call', data=dict(name='terminal')), provider, 'fixture')[0]
+        _, result = normalize(dict(type='tool/result', data=dict(message={})), provider, 'fixture')[0]
+    elif provider == 'hermes':
+        _, call = normalize(dict(role='assistant', tool_calls=[dict(function=dict(name='terminal'))]), provider, 'fixture')[0]
+        _, result = normalize(dict(role='tool', tool_name='terminal'), provider, 'fixture')[0]
+    elif provider == 'codex':
+        call = project(dict(type='response_item', payload=dict(
+            type='function_call', name='fixture_tool', call_id='one', arguments='{}')), 1)
+        result = None
+    else:
+        # Antigravity emits these generic rows from its DONE planner and result records.
+        call, result = [dict(kind=kind, role='assistant', text=name, ts=now) for kind,name in
+                        [('tool','run_command'),('tool_result','Tool result')]]
+    call['id']='request'
+    if result:
+        result['id']='result'
+    history = [dict(id='old',kind='tool',role='assistant',text='older tool'),
+               dict(id='prompt',kind='text',role='user',text='Run the fixture')]
+    js,wait,_=prepare(cockpit,provider,rows=history)
+    js('conversationView.close();currentAgents[0].program='+json.dumps(provider)+';stepsPage.mode='+json.dumps(mode)+
+       ';conversationView.open()')
+    wait("Boolean(document.querySelector('[data-event-id=prompt]'))")
+    js('stepsPage.events.push('+json.dumps(call)+');conversationView.refresh()')
+    wait("document.querySelector('.conversation-steps:not([hidden]) .conversation-steps-count')?.textContent==='1 step'")
+    assert js("document.querySelectorAll('.conversation-tool-group').length")==1  # Earlier history.
+    js("window.activeToolCard=document.querySelector('.conversation-steps:not([hidden])');")
+    if result:
+        js('stepsPage.events.push('+json.dumps(result)+');conversationView.refresh()')
+        wait("Boolean(document.querySelector('[data-event-id=result]'))")
+        assert js("activeToolCard===document.querySelector('.conversation-steps:not([hidden])')")
+        assert js("activeToolCard.querySelector('.conversation-steps-count').textContent")=='1 step'
+        assert js("document.querySelectorAll('.conversation-tool-group').length")==1
+    js("currentAgents[0].act_state='wait';document.dispatchEvent(new CustomEvent('oc:agents'))")
+    wait("document.querySelectorAll('.conversation-tool-group').length===2")
+    assert js("!activeToolCard.isConnected")
+    assert js("Array.from(document.querySelectorAll('.conversation-tool-count')).map(n=>n.textContent)")==['1 tool call','1 tool call']
 
 
 @pytest.mark.parametrize('theme',['light','dark'])

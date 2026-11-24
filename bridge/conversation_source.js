@@ -46,6 +46,13 @@
     return own(REASONS,payload.reason_code)||(payload.error==='history_stale'?REASONS.receipt_predates_session:
       'Reader has no verified recording for this launch; retry after startup or use a newly launched child.');
   }
+  function bindingIdentity(current={}){
+    const nativeClaude=['claude','claude-code'].includes(current.program)&&current.history_binding==='bound'&&
+      current.history_session_id&&current.transcript_path;
+    return JSON.stringify(['name','program','provider','history_binding','transcript_path','native_session_id',
+      'history_session_id','created','mail_instance_id','mail_agent_id','terminalPaneId']
+      .map(key=>current[key]??null).concat(nativeClaude?null:(current.history_receipt_ts??null)));
+  }
   class Source {
     constructor(fetcher=root.fetch.bind(root)){this.fetcher=fetcher;}
     async read(agent,{before=null,after=null,signal,wait=0,reader=null,limit=null}={}){
@@ -89,6 +96,6 @@
     pathPreview(path,options){return this.pathRequest('/telemetry/conversation/path-image',{path},options);}
     revealPath(path,options){return this.pathRequest('/telemetry/reveal-path',{path,literal:true},options);}
   }
-  root.OrreryConversationSource=Object.freeze({Source,MESSAGES,REASONS,bindingMessage});
-  if(typeof module!=='undefined')module.exports={Source,MESSAGES,REASONS,bindingMessage};
+  root.OrreryConversationSource=Object.freeze({Source,MESSAGES,REASONS,bindingMessage,bindingIdentity});
+  if(typeof module!=='undefined')module.exports={Source,MESSAGES,REASONS,bindingMessage,bindingIdentity};
 })(typeof window==='undefined'?globalThis:window);

@@ -4165,9 +4165,9 @@
       }
     }
   },
-  "inventory_digest": "2f0c7dc0e0495805924a54f19b75f3bb02d272d3ffd17c75a389d12cbe83d58c",
+  "inventory_digest": "ce098f4e0385c59fe2360ccd7fb7e379812063be8c14741b4608c18756d42e4c",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "4af8b1e4ac447196d00ec62e891d63c7ee5aee9c2069262199bade5846610c18",
+  "source_digest": "4b10f2cca9d59247d8940c2e4246cadbdfba296aedb6ccac709589a4f7688b56",
   "surface": "cockpit",
   "version": 1
 }
@@ -11776,7 +11776,8 @@ function trackPrompt(target,text){
   const submittedAt=Date.now();
   const attemptId=submittedAt+':attempt:'+(++promptAttemptSequence);
   const notify=(type,detail={})=>document.dispatchEvent(new CustomEvent(type,{detail:{attemptId,name:target.session,...detail}}));
-  notify('oc:prompt-sending',{text,startedAt:submittedAt});
+  const {top,right,width}=promptInput.getBoundingClientRect();
+  notify('oc:prompt-sending',{text,startedAt:submittedAt,origin:{top,right,width}});
   return {
     cancel:()=>notify('oc:prompt-send-cancelled'),
     publish:count=>{
@@ -12395,9 +12396,8 @@ const conversationView=(()=>{
         getTarget:namedComposerTarget,onError:text=>showToast(text,true)});
       readerActivity=OrreryReaderActivity.mount({getPanes:()=>panes.values(),
         getProgram:pane=>currentAgents.find(agent=>agent.name===pane.session)?.program,
-        getBinding:pane=>{const agent=currentAgents.find(agent=>agent.name===pane.session);
-          return JSON.stringify([pane.session,agent?.history_binding,agent?.history_session_id,
-            agent?.native_session_id,agent?.history_receipt_ts,agent?.transcript_path,agent?.created]);}});
+        getBinding:pane=>OrreryConversationSource.bindingIdentity(
+          currentAgents.find(agent=>agent.name===pane.session)||{name:pane.session})});
       await asset('link','href','reader_approval.css');
       await asset('script','src','reader_approval.js');
       readerApproval=OrreryReaderApproval.mount({
