@@ -2,8 +2,8 @@
   "axes": {
     "background": {
       "effect": {
-        "digest": "24e98a6a5b2e9622dd7d34705e5e40248be4501e816ae737a852318026a7f756",
-        "expected": 303,
+        "digest": "12040cb57c2f4070ddf2d3c83328010840bba2b891f99acc2748ba30cbdac134",
+        "expected": 305,
         "records": [
           {
             "property": "background",
@@ -1399,6 +1399,16 @@
             "property": "box-shadow",
             "selector": ".mailfilters",
             "value": "0 0 0 1px var(--hair),0 10px 24px var(--theme-shadow-low,rgb(0 0 0 / .28))"
+          },
+          {
+            "property": "border",
+            "selector": ".mail-clear-filter",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-clear-filter",
+            "value": "var(--ink)"
           },
           {
             "property": "border",
@@ -2859,7 +2869,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "0231af1b70dd8b198b0da89f5a9660470c1d93c43f78d3bba67b994822e1ac19",
+        "digest": "1a98656e8fe5ea3db1e990b0b871d6f00c16644b01035b113c1b6b4438d35a38",
         "expected": 78,
         "records": [
           {
@@ -3402,7 +3412,7 @@
             "value": "6px"
           },
           {
-            "line": 82,
+            "line": 94,
             "property": "font-size",
             "selector": ".mailview-host time",
             "source": "bridge/mail_view.css",
@@ -3584,7 +3594,7 @@
       }
     }
   },
-  "inventory_digest": "d16327ad430304c9344af6d2e25e7fb2921bd30b03b0cc294a64a5f9b4b957aa",
+  "inventory_digest": "649fd64d4dd75cb2a412e01c6f4cc9aba6a4589ede832f2f9bd897a6c395569d",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -3596,10 +3606,10 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "5dd70be2025fa28de99ce81f4fab97a67f3c235e6e5e0df9d515897d99d7e0ec",
+  "source_digest": "c4d42e84772a56a87c3b1bd12cc40cf6f8763fb962f4a5adafd75aa18a4be955",
   "source_files": {
-    "bridge/cockpit.html": "e3d93af297a921922e02500c2e9858c7c330005649e3f03506fddfbd79bed401",
-    "bridge/mail_view.css": "05d451c2c4dc20b6a21d1c2f901793757b25f7ed0e0fb8a941f9b7fc0ac9faf9",
+    "bridge/cockpit.html": "71ac86b0be89cb4cfb9a4a73a64dfcbb48a97d1aed8d827f75936e8b95ca5ebf",
+    "bridge/mail_view.css": "7139ca3c6fc352f2f5213e06b589f2919befb93e79ff858c147d20c3f28f1a8a",
     "bridge/orrery_view.css": "1ed647e68a0e856403545f04dbfb5d331fb7c4e1b8fef3ccc94d18cfc76d6775"
   },
   "surface": "cockpit",

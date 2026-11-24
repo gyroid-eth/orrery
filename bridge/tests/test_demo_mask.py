@@ -69,6 +69,23 @@ def test_positive_a_colour_change_inside_a_name_does_not_hide_it_from_the_mask()
     assert mask("/Users/mi\x1b[31mra\x1b[0m/private.txt") == ["/Users/**\x1b[31m**\x1b[0m/private.txt"]
 
 
+@pytest.mark.parametrize(("raw", "shown"), [
+    ("/mnt/c/Users/Profile/work", "/mnt/c/Users/*******/work"),
+    (r"C:\Users\Profile\work", r"C:\Users\*******\work"),
+    ("D:/Users/Other Profile/work", "D:/Users/*************/work"),
+    ("/mnt/d/Users/Other Profile", "/mnt/d/Users/*************"),
+])
+def test_windows_profiles_are_hidden_without_a_windows_login_name(raw, shown):
+    result = run("""
+      console.log(JSON.stringify([
+        m.project(D.raw,{wholePath:true}).text,
+        m.project('Working directory: '+D.raw,{literalPath:D.raw}).text,
+        m.terminal(D.raw+'/work')
+      ]));
+    """, raw=raw)
+    assert result == [shown, f"Working directory: {shown}", shown + "/work"]
+
+
 def test_positive_a_screen_repainted_row_by_row_keeps_its_rows_apart():
     """Found on the real terminal: tmux repaints with a cursor move before each
     row and no line break, so "…page" + "mira@…" and "/Users/mira" + "mira@…"

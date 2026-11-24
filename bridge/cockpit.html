@@ -3155,6 +3155,16 @@
           },
           {
             "property": "border",
+            "selector": ".mail-clear-filter",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".mail-clear-filter",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
             "selector": ".mail-assignee-fallback",
             "value": "1px solid var(--hair)"
           },
@@ -4040,7 +4050,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "0231af1b70dd8b198b0da89f5a9660470c1d93c43f78d3bba67b994822e1ac19",
+        "digest": "1a98656e8fe5ea3db1e990b0b871d6f00c16644b01035b113c1b6b4438d35a38",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4162,9 +4172,9 @@
       }
     }
   },
-  "inventory_digest": "d16327ad430304c9344af6d2e25e7fb2921bd30b03b0cc294a64a5f9b4b957aa",
+  "inventory_digest": "649fd64d4dd75cb2a412e01c6f4cc9aba6a4589ede832f2f9bd897a6c395569d",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "5dd70be2025fa28de99ce81f4fab97a67f3c235e6e5e0df9d515897d99d7e0ec",
+  "source_digest": "c4d42e84772a56a87c3b1bd12cc40cf6f8763fb962f4a5adafd75aa18a4be955",
   "surface": "cockpit",
   "version": 1
 }
@@ -7297,70 +7307,83 @@ function createPane(session,meta){
   }
   // Local paths in pane output: click → reveal in the file manager.
   // Single-line matches only; a path wrapped across rows is not linked.
-  term.registerLinkProvider({
-    provideLinks(y,cb){
-      const line=term.buffer.active.getLine(y-1);if(!line)return cb(undefined);
-      const text=line.translateToString(true);const pending=[];
-      // Deduplicate within this scan; the pane's cwd can change before the next scan.
-      const relativeProbes=new Map();
-      const re=/(["'`(<])([^/\s"'`()\[\]<>=:](?:[^/"'`()\[\]<>=:]*[^/\s"'`()\[\]<>=:])?\/[^/\s"'`()\[\]<>][^\s"'`()\[\]<>]*)|(^|[\s"'`(\[<=])((?:~|\/)[^\s"'`()\[\]<>]+|[^/\s"'`()\[\]<>=:]+\/[^/\s"'`()\[\]<>][^\s"'`()\[\]<>]*)/g;
-      let m,wrappedEnd=0;
-      const urls=[...text.matchAll(/[a-z][a-z\d+.-]*:\/\/[^\s"'`()<>]+/gi)];
-      // xterm measures ranges in cells, including text before the link.
-      const columns=[];
-      if(/[^\x00-\x7f]/.test(text)){
-        const cell=term.buffer.active.getNullCell();
-        for(let col=0,index=0;index<=text.length;){
-          columns[index]=col;if(index===text.length||!line.getCell(col,cell))break;
-          index+=cell.getChars().length||1;col+=cell.getWidth()||1;
-        }
+  function providePathLinks(y,cb,relativeOnly){
+    const line=term.buffer.active.getLine(y-1);if(!line)return cb(undefined);
+    const text=line.translateToString(true);const links=[];
+    // Deduplicate within this scan; the pane's cwd can change before the next scan.
+    const relativeProbes=new Map();
+    const re=/(["'`(<])([^/\s"'`()\[\]<>=:](?:[^/"'`()\[\]<>=:]*[^/\s"'`()\[\]<>=:])?\/[^/\s"'`()\[\]<>][^\s"'`()\[\]<>]*)|(^|[\s"'`(\[<=])((?:~|\/)[^\s"'`()\[\]<>]+|[^/\s"'`()\[\]<>=:]+\/[^/\s"'`()\[\]<>][^\s"'`()\[\]<>]*)/g;
+    let m,wrappedEnd=0;
+    const urls=[...text.matchAll(/[a-z][a-z\d+.-]*:\/\/[^\s"'`()<>]+/gi)];
+    // xterm measures ranges in cells, including text before the link.
+    const columns=[];
+    if(/[^\x00-\x7f]/.test(text)){
+      const cell=term.buffer.active.getNullCell();
+      for(let col=0,index=0;index<=text.length;){
+        columns[index]=col;if(index===text.length||!line.getCell(col,cell))break;
+        index+=cell.getChars().length||1;col+=cell.getWidth()||1;
       }
-      // `open` is what the click reveals. When the probe resolved the text
-      // (a shortened "…" path, or a real name with a "…" in it), that path is
-      // bound when the link is made and opened as it is — even when it is
-      // spelled like the text — so a later click never re-reads its "…".
-      const mk=(start,p,open=p,literal=false)=>({range:{start:{x:(columns[start]??start)+1,y},end:{x:columns[start+p.length]??start+p.length,y}},text:p,
-        activate:(event)=>{event.preventDefault();revealLocalPath(open,{literal});},
-        decorations:{pointerCursor:true,underline:true}});
-      while((m=re.exec(text))){
-        const before=m[1]??m[3],token=m[2]??m[4],start=m.index+before.length;
-        if(urls.some(url=>start>=url.index&&start<url.index+url[0].length))continue;
-        const relative=!/^[~/]/.test(token);
-        if(relative&&start<wrappedEnd)continue;
-        let p=token.replace(/[.,;:!?]+$/,'');
-        // Skip bare one-segment tokens such as Claude Code's /compact, /log or the
-        // statusline's /rc: a real path has a second separator or an extension.
-        if(!relative&&(p.length<2||!(p.indexOf('/',1)>0||/\.[A-Za-z0-9]+$/.test(p))))continue;
-        // Unquoted paths with spaces ("…/21_Coding Projects/orrery") end where the
-        // filesystem says they end: ask the backend for the longest existing prefix
-        // of the rest of the row. Rows without a further space need no probe.
-        const rest=text.slice(start).split(/["'`<>]/)[0];
-        if(relative){
-          const end=relativePathEnd(text,start,before);
-          if(end<0||start===0&&line.isWrapped||end===text.length&&term.buffer.active.getLine(y)?.isWrapped)continue;
-          const quoted=/^["'`(<]$/.test(before);
-          const candidate=quoted?text.slice(start,end):rest.slice(0,end-start);
-          if(quoted)wrappedEnd=end;
-          pending.push(probeLocalPath(candidate,{session,paneId:meta.paneId},relativeProbes).then(found=>
-            found?.resolved&&(!quoted||found.path===candidate)?mk(start,found.path,found.resolved,true):null));
-          continue;
-        }
-        if(!/[\s\u3000]|[^\x00-\x7f]/.test(rest)){pending.push(Promise.resolve(mk(start,p)));continue;}
-        pending.push(probeLocalPath(rest).then(found=>found
-          ?mk(start,found.path,found.resolved||found.path,Boolean(found.resolved))
-          :mk(start,p)));
-      }
-      if(!pending.length)return cb(undefined);
-      Promise.all(pending).then(links=>{
-        let end=0;
-        const disjoint=links.filter(link=>{
-          if(!link||link.range.start.x<=end)return false;
-          end=link.range.end.x;return true;
-        });
-        cb(disjoint.length?disjoint:undefined);
-      },()=>cb(undefined));
     }
-  });
+    // `open` is what the click reveals. When the probe resolved the text
+    // (a shortened "…" path, or a real name with a "…" in it), that path is
+    // bound when the link is made and opened as it is — even when it is
+    // spelled like the text — so a later click never re-reads its "…".
+    const mk=(start,p,open=p,literal=false)=>({range:{start:{x:(columns[start]??start)+1,y},end:{x:columns[start+p.length]??start+p.length,y}},text:p,
+      activate:(event)=>{event.preventDefault();revealLocalPath(open,{literal});},
+      decorations:{pointerCursor:true,underline:true}});
+    while((m=re.exec(text))){
+      const before=m[1]??m[3],token=m[2]??m[4],start=m.index+before.length;
+      if(urls.some(url=>start>=url.index&&start<url.index+url[0].length))continue;
+      if(start<wrappedEnd)continue;
+      const relative=!/^[~/]/.test(token);
+      const quoted=/^["'`<]$/.test(before);
+      if(!relative&&quoted)wrappedEnd=relativePathEnd(text,start,before);
+      if(relative!==relativeOnly)continue;
+      let p=token.replace(/[.,;:!?]+$/,'');
+      // Skip bare one-segment tokens such as Claude Code's /compact, /log or the
+      // statusline's /rc: a real path has a second separator or an extension.
+      if(!relative&&(p.length<2||!(p.indexOf('/',1)>0||/\.[A-Za-z0-9]+$/.test(p))))continue;
+      // Unquoted paths with spaces ("…/21_Coding Projects/orrery") end where the
+      // filesystem says they end: ask the backend for the longest existing prefix
+      // of the rest of the row. Rows without a further space need no probe.
+      const rest=text.slice(start).split(/["'`<>]/)[0];
+      if(relative){
+        const end=relativePathEnd(text,start,before);
+        if(end<0||start===0&&line.isWrapped||end===text.length&&term.buffer.active.getLine(y)?.isWrapped)continue;
+        const quoted=/^["'`(<]$/.test(before);
+        const candidate=quoted?text.slice(start,end):rest.slice(0,end-start);
+        if(quoted)wrappedEnd=end;
+        links.push(probeLocalPath(candidate,{session,paneId:meta.paneId},relativeProbes).then(found=>
+          found?.resolved&&(!quoted||found.path===candidate)?mk(start,found.path,found.resolved,true):null));
+        continue;
+      }
+      const link=mk(start,quoted&&wrappedEnd>=0?rest:p);
+      if(/[\s\u3000]|[^\x00-\x7f]/.test(rest)){
+        // xterm snapshots the hovered link at mousedown. Publish the link
+        // immediately and let activation await the same hover probe.
+        const probe=probeLocalPath(rest);
+        link.activate=async event=>{
+          event.preventDefault();
+          const found=await probe;
+          return revealLocalPath(found?.resolved||found?.path||p,{literal:Boolean(found?.resolved)});
+        };
+      }
+      links.push(link);
+    }
+    if(!links.length)return cb(undefined);
+    const finish=results=>{
+      let end=0;
+      const disjoint=results.filter(link=>{
+        if(!link||link.range.start.x<=end)return false;
+        end=link.range.end.x;return true;
+      });
+      cb(disjoint.length?disjoint:undefined);
+    };
+    if(relativeOnly)Promise.all(links).then(finish,()=>cb(undefined));
+    else finish(links);
+  }
+  term.registerLinkProvider({provideLinks:(y,cb)=>providePathLinks(y,cb,false)});
+  term.registerLinkProvider({provideLinks:(y,cb)=>providePathLinks(y,cb,true)});
   term.open(host);
   term.onData(data=>{if(activeId===meta.paneId)send({type:"input",paneId:meta.paneId,data});});
   // Classic (non-SGR) mouse reports: xterm emits them here, one char per byte.
@@ -7896,10 +7919,16 @@ async function openExternalUrl(uri){
     return true;
   }catch(error){
     // Browser-hosted cockpit (no backend opener or backend offline): let the
-    // page open the tab itself.
-    const opened=window.open(url,'_blank','noopener');
-    if(!opened)showToast(`OPEN URL FAILED · ${String(error&&error.message||error||'request failed')}${appError?` · app: ${appError}`:''}`,true);
-    return !!opened;
+    // page open the tab itself. Detach the opener before navigating so a
+    // successful tab can still be distinguished from a blocked popup.
+    const opened=window.open('about:blank','_blank');
+    if(opened){
+      opened.opener=null;
+      opened.location.replace(url);
+      return true;
+    }
+    showToast(`OPEN URL FAILED · ${String(error&&error.message||error||'request failed')}${appError?` · app: ${appError}`:''}`,true);
+    return false;
   }
 }
 
@@ -9408,11 +9437,12 @@ function agentDetailHTML(detail){
     const directory=icon==='directory';
     const escaped=esc(value);
     const demo=globalThis.OrreryDemo;
-    const maskedDirectory=directory&&demo?.on&&demo.storedLocations();
-    const content=directory&&!maskedDirectory?escaped.replaceAll('/','/<wbr>'):escaped;
+    const demoDirectory=directory&&demo?.on;
+    // Demo mode needs the whole path in one text node to match its home prefix.
+    const content=directory&&!demoDirectory?escaped.replaceAll('/','/<wbr>'):escaped;
     return agentDetailItem(icon,`${label}: ${directory?detail.cwd:value}`,
-      `<span class="agent-detail-value agent-detail-${icon}"${maskedDirectory?' data-demo-path':''}>${content}</span>`,
-      maskedDirectory?detail.cwd:null);
+      `<span class="agent-detail-value agent-detail-${icon}"${demoDirectory?' data-demo-path':''}>${content}</span>`,
+      demoDirectory?detail.cwd:null);
   };
   let lineage='';
   if(detail.parentState==='top')lineage=agentDetailItem('top','Top level');
