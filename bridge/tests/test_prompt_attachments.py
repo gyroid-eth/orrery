@@ -36,6 +36,7 @@ async def test_attachment_is_written_to_the_selected_workspace(monkeypatch, tmp_
             body['format'] = 'md'
             data = b'# Fixture text'
         body['data'] = base64.b64encode(data).decode()
+        body['label'] = '元の名前.png' if kind == 'image' else '資料.md'
         missing = await client.post('/telemetry/prompt-attachment', json={**body, 'incarnation': 'b' * 32})
         assert missing.status == 409
         overridden = await client.post('/telemetry/prompt-attachment', json={**body, 'destination': '/tmp'})
@@ -47,6 +48,7 @@ async def test_attachment_is_written_to_the_selected_workspace(monkeypatch, tmp_
         saved = workspace / result['path']
         assert saved.stat().st_mode & 0o777 == 0o600
         assert (saved.parent / '.gitignore').read_text() == '*\n'
+        assert saved.with_name(saved.name+'.label').read_text() == body['label']
         if kind == 'image':
             with Image.open(saved) as picture:
                 assert picture.size == (2, 2)

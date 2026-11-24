@@ -4160,9 +4160,9 @@
       }
     }
   },
-  "inventory_digest": "f23d6ae8a1166f30b86fd8197f07781e2eecd9a8c33cc5692b249da48da50be5",
+  "inventory_digest": "bfb3119f7e8c7b8f69a3521391c79ce62504d79c3e279bd9310c4a08be3d86c1",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "01c9cfc78773c5f7c6842570eb38028dbb405f603a491b6cdbc471213a04a6c1",
+  "source_digest": "a42c5b810d410641f3d32f5eedd7daaa61098ae9a60125d0b3fcebb368d94414",
   "surface": "cockpit",
   "version": 1
 }
@@ -11642,16 +11642,16 @@ async function resolveComposerTarget(record,connection){
     document.addEventListener('oc:terminal-ready',ready);
   });
 }
-function trackPrompt(target,text){
+function trackPrompt(target,text,displayText=text,attachments=[]){
   const submittedAt=Date.now();
   const attemptId=submittedAt+':attempt:'+(++promptAttemptSequence);
   const notify=(type,detail={})=>document.dispatchEvent(new CustomEvent(type,{detail:{attemptId,name:target.session,...detail}}));
-  notify('oc:prompt-sending',{text,startedAt:submittedAt});
+  notify('oc:prompt-sending',{text,displayText,attachments,startedAt:submittedAt});
   return {
     cancel:()=>notify('oc:prompt-send-cancelled'),
     publish:count=>{
       document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'talk',name:target.session}}));
-      notify('oc:prompt-submitted',{text,submittedAt,id:submittedAt+':'+(++promptSubmissionSequence),broadcastCount:count});
+      notify('oc:prompt-submitted',{text,displayText,submittedAt,id:submittedAt+':'+(++promptSubmissionSequence),broadcastCount:count});
     },
   };
 }
@@ -11696,11 +11696,11 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
           releaseComposerTarget(record.name);
           continue;
         }
-        const prefix=record.vocabulary.program==='claude'?'@':'';
-        const references=paths.map(path=>prefix+path).join('\n');
+        const claude=record.vocabulary.program==='claude';
+        const references=paths.map(path=>(claude?'@':'')+path).join('\n')+(claude&&paths.length?' ':'');
         const body=[record.draft,references].filter(Boolean).join('\n\n');
         const text=compose(body);
-        receipt=trackPrompt(target,text);
+        receipt=trackPrompt(target,text,compose(record.draft),entries);
         status=await confirmedComposerInput(target,pastePayload(text));
         if(status==='accepted'){
           await new Promise(resolve=>setTimeout(resolve,250));

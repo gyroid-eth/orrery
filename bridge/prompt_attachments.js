@@ -103,7 +103,7 @@
     const paths=[];
     for(const entry of entries){
       const data=await dataFor(entry.file);
-      const body={...target,kind:entry.kind,data};
+      const body={...target,kind:entry.kind,data,label:entry.file.name.slice(0,256)};
       if(entry.kind==='file')body.format=entry.extension;
       const response=await fetch('/telemetry/prompt-attachment',{
         method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),

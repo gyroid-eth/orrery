@@ -17,6 +17,7 @@ import sys
 import threading
 import time
 import unicodedata
+from urllib.parse import unquote
 
 CONTRACT='orrery-mobile-pane-v1'
 MAX_TEXT_BYTES=4096
@@ -374,7 +375,7 @@ class InputCoordinator:
         return await asyncio.wait_for(asyncio.to_thread(self.resolver.read,row['bridge'],row['pane_id'],deadline),
                                       max(.001,deadline-time.monotonic()))
 
-    async def request(self,operation,payload, *, expanded_preview=False):
+    async def request(self,operation,payload, *, expanded_preview=False, attachment_label=None):
         fields={'capability':set(),'targets':{'name'},'preview':{'choice'},'prepare':{'choice','revision','text'},
                 'commit':{'intent','confirmation'},'cancel':{'intent'},'status':{'intent'},
                 'image':{'choice','revision','image'},'file':{'choice','revision','file'}}
@@ -411,7 +412,7 @@ class InputCoordinator:
             if upload is None:return self._reply(target=target,enabled=root is not None)
             if root is None:raise InputRefused(operation+'_workspace_unavailable')
             save=mobile_image.save_image if operation=='image' else mobile_file.save_file
-            try:path=save(root,upload)
+            try:path=save(root,upload,**({'label':attachment_label} if attachment_label is not None else {}))
             except (ValueError,OSError) as error:raise InputRefused(str(error) if isinstance(error,ValueError) else operation+'_save_failed') from None
             return self._reply(target=target,enabled=True,path=path)
         if operation=='targets':
@@ -581,8 +582,13 @@ def install_routes(app,coordinator):
         limits=request.headers.getall('X-ORRERY-Mobile-Preview',[])
         if limits and (operation!='preview' or limits!=['120/12288']):
             return reply({'error':'input_request_denied'},403)
+        labels=request.headers.getall('X-ORRERY-Attachment-Label',[])
+        if labels and (operation not in attachment_limits or payload.get(operation) is None or len(labels)!=1
+                       or not re.fullmatch(r'(?:[A-Za-z0-9._~-]|%[A-Fa-f0-9]{2}){1,3072}',labels[0])):
+            return reply({'error':'input_request_denied'},403)
         try:
             options={'expanded_preview':True} if limits else {}
+            if labels:options['attachment_label']=unquote(labels[0],errors='strict')[:256]
             return reply(await coordinator.request(operation,payload,**options))
         except InputRefused as error:
             reason=str(error) if operation in attachment_limits and str(error).startswith(operation+'_') else 'input_unavailable'

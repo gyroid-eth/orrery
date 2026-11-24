@@ -98,6 +98,81 @@ def test_only_images_saved_by_this_bridge_get_text_path_references(tmp_path,monk
     assert not decorate(r)[1][0].get('references')
 
 
+@pytest.mark.parametrize('program',['claude-code','codex','dsh','hermes'])
+def test_composer_attachments_are_record_bound_and_hidden_from_body(tmp_path,program):
+    from mobile_file import save_file
+    from mobile_image import save_image
+    workspace=(tmp_path/"Quoted work 'file'").resolve()
+    workspace.mkdir()
+    image_path=Path(save_image(workspace,base64.b64encode(png()).decode(),label='比較.png'))
+    file_path=Path(save_file(workspace,{'format':'md','data':base64.b64encode(b'# Notes').decode()},label='notes.md'))
+    prefix='@' if program=='claude-code' else ''
+    sent='Compare these.\n\n'+'\n'.join(prefix+'./'+str(p.relative_to(workspace)) for p in (image_path,file_path))
+    path=tmp_path/('state.db' if program=='hermes' else 'history.jsonl')
+    if program=='claude-code':
+        path.write_bytes(line(claude('user',sent,cwd=str(workspace))))
+    elif program=='codex':
+        path.write_bytes(line(dict(type='session_meta',payload=dict(cwd=str(workspace))))+
+                         line(codex([dict(type='input_text',text=sent)])))
+    elif program=='dsh':
+        path.write_bytes(line(dict(type='session',version=4,id='fixture-session',cwd=str(workspace)))+
+                         line(dsh('user/message',dict(source=dict(kind='user'),content=[dict(type='text',text=sent)]))))
+    else:
+        db=make_db(path)
+        db.execute("UPDATE sessions SET cwd=? WHERE id='fixture-session'",(str(workspace),))
+        db.execute("INSERT INTO messages(session_id,role,content,timestamp) VALUES('fixture-session','user',?,1)",(sent,))
+        db.commit();db.close()
+    binding=row(path,program)
+    store,events=decorate(binding)
+    event,=events
+    assert event['text']==sent and event['input_display_text']=='Compare these.'
+    picture,document=event['references']
+    assert picture['label']=='比較.png' and picture['input_image']
+    assert document['label']=='notes.md' and document['kind']=='file'
+    for mobile in [False,True]:
+        assert store.read(picture['id'],binding,thumbnail=True,mobile=mobile)['kind']=='image'
+    assert store.read(document['id'],binding)['text']=='# Notes'
+    image_path.write_bytes(b'replaced')
+    with pytest.raises(PreviewUnavailable):store.read(picture['id'],binding)
+
+
+def test_attachment_trailer_keeps_arbitrary_text_and_rejects_symlinks(tmp_path):
+    from conversation_preview import attachment_trailer
+    from mobile_image import save_image
+    workspace=(tmp_path/"My owner's workspace").resolve();workspace.mkdir()
+    path=Path(save_image(workspace,base64.b64encode(png()).decode()))
+    relative='./'+str(path.relative_to(workspace))
+    phone="Check [image: "+("'"+str(path).replace("'","'\\''")+"'")+"]"
+    body,images=attachment_trailer(phone,workspace)
+    assert body=='Check' and images[0]['path']==str(path)
+    for sample in ['Use this path in the example '+relative, 'Quote:\n> '+relative, 'Next to '+relative+' and compare.']:
+        assert attachment_trailer(sample,workspace)==(sample,[])
+    outside=tmp_path/'outside.png';outside.write_bytes(png())
+    path.unlink();path.symlink_to(outside)
+    assert attachment_trailer(relative,workspace)==(relative,[])
+
+
+def test_recent_composer_upload_can_be_admitted_without_native_cwd(tmp_path):
+    from mobile_image import save_image
+    workspace=tmp_path.resolve()
+    image_path=Path(save_image(workspace,base64.b64encode(png()).decode()))
+    relative='./'+str(image_path.relative_to(workspace))
+    path=tmp_path/'history.jsonl'
+    path.write_bytes(line(claude('user',relative,cwd=None)))
+    binding=dict(row(path,'claude-code'),name='Fixture')
+    store=ReferenceStore()
+    store.remember_upload('AnotherFixture',relative,image_path)
+    def records():
+        result=page(binding)['events']
+        with open_reader(binding) as reader:store.decorate_all(binding,reader,result)
+        return result[0]
+    assert 'references' not in records()
+    store.remember_upload('Fixture',relative,image_path)
+    event=records()
+    assert event['input_display_text']==''
+    assert store.read(event['references'][0]['id'],binding,thumbnail=True)['kind']=='image'
+
+
 def test_replaced_saved_image_is_no_longer_an_input_reference(tmp_path):
     from mobile_image import save_image
     saved=save_image(str(tmp_path),base64.b64encode(png()).decode())

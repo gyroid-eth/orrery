@@ -1,5 +1,10 @@
 """Composer behavior on the real cockpit with synthetic panes and CDP."""
 
+import base64
+import json
+import os
+from pathlib import Path
+
 import pytest
 
 from test_conversation_review_regressions import cockpit, stable_roster
@@ -131,6 +136,7 @@ def test_attachment_drop_remove_and_delivery_per_cli(cockpit):
     assert js("document.querySelector('.prompt-file-name').textContent") == 'notes.txt'
     js("document.querySelector('.prompt-file-remove').click()")
     assert js("document.querySelector('.prompt-attachments').hidden")
+
     assert js('uploads.length') == 0
     js("""dropFile();promptRecipients.set(['ReviewFixture','QuietCopernicus']);
       window.send=packet=>{
@@ -145,9 +151,78 @@ def test_attachment_drop_remove_and_delivery_per_cli(cockpit):
     ]
     assert js("packets.filter(packet=>packet.data?.includes('Read this')).map(packet=>packet.data)") == [
         '\x1b[200~Read this\n\n./.orrery-input-files/' + 'a' * 32 + '.txt\x1b[201~',
-        '\x1b[200~Read this\n\n@./.orrery-input-files/' + 'a' * 32 + '.txt\x1b[201~',
+        '\x1b[200~Read this\n\n@./.orrery-input-files/' + 'a' * 32 + '.txt \x1b[201~',
     ]
     assert js("document.querySelector('.prompt-attachments').hidden")
+
+
+def test_reader_shows_selected_attachments_before_and_after_recording(cockpit,tmp_path):
+    from test_conversation_submissions import prepare
+    from test_conversation_providers import claude,line,row
+    from test_conversation_input_images import decorate,png
+    from mobile_image import save_image
+    from mobile_file import save_file
+    js,wait,client=prepare(cockpit,'claude')
+    png_data=base64.b64encode(png()).decode()
+    paths=[save_image(tmp_path,png_data,label='Comparison.png'),
+           save_file(tmp_path,{'format':'md','data':base64.b64encode(b'# File example').decode()},label='Notes.md')]
+    paths=['./'+str(Path(path).relative_to(tmp_path)) for path in paths]
+    text='Compare these two attachments.'
+    sent=text+'\n\n'+'\n'.join('@'+path for path in paths)
+    native=tmp_path/'native.jsonl'
+    native.write_bytes(line(dict(claude('user',sent,cwd=str(tmp_path)),timestamp=js('new Date(clock+1000).toISOString()'))))
+    binding=row(native,'claude-code')
+    store,events=decorate(binding)
+    picture,document=events[0]['references']
+    previews={ref['id']:store.read(ref['id'],binding) for ref in (picture,document)}
+    thumbnail=store.read(picture['id'],binding,thumbnail=True)
+    js("""window.savedFixturePaths="""+json.dumps(paths)+""";window.uploads=[];
+      const base=fetch;
+      window.fetch=(url,options)=>{
+        if(!String(url).includes('/telemetry/prompt-attachment'))return base(url,options);
+        uploads.push(JSON.parse(options.body));return Promise.resolve(Response.json({path:savedFixturePaths[uploads.length-1]}));
+      };
+      window.send=packet=>{
+        packets.push(packet);
+        if(packet.inputAck)queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'}));
+        return true;
+      };
+      const transfer=new DataTransfer();
+      transfer.items.add(new File([Uint8Array.from(atob("""+json.dumps(png_data)+"""),c=>c.charCodeAt(0))],'Comparison.png',{type:'image/png'}));
+      transfer.items.add(new File(['# File example'],'Notes.md',{type:'text/markdown'}));
+      currentAgents[0].program='claude-code';
+      document.querySelector('.promptbar').dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));
+      promptInput.value="""+json.dumps(text)+""";void sendPrompt();""")
+    wait("reader.querySelector('.conversation-submission img')?.naturalWidth===640&&!promptBusy")
+    assert js("reader.querySelector('.conversation-submission').textContent.includes('Notes.md')")
+    assert not js("reader.querySelector('.conversation-submission').textContent.includes('.orrery-input-')")
+    assert js("uploads.map(upload=>upload.label)")==['Comparison.png','Notes.md']
+    assert js(r"packets.find(packet=>packet.data?.startsWith('\x1b[200~Compare')).data.slice(6,-6)")==sent+' '
+    capture=os.environ.get('ORRERY_ATTACHMENT_CAPTURE_DIR')
+    def save_capture(name):
+        if os.environ.get('CDP_PDF_ON_TIMEOUT'):
+            result=client.call('Page.printToPDF',paperWidth=1600/96,paperHeight=1000/96,
+                               marginTop=0,marginRight=0,marginBottom=0,marginLeft=0,printBackground=True)
+            suffix='.pdf'
+        else:
+            result=client.call('Page.captureScreenshot',format='png')
+            suffix='.png'
+        (Path(capture)/('desktop-'+name+suffix)).write_bytes(base64.b64decode(result['data']))
+    if capture:save_capture('pending')
+    js('window.verifiedAttachments='+json.dumps(events)+';window.verifiedPreviews='+json.dumps(previews)+';window.verifiedThumb='+json.dumps(thumbnail)+';'
+       'OrreryConversationSource.Source.prototype.reference=async(ref,{thumbnail}={})=>thumbnail?verifiedThumb:verifiedPreviews[ref];'
+       'OrreryConversationSource.Source.prototype.read=async()=>({provider:"claude",mode:"cursor",events:[oldRecord,...verifiedAttachments],after:"end"});'
+       'conversationView.refresh()')
+    wait("reader.querySelector('.conversation-event .conversation-inline-image img')?.naturalWidth===320&&!reader.querySelector('.conversation-submission')")
+    assert not js("reader.querySelector('.conversation-event .conversation-input-images').parentElement.textContent.includes('.orrery-input-')")
+    assert js("reader.querySelector('.conversation-event button.conversation-file').textContent.includes('Notes.md')")
+    if capture:
+        for theme in ('dark','light'):
+            js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
+            js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
+            save_capture(theme)
+    js("reader.querySelector('.conversation-event .conversation-inline-image').click()")
+    wait("reader.querySelector('.conversation-preview-image')?.naturalWidth===640")
 
 
 def test_skill_kind_namespace_retry_switch_and_multiline_fix(cockpit):

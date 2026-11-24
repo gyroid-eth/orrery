@@ -227,8 +227,8 @@
     const sending=new Map();
     const observedIds=new Set(),matchedSubmissions=new Set(),pendingEl=el('.conversation-pending');
     const normalizePrompt=text=>(root.OrreryConversationMarkdown?.submissionText(text)??text).replace(/\s+/gu,' ').trim();
-    function splitImageMarkers(event){
-      let body=event.text;
+    function splitImageMarkers(event,text=event.text){
+      let body=text;
       const prefix=[],count=event.input_image_count;
       if(event.truncated||!Number.isInteger(count)||count<1||count>64)return {body,prefix,suffix:''};
       if(event.input_image_marker==='prefix'){
@@ -353,6 +353,26 @@
       const text=content.querySelector(':scope > .conversation-text');
       if(text)showBroadcast(content,count,text);
     }
+    const submissionUrls=new WeakMap();
+    function addSubmissionAttachments(row,attachments){
+      const images=document.createElement('div'),files=document.createElement('div'),urls=[];
+      images.className='conversation-inline-images conversation-input-images';files.className='conversation-files';
+      for(const entry of attachments||[]){
+        if(!(entry?.file instanceof File))continue;
+        if(entry.kind==='image'){
+          const tile=document.createElement('span'),image=document.createElement('img');
+          tile.className='conversation-inline-image';image.className='conversation-inline-thumbnail';
+          const url=URL.createObjectURL(entry.file);urls.push(url);image.src=url;
+          image.alt=entry.file.name;tile.append(image);images.append(tile);
+        }else{
+          const chip=document.createElement('span');chip.className='conversation-file';
+          chip.textContent='▤ '+entry.file.name;files.append(chip);
+        }
+      }
+      if(files.childElementCount)row.append(files);
+      if(images.childElementCount)row.append(images);
+      if(urls.length)submissionUrls.set(row,urls);
+    }
     function renderSubmissions({preserve=true}={}){
       clearTimeout(submissionTimer);submissionTimer=0;
       const paint=()=>{
@@ -361,7 +381,10 @@
         const receiptKey=item=>JSON.stringify([item.attemptId?'attempt':'sent',item.attemptId||item.id]);
         const retained=new Set(items.map(receiptKey));
         // Remove stale siblings before ordering rows that still own focus.
-        for(const [key,row] of existing)if(!retained.has(key)){keepReaderFocus(row);row.remove();existing.delete(key);}
+        for(const [key,row] of existing)if(!retained.has(key)){
+          for(const url of submissionUrls.get(row)||[])URL.revokeObjectURL(url);
+          submissionUrls.delete(row);keepReaderFocus(row);row.remove();existing.delete(key);
+        }
         for(const item of items){
           const key=receiptKey(item);
           let row=existing.get(key);existing.delete(key);
@@ -381,7 +404,7 @@
             const label=document.createElement('div');label.className='conversation-byline';
             label.innerHTML='<span class="conversation-submission-mark" aria-hidden="true"></span><span class="conversation-submission-state"></span><span class="conversation-submission-recipient"></span>';
             const note=document.createElement('div');note.className='conversation-submission-note';
-            row.append(text,more,label,note);
+            row.append(text,more);addSubmissionAttachments(row,item.attachments);row.append(label,note);
           }
           const elapsed=Date.now()-item.at,state=item.sending?'sending':item.unmatched?'unmatched':elapsed>=60000?'late':'awaiting';
           const status=state==='sending'?'Sending…':state==='unmatched'?'Record not matched':state==='late'?'Not recorded yet':'Awaiting record';
@@ -887,16 +910,17 @@
       if(event.kind==='mail'&&Array.isArray(event.mail)&&root.OrreryConversationMail)return root.OrreryConversationMail.render(event,article,{name:agent,renderPeerAvatar});
       const byline=document.createElement('div');byline.className='conversation-byline';
       const role=document.createElement('span');role.className='conversation-role';
-      const command=event.role==='user'&&root.OrreryConversationMarkdown?.commandRecord(event.text);
+      const shownText=event.input_display_text??event.text;
+      const command=event.role==='user'&&root.OrreryConversationMarkdown?.commandRecord(shownText);
       if(providerLabel==='Claude'&&event.kind==='text'&&!event.truncated&&(command?.compactArgs!==undefined||command?.compactOutput)){
         article.hidden=true;return article;
       }
       const shell=command?.shell;
       const user=event.role==='user'&&event.kind==='text'&&!shell;
-      const parent=user&&root.OrreryConversationMotion?.promptAuthor(event.text,agent,(getContext()||{}).parent_agent);
+      const parent=user&&root.OrreryConversationMotion?.promptAuthor(shownText,agent,(getContext()||{}).parent_agent);
       const human=user&&!parent;
       if(human)humanBubble(article);
-      const markers=human?splitImageMarkers(event):{body:event.text,prefix:[],suffix:''};
+      const markers=human?splitImageMarkers(event,shownText):{body:shownText,prefix:[],suffix:''};
       const ref=human&&!event.truncated&&root.OrreryConversationReply?.parse(markers.body);
       let content=article;
       if(ref){
@@ -1328,7 +1352,8 @@
     listen(document,'oc:prompt-sending',event=>{
       const detail=event.detail;
       if(!opened||!enabled||detail?.name!==agent||typeof detail.attemptId!=='string'||typeof detail.text!=='string')return;
-      sending.set(detail.attemptId,{id:detail.attemptId,attemptId:detail.attemptId,name:agent,sending:true,known:new Set(observedIds),nextRead:readSequence+1,at:Number.isFinite(detail.startedAt)?detail.startedAt:Date.now(),preview:detail.text.slice(0,1000)+(detail.text.length>1000?'…':'')});
+      const display=typeof detail.displayText==='string'?detail.displayText:detail.text;
+      sending.set(detail.attemptId,{id:detail.attemptId,attemptId:detail.attemptId,name:agent,sending:true,known:new Set(observedIds),nextRead:readSequence+1,at:Number.isFinite(detail.startedAt)?detail.startedAt:Date.now(),attachments:detail.attachments,preview:display.slice(0,1000)+(display.length>1000?'…':'')});
       renderSubmissions();empty.hidden=true;
     });
     listen(document,'oc:prompt-send-cancelled',event=>{if(sending.delete(event.detail?.attemptId))renderSubmissions();});
@@ -1337,9 +1362,10 @@
       const pending=attempt&&sending.get(attempt);if(pending)sending.delete(attempt);
       if(!opened||!enabled||detail?.name!==agent||attempt&&!pending){if(pending)renderSubmissions();return;}
       if(typeof detail.text==='string'&&typeof detail.id==='string'&&!submissions.some(item=>item.id===detail.id)){
-        const text=normalizePrompt(detail.text);
+        const text=normalizePrompt(detail.text),display=typeof detail.displayText==='string'?detail.displayText:detail.text;
         submissions.push({id:detail.id,attemptId:pending?attempt:null,name:agent,at:Number.isFinite(detail.submittedAt)?detail.submittedAt:Date.now(),
-          text:text.slice(0,65536),length:text.length,matchable:text.length<=65536,preview:detail.text.slice(0,1000)+(detail.text.length>1000?'…':''),
+          text:text.slice(0,65536),length:text.length,matchable:text.length<=65536,
+          attachments:pending?.attachments,preview:display.slice(0,1000)+(display.length>1000?'…':''),
           known:detail.broadcastCount>1&&pending?pending.known:new Set(observedIds),uncertain:new Set(),
           nextRead:detail.broadcastCount>1&&pending?pending.nextRead:readSequence+1,broadcastCount:detail.broadcastCount});
         if(detail.broadcastCount>1)reconcileSubmissions([...events.values()],'newer',readSequence);

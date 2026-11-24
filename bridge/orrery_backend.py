@@ -3981,12 +3981,16 @@ async def serve_prompt_attachment(request: web.Request) -> web.Response:
         return reject('invalid_attachment', 400)
     kind, name, pane, instance = (data.get(key) for key in ('kind', 'session', 'paneId', 'incarnation'))
     expected = {'kind', 'session', 'paneId', 'incarnation', 'data'}
+    label = data.get('label')
+    if 'label' in data:
+        expected.add('label')
     if kind == 'file':
         expected.add('format')
     if (kind not in ('image', 'file') or set(data) != expected
             or not isinstance(name, str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,95}', name)
             or not isinstance(pane, str) or not re.fullmatch(r'(?:%[0-9]+|fresh-[a-f0-9]{64}-[0-9]+)', pane)
-            or not isinstance(instance, str) or not re.fullmatch(r'[a-f0-9]{32}', instance)):
+            or not isinstance(instance, str) or not re.fullmatch(r'[a-f0-9]{32}', instance)
+            or 'label' in data and (not isinstance(label, str) or len(label) > 256)):
         return reject('invalid_attachment_target', 400)
     if kind == 'file' and size > MAX_FILE_JSON:
         return reject('invalid_attachment_size', 413)
@@ -4000,16 +4004,19 @@ async def serve_prompt_attachment(request: web.Request) -> web.Response:
         if workspace is None:
             return reject('attachment_workspace_unavailable', 409)
         if kind == 'image':
-            path = await asyncio.to_thread(save_image, workspace, data['data'])
+            path = await asyncio.to_thread(save_image, workspace, data['data'], label=label)
         else:
             path = await asyncio.to_thread(save_file, workspace,
-                                           {'format': data['format'], 'data': data['data']})
+                                           {'format': data['format'], 'data': data['data']}, label=label)
         current = await pane_probe_cwd(request.app, name, pane)
         if (composer_pane_state(request.app, name, pane) is not state or current != cwd):
             return reject('attachment_target_changed', 409)
         relative = './' + Path(path).relative_to(workspace).as_posix()
     except (ValueError, OSError, TargetRefused):
         return reject('attachment_save_failed', 422)
+    references = request.app.get(CONVERSATION_REFERENCES_KEY)
+    if references is not None:
+        references.remember_upload(name, relative, path)
     return web.json_response({'ok': True, 'path': relative}, headers={'Cache-Control': 'no-store'})
 
 
