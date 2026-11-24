@@ -122,7 +122,7 @@
       '<div class="conversation-scroll" tabindex="0" aria-label="Conversation messages">'+
       '<button class="cockpit-control conversation-action conversation-older" type="button" aria-label="Load earlier" hidden>Load earlier</button>'+
       '<div class="conversation-events"></div><div class="conversation-pending" role="status" aria-live="polite"></div>'+
-      '<div class="conversation-activity" hidden><span class="conversation-activity-mark" aria-hidden="true"><i></i><i></i><i></i></span><span class="conversation-activity-label" role="status" aria-live="polite"></span><span class="conversation-activity-time" aria-hidden="true"></span></div><div class="conversation-empty"></div></div>'+
+      '<div class="conversation-activity" hidden><span class="conversation-activity-mark" aria-hidden="true"></span><span class="conversation-activity-copy"><span class="conversation-activity-label" role="status" aria-live="polite"></span></span><span class="conversation-activity-time" aria-hidden="true"></span></div><div class="conversation-empty"></div></div>'+
       '<div class="conversation-bottom" hidden><button class="cockpit-control pane-icon conversation-latest" type="button" title="Latest" aria-label="Latest">'+latestIcon+'</button></div></div>'+
       '<aside class="conversation-preview" aria-label="Selected file preview" hidden></aside></div>';
     screen.appendChild(panel);
@@ -144,6 +144,10 @@
     if(!expandControl)toggle.after(expandButton);
     const el=selector=>panel.querySelector(selector);
     const scroll=el('.conversation-scroll'),eventsEl=el('.conversation-events');
+    const motion=root.OrreryConversationMotion?.mount({
+      visible:()=>opened&&presented&&!document.hidden&&!root.OrreryDemo?.on,
+      follow:()=>{if(opened&&presented)scroll.scrollTop=scroll.scrollHeight;},
+    });
     const replyButton=document.createElement('button');replyButton.type='button';replyButton.className='cockpit-control conversation-selection-reply';
     replyButton.textContent='Reply with reference';replyButton.hidden=true;panel.append(replyButton);
     let selectedPassage=null,selectionFrame=0;
@@ -246,8 +250,11 @@
       if(opened&&presented&&container?.contains(document.activeElement))scroll.focus({preventScroll:true});
     }
     const activityEl=el('.conversation-activity'),activityLabel=el('.conversation-activity-label'),activityTime=el('.conversation-activity-time');
+    const workingByline=document.createElement('div'),workingSpeaker=document.createElement('span');
+    workingByline.className='conversation-byline conversation-working-byline';workingByline.hidden=true;
+    workingSpeaker.className='conversation-working-speaker';workingByline.append(workingSpeaker);activityEl.prepend(workingByline);
     const process=el('.conversation-process'),processTime=el('.conversation-process-time');
-    function paintActivity(current=getContext()||{}){
+    function paintActivity(current=getContext()||{},maintainPosition=true){
       const stepActivity=stepView?.activity(current,opened&&presented&&!document.hidden);
       const compacting=opened&&presented&&current.running===true&&current.reader_phase==='compacting';
       if(process.hidden===compacting)process.hidden=!compacting;
@@ -259,14 +266,17 @@
       const elapsed=state==='work'&&typeof current.work_disp==='string'?current.work_disp.trim():'';
       activityEl.classList.toggle('activity-paused',document.hidden||!presented||!opened);
       panel.classList.toggle('conversation-inactive',document.hidden||!presented||!opened);
-      const hidden=!state||compacting||stepActivity;
+      const hidden=!state||compacting||stepActivity||state==='work'&&Boolean(liveRow);
+      const speaking=state==='work'&&!hidden;
+      workingByline.hidden=!speaking;
+      if(speaking)root.OrreryConversationSpeaker?.paint(workingSpeaker,{name:agent,model:'',harness:providerLabel,context:current,renderAvatar});
       if(activityEl.hidden===hidden&&activityEl.dataset.state===(state||'')&&activityTime.textContent===(elapsed?'· '+elapsed:''))return;
       const atBottom=nearBottom();
       activityEl.hidden=hidden;activityEl.dataset.state=state;
       if(activityLabel.textContent!==label)activityLabel.textContent=label;
       activityTime.textContent=elapsed?'· '+elapsed:'';
       activityEl.title=label+(elapsed?' · '+elapsed:'');
-      if(opened&&presented){
+      if(maintainPosition&&opened&&presented){
         if(atBottom)scroll.scrollTop=scroll.scrollHeight;
         position();if(atBottom)remember(true);
       }
@@ -283,19 +293,24 @@
       if(liveSample?.id===sample?.id&&liveSample?.text===sample?.text)return;
       const newSample=sample&&liveSample?.id!==sample.id;
       if(!sample||sample.id===consumedLiveId||newSample&&[...events.values()].slice(-16).some(event=>liveMatches(event,sample))){
-        if(liveRow)changeTail(()=>{liveRow.remove();liveRow=null;liveSample=null;empty.hidden=events.size>0||submissions.length>0;});
+        if(liveRow)changeTail(()=>{
+          motion?.stopReply();liveRow.remove();liveRow=null;liveSample=null;
+          empty.hidden=events.size>0||submissions.length>0;paintActivity(current,false);
+        });
         return;
       }
+      const keepBottom=nearBottom(),seen=sample.text.startsWith(seenLiveText)?seenLiveText.length:
+        seenLiveText.startsWith(sample.text)?sample.text.length:0;
       changeTail(()=>{
         if(newSample){
           liveRow?.remove();
           liveRow=node({role:'assistant',kind:'text',text:sample.text,ts:sample.at},{live:true});
-          eventsEl.appendChild(liveRow);
-        }else{
-          const body=liveRow.querySelector('.conversation-text').firstChild;
-          if(root.OrreryDemo?.on)body.data=sample.text;
-          else body.appendData(sample.text.slice(liveSample.text.length));
+          eventsEl.appendChild(liveRow);paintActivity(current,false);
         }
+        const body=liveRow.querySelector('.conversation-text');
+        if(motion)motion.write(body,sample.text,{seen,keepBottom,plain:root.OrreryDemo?.on});
+        else body.textContent=sample.text;
+        if(!seenLiveText.startsWith(sample.text))seenLiveText=sample.text;
         liveSample=sample;empty.hidden=true;
       });
     }
@@ -320,8 +335,10 @@
         for(const item of items){
           const key=receiptKey(item);
           let row=existing.get(key);existing.delete(key);
-          if(!row){
+          const fresh=!row;
+          if(fresh){
             row=document.createElement('article');row.className='conversation-submission';row.dataset.receiptKey=key;
+            humanBubble(row);
             const text=document.createElement('p');text.className='conversation-text conversation-submission-text';
             if(root.OrreryConversationMarkdown)root.OrreryConversationMarkdown.renderText(item.preview,text);else text.textContent=item.preview;
             text.addEventListener('focusin',event=>{
@@ -354,6 +371,7 @@
           note.title=item.unmatched?'A user record arrived after this send, but it cannot be matched to this text.':'';
           const after=previous?previous.nextElementSibling:pendingEl.firstElementChild;
           if(row!==after){keepReaderFocus(row);pendingEl.insertBefore(row,after);}
+          if(fresh)motion?.prompt(row);
           previous=row;
           if(!item.sending&&!item.unmatched&&elapsed<60000)next=Math.min(next,60000-elapsed);
         }
@@ -440,7 +458,7 @@
     let layoutTimer=0,layoutFrame=0,layoutPending=false,restoring=false,userScrolling=false,layoutStarted=0;
     panel.dataset.conversationLayout="idle";
     let contextKey='',boundContext={},paused=false,retainedBytes=0,providerLabel='Codex',followPending=false,jumpTimer=0;
-    let liveRow=null,liveSample=null,consumedLiveId=null;
+    let liveRow=null,liveSample=null,consumedLiveId=null,seenLiveText='';
     const assistantText=event=>event.role==='assistant'&&event.kind==='text'&&event.variant!=='update';
     const liveMatches=(event,sample)=>assistantText(event)&&
       event.text.replace(/\s+/gu,' ').trim().startsWith(sample.text.replace(/\s+/gu,' ').trim());
@@ -508,8 +526,8 @@
       paintMessage();
     }
     function modeMessage(text){if(!text&&document.activeElement===modeInfo&&opened)scroll.focus({preventScroll:true});modeInfo.title=text;modeInfo.setAttribute('aria-label',text);paintStatus();}
-    function stop(keepFollow=false){clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;sessionReloadAttempted=false;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=holding=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
-    function clear({keepSubmissions=false}={}){hideSelection();closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();stepView?.reset();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();preview?.resetInline();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();liveRow=null;liveSample=null;before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
+    function stop(keepFollow=false){motion?.stop();clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;sessionReloadAttempted=false;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=holding=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
+    function clear({keepSubmissions=false}={}){hideSelection();closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();stepView?.reset();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();preview?.resetInline();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();motion?.stopReply();liveRow=null;liveSample=null;seenLiveText='';before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
       if(tableMutating)return;
@@ -732,6 +750,9 @@
       }
       return removed;
     }
+    function humanBubble(article){
+      article.classList.add('conversation-human');article.setAttribute('aria-label','You');article.title='You';
+    }
     function node(event,{article=document.createElement('article'),live=false}={}){
       article.replaceChildren();article.className='conversation-event';
       if(live)article.classList.add('conversation-live');else article.dataset.eventId=event.id;
@@ -751,7 +772,17 @@
       const byline=document.createElement('div');byline.className='conversation-byline';
       const role=document.createElement('span');role.className='conversation-role';
       const shell=event.role==='user'&&root.OrreryConversationMarkdown?.commandRecord(event.text)?.shell;
-      role.textContent=event.kind==='tool'?'Tool':event.kind==='tool_result'?'Tool result':shell?'Shell':event.role==='user'?'You':providerLabel;
+      const user=event.role==='user'&&event.kind==='text'&&!shell;
+      const parent=user&&root.OrreryConversationMotion?.promptAuthor(event.text,agent,(getContext()||{}).parent_agent);
+      const human=user&&!parent;
+      if(human)humanBubble(article);
+      role.textContent=event.kind==='tool'?'Tool':event.kind==='tool_result'?'Tool result':shell?'Shell':parent||providerLabel;
+      if(parent){
+        const avatar=renderPeerAvatar?.(parent);
+        role.classList.add('conversation-parent');
+        if(avatar)role.prepend(avatar);
+        role.setAttribute('aria-label',parent);role.title=parent;
+      }
       if(event.kind==='text'&&event.role==='assistant'&&root.OrreryConversationSpeaker){
         role.dataset.recordedModel=typeof event.model==='string'?event.model:'';
         root.OrreryConversationSpeaker.paint(role,{name:agent,model:role.dataset.recordedModel,harness:providerLabel,context:getContext()||{},renderAvatar});
@@ -763,10 +794,12 @@
       const time=document.createElement('time');time.className='conversation-time';
       const date=new Date(event.ts);
       if(Number.isFinite(date.getTime())){time.dateTime=event.ts;time.textContent=date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});time.title=date.toLocaleString();}
-      byline.appendChild(time);article.appendChild(byline);
+      byline.appendChild(time);
+      if(human){if(time.title)article.title+=' · '+time.title;}
+      else article.appendChild(byline);
       if(!['tool','tool_result'].includes(event.kind)){
         const text=document.createElement('div');text.className='conversation-text';
-        if(live)text.textContent=event.text;
+        if(live)text.textContent=motion?'':event.text;
         else if(event.role==='assistant'&&root.OrreryConversationMarkdown){
           text.className+=' conversation-markdown';root.OrreryConversationMarkdown.renderDocument(event.text,text,{codeControls:true});
           // A single paragraph needs no block wrapper in a conversation row.
@@ -780,7 +813,9 @@
       const target=article.querySelector('.conversation-text')||byline;
       if(jumpToEvent){
         target.classList.add('conversation-jumpable');target.tabIndex=0;target.setAttribute('role','button');
-        target.setAttribute('aria-label','Show this message in its terminal');target.title='Click to find this message in the terminal';
+        const jumpLabel='Show this message in its terminal';
+        target.setAttribute('aria-label',human?'You · '+jumpLabel:jumpLabel);
+        target.title=human?'You · '+jumpLabel:'Click to find this message in the terminal';
         let press=null;
         target.addEventListener('pointerdown',e=>{press={x:e.clientX,y:e.clientY,selected:!root.getSelection()?.isCollapsed};});
         target.addEventListener('click',e=>{
@@ -931,6 +966,7 @@
             const matching=recorded.filter(event=>liveMatches(event,liveSample));
             replacement=matching.length===1?matching[0]:null;
             consumedLiveId=liveSample.id;
+            motion?.stopReply();seenLiveText='';
             if(replacement&&!renderEvent)reused=liveRow;else liveRow.remove();
             if(replacement){
               const id=JSON.stringify(['event',replacement.id]);
@@ -940,7 +976,13 @@
             liveRow=null;liveSample=null;
           }
         }
-        const drawRecorded=event=>draw(event,event===replacement?reused:undefined);
+        const arrivingPrompts=[];
+        const arrivingIds=direction==='newer'&&atBottom?new Set(additions.map(event=>event.id)):null;
+        const drawRecorded=event=>{
+          const article=draw(event,event===replacement?reused:undefined);
+          if(arrivingIds?.has(event.id)&&article.classList.contains('conversation-human'))arrivingPrompts.push(article);
+          return article;
+        };
         if(!unchangedSnapshot){saveTables();tableMutating=true;}
         const fragment=document.createDocumentFragment(),focusedGroup=toolGroups.find(group=>group.button===document.activeElement);let added=0;
         if(fresh&&!unchangedSnapshot){
@@ -972,6 +1014,7 @@
         for(const key of tablePositions.keys())if(!events.has(JSON.parse(key)[0]))tablePositions.delete(key);
         if(!unchangedSnapshot)restoreTables();
         reconcileSubmissions(incoming,direction,sequence);
+        for(const article of arrivingPrompts)if(!matchedSubmissions.has(article.dataset.eventId))motion?.prompt(article);
         empty.hidden=events.size>0||submissions.length>0||Boolean(liveRow);empty.textContent='No conversation messages in this portion yet.';
         if(direction==='initial'||direction==='newer'&&atBottom)scroll.scrollTop=scroll.scrollHeight;
         else if(direction==='older')restoreAnchor(saved,Math.max(0,oldTop+scroll.scrollHeight-oldHeight));
@@ -1145,7 +1188,7 @@
       if(busy){followPending=true;if(holding)controller?.abort();return;}
       followSubmitted();
     });
-    function userScroll(){clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);layoutTimer=layoutFrame=0;layoutPending=restoring=false;panel.dataset.conversationLayout='settled';userScrolling=true;const r=screen.getBoundingClientRect();lastWidth=r.width;lastHeight=r.height;}
+    function userScroll(){motion?.stopFollowing();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);layoutTimer=layoutFrame=0;layoutPending=restoring=false;panel.dataset.conversationLayout='settled';userScrolling=true;const r=screen.getBoundingClientRect();lastWidth=r.width;lastHeight=r.height;}
     listen(scroll,'wheel',userScroll,{passive:true});listen(scroll,'touchstart',userScroll,{passive:true});listen(scroll,'pointerdown',userScroll,{passive:true});
     listen(scroll,'keydown',event=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key))userScroll();});
     let previousScrollTop=scroll.scrollTop,previousScrollHeight=scroll.scrollHeight;
@@ -1172,10 +1215,10 @@
     listen(document,'oc:reader-activity',()=>{if(opened&&presented){const current=getContext()||{};paintActivity(current);paintLiveText(current);}});
     // A hidden tab keeps no held poll: end one that is waiting, so its
     // browser connection and the server's slot are returned at once.
-    listen(document,'visibilitychange',()=>{preview?.setVisible(opened&&presented&&!document.hidden);paintActivity();paintLiveText();if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
+    listen(document,'visibilitychange',()=>{if(document.hidden)motion?.stop();preview?.setVisible(opened&&presented&&!document.hidden);paintActivity();paintLiveText();if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
     preference();paintControls();
     return Object.freeze({open,close,relocate,reconcile:context,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
-      dispose(){cancelAnimationFrame(selectionFrame);stopPathLinks?.();ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();submissionObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});preview?.dispose();clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();noticeMenu.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
+      dispose(){cancelAnimationFrame(selectionFrame);stopPathLinks?.();ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();submissionObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});preview?.dispose();motion?.dispose();clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();noticeMenu.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});
   }
   function mountWorkspace({getContext,getSlots,getOwner=name=>getContext(name)?.terminalPaneId,activate,defaultView=()=> 'terminal',...options}){
     const screen=document.querySelector('.screen'),toggle=document.getElementById('conversationToggle');

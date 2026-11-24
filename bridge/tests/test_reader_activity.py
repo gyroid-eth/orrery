@@ -72,12 +72,12 @@ def test_activity_stays_after_submissions_and_stops_motion(cockpit,theme):
     wait("reader.querySelector('.conversation-submission')!==null")
     assert js("reader.querySelector('.conversation-pending').nextElementSibling===reader.querySelector('.conversation-activity')")
     assert js("reader.querySelector('.conversation-activity').getBoundingClientRect().right<=readerScroll.getBoundingClientRect().right")
-    assert js("getComputedStyle(reader.querySelector('.conversation-activity-mark i')).animationName") != 'none'
+    assert js("getComputedStyle(reader.querySelector('.conversation-activity-label')).animationName") == 'conversation-working-shimmer'
     client.call('Emulation.setEmulatedMedia',features=[dict(name='prefers-reduced-motion',value='reduce')])
-    assert js("getComputedStyle(reader.querySelector('.conversation-activity-mark i')).animationName") == 'none'
+    assert js("getComputedStyle(reader.querySelector('.conversation-activity-label')).animationName") == 'none'
     client.call('Emulation.setEmulatedMedia',features=[])
     js("Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});document.dispatchEvent(new Event('visibilitychange'))")
-    assert js("getComputedStyle(reader.querySelector('.conversation-activity-mark i')).animationPlayState") == 'paused'
+    assert js("getComputedStyle(reader.querySelector('.conversation-activity-label')).animationPlayState") == 'paused'
     js("Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});document.dispatchEvent(new Event('visibilitychange'));currentAgents[0].history_session_id='new-activity-binding';document.dispatchEvent(new Event('oc:agents'))")
     assert js("reader.querySelector('.conversation-submission')===null")
 

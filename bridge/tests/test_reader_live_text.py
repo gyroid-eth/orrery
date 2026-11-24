@@ -5,7 +5,7 @@ import subprocess
 
 import pytest
 
-from test_conversation_review_regressions import cockpit, stable_roster
+from test_conversation_review_regressions import cockpit, stable_roster, wait_reading_layout
 
 
 PROGRAMS = [
@@ -104,7 +104,10 @@ def test_live_rows_extend_and_become_the_authoritative_message(cockpit, program,
 def test_live_updates_keep_the_scroll_anchor_and_drop_ambiguous_redraw(cockpit):
     js, wait, *_ = cockpit
     open_fixture(cockpit, 'codex', 'openai', 'cursor')
-    js("window.readScroll=document.querySelector('.conversation-scroll');readScroll.scrollTop=90")
+    wait_reading_layout(js)
+    js("""window.readScroll=document.querySelector('.conversation-scroll');
+      readScroll.dispatchEvent(new WheelEvent('wheel'));readScroll.scrollTop=90;
+      readScroll.dispatchEvent(new Event('scroll'));""")
     top = js('readScroll.scrollTop')
     write_frame(js, frame('codex', SEED), snapshot=True)
     write_frame(js, frame('codex', MORE))
@@ -129,6 +132,61 @@ def test_binding_loss_discards_an_unrecorded_terminal_row(cockpit):
     assert live_text(js) is None
     write_frame(js, frame('claude-code', FINAL))
     assert live_text(js) is None
+
+
+def test_word_springs_stagger_once_and_finalize_without_animation(cockpit):
+    js, wait, client, *_ = cockpit
+    client.call('Emulation.setEmulatedMedia',features=[{'name':'prefers-reduced-motion','value':'no-preference'}])
+    open_fixture(cockpit, 'codex', 'openai', 'cursor', count=3)
+    assert js("!document.querySelector('.conversation-activity').hidden")
+    write_frame(js, frame('codex', SEED), snapshot=True)
+    write_frame(js, frame('codex', MORE))
+    delays=js("""window.wordNodes=[...document.querySelectorAll('.conversation-stream-word')];
+       window.entrances=wordNodes.map(word=>word.getAnimations()[0]);
+       entrances.map(a=>a?.effect.getTiming().delay)""")
+    assert len(delays)>2 and abs(delays[1]-delays[0]-70)<1
+    assert js("document.querySelector('.conversation-activity').hidden")
+    write_frame(js, frame('codex', MORE))
+    write_frame(js, frame('codex', MORE+' Use'))
+    assert js("""wordNodes.every((word,index)=>document.querySelectorAll('.conversation-stream-word')[index]===word
+        &&word.getAnimations().every(animation=>animation===entrances[index]))""")
+    js("""window.projected=document.querySelector('.conversation-live');
+       window.originTop=projected.getBoundingClientRect().top""")
+    commit(js,MORE+' Use')
+    wait("Boolean(document.querySelector('[data-event-id=confirmed]'))")
+    assert js("""projected===document.querySelector('[data-event-id=confirmed]')
+       &&projected.getAnimations({subtree:true}).length===0
+       &&Math.abs(projected.getBoundingClientRect().top-originTop)<=1""")
+
+
+def test_reduced_motion_and_hidden_tab_never_queue_words(cockpit):
+    js, _, client, *_ = cockpit
+    client.call('Emulation.setEmulatedMedia',features=[{'name':'prefers-reduced-motion','value':'reduce'}])
+    open_fixture(cockpit, 'codex', 'openai', 'cursor', count=3)
+    write_frame(js, frame('codex', SEED), snapshot=True)
+    write_frame(js, frame('codex', MORE))
+    assert live_text(js)==MORE
+    assert js("document.querySelector('.conversation-live').getAnimations({subtree:true}).length===0")
+    js("Object.defineProperty(document,'hidden',{value:true,configurable:true});document.dispatchEvent(new Event('visibilitychange'))")
+    write_frame(js,frame('codex',FINAL))
+    assert live_text(js) is None
+    client.call('Emulation.setEmulatedMedia',features=[{'name':'prefers-reduced-motion','value':'no-preference'}])
+    js("delete document.hidden;document.dispatchEvent(new Event('visibilitychange'))")
+    assert live_text(js)==FINAL
+    assert js("""[...document.querySelectorAll('.conversation-stream-word')].filter(word=>word.getAnimations().length)
+      .every(word=>['Use','a','vector','export.'].includes(word.textContent))""")
+
+
+def test_japanese_groups_are_short_and_keep_the_original_text():
+    source = Path(__file__).resolve().parents[1] / 'conversation_motion.js'
+    subprocess.run(['node', '-e', r"""
+      require(process.argv[1]);
+      const {pieces}=globalThis.OrreryConversationMotion;
+      const assert=require('node:assert/strict'),text='SVGで目盛りを確認。\n  読みやすく。';
+      const parts=pieces(text);
+      assert.equal(parts.join(''),text);
+      assert.deepEqual(parts,['SVG','で目盛り','を確認。','\n  ','読みやす','く。']);
+    """, str(source)], check=True, timeout=10)
 
 
 def test_hermes_ink_response_uses_its_own_gutter_and_busy_composer(cockpit):
