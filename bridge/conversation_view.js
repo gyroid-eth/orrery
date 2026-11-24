@@ -534,8 +534,7 @@
     const stepView=root.OrreryConversationSteps?.mount({host:eventsEl,
       mutate:fn=>changeTail(fn,false),onFocusLost:()=>scroll.focus({preventScroll:true})});
     const byteSize=event=>new TextEncoder().encode(JSON.stringify(event)).byteLength;
-    const fingerprint=current=>JSON.stringify(['name','program','provider','history_binding','transcript_path',
-      'native_session_id','history_session_id','history_receipt_ts','created','mail_instance_id','mail_agent_id','terminalPaneId'].map(key=>current[key]??null));
+    const fingerprint=root.OrreryConversationSource.bindingIdentity;
     function nearBottom(){return scroll.scrollHeight-scroll.clientHeight-scroll.scrollTop<45;}
     function position(){
       const atBottom=nearBottom()||motion?.followingReply();

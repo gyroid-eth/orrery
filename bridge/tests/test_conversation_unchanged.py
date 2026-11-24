@@ -222,6 +222,42 @@ def test_b_skips_only_the_pre_read_check_and_publishes_after_the_recheck(tmp_pat
     run(monkeypatch, current, scenario, events=order)
 
 
+@pytest.mark.parametrize('refresh', ['before_revalidated_read', 'during_cached_read'])
+def test_claude_receipt_refresh_keeps_the_same_cursor(tmp_path, monkeypatch, refresh):
+    path = tmp_path / 'history.jsonl'
+    path.write_bytes(line(claude('user', 'first prompt')))
+    current = row(path, 'claude-code')
+    now = [1000.0]
+    advance = False
+    seen_receipts = []
+    updated = '2026-11-04T07:00:10Z'
+
+    async def before_upstream(request):
+        if request.path == '/api/version':
+            return
+        if advance:
+            current['history_receipt_ts'] = updated
+        seen_receipts.append(current['history_receipt_ts'])
+
+    async def scenario(get, calls, reads):
+        nonlocal advance
+        status, first = await get()
+        assert status == 200 and first['events'][0]['text'] == 'first prompt'
+        with path.open('ab') as transcript:
+            transcript.write(line(claude('user', 'next prompt')))
+        if refresh == 'before_revalidated_read':
+            now[0] += 31
+            current['history_receipt_ts'] = updated
+        advance = True
+        status, new = await get(after=first['after'])
+        assert status == 200 and [e['text'] for e in new['events']] == ['next prompt']
+        assert first['after'].split(':')[0] == new['after'].split(':')[0]
+        assert len(set(seen_receipts)) == 2
+        assert len(reads) == 2
+
+    run(monkeypatch, current, scenario, api=36, clock=lambda: now[0], before_upstream=before_upstream)
+
+
 def test_b_discards_the_read_when_the_recheck_fails_and_checks_first_next_time(tmp_path, monkeypatch):
     path = tmp_path / 'history.jsonl'; path.write_bytes(line(claude('user', 'fixture body')))
     current = row(path, 'claude-code'); order = []

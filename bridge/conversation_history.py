@@ -368,6 +368,19 @@ def bound_codex_agent(payload: object, name: str) -> dict:
     return bound_agent(payload,name)
 
 
+def conversation_binding(row):
+    """Identity of a verified record across authority checks and previews."""
+    keys = ('name', 'program', 'history_binding', 'transcript_path', 'native_session_id',
+            'history_session_id', 'created', 'mail_instance_id', 'mail_agent_id')
+    # Telemetry checks the self receipt's freshness before returning a bound
+    # Claude row. A newer receipt can still prove the same native session.
+    native_claude = (row.get('program') in ('claude', 'claude-code')
+                     and row.get('history_binding') == 'bound'
+                     and row.get('history_session_id') and row.get('transcript_path'))
+    receipt = None if native_claude else row.get('history_receipt_ts')
+    return (*[row.get(key) for key in keys], receipt)
+
+
 def open_reader(row, expect_inode=None):
     from conversation_readers import open_reader as native_reader
     return native_reader(row, expect_inode=expect_inode)
