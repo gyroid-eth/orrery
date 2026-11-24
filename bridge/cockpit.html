@@ -4172,9 +4172,9 @@
       }
     }
   },
-  "inventory_digest": "649fd64d4dd75cb2a412e01c6f4cc9aba6a4589ede832f2f9bd897a6c395569d",
+  "inventory_digest": "398abf7a5b4eb18a17d87f194d32830af80ace6cc8879cb60c5e4178e0f60f42",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "c4d42e84772a56a87c3b1bd12cc40cf6f8763fb962f4a5adafd75aa18a4be955",
+  "source_digest": "dea7dae4585d16c486045d842d62d8f50b69d7e9cf1c163fbf1f5f0ef555614e",
   "surface": "cockpit",
   "version": 1
 }
@@ -7291,11 +7291,14 @@ function createPane(session,meta){
   const host=document.createElement('div');
   host.className='termhost';host.dataset.paneId=meta.paneId;host.dataset.session=session;
   stageEl.appendChild(host);
+  const activateWebLink=(event,uri)=>{event.preventDefault();openExternalUrl(uri);};
   const term=new Terminal({
     cursorBlink:true,
     fontFamily:'"IBM Plex Mono", Menlo, Monaco, "DejaVu Sans Mono", monospace',
     fontSize:currentTerminalFontSize(),lineHeight:1.15,scrollback:6000,theme:currentTerminalTheme(),
     minimumContrastRatio:currentTerminalMinimumContrastRatio(),
+    // OSC 8 hyperlinks are handled by xterm before the plain-URL addon.
+    linkHandler:{activate:activateWebLink,allowNonHttpProtocols:false},
   });
   const fit=new FitAddon.FitAddon();
   term.loadAddon(fit);
@@ -7303,7 +7306,7 @@ function createPane(session,meta){
   // backend (the Tauri webview has no window.open handler, so a plain
   // addon default would do nothing there).
   if(window.WebLinksAddon&&WebLinksAddon.WebLinksAddon){
-    term.loadAddon(new WebLinksAddon.WebLinksAddon((event,uri)=>{event.preventDefault();openExternalUrl(uri);}));
+    term.loadAddon(new WebLinksAddon.WebLinksAddon(activateWebLink));
   }
   // Local paths in pane output: click → reveal in the file manager.
   // Single-line matches only; a path wrapped across rows is not linked.
