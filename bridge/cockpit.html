@@ -3993,9 +3993,9 @@
       }
     }
   },
-  "inventory_digest": "84b2ff9fc05b9ae1b8a360a14af2bf16e5dcdf7be08d4017a0c2edbd45acd188",
+  "inventory_digest": "34cf544786b696a692ebe28d159e911e1b2c646ab84ee863b2a4e11c32dd7a38",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "130472f9a7aa3c96a94de9826c0216c1941338e93278c209901c286ecac37d2d",
+  "source_digest": "50055106c5e028872ecc7b0d5db7f1b89fd2d4e0d2a7b4d2f78b9c9c447af76e",
   "surface": "cockpit",
   "version": 1
 }
@@ -8935,7 +8935,11 @@ async function postBulkAgentAction(action,body){
     method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),
   });
   const result=await response.json().catch(()=>null);
-  if(!response.ok||!result?.ok)throw new Error(result?.error||`HTTP ${response.status}`);
+  if(!response.ok||!result?.ok){
+    const error=new Error(result?.error||`HTTP ${response.status}`);
+    error.resumeConfirmationPending=result?.resume_confirmation_pending===true;
+    throw error;
+  }
   return result;
 }
 const LIVE_AGENT_ROSTER='/telemetry/agents?scope=live';
@@ -9415,14 +9419,15 @@ async function changeAgentPermission(original,key,value){
     showToast(`Resume accepted for ${label} with updated permissions.`);
   }catch(error){
     const reason=OrreryDemo.mask(String(error?.message||error).replace(/\s+/g,' ').trim());
-    const message={
+    const confirmationPending=stage==='resume'&&error?.resumeConfirmationPending;
+    const message=confirmationPending?label:{
       check:restart?`Restart check failed for ${label}`:`Permission change failed for ${label}`,
       exit:`Exit request failed for ${label}`,
       wait:`Could not confirm ${label} was ready to resume`,
       resume:restart?`${label} stopped. Resume failed`:`Resume failed for ${label}`,
     }[stage];
     const recovery=stage==='wait'?'\nCheck the agent in Network before resuming.':
-      stage==='resume'?'\nUse Resume in Network if the agent is stopped.':'';
+      stage==='resume'&&!confirmationPending?'\nUse Resume in Network if the agent is stopped.':'';
     showToast(`${message} · ${reason}${recovery}`,true,9000);
     toastEl.classList.add('multiline');
   }finally{

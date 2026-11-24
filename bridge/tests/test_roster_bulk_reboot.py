@@ -95,7 +95,8 @@ def roster(request):
             action = '/api/jump:check' if body.get('check_only') else self.path
             error = state['failures'].get((action, body['session']))
             if error:
-                self.answer({'ok': False, 'error': error})
+                details = error if isinstance(error, dict) else {'error': error}
+                self.answer({'ok': False, **details}, 400)
             elif body.get('check_only'):
                 self.answer({'ok': True, 'action': 'validated'})
             elif self.path == '/api/jump' and 'permission' in body:
@@ -455,3 +456,21 @@ def test_api46_preflight_failure_leaves_the_standalone_running(roster):
     wait("toastEl.textContent.includes('Saved settings could not be restored')")
     path, jump = permission_jump('IndigoFixture', TOP_SID, browser_use=True)
     assert state['trace'] == [('roster', 200, ['agent']), (path, jump | {'check_only': True})]
+
+
+@pytest.mark.parametrize('roster', [46], indirect=True)
+@pytest.mark.parametrize('active', [True, False], ids=['restart', 'resume'])
+def test_api46_pending_codex_resume_displays_the_api_instructions(roster, active):
+    js, wait, state = roster
+    target = TOP if active else TOP_RETIRED
+    name, sid = target['name'], target['history_session_id']
+    if active:
+        state['checks'] = [(200, [TOP]), (200, [])]
+        state['stop_checks'] = [TOP_EXITED]
+    error = 'Could not confirm Codex resumed or stopped; check its session'
+    state['failures'][('/api/jump', name)] = {'error': error, 'resume_confirmation_pending': True}
+    open_permissions(js, name, '[data-browser]')
+    js('permissionApply.click()')
+    wait("!permissionChangeBusy&&toastEl.textContent.includes('check its session')")
+    assert js('toastEl.textContent') == f'{name} · {error}'
+    assert state['trace'][-1] == permission_jump(name, sid, browser_use=True)
