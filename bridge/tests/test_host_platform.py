@@ -53,7 +53,7 @@ def opened(monkeypatch):
     """Every argv handed to run_opener, with its exit-status policy."""
     calls: list[tuple[list[str], bool]] = []
 
-    def record(argv, *, trust_exit_status=True, confirm=False):
+    def record(argv, *, trust_exit_status=True, confirm=False, input_data=None):
         calls.append((list(argv), trust_exit_status))
 
     monkeypatch.setattr(ob, "run_opener", record)
@@ -184,13 +184,36 @@ def test_wsl_prefers_wslview_for_urls(monkeypatch, opened):
     _host(monkeypatch, "wsl", which={"wslview": "/usr/bin/wslview",
                                      "explorer.exe": "/mnt/c/Windows/explorer.exe"})
     ob.launch_url("https://example.com/?a=1&b=2")
-    assert opened == [(["wslview", "https://example.com/?a=1&b=2"], True)]
+    assert opened == [(["/usr/bin/wslview", "https://example.com/?a=1&b=2"], True)]
 
 
-def test_wsl_falls_back_to_explorer_and_ignores_its_exit_status(monkeypatch, opened):
-    _host(monkeypatch, "wsl", which={"explorer.exe": "/mnt/c/Windows/explorer.exe"})
-    ob.launch_url("https://example.com/")
-    assert opened == [(["/mnt/c/Windows/explorer.exe", "https://example.com/"], False)]
+@pytest.mark.parametrize("has_wslview", [False, True])
+def test_wsl_opens_the_default_browser_with_powershell_if_wslview_cannot(
+    monkeypatch, has_wslview,
+):
+    powershell = "/mnt/c/powershell.exe"
+    wslview = "/usr/bin/wslview"
+    which = {"powershell.exe": powershell, "explorer.exe": "/mnt/c/Windows/explorer.exe"}
+    if has_wslview:
+        which["wslview"] = wslview
+    _host(monkeypatch, "wsl", which=which)
+    attempted = []
+    url = "https://example.com/?a=1&b=%22'語"
+
+    def record(argv, **options):
+        attempted.append(argv[0])
+        if argv[0] == wslview:
+            raise OSError("wslview could not launch the browser")
+        assert argv[:-1] == [powershell, "-NoProfile", "-NonInteractive", "-EncodedCommand"]
+        script = base64.b64decode(argv[-1]).decode("utf-16-le")
+        assert "SessionId -eq 0" in script
+        assert "[Environment]::UserInteractive" in script
+        assert "Start-Process -FilePath ([Console]::In.ReadToEnd()) -ErrorAction Stop" in script
+        assert options == {"input_data": url.encode(), "confirm": True}
+
+    monkeypatch.setattr(ob, "run_opener", record)
+    ob.launch_url(url)
+    assert attempted == ([wslview, powershell] if has_wslview else [powershell])
 
 
 def test_wsl_with_no_route_to_windows_is_an_error(monkeypatch, opened):

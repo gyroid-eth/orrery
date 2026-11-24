@@ -16,11 +16,12 @@ const byId=new Map(),groupsByName=new Map(),rowsByKey=new Map();
 const requestedAgents=new Map();
 const peerAvatars=new Map();
 const motion=matchMedia('(prefers-reduced-motion: reduce)');
-let activeFilter='',waitingOnly=false,filterRequest=0;
+let activeFilter='',waitingOnly=false,filterRequest=0,clearedAgent='';
 let drawer=null,drawerMotion=null,drawerMotionTimer=0,replyRequest=0;
 let paintedBody=null,observingPaths=false;
 let hoveredRoute=null,focusedRoute=null;
-let manualGraphOpen=false;
+const GRAPH_KEY='oc-mini-mail-graph';
+let manualGraphOpen=readGraphPreference();
 const VIEW_KEY='oc-mail-view';
 let timeline=true;
 try{timeline=localStorage.getItem(VIEW_KEY)!=='recipient';}catch(_){/* preference unavailable */}
@@ -53,6 +54,7 @@ const icons={
 function icon(name){
   return '<svg class="mail-icon" viewBox="0 0 24 24" aria-hidden="true">'+icons[name]+'</svg>';
 }
+
 function control(action,label,symbol){
   return '<button class="rail-icon" type="button" data-action="'+action+'" title="'+label+'" aria-label="'+label+'">'+icon(symbol)+'</button>';
 }
@@ -286,7 +288,23 @@ function setFilterOpen(open,restoreFocus=false){
     ],{duration:motion.matches?90:160,easing:'ease-out'});
   }else if(restoreFocus)filterButton.focus({preventScroll:true});
 }
+
+const filterSummary=document.createElement('div');
+filterSummary.className='mail-filter-summary';
+filterSummary.hidden=true;
+filterSummary.innerHTML='<button type="button" class="mail-clear-filter"><span></span>'+icon('close')+'</button>';
+const clearFilter=filterSummary.querySelector('button');
+const filterLabel=clearFilter.querySelector('span');
+mailEl.before(filterSummary);
 filterButton.addEventListener('click',()=>setFilterOpen(filterEl.hidden));
+clearFilter.addEventListener('click',()=>{
+  ++filterRequest;
+  clearedAgent=activeFilter;
+  activeFilter='';
+  waitingOnly=false;
+  setFilterOpen(false,true);
+  renderMail({animate:true});
+});
 document.addEventListener('pointerdown',event=>{
   if(!filterEl.hidden&&!filterEl.contains(event.target)&&!filterButton.contains(event.target))setFilterOpen(false);
 });
@@ -303,12 +321,14 @@ async function loadAgentMail(agent){
 async function selectMailFilter(agent,{requireExisting=false}={}){
   const request=++filterRequest,next=text(agent);
   const known=()=>[...byId.values()].some(m=>includesAgent(m,next));
-  if(next&&!known())await loadAgentMail(next);
+  const missing=next&&!known();
+  if(missing&&requireExisting)await loadAgentMail(next);
   if(request!==filterRequest||(requireExisting&&!known()))return false;
   if(activeFilter!==next){
     activeFilter=next;
     renderMail({animate:true});
   }
+  if(missing&&!requireExisting)await loadAgentMail(next);
   return true;
 }
 
@@ -379,7 +399,27 @@ function paintGraph(){
   selectedGraph.setAttribute('aria-label',(route.sender||'Unknown sender')+' to '+
     (route.recipients.join(', ')||'no direct recipient'));
 }
-graphButton.addEventListener('click',()=>{manualGraphOpen=!manualGraphOpen;paintGraph();});
+function readGraphPreference(){
+  try{return localStorage.getItem(GRAPH_KEY)==='1';}catch(_){return false;}
+}
+function syncGraphPreference(){
+  manualGraphOpen=readGraphPreference();
+  paintGraph();
+}
+graphButton.addEventListener('click',()=>{
+  manualGraphOpen=!manualGraphOpen;
+  try{
+    localStorage.setItem(GRAPH_KEY,manualGraphOpen?'1':'0');
+    window.OrreryPrefs?.flush();
+  }catch(_){/* preference unavailable */}
+  paintGraph();
+});
+window.addEventListener('storage',event=>{
+  if(event.key===GRAPH_KEY)syncGraphPreference();
+});
+document.addEventListener('oc:prefs-changed',event=>{
+  if(event.detail?.keys?.includes(GRAPH_KEY))syncGraphPreference();
+});
 
 function paintView(){
   viewButton.title=timeline?'Group by recipient':'Show thread timeline';
@@ -518,7 +558,16 @@ function originFor(sender){
 }
 
 function renderMail({animate=false,fresh=new Set()}={}){
-  filterButton.toggleAttribute('data-filtered',Boolean(activeFilter||waitingOnly));
+  const filters=[activeFilter,waitingOnly?'Awaiting a reply':''].filter(Boolean);
+  const filtered=filters.length>0;
+  filterButton.toggleAttribute('data-filtered',filtered);
+  filterSummary.hidden=!filtered;
+  if(filtered){
+    const label=filters.join(' · ');
+    filterLabel.textContent=label;
+    clearFilter.title=label+' · Clear mail filters';
+    clearFilter.setAttribute('aria-label','Clear mail filters: '+label);
+  }
   const visible=assignmentsForView(visibleAssignments());
   const focus=cardsEl.contains(document.activeElement)?document.activeElement:null;
   const moving=animate?OC.railPositions([
@@ -835,9 +884,19 @@ document.addEventListener('oc:agents',()=>{
   groupsByName.forEach(paintPortrait);
   refreshPeerAvatars();
 });
-document.addEventListener('oc:filter-agent',event=>selectMailFilter(event.detail?.agent));
-document.addEventListener('oc:focus-agent',event=>selectMailFilter(event.detail?.name,{requireExisting:true}));
+document.addEventListener('oc:filter-agent',event=>{
+  clearedAgent='';
+  selectMailFilter(event.detail?.agent);
+});
+document.addEventListener('oc:focus-agent',event=>{
+  const name=event.detail?.name;
+  // A pane can finish attaching after its roster selection was cleared.
+  if(name===clearedAgent)return;
+  clearedAgent='';
+  selectMailFilter(name,{requireExisting:true});
+});
 paintView();
+paintGraph();
 ingest(OC.mailBacklog());
 fetchJson('/telemetry/mail/recent?limit=40').then(data=>{
   if(Array.isArray(data?.messages))ingest(data.messages);

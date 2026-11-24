@@ -1,9 +1,11 @@
 /* Demo mode: hide the user name and the machine name on screen only.
 
    What is hidden: the user name where it is part of a home path
-   (/Users/<name>, /home/<name>, C:\Users\<name>), the user name right before
-   an "@" (a shell prompt's user@host), and the host name as a whole word. The
-   names come from the backend (GET /telemetry/identity), never from guessing.
+   (/Users/<name>, /home/<name>), the user name right before an "@" (a shell
+   prompt's user@host), and the host name as a whole word. The names come from
+   the backend (GET /telemetry/identity). Windows profile directory names in
+   drive paths and WSL mounts are hidden even if the Windows account could not
+   be read or has a different name from its profile directory.
    A name that only appears inside another word ("admiral" for a user called
    "mira") is left alone.
 
@@ -31,6 +33,9 @@
   const NARROW_MASK='*',WIDE_MASK='\uFF0A';
   const NAME_CHAR=/[A-Za-z0-9._-]/,HOST_CHAR=/[A-Za-z0-9-]/,WORD_CHAR=/[A-Za-z0-9_]/;
   const LATIN_WORD=/^[A-Za-z0-9_][A-Za-z0-9_ .'-]*$/;
+  const WINDOWS_HOME=/(?:\/mnt\/[a-z]\/users\/|[a-z]:[\\/]users[\\/])/gi;
+  const WINDOWS_PROFILE=/^[^\\/\x00-\x1f<>:"|?*]+/;
+  const WINDOWS_PROFILE_TOKEN=/^[^\s\\/<>:"'`|?*]+/;
   const LOCATION=/(^|[\s([{=,:;<>"'`|])([a-z][a-z0-9+.-]*:\/\/|(?:data|mailto|blob|tel|urn|magnet):|www\.|[a-z]:[\\/]|(?:~|\.\.?)\/|\\\\|\/+)/gi;
   const MARKER={url:'[URL]',path:'[path]'};
   const TERMINAL_MARKER={url:'<>',path:'[]'};
@@ -191,6 +196,18 @@
         if(found.some(([a,b])=>start<b&&end>a))return;
         found.push([start,end,null]);
       };
+      const pathStart=wholePath?0:literalPath?text.lastIndexOf(literalPath):-1;
+      const pathEnd=wholePath?text.length:pathStart+(literalPath?.length||0);
+      for(const prefix of text.matchAll(WINDOWS_HOME)){
+        const start=prefix.index+prefix[0].length;
+        const exact=pathStart>=0&&prefix.index>=pathStart&&start<pathEnd;
+        const rest=exact?text.slice(start,pathEnd):text.slice(start);
+        const component=rest.match(WINDOWS_PROFILE)?.[0]||'';
+        const next=rest[component.length];
+        const delimited=/[\\/]/.test(next||'')&&!/['`]/.test(component);
+        const name=exact||delimited?component:rest.match(WINDOWS_PROFILE_TOKEN)?.[0];
+        if(name)take(start,start+name.length);
+      }
       const each=(needle,fn)=>{for(let at=lower.indexOf(needle);at>=0;at=lower.indexOf(needle,at+1))fn(at);};
       for(const user of lowerUsers){
         for(const lead of LEADS)each(lead+user,at=>{
