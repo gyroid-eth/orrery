@@ -416,7 +416,8 @@
   .roster.select-mode .agent.bulk-selected{background:var(--rail-selection)}
   .roster.select-mode .agent.bulk-selected .bulk-check{border-color:var(--amber);background:var(--amber)}
   .roster.select-mode .agent.bulk-selected .bulk-check::after{opacity:1}
-  .roster.select-mode .agent.bulk-ineligible{opacity:.38!important;cursor:not-allowed;filter:saturate(.45)}
+  .roster.select-mode .agent.bulk-ineligible:not(.permission-target){opacity:.38!important;cursor:not-allowed;filter:saturate(.45)}
+  .roster.select-mode .agent.permission-target{cursor:default}
   .agent.offline-hint .agent-status{border-color:var(--theme-status-alert,#ff6a5d)}
   .roster-bulkbar{
     margin:8px 10px 0;padding:8px 9px;display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -547,7 +548,13 @@
   .agent-detail-permissions .agent-detail-icon{margin-top:0}
   .agent-detail-permissions .agent-detail-item+.agent-detail-item{padding-left:10px;border-left:1px solid var(--hair)}
   .agent-detail-modes{display:flex;align-items:center;flex-wrap:wrap;gap:1px;color:var(--ink-dim)}
-  .agent-detail-modes span{padding:2px 5px}
+  .agent-detail-modes button,.agent-detail-browser-toggle{
+    min-height:24px;padding:2px 5px;border:0;border-radius:4px;background:transparent;
+    color:inherit;font:inherit;cursor:pointer;
+  }
+  .agent-detail-permissions button:not(:disabled):hover{background:var(--rail-selection);color:var(--amber)}
+  .agent-detail-permissions button:focus-visible{outline:1px solid var(--amber);outline-offset:1px}
+  .agent-detail-permissions button:disabled{opacity:.55;cursor:not-allowed}
   .agent-detail-modes .current{
     border-radius:3px;color:var(--amber);font-weight:600;background:rgb(var(--theme-accent-rgb) / .13);
   }
@@ -560,6 +567,25 @@
     justify-content:flex-end;border-color:rgb(var(--theme-local-rgb) / .35);background:rgb(var(--theme-local-rgb) / .16);
   }
   .agent-detail-switch.on::before{background:var(--ln-local)}
+  .agent-detail-browser-toggle{color:var(--ink-dim)}
+  .agent-detail-switch.unknown{justify-content:center}
+  .agent-detail-switch.unknown::before{width:8px;height:1px}
+  .agent-permission-confirm{
+    width:min(390px,calc(100vw - 24px));margin:auto;padding:16px;border:1px solid var(--hair);border-radius:10px;
+    color:var(--ink);background:var(--panel);font:13px/1.45 var(--rail-sans);
+  }
+  .agent-permission-confirm::backdrop{background:rgb(0 0 0 / .42)}
+  .agent-permission-confirm p{margin:0;overflow-wrap:anywhere}
+  .agent-permission-confirm [hidden]{display:none}
+  .agent-permission-confirm .agent-detail-permissions{margin:12px 0}
+  .agent-permission-confirm select,.agent-permission-confirm button{
+    min-height:28px;border:1px solid var(--hair);border-radius:5px;padding:2px 7px;
+    color:var(--ink);background:var(--panel-2);font:inherit;
+  }
+  .agent-permission-confirm :is(button,select):focus-visible{outline:1px solid var(--amber);outline-offset:1px}
+  .agent-permission-actions{display:flex;justify-content:flex-end;gap:6px}
+  .agent-permission-actions button{cursor:pointer}
+  .agent-permission-actions button[value="apply"]{color:var(--amber);border-color:rgb(var(--theme-accent-rgb) / .42)}
   .agent-detail-context{display:flex;flex:1;align-items:center;gap:7px;min-width:0}
   .agent-detail-context strong{font-weight:600;white-space:nowrap}
   .agent-detail-meter{flex:1;height:4px;border-radius:3px;overflow:hidden;background:rgb(var(--theme-accent-rgb) / .18)}
@@ -2116,6 +2142,41 @@
             "value": "var(--ink-dim)"
           },
           {
+            "property": "color",
+            "selector": ".agent-detail-browser-toggle",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".agent-permission-confirm",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-permission-confirm",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".agent-permission-confirm",
+            "value": "var(--panel)"
+          },
+          {
+            "property": "border",
+            "selector": ".agent-permission-confirm select,.agent-permission-confirm button",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-permission-confirm select,.agent-permission-confirm button",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".agent-permission-confirm select,.agent-permission-confirm button",
+            "value": "var(--panel-2)"
+          },
+          {
             "property": "background",
             "selector": ".term",
             "value": "radial-gradient(ellipse 100% 70% at 50% 0%, rgba(28,33,42,.55), transparent 70%),var(--bg)"
@@ -3314,6 +3375,11 @@
           },
           {
             "property": "color",
+            "selector": ".agent-detail-browser-toggle",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
             "selector": ".layout-chip",
             "value": "var(--ink-dim)"
           },
@@ -3812,7 +3878,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "244e4893a3dfe93165c157b39afa2da77fdebd4d46f9391321eb7905a18f6f44",
+        "digest": "4cd8b662ae0dcb6361122ee54cb10b239b898b7708f1b77441bb6537b6474934",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -3907,7 +3973,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "5ae50d8cb52787c6605b56af761cfc1ed2e53d0961d6b07cd67301e948c9fa76",
+        "digest": "5c1a0bb567e3173521d018e31141fd7df2774bf1786da7bfafd85eabddf57fb3",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -3937,9 +4003,9 @@
       }
     }
   },
-  "inventory_digest": "6a0442395ae97625a24a6e9b24a8e5cdadcac71c68b09dbe02dc82f69d22ddde",
+  "inventory_digest": "ca1145f2d5a6bacf00335c2053c78d6cf095a6ff3032dd740c4e8746e26700cc",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "10df193b638516f3cc2f176877691af12605925edc0d8fc66f9232b2b0ba13f9",
+  "source_digest": "8f4a97e9c2df005347d31a04c568eb98d4697a8fdf4380a244252197ecc0cc3f",
   "surface": "cockpit",
   "version": 1
 }
@@ -8745,9 +8811,10 @@ function storedRosterNames(key){
 const pinnedAgents=storedRosterNames(PINNED_AGENT_KEY),foldedAgents=storedRosterNames(ROSTER_FOLD_KEY);
 let rosterRows=[],rosterRowsByName=new Map();
 const agentDetail=document.createElement('div');
-agentDetail.id='agentDetail';agentDetail.className='agent-detail';agentDetail.setAttribute('role','tooltip');agentDetail.hidden=true;
-document.body.appendChild(agentDetail);
+agentDetail.id='agentDetail';agentDetail.className='agent-detail';agentDetail.setAttribute('role','group');
+agentDetail.setAttribute('aria-labelledby','agentDetailName');agentDetail.hidden=true;
 let detailAnchor=null,detailHideTimer=0,detailRendered='';
+let permissionChangeBusy=false,permissionApi=null,permissionApiRequest=null,permissionApiCheckedAt=-Infinity;
 let selectedAgent=null,currentAgents=[];
 const descriptorStore=RosterDescriptor.createStableDescriptorStore();
 let rosterAnnotationEpoch=0;
@@ -8792,6 +8859,7 @@ function paintBulkTileState(el,agent){
   const eligible=isBulkSelectableAgent(agent);
   const selected=eligible&&bulkSelectedAgents.has(agent.name);
   el.classList.toggle('bulk-ineligible',rosterSelectMode&&!eligible);
+  el.classList.toggle('permission-target',rosterSelectMode&&!eligible&&!agentPermissionBlockReason(agent,permissionApi));
   el.classList.toggle('bulk-selected',rosterSelectMode&&selected);
   if(rosterSelectMode){
     el.setAttribute('aria-selected',String(selected));
@@ -8819,7 +8887,7 @@ function updateRosterBulkUI(){
     const agent=currentAgentNamed(name);
     return isBulkSelectableAgent(agent)&&isBulkExitEligibleAgent(agent);
   }).length;
-  const busy=Boolean(bulkActionBusy);
+  const busy=Boolean(bulkActionBusy||permissionChangeBusy);
   setHidden(rosterBulkBar,count===0);
   setText(rosterBulkCount,`${count} selected`);
   setText(rosterBulkExit,bulkActionBusy==='exit'?'Exiting…':
@@ -8882,11 +8950,21 @@ async function postBulkAgentAction(action,body){
     method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),
   });
   const result=await response.json().catch(()=>null);
-  if(!response.ok||!result?.ok)throw new Error(result?.error||`HTTP ${response.status}`);
+  if(!response.ok||!result?.ok){
+    const error=new Error(result?.error||`HTTP ${response.status}`);
+    error.resumeConfirmationPending=result?.resume_confirmation_pending===true;
+    throw error;
+  }
   return result;
 }
+const LIVE_AGENT_ROSTER='/telemetry/agents?scope=live';
+async function agentActionRoster(path,signal){
+  const response=await fetch(path,{cache:'no-store',signal}).catch(()=>null);
+  const roster=response?.ok?await response.json().catch(()=>null):null;
+  return Array.isArray(roster?.agents)?roster.agents:null;
+}
 async function runBulkExit(){
-  if(bulkActionBusy)return;
+  if(bulkActionBusy||permissionChangeBusy)return;
   const names=[...bulkSelectedAgents].filter(name=>{
     const agent=currentAgentNamed(name);
     return isBulkSelectableAgent(agent)&&isBulkExitEligibleAgent(agent);
@@ -8909,22 +8987,19 @@ async function runBulkExit(){
   // 2026-10-01 seminar looking for a bug in the wrong place.
   showToast(`BULK EXIT · ${succeeded} succeeded${failed?` · ${failed} failed — ${failures[0]}`:''}`,failed>0,failed?9000:4200);
 }
-async function waitForBulkRebootExit(name,timeoutMs=30000,pollMs=1500){
+async function waitForBulkRebootExit(name,timeoutMs=30000,pollMs=1500,confirmStopped=null){
   const controller=new AbortController();
   const deadline=performance.now()+timeoutMs;
   const timer=setTimeout(()=>controller.abort(),timeoutMs);
   try{
     while(!controller.signal.aborted){
-      const response=await fetch('/telemetry/agents?scope=live',{
-        cache:'no-store',signal:controller.signal,
-      }).catch(()=>null);
-      if(response?.ok){
-        const roster=await response.json().catch(()=>null);
-        if(Array.isArray(roster?.agents)&&!controller.signal.aborted){
-          const agent=roster.agents.find(row=>row?.name===name);
-          // The live scope omits stopped rows. Older dashboards return them.
-          const state=normalizeSearchText(agent?.category||agent?.state);
-          if(!agent||(!isBulkAgentRunning(agent)&&['finished','gone','retired'].includes(state)))return;
+      const rows=await agentActionRoster(LIVE_AGENT_ROSTER,controller.signal);
+      if(rows&&!controller.signal.aborted){
+        const agent=rows.find(row=>row?.name===name);
+        // The live scope omits stopped rows. Older dashboards return them.
+        const state=normalizeSearchText(agent?.category||agent?.state);
+        if(!agent||(!isBulkAgentRunning(agent)&&['finished','gone','retired'].includes(state))){
+          if((!confirmStopped||await confirmStopped(controller.signal))&&!controller.signal.aborted)return;
         }
       }
       const remaining=deadline-performance.now();
@@ -8935,7 +9010,7 @@ async function waitForBulkRebootExit(name,timeoutMs=30000,pollMs=1500){
   }finally{clearTimeout(timer);}
 }
 async function runBulkReboot(){
-  if(bulkActionBusy)return;
+  if(bulkActionBusy||permissionChangeBusy)return;
   const names=[...bulkSelectedAgents].filter(name=>isBulkSelectableAgent(currentAgentNamed(name)));
   if(!names.length||!confirmBulkAction('reboot'))return;
   clearBulkActionArm();bulkActionBusy='reboot';updateRosterBulkUI();
@@ -9024,6 +9099,7 @@ rosterBulkReboot.addEventListener('click',runBulkReboot);
 
 const AGENT_DETAIL_HARNESSES=new Map([['claude','Claude Code'],['codex','Codex CLI'],['dsh','dsh'],['hermes','Hermes']]);
 const AGENT_DETAIL_COMPUTER=new Map([['off','Off'],['view','View'],['control','Control']]);
+const STANDALONE_PERMISSION_API=46;
 const AGENT_DETAIL_TOKENS=new Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1});
 const AGENT_DETAIL_ICONS={
   role:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M5.5 16a3.5 3.5 0 0 1 7 0m3-6h2.5m-2.5 4H18"/>',
@@ -9042,27 +9118,92 @@ const CONTEXT_HOT_PERCENT=65;
 function agentContextUsed(a){
   return Number.isFinite(a.ctx_used)&&a.ctx_used>=0&&a.ctx_used<=100?a.ctx_used:null;
 }
-function agentDetailModel(a,homeDir,hiddenChildren=[]){
+function permissionConversationOnly(a){
+  return a.resume_mode==='conversation_only'||a.mail_status==='unavailable';
+}
+function permissionCli(a){
+  return a.harness_kind==='claude'||a.harness_kind==='codex';
+}
+function agentPermissionBlockReason(a,api){
+  if(a.lifecycle==='persistent')return 'Persistent agent';
+  if(a.surface==='codex-app'||a.program==='codex-app')return 'Codex App';
+  const standalone=a.parent_state==='top'||a.parentless===true||a.standalone===true;
+  if(standalone&&!(api>=STANDALONE_PERMISSION_API))return 'Standalone agent';
+  if(permissionConversationOnly(a))return 'Conversation-only resume has no saved permissions';
+  if(!permissionCli(a)){
+    return 'Requires a Claude Code or Codex CLI child';
+  }
+  if(!(api>=45))return 'Requires Telemetry API 45';
+  if(api>=STANDALONE_PERMISSION_API&&a.permission_resume_supported!==true){
+    const reason=typeof a.permission_resume_reason==='string'&&a.permission_resume_reason.trim();
+    if(reason)return reason;
+    if(standalone)return 'No saved launch settings. Use Resume.';
+    if(a.permission_resume_supported===false)return 'Permission changes are unavailable';
+  }
+  if((!standalone&&a.parent_state!=='child')||a.history_binding!=='bound'||!a.history_session_id){
+    return standalone?'No verified conversation':'No verified child conversation';
+  }
+  if(a.category==='agent'&&a.running===true)return '';
+  if(a.category==='finished')return 'Exit this agent first';
+  if(a.running!==false||!['gone','retired'].includes(a.category))return 'Agent is not confirmed stopped';
+  if(!['ready','verification_required'].includes(a.resume_capability)){
+    return 'Conversation cannot be resumed';
+  }
+  return '';
+}
+function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false){
   const text=value=>typeof value==='string'&&value.trim()?value:null;
   const cwd=text(a.cwd),home=homeDir?.replace(/\/+$/,'');
   const directory=cwd&&home&&(cwd===home||cwd.startsWith(home+'/'))?'~'+cwd.slice(home.length):cwd;
   return {
     name:a.name,role:text(a.annot?.role),
     parentState:a.parent_state,parent:a.parent_state==='child'?text(a.parent_agent):null,
-    computer:AGENT_DETAIL_COMPUTER.get(a.computer_use)??null,
+    computer:AGENT_DETAIL_COMPUTER.has(a.computer_use)?a.computer_use:null,
     browser:typeof a.browser_use==='boolean'?a.browser_use:null,
+    permissions:Boolean(a.harness_kind||a.lifecycle==='persistent'||a.surface==='codex-app'||permissionConversationOnly(a)||
+      a.computer_use||typeof a.browser_use==='boolean'),
+    permissionReason:agentPermissionBlockReason(a,api)||(busy?'Agent action in progress':''),
     model:text(a.model_id),harness:AGENT_DETAIL_HARNESSES.get(a.harness_kind)??null,effort:text(a.effort),
     tokens:Number.isSafeInteger(a.ctx_window_tokens)&&a.ctx_window_tokens>0?a.ctx_window_tokens:null,
     used:agentContextUsed(a),
     directory,cwd,hiddenChildren
   };
 }
+function agentDetailIcon(icon){
+  return `<svg class="agent-detail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${AGENT_DETAIL_ICONS[icon]}</svg>`;
+}
 function agentDetailItem(icon,label,body='',path=null){
   const description=esc(label);
   const pathAttribute=path===null?'':` data-demo-path-value="${esc(path)}"`;
   return `<div class="agent-detail-item" role="group" title="${description}" aria-label="${description}"${pathAttribute}>
-    <svg class="agent-detail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
-      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${AGENT_DETAIL_ICONS[icon]}</svg>${body}</div>`;
+    ${agentDetailIcon(icon)}${body}</div>`;
+}
+function agentDetailPermissions(detail){
+  if(!detail.permissions)return '';
+  const disabled=reason=>reason?' disabled':'';
+  const title=(label,reason)=>esc(reason?`${label} (${reason})`:label);
+  const computer=detail.computer?AGENT_DETAIL_COMPUTER.get(detail.computer):'Unknown';
+  const modes=[...AGENT_DETAIL_COMPUTER].map(([value,label])=>{
+    const reason=detail.permissionReason;
+    const current=value===detail.computer;
+    return `<button type="button" data-computer="${value}" aria-pressed="${current}"
+      aria-label="Computer use: ${label}" title="${title(`Computer use: ${label}`,reason)}"
+      ${current?'class="current"':''}${disabled(reason)}>${label}</button>`;
+  }).join('');
+  const browserLabel=`Browser use: ${detail.browser===null?'Unknown':detail.browser?'On':'Off'}`;
+  const switchState=detail.browser===null?' unknown':detail.browser?' on':'';
+  return `<div class="agent-detail-permissions" role="group" aria-label="Permissions">
+    <div class="agent-detail-item" role="group" aria-label="Computer use" title="${title(`Computer use: ${computer}`,detail.permissionReason)}">
+      ${agentDetailIcon('computer')}<span class="agent-detail-modes">${modes}</span>
+    </div>
+    <div class="agent-detail-item" title="${title(browserLabel,detail.permissionReason)}">
+      ${agentDetailIcon('browser')}<button class="agent-detail-browser-toggle" type="button" data-browser
+        ${detail.browser===null?'':`role="switch" aria-checked="${detail.browser}"`}
+        aria-label="${detail.browser===null?browserLabel:'Browser use'}" title="${title(browserLabel,detail.permissionReason)}"${disabled(detail.permissionReason)}>
+        <span class="agent-detail-switch${switchState}" aria-hidden="true"></span></button>
+    </div>
+  </div>`;
 }
 function agentDetailHTML(detail){
   const group=(name,content)=>content?`<div class="agent-detail-${name}">${content}</div>`:'';
@@ -9081,11 +9222,6 @@ function agentDetailHTML(detail){
   if(detail.parentState==='top')lineage=agentDetailItem('top','Top level');
   if(detail.parentState==='child')lineage=detail.parent?text('parent','Parent',detail.parent):agentDetailItem('parent','Child agent');
   if(detail.hiddenChildren?.length)lineage+=text('children','Hidden descendants',detail.hiddenChildren.join(', '));
-  const computer=detail.computer?agentDetailItem('computer',`Computer use: ${detail.computer}`,
-    `<span class="agent-detail-modes" aria-hidden="true">${[...AGENT_DETAIL_COMPUTER.values()].map(mode=>
-      `<span${mode===detail.computer?' class="current"':''}>${mode}</span>`).join('')}</span>`):'';
-  const browser=detail.browser===null?'':agentDetailItem('browser','Browser use: '+(detail.browser?'On':'Off'),
-    `<span class="agent-detail-switch${detail.browser?' on':''}" aria-hidden="true"></span>`);
   const context=[];
   if(detail.tokens!==null)context.push(detail.tokens.toLocaleString('en')+' tokens');
   if(detail.used!==null)context.push(detail.used+'% used');
@@ -9095,9 +9231,9 @@ function agentDetailHTML(detail){
       ${detail.used===null?'':`<span class="agent-detail-meter${detail.used>CONTEXT_HOT_PERCENT?' hot':''}" aria-hidden="true"><i style="width:${detail.used}%"></i></span><strong>${detail.used}%</strong>`}
     </span>`):'';
   const runtime=text('harness','Harness',detail.harness)+text('effort','Effort',detail.effort);
-  return `<div class="agent-detail-name">${esc(detail.name)}</div>
+  return `<div class="agent-detail-name" id="agentDetailName">${esc(detail.name)}</div>
     ${group('identity',text('role','Role',detail.role)+lineage)}
-    ${group('permissions',computer+browser)}
+    ${agentDetailPermissions(detail)}
     ${group('meta',text('model','Model',detail.model)+group('runtime',runtime)+contextRow+text('directory','Working directory',detail.directory))}`;
 }
 function positionAgentDetail(el){
@@ -9124,9 +9260,20 @@ function showAgentDetail(el){
   detailAnchor=el;
   const row=rosterRowsByName.get(a.name);
   const hiddenChildren=row?.folded?rosterRows.slice(row.index+1,row.end).map(child=>child.name):[];
-  const html=agentDetailHTML(agentDetailModel(a,hostPlatform.home_dir,hiddenChildren));
-  if(detailRendered!==html){agentDetail.innerHTML=html;detailRendered=html;}
+  const html=agentDetailHTML(agentDetailModel(a,hostPlatform.home_dir,hiddenChildren,permissionApi,
+    bulkActionBusy||permissionChangeBusy));
+  const focused=agentDetail.contains(document.activeElement)?document.activeElement:null;
+  if(el.nextElementSibling!==agentDetail)el.after(agentDetail);
+  if(detailRendered!==html){
+    agentDetail.innerHTML=html;detailRendered=html;
+    const replacement=focused?.matches('[data-browser]')?agentDetail.querySelector('[data-browser]'):
+      focused&&agentDetail.querySelector(`[data-computer="${focused.dataset.computer}"]`);
+    if(replacement?.disabled)el.focus({preventScroll:true});
+    else replacement?.focus({preventScroll:true});
+  }
+  if(agentDetail.contains(focused)&&focused!==document.activeElement)focused.focus({preventScroll:true});
   setHidden(agentDetail,false);positionAgentDetail(el);
+  if(permissionCli(a))loadPermissionApi();
 }
 function hideAgentDetail(el){
   if(detailAnchor!==el)return;
@@ -9136,26 +9283,179 @@ function hideAgentDetail(el){
 function scheduleAgentDetailHide(el){
   clearTimeout(detailHideTimer);
   detailHideTimer=setTimeout(()=>{
-    if(document.activeElement!==el&&!el.matches(':hover')&&!agentDetail.matches(':hover'))hideAgentDetail(el);
+    if(!el.contains(document.activeElement)&&!agentDetail.contains(document.activeElement)&&
+      !el.matches(':hover')&&!agentDetail.matches(':hover'))hideAgentDetail(el);
   },160);
 }
 agentDetail.addEventListener('mouseenter',()=>clearTimeout(detailHideTimer));
 agentDetail.addEventListener('mouseleave',()=>{if(detailAnchor)scheduleAgentDetailHide(detailAnchor);});
+agentDetail.addEventListener('focusout',()=>{if(detailAnchor)scheduleAgentDetailHide(detailAnchor);});
 function bindAgentDetail(el){
-  el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-describedby',agentDetail.id);
+  el.tabIndex=0;el.setAttribute('role','button');
   el.addEventListener('mouseenter',()=>showAgentDetail(el));
   el.addEventListener('mouseleave',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
-  el.addEventListener('focus',()=>showAgentDetail(el));
-  el.addEventListener('blur',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
+  el.addEventListener('focusin',()=>showAgentDetail(el));
+  el.addEventListener('focusout',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
   el.addEventListener('keydown',event=>{
     if(event.target!==el)return;
     if(event.key!=='Enter'&&event.key!==' ')return;
     event.preventDefault();handleRosterTileClick(el.dataset.agent,event);
   });
 }
-document.addEventListener('keydown',event=>{if(event.key==='Escape'&&detailAnchor)hideAgentDetail(detailAnchor);});
+document.addEventListener('keydown',event=>{
+  if(event.key!=='Escape'||!detailAnchor||permissionConfirm.open)return;
+  if(agentDetail.contains(document.activeElement))detailAnchor.focus({preventScroll:true});
+  hideAgentDetail(detailAnchor);
+});
 window.addEventListener('resize',()=>{if(detailAnchor)positionAgentDetail(detailAnchor);});
 rosterEl.addEventListener('scroll',()=>{if(detailAnchor)positionAgentDetail(detailAnchor);},{passive:true});
+
+function loadPermissionApi(refresh=false){
+  if(!refresh&&performance.now()-permissionApiCheckedAt<30000)return Promise.resolve(permissionApi);
+  permissionApiRequest??=fetch('/api/version',{cache:'no-store'})
+    .then(response=>response.ok?response.json():null)
+    .then(version=>{
+      return Number.isInteger(version?.api)?
+        (version.runtime_mode&&version.runtime_mode!=='legacy'?0:version.api):null;
+    }).catch(()=>null).then(api=>{
+      permissionApi=api;permissionApiCheckedAt=performance.now();
+      if(detailAnchor)showAgentDetail(detailAnchor);
+      return api;
+    }).finally(()=>{permissionApiRequest=null;});
+  return permissionApiRequest;
+}
+
+const permissionConfirm=document.createElement('dialog');
+permissionConfirm.className='agent-permission-confirm';
+permissionConfirm.setAttribute('aria-labelledby','permissionMessage');
+permissionConfirm.innerHTML=`<form method="dialog">
+  <p id="permissionMessage"></p>
+  <div class="agent-detail-permissions" role="group" aria-label="Permissions">
+    <div class="agent-detail-item">${agentDetailIcon('computer')}
+      <select name="computer" title="Computer use" aria-label="Computer use" required>
+        <option value="">Choose a level</option>
+        ${[...AGENT_DETAIL_COMPUTER].map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}
+      </select>
+    </div>
+    <div class="agent-detail-item">${agentDetailIcon('browser')}
+      <select name="browser" title="Browser use" aria-label="Browser use" required>
+        <option value="">Choose a setting</option><option value="off">Off</option><option value="on">On</option>
+      </select>
+    </div>
+  </div>
+  <div class="agent-permission-actions">
+    <button type="submit" value="cancel" autofocus formnovalidate>Cancel</button>
+    <button type="submit" value="apply">Resume</button>
+  </div>
+</form>`;
+document.body.appendChild(permissionConfirm);
+const permissionComputer=permissionConfirm.querySelector('[name="computer"]');
+const permissionBrowser=permissionConfirm.querySelector('[name="browser"]');
+const permissionApply=permissionConfirm.querySelector('[value="apply"]');
+let pendingPermissionChange=null;
+permissionConfirm.addEventListener('keydown',event=>event.stopPropagation());
+agentDetail.addEventListener('click',event=>{
+  const button=event.target.closest('[data-computer],[data-browser]');
+  const a=currentAgentNamed(detailAnchor?.dataset.agent);
+  if(!button||button.disabled||!a||permissionConfirm.open||bulkActionBusy||permissionChangeBusy||
+    agentPermissionBlockReason(a,permissionApi))return;
+  const computer=button.dataset.computer;
+  if(computer&&computer===a.computer_use)return;
+  permissionComputer.parentElement.hidden=permissionComputer.disabled=!computer;
+  permissionBrowser.parentElement.hidden=permissionBrowser.disabled=Boolean(computer);
+  permissionComputer.value=computer||'';
+  permissionBrowser.value=typeof a.browser_use==='boolean'?(a.browser_use?'off':'on'):'';
+  pendingPermissionChange={agent:a,key:computer?'computer_use':'browser_use'};
+  const name=OrreryDemo.mask(a.name);
+  setText(permissionApply,a.running?'Restart':'Resume');
+  setText(permissionConfirm.querySelector('p'),a.running?
+    `Restart ${name} in the same conversation with this permission change? Any work in progress will be interrupted.`:
+    `Resume ${name} in the same conversation with this permission change?`);
+  permissionConfirm.showModal();
+});
+permissionConfirm.addEventListener('cancel',()=>{pendingPermissionChange=null;});
+permissionConfirm.addEventListener('submit',event=>{
+  event.preventDefault();
+  const change=pendingPermissionChange;
+  pendingPermissionChange=null;
+  permissionConfirm.close();
+  if(change&&event.submitter===permissionApply){
+    const {agent,key}=change;
+    changeAgentPermission(agent,key,key==='computer_use'?permissionComputer.value:permissionBrowser.value==='on');
+  }
+});
+function samePermissionConversation(a,b){
+  return ['history_session_id','harness_kind','parent_state','project_key'].every(key=>a[key]===b[key]);
+}
+async function confirmPermissionStop(original,api,signal){
+  // The live roster also omits finished tmux panes. Permission resumes need
+  // the retained conversation and a gone/retired row before trying jump.
+  const rows=await agentActionRoster('/telemetry/agents',signal);
+  const stopped=rows?.find(row=>row?.name===original.name);
+  if(!stopped||stopped.running!==false||!['gone','retired'].includes(stopped.category))return false;
+  if(!samePermissionConversation(stopped,original))throw new Error('The stopped conversation changed');
+  const reason=agentPermissionBlockReason(stopped,api);
+  if(reason)throw new Error(reason);
+  return true;
+}
+async function changeAgentPermission(original,key,value){
+  const {name}=original;
+  if(permissionChangeBusy||bulkActionBusy||value===original[key])return;
+  permissionChangeBusy=true;updateRosterBulkUI();
+  if(detailAnchor)showAgentDetail(detailAnchor);
+  const label=OrreryDemo.mask(name),restart=original.running===true;
+  let stage='check';
+  showToast(`Checking ${label}…`,false,65000);
+  try{
+    const api=await loadPermissionApi(true);
+    if(api===null)throw new Error('Could not check the Telemetry API');
+    if(!(api>=45))throw new Error('Requires Telemetry API 45');
+    const agent=restart?
+      (await agentActionRoster(LIVE_AGENT_ROSTER,AbortSignal.timeout(8000)))?.find(row=>row?.name===name):
+      currentAgentNamed(name);
+    if(!agent)throw new Error('Could not verify the agent in the roster');
+    const reason=agentPermissionBlockReason(agent,api);
+    if(reason)throw new Error(reason);
+    if(!samePermissionConversation(agent,original)||['created','category','running',key].some(
+      key=>agent[key]!==original[key]))throw new Error('The agent changed. Choose permissions again');
+    const permission={history_session_id:agent.history_session_id,[key]:value};
+    const jump={session:name,open_terminal:false,open:false,permission};
+    if(restart){
+      const exit={session:name};
+      if(api>=STANDALONE_PERMISSION_API){
+        const checked=await postBulkAgentAction('jump',{...jump,check_only:true});
+        if(checked.action!=='validated')throw new Error('Telemetry did not confirm this restart is available');
+        exit.history_session_id=permission.history_session_id;
+      }
+      stage='exit';showToast(`Stopping ${label}…`,false,65000);
+      await postBulkAgentAction('exit',exit);
+      stage='wait';showToast(`Waiting for ${label} to stop…`,false,30000);
+      await waitForBulkRebootExit(name,30000,1500,signal=>confirmPermissionStop(agent,api,signal));
+    }
+    stage='resume';showToast(`Resuming ${label}…`,false,65000);
+    const result=await postBulkAgentAction('jump',jump);
+    if(result.action!=='resumed'||result.tools_changed!==true){
+      throw new Error('Telemetry did not confirm the new permissions');
+    }
+    showToast(`Resume accepted for ${label} with updated permissions.`);
+  }catch(error){
+    const reason=OrreryDemo.mask(String(error?.message||error).replace(/\s+/g,' ').trim());
+    const confirmationPending=stage==='resume'&&error?.resumeConfirmationPending;
+    const message=confirmationPending?label:{
+      check:restart?`Restart check failed for ${label}`:`Permission change failed for ${label}`,
+      exit:`Exit request failed for ${label}`,
+      wait:`Could not confirm ${label} was ready to resume`,
+      resume:restart?`${label} stopped. Resume failed`:`Resume failed for ${label}`,
+    }[stage];
+    const recovery=stage==='wait'?'\nCheck the agent in Network before resuming.':
+      stage==='resume'&&!confirmationPending?'\nUse Resume in Network if the agent is stopped.':'';
+    showToast(`${message} · ${reason}${recovery}`,true,9000);
+    toastEl.classList.add('multiline');
+  }finally{
+    permissionChangeBusy=false;updateRosterBulkUI();
+    if(detailAnchor)showAgentDetail(detailAnchor);
+  }
+}
 
 /* Writes that skip a value the node already has. A roster poll that finds
    nothing changed (most rows, most of the time) then leaves the DOM alone:
@@ -9586,14 +9886,17 @@ function renderRoster(){
   if(paletteOverlay.classList.contains('on'))renderPalette();
 }
 async function loadStoppedSelectAgents(){
-  // The default roster stays live-only. Fetch finished sessions once for Select.
+  // The default roster stays live-only. Select also shows historical permission targets.
   const controller=new AbortController();stoppedSelectRequest=controller;
   try{
-    const response=await fetch('/telemetry/agents',{cache:'no-store',signal:controller.signal});
+    const [response,api]=await Promise.all([
+      fetch('/telemetry/agents',{cache:'no-store',signal:controller.signal}),loadPermissionApi(),
+    ]);
     if(!response.ok)return;
     const roster=await response.json();
     if(controller.signal.aborted||!Array.isArray(roster?.agents))return;
-    stoppedSelectAgents=roster.agents.filter(agent=>agent?.category==='finished'&&isBulkSelectableAgent(agent))
+    stoppedSelectAgents=roster.agents.filter(agent=>agent&&(agent.category==='finished'&&isBulkSelectableAgent(agent)||
+      agent.running===false&&!agentPermissionBlockReason(agent,api)))
       .map(prepareRosterRow);
     if(stoppedSelectAgents.length)renderRoster();
   }catch(_){/* live selections remain available if the history request fails */}
@@ -11512,13 +11815,17 @@ const conversationView=(()=>{
       await asset('script','src','conversation_mail.js');
       await asset('script','src','conversation_speaker.js');
       await asset('script','src','conversation_terminal.js');
+      await asset('script','src','conversation_motion.js');
       await asset('script','src','conversation_view.js');
       await asset('script','src','conversation_reply.js');
       await asset('script','src','reader_activity.js');
       readerReply=OrreryConversationReply.mount({host:promptInput.closest('.promptbar'),input:promptInput,
         getTarget:captureComposerTarget,onError:text=>showToast(text,true)});
       readerActivity=OrreryReaderActivity.mount({getPanes:()=>panes.values(),
-        getProgram:pane=>currentAgents.find(agent=>agent.name===pane.session)?.program});
+        getProgram:pane=>currentAgents.find(agent=>agent.name===pane.session)?.program,
+        getBinding:pane=>{const agent=currentAgents.find(agent=>agent.name===pane.session);
+          return JSON.stringify([pane.session,agent?.history_binding,agent?.history_session_id,
+            agent?.native_session_id,agent?.history_receipt_ts,agent?.transcript_path,agent?.created]);}});
       await asset('link','href','reader_approval.css');
       await asset('script','src','reader_approval.js');
       readerApproval=OrreryReaderApproval.mount({
