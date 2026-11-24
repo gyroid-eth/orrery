@@ -42,29 +42,38 @@ def test_antigravity_dials_match_other_providers_and_settings(tour_browser):
     import usage_probe as up
     _, evaluate = tour_browser
     payload = {"providers": [up.provider_from_quota_payload(e).to_json()
-                             for e in QUOTAS + [ANTIGRAVITY]]}
+                             for e in [{**QUOTAS[0], "status": "stale"}, QUOTAS[1],
+                                       {**ANTIGRAVITY, "status": "stale"}]]}
     usage_dom(evaluate, payload)
     result = evaluate("""(()=>({
       pill:document.querySelector('#usageBtn [data-provider="antigravity"] b').textContent,
       title:document.querySelector('#usageBtn [data-provider="antigravity"]').title,
       headings:[...document.querySelectorAll('#usageDials .up-head .up-name')].map(e=>e.textContent),
+      stale:[...document.querySelectorAll('#usageDials .up-name.stale')].map(e=>e.textContent),
+      headingTitle:document.querySelector('#usageDials .up-prov:last-of-type .up-name').title,
+      accessibleName:document.querySelector('#usageDials .up-prov:last-of-type').ariaLabel,
       names:[...document.querySelectorAll('#usageDials .up-prov:last-of-type .up-subname')].map(e=>e.textContent),
       labels:[...document.querySelectorAll('#usageDials .up-prov:last-of-type .up-sub > span:first-child')].map(e=>e.textContent),
       dials:document.querySelectorAll('#usageDials .up-prov:last-of-type .dial').length,
       dialLabels:[...document.querySelectorAll('#usageDials .up-prov:last-of-type .dial .lab')].map(e=>e.textContent),
       foreign:document.querySelector('#usageDials .up-prov:last-of-type').textContent.includes('Claude and GPT models'),
       untouched:document.querySelector('#usageDials .up-prov:last-of-type').textContent.includes('untouched'),
-      source:document.querySelector('#usageDials .up-foot').textContent
+      foot:document.querySelector('#usageDials .up-foot').textContent,
+      source:document.querySelector('#usageDials .up-foot').title
     }))()""")
     assert result["pill"] == "70%"
     assert "Gemini 4 Argon · 7d" in result["title"]
-    assert result["headings"] == ["Claude", "Codex", "Antigravity (Gemini)"]
+    assert result["headings"] == ["Claude", "Codex", "Antigravity"]
+    assert result["stale"] == ["Claude", "Antigravity"]
+    assert result["accessibleName"] == "Antigravity (Gemini), stale"
+    assert result["headingTitle"] == "Antigravity (Gemini) · stale · observed 12:00\nGemini 4 Argon · 7d: 70% left, resets 12:00"
     assert result["names"] == []
     assert result["labels"] == []
-    assert result["dialLabels"] == ["5H", "7D", "ARGON"]
+    assert result["dialLabels"] == ["5H", "7D"]
     assert result["foreign"] is False
     assert result["untouched"] is False
-    assert result["dials"] == 3
+    assert result["dials"] == 2
+    assert result["foot"] == "Read-only · refreshed every minute"
     assert "Antigravity quotas from ORRERY Telemetry" in result["source"]
     positions = evaluate("""(()=>{
       const pop=document.getElementById('usagePopover');pop.showPopover();
@@ -73,7 +82,7 @@ def test_antigravity_dials_match_other_providers_and_settings(tour_browser):
       pop.hidePopover();
       return rects.map(r=>({x:r.left,y:r.top,width:r.width,height:r.height}));
     })()""")
-    assert len(positions) == 3
+    assert len(positions) == 2
     assert all(abs(rect["y"] - positions[0]["y"]) < 1 for rect in positions)
     assert all(left["x"] + left["width"] <= right["x"]
                for left, right in zip(positions, positions[1:]))
@@ -83,7 +92,7 @@ def test_antigravity_dials_match_other_providers_and_settings(tour_browser):
       const toggle=document.querySelector('#usageProviderRows [data-provider="antigravity"]');
       toggle.click();
       return {hidden:document.querySelector('#usageBtn [data-provider="antigravity"]').hidden,
-        shown:[...document.querySelectorAll('#usageDials .up-head .up-name')].some(e=>e.textContent==='Antigravity (Gemini)')};
+        shown:[...document.querySelectorAll('#usageDials .up-head .up-name')].some(e=>e.textContent==='Antigravity')};
     })()""")
     assert result == {"hidden": True, "shown": False}
 
@@ -237,10 +246,11 @@ def test_antigravity_model_group_is_rendered_as_text(tour_browser):
         {"id": "named", "label": name + " · 7d", "remaining_percent": 42}]}
     usage_dom(evaluate, {"providers": [up.provider_from_quota_payload(entry).to_json()]})
     assert evaluate("""(()=>({
-      name:document.querySelector('#usageDials .dial .lab').textContent,
+      label:document.querySelector('#usageDials .dial .lab').textContent,
+      title:document.querySelector('#usageDials .dial .lab').title,
       markup:document.querySelector('#usageDials .dial .lab').children.length,
       executed:window.__usageInjected===true
-    }))()""") == {"name": name.upper(), "markup": 0, "executed": False}
+    }))()""") == {"label": "7D", "title": name + " · 7d", "markup": 0, "executed": False}
 
 
 def test_antigravity_main_windows_are_ordered_and_third_party_is_not_binding(tour_browser):
@@ -262,7 +272,7 @@ def test_antigravity_main_windows_are_ordered_and_third_party_is_not_binding(tou
     }))()""")
     assert result["pill"] == "76%"
     assert "Gemini 4 Argon · 7d" in result["title"]
-    assert result["labels"] == ["5H", "7D", "ARGON"]
+    assert result["labels"] == ["5H", "7D"]
     assert result["mainReset"].startswith("next reset 5h · ")
     assert result["foreign"] is False
 
@@ -277,9 +287,11 @@ def test_antigravity_zero_use_still_displays_numeric_dials(tour_browser):
     usage_dom(evaluate, {"providers": [up.provider_from_quota_payload(entry).to_json()]})
     result = evaluate("""(()=>({
         dials:[...document.querySelectorAll('#usageDials .dial .n')].map(e=>e.textContent),
-        text:document.querySelector('#usageDials').textContent
+        text:document.querySelector('#usageDials').textContent,
+        extra:document.querySelector('#usageDials .up-name').title
     }))()""")
-    assert result["dials"] == ["100%", "100%", "100%"]
+    assert result["dials"] == ["100%", "100%"]
+    assert "Gemini 4 Argon · 7d: 100% left" in result["extra"]
     assert "untouched" not in result["text"]
 
 
