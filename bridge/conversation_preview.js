@@ -3,7 +3,7 @@
 (function(root){
   'use strict';
   const MAX_TEXT=131072,INLINE_MARGIN=200;
-  function mount({host,source,onActivate=()=>{},onBeforeOpen=()=>{},onClose=()=>{},onReference=null}){
+  function mount({host,source,onActivate=()=>{},onBeforeOpen=()=>{},onClose=()=>{},onReference=null,mutate=fn=>fn()}){
     // sourceView: this reader's last Markdown/Source choice for .md previews.
     let request=null,generation=0,objectUrl=null,selected=null,sourceView=false;
     const create=(tag,cls,text)=>{const el=document.createElement(tag);el.className=cls;if(text!==undefined)el.textContent=text;return el;};
@@ -67,13 +67,22 @@
     function setVisible(value){
       if(visible===value)return;visible=value;observer.disconnect();previewObserver.disconnect();near.clear();
       for(const entry of inlineEntries()){
-        if(value)observeEntry(entry);else{entry.request?.abort();entry.request=null;}
+        if(value)observeEntry(entry);else if(entry.request)release(entry);
       }
       schedule();
     }
     function pngUrl(data){
       const bytes=Uint8Array.from(atob(data),char=>char.charCodeAt(0));
       return URL.createObjectURL(new Blob([bytes],{type:'image/png'}));
+    }
+    function syncInputMarkers(record){
+      if(!record.input||!record.row.isConnected)return;
+      const ready=new Set(record.entries.filter(entry=>entry.confirmed).map(entry=>entry.ref.input_image_slot).filter(Number.isInteger));
+      const changes=[...record.row.querySelectorAll('.conversation-text > [data-input-image-marker]')].map(marker=>{
+        const slot=marker.dataset.inputImageMarker;
+        return [marker,slot==='all'?ready.size===record.count:ready.has(Number(slot))];
+      }).filter(([marker,hide])=>marker.hidden!==hide);
+      if(changes.length)mutate(()=>{for(const [marker,hide] of changes)marker.hidden=hide;});
     }
     async function loadInline(entry){
       const request=new AbortController();entry.request=request;loading++;
@@ -83,9 +92,17 @@
         if(entry.request!==request||!visible||!entry.button.isConnected)return;
         if(data.kind!=='image'||data.mime!=='image/png'||typeof data.data!=='string'||data.data.length>=12*1024*1024)throw new Error('Preview unavailable');
         entry.url=pngUrl(data.data);
-        entry.image.src=entry.url;entry.image.hidden=false;entry.status.hidden=true;
+        entry.image.src=entry.url;
+        if(entry.record?.input){
+          await entry.image.decode();
+          if(entry.request!==request||!visible||!entry.button.isConnected)return;
+          entry.confirmed=true;
+        }
+        entry.image.hidden=false;entry.status.hidden=true;
+        if(entry.record)syncInputMarkers(entry.record);
       }catch(error){if(entry.request===request&&error.name!=='AbortError'){
         entry.failed=true;if(!entry.ref.path)entry.status.textContent='Preview unavailable · click to retry';
+        if(entry.record?.input){release(entry);entry.confirmed=false;syncInputMarkers(entry.record);}
       }}
       finally{loading--;if(entry.request===request)entry.request=null;schedule();}
     }
@@ -128,28 +145,35 @@
       for(const row of rows){
         const event=events.get(row.dataset.eventId);
         const input=event?.kind==='text'&&event.role==='user'&&event.input_images===true;
+        const inMessage=input&&row.classList.contains('conversation-human');
         if(!input&&(event?.kind!=='tool'||!/^mcp__orrery[-_]mail__show_files$/.test(event.text)))continue;
-        const refs=(Array.isArray(event.references)?event.references:[]).slice(0,24).filter(ref=>
-          ref?.kind==='image'&&/^[A-Za-z0-9_-]{32}$/.test(ref.id)&&typeof ref.label==='string');
+        const refs=(Array.isArray(event.references)?event.references:[]).slice(0,input?8:24).filter(ref=>
+          ref?.kind==='image'&&/^[A-Za-z0-9_-]{32}$/.test(ref.id)&&typeof ref.label==='string'&&(!input||ref.input_image===true));
         if(!refs.length)continue;
         const id=event.id,signature=JSON.stringify(refs);keep.add(id);
         let record=inlineRows.get(id);
         if(record?.signature!==signature){if(record)forget(record);record=null;}
         if(!record){
           const node=create('div','conversation-inline-images');node.dataset.inlineFor=id;
-          record={node,signature,entries:[]};inlineRows.set(id,record);
+          node.classList.toggle('conversation-input-images',inMessage);
+          record={node,signature,entries:[],input:inMessage,count:event.input_image_count,row};inlineRows.set(id,record);
           for(const ref of refs){
             remember(ref);
             const control=button('conversation-inline-image conversation-file','',()=>open(ref));
-            control.dataset.refId=ref.id;control.setAttribute('aria-label','Preview '+ref.label);
+            control.dataset.refId=ref.id;control.title='Preview '+ref.label;control.setAttribute('aria-label',control.title);
             const image=create('img','conversation-inline-thumbnail');image.alt='';image.hidden=true;image.draggable=false;
             const status=create('span','conversation-inline-status','Preview image');
-            control.append(image,status,create('span','conversation-inline-label',ref.label));
-            const entry={ref,button:control,image,status,observer,url:null,request:null,failed:false,alive:true};control.inlineEntry=entry;
+            control.append(image,status);
+            if(!inMessage)control.append(create('span','conversation-inline-label',ref.label));
+            const entry={ref,button:control,image,status,observer,record,url:null,request:null,failed:false,alive:true};control.inlineEntry=entry;
             record.entries.push(entry);node.appendChild(control);if(visible)observer.observe(control);
           }
         }
-        if(row.nextElementSibling!==record.node)row.after(record.node);
+        record.row=row;
+        if(inMessage){
+          const body=row.querySelector(':scope > .conversation-reference-body')||row;
+          if(record.node.parentElement!==body){body.append(record.node);syncInputMarkers(record);}
+        }else if(row.nextElementSibling!==record.node)row.after(record.node);
       }
       for(const [id,row] of inlineRows)if(!keep.has(id)){forget(row);inlineRows.delete(id);}
       markSelected();schedule();
@@ -391,12 +415,13 @@
         const chips=create('div','conversation-files');
         for(const ref of event.references.slice(0,24)){
           if(!ref||!/^[A-Za-z0-9_-]{32}$/.test(ref.id)||typeof ref.label!=='string')continue;
+          if(event.input_images===true&&ref.input_image===true&&article.classList.contains('conversation-human'))continue;
           remember(ref);
           const chip=button('conversation-file',(ref.kind==='image'?'▧ ':'▤ ')+ref.label,()=>open(ref));
           chip.title='Preview current '+(ref.kind==='image'?'image':'file');chip.dataset.refId=ref.id;chips.appendChild(chip);
           chip.setAttribute('aria-pressed',String(selected?.id===ref.id));
         }
-        article.appendChild(chips);
+        if(chips.childElementCount)article.appendChild(chips);
       }
       if(typeof event.diff==='string'&&event.diff){
         const details=create('details','conversation-diff');

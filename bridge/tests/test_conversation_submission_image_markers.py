@@ -67,10 +67,11 @@ def test_native_image_prefix_reconciles_but_typed_labels_stay_literal(cockpit, t
         wait('receipts.length==='+str(index+1))
         recorded = '[Image #18] '+js('sentText')
         event = native_record(tmp_path/provider, provider, recorded, js('clock+1000'))
-        if provider=='claude':assert event['input_image_count']==1
-        else:assert event['input_images'] and event['references'][0]['input_image']
+        assert event['input_image_count']==1
+        assert event['input_images'] and event['references'][0]['input_image']
         publish(js, wait, event, provider)
-        assert js('reader.querySelector("[data-event-id="+CSS.escape(imageRecord.id)+"] .conversation-text").textContent') == recorded
+        visible = 'reader.querySelector("[data-event-id="+CSS.escape(imageRecord.id)+"] .conversation-text").innerText'
+        wait(visible + '===sentText')
     capture = os.environ.get('ORRERY_IMAGE_MARKER_CAPTURE')
     if capture:
         wait('reader.querySelector(".conversation-inline-thumbnail")?.naturalWidth>0')
@@ -87,12 +88,14 @@ def test_native_image_prefix_reconciles_but_typed_labels_stay_literal(cockpit, t
 
 def test_codex_synthetic_attachment_suffix_reconciles_without_removing_literal_text(cockpit, tmp_path):
     js, wait, client = prepare(cockpit, 'codex')
+    js('OrreryConversationSource.Source.prototype.reference=async()=>('+json.dumps(dict(kind='image', mime='image/png',
+       data=base64.b64encode(png()).decode(), width=640, height=400))+')')
     js('sentText="Inspect this image\\n[image attachment]";promptInput.value=sentText;sendPrompt()')
     wait('receipts.length===1')
     event = native_record(tmp_path, 'codex', js('sentText'), js('clock+1000'))
     assert event['text'] == js('sentText')+'\n[image attachment]'
     publish(js, wait, event, 'codex')
-    assert js('reader.querySelector("[data-event-id="+CSS.escape(imageRecord.id)+"] .conversation-text").textContent') == event['text']
+    wait('reader.querySelector("[data-event-id="+CSS.escape(imageRecord.id)+"] .conversation-text").innerText===sentText')
 
 
 def test_plain_prompt_still_reconciles_exactly(cockpit):

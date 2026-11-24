@@ -75,12 +75,14 @@ def test_current_turn_has_steps_and_no_duplicate_tool_group(cockpit,theme,provid
     js,wait,client=prepare(cockpit,provider,theme=theme)
     assert js("document.querySelectorAll('.conversation-step').length")==1
     assert js("document.querySelectorAll('.conversation-tool-group').length")==0
-    assert js("document.querySelector('.conversation-steps-toggle').getAttribute('aria-expanded')")=='true'
+    assert js("document.querySelector('.conversation-steps-toggle').getAttribute('aria-expanded')")=='false'
     assert js("document.querySelector('.conversation-steps-heading').textContent")=='Working…'
+    assert js("document.querySelector('.conversation-steps-count').textContent")=='1 step'
+    assert js("document.querySelector('.conversation-steps-expansion').inert") is True
     assert js("document.querySelector('.conversation-activity').hidden")
     before=js("document.querySelector('.conversation-steps-time').textContent")
     wait("document.querySelector('.conversation-steps-time').textContent!=="+json.dumps(before))
-    assert js("document.querySelector('.conversation-steps-time').textContent").startswith('1m ')
+    assert js("document.querySelector('.conversation-steps-time').textContent").startswith(', 1m ')
 
 
 @pytest.mark.parametrize('provider',['claude','codex'])
@@ -89,13 +91,15 @@ def test_only_completed_operations_added_then_turn_folds_and_button_reopens(cock
     assert js("document.querySelectorAll('.conversation-step').length")==0
     js('stepsPage.events='+json.dumps(events(provider))+';conversationView.refresh()')
     wait("document.querySelectorAll('.conversation-step').length===1")
+    js("document.querySelector('.conversation-steps-toggle').click()")
+    assert js("document.querySelector('.conversation-steps-toggle').getAttribute('aria-expanded')")=='true'
     if provider=='codex':
         end=project(dict(type='event_msg',payload=dict(type='task_complete',turn_id='turn-one',duration_ms=125000,started_at=1,completed_at=126)),20)
         js('stepsPage.events.push('+json.dumps(end)+');conversationView.refresh()')
     else:js("currentAgents[0].act_state='wait';document.dispatchEvent(new CustomEvent('oc:agents'))")
     wait("document.querySelector('.conversation-steps-toggle').getAttribute('aria-expanded')==='false'")
-    assert js("document.querySelector('.conversation-steps-heading').textContent").startswith('Worked for ')
-    if provider=='codex':assert js("document.querySelector('.conversation-steps-heading').textContent")=='Worked for 2m 05s'
+    assert js("document.querySelector('.conversation-steps-heading').hidden") is True
+    if provider=='codex':assert js("document.querySelector('.conversation-steps-toggle').ariaLabel")=='1 step, 2m 05s'
     js("document.querySelector('.conversation-steps-toggle').click()")
     assert js("document.querySelector('.conversation-steps-toggle').getAttribute('aria-expanded')")=='true'
     assert js("document.querySelector('.conversation-steps-expansion').inert") is False
@@ -120,7 +124,8 @@ def test_historical_turn_starts_folded_and_failure_is_not_inferred_from_prose(co
 def test_append_keeps_existing_row_selection_and_earlier_pair_fills_without_duplicate(cockpit):
     rows=events('claude')
     js,wait,client=prepare(cockpit,'claude',rows=rows)
-    js("""window.firstStep=document.querySelector('.conversation-step');
+    js("""document.querySelector('.conversation-steps-toggle').click();
+      window.firstStep=document.querySelector('.conversation-step');
       window.selectedText=firstStep.querySelector('.conversation-step-target').firstChild;
       const range=document.createRange();range.selectNodeContents(selectedText);
       getSelection().removeAllRanges();getSelection().addRange(range);""")
@@ -136,14 +141,17 @@ def test_append_keeps_existing_row_selection_and_earlier_pair_fills_without_dupl
     assert js("document.querySelectorAll('.conversation-step').length")==2
 
 
-def test_close_clears_steps_and_reduced_motion_stops_letter_animation(cockpit):
+def test_close_clears_steps_and_reduced_motion_opens_without_animation(cockpit):
     js,wait,client=prepare(cockpit)
     js("conversationView.close()")
     assert js("document.querySelectorAll('.conversation-steps').length")==0
     js("conversationView.open()")
     wait("document.querySelector('.conversation-steps')!==null")
     client.call('Emulation.setEmulatedMedia',features=[{'name':'prefers-reduced-motion','value':'reduce'}])
-    assert js("document.querySelector('.conversation-steps-letter').getAnimations().length")==0
+    assert js("document.querySelector('.conversation-steps-heading').getAnimations().length")==0
+    assert js("""(()=>{document.querySelector('.conversation-steps-toggle').click();
+      const body=document.querySelector('.conversation-steps-expansion');
+      return body.getAnimations().length===0&&body.getBoundingClientRect().height>0;})()""")
     assert js("document.querySelectorAll('.conversation-step').length")==1
     assert js("packets.filter(p=>p.type==='input')")==[]
 
@@ -169,20 +177,44 @@ def test_codex_unmatched_tools_remain_in_existing_group(cockpit, unknown):
         Path(folder,'codex-unmatched-tool.png').write_bytes(base64.b64decode(client.call('Page.captureScreenshot',format='png')['data']))
 
 
-def test_hidden_reader_pauses_letters_pseudo_connectors_and_elapsed_timer(cockpit):
+def test_hidden_reader_pauses_working_shimmer_and_elapsed_timer(cockpit):
     rows=events('codex')+[project(native('ImageView',ident='image',path='/fixture/a.png'),11)]
     js,wait,client=prepare(cockpit,'codex',rows=rows)
-    assert js("getComputedStyle(document.querySelector('.conversation-step.has-next'),'::before').animationPlayState")=='running'
+    assert js("getComputedStyle(document.querySelector('.conversation-steps-heading')).animationName")=='conversation-working-shimmer'
     js("""Object.defineProperty(document,'hidden',{configurable:true,value:true});
       document.dispatchEvent(new Event('visibilitychange'));""")
     assert js("document.querySelector('.conversation-steps').classList.contains('is-paused')")
-    assert js("getComputedStyle(document.querySelector('.conversation-steps-letter')).animationPlayState")=='paused'
-    assert js("getComputedStyle(document.querySelector('.conversation-step.has-next'),'::before').animationPlayState")=='paused'
+    assert js("getComputedStyle(document.querySelector('.conversation-steps-heading')).animationPlayState")=='paused'
     before=js("document.querySelector('.conversation-steps-time').textContent")
     time.sleep(1.1)
     assert js("document.querySelector('.conversation-steps-time').textContent")==before
     js("delete document.hidden;document.dispatchEvent(new Event('visibilitychange'))")
-    assert js("getComputedStyle(document.querySelector('.conversation-step.has-next'),'::before').animationPlayState")=='running'
+    assert js("getComputedStyle(document.querySelector('.conversation-steps-heading')).animationPlayState")=='running'
+
+
+def test_step_expansion_uses_soft_height_spring_and_reverses_from_current_height(cockpit):
+    js,wait,_=prepare(cockpit,working=False)
+    sample=js("""(()=>{
+      const toggle=document.querySelector('.conversation-steps-toggle');
+      const body=document.querySelector('.conversation-steps-expansion');
+      const curve=OrreryConversationMotion.spring(260,24);
+      toggle.click();
+      const opening=body.getAnimations()[0];
+      const values=opening.effect.getKeyframes().map(frame=>parseFloat(frame.height));
+      const target=values.at(-1);
+      opening.pause();opening.currentTime=120;
+      const current=body.getBoundingClientRect().height;
+      toggle.click();
+      const closing=body.getAnimations()[0];
+      const reversed=parseFloat(closing.effect.getKeyframes()[0].height);
+      return {expected:values.length===curve.length&&values.every((h,i)=>Math.abs(h-target*curve[i])<.01),
+        target,current,reversed,expanded:toggle.getAttribute('aria-expanded'),inert:body.inert};
+    })()""")
+    assert sample['expected']
+    assert 0 < sample['current'] < sample['target']
+    assert abs(sample['current']-sample['reversed']) < .05
+    assert sample['expanded']=='false' and sample['inert']
+    wait("document.querySelector('.conversation-steps-expansion').getBoundingClientRect().height===0")
 
 
 def test_demo_keeps_native_tool_label_and_masks_only_targets(cockpit):

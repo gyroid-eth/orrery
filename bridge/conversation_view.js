@@ -227,11 +227,25 @@
     const sending=new Map();
     const observedIds=new Set(),matchedSubmissions=new Set(),pendingEl=el('.conversation-pending');
     const normalizePrompt=text=>(root.OrreryConversationMarkdown?.submissionText(text)??text).replace(/\s+/gu,' ').trim();
+    function splitImageMarkers(event){
+      let body=event.text;
+      const prefix=[],count=event.input_image_count;
+      if(event.truncated||!Number.isInteger(count)||count<1||count>64)return {body,prefix,suffix:''};
+      if(event.input_image_marker==='prefix'){
+        for(let slot=1;slot<=count;slot++){
+          const marker=/^\s*\[Image #\d+\]\s*/u.exec(body)?.[0];
+          if(!marker)break;
+          prefix.push(marker);body=body.slice(marker.length);
+        }
+      }
+      const suffix=event.input_image_marker==='suffix'?/\n\[image attachment\]$/u.exec(body)?.[0]:
+        event.input_image_marker==='single'&&/^\[(?:image )?attachment\]$/u.test(body)?body:'';
+      return {body:suffix?body.slice(0,-suffix.length):body,prefix,suffix:suffix||''};
+    }
     function imagePromptText(event){
+      if(event.input_image_marker)return normalizePrompt(splitImageMarkers(event).body);
       let text=event.text;
-      // Only structured native input images justify treating these labels as
-      // generated text. Claude's image event is separate from its text event.
-      // A typed image label without an attachment stays literal.
+      // Older conversation responses carried provenance without marker slots.
       const images=providerLabel==='Claude'&&Number.isInteger(event.input_image_count)&&event.input_image_count>0&&event.input_image_count<=64
         ?event.input_image_count:event.input_images===true?(event.references||[]).filter(ref=>ref.input_image===true).length:0;
       if(images&&['dsh','Claude'].includes(providerLabel)){
@@ -449,7 +463,7 @@
       paintStatus();
       paintActivity();
     }
-    const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onBeforeOpen:layoutChanged,onClose:layoutChanged,onActivate:()=>expand(true),
+    const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onBeforeOpen:layoutChanged,onClose:layoutChanged,onActivate:()=>expand(true),mutate:changeTail,
       onReference:onReference?ref=>{
         const event=ref.path?ref.origin:[...events.values()].find(event=>event.references?.some(value=>value.id===ref.id));
         if(event&&reference(event,ref.path||ref.label,'file'))preview.close();
@@ -762,7 +776,12 @@
       clearTimeout(referenceTimer);referenceFlash?.classList.remove('conversation-reference-target');referenceFlash=null;
     }
     function referenceRow(id){
-      const row=eventsEl.querySelector('[data-event-id="'+CSS.escape(id)+'"]');
+      const find=value=>eventsEl.querySelector('[data-event-id="'+CSS.escape(value)+'"]');
+      let row=find(id);
+      if(!row){
+        const owner=[...events.values()].find(event=>Array.isArray(event.input_image_aliases)&&event.input_image_aliases.includes(id));
+        if(owner)row=find(owner.id);
+      }
       return row&&(!row.hidden||toolGroupFor.has(id))?row:null;
     }
     function canReadReference(ref){
@@ -841,7 +860,8 @@
       const parent=user&&root.OrreryConversationMotion?.promptAuthor(event.text,agent,(getContext()||{}).parent_agent);
       const human=user&&!parent;
       if(human)humanBubble(article);
-      const ref=human&&!event.truncated&&root.OrreryConversationReply?.parse(event.text);
+      const markers=human?splitImageMarkers(event):{body:event.text,prefix:[],suffix:''};
+      const ref=human&&!event.truncated&&root.OrreryConversationReply?.parse(markers.body);
       let content=article;
       if(ref){
         article.classList.add('conversation-has-reference');
@@ -877,8 +897,20 @@
           // A single paragraph needs no block wrapper in a conversation row.
           if(text.childNodes.length===1&&text.firstChild.nodeName==='P')text.replaceChildren(...text.firstChild.childNodes);
         }
-        else if(root.OrreryConversationMarkdown){const body=ref?ref.reply:event.text;if(!root.OrreryConversationMarkdown.renderCommand(body,text))root.OrreryConversationMarkdown.renderText(body,text);}
-        else text.textContent=ref?ref.reply:event.text;content.appendChild(text);
+        else{
+          const body=ref?ref.reply:markers.body;
+          const marker=(copy,slot)=>{
+            const span=document.createElement('span');span.dataset.inputImageMarker=slot;
+            span.textContent=copy;text.append(span);
+          };
+          markers.prefix.forEach((copy,index)=>marker(copy,index+1));
+          if(root.OrreryConversationMarkdown){
+            if(!root.OrreryConversationMarkdown.renderCommand(body,text))root.OrreryConversationMarkdown.renderText(body,text);
+          }else text.append(body);
+          if(markers.suffix)marker(markers.suffix,'all');
+          if(!body&&(markers.prefix.length||markers.suffix))text.classList.add('conversation-image-only');
+        }
+        content.appendChild(text);
       }
       if(live)return article;
       if(event.truncated){const note=document.createElement('div');note.className='conversation-truncated';note.textContent='Long message shortened in this reader.';article.appendChild(note);}
