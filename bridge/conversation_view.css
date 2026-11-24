@@ -54,11 +54,30 @@
 .conversation-text :is(code,pre,[data-local-path]),:is(.conversation-shell-start,.conversation-shell-continuation) .conversation-text{font-family:var(--mono)}
 .conversation-live .conversation-text{overflow:clip;overflow-clip-margin:6px}
 .conversation-stream-word{position:relative;top:0}
-.conversation-human{
+:is(.conversation-human:not(.conversation-has-reference),.conversation-reference-body){
   box-sizing:border-box;width:fit-content;max-width:84%;margin:0 0 26px auto;padding:9px 12px 9px 26px;
   border:0;background:linear-gradient(270deg,rgb(var(--theme-accent-rgb) / .115),rgb(var(--theme-accent-rgb) / .05) 62%,transparent);
   color:var(--ink);overflow-wrap:anywhere;
 }
+.conversation-has-reference{max-width:84%;margin:0 0 26px auto;padding:0;border:0}
+.conversation-reference-body{max-width:100%;margin-bottom:0}
+.conversation-reference-link{
+  display:flex;align-items:center;gap:6px;max-width:100%;min-height:26px;margin:0 0 2px auto;padding:2px 10px;
+  border:0;background:transparent;color:var(--ink-dim);font:11px/1.45 var(--rail-sans);text-align:left;cursor:pointer;
+}
+.conversation-reference-link:hover:not([aria-disabled="true"]){color:var(--ink)}
+.conversation-reference-link:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.conversation-reference-link[aria-disabled="true"]{cursor:default}
+.conversation-reference-link[aria-busy="true"]{cursor:progress}
+.conversation-reference-link .conversation-avatar.medal{width:16px;height:16px}
+.conversation-reference-link .conversation-avatar .face{font-size:9px}
+.conversation-reference-link .conversation-avatar .provider-badge{display:none}
+.conversation-reference-name,.conversation-reference-quote{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conversation-reference-name{flex:0 0 auto;max-width:40%;font-weight:600}
+.conversation-reference-link svg{width:15px;height:15px;flex:none}
+.conversation-reference-target{animation:conversation-reference-flash 1.55s ease-out both}
+@keyframes conversation-reference-flash{from{background-color:rgb(var(--theme-accent-rgb) / .20)}to{background-color:transparent}}
+@media(prefers-reduced-motion:reduce){.conversation-reference-target{animation:none;background-color:rgb(var(--theme-accent-rgb) / .14)}}
 .conversation-human .conversation-text{text-align:right}
 .conversation-human :is(.conversation-text,.conversation-truncated,.conversation-submission-more,.conversation-submission-note,.conversation-byline){color:inherit}
 .conversation-human .conversation-text a{color:inherit}

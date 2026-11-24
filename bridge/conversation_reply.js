@@ -1,6 +1,19 @@
 /* A reference stays browser-local beside the original composer until Send. */
 (function(root){
   'use strict';
+  function parse(text){
+    if(typeof text!=='string'||!text.startsWith('Reference: '))return null;
+    const lines=text.replace(/\r\n?/g,'\n').split('\n');
+    const fields=lines[0].slice(11).split(' · '),[agent,role,ts]=fields;
+    const id=/^Recorded message: (\S+)$/.exec(lines[1]||'')?.[1];
+    if(!id||!agent||agent.trim()!==agent||!/^\S+$/.test(role||'')||fields.length<2||fields.length>3)return null;
+    if(ts!==undefined&&(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(ts)||!Number.isFinite(Date.parse(ts))))return null;
+    let end=2;
+    while(lines[end]?.startsWith('> '))end++;
+    if(end===2||lines[end]!=='')return null;
+    const quote=lines.slice(2,end).map(line=>line.slice(2)).join('\n'),reply=lines.slice(end+1).join('\n');
+    return quote.trim()&&reply.trim()?{agent,ts,id,quote,reply}:null;
+  }
   function mount({host,input,getTarget,onError=()=>{}}){
     let reference=null,target=null;
     const screen=host.closest('.screen');
@@ -55,5 +68,5 @@
     return Object.freeze({add,guard,compose,clear,get hasReference(){return Boolean(reference);},
       dispose(){observer.disconnect();clear();card.remove();}});
   }
-  root.OrreryConversationReply=Object.freeze({mount});
+  root.OrreryConversationReply=Object.freeze({mount,parse});
 })(window);

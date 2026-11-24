@@ -108,6 +108,9 @@
   const latestIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v14m-6-6 6 6 6-6M5 21h14"/></svg>';
   const warningIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5m0 3v.1"/></svg>';
   const retryIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10a8 8 0 1 0-1 7M20 4v6h-6"/></svg>';
+  const referenceIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 18 16.5 7.5m-9 0h9v9"/></svg>';
+  const referenceClock=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+  const missingReference='The quoted message is not in the loaded part of this conversation.';
   let closeActiveNotice=null;
   function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,expandControl=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null,openExternalUrl=null,renderPeerAvatar=null,renderAvatar=null,onReference=null}){
     let screen=host||document.querySelector('.screen');
@@ -526,7 +529,7 @@
       paintMessage();
     }
     function modeMessage(text){if(!text&&document.activeElement===modeInfo&&opened)scroll.focus({preventScroll:true});modeInfo.title=text;modeInfo.setAttribute('aria-label',text);paintStatus();}
-    function stop(keepFollow=false){motion?.stop();clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;sessionReloadAttempted=false;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=holding=false;if(pendingAction){endOp(pendingAction.op);pendingAction=null;}if(!keepFollow)followPending=false;}
+    function stop(keepFollow=false){motion?.stop();clearReferenceFlash();referenceJump=null;clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;sessionReloadAttempted=false;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=holding=false;cancelEarlier();if(!keepFollow)followPending=false;}
     function clear({keepSubmissions=false}={}){hideSelection();closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();stepView?.reset();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();preview?.resetInline();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();motion?.stopReply();liveRow=null;liveSample=null;seenLiveText='';before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
@@ -753,6 +756,68 @@
     function humanBubble(article){
       article.classList.add('conversation-human');article.setAttribute('aria-label','You');article.title='You';
     }
+    const referenceCards=new WeakMap();
+    let referenceJump=null,referenceFlash=null,referenceTimer=0;
+    function clearReferenceFlash(){
+      clearTimeout(referenceTimer);referenceFlash?.classList.remove('conversation-reference-target');referenceFlash=null;
+    }
+    function referenceRow(id){
+      const row=eventsEl.querySelector('[data-event-id="'+CSS.escape(id)+'"]');
+      return row&&(!row.hidden||toolGroupFor.has(id))?row:null;
+    }
+    function canReadReference(ref){
+      return hasOlder&&typeof before==='string'&&before!==ref.failedCursor&&events.size<MAX_EVENTS&&retainedBytes<MAX_BYTES;
+    }
+    function updateReferenceCards(){
+      for(const button of eventsEl.querySelectorAll('.conversation-reference-link')){
+        const ref=referenceCards.get(button);
+        const available=Boolean(referenceRow(ref.id)||canReadReference(ref));
+        button.setAttribute('aria-disabled',String(!available));
+        button.title=ref.label+'\n'+ref.quote+(available?'':'\n\n'+missingReference);
+        button.setAttribute('aria-label',available?'Jump to '+ref.label:ref.label+'. '+missingReference);
+      }
+    }
+    async function jumpReference(button,ref){
+      if(referenceJump||button.getAttribute('aria-disabled')==='true')return;
+      const token=generation,key=contextKey,cursors=new Set();
+      const current=()=>token===generation&&opened&&presented&&fingerprint(getContext()||{})===key;
+      if(!current())return;
+      referenceJump=button;button.setAttribute('aria-busy','true');
+      try{
+        let row=referenceRow(ref.id);
+        while(!row&&canReadReference(ref)&&!cursors.has(before)&&cursors.size<MAX_EVENTS){
+          cursors.add(before);
+          const loaded=await loadEarlier();
+          if(!current()||!loaded)return;
+          row=referenceRow(ref.id);
+        }
+        if(!row){ref.failedCursor=before;return;}
+        const group=toolGroupFor.get(ref.id);
+        if(group&&!group.open)setGroupOpen(group,true);
+        userScroll();userScrolling=false;
+        scroll.scrollTop+=row.getBoundingClientRect().top-scroll.getBoundingClientRect().top-22;
+        row.tabIndex=-1;row.focus({preventScroll:true});
+        position();remember(true);
+        clearReferenceFlash();referenceFlash=row;row.classList.add('conversation-reference-target');
+        referenceTimer=setTimeout(clearReferenceFlash,1550);
+      }finally{
+        if(referenceJump===button)referenceJump=null;
+        button.removeAttribute('aria-busy');if(current())updateReferenceCards();
+      }
+    }
+    function referenceCard(ref){
+      const button=document.createElement('button');button.type='button';button.className='conversation-reference-link';
+      const at=ref.ts?referenceClock.format(Date.parse(ref.ts)):'';
+      ref.label='quoted message from '+ref.agent+(at?' at '+at+' JST':'');
+      const avatar=renderAvatar?.(ref.agent,events.get(ref.id)?.model)||renderPeerAvatar?.(ref.agent);
+      if(avatar)button.append(avatar);
+      const name=document.createElement('span');name.className='conversation-reference-name';name.textContent=ref.agent;
+      const quote=document.createElement('span');quote.className='conversation-reference-quote';quote.textContent=ref.quote.trimStart().split('\n',1)[0].trimEnd();
+      const icon=document.createElement('template');icon.innerHTML=referenceIcon;
+      button.append(name,quote,icon.content);referenceCards.set(button,ref);
+      button.addEventListener('click',()=>{clearTimeout(jumpTimer);jumpReference(button,ref);});
+      return button;
+    }
     function node(event,{article=document.createElement('article'),live=false}={}){
       article.replaceChildren();article.className='conversation-event';
       if(live)article.classList.add('conversation-live');else article.dataset.eventId=event.id;
@@ -776,6 +841,13 @@
       const parent=user&&root.OrreryConversationMotion?.promptAuthor(event.text,agent,(getContext()||{}).parent_agent);
       const human=user&&!parent;
       if(human)humanBubble(article);
+      const ref=human&&!event.truncated&&root.OrreryConversationReply?.parse(event.text);
+      let content=article;
+      if(ref){
+        article.classList.add('conversation-has-reference');
+        content=document.createElement('div');content.className='conversation-reference-body';
+        article.append(referenceCard(ref),content);
+      }
       role.textContent=event.kind==='tool'?'Tool':event.kind==='tool_result'?'Tool result':shell?'Shell':parent||providerLabel;
       if(parent){
         const avatar=renderPeerAvatar?.(parent);
@@ -805,8 +877,8 @@
           // A single paragraph needs no block wrapper in a conversation row.
           if(text.childNodes.length===1&&text.firstChild.nodeName==='P')text.replaceChildren(...text.firstChild.childNodes);
         }
-        else if(root.OrreryConversationMarkdown){if(!root.OrreryConversationMarkdown.renderCommand(event.text,text))root.OrreryConversationMarkdown.renderText(event.text,text);}
-        else text.textContent=event.text;article.appendChild(text);
+        else if(root.OrreryConversationMarkdown){const body=ref?ref.reply:event.text;if(!root.OrreryConversationMarkdown.renderCommand(body,text))root.OrreryConversationMarkdown.renderText(body,text);}
+        else text.textContent=ref?ref.reply:event.text;content.appendChild(text);
       }
       if(live)return article;
       if(event.truncated){const note=document.createElement('div');note.className='conversation-truncated';note.textContent='Long message shortened in this reader.';article.appendChild(note);}
@@ -856,11 +928,18 @@
     let last={...initialPoll};
     // Load earlier gives way to the end of this pane's held poll and
     // releases other panes' held polls while the request runs.
+    function cancelEarlier(){
+      if(!pendingAction)return;
+      endOp(pendingAction.op);pendingAction.resolve(false);pendingAction=null;
+    }
     function loadEarlier(){
-      if(busy&&!holding)return;
+      if(pendingAction)return pendingAction.result;
       const op=beginOp();
-      if(busy){pendingAction={direction:'older',op};controller?.abort();return;}
-      load('older',op);
+      if(!busy)return load('older',op);
+      let resolve;
+      const result=new Promise(done=>{resolve=done;});
+      pendingAction={op,resolve,result};
+      return result;
     }
     /* The one place that decides when this reader asks next.
        - nothing while it is closed, hidden, paused or already asking;
@@ -1011,6 +1090,7 @@
         if(direction!=='older')after=page.after;
         const trimmed=trim(direction!=='older');earlier.hidden=!hasOlder;
         if(!unchangedSnapshot)regroupTools(focusedGroup);
+        updateReferenceCards();
         for(const key of tablePositions.keys())if(!events.has(JSON.parse(key)[0]))tablePositions.delete(key);
         if(!unchangedSnapshot)restoreTables();
         reconcileSubmissions(incoming,direction,sequence);
@@ -1029,6 +1109,7 @@
         position();if(direction==='initial'||direction==='newer'&&atBottom)remember(true);
         paintLiveText();
         if(direction!=='older')last.rows=added;
+        return true;
       }catch(error){
         waiting.delete(holder);
         if(token!==generation)return;
@@ -1042,7 +1123,7 @@
           // One short retry for a changed binding; repeated changes use the
           // normal poll interval instead of spinning on an unsettled session.
           clear();empty.textContent='New session';message('New session','New session',true);
-          if(pendingAction){endOp(pendingAction.op);pendingAction=null;}
+          cancelEarlier();
           if(!sessionReloadAttempted){sessionReloadAttempted=true;reloadDelay=250;}
           position();
         }else{
@@ -1061,7 +1142,7 @@
         if(token===generation){
           busy=false;controller=null;earlier.disabled=false;paintStatus();
           if(followPending){followPending=false;followSubmitted();}
-          else if(pendingAction){const next=pendingAction;pendingAction=null;load(next.direction,next.op);}
+          else if(pendingAction){const next=pendingAction;pendingAction=null;next.resolve(load('older',next.op));}
           else if(pollAgain)plan(reloadDelay);
         }
         endOp(op);
