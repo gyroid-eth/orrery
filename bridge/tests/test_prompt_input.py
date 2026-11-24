@@ -110,31 +110,62 @@ def test_watcher_never_sends_enter_without_visible_paste(monkeypatch, initial, e
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('composer_first', [True, False])
-async def test_real_tmux_prompt_keeps_the_entire_paste_with_its_enter(tmp_path, composer_first):
+async def test_real_tmux_prompt_keeps_the_entire_paste_with_its_enter(tmp_path, monkeypatch, composer_first):
     tmux=shutil.which('tmux')
     if tmux is None:
         pytest.skip('tmux unavailable')
     log=tmp_path/'typed'
+    release=tmp_path/'release-first-paste'
     recorder=tmp_path/'record.py'
     recorder.write_text(r"""
 import json,os,select,sys,tty
+from pathlib import Path
+
 tty.setraw(0)
 os.write(1,b'\x1b[?2004h'+ '❯ '.encode())
+start,end=b'\x1b[200~',b'\x1b[201~'
+release=Path(sys.argv[2])
+first=True
 with open(sys.argv[1], 'w', buffering=1) as out:
     while True:
-        raw=b''
-        while not raw.endswith(b'\x1b[201~'):
-            raw+=os.read(0,1)
-        text=raw.removeprefix(b'\x1b[200~').removesuffix(b'\x1b[201~').decode()
+        raw=bytearray()
+        while end not in raw:
+            chunk=os.read(0,4096)
+            if not chunk:
+                sys.exit(0)
+            raw.extend(chunk)
+        framed,_,early=raw.partition(end)
+        assert framed.startswith(start) and not early, 'Input arrived before the editor rendered the paste'
+        text=framed[len(start):].decode()
         os.write(1,'\r\x1b[2KPasting…'.encode())
-        if select.select([0],[],[],.25)[0]:
-            print(json.dumps('Enter before visible paste'),file=out)
+        if first:
+            # Keep the first draft unrendered until the competing sender has
+            # reached the actual pane lock. Any key in this phase is premature.
+            while not release.exists():
+                readable,_,_=select.select([0],[],[],.02)
+                assert not readable, 'Input arrived while the editor was still pasting'
+            first=False
         view='[Pasted text #1 +3 lines]' if '\n' in text else text
         os.write(1,('\r\x1b[2K❯ '+view).encode())
         assert os.read(0,1)==b'\r'
         print(json.dumps(text),file=out)
         os.write(1,'\r\x1b[2K❯ '.encode())
 """)
+    # This deliberately stalls the editor for the test coordinator. The live
+    # submission timeout is exercised separately, without a competing writer.
+    fixture_timeout=20
+    monkeypatch.setattr(submission,'TIMEOUT',fixture_timeout)
+    loop=asyncio.get_running_loop()
+    lock_contended=asyncio.Event()
+    try_lock=submission.try_lock
+
+    def observe_lock(frame):
+        lock=try_lock(frame)
+        if lock is None:
+            loop.call_soon_threadsafe(lock_contended.set)
+        return lock
+
+    monkeypatch.setattr(submission,'try_lock',observe_lock)
     env={k:v for k,v in os.environ.items() if k not in ('TMUX','TMUX_PANE')}
     env['LC_CTYPE']='C.UTF-8'
     env.pop('LC_ALL',None)
@@ -148,8 +179,10 @@ with open(sys.argv[1], 'w', buffering=1) as out:
         def call(*args, input=None):
             return subprocess.run([*argv,*args],env=env,capture_output=True,text=True,timeout=5,input=input)
 
-        assert call('new-session','-d','-s','Fixture',shlex.join([sys.executable,str(recorder),str(log)])).returncode==0
+        editor=shlex.join([sys.executable,str(recorder),str(log),str(release)])
+        assert call('new-session','-d','-s','Fixture',editor).returncode==0
         bridge=control.TmuxControlBridge(control.ControlConfig('127.0.0.1',0,'Fixture',str(wrapper),history_dir=tmp_path/'history'))
+        writers=[]
         try:
             await bridge.start()
             pane=next(iter(bridge.panes))
@@ -157,10 +190,22 @@ with open(sys.argv[1], 'w', buffering=1) as out:
             note='Synthetic Mail notice'
 
             async def wait_for_view(value):
-                deadline=time.monotonic()+3
-                while value not in (await asyncio.to_thread(call,'capture-pane','-p','-t',pane)).stdout:
-                    assert time.monotonic()<deadline
-                    await asyncio.sleep(.01)
+                screen=''
+
+                async def observe():
+                    nonlocal screen
+                    while True:
+                        result=await asyncio.to_thread(call,'capture-pane','-p','-t',pane)
+                        assert result.returncode==0,result.stderr
+                        screen=result.stdout
+                        if value in screen:
+                            return
+                        await asyncio.sleep(.02)
+
+                try:
+                    await asyncio.wait_for(observe(),timeout=fixture_timeout/2)
+                except asyncio.TimeoutError:
+                    pytest.fail(f'Terminal did not show {value!r}. Last capture: {screen!r}')
 
             async def wake():
                 return await asyncio.to_thread(submission.submit,call,lambda:True,pane,note)
@@ -168,19 +213,28 @@ with open(sys.argv[1], 'w', buffering=1) as out:
             await wait_for_view('❯')
             if composer_first:
                 user=asyncio.create_task(bridge.submit_prompt(pane,text))
+                writers.append(user)
                 await wait_for_view('Pasting…')
                 assert await wake()=='refused'
+                await asyncio.wait_for(lock_contended.wait(),timeout=fixture_timeout/2)
+                release.touch()
                 assert await user=='accepted'
                 assert await wake()=='accepted'
                 expected=[text,note]
             else:
                 mail=asyncio.create_task(wake())
+                writers.append(mail)
                 await wait_for_view('Pasting…')
-                assert await bridge.submit_prompt(pane,text)=='accepted'
+                user=asyncio.create_task(bridge.submit_prompt(pane,text))
+                writers.append(user)
+                await asyncio.wait_for(lock_contended.wait(),timeout=fixture_timeout/2)
+                release.touch()
                 assert await mail=='accepted'
+                assert await user=='accepted'
                 expected=[note,text]
             assert [json.loads(line) for line in log.read_text().splitlines()]==expected
-
         finally:
+            release.touch(exist_ok=True)
+            await asyncio.gather(*writers,return_exceptions=True)
             await bridge.stop()
             call('kill-server')
