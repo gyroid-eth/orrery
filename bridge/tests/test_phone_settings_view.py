@@ -94,9 +94,15 @@ def state(**over):
             "suggest": {"owner_login": OWNER, "public_origin": ORIGIN}, "cockpit": {"send": True}, **over}
 
 
-def draw(value, *, demo=False, steps=(), demo_reload=False):
+def draw(value, *, demo=False, steps=(), demo_reload=False, host=None):
+    platform = (
+        f"const HOST={json.dumps(host)};global.hostPlatform={{host:'unknown'}};"
+        "global.hostPlatformReady=new Promise(resolve=>setTimeout(()=>{hostPlatform.host=HOST;resolve();},10));"
+        if host else ""
+    )
     script = (DOM + f"const STATE={json.dumps(value)};const STEPS={json.dumps(list(steps))};"
               + f"const SCRIPT={json.dumps(str(ROOT / 'phone_settings.js'))};"
+              + platform
               + ("global.OrreryDemo={on:true};" if demo else "")
               + ("global.RELOADS=[];global.OrreryDemo.reloadFor=v=>RELOADS.push(v);" if demo and demo_reload else "")
               + RUN)
@@ -122,6 +128,26 @@ def test_settings_reader_is_not_mistaken_for_a_manual_one():
 def test_status_says_when_the_readers_python_is_gone():
     view = draw(state(relay={"listening": False, "python_missing": True}))
     assert "Python" in view["text"] and "off and on" in view["text"]
+
+
+def test_wsl_serve_setup_uses_telemetry_and_check_again_reads_the_result():
+    value = state(tailscale={"serve": "missing"}, settings={"policy_reviewed_at": None})
+    view = draw(value, host="wsl")
+    assert "Network → Settings → Phone access → Review Serve" in view["text"]
+    assert "you · Telemetry" in view["text"]
+    assert "Run this once in a terminal" not in view["text"]
+    assert "tailscale serve --https" not in view["text"] and "Copy" not in view["text"]
+    checked = draw(value, host="wsl", steps=("!tailscale.serve='ok'", "Check again"))
+    assert checked["missing"] == [] and checked["puts"] == []
+    assert "Review Serve" not in checked["text"] and "→ this computer" in checked["text"]
+
+
+def test_macos_serve_setup_still_shows_the_terminal_command_and_copy():
+    value = state(tailscale={"serve": "missing"}, settings={"policy_reviewed_at": None})
+    view = draw(value, host="mac", steps=("Copy",))
+    assert "Run this once in a terminal; ORRERY only reads the result." in view["text"]
+    assert "tailscale serve --https=9443 http://127.0.0.1:8781" in view["text"]
+    assert view["missing"] == [] and "Review Serve" not in view["text"]
 
 
 @pytest.mark.parametrize("case", ["ready", "setup", "first", "edit"])
