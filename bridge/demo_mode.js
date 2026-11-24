@@ -201,7 +201,8 @@
     if(!remasking&&kept&&kept.masked===shown)return;
     const value=kept&&kept.masked===shown?kept.original:shown;
     const wholePath=node.parentElement?.hasAttribute('data-demo-path');
-    const {text:masked,ranges}=api.project(value,{wholePath});
+    const literalPath=node.parentElement?.getAttribute('data-demo-path-value');
+    const {text:masked,ranges}=api.project(value,{wholePath,literalPath});
     if(masked!==value){originals.set(node,{original:value,masked,ranges});node.nodeValue=masked;}
     else{originals.delete(node);if(node.nodeValue!==value)node.nodeValue=value;}
   }

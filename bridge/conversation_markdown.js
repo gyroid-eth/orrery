@@ -210,26 +210,23 @@
   function at(pattern,text,i){pattern.lastIndex=i;return pattern.exec(text);}
   function imageLink(alt,target,linked){
     const local=/^(?:\/(?!\/)|~\/)/.test(target);
-    function caption(node){
-      if(alt)node.appendChild(document.createTextNode(alt+' · '));
-      const location=el('span');location.textContent=target;
-      if(local)location.dataset.demoPath='';
-      node.appendChild(location);
-    }
+    const caption=alt?alt+' · '+target:target;
+    const maskPath=local&&root.OrreryDemo?.on&&root.OrreryDemo.storedLocations?.();
     if(!linked){
       const href=safeUrl(target);
       if(href&&/^https?:/i.test(href)){
-        const node=anchor(href);node.className='markdown-image';caption(node);return node;
+        const node=anchor(href);node.className='markdown-image';node.textContent=caption;return node;
       }
       if(local&&!/[\x00-\x1f\x7f]/.test(target)&&/\.(?:png|jpe?g|gif|webp)$/i.test(target)){
         const node=el('a','markdown-image');node.href='#';node.dataset.localPath=target;node.dataset.markdownImage=alt;
         node.title='Preview '+target;
-        node.dataset.demoPathValue=target;
-        const label=el('span','markdown-image-label');caption(label);node.appendChild(label);return node;
+        const label=el('span','markdown-image-label');label.textContent=caption;
+        if(maskPath){node.dataset.demoPathValue=target;label.dataset.demoPathValue=target;}
+        node.appendChild(label);return node;
       }
     }
     const label=el('span','markdown-image');label.textContent='[image'+(alt?': '+alt:'')+']';label.title=target;
-    if(local)label.dataset.demoPathValue=target;
+    if(maskPath)label.dataset.demoPathValue=target;
     return label;
   }
   function inline(text,host,depth=0,inLink=false){
