@@ -1,5 +1,10 @@
 """Composer behavior on the real cockpit with synthetic panes and CDP."""
 
+import base64
+import json
+import os
+from pathlib import Path
+
 import pytest
 
 from test_conversation_review_regressions import cockpit, stable_roster
@@ -85,7 +90,7 @@ def test_mention_matches_name_and_role_and_leaves_file_references(cockpit):
     assert js("OrreryPromptRecipients.queryAt('@docs/sample.md',5,5)") is None
     js("promptInput.setSelectionRange(0,0);promptInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Backspace',bubbles:true,cancelable:true}))")
     assert js('promptRecipients.names') == []
-    assert js("packets.filter(packet=>packet.type==='input')") == []
+    assert js("packets.filter(packet=>['input','submit-prompt'].includes(packet.type))") == []
 
 
 @pytest.mark.parametrize('status', ['accepted', 'refused', 'unknown'])
@@ -121,7 +126,8 @@ def test_roster_selection_sends_each_agent_once_and_keeps_only_failed_targets(co
         assert js("toastEl.textContent.includes('Delivery unconfirmed for QuietCopernicus')")
 
 
-def test_attachment_drop_remove_and_delivery_per_cli(cockpit):
+@pytest.mark.parametrize('claude_status', ['accepted', 'unknown'])
+def test_attachment_drop_remove_and_delivery_per_cli(cockpit, claude_status):
     js, wait, _ = recipients(cockpit)
     js("""window.uploads=[];
       const base=fetch;
@@ -139,11 +145,14 @@ def test_attachment_drop_remove_and_delivery_per_cli(cockpit):
     assert js("document.querySelector('.prompt-file-name').textContent") == 'notes.txt'
     js("document.querySelector('.prompt-file-remove').click()")
     assert js("document.querySelector('.prompt-attachments').hidden")
+
     assert js('uploads.length') == 0
-    js("""dropFile();promptRecipients.set(['ReviewFixture','QuietCopernicus']);
+    js("window.claudeStatus="+json.dumps(claude_status)+""";
+      dropFile();promptRecipients.set(['ReviewFixture','QuietCopernicus']);
       window.send=packet=>{
         packets.push(packet);
-        if(packet.inputAck)queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'}));
+        if(packet.type==='submit-prompt')queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,
+          id:packet.inputAck,status:packet.paneId==='%902'?claudeStatus:'accepted'}));
         return true;
       };
       promptInput.value='Read this';promptInput.dispatchEvent(new Event('input'));promptSendBtn.click()""")
@@ -151,11 +160,231 @@ def test_attachment_drop_remove_and_delivery_per_cli(cockpit):
     assert js("uploads.map(upload=>[upload.session,upload.format,atob(upload.data)])") == [
         ['ReviewFixture', 'txt', 'Fixture data'], ['QuietCopernicus', 'txt', 'Fixture data'],
     ]
-    assert js("packets.filter(packet=>packet.data?.includes('Read this')).map(packet=>packet.data)") == [
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
         'Read this\n\n./.orrery-input-files/' + 'a' * 32 + '.txt',
-        'Read this\n\n@./.orrery-input-files/' + 'a' * 32 + '.txt',
+        'Read this\n\n@./.orrery-input-files/' + 'a' * 32 + '.txt ',
     ]
-    assert js("document.querySelector('.prompt-attachments').hidden")
+    assert js("packets.filter(packet=>packet.type==='input')") == []
+    assert js("document.querySelector('.prompt-attachments').hidden") == (claude_status == 'accepted')
+    if claude_status == 'unknown':
+        assert js('promptInput.value') == 'Read this'
+        assert js('promptRecipients.names') == ['QuietCopernicus']
+        assert js("promptFiles.entries.map(entry=>entry.file.name)") == ['notes.txt']
+        assert js("toastEl.textContent.includes('Delivery unconfirmed for QuietCopernicus')")
+
+
+@pytest.mark.parametrize('route, program', [
+    ('browser-files', 'claude-code'), ('mac-app', 'claude-code'),
+    ('mac-http', 'claude-code'), ('wsl-http', 'claude-code'),
+    ('browser-files', 'codex'), ('browser-files', 'dsh'),
+    ('browser-files', 'hermes'), ('wsl-http', 'agy'),
+])
+def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, route, program):
+    from test_conversation_input_images import png
+
+    js, wait, client = recipients(cockpit)
+    picture = base64.b64encode(png()).decode()
+    snapshot = {'attachments': [
+        {'name': 'Clipboard image.png', 'type': 'image/png', 'data': picture},
+        {'name': '資料 1.md', 'data': base64.b64encode(b'# Clipboard note').decode()},
+    ]}
+    js('window.copyFixture='+json.dumps(snapshot)+';window.pasteRoute='+json.dumps(route)+
+       ';window.pasteProgram='+json.dumps(program)+r""";
+      window.reads=[];window.uploads=[];window.releaseClipboard=null;
+      window.clipboardReply=()=>new Promise(resolve=>{releaseClipboard=()=>resolve(copyFixture)});
+      const base=fetch;
+      window.fetch=(url,options)=>{
+        const path=new URL(url,location.href).pathname;
+        if(path==='/telemetry/clipboard/attachments'){
+          reads.push([path,options.method,options.body]);
+          return clipboardReply().then(payload=>Response.json(payload));
+        }
+        if(path!=='/telemetry/prompt-attachment')return base(url,options);
+        uploads.push(JSON.parse(options.body));
+        return Promise.resolve(Response.json({path:'./.orrery-input-images/'+'a'.repeat(32)+'.png'}));
+      };
+      if(pasteRoute==='mac-app')window.__TAURI__={core:{invoke:(cmd,args)=>{
+        reads.push([cmd,args.attachments]);return clipboardReply();
+      }}};
+      hostPlatform={host:pasteRoute.startsWith('mac')?'mac':'wsl',file_paste:pasteRoute!=='browser-files'};
+      window.send=packet=>{
+        packets.push(packet);
+        if(packet.inputAck)queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'}));
+        return true;
+      };
+      window.pasteFixture=mode=>{
+        const clipboard=new DataTransfer();
+        if(mode==='text')clipboard.setData('text/plain','ordinary text');
+        else if(pasteRoute==='browser-files'){
+          const image=Uint8Array.from(atob(copyFixture.attachments[0].data),c=>c.charCodeAt(0));
+          clipboard.items.add(new File([image],'Clipboard image.png',{type:'image/png'}));
+          clipboard.items.add(new File(['# Clipboard note'],'資料 1.md',{type:'text/markdown'}));
+          clipboard.setData('text/plain','This file paste must not replace the draft.');
+        }else if(pasteRoute==='wsl-http'){
+          clipboard.setData('text/uri-list','file:///C:/Users/fixture/Notes.md');
+          clipboard.setData('text/plain','C:\\Users\\fixture\\Notes.md');
+        }
+        return promptInput.dispatchEvent(new ClipboardEvent('paste',{clipboardData:clipboard,bubbles:true,cancelable:true}));
+      };
+      currentAgents[0].program=pasteProgram;
+      promptInput.value='Compare the pasted screenshot.';
+      promptInput.dispatchEvent(new Event('input'));
+      packets.length=0;
+    """)
+    assert js("pasteFixture('text')") is True
+    assert js('reads.length') == 0
+    assert not js("pasteFixture('files')")
+    if route != 'browser-files':
+        wait('releaseClipboard!==null')
+        assert js('promptFiles.pending&&promptSendBtn.disabled')
+        js('void sendPrompt()')
+        assert js('uploads.length') == 0
+        assert js("packets.filter(packet=>['input','submit-prompt'].includes(packet.type))") == []
+        js('releaseClipboard()')
+    wait("document.querySelector('.prompt-file-preview')?.naturalWidth===640")
+    assert js("Array.from(document.querySelectorAll('.prompt-file-name'),node=>node.textContent)") == [
+        'Clipboard image.png', '資料 1.md']
+    expected_reads = ([['clipboard_file_paths', True]] if route == 'mac-app' else
+                      [] if route == 'browser-files' else
+                      [['/telemetry/clipboard/attachments', 'POST', '{}']])
+    assert js('reads') == expected_reads
+    assert js('promptInput.value') == 'Compare the pasted screenshot.'
+    assert js('uploads.length') == 0
+    assert js("packets.filter(packet=>['input','submit-prompt'].includes(packet.type))") == []
+
+    capture = os.environ.get('ORRERY_PASTE_CAPTURE_DIR')
+    if capture and route == 'wsl-http' and program == 'claude-code':
+        js("document.querySelector('.prompt-ava').src='/cockpit-assets/anthropic.svg'")
+        wait("document.querySelector('.prompt-ava').naturalWidth>0")
+        for theme in ('dark', 'light'):
+            js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
+            js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
+            result = client.call('Page.printToPDF', paperWidth=1600/96, paperHeight=1000/96,
+                                 marginTop=0, marginRight=0, marginBottom=0, marginLeft=0,
+                                 printBackground=True)
+            (Path(capture)/('paste-'+theme+'.pdf')).write_bytes(base64.b64decode(result['data']))
+
+    js("document.querySelector('.prompt-file-remove[aria-label=\"Remove 資料 1.md\"]').click()")
+    assert js('promptFiles.entries.length') == 1
+    js('void sendPrompt()')
+    wait("!promptBusy && promptFiles.entries.length===0")
+    assert js("uploads.map(upload=>[upload.kind,upload.label,upload.data])") == [
+        ['image', 'Clipboard image.png', picture]]
+    path = './.orrery-input-images/'+'a'*32+'.png'
+    reference = '@'+path+' ' if program == 'claude-code' else path
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        'Compare the pasted screenshot.\n\n' + reference]
+    assert js("packets.filter(packet=>packet.type==='input')") == []
+
+
+@pytest.mark.parametrize('variant', ['plain', 'quoted', 'quoted-attachments-only', 'quoted-early-record'])
+def test_reader_shows_selected_attachments_before_and_after_recording(cockpit,tmp_path,variant):
+    from test_conversation_submissions import prepare
+    from test_conversation_providers import claude,line,row
+    from test_conversation_input_images import decorate,png
+    from mobile_image import save_image
+    from mobile_file import save_file
+    js,wait,client=prepare(cockpit,'claude')
+    png_data=base64.b64encode(png()).decode()
+    paths=[save_image(tmp_path,png_data,label='Comparison.png'),
+           save_file(tmp_path,{'format':'md','data':base64.b64encode(b'# File example').decode()},label='Notes.md')]
+    paths=['./'+str(Path(path).relative_to(tmp_path)) for path in paths]
+    text='' if variant=='quoted-attachments-only' else 'Compare these two attachments.'
+    quoted=variant!='plain'
+    if quoted:
+        assert js("""readerReply.add({agent:'ReviewFixture',role:'user',eventId:'old',
+          text:'Compare against this earlier message.',isCurrent:()=>true})""")
+    body='\n\n'.join(part for part in (text,'\n'.join('@'+path for path in paths)) if part)
+    sent=js('readerReply.compose('+json.dumps(body)+')')
+    native=tmp_path/'native.jsonl'
+    native.write_bytes(line(dict(claude('user',sent,cwd=str(tmp_path)),timestamp=js('new Date(clock+1000).toISOString()'))))
+    binding=row(native,'claude-code')
+    store,events=decorate(binding)
+    picture,document=events[0]['references']
+    previews={ref['id']:store.read(ref['id'],binding) for ref in (picture,document)}
+    thumbnail=store.read(picture['id'],binding,thumbnail=True)
+    js("""window.savedFixturePaths="""+json.dumps(paths)+""";window.uploads=[];
+      const base=fetch;
+      window.fetch=(url,options)=>{
+        if(!String(url).includes('/telemetry/prompt-attachment'))return base(url,options);
+        uploads.push(JSON.parse(options.body));return Promise.resolve(Response.json({path:savedFixturePaths[uploads.length-1]}));
+      };
+      window.attachmentAttempts=[];
+      document.addEventListener('oc:prompt-sending',event=>attachmentAttempts.push(event.detail));
+      window.send=packet=>{
+        packets.push(packet);
+        if(packet.type==='submit-prompt')
+          window.finishAttachmentSend=()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'});
+        return true;
+      };
+      const transfer=new DataTransfer();
+      transfer.items.add(new File([Uint8Array.from(atob("""+json.dumps(png_data)+"""),c=>c.charCodeAt(0))],'Comparison.png',{type:'image/png'}));
+      transfer.items.add(new File(['# File example'],'Notes.md',{type:'text/markdown'}));
+      currentAgents[0].program='claude-code';
+      document.querySelector('.promptbar').dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));
+      promptInput.value="""+json.dumps(text)+""";void sendPrompt();""")
+    wait("typeof finishAttachmentSend==='function'&&reader.querySelector('.conversation-submission .conversation-inline-image img')?.naturalWidth===640")
+    js("window.attachmentBubble=reader.querySelector('.conversation-submission');"
+       "window.pendingThumbnail=attachmentBubble.querySelector('.conversation-inline-image img').src")
+    assert js("attachmentBubble.dataset.state")=='sending'
+    assert js("attachmentAttempts[0].origin.width>0")
+    assert js("attachmentBubble.querySelector('.conversation-submission-text').textContent")==text
+    assert js("attachmentBubble.textContent.includes('Notes.md')")
+    assert not js("attachmentBubble.textContent.includes('.orrery-input-')")
+    if quoted:
+        assert js("attachmentBubble.querySelector('.conversation-reference-quote').textContent")=='Compare against this earlier message.'
+        assert js("attachmentBubble.querySelector('.conversation-reference-body .conversation-file')!==null")
+        assert js("attachmentBubble.querySelector('.conversation-reference-body .conversation-inline-image img').naturalWidth")==640
+    else:
+        assert not js("attachmentBubble.querySelector('.conversation-reference-link')")
+    assert js("uploads.map(upload=>upload.label)")==['Comparison.png','Notes.md']
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)")==[sent+' ']
+    assert js("packets.filter(packet=>packet.type==='input')") == []
+    capture=os.environ.get('ORRERY_ATTACHMENT_CAPTURE_DIR')
+    def save_capture(name):
+        if os.environ.get('CDP_PDF_ON_TIMEOUT'):
+            result=client.call('Page.printToPDF',paperWidth=1600/96,paperHeight=1000/96,
+                               marginTop=0,marginRight=0,marginBottom=0,marginLeft=0,printBackground=True)
+            suffix='.pdf'
+        else:
+            result=client.call('Page.captureScreenshot',format='png')
+            suffix='.png'
+        (Path(capture)/(variant+'-'+name+suffix)).write_bytes(base64.b64decode(result['data']))
+    def read_record():
+        js('window.verifiedAttachments='+json.dumps(events)+';window.verifiedPreviews='+json.dumps(previews)+';window.verifiedThumb='+json.dumps(thumbnail)+';'
+           'OrreryConversationSource.Source.prototype.reference=async(ref,{thumbnail}={})=>thumbnail?verifiedThumb:verifiedPreviews[ref];'
+           'OrreryConversationSource.Source.prototype.read=async()=>({provider:"claude",mode:"cursor",events:[oldRecord,...verifiedAttachments],after:"end"});'
+           'conversationView.refresh()')
+
+    if variant=='quoted-early-record':
+        read_record()
+        wait("reader.querySelector('.conversation-event .conversation-inline-image img')?.naturalWidth===320")
+        assert js("attachmentBubble.isConnected&&attachmentBubble.dataset.state==='sending'")
+        js('finishAttachmentSend()')
+    else:
+        js('finishAttachmentSend()')
+        wait("!promptBusy&&attachmentBubble.dataset.state==='awaiting'")
+        assert js("attachmentBubble===reader.querySelector('.conversation-submission')")
+        if capture:save_capture('pending')
+        read_record()
+    wait("reader.querySelector('.conversation-event .conversation-inline-image img')?.naturalWidth===320&&!reader.querySelector('.conversation-submission')")
+    assert not js("fetch(pendingThumbnail).then(()=>true,()=>false)")
+    assert not js("reader.querySelector('.conversation-event .conversation-input-images').parentElement.textContent.includes('.orrery-input-')")
+    chips=js("Array.from(reader.querySelectorAll('.conversation-event button.conversation-file'),"+
+             "chip=>[chip.dataset.refId,chip.textContent])")
+    assert any(ref==document['id'] and 'Notes.md' in label for ref,label in chips),chips
+    if quoted:
+        assert js("reader.querySelector('.conversation-event .conversation-reference-quote').textContent")=='Compare against this earlier message.'
+        assert js("reader.querySelector('.conversation-event .conversation-reference-body .conversation-text').textContent")==text
+        assert js("reader.querySelector('.conversation-event .conversation-reference-body "
+                  "button[data-ref-id="+json.dumps(document['id'])+"]')!==null")
+    if capture:
+        for theme in ('dark','light'):
+            js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
+            js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
+            save_capture(theme)
+    js("reader.querySelector('.conversation-event .conversation-inline-image').click()")
+    wait("reader.querySelector('.conversation-preview-image')?.naturalWidth===640")
 
 
 def test_skill_kind_namespace_retry_switch_and_multiline_fix(cockpit):
@@ -211,7 +440,7 @@ def test_a_recipient_pin_survives_the_draft_and_refuses_a_reused_name(cockpit):
     ]
     js("currentAgentNamed('QuietCopernicus').created=2;packets.length=0;sendPrompt()")
     wait("!promptBusy")
-    assert js("packets.filter(packet=>packet.type==='input')") == []
+    assert js("packets.filter(packet=>['input','submit-prompt'].includes(packet.type))") == []
     assert js("toastEl.textContent") == 'Not sent to QuietCopernicus'
     assert js("promptRecipients.names") == ['QuietCopernicus']
     assert js("promptInput.value") == 'Keep the intended recipient'

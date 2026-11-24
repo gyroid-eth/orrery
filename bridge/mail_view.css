@@ -28,7 +28,19 @@
 }
 .mailfilters button:is(:hover,[aria-pressed="true"]) {background:var(--rail-selection);color:var(--amber)}
 .mail-head .rail-icon[data-filtered] {background:var(--rail-selection);color:var(--amber)}
-.mailview-host button:focus-visible,.mailfilters button:focus-visible {outline:1px solid var(--amber);outline-offset:-1px}
+.mail-filter-summary {flex:none;padding:6px 16px 0}
+.mail-filter-summary[hidden] {display:none}
+.mail-clear-filter {
+  display:inline-flex;align-items:center;gap:6px;max-width:100%;
+  padding:3px 7px;border:1px solid var(--hair);border-radius:999px;
+  background:var(--rail-selection);color:var(--ink);font:11px/1.4 var(--rail-sans);cursor:pointer;
+}
+.mail-clear-filter span {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mail-clear-filter:hover {color:var(--amber);border-color:currentColor}
+.mail-clear-filter .mail-icon {width:12px;height:12px}
+.mailview-host button:focus-visible,.mailfilters button:focus-visible,.mail-clear-filter:focus-visible {
+  outline:1px solid var(--amber);outline-offset:-1px;
+}
 .mail-icon {
   flex:none;width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.55;
   stroke-linecap:round;stroke-linejoin:round;

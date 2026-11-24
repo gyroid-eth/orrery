@@ -39,7 +39,12 @@ def test_queued_turn_keeps_receipt_until_exact_new_user_record(cockpit,provider)
     assert js("reader.querySelector('.conversation-submission').textContent.includes('ReviewFixture')")
     assert not js("reader.querySelector('.conversation-submission img')")
     assert js("reader.parentElement.classList.contains('conversation-just-submitted')")
-    assert js("reader.querySelector('.conversation-submission').getBoundingClientRect().bottom<=reader.querySelector('.conversation-scroll').getBoundingClientRect().bottom")
+    # The receipt starts at the composer and moves into the Reader. Check its
+    # final position after that flight has brought it inside the scroll area.
+    wait("""(()=>{const el=reader.querySelector('.conversation-submission');
+        return el&&el.getAnimations().every(animation=>animation.playState==='finished')&&
+          el.getBoundingClientRect().bottom<=reader.querySelector('.conversation-scroll').getBoundingClientRect().bottom;
+      })()""")
     js("clock+=60001;receiptTimers.forEach(f=>f());conversationView.refresh()")
     assert js("reader.querySelector('.conversation-submission').textContent.includes('Not recorded yet')")
     js("clock+=600000;conversationView.refresh()")

@@ -202,7 +202,7 @@ def test_an_ambiguous_probe_links_without_resolving(runs):
 
 def test_the_cockpit_opens_the_probed_path():
     html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
-    assert "mk(start,found.path,found.resolved||found.path,Boolean(found.resolved))" in html
+    assert "revealLocalPath(found?.resolved||found?.path||p,{literal:Boolean(found?.resolved)})" in html
     assert "activate:(event)=>{event.preventDefault();revealLocalPath(open,{literal});}" in html
 
 
@@ -372,7 +372,7 @@ NODE = shutil.which("node")
 def _pane_link_script(*, probe=False):
     html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
     start = html.index("  // Local paths in pane output:")
-    provider = html[start : html.index("\n  });", start) + len("\n  });")]
+    provider = html[start : html.index("\n  term.open(host);", start)]
     end = html.index("/* The file manager's name" if probe else "const probeCache")
     return html[html.index("function relativePathEnd") : end] + provider
 
@@ -388,17 +388,45 @@ const row={json.dumps(row)},cells=[];
 for(const ch of row){{cells.push(ch);if(/[\u3040-\u9fff]/.test(ch))cells.push('');}}
 const line={{isWrapped:{json.dumps(wrap[0])},translateToString:()=>row,
   getCell(col,cell){{Object.assign(cell,{{getChars:()=>cells[col],getWidth:()=>cells[col+1]===''?2:1}});return cell;}}}};
-const term={{buffer:{{active:{{getLine:y=>y===0?line:{{isWrapped:{json.dumps(wrap[1])}}},getNullCell:()=>({{}})}}}},registerLinkProvider(p){{this.p=p;}}}};
+const term={{providers:[],buffer:{{active:{{getLine:y=>y===0?line:{{isWrapped:{json.dumps(wrap[1])}}},getNullCell:()=>({{}})}}}},
+  registerLinkProvider(p){{this.providers.push(p);}}}};
 {_pane_link_script()}
-term.p.provideLinks(1,links=>{{
-  for(const l of links||[])l.activate({{preventDefault(){{}}}});
-  const result=(links||[]).map((l,i)=>({{text:l.text,...sent[i],...({json.dumps(ranges or trace)}?{{range:l.range}}:{{}})}}));
+Promise.all(term.providers.map(provider=>new Promise(resolve=>provider.provideLinks(1,resolve)))).then(async replies=>{{
+  const links=replies.flatMap(value=>value||[]);
+  for(const link of links)await link.activate({{preventDefault(){{}}}});
+  const result=links.map((l,i)=>({{text:l.text,...sent[i],...({json.dumps(ranges or trace)}?{{range:l.range}}:{{}})}}));
   console.log(JSON.stringify({json.dumps(trace)}?{{links:result,requests}}:result));
 }});
 """
     done = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=20)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
+
+
+@pytest.mark.skipif(NODE is None, reason="no node")
+def test_absolute_link_is_ready_for_first_click_before_its_full_path_resolves():
+    script = """
+const path='/mnt/c/Users/Profile/dir with space';
+const term={providers:[],buffer:{active:{getLine:()=>({translateToString:()=>path})}},
+  registerLinkProvider(provider){this.providers.push(provider);}};
+const actions=[];
+let finishProbe;
+function probeLocalPath(text){
+  actions.push(['probe',text]);
+  return new Promise(resolve=>{finishProbe=()=>resolve({path:text,resolved:text});});
+}
+function revealLocalPath(path,{literal}){actions.push(['reveal',path,literal]);}
+""" + _pane_link_script() + """
+let firstLink;
+term.providers[0].provideLinks(1,links=>{firstLink=links?.[0];});
+if(!firstLink||actions.length!==1)throw Error('Link was not ready while the probe was pending');
+const clicked=firstLink.activate({preventDefault(){}});
+finishProbe();
+clicked.then(()=>console.log(JSON.stringify(actions)));
+"""
+    done = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=20, check=True)
+    path = "/mnt/c/Users/Profile/dir with space"
+    assert json.loads(done.stdout) == [["probe", path], ["reveal", path, True]]
 
 
 @pytest.mark.skipif(NODE is None, reason="no node")
@@ -430,8 +458,8 @@ def test_new_relative_links_use_the_current_directory_in_the_same_pane(pane_prob
 const fs=require('node:fs'),path=require('node:path');
 const performance={now:()=>0},requests=[],opened=[],session='Fixture',meta={paneId:'%1'};
 const rows=['Before (docs/note.md) (docs/note.md)','After (docs/note.md)'];
-const term={buffer:{active:{getLine(i){return rows[i]&&{translateToString:()=>rows[i]};}}},
-  registerLinkProvider(provider){this.provider=provider;}};
+const term={providers:[],buffer:{active:{getLine(i){return rows[i]&&{translateToString:()=>rows[i]};}}},
+  registerLinkProvider(provider){this.providers.push(provider);}};
 let cwd=workspaces[0];
 function revealLocalPath(path,{literal}){opened.push({path,literal});}
 async function fetch(url,options){
@@ -442,11 +470,12 @@ async function fetch(url,options){
 }
 """ + _pane_link_script(probe=True) + """
 (async()=>{
-  const linksAt=y=>new Promise(resolve=>term.provider.provideLinks(y,resolve));
+  const linksAt=async y=>(await Promise.all(term.providers.map(provider=>
+    new Promise(resolve=>provider.provideLinks(y,resolve))))).flatMap(value=>value||[]);
   const before=await linksAt(1);
   cwd=workspaces[1];
   const after=await linksAt(2);
-  for(const link of [...before,...after])link.activate({preventDefault(){}});
+  for(const link of [...before,...after])await link.activate({preventDefault(){}});
   console.log(JSON.stringify({opened,requests}));
 })();
 """

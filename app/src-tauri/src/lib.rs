@@ -152,64 +152,40 @@ fn active_hotkey(binding: State<'_, HotkeyBinding>) -> String {
 // so the read lives here and the HTTP endpoint stays only as the fallback for
 // cockpits opened in an ordinary browser.
 #[cfg(target_os = "macos")]
-const CLIPBOARD_FILES_JXA: &str = r#"
-ObjC.import("AppKit");
-const pb = $.NSPasteboard.generalPasteboard;
-const items = pb.pasteboardItems;
-const out = [];
-if (!items.isNil()) {
-  for (let i = 0; i < items.count; i++) {
-    const s = items.objectAtIndex(i).stringForType("public.file-url");
-    if (!s.isNil()) {
-      const p = $.NSURL.URLWithString(s).path;
-      if (!p.isNil()) out.push(ObjC.unwrap(p));
-    }
-  }
-}
-JSON.stringify({changeCount: Number(pb.changeCount) || 0, files: out});
-"#;
+const CLIPBOARD_FILES_JXA: &str = include_str!("../../../bridge/clipboard_mac.jxa");
 
 #[cfg(target_os = "macos")]
 #[tauri::command]
-fn clipboard_file_paths() -> Result<Vec<String>, String> {
-    let output = std::process::Command::new("/usr/bin/osascript")
-        .args(["-l", "JavaScript", "-e", CLIPBOARD_FILES_JXA])
-        .output()
-        .map_err(|error| format!("pasteboard reader could not run: {error}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "pasteboard reader failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        ));
-    }
-    let raw = String::from_utf8_lossy(&output.stdout);
-    let parsed: serde_json::Value = serde_json::from_str(raw.trim())
-        .map_err(|error| format!("pasteboard reader returned non-JSON: {error}"))?;
-    // No change count means no pasteboard connection, which is a different
-    // answer from "the clipboard holds no files" and must not be flattened
-    // into an empty list.
-    if parsed.get("changeCount").and_then(serde_json::Value::as_i64) == Some(0) {
-        return Err("pasteboard reports no change count (no window server session)"
-            .to_owned());
-    }
-    Ok(parsed
-        .get("files")
-        .and_then(serde_json::Value::as_array)
-        .map(|entries| {
-            entries
-                .iter()
-                .filter_map(serde_json::Value::as_str)
-                .filter(|path| !path.is_empty())
-                .map(str::to_owned)
-                .collect()
-        })
-        .unwrap_or_default())
+async fn clipboard_file_paths(attachments: Option<bool>) -> Result<serde_json::Value, String> {
+    let snapshot = attachments.unwrap_or(false);
+    tauri::async_runtime::spawn_blocking(move || {
+        let output = std::process::Command::new("/usr/bin/osascript")
+            .args(["-l", "JavaScript", "-e", CLIPBOARD_FILES_JXA, "--",
+                if snapshot { "snapshot" } else { "paths" }])
+            .output()
+            .map_err(|error| format!("pasteboard reader could not run: {error}"))?;
+        if !output.status.success() {
+            return Err("pasteboard reader failed".to_owned());
+        }
+        let mut parsed: serde_json::Value = serde_json::from_slice(&output.stdout)
+            .map_err(|error| format!("pasteboard reader returned non-JSON: {error}"))?;
+        if parsed["changeCount"].as_i64() == Some(0) {
+            return Err("pasteboard reports no change count (no window server session)".to_owned());
+        }
+        if snapshot {
+            Ok(parsed)
+        } else {
+            Ok(parsed.get_mut("files").map(serde_json::Value::take)
+                .unwrap_or_else(|| serde_json::json!([])))
+        }
+    }).await.map_err(|error| format!("pasteboard reader did not finish: {error}"))?
 }
 
 #[cfg(not(target_os = "macos"))]
 #[tauri::command]
-fn clipboard_file_paths() -> Result<Vec<String>, String> {
-    Err("pasteboard file paths are only available on macOS".to_owned())
+async fn clipboard_file_paths(attachments: Option<bool>) -> Result<serde_json::Value, String> {
+    let _ = attachments;
+    Err("pasteboard files are only available on macOS".to_owned())
 }
 
 // Opening links from a pane belongs to the app for the same reason as the

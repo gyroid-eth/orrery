@@ -29,6 +29,16 @@ DSH_COMPACT = [
 HERMES_COMPACT = ['─ ☤ compacting…      · 12s │ fixture-model │ 19%', ' ❯']
 
 
+@pytest.mark.parametrize('cockpit', [False, True], indirect=True, ids=['desktop', 'phone'])
+def test_idle_and_input_required_have_distinct_reader_labels(cockpit):
+    js, wait, _ = prepare(cockpit, [message('answer', 'The release check is complete.')])
+    for state, label in [('wait', 'Idle'), ('question', 'Waiting for you'), ('ask', 'Waiting for you')]:
+        js("currentAgents[0].running=true;currentAgents[0].act_state="+json.dumps(state)+
+           ";document.dispatchEvent(new Event('oc:agents'));")
+        wait("document.querySelector('.conversation-activity:not([hidden]) .conversation-activity-label')"
+             "?.textContent==="+json.dumps(label))
+
+
 @pytest.mark.parametrize('program,provider,native,done', [
     ('claude', 'anthropic', CLAUDE_COMPACT, [RULE, '❯', RULE, '  ⏵⏵ auto mode on (shift+tab to cycle)']),
     ('claude-code', 'anthropic', CLAUDE_COMPACT, [RULE, '❯', RULE, '  ⏵⏵ auto mode on (shift+tab to cycle)']),

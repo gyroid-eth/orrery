@@ -12,6 +12,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import stat
 import threading
 import time
@@ -23,8 +24,10 @@ from pathlib import Path
 from PIL import Image
 from conversation_artifacts import extract_artifacts
 from conversation_history import codex_event, codex_user_content, open_bound_transcript, assert_transcript_identity, HistoryUnavailable, open_reader
+from conversation_history import conversation_binding as binding
 from conversation_images import input_images, saved_path, dsh_image_path
 from conversation_markdown_images import IMAGE_EXT, local_image_target, markdown_image_targets
+from mobile_attachment_store import DIRECTORIES, FORMATS, attachment_label
 
 MAX_RECORD=1024*1024
 MAX_TEXT=128*1024
@@ -36,6 +39,9 @@ TEXT_EXT={'.txt','.md','.py','.js','.mjs','.cjs','.ts','.tsx','.jsx','.css','.sc
           '.yaml','.yml','.toml','.ini','.cfg','.csv','.tsv','.xml','.html','.svg','.sh','.bash','.zsh',
           '.rs','.go','.c','.h','.cpp','.hpp','.java','.kt','.sql','.diff','.patch','.log','.rst'}
 RASTER_FORMATS=('PNG','JPEG','GIF','WEBP')
+ATTACHMENT_NAME=re.compile(r'[a-f0-9]{32}\.([a-z]{2,4})\Z')
+COMPOSER_ATTACHMENT=re.compile(r'@?(\./\.orrery-input-(?:images|files)/[a-f0-9]{32}\.[a-z]{2,4})\Z')
+PHONE_ATTACHMENT=re.compile(r"(?:\A| )\[(image|file): ('(?:[^']|'\\'')*')\]\Z")
 
 
 def resolve_clicked_path(value):
@@ -67,11 +73,6 @@ def clicked_path(value):
 
 
 class PreviewUnavailable(ValueError): pass
-
-
-def binding(row):
-    keys=('name','program','history_binding','transcript_path','native_session_id','history_session_id','history_receipt_ts','created','mail_instance_id','mail_agent_id')
-    return tuple(row.get(key) for key in keys)
 
 
 def identity(stream):
@@ -135,6 +136,72 @@ def open_file(path):
         if parent is not None:os.close(parent)
 
 
+def private_attachment(info):
+    return info.st_uid==os.getuid() and (stat.S_IMODE(info.st_mode)&0o077)==0
+
+
+def stored_attachment(path, cwd):
+    """Only the attachment store layout under the recording's workspace."""
+    if cwd is None or path.parent.parent!=cwd:
+        return None
+    kind=next((kind for kind,folder in DIRECTORIES.items() if path.parent.name==folder),None)
+    name=ATTACHMENT_NAME.fullmatch(path.name)
+    if not kind or not name or name[1] not in FORMATS[kind]:
+        return None
+    try:
+        folder=path.parent.lstat()
+        if not stat.S_ISDIR(folder.st_mode) or not private_attachment(folder):
+            return None
+        # This marker is written by the upload route, including in old stores.
+        with open_file(path.parent/'.gitignore') as (fd,marker):
+            if not private_attachment(marker) or os.read(fd,3)!=b'*\n':return None
+        with open_file(path) as (_,info):
+            if not private_attachment(info) or info.st_size==0:
+                return None
+            signature=(info.st_dev,info.st_ino,info.st_size,info.st_mtime_ns,info.st_ctime_ns)
+        label=''
+        try:
+            with open_file(path.with_name(path.name+'.label')) as (fd,meta):
+                if private_attachment(meta) and meta.st_size<=640:
+                    label=attachment_label(os.read(fd,641).decode('utf-8'))
+        except (PreviewUnavailable,UnicodeError):
+            pass  # Older uploads have no original filename.
+        return dict(path=str(path),kind=kind,signature=signature,label=label,extension=name[1])
+    except (OSError,PreviewUnavailable):
+        return None
+
+
+def attachment_trailer(text,cwd,uploads=None):
+    """Validate only the suffix emitted by the desktop or phone composer."""
+    if cwd is None and not uploads:return text,[]
+    parts=text.rstrip().rsplit('\n\n',1)
+    lines=parts[-1].splitlines()
+    if 0<len(lines)<=8 and all(COMPOSER_ATTACHMENT.fullmatch(line) for line in lines):
+        displayed=[];attachments=[]
+        for line in lines:
+            value=COMPOSER_ATTACHMENT.fullmatch(line)[1].removeprefix('./')
+            uploaded=(uploads or {}).get(value)
+            if uploaded is not None:
+                attachment=stored_attachment(uploaded,uploaded.parent.parent)
+            else:
+                attachment=stored_attachment(cwd/value,cwd) if cwd is not None else None
+            if attachment:attachments.append(attachment)
+            else:displayed.append(line)
+        caption='\n\n'.join([*parts[:-1],*(['\n'.join(displayed)] if displayed else [])]) if attachments else text
+        return caption,attachments
+    remaining=text.rstrip();attachments=[]
+    for _ in range(8):
+        marker=PHONE_ATTACHMENT.search(remaining)
+        if not marker:break
+        try:paths=shlex.split(marker[2])
+        except ValueError:break
+        if len(paths)!=1:break
+        attachment=stored_attachment(Path(paths[0]),cwd)
+        if not attachment or attachment['kind']!=marker[1]:break
+        attachments.append(attachment);remaining=remaining[:marker.start()]
+    return (remaining,attachments[::-1]) if attachments else (text,[])
+
+
 def resize_to_pixels(image, limit):
     width,height=image.size
     scale=(limit/(width*height))**0.5
@@ -147,6 +214,15 @@ class ReferenceStore:
         self.workspace_roots=tuple(root for value in workspace_roots if (root:=root_path(value)))
         self.ttl,self.max_refs,self.clock,self.max_pixels=ttl,max_refs,clock,max_pixels
         self.refs=OrderedDict();self.by_key={};self.lock=threading.RLock()
+        self.uploads=OrderedDict()
+
+    def remember_upload(self,name,relative,path):
+        """A verified composer upload also covers providers with no native cwd."""
+        with self.lock:
+            key=(name,relative.removeprefix('./'))
+            self.uploads[key]=Path(path)
+            self.uploads.move_to_end(key)
+            while len(self.uploads)>1024:self.uploads.popitem(last=False)
 
     def prune(self):
         now=self.clock()
@@ -208,7 +284,8 @@ class ReferenceStore:
             if cwd is False:cwd=workspace(stream)
         except ValueError:return
         if event.get('kind')=='text' and event.get('role')=='user':
-            self.decorate_input(row,stream,event,item,digest)
+            attachments=self.decorate_attachments(row,stream,event,digest,cwd)
+            self.decorate_input(row,stream,event,item,digest,exclude=attachments)
             return
         if projection['diff']:
             event['diff']=projection['diff'];event['diff_status']=projection['diff_status']
@@ -282,11 +359,47 @@ class ReferenceStore:
     def image_key(image):
         return hashlib.sha256(json.dumps(image,sort_keys=True).encode()).digest()
 
-    def decorate_input(self,row,stream,event,item,digest):
+    def decorate_attachments(self,row,stream,event,digest,cwd):
+        if event.get('truncated'):return set()
+        text=event['text'];suffix=''
+        if event.get('input_image_marker')=='suffix' and text.endswith('\n[image attachment]'):
+            suffix='\n[image attachment]';text=text.removesuffix(suffix)
+        # Most records use their bound native workspace, including after a
+        # bridge restart. The small upload cache also covers agy and cd'd panes.
+        uploads={}
+        if COMPOSER_ATTACHMENT.fullmatch(text.rstrip().rsplit('\n',1)[-1]):
+            with self.lock:
+                uploads={value:path for (agent,value),path in self.uploads.items() if agent==row.get('name')}
+        caption,attachments=attachment_trailer(text,cwd,uploads)
+        if not attachments:return set()
+        event['input_display_text']=caption+suffix
+        if any(attachment['kind']=='image' for attachment in attachments):event['input_images']=True
+        refs=[]
+        with self.lock:
+            self.prune()
+            for index,attachment in enumerate(attachments):
+                key=(binding(row),identity(stream),event['id'],digest,'attachment',index,self.image_key(attachment))
+                ref=self.by_key.get(key)
+                if ref not in self.refs or self.refs[ref]['key']!=key:ref=secrets.token_urlsafe(24)
+                self.by_key[key]=ref
+                offset=event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id'])
+                label=attachment['label'] or f"Attachment {index+1}.{attachment['extension']}"
+                self.refs[ref]=dict(key=key,row=binding(row),inode=identity(stream),offset=offset,
+                                    digest=digest,attachment=attachment,label=label,expires=self.clock()+self.ttl)
+                self.refs.move_to_end(ref)
+                projected=dict(id=ref,label=label,kind=attachment['kind'])
+                if attachment['kind']=='image':projected['input_image']=True
+                refs.append(projected)
+            self.prune()
+        event['references']=refs
+        return {attachment['path'] for attachment in attachments}
+
+    def decorate_input(self,row,stream,event,item,digest,*,exclude=()):
         refs=[]
         with self.lock:
             self.prune()
             for index,image in enumerate(input_images(item)):
+                if image.get('path') in exclude:continue
                 key=(binding(row),identity(stream),event['id'],digest,index,self.image_key(image))
                 ref=self.by_key.get(key)
                 if ref not in self.refs or self.refs[ref]['key']!=key:ref=secrets.token_urlsafe(24)
@@ -298,7 +411,7 @@ class ReferenceStore:
                 if 'slot' in image:projected['input_image_slot']=image['slot']
                 refs.append(projected)
             self.prune()
-        if refs:event['references']=refs;event['input_images']=True
+        if refs:event['references']=(refs+event.get('references',[]))[:8];event['input_images']=True
 
     def read_input(self,image,stream,*,thumbnail=False,mobile=False):
         if image['kind']=='data':
@@ -327,12 +440,19 @@ class ReferenceStore:
                 item,digest=record_at(stream,entry['offset'])
                 if digest!=entry['digest']:raise PreviewUnavailable('reference_expired')
                 markdown=entry.get('markdown_image')
+                attachment=entry.get('attachment')
                 if markdown:
                     if reveal:raise PreviewUnavailable('preview_unavailable')
                     original,path=resolve_clicked_path(markdown)
                     if str(path)!=entry['key'][-1] or path.suffix.lower() not in IMAGE_EXT:
                         raise PreviewUnavailable('reference_expired')
                     result=self.read_file(path,thumbnail=thumbnail,mobile=mobile)
+                elif attachment:
+                    path=Path(attachment['path'])
+                    cwd=path.parent.parent  # Already admitted when this bound reference was issued.
+                    if reveal or stored_attachment(path,cwd)!=attachment:raise PreviewUnavailable('reference_expired')
+                    result=self.read_file(path,thumbnail=thumbnail,mobile=mobile)
+                    result=dict(result,label=entry['label'],notice='Recorded input attachment')
                 elif entry.get('input_image'):
                     if reveal:raise PreviewUnavailable('preview_unavailable')
                     images=input_images(item)
@@ -351,6 +471,8 @@ class ReferenceStore:
                 if record_at(stream,entry['offset'])[1]!=entry['digest']:raise PreviewUnavailable('reference_expired')
                 if markdown:
                     if original.resolve(strict=True)!=path:raise PreviewUnavailable('reference_expired')
+                elif attachment:
+                    if stored_attachment(path,cwd)!=attachment:raise PreviewUnavailable('reference_expired')
                 elif not entry.get('input_image') and self.policy(value,workspace(stream),shown=shown)!=path:raise PreviewUnavailable('reference_expired')
                 stream.assert_identity()
             return path if reveal else result

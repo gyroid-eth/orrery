@@ -48,6 +48,46 @@ def test_roster_refresh_keeps_focused_assignment_and_drops_stale_portrait(cockpi
     assert js("Boolean(keptGroup.querySelector('.mail-assignee-fallback'))")
 
 
+def test_active_mail_filter_can_be_cleared_with_one_click(cockpit):
+    js, wait = prepare(cockpit, width=240)
+    js("""window.filterMail=name=>document.dispatchEvent(new CustomEvent('oc:filter-agent',{detail:{agent:name}}));
+      window.focusMailPane=name=>document.dispatchEvent(new CustomEvent('oc:focus-agent',{detail:{name}}));
+      filterMail('EmptyNode');focusMailPane('EmptyNode');""")
+    wait("document.querySelector('.mailempty')?.textContent==='No matching requests'")
+    assert js("document.querySelector('.mail-clear-filter').getAttribute('aria-label')") == (
+        'Clear mail filters: EmptyNode')
+    js("document.querySelector('.mail-clear-filter').click()")
+    assert js("document.querySelector('.mail-filter-summary').hidden")
+    assert js("document.querySelectorAll('.mail-assignee').length") == 3
+
+    js("""filterMail('BuildNode');
+      document.querySelector('.mail-clear-filter').click();
+      focusMailPane('BuildNode');""")
+    assert js("document.querySelector('.mail-filter-summary').hidden")
+    assert js("document.activeElement.id") == 'mailFilterBtn'
+    js("filterMail('BuildNode')")
+    assert js("document.querySelector('.mail-clear-filter span').textContent") == 'BuildNode'
+
+
+def test_mini_graph_remembers_both_states_across_loads(cockpit):
+    js, wait, client, _, _ = cockpit
+    wait("Boolean(document.querySelector('#mail .mailcards'))")
+    client.call('Page.removeScriptToEvaluateOnNewDocument', identifier=js.storage_bootstrap)
+    address = js('location.href')
+    graph = "document.getElementById('orrery')"
+    toggle = "document.getElementById('mailGraphBtn')"
+    key = 'oc-mini-mail-graph'
+
+    assert js(f"{graph}.hasAttribute('hidden')")
+    for value in ('1', '0'):
+        js(f"{toggle}.click()")
+        assert js(f"localStorage.getItem('{key}')") == value
+        client.call('Page.navigate', url=address)
+        wait("Boolean(document.querySelector('#mail .mailcards'))")
+        assert js(f"{toggle}.getAttribute('aria-expanded')") == str(value == '1').lower()
+        assert js(f"{graph}.hasAttribute('hidden')") == (value == '0')
+
+
 @pytest.mark.parametrize('cockpit',['disabled'],indirect=True)
 def test_recipient_portraits_work_with_reader_off(cockpit):
     js, _ = prepare(cockpit)

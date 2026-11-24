@@ -36,6 +36,7 @@ async def test_attachment_is_written_to_the_selected_workspace(monkeypatch, tmp_
             body['format'] = 'md'
             data = b'# Fixture text'
         body['data'] = base64.b64encode(data).decode()
+        body['label'] = '元の名前.png' if kind == 'image' else '資料.md'
         missing = await client.post('/telemetry/prompt-attachment', json={**body, 'incarnation': 'b' * 32})
         assert missing.status == 409
         overridden = await client.post('/telemetry/prompt-attachment', json={**body, 'destination': '/tmp'})
@@ -47,9 +48,36 @@ async def test_attachment_is_written_to_the_selected_workspace(monkeypatch, tmp_
         saved = workspace / result['path']
         assert saved.stat().st_mode & 0o777 == 0o600
         assert (saved.parent / '.gitignore').read_text() == '*\n'
+        assert saved.with_name(saved.name+'.label').read_text() == body['label']
         if kind == 'image':
             with Image.open(saved) as picture:
                 assert picture.size == (2, 2)
                 assert picture.getpixel((0, 0)) == (0, 0, 128)
         else:
             assert saved.read_bytes() == data
+
+
+@pytest.mark.asyncio
+async def test_clipboard_snapshot_is_loopback_scoped_and_cannot_accept_paths(monkeypatch):
+    calls = []
+
+    async def read(*, snapshot):
+        assert snapshot is True
+        calls.append(snapshot)
+        return {'attachments': [{'name': 'file.md', 'data': 'IyBEcmFmdA=='}]}
+
+    monkeypatch.setattr(backend, 'host_kind', lambda: 'wsl')
+    monkeypatch.setattr(backend, 'read_windows_clipboard', read)
+    app = web.Application(middlewares=[backend.own_page_only, backend.json_writes_only])
+    app.router.add_post('/telemetry/clipboard/attachments', backend.serve_clipboard_attachments)
+    async with TestClient(TestServer(app)) as client:
+        foreign = await client.post('/telemetry/clipboard/attachments', json={},
+                                    headers={'Origin': 'https://elsewhere.invalid'})
+        assert foreign.status == 403
+        forged = await client.post('/telemetry/clipboard/attachments', json={'path': '/private/file.md'})
+        assert forged.status == 400
+        result = await client.post('/telemetry/clipboard/attachments', json={})
+        assert result.status == 200
+        assert result.headers['Cache-Control'] == 'no-store'
+        assert (await result.json())['attachments'] == [{'name': 'file.md', 'data': 'IyBEcmFmdA=='}]
+        assert calls == [True]

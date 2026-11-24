@@ -475,7 +475,7 @@ def test_pane_status_is_noninteractive_text_separate_from_buttons(cockpit):
         assert not js('document.activeElement===scrBadge')
 
 
-def test_provider_labels_snapshot_rewrite_and_receipt_changes_clear(cockpit):
+def test_provider_labels_snapshot_rewrite_and_native_binding_changes_clear(cockpit):
     js,wait,client,requests,enable=cockpit
     enable(mode='snapshot',count=1)
     js("""OrreryConversationSource.Source.prototype.read=async()=>({ok:true,agent:'ReviewFixture',provider:'hermes',mode:'snapshot',events:[{id:'same',kind:'text',role:'assistant',text:'first'}],after:'snapshot',notice:'Active segment'});conversationView.refresh()""")
@@ -491,8 +491,41 @@ def test_provider_labels_snapshot_rewrite_and_receipt_changes_clear(cockpit):
         wait("document.querySelector('.conversation-event')!==null")
         assert js("document.querySelector('.conversation-speaker-name').textContent")=='ReviewFixture'
         assert '('+label+')' in js("document.querySelector('.conversation-role').ariaLabel")
-        js("OrreryConversationSource.Source.prototype.read=()=>new Promise(()=>{});currentAgents[0].history_receipt_ts=String(Date.now());document.dispatchEvent(new Event('oc:agents'))")
+        js("OrreryConversationSource.Source.prototype.read=()=>new Promise(()=>{});currentAgents[0].history_session_id=String(Date.now());document.dispatchEvent(new Event('oc:agents'))")
         assert js("document.querySelectorAll('.conversation-event').length")==0
+
+
+@pytest.mark.parametrize('changed', ['history_session_id', 'transcript_path', 'created'])
+def test_claude_work_and_record_nodes_survive_receipt_refresh(cockpit, changed):
+    from test_reader_live_text import frame, write_frame
+    js,wait,_,_,enable=cockpit
+    stable_roster(js);enable(count=1)
+    js("""conversationView.close();
+      Object.assign(currentAgents[0],{program:'claude-code',provider:'anthropic',running:true,act_state:'work',
+        history_session_id:'fixture-native',history_receipt_ts:'first',created:100});
+      window.calls=[];
+      OrreryConversationSource.Source.prototype.read=async(name,{after=null}={})=>{
+        calls.push(after);
+        return {provider:'claude',mode:'cursor',events:after?[]:[
+          {id:'earlier',role:'assistant',kind:'text',text:'Earlier reply in the record.'}],after:'tail'};
+      };
+      conversationView.open();
+    """)
+    wait("Boolean(document.querySelector('[data-event-id=earlier]'))")
+    write_frame(js,frame('claude-code','The original labels are readable.'),snapshot=True)
+    write_frame(js,frame('claude-code','The original labels are readable. The export is sharp.'))
+    js("""window.oldMessage=document.querySelector('[data-event-id=earlier]');
+      window.liveMessage=document.querySelector('.conversation-live');
+      window.receiptLiveID=readerActivity.current(panes.get('%901')).reader_live_text?.id;
+      currentAgents[0].history_receipt_ts='refreshed';document.dispatchEvent(new Event('oc:agents'));
+      conversationView.refresh();
+    """)
+    assert js("""oldMessage.isConnected&&liveMessage?.isConnected&&receiptLiveID&&
+      readerActivity.current(panes.get('%901')).reader_live_text?.id===receiptLiveID""")
+    assert js("calls[0]===null&&calls.slice(1).every(cursor=>cursor==='tail')")
+    js("OrreryConversationSource.Source.prototype.read=()=>new Promise(()=>{});"
+       f"currentAgents[0][{json.dumps(changed)}]='changed';document.dispatchEvent(new Event('oc:agents'))")
+    assert js("!oldMessage.isConnected && !liveMessage.isConnected")
 
 
 def test_stale_removes_previous_body_and_explains_previous_conversation(cockpit):
