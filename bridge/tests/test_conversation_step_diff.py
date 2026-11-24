@@ -189,7 +189,12 @@ def test_lazy_diff_route_exposes_only_the_selected_record(tmp_path, monkeypatch)
                 async with browser.get(origin+'/telemetry/conversation?agent=BoundAgent') as received:
                     assert received.status == 200
                     page = await received.json()
-                    assert 'PROPOSED_TEXT' not in json.dumps(page) and 'inert' not in json.dumps(page)
+                    assert 'inert' not in json.dumps(page)
+                    previews = [event for event in page['events'] if event.get('diff')]
+                    assert len(previews) == 1
+                    assert '+PROPOSED_TEXT' in previews[0]['diff']
+                    assert previews[0]['diff_status'] == 'Recorded edit request · outcome unconfirmed'
+                    assert 'diff_ref' not in previews[0].get('step', {})
                     steps = [event['step'] for event in page['events'] if event.get('step')]
                     assert len(steps) == 1
                     assert steps[0]['diff_stat'] == dict(added=1, removed=0, new_file=True)

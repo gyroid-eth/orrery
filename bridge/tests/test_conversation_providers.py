@@ -40,7 +40,10 @@ def test_claude_visible_blocks_tools_results_and_recorded_edit(tmp_path):
     store=ReferenceStore()
     with history.open_reader(r) as reader:
         event,reply=result['events'][2:];store.decorate_all(r,reader,[event,reply])
-    assert 'diff' not in event
+    assert '-before\n+after' in event['diff']
+    assert event['diff_status']=='Recorded edit request · outcome unconfirmed'
+    assert 'diff_ref' not in event['step']
+    assert 'diff' not in reply
     assert reply['step']['diff_stat']=={'added':1,'removed':1,'new_file':False}
     assert store.read_step_diff(reply['step']['diff_ref'],r)['hunks'][0]['lines']==[
         {'op':'-','text':'before'},{'op':'+','text':'after'}]

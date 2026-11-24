@@ -340,7 +340,7 @@ class ReferenceStore:
                 self.decorate_markdown(row,stream,event,offset,targets,records,images)
             if event.get('kind')=='mail' or event.get('kind')=='text' and event.get('role')=='assistant':return
             item,digest=record_at(stream,offset,records)
-            projection=extract_artifacts(item,include_diff=row.get('program') not in {'claude','claude-code','codex','codex-cli'})
+            projection=extract_artifacts(item)
             if cwd is False:cwd=workspace(stream)
         except ValueError:return
         if event.get('kind')=='text' and event.get('role')=='user':
