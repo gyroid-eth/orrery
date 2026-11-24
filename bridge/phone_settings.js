@@ -4,11 +4,11 @@
  * agents, Graph, Mail, conversation, file and image previews) and "Send from
  * phone" (one confirmed line to a pane; on by default). The reader belongs to
  * Telemetry: GET/PUT /telemetry/mobile run its `agentstack-mobile` command,
- * which writes ~/.agentstack/mobile.json and the launchd job.
+ * which writes ~/.agentstack/mobile.json and manages the relay service.
  *
  * Tailscale Serve and the access policy stay the person's own steps. This panel
- * only reads Serve/Funnel, offers the command to copy, and records the
- * person's own "I reviewed the policy" with its date; it cannot verify it.
+ * reads Serve/Funnel, points to setup for this host, and records the person's
+ * own "I reviewed the policy" with its date; it cannot verify it.
  * The setup steps are shown only while one is missing.
  *
  * A reader started by hand (not by Settings) may hold the port: the panel says
@@ -67,6 +67,7 @@
   }
   async function refresh(){
     var value=await call('GET');
+    if(value.ok&&typeof hostPlatformReady!=='undefined')await hostPlatformReady;
     if(value.ok){state=value;}else{state=state||null;message=text(value.error);if(value.error==='telemetry_missing')state=null;}
     render();
   }
@@ -111,10 +112,21 @@
     var two=step(named&&!editing,signed&&(!named||editing),2,'Owner and address','you · once',body);two.id='phoneStepOwner';
     list.append(two);
     var served=ts.serve==='ok';
-    var serveBody=[el('div','settings-help',served?(demo()?'9443 → this computer (address '+HIDDEN+')':'https://'+ts.dns_name+':9443 → this computer'):'Run this once in a terminal; ORRERY only reads the result.')];
-    if(!served){serveBody.push(el('div','phone-code','tailscale serve --https=9443 http://127.0.0.1:'+s.relay.port));
-      var a2=el('div','phone-actions');a2.append(button('Copy',function(){try{navigator.clipboard.writeText('tailscale serve --https=9443 http://127.0.0.1:'+s.relay.port);}catch(_){}}),button('Check again',refresh));serveBody.push(a2);}
-    list.append(step(served,named&&!served,3,'Serve 9443 → reader','you · terminal',serveBody));
+    var wsl=typeof hostPlatform!=='undefined'&&hostPlatform.host==='wsl';
+    var serveHelp=wsl?'In the Telemetry dashboard, go to Network → Settings → Phone access → Review Serve.':
+      'Run this once in a terminal; ORRERY only reads the result.';
+    if(served)serveHelp=demo()?'9443 → this computer (address '+HIDDEN+')':'https://'+ts.dns_name+':9443 → this computer';
+    var serveBody=[el('div','settings-help',serveHelp)];
+    if(!served){
+      var a2=el('div','phone-actions');
+      if(!wsl){
+        var command='tailscale serve --https=9443 http://127.0.0.1:'+s.relay.port;
+        serveBody.push(el('div','phone-code',command));
+        a2.append(button('Copy',function(){try{navigator.clipboard.writeText(command);}catch(_){}}));
+      }
+      a2.append(button('Check again',refresh));serveBody.push(a2);
+    }
+    list.append(step(served,named&&!served,3,'Serve 9443 → reader',wsl?'you · Telemetry':'you · terminal',serveBody));
     var reviewed=!!set.policy_reviewed_at;
     var policyBody=[el('div','settings-help',reviewed?'You reviewed it on '+date(set.policy_reviewed_at)+'. ORRERY cannot check the policy.':'Limit tcp:9443 to your own phones and tablets in the Tailscale admin console, then confirm here. ORRERY cannot check it. Reader and Send stay off until you do.')];
     if(!reviewed){var a3=el('div','phone-actions');a3.append(button('I reviewed the policy',function(){change({policy_reviewed:true});},true));policyBody.push(a3);}
