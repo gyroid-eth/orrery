@@ -70,7 +70,7 @@ or failure summaries. Messages are shortened beyond 64 Ki characters.
   current context: replacement/compaction/injection events are excluded.
   Independent frames have frame/line/block cursors. Each request bounds compressed
   input and decoded output to 4 MiB and 512 frames; an unfinished final frame
-  stays pending. Invalid complete frames fail explicitly. `zstandard==0.23.0`
+  stays pending. Invalid complete frames fail explicitly. `zstandard==0.25.0`
   is pinned in requirements; if missing, dsh reports unsupported without a
   guessed decoder or provider executable. Recorded fs-result hunks are supported.
 - **Hermes:** exact `history_session_id` on every message query, `mode=ro`,
