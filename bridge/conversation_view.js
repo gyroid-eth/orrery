@@ -4,7 +4,8 @@
 (function(root){
   'use strict';
   const KEY='oc-term-conversation-enabled';
-  const READER_PROGRAMS=new Set(['codex','codex-cli','claude','claude-code','dsh','hermes']);
+  const AGY_PROGRAMS=new Set(['agy','antigravity','antigravity-cli','antigravity-agent']);
+  const READER_PROGRAMS=new Set(['codex','codex-cli','claude','claude-code','dsh','hermes',...AGY_PROGRAMS]);
   const READER_UNAVAILABLE=new Set(['provider_unavailable','claude_next_phase','dashboard_upgrade_required',
     'dsh_decoder_unavailable','history_format_unsupported']);
   const MAX_EVENTS=800,MAX_BYTES=2*1024*1024;
@@ -1100,7 +1101,7 @@
         for(const event of incoming)observedIds.add(event.id);
         const previousMode=mode;
         mode=page.mode||'cursor';
-        providerLabel=({codex:'Codex',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[page.provider]||providerLabel;
+        providerLabel=({codex:'Codex',claude:'Claude',dsh:'dsh',hermes:'Hermes',antigravity:'Antigravity'})[page.provider]||providerLabel;
         const fresh=['fresh_tail','snapshot'].includes(mode);
         const additions=incoming.filter(event=>!events.has(event.id));
         if(!fresh&&direction==='newer'&&!atBottom&&
@@ -1262,7 +1263,8 @@
       paintActivity(current);
       panel.setAttribute('aria-label',agent?'Reader for '+agent:'Reader');message('');
       if(!agent){empty.textContent='Select an agent pane to read its conversation.';message('No agent selected');endOp(op);return;}
-      providerLabel=({'claude-code':'Claude',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[current.program]||'Codex';
+      providerLabel=AGY_PROGRAMS.has(current.program)?'Antigravity':
+        ({'claude-code':'Claude',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[current.program]||'Codex';
       load('initial',op);
     }
     function retryRead(){
