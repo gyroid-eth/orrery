@@ -27,7 +27,7 @@
     return values;
   }
   const bounded=value=>Math.min(1,Math.max(0,value));
-  const WORD=70,WORD_SPRING=[340,26],REPLY_MS=460,REPLY_STEPS=12,COPY_MS=580;
+  const WORD=70,WORD_SPRING=[340,26],REPLY_MS=430,COPY_MS=580,FLIGHT_MS=610;
   const wordFrame=value=>({
     top:(1-value)*6+'px',filter:`blur(${(1-bounded(value))*4}px)`,opacity:bounded(value),
   });
@@ -38,11 +38,12 @@
   }));
   const heights=spring(260,26);
   const eastAsian=/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3001\u3002\uff01\uff1f\uff1b\uff0c\uff0e\u2026]/u;
+  const wordRuns=/\s+|[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3001\u3002\uff01\uff1f\uff1b\uff0c\uff0e\u2026]+|[^\s\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3001\u3002\uff01\uff1f\uff1b\uff0c\uff0e\u2026]+/gu;
   const punctuation=/[\u3001\u3002\uff01\uff1f\uff1b\uff0c\uff0e\u2026]/u;
   const graphemes=typeof Intl.Segmenter==='function'?new Intl.Segmenter('ja',{granularity:'grapheme'}):null;
+  const words=typeof Intl.Segmenter==='function'?new Intl.Segmenter('ja',{granularity:'word'}):null;
   function pieces(text){
-    const segments=/\s+|[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3001\u3002\uff01\uff1f\uff1b\uff0c\uff0e\u2026]+|[^\s\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3001\u3002\uff01\uff1f\uff1b\uff0c\uff0e\u2026]+/gu;
-    return (text.match(segments)||[]).flatMap(run=>{
+    return (text.match(wordRuns)||[]).flatMap(run=>{
       if(!eastAsian.test(run))return [run];
       const chars=graphemes?Array.from(graphemes.segment(run),part=>part.segment):Array.from(run);
       const groups=[];let part='',count=0;
@@ -62,10 +63,13 @@
     const delegated=`You are ${name}. The parent agent is ${parent}. The child name ${name} is already reserved, so do not register under another name.`;
     return text.startsWith(embedded)||text.startsWith(delegated)?parent:'';
   }
-  function mount({visible,follow}){
+  function mount({visible,follow,followReply=()=>{}}){
     const reduced=root.matchMedia('(prefers-reduced-motion: reduce)');
     const animations=new Set(),replyAnimations=new Set();
+    const flights=new WeakMap(),liveEffects=new WeakMap(),recordedQueue=[];
     let wordTime=0,frame=0,heightAnimation=null,following=false,body=null,parts=[];
+    let lastLiveText='',lastLiveProjection=null;
+    let recordedFrame=0,queueIndex=0,nextWord=0,followingRecorded=false,frontier=null;
     const allowed=()=>visible()&&!reduced.matches;
     function animate(element,frames,{delay=0,group=null,duration=(frames.length-1)*1000/60}={}){
       if(!allowed())return null;
@@ -75,47 +79,195 @@
       animation.finished.then(remove,remove);
       return animation;
     }
-    function revealReply(element,prefix=''){
-      if(!element?.isConnected||!allowed())return;
-      const skip='pre, code, button, a, table, .conversation-code, .conversation-table, [aria-hidden="true"]';
-      const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT);
-      const seen=prefixEnd(element.textContent,prefix);
+    function tokenize(element,{seen=0,limit=Infinity,className='conversation-reply-word',tailClass=''}={}){
       const demo=root.OrreryDemo?.on?root.OrreryDemo:null;
       demo?.maskContent?.(element);
-      // Collect before replacing nodes so the walker keeps its original position.
-      const runs=[];
-      let remaining=REPLY_STEPS,offset=0;
-      for(let node=walker.nextNode();node&&remaining>0;node=walker.nextNode()){
+      const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT),runs=[],cues=[],tails=[],shownBlocks=new Set();
+      let offset=0;
+      for(let node=walker.nextNode();node&&limit>0;node=walker.nextNode()){
         const projection=demo?.projectText?.(node),shown=projection?.text??node.data;
         const start=offset;offset+=projection?.originalLength??node.length;
-        if(node.parentElement.closest(skip))continue;
-        const words=[];
-        for(const match of shown.matchAll(/\S+/gu)){
-          const end=match.index+match[0].length;
-          if(start+(projection?.offset(end,true)??end)<=seen)continue;
-          words.push(match);
-          if(--remaining===0)break;
+        if(node.parentElement.closest('button,.conversation-code-head,[aria-hidden="true"],[hidden]'))continue;
+        const ranges=[];
+        for(const [from,end] of replyPieces(shown)){
+          if(start+(projection?.offset(end,true)??end)<=seen){
+            for(const block of revealBlocks(node.parentElement))shownBlocks.add(block);
+            continue;
+          }
+          ranges.push([from,end]);
+          if(--limit===0)break;
         }
-        if(words.length)runs.push({node,words,shown,projection});
+        if(ranges.length)runs.push({node,ranges,shown,projection});
       }
-      let index=0;
-      for(const {node,words,shown,projection} of runs){
-        const fragment=document.createDocumentFragment(),cues=[];
+      for(const {node,ranges,shown,projection} of runs){
+        const fragment=document.createDocumentFragment();
         const part=(start,end)=>{
           const text=document.createTextNode(shown.slice(start,end));
           projection?.write(text,start,end);
           return text;
         };
         let offset=0;
-        for(const match of words){
-          const word=span('conversation-reply-word');
-          word.append(part(match.index,match.index+match[0].length));
-          fragment.append(part(offset,match.index),word);cues.push(word);
-          offset=match.index+match[0].length;
+        for(const [from,end] of ranges){
+          const word=span(className);
+          word.append(part(from,end));fragment.append(part(offset,from),word);
+          cues.push(word);offset=end;
         }
-        fragment.append(part(offset,shown.length));node.replaceWith(fragment);
-        for(const cue of cues)animate(cue,recordedFrames,{duration:REPLY_MS,delay:index++*WORD});
+        const rest=part(offset,shown.length);
+        if(tailClass&&rest.data.trim()){
+          const tail=span(tailClass);tail.append(rest);fragment.append(tail);tails.push(tail);
+        }else fragment.append(rest);
+        node.replaceWith(fragment);
       }
+      return {cues,tails,shownBlocks};
+    }
+    function whitespaceWords(text){
+      return Array.from(text.matchAll(/\S+/gu),match=>[match.index,match.index+match[0].length]);
+    }
+    function replyPieces(text){
+      if(!words||!eastAsian.test(text))return whitespaceWords(text);
+      // Keep ASCII runs such as [path] and [URL] intact in mixed prose.
+      return Array.from(text.matchAll(wordRuns)).flatMap(run=>{
+        if(!run[0].trim())return [];
+        if(!eastAsian.test(run[0]))return [[run.index,run.index+run[0].length]];
+        return Array.from(words.segment(run[0]),({index,segment})=>[run.index+index,run.index+index+segment.length]);
+      });
+    }
+    function revealBlocks(element){
+      const blocks=[];
+      for(let node=element.closest('li,.conversation-table,.conversation-code');node;
+        node=node.parentElement?.closest('li,.conversation-table,.conversation-code'))blocks.push(node);
+      return blocks;
+    }
+    function readingOrder(cues){
+      const ordered=[];
+      for(let index=0;index<cues.length;){
+        const cue=cues[index++],row=cue.closest('tr');
+        if(!row){ordered.push(cue);continue;}
+        const line=[cue];
+        while(index<cues.length&&cues[index].closest('tr')===row)line.push(cues[index++]);
+        // Columns can wrap independently. Follow the rendered lines across
+        // each row, including the first line of the next cell before its wrap.
+        const positions=line.map(word=>({word,box:word.getBoundingClientRect()})).sort((a,b)=>a.box.top-b.box.top);
+        for(let start=0;start<positions.length;){
+          let end=start+1;
+          while(end<positions.length&&positions[end].box.top-positions[start].box.top<5)end++;
+          ordered.push(...positions.slice(start,end).sort((a,b)=>a.box.left-b.box.left).map(entry=>entry.word));
+          start=end;
+        }
+      }
+      return ordered;
+    }
+    function unqueue({word,decorations}){
+      delete word.dataset.replyQueued;
+      for(const decoration of decorations)delete decoration.dataset.replyQueued;
+    }
+    function finishRecorded(){
+      cancelAnimationFrame(recordedFrame);recordedFrame=nextWord=0;
+      for(;queueIndex<recordedQueue.length;queueIndex++)unqueue(recordedQueue[queueIndex]);
+      recordedQueue.length=queueIndex=0;
+      followingRecorded=false;frontier=null;
+    }
+    function revealNext(){
+      recordedFrame=0;
+      if(!allowed()){finishRecorded();return;}
+      while(queueIndex<recordedQueue.length&&!recordedQueue[queueIndex].word.isConnected)unqueue(recordedQueue[queueIndex++]);
+      if(performance.now()>=nextWord&&queueIndex<recordedQueue.length){
+        const cue=recordedQueue[queueIndex++];
+        unqueue(cue);
+        animate(cue.word,recordedFrames,{duration:REPLY_MS});
+        for(const decoration of cue.decorations)rise(decoration,0,0,190);
+        nextWord=performance.now()+cue.interval;
+        frontier=cue.word;
+        if(followingRecorded)followReply(frontier);
+      }
+      if(queueIndex<recordedQueue.length)recordedFrame=requestAnimationFrame(revealNext);
+      else{
+        recordedQueue.length=queueIndex=0;
+        const followed=followingRecorded;
+        followingRecorded=false;frontier=null;
+        if(followed)follow({settled:true});
+      }
+    }
+    function revealReply(element,prefix=''){
+      if(!element?.isConnected||!allowed())return;
+      const seen=prefixEnd(element.textContent,prefix);
+      const tokens=tokenize(element,{seen}),cues=readingOrder(tokens.cues);
+      if(!cues.length)return;
+      const interval=Math.min(WORD,Math.max(34,820/Math.max(1,cues.length-1))),marked=tokens.shownBlocks;
+      for(const word of cues){
+        word.dataset.replyQueued='';
+        const decorations=[];
+        for(const decoration of revealBlocks(word)){
+          if(marked.has(decoration))continue;
+          marked.add(decoration);
+          decoration.dataset.replyQueued='';decorations.push(decoration);
+        }
+        recordedQueue.push({word,decorations,interval});
+      }
+      if(!frontier?.isConnected)frontier=cues[0];
+      if(!recordedFrame)recordedFrame=requestAnimationFrame(revealNext);
+    }
+    function keepReplyInView(){
+      if(!frontier?.isConnected)return false;
+      followingRecorded=true;followReply(frontier);return true;
+    }
+    function rise(element,px=6,delay=0,duration=390,stiffness=300,damping=22){
+      if(!element)return null;
+      const frames=spring(stiffness,damping,duration).map(value=>({
+        transform:`translateY(${(1-value)*px}px)`,opacity:bounded(value),
+      }));
+      return animate(element,frames,{delay,duration});
+    }
+    function revealMail(article){
+      if(!article?.isConnected||!allowed())return;
+      if(root.OrreryDemo?.on)root.OrreryDemo.maskContent?.(article);
+      for(const row of article.querySelectorAll('.conversation-mail')){
+        const arrow=row.querySelector('.conversation-mail-arrow');
+        rise(row.querySelector('.conversation-mail-sender'),0,0,250);
+        animate(arrow,spring(190,19,450).map(value=>({
+          transform:`translateX(${-8*(1-value)}px)`,opacity:bounded(value),
+        })),{delay:85,duration:450});
+        for(const peer of row.querySelectorAll('.conversation-mail-recipients :is(.conversation-mail-peer,.conversation-mail-more)'))
+          rise(peer,4,170,330);
+        const subject=row.querySelector('.conversation-mail-subject');
+        const {cues,tails}=tokenize(subject,{limit:4,className:'conversation-mail-arrival-word',
+          tailClass:'conversation-mail-arrival-tail'});
+        rise(subject,0,245,220);
+        cues.forEach((cue,index)=>animate(cue,recordedFrames,{delay:245+70*index,duration:REPLY_MS}));
+        for(const tail of tails)rise(tail,0,245+70*cues.length,220);
+        rise(row.querySelector('.conversation-mail-importance'),0,275,260,420,32);
+      }
+    }
+    function flyPrompt(row,origin,duration=FLIGHT_MS){
+      if(!origin||!allowed()||!row?.isConnected)return;
+      if(root.OrreryDemo?.on)root.OrreryDemo.maskContent?.(row);
+      const wash=row.querySelector('.conversation-reference-body')||row;
+      const box=wash.getBoundingClientRect(),x=origin.right-box.right,y=origin.top-box.top;
+      if(!box.width||!origin.width||Math.abs(x)+Math.abs(y)<1)return;
+      const startOpacity=origin.opacity??.72;
+      const motion=animate(row,spring(300,22,duration).map(value=>({
+        transform:`translate(${(1-value)*x}px,${(1-value)*y}px)`,
+        opacity:startOpacity+(1-startOpacity)*bounded(value),
+      })),{duration});
+      if(motion)flights.set(row,motion);
+    }
+    function promptPosition(row){
+      const flight=flights.get(row);
+      if(!flight||flight.playState!=='running')return null;
+      const remaining=flight.effect.getTiming().duration-(flight.currentTime||0);
+      if(remaining<55)return null;
+      const box=(row.querySelector('.conversation-reference-body')||row).getBoundingClientRect();
+      return {top:box.top,right:box.right,width:box.width,opacity:Number(getComputedStyle(row).opacity),remaining};
+    }
+    function acknowledge(byline){
+      if(!byline||!allowed())return;
+      const check=span('conversation-sent-ack','✓');check.setAttribute('aria-hidden','true');
+      check.title='Received by terminal';byline.append(check);
+      const animation=rise(check,4,0,340);
+      animation?.finished.then(()=>{
+        const fade=animate(check,[{opacity:1},{opacity:0}],{delay:600,duration:240});
+        if(fade)fade.finished.then(()=>check.remove(),()=>check.remove());else check.remove();
+      },()=>check.remove());
     }
     function prefixEnd(text,prefix){
       if(!prefix)return 0;
@@ -171,9 +323,10 @@
       for(const animation of replyAnimations)animation.cancel();
       replyAnimations.clear();cancelAnimationFrame(frame);
       frame=0;heightAnimation=null;following=false;wordTime=0;body=null;parts=[];
+      lastLiveText='';lastLiveProjection=null;
     }
     function stop(){
-      stopReply();for(const animation of animations)animation.cancel();animations.clear();
+      stopReply();finishRecorded();for(const animation of animations)animation.cancel();animations.clear();
     }
     function grow(previous,target,keepBottom){
       heightAnimation?.cancel();cancelAnimationFrame(frame);frame=0;heightAnimation=null;
@@ -208,6 +361,7 @@
         }
         return;
       }
+      lastLiveText=text;lastLiveProjection=projection;
       const before=body.getBoundingClientRect().height;
       heightAnimation?.cancel();
       const next=pieces(shown);
@@ -226,29 +380,42 @@
         offset=end;
       }
       const fragment=document.createDocumentFragment(),now=performance.now();
-      // A delayed terminal batch can contain many words. Paint the earliest
-      // ones immediately and retain at most a second of stagger.
-      const motionStart=Math.max(common,next.length-24);
+      const newWords=next.slice(common).filter(part=>part.trim()).length;
+      const interval=Math.min(WORD,Math.max(34,820/Math.max(1,newWords-1)));
       for(let index=common;index<next.length;index++){
         const value=next[index],start=offset;offset+=value.length;
         const content=document.createTextNode('');put(content,start,offset);
         if(!value.trim()){fragment.append(content);continue;}
         const word=span('conversation-stream-word');word.append(content);fragment.append(word);
-        if(offset<=seenOffset||index<motionStart)continue;
+        if(offset<=seenOffset)continue;
         const delay=Math.max(0,wordTime-now);
-        if(delay>980)continue;
-        animate(word,wordFrames,{delay,group:replyAnimations});wordTime=now+delay+WORD;
+        const entrance=animate(word,wordFrames,{delay,group:replyAnimations});
+        if(entrance)liveEffects.set(word,entrance);
+        wordTime=now+delay+interval;
       }
       body.append(fragment);parts=next;
       const target=body.getBoundingClientRect().height;
       const firstLine=parseFloat(getComputedStyle(body).lineHeight)||target;
       grow(before||Math.min(firstLine,target),target,keepBottom);
     }
-    reduced.addEventListener('change',stop);
+    function visiblePrefix(){
+      if(!body)return null;
+      let offset=0;
+      for(const child of body.childNodes){
+        const effect=liveEffects.get(child);
+        if(effect&&effect.playState==='running'&&(effect.pending||effect.currentTime<effect.effect.getTiming().delay))break;
+        offset+=child.textContent.length;
+      }
+      return lastLiveText.slice(0,lastLiveProjection?.offset(offset,true)??offset);
+    }
+    function preferenceChanged(){if(reduced.matches)stop();}
+    reduced.addEventListener('change',preferenceChanged);
     return {
-      write,revealReply,enhanceCopies,stopReply,stop,stopFollowing(){following=false;heightAnimation?.cancel();},
+      write,visiblePrefix,revealReply,revealMail,flyPrompt,promptPosition,acknowledge,enhanceCopies,
+      keepReplyInView,followingReply:()=>followingRecorded,finishRecorded,stopReply,stop,
+      stopFollowing(){following=followingRecorded=false;heightAnimation?.cancel();},
       prompt:element=>root.OrreryDemo?.on?null:animate(element,promptFrames),
-      dispose(){stop();reduced.removeEventListener('change',stop);},
+      dispose(){stop();reduced.removeEventListener('change',preferenceChanged);},
     };
   }
   function span(className,text=''){
