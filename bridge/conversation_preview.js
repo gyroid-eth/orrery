@@ -350,7 +350,11 @@
       const head=create('div','conversation-preview-head'),title=fileLabel('h3','conversation-preview-title',ref.label);
       const closeButton=iconButton('conversation-preview-close','close','Close preview',()=>{close();host.closest('.conversation-panel').querySelector('.conversation-scroll')?.focus();});
       head.append(title,closeButton);
-      if(onReference&&(ref.path?ref.origin:ref.id))head.insertBefore(iconButton('conversation-preview-reply','reply','Reply with reference',()=>onReference(ref)),closeButton);
+      if(onReference&&(ref.path?ref.origin:ref.id)){
+        const reply=iconButton('conversation-preview-reply','reply','Reply with reference',()=>onReference(ref));
+        reply.addEventListener('pointerdown',event=>event.preventDefault());
+        head.insertBefore(reply,closeButton);
+      }
       const notice=create('div','conversation-preview-notice',ref.path?'':ref.input_image?'Recorded input image':'Current file · may differ from the recorded edit');
       const body=create('div','conversation-preview-content','Loading preview…');body.tabIndex=0;
       host.replaceChildren(head,notice,body);closeButton.focus();
