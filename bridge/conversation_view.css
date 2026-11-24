@@ -4,7 +4,6 @@
 .screen.conversation-open .termstage{clip-path:inset(0 var(--conversation-width) 0 0)}
 .screen.conversation-open .termstage>.termhost:not(.follow){right:var(--conversation-width)}
 .screen.conversation-open .promptbar{right:var(--conversation-width)}
-.screen.conversation-open .promptmeta .phint{display:none}
 .conversation-panel{position:absolute;right:0;top:40px;bottom:0;z-index:5;
   width:var(--conversation-width);display:flex;flex-direction:column;min-height:0;
   border-left:1px solid var(--hair);background:var(--panel);color:var(--ink)}
@@ -106,7 +105,7 @@
 .screen.conversation-open.conversation-full .termstage>.termhost:not(.follow){right:0}
 /* Keep the original composer and every existing send/IME/target guard. The
    reader reserves its space instead of covering it or cloning its controls. */
-.screen.conversation-open.conversation-full .conversation-panel{bottom:calc(84px + var(--conversation-reply-space,0px))}
+.screen.conversation-open.conversation-full .conversation-panel{bottom:var(--prompt-height)}
 .screen.conversation-open.conversation-full .promptbar{right:0;z-index:6}
 .conversation-body{display:flex;flex:1;min-height:0;min-width:0}
 .conversation-thread{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
@@ -138,7 +137,7 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .screen.conversation-open{--conversation-width:100%}
   .screen.conversation-open .termstage,.screen.conversation-open .promptbar{right:0}
   .screen.conversation-open .termstage>.termhost:not(.follow){right:0}
-  .screen.conversation-open .conversation-panel{bottom:calc(84px + var(--conversation-reply-space,0px))}
+  .screen.conversation-open .conversation-panel{bottom:var(--prompt-height)}
   .screen.conversation-open .promptbar{z-index:6}
   .conversation-panel{border-left:0}
 }
@@ -148,24 +147,17 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   /* The existing cockpit header/composer can overflow a phone viewport. Keep
      this reader attached to the actual viewport, not that wider grid. */
   .conversation-panel{position:fixed;left:0;right:0;top:calc(var(--conversation-viewport-top,0px) + 94px);bottom:auto;width:100vw;
-    height:calc(var(--conversation-viewport-height,100dvh) - 94px - 132px - var(--conversation-reply-space,0px));z-index:1090}
+    height:calc(var(--conversation-viewport-height,100dvh) - 94px - var(--prompt-height));z-index:1090}
   .screen.conversation-open .scr-head{position:fixed;left:0;right:auto;
     top:calc(var(--conversation-viewport-top,0px) + 54px);width:100vw;z-index:1092;background:var(--panel)}
   .screen.conversation-open .termstage{visibility:hidden}
   .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .promptbar{position:fixed;left:0;right:auto;bottom:auto;
-    top:calc(var(--conversation-viewport-top,0px) + var(--conversation-viewport-height,100dvh) - 132px - var(--conversation-reply-space,0px));width:100vw;height:calc(132px + var(--conversation-reply-space,0px));
-    z-index:1091;display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-rows:22px minmax(0,1fr);
-    gap:6px;padding:8px 10px;visibility:visible}
-  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .promptmeta{grid-column:1/-1;grid-row:1;display:block;max-width:none;min-width:0}
-  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .promptmeta .plab{display:none}
-  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .prompt-ava{width:18px;height:18px}
-  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) #promptInput{grid-row:2;grid-column:1;min-width:0;width:100%;font-size:16px}
-  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) #promptStop{grid-row:2;grid-column:2}
-  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) #promptSend{grid-row:2;grid-column:3}
+    top:calc(var(--conversation-viewport-top,0px) + var(--conversation-viewport-height,100dvh) - var(--prompt-height));
+    width:100vw;z-index:1091;padding-inline:10px;visibility:visible}
+  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) #promptInput{font-size:16px}
   .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .slashmenu,.screen:is(.conversation-open,:has(.split-cell.conversation-open)) .sendguard{left:10px;right:10px;bottom:calc(100% + 6px)}
   .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .sendguard{flex-wrap:wrap}
   .screen:has(.split-cell.conversation-open) .promptbar{position:absolute;left:0;right:0;top:auto;bottom:0;width:auto;z-index:6}
-  .screen:has(.split-cell.conversation-open) .termstage{bottom:calc(132px + var(--conversation-reply-space,0px))}
   .conversation-has-preview .conversation-thread{display:none}
   .conversation-preview{width:100%;border:0}
   .conversation-scroll{--conversation-text-size:calc(var(--reader-text-size,13px) - .5px);padding-left:14px;padding-right:12px}
@@ -231,7 +223,6 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 .cockpit-control:is(.conversation-toggle,.split-history-toggle,.conversation-expand)[aria-pressed="true"]{
   color:var(--ink);border-color:var(--hair);background:rgb(var(--theme-accent-rgb) / .12)}
 .screen:not(.split-pane-headers) .split-count-1 .conversation-cell>.conversation-panel{top:0}
-.screen:has(.split-cell.conversation-open) .promptmeta .phint{display:none}
 .conversation-expand[hidden]{display:none}
 /* Recorded Mail is a collapsible source of its own, never a human prompt. */
 .conversation-mail-event{padding:12px 0}
@@ -294,6 +285,7 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 .conversation-activity:not([hidden])[data-state="work"] .conversation-activity-label,.conversation-steps-heading.is-working{background:linear-gradient(90deg,var(--ink-dim) 20%,var(--ink) 50%,var(--ink-dim) 80%) 0 0/200% 100%;background-clip:text;color:transparent;animation:conversation-working-shimmer 1.4s linear infinite}
 .conversation-activity.activity-paused[data-state="work"] .conversation-activity-label{animation-play-state:paused}
 @media(prefers-reduced-motion:reduce){.conversation-activity:not([hidden])[data-state="work"] .conversation-activity-label,.conversation-steps-heading.is-working{animation:none;background:none;color:var(--ink-dim)}}
+.conversation-broadcast{color:var(--ink-dim);font:11px var(--rail-sans);white-space:nowrap;text-align:right}
 .conversation-submission{max-width:min(84%,70ch);margin:0 0 24px auto}
 .conversation-submission-text{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .submission-expanded .conversation-submission-text{-webkit-line-clamp:unset}
@@ -392,13 +384,7 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
 .conversation-reply-remove{position:absolute;right:3px;top:3px;width:28px;height:28px;border:0;background:transparent;color:var(--ink-dim);font:18px var(--mono);cursor:pointer}
 .conversation-reply-remove:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
-.screen .promptbar.has-conversation-reference{height:calc(84px + var(--conversation-reply-space,0px));padding-top:calc(10px + var(--conversation-reply-space,0px))}
-.screen:has(.promptbar.has-conversation-reference) .termstage{bottom:calc(84px + var(--conversation-reply-space,0px))}
-@media(max-width:600px){
-  .screen:is(.conversation-open,:has(.split-cell.conversation-open)) .promptbar.has-conversation-reference{
-    height:calc(132px + var(--conversation-reply-space,0px));padding-top:calc(8px + var(--conversation-reply-space,0px))}
-  .screen:has(.split-cell.conversation-open):has(.promptbar.has-conversation-reference) .termstage{bottom:calc(132px + var(--conversation-reply-space,0px))}
-}
+.promptbar.has-conversation-reference{padding-top:calc(8px + var(--conversation-reply-space,0px))}
 /* Lightbox: the preview image on a dark layer over the whole window. The layer
    is dark in every theme (it is a place to look at a picture, not a panel). */
 .conversation-preview-image{cursor:zoom-in}

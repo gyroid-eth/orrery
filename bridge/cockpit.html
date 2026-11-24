@@ -743,32 +743,79 @@
   .claim-toggle[hidden],.ghostty-action[hidden]{display:none}
   .ghostty-action:disabled{opacity:.45;cursor:wait}
   /* terminal stage: existing termhosts move between single view and split cells */
-  .termstage{position:absolute;left:0;right:0;top:40px;bottom:84px;z-index:1}
-  /* ── prompt composer: humans type HERE, not in the shared pty ──
-     mail-watcher injections write into the tmux input line and used to
-     collide with a human mid-sentence; this box is browser-local until
-     ⌘⏎, then delivered as ONE bracketed paste + submit. */
-  .promptbar{position:absolute;left:0;right:0;bottom:0;height:84px;z-index:2;
-    display:flex;align-items:stretch;gap:10px;padding:10px 12px;
-    border-top:1px solid var(--hair);background:var(--panel)}
-  .promptmeta{display:flex;flex-direction:column;justify-content:center;gap:4px;flex:0 0 auto;max-width:150px}
-  .promptmeta .plab{font-size:8.5px;letter-spacing:.22em;color:var(--ink-faint)}
-  .promptmeta .ptarget-row{display:flex;align-items:center;gap:7px;min-width:0}
-  .promptmeta .prompt-ava{width:26px;height:26px;border-radius:50%;flex:0 0 auto;
-    border:1px solid var(--hair);background:#0a0a0c}
-  .promptmeta .ptarget{font-family:var(--serif);font-size:13px;color:var(--ink);
+  .screen{--prompt-height:112px}
+  .termstage{position:absolute;left:0;right:0;top:40px;bottom:var(--prompt-height);z-index:1}
+  /* Keep the browser draft separate from the shared terminal input. */
+  .promptbar{position:absolute;inset:auto 0 0;z-index:2;padding:0 18px 12px;
+    background:var(--panel);font-family:var(--rail-sans);
+    --prompt-fill:var(--elev);
+    --prompt-soft:color-mix(in srgb,var(--ink) 5%,var(--prompt-fill));
+    --prompt-middle:color-mix(in srgb,var(--ink) 9%,var(--prompt-fill));
+    --prompt-strong:color-mix(in srgb,var(--ink) 17%,var(--prompt-fill))}
+  .prompt-card{display:flex;flex-direction:column;gap:4px;min-width:0;
+    border-radius:16px;padding:14px 16px 12px;background:var(--prompt-fill)}
+  .prompt-footer{display:flex;align-items:center;gap:6px;min-height:34px}
+  .prompt-meta{display:flex;align-items:center;gap:6px;min-width:0;max-width:72%;min-height:27px;
+    padding:3px 8px 3px 4px;border-radius:7px;background:var(--prompt-soft)}
+  .prompt-target{font:500 12px var(--rail-sans);color:var(--ink);
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .promptmeta .phint{font-size:8.5px;color:var(--ink-faint);letter-spacing:.04em}
-  #promptInput{flex:1;resize:none;border:1px solid var(--hair);border-radius:8px;
-    background:var(--bg);color:var(--ink);padding:8px 10px;outline:none;
-    font-family:var(--mono);font-size:12px;line-height:1.45}
-  #promptInput:focus{border-color:rgb(var(--theme-accent-rgb) / .4)}
-  #promptSend{flex:0 0 auto;align-self:center}
-  #promptStop{flex:0 0 auto;align-self:center;color:var(--ink-dim)}
-  #promptStop:hover{color:var(--amber);border-color:rgb(var(--theme-accent-rgb) / .4)}
+  .prompt-ava{width:21px;height:21px;border-radius:50%;flex:none}
+  #promptInput{display:block;resize:none;width:100%;height:32px;max-height:88px;overflow:auto;
+    border:0;border-radius:4px;background:transparent;color:var(--ink);padding:0 1px;
+    font:15px/28px var(--rail-sans);outline:none}
+  #promptInput::placeholder{color:var(--ink-dim);opacity:1}
+  .prompt-card:has(#promptInput:focus-visible){background:color-mix(in srgb,var(--ink) 2%,var(--prompt-fill))}
+  #promptSend{display:grid;place-items:center;flex:none;width:34px;height:34px;margin-left:auto;
+    border:0;border-radius:50%;padding:0;background:var(--prompt-middle);color:var(--ink-dim);cursor:pointer}
+  #promptSend[data-ready],#promptSend:hover:not(:disabled){background:var(--prompt-strong);color:var(--ink)}
+  #promptSend:disabled{cursor:default}
+  #promptSend:focus-visible{outline:2px solid var(--ink-dim);outline-offset:2px}
+  #promptSend>*{grid-area:1/1}
+  .prompt-arrow{width:17px;height:17px}
+  .prompt-square{width:9px;height:9px;border-radius:2px;background:currentColor;transform:scale(0)}
+  .prompt-meta[hidden],.prompt-chosen[hidden],.prompt-mentions[hidden]{display:none}
+  .prompt-chosen{display:flex;align-items:center;gap:6px;min-width:0;max-width:80%;
+    border-radius:7px;padding:3px 3px 3px 4px;background:var(--prompt-middle);transform-origin:left center}
+  .prompt-faces{display:flex;flex:none;padding-left:5px}
+  .prompt-faces .prompt-ava{margin-left:-5px}
+  .prompt-remove-recipient{border:0;border-radius:5px;background:none;color:var(--ink-dim);
+    width:22px;height:21px;padding:0;cursor:pointer;font:16px/1 var(--rail-sans)}
+  .prompt-remove-recipient:hover{background:var(--prompt-strong);color:var(--ink)}
+  .prompt-mentions{position:fixed;inset:0 auto auto 0;z-index:1095;height:0;opacity:0;overflow:hidden;
+    border-radius:13px;background:color-mix(in srgb,var(--ink) 6%,var(--elev));
+    font:13px var(--rail-sans);color:var(--ink)}
+  .prompt-mentions[inert]{pointer-events:none}
+  .prompt-mention-band{position:absolute;top:0;inset-inline:4px;border-radius:8px;pointer-events:none;
+    background:color-mix(in srgb,var(--ink) 12%,transparent)}
+  .prompt-mention-row{position:absolute;top:0;inset-inline:4px;height:40px;display:grid;align-items:center;
+    grid-template-columns:25px minmax(0,max-content) minmax(0,1fr) 16px;gap:7px;padding:0 8px;
+    cursor:pointer}
+  .prompt-mention-row[aria-disabled=true]{color:var(--ink-dim);cursor:not-allowed}
+  .prompt-mention-row[aria-hidden=true]{pointer-events:none}
+  .prompt-mention-row .prompt-ava{width:25px;height:25px}
+  .prompt-mention-name,.prompt-mention-role{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .prompt-mention-role{color:var(--ink-dim);font-size:12px}
+  .prompt-mention-logo{width:15px;height:15px;object-fit:contain}
+  .prompt-caret-measure{position:fixed;visibility:hidden;pointer-events:none;white-space:pre-wrap;overflow-wrap:break-word}
+  .prompt-clip,.prompt-file-remove{display:grid;place-items:center;flex:none;border:0;
+    background:none;color:var(--ink-dim);padding:0;cursor:pointer}
+  .prompt-clip{width:29px;height:29px;border-radius:7px}
+  .prompt-clip svg{width:17px;height:17px}
+  .prompt-clip:hover,.prompt-file-remove:hover{background:var(--prompt-strong);color:var(--ink)}
+  .prompt-clip:disabled{cursor:default}
+  .prompt-attachments{display:flex;flex-wrap:wrap;gap:5px;max-height:90px;overflow:auto;
+    padding:2px 0;margin:0;list-style:none}
+  .prompt-attachments[hidden]{display:none}
+  .prompt-attachment{display:flex;align-items:center;gap:5px;min-width:0;max-width:min(240px,100%);height:25px;
+    border-radius:6px;padding:2px 3px 2px 4px;background:var(--prompt-middle);color:var(--ink)}
+  .prompt-file-preview{width:24px;height:19px;object-fit:cover;border-radius:3px;flex:none}
+  .prompt-file-icon{width:14px;height:16px;color:var(--ink-dim);flex:none}
+  .prompt-file-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:12px var(--rail-sans)}
+  .prompt-file-remove{width:19px;height:19px;border-radius:4px;font:15px/1 var(--rail-sans)}
+  .promptbar[data-dragging] .prompt-card{background:var(--prompt-middle)}
   /* ── slash-skill autocomplete (composer-local; the TUI can't see keystrokes
      until send, so we re-create /skill suggestions from /telemetry/skills) ── */
-  .slashmenu{position:absolute;left:162px;right:190px;bottom:88px;z-index:6;
+  .slashmenu{position:absolute;left:18px;right:18px;bottom:calc(100% + 4px);z-index:6;
     background:var(--panel);border:1px solid var(--hair);border-radius:8px;
     max-height:238px;overflow-y:auto;box-shadow:0 -6px 24px rgba(0,0,0,.35)}
   .slashmenu[hidden]{display:none}
@@ -781,7 +828,7 @@
   .slashmenu .sm-it.sel{background:rgb(var(--theme-accent-rgb) / .09)}
   .slashmenu .sm-it.sel .sm-name{color:var(--amber)}
   /* ── wrong-vocabulary guard ── */
-  .sendguard{position:absolute;left:162px;right:14px;bottom:88px;z-index:7;
+  .sendguard{position:absolute;left:18px;right:18px;bottom:calc(100% + 4px);z-index:7;
     display:flex;align-items:center;gap:9px;padding:9px 12px;
     background:linear-gradient(180deg,rgba(116,28,20,.72),rgba(60,16,12,.55));
     border:1px solid #ff5a4d;border-radius:8px;
@@ -1322,6 +1369,7 @@
       <div class="roster-bulkbar" id="rosterBulkBar" hidden>
         <span class="bulk-count" id="rosterBulkCount" aria-live="polite">0 selected</span>
         <span class="bulk-actions">
+          <button class="bulk-exit" id="rosterBulkMessage" type="button" disabled>Message</button>
           <button class="bulk-exit" id="rosterBulkExit" type="button">Exit</button>
           <button class="bulk-exit bulk-reboot" id="rosterBulkReboot" type="button" title="Reboot" aria-label="Reboot">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4v5h5M3 9a9 9 0 1 1 0 6"/></svg>
@@ -1363,14 +1411,21 @@
           <div class="stage-empty" id="stageEmpty">waiting for ORRERY backend…<br>start <b>orrery_backend.py</b> on :8791</div>
         </div>
         <div class="promptbar">
-          <div class="promptmeta">
-            <span class="plab">PROMPT</span>
-            <span class="ptarget-row"><img class="prompt-ava" id="promptAva" alt="" hidden><span class="ptarget" id="promptTarget">—</span></span>
-            <span class="phint">⏎ send · ⇧⏎ newline · esc interrupt · ↑ history · <b id="phintPrefix">/</b> skills</span>
+          <div class="prompt-card">
+            <textarea id="promptInput" rows="1" placeholder="Write a message" aria-label="Message draft" title="Enter to send. Shift+Enter for a new line. Up for history. / for skills. @ for recipients. Esc to stop."></textarea>
+            <ul class="prompt-attachments" id="promptFiles" aria-label="Attachments" hidden></ul>
+            <div class="prompt-footer">
+              <span class="prompt-meta"><img class="prompt-ava" id="promptAva" alt="" hidden><span class="prompt-target" id="promptTarget">—</span></span>
+              <input id="promptFilePicker" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.txt,.md,.csv,.json" multiple hidden>
+              <button class="prompt-clip" id="promptClip" type="button" title="Attach files" aria-label="Attach files">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 14 6-6a2 2 0 0 1 3 3l-7 7a4 4 0 0 1-6-6l8-8a6 6 0 0 1 8 8l-8 8"/></svg>
+              </button>
+              <button id="promptSend" type="button" title="Send message" aria-label="Send message" disabled>
+                <svg class="prompt-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+                <span class="prompt-square" aria-hidden="true"></span>
+              </button>
+            </div>
           </div>
-          <textarea id="promptInput" placeholder="type here — tmux injections can't touch this box. ⏎ sends, ⇧⏎ newline, esc interrupts the agent, ↑ recalls, / suggests skills."></textarea>
-          <button id="promptStop" class="modal-btn" type="button" title="interrupt the agent (Esc)">⎋ STOP</button>
-          <button id="promptSend" class="modal-btn primary" type="button">SEND ⏎</button>
           <div class="slashmenu" id="slashMenu" hidden></div>
           <!-- Wrong-vocabulary guard: shown instead of sending, never as a
                toast after the fact — by then the agent has already logged out. -->
@@ -1691,6 +1746,10 @@
 <script src="roster_edit.js"></script>
 <script src="demo_mask.js"></script>
 <script src="demo_mode.js"></script>
+<script src="prompt_spring.js"></script>
+<script src="prompt_composer.js"></script>
+<script src="prompt_recipients.js"></script>
+<script src="prompt_attachments.js"></script>
 <script id="agentstack-theme-axis-inventory" type="application/json">
 {
   "axes": {
@@ -2403,53 +2462,118 @@
             "value": "var(--panel-2)"
           },
           {
-            "property": "border-top",
-            "selector": ".promptbar",
-            "value": "1px solid var(--hair)"
-          },
-          {
             "property": "background",
             "selector": ".promptbar",
             "value": "var(--panel)"
           },
           {
-            "property": "color",
-            "selector": ".promptmeta .plab",
-            "value": "var(--ink-faint)"
+            "property": "--prompt-fill",
+            "selector": ".promptbar",
+            "value": "var(--elev)"
           },
           {
-            "property": "border",
-            "selector": ".promptmeta .prompt-ava",
-            "value": "1px solid var(--hair)"
+            "property": "--prompt-soft",
+            "selector": ".promptbar",
+            "value": "color-mix(in srgb,var(--ink) 5%,var(--prompt-fill))"
+          },
+          {
+            "property": "--prompt-middle",
+            "selector": ".promptbar",
+            "value": "color-mix(in srgb,var(--ink) 9%,var(--prompt-fill))"
+          },
+          {
+            "property": "--prompt-strong",
+            "selector": ".promptbar",
+            "value": "color-mix(in srgb,var(--ink) 17%,var(--prompt-fill))"
           },
           {
             "property": "color",
-            "selector": ".promptmeta .ptarget",
+            "selector": ".prompt-target",
             "value": "var(--ink)"
           },
           {
             "property": "color",
-            "selector": ".promptmeta .phint",
-            "value": "var(--ink-faint)"
+            "selector": "#promptInput",
+            "value": "var(--ink)"
           },
           {
-            "property": "border",
-            "selector": "#promptInput",
-            "value": "1px solid var(--hair)"
+            "property": "color",
+            "selector": "#promptInput::placeholder",
+            "value": "var(--ink-dim)"
           },
           {
             "property": "background",
-            "selector": "#promptInput",
-            "value": "var(--bg)"
+            "selector": ".prompt-card:has(#promptInput:focus-visible)",
+            "value": "color-mix(in srgb,var(--ink) 2%,var(--prompt-fill))"
           },
           {
             "property": "color",
-            "selector": "#promptInput",
+            "selector": "#promptSend",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": "#promptSend[data-ready],#promptSend:hover:not(:disabled)",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "outline",
+            "selector": "#promptSend:focus-visible",
+            "value": "2px solid var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-remove-recipient",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-remove-recipient:hover",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".prompt-mentions",
+            "value": "color-mix(in srgb,var(--ink) 6%,var(--elev))"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-mentions",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".prompt-mention-band",
+            "value": "color-mix(in srgb,var(--ink) 12%,transparent)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-mention-row[aria-disabled=true]",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-mention-role",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-clip,.prompt-file-remove",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-clip:hover,.prompt-file-remove:hover",
             "value": "var(--ink)"
           },
           {
             "property": "color",
-            "selector": "#promptStop",
+            "selector": ".prompt-attachment",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-file-icon",
             "value": "var(--ink-dim)"
           },
           {
@@ -3471,17 +3595,42 @@
           },
           {
             "property": "color",
-            "selector": ".promptmeta .plab",
-            "value": "var(--ink-faint)"
+            "selector": "#promptInput::placeholder",
+            "value": "var(--ink-dim)"
           },
           {
             "property": "color",
-            "selector": ".promptmeta .phint",
-            "value": "var(--ink-faint)"
+            "selector": "#promptSend",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "outline",
+            "selector": "#promptSend:focus-visible",
+            "value": "2px solid var(--ink-dim)"
           },
           {
             "property": "color",
-            "selector": "#promptStop",
+            "selector": ".prompt-remove-recipient",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-mention-row[aria-disabled=true]",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-mention-role",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-clip,.prompt-file-remove",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-file-icon",
             "value": "var(--ink-dim)"
           },
           {
@@ -3889,7 +4038,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "4cd8b662ae0dcb6361122ee54cb10b239b898b7708f1b77441bb6537b6474934",
+        "digest": "0231af1b70dd8b198b0da89f5a9660470c1d93c43f78d3bba67b994822e1ac19",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -3922,8 +4071,6 @@
           ".tab\u0000font-size",
           ".tabs .empty\u0000font-size",
           ".scr-head .path\u0000font-size",
-          ".promptmeta .plab\u0000font-size",
-          ".promptmeta .phint\u0000font-size",
           ".slashmenu .sm-kind\u0000font-size",
           ".slashmenu .sm-desc\u0000font-size",
           ".sendguard .sg-msg\u0000font-size",
@@ -3984,7 +4131,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "5c1a0bb567e3173521d018e31141fd7df2774bf1786da7bfafd85eabddf57fb3",
+        "digest": "d1228ba83facf5e54b0feb59e2749799404bf8501b79517471658184d337f73c",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -3993,7 +4140,6 @@
           ".usage-popover .up-sub\u0000letter-spacing",
           ".layout-picker-title\u0000letter-spacing",
           ".layout-option\u0000letter-spacing",
-          ".promptmeta .plab\u0000letter-spacing",
           ".slashmenu .sm-kind\u0000letter-spacing",
           ".network-note\u0000letter-spacing",
           ".pane-bottom-jump\u0000letter-spacing",
@@ -4014,9 +4160,9 @@
       }
     }
   },
-  "inventory_digest": "b8726d061b0aae4cbb58dde4403dbd76c12c8c95b831f929c3340f2280d53f9a",
+  "inventory_digest": "c0d77a40344f41a6204ec269cb3d0b9b2ce5532cd1489e05ba93bf723187aa8c",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "b7a9126591ea0b0d10fffb147dce3adbca687c33d18642901656a6b77ccfd908",
+  "source_digest": "12cfce6319adfeecaf7729f4d9721af2acf3ee9edc6a9b1d9cb8dda0cc5df399",
   "surface": "cockpit",
   "version": 1
 }
@@ -5989,6 +6135,7 @@ function resetHead(){
   scrBadge.title=scrBadge.ariaLabel='offline';
   paintPaneHeading(scrName.closest('.pane-heading'),null,'offline');
   paintClaimToggle();paintGhosttyAction();
+  if(!activeId){promptTarget.textContent='—';promptAva.hidden=true;refreshComposerVocabulary();}
 }
 function refreshHeaderStats(){
   if(paneCountEl)paneCountEl.textContent=panes.size;
@@ -7434,7 +7581,7 @@ function detachSession(session,remember=false,{keepTab=false}={}){
   if(remember)manualDetached.add(session);
   forgetSession(session,{removeGroup:!keepTab});
 }
-function requestAttach(session,priority=false){
+function requestAttach(session,priority=false,reference={}){
   if(!paneSessionAllowed(session))return false;
   if(!availableSessions.has(session)||attachedSessions.has(session)||requestedSessions.has(session))return false;
   manualDetached.delete(session);
@@ -7448,7 +7595,7 @@ function requestAttach(session,priority=false){
     detachSession(victim,true);
   }
   const group=ensureSessionGroup(session);group.empty.textContent='waiting…';
-  if(!send({type:"attach",session})){setGroupState(session,'closed');return false;}
+  if(!send({type:"attach",session,...reference})){setGroupState(session,'closed');return false;}
   requestedSessions.add(session);setGroupState(session,'connecting');refreshHeaderStats();return true;
 }
 function resetSession(msg){
@@ -7463,10 +7610,13 @@ function resetSession(msg){
   setGroupState(session,'live');
   (Array.isArray(msg.panes)?msg.panes:[]).forEach(meta=>createPane(session,meta));
   refreshSessionGroup(session);
-  if(pendingJump===session){pendingJump=null;focusSession(session);}
+  const background=composerAttaching.has(session)&&pendingJump!==session;
+  if(background)renderStage();
+  else if(pendingJump===session){pendingJump=null;focusSession(session);}
   else if(wasSplitFocus)focusSplitSession(session);
   else if(!splitVisible&&(wasActive||(activeId===null&&!paneWindowSelection)))focusSession(session);
   else renderStage();
+  document.dispatchEvent(new CustomEvent('oc:terminal-ready',{detail:session}));
 }
 function handleSessions(items){
   const records=Array.isArray(items)?items:[];
@@ -7672,7 +7822,9 @@ function fitPane(paneId){
   paintPaneBottomJump(p);
   send({type:"resize",paneId,cols:p.term.cols,rows:p.term.rows});
 }
-function fitVisible(){if(!dividerDragActive())visiblePaneIds().forEach(fitPane);}
+function fitVisible(){
+  if(!dividerDragActive()&&!stageEl.parentElement.hasAttribute('data-prompt-resizing'))visiblePaneIds().forEach(fitPane);
+}
 function scheduleFit(){clearTimeout(resizeTimer);resizeTimer=setTimeout(fitVisible,90);}
 function releaseSessionClaim(session,{resize=true}={}){
   if(!sessionClaimed(claimedSessions,session))return false;
@@ -8276,6 +8428,7 @@ function handle(msg){
   if((manualDetached.has(msg.session)||paneWindows.has(msg.session))&&
      (msg.type==='reset'||msg.type==='add'||msg.type==='update'))return;
   switch(msg.type){
+    case 'input-ack':receiveComposerAck(msg);break;
     case 'approval':readerApproval?.receive(msg);break;
     case "sessions":{
       const notice=document.getElementById('tmuxRestartNotice');
@@ -8346,6 +8499,7 @@ function connect(){
   });
   nextSocket.addEventListener('close',()=>{
     if(socket!==nextSocket)return;
+    cancelComposerAcks();
     readerApproval?.disconnected();
     readerActivity?.disconnected();
     attachedSessions.clear();requestedSessions.clear();
@@ -8808,6 +8962,7 @@ const rosterSelectBtn=document.getElementById('rosterSelectBtn');
 const rosterBulkBar=document.getElementById('rosterBulkBar');
 const rosterBulkCount=document.getElementById('rosterBulkCount');
 const rosterBulkExit=document.getElementById('rosterBulkExit');
+const rosterBulkMessage=document.getElementById('rosterBulkMessage');
 const rosterBulkReboot=document.getElementById('rosterBulkReboot');
 const rosterBulkRebootLabel=document.getElementById('rosterBulkRebootLabel');
 const tiles=new Map();   // name -> tile element
@@ -8913,6 +9068,12 @@ function updateRosterBulkUI(){
   rosterBulkReboot.classList.toggle('arm',bulkActionArmed==='reboot');
   if(rosterBulkExit.disabled!==(busy||exitCount===0))rosterBulkExit.disabled=busy||exitCount===0;
   if(rosterBulkReboot.disabled!==(busy||count===0))rosterBulkReboot.disabled=busy||count===0;
+  const names=[...bulkSelectedAgents];
+  const available=names.filter(name=>!recipientRefusal(currentAgentNamed(name)));
+  rosterBulkMessage.disabled=busy||available.length===0;
+  const wait=available.length===names.length?'Message selected agents':
+    'Unavailable: '+names.filter(name=>!available.includes(name)).join(', ');
+  setTitle(rosterBulkMessage,wait);
   if(rosterSelectBtn.disabled!==busy)rosterSelectBtn.disabled=busy;
 }
 function setRosterSelectMode(on){
@@ -9106,6 +9267,16 @@ rosterFilterClear.addEventListener('click',()=>{
 });
 rosterSelectBtn.addEventListener('click',()=>setRosterSelectMode(!rosterSelectMode));
 rosterBulkExit.addEventListener('click',runBulkExit);
+rosterBulkMessage.addEventListener('click',()=>{
+  if(promptBusy)return;
+  const names=[...bulkSelectedAgents];
+  const available=names.filter(name=>!recipientRefusal(currentAgentNamed(name)));
+  if(!available.length)return;
+  promptRecipients.set(available);setRosterSelectMode(false);
+  const skipped=names.filter(name=>!available.includes(name));
+  if(skipped.length)showToast('Unavailable: '+skipped.join(', '),true);
+  promptInput.focus({preventScroll:true});
+});
 rosterBulkReboot.addEventListener('click',runBulkReboot);
 
 const AGENT_DETAIL_HARNESSES=new Map([['claude','Claude Code'],['codex','Codex CLI'],['dsh','dsh'],['hermes','Hermes']]);
@@ -11270,14 +11441,12 @@ window.addEventListener('keydown',event=>{
 const promptTarget=document.getElementById('promptTarget');
 const promptInput=document.getElementById('promptInput');
 const promptSendBtn=document.getElementById('promptSend');
-const promptStopBtn=document.getElementById('promptStop');
 const slashMenu=document.getElementById('slashMenu');
 const sendGuard=document.getElementById('sendGuard');
 const sendGuardMsg=document.getElementById('sendGuardMsg');
 const sendGuardFix=document.getElementById('sendGuardFix');
 const sendGuardRaw=document.getElementById('sendGuardRaw');
 const sendGuardCancel=document.getElementById('sendGuardCancel');
-const phintPrefix=document.getElementById('phintPrefix');
 
 /* sent-prompt history: the composer-native equivalent of the TUI's esc-esc
    prompt editing — ↑ recalls a past prompt into the box for editing/resend. */
@@ -11289,14 +11458,28 @@ let histIndex=-1,histDraft='';
 /* draft persistence — a half-typed prompt must survive app restarts and
    accidental reloads. Saved on every input, cleared only by a send. */
 const PROMPT_DRAFT_KEY=soloSession?paneDraftKey(paneScope,soloSession):'oc-prompt-draft';
+const PROMPT_RECIPIENTS_KEY=PROMPT_DRAFT_KEY+':recipients';
+let promptRecipientPins=new Map();
 try{
   const savedDraft=localStorage.getItem(PROMPT_DRAFT_KEY);
   if(savedDraft)promptInput.value=savedDraft;
+  const saved=JSON.parse(localStorage.getItem(PROMPT_RECIPIENTS_KEY)||'[]');
+  if(Array.isArray(saved)){
+    for(const record of saved.slice(0,256)){
+      if(record&&typeof record.name==='string'&&/^[A-Za-z][A-Za-z0-9_-]{0,95}$/.test(record.name)){
+        promptRecipientPins.set(record.name,{name:record.name,created:record.created,
+          mail_instance_id:record.mail_instance_id,mail_agent_id:record.mail_agent_id});
+      }
+    }
+  }
 }catch(_){/* private mode */}
 function saveDraft(){
+  promptCard.refresh();
   try{
     if(promptInput.value)localStorage.setItem(PROMPT_DRAFT_KEY,promptInput.value);
     else localStorage.removeItem(PROMPT_DRAFT_KEY);
+    if(promptRecipientPins.size)localStorage.setItem(PROMPT_RECIPIENTS_KEY,JSON.stringify([...promptRecipientPins.values()]));
+    else localStorage.removeItem(PROMPT_RECIPIENTS_KEY);
   }catch(_){/* quota */}
 }
 window.addEventListener('beforeunload',saveDraft);
@@ -11317,50 +11500,51 @@ function pushPromptHistory(text){
    Checked before the keystrokes leave the composer, because the damage is
    done the moment the TUI reads them: `/log` at Codex completes to /logout
    and the session is gone before any toast could warn about it. */
-const CODEX_DESTRUCTIVE=/^\/(logout|quit|exit|new)\b/;
-const CLAUDE_DESTRUCTIVE=/^\/(clear|logout|exit|quit)\b/;
-// Gemini CLI: /quit and /exit end the session, /clear wipes the screen and
-// history. Custom commands and skills use the same slash as Claude.
-const GEMINI_DESTRUCTIVE=/^\/(clear|exit|quit)\b/;
-const DESTRUCTIVE_BY_PROGRAM={codex:CODEX_DESTRUCTIVE,claude:CLAUDE_DESTRUCTIVE,gemini:GEMINI_DESTRUCTIVE};
-function inspectPrompt(text){
-  const first=String(text).split('\n')[0].trim();
-  const program=targetProgram();
-  const right=SKILL_PREFIX[program];
-  const word=first.split(/\s+/)[0];
-
-  // 1. Destructive builtins, checked before anything else — these are spelled
-  //    with the sigil the CLI expects, so a "the prefix is wrong" test never
-  //    sees them. /clear at Claude wipes the conversation and is perfectly
-  //    well-formed.
-  const destructive=DESTRUCTIVE_BY_PROGRAM[program];
-  if(destructive&&destructive.test(first)){
-    const name=word.slice(1);
-    const known=skillNamed(name,program);
-    return {
-      reason:`<code>${esc(word)}</code> is a destructive builtin on ${program} — `+
-        `it ends or wipes the session, it does not run a skill.`,
-      fix:known?right+name+first.slice(word.length):null,
-      fixLabel:known?`run the skill ${right}${name}`:null,
-    };
+const DESTRUCTIVE_COMMANDS={
+  codex:['logout','quit','exit','new','clear'],
+  claude:['clear','logout','exit','quit'],
+  gemini:['clear','exit','quit'],agy:['clear','exit','quit'],
+};
+const OFFLINE_CODEX_COMMANDS=new Set(['compact','model','approvals','permissions','status','skills','help','review','mcp','plan','diff','copy','resume']);
+function skillToken(text){
+  const match=/^(\s*)([/$])([A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)*)(?=\s|$)/.exec(text);
+  return match?{start:match[1].length,end:match[0].length,prefix:match[2],name:match[3]}:null;
+}
+function inspectPrompt(text,context=composerVocabulary()){
+  const {program}=context;
+  const destructiveCommands=DESTRUCTIVE_COMMANDS[program]||[];
+  const destructiveReason=word=>`<code>${esc(word)}</code> can end or reset the ${esc(program)} session.`;
+  const token=skillToken(text);
+  if(!token){
+    // Keep confirmation for commands followed by punctuation. The strict
+    // skill token parser must never rewrite a malformed command.
+    const word=/^\s*(\/([A-Za-z0-9_]+)\b\S*)/.exec(text);
+    return word&&destructiveCommands.includes(word[2])?
+      {reason:destructiveReason(word[1]),fix:null,fixLabel:null}:null;
   }
-
-  // 2. A sigil this CLI does not use for skills. If the name is a skill it
-  //    does have, offer the corrected form; otherwise refuse to send blind.
-  const wrong=program==='codex'?/^\/([A-Za-z0-9_-]+)/:/^\$([A-Za-z0-9_-]+)/;
-  const m=wrong.exec(first);
-  if(m){
-    const name=m[1];
-    const known=skillNamed(name,program);
-    if(known||program==='codex'){
-      return {
-        reason:`${program} runs skills as <code>${right}${name}</code>, not `+
-          `<code>${m[0][0]}${name}</code>.`,
-        fix:known?right+name+first.slice(m[0].length):null,
-        fixLabel:known?`send as ${right}${name}`:null,
-      };
-    }
-  }
+  const items=catalogFor(context).items;
+  const name=token.name;
+  const skill=items.find(item=>item.name===name&&item.kind!=='builtin');
+  const builtin=items.some(item=>item.name===name&&item.kind==='builtin')||
+    program==='codex'&&OFFLINE_CODEX_COMMANDS.has(name);
+  const right=skillPrefix(context);
+  const command=token.prefix==='/';
+  const destructive=destructiveCommands.some(value=>
+    value===name||program==='codex'&&!builtin&&value.startsWith(name));
+  const fix=skill&&token.prefix!==right?text.slice(0,token.start)+right+name+text.slice(token.end):null;
+  if(command&&destructive)return {
+    reason:destructiveReason('/'+name),
+    fix,fixLabel:fix?`Use ${right}${name}`:null,
+  };
+  if(command&&builtin)return null;
+  if(fix)return {
+    reason:`This skill uses <code>${right}${esc(name)}</code> in ${esc(program)}.`,
+    fix,fixLabel:`Use ${right}${name}`,
+  };
+  if(command&&program==='codex')return {
+    reason:`No matching Codex command for <code>/${esc(name)}</code>.`,
+    fix:null,fixLabel:null,
+  };
   return null;
 }
 let guardArmed=null;
@@ -11372,49 +11556,216 @@ function showSendGuard(verdict){
   if(verdict.fix)sendGuardFix.textContent=verdict.fixLabel;
   sendGuard.hidden=false;
 }
-function captureComposerTarget(){
-  const paneId=activeId,pane=panes.get(paneId);
-  return pane?{paneId,pane,session:pane.session,socket}:null;
+function captureComposerTarget(paneId=activeId){
+  const pane=panes.get(paneId);
+  return pane?{paneId,pane,session:pane.session,socket,incarnation:sessionGroups.get(pane.session)?.incarnation}:null;
 }
 function composerTargetPresent(target){
   if(panes.get(target.paneId)===target.pane&&target.pane.session===target.session&&socket===target.socket)return true;
   showToast(`send cancelled → ${target.session}: terminal changed; select the target and retry`,true);
   return false;
 }
-let promptSubmissionSequence=0;
-let promptAttemptSequence=0;
-let readerReply=null;
-function sendPrompt(opts){
-  const bypass=opts&&opts.bypassGuard;
-  const draft=promptInput.value;
-  if(!draft.trim())return;
-  const target=captureComposerTarget(),p=target?.pane;
-  if(!target){showToast('no pane focused — click an agent first');return;}
-  const referenceGuard=readerReply?.guard();
-  if(referenceGuard&&!referenceGuard(target))return;
-  if(!bypass){
-    const verdict=inspectPrompt(draft);
-    if(verdict){showSendGuard(verdict);return;}
+let promptSubmissionSequence=0,promptAttemptSequence=0,promptAckSequence=0;
+let readerReply=null,promptBusy=false;
+const composerAcks=new Map(),composerAttaching=new Map();
+
+function receiveComposerAck(message){
+  const pending=composerAcks.get(message.id);
+  if(pending?.paneId===message.paneId)pending.done(message.status);
+}
+function cancelComposerAcks(){
+  for(const pending of composerAcks.values())pending.done('unknown');
+}
+function confirmedComposerInput(target,data){
+  return new Promise(resolve=>{
+    const id=Date.now()+':'+(++promptAckSequence);
+    const done=status=>{
+      clearTimeout(timer);composerAcks.delete(id);
+      resolve(status==='accepted'||status==='refused'?status:'unknown');
+    };
+    const timer=setTimeout(()=>done('unknown'),4500);
+    composerAcks.set(id,{done,paneId:target.paneId});
+    const payload={type:'input',paneId:target.paneId,session:target.session,incarnation:target.incarnation,inputAck:id,data};
+    for(const key of ['mail_instance_id','mail_agent_id']){
+      if(target.pane.meta[key])payload[key]=target.pane.meta[key];
+    }
+    try{if(!send(payload))done('refused');}
+    catch(_){done('unknown');}
+  });
+}
+function recipientRefusal(agent){
+  if(!agent?.name)return 'Agent unavailable';
+  if(agent.lifecycle==='persistent'||agent.category==='warmup')return 'This agent is managed separately';
+  if(/^codex-app/.test(String(agent.harness||agent.program||agent.cmd||''))||agentHasNoTerminal(agent.name))
+    return 'This agent has no terminal input';
+  if(!isBulkAgentRunning(agent))return 'Agent is stopped';
+  if(!paneIdForSession(agent.name)&&!availableSessions.has(agent.name))return 'Terminal unavailable';
+  if(!paneSessionAllowed(agent.name))return 'Agent is open in a separate window';
+  return '';
+}
+function sameRecipient(record,target=null){
+  const agent=currentAgentNamed(record.name);
+  if(record.singlePane)return Boolean(record.target)&&targetProgram(record.name)===record.vocabulary.program;
+  const stable=!recipientRefusal(agent)&&targetProgram(record.name)===record.vocabulary.program&&
+    ['mail_instance_id','mail_agent_id','created'].every(key=>record[key]===agent[key]);
+  return stable&&(!target||['mail_instance_id','mail_agent_id'].every(key=>
+    target.pane.meta[key]==null||record[key]===target.pane.meta[key]));
+}
+function namedComposerTarget(name){
+  const paneId=paneIdForSession(name);
+  return paneId?captureComposerTarget(paneId):null;
+}
+async function resolveComposerTarget(record,connection){
+  if(!sameRecipient(record)||socket!==connection)return null;
+  if(record.target)return composerTargetPresent(record.target)?record.target:null;
+  const name=record.name;
+  if(attachedSessions.has(name))return namedComposerTarget(name);
+  if(!requestedSessions.has(name)){
+    if(!availableSessions.has(name))return null;
+    composerAttaching.set(name,manualDetached.has(name));
+    const reference=typeof record.mail_instance_id==='string'&&Number.isInteger(record.mail_agent_id)?
+      {mail_instance_id:record.mail_instance_id,mail_agent_id:record.mail_agent_id}:{};
+    if(!requestAttach(name,false,reference)){composerAttaching.delete(name);return null;}
   }
-  const text=readerReply?readerReply.compose(draft):draft;
-  hideSendGuard();
-  // one bracketed paste (multiline stays one block in the TUI input box),
-  // then a separate CR to submit — same shape the pty expects from a human.
-  if(!send({type:"input",paneId:target.paneId,data:"\x1b[200~"+text+"\x1b[201~"})){showToast('not connected — try again');return;}
+  return new Promise(resolve=>{
+    const finish=target=>{
+      clearTimeout(timer);document.removeEventListener('oc:terminal-ready',ready);resolve(target);
+    };
+    const ready=event=>{
+      if(event.detail!==name)return;
+      finish(sameRecipient(record)&&socket===connection?namedComposerTarget(name):null);
+    };
+    const timer=setTimeout(()=>finish(null),4500);
+    document.addEventListener('oc:terminal-ready',ready);
+  });
+}
+function trackPrompt(target,text){
   const submittedAt=Date.now();
   const attemptId=submittedAt+':attempt:'+(++promptAttemptSequence);
-  document.dispatchEvent(new CustomEvent('oc:prompt-sending',{detail:{attemptId,name:target.session,text,startedAt:submittedAt}}));
-  const cancel=()=>document.dispatchEvent(new CustomEvent('oc:prompt-send-cancelled',{detail:{attemptId,name:target.session}}));
-  setTimeout(()=>{
-    if(!composerTargetPresent(target)||referenceGuard&&!referenceGuard(target)){cancel();return;}
-    if(send({type:"input",paneId:target.paneId,data:"\r"})){
-      document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'talk',name:p.session}}));
-      document.dispatchEvent(new CustomEvent('oc:prompt-submitted',{detail:{name:target.session,text,submittedAt,id:submittedAt+':'+(++promptSubmissionSequence),attemptId}}));
-      showToast(`sent → ${p.session}`);
-    }else{cancel();showToast(`send cancelled → ${target.session}: disconnected before Enter; reconnect and retry`,true);}
-  },250);
+  const notify=(type,detail={})=>document.dispatchEvent(new CustomEvent(type,{detail:{attemptId,name:target.session,...detail}}));
+  notify('oc:prompt-sending',{text,startedAt:submittedAt});
+  return {
+    cancel:()=>notify('oc:prompt-send-cancelled'),
+    publish:count=>{
+      document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'talk',name:target.session}}));
+      notify('oc:prompt-submitted',{text,submittedAt,id:submittedAt+':'+(++promptSubmissionSequence),broadcastCount:count});
+    },
+  };
+}
+function pastePayload(text){return "\x1b[200~"+text+"\x1b[201~";}
+function clearSentDraft(text){
   pushPromptHistory(text);
-  promptInput.value='';readerReply?.clear();saveDraft();closeSlashMenu();
+  promptInput.value='';readerReply?.clear();promptFiles.clear();saveDraft();closeSlashMenu();promptRecipients.close();
+}
+function sendSinglePrompt(target,text,referenceGuard){
+  if(!send({type:'input',paneId:target.paneId,data:pastePayload(text)})){
+    showToast('Not connected. Try again.',true);return;
+  }
+  const receipt=trackPrompt(target,text);
+  setTimeout(()=>{
+    if(!composerTargetPresent(target)||referenceGuard&&!referenceGuard(target)){receipt.cancel();return;}
+    if(send({type:'input',paneId:target.paneId,data:"\r"})){
+      receipt.publish(1);showToast(`Sent to ${target.session}`);
+    }else{receipt.cancel();showToast(`Disconnected before sending to ${target.session}`,true);}
+  },250);
+  clearSentDraft(text);
+}
+async function sendPreparedPrompt(records,draft,compose,stillValid,entries,explicit){
+  const clip=document.getElementById('promptClip');
+  const connection=socket;
+  promptBusy=true;promptInput.readOnly=true;clip.disabled=true;promptCard.refresh();promptRecipients.close();closeSlashMenu();
+  const results=[];
+  try{
+    for(const record of records){
+      const target=await resolveComposerTarget(record,connection);
+      const valid=()=>socket===connection&&sameRecipient(record,target)&&composerTargetPresent(target)&&stillValid();
+      let status='refused',receipt=null,problem='';
+      if(target&&valid()){
+        let paths=[];
+        if(entries.length){
+          try{
+            const selection={session:target.session,paneId:target.paneId,incarnation:target.incarnation};
+            paths=await OrreryPromptAttachments.upload(selection,entries);
+          }catch(error){problem=error.message||'Attachment unavailable';}
+        }
+        if(problem||!valid()){
+          results.push({...record,status,receipt,problem});
+          releaseComposerTarget(record.name);
+          continue;
+        }
+        const prefix=record.vocabulary.program==='claude'?'@':'';
+        const references=paths.map(path=>prefix+path).join('\n');
+        const body=[record.draft,references].filter(Boolean).join('\n\n');
+        const text=compose(body);
+        receipt=trackPrompt(target,text);
+        status=await confirmedComposerInput(target,pastePayload(text));
+        if(status==='accepted'){
+          await new Promise(resolve=>setTimeout(resolve,250));
+          const entered=valid()&&await confirmedComposerInput(target,"\r")==='accepted';
+          status=entered?'accepted':'unknown';
+        }
+      }
+      if(status!=='accepted')receipt?.cancel();
+      results.push({...record,status,receipt});
+      releaseComposerTarget(record.name);
+    }
+    const sent=results.filter(result=>result.status==='accepted');
+    const refused=results.filter(result=>result.status==='refused');
+    const unknown=results.filter(result=>result.status==='unknown');
+    sent.forEach(({receipt})=>receipt.publish(sent.length));
+    const names=entries=>entries.map(record=>record.problem?record.name+' ('+record.problem+')':record.name).join(', ');
+    const summary=[
+      sent.length?'Sent to '+names(sent):'',
+      refused.length?'Not sent to '+names(refused):'',
+      unknown.length?'Delivery unconfirmed for '+names(unknown):'',
+    ].filter(Boolean).join(' · ');
+    showToast(summary,Boolean(refused.length||unknown.length),7000);
+    if(summary.length>70)toastEl.classList.add('multiline');
+    if(refused.length){
+      if(explicit)promptRecipients.set(refused.map(record=>record.name));
+      if(sent.length)pushPromptHistory(draft);
+    }else{
+      promptRecipients.set([]);clearSentDraft(draft);
+    }
+  }finally{
+    promptBusy=false;promptInput.readOnly=false;clip.disabled=false;promptCard.refresh();
+  }
+}
+function releaseComposerTarget(name){
+  const wasDetached=composerAttaching.get(name);
+  if(composerAttaching.delete(name)&&activeSession()!==name&&
+     !splitSessions.includes(name)&&pendingJump!==name)detachSession(name,wasDetached);
+}
+function sendPrompt(opts={}){
+  if(promptBusy)return;
+  const draft=promptInput.value;
+  const entries=promptFiles.entries;
+  if(!draft.trim()&&!entries.length)return;
+  const target=captureComposerTarget();
+  const names=promptRecipients.names;
+  if(!target&&!names.length){showToast('Select an agent first.',true);return;}
+  const referenceGuard=readerReply?.guard();
+  if(referenceGuard&&!referenceGuard(target))return;
+  const records=(names.length?names:[target.session]).map(name=>({
+    ...promptRecipientPins.get(name),name,target:names.length?namedComposerTarget(name):target,singlePane:!names.length,vocabulary:composerVocabulary(name),draft,
+  }));
+  const verdicts=records.map(record=>opts.bypassGuard?null:inspectPrompt(draft,record.vocabulary));
+  const problem=verdicts.find(Boolean);
+  if(problem){
+    if(!names.length){showSendGuard(problem);return;}
+    const canFix=verdicts.every(verdict=>!verdict||verdict.fix);
+    showSendGuard({...problem,fix:canFix?draft:null,fixLabel:'Fix and send',resume:()=>{
+      records.forEach((record,index)=>{record.draft=verdicts[index]?.fix||draft;});
+      return deliver();
+    }});return;
+  }
+  return deliver();
+  function deliver(){
+    hideSendGuard();
+    if(!names.length&&!entries.length)return sendSinglePrompt(target,readerReply?.compose(draft)??draft,referenceGuard);
+    const plain=readerReply?.compose('')||'';
+    return sendPreparedPrompt(records,draft,value=>plain+value,()=>!referenceGuard||referenceGuard(target),entries,Boolean(names.length));
+  }
 }
 function sendInterrupt(){
   const p=panes.get(activeId);
@@ -11424,10 +11775,51 @@ function sendInterrupt(){
   send({type:"input",paneId:activeId,data:"\x1b"});
   showToast(`⎋ interrupt → ${p.session}`);
 }
-promptSendBtn.addEventListener('click',()=>sendPrompt());
-promptStopBtn.addEventListener('click',sendInterrupt);
+const promptRecipients=OrreryPromptRecipients.mount({
+  input:promptInput,meta:document.querySelector('.prompt-meta'),
+  portrait:name=>{
+    const image=document.createElement('img');image.className='prompt-ava';image.alt='';
+    image.src='/telemetry/portrait?v=3&name='+encodeURIComponent(name);
+    return image;
+  },
+  getAgents:()=>currentAgents,
+  getRole:agent=>String(agent.annot?.role||agent.role||''),
+  getRefusal:recipientRefusal,
+  getProvider:agent=>{
+    const {provider}=providerPresentation(agent);
+    return provider?{src:'cockpit-assets/'+provider.asset+'.svg',label:provider.label}:null;
+  },
+  onChange:()=>{
+    promptRecipientPins=new Map(promptRecipients.names.map(name=>{
+      const previous=promptRecipientPins.get(name),agent=currentAgentNamed(name);
+      return [name,previous||{name,created:agent?.created,mail_instance_id:agent?.mail_instance_id,mail_agent_id:agent?.mail_agent_id}];
+    }));
+    saveDraft();refreshComposerVocabulary();
+  },
+  onText:saveDraft,
+});
+const promptFiles=OrreryPromptAttachments.mount({
+  host:promptInput.closest('.promptbar'),clip:document.getElementById('promptClip'),
+  picker:document.getElementById('promptFilePicker'),list:document.getElementById('promptFiles'),
+  onChange:()=>{hideSendGuard();promptCard.refresh();},
+  onError:message=>showToast(message,true),mayEdit:()=>!promptBusy,
+});
+const promptCard=OrreryPromptComposer.mount({
+  input:promptInput,button:promptSendBtn,
+  getDestination:()=>{
+    const pane=panes.get(activeId);
+    const agent=pane&&currentAgentNamed(pane.session);
+    const names=promptRecipients.names;
+    return {label:names.length>1?`${names.length} agents`:names[0]||pane?.session,
+      count:names.length,explicit:names.length>0,pending:promptBusy,hasFiles:promptFiles.entries.length>0,
+      working:agent?.running===true&&agent.act_state==='work'};
+  },
+  submit:()=>sendPrompt(),interrupt:sendInterrupt,onHeightSettled:scheduleFit,
+});
+document.addEventListener('oc:agents',()=>{promptCard.refresh();if(!promptBusy)promptRecipients.update();});
 sendGuardFix.addEventListener('click',()=>{
   if(!guardArmed||!guardArmed.fix)return;
+  if(guardArmed.resume){guardArmed.resume();return;}
   promptInput.value=guardArmed.fix;saveDraft();
   hideSendGuard();sendPrompt({bypassGuard:true});
 });
@@ -11511,6 +11903,7 @@ function handleComposerPaste(e){
   const caret=promptInput.selectionStart==null?promptInput.value.length:promptInput.selectionStart;
   const end=promptInput.selectionEnd==null?caret:promptInput.selectionEnd;
   const insertPaths=(files,label)=>{
+    if(promptBusy)return;
     const text=files.map(quotePath).join(' ');
     const before=promptInput.value.slice(0,caret),after=promptInput.value.slice(end);
     const pad=before&&!/\s$/.test(before)?' ':'';
@@ -11579,56 +11972,75 @@ promptInput.addEventListener('paste',handleComposerPaste);
    it: Claude runs a skill as `/log`, Codex as `$log` — and `/log` typed at
    Codex is a prefix of its builtin /logout, so the wrong sigil does not fail
    loudly, it logs the agent out. */
-const SKILL_PREFIX={claude:'/',codex:'$',gemini:'/',dsh:'/',hermes:'/'};
-function targetProgram(){
-  const p=panes.get(activeId);
-  const rec=p?currentAgentNamed(p.session):null;
+const SKILL_PREFIX={claude:'/',codex:'$',gemini:'/',agy:'/',dsh:'/',hermes:'/'};
+function targetProgram(name=activeSession()){
+  const rec=currentAgentNamed(name);
   const runtime=rec&&(rec.harness||rec.program||rec.cmd);
-  if(runtime){const key=SpawnPicker.harnessKey(String(runtime).split(/\s+/)[0]);return key.startsWith('antigravity')?'gemini':key==='claude-code'?'claude':key;}
+  if(runtime){const key=SpawnPicker.harnessKey(String(runtime).split(/\s+/)[0]);return key.startsWith('antigravity')?'agy':key==='claude-code'?'claude':key;}
   const engine=normalizeSearchText(`${(rec&&rec.provider)||''} ${(rec&&rec.model)||''}`);
   if(engine.includes('openai')||engine.includes('codex')||engine.includes('gpt'))return 'codex';
-  if(engine.includes('google')||engine.includes('gemini')||engine.includes('antigravity'))return 'gemini';
+  if(engine.includes('antigravity'))return 'agy';
+  if(engine.includes('google')||engine.includes('gemini'))return 'gemini';
   return 'claude';
 }
-function targetPrefix(){return SKILL_PREFIX[targetProgram()]||'/';}
-/* The target changed, so the vocabulary did too: re-label the hint, drop a
-   guard that was about a different agent, and pull that program's skills. */
+function composerVocabulary(name=promptRecipients.names[0]||activeSession()){
+  const program=targetProgram(name);
+  const target=name===activeSession()?captureComposerTarget():namedComposerTarget(name);
+  const params=new URLSearchParams({program});
+  if(program==='codex'&&target?.incarnation){
+    params.set('agent',name);params.set('paneId',target.paneId);params.set('incarnation',target.incarnation);
+  }
+  return {program,key:params.toString()};
+}
+const skillCatalogs=new Map(),skillRequests=new Map();
+let slashItems=[],slashIndex=0;
+const emptyCatalog={items:[],prefix:null,expires:0};
+function catalogFor(context){return skillCatalogs.get(context.key)||emptyCatalog;}
+function skillPrefix(context){return catalogFor(context).prefix||SKILL_PREFIX[context.program]||'/';}
+function insertionToken(item,context){return (item.kind==='builtin'?'/':skillPrefix(context))+item.name;}
+function loadSkills(context=composerVocabulary()){
+  if(catalogFor(context).expires>Date.now())return;
+  if(skillRequests.has(context.key))return;
+  const request=fetch('/telemetry/skills?'+context.key).then(async response=>{
+    const data=await response.json();
+    if(!Array.isArray(data.skills))return;
+    const items=data.skills.filter(item=>item&&typeof item.name==='string'&&
+      /^[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)*$/.test(item.name)&&['builtin','skill','bundled'].includes(item.kind));
+    const prefix=data.prefix==='/'||data.prefix==='$'?data.prefix:null;
+    if(!response.ok&&!items.length)return;
+    if(skillCatalogs.size>=36&&!skillCatalogs.has(context.key))skillCatalogs.delete(skillCatalogs.keys().next().value);
+    skillCatalogs.set(context.key,{items:response.ok?items:items.filter(item=>item.kind==='builtin'),
+      prefix,expires:response.ok?Date.now()+30000:0});
+    if(document.activeElement===promptInput&&composerVocabulary().key===context.key)updateSlashMenu(false);
+  }).catch(()=>{/* A subsequent input or focus retries a failed catalog. */})
+    .finally(()=>skillRequests.delete(context.key));
+  skillRequests.set(context.key,request);
+}
 function refreshComposerVocabulary(){
-  if(phintPrefix)phintPrefix.textContent=targetPrefix();
+  promptCard.refresh();
   hideSendGuard();
   closeSlashMenu();
-  loadSkills();
-}
-
-let skillsByProgram={},slashItems=[],slashIndex=0;
-function loadSkills(){
-  const program=targetProgram();
-  if(skillsByProgram[program])return;
-  skillsByProgram[program]=[];  // 404/offline degrades to no menu, not to a wrong menu
-  fetch('/telemetry/skills?program='+encodeURIComponent(program)).then(r=>r.json())
-    .then(j=>{skillsByProgram[program]=Array.isArray(j.skills)?j.skills:[];updateSlashMenu();})
-    .catch(()=>{});
-}
-function currentSkills(){return skillsByProgram[targetProgram()]||[];}
-function skillNamed(name,program){
-  const list=skillsByProgram[program||targetProgram()]||[];
-  return list.find(s=>s&&s.name===name)||null;
+  const active=composerVocabulary();
+  loadSkills(active);
+  for(const name of promptRecipients.names.slice(1))loadSkills(composerVocabulary(name));
+  updateSlashMenu(false);
 }
 function slashQuery(){
-  const caret=promptInput.selectionStart==null?promptInput.value.length:promptInput.selectionStart;
-  // Accept either sigil as the trigger — typing the habitual one should still
-  // open the menu, and the insert then corrects it to the target's.
-  const m=/^[\/$]([A-Za-z0-9_-]*)$/.exec(promptInput.value.slice(0,caret));
-  return m?m[1]:null;
+  const start=promptInput.selectionStart,end=promptInput.selectionEnd;
+  if(start===null||start!==end)return null;
+  const match=/^(\s*)([/$])([A-Za-z0-9_:-]*)$/.exec(promptInput.value.slice(0,start));
+  if(!match)return null;
+  const tail=/^\S*/.exec(promptInput.value.slice(start))[0];
+  if(!/^[A-Za-z0-9_:-]*$/.test(tail))return null;
+  return {start:match[1].length,end:start+tail.length,prefix:match[2],word:match[3].toLowerCase()};
 }
 function closeSlashMenu(){slashMenu.hidden=true;slashItems=[];slashIndex=0;}
-function updateSlashMenu(){
-  const q=slashQuery();
-  if(q===null){closeSlashMenu();return;}
-  loadSkills();
-  const skillsList=currentSkills();
-  const prefix=targetPrefix();
-  const lower=q.toLowerCase();
+function updateSlashMenu(request=true){
+  const q=slashQuery(),context=composerVocabulary();
+  if(!q||!q.word&&document.activeElement!==promptInput){closeSlashMenu();return;}
+  if(request)loadSkills(context);
+  const skillsList=catalogFor(context).items.filter(item=>q.prefix!=='$'||item.kind!=='builtin');
+  const lower=q.word;
   const starts=skillsList.filter(s=>s.name.toLowerCase().startsWith(lower));
   const contains=skillsList.filter(s=>!s.name.toLowerCase().startsWith(lower)&&s.name.toLowerCase().includes(lower));
   slashItems=[...starts,...contains].slice(0,8);
@@ -11640,7 +12052,7 @@ function updateSlashMenu(){
     it.className='sm-it'+(i===slashIndex?' sel':'');
     const nm=document.createElement('span');nm.className='sm-name';
     // builtins keep the slash on both CLIs; only skills take the program sigil
-    nm.textContent=(s.kind==='builtin'?'/':prefix)+s.name;
+    nm.textContent=insertionToken(s,context);
     const kd=document.createElement('span');kd.className='sm-kind';kd.textContent=s.kind||'';
     const ds=document.createElement('span');ds.className='sm-desc';ds.textContent=s.description||'';
     it.append(nm,kd,ds);
@@ -11652,16 +12064,19 @@ function updateSlashMenu(){
 function applySlash(i){
   const item=slashItems[i];
   if(!item)return;
-  const sigil=item.kind==='builtin'?'/':targetPrefix();
-  const caret=promptInput.selectionStart==null?promptInput.value.length:promptInput.selectionStart;
-  promptInput.value=sigil+item.name+' '+promptInput.value.slice(caret);
-  const pos=item.name.length+2;
-  promptInput.setSelectionRange(pos,pos);
-  closeSlashMenu();promptInput.focus();
+  const q=slashQuery();
+  if(!q)return;
+  const token=insertionToken(item,composerVocabulary());
+  const suffix=promptInput.value.slice(q.end);
+  promptInput.setRangeText(token+(suffix&&/^\s/.test(suffix)?'':' '),q.start,q.end,'end');
+  saveDraft();closeSlashMenu();promptInput.focus();
 }
-promptInput.addEventListener('input',()=>{histIndex=-1;saveDraft();updateSlashMenu();});
-promptInput.addEventListener('focus',loadSkills);
-promptInput.addEventListener('blur',()=>setTimeout(closeSlashMenu,120));
+promptInput.addEventListener('input',()=>{
+  histIndex=-1;hideSendGuard();saveDraft();
+  if(promptRecipients.update())closeSlashMenu();else updateSlashMenu();
+});
+promptInput.addEventListener('focus',()=>{loadSkills();updateSlashMenu(false);});
+promptInput.addEventListener('blur',closeSlashMenu);
 
 // IME guard: WebKit (the Tauri webview) fires the conversion-confirming
 // Enter as a plain keydown AFTER compositionend with isComposing=false, so
@@ -11672,6 +12087,8 @@ promptInput.addEventListener('compositionstart',()=>{promptComposing=true;});
 promptInput.addEventListener('compositionend',()=>{promptComposing=false;promptComposedAt=Date.now();});
 promptInput.addEventListener('keydown',e=>{
   const imeActive=e.isComposing||e.keyCode===229||promptComposing||Date.now()-promptComposedAt<75;
+  if(promptBusy){if(e.key==='Enter'&&!e.shiftKey)e.preventDefault();return;}
+  if(!imeActive&&promptRecipients.handleKey(e))return;
   const menuOpen=!slashMenu.hidden&&slashItems.length>0;
   if(e.key==='Escape'){
     if(imeActive)return;                 // let the IME cancel its own composition
@@ -11695,13 +12112,13 @@ promptInput.addEventListener('keydown',e=>{
     e.preventDefault();
     if(histIndex===-1){histDraft=promptInput.value;histIndex=promptHistory.length-1;}
     else if(histIndex>0)histIndex--;
-    promptInput.value=promptHistory[histIndex];closeSlashMenu();return;
+    promptInput.value=promptHistory[histIndex];promptCard.refresh();closeSlashMenu();return;
   }
   if(e.key==='ArrowDown'&&!imeActive&&histIndex!==-1){
     e.preventDefault();
     if(histIndex<promptHistory.length-1){histIndex++;promptInput.value=promptHistory[histIndex];}
     else{histIndex=-1;promptInput.value=histDraft;}
-    return;
+    promptCard.refresh();return;
   }
   // Enter sends (chat convention); Shift+Enter inserts a newline.
   if(e.key!=='Enter'||e.shiftKey)return;
@@ -11710,6 +12127,8 @@ promptInput.addEventListener('keydown',e=>{
   }
   e.preventDefault();sendPrompt();
 });
+
+if(promptRecipientPins.size)promptRecipients.set([...promptRecipientPins.keys()]);
 
 /* A poll sends one request at a time. The next starts `ms` after the last one
    started, as setInterval did, or as soon as it answers if it took longer, so a

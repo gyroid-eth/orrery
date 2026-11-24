@@ -1510,8 +1510,15 @@ class SessionBridgeManager:
             await send_error(peer, None, "paneId must be a string")
             return
 
+        ack = payload.get('inputAck') if message_type == 'input' else None
+        if ack is not None and (not isinstance(ack, str) or not re.fullmatch(r'[0-9]{1,16}:[0-9]{1,12}', ack)):
+            await send_error(peer, None, "invalid input receipt request")
+            return
         state = self._find_attached_pane(attached, pane_id)
         if state is None:
+            if ack is not None:
+                await peer.send_json(dict(type='input-ack', id=ack, paneId=pane_id, status='refused'))
+                return
             if message_type in {'approval-inspect', 'approval-answer'}:
                 await peer.send_json(dict(type='approval', paneId=pane_id, session=payload.get('session'),
                     requestId=payload.get('requestId'), state='unavailable', message='Pane unavailable'))
@@ -1545,6 +1552,26 @@ class SessionBridgeManager:
                                                   payload.get('operation'), proof=proof)
             await bridge.send_json(peer, dict(type='approval', paneId=pane_id,
                 requestId=payload.get('requestId'), **result))
+            return
+        if ack is not None:
+            bridge = state.bridge
+            data = payload.get('data')
+            status = 'refused'
+            if (payload.get('session') == session and payload.get('incarnation') == bridge._incarnation
+                    and isinstance(data, str) and data
+                    and len(data.encode('utf-8', errors='replace')) <= 262144):
+                target = bridge.config.tmux_bin
+                try:
+                    if isinstance(target, FreshPaneBoundary):
+                        proofs = bridge._fresh_peer_proofs.get(peer)
+                        if proofs is None or any(payload.get(key) != value for key, value in target.ref.items()):
+                            raise TargetRefused('FRESH_TMUX_TARGET_CHANGED')
+                        status = await bridge.send_input(target.pane_id, data, proof=proofs[0], acknowledge=True)
+                    else:
+                        status = await bridge.send_input(pane_id, data, acknowledge=True)
+                except (TargetRefused, OSError, RuntimeError):
+                    status = 'refused'
+            await peer.send_json(dict(type='input-ack', id=ack, paneId=pane_id, status=status))
             return
         if isinstance(state.bridge.config.tmux_bin,FreshPaneBoundary):
             target=state.bridge.config.tmux_bin
@@ -2723,6 +2750,7 @@ SKILL_SOURCES = {
     # Gemini CLI keeps Agent Skills as ~/.gemini/skills/<name>/SKILL.md and
     # runs them with the same slash as Claude.
     "gemini": {"dir": os.path.expanduser("~/.gemini/skills"), "prefix": "/"},
+    "agy": {"dir": os.path.expanduser("~/.gemini/antigravity-cli/skills"), "prefix": "/"},
 }
 SKILLS_DIR = SKILL_SOURCES["claude"]["dir"]  # kept: older callers import this
 # Composer autocomplete: REPL builtins each TUI understands besides skills.
@@ -2742,6 +2770,19 @@ _BUILTIN_SLASH = {
         {"name": "model", "kind": "builtin", "description": "Switch model and reasoning effort"},
         {"name": "approvals", "kind": "builtin", "description": "Switch approval mode"},
         {"name": "status", "kind": "builtin", "description": "Show session status"},
+        {"name": "skills", "kind": "builtin", "description": "Choose a skill"},
+        {"name": "permissions", "kind": "builtin", "description": "Change approval mode"},
+        {"name": "review", "kind": "builtin", "description": "Start a review"},
+        {"name": "mcp", "kind": "builtin", "description": "List MCP tools"},
+        {"name": "plan", "kind": "builtin", "description": "Switch to planning mode"},
+        {"name": "diff", "kind": "builtin", "description": "Show working tree changes"},
+        {"name": "copy", "kind": "builtin", "description": "Copy the latest response"},
+        {"name": "resume", "kind": "builtin", "description": "Resume a conversation"},
+        {"name": "help", "kind": "builtin", "description": "Help"},
+    ),
+    "agy": (
+        {"name": "compact", "kind": "builtin", "description": "Compact the conversation"},
+        {"name": "skills", "kind": "builtin", "description": "List or reload skills"},
         {"name": "help", "kind": "builtin", "description": "Help"},
     ),
     "gemini": (
@@ -2840,37 +2881,94 @@ def _collect_skills(root: str) -> list[dict[str, str]]:
     return found
 
 
-async def serve_skills(request: web.Request) -> web.Response:
-    """Slash-completions for the composer, for one program's vocabulary.
+async def codex_skill_context(request, name, pane_id, incarnation):
+    from codex_skill_catalog import codex_home
+    from conversation_preview import root_path, workspace
 
-    `?program=claude|codex`. The response carries the prefix the caller must
-    put in front of a skill name, so the composer never has to hardcode which
-    CLI uses which sigil.
-    """
+    state = composer_pane_state(request.app, name, pane_id)
+    if state is None or state.bridge._incarnation != incarnation:
+        raise ValueError('skill target changed')
+    row = await conversation_bound_row(request, name)
+    if row.get('program') not in {'codex', 'codex-cli'}:
+        raise ValueError('skill target is not Codex')
+    target = state.bridge.config.tmux_bin
+    if isinstance(target, FreshPaneBoundary) and any(row.get(key) != value for key, value in target.ref.items()):
+        raise ValueError('skill target changed')
+    home = codex_home(row['transcript_path'])
+    with open_reader(row) as reader:
+        root = workspace(reader)
+        reader.assert_identity()
+    current_path = await pane_probe_cwd(request.app, name, pane_id)
+    cwd = root_path(str(current_path)) if current_path is not None else None
+    if (home is None or cwd is None or root != cwd or composer_pane_state(request.app, name, pane_id) is not state):
+        raise ValueError('skill workspace unavailable')
+    binary = resolve_codex_bin()
+    if binary is None:
+        raise ValueError('Codex not installed')
+    return os.path.abspath(binary), cwd, home
+
+
+CODEX_SKILLS_KEY = web.AppKey('codex_skill_catalog', dict)
+CODEX_SKILLS_LIMIT = web.AppKey('codex_skill_limit', asyncio.Semaphore)
+
+
+async def serve_skills(request: web.Request) -> web.Response:
+    """A scoped native catalog for Codex. Other programs keep their own catalog."""
+    from codex_skill_catalog import list_skills
+
     program = str(request.query.get("program") or "claude").lower()
     program = {"claude-code": "claude", "claudecode": "claude",
                "codex-cli": "codex", "dsh-tui": "dsh"}.get(program, program)
     if program.startswith("antigravity"):
-        program = "gemini"
-    if program not in SKILL_SOURCES:
-        # dsh/Hermes own a native registry tied to their runtime HOME/cwd.
-        # Until that registry is exposed, no completions are available here.
-        # A model's vendor never makes Claude's skills valid for its harness.
+        program = "agy"
+    source = SKILL_SOURCES.get(program)
+    if source is None:
         return web.json_response({"program": program, "prefix": "/", "skills": []})
-    source = SKILL_SOURCES[program]
-    now = time.monotonic()
-    cached = _skills_cache.get(program)
-    if cached and now - cached[0] < _SKILLS_CACHE_SECONDS:
-        items = cached[1]
+
+    items = [dict(entry) for entry in _BUILTIN_SLASH[program]]
+    if program == "codex":
+        name, pane, instance = (request.query.get(key, '') for key in ('agent', 'paneId', 'incarnation'))
+        if not name and not pane and not instance:
+            return web.json_response(dict(program=program, prefix='$', skills=items))
+        if (not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,95}', name)
+                or not re.fullmatch(r'(?:%[0-9]+|fresh-[a-f0-9]{64}-[0-9]+)', pane)
+                or not re.fullmatch(r'[a-f0-9]{32}', instance)):
+            return web.json_response(dict(program=program, prefix='$', skills=items), status=400)
+        cache = request.app[CODEX_SKILLS_KEY]
+        key = (name, pane, instance)
+        try:
+            # Derive cwd and runtime from the exact pane and its verified
+            # history binding. Never execute a browser-selected path.
+            async with asyncio.timeout(10):
+                async with request.app[CODEX_SKILLS_LIMIT]:
+                    context = await codex_skill_context(request, name, pane, instance)
+                    cached = cache.get(key)
+                    now = time.monotonic()
+                    if cached and cached[1] == context and now - cached[0] < _SKILLS_CACHE_SECONDS:
+                        skills = cached[2]
+                    else:
+                        skills = await list_skills(*context)
+                        if await codex_skill_context(request, name, pane, instance) != context:
+                            raise ValueError('skill target changed')
+                        if len(cache) >= 64:
+                            cache.pop(next(iter(cache)))
+                        cache[key] = (time.monotonic(), context, skills)
+                    items.extend(skills)
+        except (ClientError, HistoryUnavailable, OSError, KeyError, ValueError, RuntimeError, asyncio.TimeoutError):
+            # Keep builtins available but allow the browser to retry the native
+            # catalog on the next request.
+            return web.json_response(dict(program=program, prefix='$', skills=items), status=503,
+                                     headers={'Cache-Control': 'no-store'})
     else:
-        items = [dict(entry) for entry in _BUILTIN_SLASH[program]]
-        items.extend(_collect_skills(source["dir"]))
-        _skills_cache[program] = (now, items)
-    return web.json_response({
-        "program": program,
-        "prefix": source["prefix"],
-        "skills": items,
-    })
+        now = time.monotonic()
+        cached = _skills_cache.get(program)
+        if cached and now - cached[0] < _SKILLS_CACHE_SECONDS:
+            items = cached[1]
+        else:
+            items.extend(await asyncio.to_thread(_collect_skills, source["dir"]))
+            _skills_cache[program] = (now, items)
+    return web.json_response(dict(program=program, prefix=source["prefix"], skills=items),
+                             headers={'Cache-Control': 'no-store'})
 
 
 # A browser never learns where a pasted file lives — the File object carries a
@@ -3828,13 +3926,18 @@ async def path_probe(request: web.Request) -> web.Response:
     return web.json_response(payload)
 
 
-async def pane_probe_cwd(app: web.Application, session: str, wire_pane: str) -> Path | None:
+def composer_pane_state(app, session, wire_pane):
     manager = app.get(BRIDGE_MANAGER_KEY)
     if manager is None:
         return None
     keys = {key for key, state in manager.states.items() if state.bridge.config.session == session}
     state = manager._find_attached_pane(keys, wire_pane)
-    if state is None or state.bridge._closed:
+    return state if state is not None and not state.bridge._closed else None
+
+
+async def pane_probe_cwd(app: web.Application, session: str, wire_pane: str) -> Path | None:
+    state = composer_pane_state(app, session, wire_pane)
+    if state is None:
         return None
     bridge = state.bridge
     target = bridge.config.tmux_bin
@@ -3848,13 +3951,66 @@ async def pane_probe_cwd(app: web.Application, session: str, wire_pane: str) -> 
     except (OSError, RuntimeError, asyncio.TimeoutError):
         return None
     if (not result or not result.ok or result.overflow or len(result.lines) != 1
-            or bridge._closed or manager._find_attached_pane(keys, wire_pane) is not state):
+            or composer_pane_state(app, session, wire_pane) is not state):
         return None
     fields = result.lines[0].split("\t", 3)
     if len(fields) != 4 or fields[:3] != [pane.session_id, pane.window_id, pane_id]:
         return None
     cwd = fields[3]
     return Path(cwd) if cwd.startswith("/") and not any(ch in cwd for ch in "\x00\r\n") else None
+
+
+async def serve_prompt_attachment(request: web.Request) -> web.Response:
+    """Place a selected file in this pane's workspace, with no caller path."""
+    from conversation_preview import root_path
+    from mobile_file import MAX_FILE_JSON, save_file
+    from mobile_image import MAX_IMAGE_JSON, save_image
+    from mobile_input import InputRefused, decode_json
+
+    def reject(error, status):
+        return web.json_response({'ok': False, 'error': error}, status=status,
+                                 headers={'Cache-Control': 'no-store'})
+
+    size = request.content_length
+    if size is None or size < 1 or size > MAX_IMAGE_JSON or request.headers.get('Content-Encoding'):
+        return reject('invalid_attachment_size', 413)
+    try:
+        raw = await asyncio.wait_for(request.content.readexactly(size), timeout=10)
+        data = decode_json(raw, max_bytes=MAX_IMAGE_JSON)
+    except (InputRefused, asyncio.TimeoutError, asyncio.IncompleteReadError, OSError):
+        return reject('invalid_attachment', 400)
+    kind, name, pane, instance = (data.get(key) for key in ('kind', 'session', 'paneId', 'incarnation'))
+    expected = {'kind', 'session', 'paneId', 'incarnation', 'data'}
+    if kind == 'file':
+        expected.add('format')
+    if (kind not in ('image', 'file') or set(data) != expected
+            or not isinstance(name, str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,95}', name)
+            or not isinstance(pane, str) or not re.fullmatch(r'(?:%[0-9]+|fresh-[a-f0-9]{64}-[0-9]+)', pane)
+            or not isinstance(instance, str) or not re.fullmatch(r'[a-f0-9]{32}', instance)):
+        return reject('invalid_attachment_target', 400)
+    if kind == 'file' and size > MAX_FILE_JSON:
+        return reject('invalid_attachment_size', 413)
+
+    state = composer_pane_state(request.app, name, pane)
+    if state is None or state.bridge._incarnation != instance:
+        return reject('attachment_target_changed', 409)
+    try:
+        cwd = await pane_probe_cwd(request.app, name, pane)
+        workspace = root_path(str(cwd)) if cwd is not None else None
+        if workspace is None:
+            return reject('attachment_workspace_unavailable', 409)
+        if kind == 'image':
+            path = await asyncio.to_thread(save_image, workspace, data['data'])
+        else:
+            path = await asyncio.to_thread(save_file, workspace,
+                                           {'format': data['format'], 'data': data['data']})
+        current = await pane_probe_cwd(request.app, name, pane)
+        if (composer_pane_state(request.app, name, pane) is not state or current != cwd):
+            return reject('attachment_target_changed', 409)
+        relative = './' + Path(path).relative_to(workspace).as_posix()
+    except (ValueError, OSError, TargetRefused):
+        return reject('attachment_save_failed', 422)
+    return web.json_response({'ok': True, 'path': relative}, headers={'Cache-Control': 'no-store'})
 
 
 FILE_MANAGER_NAMES = {"mac": "Finder", "wsl": "Explorer", "linux": "the file manager"}
@@ -4695,7 +4851,7 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "spawn_picker.js", "effort_slider.js", "spawn_catalog_loader.js", "prefs_sync.js", "phone_settings.js",
     "theme_core.js", "theme_controller.js", "roster_descriptor.js", "roster_edit.js", "demo_mask.js",
     "demo_mode.js", "orrery_view.js", "mail_view.js", "cockpit_tour.js",
-    "cockpit_full_tour.js", "telemetry_light.js",
+    "cockpit_full_tour.js", "telemetry_light.js", "prompt_spring.js", "prompt_composer.js", "prompt_recipients.js", "prompt_attachments.js",
     "conversation_source.js", "conversation_view.js", "conversation_view.css", "conversation_preview.js", "conversation_reply.js",
     "conversation_motion.js",
     "conversation_steps.js", "conversation_steps.css",
@@ -4725,6 +4881,8 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
     app[PROXY_INFLIGHT_KEY] = {}
     app[CONVERSATION_DASHBOARD_KEY] = {}
     app[CONVERSATION_STATS_KEY] = collections.Counter()
+    app[CODEX_SKILLS_KEY] = {}
+    app[CODEX_SKILLS_LIMIT] = asyncio.Semaphore(2)
     app[CONVERSATION_UNCHANGED_KEY] = UnchangedPolls()
     app[CONVERSATION_REFERENCES_KEY] = ReferenceStore(image_roots=conversation_image_roots,
                                                     workspace_roots=conversation_workspace_roots)
@@ -4796,6 +4954,7 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
     app.router.add_get("/telemetry/spawn-catalog", proxy_dashboard)
     app.router.add_get("/telemetry/spawn-status", proxy_dashboard)
     app.router.add_get("/telemetry/skills", serve_skills)
+    app.router.add_post("/telemetry/prompt-attachment", serve_prompt_attachment)
     app.router.add_get("/telemetry/clipboard/files", serve_clipboard_files)
     app.router.add_get("/telemetry/fs/dirs", serve_fs_dirs)
     app.router.add_get("/telemetry/fs/dir-search", proxy_dashboard)

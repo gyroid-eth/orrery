@@ -100,10 +100,10 @@ Promise.resolve().then(() => console.log(JSON.stringify([detailHtml(message), re
 def test_composer_warning_escapes_the_complete_word():
     cockpit = (BRIDGE / 'cockpit.html').read_text()
     escape = next(line for line in cockpit.splitlines() if line.startswith('function esc('))
-    inspect = cockpit[cockpit.index('const CODEX_DESTRUCTIVE='):cockpit.index('let guardArmed=null;')]
+    inspect = cockpit[cockpit.index('const DESTRUCTIVE_COMMANDS='):cockpit.index('let guardArmed=null;')]
     script = escape + '\n' + inspect
-    script += '\nfunction targetProgram(){return "codex";} const SKILL_PREFIX={codex:"$"}; function skillNamed(){return null;}'
-    script += '\nconsole.log(JSON.stringify(inspectPrompt("/exit<img/src=x>").reason));'
+    script += '\nfunction catalogFor(){return {items:[]};} function skillPrefix(){return "$";}'
+    script += '\nconsole.log(JSON.stringify(inspectPrompt("/exit<img/src=x>",{program:"codex"}).reason));'
     parsed = Tags()
     parsed.feed(run_js(script))
     assert parsed.tags == [('code', {})]
