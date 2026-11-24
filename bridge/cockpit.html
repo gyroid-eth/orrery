@@ -4175,9 +4175,9 @@
       }
     }
   },
-  "inventory_digest": "214770731afdbbd0b25cdb6e906244143ec89bea6caccb5e73c2124752467350",
+  "inventory_digest": "22d995c30730b2e8854bcc200ab0b262cbd4b28ac48c32c46bcc2c3c13b49926",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "c56f43d2cd9d1894b6de3564dab371b3c6f3b80eb4fce371db2e7df692c9bbce",
+  "source_digest": "f54f3f34dfac6e6079db1d0b02bed4f78400b800c1cbe7f976105f795c42bd36",
   "surface": "cockpit",
   "version": 1
 }
@@ -4708,12 +4708,9 @@ function terminalYieldsHostShortcut(event,host){
 function paletteShortcutLabel(host){return usesAltShortcuts(host)?'Alt+K':'⌘K';}
 function splitClickLabel(host){return usesAltShortcuts(host)?'Ctrl+click':'⌘+click';}
 function terminalActionText(host){return usesAltShortcuts(host)?'WIN TERMINAL':'GHOSTTY';}
-/* File, image and file:// pastes need a clipboard reader in the backend: the
-   macOS pasteboard, or under WSL the Windows clipboard via powershell.exe
-   (file_paste says whether that one can run). */
-const PASTE_UNSUPPORTED_MESSAGE='file / image paste is not available on Windows (WSL) here: the backend cannot reach powershell.exe — paste text, or type the path';
-const PASTE_HOST_UNKNOWN_MESSAGE='file / image paste is held: the backend has not said which host it runs on (GET /telemetry/platform) — paste text, or try again';
-/* Why a file / image / file:// paste must not proceed on this host, or ''. */
+/* Native fallback for clipboard payloads the browser could not read. */
+const PASTE_UNSUPPORTED_MESSAGE='The WSL backend cannot read the Windows clipboard. Use the attachment picker.';
+const PASTE_HOST_UNKNOWN_MESSAGE='Could not identify the clipboard host. Try again or use the attachment picker.';
 function composerPasteRefusal(host){
   const kind=host&&host.host;
   if(kind==='wsl')return host.file_paste?'':PASTE_UNSUPPORTED_MESSAGE;
@@ -11805,17 +11802,17 @@ async function resolveComposerTarget(record,connection){
     document.addEventListener('oc:terminal-ready',ready);
   });
 }
-function trackPrompt(target,text){
+function trackPrompt(target,text,displayText=text,attachments=[]){
   const submittedAt=Date.now();
   const attemptId=submittedAt+':attempt:'+(++promptAttemptSequence);
   const notify=(type,detail={})=>document.dispatchEvent(new CustomEvent(type,{detail:{attemptId,name:target.session,...detail}}));
   const {top,right,width}=promptInput.getBoundingClientRect();
-  notify('oc:prompt-sending',{text,startedAt:submittedAt,origin:{top,right,width}});
+  notify('oc:prompt-sending',{text,displayText,attachments,startedAt:submittedAt,origin:{top,right,width}});
   return {
     cancel:()=>notify('oc:prompt-send-cancelled'),
     publish:count=>{
       document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'talk',name:target.session}}));
-      notify('oc:prompt-submitted',{text,submittedAt,id:submittedAt+':'+(++promptSubmissionSequence),broadcastCount:count});
+      notify('oc:prompt-submitted',{text,displayText,submittedAt,id:submittedAt+':'+(++promptSubmissionSequence),broadcastCount:count});
     },
   };
 }
@@ -11860,11 +11857,11 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
           releaseComposerTarget(record.name);
           continue;
         }
-        const prefix=record.vocabulary.program==='claude'?'@':'';
-        const references=paths.map(path=>prefix+path).join('\n');
+        const claude=record.vocabulary.program==='claude';
+        const references=paths.map(path=>(claude?'@':'')+path).join('\n')+(claude&&paths.length?' ':'');
         const body=[record.draft,references].filter(Boolean).join('\n\n');
         const text=compose(body);
-        receipt=trackPrompt(target,text);
+        receipt=trackPrompt(target,text,compose(record.draft),entries);
         status=await confirmedComposerInput(target,pastePayload(text));
         if(status==='accepted'){
           await new Promise(resolve=>setTimeout(resolve,250));
@@ -11904,7 +11901,7 @@ function releaseComposerTarget(name){
      !splitSessions.includes(name)&&pendingJump!==name)detachSession(name,wasDetached);
 }
 function sendPrompt(opts={}){
-  if(promptBusy)return;
+  if(promptBusy||promptFiles.pending)return;
   const draft=promptInput.value;
   const entries=promptFiles.entries;
   if(!draft.trim()&&!entries.length)return;
@@ -11978,7 +11975,7 @@ const promptCard=OrreryPromptComposer.mount({
     const agent=pane&&currentAgentNamed(pane.session);
     const names=promptRecipients.names;
     return {label:names.length>1?`${names.length} agents`:names[0]||pane?.session,
-      count:names.length,explicit:names.length>0,pending:promptBusy,hasFiles:promptFiles.entries.length>0,
+      count:names.length,explicit:names.length>0,pending:promptBusy||promptFiles.pending,hasFiles:promptFiles.entries.length>0,
       working:agent?.running===true&&agent.act_state==='work'};
   },
   submit:()=>sendPrompt(),interrupt:sendInterrupt,onHeightSettled:scheduleFit,
@@ -11993,142 +11990,43 @@ sendGuardFix.addEventListener('click',()=>{
 sendGuardRaw.addEventListener('click',()=>{hideSendGuard();sendPrompt({bypassGuard:true});});
 sendGuardCancel.addEventListener('click',()=>{hideSendGuard();promptInput.focus();});
 
-/* image paste — the composer is a plain textarea, so ⌘V with an image on the
-   clipboard would silently drop it. The TUI itself knows how to read an image
-   from the OS clipboard (ctrl+V), and browser and pty live on the same machine
-   with the same clipboard: forward a literal ^V and let the TUI do the read. */
-/* A path with whitespace pasted bare turns into two arguments the moment the
-   agent puts it in a command; quote only those, so the common case stays
-   readable and copy-pasteable. */
-/* Where the pasted file paths come from. The app's own reader is authoritative
-   when ORRERY is the host; the backend endpoint is the browser fallback. */
-function clipboardFilesOverHttp(reason){
-  return fetch('/telemetry/clipboard/files').then(r=>r.json())
-    .then(j=>reason&&j.error?{files:j.files||[],error:`${reason}; ${j.error}`}:j)
-    .catch(()=>({files:[],error:reason||'clipboard endpoint unreachable'}));
-}
-function readClipboardFiles(){
-  const invoke=window.__TAURI__&&window.__TAURI__.core&&window.__TAURI__.core.invoke;
-  if(!invoke)return clipboardFilesOverHttp('');
-  // The app's reader is preferred, never required: a host that refuses the
-  // command must not take the backend route away with it.
-  return invoke('clipboard_file_paths')
-    .then(files=>{
-      const list=Array.isArray(files)?files:[];
-      return list.length?{files:list}:clipboardFilesOverHttp('');
-    })
-    .catch(error=>{
-      const detail=String((error&&error.message)||error);
-      console.warn('[clipboard] app reader unavailable:',detail);
-      return clipboardFilesOverHttp(`app reader: ${detail}`);
-    });
-}
-function quotePath(path){
-  if(!/[\s'"]/.test(path))return path;
-  return "'"+String(path).replace(/'/g,"'\\''")+"'";
-}
-/* The gate is "the DOM had nothing the textarea can use", not "the DOM saw a
-   file". WKWebView hands a Finder file copy over with no file item *and* no
-   text, so gating on hasFile made the common case fall through to a textarea
-   that then inserted nothing — the paste looked ignored (2026-08-24). */
-function handleComposerPaste(e){
-  const data=e.clipboardData;
-  const items=data?data.items:null;
-  let hasFile=false,hasImage=false;
-  if(items)for(const it of items){
-    if(it.kind!=='file')continue;
-    hasFile=true;
-    if(it.type.indexOf('image/')===0)hasImage=true;
+/* A paste stages browser files first. Finder and Explorer file copies can
+   reach the DOM without File objects, so ask the local host in that case. */
+async function readClipboardAttachments(){
+  const invoke=window.__TAURI__?.core?.invoke;
+  if(invoke){
+    let timeout;
+    try{
+      const result=await Promise.race([
+        invoke('clipboard_file_paths',{attachments:true}),
+        new Promise((_,reject)=>{timeout=setTimeout(reject,4500);}),
+      ]);
+      if(Array.isArray(result?.attachments))return result;
+    }catch(_){}finally{clearTimeout(timeout);}
   }
-  const plain=data?String(data.getData('text/plain')||''):'';
-  if(!hasFile&&plain)return;                // real text: let the textarea have it
-  e.preventDefault();
-  // A host with no reader (WSL without powershell.exe, or not known yet) can
-  // make none of the three routes below succeed: say so, send nothing.
+  const response=await fetch('/telemetry/clipboard/attachments',{
+    method:'POST',headers:{'Content-Type':'application/json'},body:'{}',
+    signal:AbortSignal.timeout(16000),
+  });
+  if(!response.ok)throw new Error('Clipboard unavailable');
+  return response.json();
+}
+function handleComposerPaste(event){
+  const data=event.clipboardData;
+  const files=OrreryPromptAttachments.eventFiles(data);
+  const fileHint=Array.from(data?.types||[]).includes('Files')||
+    Array.from(data?.items||[]).some(item=>item.kind==='file')||/^file:\/\//mi.test(data?.getData('text/uri-list')||'');
+  if(!files.length&&!fileHint&&data?.getData('text/plain'))return;
+  event.preventDefault();
+  if(promptBusy)return;
+  if(files.length){promptFiles.add(files);return;}
   const refusal=composerPasteRefusal(hostPlatform);
   if(refusal){
     showToast(refusal,true);
-    if(hostPlatform.host==='unknown'&&typeof loadHostPlatform==='function')loadHostPlatform();
+    if(hostPlatform.host==='unknown')loadHostPlatform();
     return;
   }
-  // file:// URLs travel as text/uri-list even when no File object exists, and
-  // reading them needs no subprocess — try them before asking the backend.
-  // Under WSL they name Windows paths (file:///C:/…), which only the backend's
-  // wslpath can turn into a path the agent can open, so they are not used.
-  const onWsl=hostPlatform.host==='wsl';
-  const uriList=data&&!onWsl?String(data.getData('text/uri-list')||''):'';
-  const fromUris=uriList.split(/[\r\n]+/)
-    .map(u=>u.trim())
-    .filter(u=>u&&!u.startsWith('#')&&u.startsWith('file://'))
-    .map(u=>{try{return decodeURIComponent(u.slice(7).replace(/^localhost/,''));}
-             catch(_){return '';}})
-    .filter(Boolean);
-  const target=captureComposerTarget(),p=target?.pane;
-  if(!target){showToast('no pane focused — click an agent first');return;}
-  // The DOM knows a file was pasted but never where it lives, so ask the
-  // backend — it shares the pasteboard with the Finder that copied it.
-  const caret=promptInput.selectionStart==null?promptInput.value.length:promptInput.selectionStart;
-  const end=promptInput.selectionEnd==null?caret:promptInput.selectionEnd;
-  const insertPaths=(files,label)=>{
-    if(promptBusy)return;
-    const text=files.map(quotePath).join(' ');
-    const before=promptInput.value.slice(0,caret),after=promptInput.value.slice(end);
-    const pad=before&&!/\s$/.test(before)?' ':'';
-    promptInput.value=before+pad+text+after;
-    const pos=(before+pad+text).length;
-    promptInput.setSelectionRange(pos,pos);
-    promptInput.focus();saveDraft();
-    showToast(label||(files.length===1?`path → composer`:`${files.length} paths → composer`));
-  };
-  if(fromUris.length){insertPaths(fromUris);return;}
-  // Ask the app first: it is the process that owns the GUI session, so its
-  // answer cannot go stale the way a long-lived backend's does. In an ordinary
-  // browser there is no app, and the HTTP endpoint answers instead.
-  readClipboardFiles().then(j=>{
-    const files=Array.isArray(j.files)?j.files:[];
-    // A backend that says it has no reader at all outranks the image
-    // fallback: ^V would be sent and reported although nothing can be read.
-    if(String(j.error||'').includes('clipboard_unsupported')){
-      showToast(PASTE_UNSUPPORTED_MESSAGE,true);
-      return;
-    }
-    if(j.error&&!files.length&&(!hasImage||onWsl)){
-      // a reader that cannot reach the pasteboard is not an empty clipboard
-      showToast(`clipboard reader failed (${j.error})`,true);
-      return;
-    }
-    // Under WSL a pasted screenshot comes back as a PNG the backend saved in
-    // the distro. The TUI there cannot read the Windows clipboard, so ^V would
-    // be reported and read nothing — it is never sent.
-    if(files.length){
-      insertPaths(files,j.image?'image saved as PNG → path → composer':'');
-      // part of a multi-file copy could not become WSL paths: never let the
-      // inserted ones pass for the whole copy
-      const skipped=Array.isArray(j.skipped)?j.skipped:[];
-      if(skipped.length)showToast(`${skipped.length} of ${files.length+skipped.length} files not pasted — no WSL path for: ${skipped.join(', ')}`,true);
-      return;
-    }
-    if(onWsl){
-      showToast(hasImage?'no image on the Windows clipboard the backend could read'
-        :'nothing on the clipboard the composer can use',hasImage);
-      return;
-    }
-    // No file URL on the pasteboard: this is image *data* (a screenshot), not
-    // a file copy. The TUI can read that itself — forward a literal ^V.
-    if(hasImage){
-      if(!composerTargetPresent(target))return;
-      if(!send({type:"input",paneId:target.paneId,data:"\x16"})){showToast('not connected — try again');return;}
-      showToast(`Image paste sent → ${p.session} (TUI clipboard paste)`);
-      return;
-    }
-    showToast('nothing on the clipboard the composer can use');
-  }).catch(()=>{
-    if(hasImage&&!onWsl){
-      if(!composerTargetPresent(target))return;
-      if(!send({type:"input",paneId:target.paneId,data:"\x16"})){showToast('not connected — try again');return;}
-      showToast(`Image paste sent → ${p.session} (TUI clipboard paste)`);
-    }else showToast('could not read the clipboard');
-  });
+  void promptFiles.paste(readClipboardAttachments);
 }
 promptInput.addEventListener('paste',handleComposerPaste);
 

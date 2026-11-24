@@ -1,14 +1,7 @@
-"""The cockpit follows the backend's host: labels, shortcuts and paste (2026-09-28).
+"""Exercise the cockpit's host-specific labels, shortcuts and clipboard routes.
 
-On WSL the page is shown in a Windows browser. The three file routes of the
-composer paste (a file item, an image item, a file:// uri-list) all depend on
-the macOS pasteboard reader, and before this change the image route sent ^V
-and toasted success even when nothing could be read. These run the real
-functions from cockpit.html under node with the host swapped, and check that
-WSL never reports a paste it did not make while the Mac keeps every route.
-Since 2026-09-29 a WSL backend that can run powershell.exe reads the Windows
-clipboard itself (file_paste: true), and only then do the WSL routes proceed.
-
+The Node harness runs the current paste listener and attachment module with
+browser File objects and fixtures for the Mac app and local HTTP clipboard.
 Run from bridge/: ``python -m pytest tests/test_cockpit_host.py``.
 """
 from __future__ import annotations
@@ -23,193 +16,227 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCES = Path(os.environ.get("ORRERY_BRIDGE_SOURCES", ROOT))
 COCKPIT = SOURCES / "cockpit.html"
 
-BLOCKS = (
-    r"/\* ── host: Mac, WSL or plain Linux.*?(?=/\* COCKPIT_PURE_LOGIC_END \*/)",
-    r"function quotePath\(path\)\{.*?\n\}\n",
-    # The paste fixes its target pane when it starts (captureComposerTarget).
-    r"function captureComposerTarget\([^)]*\)\{.*?\n\}\n",
-    r"function composerTargetPresent\(target\)\{.*?\n\}\n",
-    r"function handleComposerPaste\(e\)\{.*?\n\}\n",
+HOST_BLOCK = r"/\* ── host: Mac, WSL or plain Linux.*?(?=/\* COCKPIT_PURE_LOGIC_END \*/)"
+PASTE_BLOCK = (
+    r"^async function readClipboardAttachments\(\).*?"
+    r"^promptInput\.addEventListener\('paste',handleComposerPaste\);"
 )
 
-HARNESS = r"""
-const toasts=[],sent=[],reads=[];let drafts=0;const socket={};
-function showToast(message,isError=false){toasts.push({message,isError});}
-function send(msg){sent.push(msg);return true;}  // connected, as the real send() reports
-function saveDraft(){drafts++;}
-let clipboardAnswer={files:[]};
-function readClipboardFiles(){reads.push(1);return Promise.resolve(clipboardAnswer);}
-const panes=new Map([['%1',{session:'orrery-A'}]]);let activeId='%1';const sessionGroups=new Map();
-let promptBusy=false;
-const promptInput={value:'',selectionStart:0,selectionEnd:0,
-  setSelectionRange(){},focus(){}};
-let hostPlatform;
-function pasteEvent({items=[],plain='',uris=''}={}){
-  const ev={prevented:false,preventDefault(){this.prevented=true;},
-    clipboardData:{items,getData:t=>t==='text/plain'?plain:t==='text/uri-list'?uris:''}};
-  return ev;
-}
-const FILE={kind:'file',type:'application/pdf'};
-const IMAGE={kind:'file',type:'image/png'};
-async function paste(host,spec,answer={files:[]}){
-  hostPlatform=normalizeHostPlatform(host);clipboardAnswer=answer;
-  toasts.length=0;sent.length=0;reads.length=0;promptInput.value='';
-  const ev=pasteEvent(spec);handleComposerPaste(ev);
-  await new Promise(r=>setTimeout(r,0));await new Promise(r=>setTimeout(r,0));
-  return {prevented:ev.prevented,toasts:[...toasts],sent:[...sent],reads:reads.length,
-    value:promptInput.value};
-}
+HOSTS = """
 const MAC={host:'mac',terminal:{kind:'ghostty',label:'Ghostty',available:true},file_paste:true};
 const WSL={host:'wsl',terminal:{kind:'wt',label:'Windows Terminal',available:true},file_paste:false};
 const WSL_READER={...WSL,file_paste:true};
 const LINUX={host:'linux',terminal:{kind:'ghostty',label:'Ghostty',available:true},file_paste:false};
-run().then(r=>console.log(JSON.stringify(r)));
 """
 
+PASTE_HARNESS = r"""
+const {File}=require('node:buffer');
+const calls=[],toasts=[],sent=[],listeners=new Map();
+let hostPlatform,promptBusy=false,hostReloads=0;
+let snapshot;
+const promptInput={
+  value:'',
+  addEventListener(name,handler){listeners.set(name,handler);}
+};
+function showToast(message,isError=false){toasts.push({message,isError});}
+function send(packet){sent.push(packet);return true;}
+function loadHostPlatform(){hostReloads++;}
 
-def _run(body: str):
+function node(){
+  return {
+    addEventListener(){},setAttribute(){},focus(){},append(){},replaceChildren(){},
+    classList:{add(){}},
+  };
+}
+const document={createElement:node,createElementNS:node};
+const promptFiles=OrreryPromptAttachments.mount({
+  host:node(),clip:node(),picker:node(),list:node(),
+  onChange(){},onError:message=>showToast(message,true),mayEdit:()=>!promptBusy,
+});
+const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jZioAAAAASUVORK5CYII=','base64');
+const IMAGE={name:'Clipboard image.png',type:'image/png',data:PNG.toString('base64')};
+const NOTE={name:'資料 with space.txt',type:'text/plain',data:Buffer.from('Fixture note').toString('base64')};
+const fileOf=entry=>new File([Buffer.from(entry.data,'base64')],entry.name,{type:entry.type});
+globalThis.fetch=async (url,options)=>{
+  calls.push({via:'http',url,method:options.method,body:options.body,type:options.headers['Content-Type']});
+  return {ok:snapshot!==null,json:async()=>snapshot};
+};
+async function paste(host,{files=[],items=[],types=[],plain='',uris='',app,busy=false,answer={attachments:[]}}={}){
+  promptFiles.clear();
+  calls.length=0;toasts.length=0;sent.length=0;hostReloads=0;
+  hostPlatform=normalizeHostPlatform(host);
+  snapshot=answer;
+  promptBusy=busy;
+  promptInput.value='Keep this draft';
+  window.__TAURI__=app===undefined?undefined:{core:{invoke:async (command,args)=>{
+    calls.push({via:'app',command,args});
+    if(app===false)throw Error('app failure');
+    return app;
+  }}};
+  const event={
+    prevented:false,preventDefault(){this.prevented=true;},
+    clipboardData:{files,items,types,getData:type=>type==='text/plain'?plain:type==='text/uri-list'?uris:''},
+  };
+  listeners.get('paste')(event);
+  await new Promise(resolve=>setImmediate(resolve));
+  const attachments=await Promise.all(promptFiles.entries.map(async entry=>({
+    name:entry.file.name,kind:entry.kind,preview:!!entry.preview,
+    data:Buffer.from(await entry.file.arrayBuffer()).toString('base64'),
+  })));
+  return {prevented:event.prevented,value:promptInput.value,hostReloads,attachments,
+    calls:[...calls],sent:[...sent],toasts:[...toasts]};
+}
+"""
+
+HTTP = {"via": "http", "url": "/telemetry/clipboard/attachments", "method": "POST",
+        "body": "{}", "type": "application/json"}
+APP = {"via": "app", "command": "clipboard_file_paths", "args": {"attachments": True}}
+
+
+def _run(body: str, *, paste=False):
     html = COCKPIT.read_text(encoding="utf-8")
-    parts = []
-    for pattern in BLOCKS:
-        match = re.search(pattern, html, re.DOTALL)
-        assert match, f"missing block in cockpit.html: {pattern}"
-        parts.append(match.group(0))
-    script = "\n".join([f"async function run(){{\n{body}\n}}", *parts, HARNESS])
-    done = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
+    host = re.search(HOST_BLOCK, html, re.DOTALL)
+    assert host, "missing cockpit host logic"
+    parts = [host.group(0), HOSTS]
+    if paste:
+        listener = re.search(PASTE_BLOCK, html, re.DOTALL | re.MULTILINE)
+        assert listener, "missing composer clipboard listener"
+        assets = (SOURCES / "prompt_attachments.js").read_text(encoding="utf-8")
+        parts.extend(["const window=globalThis;", assets, PASTE_HARNESS, listener.group(0)])
+    parts.extend([f"async function run(){{\n{body}\n}}",
+                  "run().then(result=>console.log(JSON.stringify(result))).catch(error=>{"
+                  "console.error(error);process.exitCode=1;});"])
+    done = subprocess.run(["node", "-e", "\n".join(parts)], capture_output=True, text=True, check=False)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
+
+
+def _paste(body):
+    return _run(body, paste=True)
+
+
+def assert_staged(out, names):
+    assert out["prevented"]
+    assert out["value"] == "Keep this draft"
+    assert out["sent"] == []
+    assert [(entry["name"], entry["kind"], entry["preview"]) for entry in out["attachments"]] == names
 
 
 # --- paste ---------------------------------------------------------------------
 
 
-def test_wsl_without_a_reader_does_not_report_any_of_the_three_file_routes_as_done():
-    r = _run("""return {
-      file:await paste(WSL,{items:[FILE]},{files:['/tmp/x.pdf']}),
-      image:await paste(WSL,{items:[IMAGE]}),
-      imageAfterReaderError:await paste(WSL,{items:[IMAGE]},{files:[],error:'clipboard_unsupported'}),
-      uri:await paste(WSL,{uris:'file:///C:/Users/u/x.pdf'}),
+def test_browser_files_stage_on_mac_wsl_and_linux_even_without_a_host_reader():
+    result = _paste("""
+      const outputs=[];
+      for(const host of [MAC,WSL,LINUX,null])outputs.push(await paste(host,{
+        files:[fileOf(IMAGE),fileOf(NOTE)],plain:'A text representation of the files',
+      }));
+      return outputs;
+    """)
+    for out in result:
+        assert_staged(out, [("Clipboard image.png", "image", True), ("資料 with space.txt", "file", False)])
+        assert out["attachments"][0]["data"].startswith("iVBORw0KGgo")
+        assert out["attachments"][1]["data"] == "Rml4dHVyZSBub3Rl"
+        assert out["calls"] == out["toasts"] == []
+        assert out["hostReloads"] == 0
+
+
+def test_linux_reads_an_image_from_clipboard_items_if_file_list_is_empty():
+    result = _paste("""return paste(LINUX,{items:[
+      {kind:'string'}, {kind:'file',getAsFile:()=>new File([PNG],'capture',{type:'image/png'})},
+    ]});""")
+    assert_staged(result, [("capture.png", "image", True)])
+    assert result["calls"] == result["toasts"] == []
+
+
+def test_wsl_without_reader_keeps_the_draft_and_reports_why_native_paste_is_unavailable():
+    result = _paste("""return paste(WSL,{types:['Files'],uris:'file:///C:/Users/u/Note%20one.txt'});""")
+    assert_staged(result, [])
+    assert result["calls"] == []
+    [error] = result["toasts"]
+    assert error["isError"] and "Windows clipboard" in error["message"]
+
+
+def test_unknown_host_refreshes_platform_before_trying_native_paste():
+    result = _paste("""return paste(null,{types:['Files']});""")
+    assert_staged(result, [])
+    assert result["calls"] == []
+    assert result["hostReloads"] == 1
+    assert [toast["isError"] for toast in result["toasts"]] == [True]
+
+
+def test_wsl_reader_stages_explorer_bytes_and_screenshots_without_inserting_windows_paths():
+    result = _paste("""return {
+      explorer:await paste(WSL_READER,{
+        uris:'file:///C:/Users/u/Note%20one.txt',plain:'C:/Users/u/Note one.txt',
+        answer:{attachments:[NOTE]},
+      }),
+      screenshot:await paste(WSL_READER,{types:['Files'],answer:{attachments:[IMAGE]}}),
     };""")
-    for route, out in r.items():
-        assert out["prevented"], route
-        assert out["sent"] == [], route          # no ^V to the TUI
-        assert out["reads"] == 0, route          # no pasteboard reader asked
-        assert out["value"] == "", route         # nothing inserted
-        assert len(out["toasts"]) == 1, route
-        toast = out["toasts"][0]
-        assert toast["isError"] is True, route
-        assert "not available on Windows" in toast["message"], route
+    assert_staged(result["explorer"], [("資料 with space.txt", "file", False)])
+    assert_staged(result["screenshot"], [("Clipboard image.png", "image", True)])
+    for out in result.values():
+        assert out["calls"] == [HTTP]
+        assert out["toasts"] == []
 
 
-def test_an_undetermined_host_holds_the_three_file_routes():
-    """Before /telemetry/platform answers, or when it failed, nothing is sent
-    and nothing is reported as pasted (review of PR #2: the image route used
-    to fall back to ^V and a success toast on a WSL backend)."""
-    r = _run("""return {
-      file:await paste(null,{items:[FILE]},{files:['/tmp/x.pdf']}),
-      image:await paste(null,{items:[IMAGE]},{files:[],error:'clipboard_unsupported'}),
-      imageBadAnswer:await paste({host:'windows'},{items:[IMAGE]}),
-      uri:await paste(undefined,{uris:'file:///C:/Users/u/x.pdf'}),
-      text:await paste(null,{plain:'hello'}),
+def test_wsl_keeps_successful_files_when_the_native_reader_skips_one():
+    result = _paste("""return paste(WSL_READER,{answer:{attachments:[NOTE],skipped:1}});""")
+    assert_staged(result, [("資料 with space.txt", "file", False)])
+    assert result["calls"] == [HTTP]
+    assert result["toasts"] == [{"message": "1 clipboard item could not be attached.", "isError": True}]
+
+
+def test_native_reader_failures_do_not_send_to_the_terminal():
+    result = _paste("""return [
+      await paste(WSL_READER,{answer:{attachments:[]}}),
+      await paste(WSL_READER,{answer:{error:'clipboard_no_session'}}),
+      await paste(LINUX,{answer:{error:'clipboard_unsupported'}}),
+      await paste(MAC,{answer:null}),
+    ];""")
+    for out in result:
+        assert_staged(out, [])
+        assert out["calls"] == [HTTP]
+        assert [toast["isError"] for toast in out["toasts"]] == [True]
+
+
+def test_mac_uses_the_app_snapshot_and_falls_back_to_http_after_old_app_or_error():
+    result = _paste("""return {
+      app:await paste(MAC,{app:{attachments:[NOTE]}}),
+      emptyApp:await paste(MAC,{app:{attachments:[]},answer:{attachments:[NOTE]}}),
+      oldApp:await paste(MAC,{app:['/old/path'],answer:{attachments:[IMAGE]}}),
+      failedApp:await paste(MAC,{app:false,answer:{attachments:[IMAGE]}}),
+      browser:await paste(MAC,{answer:{attachments:[IMAGE]}}),
     };""")
-    for route in ("file", "image", "imageBadAnswer", "uri"):
-        out = r[route]
-        assert out["prevented"], route
-        assert out["sent"] == [] and out["reads"] == 0 and out["value"] == "", route
-        assert [t["isError"] for t in out["toasts"]] == [True], route
-        assert "held" in out["toasts"][0]["message"], route
-    assert r["text"]["prevented"] is False and r["text"]["toasts"] == []
+    assert_staged(result["app"], [("資料 with space.txt", "file", False)])
+    assert_staged(result["emptyApp"], [])
+    assert result["app"]["calls"] == result["emptyApp"]["calls"] == [APP]
+    for route in ("oldApp", "failedApp", "browser"):
+        assert_staged(result[route], [("Clipboard image.png", "image", True)])
+        assert result[route]["calls"] == ([HTTP] if route == "browser" else [APP, HTTP])
 
 
-def test_a_backend_without_a_reader_outranks_the_image_fallback():
-    """Even on a host that allows the reader, clipboard_unsupported stops ^V."""
-    r = _run("""return {
-      mac:await paste(MAC,{items:[IMAGE]},{files:[],error:'clipboard_unsupported'}),
-      prefixed:await paste(MAC,{items:[IMAGE]},{files:[],error:'app reader: x; clipboard_unsupported'}),
-      linux:await paste(LINUX,{items:[IMAGE]},{files:[],error:'clipboard_unsupported'}),
-    };""")
-    for route, out in r.items():
-        assert out["sent"] == [], route
-        assert [t["isError"] for t in out["toasts"]] == [True], route
-        assert "not available" in out["toasts"][0]["message"], route
+def test_text_paste_is_left_to_the_textarea_on_every_host():
+    result = _paste("""return [
+      await paste(MAC,{plain:'hello'}),
+      await paste(WSL,{plain:'hello'}),
+      await paste(WSL_READER,{plain:'hello'}),
+      await paste(LINUX,{plain:'hello'}),
+      await paste(null,{plain:'hello'}),
+    ];""")
+    for out in result:
+        assert not out["prevented"]
+        assert out["calls"] == out["toasts"] == out["attachments"] == out["sent"] == []
 
 
-def test_wsl_with_the_powershell_reader_pastes_windows_files_as_wsl_paths():
-    """2026-09-29: the backend reads the Windows clipboard, so an Explorer
-    copy lands as /mnt/c/... paths and a screenshot as the PNG it saved."""
-    r = _run("""return {
-      file:await paste(WSL_READER,{items:[FILE]},{files:['/mnt/c/Users/u/a b.pdf']}),
-      image:await paste(WSL_READER,{items:[IMAGE]},
-        {files:['/tmp/orrery-clipboard-1000/clipboard-1.png'],image:true}),
-      uri:await paste(WSL_READER,{uris:'file:///C:/Users/u/x.pdf'},{files:['/mnt/c/Users/u/x.pdf']}),
-    };""")
-    assert r["file"]["value"] == "'/mnt/c/Users/u/a b.pdf'" and r["file"]["reads"] == 1
-    assert r["image"]["value"] == "/tmp/orrery-clipboard-1000/clipboard-1.png"
-    assert r["image"]["toasts"] == [{"message": "image saved as PNG → path → composer",
-                                     "isError": False}]
-    # the Windows file:// URI is never decoded into /C:/...; the backend answers
-    assert r["uri"]["value"] == "/mnt/c/Users/u/x.pdf" and r["uri"]["reads"] == 1
-    for route, out in r.items():
-        assert out["prevented"] and out["sent"] == [], route
-
-
-def test_wsl_says_which_files_did_not_become_wsl_paths():
-    r = _run("""return await paste(WSL_READER,{items:[FILE]},
-      {files:['/mnt/c/a.txt'],skipped:['\\\\\\\\server\\\\x.pdf']});""")
-    assert r["value"] == "/mnt/c/a.txt"
-    assert r["toasts"][-1]["isError"] is True
-    assert r["toasts"][-1]["message"].startswith("1 of 2 files not pasted")
-    assert "server" in r["toasts"][-1]["message"]
-
-
-def test_wsl_never_falls_back_to_ctrl_v():
-    """The TUI inside WSL cannot read the Windows clipboard: ^V would be
-    reported as an image paste that read nothing."""
-    r = _run("""return {
-      empty:await paste(WSL_READER,{items:[IMAGE]},{files:[]}),
-      noSession:await paste(WSL_READER,{items:[IMAGE]},{files:[],error:'clipboard_no_session'}),
-      file:await paste(WSL_READER,{items:[FILE]},{files:[]}),
-    };""")
-    for route, out in r.items():
-        assert out["sent"] == [] and out["value"] == "", route
-        assert len(out["toasts"]) == 1, route
-    assert r["empty"]["toasts"][0]["isError"] is True
-    assert "Windows clipboard" in r["empty"]["toasts"][0]["message"]
-    assert r["noSession"]["toasts"][0] == {
-        "message": "clipboard reader failed (clipboard_no_session)", "isError": True}
-    assert r["file"]["toasts"][0]["message"] == "nothing on the clipboard the composer can use"
-
-
-def test_wsl_keeps_plain_text_paste():
-    for host in ("WSL", "WSL_READER"):
-        r = _run(f"return await paste({host},{{plain:'hello'}});")
-        assert r == {"prevented": False, "toasts": [], "sent": [], "reads": 0, "value": ""}
-
-
-def test_the_mac_keeps_every_route():
-    r = _run("""return {
-      file:await paste(MAC,{items:[FILE]},{files:['/tmp/a b.pdf']}),
-      image:await paste(MAC,{items:[IMAGE]}),
-      uri:await paste(MAC,{uris:'file:///Users/u/x.pdf'}),
-      text:await paste(MAC,{plain:'hello'}),
-    };""")
-    assert r["file"]["value"] == "'/tmp/a b.pdf'"
-    assert r["file"]["toasts"] == [{"message": "path → composer", "isError": False}]
-    assert r["image"]["sent"] == [{"type": "input", "paneId": "%1", "data": "\x16"}]
-    assert r["image"]["toasts"][0]["message"].startswith("Image paste sent → orrery-A")
-    assert r["uri"]["value"] == "/Users/u/x.pdf" and r["uri"]["reads"] == 0
-    assert r["text"]["prevented"] is False
-
-
-def test_plain_linux_paste_is_unchanged():
-    r = _run("return await paste(LINUX,{items:[IMAGE]});")
-    assert r["reads"] == 1
-    assert r["sent"] == [{"type": "input", "paneId": "%1", "data": "\x16"}]
-
-
-def test_the_handler_is_the_one_on_the_composer():
-    html = COCKPIT.read_text(encoding="utf-8")
-    assert "promptInput.addEventListener('paste',handleComposerPaste);" in html
+def test_new_clipboard_attachments_are_ignored_while_sending():
+    result = _paste("""return [
+      await paste(MAC,{files:[fileOf(IMAGE)],busy:true}),
+      await paste(WSL_READER,{answer:{attachments:[IMAGE]},busy:true}),
+    ];""")
+    for out in result:
+        assert_staged(out, [])
+        assert out["calls"] == out["toasts"] == []
 
 
 # --- shortcuts -----------------------------------------------------------------

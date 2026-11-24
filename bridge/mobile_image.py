@@ -21,10 +21,10 @@ def available():
     return Image is not None
 
 
-def save_image(workspace, encoded):
+def save_image(workspace, encoded, *, label=None):
     """Re-encode pixels, strip metadata, and return a random absolute path.
 
-    No subprocess, registry, client filename, or caller-selected destination.
+    The supplied label is display-only. The caller cannot choose a destination.
     DrvFS may inherit Windows ACLs instead of honoring POSIX mode bits; never
     claim that chmod makes a Windows-shared directory private.
     """
@@ -58,6 +58,6 @@ def save_image(workspace, encoded):
         raise
     except Exception:
         raise ValueError('image_invalid') from None
-    path = store(workspace, 'image', extension, output.getvalue())
+    path = store(workspace, 'image', extension, output.getvalue(), label=label)
     remember_saved(path)
     return path
