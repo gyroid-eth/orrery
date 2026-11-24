@@ -181,31 +181,36 @@ def test_composer_uses_the_harness_not_the_model_vendor(tour_browser,harness,mod
     result=evaluate('''(()=>{
       currentAgents=[{name:'MixedHarness',program:HARNESS,provider:'openai',model:MODEL}];
       panes.set('fixture',{session:'MixedHarness'});activeId='fixture';
-      return {program:targetProgram(),prefix:targetPrefix()};
+      const vocabulary=composerVocabulary();
+      return {program:vocabulary.program,prefix:skillPrefix(vocabulary)};
     })()'''.replace('HARNESS',json.dumps(harness)).replace('MODEL',json.dumps(model)))
     expected={'codex-cli':'codex','claude-code':'claude'}.get(harness,harness)
     assert result==dict(program=expected,prefix='$' if expected=='codex' else '/')
 
 
 @pytest.mark.parametrize('program',['antigravity','antigravity-cli','Antigravity-agent'])
-def test_antigravity_composer_retains_gemini_destructive_confirmation(tour_browser,program):
+def test_antigravity_composer_keeps_destructive_confirmation(tour_browser,program):
     _,evaluate=tour_browser
     result=evaluate('''(()=>{
       currentAgents=[{name:'GeminiFixture',program:PROGRAM,provider:'google',model:'gemini-fixture'}];
       panes.set('fixture',{session:'GeminiFixture'});activeId='fixture';
-      return {program:targetProgram(),prefix:targetPrefix(),reason:inspectPrompt('/quit').reason};
+      const vocabulary=composerVocabulary();
+      return {program:vocabulary.program,prefix:skillPrefix(vocabulary),reason:inspectPrompt('/quit',vocabulary).reason};
     })()'''.replace('PROGRAM',json.dumps(program)))
-    assert result['program']=='gemini' and result['prefix']=='/'
-    assert 'destructive builtin on gemini' in result['reason']
+    assert result['program']=='agy' and result['prefix']=='/'
+    assert result['reason']=='<code>/quit</code> can end or reset the agy session.'
 
 
 @pytest.mark.parametrize('program',['antigravity','antigravity-cli','Antigravity-agent'])
-def test_antigravity_skills_http_uses_real_gemini_collection(monkeypatch,tmp_path,program):
+def test_antigravity_skills_http_uses_its_own_collection(monkeypatch,tmp_path,program):
     from aiohttp import web
     from aiohttp.test_utils import TestClient, TestServer
-    skill=tmp_path/'fixture-skill';skill.mkdir()
-    (skill/'SKILL.md').write_text('# Fixture skill\nRead only test description.\n')
-    monkeypatch.setitem(ob.SKILL_SOURCES,'gemini',dict(dir=str(tmp_path),prefix='/'))
+    for harness,name in [('agy','antigravity-skill'),('gemini','gemini-skill')]:
+        root=tmp_path/harness
+        skill=root/name
+        skill.mkdir(parents=True)
+        (skill/'SKILL.md').write_text('# Fixture skill\nRead only test description.\n')
+        monkeypatch.setitem(ob.SKILL_SOURCES,harness,dict(dir=str(root),prefix='/'))
     monkeypatch.setattr(ob,'_skills_cache',{})
     async def check():
         app=web.Application();app.router.add_get('/api/skills',ob.serve_skills)
@@ -214,8 +219,8 @@ def test_antigravity_skills_http_uses_real_gemini_collection(monkeypatch,tmp_pat
             assert response.status==200
             return await response.json()
     result=asyncio.run(check())
-    assert result['program']=='gemini' and result['prefix']=='/'
-    assert any(skill['name']=='fixture-skill' for skill in result['skills'])
+    assert result['program']=='agy' and result['prefix']=='/'
+    assert [skill['name'] for skill in result['skills'] if skill['kind']=='skill']==['antigravity-skill']
 
 
 def test_unknown_effort_tolerates_slider_mount_without_children(tour_browser):
