@@ -236,9 +236,12 @@ def start_pane(js, cols=None):
         time.sleep(.1)
 
 
-def open_demo(go, js):
-    go("demo=1")
-    assert wait(js, "document.documentElement.dataset.demo==='on'")
+DEMO_READY = "document.readyState!=='loading' && document.documentElement.dataset.demo==='on'"
+
+
+def open_demo(go, js, query="demo=1"):
+    go(query)
+    assert wait(js, DEMO_READY)
 
 
 def test_terminal_names_are_masked_where_drawn_split_slow_coloured_or_prompted():
@@ -356,8 +359,7 @@ def test_a_dom_copy_restores_each_node_at_its_own_place():
 def test_fields_show_the_mask_and_keep_the_real_value():
     """P2-2: a restored draft holding a home path and the host name."""
     with browser() as (go, js):
-        go("demo=1")
-        assert wait(js, "document.documentElement.dataset.demo==='on'")
+        open_demo(go, js)
         time.sleep(.5)
         field = js("""(()=>{const f=document.getElementById('promptInput');const o=f.__demoOverlay;
           return {value:f.value,overlay:o?o.textContent:null,color:getComputedStyle(f).color,
@@ -378,8 +380,7 @@ def test_fields_show_the_mask_and_keep_the_real_value():
 def test_the_telemetry_frame_is_never_shown_before_it_is_masked():
     """P2-1: the frame's document was painted before its load event."""
     with browser() as (go, js):
-        go("demo=1")
-        assert wait(js, "document.documentElement.dataset.demo==='on'")
+        open_demo(go, js)
         js("openNetwork({focus:''})")
         seen = []
         deadline = time.time() + 4.5
@@ -440,8 +441,7 @@ def test_saved_words_are_masked_on_screen_and_copied_as_they_are():
         go("demo=0")
         assert wait(js, "typeof OrreryDemo!=='undefined'")
         js("OrreryDemo.setWords(['Kobo'],{reload:false})")
-        go("demo=1")
-        assert wait(js, "document.documentElement.dataset.demo==='on'")
+        open_demo(go, js)
         assert js(WORD_CHECK) == ["Ask **** about kobold", "Ask Kobo about kobold"]
         start_pane(js)
         write(js, "mail from KOBO: hi\r\n")
@@ -455,8 +455,7 @@ def test_saved_words_are_masked_on_screen_and_copied_as_they_are():
 
 def test_words_in_the_url_count_for_that_page_and_its_pane_windows():
     with browser() as (go, js):
-        go("demo=1&mask=Kobo,%E3%83%9F%E3%83%A9%E3%83%8E")
-        assert wait(js, "document.documentElement.dataset.demo==='on'")
+        open_demo(go, js, "demo=1&mask=Kobo,%E3%83%9F%E3%83%A9%E3%83%8E")
         shown = js("""(async()=>{const d=document.createElement('div');d.textContent='Kobo and ミラノさん';
           document.body.appendChild(d);await new Promise(r=>setTimeout(r,50));return d.textContent;})()""")
         assert shown == "**** and ＊＊＊さん"
@@ -494,7 +493,7 @@ def test_a_wrapped_name_whose_other_rows_are_out_of_view_is_masked(scroll, shown
 
 def open_strict_demo(go, js):
     go("demo=0")
-    assert wait(js, "typeof OrreryDemo!=='undefined'")
+    assert wait(js, "document.readyState!=='loading' && window.OrreryDemo?.on===false")
     js("document.getElementById('demoMaskLocations').click()")
     assert js("OrreryDemo.storedLocations() && OrreryDemo.mask('https://fixture.invalid')==='https://fixture.invalid'")
     open_demo(go, js)
@@ -505,8 +504,13 @@ def test_location_switch_applies_only_in_demo_and_keeps_the_name_mask():
         open_strict_demo(go, js)
         assert js("OrreryDemo.mask('/Users/mira/path https://fixture.invalid/secret')") == "[path] [URL]"
         assert js("document.getElementById('demoMaskLocations').checked")
+        previous_document = js("performance.timeOrigin")
         js("document.getElementById('demoMaskLocations').click()")
-        assert wait(js, "OrreryDemo.known&&!OrreryDemo.storedLocations()&&document.documentElement.dataset.demo==='on'")
+        # Storage changes before the reload replaces the old mask.
+        assert wait(
+            js, f"performance.timeOrigin!=={previous_document} && {DEMO_READY}"
+            " && window.OrreryDemo?.known && !OrreryDemo.storedLocations()",
+        )
         assert js("OrreryDemo.mask('/Users/mira/path https://fixture.invalid/secret')") == "/Users/****/path https://fixture.invalid/secret"
 
 
