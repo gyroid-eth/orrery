@@ -27,7 +27,7 @@ BLOCKS = (
     r"/\* ── host: Mac, WSL or plain Linux.*?(?=/\* COCKPIT_PURE_LOGIC_END \*/)",
     r"function quotePath\(path\)\{.*?\n\}\n",
     # The paste fixes its target pane when it starts (captureComposerTarget).
-    r"function captureComposerTarget\(\)\{.*?\n\}\n",
+    r"function captureComposerTarget\([^)]*\)\{.*?\n\}\n",
     r"function composerTargetPresent\(target\)\{.*?\n\}\n",
     r"function handleComposerPaste\(e\)\{.*?\n\}\n",
 )
@@ -39,7 +39,8 @@ function send(msg){sent.push(msg);return true;}  // connected, as the real send(
 function saveDraft(){drafts++;}
 let clipboardAnswer={files:[]};
 function readClipboardFiles(){reads.push(1);return Promise.resolve(clipboardAnswer);}
-const panes=new Map([['%1',{session:'orrery-A'}]]);let activeId='%1';
+const panes=new Map([['%1',{session:'orrery-A'}]]);let activeId='%1';const sessionGroups=new Map();
+let promptBusy=false;
 const promptInput={value:'',selectionStart:0,selectionEnd:0,
   setSelectionRange(){},focus(){}};
 let hostPlatform;
@@ -303,6 +304,10 @@ function createPane(session,meta){panes.set(meta.paneId,{session});}
 function focusSession(){} function focusSplitSession(){} function applyAutoClaims(){}
 const MAX_ATTACHED_SESSIONS=12;
 const events={};let socket=null;const wsUrl='private';
+const composerAttaching=new Map();
+const document={dispatchEvent(){}};
+class CustomEvent{constructor(type,options){this.type=type;this.detail=options.detail;}}
+function cancelComposerAcks(){}
 class WebSocket{addEventListener(name,fn){events[name]=fn;}}
 function setLink(...args){links.push(args);} function scheduleFit(){} function scheduleReconnect(){}
 function reset(session,generation){handle({type:'reset',session,incarnation:'i',attachGeneration:generation,panes:[{paneId:session+'-pane'}]});}

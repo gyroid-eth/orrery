@@ -154,11 +154,15 @@ def test_any_tour_keeps_its_own_steps_key_and_fold():
 def prompt(connected=True, pane=True, text='Hello', guarded=False):
     source = (BRIDGE / 'cockpit.html').read_text()
     # sendPrompt fixes its target pane when it starts; take those helpers as they are.
-    fn = re.search(r'function captureComposerTarget\(\)\{.*?(?=\nfunction sendInterrupt)', source, re.S).group()
-    return node("const events=[];let cleared=false;const activeId='pane';const socket={};"
+    fn = re.search(r'function captureComposerTarget\([^)]*\)\{.*?(?=\nfunction sendInterrupt)', source, re.S).group()
+    return node("const events=[];const activeId='pane';const socket={};"
                 f"const promptInput={{value:{json.dumps(text)}}};"
                 f"const panes=new Map({json.dumps([['pane', {'session': 'Test'}]] if pane else [])});"
-                # Only the tour step counts here; oc:prompt-submitted is for the history reader.
+                "const sessionGroups=new Map(),promptRecipientPins=new Map();"
+                "const promptFiles={entries:[],clear(){}};"
+                "const promptRecipients={names:[],close(){}};"
+                "function composerVocabulary(){return {program:'claude'};}"
+                # Only the tour step counts here; the receipt events are for the Reader.
                 "const document={dispatchEvent:e=>{if(e.type==='oc:tour-action')events.push(e.detail.id);}};"
                 "class CustomEvent{constructor(type,v){this.type=type;this.detail=v.detail;}}"
                 f"function send(){{return {str(connected).lower()};}}"
@@ -360,7 +364,7 @@ def test_dom_map_never_draws_crossing_leaders_while_the_window_changes(tour_brow
 
     def check(width, height):
         client.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=1, mobile=False)
-        result = evaluate(MAP_LAYOUT)
+        result = evaluate("window.dispatchEvent(new Event('resize'));" + MAP_LAYOUT)
         seen.add('legend' if result['compact'] else 'scale' + result['scale'])
         ok = not result['crossings'] and (result['compact'] or (
             not result['overlap'] and result['within'] and result['vertically']
@@ -371,8 +375,9 @@ def test_dom_map_never_draws_crossing_leaders_while_the_window_changes(tour_brow
     for width in range(1120, 1441, 40):
         for height in (660, 720, 800, 880, 940):
             check(width, height)
-    # The expanded mini graph moves the Mail target down and exercises the
-    # smallest labelled layout in a window that can still draw all the leaders.
+    # The taller composer reaches the smallest labelled scale below the sweep.
+    check(1200, 640)
+    # Also exercise the map after expanding the mini graph.
     evaluate("document.getElementById('helpMapBtn').click();document.getElementById('mailGraphBtn').click()")
     check(1200, 600)
     assert bad == []

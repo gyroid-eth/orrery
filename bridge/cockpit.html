@@ -4160,9 +4160,9 @@
       }
     }
   },
-  "inventory_digest": "388dc31c3d81f06e36362903d33aaf1fe31f4c3453bfa9c0dbd083d02881e199",
+  "inventory_digest": "c0d77a40344f41a6204ec269cb3d0b9b2ce5532cd1489e05ba93bf723187aa8c",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "b23efe265c7c6d849f396622bb16113828ede80e91b61a0c1be2dcb919603b3a",
+  "source_digest": "12cfce6319adfeecaf7729f4d9721af2acf3ee9edc6a9b1d9cb8dda0cc5df399",
   "surface": "cockpit",
   "version": 1
 }
@@ -11511,9 +11511,17 @@ function skillToken(text){
   return match?{start:match[1].length,end:match[0].length,prefix:match[2],name:match[3]}:null;
 }
 function inspectPrompt(text,context=composerVocabulary()){
-  const token=skillToken(text);
-  if(!token)return null;
   const {program}=context;
+  const destructiveCommands=DESTRUCTIVE_COMMANDS[program]||[];
+  const destructiveReason=word=>`<code>${esc(word)}</code> can end or reset the ${esc(program)} session.`;
+  const token=skillToken(text);
+  if(!token){
+    // Keep confirmation for commands followed by punctuation. The strict
+    // skill token parser must never rewrite a malformed command.
+    const word=/^\s*(\/([A-Za-z0-9_]+)\b\S*)/.exec(text);
+    return word&&destructiveCommands.includes(word[2])?
+      {reason:destructiveReason(word[1]),fix:null,fixLabel:null}:null;
+  }
   const items=catalogFor(context).items;
   const name=token.name;
   const skill=items.find(item=>item.name===name&&item.kind!=='builtin');
@@ -11521,11 +11529,11 @@ function inspectPrompt(text,context=composerVocabulary()){
     program==='codex'&&OFFLINE_CODEX_COMMANDS.has(name);
   const right=skillPrefix(context);
   const command=token.prefix==='/';
-  const destructive=(DESTRUCTIVE_COMMANDS[program]||[]).some(value=>
+  const destructive=destructiveCommands.some(value=>
     value===name||program==='codex'&&!builtin&&value.startsWith(name));
   const fix=skill&&token.prefix!==right?text.slice(0,token.start)+right+name+text.slice(token.end):null;
   if(command&&destructive)return {
-    reason:`<code>/${esc(name)}</code> can end or reset the ${esc(program)} session.`,
+    reason:destructiveReason('/'+name),
     fix,fixLabel:fix?`Use ${right}${name}`:null,
   };
   if(command&&builtin)return null;
