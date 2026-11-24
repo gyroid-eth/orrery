@@ -122,11 +122,27 @@ def test_safe_links_open_in_a_new_tab_without_referrer():
     assert '<a href="mailto:a@example.com"' in out
 
 
-def test_an_image_is_a_label_and_is_never_fetched():
+def test_remote_images_are_links_and_relative_images_stay_text():
     out = html('![chart](https://example.com/x.png) ![](local.png)')
-    assert out == ('<p><span class="markdown-image" title="https://example.com/x.png">[image: chart]</span>'
+    assert out == ('<p><a class="markdown-image" href="https://example.com/x.png" target="_blank" rel="noopener noreferrer" '
+                   'title="https://example.com/x.png">chart · https://example.com/x.png</a>'
                    ' <span class="markdown-image" title="local.png">[image]</span></p>')
     assert '<img' not in out
+
+
+@pytest.mark.parametrize('target', ['/fixture/plot.png', '~/fixture/Plot (draft).JPEG', '/fixture/plot.gif', '/fixture/plot.webp'])
+def test_local_raster_images_start_as_preview_links(target):
+    out = html(f'![<b>chart</b>](<{target}>)')
+    assert ('href="#" title="Preview '+target+'" data-localPath="'+target+'" '
+            'data-markdownImage="&lt;b&gt;chart&lt;/b&gt;"') in out
+    assert '&lt;b&gt;chart&lt;/b&gt; · ' + target in out
+    assert '<img' not in out and '<b>' not in out
+
+
+@pytest.mark.parametrize('target', ['//example.com/x.png', 'file:///fixture/x.png', 'data:image/png,x', '/fixture/x.svg'])
+def test_unsupported_image_targets_cannot_request_a_preview(target):
+    out = html(f'![chart]({target})')
+    assert out == f'<p><span class="markdown-image" title="{target}">[image: chart]</span></p>'
 
 
 def test_deep_nesting_and_unclosed_marks_stay_bounded():

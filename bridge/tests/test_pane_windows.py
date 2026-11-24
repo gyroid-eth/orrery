@@ -258,7 +258,7 @@ def test_a_session_that_is_out_is_never_attached_again_by_the_cockpit():
 
 def test_a_pane_window_polls_only_what_one_terminal_needs():
     html = _html()
-    assert "if(!soloSession){pollUsage(false);" in html
+    assert "if(!soloSession){renderUsagePill();pollUsage(false);" in html
     # the polls themselves: test_cockpit_poll_schedule.py runs them
     assert "const graphPoll=soloSession?null:" in html and "const mailPoll=soloSession?null:" in html
     assert "function kickPolls(){\n  if(soloSession){agentsPoll.kick();return;}" in html

@@ -22,8 +22,9 @@ from pathlib import Path
 
 from PIL import Image
 from conversation_artifacts import extract_artifacts
-from conversation_history import open_bound_transcript, assert_transcript_identity, HistoryUnavailable, open_reader
+from conversation_history import codex_event, open_bound_transcript, assert_transcript_identity, HistoryUnavailable, open_reader
 from conversation_images import input_images, saved_path, dsh_image_path
+from conversation_markdown_images import IMAGE_EXT, local_image_target, markdown_image_targets
 
 MAX_RECORD=1024*1024
 MAX_TEXT=128*1024
@@ -34,15 +35,10 @@ MOBILE_IMAGE_PIXELS=8_000_000
 TEXT_EXT={'.txt','.md','.py','.js','.mjs','.cjs','.ts','.tsx','.jsx','.css','.scss','.json','.jsonl',
           '.yaml','.yml','.toml','.ini','.cfg','.csv','.tsv','.xml','.html','.svg','.sh','.bash','.zsh',
           '.rs','.go','.c','.h','.cpp','.hpp','.java','.kt','.sql','.diff','.patch','.log','.rst'}
-IMAGE_EXT={'.png','.jpg','.jpeg','.gif','.webp'}
+RASTER_FORMATS=('PNG','JPEG','GIF','WEBP')
 
 
-def clicked_path(value):
-    """Explicit local path click, independent of record grants.
-
-    Resolve aliases first, then use the same no-follow descriptor walk and
-    preview limits as recorded references. Recheck the alias after the read.
-    """
+def resolve_clicked_path(value):
     if (not isinstance(value,str) or len(value)>2000
             or not value.startswith(('/', '~/')) or re.search(r'[\x00-\x1f\x7f]',value)):
         raise PreviewUnavailable('preview_path_denied')
@@ -51,6 +47,16 @@ def clicked_path(value):
         path=original.resolve(strict=True)
         if (original.suffix.lower() in IMAGE_EXT)!=(path.suffix.lower() in IMAGE_EXT):
             raise PreviewUnavailable('preview_type_denied')
+        return original,path
+    except (OSError,ValueError,RuntimeError) as exc:
+        if isinstance(exc,PreviewUnavailable):raise
+        raise PreviewUnavailable('preview_unavailable') from None
+
+
+def clicked_path(value):
+    """Explicit local path click, independent of record grants."""
+    original,path=resolve_clicked_path(value)
+    try:
         result=ReferenceStore().read_file(path)
         if original.resolve(strict=True)!=path:raise PreviewUnavailable('preview_changed')
         result.pop('notice',None)
@@ -72,17 +78,19 @@ def identity(stream):
     info=os.fstat(stream.fileno());return info.st_dev,info.st_ino
 
 
-def record_at(stream,offset,cache=None):
+def record_at(stream,offset,cache=None,*,normalized=False):
     if hasattr(stream,'provider'):
-        if stream.provider!='codex':return stream.record_at(str(offset),cache)
+        if stream.provider!='codex':return stream.record_at(str(offset),cache,normalized=normalized)
         stream=stream.stream
     if offset<0:raise PreviewUnavailable('reference_expired')
     if offset and os.pread(stream.fileno(),1,offset-1)!=b'\n':raise PreviewUnavailable('reference_expired')
     data=os.pread(stream.fileno(),MAX_RECORD+1,offset)
     raw=data.split(b'\n',1)[0]
     if b'\n' not in data or len(raw)>MAX_RECORD:raise PreviewUnavailable('record_too_large')
-    try:return json.loads(raw),hashlib.sha256(raw).digest()
-    except (ValueError,UnicodeError):raise PreviewUnavailable('reference_expired') from None
+    try:
+        projection=codex_event(raw,offset) if normalized else json.loads(raw)
+        return projection,hashlib.sha256(raw).digest()
+    except (ValueError,UnicodeError,RecursionError):raise PreviewUnavailable('reference_expired') from None
 
 
 def workspace(stream):
@@ -178,19 +186,24 @@ class ReferenceStore:
 
     def decorate_all(self,row,stream,events):
         """decorate() for one page: the workspace root is resolved once."""
-        missing=object();cwd=missing;records={}
+        missing=object();cwd=missing;records={};images={}
         for event in events:
             if cwd is missing:
                 try:cwd=workspace(stream)
                 except (PreviewUnavailable,ValueError):cwd=None
-            self.decorate(row,stream,event,cwd=cwd,records=records)
+            self.decorate(row,stream,event,cwd=cwd,records=records,images=images)
 
-    def decorate(self,row,stream,event,*,cwd=False,records=None):
+    def decorate(self,row,stream,event,*,cwd=False,records=None,images=None):
         """Only called on selected events from an already pinned bound transcript."""
         try:
-            item,digest=record_at(stream,event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id']),records);projection=extract_artifacts(item)
+            offset=event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id'])
+            targets=markdown_image_targets(event)
+            if targets:
+                self.decorate_markdown(row,stream,event,offset,targets,records,images)
+            if event.get('kind')=='mail' or event.get('kind')=='text' and event.get('role')=='assistant':return
+            item,digest=record_at(stream,offset,records);projection=extract_artifacts(item)
             if cwd is False:cwd=workspace(stream)
-        except (PreviewUnavailable,ValueError):return
+        except ValueError:return
         if event.get('kind')=='text' and event.get('role')=='user':
             self.decorate_input(row,stream,event,item,digest)
             return
@@ -211,6 +224,56 @@ class ReferenceStore:
                 refs.append(dict(id=ref,label=path.name[:160],kind='image' if path.suffix.lower() in IMAGE_EXT else 'file'))
             self.prune()
         if refs:event['references']=refs
+
+    def markdown_image_path(self,target):
+        """Check a pinned local raster header before offering a reference."""
+        if not local_image_target(target):raise PreviewUnavailable('preview_type_denied')
+        original,path=resolve_clicked_path(target)
+        with open_file(path) as (fd,info):
+            if info.st_size>MAX_IMAGE:raise PreviewUnavailable('preview_too_large')
+            try:
+                with warnings.catch_warnings(),os.fdopen(os.dup(fd),'rb') as file:
+                    warnings.simplefilter('error',Image.DecompressionBombWarning)
+                    with Image.open(file,formats=RASTER_FORMATS) as image:
+                        width,height=image.size
+                        if width>8192 or height>8192 or width*height>self.max_pixels:
+                            raise PreviewUnavailable('preview_too_large')
+            except PreviewUnavailable:raise
+            except (OSError,ValueError,SyntaxError,Image.DecompressionBombError,Image.DecompressionBombWarning):
+                raise PreviewUnavailable('preview_not_image') from None
+        if original.resolve(strict=True)!=path:raise PreviewUnavailable('preview_changed')
+        return path
+
+    def decorate_markdown(self,row,stream,event,offset,targets,records,images):
+        # A page may have been read before an in-place transcript edit. Only
+        # targets also present in the record we actually pin may grant an ID.
+        try:current,digest=record_at(stream,offset,records,normalized=True)
+        except ValueError:return
+        allowed=set(markdown_image_targets(current))
+        images={} if images is None else images
+        grants=[]
+        for target in targets:
+            if target not in allowed:continue
+            if target not in images:
+                try:images[target]=self.markdown_image_path(target)
+                except (OSError,ValueError,RuntimeError):images[target]=None
+            if images[target] is not None:grants.append((target,images[target]))
+        if not grants:return
+        owner,inode=binding(row),identity(stream)
+        refs=[]
+        with self.lock:
+            self.prune()
+            for target,path in grants:
+                key=(owner,inode,event['id'],digest,'markdown_image',target,str(path))
+                ref=self.by_key.get(key)
+                if ref not in self.refs or self.refs[ref]['key']!=key:ref=secrets.token_urlsafe(24)
+                self.by_key[key]=ref
+                self.refs[ref]=dict(key=key,row=owner,inode=inode,offset=offset,digest=digest,
+                                    markdown_image=target,expires=self.clock()+self.ttl)
+                self.refs.move_to_end(ref)
+                refs.append(dict(target=target,id=ref))
+            self.prune()
+        event['markdown_images']=refs
 
     @staticmethod
     def image_key(image):
@@ -258,7 +321,14 @@ class ReferenceStore:
                 if identity(stream)!=entry['inode']:raise PreviewUnavailable('reference_expired')
                 item,digest=record_at(stream,entry['offset'])
                 if digest!=entry['digest']:raise PreviewUnavailable('reference_expired')
-                if entry.get('input_image'):
+                markdown=entry.get('markdown_image')
+                if markdown:
+                    if reveal:raise PreviewUnavailable('preview_unavailable')
+                    original,path=resolve_clicked_path(markdown)
+                    if str(path)!=entry['key'][-1] or path.suffix.lower() not in IMAGE_EXT:
+                        raise PreviewUnavailable('reference_expired')
+                    result=self.read_file(path,thumbnail=thumbnail,mobile=mobile)
+                elif entry.get('input_image'):
                     if reveal:raise PreviewUnavailable('preview_unavailable')
                     images=input_images(item)
                     if entry['index']>=len(images) or self.image_key(images[entry['index']])!=entry['key'][-1]:raise PreviewUnavailable('reference_expired')
@@ -274,7 +344,9 @@ class ReferenceStore:
                 # Revalidate both the source record and file descriptor identity
                 # before publishing; append-only transcript growth is allowed.
                 if record_at(stream,entry['offset'])[1]!=entry['digest']:raise PreviewUnavailable('reference_expired')
-                if not entry.get('input_image') and self.policy(value,workspace(stream),shown=shown)!=path:raise PreviewUnavailable('reference_expired')
+                if markdown:
+                    if original.resolve(strict=True)!=path:raise PreviewUnavailable('reference_expired')
+                elif not entry.get('input_image') and self.policy(value,workspace(stream),shown=shown)!=path:raise PreviewUnavailable('reference_expired')
                 stream.assert_identity()
             return path if reveal else result
         except (HistoryUnavailable,OSError,ValueError,KeyError,TypeError) as exc:
@@ -314,7 +386,7 @@ class ReferenceStore:
             with warnings.catch_warnings():
                 warnings.simplefilter('error',Image.DecompressionBombWarning)
                 with Image.open(io.BytesIO(data)) as image:
-                    if image.format not in {'PNG','JPEG','GIF','WEBP'}:raise PreviewUnavailable('preview_type_denied')
+                    if image.format not in RASTER_FORMATS:raise PreviewUnavailable('preview_type_denied')
                     width,height=image.size
                     if width>8192 or height>8192 or width*height>self.max_pixels:raise PreviewUnavailable('preview_too_large')
                     image.seek(0);image.load()
