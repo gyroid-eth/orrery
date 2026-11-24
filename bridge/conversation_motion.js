@@ -25,11 +25,11 @@
     transform:`translateY(${(1-value)*14}px) scale(${.92+.08*value})`,opacity:bounded(value),
   }));
   const heights=spring(260,26);
-  const eastAsian=/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}、。！？；，．…]/u;
-  const punctuation=/[、。！？；，．…]/u;
+  const eastAsian=/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3001\u3002\uff01\uff1f\uff1b\uff0c\uff0e\u2026]/u;
+  const punctuation=/[\u3001\u3002\uff01\uff1f\uff1b\uff0c\uff0e\u2026]/u;
   const graphemes=typeof Intl.Segmenter==='function'?new Intl.Segmenter('ja',{granularity:'grapheme'}):null;
   function pieces(text){
-    const segments=/\s+|[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}、。！？；，．…]+|[^\s\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}、。！？；，．…]+/gu;
+    const segments=/\s+|[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3001\u3002\uff01\uff1f\uff1b\uff0c\uff0e\u2026]+|[^\s\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3001\u3002\uff01\uff1f\uff1b\uff0c\uff0e\u2026]+/gu;
     return (text.match(segments)||[]).flatMap(run=>{
       if(!eastAsian.test(run))return [run];
       const chars=graphemes?Array.from(graphemes.segment(run),part=>part.segment):Array.from(run);
@@ -46,7 +46,7 @@
   // child and the known parent as well as the fixed part of the envelope.
   function promptAuthor(text,name,parent){
     if(!name||!parent)return '';
-    const embedded=`あなたは ${name}（親: ${parent}）。この起動は --embed-task mode です。ORRERY Mail への登録は親が完了済み・儀式不要です。`;
+    const embedded=`\u3042\u306a\u305f\u306f ${name}\uff08\u89aa: ${parent}\uff09\u3002\u3053\u306e\u8d77\u52d5\u306f --embed-task mode \u3067\u3059\u3002ORRERY Mail \u3078\u306e\u767b\u9332\u306f\u89aa\u304c\u5b8c\u4e86\u6e08\u307f\u30fb\u5100\u5f0f\u4e0d\u8981\u3067\u3059\u3002`;
     const delegated=`You are ${name}. The parent agent is ${parent}. The child name ${name} is already reserved, so do not register under another name.`;
     return text.startsWith(embedded)||text.startsWith(delegated)?parent:'';
   }
