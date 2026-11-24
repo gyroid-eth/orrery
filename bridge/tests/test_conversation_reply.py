@@ -160,15 +160,30 @@ def test_recorded_reference_shows_one_line_and_keyboard_jumps_to_source(cockpit)
     wait('!' + ORIGIN + '.classList.contains("conversation-reference-target")')
 
 
+def test_recorded_mobile_reference_shows_the_quote_and_jumps_to_source(cockpit):
+    quote = 'Keep "quoted text" | Reply: inside the quote.\nSecond line.'
+    body = 'Check again | Reply: this is still the reply.'
+    text = ('Reference: ReviewFixture · assistant · 2026-11-01T04:00:00Z | Recorded message: source'
+            f' | Quote: {json.dumps(quote)} | Reply: {body}')
+    js, wait, _ = prepare(cockpit, [message('source', quote), dict(message('reply', text), role='user')])
+    assert js(CARD + '.querySelector(".conversation-reference-quote").textContent') == quote.splitlines()[0]
+    assert js(CARD + '.title').endswith(quote)
+    assert js(CARD + '.nextElementSibling.querySelector(".conversation-text").textContent') == body
+    js(CARD + '.click()')
+    wait(ORIGIN + '.classList.contains("conversation-reference-target")')
+
+
 def test_malformed_and_truncated_references_stay_in_the_original_body(cockpit):
     truncated = recorded_reply('truncated', 'source', truncated=True)
     invalid_date = recorded_reply('bad-date', 'source', timestamp=' · yesterday')
     missing_id = dict(recorded_reply('bad-id', 'source'), text=truncated['text'].replace('Recorded message: source\r\n', ''))
     non_user = dict(recorded_reply('assistant-quote', 'source'), role='assistant')
     empty_body = dict(recorded_reply('empty-body', 'source'), text=truncated['text'].split('\r\n\r\n')[0] + '\r\n\r\n  ')
-    js, _, _ = prepare(cockpit, [truncated, invalid_date, missing_id, non_user, empty_body])
+    malformed_mobile = dict(message('bad-mobile', 'Reference: ReviewFixture · assistant | Recorded message: source'
+                                                   ' | Quote: "\\q" | Reply: answer'), role='user')
+    js, _, _ = prepare(cockpit, [truncated, invalid_date, missing_id, non_user, empty_body, malformed_mobile])
     assert js("document.querySelectorAll('.conversation-reference-link').length") == 0
-    for event in [truncated, invalid_date, missing_id, non_user, empty_body]:
+    for event in [truncated, invalid_date, missing_id, non_user, empty_body, malformed_mobile]:
         assert 'Reference: ReviewFixture' in js(f'document.querySelector("[data-event-id={event["id"]}] .conversation-text").textContent')
 
 
