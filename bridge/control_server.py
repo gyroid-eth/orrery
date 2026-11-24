@@ -1695,7 +1695,8 @@ class TmuxControlBridge:
                     return 'refused'
 
                 before = await capture()
-                if before is None or before.identity != observed.identity or not before.empty:
+                if (before is None or before.identity != observed.identity
+                        or not before.empty or not before.allows_paste(text)):
                     return 'refused'
                 with tempfile.TemporaryDirectory(prefix='orrery-compose-') as tmp:
                     path = Path(tmp) / 'prompt'
@@ -1706,7 +1707,8 @@ class TmuxControlBridge:
                     loaded = True
                 await admit()
                 current = await capture()
-                if current is None or current.identity != before.identity or not current.empty:
+                if (current is None or current.identity != before.identity
+                        or not current.empty or not current.allows_paste(text)):
                     return 'refused'
                 pasted = True
                 result = await command(paste)

@@ -16,9 +16,15 @@ import uuid
 from dataclasses import dataclass
 
 
-METADATA = '#{socket_path}\t#{pid}\t#{pane_id}\t#{pane_pid}\t#{cursor_y}\t#{pane_in_mode}\t#{cursor_x}\t#{bracket_paste_flag}'
+METADATA = ('#{socket_path}\t#{pid}\t#{pane_id}\t#{pane_pid}\t#{cursor_y}\t#{pane_in_mode}'
+            '\t#{cursor_x}\t#{bracket_paste_flag}\t#{pane_current_command}')
 POLL = .06
 TIMEOUT = 5.0
+SHELLS = frozenset({
+    'ash', 'bash', 'busybox', 'cmd', 'csh', 'dash', 'elvish', 'fish', 'hush',
+    'ksh', 'ksh93', 'mksh', 'nu', 'nushell', 'pdksh', 'powershell', 'pwsh',
+    'sh', 'tcsh', 'xonsh', 'yash', 'zsh',
+})
 PROMPT = re.compile(r'^(\s*(?:(?:[⌸│]|[\w.-]+)\s+)?)([❯›>])(?:[ \u00a0]+|$)(.*)')
 BORDER = re.compile(r'^[╭╰]?[─━]{8,}[╮╯]?$')
 SGR = re.compile(r'\x1b\[[0-9;:]*m')
@@ -45,6 +51,8 @@ class Frame:
     selected: bool = False
     hermes: bool = False
     dsh: bool = False
+    bracketed: bool | None = None
+    foreground_command: str = ''
 
     @property
     def identity(self):
@@ -54,20 +62,33 @@ class Frame:
     def empty(self):
         return self.draft == '' and not self.waiting and not self.selected
 
+    def allows_paste(self, text):
+        if self.bracketed is not None:
+            return self.bracketed
+        # Before tmux 3.7, paste-buffer -p can see the mode but formats
+        # cannot. Preserve TUI paste on those releases. In a shell, LF and
+        # other control characters may be acted on before the draft is visible.
+        return bool(self.foreground_command) and (
+            self.foreground_command not in SHELLS
+            or not re.search(r'[\x00-\x1f\x7f-\x9f]', text))
+
 
 def frame(metadata, lines, pane):
     fields = metadata.split('\t')
-    if (len(fields)!=8 or fields[2]!=pane or not re.fullmatch(r'%[0-9]+',pane)
-            or not all(fields[i].isdigit() for i in (1,3,4,5,6,7))):
+    if (len(fields)!=9 or fields[2]!=pane or not re.fullmatch(r'%[0-9]+',pane)
+            or not all(fields[i].isdigit() for i in (1,3,4,5,6))
+            or fields[7] not in ('', '0', '1')):
         return None
     path=Path(fields[0])
     if not path.is_absolute():
         return None
-    server,process,cursor,mode,column,bracketed=map(int,(fields[1],*fields[3:]))
+    server,process,cursor,mode,column=map(int,(fields[1],*fields[3:7]))
     if not server or not process:
         return None
     base=(path,server,pane,process)
-    if mode or bracketed!=1 or cursor>=len(lines):
+    bracketed = fields[7] == '1' if fields[7] else None
+    command = fields[8].rsplit('/', 1)[-1].lower().lstrip('-').removesuffix('.exe')
+    if mode or bracketed is False or cursor>=len(lines):
         return Frame(*base,None,False)
     plain=[SGR.sub('',line) for line in lines]
     for start in range(cursor,-1,-1):
@@ -117,12 +138,13 @@ def frame(metadata, lines, pane):
             previous_row=next((row.strip().lower() for row in reversed(above) if row.strip()), '')
             menu=previous_row.startswith(('enter/tab insert · esc close','enter insert · esc close'))
         hermes=glyph=='❯' and framed and not boxed and (left or any('☤' in row for row in around))
-        return Frame(*base,draft,waiting,menu,bool(hermes),boxed)
+        return Frame(*base,draft,waiting,menu,bool(hermes),boxed,bracketed,command)
     return Frame(*base,None,False)
 
 
 def ready(observed, text):
-    if observed is None or observed.draft is None or observed.waiting or observed.selected:
+    if (observed is None or observed.draft is None or observed.waiting or observed.selected
+            or not observed.allows_paste(text)):
         return False
     if ''.join(observed.draft.split())==''.join(text.split()):
         return True
@@ -201,7 +223,7 @@ def submit(command,admit,pane,text,*,deadline=None):
         if fd is None or not admit():
             return 'refused'
         before=capture(command,pane)
-        if not before or before.identity!=current.identity or not before.empty:
+        if not before or before.identity!=current.identity or not before.empty or not before.allows_paste(text):
             return 'refused'
         name='orrery-submit-'+uuid.uuid4().hex
         try:
@@ -210,7 +232,7 @@ def submit(command,admit,pane,text,*,deadline=None):
             if time.monotonic()>=end or not admit():
                 return 'refused'
             current=capture(command,pane)
-            if not current or current.identity!=before.identity or not current.empty:
+            if not current or current.identity!=before.identity or not current.empty or not current.allows_paste(text):
                 return 'refused'
             pasted=True  # A timeout after the command starts cannot prove absence.
             if command('paste-buffer','-r','-p','-d','-b',name,'-t',pane).returncode:

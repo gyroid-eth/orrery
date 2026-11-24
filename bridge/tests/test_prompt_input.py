@@ -67,7 +67,8 @@ async def test_receipt_is_bound_to_pane_session_and_bridge_incarnation(tmp_path)
 
 def test_input_readiness_uses_the_editor_and_rejects_selected_completions():
     def observe(lines, cursor, column):
-        return submission.frame(f'/tmp/fixture.sock\t100\t%1\t200\t{cursor}\t0\t{column}\t1', lines, '%1')
+        return submission.frame(f'/tmp/fixture.sock\t100\t%1\t200\t{cursor}\t0\t{column}\t1\tclaude',
+                                lines, '%1')
 
     assert observe(['› \x1b[2mAsk Codex to do anything\x1b[0m'], 0, 2).empty
     assert not observe(['› \x1b[2mAsk Codex to do anything\x1b[0m'], 0, 27).empty
@@ -77,7 +78,7 @@ def test_input_readiness_uses_the_editor_and_rejects_selected_completions():
     assert not observe(['────────', '❯ Try something', '────────'], 1, 2).empty
     assert observe(['────────', 'deepseek ❯', '────────'], 1, 11).empty
     assert not observe(['>', ''], 0, 2).empty
-    assert not submission.frame('/tmp/fixture.sock\t100\t%1\t200\t0\t0\t2\t0',
+    assert not submission.frame('/tmp/fixture.sock\t100\t%1\t200\t0\t0\t2\t0\tclaude',
                                 ['❯ '], '%1').empty
     assert observe(['────────', '> Auto mode: edits & safe commands auto-approved (shift+tab to cycle)',
                     '────────', 'auto · Gemini 4 Neon · low'], 1, 2).empty
@@ -95,17 +96,47 @@ def test_input_readiness_uses_the_editor_and_rejects_selected_completions():
     assert submission.ready(observe(['❯ [Pasted text #1 +3 lines]'], 0, 26), 'four\nposted\nfixture\nlines')
 
 
+@pytest.mark.parametrize('flag,command,text,allowed', [
+    ('', 'claude', 'first\nsecond', True),
+    ('', 'codex', 'first\nsecond', True),
+    ('', 'bash', 'one line', True),
+    ('', 'bash', 'first\nsecond', False),
+    ('', '/bin/-zsh', 'first\rsecond', False),
+    ('', 'fish', 'first\tsecond', False),
+    ('', 'sh', 'a\x1b[A', False),
+    ('', '', 'first line', False),
+    ('0', 'claude', 'one line', False),
+    ('1', 'claude', 'first\nsecond', True),
+])
+def test_paste_mode_uses_tmux_flag_when_available(flag, command, text, allowed):
+    metadata = f'/tmp/fixture.sock\t100\t%1\t200\t0\t0\t2\t{flag}\t{command}'
+    empty = submission.frame(metadata, ['❯ '], '%1')
+    assert (empty.empty and empty.allows_paste(text)) == allowed
+    pasted = submission.frame(metadata, ['❯ [Pasted text #1 +1 line]'], '%1')
+    assert submission.ready(pasted, text) == allowed
+
+
 @pytest.mark.parametrize('initial,expected', [('❯ ', 'unknown'), ('❯ Human draft', 'refused')])
 def test_watcher_never_sends_enter_without_visible_paste(monkeypatch, initial, expected):
     commands=[]
     def command(*args,input=None):
         commands.append(args[0])
-        screen='/tmp/fixture.sock\t100\t%1\t200\t0\t0\t2\t1\n'+initial+'\n'
+        screen='/tmp/fixture.sock\t100\t%1\t200\t0\t0\t2\t1\tclaude\n'+initial+'\n'
         return subprocess.CompletedProcess(args,0,screen,'')
     monkeypatch.setattr(submission,'try_lock',lambda _:os.open(os.devnull,os.O_RDONLY))
     assert submission.submit(command,lambda:True,'%1','Hidden fixture',deadline=time.monotonic()+.15)==expected
     assert ('paste-buffer' in commands)==(expected=='unknown')
     assert 'send-keys' not in commands
+
+
+def test_watcher_refuses_multiline_in_a_legacy_shell_before_loading_buffer(monkeypatch):
+    def command(*args, input=None):
+        assert args[0] == 'display-message', args
+        screen = '/tmp/fixture.sock\t100\t%1\t200\t0\t0\t2\t\tbash\n❯ \n'
+        return subprocess.CompletedProcess(args, 0, screen, '')
+
+    monkeypatch.setattr(submission, 'try_lock', lambda _: os.open(os.devnull, os.O_RDONLY))
+    assert submission.submit(command, lambda: True, '%1', 'first\nsecond') == 'refused'
 
 
 @pytest.mark.asyncio
@@ -169,11 +200,12 @@ with open(sys.argv[1], 'w', buffering=1) as out:
     env={k:v for k,v in os.environ.items() if k not in ('TMUX','TMUX_PANE')}
     env['LC_CTYPE']='C.UTF-8'
     env.pop('LC_ALL',None)
-    with tempfile.TemporaryDirectory(prefix='orrery-compose-test-') as temp:
-        socket=str(Path(temp).resolve()/'tmux.sock')
+    with tempfile.TemporaryDirectory(prefix='orrery-ct-', dir='/tmp') as temp:
         wrapper=tmp_path/'tmux'
-        argv=[tmux,'-S',socket,'-f','/dev/null']
-        wrapper.write_text('#!/bin/sh\nexec '+shlex.join(argv)+' "$@"\n')
+        env['TMUX_TMPDIR']=str(Path(temp).resolve())
+        argv=[tmux,'-L','orrery-compose-test','-f','/dev/null']
+        wrapper.write_text('#!/bin/sh\nexec '+shlex.join(
+            ['env','TMUX_TMPDIR='+env['TMUX_TMPDIR'],*argv])+' "$@"\n')
         wrapper.chmod(0o700)
 
         def call(*args, input=None):
@@ -189,7 +221,7 @@ with open(sys.argv[1], 'w', buffering=1) as out:
             text='Aだね\n'+'second line '*2500
             note='Synthetic Mail notice'
 
-            async def wait_for_view(value):
+            async def wait_for_view(value, writer=None):
                 screen=''
 
                 async def observe():
@@ -200,6 +232,8 @@ with open(sys.argv[1], 'w', buffering=1) as out:
                         screen=result.stdout
                         if value in screen:
                             return
+                        if writer is not None and writer.done():
+                            pytest.fail(f'Writer returned {writer.result()!r} before {value!r}: {screen!r}')
                         await asyncio.sleep(.02)
 
                 try:
@@ -214,7 +248,7 @@ with open(sys.argv[1], 'w', buffering=1) as out:
             if composer_first:
                 user=asyncio.create_task(bridge.submit_prompt(pane,text))
                 writers.append(user)
-                await wait_for_view('Pasting…')
+                await wait_for_view('Pasting…', user)
                 assert await wake()=='refused'
                 await asyncio.wait_for(lock_contended.wait(),timeout=fixture_timeout/2)
                 release.touch()
@@ -224,7 +258,7 @@ with open(sys.argv[1], 'w', buffering=1) as out:
             else:
                 mail=asyncio.create_task(wake())
                 writers.append(mail)
-                await wait_for_view('Pasting…')
+                await wait_for_view('Pasting…', mail)
                 user=asyncio.create_task(bridge.submit_prompt(pane,text))
                 writers.append(user)
                 await asyncio.wait_for(lock_contended.wait(),timeout=fixture_timeout/2)
