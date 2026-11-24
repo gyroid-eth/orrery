@@ -280,6 +280,39 @@ def test_submit_cloud_defaults_and_optional_local_parameters_without_real_spawn(
     assert result['recent'][0] == json.dumps(['local-fixture','local-one'],separators=(',',':'))
 
 
+def test_browser_off_keeps_the_standard_base_on_current_telemetry(tour_browser):
+    _, evaluate = tour_browser
+    result = evaluate('''(()=>{
+      const model={id:'fixture',default:true};
+      spawnCatalog={supports_browser_off:true,providers:[
+        {id:'claude',program:'claude-code',models:[model]},
+        {id:'codex',program:'codex-cli',models:[model]},
+        {id:'local-fixture',program:'dsh',locality:'local',models:[model],
+         harnesses:[{id:'dsh',available:true,default:true},{id:'hermes',available:true}]}]};
+      selFamily=null;selProvider=null;selModel=null;selHarness=null;renderProviderTabs();
+      spawnBrowserUse.click();
+      const claude=spawnToolOptions();
+      providerTabs.querySelector('[data-family="codex"]').click();
+      spawnComputerUse.click();
+      const codex=spawnToolOptions();
+      spawnBrowserUse.click();
+      const codexBrowserOn=spawnToolOptions();
+      providerTabs.querySelector('[data-family="local"]').click();
+      const dsh=spawnToolOptions();
+      spawnHarnesses.querySelector('[data-harness="hermes"]').click();
+      spawnBrowserUse.click();
+      const hermes=spawnToolOptions();
+      return {claude,codex,codexBrowserOn,dsh,hermes};
+    })()''')
+    assert result == {
+        'claude': {'tools': {'mcp': ['cua-driver'], 'browser_off': True}},
+        'codex': {'tools': {'browser_off': True}},
+        'codexBrowserOn': {'tools': {'browser': {}}},
+        'dsh': {'tools': {'browser_off': True}},
+        'hermes': {'tools': {'mcp': ['cua-driver'], 'browser_off': True}},
+    }
+
+
 def test_fresh_spawn_omits_unsupported_tool_options(tour_browser):
     _, evaluate = tour_browser
     result = evaluate('''(async()=>{

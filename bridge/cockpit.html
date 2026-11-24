@@ -4175,9 +4175,9 @@
       }
     }
   },
-  "inventory_digest": "0605f81a7ba45281809fb0d1a25b028fc1720ac01a6a25942d12d075d831e151",
+  "inventory_digest": "7904688ca4657c41faabceac6ba9340eca7cc1e8ddc61be44bf2f66b5861052f",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "ee37ea17ddd3fc6d70c333c519090f5bdcbda93e5fbf4ea493fbe13909e28d00",
+  "source_digest": "0d9cd4eb816f2ad99efaf37f69cf0eeb2fa07820bebf697be2b66b5ef7fda8f7",
   "surface": "cockpit",
   "version": 1
 }
@@ -10732,14 +10732,16 @@ function spawnToolOptions(){
   const native=harness==='dsh'||harness==='hermes';
   const computer=spawnComputerUse.getAttribute('aria-checked')==='true';
   const browser=spawnBrowserUse.getAttribute('aria-checked')==='true';
+  const supportsBrowserOff=spawnCatalog?.supports_browser_off===true;
   const mcp=[];
   if(computer)mcp.push('cua-driver');
   // Native harnesses can copy an MCP server without the per-tool approvals that tools.browser requests.
   if(browser&&native)mcp.push('chrome-devtools');
   return {
-    // The default base can inherit Chrome, and Codex can also inherit cua-driver.
-    ...(!browser||(harness==='codex'&&!computer)?{base:'mail-only'}:{}),
-    tools:{...(mcp.length?{mcp}:{}),...(browser&&!native?{browser:{}}:{})},
+    // Older Telemetry has only the base selector to suppress inherited Chrome.
+    ...(!supportsBrowserOff&&(!browser||(harness==='codex'&&!computer))?{base:'mail-only'}:{}),
+    tools:{...(mcp.length?{mcp}:{}),...(browser&&!native?{browser:{}}:{}),
+      ...(!browser&&supportsBrowserOff?{browser_off:true}:{})},
   };
 }
 function renderHarnesses(){
