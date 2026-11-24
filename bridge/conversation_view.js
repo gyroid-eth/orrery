@@ -477,11 +477,35 @@
       submissions=[];sending.clear();observedIds.clear();matchedSubmissions.clear();broadcasted.clear();clearTimeout(submissionTimer);clearTimeout(flashTimer);
       flashTimer=0;screen.classList.remove('conversation-just-submitted');renderSubmissions();
     }
+    function recoverQueuedPrompt(event,eligible,ts){
+      const candidate=event.queued_notice;
+      if(!candidate||event.truncated||!Number.isFinite(ts))return null;
+      const plausible=eligible.filter(item=>item.matchable&&item.raw&&ts>=item.at&&ts-item.at<=5000);
+      if(candidate.mail){
+        const text=candidate.prefix.trimEnd();
+        const matches=plausible.filter(item=>item.text===normalizePrompt(text));
+        if(matches.length===1){
+          return {receipt:matches[0],event:{...event,kind:'text',text,mail:[candidate.mail],queued_notice:undefined}};
+        }
+        return null;
+      }
+      const mail=event.mail?.[0];
+      if(event.kind!=='mail'||mail?.coverage!=='complete')return null;
+      const body=mail.body.replace(/\r\n?/g,'\n');
+      // A full notice has no terminator in older recordings. Match only the
+      // exact edge of a single contemporary send, never an interior substring.
+      const matches=plausible.map(receipt=>({receipt,text:receipt.raw.replace(/\r\n?/g,'\n').trim()}))
+        .filter(({text})=>text&&body.endsWith(text)&&body.slice(0,-text.length).trim());
+      if(matches.length!==1)return null;
+      const [{receipt,text}]=matches;
+      return {receipt,event:{...event,kind:'text',text,mail:[{...mail,body:body.slice(0,-text.length).trimEnd()}],queued_notice:undefined}};
+    }
     function reconcileSubmissions(incoming,direction,sequence){
       const landings=[];
       if(!submissions.length)return landings;
-      for(const event of incoming){
-        if(event.role!=='user'||event.kind!=='text'||matchedSubmissions.has(event.id))continue;
+      let repairedRows=false;
+      for(let event of incoming){
+        if(event.role!=='user'||event.kind!=='text'&&!event.queued_notice||matchedSubmissions.has(event.id))continue;
         const ts=Date.parse(event.ts),text=normalizePrompt(event.text),imageText=imagePromptText(event);
         const fraction=/\.(\d+)(?:Z|[+-]\d\d:\d\d)$/.exec(event.ts||'');
         const secondsOnly=!fraction||!/[1-9]/.test(fraction[1]);
@@ -501,13 +525,23 @@
         const eligible=submissions.filter(item=>!item.known.has(event.id)&&!item.uncertain.has(event.id)&&
           (Number.isFinite(ts)?ts>=item.at||ts>=(secondsOnly?Math.floor(item.at/1000)*1000:item.at)&&sequence>=item.nextRead:
             sequence>=item.nextRead&&direction==='newer'));
-        let candidates=eligible.filter(item=>item.matchable&&!event.truncated&&item.text===text);
+        let candidates=event.kind==='text'?eligible.filter(item=>item.matchable&&!event.truncated&&item.text===text):[];
         // Prefer a literal exact match before trying a known attachment wrapper.
-        if(!candidates.length&&imageText!==text)candidates=eligible.filter(item=>item.matchable&&!event.truncated&&item.text===imageText);
+        if(!candidates.length&&event.kind==='text'&&imageText!==text)candidates=eligible.filter(item=>item.matchable&&!event.truncated&&item.text===imageText);
         if(!candidates.length&&event.truncated&&text.length>=256){
           candidates=eligible.filter(item=>item.text.startsWith(text));
           // A shared prefix cannot distinguish two different pending prompts.
           if(candidates.some(item=>item.text!==candidates[0].text||item.length!==candidates[0].length))candidates=[];
+        }
+        if(!candidates.length){
+          const recovery=recoverQueuedPrompt(event,eligible,ts);
+          if(recovery){
+            const repaired=recovery.event;
+            const row=rawRows().find(node=>node.dataset.eventId===event.id);
+            if(events.has(event.id)){retainedBytes+=byteSize(repaired)-byteSize(events.get(event.id));events.set(event.id,repaired);}
+            if(row){keepReaderFocus(row);row.replaceWith(draw(repaired));repairedRows=true;}
+            event=repaired;candidates=[recovery.receipt];
+          }
         }
         if(candidates.length){
           const receipt=candidates[0];
@@ -520,12 +554,13 @@
             showRecordedBroadcast(record,receipt.broadcastCount);
           }
           submissions.splice(submissions.indexOf(receipt),1);matchedSubmissions.add(event.id);
-        }else if(eligible.length){
+        }else if(eligible.length&&event.kind==='text'){
           // A new user record exists, but we cannot assert which send it is.
           // Keep the receipt without claiming that no record has arrived.
           eligible[0].unmatched=true;matchedSubmissions.add(event.id);
         }
       }
+      if(repairedRows)updateReferenceCards();
       renderSubmissions({preserve:false});
       return landings;
     }
@@ -1436,11 +1471,16 @@
         const text=normalizePrompt(detail.text);
         const presentation=pending?{reference:pending.reference,preview:pending.preview}:submissionPreview(detail);
         submissions.push({id:detail.id,attemptId:pending?attempt:null,name:agent,at:Number.isFinite(detail.submittedAt)?detail.submittedAt:Date.now(),
-          text:text.slice(0,65536),length:text.length,matchable:text.length<=65536,attachments:pending?.attachments,...presentation,
-          known:detail.broadcastCount>1&&pending?pending.known:new Set(observedIds),uncertain:new Set(),
-          nextRead:detail.broadcastCount>1&&pending?pending.nextRead:readSequence+1,broadcastCount:detail.broadcastCount});
-        if(detail.broadcastCount>1)reconcileSubmissions([...events.values()],'newer',readSequence);
-        renderSubmissions();empty.hidden=true;
+          text:text.slice(0,65536),raw:detail.text.length<=65536?detail.text:null,
+          length:text.length,matchable:text.length<=65536,attachments:pending?.attachments,...presentation,
+          known:pending?pending.known:new Set(observedIds),uncertain:new Set(),
+          nextRead:pending?pending.nextRead:readSequence+1,broadcastCount:detail.broadcastCount});
+        if(pending){
+          let landings;
+          changeTail(()=>{landings=reconcileSubmissions([...events.values()],'newer',readSequence);});
+          for(const [row,flight] of landings)motion?.flyPrompt(row,flight,flight.remaining);
+        }else renderSubmissions();
+        empty.hidden=true;
         const speakers=[...eventsEl.querySelectorAll('.conversation-event[data-role="assistant"][data-kind="text"]:not([hidden]) .conversation-speaker')];
         motion?.acknowledge(speakers.at(-1));
         screen.classList.add('conversation-just-submitted');clearTimeout(flashTimer);

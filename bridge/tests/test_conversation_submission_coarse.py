@@ -13,7 +13,7 @@ def test_true_new_record_resolved_at_enter_is_not_permanently_excluded(cockpit,p
       OrreryConversationSource.Source.prototype.read=()=>++causalReads===1?new Promise(r=>finishCausal=r):Promise.resolve({mode:'snapshot',events:[oldRecord,currentCausalRecord],after:'current'});
       conversationView.refresh();
       window.beforeCausalSend=send;
-      window.send=p=>{const ok=beforeCausalSend(p);if(ok&&p.type==='input'&&p.data==='\\r'&&!causalEntered){
+      window.send=p=>{const ok=beforeCausalSend(p);if(ok&&p.type==='submit-prompt'&&!causalEntered){
         causalEntered=true;clock+=300;
         window.currentCausalRecord={id:'current-causal-user',kind:'text',role:'user',text:sentText,
           ts:new Date("""+('Math.floor(clock/1000)*1000' if precision=='seconds' else 'clock')+""").toISOString()};

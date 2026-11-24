@@ -13,8 +13,13 @@ MAX_TOTAL=131072
 MAIL_TOOLS=frozenset({'mcp__orrery_mail__send_message','mcp__orrery-mail__send_message',
     'mcp_orrery_mail_send_message','mcp__agentstack__send_message','mcp_agentstack_send_message'})
 HEADER=re.compile(r'\AORRERY Mail notification: message from ([A-Za-z][A-Za-z0-9_-]{0,95}) \[(low|normal|high|urgent)\]: ')
+QUEUED_HEADER=re.compile(HEADER.pattern.removeprefix(r'\A'))
 MARKERS=(('. Body (complete; no inbox fetch needed): ','complete'),('. Body preview: ','preview'),
          ('. Please call fetch_inbox to read it.','unavailable'))
+NOTICE_END=re.compile(r'(?:\. Please call fetch_inbox to read it\.| Fetch inbox to read the rest\.)')
+REPLY_START=re.compile(r'Reference: [^\r\n·]+ · \S+(?: · '
+    r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d))?\r?\n'
+    r'Recorded message: \S+\r?\n(?:> [^\r\n]*\r?\n)+\r?\n(?=[\s\S]*\S)')
 
 
 def safe(value,limit):
@@ -38,11 +43,46 @@ def received(event):
     if not subject or len(subject)>1024:return event
     body=rest[offset+len(marker):]
     if coverage=='unavailable' and body.strip():return event
-    if coverage=='preview':body=body.removesuffix(' ... Fetch inbox to read the rest.')
+    if coverage=='preview':
+        body=body.removesuffix(' ... Fetch inbox to read the rest.').removesuffix(' Fetch inbox to read the rest.')
     mail=dict(direction='received',sender=match[1],recipients=[],subject=safe(subject,512),
         importance=match[2],coverage=coverage,body=safe(body,MAX_BODY),
         truncated=bool(event.get('truncated') or len(body)>MAX_BODY),source='recorded')
     return dict(event,kind='mail',text=mail['subject'],mail=[mail])
+
+
+def received_queued(event):
+    """Recover boundaries from consumed Claude input without guessing a full body's end."""
+    text=event['text']
+    normal=received(event)
+    if event.get('truncated') or not isinstance(text,str):
+        return normal
+    header=QUEUED_HEADER.search(text)
+    if header is None or QUEUED_HEADER.search(text,header.end()):
+        return normal
+    if header.start():
+        prefix=text[:header.start()]
+        candidate=received(dict(event,text=text[header.start():]))
+        # A matching send receipt must corroborate the prefix. Ordinary user
+        # prompts that quote the entire notice remain literal text.
+        if prefix.strip() and candidate.get('mail'):
+            return dict(event,queued_notice=dict(prefix=prefix,mail=candidate['mail'][0]))
+        return normal
+    ends=[(m.end(),'unavailable' if m.group().startswith('.') else 'preview')
+          for m in NOTICE_END.finditer(text)]
+    reference=REPLY_START.search(text,header.end())
+    if reference:
+        ends.append((reference.start(),'complete'))
+    for at,coverage in sorted(ends):
+        notice,reply=text[:at].rstrip(),text[at:].strip('\r\n')
+        if not reply.strip() or '\n' in notice or '\r' in notice:
+            continue
+        candidate=received(dict(event,text=notice))
+        if candidate.get('mail') and candidate['mail'][0]['coverage']==coverage:
+            return dict(event,text=reply,mail=candidate['mail'])
+    if normal.get('mail') and normal['mail'][0]['coverage']=='complete':
+        return dict(normal,queued_notice={})
+    return normal
 
 
 def call(name,arguments):

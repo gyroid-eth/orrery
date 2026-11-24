@@ -294,12 +294,12 @@ def test_body_path_reply_cites_the_clicked_message(cockpit, filename):
     assert js('document.querySelector(".conversation-preview").hidden')
     assert js('document.querySelector(".conversation-reply-quote").textContent') == path
     assert 'ReviewFixture · File reference' in js('document.querySelector(".conversation-reply-label").textContent')
-    assert js('packets.filter(p=>p.type==="input")') == []
+    assert js('packets.filter(p=>p.type==="submit-prompt")') == []
     js('sendPrompt()')
-    wait('packets.filter(p=>p.type==="input").length===2')
-    assert js('packets.find(p=>p.type==="input").data') == (
-        '\x1b[200~Reference: ReviewFixture · assistant · 2026-11-01T04:15:00Z\n'
-        f'Recorded message: clicked-path\n> {path}\n\nPlease check these results.\x1b[201~'
+    wait('packets.filter(p=>p.type==="submit-prompt").length===1')
+    assert js('packets.find(p=>p.type==="submit-prompt").data') == (
+        'Reference: ReviewFixture · assistant · 2026-11-01T04:15:00Z\n'
+        f'Recorded message: clicked-path\n> {path}\n\nPlease check these results.'
     )
 
 

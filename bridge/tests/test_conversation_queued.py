@@ -1,6 +1,9 @@
 """Consumed Claude prompts use native attachments, ordinary turns use user rows."""
 import asyncio
+import base64
+import io
 import json
+import os
 import queue
 import sys
 import threading
@@ -13,6 +16,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_conversation_providers import claude, line, page, row
 from test_conversation_submissions import cockpit, prepare
 from conversation_readers import normalize
+
+NOTICE='ORRERY Mail notification: message from FixturePeer [normal]: Generated notice'
+COMPLETE=NOTICE+'. Body (complete; no inbox fetch needed): Fixture note'
+REFERENCE='Reference: ReviewFixture · assistant · 2026-11-04T07:00:00Z\nRecorded message: fixture:1:0\n> Synthetic quote\n\nこれはなに？'
 
 
 @contextmanager
@@ -42,6 +49,7 @@ def native_bridge(path, monkeypatch):
             app[backend.TMUX_BIN_KEY] = object()
             app[backend.CONVERSATION_REFERENCES_KEY] = ReferenceStore()
             app.router.add_get('/telemetry/conversation', backend.serve_conversation)
+            app.router.add_get('/telemetry/conversation/preview', backend.serve_conversation_preview)
             runner = web.AppRunner(app)
             await runner.setup()
             site = web.TCPSite(runner, '127.0.0.1', 0)
@@ -89,6 +97,28 @@ def test_consumed_prompt_uses_attachment_timestamp_and_literal_text():
 def test_consumed_prompt_falls_back_to_line_timestamp(stamp):
     event = normalize(queued(timestamp=stamp), 'claude', 'fixture-session')[0][1]
     assert event['ts'] == '2026-11-04T07:00:02Z'
+
+
+@pytest.mark.parametrize('notice,reply,body', [
+    (COMPLETE,REFERENCE,'Fixture note'),
+    (NOTICE+'. Body preview: Excerpt ... Fetch inbox to read the rest.','日本語\nSecond line','Excerpt'),
+    (NOTICE+'. Please call fetch_inbox to read it.','Aだね',''),
+])
+def test_queued_notice_recovers_a_structural_boundary(notice,reply,body):
+    (_,event),=normalize(queued(notice+reply),'claude','fixture-session')
+    assert event['kind']=='text' and event['text']==reply
+    mail,=event['mail']
+    assert mail['subject']=='Generated notice' and mail['body']==body
+
+
+def test_queued_notice_stays_inert_without_evidence_of_mixed_input():
+    (_,event),=normalize(queued(COMPLETE),'claude','fixture-session')
+    assert event['kind']=='mail' and event['mail'][0]['body']=='Fixture note'
+    quoted='Please discuss this example:\n'+COMPLETE
+    (_,event),=normalize(queued(quoted),'claude','fixture-session')
+    assert event['kind']=='text' and event['text']==quoted and 'mail' not in event
+    (_,event),=normalize(queued(COMPLETE+'Reference: invalid\nSome arbitrary prose.'),'claude','fixture-session')
+    assert event['kind']=='mail' and 'Reference: invalid' in event['mail'][0]['body']
 
 
 @pytest.mark.parametrize('extra', [dict(commandMode='task-notification'), dict(commandMode='bash'),
@@ -173,9 +203,16 @@ def test_codex_mid_turn_user_response_item_is_visible_once(tmp_path):
         ('user', 'Generated interruption'), ('assistant', 'Generated continuation')]
 
 
-def test_consumed_native_record_reconciles_submission_in_real_view(cockpit, tmp_path, monkeypatch):
+@pytest.mark.parametrize('combined',['none','notice-first','prompt-first','reference','quoted'])
+def test_consumed_native_record_reconciles_submission_in_real_view(cockpit, tmp_path, monkeypatch, combined):
     js, wait, _client = prepare(cockpit, 'claude')
     js("sentText='Generated mid-turn instruction: continue with the updated requirements.'")
+    if combined=='notice-first':
+        js("sentText='Aだね\\n第二行'")
+    elif combined=='reference':
+        js('sentText='+json.dumps(REFERENCE))
+    elif combined=='quoted':
+        js('sentText='+json.dumps('Discuss this example:\n'+COMPLETE))
     text = js('sentText')
     timestamp = js('new Date(clock+1000).toISOString()')
     path = tmp_path / 'history.jsonl'
@@ -194,15 +231,59 @@ def test_consumed_native_record_reconciles_submission_in_real_view(cockpit, tmp_
         wait('receipts.length===1')
         assert js("reader.querySelectorAll('.conversation-submission').length") == 1
         assert js('receipts[0].submittedAt') <= js('Date.parse(' + json.dumps(timestamp) + ')')
+        recorded={'notice-first':COMPLETE+text,'prompt-first':text+COMPLETE,
+                  'reference':COMPLETE+text}.get(combined,text)
         with path.open('ab') as stream:
-            stream.write(line(queued(text, timestamp=timestamp)))
+            stream.write(line(queued(recorded, timestamp=timestamp)))
             stream.write(line(dict(type='queue-operation', operation='remove', reason='absorbed_mid_turn', content=text)))
             stream.write(line(dict(claude('assistant', 'Generated continuation after the interruption'),
                                    timestamp=js('new Date(clock+2000).toISOString()'))))
         js('conversationView.refresh()')
         wait("reader.querySelectorAll('.conversation-submission').length===0")
         assert calls
-        assert js("[...reader.querySelectorAll('.conversation-event')].filter(e=>e.textContent.includes(sentText)).length") == 1
+        if combined=='reference':
+            assert js("reader.querySelector('.conversation-reference-body').textContent.includes('これはなに？')")
+        else:
+            assert js("[...reader.querySelectorAll('.conversation-event')].filter(e=>e.textContent.includes(sentText)).length") == 1
+        if combined in {'notice-first','prompt-first','reference'}:
+            assert js("reader.querySelector('.conversation-mail-text').textContent")=='Fixture note'
+        else:
+            assert js("reader.querySelector('.conversation-mail-text')") is None
         assert js("[...reader.querySelectorAll('.conversation-speaker')].some(e=>e.ariaLabel.includes('(Claude)'))")
         js('conversationView.refresh()')
         assert js("reader.querySelectorAll('.conversation-submission').length") == 0
+
+
+def test_consumed_native_image_reaches_the_cockpit_thumbnail(cockpit, tmp_path, monkeypatch):
+    from PIL import Image, ImageDraw
+    js, wait, client = prepare(cockpit, 'claude')
+    path = tmp_path / 'history.jsonl'
+    image = Image.new('RGB',(640,400),'#212d42')
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((190,80,450,340),fill='#bb7747')
+    draw.ellipse((263,131,410,280),fill='#e2a87a')
+    raw = io.BytesIO()
+    image.save(raw,format='PNG')
+    attachment=dict(type='image',source=dict(type='base64',media_type='image/png',
+                    data=base64.b64encode(raw.getvalue()).decode()))
+    path.write_bytes(line(claude('assistant','Generated work in progress',cwd=str(tmp_path)))+
+                     line(queued([dict(type='text',text='Check the differences in this image.'),attachment],imagePasteIds=[1])))
+    with native_bridge(path,monkeypatch) as (url,_calls):
+        js('window.fetchQueued=fetch;window.fetch=(url,...args)=>fetchQueued(' +
+           '(String(url).startsWith("/telemetry/conversation")?' + json.dumps(url) + '+url:url),...args);' +
+           'OrreryConversationSource.Source.prototype.read=async()=>{const r=await fetch("/telemetry/conversation?agent=ReviewFixture");return r.json()};' +
+           'OrreryConversationSource.Source.prototype.reference=async(ref,{thumbnail}={})=>{const r=await fetch("/telemetry/conversation/preview?ref="+ref+(thumbnail?"&thumbnail=1":""));return r.json()};' +
+           'currentAgents[0]={...currentAgents[0],program:"claude-code",provider:"anthropic",'
+           'history_session_id:"fixture-session",transcript_path:"/fixture/claude.jsonl"};'
+           'document.dispatchEvent(new Event("oc:agents"));conversationView.refresh()')
+        wait("reader.querySelector('.conversation-inline-image img')?.naturalWidth>0")
+        assert js("reader.querySelector('.conversation-inline-image img').naturalWidth")==320
+        assert js("reader.querySelector('.conversation-human').textContent.includes('Check the differences')")
+        capture=os.environ.get('ORRERY_QUEUED_CAPTURE_DIR')
+        if capture:
+            for theme in ('dark','light'):
+                js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
+                js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
+                (Path(capture)/(theme+'.png')).write_bytes(base64.b64decode(client.call('Page.captureScreenshot',format='png')['data']))
+        js("reader.querySelector('.conversation-inline-image').click()")
+        wait("document.querySelector('.conversation-preview-image')?.naturalWidth===640")

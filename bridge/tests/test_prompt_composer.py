@@ -13,7 +13,9 @@ from test_conversation_review_regressions import cockpit, stable_roster
 def terminal(cockpit):
     js, wait, client, *_ = cockpit
     stable_roster(js)
-    js("""window.packets=[];window.send=packet=>{packets.push(packet);return true};
+    js("""window.packets=[];window.send=packet=>{packets.push(packet);
+              if(packet.type==='submit-prompt')queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'}));
+              return true};
         rosterAnnotationEpoch++;currentAgents=[{name:'ReviewFixture',running:true,program:'codex'}];
         createPane('ReviewFixture',{paneId:'%901',windowId:'@901',width:80,height:20});
         setActive('%901');packets.length=0;""")
@@ -52,9 +54,9 @@ def test_action_switches_to_stop_only_for_an_empty_working_draft(cockpit, reduce
     if reduced:
         assert js('promptInput.clientHeight') == 56
     js("packets.length=0;promptSendBtn.click()")
-    wait("packets.filter(packet=>packet.type==='input').length===2")
-    assert js("packets.filter(packet=>packet.type==='input').map(packet=>packet.data)") == [
-        '\x1b[200~First line\nSecond line\x1b[201~', '\r',
+    wait("packets.filter(packet=>packet.type==='submit-prompt').length===1")
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        'First line\nSecond line',
     ]
 
 
@@ -88,11 +90,12 @@ def test_mention_matches_name_and_role_and_leaves_file_references(cockpit):
     assert js("OrreryPromptRecipients.queryAt('@docs/sample.md',5,5)") is None
     js("promptInput.setSelectionRange(0,0);promptInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Backspace',bubbles:true,cancelable:true}))")
     assert js('promptRecipients.names') == []
-    assert js("packets.filter(packet=>packet.type==='input')") == []
+    assert js("packets.filter(packet=>['input','submit-prompt'].includes(packet.type))") == []
 
 
-@pytest.mark.parametrize('rejected', [False, True])
-def test_roster_selection_sends_each_agent_once_and_keeps_only_failed_targets(cockpit, rejected):
+@pytest.mark.parametrize('status', ['accepted', 'refused', 'unknown'])
+def test_roster_selection_sends_each_agent_once_and_keeps_only_failed_targets(cockpit, status):
+    rejected = status != 'accepted'
     js, wait, _ = recipients(cockpit)
     js("""currentAgents[0].category='agent';liveRosterAgents=currentAgents;renderRoster();setRosterSelectMode(true);
       for(const name of ['ReviewFixture','QuietCopernicus','EmeraldBose'])bulkSelectedAgents.add(name);
@@ -104,21 +107,27 @@ def test_roster_selection_sends_each_agent_once_and_keeps_only_failed_targets(co
     js("""window.send=packet=>{
       packets.push(packet);
       if(packet.inputAck)queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,
-        status:packet.paneId==='%902'&&"""+str(rejected).lower()+"""?'refused':'accepted'}));
+        status:packet.paneId==='%902'?"""+repr(status)+""":'accepted'}));
       return true;
     };promptSendBtn.click()""")
     wait("!promptBusy")
     assert js('activeId') == '%901'
     expected = ['%901', '%903'] if rejected else ['%901', '%902', '%903']
-    assert js(r"packets.filter(packet=>packet.data==='\r').map(packet=>packet.paneId)") == expected
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.paneId)") == ['%901','%902','%903']
+    assert js("receipts.map(receipt=>receipt.name)") == [
+        {'%901':'ReviewFixture','%902':'QuietCopernicus','%903':'EmeraldBose'}[pane] for pane in expected
+    ]
     assert js("receipts.map(receipt=>receipt.broadcastCount)") == [len(expected)] * len(expected)
     assert js('promptRecipients.names') == (['QuietCopernicus'] if rejected else [])
     assert js('promptInput.value') == ('Shared draft' if rejected else '')
-    if rejected:
+    if status == 'refused':
         assert js("toastEl.textContent.includes('Not sent to QuietCopernicus')")
+    if status == 'unknown':
+        assert js("toastEl.textContent.includes('Delivery unconfirmed for QuietCopernicus')")
 
 
-def test_attachment_drop_remove_and_delivery_per_cli(cockpit):
+@pytest.mark.parametrize('claude_status', ['accepted', 'unknown'])
+def test_attachment_drop_remove_and_delivery_per_cli(cockpit, claude_status):
     js, wait, _ = recipients(cockpit)
     js("""window.uploads=[];
       const base=fetch;
@@ -138,10 +147,12 @@ def test_attachment_drop_remove_and_delivery_per_cli(cockpit):
     assert js("document.querySelector('.prompt-attachments').hidden")
 
     assert js('uploads.length') == 0
-    js("""dropFile();promptRecipients.set(['ReviewFixture','QuietCopernicus']);
+    js("window.claudeStatus="+json.dumps(claude_status)+""";
+      dropFile();promptRecipients.set(['ReviewFixture','QuietCopernicus']);
       window.send=packet=>{
         packets.push(packet);
-        if(packet.inputAck)queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'}));
+        if(packet.type==='submit-prompt')queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,
+          id:packet.inputAck,status:packet.paneId==='%902'?claudeStatus:'accepted'}));
         return true;
       };
       promptInput.value='Read this';promptInput.dispatchEvent(new Event('input'));promptSendBtn.click()""")
@@ -149,11 +160,17 @@ def test_attachment_drop_remove_and_delivery_per_cli(cockpit):
     assert js("uploads.map(upload=>[upload.session,upload.format,atob(upload.data)])") == [
         ['ReviewFixture', 'txt', 'Fixture data'], ['QuietCopernicus', 'txt', 'Fixture data'],
     ]
-    assert js("packets.filter(packet=>packet.data?.includes('Read this')).map(packet=>packet.data)") == [
-        '\x1b[200~Read this\n\n./.orrery-input-files/' + 'a' * 32 + '.txt\x1b[201~',
-        '\x1b[200~Read this\n\n@./.orrery-input-files/' + 'a' * 32 + '.txt \x1b[201~',
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        'Read this\n\n./.orrery-input-files/' + 'a' * 32 + '.txt',
+        'Read this\n\n@./.orrery-input-files/' + 'a' * 32 + '.txt ',
     ]
-    assert js("document.querySelector('.prompt-attachments').hidden")
+    assert js("packets.filter(packet=>packet.type==='input')") == []
+    assert js("document.querySelector('.prompt-attachments').hidden") == (claude_status == 'accepted')
+    if claude_status == 'unknown':
+        assert js('promptInput.value') == 'Read this'
+        assert js('promptRecipients.names') == ['QuietCopernicus']
+        assert js("promptFiles.entries.map(entry=>entry.file.name)") == ['notes.txt']
+        assert js("toastEl.textContent.includes('Delivery unconfirmed for QuietCopernicus')")
 
 
 @pytest.mark.parametrize('route, program', [
@@ -222,7 +239,7 @@ def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, rout
         assert js('promptFiles.pending&&promptSendBtn.disabled')
         js('void sendPrompt()')
         assert js('uploads.length') == 0
-        assert js("packets.filter(packet=>packet.type==='input').length") == 0
+        assert js("packets.filter(packet=>['input','submit-prompt'].includes(packet.type))") == []
         js('releaseClipboard()')
     wait("document.querySelector('.prompt-file-preview')?.naturalWidth===640")
     assert js("Array.from(document.querySelectorAll('.prompt-file-name'),node=>node.textContent)") == [
@@ -233,7 +250,7 @@ def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, rout
     assert js('reads') == expected_reads
     assert js('promptInput.value') == 'Compare the pasted screenshot.'
     assert js('uploads.length') == 0
-    assert js("packets.filter(packet=>packet.type==='input').length") == 0
+    assert js("packets.filter(packet=>['input','submit-prompt'].includes(packet.type))") == []
 
     capture = os.environ.get('ORRERY_PASTE_CAPTURE_DIR')
     if capture and route == 'wsl-http' and program == 'claude-code':
@@ -253,14 +270,14 @@ def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, rout
     wait("!promptBusy && promptFiles.entries.length===0")
     assert js("uploads.map(upload=>[upload.kind,upload.label,upload.data])") == [
         ['image', 'Clipboard image.png', picture]]
-    [wire,enter] = js("packets.filter(packet=>packet.type==='input'&&packet.inputAck).map(packet=>packet.data)")
     path = './.orrery-input-images/'+'a'*32+'.png'
     reference = '@'+path+' ' if program == 'claude-code' else path
-    assert wire == '\x1b[200~Compare the pasted screenshot.\n\n'+reference+'\x1b[201~'
-    assert enter == '\r'
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        'Compare the pasted screenshot.\n\n' + reference]
+    assert js("packets.filter(packet=>packet.type==='input')") == []
 
 
-@pytest.mark.parametrize('variant', ['plain', 'quoted', 'quoted-attachments-only'])
+@pytest.mark.parametrize('variant', ['plain', 'quoted', 'quoted-attachments-only', 'quoted-early-record'])
 def test_reader_shows_selected_attachments_before_and_after_recording(cockpit,tmp_path,variant):
     from test_conversation_submissions import prepare
     from test_conversation_providers import claude,line,row
@@ -296,11 +313,8 @@ def test_reader_shows_selected_attachments_before_and_after_recording(cockpit,tm
       document.addEventListener('oc:prompt-sending',event=>attachmentAttempts.push(event.detail));
       window.send=packet=>{
         packets.push(packet);
-        if(packet.inputAck){
-          const acknowledge=()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'});
-          if(packet.data===String.fromCharCode(13))window.finishAttachmentSend=acknowledge;
-          else queueMicrotask(acknowledge);
-        }
+        if(packet.type==='submit-prompt')
+          window.finishAttachmentSend=()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'});
         return true;
       };
       const transfer=new DataTransfer();
@@ -323,11 +337,9 @@ def test_reader_shows_selected_attachments_before_and_after_recording(cockpit,tm
         assert js("attachmentBubble.querySelector('.conversation-reference-body .conversation-inline-image img').naturalWidth")==640
     else:
         assert not js("attachmentBubble.querySelector('.conversation-reference-link')")
-    js('finishAttachmentSend()')
-    wait("!promptBusy&&attachmentBubble.dataset.state==='awaiting'")
-    assert js("attachmentBubble===reader.querySelector('.conversation-submission')")
     assert js("uploads.map(upload=>upload.label)")==['Comparison.png','Notes.md']
-    assert js("packets.find(packet=>packet.data?.includes('.orrery-input-images/')).data.slice(6,-6)")==sent+' '
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)")==[sent+' ']
+    assert js("packets.filter(packet=>packet.type==='input')") == []
     capture=os.environ.get('ORRERY_ATTACHMENT_CAPTURE_DIR')
     def save_capture(name):
         if os.environ.get('CDP_PDF_ON_TIMEOUT'):
@@ -338,11 +350,23 @@ def test_reader_shows_selected_attachments_before_and_after_recording(cockpit,tm
             result=client.call('Page.captureScreenshot',format='png')
             suffix='.png'
         (Path(capture)/(variant+'-'+name+suffix)).write_bytes(base64.b64decode(result['data']))
-    if capture:save_capture('pending')
-    js('window.verifiedAttachments='+json.dumps(events)+';window.verifiedPreviews='+json.dumps(previews)+';window.verifiedThumb='+json.dumps(thumbnail)+';'
-       'OrreryConversationSource.Source.prototype.reference=async(ref,{thumbnail}={})=>thumbnail?verifiedThumb:verifiedPreviews[ref];'
-       'OrreryConversationSource.Source.prototype.read=async()=>({provider:"claude",mode:"cursor",events:[oldRecord,...verifiedAttachments],after:"end"});'
-       'conversationView.refresh()')
+    def read_record():
+        js('window.verifiedAttachments='+json.dumps(events)+';window.verifiedPreviews='+json.dumps(previews)+';window.verifiedThumb='+json.dumps(thumbnail)+';'
+           'OrreryConversationSource.Source.prototype.reference=async(ref,{thumbnail}={})=>thumbnail?verifiedThumb:verifiedPreviews[ref];'
+           'OrreryConversationSource.Source.prototype.read=async()=>({provider:"claude",mode:"cursor",events:[oldRecord,...verifiedAttachments],after:"end"});'
+           'conversationView.refresh()')
+
+    if variant=='quoted-early-record':
+        read_record()
+        wait("reader.querySelector('.conversation-event .conversation-inline-image img')?.naturalWidth===320")
+        assert js("attachmentBubble.isConnected&&attachmentBubble.dataset.state==='sending'")
+        js('finishAttachmentSend()')
+    else:
+        js('finishAttachmentSend()')
+        wait("!promptBusy&&attachmentBubble.dataset.state==='awaiting'")
+        assert js("attachmentBubble===reader.querySelector('.conversation-submission')")
+        if capture:save_capture('pending')
+        read_record()
     wait("reader.querySelector('.conversation-event .conversation-inline-image img')?.naturalWidth===320&&!reader.querySelector('.conversation-submission')")
     assert not js("fetch(pendingThumbnail).then(()=>true,()=>false)")
     assert not js("reader.querySelector('.conversation-event .conversation-input-images').parentElement.textContent.includes('.orrery-input-')")
@@ -390,14 +414,14 @@ def test_skill_kind_namespace_retry_switch_and_multiline_fix(cockpit):
     js("draft('/sta')")
     assert js("slashMenu.querySelector('.sm-name').textContent") == '/status'
     js("draft('/status');sendPrompt()")
-    wait(r"packets.some(packet=>packet.data==='\r')")
-    assert js("packets.filter(packet=>packet.type==='input')[0].data") == '\x1b[200~/status\x1b[201~'
+    wait(r"packets.some(packet=>packet.type==='submit-prompt')")
+    assert js("packets.find(packet=>packet.type==='submit-prompt').data") == '/status'
     js(r"packets.length=0;draft('  /release-check extra\nsecond note');sendPrompt()")
     assert js('!sendGuard.hidden')
     assert js('guardArmed.fix') == '  $release-check extra\nsecond note'
     js('sendGuardFix.click()')
-    wait(r"packets.some(packet=>packet.data==='\r')")
-    assert js("packets.filter(packet=>packet.type==='input')[0].data") == '\x1b[200~  $release-check extra\nsecond note\x1b[201~'
+    wait(r"packets.some(packet=>packet.type==='submit-prompt')")
+    assert js("packets.find(packet=>packet.type==='submit-prompt').data") == '  $release-check extra\nsecond note'
     js("draft('/log');sendPrompt()")
     assert js('guardArmed.fix') == '$log'
     js("setActive('%902');draft('/ops:')")
@@ -416,7 +440,7 @@ def test_a_recipient_pin_survives_the_draft_and_refuses_a_reused_name(cockpit):
     ]
     js("currentAgentNamed('QuietCopernicus').created=2;packets.length=0;sendPrompt()")
     wait("!promptBusy")
-    assert js("packets.filter(packet=>packet.type==='input')") == []
+    assert js("packets.filter(packet=>['input','submit-prompt'].includes(packet.type))") == []
     assert js("toastEl.textContent") == 'Not sent to QuietCopernicus'
     assert js("promptRecipients.names") == ['QuietCopernicus']
     assert js("promptInput.value") == 'Keep the intended recipient'

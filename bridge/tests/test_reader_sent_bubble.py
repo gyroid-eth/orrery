@@ -53,28 +53,29 @@ def test_long_prompt_expansion_and_selection_survive_poll(cockpit,theme):
     assert js("packets.filter(p=>['input','codex-page'].includes(p.type))") == []
 
 
-@pytest.mark.parametrize('failure',['paste','enter','removed','guard'])
+@pytest.mark.parametrize('failure',['disconnected','refused','removed','guard'])
 def test_sending_attempt_never_leaves_a_sent_bubble_after_failure(cockpit,failure):
     js,wait,client=prepare(cockpit)
     js("window.sendAttempts=[];document.addEventListener('oc:prompt-sending',e=>sendAttempts.push(e.detail));window.cancelledAttempts=[];document.addEventListener('oc:prompt-send-cancelled',e=>cancelledAttempts.push(e.detail))")
-    if failure=='paste':js('send=()=>false')
-    if failure=='enter':js("send=p=>p.data!=='\\r'")
+    if failure=='disconnected':js('send=()=>false')
+    if failure=='refused':
+        js("send=p=>{queueMicrotask(()=>handle({type:'input-ack',paneId:p.paneId,id:p.inputAck,status:'refused'}));return true}")
     js('promptInput.value='+json.dumps('/logout' if failure=='guard' else 'Generated failed send')+';sendPrompt()'+(";panes.delete('%901')" if failure=='removed' else ''))
     time.sleep(.35)
-    assert js('sendAttempts.length') == (1 if failure in ['enter','removed'] else 0)
-    assert js('cancelledAttempts.length') == (1 if failure in ['enter','removed'] else 0)
+    assert js('sendAttempts.length') == (1 if failure in ['disconnected','refused'] else 0)
+    assert js('cancelledAttempts.length') == (1 if failure in ['disconnected','refused'] else 0)
     assert js('receipts.length')==0
     assert js("reader.querySelector('.conversation-submission')===null")
 
 
 def test_sending_uses_a_separate_attempt_and_then_the_confirmed_receipt(cockpit):
     js,wait,client=prepare(cockpit)
-    js("window.finishSend=null;window.nativeSendTimeout=setTimeout;window.setTimeout=(fn,ms,...args)=>{if(ms===250){finishSend=fn;return 0}return nativeSendTimeout(fn,ms,...args)};window.startAttempts=[];document.addEventListener('oc:prompt-sending',e=>startAttempts.push(e.detail));promptInput.value='Generated delayed Enter';sendPrompt()")
-    assert js("reader.querySelector('.conversation-submission')?.dataset.state") == 'sending'
+    js("window.send=p=>{if(p.type==='submit-prompt')window.finishSend=()=>handle({type:'input-ack',paneId:p.paneId,id:p.inputAck,status:'accepted'});return true};window.startAttempts=[];document.addEventListener('oc:prompt-sending',e=>startAttempts.push(e.detail));promptInput.value='Generated delayed acknowledgement';void sendPrompt()")
+    wait("reader.querySelector('.conversation-submission')?.dataset.state==='sending'")
     assert js('receipts.length')==0
     js("window.sendingBubble=reader.querySelector('.conversation-submission')")
     js('finishSend()')
-    assert js('receipts.length')==1
+    wait('receipts.length===1')
     assert js('receipts[0].attemptId===startAttempts[0].attemptId')
     assert js("reader.querySelectorAll('.conversation-submission').length")==1
     assert js("reader.querySelector('.conversation-submission').dataset.state") == 'awaiting'
@@ -96,15 +97,15 @@ def test_unmatched_note_is_small_and_the_bubble_stays_before_activity(cockpit,th
 @pytest.mark.parametrize('change',['binding','disabled','closed','reopened'])
 def test_delayed_confirmation_cannot_cross_a_reader_binding(cockpit,change):
     js,wait,client=prepare(cockpit)
-    js("window.nativeSendTimeout=setTimeout;window.setTimeout=(fn,ms,...args)=>{if(ms===250){window.finishBubbleSend=fn;return 0}return nativeSendTimeout(fn,ms,...args)};promptInput.value='Generated bound attempt';sendPrompt()")
-    assert js("reader.querySelector('.conversation-submission').dataset.state") == 'sending'
+    js("window.send=p=>{if(p.type==='submit-prompt')window.finishBubbleSend=()=>handle({type:'input-ack',paneId:p.paneId,id:p.inputAck,status:'accepted'});return true};promptInput.value='Generated bound attempt';void sendPrompt()")
+    wait("reader.querySelector('.conversation-submission')?.dataset.state==='sending'")
     if change=='binding':
         js("currentAgents[0].history_session_id='next-generated-session';document.dispatchEvent(new Event('oc:agents'))")
     elif change=='disabled':
         js("conversationEnabled.checked=false;conversationEnabled.dispatchEvent(new Event('change'))")
     else:
         js('conversationView.close()'+(';conversationView.open()' if change=='reopened' else ''))
-    js('finishBubbleSend()')
+    js('finishBubbleSend();new Promise(resolve=>setTimeout(resolve,0))')
     assert js("reader.querySelectorAll('.conversation-submission').length") == (1 if change=='reopened' else 0)
     if change=='reopened':
         assert js("reader.querySelector('.conversation-submission').dataset.state") == 'awaiting'
