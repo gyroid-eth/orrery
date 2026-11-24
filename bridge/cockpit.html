@@ -743,32 +743,39 @@
   .claim-toggle[hidden],.ghostty-action[hidden]{display:none}
   .ghostty-action:disabled{opacity:.45;cursor:wait}
   /* terminal stage: existing termhosts move between single view and split cells */
-  .termstage{position:absolute;left:0;right:0;top:40px;bottom:84px;z-index:1}
-  /* ── prompt composer: humans type HERE, not in the shared pty ──
-     mail-watcher injections write into the tmux input line and used to
-     collide with a human mid-sentence; this box is browser-local until
-     ⌘⏎, then delivered as ONE bracketed paste + submit. */
-  .promptbar{position:absolute;left:0;right:0;bottom:0;height:84px;z-index:2;
-    display:flex;align-items:stretch;gap:10px;padding:10px 12px;
-    border-top:1px solid var(--hair);background:var(--panel)}
-  .promptmeta{display:flex;flex-direction:column;justify-content:center;gap:4px;flex:0 0 auto;max-width:150px}
-  .promptmeta .plab{font-size:8.5px;letter-spacing:.22em;color:var(--ink-faint)}
-  .promptmeta .ptarget-row{display:flex;align-items:center;gap:7px;min-width:0}
-  .promptmeta .prompt-ava{width:26px;height:26px;border-radius:50%;flex:0 0 auto;
-    border:1px solid var(--hair);background:#0a0a0c}
-  .promptmeta .ptarget{font-family:var(--serif);font-size:13px;color:var(--ink);
+  .screen{--prompt-height:112px}
+  .termstage{position:absolute;left:0;right:0;top:40px;bottom:var(--prompt-height);z-index:1}
+  /* Keep the browser draft separate from the shared terminal input. */
+  .promptbar{position:absolute;inset:auto 0 0;z-index:2;padding:0 18px 12px;
+    background:var(--panel);font-family:var(--rail-sans);
+    --prompt-fill:var(--elev);
+    --prompt-soft:color-mix(in srgb,var(--ink) 5%,var(--prompt-fill));
+    --prompt-middle:color-mix(in srgb,var(--ink) 9%,var(--prompt-fill));
+    --prompt-strong:color-mix(in srgb,var(--ink) 17%,var(--prompt-fill))}
+  .prompt-card{display:flex;flex-direction:column;gap:4px;min-width:0;
+    border-radius:16px;padding:14px 16px 12px;background:var(--prompt-fill)}
+  .prompt-footer{display:flex;align-items:center;gap:6px;min-height:34px}
+  .prompt-meta{display:flex;align-items:center;gap:6px;min-width:0;max-width:72%;min-height:27px;
+    padding:3px 8px 3px 4px;border-radius:7px;background:var(--prompt-soft)}
+  .prompt-target{font:500 12px var(--rail-sans);color:var(--ink);
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .promptmeta .phint{font-size:8.5px;color:var(--ink-faint);letter-spacing:.04em}
-  #promptInput{flex:1;resize:none;border:1px solid var(--hair);border-radius:8px;
-    background:var(--bg);color:var(--ink);padding:8px 10px;outline:none;
-    font-family:var(--mono);font-size:12px;line-height:1.45}
-  #promptInput:focus{border-color:rgb(var(--theme-accent-rgb) / .4)}
-  #promptSend{flex:0 0 auto;align-self:center}
-  #promptStop{flex:0 0 auto;align-self:center;color:var(--ink-dim)}
-  #promptStop:hover{color:var(--amber);border-color:rgb(var(--theme-accent-rgb) / .4)}
+  .prompt-ava{width:21px;height:21px;border-radius:50%;flex:none}
+  #promptInput{display:block;resize:none;width:100%;height:32px;max-height:88px;overflow:auto;
+    border:0;border-radius:4px;background:transparent;color:var(--ink);padding:0 1px;
+    font:15px/28px var(--rail-sans);outline:none}
+  #promptInput::placeholder{color:var(--ink-dim);opacity:1}
+  #promptInput:focus-visible{outline:1px solid var(--prompt-strong);outline-offset:3px}
+  #promptSend{display:grid;place-items:center;flex:none;width:34px;height:34px;margin-left:auto;
+    border:0;border-radius:50%;padding:0;background:var(--prompt-middle);color:var(--ink-dim);cursor:pointer}
+  #promptSend[data-ready],#promptSend:hover:not(:disabled){background:var(--prompt-strong);color:var(--ink)}
+  #promptSend:disabled{cursor:default}
+  #promptSend:focus-visible{outline:2px solid var(--ink-dim);outline-offset:2px}
+  #promptSend>*{grid-area:1/1}
+  .prompt-arrow{width:17px;height:17px}
+  .prompt-square{width:9px;height:9px;border-radius:2px;background:currentColor;transform:scale(0)}
   /* ── slash-skill autocomplete (composer-local; the TUI can't see keystrokes
      until send, so we re-create /skill suggestions from /telemetry/skills) ── */
-  .slashmenu{position:absolute;left:162px;right:190px;bottom:88px;z-index:6;
+  .slashmenu{position:absolute;left:18px;right:18px;bottom:calc(100% + 4px);z-index:6;
     background:var(--panel);border:1px solid var(--hair);border-radius:8px;
     max-height:238px;overflow-y:auto;box-shadow:0 -6px 24px rgba(0,0,0,.35)}
   .slashmenu[hidden]{display:none}
@@ -781,7 +788,7 @@
   .slashmenu .sm-it.sel{background:rgb(var(--theme-accent-rgb) / .09)}
   .slashmenu .sm-it.sel .sm-name{color:var(--amber)}
   /* ── wrong-vocabulary guard ── */
-  .sendguard{position:absolute;left:162px;right:14px;bottom:88px;z-index:7;
+  .sendguard{position:absolute;left:18px;right:18px;bottom:calc(100% + 4px);z-index:7;
     display:flex;align-items:center;gap:9px;padding:9px 12px;
     background:linear-gradient(180deg,rgba(116,28,20,.72),rgba(60,16,12,.55));
     border:1px solid #ff5a4d;border-radius:8px;
@@ -1363,14 +1370,16 @@
           <div class="stage-empty" id="stageEmpty">waiting for ORRERY backend…<br>start <b>orrery_backend.py</b> on :8791</div>
         </div>
         <div class="promptbar">
-          <div class="promptmeta">
-            <span class="plab">PROMPT</span>
-            <span class="ptarget-row"><img class="prompt-ava" id="promptAva" alt="" hidden><span class="ptarget" id="promptTarget">—</span></span>
-            <span class="phint">⏎ send · ⇧⏎ newline · esc interrupt · ↑ history · <b id="phintPrefix">/</b> skills</span>
+          <div class="prompt-card">
+            <textarea id="promptInput" rows="1" placeholder="Write a message" aria-label="Message draft" title="Enter to send. Shift+Enter for a new line. Up for history. / for skills. Esc to stop."></textarea>
+            <div class="prompt-footer">
+              <span class="prompt-meta"><img class="prompt-ava" id="promptAva" alt="" hidden><span class="prompt-target" id="promptTarget">—</span></span>
+              <button id="promptSend" type="button" title="Send message" aria-label="Send message" disabled>
+                <svg class="prompt-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+                <span class="prompt-square" aria-hidden="true"></span>
+              </button>
+            </div>
           </div>
-          <textarea id="promptInput" placeholder="type here — tmux injections can't touch this box. ⏎ sends, ⇧⏎ newline, esc interrupts the agent, ↑ recalls, / suggests skills."></textarea>
-          <button id="promptStop" class="modal-btn" type="button" title="interrupt the agent (Esc)">⎋ STOP</button>
-          <button id="promptSend" class="modal-btn primary" type="button">SEND ⏎</button>
           <div class="slashmenu" id="slashMenu" hidden></div>
           <!-- Wrong-vocabulary guard: shown instead of sending, never as a
                toast after the fact — by then the agent has already logged out. -->
@@ -1671,6 +1680,8 @@
 <script src="roster_edit.js"></script>
 <script src="demo_mask.js"></script>
 <script src="demo_mode.js"></script>
+<script src="prompt_spring.js"></script>
+<script src="prompt_composer.js"></script>
 <script id="agentstack-theme-axis-inventory" type="application/json">
 {
   "axes": {
@@ -2383,44 +2394,34 @@
             "value": "var(--panel-2)"
           },
           {
-            "property": "border-top",
-            "selector": ".promptbar",
-            "value": "1px solid var(--hair)"
-          },
-          {
             "property": "background",
             "selector": ".promptbar",
             "value": "var(--panel)"
           },
           {
-            "property": "color",
-            "selector": ".promptmeta .plab",
-            "value": "var(--ink-faint)"
+            "property": "--prompt-fill",
+            "selector": ".promptbar",
+            "value": "var(--elev)"
           },
           {
-            "property": "border",
-            "selector": ".promptmeta .prompt-ava",
-            "value": "1px solid var(--hair)"
+            "property": "--prompt-soft",
+            "selector": ".promptbar",
+            "value": "color-mix(in srgb,var(--ink) 5%,var(--prompt-fill))"
+          },
+          {
+            "property": "--prompt-middle",
+            "selector": ".promptbar",
+            "value": "color-mix(in srgb,var(--ink) 9%,var(--prompt-fill))"
+          },
+          {
+            "property": "--prompt-strong",
+            "selector": ".promptbar",
+            "value": "color-mix(in srgb,var(--ink) 17%,var(--prompt-fill))"
           },
           {
             "property": "color",
-            "selector": ".promptmeta .ptarget",
+            "selector": ".prompt-target",
             "value": "var(--ink)"
-          },
-          {
-            "property": "color",
-            "selector": ".promptmeta .phint",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "border",
-            "selector": "#promptInput",
-            "value": "1px solid var(--hair)"
-          },
-          {
-            "property": "background",
-            "selector": "#promptInput",
-            "value": "var(--bg)"
           },
           {
             "property": "color",
@@ -2429,8 +2430,23 @@
           },
           {
             "property": "color",
-            "selector": "#promptStop",
+            "selector": "#promptInput::placeholder",
             "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": "#promptSend",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": "#promptSend[data-ready],#promptSend:hover:not(:disabled)",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "outline",
+            "selector": "#promptSend:focus-visible",
+            "value": "2px solid var(--ink-dim)"
           },
           {
             "property": "background",
@@ -3451,18 +3467,18 @@
           },
           {
             "property": "color",
-            "selector": ".promptmeta .plab",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": ".promptmeta .phint",
-            "value": "var(--ink-faint)"
-          },
-          {
-            "property": "color",
-            "selector": "#promptStop",
+            "selector": "#promptInput::placeholder",
             "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": "#promptSend",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "outline",
+            "selector": "#promptSend:focus-visible",
+            "value": "2px solid var(--ink-dim)"
           },
           {
             "property": "color",
@@ -3869,7 +3885,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "4cd8b662ae0dcb6361122ee54cb10b239b898b7708f1b77441bb6537b6474934",
+        "digest": "0b8efa112ea0e683c5a3e97dc0d1058a9ca6fd563466691d428e2e984149437d",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -3902,8 +3918,6 @@
           ".tab\u0000font-size",
           ".tabs .empty\u0000font-size",
           ".scr-head .path\u0000font-size",
-          ".promptmeta .plab\u0000font-size",
-          ".promptmeta .phint\u0000font-size",
           ".slashmenu .sm-kind\u0000font-size",
           ".slashmenu .sm-desc\u0000font-size",
           ".sendguard .sg-msg\u0000font-size",
@@ -3964,7 +3978,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "5c1a0bb567e3173521d018e31141fd7df2774bf1786da7bfafd85eabddf57fb3",
+        "digest": "84387da07e5bf89ae817251f492dc48b2c4924e0dfe422178783614e6a4a2eaa",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -3973,7 +3987,6 @@
           ".usage-popover .up-sub\u0000letter-spacing",
           ".layout-picker-title\u0000letter-spacing",
           ".layout-option\u0000letter-spacing",
-          ".promptmeta .plab\u0000letter-spacing",
           ".slashmenu .sm-kind\u0000letter-spacing",
           ".network-note\u0000letter-spacing",
           ".pane-bottom-jump\u0000letter-spacing",
@@ -3994,9 +4007,9 @@
       }
     }
   },
-  "inventory_digest": "520d8780211e38a6b0beb40286e2459f48458a713c74f663d2815af570af261f",
+  "inventory_digest": "d7aaf1af51a6c6bc4cffb21cb90700b3418164facb27efe6e2b0ab2086dacc4a",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "55da999b94e251251abaeb891c7395dbd98e368589f4239070be721fd9f84125",
+  "source_digest": "f5d0d106835c8828d1c25474fc7a861fe0dcfc7f41e8cc02df1d00f85737d183",
   "surface": "cockpit",
   "version": 1
 }
@@ -11235,14 +11248,12 @@ window.addEventListener('keydown',event=>{
 const promptTarget=document.getElementById('promptTarget');
 const promptInput=document.getElementById('promptInput');
 const promptSendBtn=document.getElementById('promptSend');
-const promptStopBtn=document.getElementById('promptStop');
 const slashMenu=document.getElementById('slashMenu');
 const sendGuard=document.getElementById('sendGuard');
 const sendGuardMsg=document.getElementById('sendGuardMsg');
 const sendGuardFix=document.getElementById('sendGuardFix');
 const sendGuardRaw=document.getElementById('sendGuardRaw');
 const sendGuardCancel=document.getElementById('sendGuardCancel');
-const phintPrefix=document.getElementById('phintPrefix');
 
 /* sent-prompt history: the composer-native equivalent of the TUI's esc-esc
    prompt editing — ↑ recalls a past prompt into the box for editing/resend. */
@@ -11259,6 +11270,7 @@ try{
   if(savedDraft)promptInput.value=savedDraft;
 }catch(_){/* private mode */}
 function saveDraft(){
+  promptCard.refresh();
   try{
     if(promptInput.value)localStorage.setItem(PROMPT_DRAFT_KEY,promptInput.value);
     else localStorage.removeItem(PROMPT_DRAFT_KEY);
@@ -11389,8 +11401,16 @@ function sendInterrupt(){
   send({type:"input",paneId:activeId,data:"\x1b"});
   showToast(`⎋ interrupt → ${p.session}`);
 }
-promptSendBtn.addEventListener('click',()=>sendPrompt());
-promptStopBtn.addEventListener('click',sendInterrupt);
+const promptCard=OrreryPromptComposer.mount({
+  input:promptInput,button:promptSendBtn,
+  getDestination:()=>{
+    const pane=panes.get(activeId);
+    const agent=pane&&currentAgentNamed(pane.session);
+    return {label:pane?.session,working:agent?.running===true&&agent.act_state==='work'};
+  },
+  submit:()=>sendPrompt(),interrupt:sendInterrupt,
+});
+document.addEventListener('oc:agents',()=>promptCard.refresh());
 sendGuardFix.addEventListener('click',()=>{
   if(!guardArmed||!guardArmed.fix)return;
   promptInput.value=guardArmed.fix;saveDraft();
@@ -11559,7 +11579,7 @@ function targetPrefix(){return SKILL_PREFIX[targetProgram()]||'/';}
 /* The target changed, so the vocabulary did too: re-label the hint, drop a
    guard that was about a different agent, and pull that program's skills. */
 function refreshComposerVocabulary(){
-  if(phintPrefix)phintPrefix.textContent=targetPrefix();
+  promptCard.refresh();
   hideSendGuard();
   closeSlashMenu();
   loadSkills();
@@ -11622,7 +11642,7 @@ function applySlash(i){
   promptInput.value=sigil+item.name+' '+promptInput.value.slice(caret);
   const pos=item.name.length+2;
   promptInput.setSelectionRange(pos,pos);
-  closeSlashMenu();promptInput.focus();
+  saveDraft();closeSlashMenu();promptInput.focus();
 }
 promptInput.addEventListener('input',()=>{histIndex=-1;saveDraft();updateSlashMenu();});
 promptInput.addEventListener('focus',loadSkills);
@@ -11660,13 +11680,13 @@ promptInput.addEventListener('keydown',e=>{
     e.preventDefault();
     if(histIndex===-1){histDraft=promptInput.value;histIndex=promptHistory.length-1;}
     else if(histIndex>0)histIndex--;
-    promptInput.value=promptHistory[histIndex];closeSlashMenu();return;
+    promptInput.value=promptHistory[histIndex];promptCard.refresh();closeSlashMenu();return;
   }
   if(e.key==='ArrowDown'&&!imeActive&&histIndex!==-1){
     e.preventDefault();
     if(histIndex<promptHistory.length-1){histIndex++;promptInput.value=promptHistory[histIndex];}
     else{histIndex=-1;promptInput.value=histDraft;}
-    return;
+    promptCard.refresh();return;
   }
   // Enter sends (chat convention); Shift+Enter inserts a newline.
   if(e.key!=='Enter'||e.shiftKey)return;
