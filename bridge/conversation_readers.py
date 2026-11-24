@@ -16,12 +16,13 @@ import stat
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import quote
 from conversation_mail import received, sent
 from conversation_images import hermes_content, native_image
 from conversation_steps import claude_call, claude_result, mark_step_boundary
 
-from conversation_history import (HistoryUnavailable, MAX_SCAN, MAX_TEXT, PAGE_SIZE,
+from conversation_history import (AGY_PROGRAMS, HistoryUnavailable, MAX_SCAN, MAX_TEXT, PAGE_SIZE,
     open_bound_transcript, assert_transcript_identity, read_codex_page, recorded_model)
 
 try:
@@ -41,6 +42,8 @@ HERMES_SYSTEM_KINDS = frozenset({'model_switch', 'personality_switch', 'async_de
 
 def provider(row):
     p = row.get('program')
+    if p in AGY_PROGRAMS:
+        return 'antigravity'
     return {'codex':'codex','codex-cli':'codex','claude':'claude','claude-code':'claude',
             'dsh':'dsh','hermes':'hermes'}.get(p)
 
@@ -154,8 +157,67 @@ def claude_text(text, role, ts, item):
                 system_detail=detail[:MAX_TEXT], truncated=len(text)>MAX_TEXT)
 
 
+AGY_REQUEST_START = '<USER_REQUEST>\n'
+AGY_REQUEST_END = '\n</USER_REQUEST>'
+AGY_UUID = re.compile(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\Z')
+AGY_TRANSCRIPTS = frozenset({'transcript.jsonl','transcript_full.jsonl'})
+AGY_TOOL_NAME = re.compile(r'[A-Za-z0-9_.:-]{1,160}\Z')
+AGY_RESULT_HEADER = re.compile(r'\ACreated At: [^\n]+\nCompleted At: [^\n]+(?:\n|$)')
+
+
+def agy_normalize(item):
+    """Provider log projection. Hide model-only scaffolding and tool payloads."""
+    if type(item.get('step_index')) is not int or item['step_index'] < 0:
+        return []
+    kind, source, status = (item.get(key) for key in ('type', 'source', 'status'))
+    if status != 'DONE':
+        return []  # The interactive transcript publishes confirmed steps.
+    ts = item.get('created_at')
+    if not isinstance(ts, str) or len(ts) > 128:
+        return []
+    content = item.get('content')
+    truncated = item.get('truncated_fields')
+    cut_content = isinstance(truncated, list) and 'content' in truncated
+    if kind == 'USER_INPUT' and source == 'USER_EXPLICIT':
+        if not isinstance(content, str) or not content.startswith(AGY_REQUEST_START):
+            return []
+        request, close, suffix = content[len(AGY_REQUEST_START):].rpartition(AGY_REQUEST_END)
+        if not close and cut_content:
+            return [(0, dict(kind='text', role='user', ts=ts, truncated=True,
+                             text='Input shortened by Antigravity.'))]
+        if not close or suffix and not suffix.startswith('\n<ADDITIONAL_METADATA>'):
+            return []
+        if request.strip() == '/compact':
+            return []  # The confirmed checkpoint is the visible event.
+        event = text_event(request, 'user', ts)
+        return [(0, event)] if event else []
+    if kind == 'PLANNER_RESPONSE' and source == 'MODEL':
+        event = text_event(content, 'assistant', ts)
+        events = [(0, event)] if event else []
+        model = recorded_model(item.get('model'))
+        if event and model:
+            event['model'] = model
+        if event and cut_content:
+            event['truncated'] = True
+        calls = item.get('tool_calls')
+        for slot, call in enumerate(calls[:MAX_BLOCKS-1] if isinstance(calls, list) else [], 1):
+            name = call.get('name') if isinstance(call, dict) else None
+            if isinstance(name, str) and AGY_TOOL_NAME.fullmatch(name):
+                events.append((slot, sent(tool_event(name, ts), name, call.get('args'))))
+        return events
+    if kind == 'GENERIC' and source == 'MODEL' and isinstance(content, str) and AGY_RESULT_HEADER.match(content):
+        # agy 1.5.16 does not put a call ID or exit verdict in this record.
+        return [(0, dict(kind='tool_result', role='assistant', text='Tool result', ts=ts))]
+    if kind == 'CHECKPOINT' and source == 'SYSTEM':
+        return [(0, dict(kind='system', role='system', text='Context compacted', ts=ts,
+                         system_detail='Antigravity recorded a context checkpoint.'))]
+    return []
+
+
 def normalize(item,p,sid):
     """Return (block-index,event) pairs; hidden/reasoning/raw tool bodies excluded."""
+    if p == 'antigravity':
+        return agy_normalize(item)
     out=[]
     def add(index,event):
         if event:out.append((index,mark_step_boundary(event) if p=='claude' else event))
@@ -391,6 +453,10 @@ class Reader:
         except zstd.ZstdError:raise HistoryUnavailable('history_format_unsupported') from None
 
     def check_header(self):
+        if self.provider=='antigravity':
+            # No UUID header. The authoritative receipt binds the UUID-named
+            # directory, and the reader pins and revalidates its regular file.
+            return
         if self.provider=='dsh' and self.path.endswith('.zstd'):
             frame=self.frame(0)
             if frame is None:raise HistoryUnavailable('history_pending')
@@ -771,6 +837,13 @@ def open_reader(row,expect_inode=None):
     if not isinstance(path,str) or (p in {'codex','claude'} and not path.endswith('.jsonl')
         or p=='dsh' and not path.endswith(('.jsonl','.jsonl.zstd'))
         or p=='hermes' and not path.endswith('/state.db')):raise HistoryUnavailable('invalid_binding')
+    if p == 'antigravity':
+        sid = row.get('history_session_id')
+        transcript = Path(path)
+        if (not isinstance(sid, str) or not AGY_UUID.fullmatch(sid)
+                or transcript.parts[-6:-1] != ('antigravity-cli','brain',sid,'.system_generated','logs')
+                or transcript.name not in AGY_TRANSCRIPTS):
+            raise HistoryUnavailable('invalid_binding')
     reader=None
     try:
         with open_bound_transcript(path) as stream:

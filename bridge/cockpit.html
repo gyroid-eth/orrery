@@ -1288,6 +1288,8 @@
   .local-provider-badge .provider-logo[hidden]{display:none}
   .usage-popover .up-balance-warning{color:var(--amber)}
   .usage-popover .up-balance-low{color:var(--theme-status-alert,#d2685e)}
+  .usage-popover .up-name.stale::after{content:"";display:inline-block;width:6px;height:6px;
+    margin-inline-start:6px;vertical-align:middle;border:1px solid currentColor;border-radius:50%;opacity:.55}
   .tmux-restart-notice:not(:empty){
     padding:8px 14px;border-bottom:1px solid var(--hair);
     background:var(--panel);color:var(--amber);font-size:12px;line-height:1.4;
@@ -4160,9 +4162,9 @@
       }
     }
   },
-  "inventory_digest": "0e6cbd4c90f77dba88fbc8361a97e0554e976055e9d41cd333706581921b7a05",
+  "inventory_digest": "2ae60edc2e7baa6b611880dc977dd8705ff046f7744c6d97fee35f1d37429faa",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "333210f3051632bbd95524d0aacc499d525315ce77a742a8d747ea7683c0667a",
+  "source_digest": "ec80e37143f45a05ac2b021ae2c2de81a3b5562324d614c5cf5a4724629761a0",
   "surface": "cockpit",
   "version": 1
 }
@@ -8655,7 +8657,11 @@ function renderUsagePill(){
     usageProviderName(slot.dataset.provider)+' '+slot.querySelector('b').textContent);
   setAttr(pill,'aria-label',values.length?'Usage left. '+values.join(', '):'Usage left');
 }
-function usageDial(w,label=w.label){
+function usageWindowLabel(w){return w.limit?`${w.limit} · ${w.label}`:w.label;}
+function usageWindowTitle(w){
+  return `${usageWindowLabel(w)}: ${Math.round(w.remaining_percent)}% left`+(w.resets_at?`, resets ${usageClock(w.resets_at)}`:'');
+}
+function usageDial(w){
   const R=25,C=2*Math.PI*R,tier=usageTier(w.remaining_percent);
   const el=document.createElement('div');el.className='dial'+(tier==='ok'?'':' '+tier);
   /* the ring is rotated so the arc starts at 12 o'clock; the number stays
@@ -8665,10 +8671,9 @@ function usageDial(w,label=w.label){
     <circle class="f" cx="31" cy="31" r="${R}" stroke-dasharray="${(C*w.remaining_percent/100).toFixed(2)} ${C.toFixed(2)}"/></g>
     <text class="n" x="31" y="31" text-anchor="middle" dominant-baseline="central">${Math.round(w.remaining_percent)}<tspan class="u" dy="-.35em">%</tspan></text>
   </svg><span class="lab"></span><span class="rs"></span>`;
-  const fullLabel=w.limit?`${w.limit} · ${w.label}`:w.label;
-  el.querySelector('.lab').textContent=label.toUpperCase();el.querySelector('.lab').title=fullLabel;
+  el.querySelector('.lab').textContent=w.label.toUpperCase();el.querySelector('.lab').title=usageWindowLabel(w);
   el.querySelector('.rs').textContent=w.resets_at?'in '+usageUntil(w.resets_at):'reset unknown';
-  el.title=`${fullLabel}: ${Math.round(w.remaining_percent)}% left`+(w.resets_at?`, resets ${usageClock(w.resets_at)}`:'');
+  el.title=usageWindowTitle(w);
   return el;}
 function renderUsagePopover(){
   const body=document.getElementById('usageDials'),kicker=document.getElementById('usageKicker');
@@ -8681,10 +8686,15 @@ function renderUsagePopover(){
     const sec=document.createElement('section');sec.className='up-prov';
     const head=document.createElement('div');head.className='up-head';
     head.innerHTML=`<span class="up-name"></span><span class="up-reset"></span>`;
-    const logo=USAGE_LOGO[prov.provider];
-    head.querySelector('.up-name').textContent=usageProviderName(prov.provider)+(prov.status==='stale'?' · stale':'');
+    const logo=USAGE_LOGO[prov.provider],name=head.querySelector('.up-name');
+    const providerName=usageProviderName(prov.provider),stale=prov.status==='stale';
+    const antigravity=prov.provider==='antigravity';
+    name.textContent=antigravity?'Antigravity':providerName;name.classList.toggle('stale',stale);
+    name.title=providerName;
+    sec.setAttribute('aria-label',providerName+(stale?', stale':''));
+    if(stale)name.title+=prov.observed_at?` · stale · observed ${usageClock(prov.observed_at)}`:' · stale';
     if(logo){const img=document.createElement('img');img.className='up-logo';img.src=logo;img.alt='';
-      head.querySelector('.up-name').prepend(img);}
+      name.prepend(img);}
     if(prov.measurement_kind==='balance'){
       head.querySelector('.up-reset').textContent=prov.observed_at?'observed '+usageClock(prov.observed_at):'not observed';
       sec.appendChild(head);
@@ -8704,16 +8714,14 @@ function renderUsagePopover(){
     if(!windows.length){const e=document.createElement('div');e.className='up-empty';
       e.textContent='no windows';sec.appendChild(e);return sec;}
     const dials=document.createElement('div');dials.className='up-dials';
-    if(prov.provider==='antigravity'){
-      const ordered=main.slice().sort((a,b)=>(a.window_seconds||Infinity)-(b.window_seconds||Infinity));
-      for(const w of [...ordered,...windows.filter(w=>!main.includes(w))]){
-        const label=w.limit&&w.limit!=='Gemini Models'
-          ?w.limit.replace(/^Gemini(?:\s+\d+)?\s+/i,''):w.label;
-        dials.appendChild(usageDial(w,label));
-      }
-      sec.appendChild(dials);return sec;
+    const primary=antigravity
+      ?(main.length?main:windows).slice().sort((a,b)=>(a.window_seconds||Infinity)-(b.window_seconds||Infinity))
+      :main;
+    primary.forEach(w=>dials.appendChild(usageDial(w)));sec.appendChild(dials);
+    if(antigravity){
+      for(const w of windows)if(!primary.includes(w))name.title+='\n'+usageWindowTitle(w);
+      return sec;
     }
-    main.forEach(w=>dials.appendChild(usageDial(w)));sec.appendChild(dials);
     /* named additional limits (Codex Spark …) are a separate pool: show them
        under their own name, and as one line when nothing has drawn on them */
     const groups=new Map();
@@ -8729,7 +8737,10 @@ function renderUsagePopover(){
       ws.forEach(w=>d.appendChild(usageDial(w)));sec.appendChild(d);}
     return sec;}));
   const foot=document.createElement('div');foot.className='up-foot';
-  foot.textContent='Claude from the OAuth usage endpoint with the token Claude Code keeps · Codex from the app server. Read-only; refreshed every minute.'+(providers.some(p=>p.provider==='antigravity')?' Antigravity quotas from ORRERY Telemetry.':'')+(providers.some(p=>p.measurement_kind==='balance')?' DeepSeek account balance from ORRERY Telemetry.':'');
+  foot.textContent='Read-only · refreshed every minute';
+  foot.title='Claude: OAuth usage endpoint. Codex: app server.'
+    +(providers.some(p=>p.provider==='antigravity')?' Antigravity quotas from ORRERY Telemetry.':'')
+    +(providers.some(p=>p.measurement_kind==='balance')?' DeepSeek account balance from ORRERY Telemetry.':'');
   body.appendChild(foot);
 }
 async function pollUsage(force){
