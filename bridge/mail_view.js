@@ -54,13 +54,6 @@ const icons={
 function icon(name){
   return '<svg class="mail-icon" viewBox="0 0 24 24" aria-hidden="true">'+icons[name]+'</svg>';
 }
-const filterSummary=document.createElement('div');
-filterSummary.className='mail-filter-summary';
-filterSummary.hidden=true;
-filterSummary.innerHTML='<button type="button" class="mail-clear-filter"><span></span>'+icon('close')+'</button>';
-const clearFilter=filterSummary.querySelector('button');
-const filterLabel=clearFilter.querySelector('span');
-mailEl.before(filterSummary);
 
 function control(action,label,symbol){
   return '<button class="rail-icon" type="button" data-action="'+action+'" title="'+label+'" aria-label="'+label+'">'+icon(symbol)+'</button>';
@@ -295,6 +288,14 @@ function setFilterOpen(open,restoreFocus=false){
     ],{duration:motion.matches?90:160,easing:'ease-out'});
   }else if(restoreFocus)filterButton.focus({preventScroll:true});
 }
+
+const filterSummary=document.createElement('div');
+filterSummary.className='mail-filter-summary';
+filterSummary.hidden=true;
+filterSummary.innerHTML='<button type="button" class="mail-clear-filter"><span></span>'+icon('close')+'</button>';
+const clearFilter=filterSummary.querySelector('button');
+const filterLabel=clearFilter.querySelector('span');
+mailEl.before(filterSummary);
 filterButton.addEventListener('click',()=>setFilterOpen(filterEl.hidden));
 clearFilter.addEventListener('click',()=>{
   ++filterRequest;
