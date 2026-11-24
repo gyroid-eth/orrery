@@ -3994,9 +3994,9 @@
       }
     }
   },
-  "inventory_digest": "1a777312b5027fa2fda998c2153cf8bda500f541fd4381fe4d16cfb371cf6afa",
+  "inventory_digest": "a94b51957a5f0e74392104083d9ea20321cc15c87e71618d294acbb399e839c2",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "fa739560e963a429166d2583f0b9d7a1d136686d291970253ee438d7dfe8dfe5",
+  "source_digest": "9a2a7fd1532df0834915e10286875bb3d3f605e0105d54c06e8c5a8e404ccfda",
   "surface": "cockpit",
   "version": 1
 }
@@ -8314,13 +8314,16 @@ function handle(msg){
 function connect(){
   setLink('connecting','connecting');
   const nextSocket=new WebSocket(wsUrl);socket=nextSocket;
-  nextSocket.addEventListener('open',()=>{if(socket===nextSocket){setLink('open','live');scheduleFit();}});
+  nextSocket.addEventListener('open',()=>{if(socket===nextSocket){
+    setLink('open','live');scheduleFit();document.dispatchEvent(new Event('oc:reader-connection'));
+  }});
   nextSocket.addEventListener('message',event=>{
     if(socket!==nextSocket)return;
     try{handle(JSON.parse(event.data));}catch(_){/* ignore malformed backend events */}
   });
   nextSocket.addEventListener('close',()=>{
     if(socket!==nextSocket)return;
+    document.dispatchEvent(new Event('oc:reader-connection'));
     readerApproval?.disconnected();
     readerActivity?.disconnected();
     attachedSessions.clear();requestedSessions.clear();
