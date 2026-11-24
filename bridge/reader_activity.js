@@ -3,7 +3,19 @@
   'use strict';
   const codexPrompt=/^\s*›(?:\s|$)/u;
   const codexFooter=/^(?:gpt-\S+\s+(?:default|low|medium|high|xhigh|max|ultra)\b|\? for shortcuts\b|(?:Context\s+)?\d{1,3}%?\s+context left\b|Context\s+\d{1,3}%\s+(?:left|used)\b)/i;
+  const agyPrograms=new Set(['agy','antigravity','antigravity-cli','antigravity-agent']);
+  function agyCompaction(text){
+    const rows=text.trimEnd().split('\n').slice(-12).map(row=>row.trim());
+    for(const row of rows.reverse()){
+      if(/^[\u2500\u2501]+\s*Conversation compacted\s*[\u2500\u2501]+$/u.test(row)||
+         row.startsWith('Compaction cancelled.')||row.startsWith('Compaction failed'))return null;
+      const match=/^[\u2801-\u28ff]\s+Compacting conversation\u2026\s+\(((?:\d{1,4}h\s*)?(?:\d{1,3}m\s*)?\d{1,2}s)\s*\u00b7\s*esc to cancel\)$/u.exec(row);
+      if(match)return {reader_phase:'compacting',reader_phase_elapsed:match[1].replace(/\s+/g,' ')};
+    }
+    return null;
+  }
   function compaction(text,program){
+    if(agyPrograms.has(program))return typeof text==='string'&&text.length<=65536?agyCompaction(text):null;
     if(program!=='codex'||typeof text!=='string'||text.length>65536)return null;
     const rows=text.split('\n').slice(-40).map(row=>row.trimEnd());
     let prompt=-1;

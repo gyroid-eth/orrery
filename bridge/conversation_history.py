@@ -334,6 +334,9 @@ def read_codex_page(path: str, *, before: str | None = None,
                 and complete_end > start, skipped_large_record=False)
 
 
+AGY_PROGRAMS = frozenset({'agy','antigravity','antigravity-cli','antigravity-agent'})
+
+
 def bound_agent(payload: object, name: str, *, api_generation: int = 34) -> dict:
     """Only an authoritative bound provider row; no candidate/path guessing."""
     rows = payload.get("agents") if isinstance(payload, dict) else None
@@ -342,9 +345,10 @@ def bound_agent(payload: object, name: str, *, api_generation: int = 34) -> dict
         raise HistoryUnavailable("agent_unavailable")
     row = matches[0]
     program = row.get('program')
-    if program not in {'codex','codex-cli','claude','claude-code','dsh','hermes'}:
+    if program not in ({'codex','codex-cli','claude','claude-code','dsh','hermes'} | AGY_PROGRAMS):
         raise HistoryUnavailable('provider_unavailable')
-    if program not in {'codex','codex-cli'} and api_generation < 35:
+    required_api = 48 if program in AGY_PROGRAMS else 35 if program not in {'codex','codex-cli'} else 0
+    if api_generation < required_api:
         raise HistoryUnavailable('dashboard_upgrade_required')
     if row.get('history_binding') != 'bound' or not isinstance(row.get('transcript_path'),str):
         error=HistoryUnavailable('history_stale' if row.get('history_binding')=='stale' else 'history_unconfirmed')
