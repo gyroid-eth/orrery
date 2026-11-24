@@ -35,19 +35,21 @@
       host.classList.remove('has-conversation-reference');size();
     }
     remove.onclick=()=>{clear();input.focus({preventScroll:true});};
-    function add(value){
-      const selected=getTarget();
+    function add(value,beforeFocus){
+      const selected=getTarget(value.agent);
       if(!selected||selected.session!==value.agent||!value.isCurrent()){
         onError('Reference unavailable — select its agent and try again.');return false;
       }
       if(typeof value.text!=='string'||!value.text.trim()||value.text.length>8192){
         onError('Select up to 8,192 characters to reference.');return false;
       }
+      beforeFocus?.();
       reference=value;target=selected;
       const at=new Date(value.ts),time=Number.isFinite(at.getTime())?at.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
       label.textContent=[value.agent,value.kind==='file'?'File reference':'Message reference',time].filter(Boolean).join(' · ');
       quote.textContent=value.text;quote.title=value.text;card.hidden=false;
       host.classList.add('has-conversation-reference');size();input.focus({preventScroll:true});
+      input.setSelectionRange(input.value.length,input.value.length);
       return true;
     }
     function check(value,pinned,selected){

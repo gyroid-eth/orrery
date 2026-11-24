@@ -241,6 +241,37 @@
     }
     maskRows();
   }
+  api.maskContent=walk;
+  // Motion divides text only after projection. Keep the original offsets on
+  // the new text nodes for the same selection-copy behavior as ordinary DOM.
+  api.projectText=function(value,{streaming=false}={}){
+    const node=typeof value==='string'?null:value,kept=node&&originals.get(node);
+    const original=node?(kept?.masked===node.data?kept.original:node.data):value;
+    const parent=node?.parentElement;
+    const {text,ranges}=api.project(original,{streaming,wholePath:parent?.hasAttribute('data-demo-path'),
+      literalPath:parent?.getAttribute('data-demo-path-value')});
+    const offset=(at,end=false)=>window.OrreryDemoMask.originalOffset(at,ranges,end);
+    function shownOffset(at){
+      let delta=0;
+      for(const range of ranges){
+        if(at<range.from)break;
+        if(at<range.to)return range.start;
+        delta=range.end-range.to;
+      }
+      return at+delta;
+    }
+    function write(target,start=0,end=text.length){
+      const from=offset(start),to=offset(end,true);
+      const real=original.slice(from,to),masked=text.slice(start,end);
+      if(real!==masked){
+        const offsets=ranges.filter(r=>r.start>=start&&r.end<=end).map(r=>(
+          {from:r.from-from,to:r.to-from,start:r.start-start,end:r.end-start}));
+        originals.set(target,{original:real,masked,ranges:offsets});
+      }else originals.delete(target);
+      if(target.data!==masked)target.data=masked;
+    }
+    return {text,originalLength:original.length,offset,shownOffset,write};
+  };
 
   /* The real text of a selection: the browser's own text for it (which has
      the line breaks of the layout), with each masked run swapped back for the
