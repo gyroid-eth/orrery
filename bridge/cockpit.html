@@ -4175,9 +4175,9 @@
       }
     }
   },
-  "inventory_digest": "22d995c30730b2e8854bcc200ab0b262cbd4b28ac48c32c46bcc2c3c13b49926",
+  "inventory_digest": "d996182571ab55dd1aed6c4435da191072b413d852c30ba1122a12e8b26c40c6",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "f54f3f34dfac6e6079db1d0b02bed4f78400b800c1cbe7f976105f795c42bd36",
+  "source_digest": "bd8e78a30d318bb2b337de938483f6e5f0b27cf98ce9575d96325ea0955efd44",
   "surface": "cockpit",
   "version": 1
 }
@@ -8453,7 +8453,7 @@ function loadHostPlatform(){
     .then(applyHostPlatform)
     .catch(()=>{/* stays unknown: labels as on the Mac, special pastes held */});
 }
-loadHostPlatform();
+const hostPlatformReady=loadHostPlatform();
 
 function handle(msg){
   if(!msg||typeof msg.type!=='string')return;
