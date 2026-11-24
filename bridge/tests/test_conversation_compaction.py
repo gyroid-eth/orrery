@@ -2,7 +2,7 @@
 import json
 import pytest
 
-from test_conversation_providers import claude, line, page, row
+from test_conversation_providers import claude, dsh, line, make_db, page, row
 from conversation_history import MAX_TEXT, codex_event
 from conversation_readers import normalize
 
@@ -94,6 +94,64 @@ def test_codex_compaction_preserves_paging_and_normal_human_text(tmp_path):
         events = current['events'] + events
     assert [e['role'] for e in events] == ['user', 'system', 'user']
     assert len({e['id'] for e in events}) == 3
+
+
+def test_dsh_projects_the_successful_append_end_without_summary_or_failure(tmp_path):
+    path = tmp_path / 'fixture.jsonl'
+    lifecycle = dict(compactionId='fixture-compaction', turn=None)
+    prompt = dsh('user/message', dict(source=dict(kind='user'), content='Generated prompt'))
+    path.write_bytes(line(dict(type='session', version=4, id='fixture-session'))+line(prompt))
+    binding = row(path, 'dsh')
+    before = page(binding)['after']
+    records = [dsh('compaction/start', lifecycle, 2), dsh('compaction/summary', dict(lifecycle, summary='PRIVATE_SUMMARY'), 3),
+               dict(dsh('user/message', dict(source=dict(kind='compact-checkpoint'), content='PRIVATE_CHECKPOINT'), 4),
+                    surfaceOp=dict(op='replace', startSeq=1, endSeq=1)),
+               dsh('compaction/end', lifecycle, 5), dsh('compaction/end', dict(lifecycle, error='PRIVATE_ERROR'), 6)]
+    for item in records:
+        if item['type'].startswith('compaction/'):
+            item.pop('surfaceOp')
+    with path.open('ab') as f:
+        f.write(b''.join(line(item) for item in records))
+    event, = page(binding, after=before)['events']
+    assert (event['kind'], event['role'], event['text']) == ('system', 'system', 'Context compacted')
+    assert page(binding, limit=1)['events'] == [event]
+    assert 'PRIVATE_' not in json.dumps(page(binding))
+
+
+def test_hermes_snapshot_exposes_only_the_bound_active_summary_marker(tmp_path):
+    path = tmp_path / 'state.db'
+    db = make_db(path)
+    rows = [
+        (1,'fixture-session','user','PRIVATE_OLD',0,0,None,None),
+        (2,'fixture-session','user','PRIVATE_SUMMARY',1,1,'hidden','{"model_only":true}'),
+        (3,'fixture-session','assistant','Visible answer',1,0,None,None),
+        (4,'fixture-session','user','PRIVATE_OTHER_HIDDEN',1,0,'hidden',None),
+        (5,'foreign-session','user','PRIVATE_FOREIGN_SUMMARY',1,1,'hidden','{"model_only":true}'),
+    ]
+    db.executemany('''INSERT INTO messages
+        (id,session_id,role,content,active,_compressed_summary,display_kind,display_metadata) VALUES(?,?,?,?,?,?,?,?)''', rows)
+    db.commit();db.close()
+    binding = row(path, 'hermes')
+    result = page(binding)
+    assert [(event['id'],event['kind'],event['text']) for event in result['events']] == [
+        ('2:0:0','system','Context compacted'),('3:0:0','text','Visible answer')]
+    assert 'PRIVATE_' not in json.dumps(result)
+    assert page(binding, after=result['after'])['events'] == result['events']
+
+
+def test_hermes_rotation_marks_the_bound_parent_without_reading_the_successor(tmp_path):
+    path = tmp_path / 'state.db'
+    db = make_db(path)
+    db.executescript("""ALTER TABLE sessions ADD COLUMN ended_at REAL;
+        ALTER TABLE sessions ADD COLUMN end_reason TEXT;
+        UPDATE sessions SET ended_at=1793775600,end_reason='compression' WHERE id='fixture-session';
+        INSERT INTO messages (id,session_id,role,content) VALUES
+            (1,'fixture-session','user','Visible parent prompt'),
+            (2,'foreign-session','user','PRIVATE_SUCCESSOR');""")
+    db.commit();db.close()
+    result = page(row(path, 'hermes'))
+    assert [event['text'] for event in result['events']] == ['Visible parent prompt','Context compacted']
+    assert result['events'][-1]['ts'] == '2026-11-04T07:00:00Z'
 
 
 @pytest.mark.parametrize('bad_type', [[], {}])

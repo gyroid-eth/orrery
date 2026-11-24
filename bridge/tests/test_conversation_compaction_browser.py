@@ -16,23 +16,43 @@ def prepare(cockpit):
     return js, wait, client
 
 
-def test_compaction_is_one_expandable_system_row_beside_a_human_prompt(cockpit, tmp_path):
+@pytest.mark.parametrize('delivery', ['initial', 'append', 'earlier'])
+def test_compaction_is_one_expandable_system_row_beside_a_human_prompt(cockpit, tmp_path, delivery):
     path = tmp_path / 'fixture.jsonl'
-    path.write_bytes(line(claude('user', 'Generated compacted summary.', isCompactSummary=True)) +
-                     line(claude('user', 'Generated human request.')))
+    path.write_bytes(b''.join(line(record) for record in [
+        claude('user', 'Generated compacted summary.', isCompactSummary=True),
+        claude('user', '<local-command-caveat>Fixture native command</local-command-caveat>', isMeta=True),
+        claude('user', '<command-name>/compact</command-name>\n<command-message>compact</command-message>'
+                       '\n<command-args>Keep chart labels &lt;exact&gt;.</command-args>'),
+        claude('user', '<local-command-stdout>\x1b[2mCompacted (ctrl+o to see full summary)\x1b[22m\n'
+                       '\x1b[2mPreCompact [fixture hook] completed\x1b[22m</local-command-stdout>'),
+        claude('user', 'Generated human request.'),
+    ]))
     events = page(row(path, 'claude-code'))['events']
+    first = {'initial': events, 'append': events[:1], 'earlier': events[1:]}[delivery]
     js, wait, client = prepare(cockpit)
-    js('OrreryConversationSource.Source.prototype.read=async()=>({events:' + json.dumps(events) +
-       ",provider:'claude',after:'end'});conversationView.open()")
-    wait("document.querySelectorAll('.conversation-event').length===2")
+    js('window.compactFirst=' + json.dumps(first) + ';window.compactAll=' + json.dumps(events) + ';' +
+       """OrreryConversationSource.Source.prototype.read=async(name,options)=>({
+         events:options.before?compactAll.slice(0,1):options.after?compactAll.slice(1):compactFirst,
+         provider:'claude',before:'start',after:'end',has_older:!options.before
+       });conversationView.open()""")
+    wait(f"document.querySelectorAll('.conversation-event').length==={len(first)}")
+    if delivery == 'append':
+        js('conversationView.refresh()')
+    elif delivery == 'earlier':
+        js("document.querySelector('.conversation-older').click()")
+    wait("document.querySelectorAll('.conversation-event').length===4")
+    assert js("document.querySelectorAll('.conversation-event:not([hidden])').length") == 2
     assert js("document.querySelector('.conversation-system-toggle').textContent") == '▸Context compacted'
     assert js("[...document.querySelectorAll('.conversation-human')].map(e=>e.getAttribute('aria-label'))") == ['You']
     assert js("document.querySelector('.conversation-system-detail').hidden")
+    assert js("document.querySelectorAll('.conversation-code').length") == 0
     js("document.querySelector('.conversation-system-toggle').focus()")
     client.call('Input.dispatchKeyEvent', type='keyDown', key='Enter', code='Enter', windowsVirtualKeyCode=13, text='\r')
     client.call('Input.dispatchKeyEvent', type='keyUp', key='Enter', code='Enter', windowsVirtualKeyCode=13)
     wait("!document.querySelector('.conversation-system-detail').hidden")
-    assert js("document.querySelector('.conversation-system-detail').textContent") == 'Generated compacted summary.'
+    assert js("document.querySelector('.conversation-system-detail').textContent") == (
+        'Instructions: Keep chart labels <exact>.\n\nGenerated compacted summary.')
     js("document.querySelector('.conversation-system-toggle').click()")
     assert js("document.querySelector('.conversation-system-detail').hidden")
     assert js("packets.filter(p=>p.type==='input')") == []

@@ -54,7 +54,7 @@
 .conversation-text{margin:0;white-space:pre-wrap;font:var(--conversation-text-size)/1.7 var(--rail-sans);color:var(--ink);tab-size:2}
 .conversation-text :is(code,pre,[data-local-path]),:is(.conversation-shell-start,.conversation-shell-continuation) .conversation-text{font-family:var(--mono)}
 .conversation-live .conversation-text{overflow:clip;overflow-clip-margin:6px}
-.conversation-stream-word{position:relative;top:0}
+.conversation-stream-word,.conversation-reply-word{position:relative;top:0}
 :is(.conversation-human:not(.conversation-has-reference),.conversation-reference-body){
   box-sizing:border-box;width:fit-content;max-width:84%;margin:0 0 26px auto;padding:9px 12px 9px 26px;
   border:0;background:linear-gradient(270deg,rgb(var(--theme-accent-rgb) / .115),rgb(var(--theme-accent-rgb) / .05) 62%,transparent);
@@ -331,6 +331,24 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 .conversation-code-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 10px;border-bottom:1px solid var(--hair-2);font:calc(var(--conversation-text-size) * 10 / 13)/1.5 var(--mono);color:var(--ink-dim)}
 .conversation-code-language{min-width:0;overflow-wrap:anywhere}
 .conversation-code-copy{flex:none;min-height:24px;height:auto;padding:3px 6px;font-size:10px}
+.conversation-code-copy-wrap{display:grid;flex:none;position:relative;user-select:none}
+.conversation-code-copy-wrap>.conversation-code-copy,.conversation-code-copy-face{grid-area:1/1}
+.conversation-code-copy-wrap>.conversation-code-copy{color:transparent;font-size:0}
+.conversation-code-copy-face{display:flex;align-items:center;gap:5px;padding:0 6px;color:var(--ink-dim);font:10px/16px var(--mono);white-space:nowrap;pointer-events:none}
+.conversation-code-copy-icons{position:relative;flex:none;width:14px;height:14px}
+.conversation-code-copy-icons svg{position:absolute;inset:0;width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.conversation-code-copy-icons .conversation-code-copy-tick{opacity:0;transform:scale(.4);stroke-width:2.3}
+.conversation-code-copy-roll{width:4ch;height:16px;overflow:hidden}
+.conversation-code-copy-words,.conversation-code-copy-words>span{display:block;width:max-content}
+.conversation-code-copy-confirmed,.conversation-code-copy-tick{color:var(--amber)}
+.conversation-code-copy-wrap[data-result="copied"] .conversation-code-copy-roll{width:6ch}
+.conversation-code-copy-wrap[data-result="copied"] .conversation-code-copy-words{transform:translateY(-16px)}
+.conversation-code-copy-wrap[data-result="copied"] .conversation-code-copy-symbol{opacity:0}
+.conversation-code-copy-wrap[data-result="copied"] .conversation-code-copy-tick{opacity:1;transform:none}
+.conversation-code-copy-error{display:none}
+.conversation-code-copy-wrap[data-result="failed"] .conversation-code-copy-face>:not(.conversation-code-copy-error){display:none}
+.conversation-code-copy-wrap[data-result="failed"] .conversation-code-copy-error{display:block}
+.conversation-code-copy-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .conversation-output-toggle{margin-left:auto;flex:none;min-height:24px;height:auto;padding:3px 6px;font-size:10px}
 .conversation-code pre{margin:0;padding:10px 12px;max-width:100%;box-sizing:border-box;overflow-x:auto;white-space:pre;overflow-wrap:normal;font:calc(var(--conversation-text-size) * 12 / 13)/1.75 var(--mono);tab-size:2;overscroll-behavior-x:contain}
 .conversation-code pre code{padding:0;background:none;font:inherit}
