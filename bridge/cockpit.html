@@ -4175,9 +4175,9 @@
       }
     }
   },
-  "inventory_digest": "394d5bb60ec772660a26a20f913fad10fb73dc2ec0f416db974db1bc1c691cf0",
+  "inventory_digest": "0605f81a7ba45281809fb0d1a25b028fc1720ac01a6a25942d12d075d831e151",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "0b8db51c96d2e874068046a180132f9ce4f0c225014115ed9a84fc3915f49f59",
+  "source_digest": "ee37ea17ddd3fc6d70c333c519090f5bdcbda93e5fbf4ea493fbe13909e28d00",
   "surface": "cockpit",
   "version": 1
 }
@@ -8635,6 +8635,14 @@ function usageBalanceLow(prov){
   return prov.status==='ok'&&prov.balance&&prov.balance.total_balance!==null
     &&Number(usageUsd(prov.balance.total_balance,0))<USAGE_BALANCE_LOW;
 }
+function usageBalance(prov){
+  return prov.status==='ok'||prov.status==='stale'?prov.balance:null;
+}
+function usageBalanceStaleness(prov){
+  if(!prov.observed_at)return 'stale';
+  const day=new Date(prov.observed_at*1000).toLocaleDateString('en',{dateStyle:'medium'});
+  return `stale · observed ${day} ${usageClock(prov.observed_at)}`;
+}
 function usageProviderName(p){return p==='claude'?'Claude':p==='codex'?'Codex':p==='antigravity'?'Antigravity (Gemini)':p==='dsh'?'DeepSeek':p;}
 const USAGE_LOGO={claude:'assets/anthropic.svg',codex:'assets/openai.svg',antigravity:'cockpit-assets/google.svg',dsh:'cockpit-assets/deepseek.svg'};
 function usageVisibleWindows(prov){
@@ -8665,16 +8673,21 @@ function renderUsagePill(){
     if(reported&&!slot)pill.appendChild(usageHeaderSlot(provider));
     else if(!reported&&slot)slot.remove();
   }
+  const values=[];
   for(const slot of pill.querySelectorAll('.up-p')){
     const prov=usageData&&usageData.providers.find(p=>p.provider===slot.dataset.provider);
     slot.hidden=usageHidden.has(slot.dataset.provider);
     const b=slot.querySelector('b');
+    const name=usageProviderName(slot.dataset.provider);
     if(prov&&prov.measurement_kind==='balance'){
-      const balance=prov.status==='ok'&&prov.balance;
+      const balance=usageBalance(prov);
+      const stale=prov.status==='stale'?usageBalanceStaleness(prov):'';
       slot.classList.toggle('none',!balance);slot.classList.toggle('warn',!!balance&&!balance.is_available);slot.classList.toggle('low',!!usageBalanceLow(prov));
       b.textContent=balance?(balance.total_balance===null?'No USD':'$'+usageUsd(balance.total_balance,0)):'$?';
-      slot.title='DeepSeek: '+(balance?(balance.total_balance===null?'no USD balance':'$'+usageUsd(balance.total_balance))
-        +' · account '+(balance.is_available?'available':'unavailable'):'balance unknown');
+      slot.title=name+': '+(balance?(balance.total_balance===null?'no USD balance':'$'+usageUsd(balance.total_balance))
+        +' · '+(stale?'last reported ':'account ')+(balance.is_available?'available':'unavailable'):'balance unknown')
+        +(stale?' · '+stale:'');
+      if(!slot.hidden)values.push(name+' '+b.textContent+(stale?' ('+stale+')':''));
       continue;
     }
     const bind=prov?usageBinding(prov):null;
@@ -8684,9 +8697,8 @@ function renderUsagePill(){
     setBox(slot,'--usage-left',bind?Math.max(0,Math.min(100,bind.remaining_percent)):0);
     slot.title=bind?`${usageProviderName(prov.provider)} ${bind.limit?bind.limit+' · ':''}${bind.label}: ${Math.round(bind.remaining_percent)}% left`
       +(bind.resets_at?`, resets in ${usageUntil(bind.resets_at)}`:''):(prov?USAGE_REASON[prov.reason]||'unavailable':'waiting for update');
+    if(!slot.hidden)values.push(name+' '+b.textContent);
   }
-  const values=[...pill.querySelectorAll('.up-p:not([hidden])')].map(slot=>
-    usageProviderName(slot.dataset.provider)+' '+slot.querySelector('b').textContent);
   setAttr(pill,'aria-label',values.length?'Usage left. '+values.join(', '):'Usage left');
 }
 function usageWindowLabel(w){return w.limit?`${w.limit} · ${w.label}`:w.label;}
@@ -8724,17 +8736,18 @@ function renderUsagePopover(){
     name.textContent=antigravity?'Antigravity':providerName;name.classList.toggle('stale',stale);
     name.title=providerName;
     sec.setAttribute('aria-label',providerName+(stale?', stale':''));
-    if(stale)name.title+=prov.observed_at?` · stale · observed ${usageClock(prov.observed_at)}`:' · stale';
+    if(stale)name.title+=' · '+(prov.measurement_kind==='balance'?usageBalanceStaleness(prov):
+      prov.observed_at?`stale · observed ${usageClock(prov.observed_at)}`:'stale');
     if(logo){const img=document.createElement('img');img.className='up-logo';img.src=logo;img.alt='';
       name.prepend(img);}
     if(prov.measurement_kind==='balance'){
       head.querySelector('.up-reset').textContent=prov.observed_at?'observed '+usageClock(prov.observed_at):'not observed';
       sec.appendChild(head);
-      const balance=prov.status==='ok'&&prov.balance;
+      const balance=usageBalance(prov);
       const amount=document.createElement('div');amount.className='up-name'+(balance&&!balance.is_available?' up-balance-warning':'')+(usageBalanceLow(prov)?' up-balance-low':'');
       amount.textContent=balance?(balance.total_balance===null?'No USD balance':'$'+usageUsd(balance.total_balance)):'$?';
       const note=document.createElement('div');note.className='up-empty';
-      note.textContent=balance?'Account '+(balance.is_available?'available':'unavailable'):'Balance unavailable';
+      note.textContent=balance?(stale?'Last reported ':'Account ')+(balance.is_available?'available':'unavailable'):'Balance unavailable';
       sec.append(amount,note);return sec;
     }
     const windows=usageVisibleWindows(prov);
@@ -8776,14 +8789,17 @@ function renderUsagePopover(){
   body.appendChild(foot);
 }
 async function pollUsage(force){
+  const previous=usageData;
   try{
     const r=await fetch('/telemetry/usage'+(force?'?refresh=1':''),{cache:'no-store'});
     if(!r.ok)throw new Error(String(r.status));
-    usageData=await r.json();
-  }catch(e){ /* Window snapshots retain their existing behaviour; a failed balance read is unknown. */
-    if(usageData&&usageData.providers.some(p=>p.measurement_kind==='balance')){
-      usageData={...usageData,providers:usageData.providers.map(p=>p.measurement_kind==='balance'
-        ?{...p,status:'unavailable',balance:null,reason:'telemetry_unavailable'}:p)};
+    const next=await r.json();
+    if(!Array.isArray(next?.providers))throw new Error('Invalid provider list');
+    usageData=next;
+  }catch(e){
+    if(usageData===previous&&previous){
+      usageData={...previous,providers:previous.providers.map(p=>p.measurement_kind==='balance'&&p.status==='ok'&&p.balance
+        ?{...p,status:'stale',reason:'telemetry_unavailable'}:p)};
     }
   }
   renderUsageSettings();renderUsagePill();

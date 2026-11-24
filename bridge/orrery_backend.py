@@ -10,6 +10,7 @@ import collections
 import contextlib
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -650,6 +651,7 @@ CONVERSATION_REFERENCES_KEY = web.AppKey("conversation_references", ReferenceSto
 TMUX_BIN_KEY = web.AppKey("tmux_bin", LegacyTargetBoundary)
 USAGE_CACHE_KEY = web.AppKey("usage_cache", UsageCache)
 USAGE_LOCKS_KEY = web.AppKey("usage_locks", dict)
+USAGE_LOG = logging.getLogger("orrery.usage")
 PREFS_PATH = Path(os.path.expanduser(os.environ.get("ORRERY_PREFS_PATH") or "~/.orrery/prefs.json"))
 PREFS_LOCK_KEY = web.AppKey("prefs_lock", asyncio.Lock)
 PROXY_INFLIGHT_KEY = web.AppKey("proxy_inflight", dict)
@@ -817,16 +819,21 @@ async def serve_usage(request: web.Request) -> web.Response:
     )
 
 
-async def _usage_from_dashboard(request: web.Request, cache) -> list[ProviderUsage]:
+async def _usage_from_dashboard(request: web.Request, cache: UsageCache) -> list[ProviderUsage]:
     """Read `/api/quotas`, or answer from what was last seen."""
     http_session = request.app[HTTP_SESSION_KEY]
     payload: Any = None
+    received = False
     try:
         async with http_session.get(DASHBOARD_URL + "/api/quotas") as response:
             if response.status == 200:
                 payload = await response.json(content_type=None)
-    except (ClientError, asyncio.TimeoutError, ValueError):
-        payload = None
+                received = True
+            else:
+                USAGE_LOG.warning("Telemetry /api/quotas returned HTTP %d", response.status)
+    except (ClientError, asyncio.TimeoutError, ValueError) as exc:
+        payload, received = None, False
+        USAGE_LOG.warning("Telemetry /api/quotas read failed (%s)", type(exc).__name__)
 
     entries = payload.get("providers") if isinstance(payload, Mapping) else None
     by_provider = {
@@ -836,21 +843,33 @@ async def _usage_from_dashboard(request: web.Request, cache) -> list[ProviderUsa
     }
 
     if isinstance(entries, list):
-        cache.reported_providers = tuple(p for p in ("antigravity", "dsh") if p in by_provider)
+        reported = [p for p in ("antigravity", "dsh") if p in by_provider]
+        omitted = "dsh" in cache.reported_providers and "dsh" not in by_provider
+        if omitted:
+            USAGE_LOG.warning("Telemetry /api/quotas omitted DeepSeek")
+            last_balance = cache.last("dsh")
+            if not cache.balance_omitted and last_balance is not None and last_balance.balance is not None:
+                reported.append("dsh")
+        cache.balance_omitted = omitted and "dsh" in reported
+        cache.reported_providers = tuple(reported)
+    elif received:
+        USAGE_LOG.warning("Telemetry /api/quotas returned an invalid provider list")
+
+    reason = "provider_not_reported" if isinstance(entries, list) else "telemetry_unavailable"
     snapshots: list[ProviderUsage] = []
     for provider in USAGE_PROVIDERS + cache.reported_providers:
         entry = by_provider.get(provider)
         if entry is not None:
-            snapshots.append(cache.put(provider_from_quota_payload(entry), time.time()))
+            snapshot = provider_from_quota_payload(entry)
+            if provider == "dsh" and snapshot.balance is None:
+                USAGE_LOG.warning("Telemetry /api/quotas reported no DeepSeek balance")
+            snapshots.append(cache.put(snapshot, time.time()))
             continue
-        last = cache.last(provider) if hasattr(cache, "last") else None
-        snapshot = last if last is not None else ProviderUsage(
-            provider, "unavailable", None,
-            reason="telemetry_unavailable" if payload is None else "provider_not_reported")
+        last = cache.last(provider, balance_reason=reason)
+        snapshot = last if last is not None else ProviderUsage(provider, "unavailable", None, reason=reason)
         # Replace old observations so an ordinary request cannot revive them
         # as current. With nothing observed yet, let the next request retry.
-        snapshots.append(cache.put(snapshot, time.time())
-                         if last is not None or snapshot.measurement_kind == "balance" else snapshot)
+        snapshots.append(cache.put(snapshot, time.time()) if last is not None else snapshot)
     return snapshots
 
 
