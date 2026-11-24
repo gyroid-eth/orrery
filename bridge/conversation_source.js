@@ -4,7 +4,7 @@
   const MESSAGES={
     claude_next_phase:'Claude history is unavailable through this protected fresh projection.',
     provider_unavailable:'This provider has no supported conversation reader.',
-    dashboard_upgrade_required:'This dashboard supports Codex history only. Claude, dsh and Hermes need telemetry API 35 or later.',
+    dashboard_upgrade_required:'Update ORRERY Telemetry to read this agent\'s history.',
     history_stale:'Previous conversation · this record predates the current launch. Its contents are hidden.',
     dsh_decoder_unavailable:'dsh is unsupported on this cockpit: install the pinned zstandard dependency.',
     history_format_unsupported:'This native history format is not supported.',
