@@ -7,6 +7,7 @@
     // sourceView: this reader's last Markdown/Source choice for .md previews.
     let request=null,generation=0,objectUrl=null,selected=null,sourceView=false;
     const create=(tag,cls,text)=>{const el=document.createElement(tag);el.className=cls;if(text!==undefined)el.textContent=text;return el;};
+    const fileLabel=(tag,cls,text)=>{const el=create(tag,cls,text);el.dataset.demoPath='';return el;};
     const button=(cls,text,action)=>{const el=create('button','cockpit-control conversation-action '+cls,text);el.type='button';el.addEventListener('click',action);return el;};
     // Heading buttons are icons only; the name lives in aria-label and title.
     const ICONS={
@@ -107,7 +108,9 @@
       for(const link of panel.querySelectorAll(markdownSelector)){
         if(markdownImages.has(link))continue;
         const path=link.dataset.localPath,status=link.querySelector('.markdown-image-label');
-        const image=create('img','conversation-markdown-image');image.alt=link.dataset.markdownImage||path.split('/').pop();
+        const alt=link.dataset.markdownImage;
+        const image=alt?create('img','conversation-markdown-image'):fileLabel('img','conversation-markdown-image');
+        image.alt=alt||path.split('/').pop();
         image.hidden=true;image.draggable=false;link.prepend(image);
         const entry={ref:{path},button:link,image,status,observer:host.contains(link)?previewObserver:observer,
           url:null,request:null,failed:false,alive:true};
@@ -142,9 +145,10 @@
             remember(ref);
             const control=button('conversation-inline-image conversation-file','',()=>open(ref));
             control.dataset.refId=ref.id;control.setAttribute('aria-label','Preview '+ref.label);
+            control.dataset.demoPathValue=ref.label;
             const image=create('img','conversation-inline-thumbnail');image.alt='';image.hidden=true;image.draggable=false;
             const status=create('span','conversation-inline-status','Preview image');
-            control.append(image,status,create('span','conversation-inline-label',ref.label));
+            control.append(image,status,fileLabel('span','conversation-inline-label',ref.label));
             const entry={ref,button:control,image,status,observer,url:null,request:null,failed:false,alive:true};control.inlineEntry=entry;
             record.entries.push(entry);node.appendChild(control);if(visible)observer.observe(control);
           }
@@ -185,7 +189,7 @@
       const rootEl=create('div','conversation-lightbox');
       rootEl.setAttribute('role','dialog');rootEl.setAttribute('aria-modal','true');rootEl.setAttribute('aria-label','Image viewer');rootEl.tabIndex=-1;
       const bar=create('div','conversation-lightbox-bar');
-      lb.name=create('span','conversation-lightbox-name');lb.count=create('span','conversation-lightbox-meta conversation-lightbox-count');lb.zoom=create('span','conversation-lightbox-meta conversation-lightbox-zoom');
+      lb.name=fileLabel('span','conversation-lightbox-name');lb.count=create('span','conversation-lightbox-meta conversation-lightbox-count');lb.zoom=create('span','conversation-lightbox-meta conversation-lightbox-zoom');
       lb.fitBtn=lbIcon('fit','Fit to window (0)',()=>setFit(true));lb.oneBtn=lbIcon('actual','Actual size (1)',()=>setActual(null,true));
       lb.closeBtn=lbIcon('close','Close (Esc)',()=>closeLightbox(true));
       bar.append(lb.name,lb.count,lb.zoom,lb.fitBtn,lb.oneBtn,lb.closeBtn);
@@ -319,7 +323,7 @@
     async function open(ref){
       onBeforeOpen();cancel();current=null;selected=ref;markSelected();const token=generation;
       host.hidden=false;host.parentElement.classList.add('conversation-has-preview');onActivate(ref);
-      const head=create('div','conversation-preview-head'),title=create('h3','conversation-preview-title',ref.label);
+      const head=create('div','conversation-preview-head'),title=fileLabel('h3','conversation-preview-title',ref.label);
       const closeButton=iconButton('conversation-preview-close','close','Close preview',()=>{close();host.closest('.conversation-panel').querySelector('.conversation-scroll')?.focus();});
       head.append(title,closeButton);
       if(onReference&&(ref.path?ref.origin:ref.id))head.insertBefore(iconButton('conversation-preview-reply','reply','Reply with reference',()=>onReference(ref)),closeButton);
@@ -365,7 +369,7 @@
           }else body.appendChild(raw);
         }else if(data.kind==='image'&&data.mime==='image/png'&&typeof data.data==='string'&&data.data.length<12*1024*1024){
           objectUrl=pngUrl(data.data);
-          const image=create('img','conversation-preview-image');image.alt=ref.label;image.src=objectUrl;image.draggable=false;
+          const image=fileLabel('img','conversation-preview-image');image.alt=ref.label;image.src=objectUrl;image.draggable=false;
           body.appendChild(image);notice.textContent+=(ref.path?'':' · ')+data.width+' × '+data.height;
           current={ref,url:objectUrl,width:data.width,height:data.height};
           // Same two doors as the Full screen button: the picture itself (also from the keyboard).
@@ -380,7 +384,7 @@
         if(token!==generation||error.name==='AbortError')return;
         if(ref.path){
           notice.textContent=error.message;
-          body.replaceChildren(create('div','conversation-preview-text',ref.path));
+          body.replaceChildren(fileLabel('div','conversation-preview-text',ref.path));
         }else body.textContent=error.message;
         if(lightbox)lbMessage(error.message);
       }
@@ -392,7 +396,8 @@
         for(const ref of event.references.slice(0,24)){
           if(!ref||!/^[A-Za-z0-9_-]{32}$/.test(ref.id)||typeof ref.label!=='string')continue;
           remember(ref);
-          const chip=button('conversation-file',(ref.kind==='image'?'▧ ':'▤ ')+ref.label,()=>open(ref));
+          const chip=button('conversation-file',ref.kind==='image'?'▧ ':'▤ ',()=>open(ref));
+          chip.appendChild(fileLabel('span','',ref.label));
           chip.title='Preview current '+(ref.kind==='image'?'image':'file');chip.dataset.refId=ref.id;chips.appendChild(chip);
           chip.setAttribute('aria-pressed',String(selected?.id===ref.id));
         }

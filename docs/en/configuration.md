@@ -77,7 +77,7 @@ To revert, set the field to `false` or remove it, also remove any explicit `--en
 
 Switching **Send from phone** switches this backend's adapter at once (no restart) and writes the same value to `enable_mobile_terminal` above, keeping every other key. If the file cannot be read as JSON it is left untouched and the switch lasts for this run only. A change made in a terminal (`agentstack-mobile off`) reaches the adapter and `enable_mobile_terminal` the next time Settings is opened. While a reader started by hand holds 8781 (the section says **MANUAL**), and until Settings has been used once, `enable_mobile_terminal` stays as you set it, so people who use Terminal with a hand-started reader see no change after updating.
 
-In demo mode the Phone section does not put the Tailscale login, the phone address or the Serve URL on the page (demo mode itself hides only user and host names). So the login and address cannot be set in demo mode: pressing **Phone access** before they are set shows, right under the switch, that demo mode has to be turned off once for the setup (with a **Turn off demo mode** button). After that the switch works in demo mode too. Without Telemetry the section says that agentstack-mobile was not found. For the steps and limits see the [Telemetry phone guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md#turn-it-on-from-cockpit-settings).
+In demo mode the Phone section does not put the Tailscale login, the phone address or the Serve URL on the page. So the login and address cannot be set in demo mode: pressing **Phone access** before they are set shows, right under the switch, that demo mode has to be turned off once for the setup (with a **Turn off demo mode** button). After that the switch works in demo mode too. Without Telemetry the section says that agentstack-mobile was not found. For the steps and limits see the [Telemetry phone guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md#turn-it-on-from-cockpit-settings).
 
 ### Desktop app environment
 
@@ -229,7 +229,9 @@ The backend refuses to bind to anything other than `127.0.0.1`, but there is no 
 
 `/telemetry/fs/dirs` excludes hidden directories, but unlike the browser on the dashboard side, it has no root allowlist. Keep the localhost-only boundary.
 
-An updated phone reader automatically follows Demo mode and the additional words enabled on the desktop. Turning the Settings switch off also unmasks the phone. Closing the desktop preserves the last explicit state; merely opening another ordinary, non-demo page does not clear it. URL `?demo=0` still affects that page only. Only display settings and the names needed for masking are shared, never drafts or histories. The phone keeps its draft and attachments open, and copying and sending use the original values. Update both components, then reload the active Demo desktop and phone once.
+Enable **Hide URLs and file paths** to show URLs as `[URL]` and `file://` URLs, absolute paths, `~/` paths, and Windows paths as `[path]` in Demo mode. The terminal uses `<>` and `[]` and keeps the original cell positions for links and selections. The cockpit browser saves this preference. Quote paths that contain spaces in prose to mark their boundaries.
+
+An updated phone reader automatically follows Demo mode and the additional words enabled on the desktop. The URL and path setting applies to the cockpit. Turning the Settings switch off also unmasks the phone. Closing the desktop preserves the last explicit state; merely opening another ordinary, non-demo page does not clear it. URL `?demo=0` still affects that page only. Only display settings and the names needed for masking are shared, never drafts or histories. The phone keeps its draft and attachments open, and copying and sending use the original values. Update both components, then reload the active Demo desktop and phone once.
 
 ## Related documents
 
