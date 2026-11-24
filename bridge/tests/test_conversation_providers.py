@@ -39,8 +39,11 @@ def test_claude_visible_blocks_tools_results_and_recorded_edit(tmp_path):
     assert 'HIDDEN' not in json.dumps(result)
     store=ReferenceStore()
     with history.open_reader(r) as reader:
-        event=result['events'][2];store.decorate(r,reader,event)
-    assert '-before\n+after' in event['diff']
+        event,reply=result['events'][2:];store.decorate_all(r,reader,[event,reply])
+    assert 'diff' not in event
+    assert reply['step']['diff_stat']=={'added':1,'removed':1,'new_file':False}
+    assert store.read_step_diff(reply['step']['diff_ref'],r)['hunks'][0]['lines']==[
+        {'op':'-','text':'before'},{'op':'+','text':'after'}]
     assert store.read(event['references'][0]['id'],r)['text']=='current'
 
 def test_claude_progress_update_is_assistant_text_on_cursor_pages(tmp_path):

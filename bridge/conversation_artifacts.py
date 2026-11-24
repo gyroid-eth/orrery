@@ -143,7 +143,7 @@ def static_calls(text,names=('apply_patch','view_image','read_file','write_file'
             return
 
 
-def extract_artifacts(item: dict) -> dict:
+def extract_artifacts(item: dict, *, include_diff=True) -> dict:
     result=dict(paths=[],shown_paths=[],diff='',diff_status='Recorded edit request · outcome unconfirmed')
     if not isinstance(item,dict):return result
     completed=completed_show_files(item)
@@ -182,7 +182,7 @@ def extract_artifacts(item: dict) -> dict:
     diffs=[];diff_bytes=0
     def diff(line):
         nonlocal diff_bytes
-        if diff_bytes>=MAX_DIFF:return
+        if not include_diff or diff_bytes>=MAX_DIFF:return
         line=line[:MAX_DIFF-diff_bytes]
         diffs.append(line);diff_bytes+=len(line)+1
     def path(value,*,shown=False):

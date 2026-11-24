@@ -173,8 +173,9 @@ SOFTWARE.
     return {groups,consumed,pending};
   }
 
-  function mount({host,mutate=fn=>fn(),onFocusLost=()=>{}}){
+  function mount({host,mutate=fn=>fn(),onFocusLost=()=>{},readDiff}){
     const cards=new Map();let model={groups:[],consumed:new Set()},current={},visible=false,timer=0,serial=0,workingModel=false;
+    let activeDiff=null;
     function activityState(context){
       // A missed terminal sample does not end the recorded run.
       return context?.running===true?(context.act_state||current.act_state):null;
@@ -187,6 +188,76 @@ SOFTWARE.
     const reduced=root.matchMedia?.('(prefers-reduced-motion: reduce)');
     const make=(tag,cls,value)=>{const node=root.document.createElement(tag);node.className=cls;if(value!==undefined)node.textContent=value;return node;};
     function changed(node,value){if(node.textContent!==value)node.textContent=value;}
+    function closeDiff(record){
+      if(activeDiff!==record)return;
+      activeDiff=null;
+      record.request?.abort();record.request=null;
+      if(record.diff.contains(root.document.activeElement))record.diffButton.focus({preventScroll:true});
+      record.diff.hidden=true;record.diff.replaceChildren();
+      record.diffButton.setAttribute('aria-expanded','false');
+      record.diffButton.title='Show edit diff';
+    }
+    function renderDiff(record,payload){
+      const hunks=Array.isArray(payload.hunks)?payload.hunks:[];
+      const total=hunks.reduce((count,hunk)=>count+hunk.lines.length,0);
+      const showHunks=hunks.length>1||/^\d+ files$/.test(payload.path);
+      const head=make('div','conversation-step-diff-head',payload.new_file?'New file':payload.path);
+      if(!payload.new_file)head.dataset.demoPath='';
+      const showHead=payload.new_file||showHunks||payload.path!==record.detail.textContent;
+      const code=make('div','conversation-step-diff-code');
+      const limit=8;
+      const fold=make('button','conversation-step-diff-fold');fold.type='button';
+      const paintLines=expanded=>{
+        const fragment=root.document.createDocumentFragment();
+        let remaining=expanded?total:limit;
+        for(const hunk of hunks){
+          if(remaining<=0)break;
+          if(showHunks){
+            const header=make('div','conversation-step-diff-hunk',hunk.header);
+            fragment.append(header);
+          }
+          for(const line of hunk.lines.slice(0,remaining)){
+            const tone=line.op==='+'?' conversation-diff-add':line.op==='-'?' conversation-diff-remove':'';
+            const row=make('div','conversation-step-diff-line'+tone);
+            row.append(make('span','conversation-step-diff-sign',line.op==='-'?'−':line.op),
+              make('span','conversation-step-diff-text',line.text));
+            fragment.append(row);remaining--;
+          }
+        }
+        code.replaceChildren(fragment);
+        fold.textContent=expanded?'Show fewer lines':'Show '+(total-limit)+' more lines';
+        fold.setAttribute('aria-expanded',String(expanded));
+      };
+      fold.addEventListener('click',()=>mutate(()=>paintLines(fold.getAttribute('aria-expanded')!=='true')));
+      code.id=record.diff.id+'-lines';fold.setAttribute('aria-controls',code.id);
+      paintLines(false);
+      record.diff.replaceChildren();
+      if(showHead)record.diff.append(head);
+      if(total)record.diff.append(code);
+      if(payload.truncated)record.diff.append(make('div','conversation-step-diff-note','Too long to show here'));
+      else if(total>limit)record.diff.append(fold);
+    }
+    function toggleDiff(record){
+      mutate(()=>{
+        const wasOpen=activeDiff===record;
+        if(activeDiff)closeDiff(activeDiff);
+        if(wasOpen)return;
+        const controller=new AbortController();
+        activeDiff=record;record.request=controller;
+        record.diff.hidden=false;
+        record.diffButton.title='Hide edit diff';
+        record.diffButton.setAttribute('aria-expanded','true');
+        const status=make('div','conversation-step-diff-note','Loading diff…');
+        status.setAttribute('role','status');record.diff.append(status);
+        readDiff(record.diffRef,{signal:controller.signal}).then(payload=>{
+          if(activeDiff!==record||record.request!==controller)return;
+          mutate(()=>renderDiff(record,payload));
+        }).catch(()=>{
+          if(activeDiff!==record||record.request!==controller)return;
+          mutate(()=>{record.diff.replaceChildren(status);status.textContent='Diff is unavailable.';});
+        });
+      });
+    }
     function icon(status){
       const node=make('span','conversation-step-icon '+status);node.setAttribute('aria-hidden','true');
       node.innerHTML=['observed','running'].includes(status)?'<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.5"/></svg>':
@@ -199,6 +270,7 @@ SOFTWARE.
       const from=animate&&visible&&heightSpring&&!reduced?.matches?body.getBoundingClientRect().height:null;
       card.animation?.cancel();card.animation=null;
       if(!open&&card.body.contains(root.document.activeElement))card.button.focus({preventScroll:true});
+      if(!open&&activeDiff&&card.node.contains(activeDiff.node))closeDiff(activeDiff);
       card.open=open;card.node.classList.toggle('is-open',open);card.button.setAttribute('aria-expanded',String(open));
       body.inert=!open;
       if(from===null)return;
@@ -236,8 +308,20 @@ SOFTWARE.
       const copy=make('div','conversation-step-copy'),top=make('div','conversation-step-top');
       const tool=make('span','conversation-step-tool'),outcome=make('span','conversation-step-outcome');
       const clock=make('span','conversation-step-duration'),detail=make('div','conversation-step-target');
-      top.append(tool,outcome,clock);copy.append(top,detail);node.append(copy);
-      return {node,tool,outcome,clock,detail,icon:null,status:'',fingerprint:''};
+      const diffButton=make('button','conversation-step-diff-toggle');diffButton.type='button';diffButton.hidden=true;
+      const diffTool=make('span','conversation-step-diff-name'),plus=make('span','conversation-step-diff-plus');
+      const minus=make('span','conversation-step-diff-minus');
+      diffButton.append(diffTool,plus,minus);
+      const diff=make('section','conversation-step-diff');diff.hidden=true;
+      diff.id='conversation-step-diff-'+(++serial)+'-'+Math.random().toString(36).slice(2);
+      diff.setAttribute('aria-label','Recorded diff');
+      diffButton.setAttribute('aria-expanded','false');diffButton.setAttribute('aria-controls',diff.id);
+      top.append(tool,diffButton,outcome,clock);copy.append(top,detail,diff);node.append(copy);
+      const record={node,tool,outcome,clock,detail,diffButton,diffTool,plus,minus,diff,diffRef:null,
+        request:null,icon:null,status:'',fingerprint:''};
+      diffButton.addEventListener('click',()=>toggleDiff(record));
+      detail.addEventListener('click',()=>{if(record.diffRef)toggleDiff(record);});
+      return record;
     }
     function updateRow(record,step){
       const status=['done','failed','running'].includes(step.status)?step.status:'observed';
@@ -246,11 +330,26 @@ SOFTWARE.
         if(record.icon)record.icon.replaceWith(symbol);else record.node.prepend(symbol);
         record.icon=symbol;record.status=status;
       }
-      changed(record.tool,text(step.tool).split('__').at(-1));
+      const name=text(step.tool).split('__').at(-1);
+      changed(record.tool,name);
       changed(record.outcome,status==='failed'?'Failed':status==='running'?'Running…':status==='observed'?'Observed':'');
       const start=time(step.started),end=time(step.ended);
       changed(record.clock,Number.isFinite(start)&&Number.isFinite(end)&&end>=start?duration((end-start)/1000):'');
       changed(record.detail,text(step.detail));record.detail.hidden=!step.detail;
+      const stat=step.diff_stat;
+      const ref=status==='done'&&readDiff&&typeof step.diff_ref==='string'&&/^[A-Za-z0-9_-]{32}$/.test(step.diff_ref)
+        &&stat&&Number.isSafeInteger(stat.added)&&stat.added>=0&&Number.isSafeInteger(stat.removed)&&stat.removed>=0
+        &&typeof stat.new_file==='boolean'?step.diff_ref:null;
+      if(record.diffRef!==ref)closeDiff(record);
+      record.diffRef=ref;
+      record.tool.hidden=Boolean(ref);record.diffButton.hidden=!ref;
+      record.node.classList.toggle('has-step-diff',Boolean(ref));
+      if(ref){
+        if(record.diff.hidden)record.diffButton.title='Show edit diff';
+        changed(record.diffTool,name);
+        changed(record.plus,'+'+stat.added);
+        changed(record.minus,stat.new_file?'':'−'+stat.removed);record.minus.hidden=stat.new_file;
+      }
     }
     function paint(){
       const last=model.groups.at(-1);let ticking=false;
@@ -295,12 +394,14 @@ SOFTWARE.
         activeCalls:model.pending});
       const wanted=new Set(model.groups.map(g=>g.id)),byId=new Map(rows.map(r=>[r.dataset.eventId,r]));
       for(const [id,card] of cards)if(!wanted.has(id)){
-        if(card.node.contains(root.document.activeElement))onFocusLost();card.animation?.cancel();card.node.remove();cards.delete(id);
+        if(card.node.contains(root.document.activeElement))onFocusLost();
+        if(activeDiff&&card.node.contains(activeDiff.node))closeDiff(activeDiff);
+        card.animation?.cancel();card.node.remove();cards.delete(id);
       }
       for(const g of model.groups){
         const existed=cards.has(g.id),card=cards.get(g.id)||create(g.id);cards.set(g.id,card);
         const ids=new Set(g.steps.map(s=>s.id));
-        for(const [id,record] of card.rows)if(!ids.has(id)){record.node.remove();card.rows.delete(id);}
+        for(const [id,record] of card.rows)if(!ids.has(id)){closeDiff(record);record.node.remove();card.rows.delete(id);}
         for(const [index,step] of g.steps.entries()){
           const fingerprint=JSON.stringify(step),record=card.rows.get(step.id)||createRow(existed);
           if(record.fingerprint!==fingerprint){updateRow(record,step);record.fingerprint=fingerprint;}
@@ -317,7 +418,7 @@ SOFTWARE.
     }
     return Object.freeze({sync,needsSync:context=>workingModel!==doingWork(context),
       activity(context,isVisible){setActivity(context,isVisible);paint();return [...cards.values()].some(c=>!c.node.hidden&&(c.working||c.waiting));},
-      reset(){if(timer)root.clearInterval(timer);timer=0;for(const card of cards.values()){card.animation?.cancel();card.node.remove();}cards.clear();model={groups:[],consumed:new Set()};current={};workingModel=false;},
+      reset(){if(activeDiff)closeDiff(activeDiff);if(timer)root.clearInterval(timer);timer=0;for(const card of cards.values()){card.animation?.cancel();card.node.remove();}cards.clear();model={groups:[],consumed:new Set()};current={};workingModel=false;},
     });
   }
   const api={collect,duration,elapsed,mount};

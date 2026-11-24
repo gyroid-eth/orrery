@@ -602,7 +602,8 @@
     const liveMatches=(event,sample)=>assistantText(event)&&
       event.text.replace(/\s+/gu,' ').trim().startsWith(sample.text.replace(/\s+/gu,' ').trim());
     const stepView=root.OrreryConversationSteps?.mount({host:eventsEl,
-      mutate:fn=>changeTail(fn,false),onFocusLost:()=>scroll.focus({preventScroll:true})});
+      mutate:fn=>changeTail(fn,false),onFocusLost:()=>scroll.focus({preventScroll:true}),
+      readDiff:(ref,options)=>source.stepDiff(ref,options)});
     const byteSize=event=>new TextEncoder().encode(JSON.stringify(event)).byteLength;
     const fingerprint=root.OrreryConversationSource.bindingIdentity;
     function nearBottom(){return scroll.scrollHeight-scroll.clientHeight-scroll.scrollTop<45;}

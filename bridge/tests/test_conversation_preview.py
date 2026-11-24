@@ -128,8 +128,10 @@ def test_containment_symlinks_hardlinks_fifo_and_late_swaps(tmp_path):
 def test_text_limit_mime_verbatim_text_and_recorded_diff_not_disk(tmp_path):
     (tmp_path/'a.txt').write_text('sk-proj-'+'x'*40+'\ncurrent disk')
     patch='*** Begin Patch\n*** Update File: a.txt\n@@\n-old recorded\n+new recorded\n*** End Patch'
-    store,row,event=setup(tmp_path,call('apply_patch',input=patch))
-    assert 'new recorded' in event['diff'] and 'current disk' not in event['diff']
+    item=call('apply_patch',input=patch)
+    store,row,event=setup(tmp_path,item)
+    assert 'diff' not in event
+    assert 'new recorded' in extract_artifacts(item)['diff']
     result=preview(store,row,event)
     assert result['text']=='sk-proj-'+'x'*40+'\ncurrent disk'
     (tmp_path/'a.txt').write_text('x'*(128*1024+1))
