@@ -280,6 +280,34 @@ def test_submit_cloud_defaults_and_optional_local_parameters_without_real_spawn(
     assert result['recent'][0] == json.dumps(['local-fixture','local-one'],separators=(',',':'))
 
 
+def test_browser_icon_selects_modes_without_adding_a_layout_control(tour_browser):
+    _, evaluate = tour_browser
+    result = evaluate('''(()=>{
+      const model={id:'fixture',default:true};
+      openSpawnModal();
+      spawnCatalog={browser_modes:{'claude-code':['off','temporary','personal'],antigravity:[]},
+        providers:[{id:'claude',program:'claude-code',models:[model]},
+          {id:'gemini',program:'antigravity',models:[model]}]};
+      selFamily=null;selProvider=null;selModel=null;selHarness=null;
+      renderProviderTabs();
+      const initial=spawnToolOptions();
+      spawnBrowserUse.click();
+      const choices=[...spawnBrowserMenu.querySelectorAll('button:not([hidden])')].map(b=>b.textContent);
+      const opened=spawnBrowserMenu.matches(':popover-open');
+      spawnBrowserChoices[1][1].click();
+      const chosen=spawnToolOptions(),caption=spawnBrowserUse.getAttribute('aria-label');
+      selProvider='gemini';selHarness='antigravity';renderSpawnTools();
+      return {initial,choices,opened,chosen,caption,limited:spawnBrowserUse.getAttribute('aria-disabled'),
+        reason:spawnBrowserUse.title,hasText:spawnBrowserUse.textContent.trim()!==''};
+    })()''')
+    assert result['opened'] and not result['hasText']
+    assert result['choices'] == ['Off','Temporary Chrome','My Chrome']
+    assert result['initial']['tools']['browser_mode'] == 'personal'
+    assert result['chosen']['tools']['browser_mode'] == 'temporary'
+    assert result['caption'] == 'Browser: Temporary Chrome'
+    assert result['limited'] == 'true' and 'Antigravity' in result['reason']
+
+
 def test_browser_off_keeps_the_standard_base_on_current_telemetry(tour_browser):
     _, evaluate = tour_browser
     result = evaluate('''(()=>{
