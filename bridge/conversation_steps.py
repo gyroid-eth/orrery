@@ -102,15 +102,21 @@ def claude_result(block, ts):
                 status='failed' if block.get('is_error') is True else 'done') if key else None
 
 
-def codex_completed(raw):
+def codex_completed_item(raw):
     if not isinstance(raw, dict) or raw.get('type') != 'event_msg':
         return None
     p = raw.get('payload')
     if not isinstance(p, dict) or p.get('type') != 'item_completed':
         return None
     item = p.get('item')
-    if not isinstance(item, dict):
+    return item if isinstance(item, dict) else None
+
+
+def codex_completed(raw):
+    item = codex_completed_item(raw)
+    if item is None:
         return None
+    p = raw['payload']
     key = opaque(item.get('id'))
     if not key:
         return None

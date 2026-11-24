@@ -37,6 +37,7 @@ SOFTWARE.
   const time=value=>typeof value==='number'&&Number.isFinite(value)?value:
     typeof value==='string'&&value?Date.parse(value):NaN;
   const key=value=>typeof value==='string'&&/^[a-f0-9]{32}$/.test(value);
+  const reference=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{32}$/.test(value);
   const text=value=>typeof value==='string'?value:'';
   function duration(seconds){
     seconds=Math.max(0,Math.floor(seconds));
@@ -173,9 +174,9 @@ SOFTWARE.
     return {groups,consumed,pending};
   }
 
-  function mount({host,mutate=fn=>fn(),onFocusLost=()=>{},readDiff}){
+  function mount({host,mutate=fn=>fn(),onFocusLost=()=>{},readDiff,readCommand}){
     const cards=new Map();let model={groups:[],consumed:new Set()},current={},visible=false,timer=0,serial=0,workingModel=false;
-    let activeDiff=null;
+    let activeDetail=null;
     function activityState(context){
       // A missed terminal sample does not end the recorded run.
       return context?.running===true?(context.act_state||current.act_state):null;
@@ -188,14 +189,14 @@ SOFTWARE.
     const reduced=root.matchMedia?.('(prefers-reduced-motion: reduce)');
     const make=(tag,cls,value)=>{const node=root.document.createElement(tag);node.className=cls;if(value!==undefined)node.textContent=value;return node;};
     function changed(node,value){if(node.textContent!==value)node.textContent=value;}
-    function closeDiff(record){
-      if(activeDiff!==record)return;
-      activeDiff=null;
+    function closeDetail(record){
+      if(activeDetail!==record)return;
+      activeDetail=null;
       record.request?.abort();record.request=null;
       if(record.diff.contains(root.document.activeElement))record.diffButton.focus({preventScroll:true});
       record.diff.hidden=true;record.diff.replaceChildren();
       record.diffButton.setAttribute('aria-expanded','false');
-      record.diffButton.title='Show edit diff';
+      record.diffButton.title='Show '+record.detailLabel;
     }
     function renderDiff(record,payload){
       const hunks=Array.isArray(payload.hunks)?payload.hunks:[];
@@ -237,24 +238,55 @@ SOFTWARE.
       if(payload.truncated)record.diff.append(make('div','conversation-step-diff-note','Too long to show here'));
       else if(total>limit)record.diff.append(fold);
     }
-    function toggleDiff(record){
+    function renderCommand(record,payload){
+      if(payload.kind!=='command'||typeof payload.command!=='string'||typeof payload.output!=='string'){
+        throw new Error('Invalid command detail.');
+      }
+      const command=make('pre','conversation-step-command','$ '+payload.command);
+      record.diff.replaceChildren(command);
+      if(payload.output){
+        const code=make('pre','conversation-step-diff-code conversation-step-output');
+        code.id=record.diff.id+'-lines';
+        const lines=payload.output.replace(/\n$/,'').split('\n'),limit=8;
+        const fold=make('button','conversation-step-diff-fold');fold.type='button';
+        fold.setAttribute('aria-controls',code.id);
+        const paintOutput=expanded=>{
+          code.textContent=(expanded?lines:lines.slice(0,limit)).join('\n');
+          root.OrreryDemo?.maskContent?.(code);
+          fold.textContent=expanded?'Show fewer lines':'Show '+(lines.length-limit)+' more lines';
+          fold.setAttribute('aria-expanded',String(expanded));
+        };
+        record.diff.append(code);
+        paintOutput(false);
+        if(lines.length>limit){
+          fold.addEventListener('click',()=>mutate(()=>paintOutput(fold.getAttribute('aria-expanded')!=='true')));
+          record.diff.append(fold);
+        }
+      }else record.diff.append(make('div','conversation-step-diff-note','No output'));
+      if(payload.truncated)record.diff.append(make('div','conversation-step-diff-note','Too long to show here'));
+      root.OrreryDemo?.maskContent?.(command);
+    }
+    function toggleDetail(record){
       mutate(()=>{
-        const wasOpen=activeDiff===record;
-        if(activeDiff)closeDiff(activeDiff);
+        const wasOpen=activeDetail===record;
+        if(activeDetail)closeDetail(activeDetail);
         if(wasOpen)return;
+        const command=record.detailKind==='command';
+        const read=command?readCommand:readDiff;
         const controller=new AbortController();
-        activeDiff=record;record.request=controller;
+        activeDetail=record;record.request=controller;
         record.diff.hidden=false;
-        record.diffButton.title='Hide edit diff';
+        record.diffButton.title='Hide '+record.detailLabel;
         record.diffButton.setAttribute('aria-expanded','true');
-        const status=make('div','conversation-step-diff-note','Loading diff…');
+        const status=make('div','conversation-step-diff-note',command?'Loading command…':'Loading diff…');
         status.setAttribute('role','status');record.diff.append(status);
-        readDiff(record.diffRef,{signal:controller.signal}).then(payload=>{
-          if(activeDiff!==record||record.request!==controller)return;
-          mutate(()=>renderDiff(record,payload));
+        read(record.detailRef,{signal:controller.signal}).then(payload=>{
+          if(activeDetail!==record||record.request!==controller)return;
+          mutate(()=>command?renderCommand(record,payload):renderDiff(record,payload));
         }).catch(()=>{
-          if(activeDiff!==record||record.request!==controller)return;
-          mutate(()=>{record.diff.replaceChildren(status);status.textContent='Diff is unavailable.';});
+          if(activeDetail!==record||record.request!==controller)return;
+          mutate(()=>{record.diff.replaceChildren(status);
+            status.textContent=command?'Command details are unavailable.':'Diff is unavailable.';});
         });
       });
     }
@@ -270,7 +302,7 @@ SOFTWARE.
       const from=animate&&visible&&heightSpring&&!reduced?.matches?body.getBoundingClientRect().height:null;
       card.animation?.cancel();card.animation=null;
       if(!open&&card.body.contains(root.document.activeElement))card.button.focus({preventScroll:true});
-      if(!open&&activeDiff&&card.node.contains(activeDiff.node))closeDiff(activeDiff);
+      if(!open&&activeDetail&&card.node.contains(activeDetail.node))closeDetail(activeDetail);
       card.open=open;card.node.classList.toggle('is-open',open);card.button.setAttribute('aria-expanded',String(open));
       body.inert=!open;
       if(from===null)return;
@@ -317,10 +349,10 @@ SOFTWARE.
       diff.setAttribute('aria-label','Recorded diff');
       diffButton.setAttribute('aria-expanded','false');diffButton.setAttribute('aria-controls',diff.id);
       top.append(tool,diffButton,outcome,clock);copy.append(top,detail,diff);node.append(copy);
-      const record={node,tool,outcome,clock,detail,diffButton,diffTool,plus,minus,diff,diffRef:null,
+      const record={node,tool,outcome,clock,detail,diffButton,diffTool,plus,minus,diff,detailRef:null,detailKind:null,
         request:null,icon:null,status:'',fingerprint:''};
-      diffButton.addEventListener('click',()=>toggleDiff(record));
-      detail.addEventListener('click',()=>{if(record.diffRef)toggleDiff(record);});
+      diffButton.addEventListener('click',()=>toggleDetail(record));
+      detail.addEventListener('click',()=>{if(record.detailRef)toggleDetail(record);});
       return record;
     }
     function updateRow(record,step){
@@ -332,23 +364,34 @@ SOFTWARE.
       }
       const name=text(step.tool).split('__').at(-1);
       changed(record.tool,name);
-      changed(record.outcome,status==='failed'?'Failed':status==='running'?'Running…':status==='observed'?'Observed':'');
+      const hasExit=Number.isSafeInteger(step.exit_code)&&step.exit_code!==0;
+      changed(record.outcome,hasExit?'exit '+step.exit_code:
+        status==='failed'?'Failed':status==='running'?'Running…':status==='observed'?'Observed':'');
+      record.outcome.classList.toggle('has-exit-code',hasExit);
       const start=time(step.started),end=time(step.ended);
       changed(record.clock,Number.isFinite(start)&&Number.isFinite(end)&&end>=start?duration((end-start)/1000):'');
       changed(record.detail,text(step.detail));record.detail.hidden=!step.detail;
       const stat=step.diff_stat;
-      const ref=status==='done'&&readDiff&&typeof step.diff_ref==='string'&&/^[A-Za-z0-9_-]{32}$/.test(step.diff_ref)
+      const diffRef=status==='done'&&readDiff&&reference(step.diff_ref)
         &&stat&&Number.isSafeInteger(stat.added)&&stat.added>=0&&Number.isSafeInteger(stat.removed)&&stat.removed>=0
         &&typeof stat.new_file==='boolean'?step.diff_ref:null;
-      if(record.diffRef!==ref)closeDiff(record);
-      record.diffRef=ref;
+      const commandRef=readCommand&&reference(step.detail_ref)?step.detail_ref:null;
+      const ref=diffRef||commandRef,kind=diffRef?'diff':commandRef?'command':null;
+      if(record.detailRef!==ref||record.detailKind!==kind)closeDetail(record);
+      record.detailRef=ref;record.detailKind=kind;
+      record.detailLabel=kind==='command'?'command details':'edit diff';
       record.tool.hidden=Boolean(ref);record.diffButton.hidden=!ref;
       record.node.classList.toggle('has-step-diff',Boolean(ref));
       if(ref){
-        if(record.diff.hidden)record.diffButton.title='Show edit diff';
+        if(record.diff.hidden)record.diffButton.title='Show '+record.detailLabel;
+        record.diff.setAttribute('aria-label',kind==='command'?'Recorded command':'Recorded diff');
         changed(record.diffTool,name);
-        changed(record.plus,'+'+stat.added);
-        changed(record.minus,stat.new_file?'':'−'+stat.removed);record.minus.hidden=stat.new_file;
+        record.plus.hidden=!diffRef;
+        record.minus.hidden=!diffRef||stat.new_file;
+        if(diffRef){
+          changed(record.plus,'+'+stat.added);
+          changed(record.minus,stat.new_file?'':'−'+stat.removed);
+        }
       }
     }
     function paint(){
@@ -395,13 +438,13 @@ SOFTWARE.
       const wanted=new Set(model.groups.map(g=>g.id)),byId=new Map(rows.map(r=>[r.dataset.eventId,r]));
       for(const [id,card] of cards)if(!wanted.has(id)){
         if(card.node.contains(root.document.activeElement))onFocusLost();
-        if(activeDiff&&card.node.contains(activeDiff.node))closeDiff(activeDiff);
+        if(activeDetail&&card.node.contains(activeDetail.node))closeDetail(activeDetail);
         card.animation?.cancel();card.node.remove();cards.delete(id);
       }
       for(const g of model.groups){
         const existed=cards.has(g.id),card=cards.get(g.id)||create(g.id);cards.set(g.id,card);
         const ids=new Set(g.steps.map(s=>s.id));
-        for(const [id,record] of card.rows)if(!ids.has(id)){closeDiff(record);record.node.remove();card.rows.delete(id);}
+        for(const [id,record] of card.rows)if(!ids.has(id)){closeDetail(record);record.node.remove();card.rows.delete(id);}
         for(const [index,step] of g.steps.entries()){
           const fingerprint=JSON.stringify(step),record=card.rows.get(step.id)||createRow(existed);
           if(record.fingerprint!==fingerprint){updateRow(record,step);record.fingerprint=fingerprint;}
@@ -418,7 +461,7 @@ SOFTWARE.
     }
     return Object.freeze({sync,needsSync:context=>workingModel!==doingWork(context),
       activity(context,isVisible){setActivity(context,isVisible);paint();return [...cards.values()].some(c=>!c.node.hidden&&(c.working||c.waiting));},
-      reset(){if(activeDiff)closeDiff(activeDiff);if(timer)root.clearInterval(timer);timer=0;for(const card of cards.values()){card.animation?.cancel();card.node.remove();}cards.clear();model={groups:[],consumed:new Set()};current={};workingModel=false;},
+      reset(){if(activeDetail)closeDetail(activeDetail);if(timer)root.clearInterval(timer);timer=0;for(const card of cards.values()){card.animation?.cancel();card.node.remove();}cards.clear();model={groups:[],consumed:new Set()};current={};workingModel=false;},
     });
   }
   const api={collect,duration,elapsed,mount};

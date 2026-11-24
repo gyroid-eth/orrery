@@ -85,11 +85,13 @@
       if(!response.ok||payload.ok!==true){const error=new Error(MESSAGES[payload.error]||'Preview is unavailable.');error.code=payload.error;throw error;}
       return payload;
     }
-    async stepDiff(ref,{signal}={}){
-      const response=await this.fetcher('/telemetry/conversation/diff?'+new URLSearchParams({ref}),
+    stepDiff(ref,options){return this.stepReference('diff',ref,'Diff is unavailable.',options);}
+    stepCommand(ref,options){return this.stepReference('detail',ref,'Command details are unavailable.',options);}
+    async stepReference(endpoint,ref,message,{signal}={}){
+      const response=await this.fetcher('/telemetry/conversation/'+endpoint+'?'+new URLSearchParams({ref}),
         {cache:'no-store',signal});
       const payload=await response.json();
-      if(!response.ok||payload.ok!==true)throw new Error(MESSAGES[payload.error]||'Diff is unavailable.');
+      if(!response.ok||payload.ok!==true)throw new Error(MESSAGES[payload.error]||message);
       return payload;
     }
     async pathRequest(url,body,{signal,background=false}={}){

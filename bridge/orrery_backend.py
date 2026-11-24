@@ -2512,7 +2512,7 @@ async def serve_conversation_preview(request: web.Request) -> web.Response:
     return await conversation_reference(request)
 
 
-async def serve_conversation_diff(request: web.Request) -> web.Response:
+async def conversation_step_reference(request: web.Request, *, command: bool = False) -> web.Response:
     headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
              'Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"}
     query=request.query
@@ -2525,7 +2525,8 @@ async def serve_conversation_diff(request: web.Request) -> web.Response:
         store=request.app[CONVERSATION_REFERENCES_KEY]
         name=store.owner(refs[0])
         row=await conversation_bound_row(request,name)
-        result=await asyncio.to_thread(store.read_step_diff,refs[0],row)
+        read=store.read_step_command if command else store.read_step_diff
+        result=await asyncio.to_thread(read,refs[0],row)
         current=await conversation_bound_row(request,name)
         if conversation_binding(row)!=conversation_binding(current):
             raise PreviewUnavailable('reference_expired')
@@ -2534,6 +2535,14 @@ async def serve_conversation_diff(request: web.Request) -> web.Response:
         return web.json_response({'ok':False,'error':'reference_expired'},status=400,headers=headers)
     except (ClientError,asyncio.TimeoutError):
         return web.json_response({'ok':False,'error':'dashboard_unavailable'},status=502,headers=headers)
+
+
+async def serve_conversation_diff(request: web.Request) -> web.Response:
+    return await conversation_step_reference(request)
+
+
+async def serve_conversation_detail(request: web.Request) -> web.Response:
+    return await conversation_step_reference(request,command=True)
 
 
 async def reveal_conversation_reference(request: web.Request) -> web.Response:
@@ -5088,6 +5097,7 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
     app.router.add_get("/telemetry/conversation/stats", serve_conversation_stats)
     app.router.add_get('/telemetry/conversation/preview', serve_conversation_preview)
     app.router.add_get('/telemetry/conversation/diff', serve_conversation_diff)
+    app.router.add_get('/telemetry/conversation/detail', serve_conversation_detail)
     app.router.add_post('/telemetry/conversation/path-image', preview_clicked_path)
     app.router.add_post('/telemetry/conversation/path-probe', probe_conversation_paths)
     app.router.add_post('/telemetry/conversation/reveal', reveal_conversation_reference)
