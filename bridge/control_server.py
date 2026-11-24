@@ -1635,79 +1635,131 @@ class TmuxControlBridge:
                 return 'unknown'
 
     async def submit_prompt(self, pane_id: str, text: str, *, proof=None) -> str:
-        """Bracketed paste and Enter on one tmux queue, including across clients."""
+        """Hold the host pane lock through visible paste, Enter, and confirmation."""
+        import pane_submission as submission
         if not re.fullmatch(r'%[0-9]+', pane_id):
             return 'refused'
         target = self.config.tmux_bin
         if isinstance(target, FreshPaneBoundary) and (
                 proof is None or proof.target is not target or proof.purpose != 'input' or pane_id != target.pane_id):
             raise TargetRefused('FRESH_TMUX_TARGET_CHANGED')
+        deadline = time.monotonic() + submission.TIMEOUT
+        name = 'orrery-compose-' + uuid.uuid4().hex
+        paste = ['paste-buffer', '-r', '-p', '-d', '-b', name, '-t', pane_id]
+        pending = None
 
-        buffer = 'orrery-compose-' + uuid.uuid4().hex
-        paste = ['paste-buffer', '-r', '-p', '-d', '-b', buffer, '-t', pane_id]
-        enter = ['send-keys', '-t', pane_id, 'C-m']
-        deadline = time.monotonic() + 4
-
-        def ticket():
+        async def command(args, limit=4096):
+            nonlocal pending
+            remaining = deadline - time.monotonic()
+            if self.master_fd is None or self._closed or remaining <= 0:
+                raise RuntimeError('tmux prompt deadline elapsed')
             pending = asyncio.get_running_loop().create_future()
-            self._bounded_blocks[pending] = 4096
+            self._bounded_blocks[pending] = limit
             self._pending_blocks.append(pending)
-            return pending
+            await asyncio.wait_for(self._write_master((make_tmux_command(args) + '\n').encode('utf-8')), remaining)
+            result = await asyncio.wait_for(pending, max(0, deadline - time.monotonic()))
+            pending = None
+            return result
+
+        async def capture():
+            meta = await command(submission.metadata_command(pane_id))
+            screen = await command(submission.screen_command(pane_id), 262144)
+            current = await command(submission.metadata_command(pane_id))
+            if (meta.ok and not meta.overflow and screen.ok and not screen.overflow and current.ok
+                    and not current.overflow and len(meta.lines) == 1 and current.lines == meta.lines):
+                return submission.frame(meta.lines[0], screen.lines, pane_id)
+            return None
+
+        async def admit():
+            if proof is None:
+                await asyncio.to_thread(admit_command, target, paste, session=self.config.session)
+            else:
+                await proof.check()
+                if proof.closed:
+                    raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
 
         async with self._write_lock:
-            if self.master_fd is None or self._closed or time.monotonic() >= deadline:
-                return 'refused'
-            loaded = dispatching = False
+            lock = None
+            loaded = pasted = False
             try:
-                with tempfile.TemporaryDirectory(prefix='orrery-compose-') as temp:
-                    path = Path(temp) / 'prompt'
+                await admit()
+                observed = await capture()
+                if observed is None:
+                    return 'refused'
+                while time.monotonic() < deadline:
+                    lock = submission.try_lock(observed)
+                    if lock is not None:
+                        break
+                    await asyncio.sleep(submission.POLL)
+                if lock is None:
+                    return 'refused'
+
+                before = await capture()
+                if before is None or before.identity != observed.identity or not before.empty:
+                    return 'refused'
+                with tempfile.TemporaryDirectory(prefix='orrery-compose-') as tmp:
+                    path = Path(tmp) / 'prompt'
                     path.write_bytes(text.encode('utf-8', errors='replace'))
-                    load = ['load-buffer', '-b', buffer, str(path)]
-                    pending = ticket()
-                    dispatching = True
-                    await self._write_master((make_tmux_command(load) + '\n').encode('utf-8'))
-                    result = await asyncio.wait_for(pending, 2)
-                    dispatching = False
-                    if not result.ok:
+                    result = await command(['load-buffer', '-b', name, str(path)])
+                    if not result.ok or result.overflow:
                         return 'refused'
                     loaded = True
-                if proof is None:
-                    await asyncio.to_thread(admit_command, target, paste, session=self.config.session)
-                else:
-                    await proof.check()
-                    if proof.closed:
-                        raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
-                if self.master_fd is None or self._closed or time.monotonic() >= deadline:
+                await admit()
+                current = await capture()
+                if current is None or current.identity != before.identity or not current.empty:
                     return 'refused'
-                paste_result, enter_result = ticket(), ticket()
-                dispatching = True
-                command = make_tmux_command(paste) + ' ; ' + make_tmux_command(enter) + '\n'
-                await self._write_master(command.encode('ascii'))
-                pasted = await asyncio.wait_for(paste_result, max(0, deadline-time.monotonic()))
-                if not pasted.ok:
-                    # tmux dropped Enter, so its result will never arrive.
-                    self._pending_blocks.remove(enter_result)
-                    self._bounded_blocks.pop(enter_result, None)
-                    enter_result.cancel()
-                    dispatching = False
-                    return 'refused'
-                loaded = False  # paste-buffer -d consumed it.
-                entered = await asyncio.wait_for(enter_result, max(0, deadline-time.monotonic()))
-                dispatching = False
-                return 'accepted' if entered.ok and not entered.overflow and not pasted.overflow else 'unknown'
-            except (OSError, RuntimeError, asyncio.TimeoutError, asyncio.CancelledError):
-                if dispatching:
-                    self._abort_mobile_stream()
+                pasted = True
+                result = await command(paste)
+                if not result.ok or result.overflow:
                     return 'unknown'
-                return 'refused'
+                loaded = False
+
+                # Wait for the editor to render the same draft on consecutive
+                # observations. Some editors still treat a near-paste Enter as a newline.
+                previous = None
+                while time.monotonic() < deadline:
+                    view = await capture()
+                    draft = view.draft if submission.ready(view, text) else None
+                    if view is not None:
+                        if view.identity != before.identity:
+                            return 'unknown'
+                        if draft is not None and draft == previous:
+                            await admit()
+                            view = await capture()
+                            if view is not None and view.identity == before.identity and submission.ready(view, text):
+                                result = await command(['send-keys', '-t', pane_id, 'C-m'])
+                                if not result.ok or result.overflow:
+                                    return 'unknown'
+                                break
+                    previous = draft
+                    await asyncio.sleep(submission.POLL)
+                else:
+                    return 'unknown'
+
+                while time.monotonic() < deadline:
+                    view = await capture()
+                    if view is not None:
+                        if view.identity != before.identity:
+                            return 'unknown'
+                        if view.empty:
+                            return 'accepted'
+                    await asyncio.sleep(submission.POLL)
+                return 'unknown'
+            except (OSError, RuntimeError, asyncio.TimeoutError, asyncio.CancelledError):
+                if pending is not None:
+                    self._abort_mobile_stream()
+                return 'unknown' if pasted else 'refused'
             finally:
-                if loaded and self.master_fd is not None and not self._closed:
-                    self._pending_blocks.append(None)
-                    try:
-                        cleanup = make_tmux_command(['delete-buffer', '-b', buffer]) + '\n'
-                        await asyncio.wait_for(self._write_master(cleanup.encode('ascii')), .5)
-                    except (OSError, RuntimeError, asyncio.TimeoutError, asyncio.CancelledError):
-                        self._abort_mobile_stream()
+                try:
+                    if loaded and self.master_fd is not None and not self._closed:
+                        self._pending_blocks.append(None)
+                        await asyncio.wait_for(self._write_master(
+                            (make_tmux_command(['delete-buffer', '-b', name]) + '\n').encode('ascii')), .5)
+                except (OSError, RuntimeError, asyncio.TimeoutError, asyncio.CancelledError):
+                    self._abort_mobile_stream()
+                finally:
+                    if lock is not None:
+                        os.close(lock)
 
     async def capture_mobile_preview(self, pane_id: str, height: int, *, deadline: float, max_lines: int = 40) -> CommandResult:
         """One finite raw capture; never recorder or restored-history output."""

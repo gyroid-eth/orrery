@@ -4160,9 +4160,9 @@
       }
     }
   },
-  "inventory_digest": "e3146169bde46b4ddf366f5ed16dc147df04136f275ba469939068d397ac95d5",
+  "inventory_digest": "eeaeca2465447749b53fead06b9d8cbf54677d187c8b21b8337ab60f82ef6a3d",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "3c8e10c10a541cf554af0bfb5f0de99d074ce522f1d15164620e8481c337b9d2",
+  "source_digest": "693595442cb9b0320ca455269353a6467335ea9c0bf0625ca47c188d4ae396de",
   "surface": "cockpit",
   "version": 1
 }
@@ -11586,7 +11586,7 @@ function submitComposerPrompt(target,data){
       clearTimeout(timer);composerAcks.delete(id);
       resolve(status==='accepted'||status==='refused'?status:'unknown');
     };
-    const timer=setTimeout(()=>done('unknown'),4500);
+    const timer=setTimeout(()=>done('unknown'),6500);
     composerAcks.set(id,{done,paneId:target.paneId});
     const payload={type:'submit-prompt',paneId:target.paneId,session:target.session,incarnation:target.incarnation,inputAck:id,data};
     for(const key of ['mail_instance_id','mail_agent_id']){
@@ -11705,8 +11705,8 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
     ].filter(Boolean).join(' · ');
     showToast(summary,Boolean(refused.length||unknown.length),7000);
     if(summary.length>70)toastEl.classList.add('multiline');
-    if(refused.length){
-      if(explicit)promptRecipients.set(refused.map(record=>record.name));
+    if(refused.length||unknown.length){
+      if(explicit)promptRecipients.set(results.filter(record=>record.status!=='accepted').map(record=>record.name));
       if(sent.length)pushPromptHistory(draft);
     }else{
       promptRecipients.set([]);clearSentDraft(draft);

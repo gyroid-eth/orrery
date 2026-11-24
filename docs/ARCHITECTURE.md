@@ -86,7 +86,7 @@ server event:
 
 unknown session は error を返します。browser client ごとの attach / split 上限は12 session です。
 
-`submit-prompt` は接続中の session・pane・incarnation を照合し、貼り付けと Enter を一つの tmux 命令列で送ります。`input-ack` の `accepted` は両方の命令を tmux が受け付けたことを示します。Reader は別途、ハーネスの記録と照合します。
+`submit-prompt` は接続中の session・pane・incarnation を照合します。Mail watcher と同じ pane のロックを取り、空の入力欄に貼り付けた文が表示されてから Enter を送ります。`input-ack` の `accepted` は送信後に入力欄が空になったことを示します。Reader は別途、ハーネスの記録と照合します。
 
 ## tmux safety
 

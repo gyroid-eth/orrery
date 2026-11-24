@@ -88,8 +88,9 @@ def test_mention_matches_name_and_role_and_leaves_file_references(cockpit):
     assert js("packets.filter(packet=>packet.type==='input')") == []
 
 
-@pytest.mark.parametrize('rejected', [False, True])
-def test_roster_selection_sends_each_agent_once_and_keeps_only_failed_targets(cockpit, rejected):
+@pytest.mark.parametrize('status', ['accepted', 'refused', 'unknown'])
+def test_roster_selection_sends_each_agent_once_and_keeps_only_failed_targets(cockpit, status):
+    rejected = status != 'accepted'
     js, wait, _ = recipients(cockpit)
     js("""currentAgents[0].category='agent';liveRosterAgents=currentAgents;renderRoster();setRosterSelectMode(true);
       for(const name of ['ReviewFixture','QuietCopernicus','EmeraldBose'])bulkSelectedAgents.add(name);
@@ -101,7 +102,7 @@ def test_roster_selection_sends_each_agent_once_and_keeps_only_failed_targets(co
     js("""window.send=packet=>{
       packets.push(packet);
       if(packet.inputAck)queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,
-        status:packet.paneId==='%902'&&"""+str(rejected).lower()+"""?'refused':'accepted'}));
+        status:packet.paneId==='%902'?"""+repr(status)+""":'accepted'}));
       return true;
     };promptSendBtn.click()""")
     wait("!promptBusy")
@@ -114,8 +115,10 @@ def test_roster_selection_sends_each_agent_once_and_keeps_only_failed_targets(co
     assert js("receipts.map(receipt=>receipt.broadcastCount)") == [len(expected)] * len(expected)
     assert js('promptRecipients.names') == (['QuietCopernicus'] if rejected else [])
     assert js('promptInput.value') == ('Shared draft' if rejected else '')
-    if rejected:
+    if status == 'refused':
         assert js("toastEl.textContent.includes('Not sent to QuietCopernicus')")
+    if status == 'unknown':
+        assert js("toastEl.textContent.includes('Delivery unconfirmed for QuietCopernicus')")
 
 
 def test_attachment_drop_remove_and_delivery_per_cli(cockpit):
