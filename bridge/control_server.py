@@ -1585,8 +1585,8 @@ class TmuxControlBridge:
             raise RuntimeError('approval key acknowledgement unavailable')
 
     async def send_input(
-        self, pane_id: str, data: str, *, binary: bool = False, proof=None
-    ) -> None:
+        self, pane_id: str, data: str, *, binary: bool = False, proof=None, acknowledge=False
+    ) -> str | None:
         # xterm hands classic (non-SGR) mouse reports to onBinary as a string
         # of byte values 0-255; UTF-8 would turn a coordinate byte >= 0x80
         # into two bytes and the app would misread the report.
@@ -1615,10 +1615,24 @@ class TmuxControlBridge:
                     raise TargetRefused('FRESH_TMUX_TARGET_CHANGED')
                 await proof.check()
                 if proof.closed:raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
-            for args in commands:
-                self._pending_blocks.append(None)
-                await self._write_master((make_tmux_command(args) + '\n').encode('utf-8'))
-
+            acknowledgements = []
+            try:
+                for args in commands:
+                    pending = asyncio.get_running_loop().create_future() if acknowledge else None
+                    if pending is not None:
+                        acknowledgements.append(pending)
+                        self._bounded_blocks[pending] = 4096
+                    self._pending_blocks.append(pending)
+                    await self._write_master((make_tmux_command(args) + '\n').encode('utf-8'))
+                if acknowledge:
+                    results = await asyncio.wait_for(asyncio.gather(*acknowledgements), 3)
+                    return 'accepted' if all(result.ok and not result.overflow for result in results) else 'unknown'
+            except (OSError, RuntimeError, asyncio.TimeoutError):
+                if not acknowledge:
+                    raise
+                # A partial write can leave the control command stream misaligned.
+                self._abort_mobile_stream()
+                return 'unknown'
     async def capture_mobile_preview(self, pane_id: str, height: int, *, deadline: float, max_lines: int = 40) -> CommandResult:
         """One finite raw capture; never recorder or restored-history output."""
         from mobile_input import InputRefused, _deadline, MAX_CAPTURE_BYTES, MAX_PREVIEW_LINES

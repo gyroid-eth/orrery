@@ -245,6 +245,7 @@ html[data-color-theme="light"] .conversation-activity[data-state="work"]{color:#
 .conversation-activity i:nth-child(3){animation-delay:.32s}
 .conversation-activity.activity-paused[data-state="work"] i{animation-play-state:paused}
 @media(prefers-reduced-motion:reduce){.conversation-activity:not([hidden])[data-state="work"] i{animation:none}}
+.conversation-broadcast{color:var(--ink-dim);font:11px var(--rail-sans);white-space:nowrap}
 .conversation-submission{box-sizing:border-box;max-width:min(78%,70ch);margin:18px 0 0 auto;padding:12px 15px;border:1px solid var(--hair-2);border-radius:14px 14px 4px 14px;background:var(--panel-2)}
 .conversation-submission-text{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .submission-expanded .conversation-submission-text{-webkit-line-clamp:unset}

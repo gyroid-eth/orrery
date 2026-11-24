@@ -2,8 +2,8 @@
   "axes": {
     "background": {
       "effect": {
-        "digest": "d6f967c0cfc4b788109c97d1dcb40465291936962a39273cb1cdde4f23c66936",
-        "expected": 291,
+        "digest": "24e98a6a5b2e9622dd7d34705e5e40248be4501e816ae737a852318026a7f756",
+        "expected": 303,
         "records": [
           {
             "property": "background",
@@ -751,6 +751,11 @@
             "value": "var(--ink-dim)"
           },
           {
+            "property": "background",
+            "selector": ".prompt-card:has(#promptInput:focus-visible)",
+            "value": "color-mix(in srgb,var(--ink) 2%,var(--prompt-fill))"
+          },
+          {
             "property": "color",
             "selector": "#promptSend",
             "value": "var(--ink-dim)"
@@ -764,6 +769,61 @@
             "property": "outline",
             "selector": "#promptSend:focus-visible",
             "value": "2px solid var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-remove-recipient",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-remove-recipient:hover",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".prompt-mentions",
+            "value": "color-mix(in srgb,var(--ink) 6%,var(--elev))"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-mentions",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".prompt-mention-band",
+            "value": "color-mix(in srgb,var(--ink) 12%,transparent)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-mention-row[aria-disabled=true]",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-mention-role",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-clip,.prompt-file-remove",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-clip:hover,.prompt-file-remove:hover",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-attachment",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-file-icon",
+            "value": "var(--ink-dim)"
           },
           {
             "property": "background",
@@ -1606,8 +1666,8 @@
     },
     "dim-contrast": {
       "effect": {
-        "digest": "69e3251277aa51a3eb433a4635b771551f497bc36195c1ebc53a9ec8a749fbeb",
-        "expected": 106,
+        "digest": "667f3f30609344c645826f97f190104e0bee9c22d06cbf3349a598a7930d914c",
+        "expected": 111,
         "records": [
           {
             "property": "color",
@@ -1908,6 +1968,31 @@
             "property": "outline",
             "selector": "#promptSend:focus-visible",
             "value": "2px solid var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-remove-recipient",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-mention-row[aria-disabled=true]",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-mention-role",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-clip,.prompt-file-remove",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-file-icon",
+            "value": "var(--ink-dim)"
           },
           {
             "property": "color",
@@ -2774,7 +2859,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "0b8efa112ea0e683c5a3e97dc0d1058a9ca6fd563466691d428e2e984149437d",
+        "digest": "0231af1b70dd8b198b0da89f5a9660470c1d93c43f78d3bba67b994822e1ac19",
         "expected": 78,
         "records": [
           {
@@ -2995,273 +3080,273 @@
             "value": "11px"
           },
           {
-            "line": 784,
+            "line": 824,
             "property": "font-size",
             "selector": ".slashmenu .sm-kind",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 785,
+            "line": 825,
             "property": "font-size",
             "selector": ".slashmenu .sm-desc",
             "source": "bridge/cockpit.html",
             "value": "10.5px"
           },
           {
-            "line": 796,
+            "line": 836,
             "property": "font-size",
             "selector": ".sendguard .sg-msg",
             "source": "bridge/cockpit.html",
             "value": "11.5px"
           },
           {
-            "line": 808,
+            "line": 848,
             "property": "font-size",
             "selector": ".network-note",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 847,
+            "line": 887,
             "property": "font-size",
             "selector": ".split-cell-actions .cockpit-control",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 869,
+            "line": 909,
             "property": "font-size",
             "selector": ".split-cell-label",
             "source": "bridge/cockpit.html",
             "value": "9.5px"
           },
           {
-            "line": 879,
+            "line": 919,
             "property": "font-size",
             "selector": ".split-cell-label .scl-role",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 891,
+            "line": 931,
             "property": "font-size",
             "selector": ".split-drag-ghost",
             "source": "bridge/cockpit.html",
             "value": "9.5px"
           },
           {
-            "line": 898,
+            "line": 938,
             "property": "font-size",
             "selector": ".split-cell-empty",
             "source": "bridge/cockpit.html",
             "value": "10px"
           },
           {
-            "line": 976,
+            "line": 1016,
             "property": "font-size",
             "selector": ".rosterempty",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 977,
+            "line": 1017,
             "property": "font-size",
             "selector": ".legend",
             "source": "bridge/cockpit.html",
             "value": "10px"
           },
           {
-            "line": 1010,
+            "line": 1050,
             "property": "font-size",
             "selector": ".keycap",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 1019,
+            "line": 1059,
             "property": "font-size",
             "selector": ".palette-kind",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 1021,
+            "line": 1061,
             "property": "font-size",
             "selector": ".palette-meta",
             "source": "bridge/cockpit.html",
             "value": "9.5px"
           },
           {
-            "line": 1028,
+            "line": 1068,
             "property": "font-size",
             "selector": ".modal-btn",
             "source": "bridge/cockpit.html",
             "value": "9.5px"
           },
           {
-            "line": 1045,
+            "line": 1085,
             "property": "font-size",
             "selector": ".settings-kicker",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1048,
+            "line": 1088,
             "property": "font-size",
             "selector": ".settings-section-title",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1052,
+            "line": 1092,
             "property": "font-size",
             "selector": ".settings-row-name",
             "source": "bridge/cockpit.html",
             "value": "9.5px"
           },
           {
-            "line": 1053,
+            "line": 1093,
             "property": "font-size",
             "selector": ".settings-value",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 1054,
+            "line": 1094,
             "property": "font-size",
             "selector": ".settings-help",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 1087,
+            "line": 1127,
             "property": "font-size",
             "selector": ".settings-choice",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 1090,
+            "line": 1130,
             "property": "font-size",
             "selector": ".settings-select",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 1092,
+            "line": 1132,
             "property": "font-size",
             "selector": ".phone-badge",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 1100,
+            "line": 1140,
             "property": "font-size",
             "selector": ".phone-line",
             "source": "bridge/cockpit.html",
             "value": "9.5px"
           },
           {
-            "line": 1101,
+            "line": 1141,
             "property": "font-size",
             "selector": ".phone-line .dot",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 1107,
+            "line": 1147,
             "property": "font-size",
             "selector": ".phone-num",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1110,
+            "line": 1150,
             "property": "font-size",
             "selector": ".phone-who",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 1111,
+            "line": 1151,
             "property": "font-size",
             "selector": ".phone-code",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 1114,
+            "line": 1154,
             "property": "font-size",
             "selector": ".phone-field span",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1117,
+            "line": 1157,
             "property": "font-size",
             "selector": ".phone-actions .cockpit-control",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1118,
+            "line": 1158,
             "property": "font-size",
             "selector": ".phone-message",
             "source": "bridge/cockpit.html",
             "value": "9px"
           },
           {
-            "line": 1119,
+            "line": 1159,
             "property": "font-size",
             "selector": ".phone-note",
             "source": "bridge/cockpit.html",
             "value": "9.5px"
           },
           {
-            "line": 1124,
+            "line": 1164,
             "property": "font-size",
             "selector": ".toast",
             "source": "bridge/cockpit.html",
             "value": "10.5px"
           },
           {
-            "line": 1163,
+            "line": 1203,
             "property": "font-size",
             "selector": ".pane-drag-ghost small",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1174,
+            "line": 1214,
             "property": "font-size",
             "selector": ".pane-float-bar .hint",
             "source": "bridge/cockpit.html",
             "value": "8.5px"
           },
           {
-            "line": 1175,
+            "line": 1215,
             "property": "font-size",
             "selector": ".pane-float-bar button",
             "source": "bridge/cockpit.html",
             "value": "10px"
           },
           {
-            "line": 1184,
+            "line": 1224,
             "property": "font-size",
             "selector": ".pane-out-chip",
             "source": "bridge/cockpit.html",
             "value": "11px"
           },
           {
-            "line": 1189,
+            "line": 1229,
             "property": "font-size",
             "selector": ".pane-out-chip .where",
             "source": "bridge/cockpit.html",
             "value": "8px"
           },
           {
-            "line": 1190,
+            "line": 1230,
             "property": "font-size",
             "selector": ".pane-out-chip .back",
             "source": "bridge/cockpit.html",
@@ -3337,7 +3422,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "84387da07e5bf89ae817251f492dc48b2c4924e0dfe422178783614e6a4a2eaa",
+        "digest": "d1228ba83facf5e54b0feb59e2749799404bf8501b79517471658184d337f73c",
         "expected": 22,
         "records": [
           {
@@ -3390,91 +3475,91 @@
             "value": ".1em"
           },
           {
-            "line": 784,
+            "line": 824,
             "property": "letter-spacing",
             "selector": ".slashmenu .sm-kind",
             "source": "bridge/cockpit.html",
             "value": ".18em"
           },
           {
-            "line": 808,
+            "line": 848,
             "property": "letter-spacing",
             "selector": ".network-note",
             "source": "bridge/cockpit.html",
             "value": ".2em"
           },
           {
-            "line": 954,
+            "line": 994,
             "property": "letter-spacing",
             "selector": ".pane-bottom-jump",
             "source": "bridge/cockpit.html",
             "value": ".12em"
           },
           {
-            "line": 1019,
+            "line": 1059,
             "property": "letter-spacing",
             "selector": ".palette-kind",
             "source": "bridge/cockpit.html",
             "value": ".15em"
           },
           {
-            "line": 1028,
+            "line": 1068,
             "property": "letter-spacing",
             "selector": ".modal-btn",
             "source": "bridge/cockpit.html",
             "value": ".1em"
           },
           {
-            "line": 1045,
+            "line": 1085,
             "property": "letter-spacing",
             "selector": ".settings-kicker",
             "source": "bridge/cockpit.html",
             "value": ".18em"
           },
           {
-            "line": 1048,
+            "line": 1088,
             "property": "letter-spacing",
             "selector": ".settings-section-title",
             "source": "bridge/cockpit.html",
             "value": ".24em"
           },
           {
-            "line": 1052,
+            "line": 1092,
             "property": "letter-spacing",
             "selector": ".settings-row-name",
             "source": "bridge/cockpit.html",
             "value": ".13em"
           },
           {
-            "line": 1092,
+            "line": 1132,
             "property": "letter-spacing",
             "selector": ".phone-badge",
             "source": "bridge/cockpit.html",
             "value": ".14em"
           },
           {
-            "line": 1110,
+            "line": 1150,
             "property": "letter-spacing",
             "selector": ".phone-who",
             "source": "bridge/cockpit.html",
             "value": ".14em"
           },
           {
-            "line": 1114,
+            "line": 1154,
             "property": "letter-spacing",
             "selector": ".phone-field span",
             "source": "bridge/cockpit.html",
             "value": ".12em"
           },
           {
-            "line": 1163,
+            "line": 1203,
             "property": "letter-spacing",
             "selector": ".pane-drag-ghost small",
             "source": "bridge/cockpit.html",
             "value": ".1em"
           },
           {
-            "line": 1189,
+            "line": 1229,
             "property": "letter-spacing",
             "selector": ".pane-out-chip .where",
             "source": "bridge/cockpit.html",
@@ -3499,7 +3584,7 @@
       }
     }
   },
-  "inventory_digest": "d7aaf1af51a6c6bc4cffb21cb90700b3418164facb27efe6e2b0ab2086dacc4a",
+  "inventory_digest": "09e8afc7beebb81c3342f08c5fa3300bbedc3ed3d83102690c7694ef998f3e46",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -3511,9 +3596,9 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "f5d0d106835c8828d1c25474fc7a861fe0dcfc7f41e8cc02df1d00f85737d183",
+  "source_digest": "122a3f4d0caed943d3fa33e6dfb4bf18a1f60e0927064f81c8f87a2111f11584",
   "source_files": {
-    "bridge/cockpit.html": "9bebdf51cf01352fb517bacf46fa44f3d53e4af018b74612c6f63c33cfbfc88d",
+    "bridge/cockpit.html": "d9067438870b6e43c5e110994acfdc0ce99092d1b13d14470056d34170590a01",
     "bridge/mail_view.css": "0fd1dc4ca605a3e49c5742fcc790beff1b9ded955d8eba0b0b0da99ab3afb227",
     "bridge/orrery_view.css": "1ed647e68a0e856403545f04dbfb5d331fb7c4e1b8fef3ccc94d18cfc76d6775"
   },

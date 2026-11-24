@@ -286,6 +286,12 @@
         more.hidden=!row._expandable;more.textContent=expanded?'Show less':'Show more';more.setAttribute('aria-expanded',String(expanded));
       }
     }
+    const broadcasted=new Map();
+    function showBroadcast(byline,count){
+      if(count<2||!byline||byline.querySelector('.conversation-broadcast'))return;
+      const badge=document.createElement('span');badge.className='conversation-broadcast';
+      badge.textContent='Sent to '+count+' agents';byline.append(badge);
+    }
     function renderSubmissions({preserve=true}={}){
       clearTimeout(submissionTimer);submissionTimer=0;
       const paint=()=>{
@@ -318,6 +324,7 @@
           const status=state==='sending'?'Sending…':state==='unmatched'?'Record not matched':state==='late'?'Not recorded yet':'Awaiting record';
           row.dataset.state=state;row.dataset.submissionId=item.id;
           const label=row.querySelector('.conversation-byline');label.title=(item.sending?'Sending to ':'Sent → ')+item.name+' · '+status;
+          if(!item.sending)showBroadcast(label,item.broadcastCount||0);
           const copy={mark:state==='sending'?'◌':state==='unmatched'?'ⓘ':'✓',state:item.sending?status:'Sent · '+status,recipient:' → '+item.name};
           for(const [part,value] of Object.entries(copy)){
             const span=label.querySelector('.conversation-submission-'+part);if(span.textContent!==value)span.textContent=value;
@@ -341,7 +348,7 @@
       if(preserve)changeTail(paint);else paint();
     }
     function clearSubmissions(){
-      submissions=[];sending.clear();observedIds.clear();matchedSubmissions.clear();clearTimeout(submissionTimer);clearTimeout(flashTimer);
+      submissions=[];sending.clear();observedIds.clear();matchedSubmissions.clear();broadcasted.clear();clearTimeout(submissionTimer);clearTimeout(flashTimer);
       flashTimer=0;screen.classList.remove('conversation-just-submitted');renderSubmissions();
     }
     function reconcileSubmissions(incoming,direction,sequence){
@@ -376,7 +383,13 @@
           if(candidates.some(item=>item.text!==candidates[0].text||item.length!==candidates[0].length))candidates=[];
         }
         if(candidates.length){
-          submissions.splice(submissions.indexOf(candidates[0]),1);matchedSubmissions.add(event.id);
+          const receipt=candidates[0];
+          if(receipt.broadcastCount>1){
+            broadcasted.set(event.id,receipt.broadcastCount);
+            const row=rawRows().find(row=>row.dataset.eventId===event.id);
+            showBroadcast(row?.querySelector('.conversation-byline'),receipt.broadcastCount);
+          }
+          submissions.splice(submissions.indexOf(receipt),1);matchedSubmissions.add(event.id);
         }else if(eligible.length){
           // A new user record exists, but we cannot assert which send it is.
           // Keep the receipt without claiming that no record has arrived.
@@ -735,7 +748,7 @@
       const time=document.createElement('time');time.className='conversation-time';
       const date=new Date(event.ts);
       if(Number.isFinite(date.getTime())){time.dateTime=event.ts;time.textContent=date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});time.title=date.toLocaleString();}
-      byline.appendChild(time);article.appendChild(byline);
+      byline.appendChild(time);article.appendChild(byline);showBroadcast(byline,broadcasted.get(event.id)||0);
       if(!['tool','tool_result'].includes(event.kind)){
         const text=document.createElement('div');text.className='conversation-text';
         if(event.role==='assistant'&&root.OrreryConversationMarkdown){
@@ -1070,7 +1083,7 @@
     listen(document,'oc:prompt-sending',event=>{
       const detail=event.detail;
       if(!opened||!enabled||detail?.name!==agent||typeof detail.attemptId!=='string'||typeof detail.text!=='string')return;
-      sending.set(detail.attemptId,{id:detail.attemptId,attemptId:detail.attemptId,name:agent,sending:true,at:Number.isFinite(detail.startedAt)?detail.startedAt:Date.now(),preview:detail.text.slice(0,1000)+(detail.text.length>1000?'…':'')});
+      sending.set(detail.attemptId,{id:detail.attemptId,attemptId:detail.attemptId,name:agent,sending:true,known:new Set(observedIds),nextRead:readSequence+1,at:Number.isFinite(detail.startedAt)?detail.startedAt:Date.now(),preview:detail.text.slice(0,1000)+(detail.text.length>1000?'…':'')});
       renderSubmissions();empty.hidden=true;
     });
     listen(document,'oc:prompt-send-cancelled',event=>{if(sending.delete(event.detail?.attemptId))renderSubmissions();});
@@ -1082,7 +1095,9 @@
         const text=normalizePrompt(detail.text);
         submissions.push({id:detail.id,attemptId:pending?attempt:null,name:agent,at:Number.isFinite(detail.submittedAt)?detail.submittedAt:Date.now(),
           text:text.slice(0,65536),length:text.length,matchable:text.length<=65536,preview:detail.text.slice(0,1000)+(detail.text.length>1000?'…':''),
-          known:new Set(observedIds),uncertain:new Set(),nextRead:readSequence+1});
+          known:detail.broadcastCount>1&&pending?pending.known:new Set(observedIds),uncertain:new Set(),
+          nextRead:detail.broadcastCount>1&&pending?pending.nextRead:readSequence+1,broadcastCount:detail.broadcastCount});
+        if(detail.broadcastCount>1)reconcileSubmissions([...events.values()],'newer',readSequence);
         renderSubmissions();empty.hidden=true;
         screen.classList.add('conversation-just-submitted');clearTimeout(flashTimer);
         flashTimer=setTimeout(()=>{flashTimer=0;screen.classList.remove('conversation-just-submitted');},1800);
