@@ -340,6 +340,7 @@
   // These entities are already present in native CLI records. Decode once,
   // only inside complete known records; never parse their contents as HTML.
   const decodeCommand=text=>text.replace(/&(?:gt|lt|amp|quot|#39);/g,value=>({'&gt;':'>','&lt;':'<','&amp;':'&','&quot;':'"','&#39;':"'"})[value]);
+  const stripCSI=text=>text.replace(/(?:\x1b\[|\x9b)[0-?]*[ -/]*[@-~]/g,'');
   function commandRecord(text){
     const values=Object.create(null);let i=0;
     while(i<text.length){
@@ -356,8 +357,18 @@
       if('bash-input' in values&&keys.length!==1)return null;
       return {shell:true,command:values['bash-input']??null,outputs:keys.filter(key=>key!=='bash-input').map(key=>({label:key.slice(5),text:values[key]}))};
     }
-    if(slash&&values['command-name'])return {command:values['command-name']+(values['command-args']?' '+values['command-args']:''),outputs:[]};
-    if(keys.every(key=>['local-command-stdout','local-command-stderr'].includes(key)))return {command:null,outputs:keys.map(key=>({label:key==='local-command-stdout'?'output':'stderr',text:values[key]}))};
+    if(slash&&values['command-name']){
+      const name=values['command-name'],args=values['command-args']||'';
+      const record={command:name+(args?' '+args:''),outputs:[]};
+      if(name==='/compact')record.compactArgs=args;
+      return record;
+    }
+    if(keys.every(key=>['local-command-stdout','local-command-stderr'].includes(key))){
+      const outputs=keys.map(key=>({label:key==='local-command-stdout'?'output':'stderr',text:stripCSI(values[key])}));
+      const compactOutput=keys.length===1&&keys[0]==='local-command-stdout'&&
+        outputs[0].text.trimStart().split(/\r?\n/,1)[0].trimEnd()==='Compacted (ctrl+o to see full summary)';
+      return {command:null,outputs,compactOutput};
+    }
     if(keys.length===1&&keys[0]==='local-command-caveat')return {command:null,notice:values[keys[0]],outputs:[]};
     return null;
   }

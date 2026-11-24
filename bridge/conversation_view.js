@@ -651,10 +651,20 @@
       for(const group of groups)for(const row of group.rows)toolGroupFor.set(row.dataset.eventId,group);
       // Keep native IDs and nodes as siblings for cursors and reading anchors,
       // while adjacent shell records share one visible heading and boundary.
-      let shellStart=null;
+      let shellStart=null,compactDetail=null;
       for(const row of rawRows()){
         row.classList.remove('conversation-shell-start','conversation-shell-continuation');
-        const event=events.get(row.dataset.eventId),record=event?.role==='user'&&event.kind==='text'?root.OrreryConversationMarkdown?.commandRecord(event.text):null;
+        const event=events.get(row.dataset.eventId),record=event?.role==='user'&&event.kind==='text'?
+          root.OrreryConversationMarkdown?.commandRecord(event.text):null;
+        if(providerLabel==='Claude'&&!event?.truncated&&(record?.compactArgs!==undefined||record?.compactOutput)){
+          row.hidden=true;shellStart=null;
+          if(compactDetail&&record.compactArgs?.trim()&&!compactDetail.querySelector('[data-compact-instructions]')){
+            const instructions=document.createElement('span');instructions.dataset.compactInstructions='';
+            instructions.textContent='Instructions: '+record.compactArgs+'\n\n';compactDetail.prepend(instructions);
+          }
+          continue;
+        }
+        compactDetail=event?.kind==='system'&&event.text==='Context compacted'?row.querySelector('.conversation-system-detail'):null;
         if(!record?.shell){shellStart=null;continue;}
         if(record.command!==null)shellStart=row;
         else if(shellStart){shellStart.classList.add('conversation-shell-start');row.classList.add('conversation-shell-continuation');}
@@ -877,7 +887,11 @@
       if(event.kind==='mail'&&Array.isArray(event.mail)&&root.OrreryConversationMail)return root.OrreryConversationMail.render(event,article,{name:agent,renderPeerAvatar});
       const byline=document.createElement('div');byline.className='conversation-byline';
       const role=document.createElement('span');role.className='conversation-role';
-      const shell=event.role==='user'&&root.OrreryConversationMarkdown?.commandRecord(event.text)?.shell;
+      const command=event.role==='user'&&root.OrreryConversationMarkdown?.commandRecord(event.text);
+      if(providerLabel==='Claude'&&event.kind==='text'&&!event.truncated&&(command?.compactArgs!==undefined||command?.compactOutput)){
+        article.hidden=true;return article;
+      }
+      const shell=command?.shell;
       const user=event.role==='user'&&event.kind==='text'&&!shell;
       const parent=user&&root.OrreryConversationMotion?.promptAuthor(event.text,agent,(getContext()||{}).parent_agent);
       const human=user&&!parent;
