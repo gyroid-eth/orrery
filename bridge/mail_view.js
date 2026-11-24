@@ -581,9 +581,10 @@ function ingest(list,{live=false}={}){
   renderMail({animate:fresh.size>0,fresh});
 }
 function peerHtml(name,fallback,title=''){
+  const label=E(name||fallback);
   const portrait=name?'<span class="mail-peer-avatar" aria-hidden="true" data-mail-peer="'+E(name)+'"></span>':'';
   return '<span class="mail-peer"'+(title?' title="'+E(title)+'"':'')+'>'+portrait+
-    '<span>'+E(name||fallback)+'</span></span>';
+    '<span title="'+label+'">'+label+'</span></span>';
 }
 function routePeople(sender,recipients){
   const destinations=recipients.map(({name,kind})=>peerHtml(name,'No direct recipient',kind==='to'?'':kind.toUpperCase()));
