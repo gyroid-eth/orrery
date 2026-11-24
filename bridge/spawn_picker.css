@@ -63,7 +63,7 @@ html[data-color-theme="light"] #spawnOverlay {
 #spawnTask::placeholder,.spawn-search input::placeholder {color:var(--ink-dim)}
 #spawnForm #spawnDiscardDraft {position:absolute;inset:12px 12px auto auto}
 .spawn-launcher:has(#spawnDiscardDraft:not([hidden])) #spawnTask {padding-inline-end:54px}
-.spawn-status {overflow-wrap:anywhere;margin:0 22px;color:var(--theme-status-alert,#e0655f);font-size:12px;line-height:1.5}
+.spawn-status {overflow-wrap:anywhere;margin:0 22px 12px;color:var(--theme-status-alert,#e0655f);font-size:12px;line-height:1.5}
 .spawn-row {display:flex;align-items:center;gap:8px;padding:10px 12px 12px 16px}
 #spawnForm .spawn-chip,.spawn-tools button,#spawnForm .spawn-icon-button {
   display:inline-flex;align-items:center;justify-content:center;gap:8px;height:34px;

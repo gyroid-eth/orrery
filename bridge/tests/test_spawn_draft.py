@@ -1,6 +1,8 @@
 import json
 import time
 
+import pytest
+
 from test_cockpit_tour import tour_browser
 
 
@@ -159,3 +161,79 @@ def test_codex_browser_preflight_reason_is_visible_from_the_first_spawn_status(t
     assert result["status"] == result["notice"]
     assert "chrome-devtools" in result["status"] and "config.toml" in result["status"]
     assert result["open"] and result["draft"]
+
+
+@pytest.mark.parametrize(("verdict", "reopen"), [("timeout", True), ("ready", True), ("timeout", False)],
+                         ids=["reopen-timeout", "reopen-ready", "tools-changed"])
+def test_previous_launch_does_not_interrupt_the_next_draft(tour_browser, verdict, reopen):
+    client, evaluate = tour_browser
+    client.call("Emulation.setEmulatedMedia", features=[dict(name="prefers-reduced-motion", value="reduce")])
+    evaluate(BOOTSTRAP)
+    evaluate(FILL)
+    result = evaluate("""(async()=>{
+      const originalFetch=window.fetch,originalNow=Date.now;
+      let replyStatus,offset=0;
+      const requestStarted=new Promise(resolve=>{
+        window.fetch=(input,options)=>{
+          if(input==='/telemetry/spawn')return Promise.resolve(Response.json({
+            ok:true,pending:true,child_name:'QuietCurie',verdict_deadline_seconds:170}));
+          if(input.startsWith('/telemetry/spawn-status?')){
+            return new Promise(reply=>{replyStatus=reply;resolve();});
+          }
+          return originalFetch(input,options);
+        };
+      });
+      Date.now=()=>originalNow()+offset;
+      const box=()=>{const {x,y}=spawnSubmit.getBoundingClientRect();return [x,y];};
+      try{
+        const completion=submitSpawn(new Event('submit'));
+        await requestStarted;
+        if(REOPEN_MODAL){closeSpawnModal();openSpawnModal();await loadSpawnCatalog();}
+        else spawnBrowserUse.click();
+        await new Promise(r=>setTimeout(r,160));
+        const editable=!spawnTask.readOnly&&spawnSubmit.disabled;
+        spawnTask.value='A different draft';
+        spawnTask.dispatchEvent(new Event('input',{bubbles:true}));
+        spawnNameButton.focus();
+        const before=box(),draft=localStorage.getItem(SPAWN_DRAFT_KEY),focusBefore=document.activeElement.id;
+        offset=170001;
+        replyStatus(Response.json({ok:true,state:VERDICT==='ready'?'ready':'launching'}));
+        await completion;
+        return {editable,before,after:box(),status:spawnStatus.textContent,toast:toastEl.textContent,
+          open:spawnOverlay.classList.contains('on'),focusBefore,focusAfter:document.activeElement.id,
+          preserved:localStorage.getItem(SPAWN_DRAFT_KEY)===draft,canSubmit:!spawnSubmit.disabled};
+      }finally{window.fetch=originalFetch;Date.now=originalNow;}
+    })()""".replace("VERDICT", json.dumps(verdict)).replace("REOPEN_MODAL", json.dumps(reopen)))
+    assert result["editable"] and result["open"]
+    assert result["focusBefore"] == result["focusAfter"] == "spawnNameButton", result
+    assert result["preserved"] and result["canSubmit"]
+    assert result["before"] == result["after"]
+    assert "No launch result" not in result["status"]
+    if verdict == "timeout":
+        assert "Previous launch (QuietCurie)" in result["toast"]
+        assert "No launch result after 170s" in result["toast"]
+    else:
+        assert result["toast"] == ""
+
+
+@pytest.mark.parametrize("width", [1600, 390])
+def test_current_launch_error_wraps_below_the_button(tour_browser, width):
+    client, evaluate = tour_browser
+    client.call("Emulation.setDeviceMetricsOverride", width=width, height=844, deviceScaleFactor=1, mobile=False)
+    client.call("Emulation.setEmulatedMedia", features=[dict(name="prefers-reduced-motion", value="reduce")])
+    evaluate(BOOTSTRAP)
+    evaluate(FILL)
+    result = evaluate("""(async()=>{
+      const originalFetch=window.fetch;
+      window.fetch=(input,options)=>input.startsWith('/telemetry/spawn-status?')
+        ?Promise.resolve(Response.json({ok:true,state:'failed',error:'The launcher reported a configuration problem. '.repeat(5)}))
+        :originalFetch(input,options);
+      const box=()=>{const {x,y,bottom}=spawnSubmit.getBoundingClientRect();return {x,y,bottom};};
+      const before=box();
+      await submitSpawn(new Event('submit'));
+      const status=spawnStatus.getBoundingClientRect();
+      return {before,after:box(),statusTop:status.top,statusHeight:status.height,status:spawnStatus.textContent};
+    })()""")
+    assert result["before"] == result["after"]
+    assert result["statusTop"] >= result["after"]["bottom"]
+    assert result["statusHeight"] > 20 and "configuration problem" in result["status"]

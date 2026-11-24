@@ -1671,7 +1671,6 @@
       <button class="spawn-icon-button" id="spawnDiscardDraft" type="button" title="Discard draft" aria-label="Discard draft" hidden>
         <svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-reset"/></svg>
       </button>
-      <div class="spawn-status" id="spawnStatus" role="alert" hidden></div>
       <div class="spawn-row">
         <button class="spawn-chip spawn-name-chip" id="spawnNameButton" type="button" aria-expanded="false" aria-controls="spawnNameSheet" title="Agent name" aria-label="Agent name">
           <img id="ncPortrait" alt="" hidden><span id="ncDiceFace"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-dice"/></svg></span>
@@ -1689,6 +1688,7 @@
         </div>
         <button id="spawnSubmit" type="submit" title="Launch (⌘↵)" disabled>Launch<span id="spawnLaunchFill" aria-hidden="true"></span></button>
       </div>
+      <div class="spawn-status" id="spawnStatus" role="alert" hidden></div>
     </div>
     <section class="spawn-sheet" id="spawnNameSheet" aria-label="Agent name" hidden>
       <div class="spawn-sheet-in">
@@ -4165,9 +4165,9 @@
       }
     }
   },
-  "inventory_digest": "4a9ea14fdd81255c54dcc8756a0dec7f73842f133124365bdb3e69c2dfcc53e5",
+  "inventory_digest": "2f0c7dc0e0495805924a54f19b75f3bb02d272d3ffd17c75a389d12cbe83d58c",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "3e42b86b3be782a3aac00cd2131acafd5bbf2f884f2c4a23d02eba0b3f110ae0",
+  "source_digest": "4af8b1e4ac447196d00ec62e891d63c7ee5aee9c2069262199bade5846610c18",
   "surface": "cockpit",
   "version": 1
 }
@@ -10295,7 +10295,7 @@ const spawnNameButton=document.getElementById('spawnNameButton');
 const spawnModelButton=document.getElementById('spawnModelButton');
 const spawnNameSheet=document.getElementById('spawnNameSheet');
 const spawnModelSheet=document.getElementById('spawnModelSheet');
-let spawnBusy=false,toastTimer=null,spawnLastFocus=null,spawnProblem='',spawnResumeDraft=false;
+let spawnAttempt=null,spawnFormRevision=0,toastTimer=null,spawnLastFocus=null,spawnProblem='';
 let spawnOpenSheet=null,spawnOpenChip=null;
 const spawnReducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 const spawnSheetAnimations=new WeakMap();
@@ -10356,8 +10356,9 @@ function dismissSpawnSheet(restoreFocus=false){
   sheet.inert=true;
   morphSpawnSheet(sheet,chip,false);
 }
+function spawnFormIsBusy(){return spawnAttempt?.revision===spawnFormRevision;}
 function toggleSpawnSheet(sheet,chip,focus){
-  if(spawnBusy)return;
+  if(spawnFormIsBusy())return;
   if(spawnOpenSheet===sheet){dismissSpawnSheet(true);return;}
   dismissSpawnSheet();
   spawnOpenSheet=sheet;spawnOpenChip=chip;
@@ -10406,7 +10407,7 @@ function renderSpawnDirPath(){
 }
 function openSpawnDirPicker(){
   if(spawnOpenSheet===spawnDirSheet){dismissSpawnSheet(true);return;}
-  if(spawnBusy)return;
+  if(spawnFormIsBusy())return;
   spawnDirSearch.value='';spawnDirBrowsePath='';spawnDirChildren=[];
   dirCrumbs.replaceChildren();spawnDirUse.disabled=true;
   updateSpawnDirSearch();
@@ -10515,6 +10516,8 @@ const CODEX_BROWSER_REQUIREMENT='Codex Browser requires [mcp_servers.chrome-devt
 let spawnToolsRoute=null;
 for(const control of spawnToolSwitches){
   control.addEventListener('click',()=>{
+    // The submitted tools belong to the launch already waiting for a result.
+    if(spawnFormIsBusy())++spawnFormRevision;
     control.setAttribute('aria-checked',String(control.getAttribute('aria-checked')!=='true'));
     spawnProblem='';updateSpawnAvailability();saveSpawnDraft();
   });
@@ -10770,8 +10773,12 @@ function updateSpawnAvailability(){
   const browserNotice=!spawnTools.hidden&&SpawnPicker.harnessKey(selHarness)==='codex'&&
     spawnBrowserUse.getAttribute('aria-checked')==='true'?CODEX_BROWSER_REQUIREMENT:'';
   const message=spawnProblem||issue||browserNotice;
-  spawnSubmit.disabled=spawnBusy||!spawnTask.value.trim()||!harness||Boolean(missingEffort);
-  spawnDiscardDraft.disabled=spawnBusy;spawnDiscardDraft.hidden=spawnShownDraft===null;
+  const busy=spawnFormIsBusy();
+  if(busy)spawnForm.setAttribute('aria-busy','true');
+  else spawnForm.removeAttribute('aria-busy');
+  spawnTask.readOnly=busy;
+  spawnSubmit.disabled=Boolean(spawnAttempt)||!spawnTask.value.trim()||!harness||Boolean(missingEffort);
+  spawnDiscardDraft.disabled=busy;spawnDiscardDraft.hidden=spawnShownDraft===null;
   spawnStatus.textContent=message;spawnStatus.title=message;spawnStatus.hidden=!message;
 }
 spawnModelSearch.addEventListener('input',()=>{
@@ -11138,7 +11145,7 @@ function writeSpawnDraft(raw){
   }catch(_){/* keep the draft in the current window when storage is denied */}
 }
 function saveSpawnDraft(){
-  if(!spawnOverlay.classList.contains('on')||spawnBusy)return;
+  if(!spawnOverlay.classList.contains('on')||spawnFormIsBusy())return;
   const selection=spawnPendingSelection||{
     family:selFamily,provider:selProvider,model:selModel,effort:selEffort,harness:selHarness,
     urlIndex:selUrlIndex,urlKey:/^[a-f0-9]{64}$/.test(selUrlKey)?selUrlKey:null,
@@ -11192,13 +11199,12 @@ function prepareSpawnForm(raw,task=''){
   spawnModelSearch.value='';
   renderSpawnTools();renderSpawnModelChip();updateNameCard();
 }
-function clearSpawnDraft(){
+function clearSpawnDraft(raw=spawnShownDraft){
   // A later draft saved in another tab belongs to that edit.
-  if(readSpawnDraft()===spawnShownDraft)writeSpawnDraft(null);
-  spawnShownDraft=null;
+  if(readSpawnDraft()===raw)writeSpawnDraft(null);
 }
 spawnDiscardDraft.addEventListener('click',()=>{
-  if(spawnBusy)return;
+  if(spawnFormIsBusy())return;
   clearSpawnDraft();dismissSpawnSheet();prepareSpawnForm(null);
   if(spawnCatalog){renderProviderTabs();renderAgentStrip();renderDirs();}
   sizeSpawnTask();spawnTask.focus({preventScroll:true});
@@ -11212,17 +11218,15 @@ function openSpawnModal({from=document.getElementById('newAgentBtn').getBounding
     spawnSheetAnimations.delete(sheet);sheet.hidden=true;
   }
   spawnLastFocus=restoreFocus;
-  const openingFresh=!spawnBusy&&!spawnResumeDraft;
-  if(openingFresh)prepareSpawnForm(readSpawnDraft(),task);
-  spawnResumeDraft=false;
+  prepareSpawnForm(readSpawnDraft(),task);
   updateSpawnAvailability();
   const origin=spawnAnchor(from);
   spawnLauncher.style.setProperty('--spawn-origin-x',(origin.x-spawnLauncher.offsetLeft)+'px');
   spawnLauncher.style.setProperty('--spawn-origin-y',(origin.y-spawnLauncher.offsetTop)+'px');
   spawnOverlay.classList.add('on');spawnOverlay.setAttribute('aria-hidden','false');
-  if(openingFresh&&task&&spawnShownDraft===null)saveSpawnDraft();
+  if(task&&spawnShownDraft===null)saveSpawnDraft();
   sizeSpawnTask();
-  if(!spawnBusy)loadSpawnCatalog().then(()=>{
+  loadSpawnCatalog().then(()=>{
     if(selFamily==='local'){restoreSpawnModelSearch();renderLocalModels();}
     updateNameCard();
   });
@@ -11234,6 +11238,7 @@ function closeSpawnModal(){
   spawnCatalogLoader.stop();++spawnDirDefaultEpoch;
   dismissSpawnSheet();
   if(!spawnOverlay.classList.contains('on'))return;
+  ++spawnFormRevision;
   spawnOverlay.classList.remove('on');spawnOverlay.setAttribute('aria-hidden','true');
   if(spawnLastFocus&&spawnLastFocus.isConnected)spawnLastFocus.focus({preventScroll:true});
   else document.activeElement?.blur();
@@ -11345,7 +11350,7 @@ function fillSpawnButton(event){
   fill.animate([{transform:'scale(0)',opacity:1},{transform:'scale(30)',opacity:0}],{duration:520,easing:'ease-out'});
 }
 async function submitSpawn(event){
-  event.preventDefault();if(spawnBusy||!spawnTask.value.trim())return;
+  event.preventDefault();if(spawnAttempt||!spawnTask.value.trim())return;
   const p=providerById(selProvider),model=selectedSpawnModel();
   if(!p||!model||!SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available)||spawnExplicitEffortMissing(p,selModel))return;
   const payload=spawnPayloadFromForm();
@@ -11356,9 +11361,10 @@ async function submitSpawn(event){
     updateSpawnAvailability();spawnTask.focus();return;
   }
   const origin=spawnOverlay.classList.contains('on')?spawnAnchor(spawnSubmit.getBoundingClientRect()):null;
+  const attempt={revision:spawnFormRevision,draft:spawnShownDraft,scientist:selScientist};
+  let childName=payload.name;
   dismissSpawnSheet();
-  spawnBusy=true;spawnProblem='';spawnForm.setAttribute('aria-busy','true');
-  spawnTask.readOnly=true;updateSpawnAvailability();
+  spawnAttempt=attempt;spawnProblem='';updateSpawnAvailability();
   try{
     const response=await fetch('/telemetry/spawn',{
       method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,async:true}),
@@ -11368,23 +11374,29 @@ async function submitSpawn(event){
     if(!response.ok||!result.ok)throw new Error(spawnFailureReason(result,`HTTP ${response.status}`));
     if(SpawnPicker.locality(p,model)==='local')SpawnPicker.remember(spawnViewerStorage,SPAWN_RECENT_STORAGE_KEY,
       JSON.stringify([p.id,model.id,...(Number.isInteger(model.url_index)?[model.url_index]:[]),...(model.url_key?[model.url_key]:[])]));
-    const childName=result.child_name||result.tmux_session;
+    childName=result.child_name||result.tmux_session;
     if(result.pending)await watchSpawnLaunch(childName,result.verdict_deadline_seconds);
     const normalizedName=String(childName||'').toLowerCase();
-    const scientist=selScientist||(spawnCatalog?.naming?.scientists||[])
+    const scientist=attempt.scientist||(spawnCatalog?.naming?.scientists||[])
       .find(name=>normalizedName.endsWith(name.toLowerCase()));
     if(scientist)SpawnPicker.remember(spawnViewerStorage,SPAWN_NAME_RECENT_KEY,scientist);
-    spawnResumeDraft=false;clearSpawnDraft();
-    closeSpawnModal();
-    if(childName)flySpawnPortrait(childName,origin);
+    clearSpawnDraft(attempt.draft);
+    if(attempt.revision===spawnFormRevision){
+      spawnShownDraft=null;closeSpawnModal();
+      if(childName)flySpawnPortrait(childName,origin);
+    }
     document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}));
   }catch(error){
     const reason=String(error?.message||'Could not launch').replace(/\s+/g,' ').trim();
-    spawnProblem=/[.!?]$/.test(reason)?reason:`${reason}. Check launch settings and retry.`;
-    spawnResumeDraft=!spawnOverlay.classList.contains('on');
-    if(!spawnResumeDraft)spawnTask.focus({preventScroll:true});
+    const message=/[.!?]$/.test(reason)?reason:`${reason}. Check launch settings and retry.`;
+    if(attempt.revision===spawnFormRevision){
+      spawnProblem=message;
+      if(spawnOverlay.classList.contains('on'))spawnTask.focus({preventScroll:true});
+    }else{
+      showToast(`Previous launch${childName?` (${childName})`:''} · ${message}`,true);
+    }
   }finally{
-    spawnBusy=false;spawnTask.readOnly=false;spawnForm.removeAttribute('aria-busy');
+    spawnAttempt=null;
     updateSpawnAvailability();
   }
 }
