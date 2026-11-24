@@ -430,7 +430,10 @@
           chip.title='Preview current '+(ref.kind==='image'?'image':'file');chip.dataset.refId=ref.id;chips.appendChild(chip);
           chip.setAttribute('aria-pressed',String(selected?.id===ref.id));
         }
-        if(chips.childElementCount)article.appendChild(chips);
+        if(chips.childElementCount){
+          const body=article.querySelector(':scope > .conversation-reference-body')||article;
+          body.appendChild(chips);
+        }
       }
       if(typeof event.diff==='string'&&event.diff){
         const details=create('details','conversation-diff');

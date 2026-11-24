@@ -34,12 +34,12 @@ def project(item, index=0):
     return codex_event(line(item), index)
 
 
-def model(events, provider):
+def model(events, provider, **options):
     script = """const fs=require('fs'),m=require(process.argv[1]),data=JSON.parse(fs.readFileSync(0,'utf8'));
-const out=m.collect(data.events,data.provider);
+const out=m.collect(data.events,data.provider,data.options);
 console.log(JSON.stringify({groups:out.groups,consumed:[...out.consumed]}));"""
     result = subprocess.run(['node', '-e', script, str(JS)],
-        input=json.dumps(dict(events=events, provider=provider)), text=True,
+        input=json.dumps(dict(events=events, provider=provider, options=options)), text=True,
         capture_output=True, timeout=15)
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)
@@ -237,6 +237,25 @@ def test_consecutive_claude_outputs_do_not_create_empty_intermediate_runs():
 def test_other_providers_keep_existing_tool_groups(provider):
     out=model([dict(id='tool',kind='tool',step={'id':opaque('call'),'phase':'complete'})],provider)
     assert out == {'groups':[], 'consumed':[]}
+
+
+def test_codex_raw_request_and_native_completion_share_one_step_by_id():
+    start = project(dict(type='event_msg', payload=dict(type='task_started', turn_id='turn-one')), 0)
+    raw = project(dict(type='response_item', payload=dict(
+        type='function_call', name='exec_command', call_id='opaque-fixture', arguments='{}')), 1)
+    complete = project(native('CommandExecution', command=['pytest'], status='completed',
+                              call_id='opaque-fixture'), 2)
+    assert complete['tool_call_id'] == raw['tool_call_id'] == opaque('opaque-fixture')
+    assert 'opaque-fixture' not in json.dumps([raw, complete])
+    pending = model([start, raw], 'Codex', working=True)
+    assert pending['consumed'] == ['0', '1']
+    for working in [True, False]:
+        finished = model([start, raw, complete], 'Codex', working=working)
+        assert set(finished['consumed']) == {'0', '1', '2'}
+        assert finished['groups'][0]['anchor'] == '1'
+        [step] = finished['groups'][0]['steps']
+        assert step['id'] == pending['groups'][0]['steps'][0]['id']
+        assert step['status'] == 'done'
 
 
 def test_target_summaries_do_not_copy_raw_arguments_or_commands():

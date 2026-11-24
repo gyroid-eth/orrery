@@ -23,7 +23,7 @@ from conversation_images import hermes_content, native_image
 from conversation_steps import claude_call, claude_result, mark_step_boundary
 
 from conversation_history import (AGY_PROGRAMS, HistoryUnavailable, MAX_SCAN, MAX_TEXT, PAGE_SIZE,
-    open_bound_transcript, assert_transcript_identity, read_codex_page, recorded_model)
+    open_bound_transcript, assert_transcript_identity, conversation_binding, read_codex_page, recorded_model)
 
 try:
     import zstandard as zstd
@@ -370,8 +370,9 @@ class Reader:
         self.row,self.stream,self.path=row,stream,row['transcript_path']
         self.provider=provider(row);self.sid=row.get('history_session_id');self.cwd=None;self.db=None;self.frames={};self.data_start=(0,0,0);self.last_fingerprint=None
         st=os.fstat(stream.fileno())
+        binding=conversation_binding(row) if self.provider=='claude' else row.get('history_receipt_ts')
         self.file_id=hashlib.sha256(json.dumps([self.path,st.st_dev,st.st_ino,self.sid,
-             row.get('history_receipt_ts'),self.provider]).encode()).hexdigest()[:24]
+             binding,self.provider]).encode()).hexdigest()[:24]
         self.size=st.st_size
         if self.provider=='codex':return
         if not isinstance(self.sid,str) or not self.sid or len(self.sid)>256:raise HistoryUnavailable('invalid_binding')

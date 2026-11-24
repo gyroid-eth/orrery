@@ -260,7 +260,8 @@ def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, rout
     assert enter == '\r'
 
 
-def test_reader_shows_selected_attachments_before_and_after_recording(cockpit,tmp_path):
+@pytest.mark.parametrize('variant', ['plain', 'quoted', 'quoted-attachments-only'])
+def test_reader_shows_selected_attachments_before_and_after_recording(cockpit,tmp_path,variant):
     from test_conversation_submissions import prepare
     from test_conversation_providers import claude,line,row
     from test_conversation_input_images import decorate,png
@@ -271,8 +272,13 @@ def test_reader_shows_selected_attachments_before_and_after_recording(cockpit,tm
     paths=[save_image(tmp_path,png_data,label='Comparison.png'),
            save_file(tmp_path,{'format':'md','data':base64.b64encode(b'# File example').decode()},label='Notes.md')]
     paths=['./'+str(Path(path).relative_to(tmp_path)) for path in paths]
-    text='Compare these two attachments.'
-    sent=text+'\n\n'+'\n'.join('@'+path for path in paths)
+    text='' if variant=='quoted-attachments-only' else 'Compare these two attachments.'
+    quoted=variant!='plain'
+    if quoted:
+        assert js("""readerReply.add({agent:'ReviewFixture',role:'user',eventId:'old',
+          text:'Compare against this earlier message.',isCurrent:()=>true})""")
+    body='\n\n'.join(part for part in (text,'\n'.join('@'+path for path in paths)) if part)
+    sent=js('readerReply.compose('+json.dumps(body)+')')
     native=tmp_path/'native.jsonl'
     native.write_bytes(line(dict(claude('user',sent,cwd=str(tmp_path)),timestamp=js('new Date(clock+1000).toISOString()'))))
     binding=row(native,'claude-code')
@@ -286,9 +292,15 @@ def test_reader_shows_selected_attachments_before_and_after_recording(cockpit,tm
         if(!String(url).includes('/telemetry/prompt-attachment'))return base(url,options);
         uploads.push(JSON.parse(options.body));return Promise.resolve(Response.json({path:savedFixturePaths[uploads.length-1]}));
       };
+      window.attachmentAttempts=[];
+      document.addEventListener('oc:prompt-sending',event=>attachmentAttempts.push(event.detail));
       window.send=packet=>{
         packets.push(packet);
-        if(packet.inputAck)queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'}));
+        if(packet.inputAck){
+          const acknowledge=()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'});
+          if(packet.data===String.fromCharCode(13))window.finishAttachmentSend=acknowledge;
+          else queueMicrotask(acknowledge);
+        }
         return true;
       };
       const transfer=new DataTransfer();
@@ -297,11 +309,25 @@ def test_reader_shows_selected_attachments_before_and_after_recording(cockpit,tm
       currentAgents[0].program='claude-code';
       document.querySelector('.promptbar').dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));
       promptInput.value="""+json.dumps(text)+""";void sendPrompt();""")
-    wait("reader.querySelector('.conversation-submission img')?.naturalWidth===640&&!promptBusy")
-    assert js("reader.querySelector('.conversation-submission').textContent.includes('Notes.md')")
-    assert not js("reader.querySelector('.conversation-submission').textContent.includes('.orrery-input-')")
+    wait("typeof finishAttachmentSend==='function'&&reader.querySelector('.conversation-submission .conversation-inline-image img')?.naturalWidth===640")
+    js("window.attachmentBubble=reader.querySelector('.conversation-submission');"
+       "window.pendingThumbnail=attachmentBubble.querySelector('.conversation-inline-image img').src")
+    assert js("attachmentBubble.dataset.state")=='sending'
+    assert js("attachmentAttempts[0].origin.width>0")
+    assert js("attachmentBubble.querySelector('.conversation-submission-text').textContent")==text
+    assert js("attachmentBubble.textContent.includes('Notes.md')")
+    assert not js("attachmentBubble.textContent.includes('.orrery-input-')")
+    if quoted:
+        assert js("attachmentBubble.querySelector('.conversation-reference-quote').textContent")=='Compare against this earlier message.'
+        assert js("attachmentBubble.querySelector('.conversation-reference-body .conversation-file')!==null")
+        assert js("attachmentBubble.querySelector('.conversation-reference-body .conversation-inline-image img').naturalWidth")==640
+    else:
+        assert not js("attachmentBubble.querySelector('.conversation-reference-link')")
+    js('finishAttachmentSend()')
+    wait("!promptBusy&&attachmentBubble.dataset.state==='awaiting'")
+    assert js("attachmentBubble===reader.querySelector('.conversation-submission')")
     assert js("uploads.map(upload=>upload.label)")==['Comparison.png','Notes.md']
-    assert js(r"packets.find(packet=>packet.data?.startsWith('\x1b[200~Compare')).data.slice(6,-6)")==sent+' '
+    assert js("packets.find(packet=>packet.data?.includes('.orrery-input-images/')).data.slice(6,-6)")==sent+' '
     capture=os.environ.get('ORRERY_ATTACHMENT_CAPTURE_DIR')
     def save_capture(name):
         if os.environ.get('CDP_PDF_ON_TIMEOUT'):
@@ -311,15 +337,23 @@ def test_reader_shows_selected_attachments_before_and_after_recording(cockpit,tm
         else:
             result=client.call('Page.captureScreenshot',format='png')
             suffix='.png'
-        (Path(capture)/('desktop-'+name+suffix)).write_bytes(base64.b64decode(result['data']))
+        (Path(capture)/(variant+'-'+name+suffix)).write_bytes(base64.b64decode(result['data']))
     if capture:save_capture('pending')
     js('window.verifiedAttachments='+json.dumps(events)+';window.verifiedPreviews='+json.dumps(previews)+';window.verifiedThumb='+json.dumps(thumbnail)+';'
        'OrreryConversationSource.Source.prototype.reference=async(ref,{thumbnail}={})=>thumbnail?verifiedThumb:verifiedPreviews[ref];'
        'OrreryConversationSource.Source.prototype.read=async()=>({provider:"claude",mode:"cursor",events:[oldRecord,...verifiedAttachments],after:"end"});'
        'conversationView.refresh()')
     wait("reader.querySelector('.conversation-event .conversation-inline-image img')?.naturalWidth===320&&!reader.querySelector('.conversation-submission')")
+    assert not js("fetch(pendingThumbnail).then(()=>true,()=>false)")
     assert not js("reader.querySelector('.conversation-event .conversation-input-images').parentElement.textContent.includes('.orrery-input-')")
-    assert js("reader.querySelector('.conversation-event button.conversation-file').textContent.includes('Notes.md')")
+    chips=js("Array.from(reader.querySelectorAll('.conversation-event button.conversation-file'),"+
+             "chip=>[chip.dataset.refId,chip.textContent])")
+    assert any(ref==document['id'] and 'Notes.md' in label for ref,label in chips),chips
+    if quoted:
+        assert js("reader.querySelector('.conversation-event .conversation-reference-quote').textContent")=='Compare against this earlier message.'
+        assert js("reader.querySelector('.conversation-event .conversation-reference-body .conversation-text').textContent")==text
+        assert js("reader.querySelector('.conversation-event .conversation-reference-body "
+                  "button[data-ref-id="+json.dumps(document['id'])+"]')!==null")
     if capture:
         for theme in ('dark','light'):
             js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')

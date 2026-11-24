@@ -4162,9 +4162,9 @@
       }
     }
   },
-  "inventory_digest": "c8ebea3b81d1ccbec3a851093b026c66d8c522d2bbca0b3789d13c3bee9fa12b",
+  "inventory_digest": "48b8bc7f6cceba419a6182f3357790da36a86e477572049fdd2dd39695ce7481",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "e84ec1e2b0bd1af865db662130439c1de4ece39e6941a94779ddb0b33a4f7655",
+  "source_digest": "b0abec067a7860983e73e277655a11887f454d229ee514d2dd26df0f67c2d555",
   "surface": "cockpit",
   "version": 1
 }
@@ -11654,7 +11654,8 @@ function trackPrompt(target,text,displayText=text,attachments=[]){
   const submittedAt=Date.now();
   const attemptId=submittedAt+':attempt:'+(++promptAttemptSequence);
   const notify=(type,detail={})=>document.dispatchEvent(new CustomEvent(type,{detail:{attemptId,name:target.session,...detail}}));
-  notify('oc:prompt-sending',{text,displayText,attachments,startedAt:submittedAt});
+  const {top,right,width}=promptInput.getBoundingClientRect();
+  notify('oc:prompt-sending',{text,displayText,attachments,startedAt:submittedAt,origin:{top,right,width}});
   return {
     cancel:()=>notify('oc:prompt-send-cancelled'),
     publish:count=>{
@@ -12174,9 +12175,8 @@ const conversationView=(()=>{
         getTarget:namedComposerTarget,onError:text=>showToast(text,true)});
       readerActivity=OrreryReaderActivity.mount({getPanes:()=>panes.values(),
         getProgram:pane=>currentAgents.find(agent=>agent.name===pane.session)?.program,
-        getBinding:pane=>{const agent=currentAgents.find(agent=>agent.name===pane.session);
-          return JSON.stringify([pane.session,agent?.history_binding,agent?.history_session_id,
-            agent?.native_session_id,agent?.history_receipt_ts,agent?.transcript_path,agent?.created]);}});
+        getBinding:pane=>OrreryConversationSource.bindingIdentity(
+          currentAgents.find(agent=>agent.name===pane.session)||{name:pane.session})});
       await asset('link','href','reader_approval.css');
       await asset('script','src','reader_approval.js');
       readerApproval=OrreryReaderApproval.mount({
