@@ -340,6 +340,19 @@
         more.hidden=!row._expandable;more.textContent=expanded?'Show less':'Show more';more.setAttribute('aria-expanded',String(expanded));
       }
     }
+    const broadcasted=new Map();
+    function showBroadcast(container,count,after=null){
+      if(count<2||!container||container.querySelector('.conversation-broadcast'))return;
+      const badge=document.createElement(after?'div':'span');badge.className='conversation-broadcast';
+      badge.textContent='Sent to '+count+' agents';
+      if(after)after.after(badge);else container.append(badge);
+    }
+    function showRecordedBroadcast(row,count){
+      if(!row?.classList.contains('conversation-human')||count<2)return;
+      const content=row.querySelector(':scope > .conversation-reference-body')||row;
+      const text=content.querySelector(':scope > .conversation-text');
+      if(text)showBroadcast(content,count,text);
+    }
     function renderSubmissions({preserve=true}={}){
       clearTimeout(submissionTimer);submissionTimer=0;
       const paint=()=>{
@@ -374,6 +387,7 @@
           const status=state==='sending'?'Sending…':state==='unmatched'?'Record not matched':state==='late'?'Not recorded yet':'Awaiting record';
           row.dataset.state=state;row.dataset.submissionId=item.id;
           const label=row.querySelector('.conversation-byline');label.title=(item.sending?'Sending to ':'Sent → ')+item.name+' · '+status;
+          if(!item.sending)showBroadcast(label,item.broadcastCount||0);
           const copy={mark:state==='sending'?'◌':state==='unmatched'?'ⓘ':'✓',state:item.sending?status:'Sent · '+status,recipient:' → '+item.name};
           for(const [part,value] of Object.entries(copy)){
             const span=label.querySelector('.conversation-submission-'+part);if(span.textContent!==value)span.textContent=value;
@@ -398,7 +412,7 @@
       if(preserve)changeTail(paint);else paint();
     }
     function clearSubmissions(){
-      submissions=[];sending.clear();observedIds.clear();matchedSubmissions.clear();clearTimeout(submissionTimer);clearTimeout(flashTimer);
+      submissions=[];sending.clear();observedIds.clear();matchedSubmissions.clear();broadcasted.clear();clearTimeout(submissionTimer);clearTimeout(flashTimer);
       flashTimer=0;screen.classList.remove('conversation-just-submitted');renderSubmissions();
     }
     function reconcileSubmissions(incoming,direction,sequence){
@@ -433,7 +447,13 @@
           if(candidates.some(item=>item.text!==candidates[0].text||item.length!==candidates[0].length))candidates=[];
         }
         if(candidates.length){
-          submissions.splice(submissions.indexOf(candidates[0]),1);matchedSubmissions.add(event.id);
+          const receipt=candidates[0];
+          if(receipt.broadcastCount>1){
+            broadcasted.set(event.id,receipt.broadcastCount);
+            const row=rawRows().find(row=>row.dataset.eventId===event.id);
+            showRecordedBroadcast(row,receipt.broadcastCount);
+          }
+          submissions.splice(submissions.indexOf(receipt),1);matchedSubmissions.add(event.id);
         }else if(eligible.length){
           // A new user record exists, but we cannot assert which send it is.
           // Keep the receipt without claiming that no record has arrived.
@@ -475,7 +495,7 @@
     let layoutTimer=0,layoutFrame=0,layoutPending=false,restoring=false,userScrolling=false,layoutStarted=0;
     panel.dataset.conversationLayout="idle";
     let contextKey='',boundContext={},paused=false,retainedBytes=0,providerLabel='Codex',followPending=false,jumpTimer=0;
-    let liveRow=null,liveSample=null,consumedLiveId=null,seenLiveText='';
+    let liveRow=null,liveSample=null,consumedLiveId=null,seenLiveText='',lastReplyPoll=null;
     const assistantText=event=>event.role==='assistant'&&event.kind==='text'&&event.variant!=='update';
     const liveMatches=(event,sample)=>assistantText(event)&&
       event.text.replace(/\s+/gu,' ').trim().startsWith(sample.text.replace(/\s+/gu,' ').trim());
@@ -543,7 +563,8 @@
       paintMessage();
     }
     function modeMessage(text){if(!text&&document.activeElement===modeInfo&&opened)scroll.focus({preventScroll:true});modeInfo.title=text;modeInfo.setAttribute('aria-label',text);paintStatus();}
-    function stop(keepFollow=false){motion?.stop();clearReferenceFlash();referenceJump=null;clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;sessionReloadAttempted=false;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=holding=false;cancelEarlier();if(!keepFollow)followPending=false;}
+    function resetReplyMotion(){lastReplyPoll=null;motion?.stop();}
+    function stop(keepFollow=false){resetReplyMotion();clearReferenceFlash();referenceJump=null;clearTimeout(timer);clearTimeout(jumpTimer);timer=jumpTimer=0;sessionReloadAttempted=false;endTemporary();if(controller)controller.abort();controller=null;generation++;busy=holding=false;cancelEarlier();if(!keepFollow)followPending=false;}
     function clear({keepSubmissions=false}={}){hideSelection();closeNotice();noticeState={text:'',label:''};endTemporary();tablePositions.clear();toolGroups=[];toolGroupFor.clear();stepView?.reset();if(!keepSubmissions)clearSubmissions();lastPosition=null;clearTimeout(jumpTimer);jumpTimer=0;preview?.close();preview?.resetInline();events.clear();keepReaderFocus(eventsEl);eventsEl.replaceChildren();motion?.stopReply();liveRow=null;liveSample=null;seenLiveText='';before=after=null;hasOlder=false;newCount=0;mode='';modeMessage('');paused=false;followPending=false;retainedBytes=0;earlier.hidden=true;retry.hidden=true;empty.hidden=false;empty.textContent='Loading conversation…';position();}
     const tableKey=(article,index)=>JSON.stringify([article.dataset.eventId,index]);
     function saveTables(){
@@ -561,6 +582,7 @@
     }
     function draw(event,reuse){
       const article=renderEvent?renderEvent(event,node):node(event,{article:reuse});
+      motion?.enhanceCopies(article);
       article.querySelectorAll('.conversation-table-scroll').forEach((table,index)=>{
         table.addEventListener('scroll',()=>{
           if(!tableMutating&&table.isConnected&&table.getClientRects().length)tablePositions.set(tableKey(article,index),table.scrollLeft);
@@ -927,6 +949,7 @@
         content.appendChild(text);
       }
       if(live)return article;
+      if(human)showRecordedBroadcast(article,broadcasted.get(event.id)||0);
       if(event.truncated){const note=document.createElement('div');note.className='conversation-truncated';note.textContent='Long message shortened in this reader.';article.appendChild(note);}
       const target=article.querySelector('.conversation-text')||byline;
       if(jumpToEvent){
@@ -1037,7 +1060,7 @@
     }
     async function load(direction='initial',op=null){
       if(!opened||!presented||!enabled||busy||!agent||paused&&direction==='newer'){endOp(op);return;}
-      const token=generation,name=agent,sequence=++readSequence;
+      const token=generation,name=agent,sequence=++readSequence,started=Date.now();
       let pollAgain=true,reloadDelay=null;
       if(document.activeElement===retry)scroll.focus({preventScroll:true});
       controller=new AbortController();busy=true;retry.hidden=true;paintStatus();
@@ -1064,11 +1087,16 @@
         last.slot=page.slot===true;last.refused=Boolean(options.wait)&&!last.slot;
         last.catchUp=page.has_newer===true&&direction!=='older';last.rows=0;last.failed=false;
         sessionReloadAttempted=false;
+        const replySince=lastReplyPoll===null?null:Math.max(lastReplyPoll,started-2*pollMs)-pollMs;
+        // The first visible read after a gap establishes the tail. Drain any
+        // catch-up pages before arming motion again.
+        if(direction!=='older'&&presented&&!document.hidden&&(!page.has_newer||replySince!==null))lastReplyPoll=started;
         // The server saw no change since this cursor: keep every row as is.
         if(page.unchanged===true&&direction==='newer'&&page.after===after){message('');return;}
         const atBottom=nearBottom(),oldHeight=scroll.scrollHeight,oldTop=scroll.scrollTop,saved=anchor();
         const incoming=page.events.filter(event=>event&&typeof event.id==='string'&&typeof event.text==='string');
         for(const event of incoming)observedIds.add(event.id);
+        const previousMode=mode;
         mode=page.mode||'cursor';
         providerLabel=({codex:'Codex',claude:'Claude',dsh:'dsh',hermes:'Hermes'})[page.provider]||providerLabel;
         const fresh=['fresh_tail','snapshot'].includes(mode);
@@ -1083,16 +1111,17 @@
         const snapshot=fresh?incoming.slice(-200):null,previousRows=fresh?[...events.values()]:null;
         const unchangedSnapshot=fresh&&snapshot.length===previousRows.length&&snapshot.every((event,index)=>
           event.id===previousRows[index].id&&JSON.stringify(event)===JSON.stringify(previousRows[index]));
-        let replacement=null,reused=null;
-        if(liveSample&&direction!=='older'){
+        let replacement=null,reused=null,projectedMatches=[];
+        const previewed=liveSample||(seenLiveText?{text:seenLiveText}:null);
+        if(previewed&&direction!=='older'){
           const recorded=(fresh?snapshot:additions).filter(event=>assistantText(event)&&
             (!events.has(event.id)||fresh&&events.get(event.id).text!==event.text));
           if(recorded.length){
-            const matching=recorded.filter(event=>liveMatches(event,liveSample));
-            replacement=matching.length===1?matching[0]:null;
-            consumedLiveId=liveSample.id;
+            projectedMatches=recorded.filter(event=>liveMatches(event,previewed));
+            replacement=projectedMatches.length===1?projectedMatches[0]:null;
+            if(liveSample)consumedLiveId=liveSample.id;
             motion?.stopReply();seenLiveText='';
-            if(replacement&&!renderEvent)reused=liveRow;else liveRow.remove();
+            if(replacement&&!renderEvent)reused=liveRow;else liveRow?.remove();
             if(replacement){
               const id=JSON.stringify(['event',replacement.id]);
               if(saved?.id===liveKey)saved.id=id;
@@ -1101,11 +1130,18 @@
             liveRow=null;liveSample=null;
           }
         }
-        const arrivingPrompts=[];
+        const arrivingPrompts=[],arrivingReplies=[];
+        const tail=fresh?snapshot.findLastIndex(event=>events.has(event.id)):-1;
+        const selected=root.getSelection();
+        const followReplies=replySince!==null&&direction==='newer'&&atBottom&&mode===previousMode&&
+          (!fresh||tail>=0||!events.size)&&!(selected&&!selected.isCollapsed&&eventsEl.contains(selected.anchorNode));
+        const replies=followReplies?new Set((fresh?snapshot.slice(tail+1):additions)
+          .filter(event=>assistantText(event)&&!projectedMatches.includes(event)&&Date.parse(event.ts)>=replySince).slice(-3)):null;
         const arrivingIds=direction==='newer'&&atBottom?new Set(additions.map(event=>event.id)):null;
         const drawRecorded=event=>{
           const article=draw(event,event===replacement?reused:undefined);
           if(arrivingIds?.has(event.id)&&article.classList.contains('conversation-human'))arrivingPrompts.push(article);
+          if(replies?.has(event))arrivingReplies.push(article);
           return article;
         };
         if(!unchangedSnapshot){saveTables();tableMutating=true;}
@@ -1141,6 +1177,7 @@
         if(!unchangedSnapshot)restoreTables();
         reconcileSubmissions(incoming,direction,sequence);
         for(const article of arrivingPrompts)if(!matchedSubmissions.has(article.dataset.eventId))motion?.prompt(article);
+        for(const article of arrivingReplies)motion?.revealReply(article.querySelector('.conversation-text'));
         empty.hidden=events.size>0||submissions.length>0||Boolean(liveRow);empty.textContent='No conversation messages in this portion yet.';
         if(direction==='initial'||direction==='newer'&&atBottom)scroll.scrollTop=scroll.scrollHeight;
         else if(direction==='older')restoreAnchor(saved,Math.max(0,oldTop+scroll.scrollHeight-oldHeight));
@@ -1161,6 +1198,7 @@
         if(token!==generation)return;
         holding=false;
         if(error.name==='AbortError')return;
+        if(direction!=='older')lastReplyPoll=null;
         if(automaticOpening&&READER_UNAVAILABLE.has(error.code)){
           close({focus:false});return;
         }
@@ -1290,7 +1328,7 @@
     listen(document,'oc:prompt-sending',event=>{
       const detail=event.detail;
       if(!opened||!enabled||detail?.name!==agent||typeof detail.attemptId!=='string'||typeof detail.text!=='string')return;
-      sending.set(detail.attemptId,{id:detail.attemptId,attemptId:detail.attemptId,name:agent,sending:true,at:Number.isFinite(detail.startedAt)?detail.startedAt:Date.now(),preview:detail.text.slice(0,1000)+(detail.text.length>1000?'…':'')});
+      sending.set(detail.attemptId,{id:detail.attemptId,attemptId:detail.attemptId,name:agent,sending:true,known:new Set(observedIds),nextRead:readSequence+1,at:Number.isFinite(detail.startedAt)?detail.startedAt:Date.now(),preview:detail.text.slice(0,1000)+(detail.text.length>1000?'…':'')});
       renderSubmissions();empty.hidden=true;
     });
     listen(document,'oc:prompt-send-cancelled',event=>{if(sending.delete(event.detail?.attemptId))renderSubmissions();});
@@ -1302,7 +1340,9 @@
         const text=normalizePrompt(detail.text);
         submissions.push({id:detail.id,attemptId:pending?attempt:null,name:agent,at:Number.isFinite(detail.submittedAt)?detail.submittedAt:Date.now(),
           text:text.slice(0,65536),length:text.length,matchable:text.length<=65536,preview:detail.text.slice(0,1000)+(detail.text.length>1000?'…':''),
-          known:new Set(observedIds),uncertain:new Set(),nextRead:readSequence+1});
+          known:detail.broadcastCount>1&&pending?pending.known:new Set(observedIds),uncertain:new Set(),
+          nextRead:detail.broadcastCount>1&&pending?pending.nextRead:readSequence+1,broadcastCount:detail.broadcastCount});
+        if(detail.broadcastCount>1)reconcileSubmissions([...events.values()],'newer',readSequence);
         renderSubmissions();empty.hidden=true;
         screen.classList.add('conversation-just-submitted');clearTimeout(flashTimer);
         flashTimer=setTimeout(()=>{flashTimer=0;screen.classList.remove('conversation-just-submitted');},1800);
@@ -1343,7 +1383,10 @@
     listen(document,'oc:reader-activity',()=>{if(opened&&presented){const current=getContext()||{};paintActivity(current);paintLiveText(current);}});
     // A hidden tab keeps no held poll: end one that is waiting, so its
     // browser connection and the server's slot are returned at once.
-    listen(document,'visibilitychange',()=>{if(document.hidden)motion?.stop();preview?.setVisible(opened&&presented&&!document.hidden);paintActivity();paintLiveText();if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
+    listen(document,'oc:reader-connection',resetReplyMotion);
+    listen(window,'offline',resetReplyMotion);
+    listen(window,'online',resetReplyMotion);
+    listen(document,'visibilitychange',()=>{if(document.hidden)resetReplyMotion();preview?.setVisible(opened&&presented&&!document.hidden);paintActivity();paintLiveText();if(document.hidden){clearTimeout(timer);timer=0;if(holding)controller?.abort();}else if(opened){if(events.size)plan();else load('initial');}});
     preference();paintControls();
     return Object.freeze({open,close,relocate,reconcile:context,get opened(){return opened;},get panel(){return panel;},refresh:()=>load(events.size?'newer':'initial'),
       dispose(){cancelAnimationFrame(selectionFrame);stopPathLinks?.();ops.planners.delete(plan);cancelAnimationFrame(tableFrame);layoutObserver.disconnect();submissionObserver.disconnect();clearTimeout(layoutTimer);cancelAnimationFrame(layoutFrame);close({focus:false});preview?.dispose();motion?.dispose();clearSubmissions();stop();listeners.forEach(remove=>remove());panel.remove();notices.remove();noticeMenu.remove();expandButton.remove();screen.classList.remove('conversation-enabled','conversation-full');}});

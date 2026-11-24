@@ -10,7 +10,16 @@
     }
     return state.value;
   }
-  function spring(stiffness,damping){
+  function spring(stiffness,damping,duration){
+    if(duration!==undefined){
+      // Timed Reader effects use the same samples as mobile.
+      const decay=damping/2,frequency=Math.sqrt(stiffness-decay**2),samples=Math.ceil(duration/16);
+      return Array.from({length:samples+1},(_,index)=>{
+        if(index===samples)return 1;
+        const time=index*duration/(1000*samples);
+        return 1-Math.exp(-decay*time)*(Math.cos(frequency*time)+decay/frequency*Math.sin(frequency*time));
+      });
+    }
     const state={value:0,velocity:0},values=[0];
     do{values.push(stepSpring(state,1,stiffness,damping,1/60));}
     while(Math.abs(1-state.value)>.002||Math.abs(state.velocity)>.02);
@@ -18,9 +27,12 @@
     return values;
   }
   const bounded=value=>Math.min(1,Math.max(0,value));
-  const WORD=70,wordFrames=spring(340,26).map(value=>({
+  const WORD=70,WORD_SPRING=[340,26],REPLY_MS=460,REPLY_STEPS=12,COPY_MS=580;
+  const wordFrame=value=>({
     top:(1-value)*6+'px',filter:`blur(${(1-bounded(value))*4}px)`,opacity:bounded(value),
-  }));
+  });
+  const wordFrames=spring(...WORD_SPRING).map(wordFrame),recordedFrames=spring(...WORD_SPRING,REPLY_MS).map(wordFrame);
+  const copyRoll=spring(260,20,COPY_MS),copyWidth=spring(300,24,COPY_MS),copyIcon=spring(420,18,COPY_MS);
   const promptFrames=spring(300,22).map(value=>({
     transform:`translateY(${(1-value)*14}px) scale(${.92+.08*value})`,opacity:bounded(value),
   }));
@@ -55,13 +67,84 @@
     const animations=new Set(),replyAnimations=new Set();
     let wordTime=0,frame=0,heightAnimation=null,following=false,body=null,parts=[];
     const allowed=()=>visible()&&!reduced.matches;
-    function animate(element,frames,{delay=0,group=null}={}){
+    function animate(element,frames,{delay=0,group=null,duration=(frames.length-1)*1000/60}={}){
       if(!allowed())return null;
-      const animation=element.animate(frames,{duration:(frames.length-1)*1000/60,delay,fill:'backwards'});
+      const animation=element.animate(frames,{duration,delay,fill:'backwards'});
       animations.add(animation);group?.add(animation);
       const remove=()=>{animations.delete(animation);group?.delete(animation);};
       animation.finished.then(remove,remove);
       return animation;
+    }
+    function revealReply(element){
+      if(!element?.isConnected||!allowed())return;
+      const skip='pre, code, button, a, table, .conversation-code, .conversation-table, [aria-hidden="true"]';
+      const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT,{
+        acceptNode:node=>node.parentElement.closest(skip)?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT,
+      });
+      // Collect before replacing nodes so the walker keeps its original position.
+      const runs=[];
+      let remaining=REPLY_STEPS;
+      for(let node=walker.nextNode();node&&remaining>0;node=walker.nextNode()){
+        const words=[];
+        for(const match of node.data.matchAll(/\S+/gu)){
+          words.push(match);
+          if(--remaining===0)break;
+        }
+        if(words.length)runs.push({node,words});
+      }
+      let index=0;
+      for(const {node,words} of runs){
+        const fragment=document.createDocumentFragment(),cues=[];
+        let offset=0;
+        for(const match of words){
+          const word=span('conversation-reply-word',match[0]);
+          fragment.append(node.data.slice(offset,match.index),word);cues.push(word);
+          offset=match.index+match[0].length;
+        }
+        fragment.append(node.data.slice(offset));node.replaceWith(fragment);
+        for(const cue of cues)animate(cue,recordedFrames,{duration:REPLY_MS,delay:index++*WORD});
+      }
+    }
+    function enhanceCopies(article){
+      for(const button of article.querySelectorAll('.conversation-code-copy')){
+        if(button.parentElement.classList.contains('conversation-code-copy-wrap'))continue;
+        const wrapper=span('conversation-code-copy-wrap'),face=span('conversation-code-copy-face');
+        face.setAttribute('aria-hidden','true');
+        const icons=span('conversation-code-copy-icons');
+        const copy=glyph('conversation-code-copy-symbol','M8 8H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-2M10 4h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z');
+        const tick=glyph('conversation-code-copy-tick','m5 12 4.5 4.5L19 7');
+        icons.append(copy,tick);
+        const label=span('conversation-code-copy-roll'),words=span('conversation-code-copy-words');
+        words.append(span('','Copy'),span('conversation-code-copy-confirmed','Copied'));
+        label.append(words);
+        const status=span('conversation-code-copy-status');status.setAttribute('role','status');
+        face.append(icons,label,span('conversation-code-copy-error','Copy unavailable'));
+        button.before(wrapper);wrapper.append(button,face,status);
+        let effects=[];
+        const observer=new MutationObserver(()=>{
+          const result=button.textContent;
+          const next=result==='Copied'?'copied':result==='Copy unavailable'?'failed':'';
+          const previous=wrapper.dataset.result;
+          if(next===previous)return;
+          wrapper.dataset.result=next;status.textContent=next?result:'';
+          for(const effect of effects)effect?.cancel();
+          effects=[];
+          if(next==='failed'||(previous==='failed'&&!next)||!wrapper.isConnected||!allowed())return;
+          const progress=value=>next==='copied'?value:1-value;
+          const play=(element,curve,frame)=>animate(element,curve.map(value=>frame(progress(value))),{duration:COPY_MS});
+          effects=[
+            play(words,copyRoll,value=>({transform:`translateY(${-16*value}px)`})),
+            play(label,copyWidth,value=>({width:`${4+2*value}ch`})),
+            play(copy,copyIcon,value=>({
+              opacity:bounded(1-value*1.6),transform:`scale(${1-.5*bounded(value)}) rotate(${-40*bounded(value)}deg)`,
+            })),
+            play(tick,copyIcon,value=>({
+              opacity:bounded(value*1.6-.4),transform:`scale(${.4+.6*Math.max(-.2,Math.min(1.2,value))})`,
+            })),
+          ];
+        });
+        wrapper.dataset.result='';observer.observe(button,{childList:true});
+      }
     }
     function stopReply(){
       for(const animation of replyAnimations)animation.cancel();
@@ -125,10 +208,18 @@
     }
     reduced.addEventListener('change',stop);
     return {
-      write,stopReply,stop,stopFollowing(){following=false;heightAnimation?.cancel();},
+      write,revealReply,enhanceCopies,stopReply,stop,stopFollowing(){following=false;heightAnimation?.cancel();},
       prompt:element=>animate(element,promptFrames),
       dispose(){stop();reduced.removeEventListener('change',stop);},
     };
+  }
+  function span(className,text=''){
+    const element=document.createElement('span');element.className=className;element.textContent=text;return element;
+  }
+  function glyph(className,path){
+    const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg'),line=document.createElementNS(ns,'path');
+    svg.setAttribute('class',className);svg.setAttribute('viewBox','0 0 24 24');
+    line.setAttribute('d',path);svg.append(line);return svg;
   }
   root.OrreryConversationMotion=Object.freeze({mount,spring,stepSpring,pieces,promptAuthor});
 })(typeof window!=='undefined'?window:globalThis);
