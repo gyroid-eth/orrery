@@ -28,6 +28,7 @@ SHELLS = frozenset({
 PROMPT = re.compile(r'^(\s*(?:(?:[⌸│]|[\w.-]+)\s+)?)([❯›>])(?:[ \u00a0]+|$)(.*)')
 BORDER = re.compile(r'^[╭╰]?[─━]{8,}[╮╯]?$')
 CLAUDE_NAMED_BORDER = re.compile(r'^[─━]{8,}[ \t]+\S(?:.*\S)?[ \t]+[─━]+$')
+CLAUDE_SCROLLED_BORDER = re.compile(r'^[─━]{2,}[ \t]+[↑↓][ \t]+\d+[ \t]+more(?:[ \t]+[─━]+)?$')
 SGR = re.compile(r'\x1b\[[0-9;:]*m')
 DIM = re.compile(r'\x1b\[(?:[0-9]+;)*2(?:;[0-9]+)*m')
 CLAUDE_QUEUE_HINT = 'Press up to edit queued messages'
@@ -65,6 +66,7 @@ class Frame:
     foreground_command: str = ''
     slash_picker: bool = False
     selected_command: str | None = None
+    scrolled: bool = False
 
     @property
     def identity(self):
@@ -126,6 +128,16 @@ def frame(metadata, lines, pane):
         line=plain[start].rstrip()
         if BORDER.fullmatch(line.strip()):
             break
+        if CLAUDE_SCROLLED_BORDER.fullmatch(line.strip()):
+            # A tall Claude draft scrolls inside its frame: the prompt glyph
+            # and the first rows are hidden above this marker.
+            tail=[row.strip() for row in plain[cursor+1:] if row.strip()]
+            if start==cursor or '↑' not in line or not tail or not (
+                    BORDER.fullmatch(tail[0]) or CLAUDE_SCROLLED_BORDER.fullmatch(tail[0])):
+                break
+            draft='\n'.join(row.strip() for row in plain[start+1:cursor+1]).strip()
+            return Frame(*base, draft, False, bracketed=bracketed,
+                         foreground_command=command, scrolled=True)
         match=PROMPT.match(line)
         if not match:
             continue
@@ -205,6 +217,10 @@ def ready(observed, text):
     if (observed is None or observed.draft is None or observed.waiting
             or not observed.allows_paste(text)):
         return False
+    if observed.scrolled:
+        # Only the end of a tall draft is visible, so it must end the text.
+        shown=''.join(observed.draft.split())
+        return len(shown)>=16 and ''.join(text.split()).endswith(shown)
     if observed.selected or (observed.slash_picker and (text == '/' or SLASH_NAME.fullmatch(text))):
         # A bare slash command can open its picker after the text itself
         # appears. Require a named selection and compare the full draft.
