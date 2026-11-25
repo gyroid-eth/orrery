@@ -1686,6 +1686,7 @@
           <button type="button" role="switch" id="spawnComputerUse" aria-label="Computer use" title="Computer use" aria-checked="false"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-computer"/></svg></button>
           <button type="button" role="switch" id="spawnBrowserUse" aria-label="Browser" title="Browser" aria-checked="false"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-browser"/></svg></button>
         </div>
+        <div id="spawnBrowserMenu" class="spawn-browser-menu" popover aria-label="Browser" role="group"></div>
         <button id="spawnSubmit" type="submit" title="Launch (⌘↵)" disabled>Launch<span id="spawnLaunchFill" aria-hidden="true"></span></button>
       </div>
       <div class="spawn-status" id="spawnStatus" role="alert" hidden></div>
@@ -4175,9 +4176,9 @@
       }
     }
   },
-  "inventory_digest": "0605f81a7ba45281809fb0d1a25b028fc1720ac01a6a25942d12d075d831e151",
+  "inventory_digest": "7a3004298aeff1619ecfc9040cc7b545c4e97b8682ba8af2b2a3a3b8444ab13b",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "ee37ea17ddd3fc6d70c333c519090f5bdcbda93e5fbf4ea493fbe13909e28d00",
+  "source_digest": "e58d80fb87a910860d04574cd21ea20517e33f4f0863358af9e7bd39d19d8056",
   "surface": "cockpit",
   "version": 1
 }
@@ -10557,17 +10558,47 @@ const spawnHarnessBar=document.getElementById('spawnHarnessBar');
 const spawnTools=document.getElementById('spawnTools');
 const spawnComputerUse=document.getElementById('spawnComputerUse');
 const spawnBrowserUse=document.getElementById('spawnBrowserUse');
+const spawnBrowserMenu=document.getElementById('spawnBrowserMenu');
+const spawnBrowserLabels={off:'Off',temporary:'Temporary Chrome',personal:'My Chrome'};
+let spawnBrowserMode='off';
+const spawnBrowserChoices=Object.entries(spawnBrowserLabels).map(([mode,label])=>{
+  const button=document.createElement('button');
+  button.type='button';button.textContent=label;
+  button.onclick=()=>{
+    if(spawnFormIsBusy())++spawnFormRevision;
+    spawnBrowserMode=mode;paintSpawnBrowser(spawnBrowserModes());
+    spawnBrowserMenu.hidePopover();spawnBrowserUse.focus({preventScroll:true});
+    spawnProblem='';updateSpawnAvailability();saveSpawnDraft();
+  };
+  spawnBrowserMenu.append(button);
+  return [mode,button];
+});
 const spawnToolSwitches=[spawnComputerUse,spawnBrowserUse];
 const CODEX_BROWSER_REQUIREMENT='Codex Browser requires [mcp_servers.chrome-devtools] or a chrome-devtools-mcp server in config.toml.';
 let spawnToolsRoute=null;
 for(const control of spawnToolSwitches){
   control.addEventListener('click',()=>{
+    if(control===spawnBrowserUse&&spawnBrowserModes()){
+      if(spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
+      else if(control.getAttribute('aria-disabled')!=='true'){
+        spawnBrowserMenu.showPopover({source:control});
+        const anchor=control.getBoundingClientRect(),box=spawnBrowserMenu.getBoundingClientRect();
+        const left=Math.max(12,Math.min(anchor.left,innerWidth-box.width-12));
+        const top=anchor.bottom+box.height+18<innerHeight?anchor.bottom+6:Math.max(12,anchor.top-box.height-6);
+        Object.assign(spawnBrowserMenu.style,{left:left+'px',top:top+'px'});
+        spawnBrowserMenu.querySelector('[aria-pressed=true]:not([hidden])')?.focus({preventScroll:true});
+      }
+      return;
+    }
     // The submitted tools belong to the launch already waiting for a result.
     if(spawnFormIsBusy())++spawnFormRevision;
     control.setAttribute('aria-checked',String(control.getAttribute('aria-checked')!=='true'));
     spawnProblem='';updateSpawnAvailability();saveSpawnDraft();
   });
 }
+spawnBrowserMenu.addEventListener('toggle',()=>{
+  if(spawnBrowserModes())spawnBrowserUse.setAttribute('aria-expanded',String(spawnBrowserMenu.matches(':popover-open')));
+});
 spawnHelper.addEventListener('change',saveSpawnDraft);
 const ncPortrait=document.getElementById('ncPortrait');
 const ncDiceFace=document.getElementById('ncDiceFace');
@@ -10715,11 +10746,51 @@ function renderLocalModels(){
   }
 }
 function selectedSpawnModel(){const p=providerById(selProvider);return p&&(p.models||[]).find(m=>m.id===selModel&&(!Number.isInteger(m.url_index)||m.url_index===selUrlIndex)&&(!m.url_key||m.url_key===selUrlKey))||null;}
+function spawnBrowserModes(){
+  const key=selProvider==='gemini'?'antigravity':SpawnPicker.harnessKey(selHarness);
+  const modes=spawnCatalog?.browser_modes?.[key];
+  return spawnCatalog?.runtime_mode!=='fresh'&&Array.isArray(modes)?
+    Object.keys(spawnBrowserLabels).filter(mode=>modes.includes(mode)):null;
+}
+function paintSpawnBrowser(modes){
+  if(!modes)return;
+  if(!modes.includes(spawnBrowserMode))spawnBrowserMode=modes.includes('personal')?'personal':'off';
+  spawnBrowserUse.dataset.browserMode=spawnBrowserMode;
+  spawnBrowserUse.removeAttribute('role');spawnBrowserUse.removeAttribute('aria-checked');
+  spawnBrowserUse.setAttribute('aria-controls',spawnBrowserMenu.id);
+  spawnBrowserUse.setAttribute('aria-expanded',String(spawnBrowserMenu.matches(':popover-open')));
+  spawnBrowserUse.setAttribute('aria-disabled',String(!modes.length));
+  const limited=selProvider==='gemini'?'Antigravity needs macOS and no global Chrome MCP.':'Other modes need a compatible Chrome setup.';
+  spawnBrowserUse.title='Browser: '+spawnBrowserLabels[spawnBrowserMode]+(modes.length<spawnBrowserChoices.length?'. '+limited:'');
+  spawnBrowserUse.setAttribute('aria-label',spawnBrowserUse.title);
+  for(const [mode,button] of spawnBrowserChoices){
+    button.hidden=!modes.includes(mode);
+    button.setAttribute('aria-pressed',String(mode===spawnBrowserMode));
+  }
+  if(!modes.length&&spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
+}
 function renderSpawnTools(){
   const harness=SpawnPicker.harnessKey(selHarness);
-  spawnTools.hidden=spawnCatalog?.runtime_mode==='fresh'||!['claude-code','codex','dsh','hermes'].includes(harness);
+  const modes=spawnBrowserModes();
+  spawnTools.hidden=spawnCatalog?.runtime_mode==='fresh'||(!modes&&!['claude-code','codex','dsh','hermes'].includes(harness));
+  spawnComputerUse.hidden=Boolean(modes&&selProvider==='gemini');
+  const route=spawnTools.hidden?null:JSON.stringify([selProvider,harness,modes]);
+  if(modes){
+    if(route!==spawnToolsRoute){
+      spawnBrowserMode=modes.includes('personal')?'personal':'off';
+      spawnComputerUse.setAttribute('aria-checked',String(harness!=='dsh'&&!spawnComputerUse.hidden));
+    }
+    spawnToolsRoute=route;
+    paintSpawnBrowser(modes);
+    return;
+  }
+  if('browserMode' in spawnBrowserUse.dataset){
+    delete spawnBrowserUse.dataset.browserMode;
+    spawnBrowserUse.setAttribute('role','switch');spawnBrowserUse.setAttribute('aria-label','Browser');
+    for(const attr of ['aria-expanded','aria-controls','aria-disabled'])spawnBrowserUse.removeAttribute(attr);
+    if(spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
+  }
   spawnBrowserUse.title=harness==='codex'?CODEX_BROWSER_REQUIREMENT:'Browser';
-  const route=spawnTools.hidden?null:JSON.stringify([selProvider,harness]);
   if(route===spawnToolsRoute)return;
   spawnToolsRoute=route;
   const defaultOn=Boolean(route)&&harness!=='dsh';
@@ -10731,15 +10802,20 @@ function spawnToolOptions(){
   const harness=SpawnPicker.harnessKey(selHarness);
   const native=harness==='dsh'||harness==='hermes';
   const computer=spawnComputerUse.getAttribute('aria-checked')==='true';
+  const modes=spawnBrowserModes();
+  if(modes)return {tools:{...(computer?{mcp:['cua-driver']}:{}),
+    ...(modes.includes(spawnBrowserMode)?{browser_mode:spawnBrowserMode}:{})}};
   const browser=spawnBrowserUse.getAttribute('aria-checked')==='true';
+  const supportsBrowserOff=spawnCatalog?.supports_browser_off===true;
   const mcp=[];
   if(computer)mcp.push('cua-driver');
   // Native harnesses can copy an MCP server without the per-tool approvals that tools.browser requests.
   if(browser&&native)mcp.push('chrome-devtools');
   return {
-    // The default base can inherit Chrome, and Codex can also inherit cua-driver.
-    ...(!browser||(harness==='codex'&&!computer)?{base:'mail-only'}:{}),
-    tools:{...(mcp.length?{mcp}:{}),...(browser&&!native?{browser:{}}:{})},
+    // Older Telemetry has only the base selector to suppress inherited Chrome.
+    ...(!supportsBrowserOff&&(!browser||(harness==='codex'&&!computer))?{base:'mail-only'}:{}),
+    tools:{...(mcp.length?{mcp}:{}),...(browser&&!native?{browser:{}}:{}),
+      ...(!browser&&supportsBrowserOff?{browser_off:true}:{})},
   };
 }
 function renderHarnesses(){
@@ -11197,6 +11273,7 @@ function saveSpawnDraft(){
     urlIndex:selUrlIndex,urlKey:/^[a-f0-9]{64}$/.test(selUrlKey)?selUrlKey:null,
     helper:spawnHelper.disabled?null:spawnHelper.value,
     tools:spawnTools.hidden?null:spawnToolSwitches.map(control=>control.getAttribute('aria-checked')==='true'),
+    browserMode:spawnBrowserModes()?spawnBrowserMode:null,
   };
   // Keep only editable draft fields in this viewer's storage.
   spawnShownDraft=JSON.stringify({
@@ -11217,6 +11294,12 @@ function restoreSpawnSelection(){
   if([...spawnHelper.options].some(option=>option.value===saved.helper))spawnHelper.value=saved.helper;
   if(!spawnTools.hidden&&saved.tools){
     spawnToolSwitches.forEach((control,index)=>control.setAttribute('aria-checked',String(saved.tools[index])));
+    const modes=spawnBrowserModes();
+    if(modes){
+      const restored=saved.browserMode||(saved.tools[1]?'personal':'off');
+      if(modes.includes(restored))spawnBrowserMode=restored;
+      paintSpawnBrowser(modes);
+    }
     updateSpawnAvailability();
   }
 }
@@ -11231,6 +11314,7 @@ function prepareSpawnForm(raw,task=''){
     urlIndex:Number.isInteger(saved.urlIndex)&&saved.urlIndex>=0?saved.urlIndex:null,
     urlKey:/^[a-f0-9]{64}$/.test(saved.urlKey)?saved.urlKey:null,
     tools:Array.isArray(saved.tools)&&saved.tools.length===spawnToolSwitches.length&&saved.tools.every(value=>typeof value==='boolean')?saved.tools:null,
+    browserMode:Object.hasOwn(spawnBrowserLabels,saved.browserMode)?saved.browserMode:null,
   }:null;
   spawnShownDraft=draft&&typeof draft==='object'&&!Array.isArray(draft)?raw:null;
   spawnForm.reset();
@@ -11281,6 +11365,7 @@ function openSpawnModal({from=document.getElementById('newAgentBtn').getBounding
   });
 }
 function closeSpawnModal(){
+  if(spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
   spawnCatalogLoader.stop();++spawnDirDefaultEpoch;
   dismissSpawnSheet();
   if(!spawnOverlay.classList.contains('on'))return;

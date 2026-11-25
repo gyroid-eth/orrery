@@ -107,6 +107,17 @@ html[data-color-theme="light"] #spawnOverlay {
   background:color-mix(in srgb,var(--amber) 9%,transparent);
 }
 .spawn-tools button[aria-checked="true"] svg {animation:spawn-pop .5s var(--spawn-spring)}
+#spawnForm .spawn-tools button[data-browser-mode=personal]{color:var(--amber);background:var(--panel-2)}
+#spawnForm .spawn-tools button[data-browser-mode=temporary]{position:relative}
+#spawnForm .spawn-tools button[data-browser-mode=temporary]::after{content:"";position:absolute;right:5px;bottom:5px;
+  width:5px;height:5px;border-radius:50%;background:var(--amber)}
+.spawn-browser-menu{position:fixed;inset:auto;margin:0;padding:4px;min-width:156px;
+  border:1px solid var(--hair);border-radius:9px;background:var(--panel);color:var(--ink);box-shadow:var(--spawn-shadow)}
+.spawn-browser-menu button{display:block;width:100%;padding:8px 10px;border:0;border-radius:5px;
+  color:inherit;background:transparent;text-align:start;font:inherit;cursor:pointer}
+.spawn-browser-menu button:is(:hover,:focus-visible,[aria-pressed=true]){background:var(--panel-2)}
+.spawn-browser-menu button[aria-pressed=true]::after{content:"✓";float:right;padding-left:12px;color:var(--amber)}
+.spawn-browser-menu button[hidden]{display:none}
 @keyframes spawn-pop {from {transform:scale(.6)}}
 #spawnForm #spawnSubmit {
   position:relative;isolation:isolate;overflow:hidden;flex:none;margin-left:auto;
