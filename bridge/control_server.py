@@ -1721,19 +1721,25 @@ class TmuxControlBridge:
                 previous = None
                 while time.monotonic() < deadline:
                     view = await capture()
-                    draft = view.draft if submission.ready(view, text) else None
+                    choice = None
                     if view is not None:
                         if view.identity != before.identity:
                             return 'unknown'
-                        if draft is not None and draft == previous:
+                        if submission.ready(view, text) or submission.mismatched_command(view, text):
+                            choice = (view.draft, view.selected_command)
+                        if choice is not None and choice == previous:
                             await admit()
                             view = await capture()
-                            if view is not None and view.identity == before.identity and submission.ready(view, text):
-                                result = await command(['send-keys', '-t', pane_id, 'C-m'])
-                                if not result.ok or result.overflow:
-                                    return 'unknown'
-                                break
-                    previous = draft
+                            if (view is not None and view.identity == before.identity
+                                    and (view.draft, view.selected_command) == choice):
+                                if submission.ready(view, text):
+                                    result = await command(['send-keys', '-t', pane_id, 'C-m'])
+                                    if not result.ok or result.overflow:
+                                        return 'unknown'
+                                    break
+                                if submission.mismatched_command(view, text):
+                                    return 'completion-mismatch'
+                    previous = choice
                     await asyncio.sleep(submission.POLL)
                 else:
                     return 'unknown'

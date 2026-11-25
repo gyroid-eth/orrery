@@ -4176,9 +4176,9 @@
       }
     }
   },
-  "inventory_digest": "7a3004298aeff1619ecfc9040cc7b545c4e97b8682ba8af2b2a3a3b8444ab13b",
+  "inventory_digest": "126a53252dc441484457b3344a19b27847bb01db0e26a9dab6dc17f4710bcbe7",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "e58d80fb87a910860d04574cd21ea20517e33f4f0863358af9e7bd39d19d8056",
+  "source_digest": "9e44cb074bf57ff1097b311082a0569457d4e2ae1742841eeb42910d7b2ca517",
   "surface": "cockpit",
   "version": 1
 }
@@ -11845,7 +11845,7 @@ function submitComposerPrompt(target,data){
     const id=Date.now()+':'+(++promptAckSequence);
     const done=status=>{
       clearTimeout(timer);composerAcks.delete(id);
-      resolve(status==='accepted'||status==='refused'?status:'unknown');
+      resolve(['accepted','refused','completion-mismatch'].includes(status)?status:'unknown');
     };
     const timer=setTimeout(()=>done('unknown'),6500);
     composerAcks.set(id,{done,paneId:target.paneId});
@@ -11950,9 +11950,12 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
         const text=compose(body);
         receipt=trackPrompt(target,text,compose(record.draft),entries);
         status=await submitComposerPrompt(target,text);
+        if(status==='completion-mismatch'){
+          status='refused';problem='Terminal selected a different slash command';
+        }
       }
       if(status!=='accepted')receipt?.cancel();
-      results.push({...record,status,receipt});
+      results.push({...record,status,receipt,problem});
       releaseComposerTarget(record.name);
     }
     const sent=results.filter(result=>result.status==='accepted');

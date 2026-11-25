@@ -22,6 +22,25 @@ def terminal(cockpit):
     return js, wait, client
 
 
+@pytest.mark.parametrize('status', ['accepted', 'completion-mismatch'])
+def test_slash_submission_keeps_the_draft_and_explains_a_different_selection(cockpit, status):
+    js, wait, _ = terminal(cockpit)
+    js("window.receiptStatus=" + json.dumps(status) + """;
+      window.send=packet=>{
+        packets.push(packet);
+        if(packet.type==='submit-prompt')queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,
+          id:packet.inputAck,status:receiptStatus}));
+        return true;
+      };
+      promptInput.value='/status';sendPrompt();""")
+    wait("!promptBusy&&packets.some(packet=>packet.type==='submit-prompt')")
+    assert js("packets.find(packet=>packet.type==='submit-prompt').data") == '/status'
+    assert js('promptInput.value') == ('' if status == 'accepted' else '/status')
+    assert js("toastEl.textContent.includes('Terminal selected a different slash command')") == (
+        status == 'completion-mismatch'
+    )
+
+
 def test_card_fills_stage_and_resizes_the_textarea(cockpit):
     js, wait, _ = terminal(cockpit)
     assert js('promptInput.placeholder') == 'Message ReviewFixture'
