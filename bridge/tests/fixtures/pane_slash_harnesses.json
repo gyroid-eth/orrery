@@ -1,0 +1,165 @@
+{
+  "dsh": {
+    "version": "0.2.1-rc.2 / TUI 0.16.1",
+    "cases": [
+      {
+        "case": "slash-exact",
+        "text": "/help",
+        "selected": "/help",
+        "ready": true,
+        "view": {
+          "meta": [
+            "4",
+            "0",
+            "33",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "                        \u001b[38;5;102m╭─ commands · 1 items ─────────────────────────────────────────────────╮\u001b[39m",
+            "                        \u001b[38;5;102m│\u001b[39m \u001b[1m\u001b[38;5;153m❯ help     \u001b[0m\u001b[38;5;153mShow shortcuts and commands\u001b[39m                               \u001b[38;5;102m│\u001b[39m",
+            "                        \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "                        \u001b[38;5;153m╭──────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "                        \u001b[38;5;153m│\u001b[39m ⌘ /help                                                              \u001b[38;5;153m│\u001b[39m",
+            "                        \u001b[38;5;153m╰──────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "                          \u001b[1m\u001b[38;5;182mdeepseek-v4.1-flash\u001b[0m\u001b[38;5;145m  ·  standard  ·  Workspace read/write\u001b[39m"
+          ]
+        }
+      },
+      {
+        "case": "slash-prefix",
+        "text": "/log",
+        "selected": "/login",
+        "ready": false,
+        "view": {
+          "meta": [
+            "6",
+            "0",
+            "32",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "                        \u001b[38;5;102m╭─ commands · 3 items ─────────────────────────────────────────────────╮\u001b[39m",
+            "                        \u001b[38;5;102m│\u001b[39m \u001b[1m\u001b[38;5;153m❯ login      \u001b[0m\u001b[38;5;153mShow API credential status\u001b[39m                              \u001b[38;5;102m│\u001b[39m",
+            "                        \u001b[38;5;102m│\u001b[39m \u001b[38;5;145m  \u001b[39mlog\u001b[38;5;145mout     Clear the API credential\u001b[39m                                \u001b[38;5;102m│\u001b[39m",
+            "                        \u001b[38;5;102m│\u001b[39m \u001b[38;5;145m  \u001b[39mlog\u001b[38;5;145m        Create a structured session log, preferably in an Obs…\u001b[39m  \u001b[38;5;102m│\u001b[39m",
+            "                        \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "                        \u001b[38;5;153m╭──────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "                        \u001b[38;5;153m│\u001b[39m ⌘ /log                                                               \u001b[38;5;153m│\u001b[39m",
+            "                        \u001b[38;5;153m╰──────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "                          \u001b[1m\u001b[38;5;182mdeepseek-v4.1-flash\u001b[0m\u001b[38;5;145m  ·  standard  ·  Workspace read/write\u001b[39m"
+          ]
+        }
+      },
+      {
+        "case": "notice-short",
+        "text": "ORRERY Mail notification: message from Fixture [normal]: Synthetic. Body (complete; no inbox fetch needed): Check the local fixture.",
+        "selected": null,
+        "ready": true,
+        "view": {
+          "meta": [
+            "1",
+            "0",
+            "75",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "      \u001b[38;5;153m╭──────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "      \u001b[38;5;153m│\u001b[39m ❯  Body (complete; no inbox fetch needed): Check the local fixture.  \u001b[38;5;153m│\u001b[39m",
+            "      \u001b[38;5;153m╰──────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "        \u001b[1m\u001b[38;5;182mdeepseek-v4.1-flash\u001b[0m\u001b[38;5;145m  ·  standard  ·  Workspace read/write\u001b[39m"
+          ]
+        },
+        "after": {
+          "meta": [
+            "1",
+            "0",
+            "6",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "  \u001b[38;5;102m╭──────────────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "  \u001b[38;5;145m⌸ ❯ \u001b[39m                                                                           \u001b[38;5;145m⛶\u001b[39m",
+            "  \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mwork\u001b[39m"
+          ]
+        }
+      },
+      {
+        "case": "notice-long-japanese",
+        "text": "ORRERY Mail notification: message from Fixture [high]: 合成の知らせ. Body (complete; no inbox fetch needed): これは実験に使う日本語の文章です。🔬 確認のため繰り返します。 これは実験に使う日本語の文章です。🔬 確認のため繰り返します。 これは実験に使う日本語の文章です。🔬 確認のため繰り返します。 これは実験に使う日本語の文章です。🔬 確認のため繰り返します。 これは実験に使う日本語の文章です。🔬 確認のため繰り返します。 これは実験に使う日本語の文章です。🔬 確認のため繰り返します。 これは実験に使う日本語の文章です。🔬 確認のため繰り返します。 これは実験に使う日本語の文章です。🔬 確認のため繰り返します。 これは実験に使う日本語の文章です。🔬 確認のため繰り返します。",
+        "selected": null,
+        "ready": true,
+        "view": {
+          "meta": [
+            "1",
+            "0",
+            "74",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "      \u001b[38;5;153m╭──────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "      \u001b[38;5;153m│\u001b[39m ❯ 。 これは実験に使う日本語の文章です。🔬 確認のため繰り返します。   \u001b[38;5;153m│\u001b[39m",
+            "      \u001b[38;5;153m╰──────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "        \u001b[1m\u001b[38;5;182mdeepseek-v4.1-flash\u001b[0m\u001b[38;5;145m  ·  standard  ·  Workspace read/write\u001b[39m"
+          ]
+        },
+        "after": {
+          "meta": [
+            "1",
+            "0",
+            "6",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "  \u001b[38;5;102m╭──────────────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "  \u001b[38;5;145m⌸ ❯ \u001b[39m                                                                           \u001b[38;5;145m⛶\u001b[39m",
+            "  \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mwork\u001b[39m"
+          ]
+        }
+      },
+      {
+        "case": "notice-long-ascii",
+        "text": "ORRERY Mail notification: message from Fixture [normal]: Synthetic. Body preview: A deliberately longer example for wrapping and rendering. A deliberately longer example for wrapping and rendering. A deliberately longer example for wrapping and rendering. A deliberately longer example for wrapping and rendering. A deliberately longer example for wrapping and rendering. A deliberately longer example for wrapping and rendering. A deliberately longer example for wrapping and rendering. A deliberately longer example for wrapping and rendering. A deliberately longer example for wrapping and rendering. ... Fetch inbox to read the rest.",
+        "selected": null,
+        "ready": true,
+        "view": {
+          "meta": [
+            "1",
+            "0",
+            "75",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "      \u001b[38;5;153m╭──────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "      \u001b[38;5;153m│\u001b[39m ❯ ple for wrapping and rendering. ... Fetch inbox to read the rest.  \u001b[38;5;153m│\u001b[39m",
+            "      \u001b[38;5;153m╰──────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "        \u001b[1m\u001b[38;5;182mdeepseek-v4.1-flash\u001b[0m\u001b[38;5;145m  ·  standard  ·  Workspace read/write\u001b[39m"
+          ]
+        },
+        "after": {
+          "meta": [
+            "1",
+            "0",
+            "6",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "  \u001b[38;5;102m╭──────────────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "  \u001b[38;5;145m⌸ ❯ \u001b[39m                                                                           \u001b[38;5;145m⛶\u001b[39m",
+            "  \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mwork\u001b[39m"
+          ]
+        }
+      }
+    ]
+  }
+}

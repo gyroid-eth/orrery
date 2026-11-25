@@ -17,6 +17,29 @@ import orrery_backend as backend
 import pane_submission as submission
 
 
+NATIVE_PROMPTS = json.loads(
+    (Path(__file__).parent / 'fixtures/pane_slash_harnesses.json').read_text(encoding='utf-8'))
+
+
+def native_frame(snapshot):
+    meta = '\t'.join(['/tmp/fixture.sock', '100', '%1', '200', *snapshot['meta']])
+    return submission.frame(meta, snapshot['lines'], '%1')
+
+
+@pytest.mark.parametrize('case', [pytest.param(case, id=f'{harness}-{case["case"]}')
+                                  for harness, fixture in NATIVE_PROMPTS.items()
+                                  for case in fixture['cases']])
+def test_native_prompt_fixture(case):
+    observed = native_frame(case['view'])
+    assert observed.selected_command == case['selected']
+    assert submission.ready(observed, case['text']) is case['ready']
+    if after := case.get('after'):
+        assert native_frame(after).empty
+    if observed.dsh_clipped:
+        # A different text ending cannot justify Enter with a clipped draft.
+        assert not submission.ready(observed, case['text'] + ' another sentence')
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize('successful', [True, False])
 async def test_confirmed_input_uses_the_result_of_each_chunk(monkeypatch, tmp_path, successful):

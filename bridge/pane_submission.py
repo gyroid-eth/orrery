@@ -25,7 +25,7 @@ SHELLS = frozenset({
     'ksh', 'ksh93', 'mksh', 'nu', 'nushell', 'pdksh', 'powershell', 'pwsh',
     'sh', 'tcsh', 'xonsh', 'yash', 'zsh',
 })
-PROMPT = re.compile(r'^(\s*(?:(?:[⌸│]|[\w.-]+)\s+)?)([❯›>])(?:[ \u00a0]+|$)(.*)')
+PROMPT = re.compile(r'^(\s*(?:(?:[⌸│]|[\w.-]+)\s+)?)([❯›>⌘])(?:[ \u00a0]+|$)(.*)')
 BORDER = re.compile(r'^[╭╰]?[─━]{8,}[╮╯]?$')
 CLAUDE_NAMED_BORDER = re.compile(r'^[─━]{8,}[ \t]+\S(?:.*\S)?[ \t]+[─━]+$')
 CLAUDE_SCROLLED_BORDER = re.compile(r'^[─━]{2,}[ \t]+[↑↓][ \t]+\d+[ \t]+more(?:[ \t]+[─━]+)?$')
@@ -49,6 +49,8 @@ CLAUDE_SLASH_SELECTION = re.compile(r'^[ \t]+❯[ \t]+(' + SLASH_NAME.pattern + 
 CODEX_SLASH_SELECTION = re.compile(r'^›[ \t]+(' + SLASH_NAME.pattern + r')(?=[ \t]|$)')
 SLASH_CONTINUATION = re.compile(r'^[ \t]{8,}[^ \t/❯]')
 REVERSE_VIDEO = re.compile(r'\x1b\[(?:[0-9]+;)*7(?:;[0-9]+)*m')
+DSH_COMMAND_MENU = re.compile(r'^\s*╭─ commands · \d+ items? ─+╮$')
+DSH_COMMAND_SELECTED = re.compile(r'^\s*│\s+❯\s+([\w.:-]+)(?=\s|│|$)')
 
 
 @dataclass(frozen=True)
@@ -67,6 +69,7 @@ class Frame:
     slash_picker: bool = False
     selected_command: str | None = None
     scrolled: bool = False
+    dsh_clipped: bool = False
 
     @property
     def identity(self):
@@ -103,6 +106,22 @@ def _slash_selection(lines, plain, start, *, codex):
             break
         if not (SLASH_OPTION.match(row) or not codex and SLASH_CONTINUATION.match(row)):
             break
+    return None
+
+
+def _dsh_slash_selection(plain, start):
+    # The command box ends immediately above the editor's top border.
+    rows = reversed(plain[max(0, start - 24):start - 2])
+    if not BORDER.fullmatch(plain[start - 2].strip()):
+        return None
+    selected = []
+    for row in rows:
+        if DSH_COMMAND_MENU.fullmatch(row.rstrip()):
+            return selected[0] if len(selected) == 1 else None
+        if not row.strip().startswith('│'):
+            return None
+        if match := DSH_COMMAND_SELECTED.match(row):
+            selected.append('/' + match[1])
     return None
 
 
@@ -153,7 +172,9 @@ def frame(metadata, lines, pane):
         # the model and effort under the same framed editor.
         agy = glyph == '>' and framed and len(tail) > 1 and bool(
             AGY_MODE.match(tail[1]) or AGY_MODEL_FOOTER.fullmatch(tail[1]))
-        boxed=glyph=='❯' and left in ('⌸','│') and upper
+        boxed=glyph in ('❯','⌘') and left in ('⌸','│') and upper and (glyph!='⌘' or framed)
+        if glyph=='⌘' and not boxed:
+            continue
         if (glyph=='>' and not agy) or (left and not boxed and (glyph!='❯' or not framed)):
             continue
         if prefix and not left and glyph=='❯':
@@ -194,15 +215,23 @@ def frame(metadata, lines, pane):
             menu=previous_row.startswith(('enter/tab insert · esc close','enter insert · esc close'))
         hermes=glyph=='❯' and framed and not boxed and (left or any('☤' in row for row in around))
         codex = glyph == '›'
-        slash_picker = codex or (glyph == '❯' and not boxed and not hermes
+        slash_picker = codex or boxed or (glyph == '❯' and not hermes
                                  and (upper or command == 'claude'))
         selected_command = None
-        if draft.startswith('/') and slash_picker and start >= 2:
+        if boxed and draft.startswith('/') and start >= 3:
+            selected_command = _dsh_slash_selection(plain, start)
+        elif draft.startswith('/') and slash_picker and start >= 2:
             if (codex and not plain[start-1].strip()) or (not codex and upper):
                 selected_command = _slash_selection(lines, plain, start, codex=codex)
+        # The welcome editor shows a single horizontal slice, and the main
+        # editor shows at most five rows. Both can hide the start of a paste.
+        dsh_clipped = boxed and framed and glyph=='❯' and (
+            (left=='│' and start==cursor and line.endswith('  │')) or
+            (left=='⌸' and cursor-start==4))
         return Frame(*base, draft, waiting, menu or selected_command is not None,
                      bool(hermes), boxed, bracketed, command,
-                     slash_picker=slash_picker, selected_command=selected_command)
+                     slash_picker=slash_picker, selected_command=selected_command,
+                     dsh_clipped=dsh_clipped)
     return Frame(*base,None,False)
 
 
@@ -229,6 +258,9 @@ def ready(observed, text):
                 and SLASH_NAME.fullmatch(command) is not None)
     if ''.join(observed.draft.split())==''.join(text.split()):
         return True
+    if observed.dsh_clipped and text.startswith('ORRERY Mail notification: '):
+        shown = ''.join(observed.draft.split())
+        return len(shown) >= 24 and ''.join(text.split()).endswith(shown)
     # Claude represents a pasted multiline or long prompt as this native
     # capsule. The caller required an empty editor before sending the paste.
     if COLLAPSED.fullmatch(observed.draft):
