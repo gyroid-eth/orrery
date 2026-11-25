@@ -4176,9 +4176,9 @@
       }
     }
   },
-  "inventory_digest": "126a53252dc441484457b3344a19b27847bb01db0e26a9dab6dc17f4710bcbe7",
+  "inventory_digest": "23f1bfaba6c0771dd1b11bc8a5fc17bf3f531dca2be814820187e6d91af30ea9",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "9e44cb074bf57ff1097b311082a0569457d4e2ae1742841eeb42910d7b2ca517",
+  "source_digest": "467a702a79f63e6cd4a675bf8f9880dd468c2bfde79d51c9a794e7cbfc0ccee5",
   "surface": "cockpit",
   "version": 1
 }
@@ -10633,7 +10633,7 @@ function loadSpawnCatalog(){
 function providerById(id){return (spawnCatalog&&spawnCatalog.providers||[]).find(p=>p.id===id)||null;}
 const spawnFamilies=[{id:'claude',asset:'anthropic.svg',label:'Claude'},
   {id:'codex',asset:'openai.svg',label:'Codex'},{id:'deepseek',asset:'deepseek.svg',label:'DeepSeek'},
-  {id:'local',label:'Local models'}];
+  {id:'local',label:'Local models'},{id:'gemini',asset:'google.svg',label:'Antigravity',catalogOnly:true}];
 const spawnModelMark=document.getElementById('spawnModelMark');
 const spawnModelLabel=document.getElementById('spawnModelLabel');
 const spawnPips=document.getElementById('spawnPips');
@@ -10645,7 +10645,7 @@ for(const marker of [spawnProviderMarker,spawnHarnessMarker]){
 const spawnSearchThreshold=8;
 function spawnBrand(asset){
   const img=document.createElement('img');
-  img.className='spawn-brand'+(['anthropic.svg','openai.svg','deepseek.svg'].includes(asset)?' mono':'');
+  img.className='spawn-brand'+(['anthropic.svg','openai.svg','deepseek.svg','google.svg'].includes(asset)?' mono':'');
   img.src='cockpit-assets/'+asset;img.alt='';return img;
 }
 function moveSpawnMarker(group,marker){
@@ -10658,7 +10658,8 @@ function moveSpawnMarker(group,marker){
 function renderProviderTabs(){
   const entries=SpawnPicker.entries(spawnCatalog);
   const providers=spawnCatalog.providers||[];
-  const families=spawnFamilies.map(f=>({...f}));
+  const hasFamily=id=>entries.some(e=>e.family===id)||providers.some(p=>SpawnPicker.family(p,{})===id);
+  const families=spawnFamilies.filter(f=>!f.catalogOnly||hasFamily(f.id)).map(f=>({...f}));
   for(const provider of providers){
     const id=SpawnPicker.family(provider,{});
     const family=families.find(f=>f.id===id);
@@ -10668,7 +10669,6 @@ function renderProviderTabs(){
   for(const entry of entries)if(!families.some(f=>f.id===entry.family)){
     families.push({id:entry.family,label:entry.provider.label||entry.family});
   }
-  const hasFamily=id=>entries.some(e=>e.family===id)||providers.some(p=>SpawnPicker.family(p,{})===id);
   if(!selFamily||!hasFamily(selFamily))selFamily=(families.find(f=>hasFamily(f.id))||families[0]).id;
   providerTabs.replaceChildren(spawnProviderMarker);
   families.forEach(f=>{
