@@ -92,6 +92,16 @@ def test_antigravity_card_discloses_launch_permissions_and_a_reason_for_unknown(
     assert 'Browser use: Unknown (Antigravity browser mode was not recorded)' in markup
 
 
+def test_antigravity_card_labels_the_relay_and_the_recorded_browser_separately():
+    markup = render({
+        "name": "FixtureAgent", "category": "agent", "running": True, "parent_state": "top",
+        "harness_kind": "antigravity", "computer_use": "view", "computer_use_source": "relay",
+        "browser_use": False, "browser_use_source": "launch",
+    }, api=53)
+    assert 'aria-label="Computer use: View (Current screen relay)"' in markup
+    assert 'aria-label="Browser use: Off (ORRERY launch selection)"' in markup
+
+
 def test_api46_permission_reason_is_rendered_as_text():
     markup = render({
         "name": "FixtureAgent", "category": "agent", "running": True, "parent_state": "top",
