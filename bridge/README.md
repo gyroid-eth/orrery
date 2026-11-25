@@ -320,6 +320,8 @@ unattributed control clients left by earlier versions.
 
 ## Setup
 
+Use Python 3.11 or later. For the Computer use and Browser launch options, see [NEW AGENT](../docs/en/usage.md#new-agent).
+
 ```sh
 cd bridge
 python3 -m venv .venv

@@ -49,14 +49,14 @@ Pane attach is deferred until the browser selects a session. A recorder connecti
 | `GET /telemetry/mail/thread?thread_id=&limit=` | Thread. Default / maximum 50 / 100 |
 | `GET /telemetry/portrait?name=&hi=&style=pixel` | Local PNG or initials SVG |
 | `GET /telemetry/sessions` | tmux inventory and the interactive client flag |
-| `GET /telemetry/skills` | Built-in skills and `~/.claude/skills/*/SKILL.md`. Cached for 30 seconds |
+| `GET /telemetry/skills` | Harness-specific built-ins and skills. Codex uses the verified pane's native catalog. [Skill and command suggestions](usage.md#skill-and-command-suggestions) |
 | `GET /telemetry/fs/dirs?path=` | Directory browser excluding hidden entries. Up to 200, no root allowlist |
 | `* /network` | Embed of the ORRERY Telemetry dashboard root |
 | `* /network/<tail>` | Passthrough under the ORRERY Telemetry dashboard root |
 | `* /api/<tail>` | ORRERY Telemetry API passthrough |
 | `* /assets/<tail>` | ORRERY Telemetry asset passthrough |
 | `GET /portrait` | ORRERY Telemetry portrait passthrough |
-| `STATIC /<path>` | `bridge/` static files. Includes `/cockpit.html`, with directory index enabled |
+| `STATIC /<path>` | Serves only the pages and bundled assets listed in `PUBLIC_FILES`. Directory listings are disabled. |
 
 Passthroughs accept every method, but only POST has its request body read. Upstream response headers other than `Content-Type` and cache control are not preserved.
 
@@ -115,7 +115,7 @@ Restore proceeds in this order: `resize-window` to the snapshot size, updating t
 
 ## Frontend runtime
 
-The cockpit loads `xterm.js 5.5.0` and `addon-fit 0.10.0` from a CDN. The terminal logic assumes the scripts have loaded, so if you change to a self-contained distribution, update asset vendoring, CSP, license notices, and bundle inclusion together.
+The terminal loads the bundled `xterm.js 5.5.0`, `addon-fit 0.10.0`, and `addon-web-links 0.11.0` from the backend. Fonts fall back locally when Google Fonts cannot be reached. Installation and updates require access to the distribution sources.
 
 The prompt draft / history remain only in each window's `localStorage`. Font, auto-shrink, split layout, mini mode / depth, color theme, theme profile, and the open / closed state of NEW AGENT Advanced are synchronized by `bridge/prefs_sync.js` with the backend's `/telemetry/prefs` (`~/.orrery/prefs.json`). On load it copies the values into `localStorage` with a synchronous GET, intercepts `setItem` to PUT, and picks up changes from other windows with a GET every 4 seconds, dispatching `oc:prefs-changed`. This prevents a recurrence of the problem where the app window and a browser tab hold separate settings and look different. Reset applies only to font and auto-shrink.
 
@@ -136,7 +136,7 @@ The spawn catalog's local fallback is for the modal display and is not a fallbac
 
 - Bind is limited to `127.0.0.1`
 - No authentication within localhost
-- Static files expose all of `bridge/` with a directory index
+- Static routes expose only the fixed `PUBLIC_FILES` list
 - `/telemetry/fs/dirs` has no root allowlist
 - Dashboard control routes are passed through
 - Only the ORRERY Mail SQL is read-only

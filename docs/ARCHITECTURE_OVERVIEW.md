@@ -37,7 +37,7 @@ Codex App runtime は tmux pane を持たないため、cockpit terminal から�
 
 ## Network と offline の条件
 
-frontend は runtime に jsDelivr から `xterm.js 5.5.0` と `addon-fit 0.10.0`、Google Fonts を読みます。network がない場合、font は fallback し、xterm script が取得できなければ terminal UI は成立しません。現行配布は完全 self-contained bundle ではありません。
+端末は同梱の `xterm.js 5.5.0`、`addon-fit 0.10.0`、`addon-web-links 0.11.0` を backend から読み込みます。Google Fonts に接続できないときはローカルのフォントに切り替わります。インストールと更新には配布元への接続が必要です。
 
 backend は localhost-only ですが認証 layer を持ちません。`/api/*` proxy、terminal input、spawn、EXIT、mail body、local directory browser を remote tunnel や reverse proxy で公開しないでください。
 

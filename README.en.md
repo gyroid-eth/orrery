@@ -4,41 +4,42 @@
 
 <img src="app/icons-src/orrery-1024.png" alt="ORRERY icon" width="96">
 
-ORRERY is a cockpit for teams using Claude Code, Codex CLI, DeepSeek, or Local models. DeepSeek and Local agents use dsh or Hermes with a configured API connection. You do not have to hunt from window to window for the agent that is waiting for your reply. However many agents you run, only the ones waiting for a human decision blink in the roster so you can spot them at a glance, and you see every terminal, the traffic between agents, and your remaining usage quota on one screen while sending instructions from the same place. It runs on Mac (`ORRERY.app` and a browser) and on Windows (WSL2 and a browser), and works with [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry). See the [verification status by OS and feature](docs/en/install.md#requirements).
+ORRERY is a cockpit for arranging agent terminals, sending instructions, and following Mail and usage quotas. It supports Claude Code, Codex CLI, the optional Antigravity provider, and DeepSeek or Local models through dsh or Hermes.
 
 ## Quick start
 
-ORRERY is made of two parts: the **cockpit** (this repository: the screen where you arrange and drive terminals) and [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) (what runs agents and Mail behind the scenes, plus the Telemetry screen). **The next line installs both.** Run it in a Mac terminal, or inside WSL2 Ubuntu on Windows.
+**Start with the cockpit in your browser.** Run this line after preparing your Mac or Ubuntu 24.04 or later. On Windows, use the Ubuntu shell in WSL2. The command installs both the cockpit and [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry/blob/master/README.en.md).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
 ```
 
-Read the plan. To proceed, **type `yes` and press Enter**; `y` or Enter alone stops the setup. Here is an excerpt of successful shared-install output when no Claude/Codex CLI is detected and the default port is used:
+### Before you start
 
-```text
-  ok    doctor: no problems
-  ok    selftest: Mail round trip, file reservation and dashboard all work
-  ORRERY's base is ready. Choose and prepare your provider below.
-    Open:          http://127.0.0.1:8791/cockpit.html
-```
+- **macOS** with Homebrew installed. Run `brew install curl git tmux python@3.13 xz`. Use the `lsof` included with macOS.
+- **Ubuntu / WSL2**. In the Ubuntu shell, run `sudo apt update && sudo apt install -y ca-certificates curl git tmux python3 python3-venv lsof xz-utils`. For Hermes, also run `sudo apt install libatomic1`.
 
-Open the printed URL in your browser. If you see `WARN` or `NG`, read the message and the [installation guidance](docs/en/install.md#install-or-update-with-one-line). After the shared installation, prepare the provider family you want to use. You do not need all four.
+Use **Python 3.11 or later**. The shared installer provisions a compatible Python and uv if needed. If you install uv using its official shell script, run `export PATH="$HOME/.local/bin:$PATH"` in the same shell and check `uv --version`. [Detailed installation](docs/en/install.md#install-or-update-with-one-line) · [Get help from your agent](docs/en/install-with-agent.md)
 
-| Provider family | What to prepare | Steps |
-| --- | --- | --- |
-| Claude Code | Claude Code CLI and sign-in | [Mac](docs/en/install.md#mac) / [WSL](docs/en/install.md#windows-11) |
-| Codex CLI | Codex CLI and sign-in | [Mac](docs/en/install.md#mac) / [WSL](docs/en/install.md#windows-11) |
-| DeepSeek | An API key and API balance, dsh or Hermes, and connection settings | [API setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) |
-| Local models | Compatible API URL, model ID, server-specific key, dsh or Hermes, and connection settings | [API setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) |
+### Check that the base install is complete
 
-DeepSeek and Local do not require a Claude or ChatGPT login. Start with either dsh or Hermes. Node.js 24.2 or newer is needed for dsh; Hermes alone does not need `--dsh-node`. API launches currently support the DeepSeek/Local × dsh/Hermes combinations in Mail legacy mode, rather than arbitrary API and harness combinations.
+Review the plan in your terminal, then **type `yes` and press Enter** yourself to proceed. `ORRERY's base is ready` means the doctor and the selftest for Mail round trips, reservations, and dashboard access passed. Open the printed `Open:` URL in your browser (default `http://127.0.0.1:8791/cockpit.html`) and look for **Your first flight**. You can reopen it from `Settings → Getting started → Your first flight`. If a check warns or fails, use the message to find the matching step in the [installation guide](docs/en/install.md#install-or-update-with-one-line).
 
-`ORRERY's base is ready` reports the shared checks. It also names a detected Claude/Codex CLI, but it does not verify that CLI's sign-in or a DeepSeek/Local API connection. Configure your API connection and its stored-key reference, then follow the guide's launch check. See [supported combinations and limits](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/managed-catalog.en.md) for OS prerequisites and areas still awaiting verification.
+### Add the features you use
 
-Once your chosen provider is prepared, use **Your first flight** on the right to learn the controls. If it is hidden, open `Settings → Getting started → Your first flight` ([guide details](#start-with-the-guides-on-screen)). A first task can be: “Reply with a short greeting in one sentence. Do not change files or settings.”
+Set up the features you want after the base install. Each guide covers the first launch that verifies your CLI login or API connection.
 
-Installing through the cockpit defaults to keeping child OS terminal windows closed (`AGENTSTACK_AUTO_OPEN_CHILD=0`). Previously selected settings are kept, and `Open tmux` still opens a window when you need one. See [Automatic child windows](docs/en/install.md#automatic-child-windows) to enable automatic opening and for the treatment of older settings and equal environment values.
+| Feature | What to prepare and where to start |
+| --- | --- |
+| Claude Code / Codex CLI | Install and sign in to your chosen CLI. [Mac](docs/en/install.md#mac) / [WSL](docs/en/install.md#windows-11) |
+| DeepSeek / Local (dsh or Hermes) | Prepare the API connection, model, and required key and key store. dsh uses Node.js 24.2 or later. [API setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) |
+| Antigravity | Sign in to the Antigravity CLI and install the optional provider. [Antigravity](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.en.md) |
+| Computer use | Set up Cua Driver and grant OS screen recording and interaction permissions. [Computer use](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/computer-use.en.md) |
+| Browser use | Set up Chrome and the connection for your harness. [Browser setup and approvals](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/delegation.en.md#browser-and-computer-use-what-is-reachable-and-what-a-person-does) |
+| Phone | Configure Tailscale and check which devices can reach the reader. [Phone access](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md) |
+| ChatGPT MCP | Pair the read-only adapter (default port 8792) and connect a dedicated tunnel and workspace. [ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.en.md) |
+| Obsidian research set | Add Obsidian, a research vault, and the research skill. [Research set](docs/en/research-set.md) |
+| Codex App | Set up Codex App and the required CLI, install the plugin, and review the hooks. [Codex App integration](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/codex-app.en.md) |
 
 ![The cockpit and Telemetry show the same agents. Claude Code and Codex use their CLIs; DeepSeek and Local use dsh or Hermes. Agents run in tmux and communicate through Mail](docs/images/cockpit_telemetry_relation.svg)
 
@@ -49,9 +50,9 @@ Installing through the cockpit defaults to keeping child OS terminal windows clo
 | `~/orrery` | The cockpit source (start and update scripts) |
 | `~/orrery-telemetry` | The source of Telemetry, Mail, hooks, and the installer. What actually runs is the copy installed in `~/.agentstack` |
 | `~/.agentstack` | The running installation, the `env.sh` settings, and the Mail DB |
-| `~/orrery-work` | The agents' work folder (the project folder). It receives a `CLAUDE.md` with ORRERY's instructions. It is the default folder of `+ NEW AGENT`. Mail and reservations are scoped to it |
+| `~/orrery-work` | The agents' work folder (the project folder). It is the default folder of `+ NEW AGENT`. Mail and reservations follow the work-folder settings |
 
-Ports: cockpit 8791, Telemetry 8770, Mail 18765. `ORRERY.app` is a window that opens the cockpit on 8791. For changing the work folder and uninstalling, see [Work folder and Uninstall](#work-folder-and-uninstall).
+Default ports are 8791 for the cockpit, 8770 for Telemetry, and 18765 for a new Mail installation. For changing the work folder and uninstalling, see [Work folder and Uninstall](#work-folder-and-uninstall).
 
 ![An ORRERY cockpit example: roster on the left, two terminal panes above a third in the center, mini-orrery at the top right, and Mail below it](docs/images/cockpit_overview.png)
 
@@ -111,7 +112,7 @@ Legacy mode reads Codex and, with Telemetry API 35 or later, bound Claude Code, 
 
 ### Choose a scientist's portrait and a model (NEW AGENT)
 
-Open `+ NEW AGENT` and select a scientist's portrait to generate a name; you can adjust its adjective. Choose a model from Claude, Codex, DeepSeek, or Local models. DeepSeek and Local also offer a dsh / Hermes Harness choice. Available models and harnesses depend on your installed configuration.
+Open `+ NEW AGENT` and select a scientist's portrait to generate a name; you can adjust its adjective. Choose from Claude, Codex, DeepSeek, Local models, or Antigravity when installed on a supported setup. DeepSeek and Local also offer dsh and Hermes as harness choices.
 
 **First-time setup for DeepSeek, dsh, and Hermes:** A normal update does not set up API keys or connections. The cockpit has no API-key entry screen. Prepare them in this order:
 
@@ -266,13 +267,13 @@ Run the backend in WSL2 and open it in a Windows browser to use the same screen 
 
 ## Requirements
 
-- macOS, or Windows with WSL2 (Ubuntu). `ORRERY.app`, its app installer, and the global hotkey are macOS only
-- The shared installation requires Python 3.11 or later and `tmux`. If no suitable Python is available, the installer uses uv to install Python 3.12. The cockpit's standalone `start-cockpit.sh` accepts Python 3.10 or later; the shared installation including Telemetry requires 3.11 or later
+- Run shared setup in a macOS terminal or in Ubuntu (in WSL2 on Windows), then open the cockpit in a browser. [OS verification status](docs/en/install.md#requirements)
+- Starting the cockpit on its own and installing it together with Telemetry both require Python 3.11 or later and `tmux`. If no suitable Python is available, the shared installer uses uv to install Python 3.12
 - Node.js / npm and Rust / Cargo (to develop or build the desktop app)
 - On a Mac where `tmux` installed by Homebrew is not found, set up `brew shellenv` in your shell so `/opt/homebrew/bin` is on PATH (the installer reports `tmux` as "Missing" when it is not)
 - A running [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) (to use all integrated features)
 - ORRERY Mail SQLite (to use the mail rail)
-- Access to a runtime CDN (for `xterm.js` and its addons; the current distribution is not a fully offline bundle)
+- Network access to the distribution sources when installing or updating. The terminal bundles `xterm.js` and its addons
 
 See [Installation](docs/en/install.md) for details and requirements by role.
 
@@ -286,12 +287,12 @@ Add `--project-key` to the install line. To change it later, run the same line a
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key ~/my-project
 ```
 
-**To have agents work on an Obsidian vault**, pass the vault's path as `--project-key` (for example `--project-key ~/Documents/MyVault`). The vault's `CLAUDE.md` receives ORRERY's block of instructions (Codex's instructions go to `~/.codex/AGENTS.md`); if it already has a `CLAUDE.md`, only the block is added and the existing content stays ([Use it together with Obsidian](#use-it-together-with-obsidian)). **On WSL2, keep the work folder inside the Ubuntu home.** If you pass a Windows-side folder (`/mnt/c/…`) as `--project-key`, the one-line installer stops without changing anything. Do not make a Windows-side vault the work folder: keep the work folder in the Ubuntu home and hand agents the `/mnt/c/…` path to work on, as the [research set](docs/en/research-set.md) does.
+**To have agents work on an Obsidian vault**, pass the vault's path as `--project-key` (for example `--project-key ~/Documents/MyVault`). See [instruction migration](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.en.md) for user-scoped instructions. **On WSL2, keep the work folder inside the Ubuntu home.** If you pass a Windows-side folder (`/mnt/c/…`) as `--project-key`, the one-line installer stops without changing anything. Do not make a Windows-side vault the work folder: keep the work folder in the Ubuntu home and hand agents the `/mnt/c/…` path to work on, as the [research set](docs/en/research-set.md) does.
 
-- The ORRERY block in the old folder's `CLAUDE.md` stays. Delete between its markers by hand if you do not want it.
+- If an old working folder still contains a managed block, review [instruction migration](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.en.md#legacy-blocks).
 - Mail is scoped per project. Agents that were already running keep showing in Telemetry, but they stay on the old project and cannot exchange Mail with new agents. EXIT them and start them again.
 - The folder choices of `+ NEW AGENT` are the work folder and `~` by default. To change them, use `cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"` (the project key is kept).
-- **If you start `claude` directly in a terminal from a folder without ORRERY's instructions (such as home), it runs without them.** `/delegate` is not used and no parent–child line appears. Started inside the work folder (the project-key folder or a vault), it picks up that folder's `CLAUDE.md` block. Start agents with `+ NEW AGENT` or `~/.agentstack/bin/agent-start <work folder>`.
+- Start a managed agent with `+ NEW AGENT`, `~/.agentstack/bin/agent-start <work folder>`, or `agent-start-codex` for Codex.
 
 ### Uninstall
 
@@ -330,6 +331,10 @@ To add DeepSeek, dsh, or Hermes for the first time, follow the [initial setup gu
 
 [Installation](docs/en/install.md) and [Configuration](docs/en/configuration.md) cover manual clone / venv / backend setup, matching Telemetry's project key and Mail DB, building the desktop app, and setting its sidecar path.
 
+## Use the macOS app (advanced)
+
+Once you are comfortable operating agents in the browser, you can build `ORRERY.app` from source on macOS. There is currently no prebuilt distribution. [Build and run the app](docs/en/install.md#build-the-desktop-app)
+
 ## Documentation
 
 Find material by purpose in the [complete docs index](docs/en/README.md).
@@ -339,9 +344,11 @@ The Japanese documents are the source of truth. The English versions are in READ
 | Document | Contents |
 | --- | --- |
 | [Installation](docs/en/install.md) | Requirements, venv, connecting to ORRERY Telemetry, the backend, `ORRERY.app` |
+| [Install with help from your agent](docs/en/install-with-agent.md) | Review the plan and keep approvals in your hands |
+| [ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.en.md) | Read-only adapter and dedicated tunnel |
 | [Configuration](docs/en/configuration.md) | All environment variables, defaults, connection targets and storage locations |
 | [Usage](docs/en/usage.md) | Roster, terminal, split, spawn, mail, TELEMETRY, replay |
-| [Troubleshooting](docs/en/troubleshooting.md) | Startup, ports, `:8770`, `pyte`, tmux, CDN |
+| [Troubleshooting](docs/en/troubleshooting.md) | Startup, ports, `:8770`, `pyte`, tmux, and terminal assets |
 | [Architecture overview](docs/en/ARCHITECTURE_OVERVIEW.md) | tmux, Codex App, network, data retention, handling of portrait images |
 | [Implementation architecture](docs/en/ARCHITECTURE.md) | Details of the backend, HTTP / WebSocket, and tmux control |
 | [Legacy tmux target protection](docs/en/runtime-target.md) | Pinned endpoints, global pane refusals and repair |

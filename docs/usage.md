@@ -108,7 +108,13 @@ warmup、finished、gone、retired の row は左 roster に表示しません�
 
 tile をクリックすると、右の mail rail の filter もその agent に切り替わります。tile に mouse を乗せる（または `Tab` で focus する）と、右に詳細 card が出ます。pane title、最新 mail の件名、最後に動いた時刻、ORRERY Mail への登録時刻、起動時刻、provider / model / command、成果物の数（Deliverables。1 件以上あるときだけ）、表示している説明文の出どころと具体さが並びます。
 
-![CoralCurie の tile に mouse を乗せて出した詳細 card。Deliverables 3 の行がある](images/cockpit_roster_detail.png)
+詳細 card の **Computer use** と **Browser use** で、それぞれの状態を確認できます。起動記録のない稼働中の Claude Code／Codex CLI では、Telemetry API 52 以降がプロセスの起動引数や子孫プロセスから確認した値を読み取り専用で表示します。プロセスや引数、画面 relay のモード、Claude の Chrome フラグを確認できない項目には `Unknown` と理由が出ます。
+
+Antigravity では Telemetry API 53 以降が ORRERY の起動時の選択を表示し、稼働中の画面 relay と照合できるときはその実効値を表示します。起動記録などから値を確定できない場合は、項目に `Unknown` と理由が付きます。
+
+詳細 card から道具を変更できるのは、legacy の Claude Code／Codex CLI で、会話の照合と Restart／Resume の条件を満たす場合です。親付きは Telemetry API 45 以降、親なしは API 46 以降と保存済みの起動設定が必要です。表示された項目を選んで、同じ会話の **Restart** または **Resume** を確認します。Restart は作業中のターンを中断します。Codex App、常駐 agent、会話のみの Resume などでは変更ボタンに理由が出ます。
+
+![tile に mouse を乗せて出した詳細 card。Deliverables 3 の行がある](images/cockpit_roster_detail.png)
 
 成果物（Deliverables）は、ORRERY Telemetry が project の `logs/` から集めた、その agent の作業ログ（`LOG_*.md` のうち frontmatter の `agent:` がその agent のもの）です。一覧は TELEMETRY の agent panel の `Output` タブで開けます（[TELEMETRY](#telemetry)）。
 
@@ -127,7 +133,7 @@ tile をクリックすればそのターミナルに入り、質問を読んで
 
 ![7体の中で PearlFaraday だけが赤く点滅し、1 need you が出る。need you で絞り込み、tile をクリックして承認の質問を読み、composer から 1 を送ると点滅が消える](images/cockpit_need_you.gif)
 
-TELEMETRY の DECK と NETWORK での見え方は [介入待ちの見分け方](#介入待ちの見分け方) にあります。
+TELEMETRY の DECK と NETWORK での見え方は [介入待ちの見分け方](#介入待ちの見分け方) にあります。子が承認やログインなどで止まったときに親へ届く自動通知は、[Telemetry の DECK](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/dashboard.md#deck) を参照してください。
 
 ![roster の tile。WildNewton は pin で上に固定され、CosmicGuericke には hover で copy icon と詳細 card が出ている](images/cockpit_roster_pin_copy.png)
 
@@ -234,7 +240,7 @@ PC の Reader では、承認待ちになると入力欄のすぐ上に `Approva
 
 対象はPCの既存managerが扱うlegacy paneだけで、共有target guardとfreshなsocket/server/session/pane/kernel birthを照合します。agent別名からpaneを推測せず、agent起動・別socket/global対象への迂回・Codex起動recordの要求はしません。複数paneは自分で選び、不明はUnavailableです。sessionはreaderの現在のmetadata project外にある場合もあります。
 
-前面で開いている選択1paneだけを約3秒ごとに更新します。previewは最大40行/6KiBの文字表示、収集64KiB/取得3秒/serialized応答16KiBで、recorder/復元historyは送りません。収集上限超過では本文を破棄してACKの対応を維持し、終端未着ならstreamを隔離します。秘密が画面に含まれる可能性があり、スマホ側を閉じても既存PC recorderやOSの記録まで消すわけではありません。
+前面で開いている選択1paneだけを約3秒ごとに更新します。preview は通常のスマホ relay では最大120行／12 KiB、拡張指定のない互換リクエストでは40行／6 KiBの文字表示です。収集64 KiB／取得3秒／serialized 応答16 KiBで、recorder/復元historyは送りません。収集上限超過では本文を破棄してACKの対応を維持し、終端未着ならstreamを隔離します。秘密が画面に含まれる可能性があり、スマホ側を閉じても既存PC recorderやOSの記録まで消すわけではありません。
 
 1行（UTF-8最大4KiB）ごとにReview→Send onceが必要です。宛先pane・全文・Enter・30秒期限を固定し、pane交換やpreview失敗後は再確認します。同write lock内でfresh検査から全chunk/Enterまで送り、lock解放後に全tmux ACKを待ちます。Receivedはターミナル受理で、agentの実行・完了ではありません。部分失敗/timeoutはunknownとなり、再送や残chunk補送はしません。同pane内のprogram変更・shell化、既存buffer、他writer、最終検査後の変化は保証外です。スマホのclose/背景移行で表示・下書き・未送信確認を消します。通常のPC入力と履歴は不変で、実phone policy・keyboard・実targetの受入は隔離試験とは別です。
 
@@ -342,39 +348,50 @@ composer は、ターミナルとは別の入力欄です。ターミナルに�
 
 下書きは cockpit に 1 つだけで、送り先の agent ごとには分かれません。打つたびに保存され、reload や ORRERY.app の再起動のあとも残り、送信すると消えます。保存先はその window の `localStorage` で、他の window とは共有しません。独立の窓は、それぞれの session ごとに自分の下書きを持ちます（閉じると cockpit に戻る。[独立の窓](#独立の窓)）。
 
-composer は active pane へ bracketed paste を送り、250 ms 後に carriage return を送信します。
+composer は対象の pane に入力を貼り付け、送信できる状態を確認してから Enter を送ります。複数の送り先を指定した場合も、各 pane で確認します。
 
 | 操作 | 動作 |
 | --- | --- |
 | `Enter` | 送信 |
 | `Shift+Enter` | 改行 |
-| `Esc` | interrupt |
+| `Esc`／停止ボタン（■） | 選択した agent に中断を要求 |
 | `↑` / `↓` | 最大50件の送信履歴 |
 | ファイル paste | コピーしたファイルのパスを composer に入れる（空白を含むパスは引用符で囲む） |
 | 画像 paste | Mac: literal `Ctrl+V` を TUI へ転送。WSL: 画像を PNG として保存し、そのパスを composer に入れる |
 
 IME composition 中の Enter は誤送信を避ける guard があります。送信履歴も `localStorage` に保存されます。
 
-`⎋ STOP` は `Esc` と同じ interrupt、`SEND ⏎` は `Enter` と同じ送信です。送ると `sent → <agent>` と出ます。composer の左には送信先の agent の顔と名前が出ます。ファイルを貼るとパスが入ります（[ターミナルから開く・ターミナルに渡す](#ターミナルから開くターミナルに渡す)）。
+送信ボタンは `Enter` と同じ送信です。受領を確認すると `Sent to <agent>` と出ます。作業中の Hermes にも人が composer から通常文を送れます。届いた文は Hermes の作業中の入力設定（既定は中断）に従います。ORRERY Mail の自動通知は、Hermes の作業が落ち着くまで待ちます。
+
+選択した agent が作業中で、下書き・添付・宛先の明示指定がないとき、送信ボタンが停止ボタン（■）になります。候補が開いている間は、`Esc` で先に候補を閉じます。
+
+`Esc` と停止ボタンは、作業中の Hermes に `Ctrl+C`、ほかの harness に `Esc` を送ります。作業中の agent が入力欄に戻ると `Interrupted → <名前>`、待機中の agent に Esc が届いた場合は `⎋ Esc → <名前>` と表示します。待機中の Hermes は `Ctrl+C` で終了することがあるため、中断要求が拒否されます。
 
 ### skill と command の候補
 
-入力が `/` か `$` で始まると、送信先の CLI の skill と built-in command を最大8件、候補に出します。`↑` / `↓` で選び、`Tab` か `Enter` で確定すると、その CLI の正しい記号（Claude と Gemini は `/`、Codex は `$`）に直して入れます。
+入力が `/` か `$` で始まると、送信先の CLI の候補が最大8件出ます。`↑` / `↓` で選び、`Tab` か `Enter` で入力欄に入れます。組み込みコマンドは `/` を付けます。skill は CLI に合わせ、Claude と Antigravity は `/`、Codex は `$` を付けます。
 
 | 送信先 | skill を探す場所 | built-in |
 | --- | --- | --- |
 | Claude Code | `~/.claude/skills` | compact / clear / model / mcp / resume / help |
-| Codex | `~/.codex/skills`（同梱の skill を含む） | compact / new / model / approvals / status / help |
+| Codex CLI | 対象 pane の `CODEX_HOME` と作業フォルダーを使う native カタログ。対象を照合できないときは組み込み候補のみ | compact / new / model / approvals / status / help |
+| Antigravity CLI | `~/.gemini/antigravity-cli/skills` | compact / skills / help |
 | Gemini | `~/.gemini/skills` | compress / clear / model / mcp / stats / help |
 
+dsh と Hermes では端末側の slash 候補を検証します。composer 独自の skill 候補一覧はありません。
+
 ![Codex の agent に $r と打つと、$review-pr（skill）と approvals（built-in）が候補に出る](images/cockpit_skill_menu.png)
+
+単独の slash command は、候補から選んだときに付く末尾の空白を除いて送ります。引数付きなら入力した形で送ります。端末に候補が出ない場合（Antigravity の `No matches` を含む）は、端末の入力と command が一致すれば送ります。別の候補が選ばれている場合や、候補を確認できない場合は下書きを残し、送信を見送ります。
+
+`/help` や `/model` など、CLI の画面を切り替える command では、送信した command に対応する画面が確認できれば受領になります。
 
 ### 送信ガード
 
 送信する前に、1 行目が次のどちらかなら送らずに止め、composer の上に確認の帯を出します。
 
-- **session を終える・消す built-in**: Claude の `/clear` `/logout` `/exit` `/quit`、Codex の `/logout` `/quit` `/exit` `/new`、Gemini の `/clear` `/exit` `/quit`
-- **記号の取り違え**: Codex に `/名前`、Claude に `$名前` を送ろうとしたとき。同じ名前の skill があれば、正しい記号に直して送るボタンを出す
+- **session を終える・消す built-in**: Claude の `/clear` `/logout` `/exit` `/quit`、Codex の `/logout` `/quit` `/exit` `/new` `/clear`、Antigravity と Gemini の `/clear` `/exit` `/quit`
+- **skill の記号の取り違えと未確認の Codex コマンド**。例として Codex に `/review-pr` を送ろうとすると、同名の skill が見つかった場合は `$review-pr` に直して送るボタンが出る
 
 帯のボタンは、直して送る（例 `send as $review-pr`）・`send as typed`（そのまま送る）・`cancel` です。
 
@@ -415,11 +432,15 @@ DeepSeek・dsh / Hermesを初めて使う場合は、ガイドと同じ次の順
 **準備が済んだら、次の画面操作に進みます。**
 
 1. `Choose a scientist` の肖像を選ぶか、`AUTO` のままにします。
-2. `Model` で Claude・Codex・DeepSeek・Local models の系統を選び、中央で model を選びます。Local models は検索できます。
+2. `Model` で利用できる系統を選び、中央で model を選びます。Claude・Codex・DeepSeek・Local models に加え、導入済みなら Antigravity も選べます。Local models は検索できます。
 3. 右の `Harness` を選びます。DeepSeek・Local では、カタログにある dsh / Hermes から選びます。利用できない候補は選択できません。アプリやキー保存先の準備不足、OS・Mail方式の非対応などの案内と、設定ガイドへのリンクが表示されます。
 4. 表示される場合は `Helper model` と `Effort` を確認し、その下で起動先と task を指定します。詳しくは[DeepSeek・Local の標準 New Agent](configuration.md#deepseeklocal-の標準-new-agent)を参照してください。
 
-![cockpit の NEW AGENT。Curie の肖像と名前、Claude・Codex・DeepSeek・Local models の4系統、DeepSeek の dsh・Hermes 選択肢](images/cockpit-native-spawn.png)
+5. macOS の legacy 接続で Telemetry API 53 以降のカタログに `computer_modes` がある場合、**Computer use** で **Off**（画面の道具なし）、**View**（確認）、**Control**（確認と操作）を選べます。Claude Code、Codex CLI、dsh、Hermes、Antigravity CLI が対象です。旧カタログではスイッチを表示する場合があり、互換の Cua Driver 指定を使います。**Browser** は利用可能な Off・Temporary Chrome・My Chrome から選びます。古いカタログでは単一のスイッチになる場合があります。fresh ではこの道具欄を表示しません。スマホは専用の [New agent の案内](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md) を参照してください。
+
+cockpit は独立 agent として起動します。Antigravity の親なし起動には、macOS と、カタログに standalone 対応を返す Telemetry（API 50 以降）が必要です。対応する起動では Git 管理外の作業フォルダーも選べます。親を付ける場合や Isolation を指定する場合は独立した Telemetry の NEW AGENT を使います。古い Telemetry で親なしに対応しない場合は、Telemetry 側の委任起動を使います。準備と併用条件は Telemetry の [Computer use](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/computer-use.md) と [Antigravity](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.md) を参照してください。
+
+![cockpit の NEW AGENT。肖像と名前、撮影時の model の系統と DeepSeek の dsh・Hermes 選択肢](images/cockpit-native-spawn.png)
 
 ![同じ実画面で Claude → Codex → DeepSeek（dsh・Hermes）→ Local models（dsh・Hermes）と切り替える](images/cockpit-native-spawn.gif)
 
@@ -428,17 +449,15 @@ DeepSeek・dsh / Hermesを初めて使う場合は、ガイドと同じ次の順
 入力項目:
 
 - Auto または Scientist + Adjective の identity
-- Claude / Codex / DeepSeek / Local models、Harness、表示される場合は Helper model・reasoning effort
+- Model、Harness、表示される場合は Helper model・reasoning effort
 - working directory
+- 利用できる場合は Computer use と Browser
 - task（必須、最大4000文字）
-- standalone または parent
-- role / emoji / group
-- worktree / base revision
-- headless または Ghostty
+- role
 
-parent 候補は稼働中の agent です。Auto は `name:null` を送り、名前・model・effort・directory の最終検証は ORRERY Telemetry server が行います。
+Auto は `name:null` を送り、名前・model・effort・directory の最終検証は ORRERY Telemetry server が行います。親・group・worktree・base revision の選択は独立した Telemetry の ADVANCED にあります。
 
-`Spawn` を押すと、右下に経過が出ます。`LAUNCHING · <名前>` のあと、起動できれば `SPAWNED · <名前>`、失敗すれば `SPAWN FAILED · <名前> · <理由>` です。140 秒たっても結果が返らないときは `no verdict after 140s` と出ます（agent は起動しているかもしれないので、roster を確かめる）。
+`Spawn` 後、Telemetry が指定した期限まで起動結果を待ちます。期限が返らない場合は140秒です。`No launch result after …s` と出たときは、再試行の前に roster を確認します。
 
 scientist を選ぶと未使用の adjective が自動で一つ選ばれ、name card の 🎲 で再抽選できます。embedded TELEMETRY 側の spawn modal では、名前の衝突時に `SHUFFLE` が同じ scientist の別の verified name を server に再提案させます。
 
