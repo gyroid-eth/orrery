@@ -558,6 +558,9 @@
   .agent-detail-modes .current{
     border-radius:3px;color:var(--amber);font-weight:600;background:rgb(var(--theme-accent-rgb) / .13);
   }
+  .agent-detail-modes .next{border-radius:3px;outline:1px dashed rgb(var(--theme-accent-rgb) / .6);outline-offset:-1px}
+  .agent-detail-modes .next:not(.current){color:var(--amber)}
+  .agent-detail-pending{flex:none;width:6px;height:6px;border-radius:50%;background:var(--amber)}
   .agent-detail-switch{
     width:28px;height:16px;display:flex;align-items:center;padding:2px;
     border:1px solid var(--hair);border-radius:999px;background:var(--panel-2);
@@ -4054,7 +4057,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "1a98656e8fe5ea3db1e990b0b871d6f00c16644b01035b113c1b6b4438d35a38",
+        "digest": "5d3bcdf1d35de520ad43408cefa7912efcfb2a70de52a9a9f95fec193620dee6",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4147,7 +4150,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "d1228ba83facf5e54b0feb59e2749799404bf8501b79517471658184d337f73c",
+        "digest": "cb5d745fc492078c4a9b3660cf5a3c4f4373e4485fd86f8606a8242235602d54",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -4176,9 +4179,9 @@
       }
     }
   },
-  "inventory_digest": "126a53252dc441484457b3344a19b27847bb01db0e26a9dab6dc17f4710bcbe7",
+  "inventory_digest": "c081be6076be212109396b627256efbd84ed1a1d7e8dec5d2ba5a54e938bf306",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "9e44cb074bf57ff1097b311082a0569457d4e2ae1742841eeb42910d7b2ca517",
+  "source_digest": "4884dbc5fb937876102898a160f65da5ba5570dec8cd98d1a255cd61d4a6d033",
   "surface": "cockpit",
   "version": 1
 }
@@ -9369,10 +9372,19 @@ function permissionConversationOnly(a){
 function permissionCli(a){
   return a.harness_kind==='claude'||a.harness_kind==='codex';
 }
+const SAVED_PERMISSION_API=52;
+function permissionSaved(a,api){
+  // Agents without a launch record keep a saved choice that their launcher applies.
+  return a.permission_save_supported===true&&api>=SAVED_PERMISSION_API;
+}
+function permissionSavesForNextStart(a,api){
+  return permissionSaved(a,api)&&a.permission_apply==='next_start';
+}
 function agentPermissionBlockReason(a,api){
+  if(permissionSavesForNextStart(a,api))return '';
   if(a.lifecycle==='persistent')return 'Persistent agent';
   if(a.surface==='codex-app'||a.program==='codex-app')return 'Codex App';
-  const standalone=a.parent_state==='top'||a.parentless===true||a.standalone===true;
+  const standalone=a.parent_state==='top'||a.parentless===true||a.standalone===true||permissionSaved(a,api);
   if(standalone&&!(api>=STANDALONE_PERMISSION_API))return 'Standalone agent';
   if(permissionConversationOnly(a))return 'Conversation-only resume has no saved permissions';
   if(!permissionCli(a)){
@@ -9405,6 +9417,14 @@ function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false){
     parentState:a.parent_state,parent:a.parent_state==='child'?text(a.parent_agent):null,
     computer:AGENT_DETAIL_COMPUTER.has(a.computer_use)?a.computer_use:null,
     browser:typeof a.browser_use==='boolean'?a.browser_use:null,
+    // What the agent's next start gets: a saved choice, or what its launcher reads from settings.
+    // A running agent whose current value is unknown cannot say that a restart changes it.
+    computerNext:AGENT_DETAIL_COMPUTER.has(a.computer_use_next)&&a.computer_use_next!==a.computer_use&&
+      (AGENT_DETAIL_COMPUTER.has(a.computer_use)||a.running!==true)?a.computer_use_next:null,
+    browserNext:typeof a.browser_use_next==='boolean'&&a.browser_use_next!==a.browser_use&&
+      (typeof a.browser_use==='boolean'||a.running!==true)?a.browser_use_next:null,
+    nextLabel:a.running===true?'Restart to apply':'Next start',
+    permissionNote:permissionSavesForNextStart(a,api)?'Saved for the next start':'',
     permissions:Boolean(a.harness_kind||a.lifecycle==='persistent'||a.surface==='codex-app'||permissionConversationOnly(a)||
       a.computer_use||typeof a.browser_use==='boolean'),
     permissionReason:agentPermissionBlockReason(a,api)||(busy?'Agent action in progress':''),
@@ -9427,26 +9447,33 @@ function agentDetailItem(icon,label,body='',path=null){
 function agentDetailPermissions(detail){
   if(!detail.permissions)return '';
   const disabled=reason=>reason?' disabled':'';
-  const title=(label,reason)=>esc(reason?`${label} (${reason})`:label);
-  const computer=detail.computer?AGENT_DETAIL_COMPUTER.get(detail.computer):'Unknown';
+  const note=detail.permissionNote||'';
+  const title=(label,reason)=>esc(reason||note?`${label} (${reason||note})`:label);
+  const nextLabel=detail.nextLabel||'Restart to apply';
+  const computerNext=detail.computerNext?`. ${nextLabel}: ${AGENT_DETAIL_COMPUTER.get(detail.computerNext)}`:'';
+  const browserNext=typeof detail.browserNext==='boolean'?`. ${nextLabel}: ${detail.browserNext?'On':'Off'}`:'';
+  const computer=(detail.computer?AGENT_DETAIL_COMPUTER.get(detail.computer):'Unknown')+computerNext;
+  const pending='<span class="agent-detail-pending" aria-hidden="true"></span>';
   const modes=[...AGENT_DETAIL_COMPUTER].map(([value,label])=>{
     const reason=detail.permissionReason;
-    const current=value===detail.computer;
+    const current=value===detail.computer,next=value===detail.computerNext;
+    const classes=[current&&'current',next&&'next'].filter(Boolean).join(' ');
+    const name=`Computer use: ${label}${next?` (${nextLabel.toLowerCase()})`:''}`;
     return `<button type="button" data-computer="${value}" aria-pressed="${current}"
-      aria-label="Computer use: ${label}" title="${title(`Computer use: ${label}`,reason)}"
-      ${current?'class="current"':''}${disabled(reason)}>${label}</button>`;
+      aria-label="${name}" title="${title(name,reason)}"
+      ${classes?`class="${classes}"`:''}${disabled(reason)}>${label}</button>`;
   }).join('');
-  const browserLabel=`Browser use: ${detail.browser===null?'Unknown':detail.browser?'On':'Off'}`;
+  const browserLabel=`Browser use: ${detail.browser===null?'Unknown':detail.browser?'On':'Off'}${browserNext}`;
   const switchState=detail.browser===null?' unknown':detail.browser?' on':'';
   return `<div class="agent-detail-permissions" role="group" aria-label="Permissions">
-    <div class="agent-detail-item" role="group" aria-label="Computer use" title="${title(`Computer use: ${computer}`,detail.permissionReason)}">
-      ${agentDetailIcon('computer')}<span class="agent-detail-modes">${modes}</span>
+    <div class="agent-detail-item" role="group" aria-label="Computer use${computerNext}" title="${title(`Computer use: ${computer}`,detail.permissionReason)}">
+      ${agentDetailIcon('computer')}<span class="agent-detail-modes">${modes}</span>${computerNext?pending:''}
     </div>
     <div class="agent-detail-item" title="${title(browserLabel,detail.permissionReason)}">
       ${agentDetailIcon('browser')}<button class="agent-detail-browser-toggle" type="button" data-browser
         ${detail.browser===null?'':`role="switch" aria-checked="${detail.browser}"`}
-        aria-label="${detail.browser===null?browserLabel:'Browser use'}" title="${title(browserLabel,detail.permissionReason)}"${disabled(detail.permissionReason)}>
-        <span class="agent-detail-switch${switchState}" aria-hidden="true"></span></button>
+        aria-label="${detail.browser===null||browserNext?browserLabel:'Browser use'}" title="${title(browserLabel,detail.permissionReason)}"${disabled(detail.permissionReason)}>
+        <span class="agent-detail-switch${switchState}" aria-hidden="true"></span></button>${browserNext?pending:''}
     </div>
   </div>`;
 }
@@ -9606,15 +9633,22 @@ agentDetail.addEventListener('click',event=>{
   if(!button||button.disabled||!a||permissionConfirm.open||bulkActionBusy||permissionChangeBusy||
     agentPermissionBlockReason(a,permissionApi))return;
   const computer=button.dataset.computer;
-  if(computer&&computer===a.computer_use)return;
+  // A saved choice compares with what the next start gets; a launch record with the live value.
+  const saved=permissionSaved(a,permissionApi);
+  const effective=key=>saved&&a[key+'_next']!=null?a[key+'_next']:a[key];
+  if(computer&&computer===effective('computer_use'))return;
+  const saveOnly=permissionSavesForNextStart(a,permissionApi);
+  const browser=effective('browser_use');
   permissionComputer.parentElement.hidden=permissionComputer.disabled=!computer;
   permissionBrowser.parentElement.hidden=permissionBrowser.disabled=Boolean(computer);
   permissionComputer.value=computer||'';
-  permissionBrowser.value=typeof a.browser_use==='boolean'?(a.browser_use?'off':'on'):'';
+  permissionBrowser.value=typeof browser==='boolean'?(browser?'off':'on'):saveOnly?'on':'';
   pendingPermissionChange={agent:a,key:computer?'computer_use':'browser_use'};
   const name=OrreryDemo.mask(a.name);
-  setText(permissionApply,a.running?'Restart':'Resume');
-  setText(permissionConfirm.querySelector('p'),a.running?
+  setText(permissionApply,saveOnly?'Save':a.running?'Restart':'Resume');
+  setText(permissionConfirm.querySelector('p'),saveOnly?
+    `Save this permission for ${name}? It applies the next time ${name} starts; the running session keeps its tools.`:
+    a.running?
     `Restart ${name} in the same conversation with this permission change? Any work in progress will be interrupted.`:
     `Resume ${name} in the same conversation with this permission change?`);
   permissionConfirm.showModal();
@@ -9644,9 +9678,35 @@ async function confirmPermissionStop(original,api,signal){
   if(reason)throw new Error(reason);
   return true;
 }
+async function saveAgentPermission(original,key,value){
+  const {name}=original;
+  if(permissionChangeBusy||bulkActionBusy)return;
+  permissionChangeBusy=true;updateRosterBulkUI();
+  if(detailAnchor)showAgentDetail(detailAnchor);
+  const label=OrreryDemo.mask(name);
+  showToast(`Saving for ${label}…`,false,30000);
+  try{
+    const api=await loadPermissionApi(true);
+    if(!(api>=SAVED_PERMISSION_API))throw new Error(`Requires Telemetry API ${SAVED_PERMISSION_API}`);
+    const agent=currentAgentNamed(name);
+    if(!agent||!permissionSavesForNextStart(agent,api)||agent.project_key!==original.project_key){
+      throw new Error('The agent changed. Choose permissions again');
+    }
+    const result=await postBulkAgentAction('agent-permissions',{session:name,[key]:value});
+    if(result.action!=='saved')throw new Error('Telemetry did not confirm the saved permission');
+    showToast(`Saved for ${label}. It applies the next time ${label} starts.`);
+  }catch(error){
+    showToast(`Could not save the permission for ${label} · ${OrreryDemo.mask(String(error?.message||error))}`,true,9000);
+  }finally{
+    permissionChangeBusy=false;updateRosterBulkUI();
+    if(detailAnchor)showAgentDetail(detailAnchor);
+  }
+}
 async function changeAgentPermission(original,key,value){
   const {name}=original;
-  if(permissionChangeBusy||bulkActionBusy||value===original[key])return;
+  if(permissionSavesForNextStart(original,permissionApi))return saveAgentPermission(original,key,value);
+  const saved=permissionSaved(original,permissionApi)&&original[key+'_next']!=null;
+  if(permissionChangeBusy||bulkActionBusy||value===(saved?original[key+'_next']:original[key]))return;
   permissionChangeBusy=true;updateRosterBulkUI();
   if(detailAnchor)showAgentDetail(detailAnchor);
   const label=OrreryDemo.mask(name),restart=original.running===true;

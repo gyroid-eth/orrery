@@ -90,6 +90,54 @@ def test_api46_permission_reason_is_rendered_as_text():
     assert 'title="Browser use: On (Missing &quot;settings&quot; &lt;details&gt;)"' in markup
     assert markup.count(' disabled') == 4
 
+
+def test_values_read_from_the_process_mark_what_the_next_start_changes():
+    agent = {
+        "name": "FixtureAgent", "category": "agent", "running": True, "parent_state": "top",
+        "harness_kind": "claude", "computer_use": "off", "computer_use_next": "control",
+        "browser_use": True, "browser_use_next": False, "permission_source": "process",
+        "permission_resume_supported": False, "permission_resume_reason": "No saved launch settings; use Resume",
+    }
+    markup = render(agent, api=46)
+    assert 'aria-label="Computer use. Restart to apply: Control"' in markup
+    assert 'title="Computer use: Off. Restart to apply: Control (No saved launch settings; use Resume)"' in markup
+    assert re.search(r'data-computer="control"[^>]*aria-label="Computer use: Control \(restart to apply\)"[^>]*class="next"', markup)
+    assert re.search(r'data-computer="off"[^>]*class="current"', markup)
+    assert 'aria-label="Browser use: On. Restart to apply: Off"' in markup
+    assert markup.count('class="agent-detail-pending"') == 2
+    same = render({**agent, "computer_use_next": "off", "browser_use_next": True}, api=46)
+    assert "agent-detail-pending" not in same and "Restart to apply" not in same and 'class="next"' not in same
+    unknown = render({**agent, "computer_use": None, "browser_use": None}, api=46)
+    assert "Restart to apply" not in unknown
+
+
+def test_a_saved_choice_for_the_next_start_can_be_changed_without_a_restart():
+    agent = {
+        "name": "FixtureAgent", "category": "agent", "running": True, "lifecycle": "persistent",
+        "harness_kind": "claude", "computer_use": "off", "computer_use_next": "control", "browser_use": True,
+        "permission_save_supported": True, "permission_apply": "next_start",
+        "permission_resume_supported": False, "permission_resume_reason": "Persistent agents cannot change permissions on resume",
+    }
+    markup = render(agent, api=52)
+    assert " disabled" not in markup
+    assert 'title="Computer use: Off. Restart to apply: Control (Saved for the next start)"' in markup
+    # An older Telemetry without the save endpoint keeps the controls closed.
+    assert render(agent, api=51).count(" disabled") == 4
+
+
+def test_a_stopped_agent_shows_what_its_next_start_gets():
+    markup = render({
+        "name": "FixtureAgent", "category": "gone", "running": False, "harness_kind": "claude",
+        "computer_use": None, "computer_use_next": "view", "browser_use": None, "browser_use_next": True,
+        "history_binding": "bound", "history_session_id": "01234567-1234-1234-1234-012345678901",
+        "resume_capability": "ready", "permission_save_supported": True, "permission_apply": "resume",
+        "permission_resume_supported": True, "permission_resume_reason": "",
+    }, api=52)
+    assert 'title="Computer use: Unknown. Next start: View"' in markup
+    assert 'aria-label="Browser use: Unknown. Next start: On"' in markup
+    assert " disabled" not in markup
+
+
 def test_unknown_fields_leave_no_rows_and_legacy_fields_never_render():
     markup = render({
         "name": "LegacyAgent", "cwd": None, "model_id": None, "effort": None,
