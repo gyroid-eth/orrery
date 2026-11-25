@@ -111,7 +111,7 @@ Legacy mode reads Codex and, with Telemetry API 35 or later, bound Claude Code, 
 
 ### Choose a scientist's portrait and a model (NEW AGENT)
 
-Open `+ NEW AGENT` and select a scientist's portrait to generate a name; you can adjust its adjective. Choose a model from Claude, Codex, DeepSeek, or Local models. DeepSeek and Local also offer a dsh / Hermes Harness choice. Available models and harnesses depend on your installed configuration.
+Open `+ NEW AGENT` and select a scientist's portrait to generate a name; you can adjust its adjective. Choose a model from Claude, Codex, DeepSeek, or Local models. DeepSeek and Local also offer a dsh / Hermes Harness choice. With Antigravity installed on macOS, you can start it from NEW AGENT without a parent. On supported setups, choose Off, View, or Control for Computer use and select Browser separately. Available models and harnesses depend on your installed configuration.
 
 **First-time setup for DeepSeek, dsh, and Hermes:** A normal update does not set up API keys or connections. The cockpit has no API-key entry screen. Prepare them in this order:
 
@@ -214,7 +214,7 @@ For recordings, live demos and screen sharing, the cockpit can show your user na
 
 ### Copy a name, see the details (Roster)
 
-Hover over a roster tile to show a copy icon. A copied name can be pasted straight into a Mail recipient or an instruction. The detail card of a tile lists the last time the agent was active and the number of its deliverables.
+Hover over a roster tile to show a copy icon. A copied name can be pasted straight into a Mail recipient or an instruction. The detail card lists the last time the agent was active, the number of deliverables, and the Computer use and Browser use status.
 
 ![Roster tiles. The copy icon and the detail card](docs/images/cockpit_roster_pin_copy.png)
 
@@ -261,7 +261,7 @@ Run the backend in WSL2 and open it in a Windows browser to use the same screen 
 ### And more
 
 - Search agents and tmux sessions and jump to their terminals (`Cmd+K`; `Alt+K` on WSL)
-- Send from the composer. Send history, suggestions for skills and commands with `/` or `$`, and a send guard that stops commands that would delete a session, or mistyped symbols, before they are sent ([Prompt composer](docs/en/usage.md#prompt-composer))
+- Send text or slash commands from the composer and interrupt a running turn with `Esc` or the stop button (■). The composer also has send history, skill and command suggestions, and a send guard ([Prompt composer](docs/en/usage.md#prompt-composer))
 - NEW AGENT and bulk EXIT of ORRERY Telemetry from the cockpit ([NEW AGENT](docs/en/usage.md#new-agent))
 
 ## Requirements

@@ -115,7 +115,7 @@ legacy では Codex と、Telemetry API 35 以降で紐付けを確認した Cla
 
 ### 科学者の顔とモデルを選んで起動する（NEW AGENT）
 
-`+ NEW AGENT` で科学者の肖像を選ぶと名前が決まり、形容詞は調整できます。Claude・Codex・DeepSeek・Local models の4系統から model を、DeepSeek と Local では dsh / Hermes の Harness も選べます。利用できる model と Harness は導入済みの設定によって変わります。
+`+ NEW AGENT` で科学者の肖像を選ぶと名前が決まり、形容詞は調整できます。Claude・Codex・DeepSeek・Local models から model を、DeepSeek と Local では dsh / Hermes の Harness も選べます。macOS で Antigravity を導入している場合は、NEW AGENT から親なしで起動できます。対応する環境では Computer use の Off・View・Control と Browser を選べます。利用できる model と Harness は導入済みの設定によって変わります。
 
 **DeepSeek・dsh / Hermesを初めて使う人へ:** 通常の更新だけでは、APIキーや接続先は設定されません。cockpitにはAPIキーを入力する画面はありません。次の順で準備します。
 
@@ -224,7 +224,7 @@ header の `LEFT` に、Claude と Codex のアカウントの利用枠があと
 
 ### 名前をコピーする・詳細を見る（Roster）
 
-roster の tile に mouse を乗せると、名前をコピーする icon が出ます。コピーした名前は Mail の宛先や指示文にそのまま貼れます。tile の詳細 card には、最後に動いた時刻や成果物の数が並びます。
+roster の tile に mouse を乗せると、名前をコピーする icon が出ます。コピーした名前は Mail の宛先や指示文にそのまま貼れます。tile の詳細 card には、最後に動いた時刻、成果物の数、Computer use と Browser use の状態が並びます。
 
 ![roster の tile。copy icon と詳細 card](docs/images/cockpit_roster_pin_copy.png)
 
@@ -271,7 +271,7 @@ WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同
 ### ほかにできること
 
 - agent と tmux session を検索して、そのターミナルへ移る（`Cmd+K` / WSL は `Alt+K`）
-- composer から送信。送信履歴、`/` か `$` で skill と command の候補、session を消す command や記号の取り違えを送る前に止める送信ガード（[Prompt composer](docs/usage.md#prompt-composer)）
+- composer から通常文や slash command を送信し、`Esc` または停止ボタン（■）で作業を中断。送信履歴、skill と command の候補、送信ガードも使えます（[Prompt composer](docs/usage.md#prompt-composer)）
 - cockpit から ORRERY Telemetry の NEW AGENT と一括 EXIT（[NEW AGENT](docs/usage.md#new-agent)）
 
 ## 動作要件

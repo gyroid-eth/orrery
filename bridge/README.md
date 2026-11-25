@@ -105,7 +105,7 @@ Side panel, Full width and file/image preview stay inside that cell; other
 cells retain their terminal grids. Several histories can remain open at once.
 Interacting with a reader selects its cell through the existing pane focus
 route, so the original composer below the grid shows that pane as its target.
-Its send guards and API are unchanged. A narrow reader replaces its thread
+A narrow reader replaces its thread
 with the selected preview until closed. Closing one history leaves the grid
 and other histories intact. Readers belong to their live pane, so closing a
 different pane or rebuilding the split layout keeps the surviving reader,
@@ -116,9 +116,22 @@ two lines.
 
 Submitting through the original composer closes only the target reader's preview
 and resumes Latest, including a reader paused at its retention limit. Messages
-still come solely from provider records. Paste and delayed Enter use the same
-captured pane/session; removal, replacement or connection change cancels Enter
-with a visible notice. Deferred image paste also keeps its original target.
+still come solely from provider records. Paste and Enter are checked against the
+same pane and session. A pane replacement or connection change can cancel the
+send and show a notice. The composer can confirm a slash command from the terminal
+screen it opens. When the terminal shows no suggestions, including Antigravity's
+`No matches`, an exact match in the input field allows submission. A different or
+unverifiable selection leaves the draft in the composer. Deferred image paste
+also keeps its original target.
+
+The same composer can send text to a busy Hermes agent. Hermes handles the text
+according to its busy-input setting. The composer shows the stop button (■) for
+a working agent with an empty draft and no explicit recipient or attachments.
+Esc and the stop button both request
+an interrupt. The terminal receives Ctrl+C for a working Hermes agent or Esc
+for the other harnesses. An idle Hermes agent refuses the interrupt. The cockpit
+reports a confirmed interruption after the input prompt returns and reports
+`⎋ Esc → <name>` when it sends Esc to an idle agent. See [Prompt composer](../docs/en/usage.md#prompt-composer) ([日本語](../docs/usage.md#prompt-composer)).
 
 ### Find a recorded message in its terminal
 
@@ -193,7 +206,7 @@ phone the preview takes the reader area until closed. The preview is labeled
 button using the existing file-manager adapter.
 
 Full-width Reader reserves space for the original prompt composer below it;
-on phones it places the target above the textarea and STOP/SEND controls.
+on phones it places the target above the textarea and the stop/send control.
 This is the same DOM element, draft, target, IME handling, send guard and
 WebSocket input route as the terminal composer. Reading/preview keys do not
 send input. Enter in the composer or an explicit SEND sends, and the normal

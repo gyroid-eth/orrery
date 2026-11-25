@@ -108,7 +108,11 @@ Rows in warmup, finished, gone, and retired states are not shown in the left ros
 
 Clicking a tile also switches the right mail rail's filter to that agent. Hovering over a tile (or focusing it with `Tab`) shows a detail card on the right. It lists the pane title, the subject of the latest mail, the last active time, the time it was registered with ORRERY Mail, the start time, provider / model / command, the number of deliverables (Deliverables; shown only when there is at least one), and the source and specificity of the description being shown.
 
-![The detail card shown by hovering over CoralCurie's tile. It has a row "Deliverables 3"](../images/cockpit_roster_detail.png)
+Check **Computer use** and **Browser use** in the detail card. For a running Claude Code or Codex CLI agent without a launch record, Telemetry API 52 or later provides a read-only observation from launch arguments and descendant processes. An item shows `Unknown` and a reason if the process, its arguments, the screen relay mode, or the Claude Chrome flag cannot be verified.
+
+For Antigravity, Telemetry API 53 or later shows the ORRERY launch selection or the effective screen mode when it can verify the running relay. If it cannot establish a value from the available records, the item shows `Unknown` and a reason.
+
+![The detail card shown by hovering over a tile, with a row "Deliverables 3"](../images/cockpit_roster_detail.png)
 
 Deliverables are that agent's work logs (`LOG_*.md` files whose frontmatter `agent:` is that agent) that ORRERY Telemetry collects from the project's `logs/`. The list can be opened in the `Output` tab of the TELEMETRY agent panel ([TELEMETRY](#telemetry)).
 
@@ -127,7 +131,7 @@ Click the tile to enter its terminal, read the question, and send your answer fr
 
 ![Among 7 agents, only PearlFaraday blinks red and 1 need you appears. Narrowing with need you, clicking the tile to read the approval question, and sending 1 from the composer makes the blinking stop](../images/cockpit_need_you.gif)
 
-How this looks in the TELEMETRY DECK and NETWORK is described in [Spotting agents that need you](#spotting-agents-that-need-you).
+See [Spotting agents that need you](#spotting-agents-that-need-you) for how this looks in the TELEMETRY DECK and NETWORK. See [Telemetry DECK](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/dashboard.en.md#deck) for the automatic Mail notice sent to a parent when its child is waiting on screens such as an approval or sign-in.
 
 ![Roster tiles. WildNewton is pinned to the top, and CosmicGuericke shows the copy icon and detail card on hover](../images/cockpit_roster_pin_copy.png)
 
@@ -340,24 +344,28 @@ The destination is the agent of the pane that is active at that moment (its face
 
 There is only one draft in the cockpit, and it is not split per destination agent. It is saved every time you type, survives a reload or a restart of ORRERY.app, and disappears when you send. It is stored in that window's `localStorage` and is not shared with other windows. Each standalone window has its own draft per session (it returns to the cockpit when closed; see [Standalone window](#standalone-window)).
 
-The composer sends a bracketed paste to the active pane, then sends a carriage return 250 ms later.
+The composer pastes into the target pane and checks that the input is ready before sending Enter. It checks each pane when you choose multiple recipients.
 
 | Action | Behavior |
 | --- | --- |
 | `Enter` | Send |
 | `Shift+Enter` | New line |
-| `Esc` | Interrupt |
+| `Esc` or the stop button (■) | Request an interrupt for the selected agent |
 | `↑` / `↓` | Send history of up to 50 entries |
 | File paste | Put the path of the copied file into the composer (a path containing spaces is wrapped in quotes) |
 | Image paste | Mac: forward a literal `Ctrl+V` to the TUI. WSL: save the image as a PNG and put its path into the composer |
 
 There is a guard that prevents accidental sending on Enter during IME composition. The send history is also stored in `localStorage`.
 
-`⎋ STOP` is the same interrupt as `Esc`, and `SEND ⏎` is the same send as `Enter`. When you send, `sent → <agent>` is shown. The face and name of the destination agent appear to the left of the composer. Pasting a file inserts its path ([Open from and hand to the terminal](#open-from-and-hand-to-the-terminal)).
+The send button works like `Enter`. Once acceptance is confirmed, you see `Sent to <agent>`. You can send plain text from the composer while Hermes is working. Hermes handles it according to its busy-input setting, which defaults to interrupting the current turn. Automatic ORRERY Mail notifications wait while Hermes is busy.
+
+When the selected agent is working and the composer has no draft, attachment, or explicit recipient, the send button becomes the stop button (■). When a suggestion menu is open, `Esc` closes it first.
+
+`Esc` and the stop button send `Ctrl+C` to a working Hermes agent or `Esc` to the other harnesses. When a working agent returns to its input prompt, the cockpit shows `Interrupted → <name>`. When Esc reaches an idle agent, it shows `⎋ Esc → <name>`. The interrupt request is refused for an idle Hermes agent because `Ctrl+C` can exit Hermes.
 
 ### Skill and command suggestions
 
-When the input starts with `/` or `$`, up to 8 skills and built-in commands of the destination CLI are offered as suggestions. Choose with `↑` / `↓` and confirm with `Tab` or `Enter`, and it is inserted with that CLI's correct symbol (`/` for Claude and Gemini, `$` for Codex).
+When the input starts with `/` or `$`, up to eight suggestions appear for the destination CLI. Choose with `↑` / `↓` and use `Tab` or `Enter` to insert the suggestion. Built-in commands use `/`. Skills use `/` for Claude and Antigravity and `$` for Codex.
 
 | Destination | Where skills are looked up | Built-ins |
 | --- | --- | --- |
@@ -367,12 +375,16 @@ When the input starts with `/` or `$`, up to 8 skills and built-in commands of t
 
 ![Typing $r to a Codex agent offers $review-pr (skill) and approvals (built-in) as suggestions](../images/cockpit_skill_menu.png)
 
+A bare slash command is sent with the trailing space left by the suggestion picker removed. Input with arguments is sent as entered. If the terminal shows no suggestions (including Antigravity’s `No matches`), the command is sent when the terminal input matches it. If the terminal selects a different suggestion or its selection cannot be verified, the composer keeps the draft and withholds submission.
+
+For a command that opens a different CLI screen, such as `/help` or `/model`, the cockpit confirms acceptance when it recognizes the screen for the submitted command.
+
 ### Send guard
 
 Before sending, if the first line is one of the following, it is not sent, and a confirmation bar appears above the composer.
 
 - **A built-in that ends or deletes the session**: Claude's `/clear` `/logout` `/exit` `/quit`, Codex's `/logout` `/quit` `/exit` `/new`, Gemini's `/clear` `/exit` `/quit`
-- **A mixed-up symbol**: when you try to send `/name` to Codex or `$name` to Claude. If a skill with the same name exists, a button to correct the symbol and send is shown
+- **A mismatched skill prefix or an unrecognized Codex command**. For example, if you try to send `/review-pr` to Codex and a skill of that name exists, the guard offers to send `$review-pr`
 
 The buttons on the bar are: correct and send (for example `send as $review-pr`), `send as typed` (send it as is), and `cancel`.
 
@@ -413,11 +425,15 @@ For your first DeepSeek, dsh, or Hermes setup, follow the guide in the order bel
 **Once setup is complete, use the form as follows.**
 
 1. Select a portrait under `Choose a scientist`, or leave `AUTO` selected.
-2. Under `Model`, choose Claude, Codex, DeepSeek, or Local models, then select a model in the middle column. Local models can be searched.
+2. Under `Model`, choose from the available groups, then select a model in the middle column. The groups include Claude, Codex, DeepSeek, Local models, and Antigravity when installed. Local models can be searched.
 3. Choose a `Harness` on the right. DeepSeek and Local offer the dsh / Hermes entries in your catalog. Unavailable entries cannot be selected. They show a preparation or compatibility explanation, such as a missing runtime or key-store reader, with a setup-guide link.
 4. Check `Helper model` and `Effort` when shown, then set the launch directory and task below. See [Standard New Agent for DeepSeek and Local](configuration.md#standard-new-agent-for-deepseek-and-local) for details.
 
-![The cockpit's NEW AGENT: Curie's portrait and name, all four families (Claude, Codex, DeepSeek, Local models), and DeepSeek's dsh and Hermes choices](../images/cockpit-native-spawn.png)
+5. On supported macOS setups, open the **Computer use** icon and choose **Off** (no screen tools), **View** (inspect the screen), or **Control** (inspect and interact). With Telemetry API 53 or later, this applies to Claude Code, Codex CLI, dsh, Hermes, and Antigravity CLI. Open the separate **Browser** icon to choose from the available browser modes: Off, Temporary Chrome, and My Chrome.
+
+To start Antigravity without a parent on macOS, leave the parent field blank and select a working folder. Git is required when you choose Isolation. Computer use and Browser can also be selected for a standalone launch. See Telemetry's [Computer use](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/computer-use.en.md) and [Antigravity](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.en.md) guides for setup and compatibility.
+
+![The cockpit's NEW AGENT showing a portrait, a name, the model groups at the time of capture, and DeepSeek's dsh and Hermes choices](../images/cockpit-native-spawn.png)
 
 ![The same actual screen switches Claude → Codex → DeepSeek (dsh, Hermes) → Local models (dsh, Hermes)](../images/cockpit-native-spawn.gif)
 
@@ -426,8 +442,9 @@ These captures use the actual screen and its live catalog, cropped to the name, 
 Input fields:
 
 - Identity: Auto, or Scientist + Adjective
-- Claude / Codex / DeepSeek / Local models, Harness, and Helper model / reasoning effort when shown
+- Model, Harness, and Helper model / reasoning effort when shown
 - Working directory
+- Computer use and Browser when available
 - Task (required, up to 4000 characters)
 - Standalone or parent
 - Role / emoji / group

@@ -244,14 +244,14 @@ There is no override for a binary at another path. If an interactive client is a
 
 ## The prompt is not sent
 
-The composer sends a carriage return 250 ms after the bracketed paste.
+The composer checks the terminal input before sending Enter. If `Not sent to` gives a slash command reason, check the input and suggestions in the terminal. If you see `Delivery unconfirmed for`, check whether the input reached the terminal before retrying.
 
 - The active pane is the right one
 - You are not in the middle of IME composition
 - The pane is not at a shell prompt instead of the agent TUI
 - The WebSocket is connected
 
-`Shift+Enter` is a newline and `Esc` is an interrupt. Pasting an image does not upload a file; it forwards a literal `Ctrl+V` to the TUI.
+See [Prompt composer](usage.md#prompt-composer) for send confirmation, interruption keys, and image paste on macOS and WSL.
 
 ## History remains / does not disappear
 

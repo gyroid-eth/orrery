@@ -244,14 +244,14 @@ protocol の pane `split` / `close` は `orrery-` prefix の管理 session だ�
 
 ## prompt が送信されない
 
-composer は bracketed paste の250 ms 後に carriage return を送ります。
+composer は端末の入力を確かめてから Enter を送ります。`Not sent to` に slash command の理由が出たら、端末で入力と候補を確認してください。`Delivery unconfirmed for` が出たら、再送する前に端末に届いたかを確認します。
 
 - active pane が正しいか
 - IME composition 中ではないか
 - pane が agent TUI ではなく shell prompt になっていないか
 - WebSocket が connected か
 
-`Shift+Enter` は改行、`Esc` は interrupt です。画像 paste は file upload ではなく literal `Ctrl+V` を TUI へ転送します。
+送信の確認、中断キー、macOS と WSL での画像の貼り付けは、[Prompt composer](usage.md#prompt-composer) を参照してください。
 
 ## 履歴が残る／消えない
 
