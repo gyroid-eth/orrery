@@ -54,9 +54,9 @@ Set up the features you want after the base install. Each guide covers the first
 
 Default ports are 8791 for the cockpit, 8770 for Telemetry, and 18765 for a new Mail installation. For changing the work folder and uninstalling, see [Work folder and Uninstall](#work-folder-and-uninstall).
 
-![An ORRERY cockpit example: roster on the left, two terminal panes above a third in the center, mini-orrery at the top right, and Mail below it](docs/images/cockpit_overview.png)
+![ORRERY Cockpit with Agents on the left, three terminal panes and the composer in the center, and the mini-orrery and Mail on the right](docs/images/cockpit_overview.png)
 
-This example arranges three Claude/Codex terminals. The NEW AGENT GIF below shows how to choose DeepSeek or Local.
+The three panes show fictional agents running Claude Code, Codex, and Antigravity.
 
 Pick an agent in the roster on the left, give instructions in the terminal in the center, and follow parent–child relationships and messages in the mini-orrery and Mail on the right. The terminals work even when ORRERY Telemetry is not running; features that depend on it show their status and degrade gracefully.
 
@@ -72,15 +72,11 @@ An agent using an alternate-screen TUI cannot be reviewed with terminal scrollba
 
 Pane headers and roster cards use telemetry's display model name without shortening it; the title retains the full ID. Headers show the provider logo, agent name, and model, omitting missing models. An active, working agent's logo slowly brightens and dims; waiting agents and reduced-motion mode stay still. Narrow panes truncate the model before the name, keeping the logo and action buttons visible. The split pane close button is the rightmost header action and shares the other icons' size and border.
 
-![Reader panel with a fictional conversation](docs/images/cockpit_history.png)
+![Reader with a fictional conversation, a Markdown table, and file chips](docs/images/cockpit_history.png)
 
 The reader opens beside the terminal; the pane header’s **⤢** expands it across the pane; press it again to restore the side panel. On narrow screens it fills the pane. While you scroll, new records do not move your reading position. Use **Load earlier** where available to go back (up to about 300 records at a time, counting each tool call and result as one; the reader keeps up to 800 records or 2 MiB, and going back beyond that releases the newest records and pauses updates until you scroll back to the bottom or select **↓ (Latest)**, while reading new records at the bottom releases the oldest), and use **↓ (Latest)**, shown over the lower-right corner only while reading earlier messages, to return to the newest records. In CLAIMED mode, opening Reader beside the terminal fits the terminal to the remaining width; closing Reader restores its width. Full-width Reader overlays the terminal. FOLLOW keeps the external terminal’s width, so Reader can cover part of it. In a split, each pane's **Reader icon** opens an independent reader; full width and previews stay within that pane. Interacting with a reader selects its pane as the prompt composer target. Closing another pane preserves the surviving reader’s width mode, position, expanded Mail, and preview. A width change can shift the reading position by one or two lines.
 
-![Independent history readers in two split panes](docs/images/cockpit_history_split.png)
-
 The composer remains available in full-width view. Reading keys stay in the reader; use Enter or **SEND** to submit explicitly. Submission closes that pane's preview and resumes following its newest history. If the target terminal or connection changes during submission, the send is cancelled with a notice. After sending, a temporary “Sent → agent · Awaiting record” row appears at the end of that pane’s history and is replaced when the matching user message is recorded. It does not mean the agent has acknowledged the prompt. If the record cannot be matched confidently, the row says “Record not matched”; **Dismiss** closes that temporary row. A sent `! cmd` also matches its recorded shell command.
-
-![A pending record row after sending a prompt](docs/images/cockpit_history_pending.png)
 
 Reader always confirms the agent's record binding with the telemetry dashboard before it shows content. An answer without content (the record has not changed) is returned without a new confirmation for up to 30 s after the last one. At most four requests are held across the cockpit (up to four on one page); a pane beyond that polls every 4 s (network, reading and drawing time come on top). At the limit, a pane whose record has changed takes the slot of one that has held for 2 s or more with nothing new; that one goes back to polling every 4 s. For Hermes, a write by another session to the same state.db also counts as a change, so a pane with nothing new may take a slot (the pane that gave it up then polls every 4 s). While any user operation is in flight, no tab holds a request; holding resumes once all of them have ended. User operations are: opening a URL, revealing a file in Finder or Explorer, opening Ghostty, EXIT, spawn, revealing a recorded file, reading the clipboard files, a file preview, Reader’s Load earlier and Retry, and the NETWORK view’s actions (jump, kill, EXIT, annotate, spawn, reactivate). Hovering a terminal path (its existence check) is not one, nor is the NETWORK view’s automatic error report, nor is any GET not listed here, such as the spawn folder list, even when you started it. An operation counts as ended when its response headers arrive (holding may resume while a preview body is still downloading), and any operation, in this tab or another, stops counting after 90 s (the longest the dashboard allows a spawn); a tab opened later asks the others once for the operations already in flight; when the NETWORK view navigates away, its operations end there. Prompts are sent over the WebSocket and never compete with held requests for a connection. With dashboard API 36 or later it asks `/api/agents/<name>/history-binding` for that one agent; with an older dashboard, or when that route fails, it asks for the whole roster as before ([API](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/api.en.md)).
 
@@ -88,23 +84,11 @@ Assistant messages render Markdown headings, bold text, lists, quotes and inline
 
 Claude’s `!` records appear under **SHELL**, with adjacent command and output records grouped together. Long output is shortened; **Show all** expands it. Slash-command records also appear as command and output blocks. Character references are decoded only inside recognized records, and commands can be copied. System notices, such as background tasks, appear as a short line distinct from human messages; select one to expand or collapse its recorded details. Claude and Codex compaction records also appear as **Context compacted**; expand one to read its summary when the provider recorded readable text. A session change clears the previous display, briefly shows **New session**, and reloads automatically. Repeated changes return to the normal polling interval without requiring Retry.
 
-![A table in an agent message with Copy Markdown](docs/images/cockpit_history_table.png)
-
 When records contain file references or edit-request diffs, the reader shows file chips and diffs. Files delivered with Claude’s SendUserFile, and files or images an agent shows with ORRERY Mail’s `show_files` (Claude, Codex, dsh or Hermes), also have chips for preview. Select a chip to preview the current text or image. A `.md` file opens drawn as a document (headings, tables, lists, code and more); **Source** switches to its original text. Raw HTML stays text, images are never fetched, and only http(s) and mailto links open, in a new tab. A recorded diff and the current file are distinct. **Reveal in file manager** selects the file in Finder or Explorer when pressed.
-
-![Previewing the current text from a file chip](docs/images/cockpit_history_text.png)
-
-![Previewing an image from a file chip](docs/images/cockpit_history_image.png)
-
-![Previewing an image from a SendUserFile chip](docs/images/cockpit_history_sendfile.png)
 
 Select a message or tool text to search for it in the same pane's retained terminal text. The reader moves to the line only for a unique match; it shows a notice and stays put if there is no match, more than one match, or the search limit is reached. Text selection, copying, and file chips retain their own actions.
 
-![Clicking a message to reveal its line in the terminal](docs/images/cockpit_history_jump.gif)
-
 Recorded ORRERY Mail notifications and send requests appear as cards with direction, correspondent, and subject. Select a card to expand the recorded body. A preview notification indicates that the rest is in Mail. The reader does not fetch bodies from the Mail server or mark messages read, and a send request does not confirm delivery.
-
-![Opening history, expanding it, and opening a Mail card using fictional conversations](docs/images/cockpit_history_mail.gif)
 
 When history is unavailable, the panel shows a reason and next step. Shortly after launch or before the first message, wait and retry; for an old conversation or an unverified binding, open a newly launched child. If Codex recording was not observed, enable the ORRERY plugin, review its hooks in `/hooks`, and start a new process. For disabled recording or a write failure, check the provider's recording settings or storage permissions. The panel also identifies older dashboards, unsupported formats, and missing dsh dependencies.
 
@@ -121,9 +105,9 @@ Open `+ NEW AGENT` and select a scientist's portrait to generate a name; you can
 3. Review and enable the connection settings following the guide, then run the final install command yourself once to apply them to Telemetry.
 4. Return to the cockpit and select your configured `Model` and `Harness` in `+ NEW AGENT`.
 
-![The cockpit's own NEW AGENT: scientist portraits and all four families stay visible while switching Claude, Codex, DeepSeek, Local, and Harness. Selection only, before launch](docs/images/cockpit-native-spawn.gif)
+![Choose a provider and harness in Model and effort, then open the computer and browser menus](docs/images/cockpit-native-spawn.gif)
 
-This is the cockpit's actual screen and live catalog. Standalone Telemetry has a separate NEW AGENT screen. The animation stops at selection, before launch.
+The recording uses the cockpit interface and a fictional catalog. It shows the controls up to launch.
 
 → [Usage: NEW AGENT](docs/en/usage.md#new-agent) · Portrait sources and licenses: [CREDITS](CREDITS.md)
 
@@ -131,7 +115,9 @@ This is the cockpit's actual screen and live catalog. Standalone Telemetry has a
 
 When many agents run at once, notifications from other agents can pour into the same terminal while you are typing an instruction to a parent agent, burying what you have written so far. In the cockpit you type instructions into a separate input box (the composer) below the terminal, so whatever scrolls through the terminal, your draft stays put. To change the recipient, just click an agent in the roster or on a tab; the text carries over.
 
-![While a message for CoralCurie is being typed in the composer, three Mail notifications flow into the terminal. The draft stays; clicking OnyxDarwin in the roster changes the recipient, and OnyxDarwin receives the message when it is sent](docs/images/cockpit_composer_calm.gif)
+The composer shows **■** while the selected agent is working and the draft is empty. Press it or `Esc` to interrupt.
+
+![The composer shows a square Stop button while the agent is working. Esc interrupts the agent](docs/images/cockpit_composer_calm.gif)
 
 → [Usage: Prompt composer](docs/en/usage.md#prompt-composer)
 
@@ -139,11 +125,9 @@ When many agents run at once, notifications from other agents can pour into the 
 
 However many agents you run, only the agents whose work has stopped while they wait for a human decision light up in the roster (an approval wait blinks red, a question wait pulses slowly in light blue), and `N need you` appears in the header. Press `need you` to narrow the roster to just those agents, click a tile to enter its terminal and read the question. Send your answer from the composer and the blinking stops. You can clear the stopped agents in the order they stopped, without hunting for them.
 
-![Among 7 agents, only PearlFaraday blinks red and 1 need you appears in the header. Narrowing with need you, clicking the tile to read the approval question, and sending 1 from the composer makes the blinking stop](docs/images/cockpit_need_you.gif)
+![Use need you to filter for agents awaiting input, read a question, and reply with 1](docs/images/cockpit_need_you.gif)
 
 The same holds in TELEMETRY: a question wait is shown by `?`, and an approval wait by a red frame and `APPROVAL`.
-
-<img src="docs/images/deck_humanloop.png" alt="The TELEMETRY DECK. A question wait is shown with a question mark; an approval wait with a red frame and APPROVAL" width="480">
 
 This DECK example uses the former name “AGENTSTACK · TELEMETRY.” The current name is ORRERY Telemetry.
 
@@ -153,15 +137,11 @@ This DECK example uses the former name “AGENTSTACK · TELEMETRY.” The curren
 
 Agents ask, report, and point things out to each other through ORRERY Mail. That Mail streams down the rail on the right, newest first, so you can read the team's conversation without opening each terminal one by one. Click a card to read the body, or press `thread` to open the back-and-forth of that conversation in time order. Selecting an agent in the roster narrows the list to only the Mail that agent is involved in.
 
-![Two new Mails flow in and lines of traffic run across the mini-orrery. Clicking a card to read the body, reading a 4-message back-and-forth in time order with thread, and selecting PearlFaraday in the roster narrows the list to just that agent's Mail](docs/images/cockpit_mail.gif)
-
 → [Usage: ORRERY Mail](docs/en/usage.md#orrery-mail)
 
 ### Pin the agents you watch most to the top (Pin)
 
 With many agents running, the roster keeps reordering by state (approval wait, working, idle). Pin the agents you always look at, such as a parent agent or a reviewer, and they stay at the very top regardless of reordering, grouped above a divider line. Just hover over a tile and press the pin at its upper right; press it again to unpin. Pins are shared between ORRERY.app and browser tabs, and an agent is unpinned automatically when it retires (pins exist only in the roster on the left).
-
-![While the roster of 7 agents reorders as states change, pinning JadeNoether moves it to the top and draws a divider, and it stays on top while other agents reorder. Pressing it again unpins it and it returns to its original position](docs/images/cockpit_pin.gif)
 
 → [Usage: Pin](docs/en/usage.md#pin)
 
@@ -169,17 +149,11 @@ With many agents running, the roster keeps reordering by state (approval wait, w
 
 Hold `Cmd` / `Ctrl` while selecting agents to line up to 12 terminals on one screen. Drag a name tag to swap positions, and drag a border to change widths. You can watch a parent agent and the progress of its children at the same time.
 
-![In a Split with three agents, dragging name tags to swap them and dragging a border to change widths](docs/images/cockpit_split_drag.gif)
-
 → [Usage: Split](docs/en/usage.md#split)
 
 ### Take one terminal out (standalone window)
 
 Drag a tab's name tag onto the terminal to make it a small window floating above the cockpit (`FLOAT`). Drag it out of the cockpit, or press `↗`, and it becomes a standalone window (`WINDOW`) that you can place on another monitor and view larger. Close the window and it returns to its tab. It works in ORRERY.app and in browsers on Mac and WSL.
-
-![Dragging a name tag to float it, moving it, turning it into a standalone window with ↗, and closing it to return it to a tab](docs/images/cockpit_pane_float.gif)
-
-![JadeNoether floating above the cockpit, and CoralCurie open in a standalone window](docs/images/cockpit_pane_window.png)
 
 → [Usage: Standalone window](docs/en/usage.md#standalone-window)
 
@@ -187,15 +161,11 @@ Drag a tab's name tag onto the terminal to make it a small window floating above
 
 A URL an agent prints in the terminal opens in your default browser when clicked, and a file path opens in Finder (File Explorer on Windows). In the other direction, paste a file you copied in Finder (File Explorer on Windows) into the composer and its absolute path is inserted, ready to hand to the agent. Paste a screenshot and, on Mac, the agent's CLI receives it as is; on Windows (WSL2), the image is saved and its path is inserted.
 
-![Clicking a URL in the terminal to open it in the browser, clicking a path to reveal it in Finder, and pasting a file into the composer to insert its path](docs/images/cockpit_open_paste.gif)
-
 → [Usage: Open from and hand to the terminal](docs/en/usage.md#open-from-and-hand-to-the-terminal) · [Pasting files and images on WSL](docs/en/usage.md#pasting-files-and-images-on-wsl)
 
 ### A light color scheme (light mode)
 
 In Settings, Color theme switches between a dark scheme (Dark) and a paper-like light scheme (Light). Colors inside the terminal and the embedded TELEMETRY change with it, and text is adjusted to stay readable even on the red and green backgrounds of a diff. `System` follows your OS appearance.
-
-![Changing Color theme in Settings to Light, then back to Dark](docs/images/cockpit_theme_switch.gif)
 
 → [Usage: Color theme (light mode)](docs/en/usage.md#color-theme-light-mode)
 
@@ -209,15 +179,11 @@ For recordings, live demos and screen sharing, the cockpit can show your user na
 
 `LEFT` in the header shows what percentage of your Claude and Codex account quota remains. Click it to see the 5-hour window, the weekly window, and per-model windows, each with the time until reset. The numbers change between green, yellow, and red, and when a value cannot be fetched, the reason is shown.
 
-![Clicking LEFT in the header opens Usage left, with the remaining quota for each Claude and Codex window drawn as arcs. As the remaining amount decreases, the numbers and rings change from green to yellow to red](docs/images/cockpit_usage.gif)
-
 → [Usage: Usage (remaining quota)](docs/en/usage.md#usage-remaining-quota)
 
 ### Copy a name, see the details (Roster)
 
 Hover over a roster tile to show a copy icon. A copied name can be pasted straight into a Mail recipient or an instruction. The detail card of a tile lists the last time the agent was active and the number of its deliverables.
-
-![Roster tiles. The copy icon and the detail card](docs/images/cockpit_roster_pin_copy.png)
 
 → [Usage: Roster](docs/en/usage.md#roster)
 
@@ -225,7 +191,7 @@ Hover over a roster tile to show a copy icon. A copied name can be pasted straig
 
 `PLANETARIUM` in the header opens, full screen, a tree of who launched whom. A line lights up between any two agents that exchanged Mail in the last 90 seconds, and a comet flies each time Mail arrives, so you can see at a glance where in the team conversations are happening. Click a node to jump straight to that agent's terminal.
 
-![Pressing PLANETARIUM opens a tree with CoralCurie as the parent of 6 children, and lines light up each time Mail arrives. Clicking JadeNoether's node jumps to its terminal](docs/images/cockpit_planetarium.gif)
+![Planetarium showing a parent–child tree and a separate standalone agent](docs/images/cockpit_planetarium.png)
 
 → [Usage: Planetarium](docs/en/usage.md#planetarium)
 
@@ -233,19 +199,15 @@ Hover over a roster tile to show a copy icon. A copied name can be pasted straig
 
 `TELEMETRY` in the header opens the ORRERY Telemetry dashboard inside the cockpit. `DECK` shows one card per agent, and `NETWORK` shows the connections between agents as nodes and lines; select an agent to read its conversation and tool history and the list of its deliverables. Press `OPEN IN COCKPIT` to return straight to that agent's terminal. Without going to another screen, you can survey the whole team inside the cockpit and go right back to the terminal at hand. Resuming finished agents is also done here.
 
-![Pressing TELEMETRY in the header opens the DECK inside the cockpit; switching to NETWORK and selecting JadeNoether, looking at its history, then returning to JadeNoether's terminal with OPEN IN COCKPIT](docs/images/cockpit_telemetry.gif)
+![OPEN IN COCKPIT in an embedded Telemetry agent panel returns to that agent’s terminal](docs/images/cockpit_telemetry_open_in_cockpit.png)
 
 **REPLAY**: After the work is done, you can review what the team did and in what order, like a recording. Press `SELECT` in NETWORK, choose agents, and press `Replay`; the history of the chosen agents plays out along a time axis, and who launched whom (spawn) and what Mail they sent each other appear in order, with subjects. Fast-forward with the speed scale, and click the time axis below to jump to any moment.
-
-![Selecting 7 agents in NETWORK and pressing Replay starts with only the parent CoralCurie; children appear one by one through spawn, and Mail subjects flow by as speech bubbles. Raising the speed and jumping to the later part of the time axis shows everyone connected](docs/images/cockpit_replay.gif)
 
 → [Usage: TELEMETRY](docs/en/usage.md#telemetry)
 
 ### Use it together with Obsidian
 
 When you run agents inside an Obsidian vault, work logs, paper notes, and tasks become Markdown notes as they are, and all a person has to do is look at them in Obsidian's Daily Note and Kanban. A note path that an agent prints in the terminal opens when you click it in the cockpit. ORRERY works without Obsidian; this is just one convenient way to use it.
-
-![Typing /adddone review the paper note to Claude on WSL makes that task disappear from "Tasks" and appear under "Done today" in the Obsidian Daily Note on the right](docs/images/cockpit_obsidian.gif)
 
 → [Use it together with Obsidian](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/obsidian.en.md) (an ORRERY Telemetry document) · to make a vault the work folder, see [Change the work folder](#change-the-work-folder) · a template you can try right away, [orrery-demo-vault](https://github.com/gyroid-eth/orrery-demo-vault)
 
@@ -254,8 +216,6 @@ Reading notes for papers come from the add-on [orrery-digest-paper](https://gith
 ### The same screen on Windows (WSL2)
 
 Run the backend in WSL2 and open it in a Windows browser to use the same screen as on Mac. Shortcuts change to `Alt+K` and so on, the terminal opened externally becomes Windows Terminal, and links open in the Windows browser and File Explorer. Files copied in File Explorer and screenshots can also be handed to the agent as paths by pasting them into the composer.
-
-![The Jump palette opened on WSL. Alt+K is shown at the top left](docs/images/cockpit_palette_wsl.png)
 
 → [Usage: Differences on Windows (WSL2)](docs/en/usage.md#differences-on-windows-wsl2)
 
@@ -318,8 +278,6 @@ Your work folder (such as `~/orrery-work`) is where your own work lives; delete 
 3. **Full tour** — Choose `Full tour` there to try sixteen steps in order: shiritori with a child, arranging terminals, Telemetry EXIT / RESUME, NETWORK / REPLAY, and returning to a terminal. Finish all three game round trips even after its step checks off. Progress is saved separately from the first guide ([Full tour details](docs/en/FULL_TOUR.md)).
 
 For everyday controls, start with the in-app guides and help map. [Usage](docs/en/usage.md) is the detailed reference; if the screen or connection differs, use [Troubleshooting](docs/en/troubleshooting.md). Agents started during the guides follow the usual usage limits and pricing of your chosen CLI or API provider.
-
-![Find Your first flight, then open Show help map and Full tour from Settings](docs/images/cockpit-guide-entry.gif)
 
 ## Update and manual setup
 
