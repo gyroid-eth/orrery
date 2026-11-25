@@ -329,6 +329,8 @@ python3 -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
+For the Computer use and Browser launch options, see [NEW AGENT](../docs/en/usage.md#new-agent).
+
 ## Cockpit (live telemetry chrome + live terminal)
 
 `cockpit.html` is the integrated ORRERY cockpit. One unified backend serves the

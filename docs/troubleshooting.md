@@ -112,7 +112,7 @@ catalog の fallback が見えても offline spawn はできません。spawn PO
 
 ## mail が表示されない
 
-ORRERY は `AGENTSTACK_MAIL_DB` を自動では読みません。
+`scripts/start-cockpit.sh` は legacy の Telemetry 設定から `AGENTSTACK_MAIL_DB` を引き継ぎます。backend を手動またはアプリから直接起動して別の DB を使う場合は、`ORRERY_MAIL_DB` または共有設定の `mail_db` を明示します。[DB の優先順位](configuration.md#orrery-mail-db)
 
 ```bash
 export ORRERY_MAIL_DB=/absolute/path/to/storage.sqlite3
@@ -207,15 +207,7 @@ ORRERY の Claim は tmux window size を実際に変更します。Ghostty な�
 
 ## terminal が空、または xterm が読み込まれない
 
-現行 frontend は `xterm.js 5.5.0` と `addon-fit 0.10.0` を CDN から読みます。ネットワークや Content Security Policy が jsDelivr / Google Fonts を拒否すると、font は fallback し、xterm script がなければ terminal UI は成立しません。
-
-確認:
-
-- browser / WebView の developer console
-- CDN への DNS / TLS 到達
-- proxy / firewall / CSP
-
-現行配布は完全 self-contained offline bundle ではありません。
+同梱の xterm と addon は cockpit backend から配信されます。ブラウザーの開発者ツールで `/vendor/xterm-5.5.0/xterm.js` と `/vendor/` 配下の個別の addon URL が読み込めているか確かめます。失敗する場合は、起動中の backend と checkout が同じ版か、同梱の asset がそろっているか確認します。Google Fonts に接続できない場合はフォントだけが切り替わります。
 
 ## WebSocket が切断を繰り返す
 
@@ -244,14 +236,14 @@ protocol の pane `split` / `close` は `orrery-` prefix の管理 session だ�
 
 ## prompt が送信されない
 
-composer は bracketed paste の250 ms 後に carriage return を送ります。
+composer は端末の入力を確かめてから Enter を送ります。`Not sent to` に slash command の理由が出たら、端末で入力と候補を確認してください。`Delivery unconfirmed for` が出たら、再送する前に端末に届いたかを確認します。
 
 - active pane が正しいか
 - IME composition 中ではないか
 - pane が agent TUI ではなく shell prompt になっていないか
 - WebSocket が connected か
 
-`Shift+Enter` は改行、`Esc` は interrupt です。画像 paste は file upload ではなく literal `Ctrl+V` を TUI へ転送します。
+送信の確認、中断キー、macOS と WSL での画像の貼り付けは、[Prompt composer](usage.md#prompt-composer) を参照してください。
 
 ## 履歴が残る／消えない
 

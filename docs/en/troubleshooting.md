@@ -112,7 +112,7 @@ The current build always draws nodes that need a human on top. If you can reprod
 
 ## Mail is not shown
 
-ORRERY does not read `AGENTSTACK_MAIL_DB` automatically.
+In legacy mode, `scripts/start-cockpit.sh` inherits `AGENTSTACK_MAIL_DB` from Telemetry's settings. For a direct launch from a terminal or the app, set `ORRERY_MAIL_DB` or the shared `mail_db` setting to select a custom database. See [Mail DB precedence](configuration.md#orrery-mail-db).
 
 ```bash
 export ORRERY_MAIL_DB=/absolute/path/to/storage.sqlite3
@@ -207,15 +207,7 @@ A tracked snapshot whose restore failed is not consumed until the restore succee
 
 ## The terminal is empty, or xterm does not load
 
-The current frontend loads `xterm.js 5.5.0` and `addon-fit 0.10.0` from a CDN. If the network or the Content Security Policy rejects jsDelivr / Google Fonts, fonts fall back, and without the xterm script the terminal UI cannot work.
-
-Check:
-
-- The browser / WebView developer console
-- DNS / TLS reachability to the CDN
-- proxy / firewall / CSP
-
-The current distribution is not a fully self-contained offline bundle.
+The cockpit backend serves bundled xterm and its addons. In the browser developer tools, check that `/vendor/xterm-5.5.0/xterm.js` and the individual addon URLs under `/vendor/` load. If they fail, check that the running backend matches your checkout and that the bundled assets are present. A failure to reach Google Fonts only changes the font.
 
 ## The WebSocket keeps disconnecting
 
@@ -244,14 +236,14 @@ There is no override for a binary at another path. If an interactive client is a
 
 ## The prompt is not sent
 
-The composer sends a carriage return 250 ms after the bracketed paste.
+The composer checks the terminal input before sending Enter. If `Not sent to` gives a slash command reason, check the input and suggestions in the terminal. If you see `Delivery unconfirmed for`, check whether the input reached the terminal before retrying.
 
 - The active pane is the right one
 - You are not in the middle of IME composition
 - The pane is not at a shell prompt instead of the agent TUI
 - The WebSocket is connected
 
-`Shift+Enter` is a newline and `Esc` is an interrupt. Pasting an image does not upload a file; it forwards a literal `Ctrl+V` to the TUI.
+See [Prompt composer](usage.md#prompt-composer) for send confirmation, interruption keys, and image paste on macOS and WSL.
 
 ## History remains / does not disappear
 

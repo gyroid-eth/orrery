@@ -6,17 +6,21 @@
 
 ## Install or update with one line
 
-In a Mac terminal, or inside WSL2 Ubuntu on Windows, run this one line. It installs both orrery-telemetry and the cockpit, checks that they work (doctor, and a selftest that sends Mail both ways), then starts the cockpit **in the background**, prints its URL and opens the browser. The command returns to the prompt, so you can continue preparing your chosen provider in the same terminal. Where ORRERY is already (partly) installed, the same line updates it (telemetry only, an old version, an old checkout without setup.sh, a detached HEAD).
+On macOS, Ubuntu 24.04 or later, or Ubuntu in WSL2 on Windows, [prepare your system](../../README.en.md#before-you-start) and run the shared installer below. Setup is complete when the terminal reports `ORRERY's base is ready` and the printed URL opens the cockpit with **Your first flight** in your browser.
+
+The installer installs both components, runs the doctor and selftest, and starts the cockpit in the background. The same command updates an existing installation.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
 ```
 
-- **What is trusted and what runs**: only GitHub's `gyroid-eth/orrery` and `gyroid-eth/orrery-telemetry` (a checkout whose origin is not exactly one of these is left alone, and the setup stops). What runs: `get.sh`, the cockpit's `scripts/setup.sh`, orrery-telemetry's `scripts/install.sh`, and uv's official installer only when uv is missing
-- **Look without changing anything**: `curl -fsSL …/get.sh | bash -s -- --check` (prerequisites and the plan), `… | bash -s -- --dry-run` (plus the installer's preview of the 4 changes). Neither writes to your home folder (what they download goes to a temporary folder that is removed)
+- **What is trusted and what runs**: only GitHub's `gyroid-eth/orrery` and `gyroid-eth/orrery-telemetry` (a checkout whose origin is not exactly one of these is left alone, and the setup stops). What runs: `get.sh`, the cockpit's `scripts/setup.sh`, orrery-telemetry's `scripts/install.sh`, and uv's official installer when needed
+- **Review before applying**. `curl -fsSL …/get.sh | bash -s -- --check` (prerequisites and the plan), `… | bash -s -- --dry-run` (plus the installer's preview of the 4 changes). These modes leave user settings unapplied and use a temporary folder for downloads.
 - **CI and scripts that use the exit code**: `curl | bash` can return 0 when the download fails, so save first: `curl -fsSL …/get.sh -o get.sh && bash get.sh --yes`
-- Prerequisites (git, tmux, curl, uv, Python 3.11+) are checked at once. Missing git / tmux / curl stop it with nothing changed and the line that installs them. uv and Python need no sudo, so they go into the plan (your shell profile is not changed)
-- Before changing anything it shows one plan; **type `yes` and Enter** once. Four things change: `~/.claude.json` (MCP), `~/.claude/settings.json` (hooks and permissions), `~/.codex/AGENTS.md` (a global block for all your Codex work), and the project's `CLAUDE.md` (a block). Each is backed up first (the folders and background services it adds besides these 4 are listed in [What is installed, and what changes](#what-is-installed-and-what-changes)). `--ask-each` also shows each change and asks; `--yes` does not ask (you have read the plan) (`… | bash -s -- --ask-each`)
+- The entry script `get.sh` checks prerequisites such as git, tmux, curl, and Python 3.11 or later before fetching the source. Running `scripts/setup.sh` directly also checks prerequisites. An interpreter already installed through uv works. If no compatible Python is found, setup prints a command to install the missing prerequisites and stops. For example, it suggests `brew install python@3.12` on macOS or `sudo apt update && sudo apt install -y python3` on Ubuntu
+- If uv itself is missing or cannot run, setup adds it to the plan and installs it in `~/.local/bin` after approval, without sudo (your shell profile is not changed)
+- Review the plan and **type `yes` and press Enter** yourself to proceed. The installer has up to four user settings changes: Claude MCP and settings, Claude user instructions, and Codex user instructions. Some versions of the shared setup plan still mention the working folder's `CLAUDE.md`. Current Telemetry writes the Claude block to the user instructions. Use `--ask-each` for item-by-item previews. Use `--yes` only when you have read and chosen to accept the whole plan. [Consent and paths](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.en.md#consent)
+- Use `--no-start` to complete setup and checks while skipping cockpit startup or restart. `ORRERY_NO_OPEN=1` only skips opening the browser after startup. Set `ORRERY_COCKPIT_TMUX_SOCKET` to choose a dedicated tmux socket (default `orrery-cockpit`). [Startup settings](configuration.md#runtime--build-variables)
 - The folder agents work in is `~/orrery-work` unless you say otherwise (no question; the plan shows it). Another folder: `… | bash -s -- --project-key ~/my-project`
 - The cockpit runs in a tmux server of its own (`tmux -L orrery-cockpit`), apart from the agents' tmux, so it never shows up as an agent. Its output: `tmux -L orrery-cockpit attach` (Ctrl-b, d to leave). Stop it: `tmux -L orrery-cockpit kill-server`. Start it again: the same line. On an update, a cockpit this setup started is restarted on the new version (any other cockpit is left running, with a note)
 - The 2 test agents the selftest makes are not shown in the cockpit's roster and network (the dashboard still lists them)
@@ -109,21 +113,12 @@ So you can check before installing it on your own computer, here is what is inst
 | `~/.claude/skills`, `~/.codex/skills` | links to ORRERY's skills (`delegate`, `log`) |
 | `~/.codex/AGENTS.md` | ORRERY's instructions (only the block between markers) |
 | `~/.codex/config.toml` | the Codex plugin and its hook approvals (only if you do [Install the Codex plugin](#install-the-codex-plugin-if-you-use-codex)) |
-| `CLAUDE.md` in the work folder | ORRERY's instructions (a block; the existing content stays as it is) |
-| Mac: `~/Library/LaunchAgents` / Ubuntu: `~/.config/systemd/user` | entries that run Mail and Telemetry in the background (the cockpit is not registered here; it runs in its own tmux server, `tmux -L orrery-cockpit`) |
+| `$CLAUDE_CONFIG_DIR/CLAUDE.md` (default `~/.claude/CLAUDE.md`) | ORRERY's Claude user instructions (marked block) |
+| Mac: `~/Library/LaunchAgents` / Ubuntu: `~/.config/systemd/user` | entries that run Telemetry, Mail, and the Mail watcher in the background (the cockpit is not registered here; it runs in its own tmux server, `tmux -L orrery-cockpit`) |
 
-**Not changed**: `~/.zshrc` and `~/.bashrc` (ORRERY does not edit them; PATH lines for Claude Code or Codex are ones you add yourself), anything outside your home folder (except the work folder's `CLAUDE.md` and the backup placed next to it, including a Windows-side vault made the work folder by the research set), and Windows settings. Codex or Claude Code installed on Windows is not affected either: with this procedure's default locations (unless you point `CODEX_HOME`, `AGENTSTACK_CLAUDE_SETTINGS` or `AGENTSTACK_CLAUDE_JSON` at the Windows side, and do not share `~/.codex` or `~/.claude` with Windows through a link or similar), ORRERY writes settings only inside the Ubuntu home (`~/.codex`, `~/.claude`) and does not touch the Windows-side `C:\Users\…\.codex` or `.claude` (the research set's vault is on the Windows side, so if you open that vault with Windows' Claude Code, it also reads the ORRERY block in its `CLAUDE.md`). The screens and Mail listen only on `127.0.0.1` (inside this computer) and cannot be reached from outside.
+By default, Claude and Codex user settings live in the home directory of the operating system where setup runs. For WSL2 that is the Ubuntu home. If you override the settings locations, review those paths before approval. ORRERY leaves shell dotfiles alone. The cockpit and Mail bind to `127.0.0.1` by default. [Instruction migration](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.en.md)
 
 **Uninstall**: if you installed the Codex plugin, **first** remove it with `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` (its record is inside `~/.agentstack`, so it cannot be removed once that is gone). Then follow [Uninstall](../../README.en.md#uninstall) in the README (`~/.agentstack/bin/agentstack-uninstall --purge-data` removes `~/.agentstack`, the background entries and the skill links, and takes back what was added to `~/.claude/settings.json` and `~/.claude.json`; then stop the cockpit and run `rm -rf ~/orrery ~/orrery-telemetry`). The ORRERY blocks in `~/.codex/AGENTS.md` and in the work folder's `CLAUDE.md` stay; delete what is between the markers by hand if you do not want them. All of the source is public on GitHub ([orrery](https://github.com/gyroid-eth/orrery), [orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)).
-
-### 0. Obsidian (when you use it)
-
-If you will use ORRERY together with Obsidian (a note-taking app), install Obsidian first. If you will not, skip to "Mac" or "Windows 11" (ORRERY works without Obsidian).
-
-- **Mac**: download the Mac version from https://obsidian.md/ and move it to Applications
-- **Windows 11**: download the Windows installer from https://obsidian.md/ and run it. Install Obsidian on the **Windows side** (not inside the WSL2 Ubuntu)
-
-**Check**: start Obsidian. When it shows the screen for choosing a vault (with "Create new vault", "Open folder as vault" and so on), you are ready.
 
 ### Mac
 
@@ -150,8 +145,10 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 ```
 
 ```bash
-brew install tmux
+brew install curl git tmux python@3.13 xz
 ```
+
+Use the `lsof` included with macOS.
 
 **Check**: these two commands each print a version (a line such as `Homebrew 4.…` and `tmux 3.…`).
 
@@ -165,11 +162,7 @@ tmux -V
 
 **2. ORRERY**
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
-```
-
-A plan appears. Read it, type `yes`, and press Enter. It takes from tens of seconds to a few minutes, and the cockpit opens in your browser. If something is missing (git, tmux, curl), it changes nothing, stops, and shows how to install it. When it stops, run the one "how to continue" line it shows.
+Run the [shared installer](#install-or-update-with-one-line) and check the completion message and cockpit in your browser.
 
 **3. If you use Claude Code / Codex: install and sign in to your CLI**
 
@@ -246,8 +239,10 @@ wsl --set-version Ubuntu 2
 **From here on, type everything in the Ubuntu window** (`username@PC:~$`). Install the tools (nothing happens if they are already there):
 
 ```bash
-sudo apt update && sudo apt install -y git tmux curl
+sudo apt update && sudo apt install -y ca-certificates curl git tmux python3 python3-venv lsof xz-utils
 ```
+
+For Hermes, also run `sudo apt install libatomic1`.
 
 **Check**: this prints the versions of git, tmux and curl on three lines.
 
@@ -257,11 +252,7 @@ git --version && tmux -V && curl --version | head -n 1
 
 **2. ORRERY**
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
-```
-
-A plan appears. Read it, type `yes`, and press Enter. It takes from tens of seconds to a few minutes, and the cockpit URL (`http://127.0.0.1:8791/cockpit.html`) is printed. If your Windows browser does not open by itself, paste that URL into it. If something is missing, it changes nothing and stops, so run the one "how to continue" line it shows.
+Run the [shared installer](#install-or-update-with-one-line) from Ubuntu, then open the reported URL in your Windows browser.
 
 **3. If you use Claude Code / Codex: install and sign in to your CLI**
 
@@ -314,6 +305,15 @@ claude
 Sign in (if no browser opens, paste the URL it shows into your Windows browser), answer every first-run question, and when the input prompt appears, type `/exit`.
 
 If you chose Claude Code or Codex, you can now start that agent from `+ NEW AGENT` in the cockpit. If you use Obsidian, continue with "Using it with Obsidian". If you use Codex, also do "[Install the Codex plugin](#install-the-codex-plugin-if-you-use-codex)" after that (now, if you do not use Obsidian).
+
+### 0. Obsidian (when you use it)
+
+If you want to use Obsidian, set it up after you have opened the cockpit in your browser.
+
+- **Mac**: download the Mac version from https://obsidian.md/ and move it to Applications
+- **Windows 11**: download the Windows installer from https://obsidian.md/ and run it. Install Obsidian on the **Windows side** (not inside the WSL2 Ubuntu)
+
+**Check**: start Obsidian. When it shows the screen for choosing a vault (with "Create new vault", "Open folder as vault" and so on), you are ready.
 
 ### Using it with Obsidian
 
@@ -522,12 +522,12 @@ See [Telemetry's compatibility table](https://github.com/gyroid-eth/orrery-telem
 
 Required:
 
-The requirements below apply to the cockpit alone. The shared installation and Telemetry also require Python 3.11 or later. If no suitable Python is available, the shared installer uses uv to install 3.12.
+The requirements below apply to the cockpit alone. Have Python 3.11 or later available before running the [shared installer](#install-or-update-with-one-line) or installing Telemetry on its own. Telemetry's `scripts/install.sh` selects an existing interpreter and passes it to uv when creating the ORRERY Mail virtual environment.
 
 - Python 3.11 or newer
 - `tmux`
 - `pip` and `venv`
-- A network that can reach the runtime CDN
+- Network access to the distribution sources for installation and updates. The terminal bundles `xterm.js` and its addons
 
 For developing and building the desktop app:
 
@@ -632,6 +632,8 @@ open http://127.0.0.1:8791/cockpit.html
 You can change the standalone backend's port with `PORT` or `--port`, but `ORRERY.app` always opens `:8791`. Do not change it if you combine it with the desktop app. Only `127.0.0.1` is allowed for `HOST`.
 
 ## Build the desktop app
+
+This advanced macOS option is for after you are comfortable operating agents in the browser. Build `ORRERY.app` from source.
 
 ```bash
 cd app

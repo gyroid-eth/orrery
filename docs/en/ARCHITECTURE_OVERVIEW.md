@@ -37,7 +37,7 @@ A Codex App runtime has no tmux pane, so it cannot be operated from a cockpit te
 
 ## Network and offline conditions
 
-At runtime the frontend loads `xterm.js 5.5.0` and `addon-fit 0.10.0` from jsDelivr, and Google Fonts. Without a network, fonts fall back, and if the xterm script cannot be fetched, the terminal UI cannot work. The current distribution is not a fully self-contained bundle.
+The terminal loads the bundled `xterm.js 5.5.0`, `addon-fit 0.10.0`, and `addon-web-links 0.11.0` from the backend. Fonts fall back locally when Google Fonts cannot be reached. Installation and updates require access to the distribution sources.
 
 The backend is localhost-only but has no authentication layer. Do not expose the `/api/*` proxy, terminal input, spawn, EXIT, mail bodies, or the local directory browser through a remote tunnel or a reverse proxy.
 

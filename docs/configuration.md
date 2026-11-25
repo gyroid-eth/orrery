@@ -87,13 +87,16 @@ demo modeでは、Phoneの節はTailscaleのlogin・スマホで開くaddress・
 
 | 環境変数 | 既定値 | 用途 |
 | --- | --- | --- |
-| `ORRERY_MAIL_DB` | `config.mail_db`、その後 `~/.agentstack/mail/storage.sqlite3` | ORRERY が read-only で開く ORRERY Mail SQLite。`AGENTSTACK_MAIL_DB` への fallback はありません |
+| `ORRERY_MAIL_DB` | `config.mail_db`、その後 `~/.agentstack/mail/storage.sqlite3` | backend が read-only で開く ORRERY Mail SQLite。起動 script の引き継ぎは[下の優先順位](#orrery-mail-db)を参照 |
 | `ORRERY_PROJECT_KEY` | `AGENTSTACK_PROJECT_KEY`、その後 `config.project_key`、最後は未設定 | mail query の `projects.human_key`。利用者の環境では absolute path を指定してください |
 | `AGENTSTACK_PROJECT_KEY` | `config.project_key`、その後未設定 | ORRERY project key の共通 fallback。ORRERY Telemetry と同じ値を推奨 |
 | `ORRERY_PORTRAIT_DIR` | `<repo>/assets/portraits_64` | 通常 portrait |
 | `ORRERY_PORTRAIT_DIR_HI` | `<repo>/assets/portraits` | `hi=1` portrait |
 | `ORRERY_PORTRAIT_DIR_PX` | `<repo>/assets/portraits_px` | `style=pixel` portrait |
 | `AGENTSTACK_ANNOTATIONS` | `config.annotations_path`、その後 ORRERY Telemetry runtime / legacy path | dashboard annotation API が不達のときだけ読む file fallback |
+| `ORRERY_PREFS_PATH` | `~/.orrery/prefs.json` | cockpit の共有設定の読み書き先 |
+| `ORRERY_NO_OPEN` | `0` | 共通 setup で `1` にすると、起動・再起動後のブラウザー自動表示を省きます |
+| `ORRERY_COCKPIT_TMUX_SOCKET` | `orrery-cockpit` | 共通 setup が cockpit backend を動かす専用 tmux socket 名 |
 | `ORRERY_HISTORY_DIR` | `~/.orrery/history` | terminal recorder の JSON 保存先 |
 | `AGENTSTACK_ORRERY_ROOT` | `config.orrery_root`、その後未設定 | Tauri sidecar が checkout を探す root |
 | `ORRERY_BACKEND_PYTHON` | `<root>/bridge/.venv/bin/python` | sidecar の Python |
@@ -153,7 +156,7 @@ ORRERY_E2E_V2=1 .venv/bin/python tests/e2e_bridge.py -v
 
 ### ORRERY Mail DB
 
-ORRERY は `ORRERY_MAIL_DB`、`config.json` の `mail_db`、既定 path の順に読みます。ORRERY Telemetry の `AGENTSTACK_MAIL_DB` は自動継承されないため、default 以外では両側に同じ path を設定します。
+legacy で `scripts/start-cockpit.sh` を使う場合、`ORRERY_MAIL_DB`、shell の `AGENTSTACK_MAIL_DB`、インストール済み Telemetry の `env.sh` の `AGENTSTACK_MAIL_DB` の順で選び、値があれば backend へ `ORRERY_MAIL_DB` として渡します。backend を直接起動する場合は `ORRERY_MAIL_DB`、`config.json` の `mail_db`、既定 path の順です。fresh では保護された dashboard API から Mail を読みます。
 
 SQLite は次の形式で read-only open されます。
 
@@ -176,13 +179,7 @@ DB 不在や schema error は backend 全体を停止せず、mail route が `ok
 
 ### ORRERY Telemetry dashboard
 
-ORRERY の接続先は次に固定されています。
-
-```text
-http://127.0.0.1:8770
-```
-
-ORRERY Telemetry 側で port を変えないでください。必要 API は `/api/agents`、`/api/messages-since`、`/api/graph`、`/api/spawn`、`/api/spawn-names`、`/api/annotations`、`/api/exit` です。
+既定の接続先は `http://127.0.0.1:8770` です。`ORRERY_DASHBOARD_URL` で上書きできます。`scripts/start-cockpit.sh` は指定がなければ インストール済み Telemetry の `env.sh` の `AGENTSTACK_PORT` を使います。backend を直接起動する場合は `ORRERY_DASHBOARD_URL` を指定してください。必要 API は `/api/agents`、`/api/messages-since`、`/api/graph`、`/api/spawn`、`/api/spawn-names`、`/api/annotations`、`/api/exit` です。
 
 ### tmux
 
@@ -207,7 +204,7 @@ terminal recorder は `ORRERY_HISTORY_DIR` に pane JSON を30秒間隔で flush
 - 通常履歴は7日保持
 - 対応 session がない orphan は24時間保持
 
-prompt composer は browser `localStorage` に draft と最大50件の送信履歴を保存します。font、split layout、mini-orrery mode / depth、NEW AGENT の Advanced panel 開閉状態も `localStorage` に保存されます。`~/.orrery/config.json` は app 削除後も残る利用者設定です。
+prompt composer は browser `localStorage` に draft と最大50件の送信履歴を保存します。font、split layout、mini-orrery mode / depthも `localStorage` に保存されます。`~/.orrery/config.json` は app 削除後も残る利用者設定です。
 
 共有 Mac、画面共有、機密 session では次を検討してください。
 
