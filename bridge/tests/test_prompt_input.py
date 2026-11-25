@@ -37,18 +37,18 @@ def test_each_native_slash_picker_has_notice_and_slash_fixtures():
     assert set(NATIVE_PROMPTS) == set(submission.SLASH_PICKERS)
     for fixture in NATIVE_PROMPTS.values():
         cases = {case['case'] for case in fixture['cases']}
-        assert {'slash-exact', 'slash-prefix', 'notice-short'} <= cases
+        assert {'slash-exact', 'slash-prefix', 'slash-idle', 'slash-busy', 'notice-short'} <= cases
         assert any(case.startswith('notice-long') for case in cases)
 
 
 @pytest.mark.parametrize('harness,case', NATIVE_CASES)
 def test_native_prompt_fixture(harness, case):
-    assert native_frame(NATIVE_PROMPTS[harness]['before']).empty
+    assert native_frame(case.get('before', NATIVE_PROMPTS[harness]['before'])).empty
     observed = native_frame(case['view'])
     assert observed.selected_command == case['selected']
     assert submission.ready(observed, case['text']) is case['ready']
     if after := case.get('after'):
-        assert native_frame(after).empty
+        assert native_frame(after).empty is case.get('accepted', case['ready'])
     if observed.dsh_clipped:
         # A different text ending cannot justify Enter with a clipped draft.
         assert not submission.ready(observed, case['text'] + ' another sentence')
@@ -56,7 +56,9 @@ def test_native_prompt_fixture(harness, case):
 
 @pytest.mark.parametrize('harness,case', NATIVE_CASES)
 def test_watcher_enters_only_the_verified_native_draft(monkeypatch, harness, case):
-    before = NATIVE_PROMPTS[harness]['before']
+    before = case.get('before', NATIVE_PROMPTS[harness]['before'])
+    accepted = case.get('accepted', case['ready'])
+    should_enter = case.get('enter', accepted)
     stage = before
     entered = []
     reasons = []
@@ -85,10 +87,14 @@ def test_watcher_enters_only_the_verified_native_draft(monkeypatch, harness, cas
     monkeypatch.setattr(submission, 'time', SimpleNamespace(monotonic=lambda: elapsed, sleep=tick))
     monkeypatch.setattr(submission, 'try_lock', lambda _: os.open(os.devnull, os.O_RDONLY))
     result = submission.submit(tmux, lambda: True, '%1', case['text'], on_wait=reasons.append)
-    assert entered == (['C-m'] if case['ready'] else [])
-    assert result == ('accepted' if case['ready'] else 'unknown')
-    expected_reason = (['completion_mismatch'] if case['selected'] else ['completion_unverified'])
-    assert reasons == ([] if case['ready'] else expected_reason)
+    assert entered == (['C-m'] if should_enter else [])
+    assert result == ('accepted' if accepted else 'unknown')
+    if accepted:
+        assert not reasons
+    elif should_enter:
+        assert reasons == ['enter_not_confirmed']
+    else:
+        assert reasons == (['completion_mismatch'] if case['selected'] else ['completion_unverified'])
 
 
 @pytest.mark.asyncio
@@ -101,7 +107,9 @@ async def test_cockpit_enters_only_the_verified_native_draft(monkeypatch, tmp_pa
     monkeypatch.setattr(submission, 'try_lock', lambda _: os.open(os.devnull, os.O_RDONLY))
     monkeypatch.setattr(submission, 'POLL', .001)
     monkeypatch.setattr(submission, 'TIMEOUT', 1)
-    before = NATIVE_PROMPTS[harness]['before']
+    before = case.get('before', NATIVE_PROMPTS[harness]['before'])
+    accepted = case.get('accepted', case['ready'])
+    should_enter = case.get('enter', accepted)
     stage = before
     entered = []
 
@@ -126,9 +134,32 @@ async def test_cockpit_enters_only_the_verified_native_draft(monkeypatch, tmp_pa
 
     monkeypatch.setattr(bridge, '_write_master', write)
     result = await bridge.submit_prompt('%1', case['text'])
-    assert entered == (['C-m'] if case['ready'] else [])
-    failure = 'completion-mismatch' if case['selected'] else 'completion-unverified'
-    assert result == ('accepted' if case['ready'] else failure)
+    assert entered == (['C-m'] if should_enter else [])
+    if accepted:
+        assert result == 'accepted'
+    elif should_enter:
+        assert result == 'unknown'
+    else:
+        assert result == ('completion-mismatch' if case['selected'] else 'completion-unverified')
+
+
+def test_slash_grace_does_not_treat_an_unreadable_picker_as_absent(monkeypatch):
+    now = 0
+    monkeypatch.setattr(submission, 'time', SimpleNamespace(monotonic=lambda: now))
+    wait = submission.SlashMenuWait('/log')
+    border = '─' * 32
+    metadata = '/tmp/fixture.sock\t100\t%1\t200\t1\t0\t6\t1\tclaude'
+    literal = submission.frame(metadata, [border, '❯ /log', border], '%1')
+    unreadable = submission.frame(metadata.replace('\t1\t0\t6', '\t2\t0\t6'),
+                                  ['    /login  Switch accounts', border, '❯ /log', border], '%1')
+    assert unreadable.selected and unreadable.selected_command is None
+    assert not wait.ready(literal)
+    now = submission.SLASH_MENU_WAIT
+    assert wait.ready(literal)
+    assert not wait.ready(unreadable)
+    now *= 3
+    assert not wait.ready(literal)
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('successful', [True, False])
