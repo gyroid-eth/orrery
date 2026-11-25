@@ -81,6 +81,17 @@ def test_running_child_can_change_permissions_even_when_resume_is_not_required_y
     assert ' disabled' not in markup
 
 
+def test_antigravity_card_discloses_launch_permissions_and_a_reason_for_unknown():
+    markup = render({
+        "name": "FixtureAgent", "category": "agent", "running": True, "parent_state": "top",
+        "harness_kind": "antigravity", "computer_use": "view", "browser_use": None,
+        "browser_use_reason": "Antigravity browser mode was not recorded",
+    }, api=53)
+    assert 'title="Harness: Antigravity"' in markup
+    assert 'data-computer="view" aria-pressed="true"' in markup
+    assert 'Browser use: Unknown (Antigravity browser mode was not recorded)' in markup
+
+
 def test_api46_permission_reason_is_rendered_as_text():
     markup = render({
         "name": "FixtureAgent", "category": "agent", "running": True, "parent_state": "top",
