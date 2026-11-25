@@ -27,6 +27,7 @@ COMMANDS = {
     'agy': ('/help', '/model'),
 }
 PLAIN = 'ORRERY Mail notification: synthetic check.'
+BUSY_STATES = {'busy', 'tool', 'starting'}
 SLASH_VIEWS = {
     ('claude', '/help'): ['Help  General   Commands   Custom commands', '←/→ to switch · Esc to close'],
     ('claude', '/model'): ['Select model', 's to use this session only · Enter to save · Esc to cancel'],
@@ -47,7 +48,7 @@ def run_editor(harness, state, width, entered):
 
     tty.setraw(0)
     border = '─' * width
-    busy = state == 'busy'
+    busy = state in BUSY_STATES
 
     def show(text=''):
         selected = text if text in COMMANDS[harness] else None
@@ -85,7 +86,13 @@ def run_editor(harness, state, width, entered):
             if busy:
                 after += ['   esc to interrupt']
         elif harness == 'hermes':
-            before += ['  ☤ model │ 0/128K │ ⏱ 3s' if busy else '  ☤ Hermes', border]
+            if busy and state in ('tool', 'starting'):
+                before += ['\x1b[3m\x1b[38;5;136m  💻 sleep 90 + 1 command  ( 23.1s)\x1b[0m', '']
+                if state == 'starting':
+                    before += ['Initializing agent…']
+                before += [' ☤ model │ 0/128K │ ◷ 2.0s', border]
+            else:
+                before += ['  ☤ model │ 0/128K │ ⏱ 3s' if busy else '  ☤ Hermes', border]
             prompt = '☤ ❯ ' if busy else '❯ '
             after = [border]
             if selected:
@@ -166,6 +173,12 @@ async def test_unrelated_slash_view_does_not_confirm_submission(monkeypatch):
     await check_routes(monkeypatch, 'claude', 'wrong-modal', 110)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize('state', ['tool', 'starting'])
+async def test_hermes_interrupt_requires_current_activity(monkeypatch, state):
+    await check_routes(monkeypatch, 'hermes', state, 110)
+
+
 async def check_routes(monkeypatch, harness, state, width, *, rejected=None):
     tmux = shutil.which('tmux')
     if tmux is None:
@@ -218,7 +231,7 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None):
                             expected = 'accepted'
                             if rejected:
                                 expected = rejected[1]
-                            elif route == 'watcher' and harness == 'hermes' and state == 'busy' and text == PLAIN:
+                            elif route == 'watcher' and harness == 'hermes' and state in BUSY_STATES and text == PLAIN:
                                 expected = 'refused'
                             elif state == 'wrong-modal':
                                 expected = 'unknown'
@@ -250,7 +263,7 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None):
                         await ws.send_json(dict(type='interrupt', paneId=pane, session='Fixture',
                                                 incarnation=reset['incarnation'], inputAck='1:2'))
                         status = (await receive(ws, 'input-ack'))['status']
-                        if state == 'busy':
+                        if state in ('busy', 'tool'):
                             assert status == 'accepted'
                             seen.append('interrupt:03' if harness == 'hermes' else 'interrupt:1b')
                         elif harness == 'hermes':
@@ -266,6 +279,7 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None):
                         assert [json.loads(line) for line in entered.read_text().splitlines()] == seen
                         view = await get_view()
                         assert view.empty and not view.running
+                        assert view.hermes_busy == (state == 'starting')
         finally:
             call('kill-server')
 

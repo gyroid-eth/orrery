@@ -40,6 +40,9 @@ CLAUDE_ARGUMENT_HINT = re.compile(r'\x1b\[(?:38;5;246|(?:0;)?2)m[^\x1b]+'
 COLLAPSED = re.compile(r'\[Pasted text #\d+(?: \+\d+ lines?)?\]')
 HERMES_PASTE = re.compile(r'\[Pasted text #(\d+): (\d+) lines → /.+/pastes/paste_\1_\d{6}\.txt\]')
 HERMES_HINT = re.compile(r'^(?:msg=[\w-]+ · /queue · /bg · /steer · Ctrl\+C cancel|cli\.tui\.placeholder_busy)$')
+HERMES_TOOL_PROGRESS = re.compile(
+    r'^  [^ \t┊│].* {2}\(\s*(?:\d+\.\ds|\d+m[0-5]\ds|cli\.shared\.duration_(?:s|ms_compact))'
+    r'(?: · ↓ \d+(?:\.\d+)?[kM]? tok)?\)$')
 HERMES_GHOST = re.compile(r'\x1b\[38;5;241m[^\x1b]+\x1b\[39m[ \t]*$')
 HERMES_MENU_STYLING = re.compile(r'\x1b\[(?:[0-9]+;)*48;[25];[0-9;]+m')
 PASTING = re.compile(r'^\s*(?:Pasting(?:…|\.\.\.)|Waiting for startup\b)', re.I)
@@ -232,6 +235,21 @@ def _slash_view(lines):
     return None
 
 
+def _hermes_running(lines, plain, start):
+    index = start - 2
+    if index < 0:
+        return False
+    if plain[index].strip().startswith('☤ '):
+        if '│ ⏱ ' in plain[index]:
+            return True
+        index -= 1
+    # Hermes puts the live hint directly above its status bar and optional spacer.
+    if index >= 0 and not plain[index].strip():
+        index -= 1
+    return (index >= 0 and '\x1b[3m' in lines[index]
+            and HERMES_TOOL_PROGRESS.fullmatch(plain[index].rstrip()) is not None)
+
+
 def frame(metadata, lines, pane):
     fields = metadata.split('\t')
     if (len(fields)!=9 or fields[2]!=pane or not re.fullmatch(r'%[0-9]+',pane)
@@ -354,8 +372,7 @@ def frame(metadata, lines, pane):
             (left=='│' and start==cursor and line.endswith('  │')) or
             (left=='⌸' and cursor-start==4))
         running = (
-            (hermes_busy and start >= 2 and plain[start-2].strip().startswith('☤ ')
-             and '│ ⏱ ' in plain[start-2])
+            (hermes_busy and _hermes_running(lines, plain, start))
             or (editor == 'claude' and any(' · esc to interrupt' in row for row in tail[1:]))
             or (editor == 'codex' and any(CODEX_WORKING.match(row.strip()) for row in plain[max(0,start-16):start]))
             or (editor == 'dsh' and 'esc to interrupt' in tail[1:])
