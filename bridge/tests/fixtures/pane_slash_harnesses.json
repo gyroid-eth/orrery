@@ -1,6 +1,479 @@
 {
+  "claude": {
+    "version": "2.1.332",
+    "before": {
+      "meta": [
+        "3",
+        "0",
+        "2",
+        "1",
+        "2.1.332"
+      ],
+      "lines": [
+        "",
+        "                                                                            \u001b[38;5;246m● high · /effort\u001b[39m",
+        "\u001b[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────",
+        "\u001b[39m❯ \u001b[7m \u001b[0m",
+        "\u001b[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────",
+        "\u001b[39m  \u001b[38;5;220m⏵⏵ auto mode on\u001b[39m",
+        ""
+      ]
+    },
+    "cases": [
+      {
+        "case": "slash-exact",
+        "text": "/log",
+        "selected": "/log",
+        "ready": true,
+        "view": {
+          "meta": [
+            "7",
+            "0",
+            "6",
+            "1",
+            "2.1.332"
+          ],
+          "lines": [
+            "",
+            "  \u001b[38;5;153m❯ /\u001b[1mlog\u001b[0m\u001b[38;5;153m                        Local fixture for the command chooser. (user)\u001b[39m",
+            "  \u001b[38;5;246m  /\u001b[1m\u001b[39mlog\u001b[0m\u001b[38;5;246min                      Switch Anthropic accounts\u001b[39m",
+            "  \u001b[38;5;246m  /\u001b[1m\u001b[39mlog\u001b[0m\u001b[38;5;246mout                     Sign out from your Anthropic account\u001b[39m",
+            "  \u001b[38;5;246m  /\u001b[1m\u001b[39mlog\u001b[0m\u001b[38;5;246min-example              Local fixture for the command chooser. (user)\u001b[39m",
+            "  \u001b[38;5;246m  /fixture-\u001b[1m\u001b[39mlog\u001b[0m\u001b[38;5;246m                Local fixture for the command chooser. (user)\u001b[39m",
+            "\u001b[38;5;244m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m❯ \u001b[38;5;153m/log\u001b[7m\u001b[39m \u001b[0m",
+            "\u001b[38;5;244m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m  \u001b[38;5;220m⏵⏵ auto mode on\u001b[38;5;246m (shift+tab to cycle)\u001b[39m",
+            ""
+          ]
+        }
+      },
+      {
+        "case": "slash-prefix",
+        "text": "/lo",
+        "selected": "/log",
+        "ready": false,
+        "view": {
+          "meta": [
+            "7",
+            "0",
+            "5",
+            "1",
+            "2.1.332"
+          ],
+          "lines": [
+            "",
+            "  \u001b[38;5;153m❯ /\u001b[1mlo\u001b[0m\u001b[38;5;153mg                        \u001b[1mLo\u001b[0m\u001b[38;5;153mcal fixture for the command chooser. (user)\u001b[39m",
+            "  \u001b[38;5;246m  /\u001b[1m\u001b[39mlo\u001b[0m\u001b[38;5;246mop                       Repeat a prompt or command on an interval (e.g. /\u001b[1m\u001b[39mlo\u001b[0m\u001b[38;5;246mop 5m /foo)\u001b[39m",
+            "  \u001b[38;5;246m  /\u001b[1m\u001b[39mlo\u001b[0m\u001b[38;5;246mgin                      Switch Anthropic accounts\u001b[39m",
+            "  \u001b[38;5;246m  /\u001b[1m\u001b[39mlo\u001b[0m\u001b[38;5;246mgout                     Sign out from your Anthropic account\u001b[39m",
+            "  \u001b[38;5;246m  /\u001b[1m\u001b[39mlo\u001b[0m\u001b[38;5;246mgin-example              \u001b[1m\u001b[39mLo\u001b[0m\u001b[38;5;246mcal fixture for the command chooser. (user)\u001b[39m",
+            "\u001b[38;5;244m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m❯ /lo\u001b[7m \u001b[0m",
+            "\u001b[38;5;244m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m  \u001b[38;5;220m⏵⏵ auto mode on\u001b[38;5;246m (shift+tab to cycle)\u001b[39m",
+            ""
+          ]
+        }
+      },
+      {
+        "case": "notice-short",
+        "text": "ORRERY Mail notification: synthetic short notice for the fixture.",
+        "selected": null,
+        "ready": true,
+        "view": {
+          "meta": [
+            "2",
+            "0",
+            "67",
+            "1",
+            "2.1.332"
+          ],
+          "lines": [
+            "                                                                            \u001b[38;5;246m● high · /effort\u001b[39m",
+            "\u001b[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m❯ ORRERY Mail notification: synthetic short notice for the fixture.\u001b[7m \u001b[0m",
+            "\u001b[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m  \u001b[38;5;220m⏵⏵ auto mode on\u001b[38;5;246m (shift+tab to cycle)\u001b[39m",
+            ""
+          ]
+        },
+        "after": {
+          "meta": [
+            "3",
+            "0",
+            "2",
+            "1",
+            "2.1.332"
+          ],
+          "lines": [
+            "",
+            "                                                                            \u001b[38;5;246m● high · /effort\u001b[39m",
+            "\u001b[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m❯ \u001b[7m \u001b[0m",
+            "\u001b[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m  \u001b[38;5;220m⏵⏵ auto mode on\u001b[38;5;246m (shift+tab to cycle) · ← for agents\u001b[39m",
+            ""
+          ]
+        }
+      },
+      {
+        "case": "notice-long",
+        "text": "ORRERY Mail notification: synthetic long notice. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. ",
+        "selected": null,
+        "ready": true,
+        "view": {
+          "meta": [
+            "8",
+            "0",
+            "58",
+            "1",
+            "2.1.332"
+          ],
+          "lines": [
+            "                                                                            \u001b[38;5;246m● high · /effort\u001b[39m",
+            "\u001b[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m❯ ORRERY Mail notification: synthetic long notice. A synthetic sentence repeated for",
+            "  rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A",
+            "  synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for",
+            "  rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A",
+            "  synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for",
+            "  rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A",
+            "  synthetic sentence repeated for rendering and wrapping. \u001b[7m \u001b[0m",
+            "\u001b[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m  \u001b[38;5;220m⏵⏵ auto mode on\u001b[38;5;246m (shift+tab to cycle)\u001b[39m",
+            ""
+          ]
+        },
+        "after": {
+          "meta": [
+            "3",
+            "0",
+            "2",
+            "1",
+            "2.1.332"
+          ],
+          "lines": [
+            "",
+            "                                                                            \u001b[38;5;246m● high · /effort\u001b[39m",
+            "\u001b[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m❯ \u001b[7m \u001b[0m",
+            "\u001b[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m  \u001b[38;5;220m⏵⏵ auto mode on\u001b[38;5;246m (shift+tab to cycle) · ← for agents\u001b[39m",
+            ""
+          ]
+        }
+      },
+      {
+        "case": "notice-collapsed",
+        "text": "ORRERY Mail notification: synthetic multiline notice.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.",
+        "selected": null,
+        "ready": true,
+        "view": {
+          "meta": [
+            "2",
+            "0",
+            "28",
+            "1",
+            "2.1.332"
+          ],
+          "lines": [
+            "                                                                            \u001b[38;5;246m● high · /effort\u001b[39m",
+            "\u001b[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m❯ [Pasted text #1 +12 lines]\u001b[7m \u001b[0m",
+            "\u001b[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m  \u001b[38;5;246mpaste again to expand\u001b[39m",
+            ""
+          ]
+        },
+        "after": {
+          "meta": [
+            "3",
+            "0",
+            "2",
+            "1",
+            "2.1.332"
+          ],
+          "lines": [
+            "\u001b[38;5;246m✻\u001b[39m \u001b[38;5;246mSautéed for 0s · done 12:10\u001b[39m",
+            "                                                                            \u001b[38;5;246m● high · /effort\u001b[39m",
+            "\u001b[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m❯ \u001b[7m \u001b[0m",
+            "\u001b[38;5;244m──────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m  \u001b[38;5;220m⏵⏵ auto mode on\u001b[38;5;246m (shift+tab to cycle) · ← for agents\u001b[39m",
+            ""
+          ]
+        }
+      }
+    ]
+  },
+  "codex": {
+    "version": "0.167.2",
+    "before": {
+      "meta": [
+        "3",
+        "0",
+        "2",
+        "1",
+        "codex"
+      ],
+      "lines": [
+        "     \u001b[2m/fixture/work\u001b[0m",
+        "",
+        "",
+        "\u001b[1m›\u001b[0m \u001b[2mAsk Codex to do anything\u001b[0m",
+        "",
+        "  \u001b[38;5;223mgpt-5.4 default\u001b[39m · \u001b[38;5;151m/fixture/work\u001b[39m · \u001b[1m←\u001b[0m for ag…  ⚠ \u001b[38;5;179m1 warning\u001b[39m · \u001b[1mf2\u001b[0m to view",
+        "",
+        "",
+        ""
+      ]
+    },
+    "cases": [
+      {
+        "case": "slash-exact",
+        "text": "/status",
+        "selected": "/status",
+        "ready": true,
+        "view": {
+          "meta": [
+            "5",
+            "0",
+            "9",
+            "1",
+            "codex"
+          ],
+          "lines": [
+            "  \u001b[1m\u001b[38;5;211mTip:\u001b[0m Maximize usage with GPT-6.1 Sol. Try it on complex work for near-Astra performance at a lower cost.",
+            "",
+            "\u001b[1;7m› /status      \u001b[0;7mshow current session configuration and token usage\u001b[1m",
+            "\u001b[0m  /\u001b[1mstatus\u001b[0mline  \u001b[2mconfigure which items appear in the status line\u001b[0m",
+            "",
+            "\u001b[1m›\u001b[0m /status",
+            "",
+            "  \u001b[38;5;223mgpt-5.4 default\u001b[39m · \u001b[38;5;151m/fixture/work\u001b[39m",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ]
+        }
+      },
+      {
+        "case": "slash-prefix",
+        "text": "/statu",
+        "selected": "/status",
+        "ready": false,
+        "view": {
+          "meta": [
+            "5",
+            "0",
+            "8",
+            "1",
+            "codex"
+          ],
+          "lines": [
+            "  \u001b[1m\u001b[38;5;211mTip:\u001b[0m Maximize usage with GPT-6.1 Sol. Try it on complex work for near-Astra performance at a lower cost.",
+            "",
+            "\u001b[1;7m› /status      \u001b[0;7mshow current session configuration and token usage\u001b[1m",
+            "\u001b[0m  /\u001b[1mstatu\u001b[0msline  \u001b[2mconfigure which items appear in the status line\u001b[0m",
+            "",
+            "\u001b[1m›\u001b[0m /statu",
+            "",
+            "  \u001b[38;5;223mgpt-5.4 default\u001b[39m · \u001b[38;5;151m/fixture/work\u001b[39m",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ]
+        }
+      },
+      {
+        "case": "notice-short",
+        "text": "ORRERY Mail notification: synthetic short notice for the fixture.",
+        "selected": null,
+        "ready": true,
+        "view": {
+          "meta": [
+            "2",
+            "0",
+            "67",
+            "1",
+            "codex"
+          ],
+          "lines": [
+            "",
+            "",
+            "\u001b[1m›\u001b[0m ORRERY Mail notification: synthetic short notice for the fixture.",
+            "",
+            "  \u001b[38;5;223mgpt-5.4 default\u001b[39m · \u001b[38;5;151m/fixture/work\u001b[39m              ⚠ \u001b[38;5;179m1 warning\u001b[39m · \u001b[1mf2\u001b[0m to view",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ]
+        },
+        "after": {
+          "meta": [
+            "3",
+            "0",
+            "2",
+            "1",
+            "codex"
+          ],
+          "lines": [
+            "• \u001b[2mWorking\u001b[0m \u001b[2m(0s • \u001b[0;1mesc\u001b[0;2m to interrupt)\u001b[0m",
+            "",
+            "",
+            "\u001b[1m›\u001b[0m \u001b[2mAsk Codex to do anything\u001b[0m",
+            "",
+            "  \u001b[38;5;223mgpt-5.4 default\u001b[39m · \u001b[38;5;151m/fixture/work\u001b[39m · \u001b[1m←\u001b[0m for a…  ⚠ \u001b[38;5;179m2 warnings\u001b[39m · \u001b[1mf2\u001b[0m to view",
+            "",
+            ""
+          ]
+        }
+      },
+      {
+        "case": "notice-long",
+        "text": "ORRERY Mail notification: synthetic long notice. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. ",
+        "selected": null,
+        "ready": true,
+        "view": {
+          "meta": [
+            "8",
+            "0",
+            "58",
+            "1",
+            "codex"
+          ],
+          "lines": [
+            "",
+            "",
+            "\u001b[1m›\u001b[0m ORRERY Mail notification: synthetic long notice. A synthetic sentence repeated for",
+            "  rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A",
+            "  synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for",
+            "  rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A",
+            "  synthetic sentence repeated for rendering and wrapping. A synthetic sentence repeated for",
+            "  rendering and wrapping. A synthetic sentence repeated for rendering and wrapping. A",
+            "  synthetic sentence repeated for rendering and wrapping.",
+            "",
+            "  \u001b[38;5;223mgpt-5.4 default\u001b[39m · \u001b[38;5;151m/fixture/work\u001b[39m              ⚠ \u001b[38;5;179m1 warning\u001b[39m · \u001b[1mf2\u001b[0m to view",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ]
+        },
+        "after": {
+          "meta": [
+            "3",
+            "0",
+            "2",
+            "1",
+            "codex"
+          ],
+          "lines": [
+            "• \u001b[2mWorking\u001b[0m \u001b[2m(0s • \u001b[0;1mesc\u001b[0;2m to interrupt)\u001b[0m",
+            "",
+            "",
+            "\u001b[1m›\u001b[0m \u001b[2mAsk Codex to do anything\u001b[0m",
+            "",
+            "  \u001b[38;5;223mgpt-5.4 default\u001b[39m · \u001b[38;5;151m/fixture/work\u001b[39m · \u001b[1m←\u001b[0m for a…  ⚠ \u001b[38;5;179m2 warnings\u001b[39m · \u001b[1mf2\u001b[0m to view",
+            "",
+            ""
+          ]
+        }
+      },
+      {
+        "case": "notice-multiline",
+        "text": "ORRERY Mail notification: synthetic multiline notice.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.\nA synthetic line repeated for a collapsed paste.",
+        "selected": null,
+        "ready": true,
+        "view": {
+          "meta": [
+            "14",
+            "0",
+            "50",
+            "1",
+            "codex"
+          ],
+          "lines": [
+            "",
+            "",
+            "\u001b[1m›\u001b[0m ORRERY Mail notification: synthetic multiline notice.",
+            "  A synthetic line repeated for a collapsed paste.",
+            "  A synthetic line repeated for a collapsed paste.",
+            "  A synthetic line repeated for a collapsed paste.",
+            "  A synthetic line repeated for a collapsed paste.",
+            "  A synthetic line repeated for a collapsed paste.",
+            "  A synthetic line repeated for a collapsed paste.",
+            "  A synthetic line repeated for a collapsed paste.",
+            "  A synthetic line repeated for a collapsed paste.",
+            "  A synthetic line repeated for a collapsed paste.",
+            "  A synthetic line repeated for a collapsed paste.",
+            "  A synthetic line repeated for a collapsed paste.",
+            "  A synthetic line repeated for a collapsed paste.",
+            "",
+            "  \u001b[38;5;223mgpt-5.4 default\u001b[39m · \u001b[38;5;151m/fixture/work\u001b[39m              ⚠ \u001b[38;5;179m1 warning\u001b[39m · \u001b[1mf2\u001b[0m to view",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ]
+        },
+        "after": {
+          "meta": [
+            "3",
+            "0",
+            "2",
+            "1",
+            "codex"
+          ],
+          "lines": [
+            "• \u001b[2mWorking\u001b[0m \u001b[2m(0s • \u001b[0;1mesc\u001b[0;2m to interrupt)\u001b[0m",
+            "",
+            "",
+            "\u001b[1m›\u001b[0m \u001b[2mAsk Codex to do anything\u001b[0m",
+            "",
+            "  \u001b[38;5;223mgpt-5.4 default\u001b[39m · \u001b[38;5;151m/fixture/work\u001b[39m · \u001b[1m←\u001b[0m for a…  ⚠ \u001b[38;5;179m2 warnings\u001b[39m · \u001b[1mf2\u001b[0m to view",
+            "",
+            ""
+          ]
+        }
+      }
+    ]
+  },
   "dsh": {
     "version": "0.2.1-rc.2 / TUI 0.16.1",
+    "before": {
+      "meta": [
+        "1",
+        "0",
+        "6",
+        "1",
+        "zsh"
+      ],
+      "lines": [
+        "  \u001b[38;5;102m╭──────────────────────────────────────────────────────────────────────────────╮\u001b[39m",
+        "  \u001b[38;5;145m⌸ ❯ \u001b[39m                                                                           \u001b[38;5;145m⛶\u001b[39m",
+        "  \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────────────╯\u001b[39m",
+        "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mwork\u001b[39m",
+        "   \u001b[38;5;146mesc to interrupt\u001b[39m",
+        "",
+        ""
+      ]
+    },
     "cases": [
       {
         "case": "slash-exact",
@@ -53,38 +526,71 @@
         }
       },
       {
+        "case": "slash-no-menu",
+        "text": "/log ",
+        "selected": null,
+        "ready": false,
+        "view": {
+          "meta": [
+            "1",
+            "0",
+            "33",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "                        \u001b[38;5;153m╭──────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "                        \u001b[38;5;153m│\u001b[39m ⌘ /log                                                               \u001b[38;5;153m│\u001b[39m",
+            "                        \u001b[38;5;153m╰──────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "                          \u001b[1m\u001b[38;5;182mdeepseek-v4.1-flash\u001b[0m\u001b[38;5;145m  ·  standard  ·  Workspace read/write\u001b[39m"
+          ]
+        }
+      },
+      {
         "case": "notice-short",
         "text": "ORRERY Mail notification: message from Fixture [normal]: Synthetic. Body (complete; no inbox fetch needed): Check the local fixture.",
         "selected": null,
         "ready": true,
         "view": {
           "meta": [
-            "1",
+            "4",
             "0",
             "75",
             "1",
             "zsh"
           ],
           "lines": [
+            "               \u001b[38;2;125;161;222m█\u001b[38;2;127;162;223m█\u001b[39m  \u001b[38;2;132;166;224m█\u001b[38;2;133;167;225m█\u001b[39m  \u001b[38;2;138;171;227m█\u001b[38;2;140;172;227m█\u001b[39m  \u001b[38;2;145;176;229m█\u001b[38;2;146;177;230m█\u001b[39m  \u001b[38;2;151;180;232m█\u001b[38;2;153;182;232m█\u001b[39m \u001b[38;2;156;184;233m█\u001b[38;2;158;185;234m█\u001b[39m   \u001b[38;2;164;190;236m█\u001b[38;2;166;191;237m█\u001b[39m  \u001b[38;2;171;195;239m█\u001b[38;2;172;196;239m█\u001b[39m  \u001b[38;2;177;200;241m█\u001b[38;2;179;201;242m█\u001b[39m          \u001b[38;2;197;215;248m█\u001b[38;2;199;216;249m█\u001b[39m      \u001b[38;2;210;224;253m█\u001b[38;2;212;226;254m█\u001b[39m",
+            "               \u001b[38;2;125;161;222m█\u001b[38;2;127;162;223m█\u001b[39m  \u001b[38;2;132;166;224m█\u001b[38;2;133;167;225m█\u001b[39m  \u001b[38;2;138;171;227m█\u001b[38;2;140;172;227m█\u001b[39m  \u001b[38;2;145;176;229m█\u001b[38;2;146;177;230m█\u001b[39m  \u001b[38;2;151;180;232m█\u001b[38;2;153;182;232m█\u001b[39m  \u001b[38;2;158;185;234m█\u001b[38;2;159;187;235m█\u001b[39m  \u001b[38;2;164;190;236m█\u001b[38;2;166;191;237m█\u001b[39m  \u001b[38;2;171;195;239m█\u001b[38;2;172;196;239m█\u001b[39m  \u001b[38;2;177;200;241m█\u001b[38;2;179;201;242m█\u001b[38;2;181;202;242m█\u001b[38;2;182;204;243m█\u001b[38;2;184;205;244m█\u001b[38;2;186;206;244m█\u001b[39m  \u001b[38;2;190;210;246m█\u001b[38;2;192;211;247m█\u001b[38;2;194;212;247m█\u001b[38;2;195;213;248m█\u001b[38;2;197;215;248m█\u001b[38;2;199;216;249m█\u001b[39m  \u001b[38;2;204;219;251m█\u001b[38;2;205;221;251m█\u001b[38;2;207;222;252m█\u001b[38;2;208;223;253m█\u001b[38;2;210;224;253m█\u001b[38;2;212;226;254m█\u001b[39m",
+            "",
             "      \u001b[38;5;153m╭──────────────────────────────────────────────────────────────────────╮\u001b[39m",
             "      \u001b[38;5;153m│\u001b[39m ❯  Body (complete; no inbox fetch needed): Check the local fixture.  \u001b[38;5;153m│\u001b[39m",
             "      \u001b[38;5;153m╰──────────────────────────────────────────────────────────────────────╯\u001b[39m",
-            "        \u001b[1m\u001b[38;5;182mdeepseek-v4.1-flash\u001b[0m\u001b[38;5;145m  ·  standard  ·  Workspace read/write\u001b[39m"
+            "        \u001b[1m\u001b[38;5;182mdeepseek-v4.1-flash\u001b[0m\u001b[38;5;145m  ·  standard  ·  Workspace read/write\u001b[39m",
+            "",
+            "      \u001b[38;5;181m● Failed to read reasoning efforts · no adapter registered for provider \u001b[39m",
+            "      \u001b[38;5;181m\"deepseek-official\"\u001b[39m",
+            "",
+            ""
           ]
         },
         "after": {
           "meta": [
-            "1",
+            "3",
             "0",
             "6",
             "1",
             "zsh"
           ],
           "lines": [
+            "  \u001b[38;5;110m●\u001b[39m \u001b[38;5;110mConnecting… \u001b[38;5;145m(0s)\u001b[39m",
+            "    \u001b[38;5;181mFailed to read reasoning efforts · no adapter registered for provider \"deeps…\u001b[39m",
             "  \u001b[38;5;102m╭──────────────────────────────────────────────────────────────────────────────╮\u001b[39m",
             "  \u001b[38;5;145m⌸ ❯ \u001b[39m                                                                           \u001b[38;5;145m⛶\u001b[39m",
             "  \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────────────╯\u001b[39m",
-            "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mwork\u001b[39m"
+            "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mwork\u001b[39m",
+            "   \u001b[38;5;146mesc to interrupt\u001b[39m",
+            ""
           ]
         }
       },
@@ -95,32 +601,44 @@
         "ready": true,
         "view": {
           "meta": [
-            "1",
+            "4",
             "0",
             "74",
             "1",
             "zsh"
           ],
           "lines": [
+            "               \u001b[38;2;125;161;222m█\u001b[38;2;127;162;223m█\u001b[39m  \u001b[38;2;132;166;224m█\u001b[38;2;133;167;225m█\u001b[39m  \u001b[38;2;138;171;227m█\u001b[38;2;140;172;227m█\u001b[39m  \u001b[38;2;145;176;229m█\u001b[38;2;146;177;230m█\u001b[39m  \u001b[38;2;151;180;232m█\u001b[38;2;153;182;232m█\u001b[39m \u001b[38;2;156;184;233m█\u001b[38;2;158;185;234m█\u001b[39m   \u001b[38;2;164;190;236m█\u001b[38;2;166;191;237m█\u001b[39m  \u001b[38;2;171;195;239m█\u001b[38;2;172;196;239m█\u001b[39m  \u001b[38;2;177;200;241m█\u001b[38;2;179;201;242m█\u001b[39m          \u001b[38;2;197;215;248m█\u001b[38;2;199;216;249m█\u001b[39m      \u001b[38;2;210;224;253m█\u001b[38;2;212;226;254m█\u001b[39m",
+            "               \u001b[38;2;125;161;222m█\u001b[38;2;127;162;223m█\u001b[39m  \u001b[38;2;132;166;224m█\u001b[38;2;133;167;225m█\u001b[39m  \u001b[38;2;138;171;227m█\u001b[38;2;140;172;227m█\u001b[39m  \u001b[38;2;145;176;229m█\u001b[38;2;146;177;230m█\u001b[39m  \u001b[38;2;151;180;232m█\u001b[38;2;153;182;232m█\u001b[39m  \u001b[38;2;158;185;234m█\u001b[38;2;159;187;235m█\u001b[39m  \u001b[38;2;164;190;236m█\u001b[38;2;166;191;237m█\u001b[39m  \u001b[38;2;171;195;239m█\u001b[38;2;172;196;239m█\u001b[39m  \u001b[38;2;177;200;241m█\u001b[38;2;179;201;242m█\u001b[38;2;181;202;242m█\u001b[38;2;182;204;243m█\u001b[38;2;184;205;244m█\u001b[38;2;186;206;244m█\u001b[39m  \u001b[38;2;190;210;246m█\u001b[38;2;192;211;247m█\u001b[38;2;194;212;247m█\u001b[38;2;195;213;248m█\u001b[38;2;197;215;248m█\u001b[38;2;199;216;249m█\u001b[39m  \u001b[38;2;204;219;251m█\u001b[38;2;205;221;251m█\u001b[38;2;207;222;252m█\u001b[38;2;208;223;253m█\u001b[38;2;210;224;253m█\u001b[38;2;212;226;254m█\u001b[39m",
+            "",
             "      \u001b[38;5;153m╭──────────────────────────────────────────────────────────────────────╮\u001b[39m",
             "      \u001b[38;5;153m│\u001b[39m ❯ 。 これは実験に使う日本語の文章です。🔬 確認のため繰り返します。   \u001b[38;5;153m│\u001b[39m",
             "      \u001b[38;5;153m╰──────────────────────────────────────────────────────────────────────╯\u001b[39m",
-            "        \u001b[1m\u001b[38;5;182mdeepseek-v4.1-flash\u001b[0m\u001b[38;5;145m  ·  standard  ·  Workspace read/write\u001b[39m"
+            "        \u001b[1m\u001b[38;5;182mdeepseek-v4.1-flash\u001b[0m\u001b[38;5;145m  ·  standard  ·  Workspace read/write\u001b[39m",
+            "",
+            "      \u001b[38;5;181m● Failed to read reasoning efforts · no adapter registered for provider \u001b[39m",
+            "      \u001b[38;5;181m\"deepseek-official\"\u001b[39m",
+            "",
+            ""
           ]
         },
         "after": {
           "meta": [
-            "1",
+            "3",
             "0",
             "6",
             "1",
             "zsh"
           ],
           "lines": [
+            "  \u001b[38;5;110m•\u001b[39m \u001b[38;5;110mConsidering\u001b[38;5;146m…\u001b[38;5;110m \u001b[38;5;145m(0s)\u001b[39m",
+            "    \u001b[38;5;181mFailed to read reasoning efforts · no adapter registered for provider \"deeps…\u001b[39m",
             "  \u001b[38;5;102m╭──────────────────────────────────────────────────────────────────────────────╮\u001b[39m",
             "  \u001b[38;5;145m⌸ ❯ \u001b[39m                                                                           \u001b[38;5;145m⛶\u001b[39m",
             "  \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────────────╯\u001b[39m",
-            "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mwork\u001b[39m"
+            "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mwork\u001b[39m",
+            "   \u001b[38;5;146mesc to interrupt\u001b[39m",
+            ""
           ]
         }
       },
@@ -131,32 +649,503 @@
         "ready": true,
         "view": {
           "meta": [
-            "1",
+            "4",
             "0",
             "75",
             "1",
             "zsh"
           ],
           "lines": [
+            "               \u001b[38;2;125;161;222m█\u001b[38;2;127;162;223m█\u001b[39m  \u001b[38;2;132;166;224m█\u001b[38;2;133;167;225m█\u001b[39m  \u001b[38;2;138;171;227m█\u001b[38;2;140;172;227m█\u001b[39m  \u001b[38;2;145;176;229m█\u001b[38;2;146;177;230m█\u001b[39m  \u001b[38;2;151;180;232m█\u001b[38;2;153;182;232m█\u001b[39m \u001b[38;2;156;184;233m█\u001b[38;2;158;185;234m█\u001b[39m   \u001b[38;2;164;190;236m█\u001b[38;2;166;191;237m█\u001b[39m  \u001b[38;2;171;195;239m█\u001b[38;2;172;196;239m█\u001b[39m  \u001b[38;2;177;200;241m█\u001b[38;2;179;201;242m█\u001b[39m          \u001b[38;2;197;215;248m█\u001b[38;2;199;216;249m█\u001b[39m      \u001b[38;2;210;224;253m█\u001b[38;2;212;226;254m█\u001b[39m",
+            "               \u001b[38;2;125;161;222m█\u001b[38;2;127;162;223m█\u001b[39m  \u001b[38;2;132;166;224m█\u001b[38;2;133;167;225m█\u001b[39m  \u001b[38;2;138;171;227m█\u001b[38;2;140;172;227m█\u001b[39m  \u001b[38;2;145;176;229m█\u001b[38;2;146;177;230m█\u001b[39m  \u001b[38;2;151;180;232m█\u001b[38;2;153;182;232m█\u001b[39m  \u001b[38;2;158;185;234m█\u001b[38;2;159;187;235m█\u001b[39m  \u001b[38;2;164;190;236m█\u001b[38;2;166;191;237m█\u001b[39m  \u001b[38;2;171;195;239m█\u001b[38;2;172;196;239m█\u001b[39m  \u001b[38;2;177;200;241m█\u001b[38;2;179;201;242m█\u001b[38;2;181;202;242m█\u001b[38;2;182;204;243m█\u001b[38;2;184;205;244m█\u001b[38;2;186;206;244m█\u001b[39m  \u001b[38;2;190;210;246m█\u001b[38;2;192;211;247m█\u001b[38;2;194;212;247m█\u001b[38;2;195;213;248m█\u001b[38;2;197;215;248m█\u001b[38;2;199;216;249m█\u001b[39m  \u001b[38;2;204;219;251m█\u001b[38;2;205;221;251m█\u001b[38;2;207;222;252m█\u001b[38;2;208;223;253m█\u001b[38;2;210;224;253m█\u001b[38;2;212;226;254m█\u001b[39m",
+            "",
             "      \u001b[38;5;153m╭──────────────────────────────────────────────────────────────────────╮\u001b[39m",
             "      \u001b[38;5;153m│\u001b[39m ❯ ple for wrapping and rendering. ... Fetch inbox to read the rest.  \u001b[38;5;153m│\u001b[39m",
             "      \u001b[38;5;153m╰──────────────────────────────────────────────────────────────────────╯\u001b[39m",
-            "        \u001b[1m\u001b[38;5;182mdeepseek-v4.1-flash\u001b[0m\u001b[38;5;145m  ·  standard  ·  Workspace read/write\u001b[39m"
+            "        \u001b[1m\u001b[38;5;182mdeepseek-v4.1-flash\u001b[0m\u001b[38;5;145m  ·  standard  ·  Workspace read/write\u001b[39m",
+            "",
+            "      \u001b[38;5;181m● Failed to read reasoning efforts · no adapter registered for provider \u001b[39m",
+            "      \u001b[38;5;181m\"deepseek-official\"\u001b[39m",
+            "",
+            ""
           ]
         },
         "after": {
           "meta": [
-            "1",
+            "3",
             "0",
             "6",
             "1",
             "zsh"
           ],
           "lines": [
+            "  \u001b[38;5;110m·\u001b[39m \u001b[38;5;110mPreparin\u001b[38;5;146mg…\u001b[38;5;110m \u001b[38;5;145m(0s)\u001b[39m",
+            "    \u001b[38;5;181mFailed to read reasoning efforts · no adapter registered for provider \"deeps…\u001b[39m",
             "  \u001b[38;5;102m╭──────────────────────────────────────────────────────────────────────────────╮\u001b[39m",
             "  \u001b[38;5;145m⌸ ❯ \u001b[39m                                                                           \u001b[38;5;145m⛶\u001b[39m",
             "  \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────────────╯\u001b[39m",
-            "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mwork\u001b[39m"
+            "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mwork\u001b[39m",
+            "   \u001b[38;5;146mesc to interrupt\u001b[39m",
+            ""
+          ]
+        }
+      },
+      {
+        "case": "notice-collapsed",
+        "text": "ORRERY Mail notification: synthetic long fixture. This is disposable notification text with no instruction. This is disposable notification text with no instruction. This is disposable notification text with no instruction. This is disposable notification text with no instruction. This is disposable notification text with no instruction. This is disposable notification text with no instruction. This is disposable notification text with no instruction. This is disposable notification text with no instruction. This is disposable notification text with no instruction. This is disposable notification text with no instruction. ",
+        "selected": null,
+        "ready": true,
+        "view": {
+          "meta": [
+            "15",
+            "0",
+            "6",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "          \u001b[1m\u001b[38;5;110mExplore the uncharted!\u001b[0m",
+            "",
+            "  \u001b[1m\u001b[38;5;174m❯ ORRERY Mail notification: synthetic fixture, short notice.\u001b[0m",
+            "",
+            "  \u001b[38;5;145m─────────────────────── turn error · no adapter registered for provider \"deepseek-official\" ────────────────────────\u001b[39m",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "                                                                                            \u001b[38;5;145mPress Esc again to rewind\u001b[39m",
+            "  \u001b[38;5;102m╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "  \u001b[38;5;145m⌸ \u001b[39m❯                                                                                                                \u001b[38;5;145m⛶\u001b[39m",
+            "      \u001b[38;5;145m▸ 1 lines・630 chars・\u001b[39mORRERY Mail notification: synthetic long fixture. This is disposable\u001b[38;5;145m・hover to peek\u001b[39m",
+            "",
+            "  \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mwork\u001b[39m",
+            "",
+            "",
+            ""
+          ]
+        },
+        "after": {
+          "meta": [
+            "3",
+            "0",
+            "6",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "  \u001b[38;5;145m─────────────────────── turn error · no adapter registered for provider \"deepseek-official\" ────────────────────────\u001b[39m",
+            "                                                  \u001b[38;5;181mTurn error · no adapter registered for provider \"deepseek-official\"\u001b[39m",
+            "  \u001b[38;5;102m╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "  \u001b[38;5;145m⌸ \u001b[39m❯                                                                                                                \u001b[38;5;145m⛶\u001b[39m",
+            "  \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mwork\u001b[39m",
+            "",
+            ""
+          ]
+        }
+      }
+    ]
+  },
+  "hermes": {
+    "version": "0.22.2",
+    "before": {
+      "meta": [
+        "3",
+        "0",
+        "2",
+        "1",
+        "zsh"
+      ],
+      "lines": [
+        "",
+        "\u001b[38;5;250m\u001b[48;5;234m ☤ \u001b[1m\u001b[38;5;220mgpt-4o\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ ctx -- │ [░░░░░░░░░░] -- │ 0s │ ⏲ 0s\u001b[38;5;250m \u001b[39m\u001b[49m",
+        "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+        "\u001b[38;5;230m❯ \u001b[3m\u001b[38;5;136mExplain this error and how to fix it\u001b[0m",
+        "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+        ""
+      ]
+    },
+    "cases": [
+      {
+        "case": "slash-exact",
+        "text": "/help",
+        "selected": "/help",
+        "ready": true,
+        "view": {
+          "meta": [
+            "2",
+            "0",
+            "7",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "\u001b[38;5;250m\u001b[48;5;234m ☤ \u001b[1m\u001b[38;5;220mgpt-4o\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ ctx -- │ [░░░░░░░░░░] -- │ 1s │ ⏲ 0s\u001b[38;5;250m \u001b[39m\u001b[49m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[38;5;230m❯ \u001b[39m/help",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[38;5;230m\u001b[48;5;234m /help \u001b[38;5;136m Show available commands (/help skills lists skill commands, /help <text> filters) (usage: /help [skills|<fi... \u001b[38;5;230m\u001b[48;5;238m"
+          ]
+        }
+      },
+      {
+        "case": "slash-prefix",
+        "text": "/log",
+        "selected": "/login",
+        "ready": false,
+        "view": {
+          "meta": [
+            "2",
+            "0",
+            "6",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "\u001b[38;5;250m\u001b[48;5;234m ☤ \u001b[1m\u001b[38;5;220mgpt-4o\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ ctx -- │ [░░░░░░░░░░] -- │ 2s │ ⏲ 0s\u001b[38;5;250m \u001b[39m\u001b[49m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[38;5;230m❯ \u001b[39m/log\u001b[38;5;241min\u001b[39m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[38;5;230m\u001b[48;5;234m /login \u001b[38;5;136m Sign in with a Nous account (keeps your connectors) \u001b[38;5;230m\u001b[48;5;238m \u001b[39m\u001b[49m"
+          ]
+        }
+      },
+      {
+        "case": "slash-safe-control",
+        "text": "/hel",
+        "selected": "/help",
+        "ready": false,
+        "view": {
+          "meta": [
+            "2",
+            "0",
+            "6",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "\u001b[38;5;250m\u001b[48;5;234m ☤ \u001b[1m\u001b[38;5;220mgpt-4o\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ ctx -- │ [░░░░░░░░░░] -- │ 1s │ ⏲ 0s\u001b[38;5;250m \u001b[39m\u001b[49m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[38;5;230m❯ \u001b[39m/hel\u001b[38;5;241mp\u001b[39m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[38;5;230m\u001b[48;5;234m /help \u001b[38;5;136m Show available commands (/help skills lists skill commands, /help <text> filters) (usage: /help [skills|<fi... \u001b[38;5;230m\u001b[48;5;238m"
+          ]
+        }
+      },
+      {
+        "case": "notice-short",
+        "text": "ORRERY Mail notification: synthetic fixture, short notice.",
+        "selected": null,
+        "ready": true,
+        "view": {
+          "meta": [
+            "2",
+            "0",
+            "60",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "\u001b[38;5;250m\u001b[48;5;234m ☤ \u001b[1m\u001b[38;5;220mgpt-4o\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ ctx -- │ [░░░░░░░░░░] -- │ 0s │ ⏲ 0s\u001b[38;5;250m \u001b[39m\u001b[49m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[38;5;230m❯ \u001b[39mORRERY Mail notification: synthetic fixture, short notice.",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            ""
+          ]
+        },
+        "after": {
+          "meta": [
+            "3",
+            "0",
+            "4",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "",
+            "\u001b[0m\u001b[38;5;250m\u001b[48;5;234m ☤ \u001b[1m\u001b[38;5;220mgpt-4o\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ 12/128K │ \u001b[1m\u001b[38;5;108m[░░░░░░░░░░]\u001b[0m\u001b[38;5;101m\u001b[48;5;234m \u001b[1m\u001b[38;5;108m0%\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ 2s │ ⏱ 0s\u001b[38;5;250m \u001b[39m\u001b[49m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[3m\u001b[38;5;136m☤ ❯ msg=interrupt · /queue · /bg · /steer · Ctrl+C cancel\u001b[0m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            ""
+          ]
+        }
+      },
+      {
+        "case": "notice-long",
+        "text": "ORRERY Mail notification: synthetic fixture, long notice. Synthetic reply-free fixture sentence for wrapping. Synthetic reply-free fixture sentence for wrapping. Synthetic reply-free fixture sentence for wrapping. Synthetic reply-free fixture sentence for wrapping. Synthetic reply-free fixture sentence for wrapping. Synthetic reply-free fixture sentence for wrapping. Synthetic reply-free fixture sentence for wrapping. Synthetic reply-free fixture sentence for wrapping. Synthetic reply-free fixture sentence for wrapping. Synthetic reply-free fixture sentence for wrapping. Synthetic reply-free fixture sentence for wrapping. ",
+        "selected": null,
+        "ready": true,
+        "view": {
+          "meta": [
+            "7",
+            "0",
+            "32",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "\u001b[38;5;250m\u001b[48;5;234m ☤ \u001b[1m\u001b[38;5;220mgpt-4o\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ ctx -- │ [░░░░░░░░░░] -- │ 0s │ ⏲ 0s\u001b[38;5;250m \u001b[39m\u001b[49m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[38;5;230m❯ \u001b[39mORRERY Mail notification: synthetic fixture, long notice. Synthetic reply-free fixture sentence for wrapping. Syntheti",
+            "c reply-free fixture sentence for wrapping. Synthetic reply-free fixture sentence for wrapping. Synthetic reply-free fix",
+            "ture sentence for wrapping. Synthetic reply-free fixture sentence for wrapping. Synthetic reply-free fixture sentence fo",
+            "r wrapping. Synthetic reply-free fixture sentence for wrapping. Synthetic reply-free fixture sentence for wrapping. Synt",
+            "hetic reply-free fixture sentence for wrapping. Synthetic reply-free fixture sentence for wrapping. Synthetic reply-free",
+            " fixture sentence for wrapping.",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            ""
+          ]
+        },
+        "after": {
+          "meta": [
+            "3",
+            "0",
+            "4",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "",
+            "\u001b[38;5;250m\u001b[48;5;234m ☤ \u001b[1m\u001b[38;5;220mgpt-4o\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ 0/128K │ \u001b[1m\u001b[38;5;108m[░░░░░░░░░░]\u001b[0m\u001b[38;5;101m\u001b[48;5;234m \u001b[1m\u001b[38;5;108m0%\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ 2s │ ⏱ 0s\u001b[38;5;250m \u001b[39m\u001b[49m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[3m\u001b[38;5;136m☤ ❯ msg=interrupt · /queue · /bg · /steer · Ctrl+C cancel\u001b[0m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            ""
+          ]
+        }
+      },
+      {
+        "case": "notice-collapsed",
+        "text": "ORRERY Mail notification: synthetic multiline notice. \nSynthetic fixture continuation.\nSynthetic fixture continuation.\nSynthetic fixture continuation.\nSynthetic fixture continuation.\nSynthetic fixture continuation.\nSynthetic fixture continuation.\nSynthetic fixture continuation.\nSynthetic fixture continuation.\nSynthetic fixture continuation.\nSynthetic fixture continuation.\nSynthetic fixture continuation.\nSynthetic fixture continuation.",
+        "selected": null,
+        "ready": true,
+        "view": {
+          "meta": [
+            "2",
+            "0",
+            "95",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "\u001b[38;5;250m\u001b[48;5;234m ☤ \u001b[1m\u001b[38;5;220mgpt-4o\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ ctx -- │ [░░░░░░░░░░] -- │ 1s │ ⏲ 0s\u001b[38;5;250m \u001b[39m\u001b[49m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[38;5;230m❯ \u001b[39m[Pasted text #1: 13 lines → /fixture/hermes/pastes/paste_1_120000.txt]",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            ""
+          ]
+        },
+        "after": {
+          "meta": [
+            "3",
+            "0",
+            "4",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "",
+            "\u001b[0m\u001b[38;5;250m\u001b[48;5;234m ☤ \u001b[1m\u001b[38;5;220mgpt-4o\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ 12/128K │ \u001b[1m\u001b[38;5;108m[░░░░░░░░░░]\u001b[0m\u001b[38;5;101m\u001b[48;5;234m \u001b[1m\u001b[38;5;108m0%\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ ◷ 0.3s │ ↑ 6 t/s │ 2s │ ⏱ 0s\u001b[38;5;250m \u001b[39m\u001b[49m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[3m\u001b[38;5;136m☤ ❯ msg=interrupt · /queue · /bg · /steer · Ctrl+C cancel\u001b[0m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            ""
+          ]
+        }
+      }
+    ]
+  },
+  "agy": {
+    "version": "1.5.16",
+    "before": {
+      "meta": [
+        "1",
+        "0",
+        "2",
+        "1",
+        "bash"
+      ],
+      "lines": [
+        "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+        "\u001b[94m>\u001b[39m \u001b[90mPlan mode: research & plan only (shift+tab to cycle)\u001b[39m",
+        "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+        "? for shortcuts\u001b[39m                                                                                             \u001b[94mplan"
+      ]
+    },
+    "cases": [
+      {
+        "case": "slash-exact",
+        "text": "/help",
+        "selected": "/help",
+        "ready": true,
+        "view": {
+          "meta": [
+            "1",
+            "0",
+            "7",
+            "1",
+            "bash"
+          ],
+          "lines": [
+            "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[94m>\u001b[39m \u001b[94m/help\u001b[39m",
+            "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[94m> /help\u001b[39m  \u001b[2mShow available commands and keybindings\u001b[0m",
+            "",
+            "  \u001b[1m\u001b[94m↑/↓\u001b[0m\u001b[90m Navigate · \u001b[1m\u001b[94menter\u001b[0m\u001b[90m Select · \u001b[1m\u001b[94mtab\u001b[0m\u001b[90m Complete\u001b[39m",
+            "\u001b[90mesc to cancel\u001b[39m                                                                                               \u001b[94mplan"
+          ]
+        }
+      },
+      {
+        "case": "slash-prefix",
+        "text": "/hel",
+        "selected": "/help",
+        "ready": false,
+        "view": {
+          "meta": [
+            "1",
+            "0",
+            "6",
+            "1",
+            "bash"
+          ],
+          "lines": [
+            "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[94m>\u001b[39m /hel",
+            "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[94m> /help     \u001b[39m  \u001b[2mShow available commands and keybindings\u001b[0m",
+            "  /changelog  \u001b[2mShow release notes and changes\u001b[0m",
+            "",
+            "  \u001b[1m\u001b[94m↑/↓\u001b[0m\u001b[90m Navigate · \u001b[1m\u001b[94menter\u001b[0m\u001b[90m Select · \u001b[1m\u001b[94mtab\u001b[0m\u001b[90m Complete\u001b[39m",
+            "\u001b[90mesc to cancel\u001b[39m                                                                                               \u001b[94mplan"
+          ]
+        }
+      },
+      {
+        "case": "slash-logout",
+        "text": "/log",
+        "selected": "/logout",
+        "ready": false,
+        "view": {
+          "meta": [
+            "1",
+            "0",
+            "6",
+            "1",
+            "bash"
+          ],
+          "lines": [
+            "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[94m>\u001b[39m /log",
+            "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[94m> /logout\u001b[39m                     \u001b[2mLog out\u001b[0m",
+            "  /changelog                  \u001b[2mShow release notes and changes\u001b[0m",
+            "  /fixture-action  Leave the isolated configuration alone",
+            "",
+            "  \u001b[1m\u001b[94m↑/↓\u001b[0m\u001b[90m Navigate · \u001b[1m\u001b[94menter\u001b[0m\u001b[90m Select · \u001b[1m\u001b[94mtab\u001b[0m\u001b[90m Complete\u001b[39m",
+            "\u001b[90mesc to cancel\u001b[39m                                                                                               \u001b[94mplan"
+          ]
+        }
+      },
+      {
+        "case": "notice-short",
+        "text": "ORRERY Mail notification: synthetic short fixture.",
+        "selected": null,
+        "ready": true,
+        "view": {
+          "meta": [
+            "2",
+            "0",
+            "52",
+            "1",
+            "bash"
+          ],
+          "lines": [
+            "",
+            "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[94m>\u001b[39m ORRERY Mail notification: synthetic short fixture.",
+            "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m                                                                                                            \u001b[94mplan",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ]
+        },
+        "after": {
+          "meta": [
+            "3",
+            "0",
+            "2",
+            "1",
+            "bash"
+          ],
+          "lines": [
+            "\u001b[1m\u001b[34m> /plan ORRERY Mail notification: synthetic short fixture.\u001b[0m",
+            "⣷  \u001b[90mGenerating...\u001b[39m",
+            "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[94m>\u001b[39m",
+            "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "esc to cancel\u001b[39m                                                                                               \u001b[94mplan",
+            "",
+            ""
+          ]
+        }
+      },
+      {
+        "case": "notice-long",
+        "text": "ORRERY Mail notification: synthetic long fixture. A synthetic sentence for terminal wrapping. A synthetic sentence for terminal wrapping. A synthetic sentence for terminal wrapping. A synthetic sentence for terminal wrapping. A synthetic sentence for terminal wrapping. A synthetic sentence for terminal wrapping. A synthetic sentence for terminal wrapping. A synthetic sentence for terminal wrapping. A synthetic sentence for terminal wrapping. A synthetic sentence for terminal wrapping. A synthetic sentence for terminal wrapping. A synthetic sentence for terminal wrapping. ",
+        "selected": null,
+        "ready": true,
+        "view": {
+          "meta": [
+            "7",
+            "0",
+            "56",
+            "1",
+            "bash"
+          ],
+          "lines": [
+            "",
+            "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[94m>\u001b[39m ORRERY Mail notification: synthetic long fixture. A synthetic sentence for terminal wrapping. A synthetic",
+            "  sentence for terminal wrapping. A synthetic sentence for terminal wrapping. A synthetic sentence for",
+            "  terminal wrapping. A synthetic sentence for terminal wrapping. A synthetic sentence for terminal wrapping. A",
+            "  synthetic sentence for terminal wrapping. A synthetic sentence for terminal wrapping. A synthetic sentence",
+            "  for terminal wrapping. A synthetic sentence for terminal wrapping. A synthetic sentence for terminal",
+            "  wrapping. A synthetic sentence for terminal wrapping.",
+            "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[39m                                                                                                            \u001b[94mplan",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ]
+        },
+        "after": {
+          "meta": [
+            "3",
+            "0",
+            "2",
+            "1",
+            "bash"
+          ],
+          "lines": [
+            "\u001b[1m\u001b[34m  wrapping. A synthetic sentence for terminal wrapping.\u001b[0m",
+            "⣷  \u001b[90mGene\u001b[94mratin\u001b[90mg...\u001b[39m",
+            "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[94m>\u001b[39m",
+            "\u001b[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "esc to cancel\u001b[39m                                                                                               \u001b[94mplan",
+            "",
+            ""
           ]
         }
       }

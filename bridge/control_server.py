@@ -1681,6 +1681,7 @@ class TmuxControlBridge:
         async with self._write_lock:
             lock = None
             loaded = pasted = False
+            problem = None
             try:
                 await admit()
                 observed = await capture()
@@ -1722,17 +1723,18 @@ class TmuxControlBridge:
                 while time.monotonic() < deadline:
                     view = await capture()
                     choice = None
+                    problem = submission.completion_problem(view, text)
                     if view is not None:
                         if view.identity != before.identity:
                             return 'unknown'
-                        if submission.ready(view, text) or submission.mismatched_command(view, text):
+                        if submission.ready(view, text) or problem == 'completion-mismatch':
                             choice = (view.draft, view.selected_command)
                         if choice is not None and choice == previous:
                             await admit()
                             view = await capture()
                             if (view is not None and view.identity == before.identity
                                     and (view.draft, view.selected_command) == choice):
-                                if submission.ready(view, text):
+                                if submission.ready(view, text) and time.monotonic() < deadline:
                                     result = await command(['send-keys', '-t', pane_id, 'C-m'])
                                     if not result.ok or result.overflow:
                                         return 'unknown'
@@ -1742,7 +1744,7 @@ class TmuxControlBridge:
                     previous = choice
                     await asyncio.sleep(submission.POLL)
                 else:
-                    return 'unknown'
+                    return 'completion-unverified' if problem == 'completion-unverified' else 'unknown'
 
                 while time.monotonic() < deadline:
                     view = await capture()
@@ -1756,6 +1758,8 @@ class TmuxControlBridge:
             except (OSError, RuntimeError, asyncio.TimeoutError, asyncio.CancelledError):
                 if pending is not None:
                     self._abort_mobile_stream()
+                if problem == 'completion-unverified':
+                    return problem
                 return 'unknown' if pasted else 'refused'
             finally:
                 try:
