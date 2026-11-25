@@ -35,6 +35,8 @@ SGR = re.compile(r'\x1b\[[0-9;:]*m')
 DIM = re.compile(r'\x1b\[(?:[0-9]+;)*2(?:;[0-9]+)*m')
 CLAUDE_QUEUE_HINT = 'Press up to edit queued messages'
 CLAUDE_SUGGESTION = re.compile(r'^[  ]*\x1b\[(?:[0-9]+;)*2(?:;[0-9]+)*m[^\x1b]+(?:\x1b\[(?:0|22)?m[  ]*)?$')
+CLAUDE_ARGUMENT_HINT = re.compile(r'\x1b\[(?:38;5;246|(?:0;)?2)m[^\x1b]+'
+                                  r'(?:\x1b\[(?:0|22|39)?m)?[ \t]*$')
 COLLAPSED = re.compile(r'\[Pasted text #\d+(?: \+\d+ lines?)?\]')
 HERMES_PASTE = re.compile(r'\[Pasted text #(\d+): (\d+) lines → /.+/pastes/paste_\1_\d{6}\.txt\]')
 HERMES_HINT = re.compile(r'^msg=[\w-]+ · /queue · /bg · /steer · Ctrl\+C cancel$')
@@ -259,6 +261,15 @@ def frame(metadata, lines, pane):
             left=='☤' or bool(left) or any('☤' in row for row in around))
         hermes_busy = hermes and left=='☤'
         waiting=any(PASTING.match(row) for row in around)
+        if glyph=='❯' and framed and not boxed and not hermes and cursor==start and draft.startswith('/'):
+            # Claude renders an argument hint one cell after the caret when
+            # a space follows the command. Only strip that styled suffix.
+            if hint := CLAUDE_ARGUMENT_HINT.search(lines[start]):
+                visible = SGR.sub('', lines[start][:hint.start()])
+                if len(visible) == column + 1 and visible.endswith('  '):
+                    typed = PROMPT.fullmatch(visible.rstrip())
+                    if typed and SLASH_NAME.fullmatch(typed[3]):
+                        draft = typed[3]
         # Recognize native hints only at the starting caret. Style matters for
         # rotating Hermes suggestions and distinguishes Codex hints from drafts.
         if cursor==start and column<=len(prefix)+2:

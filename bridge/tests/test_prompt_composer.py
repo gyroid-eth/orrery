@@ -44,6 +44,29 @@ def test_slash_submission_keeps_an_unconfirmed_draft_and_explains_why(cockpit, s
         assert reason in js('toastEl.textContent')
 
 
+def test_slash_picker_space_is_only_used_while_editing(cockpit):
+    js, wait, _ = terminal(cockpit)
+    js("""currentAgents[0].program='claude-code';
+      const base=fetch;
+      window.fetch=(url,options)=>String(url).startsWith('/telemetry/skills')
+        ? Promise.resolve(Response.json({skills:[{name:'log',kind:'skill'}],prefix:'/'}))
+        : base(url,options);
+      skillCatalogs.clear();skillRequests.clear();
+      promptInput.value='/lo';promptInput.focus();promptInput.setSelectionRange(3,3);
+      promptInput.dispatchEvent(new Event('input'));""")
+    wait("!slashMenu.hidden&&Array.from(slashMenu.querySelectorAll('.sm-name')).some(item=>item.textContent==='/log')")
+    js("Array.from(slashMenu.querySelectorAll('.sm-it')).find(item=>item.querySelector('.sm-name').textContent==='/log').dispatchEvent(new MouseEvent('mousedown'));")
+    assert js('promptInput.value') == '/log '
+    js('sendPrompt()')
+    wait("!promptBusy&&packets.some(packet=>packet.type==='submit-prompt')")
+    assert js("packets.find(packet=>packet.type==='submit-prompt').data") == '/log'
+    assert js('promptInput.value') == ''
+
+    js("packets.length=0;promptInput.value='/log an argument ';sendPrompt()")
+    wait("!promptBusy&&packets.some(packet=>packet.type==='submit-prompt')")
+    assert js("packets.find(packet=>packet.type==='submit-prompt').data") == '/log an argument '
+
+
 def test_card_fills_stage_and_resizes_the_textarea(cockpit):
     js, wait, _ = terminal(cockpit)
     assert js('promptInput.placeholder') == 'Message ReviewFixture'
