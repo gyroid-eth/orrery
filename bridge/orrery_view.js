@@ -477,7 +477,7 @@ function updateSurfaceGeometry(surface){
       const to=surface.states.get(edge.dataset.b);
       if(!from||!to)return;
       const curve=commPathBetween(
-        from,to,surface.layoutDimensions||surface.dimensions);
+        from,to,surface.positions,surface.layoutDimensions||surface.dimensions);
       edge.setAttribute('d',curve.d);
       const life=Number(edge.dataset.life||0);
       edge.setAttribute('stroke-opacity',
@@ -986,34 +986,54 @@ function commLayerOf(target){
   return [...target.children].find(child=>
     child.classList.contains('orrery-comm-layer'));
 }
-function commPathBetween(from,to,dimensions){
+function segmentNearNode(from,to,node,radius){
   const dx=to.x-from.x,dy=to.y-from.y;
-  const sameRow=Math.abs(dy)<=(dimensions.large?12:5);
-  if(!sameRow){
-    return {
-      curved:false,d:`M ${from.x} ${from.y} L ${to.x} ${to.y}`,
-      point:t=>({x:from.x+dx*t,y:from.y+dy*t}),
-    };
-  }
-  const distance=Math.abs(dx);
-  const depth=Math.min(
-    dimensions.large?78:27,
-    (dimensions.large?18:7)+distance*(dimensions.large?.17:.18));
-  const height=dimensions.height;
-  const margin=dimensions.large?42:15;
-  const direction=Math.max(from.y,to.y)+depth>height-margin?-1:1;
-  const cx=(from.x+to.x)/2;
-  const cy=(from.y+to.y)/2+depth*direction;
-  return {
-    curved:true,d:`M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`,
-    point:t=>{
-      const mt=1-t;
-      return {
-        x:mt*mt*from.x+2*mt*t*cx+t*t*to.x,
-        y:mt*mt*from.y+2*mt*t*cy+t*t*to.y,
-      };
-    },
+  const x=node.x-from.x,y=node.y-from.y;
+  const t=Math.max(0,Math.min(1,(x*dx+y*dy)/(dx*dx+dy*dy||1)));
+  return (x-dx*t)**2+(y-dy*t)**2<=radius*radius;
+}
+function commPathBetween(from,to,positions,dimensions){
+  const dx=to.x-from.x,dy=to.y-from.y;
+  const straight={
+    d:`M ${from.x} ${from.y} L ${to.x} ${to.y}`,
+    point:t=>({x:from.x+dx*t,y:from.y+dy*t}),
   };
+  const distance=Math.hypot(dx,dy);
+  if(!distance||isLineagePair(from.name,to.name))return straight;
+  // Clear the portrait's outer ring, with room for the edge stroke.
+  const radius=dimensions.large?32:14;
+  const nodes=[...positions.values()].filter(node=>node!==from&&node!==to);
+  if(!nodes.some(node=>segmentNearNode(from,to,node,radius)))return straight;
+
+  // Start with a shallow detour on either side of the line. Use the same
+  // side in both directions, so a highlighted reply retraces its Mail edge.
+  const direction=dx<0||(dx===0&&dy<0)?-1:1;
+  const nx=direction*dy/distance,ny=-direction*dx/distance;
+  let best=straight,fewest=Infinity;
+  for(const depth of [2.5,4,6]){
+    for(const side of [1,-1]){
+      const offset=depth*side*radius;
+      const cx=Math.max(0,Math.min(dimensions.width,(from.x+to.x)/2+nx*offset));
+      const cy=Math.max(0,Math.min(dimensions.height,(from.y+to.y)/2+ny*offset));
+      const point=t=>{
+        const mt=1-t;
+        return {
+          x:mt*mt*from.x+2*mt*t*cx+t*t*to.x,
+          y:mt*mt*from.y+2*mt*t*cy+t*t*to.y,
+        };
+      };
+      const curve={d:`M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`,point};
+      // Test the detour for other portraits as well. Twelve chords with one
+      // extra unit of clearance cover the small gap between each chord and
+      // the quadratic at these depths.
+      const points=Array.from({length:13},(_,index)=>point(index/12));
+      const hits=nodes.filter(node=>points.some((end,index)=>index>0&&
+        segmentNearNode(points[index-1],end,node,radius+1))).length;
+      if(!hits)return curve;
+      if(hits<fewest){best=curve;fewest=hits;}
+    }
+  }
+  return best;
 }
 function renderMailFocus(surface){
   const target=surface?.target;
@@ -1034,7 +1054,7 @@ function renderMailFocus(surface){
   for(const name of activeMailRoute.recipients||[]){
     const to=surface.states.get(name);
     if(!to||to.removing||to===from)continue;
-    const curve=commPathBetween(from,to,dimensions);
+    const curve=commPathBetween(from,to,surface.positions,dimensions);
     const distance=Math.hypot(to.x-from.x,to.y-from.y);
     const t=Math.max(.45,1-(dimensions.large?27:14)/Math.max(distance,1));
     const tip=curve.point(t),base=curve.point(t-.05);
@@ -1054,9 +1074,8 @@ document.addEventListener('oc:mail-route',event=>{
 /* A spawn always carries its task message, so a parent and its child are a
    mail pair by definition. Drawing both a spawn line and a mail curve for
    them puts two lines where there is one relationship. Hand the mail to the
-   line that is already there — brighten it — and keep curves for pairs the
-   lineage does not connect, where the curve is the only thing saying the two
-   agents have anything to do with each other. */
+   line that is already there — brighten it — and draw separate Mail edges
+   for pairs the lineage does not connect. */
 function isLineagePair(a,b){
   const parent=(window.OC&&OC.lineageParent)||null;
   if(!parent)return false;
@@ -1084,7 +1103,7 @@ function renderCommLayer(target,positions,dimensions){
       liveLineage.add(pairKey(pair.a,pair.b));
       return;
     }
-    const curve=commPathBetween(from,to,dimensions);
+    const curve=commPathBetween(from,to,positions,dimensions);
     layer.appendChild(svgEl('path',{
       class:'orrery-comm-edge',
       d:curve.d,fill:'none',
@@ -1183,11 +1202,13 @@ function animateComet(target,positions,fromName,toName,message,large){
       const eased=progress<.5
         ?4*progress*progress*progress
         :1-Math.pow(-2*progress+2,3)/2;
-      const point=commPathBetween(
-        from,to,large&&planetMotion
-          ?planetMotion.layoutDimensions||PLANET:miniMotion.layoutDimensions||MINI).point(eased);
+      const curve=commPathBetween(
+        from,to,positions,large&&planetMotion
+          ?planetMotion.layoutDimensions||PLANET:miniMotion.layoutDimensions||MINI);
+      const point=curve.point(eased);
       const envelope=cometEnvelope(progress);
-      const angle=Math.atan2(to.y-from.y,to.x-from.x)*180/Math.PI;
+      const ahead=curve.point(Math.min(1,eased+.01)),behind=curve.point(Math.max(0,eased-.01));
+      const angle=Math.atan2(ahead.y-behind.y,ahead.x-behind.x)*180/Math.PI;
       flight.setAttribute('transform',`translate(${point.x} ${point.y}) scale(${envelope.scale})`);
       flight.style.opacity=String(envelope.opacity);
       tail.setAttribute('transform',`rotate(${angle})`);

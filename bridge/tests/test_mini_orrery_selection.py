@@ -239,3 +239,78 @@ def test_graph_captions_fit_dense_layout_and_keep_the_full_tooltip(mini_browser,
       });
     })()""".replace('MODE', json.dumps(mode)))
     assert result == [dict(count=16, clear=True, ellipsis=True, full=True, role='Fixture release review', noRole=True)] * 2
+
+
+def test_mail_edges_and_selected_routes_bend_only_around_a_portrait(mini_browser):
+    client, evaluate = mini_browser
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    result = evaluate("""(()=>{
+      OC.lineageParent.clear();
+      currentAgents=['Alpha','Middle','Zulu'].map(name=>({name,provider:'openai'}));
+      document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      const messages=['Middle','Zulu'].map(recipient=>({sender:'Alpha',recipient}));
+      document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages}}));
+      OrreryRail.openPlanetarium();
+      const route=sender=>document.dispatchEvent(new CustomEvent('oc:mail-route',
+        {detail:{sender,recipients:[sender==='Alpha'?'Zulu':'Alpha']}}));
+      route('Alpha');
+      const graphs=['#orrery','.planetarium-svg'].map(selector=>{
+        const svg=document.querySelector(selector);
+        const portrait=svg.querySelector('[data-agent=Middle] .orrery-hit');
+        const x=Number(portrait.getAttribute('cx')),y=Number(portrait.getAttribute('cy'));
+        const edge=name=>svg.querySelector('.orrery-comm-edge[data-a=Alpha][data-b='+name+']');
+        const clear=edge('Middle').getAttribute('d'),blocked=edge('Zulu');
+        const focus=()=>svg.querySelector('.orrery-mail-focus path');
+        const length=blocked.getTotalLength();
+        const clearance=Math.min(...Array.from({length:101},(_,i)=>{
+          const p=blocked.getPointAtLength(length*i/100);
+          return Math.hypot(x-p.x,y-p.y);
+        }));
+        const midpoint=path=>path.getPointAtLength(path.getTotalLength()/2);
+        return {clear:clear.includes(' L '),bent:blocked.getAttribute('d').includes(' Q '),
+          selectedMatches:focus().getAttribute('d')===blocked.getAttribute('d'),
+          clearance,midpoint:midpoint(blocked),focus,midpointOf:midpoint};
+      });
+      route('Zulu');
+      return graphs.map(({focus,midpointOf,midpoint,...rest})=>{
+        const reverse=midpointOf(focus());
+        return {...rest,reverseMatches:Math.hypot(midpoint.x-reverse.x,midpoint.y-reverse.y)<.01};
+      });
+    })()""")
+    for graph, radius in zip(result, (14, 32), strict=True):
+        assert graph['clear'] and graph['bent'], graph
+        assert graph['selectedMatches'] and graph['reverseMatches'], graph
+        assert graph['clearance'] >= radius, graph
+
+
+def test_selected_parent_child_mail_overlays_the_spawn_line(mini_browser):
+    client, evaluate = mini_browser
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    result = evaluate("""(()=>{
+      const peers=Array.from('ABCDEFGH',letter=>'Peer'+letter);
+      OC.lineageParent.clear();
+      peers.forEach(name=>OC.lineageParent.set(name,'Pilot'));
+      currentAgents=['Pilot',...peers].map(name=>({name,provider:'openai'}));
+      document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      setMiniViewMode('network');
+      OrreryRail.openPlanetarium();
+      const show=(sender,recipient)=>document.dispatchEvent(new CustomEvent('oc:mail-route',
+        {detail:{sender,recipients:[recipient]}}));
+      show('PeerG','Pilot');
+      const graphs=['#orrery','.planetarium-svg'].map(selector=>{
+        const svg=document.querySelector(selector);
+        const spawn=svg.querySelector('.orrery-spawn-edge[data-parent=Pilot][data-child=PeerG]');
+        const [x1,y1,x2,y2]=['x1','y1','x2','y2'].map(key=>spawn.getAttribute(key));
+        const d=svg.querySelector('.orrery-mail-focus path').getAttribute('d');
+        return {horizontal:Math.abs(y1-y2)<.01,overlaid:d===`M ${x2} ${y2} L ${x1} ${y1}`};
+      });
+      // The same central portrait blocks a diagonal route in the radial rail.
+      show('PeerB','PeerF');
+      return {graphs,diagonal:document.querySelector('#orrery .orrery-mail-focus path').getAttribute('d')};
+    })()""")
+    assert result['graphs'] == [
+        {'horizontal': True, 'overlaid': True}, {'horizontal': False, 'overlaid': True},
+    ]
+    assert ' Q ' in result['diagonal']
