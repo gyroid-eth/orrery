@@ -4176,9 +4176,9 @@
       }
     }
   },
-  "inventory_digest": "23f1bfaba6c0771dd1b11bc8a5fc17bf3f531dca2be814820187e6d91af30ea9",
+  "inventory_digest": "9a50e064655f41ae82579a3de1133229b3ad99fd7b5061b5cca6b9cc51bc207b",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "467a702a79f63e6cd4a675bf8f9880dd468c2bfde79d51c9a794e7cbfc0ccee5",
+  "source_digest": "df9e37872d998309e4e6ab43a2d1029bca2e0b59471695056cb779a93a87cc88",
   "surface": "cockpit",
   "version": 1
 }
@@ -10632,8 +10632,8 @@ function loadSpawnCatalog(){
 }
 function providerById(id){return (spawnCatalog&&spawnCatalog.providers||[]).find(p=>p.id===id)||null;}
 const spawnFamilies=[{id:'claude',asset:'anthropic.svg',label:'Claude'},
-  {id:'codex',asset:'openai.svg',label:'Codex'},{id:'deepseek',asset:'deepseek.svg',label:'DeepSeek'},
-  {id:'local',label:'Local models'},{id:'gemini',asset:'google.svg',label:'Antigravity',catalogOnly:true}];
+  {id:'codex',asset:'openai.svg',label:'Codex'},{id:'gemini',asset:'google.svg',label:'Antigravity',catalogOnly:true},
+  {id:'deepseek',asset:'deepseek.svg',label:'DeepSeek'},{id:'local',label:'Local models'}];
 const spawnModelMark=document.getElementById('spawnModelMark');
 const spawnModelLabel=document.getElementById('spawnModelLabel');
 const spawnPips=document.getElementById('spawnPips');
