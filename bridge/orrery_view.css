@@ -1,8 +1,8 @@
 /* ── real spawn + communication graph (right rail + planetarium) ──
    Owned by orrery_view.js. Loaded from cockpit.html. */
 .miniorrery{
-  position:relative;display:block;flex:0 0 200px;
-  width:calc(100% - 12px);height:200px;margin:4px 6px 10px;
+  position:relative;display:block;flex:none;
+  width:calc(100% - 12px);height:200px;margin:4px 6px 0;
   overflow:hidden;
 }
 .miniorrery.telemetry-network{
@@ -193,7 +193,7 @@
   fill:none;stroke:var(--ink);stroke-width:.75;pointer-events:none;
 }
 .miniorrery.orrery-mode{
-  width:100%;height:208px;flex-basis:208px;margin:4px 0 2px;
+  width:100%;margin:4px 0 0;
 }
 
 /* Compact provider seats preserve node positions and the selection extent. */

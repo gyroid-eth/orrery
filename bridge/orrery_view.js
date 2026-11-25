@@ -21,6 +21,10 @@ const MINI={
   singleColumns:5,sectionGap:64,treeGapUnits:.55,promoteComms:true,
   captionWidth:62,captionTop:15,captionHeight:20,nodeAbove:20,
 };
+const MINI_HEIGHT_KEY='oc-mini-graph-height';
+const MINI_MIN_HEIGHT=120;
+const MINI_MAX_HEIGHT=520;
+const MAIL_BELOW_GRAPH=160; // Leave room for the handle and at least several Mail rows.
 const PLANET={
   width:1000,height:620,large:true,
   xPadding:64,topPadding:90,bottomPadding:80,
@@ -53,6 +57,7 @@ let motionLastTime=null;
 let miniMode=(OC.miniView&&OC.miniView().mode)==='network'?'network':'orrery';
 let miniNetworkDepth=Number(OC.miniView&&OC.miniView().depth)||2;
 let miniFocusName=OC.activeAgent&&OC.activeAgent()||'';
+let miniWidth=MINI.width,miniHeight=MINI.height;
 
 function svgEl(tag,attrs={}){
   const el=document.createElementNS(SVG_NS,tag);
@@ -346,7 +351,7 @@ function telemetryMiniLayout(live,focus,depth,dimensions){
   if(!subset)return layoutAgents(live,dimensions);
   const names=[...subset.visible].sort((a,b)=>a.localeCompare(b));
   const others=names.filter(name=>name!==focus);
-  const rx=Math.min(102,dimensions.width*.36),ry=Math.min(69,dimensions.height*.34);
+  const rx=Math.min(102,dimensions.width*.36),ry=dimensions.height*.34;
   const offsets=[{name:focus,x:0,y:0}];
   others.forEach((name,index)=>{
     const angle=-Math.PI/2+(Math.PI*2*index)/others.length;
@@ -406,8 +411,8 @@ function newNodeStart(name,target,dimensions){
     y:target.y+dy/distance*offset,
   };
 }
-function prepareMotion(surface,layout){
-  const instant=!surface.initialized||motionIsReduced();
+function prepareMotion(surface,layout,viewportChanged=false){
+  const instant=viewportChanged||!surface.initialized||motionIsReduced();
   surface.layoutDimensions={
     ...surface.dimensions,width:layout.width,height:layout.height,
   };
@@ -776,13 +781,103 @@ function syncMiniSelection(){
     class:'mini-selection-ring',cx:hit.getAttribute('cx'),cy:hit.getAttribute('cy'),r:19.5,
   }));
 }
+function installMiniGraphDivider(){
+  const divider=document.getElementById('mailGraphDivider');
+  if(!divider)return;
+  const rail=miniSvg.parentElement,head=miniSvg.previousElementSibling;
+  let preferred=readPreference(),drag=null;
+  function readPreference(){
+    try{
+      const saved=Number(localStorage.getItem(MINI_HEIGHT_KEY));
+      if(Number.isFinite(saved)&&saved>=MINI_MIN_HEIGHT&&saved<=MINI_MAX_HEIGHT)return Math.round(saved);
+    }catch(_){/* preference unavailable */}
+    return MINI.height;
+  }
+  function maxHeight(){
+    return Math.max(MINI_MIN_HEIGHT,Math.min(MINI_MAX_HEIGHT,rail.clientHeight-head.offsetHeight-MAIL_BELOW_GRAPH));
+  }
+  function paint(height=preferred){
+    const max=maxHeight(),value=Math.max(MINI_MIN_HEIGHT,Math.min(max,Math.round(height)));
+    miniSvg.style.height=value+'px';
+    divider.setAttribute('aria-valuemin',MINI_MIN_HEIGHT);
+    divider.setAttribute('aria-valuemax',max);
+    divider.setAttribute('aria-valuenow',value);
+    divider.setAttribute('aria-valuetext',value+' pixels');
+    return value;
+  }
+  function save(height){
+    preferred=height;
+    paint();
+    try{
+      localStorage.setItem(MINI_HEIGHT_KEY,String(preferred));
+      window.OrreryPrefs?.flush();
+    }catch(_){/* keep the live height */}
+  }
+  function syncPreference(){
+    preferred=readPreference();
+    if(!drag)paint();
+  }
+  divider.addEventListener('pointerdown',event=>{
+    if(event.button!==0||drag)return;
+    event.preventDefault();
+    const height=miniSvg.clientHeight;
+    drag={id:event.pointerId,y:event.clientY,height,preview:height};
+    divider.focus({preventScroll:true});
+    divider.classList.add('dragging');
+    divider.setPointerCapture(event.pointerId);
+  });
+  function move(event){
+    if(!drag||drag.id!==event.pointerId)return;
+    drag.preview=paint(drag.height+event.clientY-drag.y);
+  }
+  function finish(event){
+    if(!drag||drag.id!==event.pointerId)return;
+    if(event.type==='pointerup')move(event);
+    const {height,preview}=drag;
+    drag=null;
+    divider.classList.remove('dragging');
+    if(event.type==='pointerup'&&preview!==height)save(preview);
+    else paint();
+  }
+  divider.addEventListener('pointermove',move);
+  for(const type of ['pointerup','pointercancel','lostpointercapture'])divider.addEventListener(type,finish);
+  divider.addEventListener('dblclick',()=>save(MINI.height));
+  divider.addEventListener('keydown',event=>{
+    if(drag)return;
+    const step=event.shiftKey?64:24;
+    const current=miniSvg.clientHeight;
+    let height;
+    switch(event.key){
+      case 'ArrowUp':height=Math.max(MINI_MIN_HEIGHT,current-step);break;
+      case 'ArrowDown':height=Math.min(maxHeight(),current+step);break;
+      case 'Home':height=MINI_MIN_HEIGHT;break;
+      case 'End':height=maxHeight();break;
+      case 'Enter':height=MINI.height;break;
+      default:return;
+    }
+    event.preventDefault();save(height);
+  });
+  window.addEventListener('storage',event=>{if(event.key===MINI_HEIGHT_KEY)syncPreference();});
+  document.addEventListener('oc:prefs-changed',event=>{
+    if(event.detail?.keys?.includes(MINI_HEIGHT_KEY))syncPreference();
+  });
+  new ResizeObserver(()=>paint(drag?.preview??preferred)).observe(rail);
+  paint();
+}
 function renderMini(){
+  const width=miniSvg.clientWidth||miniWidth,height=miniSvg.clientHeight||miniHeight;
+  const resized=width!==miniWidth||height!==miniHeight;
+  miniWidth=width;miniHeight=height;
+  // Fit the base scene into the viewport, then use any extra room for layout.
+  // This keeps the SVG's normal scale while allowing the network to spread.
+  const scale=Math.min(width/MINI.width,height/MINI.height);
+  const dimensions={...MINI,width:width/scale,height:height/scale};
   const flights=preservedFlights(miniSvg);
   miniSvg.replaceChildren();
   const layout=miniMode==='network'
-    ?telemetryMiniLayout(liveAgents,miniFocusName,miniNetworkDepth,MINI)
-    :layoutAgents(liveAgents,MINI);
-  prepareMotion(miniMotion,layout);
+    ?telemetryMiniLayout(liveAgents,miniFocusName,miniNetworkDepth,dimensions)
+    :layoutAgents(liveAgents,dimensions);
+  prepareMotion(miniMotion,layout,resized);
   miniSvg.setAttribute('viewBox',`0 0 ${layout.width} ${layout.height}`);
   miniSvg.classList.toggle('orrery-mode',miniMode==='orrery');
   miniSvg.classList.toggle('telemetry-network',Boolean(layout.networkFocus));
@@ -799,11 +894,11 @@ function renderMini(){
   miniMotion.states.forEach((state,name)=>{
     const group=drawMiniAgent(nodes,defs,{
       ...state,x:state.baseX,y:state.baseY,
-    },index++,MINI);
+    },index++,dimensions);
     miniMotion.nodes.set(name,group);
   });
   miniSvg.appendChild(nodes);
-  addExpandAffordance(miniSvg,{...MINI,width:layout.width,height:layout.height},false);
+  addExpandAffordance(miniSvg,{...dimensions,width:layout.width,height:layout.height},false);
   flights.forEach(flight=>miniSvg.appendChild(flight));
   miniMotion.spawnEdges=[...spawnLayer.children];
   syncMiniSelection();
@@ -1290,6 +1385,11 @@ window.OrreryRail={openPlanetarium,closePlanetarium,
   planetariumOpen:()=>Boolean(planetarium&&planetarium.classList.contains('on'))};
 
 recordMessages(OC.mailBacklog&&OC.mailBacklog());
+installMiniGraphDivider();
 renderMini();
+new ResizeObserver(()=>{
+  const width=miniSvg.clientWidth,height=miniSvg.clientHeight;
+  if(width&&height&&(width!==miniWidth||height!==miniHeight))renderMini();
+}).observe(miniSvg);
 seedRecentMail();
 })();
