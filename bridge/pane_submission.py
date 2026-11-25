@@ -60,6 +60,7 @@ REVERSE_VIDEO = re.compile(r'\x1b\[(?:[0-9]+;)*7(?:;[0-9]+)*m')
 DSH_COMMAND_MENU = re.compile(r'^\s*╭─ commands · \d+ items? ─+╮$')
 DSH_COMMAND_SELECTED = re.compile(r'^\s*│\s+❯\s+([\w.:-]+)(?=\s|│|$)')
 AGY_COMMAND_SELECTED = re.compile(r'^>\s+(' + SLASH_NAME.pattern + r')(?=[ \t]|$)')
+AGY_COMMAND_HELP = '↑/↓ Navigate · enter Select · tab Complete'
 
 
 @dataclass(frozen=True)
@@ -171,9 +172,12 @@ def _hermes_slash_menu(lines, plain, start, cursor):
 
 
 def _agy_slash_menu(lines, plain, start, cursor):
+    rows = [row for row in plain[cursor + 2:cursor + 20] if row.strip()]
+    if [row.strip() for row in rows[:2]] == ['No matches', AGY_COMMAND_HELP]:
+        return False, None
     picked = []
-    for row in plain[cursor + 2:cursor + 20]:
-        if row.strip() == '↑/↓ Navigate · enter Select · tab Complete':
+    for row in rows:
+        if row.strip() == AGY_COMMAND_HELP:
             return True, picked[0] if len(picked) == 1 else None
         if match := AGY_COMMAND_SELECTED.match(row):
             picked.append(match[1])

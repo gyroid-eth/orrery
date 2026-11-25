@@ -48,7 +48,7 @@ def test_native_prompt_fixture(harness, case):
     assert observed.selected_command == case['selected']
     assert submission.ready(observed, case['text']) is case['ready']
     if after := case.get('after'):
-        assert native_frame(after).empty
+        assert native_frame(after).empty is case.get('accepted', case['ready'])
     if observed.dsh_clipped:
         # A different text ending cannot justify Enter with a clipped draft.
         assert not submission.ready(observed, case['text'] + ' another sentence')
@@ -58,6 +58,7 @@ def test_native_prompt_fixture(harness, case):
 def test_watcher_enters_only_the_verified_native_draft(monkeypatch, harness, case):
     before = case.get('before', NATIVE_PROMPTS[harness]['before'])
     accepted = case.get('accepted', case['ready'])
+    should_enter = case.get('enter', accepted)
     stage = before
     entered = []
     reasons = []
@@ -86,10 +87,14 @@ def test_watcher_enters_only_the_verified_native_draft(monkeypatch, harness, cas
     monkeypatch.setattr(submission, 'time', SimpleNamespace(monotonic=lambda: elapsed, sleep=tick))
     monkeypatch.setattr(submission, 'try_lock', lambda _: os.open(os.devnull, os.O_RDONLY))
     result = submission.submit(tmux, lambda: True, '%1', case['text'], on_wait=reasons.append)
-    assert entered == (['C-m'] if accepted else [])
+    assert entered == (['C-m'] if should_enter else [])
     assert result == ('accepted' if accepted else 'unknown')
-    expected_reason = (['completion_mismatch'] if case['selected'] else ['completion_unverified'])
-    assert reasons == ([] if accepted else expected_reason)
+    if accepted:
+        assert not reasons
+    elif should_enter:
+        assert reasons == ['enter_not_confirmed']
+    else:
+        assert reasons == (['completion_mismatch'] if case['selected'] else ['completion_unverified'])
 
 
 @pytest.mark.asyncio
@@ -104,6 +109,7 @@ async def test_cockpit_enters_only_the_verified_native_draft(monkeypatch, tmp_pa
     monkeypatch.setattr(submission, 'TIMEOUT', 1)
     before = case.get('before', NATIVE_PROMPTS[harness]['before'])
     accepted = case.get('accepted', case['ready'])
+    should_enter = case.get('enter', accepted)
     stage = before
     entered = []
 
@@ -128,9 +134,13 @@ async def test_cockpit_enters_only_the_verified_native_draft(monkeypatch, tmp_pa
 
     monkeypatch.setattr(bridge, '_write_master', write)
     result = await bridge.submit_prompt('%1', case['text'])
-    assert entered == (['C-m'] if accepted else [])
-    failure = 'completion-mismatch' if case['selected'] else 'completion-unverified'
-    assert result == ('accepted' if accepted else failure)
+    assert entered == (['C-m'] if should_enter else [])
+    if accepted:
+        assert result == 'accepted'
+    elif should_enter:
+        assert result == 'unknown'
+    else:
+        assert result == ('completion-mismatch' if case['selected'] else 'completion-unverified')
 
 
 def test_slash_grace_does_not_treat_an_unreadable_picker_as_absent(monkeypatch):
