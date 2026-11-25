@@ -4175,9 +4175,9 @@
       }
     }
   },
-  "inventory_digest": "0605f81a7ba45281809fb0d1a25b028fc1720ac01a6a25942d12d075d831e151",
+  "inventory_digest": "330caeb8dbd3aae4fab60d9be13ac271b735a8561d602f1cc0cc569e464ac188",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "ee37ea17ddd3fc6d70c333c519090f5bdcbda93e5fbf4ea493fbe13909e28d00",
+  "source_digest": "b1d28e4f55322e32f1d28fe5dc8d5d72e95e338b5d12b609e1343b1b3a401e5a",
   "surface": "cockpit",
   "version": 1
 }
@@ -11760,7 +11760,7 @@ function submitComposerPrompt(target,data){
     const id=Date.now()+':'+(++promptAckSequence);
     const done=status=>{
       clearTimeout(timer);composerAcks.delete(id);
-      resolve(status==='accepted'||status==='refused'?status:'unknown');
+      resolve(['accepted','refused','completion-mismatch'].includes(status)?status:'unknown');
     };
     const timer=setTimeout(()=>done('unknown'),6500);
     composerAcks.set(id,{done,paneId:target.paneId});
@@ -11865,9 +11865,12 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
         const text=compose(body);
         receipt=trackPrompt(target,text,compose(record.draft),entries);
         status=await submitComposerPrompt(target,text);
+        if(status==='completion-mismatch'){
+          status='refused';problem='Terminal selected a different slash command';
+        }
       }
       if(status!=='accepted')receipt?.cancel();
-      results.push({...record,status,receipt});
+      results.push({...record,status,receipt,problem});
       releaseComposerTarget(record.name);
     }
     const sent=results.filter(result=>result.status==='accepted');

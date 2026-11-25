@@ -96,6 +96,26 @@ def test_input_readiness_uses_the_editor_and_rejects_selected_completions():
     assert submission.ready(observe(['❯ [Pasted text #1 +3 lines]'], 0, 26), 'four\nposted\nfixture\nlines')
 
 
+def test_named_claude_editor_distinguishes_queue_hint_from_an_unsent_draft():
+    notice = '        ✔ Update installed · Restart to update'
+    name = '──────────────────────── Fixture Agent ─'
+    lower = '─────────────────────────────────────────'
+    hint = 'Press up to edit queued messages'
+    styled = '❯\xa0\x1b[7mP\x1b[0;2mress up to edit queued messages\x1b[0m'
+
+    def observe(editor, column=2, upper=name):
+        return submission.frame(
+            f'/tmp/fixture.sock\t100\t%1\t200\t3\t0\t{column}\t1\t2.1.331',
+            ['✻ Enchanting…', notice, upper, editor, lower, 'Context 35% used'], '%1',
+        )
+
+    assert observe(styled).empty
+    assert not observe(styled, column=3).empty
+    assert not observe(styled, upper='unframed output').empty
+    assert observe(f'❯ {hint}').draft == hint
+    assert submission.ready(observe(f'❯ {hint}'), hint)
+
+
 @pytest.mark.parametrize('flag,command,text,allowed', [
     ('', 'claude', 'first\nsecond', True),
     ('', 'codex', 'first\nsecond', True),
@@ -137,6 +157,106 @@ def test_watcher_refuses_multiline_in_a_legacy_shell_before_loading_buffer(monke
 
     monkeypatch.setattr(submission, 'try_lock', lambda _: os.open(os.devnull, os.O_RDONLY))
     assert submission.submit(command, lambda: True, '%1', 'first\nsecond') == 'refused'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('path', ['cockpit', 'watcher'])
+@pytest.mark.parametrize('editor,draft,selected,accepted', [
+    ('claude', '/log', '/log', True),
+    ('claude', '/log', '/login', False),
+    ('claude-queue', 'A second prompt', '', True),
+    ('codex', '/compact', '/compact', True),
+    ('codex', '/comp', '/compact', False),
+])
+async def test_real_tmux_submission_observes_the_native_editor(
+        tmp_path, monkeypatch, path, editor, draft, selected, accepted):
+    tmux = shutil.which('tmux')
+    if tmux is None:
+        pytest.skip('tmux unavailable')
+    recorder = tmp_path / 'record.py'
+    entered = tmp_path / 'entered'
+    recorder.write_text(r"""
+import os, sys, tty
+from pathlib import Path
+
+tty.setraw(0)
+editor, selected, record = sys.argv[1:]
+border = '─' * 24
+prompt = '›' if editor == 'codex' else '❯'
+
+def show(draft='', menu=False, queued=False):
+    if editor == 'claude-queue':
+        if queued:
+            draft = '\x1b[7mP\x1b[0;2mress up to edit queued messages\x1b[0m'
+        rows = ['✻ Enchanting…', '        ✔ Update installed · Restart to update',
+                f'{border} FixtureAgent ─', f'{prompt} {draft}', border,
+                '  fixture-model | Sonnet | ctx: 35% used']
+        caret = 4
+    elif editor == 'claude':
+        rows = ([f'  ❯ {selected}  description'] if menu else [])
+        rows += [border, f'{prompt} {draft}', border]
+        caret = len(rows) - 1
+    else:
+        rows = ([f'\x1b[1;7m› {selected}  description\x1b[0m', ''] if menu else [])
+        rows += [f'{prompt} {draft}', '', '  gpt-fixture default · Context 100% left']
+        caret = len(rows) - 2
+    column = 3 if queued else len(draft) + 3
+    frame = '\x1b[2J\x1b[H' + '\r\n'.join(rows) + f'\x1b[{caret};{column}H'
+    os.write(1, frame.encode())
+
+os.write(1, b'\x1b[?2004h')
+show()
+raw = bytearray()
+while not raw.endswith(b'\x1b[201~'):
+    raw.extend(os.read(0, 4096))
+assert raw.startswith(b'\x1b[200~')
+show(raw[6:-6].decode(), menu=True)
+assert os.read(0, 1) == b'\r'
+Path(record).touch()
+show(queued=editor == 'claude-queue')
+while os.read(0, 1):
+    pass
+""")
+    monkeypatch.setattr(submission, 'TIMEOUT', 2)
+    env = {k: v for k, v in os.environ.items() if k not in ('TMUX', 'TMUX_PANE', 'LC_ALL')}
+    env['LC_CTYPE'] = 'C.UTF-8'
+    with tempfile.TemporaryDirectory(prefix='orrery-sl-', dir='/tmp') as temp:
+        argv = [tmux, '-S', str(Path(temp).resolve() / 'tmux.sock'), '-f', '/dev/null']
+        wrapper = tmp_path / 'tmux'
+        wrapper.write_text('#!/bin/sh\nexec ' + shlex.join(
+            ['env', 'LC_CTYPE=C.UTF-8', *argv]) + ' "$@"\n')
+        wrapper.chmod(0o700)
+
+        def call(*args, input=None):
+            return subprocess.run([*argv, *args], env=env, timeout=5, input=input,
+                                  capture_output=True, text=True)
+
+        cmd = shlex.join([sys.executable, str(recorder), editor, selected, str(entered)])
+        assert call('new-session', '-d', '-s', 'Fixture', cmd).returncode == 0
+        bridge = control.TmuxControlBridge(control.ControlConfig(
+            '127.0.0.1', 0, 'Fixture', str(wrapper), history_dir=tmp_path / 'history'))
+        try:
+            await bridge.start()
+            pane = next(iter(bridge.panes))
+
+            async def wait_for_editor():
+                while True:
+                    view = await asyncio.to_thread(submission.capture, call, pane)
+                    if view and view.empty:
+                        return
+                    await asyncio.sleep(.025)
+
+            await asyncio.wait_for(wait_for_editor(), timeout=6)
+            if path == 'cockpit':
+                result = await bridge.submit_prompt(pane, draft)
+            else:
+                result = await asyncio.to_thread(submission.submit, call, lambda: True, pane, draft)
+            rejected = 'completion-mismatch' if path == 'cockpit' else 'unknown'
+            assert result == ('accepted' if accepted else rejected)
+            assert entered.exists() == accepted
+        finally:
+            await bridge.stop()
+            call('kill-server')
 
 
 @pytest.mark.asyncio
