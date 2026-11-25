@@ -365,6 +365,33 @@ def test_fresh_spawn_omits_unsupported_tool_options(tour_browser):
     assert {'tools', 'base'}.isdisjoint(result['posted'][0])
 
 
+def test_gemini_mark_only_appears_when_catalog_offers_antigravity(tour_browser):
+    _, evaluate = tour_browser
+    result = evaluate("""(()=>{
+      const geminiTab=()=>providerTabs.querySelector('[data-family="gemini"]');
+      spawnCatalog={providers:[{id:'claude',models:[{id:'claude-fixture'}]}]};
+      renderProviderTabs();
+      const before=Boolean(geminiTab());
+      spawnCatalog.providers.push({
+        id:'gemini',label:'Antigravity',program:'antigravity',models:[{id:'gemini-fixture'}]
+      });
+      renderProviderTabs();
+      const tab=geminiTab(),icon=tab.querySelector('img');
+      const mark={src:icon.getAttribute('src'),mono:icon.classList.contains('mono'),alt:icon.alt,
+        title:tab.title,label:tab.getAttribute('aria-label'),enabled:!tab.disabled};
+      tab.click();
+      const selected=selProvider;
+      spawnCatalog.providers.pop();
+      renderProviderTabs();
+      return {before,mark,selected,after:Boolean(geminiTab()),fallback:selProvider};
+    })()""")
+    assert result == {
+        'before': False, 'after': False, 'selected': 'gemini', 'fallback': 'claude',
+        'mark': {'src': 'cockpit-assets/google.svg', 'mono': True, 'alt': '',
+                 'title': 'Antigravity', 'label': 'Antigravity', 'enabled': True},
+    }
+
+
 def test_empty_provider_keeps_its_configuration_error_visible(tour_browser):
     _, evaluate = tour_browser
     result = evaluate('''(()=>{
