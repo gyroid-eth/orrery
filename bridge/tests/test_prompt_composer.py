@@ -14,7 +14,7 @@ def terminal(cockpit):
     js, wait, client, *_ = cockpit
     stable_roster(js)
     js("""window.packets=[];window.send=packet=>{packets.push(packet);
-              if(packet.type==='submit-prompt')queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'}));
+              if(['submit-prompt','interrupt'].includes(packet.type))queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'}));
               return true};
         rosterAnnotationEpoch++;currentAgents=[{name:'ReviewFixture',running:true,program:'codex'}];
         createPane('ReviewFixture',{paneId:'%901',windowId:'@901',width:80,height:20});
@@ -88,7 +88,8 @@ def test_action_switches_to_stop_only_for_an_empty_working_draft(cockpit, reduce
     assert js('promptSendBtn.disabled')
     js("currentAgents[0].act_state='work';document.dispatchEvent(new Event('oc:agents'));promptSendBtn.click()")
     assert js('promptSendBtn.title') == 'Stop agent (Esc)'
-    assert js("packets.find(packet=>packet.type==='input').data") == '\x1b'
+    assert js("packets.find(packet=>packet.type==='interrupt').paneId") == '%901'
+    wait("toastEl.textContent.includes('Interrupted → ReviewFixture')")
     square = "document.querySelector('.prompt-square').style.transform==='scale(1)'"
     if reduced:
         assert js(square)
@@ -96,6 +97,9 @@ def test_action_switches_to_stop_only_for_an_empty_working_draft(cockpit, reduce
         wait(square)
     js(r"promptInput.value='First line\nSecond line';promptInput.dispatchEvent(new Event('input'))")
     assert js('promptSendBtn.title') == 'Send message'
+    js("promptInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
+    assert js("packets.filter(packet=>packet.type==='interrupt').length") == 2
+    assert js('promptInput.value') == 'First line\nSecond line'
     if reduced:
         assert js('promptInput.clientHeight') == 56
     js("packets.length=0;promptSendBtn.click()")
@@ -103,6 +107,19 @@ def test_action_switches_to_stop_only_for_an_empty_working_draft(cockpit, reduce
     assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
         'First line\nSecond line',
     ]
+
+
+def test_idle_escape_reports_key_delivery(cockpit):
+    js, wait, _ = terminal(cockpit)
+    js("""window.send=packet=>{
+        packets.push(packet);
+        if(packet.type==='interrupt')queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,
+          id:packet.inputAck,status:'sent'}));
+        return true;
+      };
+      promptInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));""")
+    wait("toastEl.textContent.includes('Esc → ReviewFixture')")
+    assert js("packets.find(packet=>packet.type==='interrupt').paneId") == '%901'
 
 
 def recipients(cockpit):

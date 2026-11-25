@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
+import select
 import shlex
 import shutil
 import subprocess
@@ -19,13 +20,26 @@ import pane_submission as submission
 
 
 COMMANDS = {
-    'claude': ('/log', '/compact'),
-    'codex': ('/status',),
-    'dsh': ('/help',),
-    'hermes': ('/help',),
-    'agy': ('/help',),
+    'claude': ('/log', '/compact', '/help', '/model', '/config'),
+    'codex': ('/status', '/model'),
+    'dsh': ('/help', '/model'),
+    'hermes': ('/help', '/model'),
+    'agy': ('/help', '/model'),
 }
 PLAIN = 'ORRERY Mail notification: synthetic check.'
+BUSY_STATES = {'busy', 'tool', 'starting'}
+SLASH_VIEWS = {
+    ('claude', '/help'): ['Help  General   Commands   Custom commands', '←/→ to switch · Esc to close'],
+    ('claude', '/model'): ['Select model', 's to use this session only · Enter to save · Esc to cancel'],
+    ('claude', '/config'): ['│ ⌕ Search settings… │', '↓ to navigate · ↑ to switch tabs · Esc to go back'],
+    ('codex', '/model'): ['Select Model and Effort', '› 1. GPT-6.1-Sol', 'enter select · esc back'],
+    ('dsh', '/model'): ['Model', 'Tab / Shift+Tab providers · ↑/↓ model · Enter select · Esc cancel'],
+    ('hermes', '/model'): ['╭─ cli.tui.picker_title_provider ─╮', '│ │', '│ cli.tui.picker_current_hint │'],
+    ('agy', '/help'): ['Antigravity CLI   general    commands    shortcuts',
+                       'Keyboard: ↑/↓ Navigate  ←/→ Switch View  esc Close', 'auto · Gemini 3.8 Flash (Low) · low'],
+    ('agy', '/model'): ['Switch Model', 'Keyboard: ↑/↓ Navigate  ←/→ Effort  enter Select',
+                        'esc Go Back', 'auto · Gemini 3.8 Flash (Low) · low'],
+}
 
 
 def run_editor(harness, state, width, entered):
@@ -34,7 +48,7 @@ def run_editor(harness, state, width, entered):
 
     tty.setraw(0)
     border = '─' * width
-    busy = state == 'busy'
+    busy = state in BUSY_STATES
 
     def show(text=''):
         selected = text if text in COMMANDS[harness] else None
@@ -42,7 +56,7 @@ def run_editor(harness, state, width, entered):
             selected = '/login'
         if harness == 'claude' and busy and text == '/compact':
             selected = None
-        before = ['✻ Working…', ''] if busy else ['', '']
+        before = ['', '']
         hint = ''
         if harness == 'claude':
             if selected:
@@ -54,7 +68,11 @@ def run_editor(harness, state, width, entered):
             before += [border]
             prompt = '❯\xa0'
             after = [border, '  Fixture status | Opus | ctx: 22% used', '  ⏵⏵ auto mode on']
+            if busy:
+                after[-1] += ' · esc to interrupt'
         elif harness == 'codex':
+            if busy:
+                before = ['• Working (1s • esc to interrupt)', '']
             if selected:
                 before += [f'\x1b[1;7m› {selected}  Fixture command\x1b[0m', '']
             prompt = '› '
@@ -65,8 +83,16 @@ def run_editor(harness, state, width, entered):
             before += [border]
             prompt = '⌸ ❯ '
             after = [border, '  dsh · Fixture']
+            if busy:
+                after += ['   esc to interrupt']
         elif harness == 'hermes':
-            before += ['  ☤ Hermes', border]
+            if busy and state in ('tool', 'starting'):
+                before += ['\x1b[3m\x1b[38;5;136m  💻 sleep 90 + 1 command  ( 23.1s)\x1b[0m', '']
+                if state == 'starting':
+                    before += ['Initializing agent…']
+                before += [' ☤ model │ 0/128K │ ◷ 2.0s', border]
+            else:
+                before += ['  ☤ model │ 0/128K │ ⏱ 3s' if busy else '  ☤ Hermes', border]
             prompt = '☤ ❯ ' if busy else '❯ '
             after = [border]
             if selected:
@@ -77,7 +103,7 @@ def run_editor(harness, state, width, entered):
             after = [border]
             if selected:
                 after += [f'> {selected}  Fixture command', '↑/↓ Navigate · enter Select · tab Complete']
-            after += ['  plan · Fixture']
+            after += ['esc to cancel  plan · Fixture' if busy else '  plan · Fixture']
         rows = [*before, prompt + text + hint, *after]
         cursor = f'\x1b[{len(before) + 1};{len(prompt) + len(text) + 1}H'
         os.write(1, ('\x1b[2J\x1b[H' + '\r\n'.join(rows) + cursor).encode())
@@ -86,18 +112,34 @@ def run_editor(harness, state, width, entered):
     show()
     start, end = b'\x1b[200~', b'\x1b[201~'
     while True:
-        assert sys.stdin.buffer.read(len(start)) == start
+        first = os.read(0, 1)
+        if not first:
+            return
+        if first == b'\x03' or (first == b'\x1b' and not select.select([0], [], [], .05)[0]):
+            expected_key = b'\x03' if harness == 'hermes' else b'\x1b'
+            assert first == expected_key and (busy or harness != 'hermes')
+            with entered.open('a') as output:
+                output.write(json.dumps('interrupt:' + first.hex()) + '\n')
+            busy = False
+            show()
+            continue
+        assert first + bytes(os.read(0, 1)[0] for _ in start[1:]) == start
         raw = bytearray()
         while not raw.endswith(end):
-            char = sys.stdin.buffer.read(1)
+            char = os.read(0, 1)
             if not char:
                 return
             raw.extend(char)
         draft = raw[:-len(end)].decode()
         show(draft)
-        assert sys.stdin.buffer.read(1) == b'\r'
+        assert os.read(0, 1) == b'\r'
         with entered.open('a') as output:
             output.write(json.dumps(draft) + '\n')
+        modal_command = '/model' if state == 'wrong-modal' else draft
+        if modal := SLASH_VIEWS.get((harness, modal_command)):
+            os.write(1, ('\x1b[?2004l\x1b[2J\x1b[H' + '\r\n'.join(modal)).encode())
+            assert os.read(0, 1) == b'\x1b'
+            os.write(1, b'\x1b[?2004h')
         show()
 
 
@@ -124,6 +166,17 @@ async def test_prompt_submission_routes(monkeypatch, harness, state, width):
 ])
 async def test_claude_control_mode_does_not_enter_unverified_slash(monkeypatch, text, status, draft):
     await check_routes(monkeypatch, 'claude', 'busy', 110, rejected=(text, status, draft))
+
+
+@pytest.mark.asyncio
+async def test_unrelated_slash_view_does_not_confirm_submission(monkeypatch):
+    await check_routes(monkeypatch, 'claude', 'wrong-modal', 110)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('state', ['tool', 'starting'])
+async def test_hermes_interrupt_requires_current_activity(monkeypatch, state):
+    await check_routes(monkeypatch, 'hermes', state, 110)
 
 
 async def check_routes(monkeypatch, harness, state, width, *, rejected=None):
@@ -172,12 +225,16 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None):
                     routes = ('cockpit',) if rejected else ('cockpit', 'watcher')
                     for route in routes:
                         texts = (rejected[0],) if rejected else (*COMMANDS[harness], PLAIN)
+                        if state == 'wrong-modal':
+                            texts = ('/help',)
                         for text in texts:
                             expected = 'accepted'
                             if rejected:
                                 expected = rejected[1]
-                            elif harness == 'hermes' and state == 'busy' and text == PLAIN:
+                            elif route == 'watcher' and harness == 'hermes' and state in BUSY_STATES and text == PLAIN:
                                 expected = 'refused'
+                            elif state == 'wrong-modal':
+                                expected = 'unknown'
 
                             if route == 'cockpit':
                                 await ws.send_json(dict(type='submit-prompt', paneId=pane, session='Fixture',
@@ -187,15 +244,42 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None):
                                 status = await asyncio.to_thread(submission.submit, call, lambda: True, pane, text)
 
                             view = await get_view()
-                            if expected == 'accepted':
+                            if expected == 'accepted' or state == 'wrong-modal':
                                 seen.append(text)
                             actual = [json.loads(line) for line in entered.read_text().splitlines()] if entered.exists() else []
                             assert status == expected, (harness, state, width, route, text, view, actual)
                             assert actual == seen
                             if rejected:
                                 assert view.draft == rejected[2]
+                            elif (harness, text) in SLASH_VIEWS:
+                                assert view.slash_view == (harness, '/model' if state == 'wrong-modal' else text)
+                                resume = call('send-keys', '-t', pane, 'Escape')
+                                assert resume.returncode == 0, resume.stderr
+                                await asyncio.wait_for(wait_for_editor(), timeout=5)
                             else:
                                 assert view.empty
+
+                    if not rejected and state != 'wrong-modal':
+                        await ws.send_json(dict(type='interrupt', paneId=pane, session='Fixture',
+                                                incarnation=reset['incarnation'], inputAck='1:2'))
+                        status = (await receive(ws, 'input-ack'))['status']
+                        if state in ('busy', 'tool'):
+                            assert status == 'accepted'
+                            seen.append('interrupt:03' if harness == 'hermes' else 'interrupt:1b')
+                        elif harness == 'hermes':
+                            assert status == 'refused'
+                        else:
+                            assert status == 'sent'
+                            # A tmux acknowledgement can precede the editor's read.
+                            for _ in range(40):
+                                if len(entered.read_text().splitlines()) > len(seen):
+                                    break
+                                await asyncio.sleep(.025)
+                            seen.append('interrupt:1b')
+                        assert [json.loads(line) for line in entered.read_text().splitlines()] == seen
+                        view = await get_view()
+                        assert view.empty and not view.running
+                        assert view.hermes_busy == (state == 'starting')
         finally:
             call('kill-server')
 
