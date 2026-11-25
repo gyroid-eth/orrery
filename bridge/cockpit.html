@@ -554,6 +554,11 @@
   .agent-detail-permissions .agent-detail-item{align-items:center;min-height:24px}
   .agent-detail-permissions .agent-detail-icon{margin-top:0}
   .agent-detail-permissions .agent-detail-item+.agent-detail-item{padding-left:10px;border-left:1px solid var(--hair)}
+  .agent-detail-observed{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+  .agent-detail-observed .agent-detail-item{align-items:flex-start}
+  .agent-detail-observed .agent-detail-icon{margin-top:1px}
+  .agent-detail-observed small{display:block;color:var(--ink-dim);overflow-wrap:anywhere}
+  .agent-detail-observed-reason{grid-column:1/-1}
   .agent-detail-modes{display:flex;align-items:center;flex-wrap:wrap;gap:1px;color:var(--ink-dim)}
   .agent-detail-modes button,.agent-detail-browser-toggle{
     min-height:24px;padding:2px 5px;border:0;border-radius:4px;background:transparent;
@@ -2210,6 +2215,11 @@
           },
           {
             "property": "color",
+            "selector": ".agent-detail-observed small",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
             "selector": ".agent-detail-modes",
             "value": "var(--ink-dim)"
           },
@@ -3527,6 +3537,11 @@
           },
           {
             "property": "color",
+            "selector": ".agent-detail-observed small",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
             "selector": ".agent-detail-modes",
             "value": "var(--ink-dim)"
           },
@@ -4065,7 +4080,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "44efa0f6dfe44f0761243ead0624a404ce5fd75e7134529a06b20e0e59a524c2",
+        "digest": "24dd7379554d41da9208c395c2dc9cb9e96c96ffb5e3f6eea0b596fa8167ef4d",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4158,7 +4173,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "49a5917fa2b5cbe0476e2b13845ef47fbf0a17bd947a683d0461fb56765012fb",
+        "digest": "aa011744cdd5e208b8ead23ab8be3ebb73b443dae77f6d3c1c6244295ace4632",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -4187,9 +4202,9 @@
       }
     }
   },
-  "inventory_digest": "0ecf4d83ff7870930933317d12f212c75dc8de2b2239006ebe7403a026e2856d",
+  "inventory_digest": "099651f5614284a20e5900985304fc875cf3201a126afabed2a06a3031ebf59e",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "cee0fd201f3bb7d517e3cb4efa1cd727e95610154e050fe5dda37c81245a9968",
+  "source_digest": "078dba97fd382347dc015ded2372ddd32a6041fce56a372374946af5f305084c",
   "surface": "cockpit",
   "version": 1
 }
@@ -9417,6 +9432,7 @@ function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false){
     parentState:a.parent_state,parent:a.parent_state==='child'?text(a.parent_agent):null,
     computer:AGENT_DETAIL_COMPUTER.has(a.computer_use)?a.computer_use:null,
     browser:typeof a.browser_use==='boolean'?a.browser_use:null,
+    processPermissions:api>=52&&a.permission_source==='process',
     computerReason:text(a.computer_use_reason)||source(a.computer_use_source),
     browserReason:text(a.browser_use_reason)||source(a.browser_use_source),
     permissions:Boolean(a.harness_kind||a.lifecycle==='persistent'||a.surface==='codex-app'||permissionConversationOnly(a)||
@@ -9440,6 +9456,19 @@ function agentDetailItem(icon,label,body='',path=null){
 }
 function agentDetailPermissions(detail){
   if(!detail.permissions)return '';
+  if(detail.processPermissions){
+    const computer=AGENT_DETAIL_COMPUTER.get(detail.computer)||'Unknown';
+    const browser=detail.browser===null?'Unknown':detail.browser?'On':'Off';
+    const shared=detail.computerReason&&detail.computerReason===detail.browserReason?detail.computerReason:'';
+    const mark=(icon,label,value,reason)=>agentDetailItem(icon,
+      `${label}: ${value}${reason?`. ${reason}`:''}`,
+      `<span class="agent-detail-value">${value}${reason&&!shared?`<small>${esc(reason)}</small>`:''}</span>`);
+    return `<div class="agent-detail-permissions agent-detail-observed" role="group" aria-label="Observed permissions">
+      ${mark('computer','Computer use',computer,detail.computerReason)}
+      ${mark('browser','Browser use',browser,detail.browserReason)}
+      ${shared?`<small class="agent-detail-observed-reason" aria-hidden="true">${esc(shared)}</small>`:''}
+    </div>`;
+  }
   const disabled=reason=>reason?' disabled':'';
   const title=(label,reason)=>esc(reason?`${label} (${reason})`:label);
   const computer=detail.computer?AGENT_DETAIL_COMPUTER.get(detail.computer):'Unknown';
