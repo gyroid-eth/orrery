@@ -14,10 +14,11 @@ The installer installs both components, runs the doctor and selftest, and starts
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
 ```
 
-- **What is trusted and what runs**: only GitHub's `gyroid-eth/orrery` and `gyroid-eth/orrery-telemetry` (a checkout whose origin is not exactly one of these is left alone, and the setup stops). What runs: `get.sh`, the cockpit's `scripts/setup.sh`, orrery-telemetry's `scripts/install.sh`, and uv's official installer only when uv is missing
+- **What is trusted and what runs**: only GitHub's `gyroid-eth/orrery` and `gyroid-eth/orrery-telemetry` (a checkout whose origin is not exactly one of these is left alone, and the setup stops). What runs: `get.sh`, the cockpit's `scripts/setup.sh`, orrery-telemetry's `scripts/install.sh`, and uv's official installer when needed
 - **Review before applying**. `curl -fsSL …/get.sh | bash -s -- --check` (prerequisites and the plan), `… | bash -s -- --dry-run` (plus the installer's preview of the 4 changes). These modes leave user settings unapplied and use a temporary folder for downloads.
 - **CI and scripts that use the exit code**: `curl | bash` can return 0 when the download fails, so save first: `curl -fsSL …/get.sh -o get.sh && bash get.sh --yes`
-- Prerequisites (git, tmux, curl, uv, Python 3.11+) are checked at once. Missing git / tmux / curl stop it with nothing changed and the line that installs them. uv and Python need no sudo, so they go into the plan (your shell profile is not changed)
+- The entry script `get.sh` checks prerequisites such as git, tmux, curl, and Python 3.11 or later before fetching the source. Running `scripts/setup.sh` directly also checks prerequisites. An interpreter already installed through uv works. If no compatible Python is found, setup prints a command to install the missing prerequisites and stops. For example, it suggests `brew install python@3.12` on macOS or `sudo apt update && sudo apt install -y python3` on Ubuntu
+- If uv itself is missing or cannot run, setup adds it to the plan and installs it in `~/.local/bin` after approval, without sudo (your shell profile is not changed)
 - Review the plan and **type `yes` and press Enter** yourself to proceed. The installer has up to four user settings changes: Claude MCP and settings, Claude user instructions, and Codex user instructions. Some versions of the shared setup plan still mention the working folder's `CLAUDE.md`. Current Telemetry writes the Claude block to the user instructions. Use `--ask-each` for item-by-item previews. Use `--yes` only when you have read and chosen to accept the whole plan. [Consent and paths](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.en.md#consent)
 - Use `--no-start` to complete setup and checks while skipping cockpit startup or restart. `ORRERY_NO_OPEN=1` only skips opening the browser after startup. Set `ORRERY_COCKPIT_TMUX_SOCKET` to choose a dedicated tmux socket (default `orrery-cockpit`). [Startup settings](configuration.md#runtime--build-variables)
 - The folder agents work in is `~/orrery-work` unless you say otherwise (no question; the plan shows it). Another folder: `… | bash -s -- --project-key ~/my-project`
@@ -521,7 +522,7 @@ See [Telemetry's compatibility table](https://github.com/gyroid-eth/orrery-telem
 
 Required:
 
-The requirements below apply to the cockpit alone. The shared installation and Telemetry also require Python 3.11 or later. If no suitable Python is available, the shared installer uses uv to install 3.12.
+The requirements below apply to the cockpit alone. Have Python 3.11 or later available before running the [shared installer](#install-or-update-with-one-line) or installing Telemetry on its own. Telemetry's `scripts/install.sh` selects an existing interpreter and passes it to uv when creating the ORRERY Mail virtual environment.
 
 - Python 3.11 or newer
 - `tmux`

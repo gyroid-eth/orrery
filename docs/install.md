@@ -17,7 +17,8 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - **何を信頼して何が動くか**: 信頼するのは GitHub の `gyroid-eth/orrery` と `gyroid-eth/orrery-telemetry` だけです（checkout の origin がこの URL と完全に一致しないときは、触らずに止まります）。動くのは `get.sh`、cockpit の `scripts/setup.sh`、orrery-telemetry の `scripts/install.sh`、必要なときだけ uv の公式 installer です
 - **適用する前に確認する**。 `curl -fsSL …/get.sh | bash -s -- --check`（前提と計画だけ）、`… | bash -s -- --dry-run`（加えて 4 項目の変更の preview）。利用者設定への適用は行いません。必要な取得は一時 folder で行います
 - **終了コードで判定する CI や script** では、`curl | bash` は取得の失敗を 0 と返すことがあるので、`curl -fsSL …/get.sh -o get.sh && bash get.sh --yes` のように保存してから実行します
-- 前提（git・tmux・curl・uv・Python 3.11 以上）はまとめて確かめます。git・tmux・curl が足りなければ入れる 1 行を出して、何も変えずに止まります。uv と Python は sudo なしで入れられるので計画に入れます（shell の設定 file は変えません）
+- 入口の `get.sh` は source を取得する前に、git・tmux・curl・Python 3.11 以上などの前提を確認します。`scripts/setup.sh` を直接実行した場合も前提を確認します。uv で導入済みの Python も使えます。対応する Python が見つからなければ、不足分を入れるコマンド（macOS なら `brew install python@3.12`、Ubuntu なら `sudo apt update && sudo apt install -y python3` など）を表示して止まります
+- uv 自体が無い場合や実行できない場合は、計画に追加し、承認後に sudo なしで `~/.local/bin` に入れます（shell の設定 file は変えません）
 - 計画を確認し、進むときは自分で **`yes` と入力して Enter** を押します。利用者設定の変更対象は、Claude の MCP 登録と settings、Claude の利用者指示、Codex の利用者指示の最大4項目です。共通 setup の計画に作業フォルダーの `CLAUDE.md` が表示される版でも、現行 Telemetry の指示の書き込み先は利用者単位です。個別の preview は `--ask-each`、包括承認は計画を読んで自分で `--yes` を選ぶ場合に使います。[同意と保存先](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.md#consent)
 - `--no-start` は導入と確認まで行い、cockpit backend の起動・再起動を省きます。`ORRERY_NO_OPEN=1` は起動時のブラウザー自動表示だけを省きます。専用の tmux socket を変える場合は `ORRERY_COCKPIT_TMUX_SOCKET` を設定します（既定 `orrery-cockpit`）。[起動設定](configuration.md#runtime--build-変数)
 - agent に作業させる folder は、指定が無ければ `~/orrery-work` です（質問はしません。計画の画面に出ます）。別の folder にするときは `… | bash -s -- --project-key ~/my-project`
@@ -521,7 +522,7 @@ APIの組合せと確認範囲は[Telemetryの対応表](https://github.com/gyro
 
 必須:
 
-以下は cockpit 単体の起動要件です。共通インストールと Telemetry も Python 3.11 以上を使います。共通 installer は適した Python がなければ uv で 3.12 を用意します。
+以下は cockpit 単体の起動要件です。[共通インストール](#1-行で入れる更新する)と Telemetry 単体の導入でも、Python 3.11 以上を先に用意します。Telemetry の `scripts/install.sh` は導入済みの Python を選び、ORRERY Mail の仮想環境を作るときはその Python を uv に渡します。
 
 - Python 3.11 以上
 - `tmux`
