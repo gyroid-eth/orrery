@@ -165,6 +165,8 @@ def test_watcher_refuses_multiline_in_a_legacy_shell_before_loading_buffer(monke
     ('claude', '/log', '/log', True),
     ('claude', '/log', '/login', False),
     ('claude-queue', 'A second prompt', '', True),
+    ('claude-wrapped', '/compact', '/compact', True),
+    ('claude-wrapped', '/compact', '/compact-later', False),
     ('codex', '/compact', '/compact', True),
     ('codex', '/comp', '/compact', False),
 ])
@@ -192,8 +194,13 @@ def show(draft='', menu=False, queued=False):
                 f'{border} FixtureAgent ─', f'{prompt} {draft}', border,
                 '  fixture-model | Sonnet | ctx: 35% used']
         caret = 4
-    elif editor == 'claude':
+    elif editor in ('claude', 'claude-wrapped'):
         rows = ([f'  ❯ {selected}  description'] if menu else [])
+        if menu and editor == 'claude-wrapped':
+            # A narrow pane wraps long descriptions under their option.
+            rows += ['              that continues on the next row',
+                     '    /fixture-skill  another long description',
+                     '                    that wraps as well']
         rows += [border, f'{prompt} {draft}', border]
         caret = len(rows) - 1
     else:

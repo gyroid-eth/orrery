@@ -45,6 +45,7 @@ SLASH_NAME = re.compile(r'/[\w.:-]+')
 SLASH_OPTION = re.compile(r'^[ \t]{2,}' + SLASH_NAME.pattern + r'(?=[ \t]|$)')
 CLAUDE_SLASH_SELECTION = re.compile(r'^[ \t]+❯[ \t]+(' + SLASH_NAME.pattern + r')(?=[ \t]|$)')
 CODEX_SLASH_SELECTION = re.compile(r'^›[ \t]+(' + SLASH_NAME.pattern + r')(?=[ \t]|$)')
+SLASH_CONTINUATION = re.compile(r'^[ \t]{8,}[^ \t/❯]')
 REVERSE_VIDEO = re.compile(r'\x1b\[(?:[0-9]+;)*7(?:;[0-9]+)*m')
 
 
@@ -88,14 +89,16 @@ def _slash_selection(lines, plain, start, *, codex):
     selection = CODEX_SLASH_SELECTION if codex else CLAUDE_SLASH_SELECTION
     # Codex separates the inline picker from the editor with a blank row.
     # Claude uses the top border and can show options below the selected row.
-    for index in range(start - 2, max(-1, start - 12), -1):
+    # In a narrow pane Claude wraps a long description onto indented rows
+    # that carry no command name; they belong to the option above them.
+    for index in range(start - 2, max(-1, start - 24), -1):
         row = plain[index]
         match = selection.match(row)
         if match:
             if not codex or REVERSE_VIDEO.search(lines[index].partition('›')[0]):
                 return match[1]
             break
-        if not SLASH_OPTION.match(row):
+        if not (SLASH_OPTION.match(row) or not codex and SLASH_CONTINUATION.match(row)):
             break
     return None
 
