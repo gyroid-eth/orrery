@@ -154,7 +154,7 @@ def test_any_tour_keeps_its_own_steps_key_and_fold():
 def prompt(connected=True, pane=True, text='Hello', guarded=False):
     source = (BRIDGE / 'cockpit.html').read_text()
     # sendPrompt fixes its target pane when it starts; take those helpers as they are.
-    fn = re.search(r'function captureComposerTarget\([^)]*\)\{.*?(?=\nfunction sendInterrupt)', source, re.S).group()
+    fn = re.search(r'function captureComposerTarget\([^)]*\)\{.*?(?=\n(?:async )?function sendInterrupt)', source, re.S).group()
     return node("const events=[];const activeId='pane';const socket={};"
                 f"const promptInput={{value:{json.dumps(text)},"
                 "getBoundingClientRect(){return {top:0,right:120,width:120};}};"
