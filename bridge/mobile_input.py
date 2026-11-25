@@ -422,17 +422,23 @@ class InputCoordinator:
             bridge=await self.get_bridge(name,ref) if self.fresh else await self.get_bridge(name)
             if not self.enabled:raise InputRefused('input_disabled')
             if (bridge is None or bridge._closed or bridge.master_fd is None or bridge.config.session!=name):raise InputRefused('input_target_unavailable')
-            # Retire this agent's previous catalog. Other Readers in the same
-            # phone workspace are still using their own choices.
-            self.choices={k:v for k,v in self.choices.items() if (v['scope'],v['name'])!=(scope,name)}
-            available=max(0,128-len(self.choices));targets=[]
-            for pane_id,info in sorted(bridge.panes.items())[:available]:
+            # Readers sharing a relay scope may still hold the previous catalog.
+            # Keep their proofs until the existing lease expires. A repeated
+            # catalog can reuse unverified choices without filling the cache.
+            self._prune()
+            unverified={(row['pane_id'],row['target']['pane_label']):key for key,row in self.choices.items()
+                        if row['scope']==scope and row['bridge'] is bridge
+                        and row['incarnation']==bridge._incarnation and row['proof'] is None}
+            targets=[]
+            for pane_id,info in sorted(bridge.panes.items()):
                 if not re.fullmatch(r'%[0-9]+',pane_id):continue
                 if not _integer(info.height) or info.height>10000:continue
-                choice=secrets.token_hex(32)
                 label=f'Window {info.window_index} · pane {info.pane_index}'
                 # No paths, commands, process metadata or terminal content.
                 label,_,_=terminal_text([label]);label=label[:96]
+                previous=unverified.get((pane_id,label))
+                if not previous and len(self.choices)>=128:continue
+                choice=previous or secrets.token_hex(32)
                 target={'name':name,'pane_label':label,'choice':choice}
                 if self.fresh:
                     from runtime_target import FreshPaneBoundary
@@ -440,12 +446,17 @@ class InputCoordinator:
                     selected=bridge.config.tmux_bin
                     if pane_id!=selected.pane_id or ref is not None and selected.ref!=ref:raise InputRefused('input_target_changed')
                     target.update(selected.ref)
-                self.choices[choice]=dict(scope=scope,name=name,bridge=bridge,pane_id=pane_id,
-                    height=info.height,incarnation=bridge._incarnation,expires=self.clock()+30,
-                    target=target,proof=None,ref=dict(bridge.config.tmux_bin.ref) if self.fresh else None)
+                if previous and self.choices[previous]['target']!=target:
+                    previous=None;choice=target['choice']=secrets.token_hex(32)
+                if not previous and len(self.choices)>=128:continue
                 try:self._reply(targets=targets+[target],truncated=True)
-                except InputRefused:
-                    del self.choices[choice];break
+                except InputRefused:break
+                if previous:
+                    self.choices[choice]['expires']=self.clock()+30
+                else:
+                    self.choices[choice]=dict(scope=scope,name=name,bridge=bridge,pane_id=pane_id,
+                        height=info.height,incarnation=bridge._incarnation,expires=self.clock()+30,
+                        target=target,proof=None,ref=dict(bridge.config.tmux_bin.ref) if self.fresh else None)
                 targets.append(target)
             return self._reply(targets=targets,truncated=len(targets)<len(bridge.panes))
         if operation in {'preview','prepare'}:
