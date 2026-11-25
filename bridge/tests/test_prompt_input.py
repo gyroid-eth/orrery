@@ -165,6 +165,8 @@ def test_watcher_refuses_multiline_in_a_legacy_shell_before_loading_buffer(monke
     ('claude', '/log', '/log', True),
     ('claude', '/log', '/login', False),
     ('claude-queue', 'A second prompt', '', True),
+    ('claude-wrapped', '/compact', '/compact', True),
+    ('claude-wrapped', '/compact', '/compact-later', False),
     ('codex', '/compact', '/compact', True),
     ('codex', '/comp', '/compact', False),
 ])
@@ -192,8 +194,13 @@ def show(draft='', menu=False, queued=False):
                 f'{border} FixtureAgent ─', f'{prompt} {draft}', border,
                 '  fixture-model | Sonnet | ctx: 35% used']
         caret = 4
-    elif editor == 'claude':
+    elif editor in ('claude', 'claude-wrapped'):
         rows = ([f'  ❯ {selected}  description'] if menu else [])
+        if menu and editor == 'claude-wrapped':
+            # A narrow pane wraps long descriptions under their option.
+            rows += ['              that continues on the next row',
+                     '    /fixture-skill  another long description',
+                     '                    that wraps as well']
         rows += [border, f'{prompt} {draft}', border]
         caret = len(rows) - 1
     else:
@@ -392,3 +399,36 @@ with open(sys.argv[1], 'w', buffering=1) as out:
             await asyncio.gather(*writers,return_exceptions=True)
             await bridge.stop()
             call('kill-server')
+
+
+@pytest.mark.parametrize('styled,column,empty', [
+    # Claude suggests a next prompt after a turn: dim text at the caret.
+    ('\x1b[39m❯\xa0\x1b[2mrun the focused tests again\x1b[0m', 2, True),
+    # A typed draft is never dim, wherever the caret is.
+    ('\x1b[39m❯\xa0run the focused tests again', 2, False),
+    ('\x1b[39m❯\xa0run the focused tests again', 29, False),
+    # Typed text followed by a dim completion is still a draft.
+    ('\x1b[39m❯\xa0run\x1b[2m the focused tests again\x1b[0m', 2, False),
+])
+def test_claude_prompt_suggestion_is_an_empty_editor(styled, column, empty):
+    border = '─' * 24
+    lines = [border, styled, border, '  fixture | Opus | ctx: 22% used']
+    metadata = f'/tmp/fixture.sock\t100\t%1\t200\t1\t0\t{column}\t1\tclaude'
+    assert submission.frame(metadata, lines, '%1').empty is empty
+
+
+def test_claude_scrolled_draft_shows_only_its_end():
+    # A tall draft scrolls inside Claude's frame and hides the prompt glyph.
+    rows = ['\x1b[38;5;244m───\x1b[39m \x1b[2m↑ 3 more\x1b[0m \x1b[38;5;244m' + '─' * 20,
+            '\x1b[39m  the middle of a long notification that wraps',
+            '  and ends here. Fetch inbox to read the rest.',
+            '\x1b[38;5;244m' + '─' * 24,
+            '  fixture | Opus | ctx: 22% used']
+    metadata = '/tmp/fixture.sock\t100\t%1\t200\t2\t0\t48\t1\tclaude'
+    view = submission.frame(metadata, rows, '%1')
+    assert view.scrolled and not view.empty
+    text = ('ORRERY Mail notification: the start is hidden above, then '
+            'the middle of a long notification that wraps and ends here. '
+            'Fetch inbox to read the rest.')
+    assert submission.ready(view, text)
+    assert not submission.ready(view, 'A different prompt that ends elsewhere.')

@@ -4176,9 +4176,9 @@
       }
     }
   },
-  "inventory_digest": "ebea6b5b032817244d32090968cd3e02479e3dc1dcbc187f75335e857fe800e4",
+  "inventory_digest": "ce39d126b661b301b76e6bd5aa49e9846f21f9d61fb4214de24a55f67c36404e",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "d9313d46bb29de696601ca4bb72bcd2c771b988f49d4e23594f75643ede7f5f7",
+  "source_digest": "6b7b3cae696eb21c3e9798dadf57513cfebf3cad2884bfab65b19eeb348d8c5e",
   "surface": "cockpit",
   "version": 1
 }
@@ -10633,8 +10633,8 @@ function loadSpawnCatalog(){
 }
 function providerById(id){return (spawnCatalog&&spawnCatalog.providers||[]).find(p=>p.id===id)||null;}
 const spawnFamilies=[{id:'claude',asset:'anthropic.svg',label:'Claude'},
-  {id:'codex',asset:'openai.svg',label:'Codex'},{id:'deepseek',asset:'deepseek.svg',label:'DeepSeek'},
-  {id:'local',label:'Local models'},{id:'gemini',asset:'google.svg',label:'Antigravity',catalogOnly:true}];
+  {id:'codex',asset:'openai.svg',label:'Codex'},{id:'gemini',asset:'google.svg',label:'Antigravity',catalogOnly:true},
+  {id:'deepseek',asset:'deepseek.svg',label:'DeepSeek'},{id:'local',label:'Local models'}];
 const spawnModelMark=document.getElementById('spawnModelMark');
 const spawnModelLabel=document.getElementById('spawnModelLabel');
 const spawnPips=document.getElementById('spawnPips');
