@@ -39,7 +39,10 @@ CLAUDE_ARGUMENT_HINT = re.compile(r'\x1b\[(?:38;5;246|(?:0;)?2)m[^\x1b]+'
                                   r'(?:\x1b\[(?:0|22|39)?m)?[ \t]*$')
 COLLAPSED = re.compile(r'\[Pasted text #\d+(?: \+\d+ lines?)?\]')
 HERMES_PASTE = re.compile(r'\[Pasted text #(\d+): (\d+) lines → /.+/pastes/paste_\1_\d{6}\.txt\]')
-HERMES_HINT = re.compile(r'^msg=[\w-]+ · /queue · /bg · /steer · Ctrl\+C cancel$')
+HERMES_HINT = re.compile(r'^(?:msg=[\w-]+ · /queue · /bg · /steer · Ctrl\+C cancel|cli\.tui\.placeholder_busy)$')
+HERMES_TOOL_PROGRESS = re.compile(
+    r'^  [^ \t┊│].* {2}\(\s*(?:\d+\.\ds|\d+m[0-5]\ds|cli\.shared\.duration_(?:s|ms_compact))'
+    r'(?: · ↓ \d+(?:\.\d+)?[kM]? tok)?\)$')
 HERMES_GHOST = re.compile(r'\x1b\[38;5;241m[^\x1b]+\x1b\[39m[ \t]*$')
 HERMES_MENU_STYLING = re.compile(r'\x1b\[(?:[0-9]+;)*48;[25];[0-9;]+m')
 PASTING = re.compile(r'^\s*(?:Pasting(?:…|\.\.\.)|Waiting for startup\b)', re.I)
@@ -63,6 +66,8 @@ DSH_COMMAND_MENU = re.compile(r'^\s*╭─ commands · \d+ items? ─+╮$')
 DSH_COMMAND_SELECTED = re.compile(r'^\s*│\s+❯\s+([\w.:-]+)(?=\s|│|$)')
 AGY_COMMAND_SELECTED = re.compile(r'^>\s+(' + SLASH_NAME.pattern + r')(?=[ \t]|$)')
 AGY_COMMAND_HELP = '↑/↓ Navigate · enter Select · tab Complete'
+AGY_WORKING = re.compile(r'^[\u2800-\u28ff]\s+Working(?:…|\.\.\.)$')
+CODEX_WORKING = re.compile(r'^• (?:Working|Compacting context) \(.*\besc to interrupt\b')
 
 
 @dataclass(frozen=True)
@@ -83,6 +88,9 @@ class Frame:
     scrolled: bool = False
     dsh_clipped: bool = False
     hermes_busy: bool = False
+    editor: str | None = None
+    running: bool = False
+    slash_view: tuple[str, str] | None = None
 
     @property
     def identity(self):
@@ -92,8 +100,8 @@ class Frame:
     def empty(self):
         return self.draft == '' and not self.waiting and not self.selected
 
-    def allows_paste(self, text):
-        if self.hermes_busy and not SLASH_NAME.fullmatch(text):
+    def allows_paste(self, text, *, operator=False):
+        if self.hermes_busy and not operator and not SLASH_NAME.fullmatch(text):
             # Hermes dispatches slash commands locally. Other input can
             # interrupt a running turn, depending on its busy input mode.
             return False
@@ -194,6 +202,53 @@ SLASH_PICKERS = {
     'agy': _agy_slash_menu,
 }
 
+def _slash_view(lines):
+    """Identify a command's native view by its title and controls together."""
+    rows = [row.strip() for row in lines if row.strip()]
+    if not rows:
+        return None
+    footer = rows[-1]
+    if footer == '←/→ to switch · Esc to close' and any(
+            re.fullmatch(r'Help\s+General\s+Commands\s+Custom commands', row) for row in rows):
+        return 'claude', '/help'
+    if footer.endswith('Enter to save · Esc to cancel') and 'Select model' in rows:
+        return 'claude', '/model'
+    if footer == '↓ to navigate · ↑ to switch tabs · Esc to go back' and any(
+            row.startswith('│ ⌕ Search settings…') for row in rows):
+        return 'claude', '/config'
+    if footer == 'enter select · esc back' and 'Select Model and Effort' in rows:
+        return 'codex', '/model'
+    if AGY_MODE.match(footer) or AGY_MODEL_FOOTER.fullmatch(footer) or AGY_MODE_ONLY.fullmatch(footer):
+        controls = ' '.join(' '.join(rows[-3:-1]).split())
+        if controls.endswith('Keyboard: ↑/↓ Navigate ←/→ Switch View esc Close') and any(
+                re.fullmatch(r'Antigravity CLI\s+general\s+commands\s+shortcuts', row) for row in rows):
+            return 'agy', '/help'
+        if controls.endswith('Keyboard: ↑/↓ Navigate ←/→ Effort enter Select esc Go Back') and 'Switch Model' in rows:
+            return 'agy', '/model'
+    for index, title in enumerate(rows):
+        if title == 'Model' and index + 1 < len(rows) and rows[index+1].startswith(
+                'Tab / Shift+Tab providers · ↑/↓ model · Enter select · Esc cancel'):
+            return 'dsh', '/model'
+        if title.startswith('╭─ cli.tui.picker_title_provider ─') and any(
+                row.startswith('│ cli.tui.picker_current_hint') for row in rows[index+1:index+4]):
+            return 'hermes', '/model'
+    return None
+
+
+def _hermes_running(lines, plain, start):
+    index = start - 2
+    if index < 0:
+        return False
+    if plain[index].strip().startswith('☤ '):
+        if '│ ⏱ ' in plain[index]:
+            return True
+        index -= 1
+    # Hermes puts the live hint directly above its status bar and optional spacer.
+    if index >= 0 and not plain[index].strip():
+        index -= 1
+    return (index >= 0 and '\x1b[3m' in lines[index]
+            and HERMES_TOOL_PROGRESS.fullmatch(plain[index].rstrip()) is not None)
+
 
 def frame(metadata, lines, pane):
     fields = metadata.split('\t')
@@ -210,9 +265,12 @@ def frame(metadata, lines, pane):
     base=(path,server,pane,process)
     bracketed = fields[7] == '1' if fields[7] else None
     command = fields[8].rsplit('/', 1)[-1].lower().lstrip('-').removesuffix('.exe')
-    if mode or bracketed is False or cursor>=len(lines):
+    if mode or cursor>=len(lines):
         return Frame(*base,None,False)
     plain=[SGR.sub('',line) for line in lines]
+    slash_view = _slash_view(plain)
+    if bracketed is False:
+        return Frame(*base,None,False,slash_view=slash_view)
     for start in range(cursor,-1,-1):
         line=plain[start].rstrip()
         if BORDER.fullmatch(line.strip()):
@@ -226,7 +284,7 @@ def frame(metadata, lines, pane):
                 break
             draft='\n'.join(row.strip() for row in plain[start+1:cursor+1]).strip()
             return Frame(*base, draft, False, bracketed=bracketed,
-                         foreground_command=command, scrolled=True)
+                         foreground_command=command, scrolled=True, slash_view=slash_view)
         match=PROMPT.match(line)
         if not match:
             continue
@@ -293,7 +351,7 @@ def frame(metadata, lines, pane):
         footer=tail and (tail[0].startswith(('? for shortcuts','← for agents','⏵','⏸','% context left','Context '))
                 or re.match(r'gpt-\S+\s+(?:default|low|medium|high|xhigh|max|ultra)\b',tail[0],re.I))
         if not draft and tail and not (lower or footer or waiting):
-            return Frame(*base,None,False)
+            return Frame(*base,None,False,slash_view=slash_view)
         menu=(start>=2 and upper and bool(re.match(r'^[ \t]+❯[ \t]+\S',plain[start-2])))
         if glyph=='›':
             previous_row=next((row.strip().lower() for row in reversed(above) if row.strip()), '')
@@ -313,11 +371,22 @@ def frame(metadata, lines, pane):
         dsh_clipped = boxed and framed and glyph=='❯' and (
             (left=='│' and start==cursor and line.endswith('  │')) or
             (left=='⌸' and cursor-start==4))
+        running = (
+            (hermes_busy and _hermes_running(lines, plain, start))
+            or (editor == 'claude' and any(' · esc to interrupt' in row for row in tail[1:]))
+            or (editor == 'codex' and any(CODEX_WORKING.match(row.strip()) for row in plain[max(0,start-16):start]))
+            or (editor == 'dsh' and 'esc to interrupt' in tail[1:])
+            or (editor == 'agy' and (
+                any(AGY_WORKING.fullmatch(row.strip()) for row in above[-3:])
+                or (not menu and any(row.startswith('esc to cancel') and
+                    (AGY_MODE.match(row) or AGY_MODE_ONLY.fullmatch(row)) for row in tail[1:]))))
+        )
         return Frame(*base, draft, waiting, menu or selected_command is not None,
                      bool(hermes), boxed, bracketed, command,
                      slash_picker=editor is not None, selected_command=selected_command,
-                     dsh_clipped=dsh_clipped, hermes_busy=hermes_busy)
-    return Frame(*base,None,False)
+                     dsh_clipped=dsh_clipped, hermes_busy=hermes_busy, editor=editor,
+                     running=running, slash_view=slash_view)
+    return Frame(*base,None,False,slash_view=slash_view)
 
 
 def bare_slash(text):
@@ -325,10 +394,16 @@ def bare_slash(text):
     return value if value == '/' or SLASH_NAME.fullmatch(value) else None
 
 
-def completion_problem(observed, text):
+def accepted_after_enter(before, after, text):
+    if after.slash_view is None or after.slash_view == before.slash_view:
+        return after.empty
+    return after.slash_view == (before.editor, bare_slash(text))
+
+
+def completion_problem(observed, text, *, operator=False):
     command = bare_slash(text)
     if (command is None or observed is None or observed.waiting
-            or not observed.allows_paste(text) or observed.draft != command):
+            or not observed.allows_paste(text, operator=operator) or observed.draft != command):
         return None
     if observed.selected_command is None:
         return 'completion-unverified'
@@ -337,29 +412,30 @@ def completion_problem(observed, text):
     return None
 
 
-def mismatched_command(observed, text):
-    return completion_problem(observed, text) == 'completion-mismatch'
+def mismatched_command(observed, text, *, operator=False):
+    return completion_problem(observed, text, operator=operator) == 'completion-mismatch'
 
 
-def _picker_free_draft(observed, text):
+def _picker_free_draft(observed, text, *, operator):
     return (observed is not None and observed.slash_picker and not observed.selected
             and not observed.waiting and not observed.scrolled and not observed.dsh_clipped
-            and observed.allows_paste(text) and observed.draft == text
+            and observed.allows_paste(text, operator=operator) and observed.draft == text
             and SLASH_NAME.fullmatch(text) is not None)
 
 
 class SlashMenuWait:
     """Give the picker time to appear after the editor echoes a slash command."""
 
-    def __init__(self, text):
+    def __init__(self, text, *, operator=False):
         self.text = text
+        self.operator = operator
         self.missing_since = None
         self.seen_picker = False
 
     def ready(self, observed):
         if observed is not None and observed.selected and bare_slash(self.text) is not None:
             self.seen_picker = True
-        if self.seen_picker or not _picker_free_draft(observed, self.text):
+        if self.seen_picker or not _picker_free_draft(observed, self.text, operator=self.operator):
             self.missing_since = None
         else:
             now = time.monotonic()
@@ -367,12 +443,12 @@ class SlashMenuWait:
                 self.missing_since = now
             if now - self.missing_since >= SLASH_MENU_WAIT:
                 return True
-        return ready(observed, self.text)
+        return ready(observed, self.text, operator=self.operator)
 
 
-def ready(observed, text):
+def ready(observed, text, *, operator=False):
     if (observed is None or observed.draft is None or observed.waiting
-            or not observed.allows_paste(text)):
+            or not observed.allows_paste(text, operator=operator)):
         return False
     command = bare_slash(text)
     if command is not None or observed.selected:
@@ -518,6 +594,7 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
                         if confirmed and time.monotonic()<end:
                             if command('send-keys','-t',pane,'C-m').returncode:
                                 return defer('unknown', 'enter_failed')
+                            entered_from = view
                             break
                 previous=choice
                 time.sleep(POLL)
@@ -527,7 +604,7 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
             while time.monotonic()<end:
                 view=capture(command,pane)
                 if not view or view.identity!=before.identity:return defer('unknown', 'pane_changed')
-                if view.empty:return 'accepted'
+                if accepted_after_enter(entered_from, view, text):return 'accepted'
                 time.sleep(POLL)
             return defer('unknown', 'enter_not_confirmed')
         finally:
