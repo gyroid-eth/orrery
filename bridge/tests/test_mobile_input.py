@@ -133,7 +133,8 @@ def test_alternating_agent_catalogs_preserve_both_pane_inputs_and_images(tmp_pat
         names=('FixtureCurie','FixtureNoether')
         roots={name:tmp_path/name for name in names}
         bridges={}
-        sent={name:[] for name in names}
+        sent=[]
+        now=100.0
 
         async def capture(*args, **kwargs):
             return SimpleNamespace(lines=['fixture output'])
@@ -142,7 +143,7 @@ def test_alternating_agent_catalogs_preserve_both_pane_inputs_and_images(tmp_pat
             async def send(pane,text,**options):
                 assert pane=='%3' and options['valid']() and options['claim']()
                 with options['admission'](time.monotonic()+1):
-                    sent[name].append(text)
+                    sent.append((name,text))
                 return 'accepted'
             return send
 
@@ -167,7 +168,7 @@ def test_alternating_agent_catalogs_preserve_both_pane_inputs_and_images(tmp_pat
         async def image_workspace(row):
             return roots[row['name']]
 
-        coordinator=mobile.InputCoordinator(Resolver(),get_bridge,enabled=True,image_workspace=image_workspace)
+        coordinator=mobile.InputCoordinator(Resolver(),get_bridge,enabled=True,clock=lambda:now,image_workspace=image_workspace)
         scope=dict(contract=mobile.CONTRACT,owner='fixture@example.invalid',reader_epoch='a'*32,epoch=coordinator.epoch)
 
         async def select(name):
@@ -183,21 +184,18 @@ def test_alternating_agent_catalogs_preserve_both_pane_inputs_and_images(tmp_pat
             second=await select(names[1])
             await preview(second)
             first=await select(names[0])
-            with pytest.raises(mobile.InputRefused,match='input_choice_unavailable'):
-                await preview(old_first)
+            old_first_target=await preview(old_first)
             second_target=await preview(second)
-            second=await select(names[1])
             first_target=await preview(first)
-            with pytest.raises(mobile.InputRefused,match='input_choice_unavailable'):
-                await preview(second_target['choice'])
-            second_target=await preview(second)
+            renewed_second_target=await preview(await select(names[1]))
+            assert await preview(second)==second_target
             drafts=[]
-            for target in (first_target,second_target):
+            for target in (old_first_target,second_target,first_target,renewed_second_target):
                 verified=dict(scope,choice=target['choice'],revision=target['revision'])
                 image=await coordinator.request('image',dict(verified,image=picture()))
                 assert Path(image['path']).parent==roots[target['name']]/'.orrery-input-images'
                 assert Path(image['path']).is_file()
-                assert not any(sent.values())
+                assert not sent
                 text=f"Review [image: '{image['path']}']"
                 prepared=await coordinator.request('prepare',dict(verified,text=text))
                 drafts.append((target['name'],text,prepared))
@@ -205,7 +203,12 @@ def test_alternating_agent_catalogs_preserve_both_pane_inputs_and_images(tmp_pat
                 commit=dict(scope,intent=prepared['intent'],confirmation=prepared['confirmation'])
                 assert (await coordinator.request('commit',commit))['state']=='accepted'
                 assert (await coordinator.request('commit',commit))['state']=='accepted'
-                assert sent[name]==[text]
+            assert sent==[(name,text) for name,text,_ in drafts]
+            now+=31
+            for choice in (old_first,second,first,renewed_second_target['choice']):
+                with pytest.raises(mobile.InputRefused,match='input_choice_unavailable'):
+                    await preview(choice)
+            assert not coordinator.choices
         finally:
             coordinator.close()
 
@@ -665,6 +668,7 @@ def test_catalog_size_is_serialized_and_no_more_than_128_handles(tmp_path):
         base=dict(contract=mobile.CONTRACT,owner='fixture@example.invalid',reader_epoch='b'*32,epoch=coordinator.epoch)
         result=await coordinator.request('targets',dict(base,name='FixtureCurie'))
         assert result['truncated'] is True and 1<=len(result['targets'])<=128
+        assert (await coordinator.request('targets',dict(base,name='FixtureCurie')))==result
         assert len(mobile.encode_json(result))<=16384 and len(coordinator.choices)==len(result['targets'])
         coordinator.close();assert not coordinator.choices
     asyncio.run(scenario())
@@ -779,6 +783,21 @@ def test_fresh_r4_real_create_app_relay_choice_and_once_ack_keep_identity(tmp_pa
                 status,preview=await asyncio.to_thread(phone,'preview',dict(epoch=cap['epoch'],choice=choice['choice']))
                 assert status==200 and preview['text']=='fresh selected output'
                 assert all(preview['target'][k]==v for k,v in ref.items())
+                if case=='accepted':
+                    # A restarted relay gets a new reader scope. The cockpit
+                    # epoch is unchanged, but its old choices are unavailable.
+                    server.mobile_input=InputClient(port,'fixture@example.invalid')
+                    status,reconnected=await asyncio.to_thread(phone)
+                    assert status==200 and reconnected==cap
+                    old=choice['choice']
+                    status,_=await asyncio.to_thread(phone,'preview',dict(epoch=cap['epoch'],choice=old))
+                    assert status==503
+                    status,listed=await asyncio.to_thread(phone,'targets',selector)
+                    assert status==200 and len(listed['targets'])==1
+                    choice=listed['targets'][0]
+                    assert choice['choice']!=old
+                    status,preview=await asyncio.to_thread(phone,'preview',dict(epoch=cap['epoch'],choice=choice['choice']))
+                    assert status==200 and all(preview['target'][k]==v for k,v in ref.items())
                 status,prepared=await asyncio.to_thread(phone,'prepare',dict(epoch=cap['epoch'],choice=choice['choice'],
                     revision=preview['target']['revision'],text='literal fresh input'))
                 assert status==200 and all(prepared['target'][k]==v for k,v in ref.items())

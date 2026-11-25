@@ -1,4 +1,4 @@
-"""Find supported image targets in the public Markdown projected into history."""
+"""Find supported image paths in public conversation and Mail text."""
 import re
 from pathlib import PurePath
 
@@ -14,6 +14,12 @@ INLINE = re.compile(
 FENCE = re.compile(r'^ {0,3}(`{3,}|~{3,})(.*)$')
 CONTAINER = re.compile(r'^ {0,3}(?:> ?|(?:[-+*]|\d{1,9}[.)])[ \t]+)')
 CONTROL = re.compile(r'[\x00-\x1f\x7f]')
+ABSOLUTE_LINE_START = re.compile(r'(?:^|[\r\n]) {0,3}/(?!/)')
+
+
+def may_have_image_targets(text, *, bare_paths=True):
+    """Cheap prefilter before the reference store reads and pins a record."""
+    return '![' in text or (bare_paths and ABSOLUTE_LINE_START.search(text) is not None)
 
 
 def local_image_target(target):
@@ -22,18 +28,18 @@ def local_image_target(target):
             PurePath(target).suffix.lower() in IMAGE_EXT)
 
 
-def _images(text):
-    if '![' not in text:
+def _images(text, *, bare_paths=False):
+    if not may_have_image_targets(text, bare_paths=bare_paths):
         return
-    lines = text.split('\n')
-    if lines[0].rstrip('\r') == '---':
-        end = next((i for i, line in enumerate(lines[1:201], 1) if line.rstrip('\r') == '---'), None)
+    lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    if lines[0] == '---':
+        end = next((i for i, line in enumerate(lines[1:201], 1) if line == '---'), None)
         if end is not None:
             lines = lines[end+1:]
     fence = None
     code = 0
     for source in lines:
-        line = source.rstrip('\r')
+        line = source
         for _ in range(8):
             prefix = CONTAINER.match(line)
             if not prefix:
@@ -53,6 +59,11 @@ def _images(text):
             continue
         if line.startswith(('    ', '\t')):
             continue
+        if bare_paths and not code and line == source:
+            target = line.strip(' \t')
+            if target.startswith('/') and '<' not in target and '>' not in target and local_image_target(target):
+                yield target
+                continue
         brackets = 0
         for match in INLINE.finditer(line):
             if match['ticks']:
@@ -78,12 +89,12 @@ def markdown_image_targets(event):
     event = received(event)
     texts = []
     if event.get('kind') == 'text' and event.get('role') == 'assistant' and event.get('variant') != 'update':
-        texts.append(event.get('text'))
-    texts.extend(item.get('body') for item in event.get('mail', ()) if isinstance(item, dict))
+        texts.append((event.get('text'), True))
+    texts.extend((item.get('body'), False) for item in event.get('mail', ()) if isinstance(item, dict))
     targets = {}
-    for text in texts:
+    for text, bare_paths in texts:
         if isinstance(text, str):
-            for target in _images(text):
+            for target in _images(text, bare_paths=bare_paths):
                 targets.setdefault(target, None)
                 if len(targets) == MAX_MARKDOWN_IMAGES:
                     return list(targets)

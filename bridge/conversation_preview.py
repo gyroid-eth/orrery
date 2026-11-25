@@ -27,6 +27,7 @@ from conversation_history import codex_event, codex_user_content, open_bound_tra
 from conversation_history import conversation_binding as binding
 from conversation_images import input_images, saved_path, dsh_image_path
 from conversation_markdown_images import IMAGE_EXT, local_image_target, markdown_image_targets
+import conversation_step_command as step_command
 import conversation_step_diff as step_diff
 from mobile_attachment_store import DIRECTORIES, FORMATS, attachment_label
 
@@ -109,7 +110,7 @@ def workspace(stream):
     except (ValueError,KeyError,TypeError):return None
 
 
-def _step_diff_inputs(stream, event_id, call_id, records=None):
+def _step_inputs(stream, event_id, call_id, records=None):
     if stream.provider=='codex' and call_id is None:
         item,digest=record_at(stream,int(event_id))
         return (item,), (digest,)
@@ -283,52 +284,68 @@ class ReferenceStore:
                 try:cwd=workspace(stream)
                 except (PreviewUnavailable,ValueError):cwd=None
             self.decorate(row,stream,event,cwd=cwd,records=records,images=images)
-        self.decorate_step_diffs(row,stream,events,records)
+        self.decorate_step_details(row,stream,events,records)
 
-    def decorate_step_diffs(self,row,stream,events,records):
+    def decorate_step_details(self,row,stream,events,records):
         provider=getattr(stream,'provider',None)
         calls={}
         if provider=='claude':
+            tools=step_diff.CLAUDE_EDIT_TOOLS | step_command.CLAUDE_COMMAND_TOOLS
             seen={step['id']:event for event in events if (step:=event.get('step',{})).get('phase')=='call'}
-            calls={key:event['id'] for key,event in seen.items() if event['step'].get('tool') in step_diff.CLAUDE_EDIT_TOOLS}
+            calls={key:(event['id'],event['step']['tool']) for key,event in seen.items() if event['step'].get('tool') in tools}
             missing={step['id']:int(event['id'].split(':',1)[0]) for event in events
                      if (step:=event.get('step',{})).get('phase')=='result'
-                     and step.get('status')=='done' and step['id'] not in seen}
-            calls.update(stream.claude_edit_calls_before(missing))
+                     and step['id'] not in seen}
+            calls.update(stream.claude_step_calls_before(missing,tools))
         elif provider!='codex':
             return
         owner,inode=binding(row),identity(stream)
         grants=[]
         for event in events:
             step=event.get('step',{})
-            if step.get('status')!='done':continue
-            call=calls.get(step.get('id'))
+            call=None
             if provider=='claude':
-                if step.get('phase')!='result' or call is None:continue
-                build=step_diff.claude_diff
+                match=calls.get(step.get('id'))
+                if step.get('phase')!='result' or match is None:continue
+                call,tool=match
+                is_command=tool in step_command.CLAUDE_COMMAND_TOOLS
             else:
-                if step.get('tool')!='apply_patch':continue
-                build=step_diff.codex_diff
+                tool=step.get('tool')
+                if tool not in {'apply_patch','Shell'}:continue
+                is_command=tool=='Shell'
+            if not is_command and step.get('status')!='done':continue
             try:
-                inputs,digests=_step_diff_inputs(stream,event['id'],call,records)
-                changes=step_diff.stat(build(*inputs))
+                inputs,digests=_step_inputs(stream,event['id'],call,records)
+                fields={}
+                if is_command:
+                    build=step_command.claude_command if provider=='claude' else step_command.codex_command
+                    command=build(*inputs)
+                    if command is None:continue
+                    if command.exit_code is not None:fields['exit_code']=command.exit_code
+                    if command.interrupted or command.exit_code not in (None,0):fields['status']='failed'
+                else:
+                    build=step_diff.claude_diff if provider=='claude' else step_diff.codex_diff
+                    changes=step_diff.stat(build(*inputs))
+                    if changes is None:continue
+                    fields['diff_stat']=changes
             except (OSError,ValueError,UnicodeError,RecursionError):
                 continue
-            if changes is not None:
-                grants.append((event,call,digests,changes))
+            grants.append((event,call,digests,is_command,fields))
         if not grants:return
         with self.lock:
             self.prune()
-            for event,call,digests,changes in grants:
+            for event,call,digests,is_command,fields in grants:
                 event_id=event['id']
-                key=(owner,inode,'step_diff',event_id,call,digests)
+                kind='step_command' if is_command else 'step_diff'
+                key=(owner,inode,kind,event_id,call,digests)
                 ref=self.by_key.get(key)
                 if ref not in self.refs or self.refs[ref]['key']!=key:ref=secrets.token_urlsafe(24)
                 self.by_key[key]=ref
-                self.refs[ref]=dict(key=key,row=owner,inode=inode,step_diff=(event_id,call,digests),
+                self.refs[ref]=dict(key=key,row=owner,inode=inode,step=(kind,event_id,call,digests),
                                     expires=self.clock()+self.ttl)
                 self.refs.move_to_end(ref)
-                event['step']=dict(event['step'],diff_stat=changes,diff_ref=ref)
+                fields['detail_ref' if is_command else 'diff_ref']=ref
+                event['step']=dict(event['step'],**fields)
             self.prune()
 
     def decorate(self,row,stream,event,*,cwd=False,records=None,images=None):
@@ -491,7 +508,7 @@ class ReferenceStore:
     def read(self,ref,row,*,reveal=False,thumbnail=False,mobile=False):
         with self.lock:
             self.prune();entry=self.refs.get(ref)
-            if not entry or 'step_diff' in entry or binding(row)!=entry['row']:raise PreviewUnavailable('reference_expired')
+            if not entry or 'step' in entry or binding(row)!=entry['row']:raise PreviewUnavailable('reference_expired')
             entry=dict(entry)
         try:
             with open_reader(row) as stream:
@@ -541,21 +558,33 @@ class ReferenceStore:
             raise PreviewUnavailable('reference_expired') from None
 
     def read_step_diff(self,ref,row):
+        def render(provider,inputs):
+            build=step_diff.claude_diff if provider=='claude' else step_diff.codex_diff
+            files=build(*inputs)
+            return step_diff.detail(files) if step_diff.stat(files) is not None else None
+        return self.read_step(ref,row,'step_diff',render)
+
+    def read_step_command(self,ref,row):
+        def render(provider,inputs):
+            build=step_command.claude_command if provider=='claude' else step_command.codex_command
+            command=build(*inputs)
+            return step_command.detail(command) if command is not None else None
+        return self.read_step(ref,row,'step_command',render)
+
+    def read_step(self,ref,row,kind,render):
         with self.lock:
             self.prune()
             entry=self.refs.get(ref)
-            if not entry or 'step_diff' not in entry or binding(row)!=entry['row']:
+            pinned=entry and entry.get('step')
+            if not pinned or pinned[0]!=kind or binding(row)!=entry['row']:
                 raise PreviewUnavailable('reference_expired')
-        event_id,call_id,expected=entry['step_diff']
+        _,event_id,call_id,expected=pinned
         try:
             with open_reader(row,expect_inode=entry['inode']) as stream:
-                inputs,digests=_step_diff_inputs(stream,event_id,call_id)
+                inputs,digests=_step_inputs(stream,event_id,call_id)
                 if digests!=expected:raise PreviewUnavailable('reference_expired')
-                build=step_diff.claude_diff if stream.provider=='claude' else step_diff.codex_diff
-                files=build(*inputs)
-                if step_diff.stat(files) is None:raise PreviewUnavailable('reference_expired')
-                result=step_diff.detail(files)
-                if _step_diff_inputs(stream,event_id,call_id)[1]!=expected:
+                result=render(stream.provider,inputs)
+                if result is None or _step_inputs(stream,event_id,call_id)[1]!=expected:
                     raise PreviewUnavailable('reference_expired')
                 stream.assert_identity()
                 return result

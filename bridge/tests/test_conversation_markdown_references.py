@@ -91,14 +91,54 @@ def test_first_eight_distinct_targets_are_shared_between_event_and_mail():
     assert markdown_image_targets(event) == targets[:8]
 
 
+def test_standalone_image_paths_in_assistant_prose_share_the_markdown_budget():
+    targets = ['/fixture/図 (draft).PNG', '/fixture/report.jpg', '/fixture/capture.webp', '/fixture/preview.gif']
+    text = f'''---
+/fixture/front.png
+---
+Here are the images.
+{targets[0]}
+  {targets[1]}  
+{markdown(targets[0])}
+{targets[2]}
+{markdown(targets[3])}
+
+Open /fixture/inline.png
+    /fixture/indented.png
+
+> /fixture/quoted.png
+
+- /fixture/listed.png
+
+~~~
+/fixture/fenced.png
+~~~
+
+`code
+/fixture/code.png`
+
+~/fixture/home.png
+//fixture.invalid/remote.png
+/fixture/unsupported.svg
+'''
+    event = dict(kind='text', role='assistant', text=text)
+    assert markdown_image_targets(event) == targets
+    assert markdown_image_targets(dict(event, role='user')) == []
+    assert markdown_image_targets(dict(event, variant='update')) == []
+    assert markdown_image_targets(dict(kind='mail', mail=[{'body': targets[0]}])) == []
+    text = '\r\n'.join(f'/fixture/{i}.png' for i in range(9))
+    assert markdown_image_targets(dict(event, text=text)) == text.splitlines()[:8]
+
+
 @pytest.mark.parametrize('program', ['codex', 'claude-code', 'dsh', 'hermes'])
-def test_native_assistant_can_show_a_verified_image_outside_workspace(tmp_path, monkeypatch, program):
+@pytest.mark.parametrize('bare', [False, True])
+def test_native_assistant_can_show_a_verified_image_outside_workspace(tmp_path, monkeypatch, program, bare):
     workspace = tmp_path / 'workspace'
     workspace.mkdir()
     monkeypatch.setenv('HOME', str(tmp_path))
-    target = '~/公開 (draft).PNG'
-    picture(tmp_path / '公開 (draft).PNG')
-    text = markdown(target)
+    path = picture(tmp_path / '公開 (draft).PNG')
+    target = str(path) if bare else '~/' + path.name
+    text = f'Published figure:\n{target}\n' if bare else markdown(target)
     transcript = workspace / 'fixture.jsonl'
     if program == 'codex':
         bound = codex_history(workspace, codex_message(text))
@@ -121,7 +161,7 @@ def test_native_assistant_can_show_a_verified_image_outside_workspace(tmp_path, 
     event = next(event for event in events if event.get('role') == 'assistant')
     item, = event['markdown_images']
     assert item.keys() == {'target', 'id'} and item['target'] == target
-    assert len(item['id']) == 32 and str(tmp_path) not in repr(item)
+    assert len(item['id']) == 32 and path.name not in item['id']
     assert next(event for event in history_with_images(bound, store) if event.get('role') == 'assistant')['markdown_images'] == [item]
     result = store.read(item['id'], bound, thumbnail=True, mobile=True)
     with Image.open(BytesIO(base64.b64decode(result['data']))) as image:
@@ -132,7 +172,8 @@ def test_native_assistant_can_show_a_verified_image_outside_workspace(tmp_path, 
         store.read(item['id'], bound, reveal=True)
 
 
-def test_refuses_non_rasters_and_unverified_events(tmp_path):
+@pytest.mark.parametrize('reference', [markdown, str])
+def test_refuses_non_rasters_and_unverified_events(tmp_path, reference):
     picture(tmp_path / 'chart.png')
     disguised = tmp_path / 'text.png'
     disguised.write_text('This is plain text')
@@ -141,8 +182,8 @@ def test_refuses_non_rasters_and_unverified_events(tmp_path):
     with oversize.open('wb') as output:
         output.truncate(MAX_IMAGE+1)
     refs = [tmp_path / name for name in ('text.png', 'raster.txt', 'huge.png', 'missing.png')]
-    user = markdown(tmp_path / 'chart.png')
-    bound = codex_history(tmp_path, codex_message(' '.join(map(markdown, refs))),
+    user = reference(tmp_path / 'chart.png')
+    bound = codex_history(tmp_path, codex_message('\n'.join(map(reference, refs))),
                           codex_message(user, role='user'), codex_message(user, phase='analysis'))
     store = ReferenceStore()
     events = history_with_images(bound, store)
@@ -184,7 +225,8 @@ def test_markdown_reference_expires_on_binding_alias_and_record_changes(tmp_path
         store.read(ref, bound)
 
 
-def test_history_endpoint_decorates_mail_and_preview_accepts_only_ids(tmp_path, monkeypatch):
+@pytest.mark.parametrize('assistant_reference', [markdown, str])
+def test_history_endpoint_decorates_mail_and_preview_accepts_only_ids(tmp_path, monkeypatch, assistant_reference):
     from aiohttp import ClientSession, web
     import orrery_backend as backend
     from test_conversation_history import start
@@ -197,7 +239,8 @@ def test_history_endpoint_decorates_mail_and_preview_accepts_only_ids(tmp_path, 
                 arguments=dict(subject='Fixture', to=['FixturePeer'], body_md=message)))
     received = ('ORRERY Mail notification: message from FixturePeer [normal]: '
                 'Fixture. Body (complete; no inbox fetch needed): '+message)
-    bound = codex_history(workspace, codex_message(message), codex_message(received, role='user'), sent)
+    bound = codex_history(workspace, codex_message(assistant_reference(image)),
+                          codex_message(received, role='user'), sent)
 
     async def scenario():
         async def agents(request):

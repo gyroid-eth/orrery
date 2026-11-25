@@ -54,6 +54,7 @@ from usage_probe import (
 from conversation_history import (HistoryUnavailable, UnchangedPolls, bound_agent, bound_signature, conversation_binding, open_reader)
 from conversation_mail import received as recorded_mail
 from conversation_preview import ReferenceStore, PreviewUnavailable, clicked_path
+from conversation_markdown_images import may_have_image_targets
 from conversation_step_diff import encode as encode_step_diff
 
 DEFAULT_HOST = "127.0.0.1"
@@ -2339,7 +2340,7 @@ async def conversation_full_read(request, name, query, cursor, limit, polls, sta
         store=request.app.get(CONVERSATION_REFERENCES_KEY)
         if store is not None:
             candidates=[event for event in result['events'] if event['kind'] in {'tool','tool_result','mail'} or
-                        event['kind']=='text' and (event['role']=='user' or '![' in event['text'])]
+                        event['kind']=='text' and (event['role']=='user' or may_have_image_targets(event['text']))]
             if candidates:
                 await asyncio.to_thread(store.decorate_all,row,reader,candidates)
         checked=polls.clock() if polls is not None else 0.0
@@ -2512,7 +2513,7 @@ async def serve_conversation_preview(request: web.Request) -> web.Response:
     return await conversation_reference(request)
 
 
-async def serve_conversation_diff(request: web.Request) -> web.Response:
+async def conversation_step_reference(request: web.Request, *, command: bool = False) -> web.Response:
     headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
              'Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"}
     query=request.query
@@ -2525,7 +2526,8 @@ async def serve_conversation_diff(request: web.Request) -> web.Response:
         store=request.app[CONVERSATION_REFERENCES_KEY]
         name=store.owner(refs[0])
         row=await conversation_bound_row(request,name)
-        result=await asyncio.to_thread(store.read_step_diff,refs[0],row)
+        read=store.read_step_command if command else store.read_step_diff
+        result=await asyncio.to_thread(read,refs[0],row)
         current=await conversation_bound_row(request,name)
         if conversation_binding(row)!=conversation_binding(current):
             raise PreviewUnavailable('reference_expired')
@@ -2534,6 +2536,14 @@ async def serve_conversation_diff(request: web.Request) -> web.Response:
         return web.json_response({'ok':False,'error':'reference_expired'},status=400,headers=headers)
     except (ClientError,asyncio.TimeoutError):
         return web.json_response({'ok':False,'error':'dashboard_unavailable'},status=502,headers=headers)
+
+
+async def serve_conversation_diff(request: web.Request) -> web.Response:
+    return await conversation_step_reference(request)
+
+
+async def serve_conversation_detail(request: web.Request) -> web.Response:
+    return await conversation_step_reference(request,command=True)
 
 
 async def reveal_conversation_reference(request: web.Request) -> web.Response:
@@ -5088,6 +5098,7 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
     app.router.add_get("/telemetry/conversation/stats", serve_conversation_stats)
     app.router.add_get('/telemetry/conversation/preview', serve_conversation_preview)
     app.router.add_get('/telemetry/conversation/diff', serve_conversation_diff)
+    app.router.add_get('/telemetry/conversation/detail', serve_conversation_detail)
     app.router.add_post('/telemetry/conversation/path-image', preview_clicked_path)
     app.router.add_post('/telemetry/conversation/path-probe', probe_conversation_paths)
     app.router.add_post('/telemetry/conversation/reveal', reveal_conversation_reference)
