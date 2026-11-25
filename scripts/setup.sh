@@ -114,7 +114,10 @@ case "$mail_mode" in
   *) printf 'Unknown --mail value: %s (auto|update|keep)\n' "$mail_mode" >&2; exit 2 ;;
 esac
 read_only=false
-if [ "$check_only" = true ] || [ "$dry_run" = true ]; then read_only=true; fi
+if [ "$check_only" = true ] || [ "$dry_run" = true ]; then
+  read_only=true
+  export PYTHONDONTWRITEBYTECODE=1
+fi
 if [ -z "$COCKPIT_ROOT" ] && [ "$read_only" != true ]; then
   printf 'No cockpit checkout (ORRERY_PLANNED_DIR is only for --check / --dry-run).\n' >&2
   exit 2
@@ -397,22 +400,29 @@ esac
 [ "$(id -u)" != 0 ] || stop "Do not run this as root or with sudo."
 ok "platform: ${platform} ($(uname -m))"
 
-missing_pkgs=""
+missing_pkgs="" missing_tools=""
 for cmd in git tmux curl; do
   if command -v "$cmd" >/dev/null 2>&1; then
     ok "$cmd"
   else
-    missing_pkgs="${missing_pkgs} ${cmd}"
+    missing_tools="$missing_tools $cmd"
+    missing_pkgs="$missing_pkgs $cmd"
   fi
 done
-if [ -n "$missing_pkgs" ]; then
-  if [ "$os" = mac ]; then
-    problem "Missing:${missing_pkgs}" \
-      "Fix (Homebrew, https://brew.sh):  brew install${missing_pkgs}"
+if [ "$os" != mac ]; then
+  if command -v xz >/dev/null 2>&1; then
+    ok "xz"
   else
-    problem "Missing:${missing_pkgs}" \
-      "Fix:  sudo apt update && sudo apt install -y${missing_pkgs}"
+    missing_tools="$missing_tools xz"
+    missing_pkgs="$missing_pkgs xz-utils"
   fi
+fi
+if command -v lsof >/dev/null 2>&1 || [ -x /usr/sbin/lsof ]; then
+  ok "lsof (dashboard port ownership)"
+elif [ "$os" = mac ]; then
+  problem "Missing: lsof" "Restore the macOS /usr/sbin/lsof and rerun."
+else
+  note "lsof is absent; Linux /proc can verify dashboard port ownership"
 fi
 
 # uv: orrery-telemetry builds ORRERY Mail's Python environment with it. It
@@ -430,7 +440,7 @@ else
   fi
 fi
 
-# Python 3.11+, judged by running it. Without one, uv installs one (no sudo).
+# Python 3.11+, including a compatible interpreter already managed by uv.
 python_bin=""
 for candidate in "${AGENTSTACK_PYTHON:-}" "$(env_value AGENTSTACK_PYTHON)" python3 python3.14 python3.13 python3.12 python3.11 \
   /opt/homebrew/bin/python3 /usr/local/bin/python3; do
@@ -439,16 +449,40 @@ for candidate in "${AGENTSTACK_PYTHON:-}" "$(env_value AGENTSTACK_PYTHON)" pytho
   [ -n "$resolved" ] || continue
   if py_ok "$resolved"; then python_bin="$resolved"; break; fi
 done
-need_python=false
+if [ -z "$python_bin" ]; then
+  candidate="$(uv --no-cache python find --no-project --no-python-downloads '>=3.11' 2>/dev/null || true)"
+  if [ -n "$candidate" ] && py_ok "$candidate"; then python_bin="$candidate"; fi
+fi
 if [ -n "$python_bin" ]; then
   ok "Python: ${python_bin} ($("$python_bin" -c 'import platform; print(platform.python_version())'))"
 else
-  need_python=true
-  sys_py="$(command -v python3 2>/dev/null || true)"
-  if [ -n "$sys_py" ]; then
-    note "${sys_py} is $("$sys_py" -c 'import platform; print(platform.python_version())' 2>/dev/null || printf '?'); 3.11 or newer is needed"
+  missing_tools="$missing_tools Python 3.11+"
+  case "$os" in
+    mac) missing_pkgs="$missing_pkgs python@3.12" ;;
+    *) missing_pkgs="$missing_pkgs python3" ;;
+  esac
+fi
+if [ -n "${AGENTSTACK_PYTHON:-}" ] && ! py_ok "$AGENTSTACK_PYTHON"; then
+  problem "AGENTSTACK_PYTHON does not run a compatible interpreter." \
+    "Point it at Python 3.11+ or unset it to use the detected interpreter."
+fi
+if [ "$os" != mac ] && [ -n "$python_bin" ]; then
+  hermes_setting="${AGENTSTACK_DIR}/dashboard/hermes-provider.json"
+  if "$python_bin" -c 'import ctypes; ctypes.CDLL("libatomic.so.1")' 2>/dev/null; then
+    ok "Hermes: libatomic.so.1 available"
+  elif [ -f "$hermes_setting" ] && "$python_bin" -c \
+      'import json, sys; sys.exit(json.load(open(sys.argv[1])).get("enabled") is not True)' "$hermes_setting" 2>/dev/null; then
+    missing_tools="$missing_tools libatomic.so.1 (enabled Hermes)"
+    missing_pkgs="$missing_pkgs libatomic1"
+  else
+    note "If you add Hermes later: sudo apt install -y libatomic1"
   fi
-  note "uv will install Python 3.12 (no sudo) and both parts will use it"
+fi
+if [ -n "$missing_tools" ]; then
+  case "$os" in
+    mac) problem "Missing prerequisites:$missing_tools" "Fix (Homebrew): brew install$missing_pkgs" ;;
+    *) problem "Missing prerequisites:$missing_tools" "Fix: sudo apt update && sudo apt install -y$missing_pkgs" ;;
+  esac
 fi
 
 # Does each agent CLI run? (codex --version writes into CODEX_HOME, so it is
@@ -691,10 +725,13 @@ export AGENTSTACK_AUTO_OPEN_CHILD="$(child_window_setting "$ENV_FILE")"
 # ================================================================ 3. plan + confirm
 step "Plan"
 backup_dir="${AGENTSTACK_DIR}/backups"
+claude_mcp_file="${AGENTSTACK_CLAUDE_JSON:-$HOME/.claude.json}"
+claude_settings_file="${AGENTSTACK_CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+codex_instructions="${CODEX_HOME:-$HOME/.codex}/AGENTS.md"
+claude_instructions="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/CLAUDE.md"
 say "  This will:"
 say "    - child terminal windows: ${AGENTSTACK_AUTO_OPEN_CHILD} (0: use the cockpit; Open tmux stays available)"
 if [ "$need_uv" = true ]; then say "    - install uv into ~/.local/bin (your shell profile is not changed)"; fi
-if [ "$need_python" = true ]; then say "    - install Python 3.12 with uv (into uv's own folder)"; fi
 if [ -n "$detached_fix" ]; then
   while IFS='|' read -r path branch head; do
     [ -z "$path" ] || say "    - switch ${path} from $(short "$head") back to ${branch}"
@@ -717,17 +754,15 @@ case "$mode" in
     say "      with scripts/update.sh: git pull --ff-only, then the installer again"
     ;;
 esac
-say "    - change these 4 things (each is backed up first):"
-say "        1. ~/.claude.json            all your Claude Code sessions: MCP server 'orrery-mail'"
+say "    - change these 4 things (existing files are backed up first):"
+say "        1. ${claude_mcp_file} (Claude Code MCP server 'orrery-mail')"
 say "                                     -> ${mail_url:-http://127.0.0.1:18765/mcp}"
 say "                                     backup: ${backup_dir}/claude-mcp.<time>"
-say "        2. ~/.claude/settings.json   all your Claude Code sessions: ORRERY hooks (file"
-say "                                     reservations, Mail) and permissions are added;"
+say "        2. ${claude_settings_file} (Claude Code hooks and permissions)"
 say "                                     your own entries are kept.  backup: ${backup_dir}/<time>/"
-say "        3. ~/.codex/AGENTS.md        ALL your Codex work (global): ORRERY's marked block only"
+say "        3. ${codex_instructions} (user-wide Codex instructions: ORRERY's marked block)"
 say "                                     backup: next to it, AGENTS.md.bak.<time>"
-say "        4. ${project_key}/CLAUDE.md"
-say "                                     Claude Code in that folder: ORRERY's marked block only"
+say "        4. ${claude_instructions} (user-wide Claude Code instructions: ORRERY's marked block)"
 say "                                     backup: next to it, CLAUDE.md.bak.<time>"
 say "    - run 2 background services: dashboard (port ${dash_port:-8770}) and ORRERY Mail"
 say "    - ${mail_line}"
@@ -749,7 +784,7 @@ if [ "$mode" = update ] && { [ "$mail_choice" = update ] || [ "$mail_choice" = a
 fi
 say "    - check: agentstack-doctor, and agentstack-selftest (a Mail round trip with 2 test"
 say "      agents, which it removes again)"
-if [ "$no_start" != true ]; then say "    - start the cockpit in this window: http://127.0.0.1:${COCKPIT_PORT}/cockpit.html"; fi
+if [ "$no_start" != true ]; then say "    - start the browser cockpit: http://127.0.0.1:${COCKPIT_PORT}/cockpit.html"; fi
 say "  If something fails after you type yes, nothing is rolled back; you get a list of"
 say "  what changed and the line that carries on."
 if [ "$ask_each" = true ]; then say "  (--ask-each: the installer also shows each change and asks before it.)"; fi
@@ -843,13 +878,6 @@ if [ "$need_uv" = true ]; then
     || { show_log_tail; stop "Installing uv failed (see above)."; }
   uv --version >/dev/null 2>&1 || stop "uv was installed but does not run (looked in ~/.local/bin)."
   ok "uv: $(command -v uv) ($(uv --version | awk '{print $2}'))"
-fi
-if [ "$need_python" = true ]; then
-  say "  installing Python 3.12 with uv ..."
-  logged uv python install 3.12 || { show_log_tail; stop "Installing Python with uv failed (see above)."; }
-  python_bin="$(uv python find 3.12 2>/dev/null || true)"
-  if [ -z "$python_bin" ] || ! py_ok "$python_bin"; then stop "uv installed Python 3.12 but it cannot be run."; fi
-  ok "Python: ${python_bin} ($("$python_bin" -c 'import platform; print(platform.python_version())'))"
 fi
 # Both parts use the same interpreter.
 export AGENTSTACK_PYTHON="${AGENTSTACK_PYTHON:-$python_bin}"
@@ -1048,6 +1076,7 @@ item_result() { # $1 = "applied" pattern, $2 = "already" pattern (may be empty),
 show_item() { # $1 = label, $2 = result
   case "$2" in
     applied | "already the same") ok "$1: $2" ;;
+    SKIPPED) note "$1: $2 (set up separately if you need this provider)" ;;
     *) warn_line "$1: $2"; checks_ok=false ;;
   esac
 }
@@ -1062,10 +1091,10 @@ else
   applied_codex="assume-yes: applied Codex AGENTS.md managed setup"
   applied_claude="assume-yes: applied Claude CLAUDE.md managed setup"
 fi
-show_item "1. ~/.claude.json (MCP)" "$(item_result "$applied_mcp" "Claude MCP already registered" "Skipped Claude MCP\|skipping Claude MCP")"
-show_item "2. ~/.claude/settings.json" "$(item_result "$applied_settings" "" "Skipped Tier1\|skipping Tier1")"
-show_item "3. ~/.codex/AGENTS.md" "$(item_result "$applied_codex" "" "Skipped Codex AGENTS.md\|skipping Codex AGENTS.md")"
-show_item "4. ${project_key}/CLAUDE.md" "$(item_result "$applied_claude" "" "Skipped Claude CLAUDE.md\|skipping Claude CLAUDE.md")"
+show_item "1. ${claude_mcp_file} (MCP)" "$(item_result "$applied_mcp" "Claude MCP already registered" "Skipped Claude MCP\|skipping Claude MCP")"
+show_item "2. ${claude_settings_file}" "$(item_result "$applied_settings" "" "Skipped Tier1\|skipping Tier1")"
+show_item "3. ${codex_instructions}" "$(item_result "$applied_codex" "" "Skipped Codex AGENTS.md\|skipping Codex AGENTS.md")"
+show_item "4. ${claude_instructions}" "$(item_result "$applied_claude" "" "Skipped Claude CLAUDE.md\|skipping Claude CLAUDE.md")"
 
 # What the installer did with ORRERY Mail. An installer that knows the Mail
 # choice ends with a "mail-result:" line; from such an installer, no line (or
@@ -1132,7 +1161,11 @@ if [ "${harmless_count:-0}" -gt 0 ]; then note "install: ${harmless_count} known
 # other non-zero exit counts as a problem too.
 if [ -x "${bin_dir}/agentstack-doctor" ]; then
   doctor_status=0
-  doctor_out="$("${bin_dir}/agentstack-doctor" 2>&1)" || doctor_status=$?
+  doctor_args=()
+  if "${bin_dir}/agentstack-doctor" --help 2>/dev/null | grep -q -- '--core-only'; then
+    doctor_args=(--core-only)
+  fi
+  doctor_out="$("${bin_dir}/agentstack-doctor" ${doctor_args[@]+"${doctor_args[@]}"} 2>&1)" || doctor_status=$?
   printf '\n$ agentstack-doctor   (exit %s)\n%s\n' "$doctor_status" "$doctor_out" >>"$LOG"
   # The doctor's ORRERY Mail block ("warn: ... lacks" up to "mail-features:")
   # is shown once, with the Mail notice at the end, not among these lines.
@@ -1147,7 +1180,7 @@ if [ -x "${bin_dir}/agentstack-doctor" ]; then
       printf '          (no explanation printed; see %s)\n' "$LOG"
     fi
   else
-    ok "doctor: no problems"
+    ok "doctor: shared services passed"
     if [ -n "$doctor_lines" ]; then
       note "doctor: notes (it still exited 0):"
       printf '%s\n' "$doctor_lines" | head -n 8 | sed 's/^/          /'
@@ -1367,10 +1400,9 @@ if [ "$update_failed" = true ]; then
   say "  The update did not finish (see NG above). What runs now is the version"
   say "  you had. Fix what the update reported, then run the same command again."
 elif [ "$checks_ok" = true ]; then
+  say "  ORRERY's base is ready."
   if [ -n "$agent_cli" ]; then
-    say "  ORRERY's base is ready. Detected Claude/Codex CLI: ${agent_cli}."
-  else
-    say "  ORRERY's base is ready. Choose and prepare your provider below."
+    say "  Detected Claude/Codex CLI: ${agent_cli}."
   fi
 else
   say "  Installed, but not every check passed (WARN above). If you need help,"
@@ -1379,14 +1411,15 @@ fi
 say ""
 case "$action" in
   start | restart | current)
+    say "  Open the cockpit in your browser: ${url}"
     say "  The cockpit runs in the background; this window is free."
-    say "    Open:          ${url}"
     say "    Its output:    tmux -L ${SHOW_SOCK} attach -t ${SHOW_SESSION}      (leave it with Ctrl-b, then d)"
     say "    Stop it:       tmux -L ${SHOW_SOCK} kill-session -t ${SHOW_SESSION}"
     say "    Start again:   the same command as before (it also updates)"
     ;;
   current_other)
-    say "  A cockpit of this version is already running: ${url}"
+    say "  Open the cockpit in your browser: ${url}"
+    say "  A cockpit of this version is already running."
     say "  It was not started by this setup; stop or restart it where it was started."
     ;;
   foreign)
