@@ -465,6 +465,7 @@ class TmuxControlBridge:
         self._block_boundary: bytes | None = None
         self._discard_block_line = False
         self._write_lock = asyncio.Lock()
+        self._last_hermes_interrupt = None
         self._refresh_lock = asyncio.Lock()
         self._history_flush_lock = asyncio.Lock()
         self._refresh_task: asyncio.Task[None] | None = None
@@ -1636,6 +1637,13 @@ class TmuxControlBridge:
 
     async def submit_prompt(self, pane_id: str, text: str, *, proof=None) -> str:
         """Hold the host pane lock through visible paste, Enter, and confirmation."""
+        return await self._composer_effect(pane_id, text, proof=proof)
+
+    async def interrupt(self, pane_id: str, *, proof=None) -> str:
+        """Interrupt the current turn and check that its editor returns."""
+        return await self._composer_effect(pane_id, None, proof=proof)
+
+    async def _composer_effect(self, pane_id: str, text: str | None, *, proof) -> str:
         import pane_submission as submission
         if not re.fullmatch(r'%[0-9]+', pane_id):
             return 'refused'
@@ -1646,6 +1654,7 @@ class TmuxControlBridge:
         deadline = time.monotonic() + submission.TIMEOUT
         name = 'orrery-compose-' + uuid.uuid4().hex
         paste = ['paste-buffer', '-r', '-p', '-d', '-b', name, '-t', pane_id]
+        escape = ['send-keys', '-t', pane_id, 'Escape']
         pending = None
 
         async def command(args, limit=4096):
@@ -1672,7 +1681,8 @@ class TmuxControlBridge:
 
         async def admit():
             if proof is None:
-                await asyncio.to_thread(admit_command, target, paste, session=self.config.session)
+                await asyncio.to_thread(admit_command, target, escape if text is None else paste,
+                                        session=self.config.session)
             else:
                 await proof.check()
                 if proof.closed:
@@ -1680,7 +1690,7 @@ class TmuxControlBridge:
 
         async with self._write_lock:
             lock = None
-            loaded = pasted = False
+            loaded = wrote = False
             problem = None
             try:
                 await admit()
@@ -1695,9 +1705,42 @@ class TmuxControlBridge:
                 if lock is None:
                     return 'refused'
 
+                if text is None:
+                    await admit()
                 before = await capture()
-                if (before is None or before.identity != observed.identity
-                        or not before.empty or not before.allows_paste(text)):
+                if before is None or before.identity != observed.identity:
+                    return 'refused'
+                if text is None:
+                    keys = escape
+                    if before.hermes:
+                        # An idle Ctrl+C can exit Hermes. A second Ctrl+C within
+                        # two seconds can force an exit even during a running turn.
+                        now = time.monotonic()
+                        last = self._last_hermes_interrupt
+                        if (not before.running or not before.empty or
+                                (last is not None and last[0] == before.identity and now - last[1] < 2)):
+                            return 'refused'
+                        self._last_hermes_interrupt = before.identity, now
+                        keys = ['send-keys', '-t', pane_id, 'C-c']
+                    wrote = True
+                    result = await command(keys)
+                    if not result.ok or result.overflow:
+                        return 'unknown'
+                    if not before.running:
+                        return 'sent'
+                    while time.monotonic() < deadline:
+                        view = await capture()
+                        if view is not None:
+                            if view.identity != before.identity:
+                                return 'unknown'
+                            if (view.editor == before.editor and view.draft is not None
+                                    and not view.waiting and not view.selected
+                                    and not view.running and not view.hermes_busy):
+                                return 'accepted'
+                        await asyncio.sleep(submission.POLL)
+                    return 'unknown'
+
+                if not before.empty or not before.allows_paste(text, operator=True):
                     return 'refused'
                 with tempfile.TemporaryDirectory(prefix='orrery-compose-') as tmp:
                     path = Path(tmp) / 'prompt'
@@ -1709,9 +1752,9 @@ class TmuxControlBridge:
                 await admit()
                 current = await capture()
                 if (current is None or current.identity != before.identity
-                        or not current.empty or not current.allows_paste(text)):
+                        or not current.empty or not current.allows_paste(text, operator=True)):
                     return 'refused'
-                pasted = True
+                wrote = True
                 result = await command(paste)
                 if not result.ok or result.overflow:
                     return 'unknown'
@@ -1720,11 +1763,11 @@ class TmuxControlBridge:
                 # Wait for the editor to render the same draft on consecutive
                 # observations. Some editors still treat a near-paste Enter as a newline.
                 previous = None
-                menu_wait = submission.SlashMenuWait(text)
+                menu_wait = submission.SlashMenuWait(text, operator=True)
                 while time.monotonic() < deadline:
                     view = await capture()
                     choice = None
-                    problem = submission.completion_problem(view, text)
+                    problem = submission.completion_problem(view, text, operator=True)
                     is_ready = menu_wait.ready(view)
                     if view is not None:
                         if view.identity != before.identity:
@@ -1742,8 +1785,9 @@ class TmuxControlBridge:
                                     result = await command(['send-keys', '-t', pane_id, 'C-m'])
                                     if not result.ok or result.overflow:
                                         return 'unknown'
+                                    entered_from = view
                                     break
-                                if submission.mismatched_command(view, text):
+                                if submission.mismatched_command(view, text, operator=True):
                                     return 'completion-mismatch'
                     previous = choice
                     await asyncio.sleep(submission.POLL)
@@ -1755,7 +1799,7 @@ class TmuxControlBridge:
                     if view is not None:
                         if view.identity != before.identity:
                             return 'unknown'
-                        if view.empty:
+                        if submission.accepted_after_enter(entered_from, view, text):
                             return 'accepted'
                     await asyncio.sleep(submission.POLL)
                 return 'unknown'
@@ -1764,7 +1808,7 @@ class TmuxControlBridge:
                     self._abort_mobile_stream()
                 if problem == 'completion-unverified':
                     return problem
-                return 'unknown' if pasted else 'refused'
+                return 'unknown' if wrote else 'refused'
             finally:
                 try:
                     if loaded and self.master_fd is not None and not self._closed:

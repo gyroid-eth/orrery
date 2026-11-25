@@ -4201,9 +4201,9 @@
       }
     }
   },
-  "inventory_digest": "37cee8b0d54c29d33fea5108fa01e0149ed18fea63a7a1374b35e4a9da597c43",
+  "inventory_digest": "91a5ffa125817f2e5bc1672d72be513919bb98c1c8733054fdaea980b0f56349",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "ca82b84a2fab63bdf003c788ba52e4276c0e621df9ac1402c248445f733ee404",
+  "source_digest": "ceffcdfbc7d40f8ee88e6264c3ad743dbc96d4c042cdb9232fed1c5cd9b95b44",
   "surface": "cockpit",
   "version": 1
 }
@@ -11889,16 +11889,16 @@ function receiveComposerAck(message){
 function cancelComposerAcks(){
   for(const pending of composerAcks.values())pending.done('unknown');
 }
-function submitComposerPrompt(target,data){
+function requestComposerInput(target,message){
   return new Promise(resolve=>{
     const id=Date.now()+':'+(++promptAckSequence);
     const done=status=>{
       clearTimeout(timer);composerAcks.delete(id);
-      resolve(['accepted','refused','completion-mismatch','completion-unverified'].includes(status)?status:'unknown');
+      resolve(['accepted','sent','refused','completion-mismatch','completion-unverified'].includes(status)?status:'unknown');
     };
     const timer=setTimeout(()=>done('unknown'),6500);
     composerAcks.set(id,{done,paneId:target.paneId});
-    const payload={type:'submit-prompt',paneId:target.paneId,session:target.session,incarnation:target.incarnation,inputAck:id,data};
+    const payload={...message,paneId:target.paneId,session:target.session,incarnation:target.incarnation,inputAck:id};
     for(const key of ['mail_instance_id','mail_agent_id']){
       if(target.pane.meta[key])payload[key]=target.pane.meta[key];
     }
@@ -12000,7 +12000,7 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
         // the terminal without it so the terminal can show its matching picker.
         const text=compose(body).replace(/^(\/[\p{L}\p{N}_.:-]+)[ \t]+$/u,'$1');
         receipt=trackPrompt(target,text,compose(record.draft),entries);
-        status=await submitComposerPrompt(target,text);
+        status=await requestComposerInput(target,{type:'submit-prompt',data:text});
         if(status==='completion-mismatch'){
           status='refused';problem='Terminal selected a different slash command';
         }else if(status==='completion-unverified'){
@@ -12068,13 +12068,14 @@ function sendPrompt(opts={}){
     return sendPreparedPrompt(records,draft,value=>plain+value,()=>!referenceGuard||referenceGuard(target),entries,Boolean(names.length));
   }
 }
-function sendInterrupt(){
-  const p=panes.get(activeId);
-  if(!p){showToast('no pane focused — click an agent first');return;}
-  // bare ESC = same interrupt a human types in the TUI; the agent stops and
-  // reads the next prompt. Composer text is deliberately left untouched.
-  send({type:"input",paneId:activeId,data:"\x1b"});
-  showToast(`⎋ interrupt → ${p.session}`);
+async function sendInterrupt(){
+  const target=captureComposerTarget();
+  if(!target){showToast('Select an agent first.',true);return;}
+  const status=await requestComposerInput(target,{type:'interrupt'});
+  if(status==='accepted')showToast(`Interrupted → ${target.session}`);
+  else if(status==='sent')showToast(`⎋ Esc → ${target.session}`);
+  else if(status==='refused')showToast(`Interrupt not sent → ${target.session}`,true);
+  else showToast(`Could not confirm interruption → ${target.session}`,true);
 }
 const promptRecipients=OrreryPromptRecipients.mount({
   input:promptInput,meta:document.querySelector('.prompt-meta'),
