@@ -28,9 +28,11 @@ SHELLS = frozenset({
 PROMPT = re.compile(r'^(\s*(?:(?:[⌸│]|[\w.-]+)\s+)?)([❯›>])(?:[ \u00a0]+|$)(.*)')
 BORDER = re.compile(r'^[╭╰]?[─━]{8,}[╮╯]?$')
 CLAUDE_NAMED_BORDER = re.compile(r'^[─━]{8,}[ \t]+\S(?:.*\S)?[ \t]+[─━]+$')
+CLAUDE_SCROLLED_BORDER = re.compile(r'^[─━]{2,}[ \t]+[↑↓][ \t]+\d+[ \t]+more(?:[ \t]+[─━]+)?$')
 SGR = re.compile(r'\x1b\[[0-9;:]*m')
 DIM = re.compile(r'\x1b\[(?:[0-9]+;)*2(?:;[0-9]+)*m')
 CLAUDE_QUEUE_HINT = 'Press up to edit queued messages'
+CLAUDE_SUGGESTION = re.compile(r'^[  ]*\x1b\[(?:[0-9]+;)*2(?:;[0-9]+)*m[^\x1b]+(?:\x1b\[(?:0|22)?m[  ]*)?$')
 COLLAPSED = re.compile(r'\[Pasted text #\d+(?: \+\d+ lines?)?\]')
 HERMES_PASTE = re.compile(r'\[Pasted text #(\d+): (\d+) lines → /.+/pastes/paste_\1_\d{6}\.txt\]')
 PASTING = re.compile(r'^\s*(?:Pasting(?:…|\.\.\.)|Waiting for startup\b)', re.I)
@@ -45,6 +47,7 @@ SLASH_NAME = re.compile(r'/[\w.:-]+')
 SLASH_OPTION = re.compile(r'^[ \t]{2,}' + SLASH_NAME.pattern + r'(?=[ \t]|$)')
 CLAUDE_SLASH_SELECTION = re.compile(r'^[ \t]+❯[ \t]+(' + SLASH_NAME.pattern + r')(?=[ \t]|$)')
 CODEX_SLASH_SELECTION = re.compile(r'^›[ \t]+(' + SLASH_NAME.pattern + r')(?=[ \t]|$)')
+SLASH_CONTINUATION = re.compile(r'^[ \t]{8,}[^ \t/❯]')
 REVERSE_VIDEO = re.compile(r'\x1b\[(?:[0-9]+;)*7(?:;[0-9]+)*m')
 
 
@@ -63,6 +66,7 @@ class Frame:
     foreground_command: str = ''
     slash_picker: bool = False
     selected_command: str | None = None
+    scrolled: bool = False
 
     @property
     def identity(self):
@@ -88,14 +92,16 @@ def _slash_selection(lines, plain, start, *, codex):
     selection = CODEX_SLASH_SELECTION if codex else CLAUDE_SLASH_SELECTION
     # Codex separates the inline picker from the editor with a blank row.
     # Claude uses the top border and can show options below the selected row.
-    for index in range(start - 2, max(-1, start - 12), -1):
+    # In a narrow pane Claude wraps a long description onto indented rows
+    # that carry no command name; they belong to the option above them.
+    for index in range(start - 2, max(-1, start - 24), -1):
         row = plain[index]
         match = selection.match(row)
         if match:
             if not codex or REVERSE_VIDEO.search(lines[index].partition('›')[0]):
                 return match[1]
             break
-        if not SLASH_OPTION.match(row):
+        if not (SLASH_OPTION.match(row) or not codex and SLASH_CONTINUATION.match(row)):
             break
     return None
 
@@ -122,6 +128,16 @@ def frame(metadata, lines, pane):
         line=plain[start].rstrip()
         if BORDER.fullmatch(line.strip()):
             break
+        if CLAUDE_SCROLLED_BORDER.fullmatch(line.strip()):
+            # A tall Claude draft scrolls inside its frame: the prompt glyph
+            # and the first rows are hidden above this marker.
+            tail=[row.strip() for row in plain[cursor+1:] if row.strip()]
+            if start==cursor or '↑' not in line or not tail or not (
+                    BORDER.fullmatch(tail[0]) or CLAUDE_SCROLLED_BORDER.fullmatch(tail[0])):
+                break
+            draft='\n'.join(row.strip() for row in plain[start+1:cursor+1]).strip()
+            return Frame(*base, draft, False, bracketed=bracketed,
+                         foreground_command=command, scrolled=True)
         match=PROMPT.match(line)
         if not match:
             continue
@@ -156,8 +172,11 @@ def frame(metadata, lines, pane):
             styled=lines[start]
             # A queued turn leaves an empty Claude editor that draws this
             # dim hint, with the caret possibly styling its first letter.
+            # After a turn Claude can also suggest a next prompt, drawn
+            # entirely dim; a typed draft is never dim.
             claude_hint=(glyph=='❯' and framed and not boxed and
-                         ('\x1b[3m' in styled or (draft==CLAUDE_QUEUE_HINT and DIM.search(styled))))
+                         ('\x1b[3m' in styled or (draft==CLAUDE_QUEUE_HINT and DIM.search(styled))
+                          or bool(CLAUDE_SUGGESTION.match(styled.partition('❯')[2]))))
             if (glyph=='›' and draft=='Ask Codex to do anything' and '\x1b[2m' in styled
                     or claude_hint
                     or boxed and draft==DSH_PLACEHOLDER and '\x1b[38;5;145m' in styled
@@ -198,6 +217,10 @@ def ready(observed, text):
     if (observed is None or observed.draft is None or observed.waiting
             or not observed.allows_paste(text)):
         return False
+    if observed.scrolled:
+        # Only the end of a tall draft is visible, so it must end the text.
+        shown=''.join(observed.draft.split())
+        return len(shown)>=16 and ''.join(text.split()).endswith(shown)
     if observed.selected or (observed.slash_picker and (text == '/' or SLASH_NAME.fullmatch(text))):
         # A bare slash command can open its picker after the text itself
         # appears. Require a named selection and compare the full draft.
