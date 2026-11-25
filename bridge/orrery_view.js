@@ -21,6 +21,10 @@ const MINI={
   singleColumns:5,sectionGap:64,treeGapUnits:.55,promoteComms:true,
   captionWidth:62,captionTop:15,captionHeight:20,nodeAbove:20,
 };
+const MINI_HEIGHT_KEY='oc-mini-graph-height';
+const MINI_MIN_HEIGHT=120;
+const MINI_MAX_HEIGHT=520;
+const MAIL_BELOW_GRAPH=160; // Leave room for the handle and at least several Mail rows.
 const PLANET={
   width:1000,height:620,large:true,
   xPadding:64,topPadding:90,bottomPadding:80,
@@ -53,6 +57,7 @@ let motionLastTime=null;
 let miniMode=(OC.miniView&&OC.miniView().mode)==='network'?'network':'orrery';
 let miniNetworkDepth=Number(OC.miniView&&OC.miniView().depth)||2;
 let miniFocusName=OC.activeAgent&&OC.activeAgent()||'';
+let miniWidth=MINI.width,miniHeight=MINI.height;
 
 function svgEl(tag,attrs={}){
   const el=document.createElementNS(SVG_NS,tag);
@@ -346,7 +351,7 @@ function telemetryMiniLayout(live,focus,depth,dimensions){
   if(!subset)return layoutAgents(live,dimensions);
   const names=[...subset.visible].sort((a,b)=>a.localeCompare(b));
   const others=names.filter(name=>name!==focus);
-  const rx=Math.min(102,dimensions.width*.36),ry=Math.min(69,dimensions.height*.34);
+  const rx=Math.min(102,dimensions.width*.36),ry=dimensions.height*.34;
   const offsets=[{name:focus,x:0,y:0}];
   others.forEach((name,index)=>{
     const angle=-Math.PI/2+(Math.PI*2*index)/others.length;
@@ -406,8 +411,8 @@ function newNodeStart(name,target,dimensions){
     y:target.y+dy/distance*offset,
   };
 }
-function prepareMotion(surface,layout){
-  const instant=!surface.initialized||motionIsReduced();
+function prepareMotion(surface,layout,viewportChanged=false){
+  const instant=viewportChanged||!surface.initialized||motionIsReduced();
   surface.layoutDimensions={
     ...surface.dimensions,width:layout.width,height:layout.height,
   };
@@ -477,7 +482,7 @@ function updateSurfaceGeometry(surface){
       const to=surface.states.get(edge.dataset.b);
       if(!from||!to)return;
       const curve=commPathBetween(
-        from,to,surface.layoutDimensions||surface.dimensions);
+        from,to,surface.positions,surface.layoutDimensions||surface.dimensions);
       edge.setAttribute('d',curve.d);
       const life=Number(edge.dataset.life||0);
       edge.setAttribute('stroke-opacity',
@@ -776,13 +781,103 @@ function syncMiniSelection(){
     class:'mini-selection-ring',cx:hit.getAttribute('cx'),cy:hit.getAttribute('cy'),r:19.5,
   }));
 }
+function installMiniGraphDivider(){
+  const divider=document.getElementById('mailGraphDivider');
+  if(!divider)return;
+  const rail=miniSvg.parentElement,head=miniSvg.previousElementSibling;
+  let preferred=readPreference(),drag=null;
+  function readPreference(){
+    try{
+      const saved=Number(localStorage.getItem(MINI_HEIGHT_KEY));
+      if(Number.isFinite(saved)&&saved>=MINI_MIN_HEIGHT&&saved<=MINI_MAX_HEIGHT)return Math.round(saved);
+    }catch(_){/* preference unavailable */}
+    return MINI.height;
+  }
+  function maxHeight(){
+    return Math.max(MINI_MIN_HEIGHT,Math.min(MINI_MAX_HEIGHT,rail.clientHeight-head.offsetHeight-MAIL_BELOW_GRAPH));
+  }
+  function paint(height=preferred){
+    const max=maxHeight(),value=Math.max(MINI_MIN_HEIGHT,Math.min(max,Math.round(height)));
+    miniSvg.style.height=value+'px';
+    divider.setAttribute('aria-valuemin',MINI_MIN_HEIGHT);
+    divider.setAttribute('aria-valuemax',max);
+    divider.setAttribute('aria-valuenow',value);
+    divider.setAttribute('aria-valuetext',value+' pixels');
+    return value;
+  }
+  function save(height){
+    preferred=height;
+    paint();
+    try{
+      localStorage.setItem(MINI_HEIGHT_KEY,String(preferred));
+      window.OrreryPrefs?.flush();
+    }catch(_){/* keep the live height */}
+  }
+  function syncPreference(){
+    preferred=readPreference();
+    if(!drag)paint();
+  }
+  divider.addEventListener('pointerdown',event=>{
+    if(event.button!==0||drag)return;
+    event.preventDefault();
+    const height=miniSvg.clientHeight;
+    drag={id:event.pointerId,y:event.clientY,height,preview:height};
+    divider.focus({preventScroll:true});
+    divider.classList.add('dragging');
+    divider.setPointerCapture(event.pointerId);
+  });
+  function move(event){
+    if(!drag||drag.id!==event.pointerId)return;
+    drag.preview=paint(drag.height+event.clientY-drag.y);
+  }
+  function finish(event){
+    if(!drag||drag.id!==event.pointerId)return;
+    if(event.type==='pointerup')move(event);
+    const {height,preview}=drag;
+    drag=null;
+    divider.classList.remove('dragging');
+    if(event.type==='pointerup'&&preview!==height)save(preview);
+    else paint();
+  }
+  divider.addEventListener('pointermove',move);
+  for(const type of ['pointerup','pointercancel','lostpointercapture'])divider.addEventListener(type,finish);
+  divider.addEventListener('dblclick',()=>save(MINI.height));
+  divider.addEventListener('keydown',event=>{
+    if(drag)return;
+    const step=event.shiftKey?64:24;
+    const current=miniSvg.clientHeight;
+    let height;
+    switch(event.key){
+      case 'ArrowUp':height=Math.max(MINI_MIN_HEIGHT,current-step);break;
+      case 'ArrowDown':height=Math.min(maxHeight(),current+step);break;
+      case 'Home':height=MINI_MIN_HEIGHT;break;
+      case 'End':height=maxHeight();break;
+      case 'Enter':height=MINI.height;break;
+      default:return;
+    }
+    event.preventDefault();save(height);
+  });
+  window.addEventListener('storage',event=>{if(event.key===MINI_HEIGHT_KEY)syncPreference();});
+  document.addEventListener('oc:prefs-changed',event=>{
+    if(event.detail?.keys?.includes(MINI_HEIGHT_KEY))syncPreference();
+  });
+  new ResizeObserver(()=>paint(drag?.preview??preferred)).observe(rail);
+  paint();
+}
 function renderMini(){
+  const width=miniSvg.clientWidth||miniWidth,height=miniSvg.clientHeight||miniHeight;
+  const resized=width!==miniWidth||height!==miniHeight;
+  miniWidth=width;miniHeight=height;
+  // Fit the base scene into the viewport, then use any extra room for layout.
+  // This keeps the SVG's normal scale while allowing the network to spread.
+  const scale=Math.min(width/MINI.width,height/MINI.height);
+  const dimensions={...MINI,width:width/scale,height:height/scale};
   const flights=preservedFlights(miniSvg);
   miniSvg.replaceChildren();
   const layout=miniMode==='network'
-    ?telemetryMiniLayout(liveAgents,miniFocusName,miniNetworkDepth,MINI)
-    :layoutAgents(liveAgents,MINI);
-  prepareMotion(miniMotion,layout);
+    ?telemetryMiniLayout(liveAgents,miniFocusName,miniNetworkDepth,dimensions)
+    :layoutAgents(liveAgents,dimensions);
+  prepareMotion(miniMotion,layout,resized);
   miniSvg.setAttribute('viewBox',`0 0 ${layout.width} ${layout.height}`);
   miniSvg.classList.toggle('orrery-mode',miniMode==='orrery');
   miniSvg.classList.toggle('telemetry-network',Boolean(layout.networkFocus));
@@ -799,11 +894,11 @@ function renderMini(){
   miniMotion.states.forEach((state,name)=>{
     const group=drawMiniAgent(nodes,defs,{
       ...state,x:state.baseX,y:state.baseY,
-    },index++,MINI);
+    },index++,dimensions);
     miniMotion.nodes.set(name,group);
   });
   miniSvg.appendChild(nodes);
-  addExpandAffordance(miniSvg,{...MINI,width:layout.width,height:layout.height},false);
+  addExpandAffordance(miniSvg,{...dimensions,width:layout.width,height:layout.height},false);
   flights.forEach(flight=>miniSvg.appendChild(flight));
   miniMotion.spawnEdges=[...spawnLayer.children];
   syncMiniSelection();
@@ -986,34 +1081,54 @@ function commLayerOf(target){
   return [...target.children].find(child=>
     child.classList.contains('orrery-comm-layer'));
 }
-function commPathBetween(from,to,dimensions){
+function segmentNearNode(from,to,node,radius){
   const dx=to.x-from.x,dy=to.y-from.y;
-  const sameRow=Math.abs(dy)<=(dimensions.large?12:5);
-  if(!sameRow){
-    return {
-      curved:false,d:`M ${from.x} ${from.y} L ${to.x} ${to.y}`,
-      point:t=>({x:from.x+dx*t,y:from.y+dy*t}),
-    };
-  }
-  const distance=Math.abs(dx);
-  const depth=Math.min(
-    dimensions.large?78:27,
-    (dimensions.large?18:7)+distance*(dimensions.large?.17:.18));
-  const height=dimensions.height;
-  const margin=dimensions.large?42:15;
-  const direction=Math.max(from.y,to.y)+depth>height-margin?-1:1;
-  const cx=(from.x+to.x)/2;
-  const cy=(from.y+to.y)/2+depth*direction;
-  return {
-    curved:true,d:`M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`,
-    point:t=>{
-      const mt=1-t;
-      return {
-        x:mt*mt*from.x+2*mt*t*cx+t*t*to.x,
-        y:mt*mt*from.y+2*mt*t*cy+t*t*to.y,
-      };
-    },
+  const x=node.x-from.x,y=node.y-from.y;
+  const t=Math.max(0,Math.min(1,(x*dx+y*dy)/(dx*dx+dy*dy||1)));
+  return (x-dx*t)**2+(y-dy*t)**2<=radius*radius;
+}
+function commPathBetween(from,to,positions,dimensions){
+  const dx=to.x-from.x,dy=to.y-from.y;
+  const straight={
+    d:`M ${from.x} ${from.y} L ${to.x} ${to.y}`,
+    point:t=>({x:from.x+dx*t,y:from.y+dy*t}),
   };
+  const distance=Math.hypot(dx,dy);
+  if(!distance||isLineagePair(from.name,to.name))return straight;
+  // Clear the portrait's outer ring, with room for the edge stroke.
+  const radius=dimensions.large?32:14;
+  const nodes=[...positions.values()].filter(node=>node!==from&&node!==to);
+  if(!nodes.some(node=>segmentNearNode(from,to,node,radius)))return straight;
+
+  // Start with a shallow detour on either side of the line. Use the same
+  // side in both directions, so a highlighted reply retraces its Mail edge.
+  const direction=dx<0||(dx===0&&dy<0)?-1:1;
+  const nx=direction*dy/distance,ny=-direction*dx/distance;
+  let best=straight,fewest=Infinity;
+  for(const depth of [2.5,4,6]){
+    for(const side of [1,-1]){
+      const offset=depth*side*radius;
+      const cx=Math.max(0,Math.min(dimensions.width,(from.x+to.x)/2+nx*offset));
+      const cy=Math.max(0,Math.min(dimensions.height,(from.y+to.y)/2+ny*offset));
+      const point=t=>{
+        const mt=1-t;
+        return {
+          x:mt*mt*from.x+2*mt*t*cx+t*t*to.x,
+          y:mt*mt*from.y+2*mt*t*cy+t*t*to.y,
+        };
+      };
+      const curve={d:`M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`,point};
+      // Test the detour for other portraits as well. Twelve chords with one
+      // extra unit of clearance cover the small gap between each chord and
+      // the quadratic at these depths.
+      const points=Array.from({length:13},(_,index)=>point(index/12));
+      const hits=nodes.filter(node=>points.some((end,index)=>index>0&&
+        segmentNearNode(points[index-1],end,node,radius+1))).length;
+      if(!hits)return curve;
+      if(hits<fewest){best=curve;fewest=hits;}
+    }
+  }
+  return best;
 }
 function renderMailFocus(surface){
   const target=surface?.target;
@@ -1034,7 +1149,7 @@ function renderMailFocus(surface){
   for(const name of activeMailRoute.recipients||[]){
     const to=surface.states.get(name);
     if(!to||to.removing||to===from)continue;
-    const curve=commPathBetween(from,to,dimensions);
+    const curve=commPathBetween(from,to,surface.positions,dimensions);
     const distance=Math.hypot(to.x-from.x,to.y-from.y);
     const t=Math.max(.45,1-(dimensions.large?27:14)/Math.max(distance,1));
     const tip=curve.point(t),base=curve.point(t-.05);
@@ -1054,9 +1169,8 @@ document.addEventListener('oc:mail-route',event=>{
 /* A spawn always carries its task message, so a parent and its child are a
    mail pair by definition. Drawing both a spawn line and a mail curve for
    them puts two lines where there is one relationship. Hand the mail to the
-   line that is already there — brighten it — and keep curves for pairs the
-   lineage does not connect, where the curve is the only thing saying the two
-   agents have anything to do with each other. */
+   line that is already there — brighten it — and draw separate Mail edges
+   for pairs the lineage does not connect. */
 function isLineagePair(a,b){
   const parent=(window.OC&&OC.lineageParent)||null;
   if(!parent)return false;
@@ -1084,7 +1198,7 @@ function renderCommLayer(target,positions,dimensions){
       liveLineage.add(pairKey(pair.a,pair.b));
       return;
     }
-    const curve=commPathBetween(from,to,dimensions);
+    const curve=commPathBetween(from,to,positions,dimensions);
     layer.appendChild(svgEl('path',{
       class:'orrery-comm-edge',
       d:curve.d,fill:'none',
@@ -1183,11 +1297,13 @@ function animateComet(target,positions,fromName,toName,message,large){
       const eased=progress<.5
         ?4*progress*progress*progress
         :1-Math.pow(-2*progress+2,3)/2;
-      const point=commPathBetween(
-        from,to,large&&planetMotion
-          ?planetMotion.layoutDimensions||PLANET:miniMotion.layoutDimensions||MINI).point(eased);
+      const curve=commPathBetween(
+        from,to,positions,large&&planetMotion
+          ?planetMotion.layoutDimensions||PLANET:miniMotion.layoutDimensions||MINI);
+      const point=curve.point(eased);
       const envelope=cometEnvelope(progress);
-      const angle=Math.atan2(to.y-from.y,to.x-from.x)*180/Math.PI;
+      const ahead=curve.point(Math.min(1,eased+.01)),behind=curve.point(Math.max(0,eased-.01));
+      const angle=Math.atan2(ahead.y-behind.y,ahead.x-behind.x)*180/Math.PI;
       flight.setAttribute('transform',`translate(${point.x} ${point.y}) scale(${envelope.scale})`);
       flight.style.opacity=String(envelope.opacity);
       tail.setAttribute('transform',`rotate(${angle})`);
@@ -1269,6 +1385,11 @@ window.OrreryRail={openPlanetarium,closePlanetarium,
   planetariumOpen:()=>Boolean(planetarium&&planetarium.classList.contains('on'))};
 
 recordMessages(OC.mailBacklog&&OC.mailBacklog());
+installMiniGraphDivider();
 renderMini();
+new ResizeObserver(()=>{
+  const width=miniSvg.clientWidth,height=miniSvg.clientHeight;
+  if(width&&height&&(width!==miniWidth||height!==miniHeight))renderMini();
+}).observe(miniSvg);
 seedRecentMail();
 })();

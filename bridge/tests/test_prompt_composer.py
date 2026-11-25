@@ -22,8 +22,12 @@ def terminal(cockpit):
     return js, wait, client
 
 
-@pytest.mark.parametrize('status', ['accepted', 'completion-mismatch'])
-def test_slash_submission_keeps_the_draft_and_explains_a_different_selection(cockpit, status):
+@pytest.mark.parametrize('status,reason', [
+    ('accepted', None),
+    ('completion-mismatch', 'Terminal selected a different slash command'),
+    ('completion-unverified', 'Could not confirm the slash command in the terminal'),
+])
+def test_slash_submission_keeps_an_unconfirmed_draft_and_explains_why(cockpit, status, reason):
     js, wait, _ = terminal(cockpit)
     js("window.receiptStatus=" + json.dumps(status) + """;
       window.send=packet=>{
@@ -36,9 +40,8 @@ def test_slash_submission_keeps_the_draft_and_explains_a_different_selection(coc
     wait("!promptBusy&&packets.some(packet=>packet.type==='submit-prompt')")
     assert js("packets.find(packet=>packet.type==='submit-prompt').data") == '/status'
     assert js('promptInput.value') == ('' if status == 'accepted' else '/status')
-    assert js("toastEl.textContent.includes('Terminal selected a different slash command')") == (
-        status == 'completion-mismatch'
-    )
+    if reason:
+        assert reason in js('toastEl.textContent')
 
 
 def test_card_fills_stage_and_resizes_the_textarea(cockpit):

@@ -5,6 +5,7 @@ no production backend, tmux, or real agent is involved.
 """
 import json
 from pathlib import Path
+import time
 
 import pytest
 
@@ -239,3 +240,181 @@ def test_graph_captions_fit_dense_layout_and_keep_the_full_tooltip(mini_browser,
       });
     })()""".replace('MODE', json.dumps(mode)))
     assert result == [dict(count=16, clear=True, ellipsis=True, full=True, role='Fixture release review', noRole=True)] * 2
+
+
+def test_mail_edges_and_selected_routes_bend_only_around_a_portrait(mini_browser):
+    client, evaluate = mini_browser
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    result = evaluate("""(()=>{
+      OC.lineageParent.clear();
+      currentAgents=['Alpha','Middle','Zulu'].map(name=>({name,provider:'openai'}));
+      document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      const messages=['Middle','Zulu'].map(recipient=>({sender:'Alpha',recipient}));
+      document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages}}));
+      OrreryRail.openPlanetarium();
+      const route=sender=>document.dispatchEvent(new CustomEvent('oc:mail-route',
+        {detail:{sender,recipients:[sender==='Alpha'?'Zulu':'Alpha']}}));
+      route('Alpha');
+      const graphs=['#orrery','.planetarium-svg'].map(selector=>{
+        const svg=document.querySelector(selector);
+        const portrait=svg.querySelector('[data-agent=Middle] .orrery-hit');
+        const x=Number(portrait.getAttribute('cx')),y=Number(portrait.getAttribute('cy'));
+        const edge=name=>svg.querySelector('.orrery-comm-edge[data-a=Alpha][data-b='+name+']');
+        const clear=edge('Middle').getAttribute('d'),blocked=edge('Zulu');
+        const focus=()=>svg.querySelector('.orrery-mail-focus path');
+        const length=blocked.getTotalLength();
+        const clearance=Math.min(...Array.from({length:101},(_,i)=>{
+          const p=blocked.getPointAtLength(length*i/100);
+          return Math.hypot(x-p.x,y-p.y);
+        }));
+        const midpoint=path=>path.getPointAtLength(path.getTotalLength()/2);
+        return {clear:clear.includes(' L '),bent:blocked.getAttribute('d').includes(' Q '),
+          selectedMatches:focus().getAttribute('d')===blocked.getAttribute('d'),
+          clearance,midpoint:midpoint(blocked),focus,midpointOf:midpoint};
+      });
+      route('Zulu');
+      return graphs.map(({focus,midpointOf,midpoint,...rest})=>{
+        const reverse=midpointOf(focus());
+        return {...rest,reverseMatches:Math.hypot(midpoint.x-reverse.x,midpoint.y-reverse.y)<.01};
+      });
+    })()""")
+    for graph, radius in zip(result, (14, 32), strict=True):
+        assert graph['clear'] and graph['bent'], graph
+        assert graph['selectedMatches'] and graph['reverseMatches'], graph
+        assert graph['clearance'] >= radius, graph
+
+
+def test_selected_parent_child_mail_overlays_the_spawn_line(mini_browser):
+    client, evaluate = mini_browser
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    result = evaluate("""(()=>{
+      const peers=Array.from('ABCDEFGH',letter=>'Peer'+letter);
+      OC.lineageParent.clear();
+      peers.forEach(name=>OC.lineageParent.set(name,'Pilot'));
+      currentAgents=['Pilot',...peers].map(name=>({name,provider:'openai'}));
+      document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      setMiniViewMode('network');
+      OrreryRail.openPlanetarium();
+      const show=(sender,recipient)=>document.dispatchEvent(new CustomEvent('oc:mail-route',
+        {detail:{sender,recipients:[recipient]}}));
+      show('PeerG','Pilot');
+      const graphs=['#orrery','.planetarium-svg'].map(selector=>{
+        const svg=document.querySelector(selector);
+        const spawn=svg.querySelector('.orrery-spawn-edge[data-parent=Pilot][data-child=PeerG]');
+        const [x1,y1,x2,y2]=['x1','y1','x2','y2'].map(key=>spawn.getAttribute(key));
+        const d=svg.querySelector('.orrery-mail-focus path').getAttribute('d');
+        return {horizontal:Math.abs(y1-y2)<.01,overlaid:d===`M ${x2} ${y2} L ${x1} ${y1}`};
+      });
+      // The same central portrait blocks a diagonal route in the radial rail.
+      show('PeerB','PeerF');
+      return {graphs,diagonal:document.querySelector('#orrery .orrery-mail-focus path').getAttribute('d')};
+    })()""")
+    assert result['graphs'] == [
+        {'horizontal': True, 'overlaid': True}, {'horizontal': False, 'overlaid': True},
+    ]
+    assert ' Q ' in result['diagonal']
+
+
+def graph_resize_metrics(evaluate):
+    return evaluate("""(()=>{
+      const graph=document.getElementById('orrery'),divider=document.getElementById('mailGraphDivider');
+      const portrait=graph.querySelector('.orrery-hit');
+      return {height:graph.clientHeight,viewBox:graph.getAttribute('viewBox'),
+        portrait:portrait?.getBoundingClientRect().width||0,
+        mail:document.getElementById('mail').clientHeight,
+        min:Number(divider.getAttribute('aria-valuemin')),max:Number(divider.getAttribute('aria-valuemax')),
+        now:Number(divider.getAttribute('aria-valuenow'))};
+    })()""")
+
+
+def test_mail_graph_divider_drag_reflows_the_live_svg_and_double_click_resets(mini_browser):
+    client, evaluate = mini_browser
+    before = graph_resize_metrics(evaluate)
+    assert before['height'] == 200
+    x, y = evaluate("""(()=>{
+      const r=document.getElementById('mailGraphDivider').getBoundingClientRect();
+      return [r.x+r.width/2,r.y+r.height/2];
+    })()""")
+    client.call('Input.dispatchMouseEvent', type='mousePressed', x=x, y=y,
+                button='left', buttons=1, clickCount=1)
+    client.call('Input.dispatchMouseEvent', type='mouseMoved', x=x, y=y+120, button='left', buttons=1)
+    for _ in range(100):
+        during = graph_resize_metrics(evaluate)
+        if during['viewBox'] != before['viewBox'] and during['height'] == 320:
+            break
+        time.sleep(.025)
+    else:
+        pytest.fail(f'Graph did not reflow during drag: {before} → {during}')
+    assert during['portrait'] > before['portrait']
+    assert during['mail'] == before['mail'] - 120
+    assert evaluate("localStorage.getItem('oc-mini-graph-height')") is None
+    client.call('Input.dispatchMouseEvent', type='mouseReleased', x=x, y=y+120,
+                button='left', clickCount=1)
+    assert evaluate("localStorage.getItem('oc-mini-graph-height')") == '320'
+    assert evaluate("document.activeElement.id") == 'mailGraphDivider'
+    assert evaluate(SELECTED) == ['Pilot']
+
+    for click_count in (1, 2):
+        client.call('Input.dispatchMouseEvent', type='mousePressed', x=x, y=y+120,
+                    button='left', buttons=1, clickCount=click_count)
+        client.call('Input.dispatchMouseEvent', type='mouseReleased', x=x, y=y+120,
+                    button='left', clickCount=click_count)
+    assert graph_resize_metrics(evaluate)['height'] == 200
+    assert evaluate("localStorage.getItem('oc-mini-graph-height')") == '200'
+    assert evaluate("""(()=>{
+      document.getElementById('mailGraphBtn').click();
+      return getComputedStyle(document.getElementById('mailGraphDivider')).display;
+    })()""") == 'none'
+
+
+def test_mail_graph_keyboard_clamps_and_restores_height_after_reload(mini_browser):
+    client, evaluate = mini_browser
+    evaluate("document.getElementById('mailGraphDivider').focus()")
+
+    def key(name, code, modifiers=0):
+        for event in ('keyDown', 'keyUp'):
+            client.call('Input.dispatchKeyEvent', type=event, key=name,
+                        windowsVirtualKeyCode=code, modifiers=modifiers)
+
+    key('Home', 36)
+    smallest = graph_resize_metrics(evaluate)
+    assert smallest['height'] == smallest['min'] == smallest['now'] == 120
+    key('ArrowDown', 40, modifiers=8)
+    assert graph_resize_metrics(evaluate)['height'] == 184
+    key('End', 35)
+    largest = graph_resize_metrics(evaluate)
+    assert largest['height'] == largest['max'] == largest['now'] == 520
+    key('ArrowUp', 38)
+    assert graph_resize_metrics(evaluate)['height'] == 496
+    assert evaluate("localStorage.getItem('oc-mini-graph-height')") == '496'
+    evaluate('window.graphResizeBeforeReload=true')
+    client.call('Page.reload', ignoreCache=True)
+    for _ in range(100):
+        try:
+            if evaluate("!window.graphResizeBeforeReload&&document.getElementById('orrery')?.clientHeight===496"):
+                break
+        except RuntimeError as error:
+            if 'Inspected target navigated or closed' not in str(error):
+                raise
+        time.sleep(.025)
+    else:
+        pytest.fail('Saved Mail graph height did not restore')
+    assert graph_resize_metrics(evaluate)['height'] == 496
+    client.call('Emulation.setDeviceMetricsOverride', width=1600, height=460,
+                deviceScaleFactor=1, mobile=False)
+    for _ in range(100):
+        compact = graph_resize_metrics(evaluate)
+        if compact['height'] < 496:
+            break
+        time.sleep(.025)
+    else:
+        pytest.fail('Mail graph height did not clamp to the shorter viewport')
+    assert compact['height'] == compact['max'] == compact['now']
+    assert compact['mail'] >= 140
+    assert evaluate("localStorage.getItem('oc-mini-graph-height')") == '496'
+    evaluate("document.getElementById('mailGraphDivider').focus()")
+    key('Enter', 13)
+    assert graph_resize_metrics(evaluate)['height'] == min(compact['max'], 200)
+    assert evaluate("localStorage.getItem('oc-mini-graph-height')") == '200'
