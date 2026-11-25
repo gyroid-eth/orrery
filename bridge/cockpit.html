@@ -4186,9 +4186,9 @@
       }
     }
   },
-  "inventory_digest": "e37ed24f56195f4662a6a80ba70c5b2001f1eccfc688f9b41700968ce16bb71f",
+  "inventory_digest": "f3980fc2e5a9052ea6f0d520e432c2b16d38d7f8f9d1ee87ea0fa6641ce13a3a",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "70cd9fbccbd1a9962c9dcefbdae18c361ac316268ee2a7358c2b83aa83b6035c",
+  "source_digest": "17b517a4b4b025167471800282251452c3930bf088db5c1251506a9bf390c04d",
   "surface": "cockpit",
   "version": 1
 }
@@ -11864,7 +11864,7 @@ function submitComposerPrompt(target,data){
     const id=Date.now()+':'+(++promptAckSequence);
     const done=status=>{
       clearTimeout(timer);composerAcks.delete(id);
-      resolve(['accepted','refused','completion-mismatch'].includes(status)?status:'unknown');
+      resolve(['accepted','refused','completion-mismatch','completion-unverified'].includes(status)?status:'unknown');
     };
     const timer=setTimeout(()=>done('unknown'),6500);
     composerAcks.set(id,{done,paneId:target.paneId});
@@ -11971,6 +11971,8 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
         status=await submitComposerPrompt(target,text);
         if(status==='completion-mismatch'){
           status='refused';problem='Terminal selected a different slash command';
+        }else if(status==='completion-unverified'){
+          status='refused';problem='Could not confirm the slash command in the terminal';
         }
       }
       if(status!=='accepted')receipt?.cancel();

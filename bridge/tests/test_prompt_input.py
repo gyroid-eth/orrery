@@ -17,6 +17,119 @@ import orrery_backend as backend
 import pane_submission as submission
 
 
+NATIVE_PROMPTS = json.loads(
+    (Path(__file__).parent / 'fixtures/pane_slash_harnesses.json').read_text(encoding='utf-8'))
+
+
+def native_meta(snapshot):
+    return '\t'.join(['/tmp/fixture.sock', '100', '%1', '200', *snapshot['meta']])
+
+
+def native_frame(snapshot):
+    return submission.frame(native_meta(snapshot), snapshot['lines'], '%1')
+
+
+NATIVE_CASES = [pytest.param(harness, case, id=f'{harness}-{case["case"]}')
+                for harness, fixture in NATIVE_PROMPTS.items() for case in fixture['cases']]
+
+
+def test_each_native_slash_picker_has_notice_and_slash_fixtures():
+    assert set(NATIVE_PROMPTS) == set(submission.SLASH_PICKERS)
+    for fixture in NATIVE_PROMPTS.values():
+        cases = {case['case'] for case in fixture['cases']}
+        assert {'slash-exact', 'slash-prefix', 'notice-short'} <= cases
+        assert any(case.startswith('notice-long') for case in cases)
+
+
+@pytest.mark.parametrize('harness,case', NATIVE_CASES)
+def test_native_prompt_fixture(harness, case):
+    assert native_frame(NATIVE_PROMPTS[harness]['before']).empty
+    observed = native_frame(case['view'])
+    assert observed.selected_command == case['selected']
+    assert submission.ready(observed, case['text']) is case['ready']
+    if after := case.get('after'):
+        assert native_frame(after).empty
+    if observed.dsh_clipped:
+        # A different text ending cannot justify Enter with a clipped draft.
+        assert not submission.ready(observed, case['text'] + ' another sentence')
+
+
+@pytest.mark.parametrize('harness,case', NATIVE_CASES)
+def test_watcher_enters_only_the_verified_native_draft(monkeypatch, harness, case):
+    before = NATIVE_PROMPTS[harness]['before']
+    stage = before
+    entered = []
+    reasons = []
+    elapsed = 0.0
+
+    def tick(seconds):
+        nonlocal elapsed
+        elapsed += seconds
+
+    def tmux(*args, input=None):
+        nonlocal stage
+        output = ''
+        if args[0] == 'display-message':
+            output = '\n'.join([native_meta(stage), *stage['lines'], ''])
+        elif args[0] == 'load-buffer':
+            assert input == case['text']
+        elif args[0] == 'paste-buffer':
+            stage = case['view']
+        elif args[0] == 'send-keys':
+            entered.append(args[-1])
+            stage = case.get('after', before)
+        else:
+            assert args[0] == 'delete-buffer'
+        return subprocess.CompletedProcess(args, 0, output, '')
+
+    monkeypatch.setattr(submission, 'time', SimpleNamespace(monotonic=lambda: elapsed, sleep=tick))
+    monkeypatch.setattr(submission, 'try_lock', lambda _: os.open(os.devnull, os.O_RDONLY))
+    result = submission.submit(tmux, lambda: True, '%1', case['text'], on_wait=reasons.append)
+    assert entered == (['C-m'] if case['ready'] else [])
+    assert result == ('accepted' if case['ready'] else 'unknown')
+    expected_reason = (['completion_mismatch'] if case['selected'] else ['completion_unverified'])
+    assert reasons == ([] if case['ready'] else expected_reason)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('harness,case', NATIVE_CASES)
+async def test_cockpit_enters_only_the_verified_native_draft(monkeypatch, tmp_path, harness, case):
+    bridge = control.TmuxControlBridge(control.ControlConfig('127.0.0.1', 0, 'Fixture', 'tmux',
+                                                            history_dir=tmp_path))
+    bridge.master_fd = 100
+    monkeypatch.setattr(control, 'admit_command', lambda *args, **kwargs: None)
+    monkeypatch.setattr(submission, 'try_lock', lambda _: os.open(os.devnull, os.O_RDONLY))
+    monkeypatch.setattr(submission, 'POLL', .001)
+    monkeypatch.setattr(submission, 'TIMEOUT', 1)
+    before = NATIVE_PROMPTS[harness]['before']
+    stage = before
+    entered = []
+
+    async def write(data):
+        nonlocal stage
+        args = shlex.split(data.decode())
+        rows = []
+        if args[0] == 'display-message':
+            rows = [native_meta(stage)]
+        elif args[0] == 'capture-pane':
+            rows = stage['lines']
+        elif args[0] == 'load-buffer':
+            assert Path(args[-1]).read_text() == case['text']
+        elif args[0] == 'paste-buffer':
+            stage = case['view']
+        else:
+            assert args[0] == 'send-keys'
+            entered.append(args[-1])
+            stage = case.get('after', before)
+        pending = bridge._pending_blocks.popleft()
+        pending.set_result(control.CommandResult(ok=True, lines=rows))
+
+    monkeypatch.setattr(bridge, '_write_master', write)
+    result = await bridge.submit_prompt('%1', case['text'])
+    assert entered == (['C-m'] if case['ready'] else [])
+    failure = 'completion-mismatch' if case['selected'] else 'completion-unverified'
+    assert result == ('accepted' if case['ready'] else failure)
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize('successful', [True, False])
 async def test_confirmed_input_uses_the_result_of_each_chunk(monkeypatch, tmp_path, successful):
@@ -432,3 +545,17 @@ def test_claude_scrolled_draft_shows_only_its_end():
             'Fetch inbox to read the rest.')
     assert submission.ready(view, text)
     assert not submission.ready(view, 'A different prompt that ends elsewhere.')
+
+
+def test_claude_scrolled_draft_with_a_named_border():
+    # A named session draws its name at the right of the scrolled border.
+    rows = ['─── ↑ 1 more ' + '─' * 20 + ' FixtureAgent ─',
+            '  the middle of a long notification that wraps',
+            '  and ends here. Fetch inbox to read the rest.',
+            '─' * 40,
+            '  fixture | Opus | ctx: 22% used']
+    metadata = '/tmp/fixture.sock\t100\t%1\t200\t2\t0\t48\t1\tclaude'
+    view = submission.frame(metadata, rows, '%1')
+    assert view.scrolled and not view.empty
+    assert submission.ready(view, 'ORRERY Mail notification: hidden start, then the middle of '
+                            'a long notification that wraps and ends here. Fetch inbox to read the rest.')
