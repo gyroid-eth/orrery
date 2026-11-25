@@ -53,9 +53,9 @@ cockpit から入れると、子の OS ターミナル窓は既定では自動�
 
 port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY.app` は、8791 の cockpit を開く窓です。作業 folder の変え方とアンインストールは[作業 folder とアンインストール](#作業-folder-とアンインストール)にあります。
 
-![ORRERY cockpitの画面例。左にroster、中央に上段2つ・下段1つのターミナル、右上にmini-orrery、右下にMail一覧](docs/images/cockpit_overview.png)
+![ORRERY Cockpit。左に Agents、中央に3つのターミナルと入力欄、右に mini-orrery と Mail](docs/images/cockpit_overview.png)
 
-この画像はClaude/Codexのターミナル3つを分割した例です。DeepSeek/Localを選ぶ画面は、次のNEW AGENTのGIFで示します。
+Claude Code、Codex、Antigravity の架空の agent をターミナル3つに分けて表示しています。
 
 左の roster で agent を選び、中央のターミナルで指示し、右の mini-orrery と Mail で親子関係とやり取りを追います。ターミナルだけなら ORRERY Telemetry が止まっていても使え、連携する機能は状態を表示して縮退します。
 
@@ -71,11 +71,9 @@ port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY
 
 pane の見出しと roster のカードは telemetry の表示用モデル名をそのまま使い、完全な ID は title に残します。見出しは provider のロゴ・agent 名・モデルの順で、モデルが不明なら省きます。active かつ作業中のロゴはゆっくり明暗し、返事待ちや動きを減らす設定では静止します。狭い pane ではモデルを名前より先に省略し、ロゴと操作ボタンを残します。分割 pane を閉じる × は、他の操作と同じ枠付きアイコンで見出しの一番右にあります。
 
-![架空の会話を履歴パネルで開く](docs/images/cockpit_history.png)
+![架空の会話を表示した Reader。発言に Markdown の表とファイルチップがある](docs/images/cockpit_history.png)
 
 履歴は端末の横に開き、pane 上部の **⤢** で pane 全体に広げ、もう一度押すと元の幅に戻せます。狭い画面では pane 全体に表示します。スクロールしている間は新しい記録が来ても読んでいる位置を保ち、**Load earlier** がある場合は過去へ遡れます（1回で最大約300件。tool の呼び出しと結果も1件ずつ数えます。手元に置く量には上限（800件または 2 MiB）があり、遡って超えると新しい側を外して更新を止めます。最下部で新着を読んでいるときは古い側から外します）。過去を読んでいるときだけ本文の右下に重ねて出る **↓（最新へ）** で最新に戻れます。CLAIMED では Reader を横に開くと端末を残りの幅に合わせ、閉じると元の幅に戻します。全幅では端末に重ねて表示します。FOLLOW では外部の端末の幅を保つため、一部が Reader に隠れます。分割中は各 pane の **Reader アイコン** で独立して開き、全幅や preview もその区画内に収まります。履歴を操作した pane が下の prompt 欄の送り先になります。別の pane を閉じても、残った pane の履歴の表示幅・読み位置・開いた Mail や preview は保たれます。幅が変わると読み位置が1〜2行ずれることがあります。
-
-![2分割の各 pane で履歴を開く](docs/images/cockpit_history_split.png)
 
 全幅でも入力欄から送信できます。履歴を読むキーは端末に送られず、Enter または **SEND** で明示的に送ります。送信すると対象 pane の preview を閉じ、履歴は最新を追います。送信中に対象の端末や接続が変わった場合は中止して知らせます。送信後は、対象の履歴の末尾に「Sent → agent 名 · Awaiting record」の仮の行が現れ、対応する発言が記録されると置き換わります。これは agent が処理を確認したことを示すものではありません。照合できない場合は「Record not matched」と表示し、**Dismiss** で仮の行を閉じられます。`! cmd` の送信は、記録されたシェルのコマンドとも照合します。
 
@@ -83,31 +81,17 @@ pane の見出しと roster のカードは telemetry の表示用モデル名�
 
 Codex の現在の端末表示から compact 中と確認できる間は、Reader 上部に **Compacting context…** と端末が報告した経過時間を表示します。過去の発言を読んでいても見え、完了・接続切断時に消えます。現在は Codex の既知の端末ステータスに対応しています。同じ内容と順序の snapshot を繰り返し受け取った場合は、メッセージのDOMを付け直さず、選択中の文章と開いた表示を保ちます。
 
-![送信後に履歴へ表示される記録待ちの行](docs/images/cockpit_history_pending.png)
-
 履歴の中身を見せる前には、必ず telemetry の dashboard でその agent の記録の対応を確かめます。記録が変わっていないという中身のない応答は、最後の確認から最大30秒、確かめずに返します。保持できるのは cockpit 全体で4本（1つのページでも最大4本）です。それを超えた pane は4秒ごとの読み込みになります（その後に通信・読み取り・描画の時間が加わります）。ただし、上限に達したときに記録が変わった pane は、2秒以上何も変わらずに保持している pane から枠を譲り受けます。譲った pane は4秒ごとの読み込みに戻ります。Hermes では、同じ state.db に別の session だけが書いた場合も記録が変わったと数えるので、中身の変わらない pane が枠を受け取ることがあります（そのとき、譲った pane は4秒ごとの読み込みになります）。利用者の操作の間は、どの tab でも保持をしません。操作がすべて終わった時点で保持に戻ります。操作として数えるのは、URL を開く・Finder や Explorer で表示する・Ghostty を開く・EXIT・spawn・記録の file の表示、clipboard の file の読み取り、file の preview、履歴の Load earlier と Retry、NETWORK の画面からの操作（jump・kill・EXIT・注記・spawn・再開）です。端末の path に mouse を重ねたときの確認、NETWORK の画面が自動で送る error 報告と、spawn の folder 一覧などの上に挙げていない GET は、利用者が押して始まったものでも数えません。操作は response の header が届いた時点で終わったと数えます（preview の本文を受け取っている間に保持が戻ることがあります）。操作は、自分の tab でも別の tab でも、90秒（dashboard が spawn に許す最長）を過ぎると数えるのをやめます。後から開いた tab は、開いたときに他の tab で進行中の操作を一度問い合わせます。NETWORK の画面が途中で移動したときは、その画面の操作をその時点で終わったと数えます。prompt の送信は WebSocket で送るので、保持とは接続を取り合いません。dashboard が API 36 以降なら、1人分を返す `/api/agents/<name>/history-binding` で確かめ、それより前の dashboard や、この route が使えないときは、従来どおり roster 全体で確かめます（[API](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/api.md)）。
 
 agent の発言は Markdown の見出し・太字・箇条書き・引用・inline code などを描きます。コードの塊は横にスクロールでき、**Copy** で改行や空白を含む中身をコピーできます。生の HTML は文字のまま表示し、Markdown の画像を取りには行きません。人が打った本文は文字のままです。表も横にスクロールでき、**Copy Markdown** で元の表をコピーできます。
 
 Claude の `!` の記録は **SHELL** と表示し、続くコマンドと出力を1つのまとまりにします。長い出力は短く表示し、**Show all** で開けます。slash command もコマンドと出力の塊として表示します。文字参照は認識した記録の中だけで戻し、コマンドもコピーできます。background task などの system 通知は、人の発言と区別した短い1行で表示し、押すと記録の詳細を開閉できます。Claude・Codex の compact の記録も **Context compacted** の1行になり、記録に読める要約がある場合は開いて読めます。セッションが変わったときは前の表示を消し、**New session** と表示して自動で読み直します。変化が続く場合は通常の間隔で確認し、Retry は不要です。
 
-![agent の発言に含まれる表と Copy Markdown](docs/images/cockpit_history_table.png)
-
 記録に file の参照や編集要求の差分があれば、file チップや差分を表示します。Claude の SendUserFile で渡された file と、agent が ORRERY Mail の `show_files` で見せた file や画像も、チップから preview できます（Claude・Codex・dsh・Hermes のどれでも同じです）。チップを押すと現在の text や画像を preview できます。`.md` は見出し・表・箇条書き・code などを描いた形で開き、**Source** で元の文字に切り替えられます（生の HTML は文字のまま出し、画像は読みに行かず、リンクは http(s) と mailto だけを新しい tab で開きます）。記録された差分と現在の file は別物です。**Reveal in file manager** を押すと Finder や Explorer で選択します。
-
-![file チップから現在の text を preview](docs/images/cockpit_history_text.png)
-
-![画像の file チップから preview](docs/images/cockpit_history_image.png)
-
-![SendUserFile の file チップから画像を preview](docs/images/cockpit_history_sendfile.png)
 
 発言や tool の本文を押すと、同じ pane の端末に残る文字列を探し、一意に一致した場合だけその行へ移ります。見つからない、複数一致する、または検索上限に達した場合は移動せずに知らせます。文字の選択・コピーや file チップはそれぞれの操作のままです。
 
-![発言を押して端末の該当行へ移る](docs/images/cockpit_history_jump.gif)
-
 記録内の ORRERY Mail 通知と送信要求は、向き・相手・件名のカードとして表示します。押すと記録された本文が開きます。通知が preview の場合は続きが Mail にあると示します。Mail server から本文を取得したり既読にしたりせず、送信要求を配信完了とは扱いません。
-
-![架空の会話で履歴を全幅にし Mail カードを開く](docs/images/cockpit_history_mail.gif)
 
 表示できない場合は、パネルに理由と次の操作が表示されます。起動直後や最初の発言前なら少し待って再試行し、古い会話や紐付けを確認できない場合は新しい子を開いてください。Codex の記録が観測されない場合は ORRERY plugin を有効にして `/hooks` で確認し、新しく起動します。記録が無効・書き込み不可の場合は provider の記録設定や保存先を確認します。古い dashboard、未対応の形式、dsh の依存関係不足なども画面に案内されます。
 
@@ -124,9 +108,9 @@ legacy では Codex と、Telemetry API 35 以降で紐付けを確認した Cla
 3. ガイドに沿って接続設定を確認・有効化し、最後のinstallコマンドを自分で1回実行してTelemetryに反映します。
 4. cockpitに戻り、`+ NEW AGENT`で設定した`Model`と`Harness`を選びます。
 
-![cockpit 本体の NEW AGENT。科学者の肖像と4系統を保ったまま、Claude・Codex・DeepSeek・Local と Harness を切り替える。起動前の選択操作だけ](docs/images/cockpit-native-spawn.gif)
+![Model and effort で provider と Harness を選び、画面操作とブラウザーのメニューを開く](docs/images/cockpit-native-spawn.gif)
 
-cockpit 本体の実画面と実カタログです。Telemetry 単体の NEW AGENT は別の画面です。画像は起動前の選択までを示します。
+録画では架空のカタログを使っています。Telemetry 単体の NEW AGENT は別の画面です。画像は起動前の選択までを示します。
 
 → [使い方: NEW AGENT](docs/usage.md#new-agent)・肖像の出典とライセンスは [CREDITS](CREDITS.md)
 
@@ -134,7 +118,9 @@ cockpit 本体の実画面と実カタログです。Telemetry 単体の NEW AGE
 
 たくさんの agent を同時に動かしていると、親の agent のターミナルに指示を打っている途中で、他の agent からの通知が同じターミナルに流れ込み、書きかけの文が埋もれてしまいます。cockpit では、指示はターミナルの下にある別の入力欄（composer）に打つので、ターミナルに何が流れてきても書きかけはそのまま残ります。送り先は、roster や tab で agent をクリックするだけで切り替わり、文はそのまま持ち越されます。
 
-![CoralCurie への指示を composer に打っている間に、ターミナルへ Mail の通知が3通流れてくる。書きかけは残ったまま、roster で OnyxDarwin をクリックして送り先を替え、送信すると OnyxDarwin が受け取る](docs/images/cockpit_composer_calm.gif)
+選んだ agent が作業中で下書きが空なら、入力欄に **■** が出ます。ボタンを押すか `Esc` で中断できます。
+
+![実行中の入力欄に出る停止ボタン ■。Esc を押すと実行が中断される](docs/images/cockpit_composer_calm.gif)
 
 → [使い方: Prompt composer](docs/usage.md#prompt-composer)
 
@@ -142,13 +128,9 @@ cockpit 本体の実画面と実カタログです。Telemetry 単体の NEW AGE
 
 何体の agent を動かしていても、手が止まって人の判断を待っている agent だけが roster で光り（承認待ちは赤く点滅、質問待ちは水色でゆっくり明滅）、header に `N need you` が出ます。`need you` を押すとその agent だけに絞られ、tile をクリックすればそのターミナルに入って質問を読めます。composer から答えを送れば点滅は消えます。人の判断が要る agent を探し回らず、止まった順に片付けられます。
 
-![7体が動いている roster の中で PearlFaraday だけが赤く点滅し、header に 1 need you が出る。need you を押して絞り込み、tile をクリックして承認の質問を読み、composer から 1 を送ると点滅が消える](docs/images/cockpit_need_you.gif)
+![need you で人の入力を待つ agent に絞り、質問を開いて 1 と答える](docs/images/cockpit_need_you.gif)
 
 TELEMETRY でも同じく、質問待ちは `?`、承認待ちは赤い枠と `APPROVAL` で見分けられます。
-
-<img src="docs/images/deck_humanloop.png" alt="TELEMETRY の DECK。質問待ちは疑問符、承認待ちは赤枠と APPROVAL で示される" width="480">
-
-このDECK画像は旧名「AGENTSTACK · TELEMETRY」の表示例です。現在の名称はORRERY Telemetryです。
 
 → [使い方: 人の判断が要る agent](docs/usage.md#人の判断が要る-agent)・[介入待ちの見分け方（TELEMETRY）](docs/usage.md#介入待ちの見分け方)
 
@@ -156,15 +138,11 @@ TELEMETRY でも同じく、質問待ちは `?`、承認待ちは赤い枠と `A
 
 agent は ORRERY Mail で互いに依頼し、報告し、指摘し合います。その Mail が右の rail に新しい順に流れてくるので、ターミナルを一つずつ開かなくても、チームの会話をその場で読めます。card をクリックすると本文が、`thread` を押すとその話の往復が時系列で開きます。roster で agent を選ぶと、その agent が関わる Mail だけに絞られます。
 
-![新しい Mail が2通流れてきて、mini-orrery に通信の線が走る。card をクリックして本文を読み、thread で4通の往復を時系列に読み、roster で PearlFaraday を選ぶとその Mail だけに絞られる](docs/images/cockpit_mail.gif)
-
 → [使い方: ORRERY Mail](docs/usage.md#orrery-mail)
 
 ### よく見る agent を上に固定する（Pin）
 
 何体も動いていると、roster は状態（承認待ち・作業中・待機）の順に並び替わり続けます。親の agent やレビュー役など、いつも見る agent を pin すれば、並び替えに関係なく一番上に留まり、区切り線の上にまとまります。tile に mouse を乗せて右上の pin を押すだけで、もう一度押せば外れます。pin は ORRERY.app とブラウザの tab の間で共有され、agent が retire すると自動で外れます（pin があるのは左の roster だけです）。
-
-![7体の roster が状態の変化で並び替わる中、JadeNoether を pin すると一番上に移って区切り線ができ、他の agent が並び替わっても上に留まる。もう一度押すと外れて元の位置に戻る](docs/images/cockpit_pin.gif)
 
 → [使い方: Pin](docs/usage.md#pin)
 
@@ -174,8 +152,6 @@ agent は ORRERY Mail で互いに依頼し、報告し、指摘し合います�
 
 `Cmd` / `Ctrl` を押しながら agent を選ぶと、最大 12 体のターミナルを一つの画面に並べられます。名札を drag すると位置を入れ替え、境目を drag すると幅を変えられます。親の agent と、その子たちの進み具合を同時に見張れます。
 
-![3体を並べた Split で、名札を drag して入れ替え、境目を drag して幅を変える](docs/images/cockpit_split_drag.gif)
-
 → [使い方: Split](docs/usage.md#split)
 
 <a id="一つの端末を外に出す独立の窓"></a>
@@ -183,10 +159,6 @@ agent は ORRERY Mail で互いに依頼し、報告し、指摘し合います�
 ### 一つのターミナルを外に出す（独立の窓）
 
 tab の名札をターミナルの上へ drag すると、cockpit の上に浮かぶ小さな窓になります（`FLOAT`）。そのまま cockpit の外へ出すか `↗` を押すと、独立の窓になり（`WINDOW`）、別のモニターに置いて大きく見られます。窓を閉じれば元の tab に戻ります。ORRERY.app でも、Mac と WSL のブラウザでも使えます。
-
-![名札を drag して浮かせ、動かし、↗ で独立の窓にし、閉じると tab に戻る](docs/images/cockpit_pane_float.gif)
-
-![JadeNoether を cockpit の上に浮かせ、CoralCurie を独立の窓で開いた状態](docs/images/cockpit_pane_window.png)
 
 → [使い方: 独立の窓](docs/usage.md#独立の窓)
 
@@ -196,15 +168,11 @@ tab の名札をターミナルの上へ drag すると、cockpit の上に浮�
 
 agent がターミナルに出した URL はクリックで既定のブラウザに、ファイルのパスはクリックで Finder（Windows ではエクスプローラー）に開きます。逆に、Finder（Windows ではエクスプローラー）でコピーしたファイルを composer に貼ると、その絶対パスが入り、そのまま agent に渡せます。スクリーンショットの画像を貼ると、Mac では agent の CLI がそのまま受け取り、Windows（WSL2）では画像を保存してそのパスが入ります。
 
-![ターミナルの URL をクリックして browser で開き、パスをクリックして Finder で表示し、composer にファイルを貼るとパスが入る](docs/images/cockpit_open_paste.gif)
-
 → [使い方: ターミナルから開く・ターミナルに渡す](docs/usage.md#ターミナルから開くターミナルに渡す)・[WSL でのファイル・画像の貼り付け](docs/usage.md#wsl-でのファイル画像の貼り付け)
 
 ### 明るい配色（light mode）
 
 Settings の Color theme で、暗い配色（Dark）と、紙のような明るい配色（Light）を切り替えられます。ターミナルの中の色や、埋め込みの TELEMETRY まで一緒に変わり、diff の赤と緑の背景の上でも文字が読める濃さに補正します。`System` にすると OS の外観に合わせます。
-
-![Settings の Color theme を Light に替え、また Dark に戻す](docs/images/cockpit_theme_switch.gif)
 
 → [使い方: 配色テーマ（light mode）](docs/usage.md#配色テーマlight-mode)
 
@@ -218,15 +186,11 @@ Settings の Color theme で、暗い配色（Dark）と、紙のような明る
 
 header の `LEFT` に、Claude と Codex のアカウントの利用枠があと何 % 残っているかが出ます。クリックすると、5 時間の枠・週の枠・モデル別の枠を、reset までの時間つきで並べます。数字は緑・黄・赤で変わり、取れないときは理由を出します。
 
-![header の LEFT をクリックすると Usage left が開き、Claude と Codex の window ごとの残量が円弧で並ぶ。残量が減ると数字と輪の色が緑から黄、赤へ変わる](docs/images/cockpit_usage.gif)
-
 → [使い方: Usage（残量表示）](docs/usage.md#usage残量表示)
 
 ### 名前をコピーする・詳細を見る（Roster）
 
 roster の tile に mouse を乗せると、名前をコピーする icon が出ます。コピーした名前は Mail の宛先や指示文にそのまま貼れます。tile の詳細 card には、最後に動いた時刻や成果物の数が並びます。
-
-![roster の tile。copy icon と詳細 card](docs/images/cockpit_roster_pin_copy.png)
 
 → [使い方: Roster](docs/usage.md#roster)
 
@@ -234,7 +198,7 @@ roster の tile に mouse を乗せると、名前をコピーする icon が出
 
 header の `PLANETARIUM` で、誰が誰を起動したかの木を画面いっぱいに開きます。直近 90 秒に Mail が行き来した二者の間には線が光り、Mail が届くたびに彗星が飛ぶので、チームのどこで会話が起きているかが一目で分かります。node をクリックすると、その agent のターミナルへそのまま移ります。
 
-![PLANETARIUM を押すと、CoralCurie を親に6体の子が並ぶ木が開き、Mail が届くたびに線が光る。JadeNoether の node をクリックすると、そのターミナルに移る](docs/images/cockpit_planetarium.gif)
+![Planetarium に並ぶ親子のツリーと、親を持たない独立した agent](docs/images/cockpit_planetarium.png)
 
 → [使い方: Planetarium](docs/usage.md#planetarium)
 
@@ -242,19 +206,15 @@ header の `PLANETARIUM` で、誰が誰を起動したかの木を画面いっ�
 
 header の `TELEMETRY` で、ORRERY Telemetry の dashboard を cockpit の中に開きます。`DECK` は agent ごとの card、`NETWORK` は agent 同士のつながりを node と線で見せ、agent を選べば会話と tool の履歴、成果物の一覧も読めます。`OPEN IN COCKPIT` を押すと、その agent のターミナルにそのまま戻ります。別の画面に行かずに、cockpit の中でチーム全体を見渡し、そのまま手元のターミナルへ戻れます。終了した agent の再開もここから行います。
 
-![header の TELEMETRY を押すと cockpit の中に DECK が開き、NETWORK に切り替えて JadeNoether を選び、履歴を見てから OPEN IN COCKPIT で JadeNoether のターミナルに戻る](docs/images/cockpit_telemetry.gif)
+![埋め込み Telemetry の詳細で OPEN IN COCKPIT を押すと、その agent のターミナルに戻る](docs/images/cockpit_telemetry_open_in_cockpit.png)
 
 **REPLAY**: 仕事が終わった後に、チームが何をどの順でやったかを、録画のように見直せます。NETWORK で `SELECT` を押して agent を選び `Replay` を押すと、選んだ agent の履歴が時間軸で再生され、誰が誰を起動し（spawn）、どんな Mail を送り合ったかが、件名つきで順に現れます。速さの目盛りで早送りし、下の時間軸をクリックすれば好きな時刻に飛べます。
-
-![NETWORK で7体を選んで Replay を押すと、親の CoralCurie だけから始まり、spawn で子が1体ずつ現れ、Mail の件名が吹き出しで流れる。速さを上げ、時間軸の後半に飛ぶと、全員がつながった状態になる](docs/images/cockpit_replay.gif)
 
 → [使い方: TELEMETRY](docs/usage.md#telemetry)
 
 ### Obsidian と一緒に使う
 
 Obsidian の vault の中で agent を動かすと、作業ログ・論文ノート・タスクがそのまま Markdown のノートになり、人は Obsidian の Daily Note と Kanban で見るだけで済みます。agent がターミナルに出したノートのパスは、cockpit でクリックすれば開けます。ORRERY は Obsidian が無くても使えます。これは便利な使い方の 1 つです。
-
-![WSL の Claude に /adddone 論文ノートを見直す と打つと、右の Obsidian の Daily Note で、そのタスクが「タスク」から消え「今日完了した」に出る](docs/images/cockpit_obsidian.gif)
 
 → [Obsidian と一緒に使う](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/obsidian.md)（ORRERY Telemetry の文書）・vault を作業 folder にする手順は[作業 folder を変える](#作業-folder-を変える)・すぐ試せるひな形 [orrery-demo-vault](https://github.com/gyroid-eth/orrery-demo-vault)
 
@@ -263,8 +223,6 @@ Obsidian の vault の中で agent を動かすと、作業ログ・論文ノー
 ### Windows（WSL2）でも同じ画面で
 
 WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同じ画面を使えます。shortcut は `Alt+K` などに、外で開くターミナルは Windows Terminal に、リンクの開き先は Windows のブラウザとエクスプローラーに切り替わります。エクスプローラーでコピーしたファイルやスクリーンショットも、composer に貼ればパスとして agent に渡せます。
-
-![WSL で開いた Jump palette。左上に Alt+K と出る](docs/images/cockpit_palette_wsl.png)
 
 → [使い方: Windows（WSL2）での違い](docs/usage.md#windowswsl2での違い)
 
@@ -327,8 +285,6 @@ rm -rf ~/orrery ~/orrery-telemetry
 3. **Full tour** — 同じ場所の `Full tour` で16段の操作を順に試します。子とのしりとり、ターミナルの配置、Telemetry の EXIT / RESUME、NETWORK / REPLAY からターミナルへの帰還までを案内します。ゲームはガイドの ✓ が付いた後も3往復まで終えます。進行は最初のガイドとは別に保存されます（[Full tour の説明](docs/FULL_TOUR.md)）。
 
 普段の操作は、画面内のガイドと help map から始めてください。操作の詳しい参照は[使い方](docs/usage.md)、表示や接続が合わないときは[トラブルシューティング](docs/troubleshooting.md)へ進みます。ガイドで起動するagentにも、選んだCLIやAPI接続先の通常の利用枠・料金条件が適用されます。
-
-![Your first flight から Settings の Show help map と Full tour の入口を開く](docs/images/cockpit-guide-entry.gif)
 
 ## 更新・手動導入
 

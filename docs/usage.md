@@ -102,13 +102,11 @@ tile の読み方（上から）:
 
 検索欄は、名前・説明文（task か pane title）・role（無ければ cwd の差分）を対象に絞り込みます。model や provider は対象外です。絞り込み中は件数が `N/M` で出て、1 件も合わないときは `searched: task, role, cwd · Clear` の帯が出ます。
 
-![roster の検索。左は test で1件に絞った状態、右は1件も合わず searched の帯が出た状態](images/cockpit_roster_search.png)
-
 warmup、finished、gone、retired の row は左 roster に表示しません。Codex App Bridge 由来の agent は telemetry には現れますが tmux pane を持たないため、terminal jump は offline hint になります。
 
 tile をクリックすると、右の mail rail の filter もその agent に切り替わります。tile に mouse を乗せる（または `Tab` で focus する）と、右に詳細 card が出ます。pane title、最新 mail の件名、最後に動いた時刻、ORRERY Mail への登録時刻、起動時刻、provider / model / command、成果物の数（Deliverables。1 件以上あるときだけ）、表示している説明文の出どころと具体さが並びます。
 
-![CoralCurie の tile に mouse を乗せて出した詳細 card。Deliverables 3 の行がある](images/cockpit_roster_detail.png)
+![Agent にカーソルを置くと、詳細に Computer use の Off・View・Control と Browser の状態が出る](images/cockpit_roster_detail.png)
 
 成果物（Deliverables）は、ORRERY Telemetry が project の `logs/` から集めた、その agent の作業ログ（`LOG_*.md` のうち frontmatter の `agent:` がその agent のもの）です。一覧は TELEMETRY の agent panel の `Output` タブで開けます（[TELEMETRY](#telemetry)）。
 
@@ -125,11 +123,9 @@ header の `working` / `waiting` は稼働中 agent の数です。
 
 tile をクリックすればそのターミナルに入り、質問を読んで composer から答えを送れます。答えて agent が動き出すと、点滅と `need you` は消えます。
 
-![7体の中で PearlFaraday だけが赤く点滅し、1 need you が出る。need you で絞り込み、tile をクリックして承認の質問を読み、composer から 1 を送ると点滅が消える](images/cockpit_need_you.gif)
+![need you で人の入力を待つ agent に絞り、質問を開いて 1 と答える](images/cockpit_need_you.gif)
 
 TELEMETRY の DECK と NETWORK での見え方は [介入待ちの見分け方](#介入待ちの見分け方) にあります。
-
-![roster の tile。WildNewton は pin で上に固定され、CosmicGuericke には hover で copy icon と詳細 card が出ている](images/cockpit_roster_pin_copy.png)
 
 ### 名前のコピー
 
@@ -149,8 +145,6 @@ Roleは40字、Taskは200字までです。TaskはMailに登録された説明�
 
 tile 右上の pin icon を押すと、その agent を roster の上に固定します。固定した agent と、それ以外の間には区切り線が入ります。もう一度押すと外れます（`PINNED` / `UNPINNED` と表示）。
 
-![状態の変化で並び替わる roster の中で JadeNoether を pin すると上に留まり、区切り線ができる。もう一度押すと外れる](images/cockpit_pin.gif)
-
 pin は左 roster だけの機能です。右の mail rail や mini-orrery には pin はありません。pin の状態は Settings と同じく ORRERY.app と browser tab の間で共有され、agent が retire すると自動で外れます。Select mode の間は icon を出しません。
 
 ## Usage（残量表示）
@@ -161,15 +155,11 @@ pill をクリックすると `Usage left` が開き、provider が返した win
 
 Settings の `Usage` で、Claude・Codex・Antigravity（Gemini を含む）・DeepSeekなどのproviderごとに表示を切り替えられます。`LEFT` pillと`Usage left`の両方に反映され、非表示の選択はこのbrowserに保存されます。後から追加されたproviderは既定で表示されます。DeepSeekの残高が$5未満の場合は、pillと残高行を低残量と同じ赤で表示します。$5以上や残高不明時の色は変えません。
 
-![Usage left。Claude は 5H 64%・7D 41%・FABLE 18%、Codex は 5H 88%・7D 47%。Codex の追加枠 Spark は untouched](images/cockpit_usage_popover.png)
-
 - **Claude**: `5h`（5 時間の枠）、`7d`（週の枠）、モデル別の週の枠（`FABLE` など。サーバーが返したときだけ）
 - **Codex**: `5h`、`7d`。Spark などの名前付きの追加枠は `ADDITIONAL LIMIT` の下に分けて出し、pill の値には使いません。追加枠を全く使っていないときは `untouched · 5h / 7d at 100% left` の 1 行にまとめます
 - **Antigravity（Gemini）**: Telemetry が提供するときだけ表示します。`Gemini Models` の `5H` / `7D` とモデル固有の `ARGON` など、Gemini の枠をほかの provider と同じ円弧 dial で並べます。`Claude and GPT models` は Antigravity の表示から除外します（Telemetry の取得結果は変更しません）。pill は表示対象の Gemini 枠の中で最も残量が少ない割合です。適用される枠は使うモデルにより異なります
 - 数字と輪の色: 50% より上は緑、50% 以下で黄、20% 以下で赤
 - 各 dial の下は reset までの時間（`in 2h 59m`、`in 3d`）。見出しの右は、いちばん早い reset の時刻
-
-![LEFT をクリックして Usage left を開き、残量が減っていく様子。5H が 64% から 19% へ、色が緑から黄、赤へ変わる](images/cockpit_usage.gif)
 
 **取得元と更新の間隔**: cockpit は provider を直接読みません。ORRERY Telemetry の dashboard が読んだ値（`/api/quotas`）を、ORRERY backend 経由で受け取ります。
 
@@ -244,8 +234,6 @@ PC の Reader では、承認待ちになると入力欄のすぐ上に `Approva
 
 agent がターミナルに出した URL やファイルのパスは、そのままクリックで開けます。逆に、手元のファイルは貼り付けるだけで agent に渡せます。
 
-![ターミナルの URL をクリックすると browser で開き（URL の toast）、パスをクリックすると Finder で表示され（FINDER の toast）、composer にファイルを貼るとパスが入る](images/cockpit_open_paste.gif)
-
 - **URL をクリック**: 既定の browser で開きます（`https://` と `http://` だけ）
 - **パスをクリック**: `/…` や `~/…` の絶対パスは、Finder（Windows ではエクスプローラー）で表示します。ファイルは選択した状態で、フォルダは開いた状態になります。空白を含むパスも、実在する範囲まで自動でリンクにします。`/compact` のような 1 語や相対パスはリンクになりません
 - **ファイルを貼る**: Finder でファイルをコピーし（`Cmd+C`）、composer で `Cmd+V` を押すと、カーソルの位置にファイルの**絶対パス**が入ります。複数ならスペースで区切り、空白や引用符を含むパスは `'…'` で囲みます。`path → composer`（複数なら `N paths → composer`）と出ます。「このファイルを読んで」と書き足して送れば、agent にファイルを渡せます
@@ -264,17 +252,11 @@ Windows（WSL2）では、URL は Windows の既定の browser、パスはエク
 - divider drag でサイズ変更
 - label drag で並べ替え
 
-![3件の Split。CoralCurie の名札を PearlFaraday の cell へ drag して位置を入れ替え（SPLIT · CoralCurie ↔ PearlFaraday）、続けて境目を drag して幅を変える](images/cockpit_split_drag.gif)
-
 cell の名札に mouse を乗せると `×` が出ます。押すとその session を cockpit から外し（tmux の session は残る）、残りが 1 つになると single 表示に戻ります。名札の drag は `Esc` で取り消せます。
 
 Split を一時的に離れて single session を表示しても、member list は `SPLIT n` chip に残り、chip を押すと復元できます。Split cell 上部の identity label は click で focus、別の cell へ drag すると二つの位置を交換します。divider の比率は drag で変更でき、grid layout の divider は double-click で均等比率へ reset します。
 
 tab strip の `SPLIT n` の右にある `⊞` chip（現在の layout 名を表示）を押すと、その人数で選べる layout の一覧が開きます。2件は ROW / COLUMN、3件は WIDE / MAIN-L / ROW / COLUMN、4件以上は GRID / ROW / COLUMN です。選んだ layout は人数ごとに記憶されます。Split に入っている session の tab には `⊞` の印が付きます。
-
-![3件の Split。SteelCurie、HazelBell、FoggyLavoisier のターミナルを横に3列並べた ROW layout](images/cockpit_split.png)
-
-![`⊞ WIDE` chip から開いた 3 pane layout の一覧](images/cockpit_split_layout.png)
 
 この Split は複数 session を並べる表示機能です。tmux の `split-window` とは異なり、通常の agent session に新しい pane を作りません。
 
@@ -288,11 +270,7 @@ WebSocket protocol 自体の破壊的 `split` / `close` は、`orrery-` prefix �
 - **独立の窓にする**: session label を cockpit の外へ drag して離す。浮かせた窓なら、その title bar を外へ出す。窓が最大化されていて外が無いときは、端の 8px で離す（ghost に `OWN WINDOW` と出る）。active な pane の header にある `↗ WINDOW` を押しても開ける
 - **戻す**: 窓を閉じると、session は元の cockpit の tab に戻って前面になる。浮かせた窓の `⇤`、独立の窓の header の `⇤ COCKPIT`、tab strip のチップの `⇤` でも戻せる
 
-![session の名札を tab strip から terminal の上へ drag して浮かせ（FLOAT）、title bar で動かし、↗ で独立の窓にし（WINDOW のチップ）、窓を閉じると tab に戻る](images/cockpit_pane_float.gif)
-
 外に出ている session は、tab strip に `◰ FLOAT` / `↗ WINDOW` のチップとして残ります。チップをクリックすると、その窓が前面に来ます。roster や palette からその agent を選んだときも、cockpit に二重に開かず、窓のほうを前面にします。Split に入っていた session は、外に出すと Split から外れます。戻したときは、通常の tab として戻ります。
-
-![JadeNoether を cockpit の上に浮かせ、CoralCurie を独立の窓で開いた状態。tab strip に ◰ FLOAT と ↗ WINDOW のチップが並ぶ](images/cockpit_pane_window.png)
 
 独立の窓の中身は、同じ cockpit の page を一つの session だけの表示（`cockpit.html?solo=1&session=<name>`）で開いたものです。backend から見ると、同じ session に websocket が一つ増えるだけです。tmux への接続（recorder）は増えません。session が外に出ている間、cockpit はその session を detach します。そのため、同じ session が二つの幅で同時に描かれることはありません。Claim / Follow は、外に出た窓のサイズで働きます。
 
@@ -338,7 +316,7 @@ composer は、ターミナルとは別の入力欄です。ターミナルに�
 
 送り先は、そのとき active な pane の agent です（composer の左に顔と名前が出る）。roster の tile や tab をクリックして別の agent を active にすると、送り先だけが切り替わり、打っている文はそのまま持ち越されます。
 
-![CoralCurie への指示を打っている間に通知が流れてきても書きかけは残り、roster で OnyxDarwin をクリックして送り先を替えて送る](images/cockpit_composer_calm.gif)
+![実行中の入力欄に出る停止ボタン ■。Esc を押すと実行が中断される](images/cockpit_composer_calm.gif)
 
 下書きは cockpit に 1 つだけで、送り先の agent ごとには分かれません。打つたびに保存され、reload や ORRERY.app の再起動のあとも残り、送信すると消えます。保存先はその window の `localStorage` で、他の window とは共有しません。独立の窓は、それぞれの session ごとに自分の下書きを持ちます（閉じると cockpit に戻る。[独立の窓](#独立の窓)）。
 
@@ -367,7 +345,7 @@ IME composition 中の Enter は誤送信を避ける guard があります。�
 | Codex | `~/.codex/skills`（同梱の skill を含む） | compact / new / model / approvals / status / help |
 | Gemini | `~/.gemini/skills` | compress / clear / model / mcp / stats / help |
 
-![Codex の agent に $r と打つと、$review-pr（skill）と approvals（built-in）が候補に出る](images/cockpit_skill_menu.png)
+![Codex の入力欄で / を打つと、/approvals と $review-pr が候補に並ぶ](images/cockpit_skill_menu.png)
 
 ### 送信ガード
 
@@ -377,8 +355,6 @@ IME composition 中の Enter は誤送信を避ける guard があります。�
 - **記号の取り違え**: Codex に `/名前`、Claude に `$名前` を送ろうとしたとき。同じ名前の skill があれば、正しい記号に直して送るボタンを出す
 
 帯のボタンは、直して送る（例 `send as $review-pr`）・`send as typed`（そのまま送る）・`cancel` です。
-
-![Codex の agent に /review-pr 3 を送ろうとすると、codex runs skills as $review-pr と止まり、send as $review-pr を選べる](images/cockpit_send_guard.png)
 
 ## Jump palette と shortcut
 
@@ -419,9 +395,7 @@ DeepSeek・dsh / Hermesを初めて使う場合は、ガイドと同じ次の順
 3. 右の `Harness` を選びます。DeepSeek・Local では、カタログにある dsh / Hermes から選びます。利用できない候補は選択できません。アプリやキー保存先の準備不足、OS・Mail方式の非対応などの案内と、設定ガイドへのリンクが表示されます。
 4. 表示される場合は `Helper model` と `Effort` を確認し、その下で起動先と task を指定します。詳しくは[DeepSeek・Local の標準 New Agent](configuration.md#deepseeklocal-の標準-new-agent)を参照してください。
 
-![cockpit の NEW AGENT。Curie の肖像と名前、Claude・Codex・DeepSeek・Local models の4系統、DeepSeek の dsh・Hermes 選択肢](images/cockpit-native-spawn.png)
-
-![同じ実画面で Claude → Codex → DeepSeek（dsh・Hermes）→ Local models（dsh・Hermes）と切り替える](images/cockpit-native-spawn.gif)
+![Model and effort で provider と Harness を選び、画面操作とブラウザーのメニューを開く](images/cockpit-native-spawn.gif)
 
 実画面と撮影時の正規カタログを使い、名前・肖像と model / Harness 部だけを切り出しています。`Spawn` は押していません。利用できる model と Harness は環境によって変わります。肖像の出典とライセンスは [CREDITS](../CREDITS.md) にあります。
 
@@ -466,9 +440,7 @@ header の `PLANETARIUM`、または mini-orrery 右上の `⤢` で overlay を
 - agent jump
 - `OPEN TELEMETRY`
 
-![Planetarium。親の LuckyGoodall から子の BraveTuring と GreenMaxwell へ spawn の線が伸び、親を持たない LimeGalileo は別の木として並ぶ](images/cockpit_planetarium.png)
-
-![PLANETARIUM で木を開き、Mail が届くたびに線が光る。node をクリックするとそのターミナルへ移る](images/cockpit_planetarium.gif)
+![Planetarium に並ぶ親子のツリーと、親を持たない独立した agent](images/cockpit_planetarium.png)
 
 node をクリックすると、その agent の terminal へ移り、overlay を閉じます。`Esc`、外側の click、または右上の `⤢` でも閉じます。mini-orrery を Settings で Telemetry network 表示にしていても、Planetarium は常に spawn forest を描きます。Planetarium は cockpit 内の系譜探索です。ORRERY Telemetry dashboard の full NETWORK / DIGEST REPLAY とは役割が異なります。
 
@@ -481,11 +453,7 @@ node をクリックすると、その agent の terminal へ移り、overlay �
 - 安全な限定 Markdown
 - thread 表示（最大50件）
 
-![新しい Mail が流れてきて、card で本文、thread で往復を時系列に読み、roster で agent を選ぶとその Mail に絞られる](images/cockpit_mail.gif)
-
 mail card をクリックすると、rail の下半分がその message の drawer に切り替わります。drawer には送信者、宛先（to / cc の区別）、正確な時刻と経過時間、importance、件名、本文が出ます。thread のある message は `thread (n)` で時系列表示に切り替わり、thread 内の項目をクリックするとその message を開きます。`←` か `Esc` で一覧に戻ります。
-
-![左: mail rail の一覧。上の mini-orrery に親子の木、その下に filter chip と card が並ぶ。右: card をクリックして開いた drawer](images/cockpit_mail_rail.png)
 
 mail card や送信者名をクリックしても、terminal へは移りません。agent の terminal を開くには、左 roster の tile か mini-orrery の node を使います。逆向きには連動していて、roster の tile を選ぶ、mini-orrery の node を押す、terminal の pane を focus する、のいずれかで filter chip がその agent に切り替わります（pane の場合は、その agent の mail が一覧にあるときだけ）。chip に出ていない agent を選ぶと、その agent の最近の mail を追加で取得します。
 右 rail の見出しの右は、普段は `live · 5m` です。ここに `project key not configured` と出ているときは、Mail の DB を読む project key が設定されていません（[設定](configuration.md)）。
@@ -496,35 +464,23 @@ mail UI は表示専用です。reply / send 操作はありません。DB は S
 
 TELEMETRY button は ORRERY Telemetry dashboard を `/network/?embed=1` の iframe として開きます。ORRERY backend が dashboard root、`/api/*`、`/assets/*`、`/portrait` を同一 origin へ proxy します。
 
-以下はすべて、ORRERY に埋め込まれる ORRERY Telemetry dashboard の実画面です。ORRERY native の roster / terminal / mail rail ではありません。`DECK` は agent ごとの状態を card で読み、`NETWORK` は agent 間の広がりを node と link で読みます。
+DECK と NETWORK の画面例は [Telemetry の Dashboard ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/dashboard.md)にあります。
 
 ### 最初の状態
 
-![TELEMETRY の DECK に3体の agent が並ぶ初期状態](images/deck_start.png)
-
 見るポイント: `DECK` では上部の `RUNNING` / `AGENTS` と各 card の name、model、task、稼働状態を一度に確認できます。
-
-![TELEMETRY の NETWORK に3体の独立した node が見える初期状態](images/net_start.png)
 
 見るポイント: `NETWORK` の左上に `3 nodes · 0 links` と表示され、まだ link のない3体を個別の node として確認できます。
 
 ### agent と通信が増えた状態
 
-![TELEMETRY の DECK に12体の agent と受信した通信が並ぶ](images/deck_growing.png)
-
 見るポイント: agent が増えると card が12体へ広がり、`RX` のある card では相手、task、importance も同じ画面で見分けられます。
-
-![TELEMETRY の NETWORK に12体の node と link が広がる](images/net_growing.png)
 
 見るポイント: `12 nodes · 6 links · 6 spawn / total 12` と node 間の線から、増員と接続の広がりを俯瞰できます。
 
 ### 介入待ちの見分け方
 
-![TELEMETRY の DECK。質問待ちは疑問符、承認待ちは赤枠と APPROVAL で示される](images/deck_humanloop.png)
-
 見るポイント: card 右上の `?` は質問への回答待ち、赤い外枠と `APPROVAL` は承認待ちです。通常の稼働 card と見分け、先に人の判断が必要な agent を特定できます。
-
-![TELEMETRY の NETWORK。通信が密な12体の中に介入待ちの疑問符が見える](images/net_humanloop.png)
 
 見るポイント: 通信が密になっても node 付近の `?` から介入待ちを見つけられます。質問待ちと承認待ちの区別は `DECK` の表示で確認します。
 
@@ -562,17 +518,13 @@ cockpit から dashboard へは、overlay を閉じたときに更新停止（`n
 
 ### TELEMETRY から cockpit で開く
 
-![header の TELEMETRY で DECK を開き、NETWORK で agent を選び、OPEN IN COCKPIT でそのターミナルに戻る](images/cockpit_telemetry.gif)
-
 TELEMETRY の `DECK` で card をクリックすると、その agent の panel が開きます。右上の `OPEN IN COCKPIT` を押すと TELEMETRY が閉じ、cockpit でその agent の terminal が開きます。dashboard を単独で開いたとき（`http://127.0.0.1:8770/`）は同じ button が `OPEN TMUX` になり、dashboard の server が terminal の窓を開きます。
 
-![TELEMETRY の agent panel。右上に EXIT、OPEN IN COCKPIT、Close が並ぶ](images/cockpit_telemetry_open_in_cockpit.png)
+![埋め込み Telemetry の詳細で OPEN IN COCKPIT を押すと、その agent のターミナルに戻る](images/cockpit_telemetry_open_in_cockpit.png)
 
 単独で開いた dashboard から cockpit へ移る button はありません。cockpit 側で特定の agent を開きたいときは、`cockpit.html?session=<session-name>` の URL を使います（[Jump palette と shortcut](#jump-palette-と-shortcut)）。
 
 ## REPLAY
-
-![NETWORK で agent を選んで Replay を押すと、spawn と Mail が時間軸で再生される。速さを上げ、時間軸をクリックして後半に飛ぶ](images/cockpit_replay.gif)
 
 操作: TELEMETRY の `NETWORK` で `SELECT` を押し、node をクリックして 2 体以上を選び、下に出るバーの `Replay` を押します。`PLAY` / `PAUSE` で再生と一時停止、`SPD` の目盛りで速さ（×1〜×10000）、`HOLD` で Mail の吹き出しを出しておく時間、時間軸のクリックで好きな時刻に飛びます。`✕ CLOSE` か `Esc` で終わります。
 
@@ -604,12 +556,6 @@ Settings で変更できる値:
 
 Settings の `Appearance` › `Color theme` で、`Dark`（既定）・`Light`・`System` を選べます。Light は、紙のような暖かい地の色に、濃い文字を載せた配色です。暗い部屋では Dark、明るい部屋や長時間の読み書きでは Light、というように使い分けられます。
 
-![同じ画面の Dark。2 体のターミナルを並べた Split と、左の roster、右の Mail](images/cockpit_theme_dark.png)
-
-![同じ画面の Light。ターミナル・roster・Mail・header がすべて明るい配色になる](images/cockpit_theme_light.png)
-
-![Settings を開き、Color theme を Light に替え、また Dark に戻す](images/cockpit_theme_switch.gif)
-
 Light にすると、次がまとめて切り替わります。
 
 - cockpit の画面全体（roster・ターミナルの枠・Mail・mini-orrery・Settings など）
@@ -638,10 +584,6 @@ WSL2 で backend を動かし、Windows 側の browser で開くと、cockpit �
 | 独立の窓 | ORRERY.app の窓（browser なら popup） | Windows の browser の popup（popup の許可が要る） |
 
 `Cmd` は Windows では Windows キーにあたり OS が使うため、`Ctrl+K` / `Ctrl+1`〜`9` は browser が使うため、WSL では `Alt` にしています。`Alt+K` / `Alt+1`〜`9` は terminal に focus があっても cockpit が受け取り、agent には送りません。
-
-![WSL で開いた Jump palette。左上に Alt+K と表示される](images/cockpit_palette_wsl.png)
-
-![WSL の pane header。右端の button が WIN TERMINAL になる](images/cockpit_pane_header_wsl.png)
 
 `WIN TERMINAL` が押せないときは、button に mouse を乗せると理由が出ます（`wt.exe` が PATH に無い、`WSL_DISTRO_NAME` が無い、など）。Windows Terminal が無い場合は Microsoft Store から入れます。backend が動作環境をまだ返していない間は、誤って貼り付け成功と表示しないよう、ファイル・画像の貼り付けを保留します。
 
