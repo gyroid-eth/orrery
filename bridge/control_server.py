@@ -1720,21 +1720,25 @@ class TmuxControlBridge:
                 # Wait for the editor to render the same draft on consecutive
                 # observations. Some editors still treat a near-paste Enter as a newline.
                 previous = None
+                menu_wait = submission.SlashMenuWait(text)
                 while time.monotonic() < deadline:
                     view = await capture()
                     choice = None
                     problem = submission.completion_problem(view, text)
+                    is_ready = menu_wait.ready(view)
                     if view is not None:
                         if view.identity != before.identity:
                             return 'unknown'
-                        if submission.ready(view, text) or problem == 'completion-mismatch':
+                        if is_ready or problem == 'completion-mismatch':
                             choice = (view.draft, view.selected_command)
                         if choice is not None and choice == previous:
                             await admit()
                             view = await capture()
+                            confirmed = menu_wait.ready(view)
                             if (view is not None and view.identity == before.identity
                                     and (view.draft, view.selected_command) == choice):
-                                if submission.ready(view, text) and time.monotonic() < deadline:
+                                if confirmed and time.monotonic() < deadline:
+                                    problem = None
                                     result = await command(['send-keys', '-t', pane_id, 'C-m'])
                                     if not result.ok or result.overflow:
                                         return 'unknown'

@@ -20,6 +20,7 @@ METADATA = ('#{socket_path}\t#{pid}\t#{pane_id}\t#{pane_pid}\t#{cursor_y}\t#{pan
             '\t#{cursor_x}\t#{bracket_paste_flag}\t#{pane_current_command}')
 POLL = .06
 TIMEOUT = 5.0
+SLASH_MENU_WAIT = .30
 SHELLS = frozenset({
     'ash', 'bash', 'busybox', 'cmd', 'csh', 'dash', 'elvish', 'fish', 'hush',
     'ksh', 'ksh93', 'mksh', 'nu', 'nushell', 'pdksh', 'powershell', 'pwsh',
@@ -40,7 +41,8 @@ HERMES_HINT = re.compile(r'^msg=[\w-]+ · /queue · /bg · /steer · Ctrl\+C can
 HERMES_GHOST = re.compile(r'\x1b\[38;5;241m[^\x1b]+\x1b\[39m[ \t]*$')
 HERMES_MENU_STYLING = re.compile(r'\x1b\[(?:[0-9]+;)*48;[25];[0-9;]+m')
 PASTING = re.compile(r'^\s*(?:Pasting(?:…|\.\.\.)|Waiting for startup\b)', re.I)
-AGY_MODE = re.compile(r'^(?:auto|plan|accept[- ]edits)\s+·\s+', re.I)
+AGY_MODE = re.compile(
+    r'^(?:(?:\? for shortcuts|esc to cancel)\s{2,})?(?:auto|plan|accept[- ]edits)\s+·\s+', re.I)
 AGY_MODE_ONLY = re.compile(r'^(?:(?:\? for shortcuts|esc to cancel)\s{2,})?(?:auto|plan|accept[- ]edits)$', re.I)
 AGY_MODEL_FOOTER = re.compile(r'^Gemini(?:[ -][^·]+)?\s+·\s+(?:low|medium|high)$', re.I)
 AGY_PLACEHOLDER = {
@@ -88,9 +90,9 @@ class Frame:
         return self.draft == '' and not self.waiting and not self.selected
 
     def allows_paste(self, text):
-        if self.hermes_busy:
-            # Enter can interrupt a running turn depending on Hermes's mode.
-            # Its idle editor is required before starting a paste.
+        if self.hermes_busy and not SLASH_NAME.fullmatch(text):
+            # Hermes dispatches slash commands locally. Other input can
+            # interrupt a running turn, depending on its busy input mode.
             return False
         if self.bracketed is not None:
             return self.bracketed
@@ -103,35 +105,38 @@ class Frame:
 
 
 def _slash_selection(lines, plain, start, *, codex):
-    """Read the active row from the picker directly above the editor."""
+    """Read the picker directly above the editor and identify its active row."""
     selection = CODEX_SLASH_SELECTION if codex else CLAUDE_SLASH_SELECTION
     # Codex separates the inline picker from the editor with a blank row.
     # Claude uses the top border and can show options below the selected row.
     # In a narrow pane Claude wraps a long description onto indented rows
     # that carry no command name; they belong to the option above them.
+    present = False
     for index in range(start - 2, max(-1, start - 24), -1):
         row = plain[index]
         match = selection.match(row)
         if match:
             if not codex or REVERSE_VIDEO.search(lines[index].partition('›')[0]):
-                return match[1]
+                return True, match[1]
+            return True, None
+        if SLASH_OPTION.match(row):
+            present = True
+        elif codex or not SLASH_CONTINUATION.match(row):
             break
-        if not (SLASH_OPTION.match(row) or not codex and SLASH_CONTINUATION.match(row)):
-            break
-    return None
+    return present, None
 
 
 def _claude_slash_menu(lines, plain, start, cursor):
     border = plain[start - 1].strip() if start else ''
     if start < 2 or not (BORDER.fullmatch(border) or CLAUDE_NAMED_BORDER.fullmatch(border)):
         return False, None
-    return False, _slash_selection(lines, plain, start, codex=False)
+    return _slash_selection(lines, plain, start, codex=False)
 
 
 def _codex_slash_menu(lines, plain, start, cursor):
     if start < 2 or plain[start - 1].strip():
         return False, None
-    return False, _slash_selection(lines, plain, start, codex=True)
+    return _slash_selection(lines, plain, start, codex=True)
 
 
 def _dsh_slash_menu(lines, plain, start, cursor):
@@ -146,7 +151,7 @@ def _dsh_slash_menu(lines, plain, start, cursor):
             break
         if match := DSH_COMMAND_SELECTED.match(row):
             selected.append('/' + match[1])
-    return False, None
+    return bool(selected), None
 
 
 def _hermes_slash_menu(lines, plain, start, cursor):
@@ -321,13 +326,41 @@ def mismatched_command(observed, text):
     return completion_problem(observed, text) == 'completion-mismatch'
 
 
+def _picker_free_draft(observed, text):
+    return (observed is not None and observed.slash_picker and not observed.selected
+            and not observed.waiting and not observed.scrolled and not observed.dsh_clipped
+            and observed.allows_paste(text) and observed.draft == text
+            and SLASH_NAME.fullmatch(text) is not None)
+
+
+class SlashMenuWait:
+    """Give the picker time to appear after the editor echoes a slash command."""
+
+    def __init__(self, text):
+        self.text = text
+        self.missing_since = None
+        self.seen_picker = False
+
+    def ready(self, observed):
+        if observed is not None and observed.selected and bare_slash(self.text) is not None:
+            self.seen_picker = True
+        if self.seen_picker or not _picker_free_draft(observed, self.text):
+            self.missing_since = None
+        else:
+            now = time.monotonic()
+            if self.missing_since is None:
+                self.missing_since = now
+            if now - self.missing_since >= SLASH_MENU_WAIT:
+                return True
+        return ready(observed, self.text)
+
+
 def ready(observed, text):
     if (observed is None or observed.draft is None or observed.waiting
             or not observed.allows_paste(text)):
         return False
     command = bare_slash(text)
     if command is not None or observed.selected:
-        # Even without a known picker, the draft can appear before it opens.
         return command is not None and command!='/' and command==observed.draft==observed.selected_command
     if observed.scrolled:
         # Only the end of a tall draft is visible, so it must end the text.
@@ -449,21 +482,25 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
                 return defer('unknown', 'paste_failed')
             previous=None
             problem=None
+            menu_wait = SlashMenuWait(text)
             while time.monotonic()<end:
                 view=capture(command,pane)
                 if not view or view.identity!=before.identity:return defer('unknown', 'pane_changed')
                 problem=completion_problem(view,text)
-                choice=(view.draft,view.selected_command) if ready(view,text) or problem=='completion-mismatch' else None
+                choice=(view.draft,view.selected_command) if menu_wait.ready(view) or problem=='completion-mismatch' else None
                 if choice is not None and choice==previous:
                     if not admit():
                         return defer('unknown', 'pane_changed')
                     if time.monotonic()>=end:
                         return defer('unknown', 'submission_deadline')
                     view=capture(command,pane)
-                    if view and view.identity==before.identity and (view.draft,view.selected_command)==choice:
+                    if not view or view.identity!=before.identity:
+                        return defer('unknown', 'pane_changed')
+                    confirmed = menu_wait.ready(view)
+                    if (view.draft,view.selected_command)==choice:
                         if mismatched_command(view,text):
                             return defer('unknown', 'completion_mismatch')
-                        if ready(view,text) and time.monotonic()<end:
+                        if confirmed and time.monotonic()<end:
                             if command('send-keys','-t',pane,'C-m').returncode:
                                 return defer('unknown', 'enter_failed')
                             break
