@@ -4176,9 +4176,9 @@
       }
     }
   },
-  "inventory_digest": "23f1bfaba6c0771dd1b11bc8a5fc17bf3f531dca2be814820187e6d91af30ea9",
+  "inventory_digest": "35f69dd618d55a2dc71e9a766dc7e5183a3a5cb69891f870deaa8e2a30bdd603",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "467a702a79f63e6cd4a675bf8f9880dd468c2bfde79d51c9a794e7cbfc0ccee5",
+  "source_digest": "ce3fff3bb599862a494379da1f4971cb119224e79a1e152543896802d92d06af",
   "surface": "cockpit",
   "version": 1
 }
@@ -10693,7 +10693,10 @@ function renderProviderTabs(){
     providerTabs.append(b);
   });
   const local=selFamily==='local',choices=entries.filter(e=>e.family===selFamily);
-  spawnModelSearch.hidden=spawnModelSearchField.hidden=!local&&choices.length<spawnSearchThreshold;
+  // Count the rows the sheet shows: Gemini lists each effort family once.
+  const rowCount=[...new Set(choices.map(e=>e.provider))].reduce((count,provider)=>count+
+    SpawnPicker.displayModels(provider,choices.filter(e=>e.provider===provider).map(e=>e.model),selModel).length,0);
+  spawnModelSearch.hidden=spawnModelSearchField.hidden=!local&&rowCount<spawnSearchThreshold;
   const hadDynamicSelection=Number.isInteger(selUrlIndex);
   let selected=choices.find(e=>e.provider.id===selProvider&&e.model.id===selModel&&
     (!Number.isInteger(e.model.url_index)||e.model.url_index===selUrlIndex)&&(!e.model.url_key||e.model.url_key===selUrlKey));
@@ -10869,12 +10872,13 @@ function renderSpawnModelChip(){
   if(maker)spawnModelMark.append(spawnBrand(maker.asset+'.svg'));
   spawnModelMark.classList.toggle('spawn-local-maker',Boolean(maker));
   spawnModelMark.title=maker?maker.label+' · Local':'';
-  const name=model?.display_name||model?.id||'Model';
+  const geminiFamily=SpawnPicker.geminiFamily(provider,model?.id);
+  const name=geminiFamily||model?.display_name||model?.id||'Model';
   spawnModelLabel.textContent=compactSpawnModelLabel(name);
   const info=effortsForModel(provider,selModel);
   const effort=effectiveSpawnEffort(provider,selModel);
   const harness=provider&&model&&SpawnPicker.harnesses(provider,model).find(h=>h.id===selHarness);
-  const description=[name,model?.id!==name?model?.id:'',spawnModelMark.title,harness?.label,effort].filter(Boolean).join(' · ');
+  const description=[name,!geminiFamily&&model?.id!==name?model?.id:'',spawnModelMark.title,harness?.label,effort].filter(Boolean).join(' · ');
   spawnModelButton.title=description;spawnModelButton.setAttribute('aria-label','Model and effort: '+description);
   spawnPips.hidden=!info.efforts?.length;
   const index=info.efforts?.indexOf(effort)??-1;
@@ -10976,7 +10980,8 @@ function renderModels(){
   }
   modelChoices.replaceChildren();
   const query=spawnModelSearch.hidden?'':spawnModelSearch.value.trim().toLowerCase();
-  const {current,older}=splitOverflowModels({...provider,models});
+  const rows=SpawnPicker.displayModels(provider,models,selModel);
+  const {current,older}=splitOverflowModels({...provider,models:rows});
   const addModel=(parent,model)=>{
     const label=document.createElement('label');label.className='model-choice';
     const input=document.createElement('input');
@@ -10985,13 +10990,13 @@ function renderModels(){
       selModel=model.id;selHarness=null;spawnProblem='';renderHarnesses();
       saveSpawnDraft();
     });
-    const name=document.createElement('span');name.className='model-choice-name';name.textContent=model.id;
+    const name=document.createElement('span');name.className='model-choice-name';name.textContent=model.pickerLabel||model.id;
     label.append(input,name);
-    label.title=[model.id,model.badge].filter(Boolean).join(' · ');
+    label.title=[...(model.variantIds||[model.id]),model.badge].filter(Boolean).join(' · ');
     parent.appendChild(label);
   };
   if(query){
-    const matches=[...current,...older].filter(model=>model.id.toLowerCase().includes(query));
+    const matches=[...current,...older].filter(model=>(model.variantIds||[model.id]).some(id=>id.toLowerCase().includes(query)));
     matches.forEach(model=>addModel(modelChoices,model));
     if(!matches.length){
       const empty=document.createElement('p');empty.className='spawn-empty';empty.textContent='No models found. Try another name.';

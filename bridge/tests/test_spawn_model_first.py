@@ -403,6 +403,79 @@ def test_empty_provider_keeps_its_configuration_error_visible(tour_browser):
     assert result['disabled']
 
 
+def test_gemini_lists_families_and_uses_the_catalog_effort_levels(tour_browser):
+    _, evaluate = tour_browser
+    result = evaluate("""(async()=>{
+      const levels=['low','medium','high','xhigh'];
+      const neon='gemini-fixture-neon',carbon='gemini-fixture-carbon';
+      const neonIds=levels.map(level=>neon+'-'+level),carbonIds=[carbon+'-medium',carbon+'-high'];
+      const exactIds=['gemini-fixture-orchestrator','gemini-fixture-orchestrator-neon'];
+      const ids=[...neonIds,...carbonIds,...exactIds];
+      const provider={id:'gemini',program:'antigravity',capabilities:{effort_required:true},
+        efforts:levels,models:ids.map(id=>({id,default:id===neon+'-high'})),
+        model_efforts:Object.fromEntries(ids.map(id=>[id,id.startsWith(neon)?levels:
+          id.startsWith(carbon)?['medium','high']:['low','medium','high']]))};
+      spawnCatalog={providers:[provider],naming:{},dirs:[]};
+      selFamily=null;selProvider=null;selModel=null;selHarness=null;selEffort=null;
+      spawnTask.value='Fixture task';spawnDirPath='/workspace';
+      renderProviderTabs();
+      const modelRows=()=>[...modelChoices.querySelectorAll('.model-choice-name')].map(el=>el.textContent);
+      const detents=()=>Number(effortChoices.querySelector('input').max)+1;
+      const search=query=>{spawnModelSearch.value=query;spawnModelSearch.dispatchEvent(new Event('input'));};
+      const state=()=>({rows:modelRows(),levels:detents(),disabled:spawnSubmit.disabled,
+        checked:modelChoices.querySelector('input:checked')?.value});
+      // Eight catalog IDs, four rows: the search field follows the rows.
+      const initial=state(),initialSearch=!spawnModelSearch.hidden;
+      const effort=effortChoices.querySelector('input');
+      effort.value=effort.max;effort.dispatchEvent(new Event('input'));
+      const chip=spawnModelButton.title;
+      let posted=null;
+      const original=window.fetch;
+      window.fetch=(url,options)=>{
+        if(String(url)!=='/telemetry/spawn')return original(url,options);
+        posted=JSON.parse(options.body);
+        return Promise.resolve({ok:false,json:async()=>({error:'Fixture'})});
+      };
+      try{await submitSpawn(new Event('submit',{cancelable:true}));}
+      finally{window.fetch=original;}
+      modelChoices.querySelector('input[value='+carbonIds[0]+']').click();
+      const changed=state(),changedEffort=spawnPayloadFromForm().effort||null;
+      spawnPendingSelection={family:'gemini',provider:'gemini',model:neon+'-xhigh',harness:'antigravity',effort:'xhigh'};
+      restoreSpawnSelection();
+      const restored=state(),restoredEffort=spawnPayloadFromForm().effort;
+      provider.efforts=['low','medium','high'];
+      renderProviderTabs();
+      const legacy=modelRows();
+      provider.efforts=levels;
+      provider.models.push({id:neon});
+      renderProviderTabs();
+      const exact=modelRows();
+      for(const name of ['argon','boron','cobalt'])for(const level of ['low','high']){
+        const id='gemini-fixture-'+name+'-'+level;
+        provider.models.push({id});provider.model_efforts[id]=['low','high'];
+      }
+      renderProviderTabs();
+      const wide={search:!spawnModelSearch.hidden,rows:modelRows().length};
+      search('xhigh');const matches=modelRows();search('');
+      return {initial,initialSearch,matches,posted:{model:posted.model,effort:posted.effort},chip,changed,changedEffort,
+        restored,restoredEffort,legacy,exact,wide};
+    })()""")
+    rows = ['gemini-fixture-neon', 'gemini-fixture-carbon',
+            'gemini-fixture-orchestrator', 'gemini-fixture-orchestrator-neon']
+    assert result['initial'] == dict(rows=rows, levels=4, disabled=True, checked='gemini-fixture-neon-high')
+    assert result['initialSearch'] is False
+    assert result['wide'] == dict(search=True, rows=8)
+    assert result['matches'] == ['gemini-fixture-neon (effort variants)']
+    assert result['posted'] == dict(model='gemini-fixture-neon-high', effort='xhigh')
+    assert result['chip'].startswith('gemini-fixture-neon · ') and result['chip'].endswith(' · xhigh')
+    assert result['changed'] == dict(rows=rows, levels=2, disabled=True, checked='gemini-fixture-carbon-medium')
+    assert result['changedEffort'] is None
+    assert result['restored'] == dict(rows=rows, levels=4, disabled=False, checked='gemini-fixture-neon-xhigh')
+    assert result['restoredEffort'] == 'xhigh'
+    assert result['legacy'] == [rows[0], 'gemini-fixture-neon-xhigh', *rows[1:]]
+    assert result['exact'] == [rows[0] + ' (effort variants)', *rows[1:], rows[0]]
+
+
 @pytest.mark.parametrize('width', [1600, 390])
 def test_launcher_and_model_sheet_fit_and_name_draft_can_be_discarded(tour_browser, width):
     client,evaluate=tour_browser
