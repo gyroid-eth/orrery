@@ -20,7 +20,7 @@ The app checks `:8791/cockpit.html`. If it is unreachable, the app starts the ba
 
 Check:
 
-1. `bridge/.venv/bin/python` exists and is executable
+1. `bridge/.venv/bin/python --version` reports Python 3.11 or later
 2. `bridge/orrery_backend.py` exists
 3. `orrery_root` in `~/.orrery/config.json` points to the actual checkout
 4. If you use an env override, `AGENTSTACK_ORRERY_ROOT` or the individual paths are passed to the app process
@@ -45,7 +45,7 @@ bridge/.venv/bin/python -m pip install -r bridge/requirements.txt
 bridge/.venv/bin/python -c "import aiohttp, websockets, PIL, pyte"
 ```
 
-Python older than 3.10 cannot parse the union type syntax.
+The backend requires Python 3.11 or later. Check `bridge/.venv/bin/python --version`. If it reports an older version, [recreate the Python environment](install.md#repository-and-python-environment).
 
 ## `pyte` is not found
 
