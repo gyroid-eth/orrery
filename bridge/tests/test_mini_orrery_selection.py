@@ -5,6 +5,7 @@ no production backend, tmux, or real agent is involved.
 """
 import json
 from pathlib import Path
+import time
 
 import pytest
 
@@ -314,3 +315,106 @@ def test_selected_parent_child_mail_overlays_the_spawn_line(mini_browser):
         {'horizontal': True, 'overlaid': True}, {'horizontal': False, 'overlaid': True},
     ]
     assert ' Q ' in result['diagonal']
+
+
+def graph_resize_metrics(evaluate):
+    return evaluate("""(()=>{
+      const graph=document.getElementById('orrery'),divider=document.getElementById('mailGraphDivider');
+      const portrait=graph.querySelector('.orrery-hit');
+      return {height:graph.clientHeight,viewBox:graph.getAttribute('viewBox'),
+        portrait:portrait?.getBoundingClientRect().width||0,
+        mail:document.getElementById('mail').clientHeight,
+        min:Number(divider.getAttribute('aria-valuemin')),max:Number(divider.getAttribute('aria-valuemax')),
+        now:Number(divider.getAttribute('aria-valuenow'))};
+    })()""")
+
+
+def test_mail_graph_divider_drag_reflows_the_live_svg_and_double_click_resets(mini_browser):
+    client, evaluate = mini_browser
+    before = graph_resize_metrics(evaluate)
+    assert before['height'] == 200
+    x, y = evaluate("""(()=>{
+      const r=document.getElementById('mailGraphDivider').getBoundingClientRect();
+      return [r.x+r.width/2,r.y+r.height/2];
+    })()""")
+    client.call('Input.dispatchMouseEvent', type='mousePressed', x=x, y=y,
+                button='left', buttons=1, clickCount=1)
+    client.call('Input.dispatchMouseEvent', type='mouseMoved', x=x, y=y+120, button='left', buttons=1)
+    for _ in range(100):
+        during = graph_resize_metrics(evaluate)
+        if during['viewBox'] != before['viewBox'] and during['height'] == 320:
+            break
+        time.sleep(.025)
+    else:
+        pytest.fail(f'Graph did not reflow during drag: {before} → {during}')
+    assert during['portrait'] > before['portrait']
+    assert during['mail'] == before['mail'] - 120
+    assert evaluate("localStorage.getItem('oc-mini-graph-height')") is None
+    client.call('Input.dispatchMouseEvent', type='mouseReleased', x=x, y=y+120,
+                button='left', clickCount=1)
+    assert evaluate("localStorage.getItem('oc-mini-graph-height')") == '320'
+    assert evaluate("document.activeElement.id") == 'mailGraphDivider'
+    assert evaluate(SELECTED) == ['Pilot']
+
+    for click_count in (1, 2):
+        client.call('Input.dispatchMouseEvent', type='mousePressed', x=x, y=y+120,
+                    button='left', buttons=1, clickCount=click_count)
+        client.call('Input.dispatchMouseEvent', type='mouseReleased', x=x, y=y+120,
+                    button='left', clickCount=click_count)
+    assert graph_resize_metrics(evaluate)['height'] == 200
+    assert evaluate("localStorage.getItem('oc-mini-graph-height')") == '200'
+    assert evaluate("""(()=>{
+      document.getElementById('mailGraphBtn').click();
+      return getComputedStyle(document.getElementById('mailGraphDivider')).display;
+    })()""") == 'none'
+
+
+def test_mail_graph_keyboard_clamps_and_restores_height_after_reload(mini_browser):
+    client, evaluate = mini_browser
+    evaluate("document.getElementById('mailGraphDivider').focus()")
+
+    def key(name, code, modifiers=0):
+        for event in ('keyDown', 'keyUp'):
+            client.call('Input.dispatchKeyEvent', type=event, key=name,
+                        windowsVirtualKeyCode=code, modifiers=modifiers)
+
+    key('Home', 36)
+    smallest = graph_resize_metrics(evaluate)
+    assert smallest['height'] == smallest['min'] == smallest['now'] == 120
+    key('ArrowDown', 40, modifiers=8)
+    assert graph_resize_metrics(evaluate)['height'] == 184
+    key('End', 35)
+    largest = graph_resize_metrics(evaluate)
+    assert largest['height'] == largest['max'] == largest['now'] == 520
+    key('ArrowUp', 38)
+    assert graph_resize_metrics(evaluate)['height'] == 496
+    assert evaluate("localStorage.getItem('oc-mini-graph-height')") == '496'
+    evaluate('window.graphResizeBeforeReload=true')
+    client.call('Page.reload', ignoreCache=True)
+    for _ in range(100):
+        try:
+            if evaluate("!window.graphResizeBeforeReload&&document.getElementById('orrery')?.clientHeight===496"):
+                break
+        except RuntimeError as error:
+            if 'Inspected target navigated or closed' not in str(error):
+                raise
+        time.sleep(.025)
+    else:
+        pytest.fail('Saved Mail graph height did not restore')
+    assert graph_resize_metrics(evaluate)['height'] == 496
+    client.call('Emulation.setDeviceMetricsOverride', width=1600, height=460,
+                deviceScaleFactor=1, mobile=False)
+    for _ in range(100):
+        compact = graph_resize_metrics(evaluate)
+        if compact['height'] < 496:
+            break
+        time.sleep(.025)
+    else:
+        pytest.fail('Mail graph height did not clamp to the shorter viewport')
+    assert compact['height'] == compact['max'] == compact['now']
+    assert compact['mail'] >= 140
+    assert evaluate("localStorage.getItem('oc-mini-graph-height')") == '496'
+    evaluate("document.getElementById('mailGraphDivider').focus()")
+    key('Enter', 13)
+    assert graph_resize_metrics(evaluate)['height'] == min(compact['max'], 200)
+    assert evaluate("localStorage.getItem('oc-mini-graph-height')") == '200'
