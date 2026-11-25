@@ -134,7 +134,7 @@ def main():
                 with camera(args.cdp, (1920, 1080)) as browser:
                     save_dashboard(browser, staged / "telemetry", cockpit)
             if args.group in {"all", "phone"}:
-                with camera(args.cdp, (390, 844), phone=True) as browser:
+                with camera(args.cdp, (412, 915), phone=True) as browser:
                     save_phone(browser, staged / "telemetry", phone)
         shutil.copytree(staged, args.output, dirs_exist_ok=True)
 

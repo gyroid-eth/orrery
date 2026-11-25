@@ -49,14 +49,14 @@ browser が session を選ぶまで pane attach は遅延します。recorder co
 | `GET /telemetry/mail/thread?thread_id=&limit=` | thread。既定 / 最大50 / 100 |
 | `GET /telemetry/portrait?name=&hi=&style=pixel` | local PNG または initials SVG |
 | `GET /telemetry/sessions` | tmux inventory と interactive client flag |
-| `GET /telemetry/skills` | built-in と `~/.claude/skills/*/SKILL.md`。30秒 cache |
+| `GET /telemetry/skills` | harness 別の組み込み候補と skill。Codex は検証した pane の native catalog を使う。[候補の説明](usage.md#skill-と-command-の候補) |
 | `GET /telemetry/fs/dirs?path=` | hidden を除く directory browser。最大200、root allowlist なし |
 | `* /network` | ORRERY Telemetry dashboard root embed |
 | `* /network/<tail>` | ORRERY Telemetry dashboard root 配下の passthrough |
 | `* /api/<tail>` | ORRERY Telemetry API passthrough |
 | `* /assets/<tail>` | ORRERY Telemetry asset passthrough |
 | `GET /portrait` | ORRERY Telemetry portrait passthrough |
-| `STATIC /<path>` | `bridge/` static。`/cockpit.html` を含み directory index 有効 |
+| `STATIC /<path>` | `PUBLIC_FILES` に列挙したページと同梱 asset だけを公開します。directory index は無効です。 |
 
 passthrough は全 method を受けますが、request body を読むのは POST だけです。upstream response header は `Content-Type` と cache 制御以外を保持しません。
 
@@ -115,7 +115,7 @@ restore は snapshot size への `resize-window`、control client の per-window
 
 ## Frontend runtime
 
-cockpit は `xterm.js 5.5.0` と `addon-fit 0.10.0` を CDN から読みます。terminal logic は script load を前提にするため、self-contained distribution に変更する場合は asset vendoring、CSP、license notice、bundle inclusion を同時に更新してください。
+端末は同梱の `xterm.js 5.5.0`、`addon-fit 0.10.0`、`addon-web-links 0.11.0` を backend から読み込みます。Google Fonts に接続できないときはローカルのフォントに切り替わります。インストールと更新には配布元への接続が必要です。
 
 prompt draft / history は各 window の `localStorage` だけに残ります。font、auto-shrink、split layout、mini mode / depth、colour theme、theme profile、NEW AGENT Advanced の開閉状態は `bridge/prefs_sync.js` が backend の `/telemetry/prefs`（`~/.orrery/prefs.json`）と同期します。読み込み時に同期 GET で `localStorage` へ写し、`setItem` を横取りして PUT し、4 秒ごとの GET で他 window の変更を取り込んで `oc:prefs-changed` を投げます。app window と browser tab が別々の設定を持って見た目が食い違う、という事故の再発防止です。Reset の対象は font と auto-shrink だけです。
 
@@ -136,7 +136,7 @@ spawn catalog の local fallback は modal 表示用で、spawn 実行の fallba
 
 - bind は `127.0.0.1` 限定
 - localhost 内の認証なし
-- static は `bridge/` 全体を directory index 付きで公開
+- static は `PUBLIC_FILES` の固定一覧だけを公開
 - `/telemetry/fs/dirs` に root allowlist なし
 - dashboard control route を passthrough
 - ORRERY Mail SQL だけ read-only

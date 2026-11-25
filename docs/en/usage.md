@@ -106,6 +106,12 @@ Rows in warmup, finished, gone, and retired states are not shown in the left ros
 
 Clicking a tile also switches the right mail rail's filter to that agent. Hovering over a tile (or focusing it with `Tab`) shows a detail card on the right. It lists the pane title, the subject of the latest mail, the last active time, the time it was registered with ORRERY Mail, the start time, provider / model / command, the number of deliverables (Deliverables; shown only when there is at least one), and the source and specificity of the description being shown.
 
+Check **Computer use** and **Browser use** in the detail card. For a running Claude Code or Codex CLI agent without a launch record, Telemetry API 52 or later provides a read-only observation from launch arguments and descendant processes. An item shows `Unknown` and a reason if the process, its arguments, the screen relay mode, or the Claude Chrome flag cannot be verified.
+
+For Antigravity, Telemetry API 53 or later shows the ORRERY launch selection or the effective screen mode when it can verify the running relay. If it cannot establish a value from the available records, the item shows `Unknown` and a reason.
+
+The detail card offers changes for legacy Claude Code or Codex CLI sessions with a verified conversation and a supported restart or resume. Delegated sessions need Telemetry API 45 or later. Standalone sessions need API 46 or later and saved launch settings. Select a setting and confirm **Restart** or **Resume** in the same conversation. Restart interrupts the current turn. For Codex App, persistent agents, conversation-only resume, and other ineligible sessions, the controls show the reason.
+
 ![Hover over an agent to inspect Computer use modes Off, View, and Control, and its Browser state](../images/cockpit_roster_detail.png)
 
 Deliverables are that agent's work logs (`LOG_*.md` files whose frontmatter `agent:` is that agent) that ORRERY Telemetry collects from the project's `logs/`. The list can be opened in the `Output` tab of the TELEMETRY agent panel ([TELEMETRY](#telemetry)).
@@ -125,7 +131,7 @@ Click the tile to enter its terminal, read the question, and send your answer fr
 
 ![Use need you to filter for agents awaiting input, read a question, and reply with 1](../images/cockpit_need_you.gif)
 
-How this looks in the TELEMETRY DECK and NETWORK is described in [Spotting agents that need you](#spotting-agents-that-need-you).
+See [Spotting agents that need you](#spotting-agents-that-need-you) for how this looks in the TELEMETRY DECK and NETWORK. See [Telemetry DECK](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/dashboard.en.md#deck) for the automatic Mail notice sent to a parent when its child is waiting on screens such as an approval or sign-in.
 
 ### Copy a name
 
@@ -224,7 +230,7 @@ The separate Telemetry mobile reader can show a short pane preview above a confi
 
 The adapter uses only existing PC-managed legacy panes, with the shared target guard and fresh socket/server/session/pane/kernel-birth checks. It does not guess a pane from an agent alias, start an agent, use another socket/global target, or require Codex launch records. Multiple panes require a choice; unknown targets stay unavailable. Sessions may be outside the reader's current metadata project.
 
-Only the selected open foreground pane refreshes every 3 seconds. Preview is literal text, at most 40 lines/6 KiB, with 64 KiB collection, a 3 second capture deadline and a 16 KiB serialized response limit. Recorder/restored history is not forwarded. Capture overflow discards the body without shifting ACK correspondence; missing termination quarantines the stream. Text may contain secrets; the existing PC recorder/OS recording is not erased by closing the phone sheet.
+Only the selected open foreground pane refreshes every 3 seconds. Preview is literal text, normally up to 120 lines / 12 KiB through the phone relay. Compatibility requests without the expanded preview selection get 40 lines / 6 KiB. The collection limit is 64 KiB, the capture deadline is three seconds, and the serialized response limit is 16 KiB. Recorder/restored history is not forwarded. Capture overflow discards the body without shifting ACK correspondence; missing termination quarantines the stream. Text may contain secrets; the existing PC recorder/OS recording is not erased by closing the phone sheet.
 
 Every line (at most 4 KiB UTF-8) requires Review→Send once. Review fixes the pane, exact text, Enter and 30 second expiry; changing the pane or losing preview requires a new review. One write lock covers fresh validation and all chunks/Enter; all tmux ACKs are awaited after releasing it. Received means terminal acceptance, not agent execution/completion. Partial failure/timeout is unknown, with no replay or remaining-chunk compensation. The same pane can change programs or become a shell; existing input, other writers and changes after the final check remain outside the guarantee. Phone close/background clears the preview/draft/unsent confirmation; ordinary PC input and history behavior remain unchanged. Real phone policy, keyboard and real-target acceptance are separate from repository fixtures.
 
@@ -318,39 +324,50 @@ The destination is the agent of the pane that is active at that moment (its face
 
 There is only one draft in the cockpit, and it is not split per destination agent. It is saved every time you type, survives a reload or a restart of ORRERY.app, and disappears when you send. It is stored in that window's `localStorage` and is not shared with other windows. Each standalone window has its own draft per session (it returns to the cockpit when closed; see [Standalone window](#standalone-window)).
 
-The composer sends a bracketed paste to the active pane, then sends a carriage return 250 ms later.
+The composer pastes into the target pane and checks that the input is ready before sending Enter. It checks each pane when you choose multiple recipients.
 
 | Action | Behavior |
 | --- | --- |
 | `Enter` | Send |
 | `Shift+Enter` | New line |
-| `Esc` | Interrupt |
+| `Esc` or the stop button (■) | Request an interrupt for the selected agent |
 | `↑` / `↓` | Send history of up to 50 entries |
 | File paste | Put the path of the copied file into the composer (a path containing spaces is wrapped in quotes) |
 | Image paste | Mac: forward a literal `Ctrl+V` to the TUI. WSL: save the image as a PNG and put its path into the composer |
 
 There is a guard that prevents accidental sending on Enter during IME composition. The send history is also stored in `localStorage`.
 
-`⎋ STOP` is the same interrupt as `Esc`, and `SEND ⏎` is the same send as `Enter`. When you send, `sent → <agent>` is shown. The face and name of the destination agent appear to the left of the composer. Pasting a file inserts its path ([Open from and hand to the terminal](#open-from-and-hand-to-the-terminal)).
+The send button works like `Enter`. Once acceptance is confirmed, you see `Sent to <agent>`. You can send plain text from the composer while Hermes is working. Hermes handles it according to its busy-input setting, which defaults to interrupting the current turn. Automatic ORRERY Mail notifications wait while Hermes is busy.
+
+When the selected agent is working and the composer has no draft, attachment, or explicit recipient, the send button becomes the stop button (■). When a suggestion menu is open, `Esc` closes it first.
+
+`Esc` and the stop button send `Ctrl+C` to a working Hermes agent or `Esc` to the other harnesses. When a working agent returns to its input prompt, the cockpit shows `Interrupted → <name>`. When Esc reaches an idle agent, it shows `⎋ Esc → <name>`. The interrupt request is refused for an idle Hermes agent because `Ctrl+C` can exit Hermes.
 
 ### Skill and command suggestions
 
-When the input starts with `/` or `$`, up to 8 skills and built-in commands of the destination CLI are offered as suggestions. Choose with `↑` / `↓` and confirm with `Tab` or `Enter`, and it is inserted with that CLI's correct symbol (`/` for Claude and Gemini, `$` for Codex).
+When the input starts with `/` or `$`, up to eight suggestions appear for the destination CLI. Choose with `↑` / `↓` and use `Tab` or `Enter` to insert the suggestion. Built-in commands use `/`. Skills use `/` for Claude and Antigravity and `$` for Codex.
 
 | Destination | Where skills are looked up | Built-ins |
 | --- | --- | --- |
 | Claude Code | `~/.claude/skills` | compact / clear / model / mcp / resume / help |
-| Codex | `~/.codex/skills` (including bundled skills) | compact / new / model / approvals / status / help |
+| Codex CLI | Native catalog using the verified pane's `CODEX_HOME` and working folder. Without a verified target, only built-ins are offered | compact / new / model / approvals / status / help |
+| Antigravity CLI | `~/.gemini/antigravity-cli/skills` | compact / skills / help |
 | Gemini | `~/.gemini/skills` | compress / clear / model / mcp / stats / help |
 
+For dsh and Hermes the cockpit checks the terminal's own slash suggestions. Its composer has no separate skill catalog for these harnesses.
+
 ![Typing / in the Codex composer offers the /approvals command and the $review-pr skill](../images/cockpit_skill_menu.png)
+
+A bare slash command is sent with the trailing space left by the suggestion picker removed. Input with arguments is sent as entered. If the terminal shows no suggestions (including Antigravity’s `No matches`), the command is sent when the terminal input matches it. If the terminal selects a different suggestion or its selection cannot be verified, the composer keeps the draft and withholds submission.
+
+For a command that opens a different CLI screen, such as `/help` or `/model`, the cockpit confirms acceptance when it recognizes the screen for the submitted command.
 
 ### Send guard
 
 Before sending, if the first line is one of the following, it is not sent, and a confirmation bar appears above the composer.
 
-- **A built-in that ends or deletes the session**: Claude's `/clear` `/logout` `/exit` `/quit`, Codex's `/logout` `/quit` `/exit` `/new`, Gemini's `/clear` `/exit` `/quit`
-- **A mixed-up symbol**: when you try to send `/name` to Codex or `$name` to Claude. If a skill with the same name exists, a button to correct the symbol and send is shown
+- **A built-in that ends or deletes the session**: Claude's `/clear` `/logout` `/exit` `/quit`, Codex's `/logout` `/quit` `/exit` `/new` `/clear`, and Antigravity and Gemini's `/clear` `/exit` `/quit`
+- **A mismatched skill prefix or an unrecognized Codex command**. For example, if you try to send `/review-pr` to Codex and a skill of that name exists, the guard offers to send `$review-pr`
 
 The buttons on the bar are: correct and send (for example `send as $review-pr`), `send as typed` (send it as is), and `cancel`.
 
@@ -389,28 +406,30 @@ For your first DeepSeek, dsh, or Hermes setup, follow the guide in the order bel
 **Once setup is complete, use the form as follows.**
 
 1. Select a portrait under `Choose a scientist`, or leave `AUTO` selected.
-2. Under `Model`, choose Claude, Codex, DeepSeek, or Local models, then select a model in the middle column. Local models can be searched.
+2. Under `Model`, choose from the available groups, then select a model in the middle column. The groups include Claude, Codex, DeepSeek, Local models, and Antigravity when installed. Local models can be searched.
 3. Choose a `Harness` on the right. DeepSeek and Local offer the dsh / Hermes entries in your catalog. Unavailable entries cannot be selected. They show a preparation or compatibility explanation, such as a missing runtime or key-store reader, with a setup-guide link.
 4. Check `Helper model` and `Effort` when shown, then set the launch directory and task below. See [Standard New Agent for DeepSeek and Local](configuration.md#standard-new-agent-for-deepseek-and-local) for details.
 
+5. In macOS legacy mode, when the Telemetry API 53 or later catalog supplies `computer_modes`, choose **Off** (no screen tools), **View** (inspect), or **Control** (inspect and interact) under **Computer use** for Claude Code, Codex CLI, dsh, Hermes, or Antigravity CLI. Older catalogs can show a switch that uses the compatibility Cua Driver selection. **Browser** offers the available modes from Off, Temporary Chrome, and My Chrome. Older catalogs can show a single switch. Fresh mode hides these controls. See the [phone guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md) for the separate mobile launch form.
+
+The cockpit launches independent agents. Antigravity requires macOS and a Telemetry catalog that advertises standalone support (API 50 or later). Supported launches can use a folder outside Git. Use standalone Telemetry's NEW AGENT form to select a parent or Isolation. With an older Telemetry that does not support standalone Antigravity, use its delegated launch form. See Telemetry's [Computer use](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/computer-use.en.md) and [Antigravity](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.en.md) guides for setup and compatibility.
+
 ![Choose a provider and harness in Model and effort, then open the computer and browser menus](../images/cockpit-native-spawn.gif)
 
-These captures use the actual screen and its live catalog, cropped to the name, portraits, model, and Harness controls. `Spawn` was not pressed. Available models and Harnesses depend on your installation. Portrait sources and licenses are in [CREDITS](../../CREDITS.md).
+The GIF uses the cockpit UI with a demo catalog and shows the choices before launch. Available models and Harnesses depend on your installation. Portrait sources and licenses are in [CREDITS](../../CREDITS.md).
 
 Input fields:
 
 - Identity: Auto, or Scientist + Adjective
-- Claude / Codex / DeepSeek / Local models, Harness, and Helper model / reasoning effort when shown
+- Model, Harness, and Helper model / reasoning effort when shown
 - Working directory
+- Computer use and Browser when available
 - Task (required, up to 4000 characters)
-- Standalone or parent
-- Role / emoji / group
-- Worktree / base revision
-- Headless or Ghostty
+- Role
 
-Parent candidates are running agents. Auto sends `name:null`, and the final validation of name, model, effort, and directory is done by the ORRERY Telemetry server.
+Auto sends `name:null`. Telemetry validates the name, model, effort, and directory. Parent, group, worktree, and base revision are options in the separate Telemetry ADVANCED form.
 
-When you press `Spawn`, progress appears at the bottom right. It is `LAUNCHING · <name>`, then `SPAWNED · <name>` if it launched, or `SPAWN FAILED · <name> · <reason>` if it failed. If no result comes back after 140 seconds, `no verdict after 140s` is shown (the agent may have started, so check the roster).
+After you press `Spawn`, the cockpit waits for the launch result until the deadline Telemetry reports. If Telemetry supplies no deadline, it waits 140 seconds. When you see `No launch result after …s`, check the roster before retrying.
 
 When you choose a scientist, an unused adjective is chosen automatically, and you can re-roll it with 🎲 on the name card. In the spawn modal on the embedded TELEMETRY side, on a name collision, `SHUFFLE` has the server propose another verified name for the same scientist.
 

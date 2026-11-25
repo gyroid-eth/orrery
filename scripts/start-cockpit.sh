@@ -21,7 +21,7 @@ PORT="${PORT:-8791}"
 VENV_DIR="${ORRERY_VENV:-${BRIDGE_DIR}/.venv}"
 AGENTSTACK_ENV_FILE="${AGENTSTACK_HOME:-${HOME}/.agentstack}/env.sh"
 MIN_PY_MAJOR=3
-MIN_PY_MINOR=10
+MIN_PY_MINOR=11
 # The orrery-telemetry API generation this cockpit needs: the "api" number in
 # its /api/version, which orrery-telemetry raises only when it adds or changes
 # something the cockpit relies on. An older one only gets a warning at startup
@@ -36,7 +36,7 @@ TELEMETRY_RELEASES_URL="${ORRERY_UPDATE_CHECK_URL:-https://api.github.com/repos/
 check_only=false
 
 usage() {
-  cat <<'EOF'
+  cat <<EOF
 Usage: scripts/start-cockpit.sh [--check] [-h|--help]
 
 Check prerequisites, prepare the Python venv, and start the ORRERY cockpit
@@ -49,7 +49,7 @@ Options:
 
 Environment (all optional):
   PORT                 backend port (default 8791)
-  ORRERY_PYTHON        Python 3.10+ used to create the venv
+  ORRERY_PYTHON        Python ${MIN_PY_MAJOR}.${MIN_PY_MINOR}+ used to create the venv
   ORRERY_VENV          venv directory (default: bridge/.venv)
   ORRERY_PROJECT_KEY   project key (default: taken from orrery-telemetry)
   ORRERY_DASHBOARD_URL orrery-telemetry dashboard (default: from its port)
@@ -152,7 +152,7 @@ if [ -n "${ORRERY_PYTHON:-}" ]; then
 else
   try_python python3
   try_python "$(telemetry_value AGENTSTACK_PYTHON)"
-  for candidate in python3.14 python3.13 python3.12 python3.11 python3.10 \
+  for candidate in python3.14 python3.13 python3.12 python3.11 \
     /opt/homebrew/bin/python3 /usr/local/bin/python3; do
     try_python "$candidate"
   done
@@ -162,6 +162,7 @@ if [ -n "$python_bin" ]; then
   ok "python: $python_bin ($("$python_bin" -c 'import platform; print(platform.python_version())'))"
 elif [ -x "${VENV_DIR}/bin/python" ] && py_version_ok "${VENV_DIR}/bin/python"; then
   # An existing venv is enough; a system Python is only needed to create one.
+  python_bin="${VENV_DIR}/bin/python"
   ok "python: existing venv ${VENV_DIR}"
 else
   if [ "$os_name" = Darwin ]; then
@@ -593,7 +594,7 @@ if [ ! -x "$venv_python" ] || ! py_version_ok "$venv_python"; then
   if [ -e "$VENV_DIR" ]; then
     say ""
     say "  NG    ${VENV_DIR} exists but is not a usable Python ${MIN_PY_MAJOR}.${MIN_PY_MINOR}+ venv."
-    say "        Fix: remove it (rm -rf \"${VENV_DIR}\") and run this script again."
+    say "        Fix: move this environment aside and run this script again."
     exit 1
   fi
   create_venv

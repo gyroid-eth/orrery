@@ -404,13 +404,13 @@ def save_phone(c, root, url):
     # Search selects the same Graph node regardless of the force layout.
     c.click("#graph-search-toggle")
     field = j("document.querySelector('#graph-search input').id")
-    frames.extend(d.type_frames("#" + field, "AmberCurie"))
+    frames.extend(d.type_frames("#" + field, "Turing"))
     c.wait("document.querySelector('#agent-results .agent-result-focus')")
     c.click("#agent-results .agent-result-focus")
     c.click("#graph-search-toggle")
     frames.append((d.frame(), 1550))
     j(
-        "OrreryMobileTerminal.open('AmberCurie',OrreryMobileIdentity.forName('AmberCurie'),'terminal')"
+        "OrreryMobileTerminal.open('Turing',OrreryMobileIdentity.forName('Turing'),'terminal')"
     )
     c.wait(
         "document.querySelector('#terminal-output')?.textContent.includes('Keyboard shortcuts')"
@@ -420,25 +420,39 @@ def save_phone(c, root, url):
     c.wait(
         "document.querySelector('#terminal-sheet .conversation-mode')?.textContent.includes('release review')"
     )
-    j("document.querySelector('#terminal-sheet .terminal-scroll').scrollTop-=160")
-    frames.append((d.frame(), 1650))
+    conversation = "#terminal-sheet .conversation-list"
+    j(f"document.querySelector('{conversation}').scrollTop=0")
+    c.wait(f"document.querySelector('{conversation}').scrollTop===0")
+    frames.append((d.frame(), 1600))
+    # Scroll by one complete message, keeping the next portrait below the bar.
+    j(f"""(() => {{
+      const list = document.querySelector('{conversation}');
+      const first = list.querySelector('[data-id="earlier-0"]');
+      const next = list.querySelector('[data-id="earlier-1"]');
+      list.scrollTop = next.offsetTop - first.offsetTop;
+    }})()""")
+    frames.append((d.frame(), 1600))
     c.wait("!!document.querySelector('#terminal-sheet textarea')")
     frames.extend(d.type_frames("#terminal-sheet textarea", "Check mobile."))
     j(
         """[...document.querySelectorAll('#terminal-sheet button')].find(b=>b.textContent.trim()==='Review input'||b.getAttribute('aria-label')==='Review input')?.click()"""
     )
     c.wait("document.getElementById('terminal-sheet').innerText.includes('Send once')")
-    frames.append((d.frame(), 1650))
+    j(f"document.querySelector('{conversation}').scrollTop=0")
+    c.wait(f"document.querySelector('{conversation}').scrollTop===0")
+    frames.append((d.frame(), 2000))
     j(
         """[...document.querySelectorAll('#terminal-sheet button')].find(b=>b.textContent.trim()==='Send once')?.click()"""
     )
     c.wait(
         "document.getElementById('terminal-sheet').innerText.includes('Received by terminal')"
     )
-    frames.append((d.frame(), 1950))
+    j(f"document.querySelector('{conversation}').scrollTop=0")
+    frames.append((d.frame(), 2100))
     d.gif("docs/images/mobile-graph-to-terminal.gif", frames)
 
     j("OrreryMobileTerminal.close()")
+    c.resize(390, 844)
     j(
         "if(document.querySelector('#graph-fullscreen').getAttribute('aria-expanded')==='true')document.querySelector('#graph-fullscreen').click()"
     )

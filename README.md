@@ -4,41 +4,42 @@
 
 <img src="app/icons-src/orrery-1024.png" alt="ORRERY icon" width="96">
 
-ORRERY は、Claude Code・Codex CLI・DeepSeek・Local modelsのagentをチームとして扱うcockpitです。DeepSeek・Local modelsは、設定した接続先のモデルをdshまたはHermesで動かします。どの agent が返事を待っているかを窓から窓へ探し回る必要はありません。何体動かしていても、人の判断を待っている agent だけが roster で点滅して一目で分かり、全員のターミナル・agent 同士のやり取り・残りの利用枠を一つの画面で見渡しながら、そのまま指示を送れます。Mac（`ORRERY.app` とブラウザ）と Windows（WSL2 とブラウザ）で使え、[ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) と連携します。[OS・機能ごとの確認状況](docs/install.md#動作環境)も確認してください。
+ORRERY は、agent のターミナルを並べて操作し、Mail のやり取りや利用枠を確認できる cockpit です。Claude Code、Codex CLI、導入済みの Antigravity、dsh または Hermes を使う DeepSeek／Local models に対応します。
 
 ## クイックスタート
 
-ORRERY は 2 つでできています。**cockpit**（この repository。ターミナルを並べて操作する画面）と、裏で agent と Mail を動かし Telemetry 画面を出す [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) です。**次の 1 行で両方入ります。** Mac のターミナル、または Windows の WSL2 Ubuntu 内で実行します。
+**まずブラウザーで cockpit を開きます。** macOS のターミナルか Ubuntu 24.04 以降（Windows では WSL2 の Ubuntu）で、下の前提をそろえてから実行します。この1行で cockpit と [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry/blob/master/README.md) をまとめて導入します。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
 ```
 
-表示される計画を読み、実行する場合は **`yes` と入力してEnterを押します**。`y`やEnterだけでは進みません。共通部分の確認が通ったときの出力例です（Claude/Codex CLIが未検出、既定ポートの場合の抜粋）。
+### 始める前に
 
-```text
-  ok    doctor: no problems
-  ok    selftest: Mail round trip, file reservation and dashboard all work
-  ORRERY's base is ready. Choose and prepare your provider below.
-    Open:          http://127.0.0.1:8791/cockpit.html
-```
+- **macOS**（Homebrew 導入済み）。`brew install curl git tmux python@3.13`。macOS 同梱の `lsof` を使います。
+- **Ubuntu／WSL2**。Ubuntu のシェルで `sudo apt update && sudo apt install -y ca-certificates curl git tmux python3 python3-venv xz-utils`。Hermes を使う場合は `sudo apt install libatomic1` も実行します。
 
-表示されたURLをブラウザで開きます。`WARN`や`NG`が出たら、その内容と[対処手順](docs/install.md#1-行で入れる更新する)を確認してください。共通の導入後は、使う系統に応じて準備します。4系統すべてを使う必要はありません。
+先に **Python 3.11 以上**を用意します。uv で導入済みの Python も使えます。一行版はソースを取得する前に前提を検査し、不足があれば対応方法を表示して止まります。uv 自体は必要に応じて共通 installer が入れます。[導入の詳細](docs/install.md#1-行で入れる更新する)・[利用中の agent に導入を手伝ってもらう](docs/install-with-agent.md)
 
-| 使う系統 | 準備するもの | 手順 |
-| --- | --- | --- |
-| Claude Code | Claude CodeのCLIとログイン | [Mac](docs/install.md#mac) / [WSL](docs/install.md#windows-11) |
-| Codex CLI | Codex CLIとログイン | [Mac](docs/install.md#mac) / [WSL](docs/install.md#windows-11) |
-| DeepSeek | APIキーとAPI利用残高、dshまたはHermes、接続設定 | [API初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
-| Local models | 対応APIのURL・model ID・サーバー専用キー、dshまたはHermes、接続設定 | [API初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
+### 共通部分の完了
 
-DeepSeek/Localだけを使う場合、ClaudeやChatGPTへのログインは不要です。dsh/Hermesはどちらか1つから始められます。Node.js 24.2以上が必要なのはdshを選ぶ場合で、Hermesだけなら`--dsh-node`の指定は不要です。API起動は現在、Mailのlegacy modeでのDeepSeek/Local × dsh/Hermesの対応組合せが対象です。任意のAPIとharnessの組合せを保証するものではありません。
+ターミナルに表示される計画を確認し、自分で **`yes` と入力して Enter** を押します。`ORRERY's base is ready` は doctor と Mail の往復・予約・dashboard の selftest が通ったことを示します。表示された `Open:` の URL（既定は `http://127.0.0.1:8791/cockpit.html`）をブラウザーで開き、**Your first flight** が見えれば共通部分の導入は完了です。ガイドは `Settings → Getting started → Your first flight` からも開けます。警告や失敗が出たら、[導入ガイド](docs/install.md#1-行で入れる更新する)で表示に対応する手順を確認します。
 
-`ORRERY's base is ready`は共通部分の確認結果です。Claude/Codex CLIを検出した場合はその名前も出ますが、CLIのログインやDeepSeek/LocalのAPI接続を確認した表示ではありません。APIを使う人は接続設定を済ませ、キーが必要な接続先ではOSへの保存も行い、ガイドの実起動で確かめます。OSごとの前提と未確認の範囲は[対応組合せと制限](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/managed-catalog.md)を参照してください。
+### 使う機能を追加する
 
-選んだ系統の準備ができたら、右側の **Your first flight** で画面の操作を試します。見当たらなければ `Settings → Getting started → Your first flight` から開けます（[ガイドの説明](#画面のガイドで始める)）。最初の依頼は、たとえば「短い挨拶を1文で返してください。ファイルや設定は変更しないでください。」から始められます。
+共通部分を入れたら、使う項目だけを設定します。CLI のログインと各 API の接続は、選んだガイドの初回起動で確認します。
 
-cockpit から入れると、子の OS ターミナル窓は既定では自動で開きません（`AGENTSTACK_AUTO_OPEN_CHILD=0`）。選択済みの設定は引き継ぎ、必要な窓は `Open tmux` で開けます。自動表示を有効にする手順と、古い設定・同値の env の扱いは[子の窓の自動表示](docs/install.md#子の窓の自動表示)を参照してください。
+| 使う機能 | 準備するものと手順 |
+| --- | --- |
+| Claude Code / Codex CLI | 使う CLI を入れてログイン。[Mac](docs/install.md#mac) / [WSL](docs/install.md#windows-11) |
+| DeepSeek / Local（dsh・Hermes） | API 接続、model、必要なキーと鍵束を準備。dsh は Node.js 24.2 以上を使用。[初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
+| Antigravity | Antigravity CLI のログインと追加 provider の導入。[Antigravity](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.md) |
+| 画面操作 | Cua Driver と OS の画面収録・操作の許可。[Computer use](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/computer-use.md) |
+| ブラウザー操作 | Chrome と利用する harness の接続設定。[ブラウザーの設定と許可](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/delegation.md#ブラウザと-computer-use-何が届くか人がやること) |
+| スマホ | Tailscale の設定と端末の到達範囲の確認。[スマホ閲覧](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md) |
+| ChatGPT MCP | 既定ポート 8792 の読み取り専用アダプターをペアリングし、専用 Tunnel と workspace を設定。[ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.md) |
+| Obsidian の研究セット | Obsidian と研究用の vault・skill を追加。[研究セット](docs/research-set.md) |
+| Codex App | Codex App と対応 CLI、plugin の導入と hook の承認。[Codex App 統合](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/codex-app.md) |
 
 ![cockpitとTelemetryは同じagentを見る2つの画面。Claude Code・Codexは各CLI、DeepSeek・LocalはdshかHermesで動き、tmuxとMailを使う](docs/images/cockpit_telemetry_relation.svg)
 
@@ -49,9 +50,9 @@ cockpit から入れると、子の OS ターミナル窓は既定では自動�
 | `~/orrery` | cockpit の source（起動・更新の script） |
 | `~/orrery-telemetry` | Telemetry・Mail・hook・installer の source。実際に動くのは `~/.agentstack` に入れた方 |
 | `~/.agentstack` | 実際に動いている本体、設定 `env.sh`、Mail の DB |
-| `~/orrery-work` | agent の作業 folder（project folder）。ORRERY の指示を書いた `CLAUDE.md` が入る。`+ NEW AGENT` の既定の folder。Mail と予約はこの単位 |
+| `~/orrery-work` | agent の作業 folder（project folder）。`+ NEW AGENT` の既定の folder。Mail と予約は作業フォルダの設定に従う |
 
-port は cockpit が 8791、Telemetry が 8770、Mail が 18765 です。`ORRERY.app` は、8791 の cockpit を開く窓です。作業 folder の変え方とアンインストールは[作業 folder とアンインストール](#作業-folder-とアンインストール)にあります。
+既定ポートは cockpit が 8791、Telemetry が 8770、新規の Mail が 18765 です。作業 folder の変え方とアンインストールは[作業 folder とアンインストール](#作業-folder-とアンインストール)にあります。
 
 ![ORRERY Cockpit。左に Agents、中央に3つのターミナルと入力欄、右に mini-orrery と Mail](docs/images/cockpit_overview.png)
 
@@ -99,7 +100,7 @@ legacy では Codex と、Telemetry API 35 以降で紐付けを確認した Cla
 
 ### 科学者の顔とモデルを選んで起動する（NEW AGENT）
 
-`+ NEW AGENT` で科学者の肖像を選ぶと名前が決まり、形容詞は調整できます。Claude・Codex・DeepSeek・Local models の4系統から model を、DeepSeek と Local では dsh / Hermes の Harness も選べます。利用できる model と Harness は導入済みの設定によって変わります。
+`+ NEW AGENT` で科学者の肖像を選ぶと名前が決まり、形容詞は調整できます。Claude・Codex・DeepSeek・Local models と、対応環境で導入済みの Antigravity から選べます。DeepSeek と Local では dsh／Hermes の Harness も選べます。
 
 **DeepSeek・dsh / Hermesを初めて使う人へ:** 通常の更新だけでは、APIキーや接続先は設定されません。cockpitにはAPIキーを入力する画面はありません。次の順で準備します。
 
@@ -234,13 +235,13 @@ WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同
 
 ## 動作要件
 
-- macOS、または Windows の WSL2（Ubuntu）。`ORRERY.app` とその installer、global hotkey は macOS だけ
-- 共通インストールはPython 3.11以上と`tmux`が必要です。適したPythonが無ければ、installerがuvでPython 3.12を用意します。cockpit単体の`start-cockpit.sh`は3.10以上で動きますが、Telemetryを含む共通導入の要件は3.11以上です
-- Node.js / npm、Rust / Cargo（desktop app の開発・build 時）
+- 共通導入は macOS のターミナルまたは Ubuntu（Windows では WSL2）で行い、cockpit はブラウザーで開きます。[OS ごとの確認状況](docs/install.md#動作環境)
+- cockpit 単体の起動と Telemetry を含む共通インストールには、Python 3.11 以上と `tmux` が必要です
+- 共通インストールには `curl` と `git` が必要です。macOS では同梱の `lsof` を使います。Ubuntu／WSL2 では `xz` が必要で、`lsof` がなければ `/proc` でポートの使用元を確認します
 - Homebrew で入れた `tmux` が見つからない Mac では、`brew shellenv` を shell に設定して `/opt/homebrew/bin` を PATH に通す（installer が `tmux` を「Missing」と言うのは、これが無いときです）
 - 稼働中の [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry)（全連携機能を使う場合）
 - ORRERY Mail SQLite（mail rail を使う場合）
-- runtime CDN への接続（`xterm.js` と addon。現行配布は完全 offline bundle ではありません）
+- 導入と更新には配布元へ接続できるネットワークが必要です。端末の `xterm.js` と addon は同梱しています
 
 詳細と役割別の要件は[インストール](docs/install.md)を参照してください。
 
@@ -254,12 +255,12 @@ install の 1 行に `--project-key` を足します。後から変えるとき�
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key ~/my-project
 ```
 
-**Obsidian の vault を agent に扱わせたいとき**は、`--project-key` に vault の path を渡します（例: `--project-key ~/Documents/MyVault`）。その vault の `CLAUDE.md` に ORRERY の指示の block が入ります（Codex の指示は `~/.codex/AGENTS.md` に入ります）。`CLAUDE.md` が既にあれば block だけが足され、既存の内容はそのまま残ります（[Obsidian と一緒に使う](#obsidian-と一緒に使う)）。**WSL2 では、作業 folder は Ubuntu の home の中に置きます。** Windows 側の folder（`/mnt/c/…`）を `--project-key` に渡すと、1 行の installer は何も変えずに止まります。Windows 側の vault は作業 folder にせず、作業 folder を Ubuntu の home に置いたまま、agent に `/mnt/c/…` の path を渡して扱わせます（[研究セット](docs/research-set.md)がこの形です）。
+**Obsidian の vault を agent に扱わせたいとき**は、`--project-key` に vault の path を渡します（例: `--project-key ~/Documents/MyVault`）。利用者単位の指示は [指示の移行](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.md) を参照してください。**WSL2 では、作業 folder は Ubuntu の home の中に置きます。** Windows 側の folder（`/mnt/c/…`）を `--project-key` に渡すと、1 行の installer は何も変えずに止まります。Windows 側の vault は作業 folder にせず、作業 folder を Ubuntu の home に置いたまま、agent に `/mnt/c/…` の path を渡して扱わせます（[研究セット](docs/research-set.md)がこの形です）。
 
-- 古い folder の `CLAUDE.md` の ORRERY の block は残ります。要らなければ marker の間を手で消します。
+- 旧版の作業フォルダーに指示の block があれば、[指示の移行](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.md#legacy-blocks)で確認します。
 - Mail は project 単位です。変える前に起動していた agent は Telemetry に出続けますが、古い project のままで、新しい agent と Mail が通じません。EXIT して起動し直してください。
 - `+ NEW AGENT` の folder の候補は、既定では作業 folder と `~` です。変えるには `cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"`（project key は引き継がれます。指定した folder だけになるので、作業 folder も入れます）。
-- **ORRERY の指示が入っていない folder（home など）で terminal から直接 `claude` を起動すると、その指示が無いまま動きます。** `/delegate` が使われず、親子の線も出ません。作業 folder（project key の folder や vault）の中で起動すれば、その folder の `CLAUDE.md` の block が入ります。agent は `+ NEW AGENT` か `~/.agentstack/bin/agent-start <作業 folder>` で起動します。
+- ORRERY の管理下で agent を起動するには、`+ NEW AGENT`、`~/.agentstack/bin/agent-start <作業 folder>`、または Codex 用の `agent-start-codex` を使います。
 
 ### アンインストール
 
@@ -296,6 +297,10 @@ DeepSeek・dsh / Hermesを新しく追加する場合は、更新後に[初期�
 
 手動での clone・venv・backend の起動、Telemetry と同じ project key / Mail DB の設定、desktop app の build と sidecar の設定は[インストール](docs/install.md)と[設定](docs/configuration.md)にまとめています。
 
+## macOS アプリを使う（上級）
+
+ブラウザーで agent の操作に慣れたら、macOS ではソースから `ORRERY.app` をビルドできます。ビルドには Node.js / npm と Rust / Cargo が必要です。アプリと専用 installer、global hotkey は macOS 向けです。配布用のビルドは提供していません。[ビルドと起動](docs/install.md#desktop-app-を-build-する)
+
 ## ドキュメント
 
 目的から探すときは[全 docs の索引](docs/README.md)へ。
@@ -305,9 +310,11 @@ DeepSeek・dsh / Hermesを新しく追加する場合は、更新後に[初期�
 | 文書 | 内容 |
 | --- | --- |
 | [インストール](docs/install.md) | 要件、venv、ORRERY Telemetry との接続、backend、`ORRERY.app` |
+| [agent と進める導入](docs/install-with-agent.md) | 計画と承認を分け、導入を手伝ってもらう |
+| [ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.md) | 読み取り専用アダプターと専用 Tunnel |
 | [設定](docs/configuration.md) | 環境変数の全数、既定値、接続先と保存先 |
 | [使い方](docs/usage.md) | roster、terminal、split、spawn、mail、TELEMETRY、replay |
-| [トラブルシューティング](docs/troubleshooting.md) | 起動、port、`:8770`、`pyte`、tmux、CDN |
+| [トラブルシューティング](docs/troubleshooting.md) | 起動、port、`:8770`、`pyte`、tmux、端末の配信 |
 | [アーキテクチャ概要](docs/ARCHITECTURE_OVERVIEW.md) | tmux、Codex App、network、データ保持、肖像画像の扱い |
 | [実装アーキテクチャ](docs/ARCHITECTURE.md) | backend、HTTP / WebSocket、tmux 制御の詳細 |
 | [旧 tmux 対象の保護](docs/runtime-target.md) | 接続先の固定、global pane の拒否と修復 |

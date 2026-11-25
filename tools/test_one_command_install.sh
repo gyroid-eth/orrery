@@ -31,10 +31,23 @@ check() { # $1 = name; rest = command that must succeed
   if "$@"; then pass "$name"; else fail "$name"; fi
 }
 
-# A repository of this checkout's committed state to clone from (file:// so
-# partial clone and sparse checkout behave as with GitHub).
-BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)"
-git clone --quiet --bare "$ROOT" "$WORK/orrery.git"
+# Seed the remotes from the installer scripts in the working tree, including
+# uncommitted fixes. Keep the fixture small so repeated file:// clones still
+# exercise Git fetch and checkout without copying the project assets and history.
+BRANCH=installer-fixture
+FIXTURE="$WORK/cockpit-source"
+mkdir -p "$FIXTURE/scripts" &&
+  cp -p "$ROOT/README.md" "$FIXTURE/" &&
+  cp -p "$ROOT"/scripts/{get,setup,start-cockpit,update}.sh "$FIXTURE/scripts/" &&
+  git -C "$FIXTURE" init --quiet --initial-branch="$BRANCH" &&
+  git -C "$FIXTURE" add README.md scripts &&
+  git -C "$FIXTURE" -c user.name=t -c user.email=t@t -c core.hooksPath=/dev/null \
+    -c commit.gpgSign=false commit --quiet -m "Cockpit installer fixture" &&
+  git clone --quiet --bare "$FIXTURE" "$WORK/orrery.git" || {
+    printf 'Could not create the cockpit installer fixture.\n' >&2
+    exit 1
+  }
+ROOT="$FIXTURE"
 COCKPIT_URL="file://$WORK/orrery.git"
 
 fresh_home() { # $1 = name; prints the new HOME
@@ -82,11 +95,21 @@ check "foreign origin: nothing fetched" test ! -e "$H/orrery/.git/FETCH_HEAD"
 # ---------------------------------------------------------------- read-only entry
 H="$(fresh_home readonly)"
 before="$(cd "$H" && find . | sort)"
-out="$(run_in "$H" ORRERY_REPO_URL="$COCKPIT_URL" ORRERY_REF="$BRANCH" bash "$ROOT/scripts/get.sh" --check 2>&1)"; status=$?
+out="$(run_in "$H" ORRERY_REPO_URL="$COCKPIT_URL" ORRERY_REF="$BRANCH" \
+  AGENTSTACK_CLAUDE_JSON="$H/user-mcp.json" AGENTSTACK_CLAUDE_SETTINGS="$H/user-settings.json" \
+  CODEX_HOME="$H/codex-home" CLAUDE_CONFIG_DIR="$H/claude-home" \
+  bash "$ROOT/scripts/get.sh" --check 2>&1)"; status=$?
 after="$(cd "$H" && find . | sort)"
 check "--check through get.sh: exits 0" test "$status" -eq 0
 check "--check through get.sh: HOME unchanged (no checkout, no state)" test "$before" = "$after"
 check "--check through get.sh: shows the plan" sh -c 'printf "%s" "$1" | grep -q "change these 4 things"' _ "$out"
+check "--check lists all four actual provider files" sh -c '
+  for file in "1. $2/user-mcp.json" "2. $2/user-settings.json" \
+              "3. $2/codex-home/AGENTS.md" "4. $2/claude-home/CLAUDE.md"; do
+    printf "%s" "$1" | grep -Fq "$file" || exit 1
+  done
+  ! printf "%s" "$1" | grep -Fq "4. $2/orrery-work/CLAUDE.md"
+' _ "$out" "$H"
 check "--check through get.sh: says where it would download" sh -c 'printf "%s" "$1" | grep -q "would be downloaded to"' _ "$out"
 
 # ---------------------------------------------------------------- old checkout -> remote setup
@@ -393,6 +416,9 @@ check "background: the default tmux server (the agents') is untouched" \
   test "$default_before" = "$(env -u TMUX tmux list-sessions -F '#{session_name}' 2>/dev/null | sort)"
 check "background: says how to stop it (only its session)" sh -c 'printf "%s" "$1" | grep -q "kill-session -t cockpit-18997"' _ "$out"
 check "background: says the window is free" sh -c 'printf "%s" "$1" | grep -q "this window is free"' _ "$out"
+check "background: gives the browser cockpit URL before tmux instructions" awk \
+  -v url="Open the cockpit in your browser: http://127.0.0.1:18997/cockpit.html" \
+  'index($0, url) { browser=NR } /Its output:.*tmux/ { tmux=NR } END { exit !(browser && tmux && browser < tmux) }' <<<"$out"
 git -C "$H/orrery" -c user.name=t -c user.email=t@t commit --quiet --allow-empty -m "newer"
 out="$(setup_in "$H" PORT=18997 ORRERY_COCKPIT_TMUX_SOCKET="$SOCK" bash "$H/orrery/scripts/setup.sh" --yes 2>&1)"
 check "background: an older cockpit it started is restarted" sh -c 'printf "%s" "$1" | grep -q "restarted the cockpit"' _ "$out"

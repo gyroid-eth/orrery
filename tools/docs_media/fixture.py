@@ -720,11 +720,40 @@ async def app_handle(req):
 
 
 fixture = json.loads((base / "tel/tests/fixtures/mobile_snapshot.json").read_text())
+# A short synthetic name fits the product's existing mobile Reader bar.
+PHONE_TERMINAL_NAME = "Turing"
+
+
+def phone_name(name):
+    return PHONE_TERMINAL_NAME if name == "NimbleTuring" else name
+
+
 phone_agents = [
-    dict(row, last_active=int(now) - row.get("last_active_age", 60))
+    dict(
+        row,
+        name=phone_name(row["name"]),
+        last_active=int(now) - row.get("last_active_age", 60),
+    )
     for row in fixture["agents"][:8]
 ]
+terminal_agent = next(row for row in phone_agents if row["name"] == PHONE_TERMINAL_NAME)
+terminal_agent.update(
+    computer_use="view",
+    computer_use_source="launch",
+    browser_use=False,
+    browser_use_source="launch",
+)
 phone_agent_names = {row["name"] for row in phone_agents}
+
+
+def phone_connections(kind):
+    return [
+        dict(edge, source=phone_name(edge["source"]), target=phone_name(edge["target"]))
+        for edge in fixture.get(kind, [])
+        if {phone_name(edge["source"]), phone_name(edge["target"])} <= phone_agent_names
+    ]
+
+
 phone_events = [
     dict(
         key="demo-review",
@@ -751,16 +780,8 @@ snapshot = dict(
     period=dict(seconds=86400, activity_unknown=0),
     graph=dict(
         nodes=phone_agents,
-        edges=[
-            edge
-            for edge in fixture.get("edges", [])
-            if {edge["source"], edge["target"]} <= phone_agent_names
-        ],
-        spawn=[
-            edge
-            for edge in fixture.get("spawn", [])
-            if {edge["source"], edge["target"]} <= phone_agent_names
-        ],
+        edges=phone_connections("edges"),
+        spawn=phone_connections("spawn"),
         degraded=False,
         unrepresented_edges=0,
     ),
@@ -817,6 +838,15 @@ async def phone_handle(req):
                 ]
             )
         ]
+        conversation = [
+            dict(
+                event,
+                mail=[dict(mail, recipients=[q.get("name")]) for mail in event["mail"]],
+            )
+            if "mail" in event
+            else event
+            for event in events
+        ]
         return J(
             dict(
                 ok=True,
@@ -824,7 +854,7 @@ async def phone_handle(req):
                 provider="codex",
                 limited=False,
                 tail_only=False,
-                events=history + events,
+                events=history + conversation,
             )
         )
     if p == "/view/conversation/preview":
@@ -837,7 +867,7 @@ async def phone_handle(req):
         contract = dict(contract="orrery-mobile-pane-v1", epoch="fixture-epoch")
         target = dict(
             choice="fixture-choice",
-            name="AmberCurie",
+            name=PHONE_TERMINAL_NAME,
             pane_label="Window 0 · pane 0",
             revision="fixture-revision",
         )
