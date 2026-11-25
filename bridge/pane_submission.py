@@ -28,7 +28,8 @@ SHELLS = frozenset({
 PROMPT = re.compile(r'^(\s*(?:(?:[⌸│☤]|[\w.-]+)\s+)?)([❯›>⌘])(?:[ \u00a0]+|$)(.*)')
 BORDER = re.compile(r'^[╭╰]?[─━]{8,}[╮╯]?$')
 CLAUDE_NAMED_BORDER = re.compile(r'^[─━]{8,}[ \t]+\S(?:.*\S)?[ \t]+[─━]+$')
-CLAUDE_SCROLLED_BORDER = re.compile(r'^[─━]{2,}[ \t]+[↑↓][ \t]+\d+[ \t]+more(?:[ \t]+[─━]+)?$')
+CLAUDE_SCROLLED_BORDER = re.compile(
+    r'^[─━]{2,}[ \t]+[↑↓][ \t]+\d+[ \t]+more(?:[ \t]+[─━]+(?:[ \t]+\S(?:.*\S)?[ \t]+[─━]+)?)?$')
 SGR = re.compile(r'\x1b\[[0-9;:]*m')
 DIM = re.compile(r'\x1b\[(?:[0-9]+;)*2(?:;[0-9]+)*m')
 CLAUDE_QUEUE_HINT = 'Press up to edit queued messages'

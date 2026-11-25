@@ -545,3 +545,17 @@ def test_claude_scrolled_draft_shows_only_its_end():
             'Fetch inbox to read the rest.')
     assert submission.ready(view, text)
     assert not submission.ready(view, 'A different prompt that ends elsewhere.')
+
+
+def test_claude_scrolled_draft_with_a_named_border():
+    # A named session draws its name at the right of the scrolled border.
+    rows = ['─── ↑ 1 more ' + '─' * 20 + ' FixtureAgent ─',
+            '  the middle of a long notification that wraps',
+            '  and ends here. Fetch inbox to read the rest.',
+            '─' * 40,
+            '  fixture | Opus | ctx: 22% used']
+    metadata = '/tmp/fixture.sock\t100\t%1\t200\t2\t0\t48\t1\tclaude'
+    view = submission.frame(metadata, rows, '%1')
+    assert view.scrolled and not view.empty
+    assert submission.ready(view, 'ORRERY Mail notification: hidden start, then the middle of '
+                            'a long notification that wraps and ends here. Fetch inbox to read the rest.')
