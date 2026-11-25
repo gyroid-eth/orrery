@@ -106,6 +106,7 @@ html[data-color-theme="light"] #spawnOverlay {
   color:var(--amber);border-color:color-mix(in srgb,var(--amber) 55%,transparent);
   background:color-mix(in srgb,var(--amber) 9%,transparent);
 }
+#spawnForm #spawnComputerUse[aria-disabled="true"]{opacity:.55;cursor:not-allowed}
 .spawn-tools button[aria-checked="true"] svg {animation:spawn-pop .5s var(--spawn-spring)}
 #spawnForm .spawn-tools button[data-browser-mode=personal]{color:var(--amber);background:var(--panel-2)}
 #spawnForm .spawn-tools button[data-browser-mode=temporary]{position:relative}

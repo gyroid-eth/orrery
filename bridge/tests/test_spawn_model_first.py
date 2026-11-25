@@ -308,6 +308,31 @@ def test_browser_icon_selects_modes_without_adding_a_layout_control(tour_browser
     assert result['limited'] == 'true' and 'Antigravity' in result['reason']
 
 
+@pytest.mark.parametrize('browser_modes', [False, True])
+def test_wsl_computer_use_is_opt_in_and_uses_managed_screen(tour_browser, browser_modes):
+    _, evaluate = tour_browser
+    result = evaluate('''(()=>{
+      spawnCatalog={computer_use_transport:'orrery-screen',computer_use:true,
+        providers:[{id:'claude',program:'claude-code',models:[{id:'fixture',default:true}]}]};
+      if(BROWSER_MODES)spawnCatalog.browser_modes={'claude-code':['off','temporary','personal']};
+      selFamily=null;selProvider=null;selModel=null;selHarness=null;renderProviderTabs();
+      const initial=spawnToolOptions().tools;
+      spawnComputerUse.click();
+      const selected=spawnToolOptions().tools;
+      spawnCatalog.computer_use=false;
+      spawnCatalog.computer_use_reason='Start Windows Cua Driver.';
+      renderSpawnTools();
+      spawnComputerUse.click();
+      return {initial,selected,blocked:spawnToolOptions().tools,
+        reason:spawnComputerUse.title,disabled:spawnComputerUse.getAttribute('aria-disabled'),
+        visible:!spawnTools.hidden&&!spawnComputerUse.hidden,checked:spawnComputerUse.getAttribute('aria-checked')};
+    })()'''.replace('BROWSER_MODES', json.dumps(browser_modes)))
+    browser = {'browser_mode': 'personal'} if browser_modes else {'browser': {}}
+    assert result == {'initial': browser, 'selected': {**browser, 'screen': {
+        'server': 'orrery-screen', 'access': 'operate'}}, 'blocked': browser,
+        'reason': 'Start Windows Cua Driver.', 'disabled': 'true', 'visible': True, 'checked': 'false'}
+
+
 def test_browser_off_keeps_the_standard_base_on_current_telemetry(tour_browser):
     _, evaluate = tour_browser
     result = evaluate('''(()=>{
