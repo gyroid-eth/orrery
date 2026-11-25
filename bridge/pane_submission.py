@@ -31,6 +31,7 @@ CLAUDE_NAMED_BORDER = re.compile(r'^[─━]{8,}[ \t]+\S(?:.*\S)?[ \t]+[─━]+
 SGR = re.compile(r'\x1b\[[0-9;:]*m')
 DIM = re.compile(r'\x1b\[(?:[0-9]+;)*2(?:;[0-9]+)*m')
 CLAUDE_QUEUE_HINT = 'Press up to edit queued messages'
+CLAUDE_SUGGESTION = re.compile(r'^[  ]*\x1b\[(?:[0-9]+;)*2(?:;[0-9]+)*m[^\x1b]+(?:\x1b\[(?:0|22)?m[  ]*)?$')
 COLLAPSED = re.compile(r'\[Pasted text #\d+(?: \+\d+ lines?)?\]')
 HERMES_PASTE = re.compile(r'\[Pasted text #(\d+): (\d+) lines → /.+/pastes/paste_\1_\d{6}\.txt\]')
 PASTING = re.compile(r'^\s*(?:Pasting(?:…|\.\.\.)|Waiting for startup\b)', re.I)
@@ -159,8 +160,11 @@ def frame(metadata, lines, pane):
             styled=lines[start]
             # A queued turn leaves an empty Claude editor that draws this
             # dim hint, with the caret possibly styling its first letter.
+            # After a turn Claude can also suggest a next prompt, drawn
+            # entirely dim; a typed draft is never dim.
             claude_hint=(glyph=='❯' and framed and not boxed and
-                         ('\x1b[3m' in styled or (draft==CLAUDE_QUEUE_HINT and DIM.search(styled))))
+                         ('\x1b[3m' in styled or (draft==CLAUDE_QUEUE_HINT and DIM.search(styled))
+                          or bool(CLAUDE_SUGGESTION.match(styled.partition('❯')[2]))))
             if (glyph=='›' and draft=='Ask Codex to do anything' and '\x1b[2m' in styled
                     or claude_hint
                     or boxed and draft==DSH_PLACEHOLDER and '\x1b[38;5;145m' in styled

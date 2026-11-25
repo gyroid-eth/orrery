@@ -399,3 +399,19 @@ with open(sys.argv[1], 'w', buffering=1) as out:
             await asyncio.gather(*writers,return_exceptions=True)
             await bridge.stop()
             call('kill-server')
+
+
+@pytest.mark.parametrize('styled,column,empty', [
+    # Claude suggests a next prompt after a turn: dim text at the caret.
+    ('\x1b[39m❯\xa0\x1b[2mrun the focused tests again\x1b[0m', 2, True),
+    # A typed draft is never dim, wherever the caret is.
+    ('\x1b[39m❯\xa0run the focused tests again', 2, False),
+    ('\x1b[39m❯\xa0run the focused tests again', 29, False),
+    # Typed text followed by a dim completion is still a draft.
+    ('\x1b[39m❯\xa0run\x1b[2m the focused tests again\x1b[0m', 2, False),
+])
+def test_claude_prompt_suggestion_is_an_empty_editor(styled, column, empty):
+    border = '─' * 24
+    lines = [border, styled, border, '  fixture | Opus | ctx: 22% used']
+    metadata = f'/tmp/fixture.sock\t100\t%1\t200\t1\t0\t{column}\t1\tclaude'
+    assert submission.frame(metadata, lines, '%1').empty is empty
