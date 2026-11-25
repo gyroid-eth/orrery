@@ -215,15 +215,22 @@
   .col{min-height:0;display:flex;flex-direction:column;overflow:hidden}
   .col.roster{border-right:1px solid var(--hair)}
   .col.mail{grid-column:3;grid-row:1;border-left:1px solid var(--hair)}
+  .mail-divider,.mail-graph-divider{position:relative;touch-action:none;outline:none}
   .mail-divider{
-    position:relative;z-index:4;grid-column:3;grid-row:1;justify-self:start;translate:-50% 0;width:12px;
-    cursor:col-resize;touch-action:none;outline:none;
+    z-index:4;grid-column:3;grid-row:1;justify-self:start;translate:-50% 0;width:12px;cursor:col-resize;
   }
-  .mail-divider::after{
+  .mail-graph-divider{flex:0 0 12px;cursor:row-resize}
+  .miniorrery[hidden]+.mail-graph-divider{display:none}
+  .mail-divider::after,.mail-graph-divider::after{
     content:"";position:absolute;left:50%;top:50%;translate:-50% -50%;
-    width:2px;height:32px;border-radius:2px;background:var(--ink-faint);
+    border-radius:2px;background:var(--ink-faint);
   }
-  .mail-divider:is(:hover,:focus-visible,.dragging)::after{background:var(--amber);width:3px}
+  .mail-divider::after{width:2px;height:32px}
+  .mail-graph-divider::after{width:32px;height:2px}
+  .mail-divider:is(:hover,:focus-visible,.dragging)::after,
+  .mail-graph-divider:is(:hover,:focus-visible,.dragging)::after{background:var(--amber)}
+  .mail-divider:is(:hover,:focus-visible,.dragging)::after{width:3px}
+  .mail-graph-divider:is(:hover,:focus-visible,.dragging)::after{height:3px}
 
   .colhead{
     display:flex;align-items:center;justify-content:space-between;
@@ -1458,6 +1465,9 @@
         </button>
       </div>
       <svg class="miniorrery" viewBox="0 0 280 120" id="orrery" hidden></svg>
+      <div class="mail-graph-divider" id="mailGraphDivider" role="separator" tabindex="0" aria-orientation="horizontal"
+           aria-controls="orrery" aria-label="Resize mini graph"
+           title="Resize mini graph with Up or Down arrows or drag. Enter or double-click to reset."></div>
       <div class="mail-selected-route" id="mailSelectedRoute" hidden></div>
       <div class="scroll" id="mail"></div>
       <!-- legend removed (2026-07-30 product decision): the design should be self-evident;
@@ -1849,7 +1859,7 @@
           },
           {
             "property": "background",
-            "selector": ".mail-divider::after",
+            "selector": ".mail-divider::after,.mail-graph-divider::after",
             "value": "var(--ink-faint)"
           },
           {
@@ -3356,7 +3366,7 @@
           },
           {
             "property": "background",
-            "selector": ".mail-divider::after",
+            "selector": ".mail-divider::after,.mail-graph-divider::after",
             "value": "var(--ink-faint)"
           },
           {
@@ -4054,7 +4064,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "1a98656e8fe5ea3db1e990b0b871d6f00c16644b01035b113c1b6b4438d35a38",
+        "digest": "44efa0f6dfe44f0761243ead0624a404ce5fd75e7134529a06b20e0e59a524c2",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4147,7 +4157,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "d1228ba83facf5e54b0feb59e2749799404bf8501b79517471658184d337f73c",
+        "digest": "49a5917fa2b5cbe0476e2b13845ef47fbf0a17bd947a683d0461fb56765012fb",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -4176,9 +4186,9 @@
       }
     }
   },
-  "inventory_digest": "2a39c49fc66643d09125bd0ac033f1df5b4ca95ec3f7c6cc0959c041920f8237",
+  "inventory_digest": "f3980fc2e5a9052ea6f0d520e432c2b16d38d7f8f9d1ee87ea0fa6641ce13a3a",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "ae10a7ca278dda5624b4dadbaecbf8a69b437fcab008b0d7197f7f3f94b9e447",
+  "source_digest": "17b517a4b4b025167471800282251452c3930bf088db5c1251506a9bf390c04d",
   "surface": "cockpit",
   "version": 1
 }
@@ -10605,29 +10615,30 @@ const ncDiceFace=document.getElementById('ncDiceFace');
 const ncName=document.getElementById('ncName');
 const ncAdjWrap=document.getElementById('ncAdjWrap');
 let spawnCatalogSignature=null;
+let spawnChooseAgain=false;
 const spawnCatalogLoader=SpawnCatalogLoader.create({
   isOpen:()=>spawnOverlay.classList.contains('on'),
   fetchCatalog:async signal=>{
     const r=await fetch('/telemetry/spawn-catalog',{signal,cache:'no-store'});
     if(!r.ok)throw new Error('catalog unavailable');
-    return r.json();
+    return {catalog:await r.json(),stale:r.headers?.get('X-Orrery-Catalog-State')==='stale'};
   },
   onState:({catalog,status})=>{
     const data=catalog||{providers:[],dirs:[],naming:{adjectives:[],scientists:[],taken:[]}};
     spawnCatalog={...data,stale:status==='stale',loading:status==='loading',unavailable:status==='unavailable'};
     const signature=(catalog?'':status)+JSON.stringify(data);
     if(signature===spawnCatalogSignature){updateSpawnAvailability();return;}
+    const refreshing=spawnCatalogSignature!==null;
     spawnCatalogSignature=signature;
     spawnTaken=new Set(((data.naming||{}).taken||[]).map(n=>String(n).toLowerCase()));
     if(catalog?.providers.length&&spawnPendingSelection)restoreSpawnSelection();
-    else renderProviderTabs();
+    else renderProviderTabs(refreshing);
     renderAgentStrip();
     if(catalog)renderDirs();
     if(spawnOpenSheet)positionSpawnSheet(spawnOpenSheet,spawnOpenChip);
   },
 });
 function loadSpawnCatalog(){
-  spawnCatalogSignature=null;
   return spawnCatalogLoader.refresh();
 }
 function providerById(id){return (spawnCatalog&&spawnCatalog.providers||[]).find(p=>p.id===id)||null;}
@@ -10655,7 +10666,7 @@ function moveSpawnMarker(group,marker){
   marker.style.width=selected.offsetWidth+'px';
   marker.style.transform=`translateX(${selected.offsetLeft}px)`;
 }
-function renderProviderTabs(){
+function renderProviderTabs(keepChoice=false){
   const entries=SpawnPicker.entries(spawnCatalog);
   const providers=spawnCatalog.providers||[];
   const hasFamily=id=>entries.some(e=>e.family===id)||providers.some(p=>SpawnPicker.family(p,{})===id);
@@ -10683,7 +10694,7 @@ function renderProviderTabs(){
     b.addEventListener('click',()=>{
       if(selFamily===f.id)return;
       selFamily=f.id;selProvider=null;selModel=null;selUrlIndex=null;selUrlKey=null;
-      selEffort=null;selHarness=null;spawnToolsRoute=null;spawnProblem='';
+      selEffort=null;selHarness=null;spawnToolsRoute=null;spawnProblem='';spawnChooseAgain=false;
       if(f.id!=='local')spawnModelSearch.value='';
       else restoreSpawnModelSearch();
       renderProviderTabs();
@@ -10697,7 +10708,12 @@ function renderProviderTabs(){
   const hadDynamicSelection=Number.isInteger(selUrlIndex);
   let selected=choices.find(e=>e.provider.id===selProvider&&e.model.id===selModel&&
     (!Number.isInteger(e.model.url_index)||e.model.url_index===selUrlIndex)&&(!e.model.url_key||e.model.url_key===selUrlKey));
-  if(!selected&&!hadDynamicSelection)selected=choices.find(e=>e.model.default&&SpawnPicker.harnesses(e.provider,e.model).some(h=>h.available))||choices.find(e=>SpawnPicker.harnesses(e.provider,e.model).some(h=>h.available))||choices.find(e=>!e.provider.dynamic_models);
+  if(keepChoice&&selModel&&(!selected||(selHarness&&!SpawnPicker.harnesses(selected.provider,selected.model)
+      .some(h=>h.id===selHarness&&h.available)))){
+    // A background refresh must not switch the route of a prepared launch.
+    spawnChooseAgain=true;selected=null;
+  }
+  if(!selected&&!hadDynamicSelection&&!spawnChooseAgain)selected=choices.find(e=>e.model.default&&SpawnPicker.harnesses(e.provider,e.model).some(h=>h.available))||choices.find(e=>SpawnPicker.harnesses(e.provider,e.model).some(h=>h.available))||choices.find(e=>!e.provider.dynamic_models);
   selProvider=selected?selected.provider.id:(providers.find(p=>SpawnPicker.family(p,{})===selFamily)||{}).id||null;
   selModel=selected?selected.model.id:null;
   selUrlIndex=selected&&Number.isInteger(selected.model.url_index)?selected.model.url_index:hadDynamicSelection?selUrlIndex:null;
@@ -10729,7 +10745,7 @@ function renderLocalModels(){
     label.classList.toggle('unavailable',input.disabled);
     input.addEventListener('change',()=>{
       selProvider=entry.provider.id;selModel=entry.model.id;selUrlIndex=entry.model.url_index??null;
-      selUrlKey=entry.model.url_key??null;selEffort=null;selHarness=null;spawnProblem='';renderHarnesses();
+      selUrlKey=entry.model.url_key??null;selEffort=null;selHarness=null;spawnProblem='';spawnChooseAgain=false;renderHarnesses();
       saveSpawnDraft();
     });
     const name=document.createElement('span');name.className='model-choice-name';name.textContent=entry.model.display_name||entry.model.id;
@@ -10888,6 +10904,7 @@ function updateSpawnAvailability(){
   const unavailable=harnesses.find(h=>!h.available);
   const missingEffort=provider&&model&&spawnExplicitEffortMissing(provider,selModel);
   const issue=spawnCatalog?.unavailable?'Model catalog unavailable. Open the model sheet to retry.':
+    spawnChooseAgain?'Selected model or harness is no longer available. Choose again.':
     provider?.model_error&&!model?`${provider.model_error}. Check model settings.`:
     model&&!harness?(unavailable?`${SpawnPicker.unavailableReason(unavailable)}. Open model settings for setup.`:'No available harness. Choose another model.'):
     !model&&Number.isInteger(selUrlIndex)?'Model unavailable. Choose another model.':
@@ -10971,7 +10988,7 @@ function splitOverflowModels(provider){
 function renderModels(){
   const provider=providerById(selProvider)||{models:[]};
   const models=(provider.models||[]).filter(model=>(model.locality||provider.locality||'cloud')!=='local');
-  if(!selModel||!models.some(model=>model.id===selModel)){
+  if(!spawnChooseAgain&&(!selModel||!models.some(model=>model.id===selModel))){
     selModel=(models.find(model=>model.default)||models[0])?.id||null;
   }
   modelChoices.replaceChildren();
@@ -10982,7 +10999,7 @@ function renderModels(){
     const input=document.createElement('input');
     input.type='radio';input.name='spawnModel';input.value=model.id;input.checked=model.id===selModel;
     input.addEventListener('change',()=>{
-      selModel=model.id;selHarness=null;spawnProblem='';renderHarnesses();
+      selModel=model.id;selHarness=null;spawnProblem='';spawnChooseAgain=false;renderHarnesses();
       saveSpawnDraft();
     });
     const name=document.createElement('span');name.className='model-choice-name';name.textContent=model.id;
@@ -11324,7 +11341,7 @@ function prepareSpawnForm(raw,task=''){
   selScientist=spawnDraftText(draft?.scientist);
   ++spawnDirDefaultEpoch;
   spawnDirPath=spawnDraftText(draft?.dir);renderSpawnDirPath();
-  spawnProblem='';
+  spawnProblem='';spawnChooseAgain=false;
   selProvider=selModel=selEffort=selFamily=selHarness=selUrlIndex=selUrlKey=spawnToolsRoute=null;
   spawnModelSearch.value='';
   renderSpawnTools();renderSpawnModelChip();updateNameCard();
@@ -11356,6 +11373,8 @@ function openSpawnModal({from=document.getElementById('newAgentBtn').getBounding
   spawnOverlay.classList.add('on');spawnOverlay.setAttribute('aria-hidden','false');
   if(task&&spawnShownDraft===null)saveSpawnDraft();
   sizeSpawnTask();
+  // A fresh form needs its catalog rendered even if the same tab already has it.
+  spawnCatalogSignature=null;
   loadSpawnCatalog().then(()=>{
     if(selFamily==='local'){restoreSpawnModelSearch();renderLocalModels();}
     updateNameCard();
