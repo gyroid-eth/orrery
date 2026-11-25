@@ -320,7 +320,7 @@ unattributed control clients left by earlier versions.
 
 ## Setup
 
-Use Python 3.11 or later. For the Computer use and Browser launch options, see [NEW AGENT](../docs/en/usage.md#new-agent).
+Check that `python3 --version` reports Python 3.11 or later, or use the path to a compatible interpreter below.
 
 ```sh
 cd bridge
@@ -328,6 +328,8 @@ python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
+
+For the Computer use and Browser launch options, see [NEW AGENT](../docs/en/usage.md#new-agent).
 
 ## Cockpit (live telemetry chrome + live terminal)
 

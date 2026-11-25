@@ -16,10 +16,10 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 ### 始める前に
 
-- **macOS**（Homebrew 導入済み）。`brew install curl git tmux python@3.13 xz`。macOS 同梱の `lsof` を使います。
-- **Ubuntu／WSL2**。Ubuntu のシェルで `sudo apt update && sudo apt install -y ca-certificates curl git tmux python3 python3-venv lsof xz-utils`。Hermes を使う場合は `sudo apt install libatomic1` も実行します。
+- **macOS**（Homebrew 導入済み）。`brew install curl git tmux python@3.13`。macOS 同梱の `lsof` を使います。
+- **Ubuntu／WSL2**。Ubuntu のシェルで `sudo apt update && sudo apt install -y ca-certificates curl git tmux python3 python3-venv xz-utils`。Hermes を使う場合は `sudo apt install libatomic1` も実行します。
 
-必要な Python は **3.11 以上**です。適した Python や uv がなければ共通 installer が用意します。uv を公式スクリプトで別途入れた場合、同じシェルで `export PATH="$HOME/.local/bin:$PATH"` を実行し、`uv --version` で確認します。[導入の詳細](docs/install.md#1-行で入れる更新する)・[利用中の agent に導入を手伝ってもらう](docs/install-with-agent.md)
+先に **Python 3.11 以上**を用意します。uv で導入済みの Python も使えます。一行版はソースを取得する前に前提を検査し、不足があれば対応方法を表示して止まります。uv 自体は必要に応じて共通 installer が入れます。[導入の詳細](docs/install.md#1-行で入れる更新する)・[利用中の agent に導入を手伝ってもらう](docs/install-with-agent.md)
 
 ### 共通部分の完了
 
@@ -278,8 +278,8 @@ WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同
 ## 動作要件
 
 - 共通導入は macOS のターミナルまたは Ubuntu（Windows では WSL2）で行い、cockpit はブラウザーで開きます。[OS ごとの確認状況](docs/install.md#動作環境)
-- cockpit 単体の起動と Telemetry を含む共通インストールには、Python 3.11 以上と `tmux` が必要です。適した Python が無ければ、共通 installer が uv で Python 3.12 を用意します
-- Node.js / npm、Rust / Cargo（desktop app の開発・build 時）
+- cockpit 単体の起動と Telemetry を含む共通インストールには、Python 3.11 以上と `tmux` が必要です
+- 共通インストールには `curl` と `git` が必要です。macOS では同梱の `lsof` を使います。Ubuntu／WSL2 では `xz` が必要で、`lsof` がなければ `/proc` でポートの使用元を確認します
 - Homebrew で入れた `tmux` が見つからない Mac では、`brew shellenv` を shell に設定して `/opt/homebrew/bin` を PATH に通す（installer が `tmux` を「Missing」と言うのは、これが無いときです）
 - 稼働中の [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry)（全連携機能を使う場合）
 - ORRERY Mail SQLite（mail rail を使う場合）
@@ -343,7 +343,7 @@ DeepSeek・dsh / Hermesを新しく追加する場合は、更新後に[初期�
 
 ## macOS アプリを使う（上級）
 
-ブラウザーで agent の操作に慣れたら、macOS ではソースから `ORRERY.app` をビルドできます。配布用のビルドは提供していません。[ビルドと起動](docs/install.md#desktop-app-を-build-する)
+ブラウザーで agent の操作に慣れたら、macOS ではソースから `ORRERY.app` をビルドできます。ビルドには Node.js / npm と Rust / Cargo が必要です。アプリと専用 installer、global hotkey は macOS 向けです。配布用のビルドは提供していません。[ビルドと起動](docs/install.md#desktop-app-を-build-する)
 
 ## ドキュメント
 

@@ -16,10 +16,10 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 ### Before you start
 
-- **macOS** with Homebrew installed. Run `brew install curl git tmux python@3.13 xz`. Use the `lsof` included with macOS.
-- **Ubuntu / WSL2**. In the Ubuntu shell, run `sudo apt update && sudo apt install -y ca-certificates curl git tmux python3 python3-venv lsof xz-utils`. For Hermes, also run `sudo apt install libatomic1`.
+- **macOS** with Homebrew installed. Run `brew install curl git tmux python@3.13`. Use the `lsof` included with macOS.
+- **Ubuntu / WSL2**. In the Ubuntu shell, run `sudo apt update && sudo apt install -y ca-certificates curl git tmux python3 python3-venv xz-utils`. For Hermes, also run `sudo apt install libatomic1`.
 
-Use **Python 3.11 or later**. The shared installer provisions a compatible Python and uv if needed. If you install uv using its official shell script, run `export PATH="$HOME/.local/bin:$PATH"` in the same shell and check `uv --version`. [Detailed installation](docs/en/install.md#install-or-update-with-one-line) · [Get help from your agent](docs/en/install-with-agent.md)
+Have **Python 3.11 or later** available before you run the command. An interpreter already installed through uv also works. The one-line installer checks prerequisites before fetching the source and stops with instructions if anything is missing. The shared installer adds uv itself if needed. [Detailed installation](docs/en/install.md#install-or-update-with-one-line) · [Get help from your agent](docs/en/install-with-agent.md)
 
 ### Check that the base install is complete
 
@@ -268,8 +268,8 @@ Run the backend in WSL2 and open it in a Windows browser to use the same screen 
 ## Requirements
 
 - Run shared setup in a macOS terminal or in Ubuntu (in WSL2 on Windows), then open the cockpit in a browser. [OS verification status](docs/en/install.md#requirements)
-- Starting the cockpit on its own and installing it together with Telemetry both require Python 3.11 or later and `tmux`. If no suitable Python is available, the shared installer uses uv to install Python 3.12
-- Node.js / npm and Rust / Cargo (to develop or build the desktop app)
+- Starting the cockpit on its own and installing it together with Telemetry both require Python 3.11 or later and `tmux`
+- Shared installation also requires `curl` and `git`. On macOS it uses the bundled `lsof`. Ubuntu / WSL2 requires `xz` and can check port ownership through `/proc` if `lsof` is unavailable
 - On a Mac where `tmux` installed by Homebrew is not found, set up `brew shellenv` in your shell so `/opt/homebrew/bin` is on PATH (the installer reports `tmux` as "Missing" when it is not)
 - A running [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) (to use all integrated features)
 - ORRERY Mail SQLite (to use the mail rail)
@@ -333,7 +333,7 @@ To add DeepSeek, dsh, or Hermes for the first time, follow the [initial setup gu
 
 ## Use the macOS app (advanced)
 
-Once you are comfortable operating agents in the browser, you can build `ORRERY.app` from source on macOS. There is currently no prebuilt distribution. [Build and run the app](docs/en/install.md#build-the-desktop-app)
+Once you are comfortable operating agents in the browser, you can build `ORRERY.app` from source on macOS. Building requires Node.js / npm and Rust / Cargo. The app, its installer, and the global hotkey are macOS features. There is currently no prebuilt distribution. [Build and run the app](docs/en/install.md#build-the-desktop-app)
 
 ## Documentation
 

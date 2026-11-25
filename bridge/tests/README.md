@@ -9,7 +9,7 @@ discover or attach to agent and user sessions on the default tmux server.
 
 ## Setup and run
 
-From `bridge/`:
+From `bridge/`, use Python 3.11 or later to create the virtual environment.
 
 ```sh
 python3 -m venv .venv

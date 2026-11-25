@@ -29,6 +29,10 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import quote, urlencode
 
+# Manual and desktop launches can reach this entry point without the shell check.
+if __name__ == "__main__" and sys.version_info < (3, 11):
+    raise SystemExit("Python 3.11 or newer is required.")
+
 from aiohttp import (
     ClientConnectorError,
     ClientError,

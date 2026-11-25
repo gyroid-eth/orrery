@@ -1,12 +1,10 @@
-"""start-cockpit.sh checks the orrery-telemetry API generation and whether a
-newer release is out, and never stops for either (2026-09-30).
+"""Standalone Python prerequisites and advisory Telemetry version checks.
 
 Run from bridge/: ``python -m pytest tests/test_start_cockpit_telemetry.py``.
 
 The script runs against a fake dashboard and a fake GitHub with a private
-HOME and AGENTSTACK_HOME. TMUX_BIN points at nothing, so the run stops at the
-prerequisite check (after these checks) and never creates a venv or starts a
-backend. Nothing here reaches the real GitHub.
+HOME and AGENTSTACK_HOME. The fixtures either omit tmux or provide a stub
+alongside an outdated venv. They never start the backend or reach GitHub.
 """
 from __future__ import annotations
 
@@ -14,9 +12,11 @@ import functools
 import json
 import os
 import re
+import shlex
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -146,8 +146,8 @@ def agent_cli_stub() -> str:
     return str(folder)
 
 
-def start(tmp_path, dash_url: str, releases_url: str | None = None, script: Path = SCRIPT,
-          problems: int = 1, **env_extra) -> str:
+def run_check(tmp_path, dash_url: str, releases_url: str | None = None, script: Path = SCRIPT,
+              **env_extra) -> subprocess.CompletedProcess[str]:
     home = tmp_path / "home"
     agentstack = home / ".agentstack"
     agentstack.mkdir(parents=True, exist_ok=True)
@@ -158,18 +158,74 @@ def start(tmp_path, dash_url: str, releases_url: str | None = None, script: Path
         "AGENTSTACK_HOME": str(agentstack),
         "ORRERY_DASHBOARD_URL": dash_url,
         "ORRERY_UPDATE_CHECK_URL": releases_url or closed_url(),
+        "ORRERY_PYTHON": sys.executable,
         "ORRERY_VENV": str(tmp_path / "venv"),
         "PORT": str(free_port()),
         "TMUX_BIN": str(tmp_path / "no-tmux"),
         **env_extra,
     }
-    result = subprocess.run([BASH, str(script), "--check"], env=env, capture_output=True,
-                            text=True, timeout=60, check=False)
+    return subprocess.run([BASH, str(script), "--check"], env=env, capture_output=True,
+                          text=True, timeout=60, check=False)
+
+
+def start(tmp_path, dash_url: str, releases_url: str | None = None, script: Path = SCRIPT,
+          problems: int = 1, **env_extra) -> str:
+    result = run_check(tmp_path, dash_url, releases_url, script, **env_extra)
     # Stopped by the missing tmux alone, as intended: the warnings are not
     # counted as missing prerequisites, and no venv was created.
     assert result.returncode == 1 and f"Stopped: {problems} prerequisite(s) missing" in result.stdout, result.stdout
     assert not (tmp_path / "venv" / "bin").exists()
     return result.stdout
+
+
+def python_version_stub(path: Path, minor: int) -> Path:
+    """Run the real launcher probes with a controlled Python version."""
+    code = f"""import os, sys
+if sys.argv[1:2] == ["-c"] and "sys.version_info >=" in sys.argv[2]:
+    sys.version_info = (3, {minor}, 0)
+    exec(sys.argv[2])
+if sys.argv[1:2] == ["-c"] and "platform.python_version()" in sys.argv[2]:
+    print("3.{minor}.0")
+    sys.exit(0)
+os.execv(sys.executable, [sys.executable, *sys.argv[1:]])
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"#!/bin/sh\nexec {shlex.quote(sys.executable)} -c {shlex.quote(code)} \"$@\"\n")
+    path.chmod(0o755)
+    return path
+
+
+@pytest.mark.parametrize("minor,problems", [(10, 2), (11, 1)])
+def test_python_minimum_for_standalone_start(tmp_path, minor, problems):
+    python = python_version_stub(tmp_path / "candidate-python", minor)
+    dash, url, _ = dashboard(version(CURRENT))
+    try:
+        out = start(tmp_path, url, problems=problems, ORRERY_PYTHON=str(python), ORRERY_NO_UPDATE_CHECK="1")
+    finally:
+        dash.shutdown()
+    if minor == 10:
+        assert "NG    Python 3.11 or newer is required." in out
+        assert "candidate-python(3.10.0)" in out
+    else:
+        assert f"ok    python: {python} (3.11.0)" in out
+
+
+def test_old_python_venv_is_reported_without_replacing_it(tmp_path):
+    venv = tmp_path / "venv"
+    python = python_version_stub(venv / "bin" / "python", 10)
+    original = python.read_bytes()
+    tmux = tmp_path / "tmux"
+    tmux.write_text("#!/bin/sh\nprintf 'tmux fixture\\n'\n")
+    tmux.chmod(0o755)
+    dash, url, _ = dashboard(version(CURRENT))
+    try:
+        result = run_check(tmp_path, url, TMUX_BIN=str(tmux), ORRERY_NO_UPDATE_CHECK="1")
+    finally:
+        dash.shutdown()
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"{venv} exists but is not a usable Python 3.11+ venv." in result.stdout
+    assert "move this environment aside" in result.stdout
+    assert python.read_bytes() == original
 
 
 # ---------------------------------------------------------------- positive

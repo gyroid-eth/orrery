@@ -19,7 +19,7 @@ main() {
 
   # This file's version. A newer get.sh in the fetched commit replaces this
   # one for the run (a cached download of an older get.sh cannot hold a fix back).
-  get_version=2
+  get_version=3
   # The setup.sh contract this get.sh needs. A checkout whose setup.sh is
   # older (or missing) is set up with the remote's setup.sh instead.
   required_contract=1
@@ -42,6 +42,7 @@ main() {
       --check | --dry-run) read_only=true ;;
     esac
   done
+  [ "$read_only" != true ] || export PYTHONDONTWRITEBYTECODE=1
 
   say "ORRERY one-command install"
   [ -z "$override_url" ] || say "  note  test override: ORRERY_REPO_URL=${override_url}"
@@ -64,11 +65,68 @@ main() {
     stop "Do not run this as root or with sudo." \
       "Run it as yourself; it only writes into your home folder."
   fi
-  if ! command -v git >/dev/null 2>&1; then
+  # Check before fetching a checkout. setup.sh repeats the check when run directly.
+  missing="" packages=""
+  for tool in curl git tmux; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+      missing="$missing $tool"
+      packages="$packages $tool"
+    fi
+  done
+  if [ "$os" != mac ] && ! command -v xz >/dev/null 2>&1; then
+    missing="$missing xz"
+    packages="$packages xz-utils"
+  fi
+  saved_env="${AGENTSTACK_HOME:-$HOME/.agentstack}/env.sh"
+  saved_python=""
+  if [ -r "$saved_env" ]; then
+    saved_python="$(. "$saved_env" >/dev/null 2>&1 || true; printf '%s' "${AGENTSTACK_PYTHON:-}")"
+  fi
+  python_bin=""
+  for candidate in "${AGENTSTACK_PYTHON:-}" "$saved_python" python3 python3.14 python3.13 python3.12 python3.11 \
+    /opt/homebrew/bin/python3 /usr/local/bin/python3; do
+    [ -n "$candidate" ] || continue
+    if "$candidate" -c 'import sys; sys.exit(sys.version_info < (3, 11))' >/dev/null 2>&1; then
+      python_bin="$candidate"
+      break
+    fi
+  done
+  if [ -z "$python_bin" ]; then
+    candidate="$(PATH="$HOME/.local/bin:$PATH" uv --no-cache python find --no-project --no-python-downloads '>=3.11' 2>/dev/null || true)"
+    if [ -n "$candidate" ] && "$candidate" -c 'import sys; sys.exit(sys.version_info < (3, 11))' >/dev/null 2>&1; then
+      python_bin="$candidate"
+    fi
+  fi
+  if [ -z "$python_bin" ]; then
+    missing="$missing Python 3.11+"
     case "$os" in
-      mac) stop "git is not installed." "Fix: xcode-select --install   (or: brew install git), then run this again." ;;
-      *) stop "git is not installed." "Fix: sudo apt update && sudo apt install -y git, then run this again." ;;
+      mac) packages="$packages python@3.12" ;;
+      *) packages="$packages python3" ;;
     esac
+  fi
+  if [ -n "${AGENTSTACK_PYTHON:-}" ] &&
+     ! "$AGENTSTACK_PYTHON" -c 'import sys; sys.exit(sys.version_info < (3, 11))' >/dev/null 2>&1; then
+    missing="$missing usable AGENTSTACK_PYTHON"
+    python_hint="Point AGENTSTACK_PYTHON at Python 3.11+ or unset it to use the detected interpreter."
+  else
+    python_hint=""
+  fi
+  hermes_setting="${AGENTSTACK_HOME:-$HOME/.agentstack}/dashboard/hermes-provider.json"
+  if [ "$os" != mac ] && [ -n "$python_bin" ] && [ -f "$hermes_setting" ] &&
+     "$python_bin" -c 'import json, sys; sys.exit(json.load(open(sys.argv[1])).get("enabled") is not True)' "$hermes_setting" 2>/dev/null &&
+     ! "$python_bin" -c 'import ctypes; ctypes.CDLL("libatomic.so.1")' 2>/dev/null; then
+    missing="$missing libatomic.so.1 (enabled Hermes)"
+    packages="$packages libatomic1"
+  fi
+  if [ -n "$missing" ]; then
+    if [ -z "$packages" ]; then stop "Missing prerequisites:$missing" "$python_hint"; fi
+    case "$os" in
+      mac) stop "Missing prerequisites:$missing" "Fix (Homebrew): brew install$packages" ${python_hint:+"$python_hint"} ;;
+      *) stop "Missing prerequisites:$missing" "Fix: sudo apt update && sudo apt install -y$packages" ${python_hint:+"$python_hint"} ;;
+    esac
+  fi
+  if [ "$os" = mac ] && ! command -v lsof >/dev/null 2>&1 && [ ! -x /usr/sbin/lsof ]; then
+    stop "Missing prerequisite: lsof" "Restore the macOS /usr/sbin/lsof and rerun."
   fi
 
   # ------------------------------------------------------------ trust
