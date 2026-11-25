@@ -21,7 +21,6 @@ from urllib.parse import quote
 from conversation_mail import received, received_queued, sent
 from conversation_images import hermes_content, native_image
 from conversation_steps import claude_call, claude_result, mark_step_boundary
-from conversation_step_diff import CLAUDE_EDIT_TOOLS
 
 from conversation_history import (AGY_PROGRAMS, HistoryUnavailable, MAX_SCAN, MAX_TEXT, PAGE_SIZE,
     open_bound_transcript, assert_transcript_identity, conversation_binding, read_codex_page, recorded_model)
@@ -817,21 +816,22 @@ class Reader:
             metadata=item.get('toolUseResult')
         return block,metadata,hashlib.sha256(raw).digest()
 
-    def claude_edit_calls_before(self,positions):
+    def claude_step_calls_before(self,positions,tools):
         """One bounded lookup for results arriving on a later page or poll."""
         if self.provider!='claude' or not positions:return {}
         end=max(positions.values())
         records,_,_=self.json_records(max(0,end-MAX_SCAN),end)
         found={}
+        names=tuple(f'"{name}"'.encode() for name in tools)
         for pos,_,raw,_ in reversed(records):
-            if b'"tool_use"' not in raw or not any(name in raw for name in (b'"Edit"',b'"MultiEdit"',b'"Write"')):
+            if b'"tool_use"' not in raw or not any(name in raw for name in names):
                 continue
             for index,event in normalize(parse(raw),'claude',self.sid):
                 step=event.get('step',{})
                 key=step.get('id')
-                if (step.get('phase')=='call' and step.get('tool') in CLAUDE_EDIT_TOOLS
+                if (step.get('phase')=='call' and step.get('tool') in tools
                         and key in positions and key not in found and pos<positions[key]):
-                    found[key]=f'{pos}:0:{index}'
+                    found[key]=(f'{pos}:0:{index}',step['tool'])
             if len(found)==len(positions):break
         return found
 
