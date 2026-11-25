@@ -414,7 +414,7 @@ Inside the repository:
 
 In one run, the script does the following.
 
-1. Checks the standalone cockpit prerequisites (Python 3.10 or newer, tmux, the orrery-telemetry settings, the project key, and a dashboard response; the shared installation and Telemetry separately need Python 3.11 or newer; an older orrery-telemetry only gets a warning)
+1. Checks the standalone cockpit prerequisites (Python 3.11 or newer, tmux, the orrery-telemetry settings, the project key, and a dashboard response). An older orrery-telemetry only gets a warning
 2. Creates a Python environment in `bridge/.venv` and installs the packages in `bridge/requirements.txt` (the first run takes a while; from the second run on it skips this if nothing changed)
 3. Takes over the orrery-telemetry settings (the project key, Mail DB, and dashboard port in `~/.agentstack/env.sh`). It does not rewrite settings files under `~/.agentstack` or `~/.orrery`
 4. Starts the backend **inside this window**, confirms it responds, and then prints the URL to open
@@ -478,7 +478,7 @@ The script checks the prerequisites all at once, shows what is missing on lines 
 
 | Message (excerpt) | Meaning and fix |
 | --- | --- |
-| `Python 3.10 or newer is required.` | Python is too old or missing. On a Mac, `brew install python@3.13`; on Ubuntu, `sudo apt install python3`. To use a specific Python, run `ORRERY_PYTHON=/path/to/python3 ./scripts/start-cockpit.sh` |
+| `Python 3.11 or newer is required.` | Python is too old or missing. On a Mac, use `brew install python@3.13`. On Ubuntu 24.04, `sudo apt install python3` installs 3.12. To select a specific Python 3.11 or later, run `ORRERY_PYTHON=/path/to/python3 ./scripts/start-cockpit.sh` |
 | `tmux is not installed.` | On a Mac, `brew install tmux`; on Ubuntu, `sudo apt install tmux` |
 | `orrery-telemetry is not installed` | `~/.agentstack/env.sh` does not exist. Install orrery-telemetry first (step 0) |
 | `No project key is configured.` | Reinstall orrery-telemetry with its installer, adding `--project-key /absolute/path/to/your-project` |
@@ -522,9 +522,9 @@ See [Telemetry's compatibility table](https://github.com/gyroid-eth/orrery-telem
 
 Required:
 
-The requirements below apply to the cockpit alone. The shared installation above and Telemetry require Python 3.11 or later. If no suitable Python is available, the shared installer uses uv to install 3.12. Meeting the standalone 3.10 minimum does not meet all requirements for the shared installation.
+The requirements below apply to the cockpit alone. The shared installation and Telemetry also require Python 3.11 or later. If no suitable Python is available, the shared installer uses uv to install 3.12.
 
-- Python 3.10 or newer
+- Python 3.11 or newer
 - `tmux`
 - `pip` and `venv`
 - A network that can reach the runtime CDN
@@ -552,7 +552,7 @@ git clone https://github.com/gyroid-eth/orrery.git
 cd orrery
 ```
 
-Create a virtual environment for the backend only.
+Create a dedicated virtual environment for the backend using Python 3.11 or later. Check `python3 --version` and substitute the appropriate executable if needed. If `bridge/.venv` uses an older Python, stop the backend, rename the environment, and recreate it.
 
 ```bash
 python3 -m venv bridge/.venv

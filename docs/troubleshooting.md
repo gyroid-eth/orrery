@@ -20,7 +20,7 @@ app は `:8791/cockpit.html` を確認し、不達なら checkout の backend �
 
 確認:
 
-1. `bridge/.venv/bin/python` が存在し実行可能か
+1. `bridge/.venv/bin/python --version` が Python 3.11 以上を示すか
 2. `bridge/orrery_backend.py` が存在するか
 3. `~/.orrery/config.json` の `orrery_root` が実際の checkout を指すか
 4. env override を使う場合は `AGENTSTACK_ORRERY_ROOT` または個別 path が app process に渡っているか
@@ -45,7 +45,7 @@ bridge/.venv/bin/python -m pip install -r bridge/requirements.txt
 bridge/.venv/bin/python -c "import aiohttp, websockets, PIL, pyte"
 ```
 
-Python 3.10 未満では union type syntax を解釈できません。
+backend は Python 3.11 以上が必要です。`bridge/.venv/bin/python --version` で確認してください。古い場合は [Python 環境を作り直します](install.md#repository-と-python-環境)。
 
 ## `pyte` が見つからない
 

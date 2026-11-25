@@ -106,7 +106,7 @@ async def _held_admission(admission,deadline):
 
 @contextlib.asynccontextmanager
 async def _deadline(deadline):
-    # Cockpit supports Python3.10, which predates asyncio.timeout_at.
+    # Use the monotonic deadline shared with the admission worker.
     task=asyncio.current_task()
     timer=asyncio.get_running_loop().call_later(max(0,deadline-time.monotonic()),task.cancel)
     try: yield

@@ -320,6 +320,8 @@ unattributed control clients left by earlier versions.
 
 ## Setup
 
+Check that `python3 --version` reports Python 3.11 or later, or use the path to a compatible interpreter below.
+
 ```sh
 cd bridge
 python3 -m venv .venv

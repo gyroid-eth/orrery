@@ -414,7 +414,7 @@ repository の中で:
 
 script は 1 回で次を行います。
 
-1. cockpit単体の前提を確認（Python 3.10以上・tmux・orrery-telemetryの設定・project key・dashboardの応答。共通導入とTelemetryには別途Python 3.11以上が必要。orrery-telemetryの版が古ければ警告だけ出す）
+1. cockpit 単体の前提を確認（Python 3.11 以上・tmux・orrery-telemetry の設定・project key・dashboard の応答。orrery-telemetry の版が古ければ警告だけ出す）
 2. `bridge/.venv` に Python の環境を作り、`bridge/requirements.txt` の package を入れる（初回だけ時間がかかります。2 回目からは変更が無ければ飛ばします）
 3. orrery-telemetry の設定（`~/.agentstack/env.sh` の project key・Mail DB・dashboard の port）を引き継ぐ。`~/.agentstack` や `~/.orrery` の設定 file は書き換えません
 4. backend を**この窓の中で**起動し、応答を確かめてから開く URL を表示する
@@ -478,7 +478,7 @@ script は前提をまとめて確かめ、足りないものを `NG` の行で�
 
 | 表示（抜粋） | 意味と直し方 |
 | --- | --- |
-| `Python 3.10 or newer is required.` | Python が古いか無い。Mac は `brew install python@3.13`、Ubuntu は `sudo apt install python3`。特定の Python を使うなら `ORRERY_PYTHON=/path/to/python3 ./scripts/start-cockpit.sh` |
+| `Python 3.11 or newer is required.` | Python が古いか無い。Mac は `brew install python@3.13`、Ubuntu 24.04 では `sudo apt install python3` で 3.12 を入れられます。特定の Python 3.11 以上を使うなら `ORRERY_PYTHON=/path/to/python3 ./scripts/start-cockpit.sh` |
 | `tmux is not installed.` | Mac は `brew install tmux`、Ubuntu は `sudo apt install tmux` |
 | `orrery-telemetry is not installed` | `~/.agentstack/env.sh` が無い。手順 0 の orrery-telemetry を先に入れる |
 | `No project key is configured.` | orrery-telemetry の installer を `--project-key /absolute/path/to/your-project` 付きで入れ直す |
@@ -522,9 +522,9 @@ APIの組合せと確認範囲は[Telemetryの対応表](https://github.com/gyro
 
 必須:
 
-以下はcockpit単体の起動要件です。上の共通インストールとTelemetryはPython 3.11以上が必要です。共通installerは適したPythonがなければuvで3.12を用意します。単体の3.10要件だけで共通導入の前提がそろうわけではありません。
+以下は cockpit 単体の起動要件です。共通インストールと Telemetry も Python 3.11 以上を使います。共通 installer は適した Python がなければ uv で 3.12 を用意します。
 
-- Python 3.10 以上
+- Python 3.11 以上
 - `tmux`
 - `pip` と `venv`
 - runtime CDN に接続できるネットワーク
@@ -552,7 +552,7 @@ git clone https://github.com/gyroid-eth/orrery.git
 cd orrery
 ```
 
-backend 専用 virtual environment を作ります。
+Python 3.11 以上で backend 専用 virtual environment を作ります。`python3 --version` で確認し、必要に応じて `python3` を対応する実行ファイルに置き換えてください。既存の `bridge/.venv` が古い Python を使っている場合は、backend を停止した状態でその環境を別名に移し、作り直します。
 
 ```bash
 python3 -m venv bridge/.venv

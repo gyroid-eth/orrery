@@ -267,7 +267,7 @@ Run the backend in WSL2 and open it in a Windows browser to use the same screen 
 ## Requirements
 
 - macOS, or Windows with WSL2 (Ubuntu). `ORRERY.app`, its app installer, and the global hotkey are macOS only
-- The shared installation requires Python 3.11 or later and `tmux`. If no suitable Python is available, the installer uses uv to install Python 3.12. The cockpit's standalone `start-cockpit.sh` accepts Python 3.10 or later; the shared installation including Telemetry requires 3.11 or later
+- Starting the cockpit on its own and installing it together with Telemetry both require Python 3.11 or later and `tmux`. If no suitable Python is available, the shared installer uses uv to install Python 3.12
 - Node.js / npm and Rust / Cargo (to develop or build the desktop app)
 - On a Mac where `tmux` installed by Homebrew is not found, set up `brew shellenv` in your shell so `/opt/homebrew/bin` is on PATH (the installer reports `tmux` as "Missing" when it is not)
 - A running [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) (to use all integrated features)

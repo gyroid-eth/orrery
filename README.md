@@ -277,7 +277,7 @@ WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同
 ## 動作要件
 
 - macOS、または Windows の WSL2（Ubuntu）。`ORRERY.app` とその installer、global hotkey は macOS だけ
-- 共通インストールはPython 3.11以上と`tmux`が必要です。適したPythonが無ければ、installerがuvでPython 3.12を用意します。cockpit単体の`start-cockpit.sh`は3.10以上で動きますが、Telemetryを含む共通導入の要件は3.11以上です
+- cockpit 単体の起動と Telemetry を含む共通インストールには、Python 3.11 以上と `tmux` が必要です。適した Python が無ければ、共通 installer が uv で Python 3.12 を用意します
 - Node.js / npm、Rust / Cargo（desktop app の開発・build 時）
 - Homebrew で入れた `tmux` が見つからない Mac では、`brew shellenv` を shell に設定して `/opt/homebrew/bin` を PATH に通す（installer が `tmux` を「Missing」と言うのは、これが無いときです）
 - 稼働中の [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry)（全連携機能を使う場合）
