@@ -1701,6 +1701,7 @@
           <button type="button" role="switch" id="spawnComputerUse" aria-label="Computer use" title="Computer use" aria-checked="false"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-computer"/></svg></button>
           <button type="button" role="switch" id="spawnBrowserUse" aria-label="Browser" title="Browser" aria-checked="false"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-browser"/></svg></button>
         </div>
+        <div id="spawnComputerMenu" class="spawn-browser-menu" popover aria-label="Computer use" role="group"></div>
         <div id="spawnBrowserMenu" class="spawn-browser-menu" popover aria-label="Browser" role="group"></div>
         <button id="spawnSubmit" type="submit" title="Launch (⌘↵)" disabled>Launch<span id="spawnLaunchFill" aria-hidden="true"></span></button>
       </div>
@@ -4201,9 +4202,9 @@
       }
     }
   },
-  "inventory_digest": "91a5ffa125817f2e5bc1672d72be513919bb98c1c8733054fdaea980b0f56349",
+  "inventory_digest": "a2d41ff83de56d12d7810a54c0775e8cda4d36d475decb72ef8a616ff0c42eb2",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "ceffcdfbc7d40f8ee88e6264c3ad743dbc96d4c042cdb9232fed1c5cd9b95b44",
+  "source_digest": "2f74cbb0e71ea070255dbf42f374577a3a624e95a857b99110d953ee13f8518b",
   "surface": "cockpit",
   "version": 1
 }
@@ -9367,7 +9368,7 @@ rosterBulkMessage.addEventListener('click',()=>{
 });
 rosterBulkReboot.addEventListener('click',runBulkReboot);
 
-const AGENT_DETAIL_HARNESSES=new Map([['claude','Claude Code'],['codex','Codex CLI'],['dsh','dsh'],['hermes','Hermes']]);
+const AGENT_DETAIL_HARNESSES=new Map([['claude','Claude Code'],['codex','Codex CLI'],['dsh','dsh'],['hermes','Hermes'],['antigravity','Antigravity']]);
 const AGENT_DETAIL_COMPUTER=new Map([['off','Off'],['view','View'],['control','Control']]);
 const STANDALONE_PERMISSION_API=46;
 const AGENT_DETAIL_TOKENS=new Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1});
@@ -9425,13 +9426,15 @@ function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false){
   const text=value=>typeof value==='string'&&value.trim()?value:null;
   const cwd=text(a.cwd),home=homeDir?.replace(/\/+$/,'');
   const directory=cwd&&home&&(cwd===home||cwd.startsWith(home+'/'))?'~'+cwd.slice(home.length):cwd;
+  const source=value=>value==='relay'?'Current screen relay':value==='launch'?'ORRERY launch selection':null;
   return {
     name:a.name,role:text(a.annot?.role),
     parentState:a.parent_state,parent:a.parent_state==='child'?text(a.parent_agent):null,
     computer:AGENT_DETAIL_COMPUTER.has(a.computer_use)?a.computer_use:null,
     browser:typeof a.browser_use==='boolean'?a.browser_use:null,
     processPermissions:api>=52&&a.permission_source==='process',
-    computerReason:text(a.computer_use_reason),browserReason:text(a.browser_use_reason),
+    computerReason:text(a.computer_use_reason)||source(a.computer_use_source),
+    browserReason:text(a.browser_use_reason)||source(a.browser_use_source),
     permissions:Boolean(a.harness_kind||a.lifecycle==='persistent'||a.surface==='codex-app'||permissionConversationOnly(a)||
       a.computer_use||typeof a.browser_use==='boolean'),
     permissionReason:agentPermissionBlockReason(a,api)||(busy?'Agent action in progress':''),
@@ -9469,6 +9472,7 @@ function agentDetailPermissions(detail){
   const disabled=reason=>reason?' disabled':'';
   const title=(label,reason)=>esc(reason?`${label} (${reason})`:label);
   const computer=detail.computer?AGENT_DETAIL_COMPUTER.get(detail.computer):'Unknown';
+  const computerTitle=title('Computer use: '+computer,detail.computerReason||detail.permissionReason);
   const modes=[...AGENT_DETAIL_COMPUTER].map(([value,label])=>{
     const reason=detail.permissionReason;
     const current=value===detail.computer;
@@ -9477,15 +9481,16 @@ function agentDetailPermissions(detail){
       ${current?'class="current"':''}${disabled(reason)}>${label}</button>`;
   }).join('');
   const browserLabel=`Browser use: ${detail.browser===null?'Unknown':detail.browser?'On':'Off'}`;
+  const browserTitle=title(browserLabel,detail.browserReason||detail.permissionReason);
   const switchState=detail.browser===null?' unknown':detail.browser?' on':'';
   return `<div class="agent-detail-permissions" role="group" aria-label="Permissions">
-    <div class="agent-detail-item" role="group" aria-label="Computer use" title="${title(`Computer use: ${computer}`,detail.permissionReason)}">
+    <div class="agent-detail-item" role="group" aria-label="${detail.computerReason?computerTitle:'Computer use'}" title="${computerTitle}">
       ${agentDetailIcon('computer')}<span class="agent-detail-modes">${modes}</span>
     </div>
-    <div class="agent-detail-item" title="${title(browserLabel,detail.permissionReason)}">
+    <div class="agent-detail-item" title="${browserTitle}">
       ${agentDetailIcon('browser')}<button class="agent-detail-browser-toggle" type="button" data-browser
         ${detail.browser===null?'':`role="switch" aria-checked="${detail.browser}"`}
-        aria-label="${detail.browser===null?browserLabel:'Browser use'}" title="${title(browserLabel,detail.permissionReason)}"${disabled(detail.permissionReason)}>
+        aria-label="${detail.browser===null||detail.browserReason?browserTitle:'Browser use'}" title="${browserTitle}"${disabled(detail.permissionReason)}>
         <span class="agent-detail-switch${switchState}" aria-hidden="true"></span></button>
     </div>
   </div>`;
@@ -10598,47 +10603,64 @@ const spawnHarnessBar=document.getElementById('spawnHarnessBar');
 const spawnTools=document.getElementById('spawnTools');
 const spawnComputerUse=document.getElementById('spawnComputerUse');
 const spawnBrowserUse=document.getElementById('spawnBrowserUse');
+const spawnComputerMenu=document.getElementById('spawnComputerMenu');
 const spawnBrowserMenu=document.getElementById('spawnBrowserMenu');
+const spawnComputerLabels={off:'Off',view:'View',control:'Control'};
 const spawnBrowserLabels={off:'Off',temporary:'Temporary Chrome',personal:'My Chrome'};
+let spawnComputerMode='off';
 let spawnBrowserMode='off';
-const spawnBrowserChoices=Object.entries(spawnBrowserLabels).map(([mode,label])=>{
-  const button=document.createElement('button');
-  button.type='button';button.textContent=label;
-  button.onclick=()=>{
-    if(spawnFormIsBusy())++spawnFormRevision;
-    spawnBrowserMode=mode;paintSpawnBrowser(spawnBrowserModes());
-    spawnBrowserMenu.hidePopover();spawnBrowserUse.focus({preventScroll:true});
-    spawnProblem='';updateSpawnAvailability();saveSpawnDraft();
-  };
-  spawnBrowserMenu.append(button);
-  return [mode,button];
+function spawnModeChoices(menu,control,labels,select){
+  return Object.entries(labels).map(([mode,label])=>{
+    const button=document.createElement('button');
+    button.type='button';button.textContent=label;
+    button.onclick=()=>{
+      if(spawnFormIsBusy())++spawnFormRevision;
+      select(mode);
+      menu.hidePopover();control.focus({preventScroll:true});
+      spawnProblem='';updateSpawnAvailability();saveSpawnDraft();
+    };
+    menu.append(button);
+    return [mode,button];
+  });
+}
+const spawnComputerChoices=spawnModeChoices(spawnComputerMenu,spawnComputerUse,spawnComputerLabels,mode=>{
+  spawnComputerMode=mode;paintSpawnComputer(spawnComputerModes());
+});
+const spawnBrowserChoices=spawnModeChoices(spawnBrowserMenu,spawnBrowserUse,spawnBrowserLabels,mode=>{
+  spawnBrowserMode=mode;paintSpawnBrowser(spawnBrowserModes());
 });
 const spawnToolSwitches=[spawnComputerUse,spawnBrowserUse];
 const CODEX_BROWSER_REQUIREMENT='Codex Browser requires [mcp_servers.chrome-devtools] or a chrome-devtools-mcp server in config.toml.';
 let spawnToolsRoute=null;
-for(const control of spawnToolSwitches){
+for(const [control,menu,available] of [
+  [spawnComputerUse,spawnComputerMenu,spawnComputerModes],
+  [spawnBrowserUse,spawnBrowserMenu,spawnBrowserModes],
+]){
   control.addEventListener('click',()=>{
-    if(control===spawnBrowserUse&&spawnBrowserModes()){
-      if(spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
+    if(available()){
+      if(menu.matches(':popover-open'))menu.hidePopover();
       else if(control.getAttribute('aria-disabled')!=='true'){
-        spawnBrowserMenu.showPopover({source:control});
-        const anchor=control.getBoundingClientRect(),box=spawnBrowserMenu.getBoundingClientRect();
+        menu.showPopover({source:control});
+        const anchor=control.getBoundingClientRect(),box=menu.getBoundingClientRect();
         const left=Math.max(12,Math.min(anchor.left,innerWidth-box.width-12));
         const top=anchor.bottom+box.height+18<innerHeight?anchor.bottom+6:Math.max(12,anchor.top-box.height-6);
-        Object.assign(spawnBrowserMenu.style,{left:left+'px',top:top+'px'});
-        spawnBrowserMenu.querySelector('[aria-pressed=true]:not([hidden])')?.focus({preventScroll:true});
+        Object.assign(menu.style,{left:left+'px',top:top+'px'});
+        menu.querySelector('[aria-pressed=true]:not([hidden])')?.focus({preventScroll:true});
       }
       return;
     }
     // The submitted tools belong to the launch already waiting for a result.
     if(spawnFormIsBusy())++spawnFormRevision;
-    control.setAttribute('aria-checked',String(control.getAttribute('aria-checked')!=='true'));
+    const enabled=control.getAttribute('aria-checked')!=='true';
+    control.setAttribute('aria-checked',String(enabled));
+    if(control===spawnComputerUse)spawnComputerMode=enabled?'control':'off';
+    else spawnBrowserMode=enabled?'personal':'off';
     spawnProblem='';updateSpawnAvailability();saveSpawnDraft();
   });
+  menu.addEventListener('toggle',()=>{
+    if(available())control.setAttribute('aria-expanded',String(menu.matches(':popover-open')));
+  });
 }
-spawnBrowserMenu.addEventListener('toggle',()=>{
-  if(spawnBrowserModes())spawnBrowserUse.setAttribute('aria-expanded',String(spawnBrowserMenu.matches(':popover-open')));
-});
 spawnHelper.addEventListener('change',saveSpawnDraft);
 const ncPortrait=document.getElementById('ncPortrait');
 const ncDiceFace=document.getElementById('ncDiceFace');
@@ -10792,6 +10814,35 @@ function renderLocalModels(){
   }
 }
 function selectedSpawnModel(){const p=providerById(selProvider);return p&&(p.models||[]).find(m=>m.id===selModel&&(!Number.isInteger(m.url_index)||m.url_index===selUrlIndex)&&(!m.url_key||m.url_key===selUrlKey))||null;}
+function spawnComputerModes(){
+  const modes=spawnCatalog?.computer_modes;
+  return spawnCatalog?.runtime_mode!=='fresh'&&Array.isArray(modes)?
+    Object.keys(spawnComputerLabels).filter(mode=>modes.includes(mode)):null;
+}
+function paintSpawnComputer(modes){
+  if(!modes){
+    if(spawnComputerMenu.matches(':popover-open'))spawnComputerMenu.hidePopover();
+    delete spawnComputerUse.dataset.computerMode;
+    spawnComputerUse.setAttribute('role','switch');
+    spawnComputerUse.setAttribute('aria-checked',String(spawnComputerMode==='control'));
+    spawnComputerUse.setAttribute('aria-label','Computer use');
+    spawnComputerUse.title='Computer use';
+    for(const attr of ['aria-expanded','aria-controls','aria-disabled'])spawnComputerUse.removeAttribute(attr);
+    return;
+  }
+  if(!modes.includes(spawnComputerMode))spawnComputerMode='off';
+  spawnComputerUse.dataset.computerMode=spawnComputerMode;
+  spawnComputerUse.removeAttribute('role');spawnComputerUse.removeAttribute('aria-checked');
+  spawnComputerUse.setAttribute('aria-controls',spawnComputerMenu.id);
+  spawnComputerUse.setAttribute('aria-expanded',String(spawnComputerMenu.matches(':popover-open')));
+  spawnComputerUse.setAttribute('aria-disabled',String(!modes.length));
+  spawnComputerUse.title='Computer use: '+(modes.length?spawnComputerLabels[spawnComputerMode]:'Unavailable');
+  spawnComputerUse.setAttribute('aria-label',spawnComputerUse.title);
+  for(const [mode,button] of spawnComputerChoices){
+    button.hidden=!modes.includes(mode);
+    button.setAttribute('aria-pressed',String(mode===spawnComputerMode));
+  }
+}
 function spawnBrowserModes(){
   const key=selProvider==='gemini'?'antigravity':SpawnPicker.harnessKey(selHarness);
   const modes=spawnCatalog?.browser_modes?.[key];
@@ -10800,7 +10851,7 @@ function spawnBrowserModes(){
 }
 function paintSpawnBrowser(modes){
   if(!modes)return;
-  if(!modes.includes(spawnBrowserMode))spawnBrowserMode=modes.includes('personal')?'personal':'off';
+  if(!modes.includes(spawnBrowserMode))spawnBrowserMode='off';
   spawnBrowserUse.dataset.browserMode=spawnBrowserMode;
   spawnBrowserUse.removeAttribute('role');spawnBrowserUse.removeAttribute('aria-checked');
   spawnBrowserUse.setAttribute('aria-controls',spawnBrowserMenu.id);
@@ -10817,16 +10868,25 @@ function paintSpawnBrowser(modes){
 }
 function renderSpawnTools(){
   const harness=SpawnPicker.harnessKey(selHarness);
-  const modes=spawnBrowserModes();
-  spawnTools.hidden=spawnCatalog?.runtime_mode==='fresh'||(!modes&&!['claude-code','codex','dsh','hermes'].includes(harness));
-  spawnComputerUse.hidden=Boolean(modes&&selProvider==='gemini');
-  const route=spawnTools.hidden?null:JSON.stringify([selProvider,harness,modes]);
+  const modes=spawnBrowserModes(),computerModes=spawnComputerModes();
+  const antigravity=selProvider==='gemini';
+  spawnTools.hidden=spawnCatalog?.runtime_mode==='fresh'||
+    (!modes&&!(antigravity&&computerModes)&&!['claude-code','codex','dsh','hermes'].includes(harness));
+  spawnComputerUse.hidden=antigravity&&!computerModes;
+  spawnBrowserUse.hidden=antigravity&&!modes;
+  const route=selProvider&&harness?JSON.stringify([selProvider,harness]):null;
+  const changed=route!==spawnToolsRoute;
+  if(changed){
+    if(spawnComputerMenu.matches(':popover-open'))spawnComputerMenu.hidePopover();
+    if(spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
+    const computerOn=Boolean(route)&&harness!=='dsh'&&!antigravity;
+    spawnComputerMode=computerOn?'control':'off';
+    const browserOn=Boolean(route)&&(modes?modes.includes('personal'):harness!=='dsh'&&harness!=='codex');
+    spawnBrowserMode=browserOn?'personal':'off';
+  }
+  spawnToolsRoute=route;
+  paintSpawnComputer(spawnTools.hidden?null:computerModes);
   if(modes){
-    if(route!==spawnToolsRoute){
-      spawnBrowserMode=modes.includes('personal')?'personal':'off';
-      spawnComputerUse.setAttribute('aria-checked',String(harness!=='dsh'&&!spawnComputerUse.hidden));
-    }
-    spawnToolsRoute=route;
     paintSpawnBrowser(modes);
     return;
   }
@@ -10837,20 +10897,18 @@ function renderSpawnTools(){
     if(spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
   }
   spawnBrowserUse.title=harness==='codex'?CODEX_BROWSER_REQUIREMENT:'Browser';
-  if(route===spawnToolsRoute)return;
-  spawnToolsRoute=route;
-  const defaultOn=Boolean(route)&&harness!=='dsh';
-  spawnComputerUse.setAttribute('aria-checked',String(defaultOn));
-  spawnBrowserUse.setAttribute('aria-checked',String(defaultOn&&harness!=='codex'));
+  spawnBrowserUse.setAttribute('aria-checked',String(spawnBrowserMode==='personal'));
 }
 function spawnToolOptions(){
   if(spawnCatalog?.runtime_mode==='fresh'||spawnTools.hidden)return {};
   const harness=SpawnPicker.harnessKey(selHarness);
   const native=harness==='dsh'||harness==='hermes';
   const computer=spawnComputerUse.getAttribute('aria-checked')==='true';
-  const modes=spawnBrowserModes();
-  if(modes)return {tools:{...(computer?{mcp:['cua-driver']}:{}),
-    ...(modes.includes(spawnBrowserMode)?{browser_mode:spawnBrowserMode}:{})}};
+  const modes=spawnBrowserModes(),computerModes=spawnComputerModes();
+  const screen=computerModes?.includes(spawnComputerMode)&&spawnComputerMode!=='off'?
+    {screen:{access:spawnComputerMode==='view'?'read':'operate'}}:{};
+  if(modes||selProvider==='gemini')return {tools:{...screen,...(computer?{mcp:['cua-driver']}:{}),
+    ...(modes?.includes(spawnBrowserMode)?{browser_mode:spawnBrowserMode}:{})}};
   const browser=spawnBrowserUse.getAttribute('aria-checked')==='true';
   const supportsBrowserOff=spawnCatalog?.supports_browser_off===true;
   const mcp=[];
@@ -10860,7 +10918,7 @@ function spawnToolOptions(){
   return {
     // Older Telemetry has only the base selector to suppress inherited Chrome.
     ...(!supportsBrowserOff&&(!browser||(harness==='codex'&&!computer))?{base:'mail-only'}:{}),
-    tools:{...(mcp.length?{mcp}:{}),...(browser&&!native?{browser:{}}:{}),
+    tools:{...screen,...(mcp.length?{mcp}:{}),...(browser&&!native?{browser:{}}:{}),
       ...(!browser&&supportsBrowserOff?{browser_off:true}:{})},
   };
 }
@@ -11320,7 +11378,8 @@ function saveSpawnDraft(){
     urlIndex:selUrlIndex,urlKey:/^[a-f0-9]{64}$/.test(selUrlKey)?selUrlKey:null,
     helper:spawnHelper.disabled?null:spawnHelper.value,
     tools:spawnTools.hidden?null:spawnToolSwitches.map(control=>control.getAttribute('aria-checked')==='true'),
-    browserMode:spawnBrowserModes()?spawnBrowserMode:null,
+    computerMode:spawnTools.hidden?null:spawnComputerMode,
+    browserMode:spawnTools.hidden?null:spawnBrowserMode,
   };
   // Keep only editable draft fields in this viewer's storage.
   spawnShownDraft=JSON.stringify({
@@ -11340,13 +11399,9 @@ function restoreSpawnSelection(){
   if(selProvider!==saved.provider||selHarness!==saved.harness)return;
   if([...spawnHelper.options].some(option=>option.value===saved.helper))spawnHelper.value=saved.helper;
   if(!spawnTools.hidden&&saved.tools){
-    spawnToolSwitches.forEach((control,index)=>control.setAttribute('aria-checked',String(saved.tools[index])));
-    const modes=spawnBrowserModes();
-    if(modes){
-      const restored=saved.browserMode||(saved.tools[1]?'personal':'off');
-      if(modes.includes(restored))spawnBrowserMode=restored;
-      paintSpawnBrowser(modes);
-    }
+    spawnComputerMode=saved.computerMode||(saved.tools[0]?'control':'off');
+    spawnBrowserMode=saved.browserMode||(saved.tools[1]?'personal':'off');
+    renderSpawnTools();
     updateSpawnAvailability();
   }
 }
@@ -11361,6 +11416,7 @@ function prepareSpawnForm(raw,task=''){
     urlIndex:Number.isInteger(saved.urlIndex)&&saved.urlIndex>=0?saved.urlIndex:null,
     urlKey:/^[a-f0-9]{64}$/.test(saved.urlKey)?saved.urlKey:null,
     tools:Array.isArray(saved.tools)&&saved.tools.length===spawnToolSwitches.length&&saved.tools.every(value=>typeof value==='boolean')?saved.tools:null,
+    computerMode:Object.hasOwn(spawnComputerLabels,saved.computerMode)?saved.computerMode:null,
     browserMode:Object.hasOwn(spawnBrowserLabels,saved.browserMode)?saved.browserMode:null,
   }:null;
   spawnShownDraft=draft&&typeof draft==='object'&&!Array.isArray(draft)?raw:null;
@@ -11414,6 +11470,7 @@ function openSpawnModal({from=document.getElementById('newAgentBtn').getBounding
   });
 }
 function closeSpawnModal(){
+  if(spawnComputerMenu.matches(':popover-open'))spawnComputerMenu.hidePopover();
   if(spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
   spawnCatalogLoader.stop();++spawnDirDefaultEpoch;
   dismissSpawnSheet();
