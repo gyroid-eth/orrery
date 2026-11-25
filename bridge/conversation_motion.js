@@ -171,15 +171,21 @@
       recordedFrame=0;
       if(!allowed()){finishRecorded();return;}
       while(queueIndex<recordedQueue.length&&!recordedQueue[queueIndex].word.isConnected)unqueue(recordedQueue[queueIndex++]);
-      if(performance.now()>=nextWord&&queueIndex<recordedQueue.length){
+      // Show every word that is due this frame, so a short interval is not
+      // capped at one word per frame on long replies.
+      const now=performance.now();
+      if(nextWord<now-50)nextWord=now;
+      let shown=false;
+      while(now>=nextWord&&queueIndex<recordedQueue.length){
         const cue=recordedQueue[queueIndex++];
+        if(!cue.word.isConnected){unqueue(cue);continue;}
         unqueue(cue);
         animate(cue.word,recordedFrames,{duration:REPLY_MS});
         for(const decoration of cue.decorations)rise(decoration,0,0,190);
-        nextWord=performance.now()+cue.interval;
-        frontier=cue.word;
-        if(followingRecorded)followReply(frontier);
+        nextWord+=cue.interval;
+        frontier=cue.word;shown=true;
       }
+      if(shown&&followingRecorded)followReply(frontier);
       if(queueIndex<recordedQueue.length)recordedFrame=requestAnimationFrame(revealNext);
       else{
         recordedQueue.length=queueIndex=0;
@@ -193,7 +199,7 @@
       const seen=prefixEnd(element.textContent,prefix);
       const tokens=tokenize(element,{seen}),cues=readingOrder(tokens.cues);
       if(!cues.length)return;
-      const interval=Math.min(WORD,Math.max(34,820/Math.max(1,cues.length-1))),marked=tokens.shownBlocks;
+      const interval=Math.min(WORD,Math.max(4,820/Math.max(1,cues.length-1))),marked=tokens.shownBlocks;
       for(const word of cues){
         word.dataset.replyQueued='';
         const decorations=[];
@@ -381,7 +387,7 @@
       }
       const fragment=document.createDocumentFragment(),now=performance.now();
       const newWords=next.slice(common).filter(part=>part.trim()).length;
-      const interval=Math.min(WORD,Math.max(34,820/Math.max(1,newWords-1)));
+      const interval=Math.min(WORD,Math.max(4,820/Math.max(1,newWords-1)));
       for(let index=common;index<next.length;index++){
         const value=next[index],start=offset;offset+=value.length;
         const content=document.createTextNode('');put(content,start,offset);
