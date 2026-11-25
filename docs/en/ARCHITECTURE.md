@@ -38,7 +38,7 @@ Pane attach is deferred until the browser selects a session. A recorder connecti
 | `GET /telemetry/agents` | Fetch `:8770/api/agents` and merge annotations and the question determination |
 | `GET /telemetry/messages?since=&limit=` | `:8770/api/messages-since` |
 | `GET /telemetry/graph?all=&days=` | `:8770/api/graph` |
-| `GET /telemetry/spawn-catalog` | `:8770/api/spawn-names` with the local Codex catalog overlaid |
+| `GET /telemetry/spawn-catalog` | In-memory catalog from `:8770/api/spawn-names`, shared by Cockpit and mobile |
 | `POST /telemetry/spawn` | Proxy a JSON object to `:8770/api/spawn` |
 | `POST /telemetry/open-ghostty` | Validate the session and attach in Ghostty |
 | `GET /telemetry/health` | Backend and dashboard reachability. `boot` is an identifier of the backend process (the same value as the `X-Orrery-Boot` header on every response; the page watches it for changes and reloads itself) |
@@ -60,7 +60,7 @@ Pane attach is deferred until the browser selects a session. A recorder connecti
 
 Passthroughs accept every method, but only POST has its request body read. Upstream response headers other than `Content-Type` and cache control are not preserved.
 
-The only upstream contract of `/telemetry/spawn-catalog` is ORRERY Telemetry's `/api/spawn-names`. A 404 is returned as is, and there is no fallback to another live-only route.
+The upstream for `/telemetry/spawn-catalog` is ORRERY Telemetry's `/api/spawn-names`. The bridge starts loading it at startup and retains the last successful response in memory. After 45 seconds the next request starts one background refresh and gets the previous response marked `X-Orrery-Catalog-State: stale`. An open Cockpit picker checks again for the refreshed catalog. Mobile issues a launch token from the shared catalog each time New agent opens. An upstream 404 or access refusal clears the snapshot. Telemetry still validates launches.
 
 ## WebSocket protocol
 

@@ -38,7 +38,7 @@ browser が session を選ぶまで pane attach は遅延します。recorder co
 | `GET /telemetry/agents` | `:8770/api/agents` を取得し annotation と question 判定を merge |
 | `GET /telemetry/messages?since=&limit=` | `:8770/api/messages-since` |
 | `GET /telemetry/graph?all=&days=` | `:8770/api/graph` |
-| `GET /telemetry/spawn-catalog` | `:8770/api/spawn-names` と local Codex catalog overlay |
+| `GET /telemetry/spawn-catalog` | `:8770/api/spawn-names` の最新カタログをメモリに保持し、Cockpit とスマホへ配信 |
 | `POST /telemetry/spawn` | JSON object を `:8770/api/spawn` へ proxy |
 | `POST /telemetry/open-ghostty` | session 検証と Ghostty attach |
 | `GET /telemetry/health` | backend と dashboard reachability。`boot` は backend process の識別子（全 response の `X-Orrery-Boot` header と同じ値。page は変化を見て自分を reload する） |
@@ -60,7 +60,7 @@ browser が session を選ぶまで pane attach は遅延します。recorder co
 
 passthrough は全 method を受けますが、request body を読むのは POST だけです。upstream response header は `Content-Type` と cache 制御以外を保持しません。
 
-`/telemetry/spawn-catalog` の upstream 契約は ORRERY Telemetry の `/api/spawn-names` だけです。404 はそのまま返し、別の live-only route へ fallback しません。
+`/telemetry/spawn-catalog` の upstream は ORRERY Telemetry の `/api/spawn-names` です。Bridge 起動後に先読みし、最後に成功した応答をプロセス内に保持します。取得から 45 秒を過ぎた後は、次の要求で背景更新を 1 件だけ開始し、前回の内容を `X-Orrery-Catalog-State: stale` とともに返します。開いている Cockpit は更新後の内容を取得し直します。スマホは NEW AGENT を開くたびに同じカタログから起動用トークンを発行します。上流が 404 やアクセス拒否を返した場合は保存した応答を破棄します。起動時の検証は従来どおり Telemetry が行います。
 
 ## WebSocket protocol
 

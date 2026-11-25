@@ -276,12 +276,14 @@ SCIENTIST_PORTRAITS = tuple(
 PORTRAIT_ALIASES = {"Galilei": "Galileo"}
 BODY_HEAD_STRIP_RE = re.compile(r"^[#>*\-\s`]+")
 
+SPAWN_CATALOG_ROUTE = "/telemetry/spawn-catalog"
+
 # telemetry path -> (dashboard path, allowed query keys)
 PROXY_ROUTES = {
     "/telemetry/agents": ("/api/agents", ("scope",)),
     "/telemetry/messages": ("/api/messages-since", ("since", "limit")),
     "/telemetry/graph": ("/api/graph", ("all", "days", "spawn_only")),
-    "/telemetry/spawn-catalog": ("/api/spawn-names", ()),
+    SPAWN_CATALOG_ROUTE: ("/api/spawn-names", ()),
     "/telemetry/fs/dir-search": ("/api/fs/dir-search", ("q", "under")),
     "/telemetry/spawn-status": ("/api/spawn-status", ("name", "attempt_id", "mail_instance_id", "mail_agent_id")),
 }
@@ -1791,10 +1793,9 @@ async def send_error(
 # seconds with the same query. While one is on its way to the dashboard, the
 # same request from another tab shares its answer instead of starting a second
 # computation there (the dashboard computes these in seconds, and computations
-# that overlap slow each other down). Nothing is kept once the answer is in:
-# a request that comes after it goes to the dashboard as before.
+# that overlap slow each other down). These pollers keep only in-flight work.
 CATALOG_PROXY_TIMEOUT = 20.0
-COALESCED_ROUTES = frozenset({"/telemetry/agents", "/telemetry/graph", "/telemetry/messages", "/telemetry/spawn-catalog"})
+COALESCED_ROUTES = frozenset({"/telemetry/agents", "/telemetry/graph", "/telemetry/messages"})
 
 
 async def fetch_proxied(
@@ -1803,7 +1804,7 @@ async def fetch_proxied(
     """One upstream GET for proxy_dashboard: (body, status, content type).
     Raises ClientError / asyncio.TimeoutError when the dashboard does not answer."""
     # Catalog construction can outlast ordinary six-second dashboard polls.
-    options = {"timeout": ClientTimeout(total=CATALOG_PROXY_TIMEOUT)} if path == "/telemetry/spawn-catalog" else {}
+    options = {"timeout": ClientTimeout(total=CATALOG_PROXY_TIMEOUT)} if path == SPAWN_CATALOG_ROUTE else {}
     async with http_session.get(url, **options) as response:
         body = await response.read()
         status = response.status
@@ -1811,10 +1812,76 @@ async def fetch_proxied(
     if path == "/telemetry/agents" and status == 200:
         labels = await annotations_by_agent(http_session)
         body = await asyncio.to_thread(prepare_agents_payload, body, labels, tmux_bin)
-    if path == "/telemetry/spawn-catalog" and status == 200:
+    if path == SPAWN_CATALOG_ROUTE and status == 200:
         mode = 'fresh' if isinstance(tmux_bin, FreshTargetBoundary) else 'legacy'
         body = merge_spawn_catalog(body, runtime_mode=mode)
     return body, status, content_type
+
+
+class SpawnCatalogCache:
+    """Keep the last picker snapshot for this app and one upstream refresh."""
+
+    FRESH_SECONDS = 45
+    RETRY_SECONDS = 5
+
+    def __init__(self, session: ClientSession, tmux_bin, *, clock=time.monotonic):
+        self._session = session
+        self._tmux_bin = tmux_bin
+        self._url = DASHBOARD_URL + PROXY_ROUTES[SPAWN_CATALOG_ROUTE][0]
+        self._clock = clock
+        self._snapshot: tuple[bytes, int, str] | None = None
+        self._updated_at = 0.0
+        self._retry_at = 0.0
+        self._pending: asyncio.Task[tuple[bytes, int, str]] | None = None
+
+    def refresh(self) -> asyncio.Task[tuple[bytes, int, str]]:
+        if self._pending is None or self._pending.done():
+            self._pending = asyncio.create_task(self._fetch())
+            self._pending.add_done_callback(self._finished)
+        return self._pending
+
+    def _finished(self, task: asyncio.Task) -> None:
+        if self._pending is task:
+            self._pending = None
+        if not task.cancelled():
+            task.exception()  # The startup or background refresh may have no waiter.
+
+    async def _fetch(self) -> tuple[bytes, int, str]:
+        try:
+            result = await fetch_proxied(self._session, SPAWN_CATALOG_ROUTE, self._url, self._tmux_bin)
+            body, status, _ = result
+            if status == 200:
+                try:
+                    payload = json.loads(body)
+                except (ValueError, UnicodeDecodeError):
+                    payload = None
+                if (isinstance(payload, dict) and payload.get("ok") is not False
+                        and isinstance(payload.get("providers"), list)):
+                    self._snapshot = result
+                    self._updated_at = self._clock()
+            elif 400 <= status < 500 and status not in (408, 429):
+                # An explicitly removed or denied catalog invalidates the snapshot.
+                self._snapshot = None
+            return result
+        finally:
+            self._retry_at = self._clock() + self.RETRY_SECONDS
+
+    async def read(self) -> tuple[tuple[bytes, int, str], bool]:
+        now = self._clock()
+        if self._snapshot is not None:
+            stale = now - self._updated_at >= self.FRESH_SECONDS
+            if stale and now >= self._retry_at:
+                self.refresh()
+            return self._snapshot, stale
+        return await asyncio.shield(self.refresh()), False
+
+    async def close(self) -> None:
+        if self._pending is not None:
+            self._pending.cancel()
+            await asyncio.gather(self._pending, return_exceptions=True)
+
+
+SPAWN_CATALOG_KEY = web.AppKey("spawn_catalog", SpawnCatalogCache)
 
 
 def shared_fetch(
@@ -1899,8 +1966,13 @@ async def proxy_dashboard(request: web.Request) -> web.Response:
         url += "?" + urlencode(kept)
 
     http_session = request.app[HTTP_SESSION_KEY]
+    headers = {"Cache-Control": "no-store"}
     try:
-        if request.path in COALESCED_ROUTES:
+        if request.path == SPAWN_CATALOG_ROUTE:
+            (body, status, content_type), stale = await request.app[SPAWN_CATALOG_KEY].read()
+            if stale:
+                headers["X-Orrery-Catalog-State"] = "stale"
+        elif request.path in COALESCED_ROUTES:
             task = shared_fetch(request.app[PROXY_INFLIGHT_KEY], http_session, request.path, url, request.app[TMUX_BIN_KEY])
             body, status, content_type = await asyncio.shield(task)
         else:
@@ -1910,10 +1982,7 @@ async def proxy_dashboard(request: web.Request) -> web.Response:
         return web.Response(
             body=body,
             status=status,
-            headers={
-                "Content-Type": content_type,
-                "Cache-Control": "no-store",
-            },
+            headers={**headers, "Content-Type": content_type},
         )
     except asyncio.TimeoutError:
         # it is there but did not answer in time (a heavy graph, many tabs):
@@ -4927,12 +4996,17 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
 
 
 async def app_resources(app: web.Application):
-    app[HTTP_SESSION_KEY] = ClientSession(timeout=ClientTimeout(total=6))
-    app[BRIDGE_MANAGER_KEY] = SessionBridgeManager(app[TMUX_BIN_KEY])
-    await app[BRIDGE_MANAGER_KEY].start()
-    yield
-    await app[BRIDGE_MANAGER_KEY].close()
-    await app[HTTP_SESSION_KEY].close()
+    async with ClientSession(timeout=ClientTimeout(total=6)) as session:
+        app[HTTP_SESSION_KEY] = session
+        app[BRIDGE_MANAGER_KEY] = SessionBridgeManager(app[TMUX_BIN_KEY])
+        await app[BRIDGE_MANAGER_KEY].start()
+        catalog = app[SPAWN_CATALOG_KEY] = SpawnCatalogCache(session, app[TMUX_BIN_KEY])
+        catalog.refresh()
+        try:
+            yield
+        finally:
+            await catalog.close()
+            await app[BRIDGE_MANAGER_KEY].close()
 
 
 @web.middleware
@@ -5121,7 +5195,7 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
     app.router.add_get("/telemetry/mail/thread", serve_mail_thread)
     app.router.add_get("/telemetry/portrait", serve_portrait)
     app.router.add_get("/telemetry/sessions", serve_sessions)
-    app.router.add_get("/telemetry/spawn-catalog", proxy_dashboard)
+    app.router.add_get(SPAWN_CATALOG_ROUTE, proxy_dashboard)
     app.router.add_get("/telemetry/spawn-status", proxy_dashboard)
     app.router.add_get("/telemetry/skills", serve_skills)
     app.router.add_post("/telemetry/prompt-attachment", serve_prompt_attachment)
