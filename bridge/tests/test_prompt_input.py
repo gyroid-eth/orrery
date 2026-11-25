@@ -415,3 +415,20 @@ def test_claude_prompt_suggestion_is_an_empty_editor(styled, column, empty):
     lines = [border, styled, border, '  fixture | Opus | ctx: 22% used']
     metadata = f'/tmp/fixture.sock\t100\t%1\t200\t1\t0\t{column}\t1\tclaude'
     assert submission.frame(metadata, lines, '%1').empty is empty
+
+
+def test_claude_scrolled_draft_shows_only_its_end():
+    # A tall draft scrolls inside Claude's frame and hides the prompt glyph.
+    rows = ['\x1b[38;5;244m───\x1b[39m \x1b[2m↑ 3 more\x1b[0m \x1b[38;5;244m' + '─' * 20,
+            '\x1b[39m  the middle of a long notification that wraps',
+            '  and ends here. Fetch inbox to read the rest.',
+            '\x1b[38;5;244m' + '─' * 24,
+            '  fixture | Opus | ctx: 22% used']
+    metadata = '/tmp/fixture.sock\t100\t%1\t200\t2\t0\t48\t1\tclaude'
+    view = submission.frame(metadata, rows, '%1')
+    assert view.scrolled and not view.empty
+    text = ('ORRERY Mail notification: the start is hidden above, then '
+            'the middle of a long notification that wraps and ends here. '
+            'Fetch inbox to read the rest.')
+    assert submission.ready(view, text)
+    assert not submission.ready(view, 'A different prompt that ends elsewhere.')
