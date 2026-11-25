@@ -4202,9 +4202,9 @@
       }
     }
   },
-  "inventory_digest": "099651f5614284a20e5900985304fc875cf3201a126afabed2a06a3031ebf59e",
+  "inventory_digest": "c049b7d31b42aa3aad32d2a375700792321d29e2df2527cfa866fbcd1a808c90",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "078dba97fd382347dc015ded2372ddd32a6041fce56a372374946af5f305084c",
+  "source_digest": "68adaed5c19b62411fdec147818304ba8893f8d33f38f67a0d16978ab6dd73e8",
   "surface": "cockpit",
   "version": 1
 }
@@ -12053,7 +12053,9 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
         const claude=record.vocabulary.program==='claude';
         const references=paths.map(path=>(claude?'@':'')+path).join('\n')+(claude&&paths.length?' ':'');
         const body=[record.draft,references].filter(Boolean).join('\n\n');
-        const text=compose(body);
+        // The chooser leaves a space for arguments. A bare command should reach
+        // the terminal without it so the terminal can show its matching picker.
+        const text=compose(body).replace(/^(\/[\p{L}\p{N}_.:-]+)[ \t]+$/u,'$1');
         receipt=trackPrompt(target,text,compose(record.draft),entries);
         status=await submitComposerPrompt(target,text);
         if(status==='completion-mismatch'){

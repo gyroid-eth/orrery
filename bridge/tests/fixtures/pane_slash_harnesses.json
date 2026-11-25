@@ -77,6 +77,155 @@
         }
       },
       {
+        "case": "slash-idle",
+        "text": "/log",
+        "selected": "/log",
+        "ready": true,
+        "before": {
+          "meta": [
+            "7",
+            "0",
+            "2",
+            "1",
+            "2.1.332"
+          ],
+          "lines": [
+            "  7·67, 527 = 17·31 and 529 = 23². That puts exactly 100 primes in the list, ending at 541.",
+            "",
+            "  All three checks give the same result: 24,133.",
+            "",
+            "✻ Worked for 31s · done 15:19",
+            "",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "❯ ",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "  merry-harness.OIL4A7 | Opus 5.5 | ctx: 6% used",
+            "  ⏵⏵ auto mode on (shift+tab to cycle)"
+          ]
+        },
+        "view": {
+          "meta": [
+            "7",
+            "0",
+            "6",
+            "1",
+            "2.1.332"
+          ],
+          "lines": [
+            "  7·67, 527 = 17·31 and 529 = 23². That puts exactly 100 primes in the list, ending at 541.",
+            "",
+            "  ❯ /log                                                  現在のセッションの作業ログを作成する。「ログ残して」「今日の作業をまとめて」と言われた時に使用。議論",
+            "                                                          プロセス・意思決定・実装内容を構造化し、05_Agents/にLOG_YYYY-MM-DDTHHmm形式で保存。 (user)",
+            "    /login                                                Sign in with your Anthropic account",
+            "    /logout                                               Sign out from your Anthropic account",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "❯ /log",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "  merry-harness.OIL4A7 | Opus 5.5 | ctx: 6% used",
+            "  ⏵⏵ auto mode on (shift+tab to cycle)"
+          ]
+        }
+      },
+      {
+        "case": "slash-busy",
+        "text": "/log",
+        "selected": "/log",
+        "ready": true,
+        "before": {
+          "meta": [
+            "7",
+            "0",
+            "2",
+            "1",
+            "2.1.332"
+          ],
+          "lines": [
+            "",
+            "❯ Without tools, compute the sum of the first 100 prime numbers and double-check it.",
+            "",
+            "✳ Razzle-dazzling…",
+            "  ⎿  Tip: Use /feedback to report a bug or share an idea",
+            "                                                                                                                                  ctrl+y to paste deleted text",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "❯ ",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "  merry-harness.OIL4A7 | Opus 5.5 | ctx: 6% used",
+            "  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt"
+          ]
+        },
+        "view": {
+          "meta": [
+            "7",
+            "0",
+            "6",
+            "1",
+            "2.1.332"
+          ],
+          "lines": [
+            "",
+            "",
+            "  ❯ /log                                                  現在のセッションの作業ログを作成する。「ログ残して」「今日の作業をまとめて」と言われた時に使用。議論",
+            "                                                          プロセス・意思決定・実装内容を構造化し、05_Agents/にLOG_YYYY-MM-DDTHHmm形式で保存。 (user)",
+            "    /login                                                Sign in with your Anthropic account",
+            "    /logout                                               Sign out from your Anthropic account",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "❯ /log",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "  merry-harness.OIL4A7 | Opus 5.5 | ctx: 6% used",
+            "  ⏵⏵ auto mode on (shift+tab to cycle)"
+          ]
+        }
+      },
+      {
+        "case": "slash-busy-no-options",
+        "text": "/zzq-orrery-fixture",
+        "selected": null,
+        "ready": false,
+        "accepted": true,
+        "before": {
+          "meta": [
+            "6",
+            "0",
+            "2",
+            "1",
+            "2.1.332"
+          ],
+          "lines": [
+            "❯ Without tools, compute the sum of the first 100 prime numbers and double-check it.",
+            "",
+            "✽ Razzle-dazzling… (16s · ↓ 1.4k tokens · still thinking with xhigh effort)",
+            "  ⎿  Tip: Use /feedback to report a bug or share an idea",
+            "                                                                                                                                  ctrl+y to paste deleted text",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "❯ ",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "  merry-harness.OIL4A7 | Opus 5.5 | ctx: 6% used",
+            "  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt"
+          ]
+        },
+        "view": {
+          "meta": [
+            "6",
+            "0",
+            "21",
+            "1",
+            "2.1.332"
+          ],
+          "lines": [
+            "❯ Without tools, compute the sum of the first 100 prime numbers and double-check it.",
+            "",
+            "✢ Razzle-dazzling… (17s · ↓ 1.5k tokens · still thinking with xhigh effort)",
+            "",
+            "  No commands match \"/zzq-orrery-fixture\"",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "❯ /zzq-orrery-fixture",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "  merry-harness.OIL4A7 | Opus 5.5 | ctx: 6% used",
+            "  ⏵⏵ auto mode on (shift+tab to cycle)"
+          ]
+        }
+      },
+      {
         "case": "notice-short",
         "text": "ORRERY Mail notification: synthetic short notice for the fixture.",
         "selected": null,
@@ -293,6 +442,97 @@
             "",
             "",
             ""
+          ]
+        }
+      },
+      {
+        "case": "slash-idle",
+        "text": "/status",
+        "selected": "/status",
+        "ready": true,
+        "before": {
+          "meta": [
+            "5",
+            "0",
+            "2",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "",
+            "",
+            "",
+            "",
+            "",
+            "\u001b[1m›\u001b[0m \u001b[2mAsk Codex to do anything\u001b[0m",
+            "",
+            "  GPT-6.1-Sol xhigh · Context 100% left · /private/tmp",
+            "  \u001b[1m←\u001b[0m for agents · \u001b[1m?\u001b[0m for shortcuts                                                      ⚠ 3 warnings · \u001b[1mf2\u001b[0m to view"
+          ]
+        },
+        "view": {
+          "meta": [
+            "5",
+            "0",
+            "9",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "",
+            "",
+            "\u001b[1;7m› /status      \u001b[0;7mshow current session configuration and token usage\u001b[1m",
+            "\u001b[0m  /\u001b[1mstatus\u001b[0mline  \u001b[2mconfigure which items appear in the status line\u001b[0m",
+            "",
+            "\u001b[1m›\u001b[0m /status",
+            "",
+            "  GPT-6.1-Sol xhigh · Context 100% left · /private/tmp"
+          ]
+        }
+      },
+      {
+        "case": "slash-busy",
+        "text": "/status",
+        "selected": "/status",
+        "ready": true,
+        "before": {
+          "meta": [
+            "5",
+            "0",
+            "2",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "",
+            "",
+            "\u001b[2m◦\u001b[0m \u001b[2mWorking\u001b[0m \u001b[2m(0s • \u001b[0;1mesc\u001b[0;2m to interrupt)\u001b[0m",
+            "",
+            "",
+            "\u001b[1m›\u001b[0m \u001b[2mAsk Codex to do anything\u001b[0m",
+            "",
+            "  GPT-6.1-Sol xhigh · Context 100% left · /private/tmp",
+            "  \u001b[1m←\u001b[0m for agents · \u001b[1m?\u001b[0m for shortcuts                                                      ⚠ 3 warnings · \u001b[1mf2\u001b[0m to view"
+          ]
+        },
+        "view": {
+          "meta": [
+            "5",
+            "0",
+            "9",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "\u001b[2m◦\u001b[0m \u001b[2mWorking\u001b[0m \u001b[2m(1s • \u001b[0;1mesc\u001b[0;2m to interrupt)\u001b[0m",
+            "",
+            "\u001b[1;7m› /status      \u001b[0;7mshow current session configuration and token usage\u001b[1m",
+            "\u001b[0m  /\u001b[1mstatus\u001b[0mline  \u001b[2mconfigure which items appear in the status line\u001b[0m",
+            "",
+            "\u001b[1m›\u001b[0m /status",
+            "",
+            "  GPT-6.1-Sol xhigh · Context 100% left · /private/tmp",
+            "  \u001b[1mtab\u001b[0m to queue message"
           ]
         }
       },
@@ -522,6 +762,100 @@
             "                        \u001b[38;5;153m│\u001b[39m ⌘ /log                                                               \u001b[38;5;153m│\u001b[39m",
             "                        \u001b[38;5;153m╰──────────────────────────────────────────────────────────────────────╯\u001b[39m",
             "                          \u001b[1m\u001b[38;5;182mdeepseek-v4.1-flash\u001b[0m\u001b[38;5;145m  ·  standard  ·  Workspace read/write\u001b[39m"
+          ]
+        }
+      },
+      {
+        "case": "slash-idle",
+        "text": "/help",
+        "selected": "/help",
+        "ready": true,
+        "before": {
+          "meta": [
+            "6",
+            "0",
+            "6",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "",
+            "",
+            "",
+            "",
+            "",
+            "  \u001b[38;5;102m╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "  \u001b[38;5;145m⌸ \u001b[39m❯                                                                                                        \u001b[38;5;145m⛶\u001b[39m",
+            "  \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mmerry-harness.OIL4A7\u001b[39m"
+          ]
+        },
+        "view": {
+          "meta": [
+            "6",
+            "0",
+            "11",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "",
+            "",
+            "  \u001b[38;5;102m╭─ commands · 1 items ─────────────────────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "  \u001b[38;5;102m│\u001b[39m \u001b[1m\u001b[38;5;153m❯ help     \u001b[0m\u001b[38;5;153mShow shortcuts and commands\u001b[39m                                                                   \u001b[38;5;102m│\u001b[39m",
+            "  \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "  \u001b[38;5;102m╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "  \u001b[38;5;145m⌸ \u001b[39m❯ /help                                                                                                  \u001b[38;5;145m⛶\u001b[39m",
+            "  \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mmerry-harness.OIL4A7\u001b[39m"
+          ]
+        }
+      },
+      {
+        "case": "slash-busy",
+        "text": "/help",
+        "selected": "/help",
+        "ready": true,
+        "before": {
+          "meta": [
+            "6",
+            "0",
+            "6",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "",
+            "",
+            "",
+            "  \u001b[38;5;110m•\u001b[39m \u001b[38;5;110mConsiderin\u001b[38;5;146mg…\u001b[38;5;110m \u001b[38;5;145m(1s)\u001b[39m",
+            "",
+            "  \u001b[38;5;102m╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "  \u001b[38;5;145m⌸ ❯ \u001b[39m                                                                                                       \u001b[38;5;145m⛶\u001b[39m",
+            "  \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mhigh\u001b[38;5;145m · \u001b[38;5;146mmerry-harness.OIL4A7\u001b[39m",
+            "   \u001b[38;5;146mesc to interrupt\u001b[39m"
+          ]
+        },
+        "view": {
+          "meta": [
+            "6",
+            "0",
+            "11",
+            "1",
+            "zsh"
+          ],
+          "lines": [
+            "",
+            "",
+            "  \u001b[38;5;102m╭─ commands · 1 items ─────────────────────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "  \u001b[38;5;102m│\u001b[39m \u001b[1m\u001b[38;5;153m❯ help     \u001b[0m\u001b[38;5;153mShow shortcuts and commands\u001b[39m                                                                   \u001b[38;5;102m│\u001b[39m",
+            "  \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "  \u001b[38;5;102m╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮\u001b[39m",
+            "  \u001b[38;5;145m⌸ ❯ \u001b[39m/help                                                                                                  \u001b[38;5;145m⛶\u001b[39m",
+            "  \u001b[38;5;102m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯\u001b[39m",
+            "   \u001b[38;5;146mdeepseek-v4.1-flash\u001b[38;5;145m · \u001b[38;5;146mhigh\u001b[38;5;145m · \u001b[38;5;146mmerry-harness.OIL4A7\u001b[39m",
+            "   \u001b[38;5;146mesc to interrupt\u001b[39m"
           ]
         }
       },
@@ -814,6 +1148,88 @@
         }
       },
       {
+        "case": "slash-idle",
+        "text": "/help",
+        "selected": "/help",
+        "ready": true,
+        "before": {
+          "meta": [
+            "4",
+            "0",
+            "2",
+            "1",
+            "python3.14"
+          ],
+          "lines": [
+            "\u001b[2m✦ Tip: /footer toggles the gateway footer on final replies showing model, context %, and cwd.\u001b[0m",
+            "",
+            "\u001b[38;5;250m\u001b[48;5;234m ☤ \u001b[1m\u001b[38;5;220mgpt-4o-mini\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ ctx -- │ [░░░░░░░░░░] -- │ 7s │ ⏲ 0s\u001b[38;5;250m \u001b[39m\u001b[49m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[38;5;230m❯ \u001b[3m\u001b[38;5;136mPlan a feature, then build it step by step\u001b[0m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+          ]
+        },
+        "view": {
+          "meta": [
+            "4",
+            "0",
+            "7",
+            "1",
+            "python3.14"
+          ],
+          "lines": [
+            "\u001b[2m✦ Tip: /footer toggles the gateway footer on final replies showing model, context %, and cwd.\u001b[0m",
+            "",
+            "\u001b[38;5;250m\u001b[48;5;234m ☤ \u001b[1m\u001b[38;5;220mgpt-4o-mini\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ ctx -- │ [░░░░░░░░░░] -- │ 51s │ ⏲ 0s\u001b[38;5;250m \u001b[39m\u001b[49m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[38;5;230m❯ \u001b[39m/help",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[38;5;230m\u001b[48;5;234m /help \u001b[38;5;136m Show available commands (/help skills lists skill commands, /help <text> filters) (usage: /help [sk... \u001b[38;5;230m\u001b[48;5;238m"
+          ]
+        }
+      },
+      {
+        "case": "slash-busy",
+        "text": "/help",
+        "selected": "/help",
+        "ready": true,
+        "before": {
+          "meta": [
+            "4",
+            "0",
+            "4",
+            "1",
+            "python3.14"
+          ],
+          "lines": [
+            "\u001b[2;3mInitializing agent...\u001b[0m",
+            "",
+            "\u001b[38;5;250m\u001b[48;5;234m ☤ \u001b[1m\u001b[38;5;220mgpt-4o-mini\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ ctx -- │ [░░░░░░░░░░] -- │ 52s │ ⏲ 0s\u001b[38;5;250m \u001b[39m\u001b[49m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[3m\u001b[38;5;136m☤ ❯ msg=interrupt · /queue · /bg · /steer · Ctrl+C cancel\u001b[0m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+          ]
+        },
+        "view": {
+          "meta": [
+            "4",
+            "0",
+            "9",
+            "1",
+            "python3.14"
+          ],
+          "lines": [
+            "\u001b[2;3mInitializing agent...\u001b[0m",
+            "",
+            "\u001b[38;5;250m\u001b[48;5;234m ☤ \u001b[1m\u001b[38;5;220mgpt-4o-mini\u001b[0m\u001b[38;5;101m\u001b[48;5;234m │ ctx -- │ [░░░░░░░░░░] -- │ 53s │ ⏲ 0s\u001b[38;5;250m \u001b[39m\u001b[49m",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[3m\u001b[38;5;136m☤ ❯ \u001b[0m/help",
+            "\u001b[38;5;173m────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[38;5;230m\u001b[48;5;234m /help \u001b[38;5;136m Show available commands (/help skills lists skill commands, /help <text> filters) (usage: /help [sk... \u001b[38;5;230m\u001b[48;5;238m"
+          ]
+        }
+      },
+      {
         "case": "slash-safe-control",
         "text": "/hel",
         "selected": "/help",
@@ -1023,6 +1439,152 @@
             "",
             "  \u001b[1m\u001b[94m↑/↓\u001b[0m\u001b[90m Navigate · \u001b[1m\u001b[94menter\u001b[0m\u001b[90m Select · \u001b[1m\u001b[94mtab\u001b[0m\u001b[90m Complete\u001b[39m",
             "\u001b[90mesc to cancel\u001b[39m                                                                                               \u001b[94mplan"
+          ]
+        }
+      },
+      {
+        "case": "slash-idle",
+        "text": "/help",
+        "selected": "/help",
+        "ready": true,
+        "before": {
+          "meta": [
+            "3",
+            "0",
+            "2",
+            "1",
+            "agy"
+          ],
+          "lines": [
+            " ┃ Our best balance of intelligence, cost, and latency. Get building today with Neon.",
+            " ┃ esc to dismiss",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "> Auto mode: edits & safe commands auto-approved (shift+tab to cycle)",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "? for shortcuts                                                                      auto\u001b[2m · Gemini 4 Neon · high"
+          ]
+        },
+        "view": {
+          "meta": [
+            "3",
+            "0",
+            "7",
+            "1",
+            "agy"
+          ],
+          "lines": [
+            " ┃ Our best balance of intelligence, cost, and latency. Get building today with Neon.",
+            " ┃ esc to dismiss",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "> /help",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "> /help  \u001b[2mShow available commands and keybindings\u001b[0m",
+            "",
+            "  \u001b[1m↑/↓\u001b[0m Navigate · \u001b[1menter\u001b[0m Select · \u001b[1mtab\u001b[0m Complete",
+            "esc to cancel                                                                        auto\u001b[2m · Gemini 4 Neon · high"
+          ]
+        }
+      },
+      {
+        "case": "slash-busy",
+        "text": "/help",
+        "selected": "/help",
+        "ready": true,
+        "before": {
+          "meta": [
+            "3",
+            "0",
+            "2",
+            "1",
+            "agy"
+          ],
+          "lines": [
+            "\u001b[1m> Compute the first 100 primes and their sum without tools. Double-check your arithmetic.\u001b[0m",
+            "⡿  Generating...",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            ">",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "esc to cancel                                                                        auto\u001b[2m · Gemini 4 Neon · high"
+          ]
+        },
+        "view": {
+          "meta": [
+            "3",
+            "0",
+            "7",
+            "1",
+            "agy"
+          ],
+          "lines": [
+            "⣾  Generating...",
+            "└ Tip: To disable tips, toggle Show Tips in /settings.",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "> /help",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "> /help  \u001b[2mShow available commands and keybindings\u001b[0m",
+            "",
+            "  \u001b[1m↑/↓\u001b[0m Navigate · \u001b[1menter\u001b[0m Select · \u001b[1mtab\u001b[0m Complete",
+            "esc to cancel                                                                        auto\u001b[2m · Gemini 4 Neon · high"
+          ]
+        }
+      },
+      {
+        "case": "slash-no-options",
+        "text": "/zzq-orrery-fixture",
+        "selected": null,
+        "ready": false,
+        "enter": true,
+        "accepted": false,
+        "before": {
+          "meta": [
+            "3",
+            "0",
+            "2",
+            "1",
+            "agy"
+          ],
+          "lines": [
+            "\u001b[1m  ⎿  \u001b[0mExited /help command",
+            "",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            ">",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "? for shortcuts                                                                      auto\u001b[2m · Gemini 4 Neon · high"
+          ]
+        },
+        "view": {
+          "meta": [
+            "3",
+            "0",
+            "21",
+            "1",
+            "agy"
+          ],
+          "lines": [
+            "\u001b[1m  ⎿  \u001b[0mExited /help command",
+            "",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "> /zzq-orrery-fixture",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "\u001b[2m   No matches\u001b[0m",
+            "",
+            "  \u001b[1m↑/↓\u001b[0m Navigate · \u001b[1menter\u001b[0m Select · \u001b[1mtab\u001b[0m Complete",
+            "esc to cancel                                                                        auto\u001b[2m · Gemini 4 Neon · high"
+          ]
+        },
+        "after": {
+          "meta": [
+            "3",
+            "0",
+            "86",
+            "1",
+            "agy"
+          ],
+          "lines": [
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "> Unknown command: /zzq-orrery-fixture",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "                                                                                     auto\u001b[2m · Gemini 4 Neon · high"
           ]
         }
       },
