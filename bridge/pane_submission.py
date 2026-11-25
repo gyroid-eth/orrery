@@ -400,116 +400,89 @@ def capture(command,pane):
     return frame(metadata,screen.splitlines(),pane) if separator else None
 
 
-def submit(command,admit,pane,text,*,deadline=None,receipt=None,on_wait=None):
+def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
     """Watcher path. Refused means a prompt was never pasted."""
     end=time.monotonic()+TIMEOUT if deadline is None else deadline
     fd=None
-    buffer=None
-    pending=False
+    pasted=False
 
-    def defer(reason):
+    def defer(status, reason):
         if on_wait is not None:
             on_wait(reason)
-        return 'unknown' if pending else 'refused'
-
-    def checkpoint(write, identity):
-        try:
-            write(identity)
-        except OSError:
-            return False
-        return True
+        return status
 
     try:
         current=capture(command,pane)
         if current is None:
-            return defer('input_not_found')
+            return defer('refused', 'input_not_found')
         fd=try_lock(current)
         if fd is None:
-            return defer('pane_locked')
+            return defer('refused', 'pane_locked')
         if not admit():
-            return defer('pane_changed')
+            return defer('refused', 'pane_changed')
         before=capture(command,pane)
         if not before or before.identity!=current.identity:
-            return defer('pane_changed')
-        identity=before.identity
+            return defer('refused', 'pane_changed')
         if before.draft is None:
-            return defer('input_not_found')
+            return defer('refused', 'input_not_found')
         if before.waiting:
-            return defer('editor_waiting')
-        if before.scrolled:
-            return defer('scrolled_draft')
+            return defer('refused', 'editor_waiting')
         if not before.empty:
-            return defer('editor_not_empty')
+            return defer('refused', 'editor_not_empty')
         if not before.allows_paste(text):
-            return defer('paste_unavailable')
-        buffer='orrery-submit-'+uuid.uuid4().hex
-        if command('load-buffer','-b',buffer,'-',input=text).returncode:
-            return defer('load_buffer_failed')
-        if receipt is not None and not checkpoint(receipt.before_paste,identity):
-            return defer('submission_state_unavailable')
-        if time.monotonic()>=end:
-            return defer('submission_deadline')
-        if not admit():
-            return defer('pane_changed')
-        current=capture(command,pane)
-        if not current or current.identity!=identity:
-            return defer('pane_changed')
-        if not current.empty or not current.allows_paste(text):
-            return defer('editor_changed')
-        if time.monotonic()>=end:
-            return defer('submission_deadline')
-        pending=True  # A timeout after the command starts cannot prove absence.
-        if command('paste-buffer','-r','-p','-d','-b',buffer,'-t',pane).returncode:
-            return defer('paste_failed')
-
-        previous = None
-        problem = None
-        while time.monotonic() < end:
-            view = capture(command, pane)
-            if not view or view.identity != identity:
-                return defer('pane_changed')
-            problem = completion_problem(view, text)
-            mismatch = problem == 'completion-mismatch'
-            choice = (view.draft, view.selected_command) if ready(view, text) or mismatch else None
-            if choice is not None and choice == previous:
-                # A different candidate can be reported without recording an
-                # Enter attempt. Write any Enter intent before the final check.
-                if not mismatch and receipt is not None and not checkpoint(receipt.before_enter, identity):
-                    return defer('submission_state_unavailable')
-                if time.monotonic() >= end:
-                    return defer('submission_deadline')
-                if not admit():
-                    return defer('pane_changed')
-                view = capture(command, pane)
-                if not view or view.identity != identity:
-                    return defer('pane_changed')
-                if (view.draft, view.selected_command) == choice:
-                    if mismatch and mismatched_command(view, text):
-                        return defer('completion_mismatch')
-                    if not mismatch and ready(view, text):
-                        if time.monotonic() >= end:
-                            return defer('submission_deadline')
-                        if command('send-keys', '-t', pane, 'C-m').returncode:
-                            return defer('enter_failed')
-                        break
-            previous = choice
-            time.sleep(POLL)
-        else:
-            reason = 'completion_unverified' if problem == 'completion-unverified' else 'draft_not_confirmed'
-            return defer(reason)
-        while time.monotonic()<end:
-            view=capture(command,pane)
-            if not view or view.identity!=identity:
-                return defer('pane_changed')
-            if view.empty:
-                return 'accepted'
-            time.sleep(POLL)
-        return defer('enter_not_confirmed')
-    except (OSError,RuntimeError,subprocess.TimeoutExpired):
-        return defer('terminal_unavailable')
-    finally:
-        if buffer is not None:
-            try:command('delete-buffer','-b',buffer)
+            return defer('refused', 'paste_unavailable')
+        name='orrery-submit-'+uuid.uuid4().hex
+        try:
+            if command('load-buffer','-b',name,'-',input=text).returncode:
+                return defer('refused', 'load_buffer_failed')
+            if time.monotonic()>=end:
+                return defer('refused', 'submission_deadline')
+            if not admit():
+                return defer('refused', 'pane_changed')
+            current=capture(command,pane)
+            if not current or current.identity!=before.identity:
+                return defer('refused', 'pane_changed')
+            if not current.empty or not current.allows_paste(text):
+                return defer('refused', 'editor_changed')
+            pasted=True  # A timeout after the command starts cannot prove absence.
+            if command('paste-buffer','-r','-p','-d','-b',name,'-t',pane).returncode:
+                return defer('unknown', 'paste_failed')
+            previous=None
+            problem=None
+            while time.monotonic()<end:
+                view=capture(command,pane)
+                if not view or view.identity!=before.identity:return defer('unknown', 'pane_changed')
+                problem=completion_problem(view,text)
+                choice=(view.draft,view.selected_command) if ready(view,text) or problem=='completion-mismatch' else None
+                if choice is not None and choice==previous:
+                    if not admit():
+                        return defer('unknown', 'pane_changed')
+                    if time.monotonic()>=end:
+                        return defer('unknown', 'submission_deadline')
+                    view=capture(command,pane)
+                    if view and view.identity==before.identity and (view.draft,view.selected_command)==choice:
+                        if mismatched_command(view,text):
+                            return defer('unknown', 'completion_mismatch')
+                        if ready(view,text) and time.monotonic()<end:
+                            if command('send-keys','-t',pane,'C-m').returncode:
+                                return defer('unknown', 'enter_failed')
+                            break
+                previous=choice
+                time.sleep(POLL)
+            else:
+                reason = 'completion_unverified' if problem=='completion-unverified' else 'draft_not_confirmed'
+                return defer('unknown', reason)
+            while time.monotonic()<end:
+                view=capture(command,pane)
+                if not view or view.identity!=before.identity:return defer('unknown', 'pane_changed')
+                if view.empty:return 'accepted'
+                time.sleep(POLL)
+            return defer('unknown', 'enter_not_confirmed')
+        finally:
+            try:command('delete-buffer','-b',name)
             except (OSError,RuntimeError,subprocess.TimeoutExpired):pass
+    except (OSError,RuntimeError,subprocess.TimeoutExpired):
+        return defer('unknown' if pasted else 'refused', 'terminal_unavailable')
+    finally:
         if fd is not None:os.close(fd)
 
