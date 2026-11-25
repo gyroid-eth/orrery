@@ -90,6 +90,30 @@ def test_api46_permission_reason_is_rendered_as_text():
     assert 'title="Browser use: On (Missing &quot;settings&quot; &lt;details&gt;)"' in markup
     assert markup.count(' disabled') == 4
 
+def test_live_process_observations_show_unknown_and_reason_without_controls():
+    agent = {
+        "name": "FixtureAgent", "running": True, "harness_kind": "claude",
+        "permission_source": "process", "computer_use": None, "browser_use": True,
+        "computer_use_reason": "Screen relay mode could not be verified",
+    }
+    markup = render(agent, api=52)
+    assert 'aria-label="Computer use: Unknown. Screen relay mode could not be verified"' in markup
+    assert '<small>Screen relay mode could not be verified</small>' in markup
+    assert 'aria-label="Browser use: On"' in markup
+    assert 'data-browser' not in markup and 'data-computer' not in markup
+    assert 'agent-detail-observed' not in render(agent, api=51)
+
+
+def test_shared_unknown_reason_appears_once_visibly():
+    reason = "Agent process could not be verified"
+    markup = render({
+        "name": "FixtureAgent", "running": True, "harness_kind": "codex",
+        "permission_source": "process", "computer_use_reason": reason, "browser_use_reason": reason,
+    }, api=52)
+    assert markup.count(">Unknown</span>") == 2
+    assert markup.count(f'>{reason}</small>') == 1
+
+
 def test_unknown_fields_leave_no_rows_and_legacy_fields_never_render():
     markup = render({
         "name": "LegacyAgent", "cwd": None, "model_id": None, "effort": None,
