@@ -561,6 +561,23 @@ def test_claude_prompt_suggestion_is_an_empty_editor(styled, column, empty):
     assert submission.frame(metadata, lines, '%1').empty is empty
 
 
+@pytest.mark.parametrize('suffix,column,draft', [
+    ('  \x1b[38;5;246m<テーマ名> [プロジェクト]\x1b[39m', 7, '/log'),
+    ('  \x1b[2m[optional arguments]\x1b[22m', 7, '/log'),
+    ('  \x1b[38;5;246m<テーマ名> [プロジェクト]\x1b[39m', 22, '/log  <テーマ名> [プロジェクト]'),
+    ('  <テーマ名> [プロジェクト]', 7, '/log  <テーマ名> [プロジェクト]'),
+    ('  \x1b[38;5;2mcolored input\x1b[39m', 7, '/log  colored input'),
+    (' project \x1b[38;5;246m[another argument]\x1b[39m', 15, '/log project [another argument]'),
+])
+def test_claude_slash_argument_hint_is_outside_the_draft(suffix, column, draft):
+    border = '─' * 110
+    styled = '\x1b[38;5;246m❯\xa0\x1b[38;5;153m/log\x1b[39m' + suffix
+    rows = [border, styled, border, '  Fixture status | Opus | ctx: 22% used',
+            '  ⏵⏵ auto mode on (shift+tab to cycle)']
+    metadata = f'/tmp/fixture.sock\t100\t%1\t200\t1\t0\t{column}\t1\tclaude'
+    assert submission.frame(metadata, rows, '%1').draft == draft
+
+
 def test_claude_scrolled_draft_shows_only_its_end():
     # A tall draft scrolls inside Claude's frame and hides the prompt glyph.
     rows = ['\x1b[38;5;244m───\x1b[39m \x1b[2m↑ 3 more\x1b[0m \x1b[38;5;244m' + '─' * 20,
