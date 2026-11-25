@@ -91,6 +91,7 @@ const EffortSlider={mount:(host,options)=>{
   effortOptions=options;host.replaceChildren();
 }};
 let selProvider='claude',selModel=null,selEffort=null,selHarness=null,spawnCatalog;
+let spawnChooseAgain=false;
 function providerById(id){return spawnCatalog.providers.find(p=>p.id===id);}
 function names(el){return el.children.filter(c=>c.tag==='label')
   .map(l=>l.children[0].value);}
