@@ -4247,9 +4247,9 @@
       }
     }
   },
-  "inventory_digest": "b143b8242e53ed9cc6b27d0c0ae7ebe45ea0d722c0ce730defa2fcacde206ba6",
+  "inventory_digest": "52e1c3e12876cc0a642432d52c6dede5d0162382af16aabf432f68eaaec38f0c",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "e8daecfc021d964ce6e1935e1e92f48d0c42623d0ad4c8d7ce2d46c0b2f0df8d",
+  "source_digest": "afd4b163ddaec60caf67af4f0211fb715b184026400c66f429d940d4943e4c4f",
   "surface": "cockpit",
   "version": 1
 }
@@ -12084,6 +12084,13 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
       const valid=()=>socket===connection&&sameRecipient(record,target)&&composerTargetPresent(target)&&stillValid();
       let status='refused',receipt=null,problem='';
       if(target&&valid()){
+        if(readerApproval?.question(target)){
+          if(records.length===1&&!entries.length)status=await readerApproval.answerDraft(target,record.draft);
+          else problem='Answer this question without attachments or other recipients';
+          results.push({...record,status,receipt,problem});
+          releaseComposerTarget(record.name);
+          continue;
+        }
         let paths=[];
         if(entries.length){
           try{
@@ -12119,7 +12126,7 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
     const sent=results.filter(result=>result.status==='accepted');
     const refused=results.filter(result=>result.status==='refused');
     const unknown=results.filter(result=>result.status==='unknown');
-    sent.forEach(({receipt})=>receipt.publish(sent.length));
+    sent.forEach(({receipt})=>receipt?.publish(sent.length));
     const names=entries=>entries.map(record=>record.problem?record.name+' ('+record.problem+')':record.name).join(', ');
     const summary=[
       sent.length?'Sent to '+names(sent):'',
@@ -12592,6 +12599,7 @@ const conversationView=(()=>{
       readerApproval=OrreryReaderApproval.mount({
         screen:document.querySelector('.screen'),getPane:()=>panes.get(activeId),
         getPanes:()=>panes.values(),send:payload=>send(payload),openTerminal:()=>conversationView.close(),
+        focusPrompt:()=>promptInput.focus(),
       });
       // A user operation (conversation_view.js userRequest: the named POSTs,
       // the clipboard files, a file preview; from the NETWORK frame the

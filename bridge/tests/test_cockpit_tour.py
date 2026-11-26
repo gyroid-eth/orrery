@@ -159,6 +159,8 @@ def prompt(connected=True, pane=True, text='Hello', guarded=False):
     return node("globalThis.window={};"
                 f"require({json.dumps(str(BRIDGE / 'prompt_recipients.js'))});"
                 "const {OrreryPromptRecipients}=window;"
+                # This prompt runs before the Reader's optional approval UI is mounted.
+                "const readerApproval=null;"
                 "const events=[];const activeId='pane';const socket={};"
                 f"const promptInput={{value:{json.dumps(text)},"
                 "getBoundingClientRect(){return {top:0,right:120,width:120};}};"
