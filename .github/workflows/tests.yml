@@ -12,20 +12,51 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # Judge the commits this run adds (see tools/test_no_personal_identifiers.py).
+      ORRERY_HISTORY_RANGE: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
     steps:
       # Full history: the identifier test reads the commits this run adds.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Classify pull request changes
+        id: scope
+        shell: bash
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          docs_only=false
+          # NUL-delimited raw records include file modes. With renames disabled,
+          # both the source and destination of a move are checked.
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]] &&
+             git diff --raw --no-renames -z "$PR_BASE...$PR_HEAD" -- > "$RUNNER_TEMP/pr-changes"; then
+            while IFS= read -r -d '' change && IFS= read -r -d '' path; do
+              case "$change" in
+                ':000000 100644 '*|':100644 000000 '*|':100644 100644 '*) ;;
+                *) docs_only=false; break ;;
+              esac
+              case "$path" in
+                *.md|docs/*.png|docs/*.jpg|docs/*.jpeg|docs/*.gif|docs/*.webp|docs/*.svg|changelog.d/README.txt)
+                  docs_only=true ;;
+                *) docs_only=false; break ;;
+              esac
+            done < "$RUNNER_TEMP/pr-changes"
+          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+
       # Shared target contract: deploy actual Telemetry payload in fixtures.
       - uses: actions/checkout@v4
+        if: steps.scope.outputs.docs_only != 'true'
         with:
           repository: gyroid-eth/orrery-telemetry
           ref: c4d1985c2a0c9587ce412da10f53d8085606912c
           fetch-depth: 0
           path: .telemetry-contract
       - name: Place contract fixtures outside the cockpit checkout
+        if: steps.scope.outputs.docs_only != 'true'
         run: |
           mv .telemetry-contract "$RUNNER_TEMP/telemetry-contract"
           echo "ORRERY_TEST_TELEMETRY_ROOT=$RUNNER_TEMP/telemetry-contract" >> "$GITHUB_ENV"
@@ -37,17 +68,27 @@ jobs:
           cache-dependency-path: bridge/requirements.txt
 
       - uses: actions/setup-node@v4
+        if: steps.scope.outputs.docs_only != 'true'
         with:
           node-version: "22"
 
       # e2e_bridge.py drives its own tmux server (tmux -L orrery-e2e-*)
       - name: Install tmux
+        if: steps.scope.outputs.docs_only != 'true'
         run: sudo apt-get update && sudo apt-get install -y tmux
 
       - name: Install Python dependencies
+        if: steps.scope.outputs.docs_only != 'true'
         run: python -m pip install -r bridge/requirements.txt pytest pytest-asyncio -e "$ORRERY_TEST_TELEMETRY_ROOT/packages/agentstack_mail"
 
+      - name: Check documentation and publication hygiene
+        if: steps.scope.outputs.docs_only == 'true'
+        run: |
+          python -m pip install pytest
+          python -m pytest -q -rs tools/test_docs_index.py tools/test_no_personal_identifiers.py
+
       - name: bridge tests
+        if: steps.scope.outputs.docs_only != 'true'
         working-directory: bridge
         run: python -m pytest -q -rs tests
 
@@ -56,7 +97,7 @@ jobs:
       # (they would need a fake dashboard) and are reported as skipped.
       - name: bridge e2e (own tmux server)
         # Run even when an earlier suite failed, so one failure hides nothing.
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.scope.outputs.docs_only != 'true' }}
         working-directory: bridge
         env:
           ORRERY_E2E_V2: "1"
@@ -64,14 +105,10 @@ jobs:
 
       - name: tools tests
         # Run even when an earlier suite failed, so one failure hides nothing.
-        if: ${{ !cancelled() }}
-        env:
-          # The commits this pull request or push adds; earlier master history
-          # is not judged here (see tools/test_no_personal_identifiers.py).
-          ORRERY_HISTORY_RANGE: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
+        if: ${{ !cancelled() && steps.scope.outputs.docs_only != 'true' }}
         run: python -m pytest -q -rs tools
 
       - name: descriptor quality (node)
         # Run even when an earlier suite failed, so one failure hides nothing.
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.scope.outputs.docs_only != 'true' }}
         run: node tools/descriptor_quality_js_test.js
