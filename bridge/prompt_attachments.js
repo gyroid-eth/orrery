@@ -2,7 +2,7 @@
 (function(root){
   'use strict';
   const imageTypes=new Set(['jpg','jpeg','png','webp']);
-  const maxFiles=5,mebibyte=1024*1024,imageLimit=10,fileLimit=50;
+  const maxFiles=5,mebibyte=1024*1024,fileLimit=50;
   const clipboardImageExtensions={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'};
   function pathName(path){
     return typeof path==='string'&&/^\/(?:[^\x00-\x1f\x7f-\x9f]+)$/u.test(path)?path.split('/').pop():'';
@@ -38,7 +38,7 @@
     const dot=file.name.lastIndexOf('.');
     const suffix=dot>0?file.name.slice(dot+1).toLowerCase():'';
     const extension=/^[a-z0-9]{1,32}$/.test(suffix)?suffix:'';
-    if(imageTypes.has(extension))return {kind:'image',extension,maxBytes:imageLimit*mebibyte};
+    if(imageTypes.has(extension))return {kind:'image',extension,maxBytes:fileLimit*mebibyte};
     return {kind:'file',extension,maxBytes:fileLimit*mebibyte};
   }
   function dataFor(file){
@@ -49,7 +49,7 @@
       reader.readAsDataURL(file);
     });
   }
-  function mount({host,clip,picker,list,onChange,onError,mayEdit,pickPaths}){
+  function mount({host,clip,picker,list,onChange,onError,mayEdit}){
     let entries=[],dragDepth=0,pending=false;
     const node=(tag,cls)=>{
       const el=document.createElement(tag);el.className=cls;return el;
@@ -106,9 +106,12 @@
     function add(files){
       if(!mayEdit())return;
       const errors=[];
-      for(const file of files){
-        if(pathName(file.path)){if(!appendPath(file.path))break;continue;}
+      for(const file of Array.from(files)){
         const format=kindFor(file);
+        if(file.size>format.maxBytes&&pathName(file.path)){
+          if(!appendPath(file.path))break;
+          continue;
+        }
         if(!file.size){errors.push(file.name+' is empty.');continue;}
         if(file.size>format.maxBytes){
           errors.push(file.name+' exceeds '+format.maxBytes/mebibyte+' MiB.');continue;
@@ -124,11 +127,8 @@
       if(errors.length)onError(errors.join(' '));
       paint();
     }
-    clip.onclick=async()=>{
-      if(!mayEdit()||pending)return;
-      if(!pickPaths){picker.click();return;}
-      try{addPaths(await pickPaths());}
-      catch(_){if(mayEdit())picker.click();}
+    clip.onclick=()=>{
+      if(mayEdit()&&!pending)picker.click();
     };
     picker.onchange=()=>{add(picker.files);picker.value='';};
     const dropping=event=>Array.from(event.dataTransfer?.types||[]).includes('Files');
@@ -151,29 +151,24 @@
       event.preventDefault();dragDepth=0;host.removeAttribute('data-dragging');
       add(event.dataTransfer.files);
     });
-    async function paste(read,fallback=[]){
+    async function paste(read){
       if(pending||!mayEdit())return;
       pending=true;onChange();
       try{
         const result=await read();
         if(!mayEdit())return;
         const paths=Array.isArray(result.paths)?result.paths.filter(pathName):[];
-        if(paths.length&&(!fallback.length||paths.length===fallback.length&&
-            paths.every((path,index)=>pathName(path)===fallback[index].name))){
-          addPaths(paths);return;
-        }
-        if(fallback.length){add(fallback);return;}
         const snapshot=Array.isArray(result.attachments)?result.attachments:[];
         const files=snapshotFiles(snapshot);
         if(files.length)add(files);
+        if(paths.length)addPaths(paths);
         const skipped=(result.skipped||0)+snapshot.length-files.length;
-        if(result.oversized)onError('Clipboard selection exceeds the size limit. Paste up to 50 MiB at a time, with images up to 10 MiB each.');
-        else if(result.error&&!files.length)onError('Could not read clipboard attachments.');
+        if(result.oversized)onError('Clipboard selection exceeds the size limit (50 MiB, or 10 MiB for a clipboard-only image).');
+        else if(result.error&&!files.length&&!paths.length)onError('Could not read clipboard attachments.');
         else if(skipped)onError(skipped===1?'1 clipboard item could not be attached.':skipped+' clipboard items could not be attached.');
-        else if(!files.length)onError('No files or images on the clipboard.');
+        else if(!files.length&&!paths.length)onError('No files or images on the clipboard.');
       }catch(_){
-        if(fallback.length)add(fallback);
-        else if(mayEdit())onError('Could not read clipboard attachments.');
+        if(mayEdit())onError('Could not read clipboard attachments.');
       }finally{
         pending=false;onChange();
       }
@@ -183,18 +178,36 @@
   async function upload(target,entries){
     const paths=[];
     for(const entry of entries){
-      if(entry.path){paths.push(entry.path);continue;}
-      const data=await dataFor(entry.file);
-      const body={...target,kind:entry.kind,data,label:entry.file.name.slice(0,256)};
-      if(entry.kind==='file')body.format=entry.extension;
+      const label=entry.name.slice(0,256);
+      const body=entry.path?{...target,kind:'path',sourcePath:entry.path,label}:
+        {...target,kind:entry.kind,data:await dataFor(entry.file),label};
+      if(!entry.path&&entry.kind==='file')body.format=entry.extension;
       const response=await fetch('/telemetry/prompt-attachment',{
         method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),
       });
       const payload=await response.json();
       if(response.status===413||payload.error==='file_too_large'||payload.error==='image_too_large')
-        throw new Error(entry.file.name+' exceeds '+entry.maxBytes/mebibyte+' MiB.');
+        throw new Error(entry.name+' exceeds 50 MiB.');
+      const reasons={
+        attachment_source_unreadable:'The original file could not be read. Select it using the attachment picker.',
+        attachment_target_changed:'The target pane changed. Re-select the recipient and try again.',
+        attachment_workspace_unavailable:'The agent workspace is unavailable. Reopen the agent and try again.',
+        attachment_workspace_unwritable:'The agent workspace is not writable. Check its permissions and try again.',
+        attachment_workspace_full:'The agent workspace is out of disk space. Free some space and try again.',
+        image_folder_full:'The agent’s .orrery-input-images folder is full. Move old inputs you no longer need out of that folder and try again.',
+        file_folder_full:'The agent’s .orrery-input-files folder is full. Move old inputs you no longer need out of that folder and try again.',
+        image_invalid:'The image could not be decoded. Open it and export a new copy.',
+        image_format_unsupported:'Export the image as a single-frame PNG, JPEG or WebP and try again.',
+        image_pixels_too_large:'The image exceeds 24 megapixels. Resize it and try again.',
+        image_decoder_unavailable:'Image decoding is unavailable on the cockpit host.',
+      };
+      if(!response.ok&&Object.hasOwn(reasons,payload.error))
+        throw new Error(entry.name+': '+reasons[payload.error]);
+      if(response.ok&&entry.path&&payload.original===true&&payload.path===entry.path){
+        paths.push(payload.path);continue;
+      }
       if(!response.ok||typeof payload.path!=='string'||!/^\.\/\.orrery-input-(?:images|files)\/[a-f0-9]{32}(?:\.[a-z0-9]{1,32})?$/.test(payload.path))
-        throw new Error('Could not save '+entry.file.name+' in the agent workspace.');
+        throw new Error('Could not save '+entry.name+' in the agent workspace.');
       paths.push(payload.path);
     }
     return paths;

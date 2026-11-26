@@ -50,7 +50,9 @@ SOFTWARE.
     return match&&match.slice(1).some(Boolean)?Number(match[1]||0)*3600+Number(match[2]||0)*60+Number(match[3]||0):null;
   }
   function collect(events,provider,{working=false,native=true,activeCalls=new Set()}={}){
-    const enabled=native&&['Claude','Codex'].includes(provider)&&events.some(e=>e.step||e.step_turn||e.step_boundary);
+    const recorded=native&&['dsh','Hermes','Antigravity'].includes(provider);
+    const paired=provider==='Claude'||recorded;
+    const enabled=recorded||native&&['Claude','Codex'].includes(provider)&&events.some(e=>e.step||e.step_turn||e.step_boundary);
     const pending=new Set();
     if(!enabled&&!working)return {groups:[],consumed:new Set(),pending};
     const groups=[],consumed=new Set(),calls=new Map(),results=new Map(),completions=new Map();
@@ -104,10 +106,10 @@ SOFTWARE.
       if(provider==='Codex'&&event.kind==='tool'&&key(event.tool_call_id)&&!step&&!event.step_wrapper)
         codexCalls.set(event.tool_call_id,event);
       if(step&&key(step.id)){
-        if(step.phase==='call'&&provider==='Claude'){
+        if(step.phase==='call'&&paired){
           const owner=active();owner.anchor??=event.id;
           calls.set(step.id,{step,event,owner});
-        }else if(step.phase==='result'&&provider==='Claude'){
+        }else if(step.phase==='result'&&paired){
           consumed.add(event.id);
           results.set(step.id,{step,event,owner:calls.has(step.id)?null:active()});
         }else if(step.phase==='complete'&&provider==='Codex'){
@@ -124,11 +126,22 @@ SOFTWARE.
           }
           const stepId=request?'record:'+request.id:step.id;
           completion.owner.steps.set(stepId,{...step,id:stepId,eventId:completion.eventId});
+        }else if(recorded&&step.phase==='complete'){
+          const owner=active(),id='record:'+event.id;owner.anchor??=event.id;
+          owner.steps.set(id,{...step,id,eventId:event.id});
+          consumed.add(event.id);
         }
+      }else if(recorded&&event.kind==='tool'&&!event.step_boundary&&!event.step_wrapper){
+        const owner=active(),id='record:'+event.id;owner.anchor??=event.id;
+        owner.steps.set(id,{id,tool:event.text,status:'observed',started:event.ts,eventId:event.id});
+        consumed.add(event.id);
+      }else if(recorded&&(event.kind==='tool_result'||event.step_wrapper===true)){
+        // An unlinked result has no operation identity or reliable verdict.
+        consumed.add(event.id);
       }
       // A tool request can also emit a visible Mail card. Record its step
       // before the separator so subsequent requests start below the card.
-      if(event.step_boundary)cut(event);
+      if(event.step_boundary||recorded&&(['text','mail','system'].includes(event.kind)||event.mail?.length))cut(event);
     }
     for(const [id,call] of calls){
       const result=results.get(id);
@@ -136,12 +149,12 @@ SOFTWARE.
         consumed.add(call.event.id);
         call.owner.steps.set(id,{...call.step,...result.step,phase:'complete',
           eventId:call.event.id,resultId:result.event.id});
-      }else if(working&&call.owner===current||activeCalls.has(id)){
+      }else if(recorded||working&&call.owner===current||activeCalls.has(id)){
         // An idle observation can arrive before the transcript's result.
         // Keep a displayed request in its original run until it resolves.
-        pending.add(id);
+        if(!recorded||call.owner===current)pending.add(id);
         consumed.add(call.event.id);
-        call.owner.steps.set(id,{...call.step,status:working?'running':'observed',eventId:call.event.id});
+        call.owner.steps.set(id,{...call.step,status:working&&(!recorded||call.owner===current)?'running':'observed',eventId:call.event.id});
       }
     }
     for(const [id,result] of results)if(!calls.has(id)){
@@ -174,7 +187,7 @@ SOFTWARE.
     return {groups,consumed,pending};
   }
 
-  function mount({host,mutate=fn=>fn(),onFocusLost=()=>{},readDiff,readCommand}){
+  function mount({host,mutate=fn=>fn(),onFocusLost=()=>{},readDiff,readCommand,previewImage}){
     const cards=new Map();let model={groups:[],consumed:new Set()},current={},visible=false,timer=0,serial=0,workingModel=false;
     let activeDetail=null;
     function activityState(context){
@@ -348,11 +361,13 @@ SOFTWARE.
       diff.id='conversation-step-diff-'+(++serial)+'-'+Math.random().toString(36).slice(2);
       diff.setAttribute('aria-label','Recorded diff');
       diffButton.setAttribute('aria-expanded','false');diffButton.setAttribute('aria-controls',diff.id);
-      top.append(tool,diffButton,outcome,clock);copy.append(top,detail,diff);node.append(copy);
+      const imageButton=make('button','conversation-step-image');imageButton.type='button';imageButton.hidden=true;
+      top.append(tool,diffButton,outcome,clock);copy.append(top,detail,diff);node.append(copy,imageButton);
       const record={node,tool,outcome,clock,detail,diffButton,diffTool,plus,minus,diff,detailRef:null,detailKind:null,
-        request:null,icon:null,status:'',fingerprint:''};
+        imageButton,image:null,request:null,icon:null,status:'',fingerprint:''};
       diffButton.addEventListener('click',()=>toggleDetail(record));
       detail.addEventListener('click',()=>{if(record.detailRef)toggleDetail(record);});
+      imageButton.addEventListener('click',()=>{if(record.image)previewImage(record.image);});
       return record;
     }
     function updateRow(record,step){
@@ -371,6 +386,12 @@ SOFTWARE.
       const start=time(step.started),end=time(step.ended);
       changed(record.clock,Number.isFinite(start)&&Number.isFinite(end)&&end>=start?duration((end-start)/1000):'');
       changed(record.detail,text(step.detail));record.detail.hidden=!step.detail;
+      const image=step.image;
+      record.image=previewImage&&step.phase==='complete'&&['done','observed'].includes(status)
+        &&image?.kind==='image'&&reference(image.id)&&text(image.label)?image:null;
+      record.imageButton.hidden=!record.image;
+      record.node.classList.toggle('has-step-image',Boolean(record.image));
+      if(record.image)record.imageButton.setAttribute('aria-label','Preview '+image.label);
       const stat=step.diff_stat;
       const diffRef=status==='done'&&readDiff&&reference(step.diff_ref)
         &&stat&&Number.isSafeInteger(stat.added)&&stat.added>=0&&Number.isSafeInteger(stat.removed)&&stat.removed>=0
@@ -433,7 +454,7 @@ SOFTWARE.
     function sync({events,provider,mode,rows,context,isVisible}){
       setActivity(context,isVisible);
       workingModel=doingWork(current);
-      model=collect(events,provider,{working:workingModel,native:!['snapshot','fresh_tail'].includes(mode),
+      model=collect(events,provider,{working:workingModel,native:mode!=='fresh_tail'&&(mode!=='snapshot'||provider==='Hermes'),
         activeCalls:model.pending});
       const wanted=new Set(model.groups.map(g=>g.id)),byId=new Map(rows.map(r=>[r.dataset.eventId,r]));
       for(const [id,card] of cards)if(!wanted.has(id)){

@@ -133,25 +133,34 @@ def test_browser_files_stage_on_mac_wsl_and_linux_even_without_a_host_reader():
       }));
       return outputs;
     """)
-    for index,out in enumerate(result):
+    for out in result:
         assert_staged(out, [("Clipboard image.png", "image", True), ("資料 with space.txt", "file", False)])
         assert out["attachments"][0]["data"].startswith("iVBORw0KGgo")
         assert out["attachments"][1]["data"] == "Rml4dHVyZSBub3Rl"
-        assert out["calls"] == ([HTTP] if index == 0 else [])
+        assert out["calls"] == []
         assert out["toasts"] == []
         assert out["hostReloads"] == 0
 
 
-def test_mac_file_copy_uses_the_original_path_without_reading_browser_file_bytes():
+def test_mac_file_copy_uses_available_browser_bytes_for_a_small_file():
     result = _paste("""
       const path='/fixtures/Screen recording 1.02.mov';
       return paste(MAC,{files:[new File(['fixture'],'Screen recording 1.02.mov')],
                         app:{attachments:[],paths:[path]}});
     """)
     assert_staged(result,[("Screen recording 1.02.mov","file",False)])
-    assert result["calls"] == [APP]
-    assert result["attachments"][0]["path"] == "/fixtures/Screen recording 1.02.mov"
-    assert result["attachments"][0]["data"] is None
+    assert result["calls"] == []
+    assert "path" not in result["attachments"][0]
+    assert result["attachments"][0]["data"] == "Zml4dHVyZQ=="
+
+
+def test_mac_stages_a_copied_image_and_a_path_from_the_same_snapshot():
+    result = _paste("""
+      return paste(MAC,{app:{attachments:[IMAGE],paths:['/fixtures/Big movie.mov']}});
+    """)
+    assert_staged(result,[("Clipboard image.png","image",True),("Big movie.mov","file",False)])
+    assert result["attachments"][0]["data"].startswith("iVBORw0KGgo")
+    assert result["attachments"][1]["path"] == "/fixtures/Big movie.mov"
 
 
 def test_linux_reads_an_image_from_clipboard_items_if_file_list_is_empty():
@@ -167,7 +176,7 @@ def test_wsl_without_reader_keeps_the_draft_and_reports_why_native_paste_is_unav
     assert_staged(result, [])
     assert result["calls"] == []
     [error] = result["toasts"]
-    assert error["isError"] and "Windows clipboard" in error["message"]
+    assert error["isError"] and "attachment picker or drop" in error["message"]
 
 
 def test_unknown_host_refreshes_platform_before_trying_native_paste():
@@ -178,23 +187,23 @@ def test_unknown_host_refreshes_platform_before_trying_native_paste():
     assert [toast["isError"] for toast in result["toasts"]] == [True]
 
 
-def test_wsl_reader_stages_explorer_bytes_and_screenshots_without_inserting_windows_paths():
+def test_wsl_stages_explorer_and_screenshot_bytes_without_a_backend_clipboard_read():
     result = _paste("""return {
       explorer:await paste(WSL_READER,{
         uris:'file:///C:/Users/u/Note%20one.txt',plain:'C:/Users/u/Note one.txt',
-        answer:{attachments:[NOTE]},
+        files:[fileOf(NOTE)],
       }),
-      screenshot:await paste(WSL_READER,{types:['Files'],answer:{attachments:[IMAGE]}}),
+      screenshot:await paste(WSL_READER,{types:['Files'],items:[{kind:'file',getAsFile:()=>fileOf(IMAGE)}]}),
     };""")
     assert_staged(result["explorer"], [("資料 with space.txt", "file", False)])
     assert_staged(result["screenshot"], [("Clipboard image.png", "image", True)])
     for out in result.values():
-        assert out["calls"] == [HTTP]
+        assert out["calls"] == []
         assert out["toasts"] == []
 
 
-def test_wsl_keeps_successful_files_when_the_native_reader_skips_one():
-    result = _paste("""return paste(WSL_READER,{answer:{attachments:[NOTE],skipped:1}});""")
+def test_mac_keeps_successful_files_when_the_native_reader_skips_one():
+    result = _paste("""return paste(MAC,{answer:{attachments:[NOTE],skipped:1}});""")
     assert_staged(result, [("資料 with space.txt", "file", False)])
     assert result["calls"] == [HTTP]
     assert result["toasts"] == [{"message": "1 clipboard item could not be attached.", "isError": True}]
@@ -207,9 +216,9 @@ def test_native_reader_failures_do_not_send_to_the_terminal():
       await paste(LINUX,{answer:{error:'clipboard_unsupported'}}),
       await paste(MAC,{answer:null}),
     ];""")
-    for out in result:
+    for index,out in enumerate(result):
         assert_staged(out, [])
-        assert out["calls"] == [HTTP]
+        assert out["calls"] == ([] if index < 2 else [HTTP])
         assert [toast["isError"] for toast in out["toasts"]] == [True]
 
 

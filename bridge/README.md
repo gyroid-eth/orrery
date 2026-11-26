@@ -43,6 +43,22 @@ Other permanent read failures retain the existing Retry control.
 The single preference uses the existing shared preference mechanism; transcript
 contents and reading position are never saved as preferences.
 
+The desktop composer copies selected attachments up to 50 MiB into the
+recipient's working folder before sending. The paperclip opens the WebView or
+browser file picker. Files available to the page from selection, drop, or
+paste are uploaded as bytes. On WSL, if the Windows browser cannot supply a
+clipboard file, select or drop the file instead. Some native Mac clipboard or
+drop events provide only an absolute path. Those use the local fallback,
+which requires the host to be able to read the file. For a file over 50 MiB
+with an available local path, the composer sends that path and identifies
+it in the send notification.
+
+Supported images use `.orrery-input-images` and other files use
+`.orrery-input-files`. Each folder retains up to 1,000 attachments from the
+last seven days. After saving an attachment, the host removes expired inputs
+and, when the folder reaches capacity, removes the oldest inputs to make room.
+Removed inputs can no longer open from earlier messages.
+
 The additive `GET /telemetry/conversation?agent=<name>` endpoint accepts an
 agent and optional opaque cursors (`before` or `after`), never a filesystem path.
 In legacy mode only a dashboard `history_binding=bound` row can select a source.
@@ -159,17 +175,23 @@ setup). It does not offer rebinding or infer a transcript path.
 ### Recorded edits and file preview
 
 Claude `SendUserFile` creates chips from its explicit `files: string[]`;
-ORRERY Mail's `show_files` uses `paths: string[]` across all four harnesses.
-Raster images explicitly named by these calls can be previewed outside the
-working folder and configured roots. Other tools' references still require the
-existing workspace/image roots; text files always require a workspace root.
-Caption, status and result prose grant no paths. Every preview rechecks the
-original bound record and preserves canonical-path, no-symlink, file-type,
-byte and pixel limits; images are reencoded as PNG before delivery.
+ORRERY Mail's `show_files` uses `paths: string[]` across the supported harnesses.
+An absolute path explicitly named in a recorded `show_files` call can be
+previewed outside the working folder, on the desktop and phone. Relative text
+paths use the conversation's working folder and configured workspace roots.
+`SendUserFile` can preview explicitly named raster images outside those roots.
+Other tools' references use the existing workspace and image roots.
+In the Reader's agent steps, click a recorded image read to open the same
+preview. Relative paths use the agent's working folder. Explicit absolute
+image paths use the same checks as `show_files` and display the current file.
+Every preview rechecks the original bound record, OS read permissions,
+canonical path, symbolic links, file type, bytes and pixels. Images are
+reencoded as PNG before delivery. Caption, status and result prose grant no
+paths.
 Codex supplies a completed MCP record for ORRERY Mail's `show_files` call,
 both natively and through code mode: `item_completed` / `McpToolCall` in
 Paginated history, or a successful `mcp_tool_call_end` in Legacy history.
-Its recorded arguments grant the image reference on that tool row; the raw
+Its recorded arguments grant the file reference on that tool row; the raw
 native call is omitted to avoid a duplicate row and chip. Codex histories
 without either completion record no longer show `show_files` chips.
 A call merely written inside a `functions.exec` wrapper keeps the existing

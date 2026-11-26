@@ -38,6 +38,29 @@ def capture(client, name):
         (Path(folder) / f'{name}.png').write_bytes(base64.b64decode(data))
 
 
+@pytest.mark.parametrize('cockpit', [False, True], indirect=True, ids=['desktop', 'narrow'])
+def test_reference_stays_above_the_editor_when_the_theme_changes(cockpit):
+    quote = 'Keep the selected message visible while writing a reply. ' * 5
+    js, wait, client = prepare(cockpit, [message('source', quote.strip())])
+    placement = """(()=>{
+        const reference=document.querySelector('.conversation-reply-reference').getBoundingClientRect();
+        const editor=promptInput.getBoundingClientRect();
+        return {above:reference.bottom<=editor.top,visible:reference.height>0,draft:promptInput.value};
+    })()"""
+    js("OrreryColorTheme.setPreference('light')")
+    padding_top = "getComputedStyle(promptInput.closest('.promptbar')).paddingTop"
+    empty_padding = js(padding_top)
+    select_passage(js, wait, '[data-event-id=source] .conversation-text')
+    click(client, js, '.conversation-selection-reply:not([hidden])')
+    wait("!document.querySelector('.conversation-reply-reference').hidden")
+    for theme in ('light', 'dark', 'light'):
+        js('OrreryColorTheme.setPreference('+json.dumps(theme)+')')
+        assert js(placement) == dict(above=True, visible=True, draft=''), theme
+    click(client, js, '.conversation-reply-remove')
+    assert js("document.querySelector('.conversation-reply-reference').hidden")
+    assert js(padding_top) == empty_padding
+
+
 @pytest.mark.parametrize('entry', ['text', 'preview', 'split'])
 def test_reference_moves_caret_to_end_of_the_correct_composer(cockpit, entry):
     if entry == 'split':

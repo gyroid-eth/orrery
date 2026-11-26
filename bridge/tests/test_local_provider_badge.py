@@ -54,6 +54,36 @@ def test_no_local_input_preserves_cloud_presentation_and_badge_dom(tour_browser)
     assert actual == json.loads(FIXTURE.read_text())
 
 
+def test_light_graph_uses_original_logo_artwork_and_readable_seats(tour_browser):
+    _, evaluate = tour_browser
+    rendered_badges(evaluate, [
+        dict(provider='openai', model='gpt-demo'),
+        dict(provider='local', model='glm-4.7'),
+        dict(provider='local', model='inkling-2-mini'),
+        dict(provider='other', program='custom-cli'),
+    ])
+    result = evaluate("""(()=>{
+      function measure(theme){
+        OrreryColorTheme.setPreference(theme);
+        return ['#orrery','.planetarium-svg'].map(selector=>{
+          const badges=[...document.querySelectorAll(selector+' .mini-provider-badge')];
+          const badge=name=>badges.find(el=>el.parentElement.dataset.agent===name);
+          const seat=name=>getComputedStyle(badge(name).querySelector('.mini-provider-seat')).fill;
+          const fallback=getComputedStyle(badge('Badge3').querySelector('text')).fill;
+          const filter=name=>getComputedStyle(badge(name).querySelector('image')).filter;
+          return {filters:[filter('Badge0'),filter('Badge1')],fills:[seat('Badge0'),seat('Badge1')],
+            empty:seat('Badge2'),fallbackSeat:seat('Badge3'),fallback};
+        });
+      }
+      return {light:measure('light'),dark:measure('dark')};
+    })()""")
+    for light, dark in zip(result['light'], result['dark']):
+        assert light['filters'] == dark['filters'] == ['none', 'none']
+        assert light['fills'] == [light['fallback']] * 2
+        assert light['empty'] == light['fallbackSeat'] != light['fallback']
+        assert dark['fills'] == [dark['fallbackSeat']] * 2
+
+
 def test_explicit_local_uses_resolved_model_and_unknown_keeps_an_empty_hexagon(tour_browser):
     _, evaluate = tour_browser
     cases = [

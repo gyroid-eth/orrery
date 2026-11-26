@@ -339,7 +339,7 @@ def test_theme_static_ring_and_working_arc_coexist(mini_browser, theme, reduced)
     assert result is not None
     assert result == {
         'selected': ['Pilot'], 'working': True,
-        'stroke': 'rgb(236, 229, 214)' if theme == 'dark' else 'rgb(1, 1, 0)',
+        'stroke': 'rgb(236, 229, 214)' if theme == 'dark' else 'rgb(172, 117, 0)',
         'width': '0.75px', 'animation': 'none', 'animations': 0, 'radius': 19.5,
         'arcRadius': 13.7, 'arcWidth': '1.6px',
         'arcAnimation': 'none' if reduced else 'orrery-spin', 'hit': 'none'}

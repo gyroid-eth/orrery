@@ -4,10 +4,14 @@ Pairing is by opaque native call ID in the bounded Reader window. This module
 does not open files, discover agents, execute code, or grant preview access.
 """
 import hashlib
+import json
 import math
 from pathlib import PurePosixPath
 import re
 from urllib.parse import urlsplit
+from conversation_markdown_images import IMAGE_EXT
+
+IMAGE_READ_TOOLS = frozenset({'Read', 'read', 'read_file', 'read_image', 'view_image', 'view_file'})
 
 
 def mark_step_boundary(event):
@@ -52,9 +56,54 @@ def filenames(values):
     return ' · '.join(filter(None, names))[:240]
 
 
+def local_step_image(path):
+    if (isinstance(path, str) and 0 < len(path) < 4096
+            and not re.search(r'[\x00-\x1f\x7f]|^(?:~|//|[a-zA-Z][\w+.-]*:)|://', path)
+            and PurePosixPath(path).suffix.lower() in IMAGE_EXT):
+        return path
+    return None
+
+
+def image_read_path(name, args):
+    if not isinstance(name, str) or not isinstance(args, dict):
+        return None
+    if name in IMAGE_READ_TOOLS:
+        return local_step_image(args.get('file_path') or args.get('path'))
+    if name == 'vision_analyze':
+        return local_step_image(args.get('image_url'))
+    return None
+
+
+def step_image_path(record):
+    """Recognize only native image reads and structured file-tool input."""
+    if not isinstance(record, dict):
+        return None
+    if (item := codex_completed_item(record)) is not None:
+        if item.get('type') == 'ImageView':
+            return local_step_image(item.get('path'))
+        if item.get('type') == 'McpToolCall':
+            return image_read_path(item.get('tool'), item.get('arguments'))
+        return None
+    if record.get('type') == 'recorded_image_read':
+        return local_step_image(record.get('path'))
+    call = record.get('payload')
+    if (record.get('type') == 'response_item' and isinstance(call, dict)
+            and call.get('type') == 'function_call'):
+        args = call.get('arguments')
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except (ValueError, RecursionError):
+                return None
+        return image_read_path(call.get('name'), args)
+    return None
+
+
 def summary(name, args):
     if not isinstance(args, dict):
         return ''
+    if image := image_read_path(name, args):
+        return filename(image)
     short = name.split('__')[-1].split('.')[-1].lower()
     if short in {'read', 'edit', 'write', 'read_file', 'write_file', 'view_image'}:
         return filenames([args.get('file_path') or args.get('path')])
@@ -89,17 +138,25 @@ def command_summary(command):
     return ''
 
 
-def claude_call(block, ts):
-    key = opaque(block.get('id'))
-    name = label(block.get('name'))
-    return dict(id=key, phase='call', tool=name, detail=summary(name, block.get('input')),
+def tool_call(call_id, name, args, ts):
+    key = opaque(call_id)
+    name = label(name)
+    return dict(id=key, phase='call', tool=name, detail=summary(name, args),
                 started=ts) if key and name else None
 
 
-def claude_result(block, ts):
-    key = opaque(block.get('tool_use_id'))
+def tool_result(call_id, ts, *, failed=False):
+    key = opaque(call_id)
     return dict(id=key, phase='result', ended=ts,
-                status='failed' if block.get('is_error') is True else 'done') if key else None
+                status='failed' if failed else 'done') if key else None
+
+
+def claude_call(block, ts):
+    return tool_call(block.get('id'), block.get('name'), block.get('input'), ts)
+
+
+def claude_result(block, ts):
+    return tool_result(block.get('tool_use_id'), ts, failed=block.get('is_error') is True)
 
 
 def codex_completed_item(raw):

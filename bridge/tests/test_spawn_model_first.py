@@ -408,6 +408,102 @@ def test_empty_provider_keeps_its_configuration_error_visible(tour_browser):
     assert result['disabled']
 
 
+def test_gemini_picker_groups_variants_and_submits_the_selected_effort(tour_browser):
+    _, evaluate = tour_browser
+    result = evaluate("""(async()=>{
+      const flash='gemini-3.8-flash',neon='gemini-4-neon';
+      const levels=['low','medium','high','xhigh'],flashLevels=levels.slice(0,3);
+      const models=[...flashLevels.map(level=>flash+'-'+level),...levels.map(level=>neon+'-'+level)];
+      const provider={id:'gemini',program:'antigravity',capabilities:{effort_required:true},
+        efforts:levels,models:models.map(id=>({id,default:id===flash+'-high'})),
+        model_efforts:Object.fromEntries(models.map(id=>[id,id.startsWith(flash)?flashLevels:levels]))};
+      spawnCatalog={providers:[provider],naming:{},dirs:[]};
+      selFamily=null;selProvider=null;selModel=null;selHarness=null;selEffort=null;
+      spawnTask.value='Fixture task';spawnDirPath='/workspace';
+      renderProviderTabs();
+      const rowLabels=()=>[...modelChoices.querySelectorAll('.model-choice-name')].map(el=>el.textContent);
+      const slider=()=>effortChoices.querySelector('input');
+      const state=()=>({rows:rowLabels(),efforts:Number(slider().max)+1,blocked:spawnSubmit.disabled,
+        chosen:modelChoices.querySelector('input:checked')?.value,search:!spawnModelSearch.hidden});
+      const initial=state();
+      modelChoices.querySelector('input[value="'+neon+'-low"]').click();
+      const beforeEffort=state();
+      slider().value=slider().max;slider().dispatchEvent(new Event('input'));
+      const chip=spawnModelButton.title;
+      let posted=null;
+      const original=window.fetch;
+      window.fetch=(url,options)=>{
+        if(String(url)!=='/telemetry/spawn')return original(url,options);
+        posted=JSON.parse(options.body);
+        return Promise.resolve({ok:false,json:async()=>({error:'Fixture'})});
+      };
+      try{await submitSpawn(new Event('submit',{cancelable:true}));}
+      finally{window.fetch=original;}
+      modelChoices.querySelector('input[value="'+flash+'-high"]').click();
+      const changed=state(),cleared=spawnPayloadFromForm().effort||null;
+      spawnPendingSelection={family:'gemini',provider:'gemini',model:neon+'-xhigh',harness:'antigravity',effort:'xhigh'};
+      restoreSpawnSelection();
+      const restored=state(),effort=spawnPayloadFromForm().effort;
+      for(const family of ['argon','boron','carbon','cobalt','oxygen','silicon']){
+        const id='gemini-fixture-'+family+'-high';
+        provider.models.push({id});provider.model_efforts[id]=['high'];
+      }
+      renderProviderTabs();
+      const expanded=state();
+      spawnModelSearch.value='xhigh';spawnModelSearch.dispatchEvent(new Event('input'));
+      return {initial,beforeEffort,posted,chip,changed,cleared,restored,effort,expanded,matches:rowLabels()};
+    })()""")
+    rows = ['gemini-3.8-flash', 'gemini-4-neon']
+    assert result['initial'] == dict(rows=rows, efforts=3, blocked=True, chosen=rows[0]+'-high', search=False)
+    assert result['beforeEffort'] == dict(rows=rows, efforts=4, blocked=True, chosen=rows[1]+'-low', search=False)
+    assert result['posted']['provider'] == 'gemini'
+    assert result['posted']['model'] == rows[1]+'-low' and result['posted']['effort'] == 'xhigh'
+    assert result['chip'].startswith(rows[1]+' · ') and result['chip'].endswith(' · xhigh')
+    assert result['changed'] == result['initial'] and result['cleared'] is None
+    assert result['restored'] == dict(rows=rows, efforts=4, blocked=False, chosen=rows[1]+'-xhigh', search=False)
+    assert result['effort'] == 'xhigh' and result['expanded']['search']
+    assert len(result['expanded']['rows']) == 8 and result['matches'] == [rows[1]]
+
+
+def test_gemini_picker_lists_the_full_cli_catalog_and_launches_fixed_models(tour_browser):
+    _, evaluate = tour_browser
+    standard = ['low', 'medium', 'high']
+    extended = [*standard, 'xhigh']
+    families = {'gemini-3.8-flash': standard, 'gemini-4-neon': extended,
+                'gemini-4-carbon': standard, 'gemini-4-argon': standard, 'gemini-4-hydrogen': extended}
+    fixed = ['gemini-pro-orchestrator-neon', 'gemini-pro-orchestrator', 'gemini-pro-orchestrator-argon']
+    levels = {f'{family}-{effort}': choices for family, choices in families.items() for effort in choices}
+    levels.update({model: [] for model in fixed})
+    provider = dict(id='gemini', program='antigravity', models=list(levels),
+                    default_model='gemini-3.8-flash-high', capabilities={'effort_required':True},
+                    efforts=extended, model_efforts=levels)
+    catalog = ob.normalize_spawn_catalog(dict(providers=[provider], naming={}, dirs=[]))
+    result = evaluate("""(async()=>{
+      spawnCatalog=CATALOG;selFamily=null;selProvider=null;selModel=null;selHarness=null;selEffort=null;
+      spawnTask.value='Fixture task';spawnDirPath='/workspace';renderProviderTabs();
+      const rows=[...modelChoices.querySelectorAll('.model-choice-name')].map(el=>el.textContent);
+      const posts=[],original=window.fetch;
+      window.fetch=(url,options)=>{
+        if(String(url)!=='/telemetry/spawn')return original(url,options);
+        posts.push(JSON.parse(options.body));
+        return Promise.resolve({ok:false,json:async()=>({error:'Fixture'})});
+      };
+      const fixed=[];
+      try{
+        for(const name of FIXED){
+          modelChoices.querySelector('input[value="'+name+'"]').click();
+          fixed.push({slider:!!effortChoices.querySelector('input'),blocked:spawnSubmit.disabled});
+          await submitSpawn(new Event('submit',{cancelable:true}));
+        }
+      }finally{window.fetch=original;}
+      return {rows,fixed,posts};
+    })()""".replace('CATALOG',json.dumps(catalog)).replace('FIXED',json.dumps(fixed)))
+    assert result['rows'] == [*families, *fixed]
+    assert result['fixed'] == [dict(slider=False, blocked=False)] * len(fixed)
+    assert [post['model'] for post in result['posts']] == fixed
+    assert all('effort' not in post for post in result['posts'])
+
+
 @pytest.mark.parametrize('width', [1600, 390])
 def test_launcher_and_model_sheet_fit_and_name_draft_can_be_discarded(tour_browser, width):
     client,evaluate=tour_browser
