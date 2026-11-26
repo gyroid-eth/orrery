@@ -6,12 +6,15 @@ import shutil
 import subprocess
 
 import pytest
+from PIL import Image
 
 import conversation_history as history
+from conversation_preview import ReferenceStore
 
 
 SID = "12345678-1234-4321-8421-123456789abc"
 STAMP = "2026-10-01T10:00:00Z"
+SHOW_FILES_TRANSCRIPT = Path(__file__).parent / "fixtures/antigravity-show-files.jsonl"
 
 
 def step(index, kind, source, content=None, **fields):
@@ -31,7 +34,7 @@ def log(tmp_path):
         step(0, "USER_INPUT", "USER_EXPLICIT",
              "<USER_REQUEST>\nOne\n\nTwo\n</USER_REQUEST>\n<ADDITIONAL_METADATA>HIDDEN_META</ADDITIONAL_METADATA>"),
         step(1, "PLANNER_RESPONSE", "MODEL", thinking="HIDDEN_REASONING",
-             tool_calls=[{"name": "read_file", "args": {"path": "HIDDEN_PATH"}}]),
+             tool_calls=[{"name": "read_file", "args": {"path": "/HIDDEN_PATH/notes.md"}}]),
         step(2, "GENERIC", "MODEL", "Created At: time\nCompleted At: time\nHIDDEN_RESULT"),
         step(3, "PLANNER_RESPONSE", "MODEL", "Fixture reply.", model="gemini-example"),
         step(4, "USER_INPUT", "USER_EXPLICIT", "<USER_REQUEST>\n /compact \n</USER_REQUEST>"),
@@ -50,6 +53,44 @@ def page(row, **kwargs):
         return reader.read_page(**kwargs)
 
 
+@pytest.mark.parametrize("server,expected", [
+    ("orrery-mail", True), ("agentstack", True), ("unrelated", False), ("orrery_mail", False),
+])
+@pytest.mark.parametrize("filename,kind", [("comparison.png", "image"), ("report.md", "text")])
+def test_native_mcp_file_chip_uses_only_an_explicit_orrery_call(tmp_path, log, server, expected, filename, kind):
+    path, row = log
+    shown = tmp_path / filename
+    if kind == "image":
+        Image.new("RGB", (32, 16), "teal").save(shown)
+    else:
+        shown.write_text("# Fixture report\n")
+    # This file is outside all configured roots. It must be explicitly named
+    # in the native call, even when a tool result mentions the same path.
+    path.write_text(SHOW_FILES_TRANSCRIPT.read_text().replace("/fixture", str(tmp_path.resolve()))
+                    .replace("comparison.png", filename)
+                    .replace('"ServerName":"orrery-mail"', f'"ServerName":"{server}"'))
+    store = ReferenceStore()
+    with history.open_reader(row) as reader:
+        events = reader.read_page()["events"]
+        store.decorate_all(row, reader, events)
+    calls = [event for event in events if event["kind"] == "tool"]
+    assert [event["step"]["tool"].split("__")[-1] for event in calls] == ["read_file", "show_files"]
+    assert [event["step"]["detail"] for event in calls] == ["notes.md", filename]
+    assert all(event["step"]["status"] == "observed" for event in calls)
+    assert "Sensitive result placeholder" not in json.dumps(events)
+    assert all(not event.get("references") for event in events if event is not calls[1])
+    assert bool(calls[1].get("references")) is expected
+    if expected:
+        assert calls[1]["text"] == "mcp__orrery_mail__show_files"
+        ref, = calls[1]["references"]
+        assert ref["label"] == filename
+        for mobile in (False, True):
+            result = store.read(ref["id"], row, mobile=mobile)
+            assert result["kind"] == kind
+            if kind == "text":
+                assert result["text"] == "# Fixture report\n"
+
+
 def test_uses_existing_cursor_pages_and_keeps_content_boundaries(log):
     _, row = log
     newest = page(row, limit=3)
@@ -62,6 +103,7 @@ def test_uses_existing_cursor_pages_and_keeps_content_boundaries(log):
         ("system", "system", "Context compacted"),
     ]
     assert events[3]["model"] == "gemini-example"
+    assert events[1]["step"]["detail"] == "notes.md"
     assert "HIDDEN" not in json.dumps(events)
     assert len({e["id"] for e in events}) == len(events)
 

@@ -58,6 +58,7 @@
       if(button.title!==title){button.title=title;button.setAttribute('aria-label',title);}
       button.disabled=pending||!stopping&&!drafted;
       button.toggleAttribute('data-ready',!button.disabled);
+      button.toggleAttribute('data-draft',drafted);
       glyph.target=stopping?1:0;
       const scroll=input.scrollTop;
       input.style.height='0px';

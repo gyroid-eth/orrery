@@ -1579,7 +1579,6 @@ class SessionBridgeManager:
 
         session = state.bridge.config.session
         if message_type in {'approval-inspect', 'approval-answer'}:
-            from reader_approval import ApprovalCoordinator
             bridge = state.bridge
             proof = None
             if isinstance(bridge.config.tmux_bin, FreshPaneBoundary):
@@ -1591,16 +1590,12 @@ class SessionBridgeManager:
                     return
                 proof = proofs[0]
                 pane_id = target.pane_id
-            coordinator = getattr(bridge, '_approval_coordinator', None)
-            if coordinator is None:
-                async def harness(target_pane):
-                    return await approval_harness(approval_request, bridge, target_pane)
-                coordinator = bridge._approval_coordinator = ApprovalCoordinator(bridge, harness_resolver=harness)
+            coordinator = approval_coordinator(approval_request, bridge)
             if message_type == 'approval-inspect':
                 result = await coordinator.inspect(pane_id, peer)
             else:
                 result = await coordinator.answer(pane_id, peer, payload.get('token'), payload.get('choice'),
-                                                  payload.get('operation'), proof=proof)
+                                                  payload.get('operation'), proof=proof, text=payload.get('text'))
             await bridge.send_json(peer, dict(type='approval', paneId=pane_id,
                 requestId=payload.get('requestId'), **result))
             return
@@ -2190,9 +2185,23 @@ async def approval_harness(request, bridge, pane):
             return 'codex'
         if program in ('claude', 'claude-code') and provider in ('anthropic', 'claude'):
             return 'claude'
+        if program in ('hermes', 'dsh'):
+            return program
+        if program in ('agy', 'antigravity', 'gemini-cli') and provider in ('google', 'gemini', 'agy', 'antigravity'):
+            return 'agy'
     except (ClientError, asyncio.TimeoutError, ValueError, TypeError, KeyError):
         pass
     return None
+
+
+def approval_coordinator(request, bridge):
+    from reader_approval import ApprovalCoordinator
+    coordinator = getattr(bridge, '_approval_coordinator', None)
+    if coordinator is None:
+        async def harness(pane):
+            return await approval_harness(request, bridge, pane)
+        coordinator = bridge._approval_coordinator = ApprovalCoordinator(bridge, harness_resolver=harness)
+    return coordinator
 
 
 async def conversation_bound_row(request: web.Request, name: str, not_before: float | None = None) -> dict:
@@ -5135,7 +5144,7 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "spawn_picker.js", "effort_slider.js", "spawn_catalog_loader.js", "prefs_sync.js", "phone_settings.js",
     "theme_core.js", "theme_controller.js", "local_model_makers.js", "roster_descriptor.js", "roster_edit.js", "demo_mask.js",
     "demo_mode.js", "orrery_view.js", "mail_view.js", "cockpit_tour.js",
-    "cockpit_full_tour.js", "telemetry_light.js", "prompt_spring.js", "prompt_composer.js", "prompt_recipients.js", "prompt_attachments.js",
+    "cockpit_full_tour.js", "telemetry_light.js", "prompt_spring.js", "exit_dust.js", "prompt_composer.js", "prompt_recipients.js", "prompt_attachments.js",
     "conversation_source.js", "conversation_view.js", "conversation_view.css", "conversation_preview.js", "conversation_reply.js",
     "conversation_motion.js",
     "conversation_steps.js", "conversation_steps.css",
@@ -5205,8 +5214,10 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
                         or root_path(location.lines[0])!=root):return None
                 return root
         except (HistoryUnavailable,PreviewUnavailable,OSError,ValueError,RuntimeError,ClientError,asyncio.TimeoutError):return None
+    from types import SimpleNamespace
     coordinator = install_routes(app, InputCoordinator(PaneResolver(app[TMUX_BIN_KEY]), mobile_bridge,
-                                                       enabled=mobile_input_enabled,image_workspace=mobile_image_workspace))
+        enabled=mobile_input_enabled,image_workspace=mobile_image_workspace,
+        approval_for=lambda bridge: approval_coordinator(SimpleNamespace(app=app),bridge)))
     import mobile_access
     mobile_access.install(app, coordinator, config_path=CONFIG_PATH)
     app.router.add_get("/telemetry/agents", proxy_dashboard)

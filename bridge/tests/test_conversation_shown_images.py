@@ -89,13 +89,13 @@ def test_agentstack_alias_uses_canonical_image_event_and_preview(tmp_path, form)
 
 
 @pytest.mark.parametrize('legacy', [False, True])
-def test_agentstack_alias_never_grants_external_text(tmp_path, legacy):
+def test_agentstack_alias_grants_external_text(tmp_path, legacy):
     work = tmp_path / 'work'
     work.mkdir()
     note = tmp_path / 'note.txt'
     note.write_text('Outside the working folder')
-    _, _, event = native_delivery(work, [str(note)], 'codex_legacy' if legacy else 'codex', 'agentstack')
-    assert not event.get('references')
+    store, bound, event = native_delivery(work, [str(note)], 'codex_legacy' if legacy else 'codex', 'agentstack')
+    assert preview(store, bound, event)['text'] == 'Outside the working folder'
 
 
 @pytest.mark.parametrize('form', FORMS)
@@ -127,14 +127,20 @@ def test_other_tools_do_not_grant_external_images(tmp_path, name):
 
 
 @pytest.mark.parametrize('form', FORMS)
-def test_delivery_never_grants_external_text_or_svg(tmp_path, form):
+def test_only_show_files_grants_external_text(tmp_path, form):
     work = tmp_path / 'work'
     work.mkdir()
     text, svg = tmp_path / 'note.txt', tmp_path / 'vector.svg'
     text.write_text('Generated text')
     svg.write_text('<svg/>')
-    _, _, event = native_delivery(work, [str(text), str(svg)], form)
-    assert not event.get('references')
+    store, bound, event = native_delivery(work, [str(text), str(svg)], form)
+    if form == 'send_user_file':
+        assert not event.get('references')
+        return
+    assert [ref['label'] for ref in event['references']] == ['note.txt', 'vector.svg']
+    assert preview(store, bound, event)['text'] == 'Generated text'
+    result = preview(store, bound, event, index=1)
+    assert (result['kind'], result['mime'], result['text']) == ('text', 'text/plain', '<svg/>')
 
 
 @pytest.mark.parametrize('case', ['file_symlink', 'directory_symlink', 'traversal', 'control'])

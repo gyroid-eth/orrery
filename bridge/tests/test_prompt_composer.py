@@ -109,6 +109,25 @@ def test_action_switches_to_stop_only_for_an_empty_working_draft(cockpit, reduce
     ]
 
 
+def test_light_send_keeps_paper_fill_and_marks_only_a_sendable_draft(cockpit):
+    js, wait, _ = terminal(cockpit)
+    appearance = """(()=>{const style=getComputedStyle(promptSendBtn);
+        return [style.backgroundColor,style.borderColor,style.color,promptSendBtn.title];})()"""
+    dark_idle = js(appearance)
+    js("OrreryColorTheme.setPreference('light')")
+    neutral = ['rgb(253, 252, 248)', 'rgb(131, 129, 121)', 'rgb(97, 94, 85)']
+    assert js(appearance) == [*neutral, 'Send message']
+    js("currentAgents[0].act_state='work';document.dispatchEvent(new Event('oc:agents'))")
+    assert js(appearance) == [*neutral, 'Stop agent (Esc)']
+    js("promptInput.value='Draft';promptInput.dispatchEvent(new Event('input'))")
+    assert js(appearance) == [neutral[0], 'rgb(172, 117, 0)', 'rgb(137, 92, 0)', 'Send message']
+    js("promptSendBtn.click()")
+    wait("promptInput.value===''&&!promptBusy")
+    assert js(appearance) == [*neutral, 'Stop agent (Esc)']
+    js("currentAgents[0].act_state='wait';document.dispatchEvent(new Event('oc:agents'));OrreryColorTheme.setPreference('dark')")
+    assert js(appearance) == dark_idle
+
+
 def test_idle_escape_reports_key_delivery(cockpit):
     js, wait, _ = terminal(cockpit)
     js("""window.send=packet=>{

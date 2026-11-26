@@ -122,7 +122,7 @@ def test_clicked_path_unreadable_special_files_and_alias_swap(tmp_path, monkeypa
         if path==target.name:raise PermissionError('fixture denied')
         return original(path,*args,**kwargs)
     monkeypatch.setattr(preview.os,'open',deny)
-    with pytest.raises(preview.PreviewUnavailable,match='preview_unavailable'):preview.clicked_path(str(target))
+    with pytest.raises(preview.PreviewUnavailable,match='preview_permission_denied'):preview.clicked_path(str(target))
     monkeypatch.setattr(preview.os,'open',original)
     link=tmp_path/f'alias.{extension}';link.symlink_to(target)
     assert preview.clicked_path(str(link))==preview.clicked_path(str(target))

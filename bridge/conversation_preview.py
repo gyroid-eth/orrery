@@ -142,6 +142,7 @@ def open_file(path):
         info=os.fstat(fd)
         if not stat.S_ISREG(info.st_mode) or info.st_nlink!=1:raise PreviewUnavailable('preview_type_denied')
         yield fd,info
+    except PermissionError:raise PreviewUnavailable('preview_permission_denied') from None
     except OSError:raise PreviewUnavailable('preview_unavailable') from None
     finally:
         if fd is not None:os.close(fd)
@@ -244,7 +245,7 @@ class ReferenceStore:
         if len(self.by_key)>len(self.refs):
             self.by_key={value['key']:ref for ref,value in self.refs.items()}
 
-    def policy(self,value,cwd,*,shown=False):
+    def policy(self,value,cwd,*,shown=False,show_files=False):
         if (not isinstance(value,str) or re.search(r'[\x00-\x1f\x7f]|://|^~',value)
                 or '..' in Path(value).parts):raise PreviewUnavailable('preview_path_denied')
         if not os.path.isabs(value):
@@ -265,10 +266,9 @@ class ReferenceStore:
         if canonical!=path:raise PreviewUnavailable('preview_path_denied')
         roots=((*self.workspace_roots,cwd) if cwd else self.workspace_roots)
         is_image=path.suffix.lower() in IMAGE_EXT
-        allowed=any(path.is_relative_to(root) for root in roots)
-        # Only explicit delivery calls grant their particular raster image
-        # outside configured roots. Callers derive this from the pinned record,
-        # never from a client flag, tool result, caption or an adjacent path.
+        allowed=(show_files and os.path.isabs(value)) or any(path.is_relative_to(root) for root in roots)
+        # A recorded show_files call grants its absolute paths. Other explicit
+        # delivery calls grant their raster images, as before.
         if not allowed and is_image:allowed=shown or any(path.is_relative_to(root) for root in self.image_roots)
         if not allowed:raise PreviewUnavailable('preview_path_denied')
         if not is_image and path.suffix.lower() not in TEXT_EXT and path.name not in {'Makefile','Dockerfile','LICENSE'}:
@@ -369,7 +369,8 @@ class ReferenceStore:
         with self.lock:
             self.prune()
             for index,value in enumerate(projection['paths']):
-                try:path=self.policy(value,cwd,shown=value in projection['shown_paths'])
+                try:path=self.policy(value,cwd,shown=value in projection['shown_paths'],
+                                     show_files=value in projection.get('show_files_paths',()))
                 except (PreviewUnavailable,OSError,ValueError):continue
                 key=(binding(row),identity(stream),event['id'],digest,index,str(path))
                 ref=self.by_key.get(key)
@@ -539,8 +540,10 @@ class ReferenceStore:
                 else:
                     projection=extract_artifacts(item);paths=projection['paths']
                     if entry['index']>=len(paths):raise PreviewUnavailable('reference_expired')
-                    value=paths[entry['index']];shown=value in projection['shown_paths']
-                    path=self.policy(value,workspace(stream),shown=shown)
+                    value=paths[entry['index']]
+                    options=dict(shown=value in projection['shown_paths'],
+                                 show_files=value in projection.get('show_files_paths',()))
+                    path=self.policy(value,workspace(stream),**options)
                     if str(path)!=entry['key'][-1]:raise PreviewUnavailable('reference_expired')
                     result=self.read_file(path,thumbnail=thumbnail,mobile=mobile)
                 # Revalidate both the source record and file descriptor identity
@@ -550,7 +553,7 @@ class ReferenceStore:
                     if original.resolve(strict=True)!=path:raise PreviewUnavailable('reference_expired')
                 elif attachment:
                     if stored_attachment(path,cwd)!=attachment:raise PreviewUnavailable('reference_expired')
-                elif not entry.get('input_image') and self.policy(value,workspace(stream),shown=shown)!=path:raise PreviewUnavailable('reference_expired')
+                elif not entry.get('input_image') and self.policy(value,workspace(stream),**options)!=path:raise PreviewUnavailable('reference_expired')
                 stream.assert_identity()
             return path if reveal else result
         except (HistoryUnavailable,OSError,ValueError,KeyError,TypeError) as exc:
