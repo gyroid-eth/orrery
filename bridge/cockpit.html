@@ -4283,9 +4283,9 @@
       }
     }
   },
-  "inventory_digest": "7c5702bb8f40b36037616c10d29bd5cd53f6d368b50bf0c73ca7f172333e0f84",
+  "inventory_digest": "63f68f0deacde04c7a660cfdafeb05ec2f2c4f9e998e0671af685a58aa8a8540",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "52591793f1dfaade7e0657f74cd3909cbc1739a97a03d04316ffed162b53777c",
+  "source_digest": "a9bd46fa98f627fd48721643f927877d394999db48f2b691fc3f6249361991a8",
   "surface": "cockpit",
   "version": 1
 }
@@ -9602,7 +9602,6 @@ const PERMISSION_CONTROLS_API=54;
 const AGENT_DETAIL_TOKENS=new Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1});
 const AGENT_DETAIL_ICONS={
   role:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M5.5 16a3.5 3.5 0 0 1 7 0m3-6h2.5m-2.5 4H18"/>',
-  top:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2"/>',
   children:'<path d="M6 5v14h7M6 12h7"/><circle cx="16" cy="12" r="2"/><circle cx="16" cy="19" r="2"/>',
   parent:'<circle cx="12" cy="5" r="2"/><rect x="3" y="16" width="5" height="4" rx="1"/><rect x="16" y="16" width="5" height="4" rx="1"/><path d="M12 7v5m-6.5 4v-4h13v4"/>',
   computer:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4m-4 0h8"/>',
@@ -9685,7 +9684,7 @@ function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false,pendin
   };
   return {
     name:a.name,role:text(a.annot?.role),pendingAction,
-    parentState:a.parent_state,parent:a.parent_state==='child'?text(a.parent_agent):null,
+    parent:a.parent_state==='child'?text(a.parent_agent):null,
     computer:setting('computer_use'),browser:setting('browser_use'),
     permissions:Boolean(a.harness_kind||a.lifecycle==='persistent'||a.surface==='codex-app'||permissionConversationOnly(a)||
       a.computer_use||typeof a.browser_use==='boolean'||a.permission_controls),
@@ -9757,9 +9756,7 @@ function agentDetailHTML(detail){
       `<span class="agent-detail-value agent-detail-${icon}"${demoDirectory?' data-demo-path':''}>${content}</span>`,
       demoDirectory?detail.cwd:null);
   };
-  let lineage='';
-  if(detail.parentState==='top')lineage=agentDetailItem('top','Top level');
-  if(detail.parentState==='child')lineage=detail.parent?text('parent','Parent',detail.parent):agentDetailItem('parent','Child agent');
+  let lineage=text('parent','Parent',detail.parent);
   if(detail.hiddenChildren?.length)lineage+=text('children','Hidden descendants',detail.hiddenChildren.join(', '));
   const context=[];
   if(detail.tokens!==null)context.push(detail.tokens.toLocaleString('en')+' tokens');

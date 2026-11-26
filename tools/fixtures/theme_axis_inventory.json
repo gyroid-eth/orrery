@@ -3642,7 +3642,7 @@
       }
     }
   },
-  "inventory_digest": "7c5702bb8f40b36037616c10d29bd5cd53f6d368b50bf0c73ca7f172333e0f84",
+  "inventory_digest": "63f68f0deacde04c7a660cfdafeb05ec2f2c4f9e998e0671af685a58aa8a8540",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -3654,9 +3654,9 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "52591793f1dfaade7e0657f74cd3909cbc1739a97a03d04316ffed162b53777c",
+  "source_digest": "a9bd46fa98f627fd48721643f927877d394999db48f2b691fc3f6249361991a8",
   "source_files": {
-    "bridge/cockpit.html": "3d88f53504dcb3e6af23ecc1f52af3e5b4ac262547ceed38136999beeadf7081",
+    "bridge/cockpit.html": "9dd89d762ee77145b09fb51d48de29386cf572a39e961c959c642c228f1a8ba7",
     "bridge/mail_view.css": "7139ca3c6fc352f2f5213e06b589f2919befb93e79ff858c147d20c3f28f1a8a",
     "bridge/orrery_view.css": "09fd0b9366053f804b82687d3b9d67b94aaefa5a06f226f2abebb4f2ccb2e6a2"
   },
