@@ -419,7 +419,7 @@ def test_graph_captions_fit_dense_layout_and_keep_the_full_name(mini_browser, mo
     })()""".replace('MODE', json.dumps(mode)))
     expected = dict(count=16, clear=True, ellipsis=True, full=True, noRole=True)
     assert {key: result[0][key] for key in expected} == expected
-    assert result[0]['role'] in (None, 'Fixture release review')
+    assert result[0]['role'] == 'Fixture release review'
     assert result[1] == dict(expected, role='Fixture release review')
 
 
@@ -528,7 +528,7 @@ def test_mini_graph_keeps_mail_pairs_by_default_and_can_use_only_recent_links(mi
       for(let i=0;i<60&&!mailLinksState().watcher;i++)await new Promise(resolve=>setTimeout(resolve,20));
       return mailLinksState();
     })()""")
-    assert retained == {'watcher': True, 'countWidth': '3.58', 'live': False}
+    assert retained == {'watcher': True, 'countWidth': '1.31', 'live': False}
     assert evaluate("setMailLinks('recent');mailLinksState()") == {
         'watcher': False, 'countWidth': None, 'live': False}
     assert evaluate("localStorage.getItem('oc-mini-mail-links')") == 'recent'
@@ -637,7 +637,7 @@ def test_hover_and_focus_emphasize_only_incident_mini_edges_and_merge_mail_pairs
       const originalFetch=window.fetch;
       window.fetch=(url,...args)=>url==='/telemetry/graph?days=1'?
         Promise.resolve(new Response(JSON.stringify({edges:[
-          {source:'Pilot',target:'Helper',count:4},{source:'Pilot',target:'Watcher',count:7},
+          {source:'Pilot',target:'Helper',count:400},{source:'Pilot',target:'Watcher',count:700},
           {source:'Helper',target:'Watcher',count:2}
         ]}))):originalFetch(url,...args);
       settings.value='keep';settings.dispatchEvent(new Event('change'));
@@ -656,6 +656,11 @@ def test_hover_and_focus_emphasize_only_incident_mini_edges_and_merge_mail_pairs
       const helper=svg.querySelector('[data-agent=Helper] .orrery-hit').getBoundingClientRect();
       return {x:helper.left+helper.width/2,y:helper.top+helper.height/2};
     })()""")
+    assert evaluate("""(()=>{
+      const graph=document.getElementById('orrery');
+      const width=selector=>getComputedStyle(graph.querySelector(selector)).strokeWidth;
+      return [width('.orrery-spawn-edge'),width('.orrery-history-edge.mail-live')];
+    })()""") == ['1.15px', '1.5px']
     expected = {'count': 3, 'incident': 2, 'active': True, 'straight': True, 'merged': True, 'fade': '0.16s'}
     client.call('Input.dispatchMouseEvent', type='mouseMoved', **point)
     assert evaluate('edgeHighlight()') == expected
@@ -697,6 +702,9 @@ def test_mini_graph_fits_every_agent_then_zooms_and_fits_again_after_resize(mini
           return r.left>=b.left-.1&&r.right<=b.right+.1&&r.top>=b.top-.1&&r.bottom<=b.bottom+.1;
         };
         return {count:nodes.length,all:nodes.every(inside),nameSize:parseFloat(getComputedStyle(name).fontSize)*svg.getScreenCTM().a,
+          completeNames:nodes.every(node=>{
+            const label=node.querySelector('.orrery-caption-name');return label.scrollWidth<=label.clientWidth;
+          }),roles:svg.querySelectorAll('.orrery-caption-role').length,
           zoom:svg.clientWidth/scroll.clientWidth,pan:[scroll.scrollLeft,scroll.scrollTop],
           expand:inside(scroll.parentElement.querySelector('.orrery-expand')),height:scroll.clientHeight};
       };
@@ -704,8 +712,14 @@ def test_mini_graph_fits_every_agent_then_zooms_and_fits_again_after_resize(mini
       return {x:Math.round(b.left+b.width/2),y:Math.round(b.top+b.height/2)};
     })()""".replace('MODE', json.dumps(mode)).replace('COUNT', str(count)))
     initial = evaluate('miniFitStats()')
-    assert initial['count'] == count and initial['all'] and initial['expand'], initial
-    assert initial['zoom'] == 1 and initial['nameSize'] >= 8.99, initial
+    assert initial['count'] == initial['roles'] == count and initial['expand'], initial
+    assert initial['completeNames'] and initial['nameSize'] >= 11.6, initial
+
+    def fit_all():
+        evaluate("document.querySelector('.mini-graph-zoom button:first-child').click()")
+        assert evaluate('miniFitStats().zoom===1&&miniFitStats().all')
+
+    fit_all()
 
     def wheel(delta, modifiers=0):
         client.call('Input.dispatchMouseEvent', type='mouseWheel', deltaX=0, deltaY=delta,
@@ -727,14 +741,77 @@ def test_mini_graph_fits_every_agent_then_zooms_and_fits_again_after_resize(mini
     assert evaluate('miniFitStats().all&&miniFitStats().zoom===1')
     wheel(-140, 4)
     assert evaluate('miniFitStats().zoom') > 1.2
+    previous = evaluate("document.getElementById('orrery').getAttribute('viewBox')")
     evaluate('setGraphHeight(304)')
     for _ in range(20):
         resized = evaluate('miniFitStats()')
-        if resized['zoom'] == 1:
+        if evaluate("document.getElementById('orrery').getAttribute('viewBox')") != previous:
             break
         time.sleep(.03)
-    assert resized['height'] == 304 and resized['all'] and resized['count'] == count, resized
-    assert resized['zoom'] == 1 and resized['nameSize'] >= 8.99, resized
+    assert resized['height'] == 304 and resized['count'] == resized['roles'] == count, resized
+    assert resized['completeNames'] and resized['nameSize'] >= 11.6, resized
+    fit_all()
+
+
+def test_zoomed_mini_graph_drags_from_background_without_stealing_node_or_edge_clicks(mini_browser):
+    client, evaluate = mini_browser
+    client.call('Emulation.setFocusEmulationEnabled', enabled=True)
+    evaluate("""(()=>{
+      const viewport=document.getElementById('miniGraphViewport'),scroll=viewport.firstElementChild;
+      document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages:[
+        {sender:'Pilot',recipient:'Watcher'},{sender:'Helper',recipient:'Watcher'},
+      ]}}));
+      window.panClicks=[];
+      for(const kind of ['oc:filter-agent','oc:filter-mail-pair']){
+        document.addEventListener(kind,()=>panClicks.push(kind));
+      }
+      window.dragState=()=>({pan:[scroll.scrollLeft,scroll.scrollTop],
+        cursor:getComputedStyle(scroll).cursor,clicks:panClicks.slice()});
+      window.dragPoint=selector=>{
+        const b=scroll.getBoundingClientRect();
+        for(let y=b.top+(selector?8:42);y<b.bottom-8;y+=4){
+          for(let x=b.left+(selector?8:50);x<b.right-8;x+=4){
+            const hit=document.elementFromPoint(x,y);
+            if(scroll.contains(hit)&&(selector?hit.closest(selector):!hit.closest('.mini-agent,.orrery-mail-edge'))){
+              return {x,y};
+            }
+          }
+        }
+      };
+    })()""")
+
+    def drag(selector=None):
+        start = evaluate(f'dragPoint({json.dumps(selector)})')
+        assert start, selector
+        end = evaluate('dragPoint(null)') if selector else {'x': start['x'] - 31, 'y': start['y'] - 25}
+        assert end
+        client.call('Input.dispatchMouseEvent', type='mousePressed', **start, button='left', buttons=1, clickCount=1)
+        client.call('Input.dispatchMouseEvent', type='mouseMoved', **end, button='left', buttons=1)
+        moving = evaluate('dragState()')
+        client.call('Input.dispatchMouseEvent', type='mouseReleased', **end, button='left', clickCount=1)
+        return moving, evaluate('dragState()')
+
+    evaluate("document.querySelector('.mini-graph-zoom button:first-child').click()")
+    unzoomed, _ = drag()
+    assert unzoomed['pan'] == [0, 0] and unzoomed['cursor'] != 'grabbing'
+
+    evaluate("document.querySelector('.mini-graph-zoom button:last-child').click()")
+    before = evaluate('dragState()')
+    moving, released = drag()
+    assert before['cursor'] == released['cursor'] == 'grab'
+    assert moving['cursor'] == 'grabbing' and moving['pan'] == released['pan']
+    assert released['pan'] == [before['pan'][0] + 31, before['pan'][1] + 25]
+    assert released['clicks'] == []
+    for selector in ('.mini-agent', '.orrery-mail-edge'):
+        moving, ended = drag(selector)
+        assert moving['pan'] == ended['pan'] == released['pan']
+        assert moving['cursor'] == 'grab'
+
+    for selector, kind in (('.orrery-mail-edge', 'oc:filter-mail-pair'), ('.mini-agent', 'oc:filter-agent')):
+        point = evaluate(f'dragPoint({json.dumps(selector)})')
+        client.call('Input.dispatchMouseEvent', type='mousePressed', **point, button='left', clickCount=1)
+        client.call('Input.dispatchMouseEvent', type='mouseReleased', **point, button='left', clickCount=1)
+        assert kind in evaluate('dragState().clicks')
 
 
 def test_dense_network_centers_focus_and_puts_frequent_mail_on_the_inner_ring(mini_browser):
@@ -759,19 +836,18 @@ def test_dense_network_centers_focus_and_puts_frequent_mail_on_the_inner_ring(mi
       setMiniViewMode('network');
       settings.value='keep';settings.dispatchEvent(new Event('change'));
       const svg=document.getElementById('orrery');
-      const retained=()=>svg.querySelector('.orrery-spawn-edge[data-child=Peer14]')?.parentElement.style.getPropertyValue('--mail-edge-width');
-      for(let i=0;i<60&&!retained();i++)await new Promise(r=>setTimeout(r,20));
-      if(!retained())throw new Error('Fixture Mail history did not load');
       const hit=name=>svg.querySelector(`[data-agent="${name}"] .orrery-hit`);
       const center=name=>{
         const el=hit(name);
         return [Number(el.getAttribute('cx')),Number(el.getAttribute('cy'))];
       };
-      const [x,y]=center('Pilot'),box=svg.viewBox.baseVal;
       const radius=name=>{
+        const [x,y]=center('Pilot');
         const [px,py]=center(name);
         return Math.hypot(px-x,py-y);
       };
+      for(let i=0;i<60&&radius('Peer14')>=radius('Peer10');i++)await new Promise(r=>setTimeout(r,20));
+      const [x,y]=center('Pilot'),box=svg.viewBox.baseVal;
       const [out,into]=document.querySelectorAll('.mini-graph-zoom button');
       const scale=()=>hit('Pilot').getScreenCTM().a;
       const normal=scale();into.click();const enlarged=scale();out.click();

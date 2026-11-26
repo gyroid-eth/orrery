@@ -8,6 +8,8 @@
 .mini-graph:has(.miniorrery[hidden])+.mail-graph-divider{display:none}
 .mini-graph.orrery-mode{width:100%;margin:4px 0 0}
 .mini-graph-scroll{width:100%;height:100%;overflow:auto;scrollbar-width:thin;overflow-anchor:none;overscroll-behavior:contain}
+.mini-graph-scroll.can-pan{cursor:grab;user-select:none}
+.mini-graph-scroll.is-panning,.mini-graph-scroll.is-panning :is(.orrery-agent,.orrery-mail-edge){cursor:grabbing}
 .mini-graph-scroll:focus-visible{outline:1px solid var(--ink-dim);outline-offset:-1px}
 .mini-graph-expand{position:absolute;top:0;right:0;width:28px;height:28px;pointer-events:none}
 .mini-graph-expand .orrery-expand{pointer-events:auto}
@@ -19,7 +21,6 @@
 .mini-graph-zoom button:not(:disabled):is(:hover,:focus-visible){color:var(--ink);border-color:var(--ink-dim)}
 .mini-graph-zoom button:disabled{cursor:default;opacity:.45}
 .miniorrery{display:block;overflow:hidden}
-.miniorrery.hide-mini-captions .mini-agent foreignObject{visibility:hidden}
 .miniorrery.telemetry-network{
   background:radial-gradient(ellipse at center,rgb(var(--theme-accent-rgb) / .055),transparent 62%);
 }
@@ -49,12 +50,12 @@
   fill:none;stroke:var(--ink-dim);
   vector-effect:non-scaling-stroke;pointer-events:none;
 }
-.orrery-mail-edge{cursor:pointer;outline:none;transition:opacity 160ms}
+.orrery-mail-edge{--mail-edge-width:1.15px;cursor:pointer;outline:none;transition:opacity 160ms}
+.orrery-comm-layer .orrery-mail-edge{--mail-edge-width:.8px}
 .orrery-mail-edge > :first-child{
   fill:none;pointer-events:none;transition:stroke 160ms,stroke-width 160ms,stroke-opacity 160ms;
 }
-.orrery-mail-edge > .orrery-spawn-edge{stroke-width:var(--mail-edge-width,1.15px)}
-.orrery-mail-edge > .orrery-spawn-edge.mail-live{stroke-width:max(var(--mail-edge-width,1.15px),1.7px)}
+.orrery-mail-edge > .orrery-spawn-edge.mail-live{--mail-edge-width:1.35px;stroke-width:var(--mail-edge-width)}
 .orrery-mail-edge > .orrery-history-edge.mail-live{stroke:var(--ink)}
 .orrery-mail-edge-hit{
   fill:none;stroke:transparent;stroke-width:14px;vector-effect:non-scaling-stroke;pointer-events:stroke;
@@ -64,11 +65,11 @@
 }
 .orrery-mail-edge:hover > .orrery-comm-edge{stroke-opacity:.76}
 .orrery-mail-edge:hover > .mail-live{stroke:var(--amber);stroke-opacity:1}
-.orrery-mail-edge:focus-visible > :first-child{stroke:var(--amber);stroke-opacity:1;stroke-width:3}
+.orrery-mail-edge:focus-visible > :first-child{stroke:var(--amber);stroke-opacity:1;stroke-width:calc(var(--mail-edge-width) + .22px)}
 .miniorrery.has-node-edge-highlight .orrery-mail-edge:not(.is-incident,:hover,:focus-visible){opacity:.55}
 .miniorrery.has-node-edge-highlight .orrery-mail-edge.is-incident > :first-child{
   stroke:var(--ink);stroke-opacity:.76;
-  stroke-width:max(2.3px,calc(var(--mail-edge-width,1.15px) + .6px));
+  stroke-width:calc(var(--mail-edge-width) + .22px);
 }
 .orrery-agent,.orrery-expand{cursor:pointer;outline:none}
 .orrery-hit{fill:transparent;stroke:none}

@@ -19,21 +19,16 @@ const miniExpand=miniViewport.querySelector('.mini-graph-expand');
 const SVG_NS='http://www.w3.org/2000/svg';
 const MINI={
   width:280,height:200,large:false,
-  xPadding:34,topPadding:46,bottomPadding:46,
+  xPadding:34,topPadding:30,bottomPadding:38,
   treePitchX:66,treePitchY:64,singlePitchX:66,singlePitchY:64,
   singleColumns:5,sectionGap:64,treeGapUnits:.55,promoteComms:true,
   captionWidth:62,captionTop:15,captionHeight:20,nodeAbove:20,
 };
 const MINI_HEIGHT_KEY='oc-mini-graph-height';
-// Keep about 12 px names when there is room. Try compact layout before scaling.
+// Keep about 12 px names on open, with room for wide names in the scene.
 const MINI_PREFERRED_SCALE=1.3;
-const MINI_READABLE_SCALE=1;
-const MINI_DETAIL=[
-  {},
-  {xPadding:33,topPadding:25,bottomPadding:38,captionGap:1},
-  {xPadding:25,topPadding:25,bottomPadding:38,captionGap:1,captionWidth:46},
-  {xPadding:22,topPadding:25,bottomPadding:29,captionGap:1,captionWidth:40,captionHeight:11,hideRoles:true},
-];
+const MINI_MAX_CAPTION_WIDTH=112;
+const miniCaptionMeasure=document.createElement('canvas').getContext('2d');
 const MINI_MIN_HEIGHT=120;
 const MINI_MAX_HEIGHT=520;
 const MAIL_BELOW_GRAPH=160; // Leave room for the handle and at least several Mail rows.
@@ -75,7 +70,8 @@ let miniFocusName=OC.activeAgent&&OC.activeAgent()||'';
 let miniWidth=MINI.width,miniHeight=MINI.height;
 let miniOverflow=false;
 const MINI_MAX_ZOOM=2.5;
-let miniZoom=1,miniBaseScale=MINI_PREFERRED_SCALE,miniZoomControls;
+let miniZoom=1,miniDefaultZoom=1,miniMaxZoom=MINI_MAX_ZOOM,miniZoomControls;
+let miniViewAdjusted=false;
 let miniHoveredAgent='',miniFocusedAgent='';
 
 function svgEl(tag,attrs={}){
@@ -199,8 +195,7 @@ function activePromotionPartners(forest,now=Date.now()){
 }
 
 function captionClearance(dimensions){
-  const gap=dimensions.captionGap;
-  return [dimensions.captionWidth+(gap??4),dimensions.nodeAbove+dimensions.captionTop+dimensions.captionHeight+(gap??2)];
+  return [dimensions.captionWidth+4,dimensions.nodeAbove+dimensions.captionTop+dimensions.captionHeight+2];
 }
 function promotedPosition(name,partnerPosition,occupied,dimensions){
   const [horizontal,vertical]=captionClearance(dimensions);
@@ -428,7 +423,6 @@ function fitMiniTree(live,dimensions){
   const layout=layoutAgents(live,{...dimensions,treePitchX:pitchX,treePitchY:pitchY,
     singlePitchX:pitchX,singlePitchY:pitchY,singleColumns:columns});
   if(layout.width===dimensions.width&&layout.height===dimensions.height)return layout;
-  if(!dimensions.captionGap)return null;
   const unpromoted=layout.promotions.size?layoutAgents(live,{...dimensions,promoteComms:false}):layout;
   const levels=new Map();
   const ordered=[...unpromoted.positions.values()].sort((a,b)=>a.y-b.y||a.x-b.x);
@@ -449,24 +443,28 @@ function fitMiniTree(live,dimensions){
   }));
   return {...unpromoted,width:dimensions.width,height:dimensions.height};
 }
+function miniCaptionWidth(agents){
+  if(!miniCaptionMeasure)return MINI.captionWidth;
+  const font=getComputedStyle(miniSvg).getPropertyValue('--rail-sans').trim()||'sans-serif';
+  miniCaptionMeasure.font=`600 9px ${font}`;
+  let width=MINI.captionWidth;
+  for(const agent of agents){
+    width=Math.max(width,Math.ceil(miniCaptionMeasure.measureText(agent.name||'').width)+3);
+    if(width>=MINI_MAX_CAPTION_WIDTH)return MINI_MAX_CAPTION_WIDTH;
+  }
+  return width;
+}
 function fitMiniScene(live,width,height){
   const subset=miniMode==='network'&&telemetryNetworkSubset(live,miniFocusName,miniNetworkDepth);
-  const preferred=Math.max(MINI_PREFERRED_SCALE,Math.min(width/MINI.width,height/MINI.height));
-  const scales=[preferred,1.2,1.1,MINI_READABLE_SCALE];
-  for(const scale of scales){
-    for(const detail of MINI_DETAIL){
-      const dimensions={...MINI,...detail,width:width/scale,height:height/scale};
-      const layout=subset?telemetryMiniLayout(subset,miniFocusName,dimensions):fitMiniTree(live,dimensions);
-      if(layout)return {layout,dimensions};
-    }
-  }
-  // Very short panes may have no room for all readable captions. Fit everything
-  // initially and let a zoom expose the underlying readable detail.
-  const detail=MINI_DETAIL.at(-1);
-  for(let factor=1.15;;factor*=1.15){
-    const dimensions={...MINI,...detail,width:width*factor,height:height*factor};
+  const agents=subset?[...subset.distances.keys()].map(name=>subset.byName.get(name)):live;
+  const scale=Math.max(MINI_PREFERRED_SCALE,Math.min(width/MINI.width,height/MINI.height));
+  const captionWidth=miniCaptionWidth(agents),xPadding=Math.max(MINI.xPadding,captionWidth/2+3);
+  // Find a scene with room for both caption rows. Fitting the whole scene is
+  // the minimum zoom, and its readable scale determines the opening zoom.
+  for(let zoom=1;;zoom*=1.12){
+    const dimensions={...MINI,captionWidth,xPadding,width:width/scale*zoom,height:height/scale*zoom};
     const layout=subset?telemetryMiniLayout(subset,miniFocusName,dimensions):fitMiniTree(live,dimensions);
-    if(layout)return {layout,dimensions};
+    if(layout)return {layout,dimensions,zoom};
   }
 }
 
@@ -778,7 +776,7 @@ function drawAgentCaption(group,{agent,x,y},dimensions,provider,showTitle=true){
   name.className='orrery-caption-name';
   name.textContent=agent.name;
   text.appendChild(name);
-  if(role&&!dimensions.hideRoles){
+  if(role){
     const roleLabel=document.createElement('div');
     roleLabel.className='orrery-caption-role';
     roleLabel.textContent=role;
@@ -1033,12 +1031,6 @@ function miniFocusPoint(){
   const matrix=miniSvg.getScreenCTM();
   return focus&&matrix?new DOMPoint(focus.tx,focus.ty).matrixTransform(matrix):null;
 }
-function miniFocusVisible(){
-  const point=miniFocusPoint();
-  if(!point)return false;
-  const bounds=miniScroll.getBoundingClientRect();
-  return point.x>=bounds.left&&point.x<=bounds.right&&point.y>=bounds.top&&point.y<=bounds.bottom;
-}
 function centerMiniViewport(){
   if(!miniOverflow)return;
   const center=miniFocusPoint();
@@ -1054,17 +1046,18 @@ function centerMiniViewport(){
 function paintMiniZoom(){
   miniSvg.style.width=miniWidth*miniZoom+'px';
   miniSvg.style.height=miniHeight*miniZoom+'px';
-  miniSvg.classList.toggle('hide-mini-captions',miniBaseScale*miniZoom<MINI_READABLE_SCALE-.001);
   const [out,into]=miniZoomControls;
   out.disabled=miniZoom===1;
-  into.disabled=miniZoom===MINI_MAX_ZOOM;
+  into.disabled=miniZoom===miniMaxZoom;
   miniOverflow=miniZoom>1;
+  miniScroll.classList.toggle('can-pan',miniOverflow);
   if(miniOverflow)miniScroll.tabIndex=0;
   else miniScroll.removeAttribute('tabindex');
 }
 function setMiniZoom(next,clientX,clientY){
-  next=Math.max(1,Math.min(MINI_MAX_ZOOM,next));
+  next=Math.max(1,Math.min(miniMaxZoom,next));
   if(next===miniZoom)return;
+  miniViewAdjusted=true;
   const bounds=miniScroll.getBoundingClientRect();
   const x=Number.isFinite(clientX)?clientX-bounds.left:bounds.width/2;
   const y=Number.isFinite(clientY)?clientY-bounds.top:bounds.height/2;
@@ -1084,8 +1077,7 @@ function installMiniZoom(){
   miniZoomControls=miniViewport.querySelectorAll('.mini-graph-zoom button');
   const [out,into]=miniZoomControls;
   out.addEventListener('click',()=>{
-    const next=miniZoom/1.25;
-    setMiniZoom(next<1.001?1:next);
+    setMiniZoom(miniZoom<=miniDefaultZoom+.001?1:miniZoom/1.25);
     if(document.activeElement===out&&out.disabled)into.focus({preventScroll:true});
   });
   into.addEventListener('click',()=>{
@@ -1094,7 +1086,10 @@ function installMiniZoom(){
   });
   let gestureZoom=null;
   miniViewport.addEventListener('wheel',event=>{
-    if(!event.ctrlKey&&!event.metaKey)return;
+    if(!event.ctrlKey&&!event.metaKey){
+      if(miniOverflow)miniViewAdjusted=true;
+      return;
+    }
     event.preventDefault();
     if(gestureZoom!==null)return;
     const units=event.deltaMode===1?16:event.deltaMode===2?miniHeight:1;
@@ -1113,17 +1108,58 @@ function installMiniZoom(){
   },{passive:false});
   miniViewport.addEventListener('gestureend',()=>{gestureZoom=null;});
 }
+function installMiniPan(){
+  let drag=null,suppressClick=false;
+  miniScroll.addEventListener('pointerdown',event=>{
+    if(drag)return;
+    suppressClick=false;
+    if(!miniOverflow||!event.isPrimary||event.pointerType!=='mouse'||event.button!==0||
+      event.target.closest('.mini-agent,.orrery-mail-edge'))return;
+    drag={id:event.pointerId,x:event.clientX,y:event.clientY,active:false};
+    // Capture the background gesture before it can reach a node or an edge.
+    miniScroll.setPointerCapture(event.pointerId);
+  });
+  function move(event){
+    if(!drag||event.pointerId!==drag.id||!miniOverflow)return;
+    const dx=event.clientX-drag.x,dy=event.clientY-drag.y;
+    if(!drag.active){
+      if(dx*dx+dy*dy<16)return;
+      drag.active=suppressClick=true;
+      miniViewAdjusted=true;
+      miniScroll.classList.add('is-panning');
+    }
+    miniScroll.scrollLeft-=dx;
+    miniScroll.scrollTop-=dy;
+    drag.x=event.clientX;drag.y=event.clientY;
+  }
+  function finish(event){
+    if(!drag||event.pointerId!==drag.id)return;
+    if(event.type==='pointerup')move(event);
+    drag=null;
+    miniScroll.classList.remove('is-panning');
+  }
+  miniScroll.addEventListener('pointermove',move);
+  for(const type of ['pointerup','pointercancel','lostpointercapture'])miniScroll.addEventListener(type,finish);
+  miniScroll.addEventListener('click',event=>{
+    if(!suppressClick||!event.detail)return;
+    suppressClick=false;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  },true);
+}
 function renderMini({recenter=false}={}){
   const focusedEdge=focusedEdgeKey(miniSvg);
   const focusedAgent=miniAgentName(document.activeElement);
   miniViewport.classList.toggle('orrery-mode',miniMode==='orrery');
   const width=miniViewport.clientWidth||miniWidth,height=miniViewport.clientHeight||miniHeight;
-  const focusWasVisible=miniFocusVisible();
   const resized=width!==miniWidth||height!==miniHeight;
   miniWidth=width;miniHeight=height;
-  if(resized||recenter)miniZoom=1;
-  const {layout,dimensions}=fitMiniScene(liveAgents,width,height);
-  miniBaseScale=Math.min(width/layout.width,height/layout.height);
+  const resetView=resized||recenter||!miniMotion.initialized;
+  if(resetView)miniViewAdjusted=false;
+  const {layout,dimensions,zoom}=fitMiniScene(liveAgents,width,height);
+  miniDefaultZoom=zoom;
+  miniMaxZoom=Math.max(MINI_MAX_ZOOM,zoom*1.25);
+  miniZoom=miniViewAdjusted?Math.min(miniMaxZoom,miniZoom):zoom;
   const flights=preservedFlights(miniSvg);
   miniSvg.replaceChildren();
   const previous=miniMotion.layoutDimensions;
@@ -1170,7 +1206,7 @@ function renderMini({recenter=false}={}){
   if(!layout.positions.has(miniHoveredAgent))miniHoveredAgent='';
   miniFocusedAgent=miniKeyboardAgentName(document.activeElement);
   syncMiniEdgeHighlight();
-  if(focusWasVisible&&!miniFocusVisible())centerMiniViewport();
+  if(!miniViewAdjusted&&(resetView||geometryChanged))centerMiniViewport();
   syncMotionLoop();
 }
 function renderPlanetarium(){
@@ -1348,18 +1384,14 @@ function renderMailHistory(){
   const layer=miniSvg.querySelector('.orrery-history-layer');
   const focused=focusedEdgeKey(layer);
   layer.replaceChildren();
-  const spawn=new Map(miniMotion.spawnEdges.map(edge=>[pairKey(edge.dataset.parent,edge.dataset.child),edge]));
-  spawn.forEach(edge=>edge.parentElement.style.removeProperty('--mail-edge-width'));
+  const spawn=new Set(miniMotion.spawnEdges.map(edge=>pairKey(edge.dataset.parent,edge.dataset.child)));
   if(!keepMailLinks)return;
   historyPairs.forEach(({a,b,count})=>{
     if(!miniPositions.has(a)||!miniPositions.has(b))return;
-    // The dashboard keeps one displayed count per pair across directions and kinds.
-    const width=Math.min(6,1+Math.log2(count+1));
-    const existing=spawn.get(pairKey(a,b));
-    if(existing){
-      existing.parentElement.style.setProperty('--mail-edge-width',`${width.toFixed(2)}px`);
-      return;
-    }
+    // A spawn line already represents this pair. Retained Mail has only a
+    // small width range so busy relationships stay as light as the other edges.
+    if(spawn.has(pairKey(a,b)))return;
+    const width=Math.min(1.5,1.15+.07*Math.log2(Math.max(1,count)));
     appendMailEdge(layer,svgEl('path',{
       class:'orrery-history-edge','data-a':a,'data-b':b,'stroke-width':width.toFixed(2),
     }),a,b,true);
@@ -1764,6 +1796,7 @@ miniSvg.addEventListener('focusout',event=>{
 });
 addExpandAffordance(miniExpand,{...MINI,width:28,height:28},false);
 installMiniZoom();
+installMiniPan();
 installMiniGraphDivider();
 renderMini();
 new ResizeObserver(()=>{
