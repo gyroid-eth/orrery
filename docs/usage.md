@@ -8,6 +8,8 @@ ORRERY cockpit は、左の roster、中央の terminal、右の ORRERY Mail rai
 
 ## やりたいことから探す
 
+[目的別ガイド](README.md#目的から選ぶ)・[画面一覧](cockpit-map.md)から、実画面の短い見本を開けます。
+
 | やりたいこと | 操作 | 詳細 |
 | --- | --- | --- |
 | 稼働中の agent を見つけたい | 左 roster を検索し、tile をクリック | [Roster](#roster) |
@@ -112,7 +114,7 @@ Antigravity では Telemetry API 53 以降が ORRERY の起動時の選択を表
 
 詳細 card から道具を変更できるのは、legacy の Claude Code／Codex CLI で、会話の照合と Restart／Resume の条件を満たす場合です。親付きは Telemetry API 45 以降、親なしは API 46 以降と保存済みの起動設定が必要です。表示された項目を選んで、同じ会話の **Restart** または **Resume** を確認します。Restart は作業中のターンを中断します。Codex App、常駐 agent、会話のみの Resume などでは変更ボタンに理由が出ます。
 
-![Agent にカーソルを置くと、詳細に Computer use の Off・View・Control と Browser の状態が出る](images/cockpit_roster_detail.png)
+![Agent にカーソルを置くと、詳細に Computer use と Browser の現在の権限と選択肢が出る](images/cockpit_roster_detail.png)
 
 成果物（Deliverables）は、ORRERY Telemetry が project の `logs/` から集めた、その agent の作業ログ（`LOG_*.md` のうち frontmatter の `agent:` がその agent のもの）です。一覧は TELEMETRY の agent panel の `Output` タブで開けます（[TELEMETRY](#telemetry)）。
 
@@ -199,6 +201,20 @@ Select mode では eligible な live agent を複数選び、ORRERY Telemetry �
 
 これは agent process へ終了を依頼する変更操作です。mail の読み取りや UI filter とは異なり、実行前に対象を再確認してください。ORRERY Telemetry dashboard が不達の場合は利用できません。
 
+## Reader
+
+Reader は agent の作業を追う主な画面です。ペイン上部の Reader アイコンを押すと、発言、作業ステップ、表、差分が読みやすく整い、参照ファイルをその場で開けます。ペインが狭い場合は Reader が全面に開きます。**Settings → Appearance → Open agents in** から、agent を開くときの表示を選べます。
+
+[Reader で作業と参照ファイルを見る](read-a-file.md)
+
+### Reader で承認する
+
+PC の Reader では、承認待ちになると入力欄のすぐ上に `Approval needed` の帯が出ます。クリックまたは Enter で全文と選択肢を開くと、「今回だけ許可」に focus が移り、もう一度 Enter で送れます。継続的に許可する選択肢は既定になりません。
+
+対応するのは Codex の MCP tool の4択、sandbox 外のコマンドの3択、Claude の作業外 Read の4択です。全文を読めない画面や別の形では、`Open terminal to review` から同じ pane を開いて確認します。押す直前に画面が変わっていればキーを送らず、確認し直す帯に更新します。
+
+`Response sent` はキーが届いたことを表し、処理の成功を保証しません。画面が解消するまでは再送できません。`Outcome unknown` が出た場合は自動再送せず、Terminal で確認してください。
+
 ## Terminal
 
 terminal は `xterm.js` を使い、ORRERY backend の `/ws` と tmux control mode を介して pane を操作します。
@@ -215,14 +231,6 @@ active な session label / pane tab を再クリックしても末尾へ移動�
 backend は起動時に live tmux session ごとに recorder connection を一つ接続します。browser からの pane attach は tile / palette の操作時に遅延実行されます。
 
 上に scroll して過去の出力を読んでいる間は、新しい出力が来ても末尾へ引き戻しません。backend を再起動すると、cockpit は page を自動で読み直します（composer の下書きは残る）。
-
-### Reader で承認する
-
-PC の Reader では、承認待ちになると入力欄のすぐ上に `Approval needed` の帯が出ます。クリックまたは Enter で全文と選択肢を開くと、「今回だけ許可」に focus が移り、もう一度 Enter で送れます。継続的に許可する選択肢は既定になりません。
-
-対応するのは Codex の MCP tool の4択、sandbox 外のコマンドの3択、Claude の作業外 Read の4択です。全文を読めない画面や別の形では、`Open terminal to review` から同じ pane を開いて確認します。押す直前に画面が変わっていればキーを送らず、確認し直す帯に更新します。
-
-`Response sent` はキーが届いたことを表し、処理の成功を保証しません。画面が解消するまでは再送できません。`Outcome unknown` が出た場合は自動再送せず、Terminal で確認してください。
 
 ### スマホのTerminal（別途有効化）
 
@@ -438,6 +446,8 @@ scientist を選ぶと未使用の adjective が自動で一つ選ばれ、name 
 filesystem browser は hidden directory を除外し、最大200件を返します。ただし ORRERY の `/telemetry/fs/dirs` には root allowlist がないため、localhost-only の利用境界を維持してください。
 
 ## Mini-orrery
+
+[詳細カードと再起動の GIF](inspect-mini-graph.md)
 
 mini-orrery は live agent の spawn forest と、直近90秒の mail edge / comet を表示します。
 

@@ -123,11 +123,6 @@ def main():
         root = Path(directory)
         snapshot(args.cockpit_source.resolve(), root / "app")
         snapshot(args.telemetry_source.resolve(), root / "tel")
-        if args.group == "guides":
-            with fixtures(root, guide_board=args.guide_board.resolve()) as (cockpit, _):
-                with camera(args.cdp, (1320, 760)) as browser:
-                    save_guides(browser, args.output / "cockpit", cockpit)
-            return
         subprocess.run(
             [
                 "bash",
@@ -137,6 +132,11 @@ def main():
             ],
             check=True,
         )
+        if args.group == "guides":
+            with fixtures(root, guide_board=args.guide_board.resolve()) as (cockpit, _):
+                with camera(args.cdp, (1320, 760)) as browser:
+                    save_guides(browser, args.output / "cockpit", cockpit)
+            return
         chart(root / "sample-chart.png")
         staged = root / "staged"
         with fixtures(root) as (cockpit, phone):

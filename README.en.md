@@ -4,14 +4,14 @@
 
 <img src="app/icons-src/orrery-1024.png" alt="ORRERY icon" width="96">
 
-ORRERY is a cockpit for arranging agent terminals, sending instructions, and following Mail and usage quotas. It supports Claude Code, Codex CLI, the optional Antigravity provider, and DeepSeek or Local models through dsh or Hermes.
+ORRERY is a cockpit for sending tasks, following an agent's work in Reader, and tracking Mail and usage. It supports Claude Code, Codex CLI, the optional Antigravity provider, and DeepSeek or Local models through dsh or Hermes.
 
 ![Launch an agent, send it a task, and read the reply in Reader](docs/images/guides/start-an-agent.gif)
 
 - [Start an agent and send a task](docs/en/start-an-agent.md)
-- [Open a referenced file in Reader](docs/en/read-a-file.md)
+- [Follow work and open files in Reader](docs/en/read-a-file.md)
 - [Read incoming ORRERY Mail](docs/en/read-mail.md)
-- [Cockpit map](docs/en/cockpit-map.md)
+- [Browse all task guides](docs/en/README.md#choose-a-task) · [Cockpit map](docs/en/cockpit-map.md)
 
 ## Quick start
 
@@ -61,7 +61,7 @@ Set up the features you want after the base install. Each guide covers the first
 
 Default ports are 8791 for the cockpit, 8770 for Telemetry, and 18765 for a new Mail installation. For changing the work folder and uninstalling, see [Work folder and Uninstall](#work-folder-and-uninstall).
 
-Pick an agent in the roster on the left, give instructions in the terminal in the center, and follow parent–child relationships and messages in the mini-orrery and Mail on the right. The terminals work even when ORRERY Telemetry is not running; features that depend on it show their status and degrade gracefully.
+Pick an agent in the roster and send a task from the composer in the center. Open Reader to see its progress. Mini Graph and Mail on the right show agent relationships and messages. The terminals work even when ORRERY Telemetry is not running; features that depend on it show their status and degrade gracefully.
 
 **Introduction video**: "Orrery" (90 s) is an illustrated explainer of the idea behind ORRERY: agents talk to each other directly, so you no longer relay between AIs. It does not show the actual screens. A [Japanese version](https://youtu.be/JXoa93TQolU) is also available.
 
@@ -69,15 +69,15 @@ Pick an agent in the roster on the left, give instructions in the terminal in th
 
 ## What you can do
 
-### Read a conversation (Reader)
+### Follow an agent's work (Reader)
 
-An agent using an alternate-screen TUI cannot be reviewed with terminal scrollback alone. Reader displays its recorded conversation in a read-only panel. Press the **Reader icon** in the pane; press it again to close. The setting is on by default; turning off **Settings → Appearance → Reader** closes the panel, removes the button, and stops history reads.
+Reader is the main view for following an agent's work as it happens. It uses the harness's records to group tool activity into steps, fold lengthy output, and present messages, tables, diffs, and file previews in the pane. Use the **Reader icon** in the pane header to open or close the view. The setting is on by default. Turn off **Settings → Appearance → Reader** to remove the panel and its button and stop loading records.
 
 Pane headers and roster cards use telemetry's display model name without shortening it; the title retains the full ID. Headers show the provider logo, agent name, and model, omitting missing models. An active, working agent's logo slowly brightens and dims; waiting agents and reduced-motion mode stay still. Narrow panes truncate the model before the name, keeping the logo and action buttons visible. The split pane close button is the rightmost header action and shares the other icons' size and border.
 
 ![Reader with a fictional conversation, a Markdown table, and file chips](docs/images/cockpit_history.png)
 
-The reader opens beside the terminal; the pane header’s **⤢** expands it across the pane; press it again to restore the side panel. On narrow screens it fills the pane. While you scroll, new records do not move your reading position. Use **Load earlier** where available to go back (up to about 300 records at a time, counting each tool call and result as one; the reader keeps up to 800 records or 2 MiB, and going back beyond that releases the newest records and pauses updates until you scroll back to the bottom or select **↓ (Latest)**, while reading new records at the bottom releases the oldest), and use **↓ (Latest)**, shown over the lower-right corner only while reading earlier messages, to return to the newest records. In CLAIMED mode, opening Reader beside the terminal fits the terminal to the remaining width; closing Reader restores its width. Full-width Reader overlays the terminal. FOLLOW keeps the external terminal’s width, so Reader can cover part of it. In a split, each pane's **Reader icon** opens an independent reader; full width and previews stay within that pane. Interacting with a reader selects its pane as the prompt composer target. Closing another pane preserves the surviving reader’s width mode, position, expanded Mail, and preview. A width change can shift the reading position by one or two lines.
+The reader opens beside the terminal; the pane header’s **⤢** expands it across the pane; press it again to restore the side panel. On narrow screens it fills the pane. While you scroll, new records do not move your reading position. To revisit earlier work, choose **Load earlier** when available (up to about 300 records at a time, counting each tool call and result as one; the reader keeps up to 800 records or 2 MiB, and going back beyond that releases the newest records and pauses updates until you scroll back to the bottom or select **↓ (Latest)**, while reading new records at the bottom releases the oldest), and use **↓ (Latest)**, shown over the lower-right corner only while reading earlier messages, to return to the newest records. In CLAIMED mode, opening Reader beside the terminal fits the terminal to the remaining width; closing Reader restores its width. Full-width Reader overlays the terminal. FOLLOW keeps the external terminal’s width, so Reader can cover part of it. In a split, each pane's **Reader icon** opens an independent reader; full width and previews stay within that pane. Interacting with a reader selects its pane as the prompt composer target. Closing another pane preserves the surviving reader’s width mode, position, expanded Mail, and preview. A width change can shift the reading position by one or two lines.
 
 The composer remains available in full-width view. Reading keys stay in the reader; use Enter or **SEND** to submit explicitly. Submission closes that pane's preview and resumes following its newest history. If the target terminal or connection changes during submission, the send is cancelled with a notice. After sending, a temporary “Sent → agent · Awaiting record” row appears at the end of that pane’s history and is replaced when the matching user message is recorded. It does not mean the agent has acknowledged the prompt. If the record cannot be matched confidently, the row says “Record not matched”; **Dismiss** closes that temporary row. A sent `! cmd` also matches its recorded shell command.
 

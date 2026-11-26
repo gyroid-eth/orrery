@@ -118,6 +118,20 @@ for row in agents:
 agents[1]["act_state"] = "question"
 agents[2]["act_state"] = "work"
 agents[5]["act_state"] = "ask"
+
+
+def guide_permissions(agent, action):
+    mode = "personal" if agent["browser_use"] else "off"
+    agent["permission_controls"] = {
+        "computer_use": dict(value=agent["computer_use"], source="launch", can_change=True, action=action),
+        "browser_use": dict(value=agent["browser_use"], mode=mode, options=["off", "temporary", "personal"],
+                            source="launch", can_change=True, action=action),
+    }
+
+
+if args.guide_board:
+    for agent in agents:
+        guide_permissions(agent, "restart")
 spawn = [
     dict(source=names[0], target=a["name"], ts=int(now) - 500)
     for a in agents
@@ -329,9 +343,10 @@ usage = dict(
         dict(
             provider=p,
             status="ok",
+            observed_at=int(now),
             windows=[
-                dict(label="5H", remaining_percent=a, reset_at=int(now) + 8200),
-                dict(label="7D", remaining_percent=b, reset_at=int(now) + 18200),
+                dict(label="5H", remaining_percent=a, resets_at=int(now) + 8200),
+                dict(label="7D", remaining_percent=b, resets_at=int(now) + 18200),
             ],
         )
         for p, a, b in [("claude", 64, 41), ("codex", 88, 47)]
@@ -544,7 +559,7 @@ def reel_story():
                 dies=None,
                 ctx0=20 + data["id"] * 3,
                 ctxRate=0.2,
-                model=data["model"],
+                model=modelids[1 if provider == "openai" else 0],
                 program=data["program"],
                 provider=provider,
                 task=data["task"],
@@ -637,7 +652,8 @@ async def app_handle(req):
     if path == "/telemetry/platform":
         return J(dict(host="mac", home_dir=identity["home"], file_paste=True))
     if path == "/telemetry/agents":
-        return J(dict(agents=agents))
+        rows = [a for a in agents if a["running"]] if args.guide_board and q.get("scope") == "live" else agents
+        return J(dict(agents=rows))
     if path == "/telemetry/messages":
         return J(dict(ok=True, messages=messages, now=int(now)))
     if args.guide_board and path == "/fixture-guide-mail" and req.method == "POST":
@@ -651,6 +667,25 @@ async def app_handle(req):
         return J(graph)
     if path == "/telemetry/mail/recent":
         return J(dict(ok=True, messages=messages))
+    if args.guide_board and req.method == "POST" and path in ("/api/exit", "/api/jump"):
+        payload = await req.json()
+        agent = next((a for a in agents if a["name"] == payload.get("session")), None)
+        if agent is None:
+            return J(dict(ok=False, error="Unknown demo agent"), status=404)
+        permission = payload.get("permission") or {}
+        if payload.get("check_only"):
+            return J(dict(ok=True, action="validated"))
+        if path == "/api/exit":
+            await asyncio.sleep(.9)
+            agent.update(running=False, category="gone", state="gone", resume_capability="ready")
+            guide_permissions(agent, "resume")
+            return J(dict(ok=True))
+        await asyncio.sleep(1.1)
+        if "computer_use" in permission:
+            agent["computer_use"] = permission["computer_use"]
+        agent.update(running=True, category="agent", state="run", act_state="wait")
+        guide_permissions(agent, "restart")
+        return J(dict(ok=True, action="resumed", tools_changed=bool(permission)))
     if path in ("/telemetry/spawn-catalog", "/fixture-catalog"):
         return J(catalog)
     if path == "/telemetry/spawn" and req.method == "POST":

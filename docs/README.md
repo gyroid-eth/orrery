@@ -12,12 +12,22 @@
 - [ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.md) — 読み取り専用アダプター。
 - [研究セット](research-set.md) — digest-paper と公開 demo vault を本体の後に追加する。
 
+## 目的から選ぶ
+
+- [最初のガイドと Help map を開く](first-flight.md)
+- [agent を起動して依頼する](start-an-agent.md)
+- [agent の状態を見てまとめて選ぶ](manage-agents.md)
+- [Reader で作業と参照ファイルを見る](read-a-file.md)
+- [届いた ORRERY Mail を読む](read-mail.md)
+- [Mini Graph で agent の詳細と再起動を見る](inspect-mini-graph.md)
+- [利用枠の残りとリセット時刻を見る](check-usage.md)
+- [Telemetry で状態と履歴を見る](view-telemetry.md)
+- [agent の親子関係をたどる](trace-agent-family.md)
+- [cockpit の見た目を調整する](adjust-cockpit.md)
+- [Cockpit の画面一覧](cockpit-map.md)
+
 ## 使い方
 
-- [Cockpit の画面一覧](cockpit-map.md)
-- [agent を起動して依頼する](start-an-agent.md)
-- [Reader で参照ファイルを開く](read-a-file.md)
-- [届いた ORRERY Mail を読む](read-mail.md)
 - [使い方](usage.md) — 画面の guide/help map を入口に、必要な操作を詳しく調べる。
 - [Full tour](FULL_TOUR.md) — 16段の実操作とチェックの条件、ゲーム・保存・別窓の仕様。
 

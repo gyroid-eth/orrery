@@ -18,11 +18,15 @@ replace text without scrolling it into history. A read-only history view
 would need to label that limited capture, or use a separate provider history
 source; it cannot supply an accurate live TUI scrollbar from these rows.
 
-**Settings → Appearance → Reader** adds a page-shaped Reader icon to
-the pane header (on by default). It opens a read-only provider conversation next to
-the terminal; on narrow screens it fills the pane until closed. The scrollbar
-describes the loaded messages, not the live TUI position. `Load earlier` reads
-older records, and new output follows only while the reader is at the bottom.
+Reader is the main view for following an agent's work. It formats messages,
+groups recorded tool activity into readable steps, and shows tables and
+referenced files in the pane. It reads the provider's records without editing
+them. The Reader icon in the pane header opens it beside the terminal. On
+narrow screens it fills the pane. The icon is on by default in **Settings →
+Appearance → Reader**.
+
+New output follows while the view is at the bottom. To revisit earlier work,
+use `Load earlier` when available. The scrollbar tracks the loaded records.
 The small **↓ (Latest)** button appears over the lower-right corner only while
 reading earlier records. Its opaque background keeps it visible, and extra
 space at the end of the list keeps the last line clear. If the retention limit

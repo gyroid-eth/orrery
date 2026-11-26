@@ -8,6 +8,8 @@ ORRERY cockpit puts the roster on the left, the terminal in the center, the ORRE
 
 ## Find what you want to do
 
+Open a short visual guide from the [task index](README.md#choose-a-task) or the [cockpit map](cockpit-map.md).
+
 | What you want to do | How | Details |
 | --- | --- | --- |
 | Find a running agent | Search the left roster and click a tile | [Roster](#roster) |
@@ -112,7 +114,7 @@ For Antigravity, Telemetry API 53 or later shows the ORRERY launch selection or 
 
 The detail card offers changes for legacy Claude Code or Codex CLI sessions with a verified conversation and a supported restart or resume. Delegated sessions need Telemetry API 45 or later. Standalone sessions need API 46 or later and saved launch settings. Select a setting and confirm **Restart** or **Resume** in the same conversation. Restart interrupts the current turn. For Codex App, persistent agents, conversation-only resume, and other ineligible sessions, the controls show the reason.
 
-![Hover over an agent to inspect Computer use modes Off, View, and Control, and its Browser state](../images/cockpit_roster_detail.png)
+![Hover over an agent to inspect current Computer use and Browser modes](../images/cockpit_roster_detail.png)
 
 Deliverables are that agent's work logs (`LOG_*.md` files whose frontmatter `agent:` is that agent) that ORRERY Telemetry collects from the project's `logs/`. The list can be opened in the `Output` tab of the TELEMETRY agent panel ([TELEMETRY](#telemetry)).
 
@@ -199,6 +201,20 @@ In Select mode you choose multiple eligible live agents, and ORRERY sends reques
 
 This is a state-changing operation that asks the agent processes to exit. Unlike reading mail or applying a UI filter, re-check the targets before running it. It is unavailable when the ORRERY Telemetry dashboard is unreachable.
 
+## Reader
+
+Reader is the main view for following an agent's work. Select the Reader icon in the pane header for readable messages, grouped tool steps, tables, diffs, and file previews. On a narrow pane it fills the pane. Use **Settings → Appearance → Open agents in** to choose the view used when you open an agent.
+
+[Follow work and open files in Reader](read-a-file.md)
+
+### Approvals in Reader
+
+In the PC Reader, an `Approval needed` band appears directly above the composer. Click it or press Enter to open the complete request and choices. Focus moves to the choice that allows only this request; press Enter again to send it. Persistent permissions are never the default.
+
+Supported menus are the four-choice Codex MCP tool prompt, the three-choice Codex command outside the sandbox, and the four-choice Claude Read outside the working directories. Incomplete or other menus offer `Open terminal to review` for the same pane. If the screen changes before sending, no keys are sent and the band asks you to review again.
+
+`Response sent` means the keys were delivered, not that the requested operation succeeded. The response cannot be repeated while the prompt remains. An `Outcome unknown` is never retried automatically; check Terminal.
+
 ## Terminal
 
 The terminal uses `xterm.js` and operates panes through the ORRERY backend's `/ws` and tmux control mode.
@@ -215,14 +231,6 @@ Clicking the active session label / pane tab again also jumps to the end. `Cmd+�
 At startup, the backend connects one recorder connection for each live tmux session. Pane attach from the browser is deferred until you act on a tile / the palette.
 
 While you are scrolled up reading past output, new output does not pull you back to the end. When the backend restarts, the cockpit reloads the page automatically (the composer draft is kept).
-
-### Approvals in Reader
-
-In the PC Reader, an `Approval needed` band appears directly above the composer. Click it or press Enter to open the complete request and choices. Focus moves to the choice that allows only this request; press Enter again to send it. Persistent permissions are never the default.
-
-Supported menus are the four-choice Codex MCP tool prompt, the three-choice Codex command outside the sandbox, and the four-choice Claude Read outside the working directories. Incomplete or other menus offer `Open terminal to review` for the same pane. If the screen changes before sending, no keys are sent and the band asks you to review again.
-
-`Response sent` means the keys were delivered, not that the requested operation succeeded. The response cannot be repeated while the prompt remains. An `Outcome unknown` is never retried automatically; check Terminal.
 
 ### Optional Terminal on your phone
 
@@ -436,6 +444,8 @@ When you choose a scientist, an unused adjective is chosen automatically, and yo
 The filesystem browser excludes hidden directories and returns up to 200 entries. However, ORRERY's `/telemetry/fs/dirs` has no root allowlist, so keep to the localhost-only usage boundary.
 
 ## Mini-orrery
+
+[See agent details and a restart](inspect-mini-graph.md)
 
 The mini-orrery shows the spawn forest of live agents and the mail edges / comets of the last 90 seconds.
 

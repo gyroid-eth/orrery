@@ -40,3 +40,18 @@ Review each frame before copying the output from `cockpit/docs/images/guides/`.
 These clips prioritize the relevant controls, so their crop changes as the
 task moves from the New agent dialog to the composer or Reader. The cockpit map
 is the full-screen exception. Keep its marker order and both map legends in sync.
+
+The numbered map and task clips use the cockpit checkout. The Telemetry clip
+also builds the Telemetry demo into the same private fixture. Copy
+`cockpit/docs/images/cockpit_roster_detail.png` when refreshing the Roster
+permissions illustration in the usage guide.
+
+## Shared with Telemetry
+
+| Cockpit asset | Telemetry reference |
+| --- | --- |
+| `docs/images/cockpit_telemetry_relation.svg` | Telemetry's `README.md`, `README.en.md`, `docs/README.md`, and `docs/README.en.md` embed the ORRERY raw URL. |
+| `docs/images/deck_start.png`, `net_growing.png`, `net_humanloop.png`, `net_start.png` | Telemetry has byte-identical files in `docs/images/`. They are currently unlinked in both repositories. |
+| `docs/images/deck_growing.png` and `docs/images/deck_humanloop.png` | Telemetry's Japanese and English dashboard guides use files with the same names and different contents. |
+
+Review and replace the Telemetry-side assets in a separate Telemetry change.

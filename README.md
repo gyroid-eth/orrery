@@ -4,14 +4,14 @@
 
 <img src="app/icons-src/orrery-1024.png" alt="ORRERY icon" width="96">
 
-ORRERY は、agent のターミナルを並べて操作し、Mail のやり取りや利用枠を確認できる cockpit です。Claude Code、Codex CLI、導入済みの Antigravity、dsh または Hermes を使う DeepSeek／Local models に対応します。
+ORRERY は、agent に依頼を送り、Reader で作業を追い、Mail のやり取りや利用枠を確認できる cockpit です。Claude Code、Codex CLI、導入済みの Antigravity、dsh または Hermes を使う DeepSeek／Local models に対応します。
 
 ![New agent でタスクを選び、依頼を送って Reader で返事を読む](docs/images/guides/start-an-agent.gif)
 
 - [agent を起動して依頼する](docs/start-an-agent.md)
-- [Reader で参照ファイルを開く](docs/read-a-file.md)
+- [Reader で作業と参照ファイルを見る](docs/read-a-file.md)
 - [届いた ORRERY Mail を読む](docs/read-mail.md)
-- [Cockpit の画面一覧](docs/cockpit-map.md)
+- [目的別ガイドをすべて見る](docs/README.md#目的から選ぶ) · [Cockpit の画面一覧](docs/cockpit-map.md)
 
 ## クイックスタート
 
@@ -61,7 +61,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 既定ポートは cockpit が 8791、Telemetry が 8770、新規の Mail が 18765 です。作業 folder の変え方とアンインストールは[作業 folder とアンインストール](#作業-folder-とアンインストール)にあります。
 
-左の roster で agent を選び、中央のターミナルで指示し、右の mini-orrery と Mail で親子関係とやり取りを追います。ターミナルだけなら ORRERY Telemetry が止まっていても使え、連携する機能は状態を表示して縮退します。
+左の roster で agent を選び、中央の入力欄から依頼を送ります。作業の進み具合は Reader で、親子関係と agent 同士のやり取りは右の Mini Graph と Mail で確認できます。ターミナルだけなら ORRERY Telemetry が止まっていても使え、連携する機能は状態を表示して縮退します。
 
 **紹介動画**: 「Orrery」（約 90 秒・日本語）は、agent どうしが直接話すことで AI の間の仲介が要らなくなる、という ORRERY の考え方を図解で説明する動画です（実際の画面ではありません）。
 
@@ -69,15 +69,15 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 
 ## できること
 
-### 会話を読み返す（Reader）
+### agent の作業を見る（Reader）
 
-代替画面を使う agent の会話は、端末のスクロールバックだけでは遡れません。Reader は、記録された会話を読み取り専用で表示します。pane の **Reader アイコン** を押してください。もう一度押すと閉じます。既定はオンです。**Settings → Appearance → Reader** をオフにするとパネルとボタンが消え、履歴の読み込みも止まります。
+Reader は agent の作業を追う主な画面です。ハーネスの記録から発言やツール操作を取り出し、長い出力を折りたたんで、作業の流れを読みやすく整えます。Markdown の表や差分、参照ファイルもペイン内で確認できます。ペイン上部の **Reader アイコン** で開閉します。既定はオンです。**Settings → Appearance → Reader** をオフにすると、パネルとボタンが消え、記録の読み込みも止まります。
 
 pane の見出しと roster のカードは telemetry の表示用モデル名をそのまま使い、完全な ID は title に残します。見出しは provider のロゴ・agent 名・モデルの順で、モデルが不明なら省きます。active かつ作業中のロゴはゆっくり明暗し、返事待ちや動きを減らす設定では静止します。狭い pane ではモデルを名前より先に省略し、ロゴと操作ボタンを残します。分割 pane を閉じる × は、他の操作と同じ枠付きアイコンで見出しの一番右にあります。
 
 ![架空の会話を表示した Reader。発言に Markdown の表とファイルチップがある](docs/images/cockpit_history.png)
 
-履歴は端末の横に開き、pane 上部の **⤢** で pane 全体に広げ、もう一度押すと元の幅に戻せます。狭い画面では pane 全体に表示します。スクロールしている間は新しい記録が来ても読んでいる位置を保ち、**Load earlier** がある場合は過去へ遡れます（1回で最大約300件。tool の呼び出しと結果も1件ずつ数えます。手元に置く量には上限（800件または 2 MiB）があり、遡って超えると新しい側を外して更新を止めます。最下部で新着を読んでいるときは古い側から外します）。過去を読んでいるときだけ本文の右下に重ねて出る **↓（最新へ）** で最新に戻れます。CLAIMED では Reader を横に開くと端末を残りの幅に合わせ、閉じると元の幅に戻します。全幅では端末に重ねて表示します。FOLLOW では外部の端末の幅を保つため、一部が Reader に隠れます。分割中は各 pane の **Reader アイコン** で独立して開き、全幅や preview もその区画内に収まります。履歴を操作した pane が下の prompt 欄の送り先になります。別の pane を閉じても、残った pane の履歴の表示幅・読み位置・開いた Mail や preview は保たれます。幅が変わると読み位置が1〜2行ずれることがあります。
+Reader は端末の横に開き、pane 上部の **⤢** で pane 全体に広げ、もう一度押すと元の幅に戻せます。狭い画面では pane 全体に表示します。スクロールしている間は新しい記録が来ても読んでいる位置を保ち、以前の作業を読み返すには **Load earlier** が表示されていれば押します（1回で最大約300件。tool の呼び出しと結果も1件ずつ数えます。手元に置く量には上限（800件または 2 MiB）があり、遡って超えると新しい側を外して更新を止めます。最下部で新着を読んでいるときは古い側から外します）。過去を読んでいるときだけ本文の右下に重ねて出る **↓（最新へ）** で最新に戻れます。CLAIMED では Reader を横に開くと端末を残りの幅に合わせ、閉じると元の幅に戻します。全幅では端末に重ねて表示します。FOLLOW では外部の端末の幅を保つため、一部が Reader に隠れます。分割中は各 pane の **Reader アイコン** で独立して開き、全幅や preview もその区画内に収まります。履歴を操作した pane が下の prompt 欄の送り先になります。別の pane を閉じても、残った pane の履歴の表示幅・読み位置・開いた Mail や preview は保たれます。幅が変わると読み位置が1〜2行ずれることがあります。
 
 全幅でも入力欄から送信できます。履歴を読むキーは端末に送られず、Enter または **SEND** で明示的に送ります。送信すると対象 pane の preview を閉じ、履歴は最新を追います。送信中に対象の端末や接続が変わった場合は中止して知らせます。送信後は、対象の履歴の末尾に「Sent → agent 名 · Awaiting record」の仮の行が現れ、対応する発言が記録されると置き換わります。これは agent が処理を確認したことを示すものではありません。照合できない場合は「Record not matched」と表示し、**Dismiss** で仮の行を閉じられます。`! cmd` の送信は、記録されたシェルのコマンドとも照合します。
 
