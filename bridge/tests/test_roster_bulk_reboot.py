@@ -618,6 +618,65 @@ def test_embedded_exit_updates_the_parent_without_consuming_its_response(roster,
             assert js("toastEl.textContent.includes('Shell rejected Exit')")
 
 
+@pytest.mark.parametrize(('depart_first', 'reduced', 'accepted'), [
+    (True, False, True), (False, False, True), (False, True, True), (True, False, False),
+])
+def test_exit_dust_waits_for_success_and_departure_and_releases_the_tab(
+    roster, depart_first, reduced, accepted,
+):
+    js, wait, _state = roster
+    js.client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce' if reduced else 'no-preference'},
+    ])
+    js("""
+      setRosterSelectMode(false);
+      socket=null;clearTimeout(reconnectTimer);send=()=>true;
+      handle({type:'sessions',sessions:['CopperFixture','IndigoFixture']});
+      handle({type:'reset',session:'CopperFixture',incarnation:'old',panes:[
+        {paneId:'%141',width:80,height:24,currentCommand:'codex',active:true}]});
+      handle({type:'reset',session:'IndigoFixture',incarnation:'other',panes:[
+        {paneId:'%142',width:80,height:24,currentCommand:'zsh',active:true}]});
+      setActive('%141');selectAgent('CopperFixture');
+      window.exitFrame=new EventTarget();exitFrame.location=location;
+      const frameExit=observeNetworkExits(exitFrame,()=>new Promise(resolve=>{window.resolveExit=resolve;}));
+      frameExit('/api/exit',{method:'POST',body:JSON.stringify({session:'CopperFixture'})});
+      const originalDustFetch=window.fetch;
+      window.fetch=(url,opts)=>url==='/telemetry/agents?scope=live'?
+        Promise.resolve(new Response(JSON.stringify({agents:liveRosterAgents.filter(a=>a.name!=='CopperFixture')}))):
+        originalDustFetch(url,opts);
+      const previousFrame=window.requestAnimationFrame;
+      window.requestAnimationFrame=callback=>{
+        if(callback.name==='animateDust'){window.advanceDust=callback;return 0;}
+        return previousFrame(callback);
+      };
+      true;
+    """)
+    if depart_first:
+        js("""
+          handle({type:'status',state:'closed',session:'CopperFixture',sessionGone:true,incarnation:'old'});
+          pollAgents();
+        """)
+        wait("pendingAgentExits.get('CopperFixture').departed")
+        assert js("tiles.has('CopperFixture')&&sessionGroups.has('CopperFixture')")
+    assert js("!document.querySelector('canvas.exit-dust')")
+    body = {"ok": True} if accepted else {"ok": False, "error": "Exit refused"}
+    js(f"resolveExit(new Response({json.dumps(json.dumps(body))},{{status:{200 if accepted else 400}}}))")
+    if not depart_first:
+        wait("pendingAgentExits.get('CopperFixture')?.accepted")
+        assert js("tiles.has('CopperFixture')&&sessionGroups.has('CopperFixture')&&!document.querySelector('canvas.exit-dust')")
+        js("pollAgents()")
+    wait("!pendingAgentExits.has('CopperFixture')&&!tiles.has('CopperFixture')")
+    if not accepted:
+        assert js("toastEl.textContent.includes('Exit refused')&&!document.querySelector('canvas.exit-dust')")
+        return
+    assert js("!sessionGroups.has('CopperFixture') && activeId==='%142'")
+    assert js("document.querySelectorAll('canvas.exit-dust').length") == (0 if reduced else 2)
+    if not reduced:
+        assert js("Array.from(document.querySelectorAll('canvas.exit-dust')).every(canvas=>canvas.getAttribute('aria-hidden')==='true')")
+        js("advanceDust(performance.now()+2000)")
+        assert js("!document.querySelector('canvas.exit-dust')")
+
+
 @pytest.mark.parametrize('roster', [55], indirect=True)
 def test_direct_launch_confirms_adoption_and_allows_stopped_shell(roster):
     js, wait, state = roster

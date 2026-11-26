@@ -913,6 +913,7 @@
     .terminal-action-wave > span{animation:terminal-action-wave 1.6s ease-in-out var(--action-delay) infinite both}
   }
   @keyframes terminal-action-wave{50%{opacity:.3}}
+  .exit-dust{position:fixed;z-index:40;pointer-events:none}
   .split-cell.focused > .split-cell-head{box-shadow:inset 3px 0 var(--amber)}
   .pane-action-short,.pane-action-icon{display:none}
   @container split-pane (max-width:320px){
@@ -1791,6 +1792,7 @@
 <script src="demo_mask.js"></script>
 <script src="demo_mode.js"></script>
 <script src="prompt_spring.js"></script>
+<script src="exit_dust.js"></script>
 <script src="prompt_composer.js"></script>
 <script src="prompt_recipients.js"></script>
 <script src="prompt_attachments.js"></script>
@@ -4122,7 +4124,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "26623611a4f95e21e5f9871dd1fb4a77026e9dccd3bf5d99a331db5ec500a6ef",
+        "digest": "e8b2c24daabfcdf765a6038f438764957da27c048d35134d43cc3bff8a3e78ea",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4215,7 +4217,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "f47e1f1c3ee89ae78a8cc71a2a3b487bbacd294ad4c47cee5db3f614cda0f9c0",
+        "digest": "ffd619a464e0bc8a9426a31e6b565d5b1f700bc7c8e00c4a6e3cda55c9769271",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -4244,9 +4246,9 @@
       }
     }
   },
-  "inventory_digest": "9bc63c5e870fe33fa7e0fbbcf6a64aba6eef29209a98e795c7673eb47929f7a8",
+  "inventory_digest": "0e8cf5d640877541580bb22de83c6ae769b4873e35a6c4f09ff7c1ade39b0667",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "3a43be651a37128e16c5560cdf0e0ec741f2242111ae335e04afb545c6a81769",
+  "source_digest": "977b520788dbccdfed735a1f814d315d4cb5d3829278db0badf2f1bb01c7b44f",
   "surface": "cockpit",
   "version": 1
 }
@@ -7232,6 +7234,7 @@ function restoreClosedSessions(availableNames){
   const available=new Set(availableNames);
   for(const session of [...closedByBackend]){
     if(manualDetached.has(session)||!sessionGroups.has(session)){closedByBackend.delete(session);continue;}
+    if(pendingAgentExits.has(session))continue;
     if(available.has(session)&&requestAttach(session))closedByBackend.delete(session);
   }
 }
@@ -7777,7 +7780,11 @@ function handleSessions(items){
   // A session that left the list while shown was ended by the backend, as a
   // closed message says: note it, and keep its tab (below) like closed does.
   const restartingTabs=[...permissionRestarts].filter(([,restart])=>restart.keepTab).map(([session])=>session);
-  occupiedSessions().forEach(session=>{if(!names.includes(session)&&!permissionRestarts.get(session)?.keepTab)noteBackendClosed(session);});
+  occupiedSessions().forEach(session=>{
+    if(!names.includes(session)&&!permissionRestarts.get(session)?.keepTab&&!pendingAgentExits.has(session)){
+      noteBackendClosed(session);
+    }
+  });
   pruneSplitSessions([...names,...restartingTabs]);
   const plan=attachmentPlan(names,[...occupiedSessions()],[...manualDetached],MAX_ATTACHED_SESSIONS);
   plan.detach.forEach(session=>detachSession(session,false,{keepTab:true,preserveRestart:true}));
@@ -8638,8 +8645,9 @@ function handle(msg){
         const restart=permissionRestarts.get(msg.session);
         if(restart?.keepTab&&restart.waiting&&msg.incarnation&&msg.incarnation===restart.incarnation)break;
         const sessionGone=msg.sessionGone===true;
-        if(!sessionGone&&!restart?.keepTab)noteBackendClosed(msg.session);
-        forgetSession(msg.session,{removeGroup:sessionGone,preserveRestart:true});
+        const exiting=pendingAgentExits.has(msg.session);
+        if(!sessionGone&&!restart?.keepTab&&!exiting)noteBackendClosed(msg.session);
+        forgetSession(msg.session,{removeGroup:sessionGone&&!exiting,preserveRestart:true});
       }
       break;
     case "error":
@@ -9333,16 +9341,19 @@ async function agentActionRoster(path,signal){
 function beginAgentExit(name){
   const agent=currentAgentNamed(name);
   if(!agent||pendingAgentAction(name))return null;
-  const action={created:agent.created};
+  const action={original:agent};
   pendingAgentExits.set(name,action);
   refreshAgentActionDisplay(name);
   return action;
 }
-function clearAgentExit(name,action){
+function clearAgentExit(name,action,{repaint=true}={}){
   if(pendingAgentExits.get(name)!==action)return false;
   clearTimeout(action.timer);
   pendingAgentExits.delete(name);
-  refreshAgentActionDisplay(name);
+  if(repaint){
+    if(action.departed)renderRoster();
+    refreshAgentActionDisplay(name);
+  }
   return true;
 }
 function exitError(name,action,message){
@@ -9351,7 +9362,25 @@ function exitError(name,action,message){
 }
 function waitForAgentToLeaveRoster(name,action){
   if(pendingAgentExits.get(name)!==action)return;
+  action.accepted=true;
+  if(action.departed){finishAgentExits([[name,action]]);return;}
   action.timer=setTimeout(()=>exitError(name,action,'The roster has not confirmed that the agent stopped'),30000);
+}
+function finishAgentExits(exits){
+  const positions=new Map([
+    ...railPositions(tiles.values(),rosterEl),
+    ...railPositions([...sessionGroups.values()].map(group=>group.el),tabsEl),
+  ]);
+  const dust=window.OrreryExitDust;
+  for(const [name,action] of exits){
+    const group=sessionGroups.get(name);
+    dust?.play(tiles.get(name),rosterEl);
+    dust?.play(group?.el,tabsEl);
+    clearAgentExit(name,action,{repaint:false});
+    if(group)detachSession(name,false);
+  }
+  renderRoster();
+  if(positions.size)railMoveRows(positions,dust?.layoutMotion());
 }
 function observeNetworkExits(view,fetchInFrame){
   const unresolved=new Map();
@@ -10297,7 +10326,7 @@ function railPositions(elements,viewport){
   }
   return positions;
 }
-function railMoveRows(positions){
+function railMoveRows(positions,motion={duration:275,easing:railEase}){
   // Batch reads around the DOM writes and keep the on-screen position of
   // an interrupted animation as the next animation's starting point.
   for(const el of positions.keys())railMoves.get(el)?.cancel();
@@ -10314,7 +10343,7 @@ function railMoveRows(positions){
     const x=delta.x-(outer?.x||0),y=delta.y-(outer?.y||0);
     if(Math.abs(x)+Math.abs(y)<=1)continue;
     railMoves.set(el,el.animate([{transform:`translate(${x}px,${y}px)`},{transform:'none'}],
-      {duration:275,easing:railEase}));
+      motion));
   }
 }
 function railArrive(el,source,viewport){
@@ -10455,6 +10484,9 @@ function renderRoster(){
   permissionRestarts.forEach(({original},name)=>{
     if(!seen.has(name)){restarting.push(original);seen.add(name);}
   });
+  pendingAgentExits.forEach(({original,departed},name)=>{
+    if(departed&&!seen.has(name)){restarting.push(original);seen.add(name);}
+  });
   const agents=liveRosterAgents.concat(restarting,stoppedSelectAgents.filter(agent=>!seen.has(agent.name)));
   descriptorStore.retain(agents.map(agent=>agent.name));
   agents.forEach(agent=>{agent.descriptor=descriptorStore.get(agent,agents);});
@@ -10519,11 +10551,18 @@ async function pollAgents(){
     liveRosterAgents=(d.agents||[]).filter(a=>
       (a.running||a.category==='agent')&&a.category!=='warmup').map(prepareRosterRow);
     const liveByName=new Map(liveRosterAgents.map(agent=>[agent.name,agent]));
+    const completed=[];
     pendingAgentExits.forEach((action,name)=>{
       const agent=liveByName.get(name);
-      if(!agent||action.created&&agent.created&&action.created!==agent.created)clearAgentExit(name,action);
+      if(!agent){
+        action.departed=true;
+        if(action.accepted)completed.push([name,action]);
+      }else if(action.original.created&&agent.created&&action.original.created!==agent.created){
+        action.departed=false;
+        clearAgentExit(name,action);
+      }else action.departed=false;
     });
-    renderRoster();
+    if(completed.length)finishAgentExits(completed);else renderRoster();
     rosterTag.hidden=true;rosterTag.textContent='';agentDot.className='dot open';
   }catch(e){rosterTag.hidden=false;rosterTag.textContent='dashboard offline';agentDot.className='dot error';return false;}
 }

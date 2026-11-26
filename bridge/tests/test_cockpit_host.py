@@ -316,6 +316,7 @@ const groups=new Map(),sessionGroups=groups,panes=new Map(),sent=[],toasts=[],li
 const attachedSessions=new Set(),requestedSessions=new Set(),availableSessions=new Map([['Alpha',{}],['Beta',{}]]);
 const manualDetached=new Set(),paneWindows=new Set(),selectedPaneBySession=new Map();
 const permissionRestarts=new Map();
+const pendingAgentExits=new Map();
 let pendingJump=null,activeId=null,splitVisible=false,focusedSplitSession=null,paneWindowSelection=null;
 function ensureSessionGroup(session){
   if(!groups.has(session))groups.set(session,{incarnation:null,attachGeneration:null,
