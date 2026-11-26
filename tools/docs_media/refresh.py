@@ -15,7 +15,7 @@ import urllib.parse
 from pathlib import Path
 
 from browser import camera
-from guide_scenes import save_guides
+from guide_scenes import save_guides, save_permission_guide
 from hero_scene import save_readme_phone, save_team_hero
 from PIL import Image, ImageDraw
 from reader_scene import save_reader
@@ -113,13 +113,13 @@ def main():
         "--cdp", default=os.environ.get("ORRERY_CDP_URL", "http://127.0.0.1:9250")
     )
     parser.add_argument(
-        "--group", choices=("all", "cockpit", "dashboard", "phone", "guides", "hero", "reader", "readme-phone"), default="all"
+        "--group", choices=("all", "cockpit", "dashboard", "phone", "guides", "hero", "reader", "permissions", "readme-phone"), default="all"
     )
     parser.add_argument(
-        "--guide-board", type=Path, help="Tracked task note from the public demo vault (required for guides, hero and reader)"
+        "--guide-board", type=Path, help="Tracked task note from the public demo vault (required for guides, hero, reader and permissions)"
     )
     args = parser.parse_args()
-    if args.group in {"guides", "hero", "reader"} and args.guide_board is None:
+    if args.group in {"guides", "hero", "reader", "permissions"} and args.guide_board is None:
         parser.error(f"--group {args.group} requires --guide-board")
     if urllib.parse.urlsplit(args.cdp).hostname not in {
         "127.0.0.1",
@@ -135,6 +135,11 @@ def main():
             with fixtures(root, readme_phone=True) as (_, phone):
                 with camera(args.cdp, (390, 844), phone=True) as browser:
                     save_readme_phone(browser, args.output / "cockpit", phone)
+            return
+        if args.group == "permissions":
+            with fixtures(root, guide_board=args.guide_board.resolve()) as (cockpit, _):
+                with camera(args.cdp, (1320, 760)) as browser:
+                    save_permission_guide(browser, args.output / "cockpit", cockpit)
             return
         if args.group in {"hero", "reader"}:
             save_scene = save_team_hero if args.group == "hero" else save_reader

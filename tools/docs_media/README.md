@@ -73,8 +73,14 @@ the same task board. The full center pane stays in view as the terminal
 streams output, Reader displays the grouped tools and table, and a reference
 chip opens a Markdown preview before returning to the conversation.
 
-The regular `--group guides` run also captures `permission-switch.gif` with
-both roster and Mini Graph, and `select-agents.gif` through the exit animation.
+Use `--group permissions` to capture `permission-switch.gif` on its own. Start
+with the Mini Graph card open and both permissions Off. The clip frames the
+card and native confirmations at readable size, with a strip from the Agents
+list during the restart. It records Control and then Temporary Chrome. Install
+`gifsicle` for lossless optimization of the GIF.
+
+The regular `--group guides` run also captures this clip and
+`select-agents.gif` through the exit animation.
 
 Run the same command with `--group readme-phone` for `mobile.gif` and
 `mobile-ipad.png`. This group can omit `--guide-board`. It uses the real

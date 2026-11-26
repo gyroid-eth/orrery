@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import shutil
 import subprocess
 import tempfile
 import time
@@ -183,7 +184,7 @@ def collect_screencast(page, seconds, crop, *, frame_step=.092):
     return frames
 
 
-def capture_sequence(camera, area, seconds, action, *, frame_step=.042):
+def capture_sequence(camera, area, seconds, action, *, frame_step=.042, min_frames=5):
     """Schedule actions, then collect each changed frame up to the sampling rate."""
     page = camera.page
     camera.js(action)
@@ -193,7 +194,7 @@ def capture_sequence(camera, area, seconds, action, *, frame_step=.042):
         frames = collect_screencast(page, seconds, area, frame_step=frame_step)
     finally:
         page.call("Page.stopScreencast")
-    if len(frames) < 5:
+    if len(frames) < min_frames:
         raise RuntimeError("Chrome did not record the sequence")
     timed = [
         (image, round((after - before) * 100) * 10)
@@ -434,19 +435,60 @@ def motion_frames(camera, area, seconds, action, *, frame_step=.09):
 
 
 def save_permission_switch(camera, gallery):
-    details = "#orrery .mini-agent[data-agent=PatientFaraday] .orrery-hit"
-    camera.resize(1120, 720)
-    area = (0, 44, 1120, 679)
-    frames = []
-    for control in ("[data-computer=control]", "[data-browser=temporary]"):
+    name = "PatientFaraday"
+    tile = f"#roster [data-agent={name}]"
+    details = f"#orrery .mini-agent[data-agent={name}] .orrery-hit"
+    dialog = ".agent-permission-confirm[open]"
+    controls = ("[data-computer=control]", "[data-browser=temporary]")
+
+    def show_card():
         move_pointer(camera, "#newAgentBtn")
         move_pointer(camera, details)
-        camera.wait(f"agentDetail.dataset && !agentDetail.hidden && agentDetail.querySelector('{control}')")
-        frames.append((gallery.frame(crop=area), 735))
-        camera.click("#agentDetail " + control)
-        camera.wait("document.querySelector('.agent-permission-confirm[open]')")
-        frames.append((gallery.frame(crop=area), 750))
-        frames.extend(motion_frames(camera, area, 2.75, """
+        camera.wait("!agentDetail.hidden && agentDetail.querySelector('[data-browser=temporary]')")
+
+    # Pin the agent so its real name row can be cropped from the same spot
+    # before, during, and after each change in the activity order.
+    camera.click(f"{tile} .pin-toggle")
+    show_card()
+    if not camera.js("agentDetail.querySelector('[data-computer=off][aria-pressed=true]')"):
+        camera.click("#agentDetail [data-computer=off]")
+        camera.click(".agent-permission-confirm [value=apply]")
+        camera.wait("!pendingAgentAction('PatientFaraday') && currentAgentNamed('PatientFaraday').computer_use==='off'")
+        show_card()
+    rail_left, _, rail_right, _ = crop_rect(camera, "#mailRail", padding=0)
+    _, graph_top, _, graph_bottom = crop_rect(camera, "#orrery", padding=1)
+    _, _, _, card_bottom = crop_rect(camera, "#agentDetail", padding=4)
+    rail = (rail_left, graph_top, rail_right, card_bottom)
+    graph = (rail_left, graph_top, rail_right, graph_bottom)
+    name_selector = f"{tile} .cname"
+    roster = crop_rect(camera, name_selector, padding=6)
+    viewport = (0, 0, *(pixels // camera.scale for pixels in camera.size))
+    width = max(432, rail[2] - rail[0])
+    height = rail[3] - rail[1] + roster[3] - roster[1] + 16
+
+    def still():
+        # Use the same browser surface and pixel coordinates as the motion.
+        return capture_sequence(camera, viewport, .4, "true", min_frames=1)[-1][0]
+
+    def rail_frame(image, name_crop, *, restarting=False):
+        canvas = Image.new("RGB", (width, height), "#101114")
+        title = image.crop(name_crop)
+        panel = image.crop(graph if restarting else rail)
+        canvas.paste(title, (12, 4))
+        canvas.paste(panel, ((width - panel.width) // 2, roster[3] - roster[1] + 9))
+        return canvas
+
+    def confirmation_frame():
+        image = still().crop(crop_rect(camera, dialog, padding=4))
+        return ImageOps.pad(image, (width, height), color="#101114")
+
+    frames = [(rail_frame(still(), roster), 1250)]
+    for selector in controls:
+        move_pointer(camera, "#agentDetail " + selector, click=True)
+        camera.wait(f"document.querySelector('{dialog}') && permissionApply.textContent==='Restart'")
+        frames.append((confirmation_frame(), 1500))
+        name_crop = crop_rect(camera, name_selector, padding=6)
+        moving = capture_sequence(camera, viewport, 2.15, """
           (() => {
             const name='PatientFaraday';
             const pending=()=>{
@@ -460,22 +502,36 @@ def save_permission_switch(camera, gallery):
             window.docRestartShowsBoth=false;
             window.docRestartObserver=obs;
             obs.observe(document.querySelector('.app'),{subtree:true,childList:true,characterData:true});
-            setTimeout(()=>permissionApply.click(),290);
+            setTimeout(()=>permissionApply.click(),170);
             return true;
           })()
-        """, frame_step=.21))
+        """, frame_step=.041)
+        # The modal is the previous shot. Continue at the first changing rail frame.
+        frames.extend((rail_frame(image, name_crop, restarting=True), hold) for image, hold in moving[1:])
         if not camera.js("window.docRestartObserver.disconnect();window.docRestartShowsBoth"):
             raise RuntimeError("Restarting must be visible in Agents and Mini Graph")
         camera.wait("!pendingAgentAction('PatientFaraday')")
         camera.js("pollAgents()")
-        camera.wait("currentAgentNamed('PatientFaraday').computer_use==='control'")
-    camera.wait("currentAgentNamed('PatientFaraday').permission_controls.browser_use.mode==='temporary'")
-    camera.wait("currentAgentNamed('PatientFaraday').act_state==='work'")
-    move_pointer(camera, details)
-    camera.wait("!agentDetail.hidden && agentDetail.querySelector('[data-browser=temporary][aria-pressed=true]')")
-    frames.append((gallery.frame(crop=area), 1170))
-    cut(gallery, "permission-switch.gif", frames, (1060, 593))
-    camera.resize(*VIEWPORT)
+        show_card()
+        camera.wait(f"agentDetail.querySelector('{selector}[aria-pressed=true]') && "
+                    f"currentAgentNamed('{name}').act_state==='work'")
+        frames.append((rail_frame(still(), crop_rect(camera, name_selector, padding=6)), 1050))
+    file = GUIDES / "permission-switch.gif"
+    gallery.gif(file, frames)
+    output = gallery.root / file
+    if shutil.which("gifsicle"):
+        packed = output.with_suffix(".optimized.gif")
+        subprocess.run(["gifsicle", "-O3", str(output), "-o", str(packed)], check=True)
+        if packed.stat().st_size < output.stat().st_size:
+            packed.replace(output)
+        else:
+            packed.unlink()
+    with Image.open(output) as result:
+        count = result.n_frames
+    if count < 35 or output.stat().st_size > 1_500_000:
+        raise RuntimeError(f"Permission GIF: {count} frames, {output.stat().st_size} bytes")
+    print(f"Permission GIF: {count} frames, {output.stat().st_size} bytes", flush=True)
+    camera.click(f"{tile} .pin-toggle")
     move_pointer(camera, "#newAgentBtn")
 
 
@@ -548,8 +604,7 @@ def save_telemetry(camera, gallery):
     camera.click("#networkClose")
 
 
-def save_guides(camera, destination, url):
-    (destination / GUIDES).mkdir(parents=True, exist_ok=True)
+def open_guides(camera, url):
     camera.open(url + "/cockpit.html?demo=1", """
       typeof availableSessions !== 'undefined' && availableSessions.has('AmberCurie')
     """, PREFERENCES)
@@ -567,6 +622,16 @@ def save_guides(camera, destination, url):
       document.querySelectorAll('#orrery .mini-agent').length>=4 &&
       document.querySelector('.mail-request')
     """)
+
+
+def save_permission_guide(camera, destination, url):
+    open_guides(camera, url)
+    save_permission_switch(camera, Gallery(destination, GuideFrames(camera)))
+
+
+def save_guides(camera, destination, url):
+    (destination / GUIDES).mkdir(parents=True, exist_ok=True)
+    open_guides(camera, url)
     gallery = Gallery(destination, GuideFrames(camera))
     save_map(camera, gallery, destination)
     save_start(camera, gallery)
