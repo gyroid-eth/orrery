@@ -16,15 +16,14 @@ const byId=new Map(),groupsByName=new Map(),rowsByKey=new Map();
 const requestedAgents=new Map();
 const peerAvatars=new Map();
 const motion=matchMedia('(prefers-reduced-motion: reduce)');
-let activeFilter='',waitingOnly=false,filterRequest=0,clearedAgent='';
+let activeFilter='',activePair=null,waitingOnly=false,filterRequest=0,clearedAgent='';
 let drawer=null,drawerMotion=null,drawerMotionTimer=0,replyRequest=0;
 let paintedBody=null,observingPaths=false;
 let hoveredRoute=null,focusedRoute=null;
 const GRAPH_KEY='oc-mini-mail-graph';
 let manualGraphOpen=readGraphPreference();
 const VIEW_KEY='oc-mail-view';
-let timeline=true;
-try{timeline=localStorage.getItem(VIEW_KEY)!=='recipient';}catch(_){/* preference unavailable */}
+let timeline=readTimelinePreference();
 let seeded=false;
 
 mailEl.classList.add('mailview-host');
@@ -109,6 +108,12 @@ function recipientNames(message){
 function includesAgent(message,name){
   return message.sender===name||message.recipients.some(r=>r.name===name);
 }
+function matchesMailPair(message){
+  if(!activePair)return true;
+  const [a,b]=activePair;
+  const peer=message.sender===a?b:message.sender===b?a:null;
+  return peer!==null&&message.recipients.some(r=>r.name===peer);
+}
 function mailboxAgents(){
   const names=new Set();
   for(const m of [...byId.values()].sort((a,b)=>chronological(b,a))){
@@ -129,7 +134,8 @@ function timeHtml(ts){
 function titleFor(message){return message.subject||message.excerpt||'(No subject)';}
 
 function directRecipients(message){
-  const direct=[...new Set(message.recipients.filter(r=>r.kind==='to').map(r=>r.name))];
+  const direct=[...new Set(message.recipients.filter(r=>
+    r.kind==='to'&&(!activePair||activePair.includes(r.name))).map(r=>r.name))];
   // Keep a message with only copied recipients accessible without assigning
   // it to an observer.
   return direct.length?direct:[''];
@@ -152,7 +158,8 @@ function isMessageId(thread){
 function collectThreadAssignments(thread,messages,remember){
   const candidate=byId.get(thread);
   // reply_message uses the unthreaded original's ID as the thread key.
-  const original=candidate&&!candidate.thread&&chronological(candidate,messages[0])<0?candidate:null;
+  const original=candidate&&!candidate.thread&&matchesMailPair(candidate)&&
+    chronological(candidate,messages[0])<0?candidate:null;
   const unresolved=isMessageId(thread)&&!original&&!messages.some(m=>m.key===thread);
   const routes=new Map();
   if(original){
@@ -192,7 +199,7 @@ function collectThreadAssignments(thread,messages,remember){
 }
 
 function assignments(){
-  const messages=[...byId.values()].sort(chronological);
+  const messages=[...byId.values()].filter(matchesMailPair).sort(chronological);
   const threads=new Map(),explicit=new Map(),pending=new Map(),result=[];
   for(const message of messages){
     if(!message.thread)continue;
@@ -278,7 +285,7 @@ function setFilterOpen(open,restoreFocus=false){
       filterChoice('Awaiting a reply',waitingOnly,()=>{
         waitingOnly=!waitingOnly;setFilterOpen(false,true);renderMail({animate:true});
       }),
-      ...['',...mailboxAgents()].map(agent=>filterChoice(agent||'All agents',activeFilter===agent,()=>{
+      ...['',...mailboxAgents()].map(agent=>filterChoice(agent||'All agents',!activePair&&activeFilter===agent,()=>{
         selectMailFilter(agent);setFilterOpen(false,true);
       }))
     );
@@ -301,6 +308,7 @@ clearFilter.addEventListener('click',()=>{
   ++filterRequest;
   clearedAgent=activeFilter;
   activeFilter='';
+  activePair=null;
   waitingOnly=false;
   setFilterOpen(false,true);
   renderMail({animate:true});
@@ -308,15 +316,17 @@ clearFilter.addEventListener('click',()=>{
 document.addEventListener('pointerdown',event=>{
   if(!filterEl.hidden&&!filterEl.contains(event.target)&&!filterButton.contains(event.target))setFilterOpen(false);
 });
-async function loadAgentMail(agent){
-  if(!requestedAgents.has(agent)){
-    const request=fetchJson('/telemetry/mail/recent?limit=40&agent='+encodeURIComponent(agent)).then(data=>{
-      if(!Array.isArray(data?.messages)){requestedAgents.delete(agent);return;}
+async function loadAgentMail(agent,limit=40){
+  const key=JSON.stringify([agent,limit]);
+  if(!requestedAgents.has(key)){
+    const query=new URLSearchParams({limit,agent});
+    const request=fetchJson('/telemetry/mail/recent?'+query).then(data=>{
+      if(!Array.isArray(data?.messages)){requestedAgents.delete(key);return;}
       ingest(data.messages);
     });
-    requestedAgents.set(agent,request);
+    requestedAgents.set(key,request);
   }
-  await requestedAgents.get(agent);
+  await requestedAgents.get(key);
 }
 async function selectMailFilter(agent,{requireExisting=false}={}){
   const request=++filterRequest,next=text(agent);
@@ -324,8 +334,9 @@ async function selectMailFilter(agent,{requireExisting=false}={}){
   const missing=next&&!known();
   if(missing&&requireExisting)await loadAgentMail(next);
   if(request!==filterRequest||(requireExisting&&!known()))return false;
-  if(activeFilter!==next){
+  if(activeFilter!==next||activePair){
     activeFilter=next;
+    activePair=null;
     renderMail({animate:true});
   }
   if(missing&&!requireExisting)await loadAgentMail(next);
@@ -400,7 +411,7 @@ function paintGraph(){
     (route.recipients.join(', ')||'no direct recipient'));
 }
 function readGraphPreference(){
-  try{return localStorage.getItem(GRAPH_KEY)==='1';}catch(_){return false;}
+  try{return localStorage.getItem(GRAPH_KEY)!=='0';}catch(_){return true;}
 }
 function syncGraphPreference(){
   manualGraphOpen=readGraphPreference();
@@ -416,9 +427,11 @@ graphButton.addEventListener('click',()=>{
 });
 window.addEventListener('storage',event=>{
   if(event.key===GRAPH_KEY)syncGraphPreference();
+  if(event.key===VIEW_KEY)syncTimelinePreference();
 });
 document.addEventListener('oc:prefs-changed',event=>{
   if(event.detail?.keys?.includes(GRAPH_KEY))syncGraphPreference();
+  if(event.detail?.keys?.includes(VIEW_KEY))syncTimelinePreference();
 });
 
 function paintView(){
@@ -426,13 +439,27 @@ function paintView(){
   viewButton.setAttribute('aria-label',viewButton.title);
   viewButton.innerHTML=icon(timeline?'group':'thread');
 }
-viewButton.addEventListener('click',()=>{
+function readTimelinePreference(){
+  try{return localStorage.getItem(VIEW_KEY)!=='recipient';}catch(_){return true;}
+}
+function syncTimelinePreference(){
+  const next=readTimelinePreference();
+  if(next===timeline)return;
+  setTimeline(next);
+}
+function setTimeline(next){
   if(drawer)closeDrawer(false);
-  timeline=!timeline;
-  try{localStorage.setItem(VIEW_KEY,timeline?'timeline':'recipient');}catch(_){/* preference unavailable */}
+  timeline=next;
   paintView();
   renderMail();
   listEl.scrollTop=0;
+}
+viewButton.addEventListener('click',()=>{
+  setTimeline(!timeline);
+  try{
+    localStorage.setItem(VIEW_KEY,timeline?'timeline':'recipient');
+    window.OrreryPrefs?.flush();
+  }catch(_){/* preference unavailable */}
 });
 
 function paintPortrait(group){
@@ -558,7 +585,7 @@ function originFor(sender){
 }
 
 function renderMail({animate=false,fresh=new Set()}={}){
-  const filters=[activeFilter,waitingOnly?'Awaiting a reply':''].filter(Boolean);
+  const filters=[activePair?activePair.join(' ↔ '):activeFilter,waitingOnly?'Awaiting a reply':''].filter(Boolean);
   const filtered=filters.length>0;
   filterButton.toggleAttribute('data-filtered',filtered);
   filterSummary.hidden=!filtered;
@@ -609,7 +636,7 @@ function renderMail({animate=false,fresh=new Set()}={}){
   if(!display.length){
     const empty=cardsEl.querySelector('.mailempty')||document.createElement('p');
     empty.className='mailempty';
-    const text=activeFilter||waitingOnly?'No matching requests':'No agent mail yet';
+    const text=filtered?'No matching requests':'No agent mail yet';
     if(empty.textContent!==text)empty.textContent=text;
     display.push(empty);
   }
@@ -888,10 +915,22 @@ document.addEventListener('oc:filter-agent',event=>{
   clearedAgent='';
   selectMailFilter(event.detail?.agent);
 });
+document.addEventListener('oc:filter-mail-pair',event=>{
+  const {a,b}=event.detail||{};
+  if(typeof a!=='string'||typeof b!=='string'||!a||!b||a===b)return;
+  ++filterRequest;
+  activeFilter=clearedAgent='';
+  activePair=[a,b].sort((left,right)=>left.localeCompare(right));
+  waitingOnly=false;
+  setFilterOpen(false);
+  listEl.scrollTop=0;
+  renderMail({animate:true});
+  activePair.forEach(agent=>loadAgentMail(agent,100));
+});
 document.addEventListener('oc:focus-agent',event=>{
   const name=event.detail?.name;
   // A pane can finish attaching after its roster selection was cleared.
-  if(name===clearedAgent)return;
+  if(activePair||name===clearedAgent)return;
   clearedAgent='';
   selectMailFilter(name,{requireExisting:true});
 });

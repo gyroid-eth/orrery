@@ -21,23 +21,27 @@ def available():
     return Image is not None
 
 
-def save_image(workspace, encoded, *, label=None):
+def save_image(workspace, encoded, *, label=None, max_bytes=MAX_IMAGE_BYTES):
     """Re-encode pixels, strip metadata, and return a random absolute path.
 
     The supplied label is display-only. The caller cannot choose a destination.
     DrvFS may inherit Windows ACLs instead of honoring POSIX mode bits; never
     claim that chmod makes a Windows-shared directory private.
     """
-    if not available():
-        raise ValueError('image_decoder_unavailable')
-    if not isinstance(encoded, str) or len(encoded) > 4 * ((MAX_IMAGE_BYTES + 2) // 3):
+    if not isinstance(encoded, str) or len(encoded) > 4 * ((max_bytes + 2) // 3):
         raise ValueError('image_too_large')
     try:
         raw = base64.b64decode(encoded, validate=True)
     except (ValueError, binascii.Error):
         raise ValueError('image_invalid') from None
-    if not raw or len(raw) > MAX_IMAGE_BYTES:
+    if not raw or len(raw) > max_bytes:
         raise ValueError('image_too_large')
+    return save_image_bytes(workspace, raw, label=label)
+
+
+def save_image_bytes(workspace, raw, *, label=None):
+    if not available():
+        raise ValueError('image_decoder_unavailable')
     try:
         with warnings.catch_warnings():
             warnings.simplefilter('error', Image.DecompressionBombWarning)
