@@ -11,8 +11,13 @@ import orrery_backend as backend
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('kind', ['image', 'file'])
-async def test_attachment_is_written_to_the_selected_workspace(monkeypatch, tmp_path, kind):
+@pytest.mark.parametrize('kind,format,label', [
+    ('image', None, '元の名前.png'),
+    ('file', 'mov', 'Screen recording 1.02.mov'),
+    ('file', 'zip', 'Archive.zip'),
+    ('file', '', 'README'),
+])
+async def test_attachment_is_written_to_the_selected_workspace(monkeypatch, tmp_path, kind, format, label):
     workspace = tmp_path / 'working folder'
     workspace.mkdir()
     incarnation = 'a' * 32
@@ -33,10 +38,10 @@ async def test_attachment_is_written_to_the_selected_workspace(monkeypatch, tmp_
             Image.new('RGB', (2, 2), 'navy').save(pixels, format='PNG')
             data = pixels.getvalue()
         else:
-            body['format'] = 'md'
-            data = b'# Fixture text'
+            body['format'] = format
+            data = b'\x00\xfffixture\n'
         body['data'] = base64.b64encode(data).decode()
-        body['label'] = '元の名前.png' if kind == 'image' else '資料.md'
+        body['label'] = label
         missing = await client.post('/telemetry/prompt-attachment', json={**body, 'incarnation': 'b' * 32})
         assert missing.status == 409
         overridden = await client.post('/telemetry/prompt-attachment', json={**body, 'destination': '/tmp'})
@@ -54,6 +59,7 @@ async def test_attachment_is_written_to_the_selected_workspace(monkeypatch, tmp_
                 assert picture.size == (2, 2)
                 assert picture.getpixel((0, 0)) == (0, 0, 128)
         else:
+            assert saved.suffix == ('.' + format if format else '')
             assert saved.read_bytes() == data
 
 

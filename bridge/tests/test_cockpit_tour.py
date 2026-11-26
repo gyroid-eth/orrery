@@ -151,17 +151,26 @@ def test_any_tour_keeps_its_own_steps_key_and_fold():
              'saved': ['seen', 'open', 'folded', 'done', 'focus']}
 
 
-def prompt(connected=True, pane=True, text='Hello', guarded=False):
+def prompt(connected=True, pane=True, text='Hello', guarded=False, restarting=False):
     source = (BRIDGE / 'cockpit.html').read_text()
     # sendPrompt fixes its target pane when it starts; take those helpers as they are.
     fn = re.search(r'function captureComposerTarget\([^)]*\)\{.*?(?=\n(?:async )?function sendInterrupt)', source, re.S).group()
-    return node("const events=[];const activeId='pane';const socket={};"
+    pending_action = re.search(r'function pendingAgentAction\(session\)\{.*?\n\}', source, re.S).group()
+    # Load the same browser script that supplies recipientPrefix to sendPrompt.
+    return node("globalThis.window={};"
+                f"require({json.dumps(str(BRIDGE / 'prompt_recipients.js'))});"
+                "const {OrreryPromptRecipients}=window;"
+                # This prompt runs before the Reader's optional approval UI is mounted.
+                "const readerApproval=null;"
+                "const events=[];const activeId='pane';const socket={};"
                 f"const promptInput={{value:{json.dumps(text)},"
                 "getBoundingClientRect(){return {top:0,right:120,width:120};}};"
                 f"const panes=new Map({json.dumps([['pane', {'session': 'Test', 'meta': {}}]] if pane else [])});"
                 "const sessionGroups=new Map(),promptRecipientPins=new Map();"
+                f"const permissionRestarts=new Map({json.dumps([['Test', {}]] if restarting else [])});"
+                "const pendingAgentExits=new Map(),OrreryDemo={mask:text=>text};"
                 "const promptFiles={entries:[],clear(){}};"
-                "const promptRecipients={names:[],close(){},set(){}};"
+                "const promptRecipients={names:[],visibility:'visible',close(){},set(){}};"
                 "const promptCard={refresh(){}};const targetProgram=()=> 'claude';"
                 "function composerVocabulary(){return {program:'claude'};}"
                 # Only the tour step counts here; the receipt events are for the Reader.
@@ -172,11 +181,12 @@ def prompt(connected=True, pane=True, text='Hello', guarded=False):
                 f"function inspectPrompt(){{return {'{}' if guarded else 'null'};}}"
                 "function showToast(){}function showSendGuard(){}function hideSendGuard(){}"
                 "function pushPromptHistory(){}function saveDraft(){}function closeSlashMenu(){}const toastEl={classList:{add(){}}};"
-                + fn + ";Promise.resolve(sendPrompt()).then(()=>console.log(JSON.stringify({events,value:promptInput.value})));")
+                + pending_action + fn + ";Promise.resolve(sendPrompt()).then(()=>console.log(JSON.stringify({events,value:promptInput.value})));")
 
 
 def test_talk_completes_only_for_a_sent_nonempty_unguarded_prompt():
     assert prompt()['events'] == ['talk']
+    assert prompt(restarting=True) == {'events': [], 'value': 'Hello'}
     assert prompt(False)['events'] == []
     assert prompt(False)['value'] == 'Hello'
     assert prompt(pane=False)['events'] == []
@@ -275,8 +285,11 @@ def tour_browser():
 def test_dom_map_escape_and_settings_reopen_keep_progress(tour_browser):
     _, evaluate = tour_browser
     result = evaluate("""(()=>{
+      const flight=OrreryTour.firstFlight;
+      flight.reset();
+      const start=()=>flight.el.querySelector('li[data-step="start"]');
       document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}));
-      const checked=document.querySelector('[data-step="start"]').classList.contains('done');
+      const checked=start().classList.contains('done');
       document.querySelector('.flight-guide .flight-close').click();
       const closed=document.querySelector('.flight-guide').hidden;
       document.getElementById('firstFlightBtn').click();
@@ -284,7 +297,7 @@ def test_dom_map_escape_and_settings_reopen_keep_progress(tour_browser):
       const shown=!document.querySelector('.flight-map').hidden&&document.querySelector('.flight-guide').hidden;
       document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
       return {checked,closed,shown,restored:!document.querySelector('.flight-guide').hidden,
-        retained:document.querySelector('[data-step="start"]').classList.contains('done'),
+        retained:start().classList.contains('done'),
         mapClosed:document.querySelector('.flight-map').hidden};
     })()""")
     assert all(result.values()), result
@@ -509,7 +522,7 @@ RING_STATE = """(()=>{
 
 def test_dom_the_next_control_gets_a_cyan_ring_and_a_here_tag(tour_browser):
     client, evaluate = tour_browser
-    evaluate("OrreryTour.firstFlight.reset();OrreryTour.firstFlight.show()")
+    evaluate("document.documentElement.dataset.colorTheme='dark';OrreryTour.firstFlight.reset();OrreryTour.firstFlight.show()")
     shown = evaluate(RING_STATE)
     assert all(shown.get(key) for key in ('ring', 'around', 'here', 'hereOnScreen', 'hereClearOfPanel', 'hereClearOfControls')), shown
     assert (shown['target'], shown['colour'], shown['pulse']) == ('newAgentBtn', 'rgb(63, 210, 230)', 'flight-ring-pulse'), shown
@@ -788,7 +801,6 @@ def test_dom_checklist_pops_out_to_its_own_window_and_comes_back(tour_browser):
         time.sleep(.1)
     assert popup, 'no tour window opened'
     try:
-        assert evaluate("OrreryTour.firstFlight.el.hidden") is True
         from tools.theme_axis_browser_test import _WebSocket
         other = _WebSocket(popup['webSocketDebuggerUrl'])
         other.call('Runtime.enable')
@@ -799,6 +811,11 @@ def test_dom_checklist_pops_out_to_its_own_window_and_comes_back(tour_browser):
             if in_popup("Boolean(window.OrreryTour&&OrreryTour.state)"):
                 break
             time.sleep(.1)
+        for _ in range(40):
+            if evaluate("OrreryTour.firstFlight.el.hidden"):
+                break
+            time.sleep(.1)
+        assert evaluate("OrreryTour.firstFlight.el.hidden") is True
         evaluate("document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}))")
         for _ in range(30):
             if in_popup("OrreryTour.state.done.has('start')"):

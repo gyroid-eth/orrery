@@ -80,8 +80,8 @@ async function paste(host,{files=[],items=[],types=[],plain='',uris='',app,busy=
   listeners.get('paste')(event);
   await new Promise(resolve=>setImmediate(resolve));
   const attachments=await Promise.all(promptFiles.entries.map(async entry=>({
-    name:entry.file.name,kind:entry.kind,preview:!!entry.preview,
-    data:Buffer.from(await entry.file.arrayBuffer()).toString('base64'),
+    name:entry.name,kind:entry.kind,preview:!!entry.preview,path:entry.path,
+    data:entry.file?Buffer.from(await entry.file.arrayBuffer()).toString('base64'):null,
   })));
   return {prevented:event.prevented,value:promptInput.value,hostReloads,attachments,
     calls:[...calls],sent:[...sent],toasts:[...toasts]};
@@ -133,12 +133,25 @@ def test_browser_files_stage_on_mac_wsl_and_linux_even_without_a_host_reader():
       }));
       return outputs;
     """)
-    for out in result:
+    for index,out in enumerate(result):
         assert_staged(out, [("Clipboard image.png", "image", True), ("資料 with space.txt", "file", False)])
         assert out["attachments"][0]["data"].startswith("iVBORw0KGgo")
         assert out["attachments"][1]["data"] == "Rml4dHVyZSBub3Rl"
-        assert out["calls"] == out["toasts"] == []
+        assert out["calls"] == ([HTTP] if index == 0 else [])
+        assert out["toasts"] == []
         assert out["hostReloads"] == 0
+
+
+def test_mac_file_copy_uses_the_original_path_without_reading_browser_file_bytes():
+    result = _paste("""
+      const path='/fixtures/Screen recording 1.02.mov';
+      return paste(MAC,{files:[new File(['fixture'],'Screen recording 1.02.mov')],
+                        app:{attachments:[],paths:[path]}});
+    """)
+    assert_staged(result,[("Screen recording 1.02.mov","file",False)])
+    assert result["calls"] == [APP]
+    assert result["attachments"][0]["path"] == "/fixtures/Screen recording 1.02.mov"
+    assert result["attachments"][0]["data"] is None
 
 
 def test_linux_reads_an_image_from_clipboard_items_if_file_list_is_empty():
@@ -315,6 +328,8 @@ def test_fresh_output_gap_uses_actual_caller_to_stop_only_affected_session_and_r
 const groups=new Map(),sessionGroups=groups,panes=new Map(),sent=[],toasts=[],links=[];
 const attachedSessions=new Set(),requestedSessions=new Set(),availableSessions=new Map([['Alpha',{}],['Beta',{}]]);
 const manualDetached=new Set(),paneWindows=new Set(),selectedPaneBySession=new Map();
+const permissionRestarts=new Map();
+const pendingAgentExits=new Map();
 let pendingJump=null,activeId=null,splitVisible=false,focusedSplitSession=null,paneWindowSelection=null;
 function ensureSessionGroup(session){
   if(!groups.has(session))groups.set(session,{incarnation:null,attachGeneration:null,
@@ -322,6 +337,7 @@ function ensureSessionGroup(session){
   return groups.get(session);
 }
 function closeSessionPanes(session){for(const [key,p] of panes)if(p.session===session)panes.delete(key);}
+function paintSessionAction(group){group.state.textContent={connecting:'…',live:'live',error:'error',closed:'closed'}[group.connectionState]||'';}
 function removeSplitSessionState(){} function removeSessionGroup(s){groups.delete(s);}
 function renderStage(){} function refreshHeaderStats(){} function refreshSessionGroup(){}
 function showToast(message,isError){toasts.push({message,isError});}
