@@ -469,6 +469,30 @@ def test_api54_browser_mode_restart_validates_and_resumes_the_same_conversation(
     ]
 
 
+@pytest.mark.parametrize('roster', [55], indirect=True)
+def test_direct_launch_confirms_adoption_and_allows_stopped_shell(roster):
+    js, wait, state = roster
+    computer = {'value': 'off', 'can_change': True, 'action': 'restart'}
+    active = TOP_DIRECT | {'permission_managed_launch': True, 'permission_controls': {'computer_use': computer}}
+    stopped = active | {'category': 'finished', 'running': False,
+                       'permission_controls': {'computer_use': computer | {'action': 'resume'}}}
+    name = active['name']
+    js(f"Object.assign(currentAgentNamed({json.dumps(name)}),{json.dumps(active)})")
+    state['checks'] = [(200, [active]), (200, [])]
+    state['stop_checks'] = [stopped]
+    open_permissions(js, name, '[data-computer="view"]')
+    assert 'managed launch' in js('permissionConfirm.textContent')
+    assert state['trace'] == []
+    js('permissionApply.click()')
+    wait("toastEl.textContent.startsWith('Resume accepted')")
+    path, jump = permission_jump(name, TOP_SID, computer_use='view', adopt=True)
+    assert state['trace'] == [
+        ('roster', 200, ['agent']), (path, jump | {'check_only': True}),
+        ('/api/exit', {'session': name, 'history_session_id': TOP_SID}),
+        ('roster', 200, []), ('history', 'finished'), (path, jump),
+    ]
+
+
 @pytest.mark.parametrize('roster', [46], indirect=True)
 def test_api46_preflight_failure_leaves_the_standalone_running(roster):
     js, wait, state = roster

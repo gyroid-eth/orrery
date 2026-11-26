@@ -4215,9 +4215,9 @@
       }
     }
   },
-  "inventory_digest": "31bf98bb022870e558449c1e2cd79b62d688d8b02bfc5a33642041a51de1b634",
+  "inventory_digest": "04f2315eaec04d771c941bf8672d093411d2c975a4460036d600cee825cfcf84",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "5c3fdaa44f62356fd3ba3347a3a921ae7d9a3253e43f2ec6ca8fbe113ffdb40d",
+  "source_digest": "6bce7f34d11d2fcc5494d74bde1cbf6ca307a77134e38c02e3c3a949471fa5a2",
   "surface": "cockpit",
   "version": 1
 }
@@ -9696,9 +9696,11 @@ agentDetail.addEventListener('click',event=>{
   pendingPermissionChange={agent:a,key,modes};
   const name=OrreryDemo.mask(a.name);
   setText(permissionApply,a.running?'Restart':'Resume');
-  setText(permissionConfirm.querySelector('p'),a.running?
+  const description=a.running?
     `Restart ${name} in the same conversation with this permission change? Any work in progress will be interrupted.`:
-    `Resume ${name} in the same conversation with this permission change?`);
+    `Resume ${name} in the same conversation with this permission change?`;
+  const managed=a.permission_managed_launch===true?' ORRERY will use a managed launch to apply the permission.':'';
+  setText(permissionConfirm.querySelector('p'),description+managed);
   permissionConfirm.showModal();
 });
 permissionConfirm.addEventListener('cancel',()=>{pendingPermissionChange=null;});
@@ -9714,14 +9716,15 @@ permissionConfirm.addEventListener('submit',event=>{
   }
 });
 function samePermissionConversation(a,b){
-  return ['history_session_id','harness_kind','parent_state','project_key'].every(key=>a[key]===b[key]);
+  return ['history_session_id','harness_kind','parent_state','project_key','permission_managed_launch'].every(key=>a[key]===b[key]);
 }
 async function confirmPermissionStop(original,key,api,signal){
   // The live roster also omits finished tmux panes. Permission resumes need
   // the retained conversation and a gone/retired row before trying jump.
   const rows=await agentActionRoster('/telemetry/agents',signal);
   const stopped=rows?.find(row=>row?.name===original.name);
-  if(!stopped||stopped.running!==false||!['gone','retired'].includes(stopped.category))return false;
+  if(!stopped||stopped.running!==false||(!['gone','retired'].includes(stopped.category)&&
+      !(original.permission_managed_launch===true&&stopped.permission_managed_launch===true&&stopped.category==='finished')))return false;
   if(!samePermissionConversation(stopped,original))throw new Error('The stopped conversation changed');
   const reason=agentPermissionSetting(stopped,key,api).reason;
   if(reason)throw new Error(reason);
@@ -9753,6 +9756,7 @@ async function changeAgentPermission(original,key,value){
     }
     if(browserMode&&!current.options.includes(value))throw new Error('The Browser mode is no longer available');
     const permission={history_session_id:agent.history_session_id,[browserMode?'browser_mode':key]:value};
+    if(agent.permission_managed_launch===true)permission.adopt=true;
     const jump={session:name,open_terminal:false,open:false,permission};
     if(restart){
       const exit={session:name};
