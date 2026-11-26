@@ -1,10 +1,24 @@
 /* ── real spawn + communication graph (right rail + planetarium) ──
    Owned by orrery_view.js. Loaded from cockpit.html. */
-.miniorrery{
-  position:relative;display:block;flex:none;
+.mini-graph{
+  position:relative;flex:none;
   width:calc(100% - 12px);height:200px;margin:4px 6px 0;
-  overflow:hidden;
 }
+.mini-graph:has(.miniorrery[hidden]),
+.mini-graph:has(.miniorrery[hidden])+.mail-graph-divider{display:none}
+.mini-graph.orrery-mode{width:100%;margin:4px 0 0}
+.mini-graph-scroll{width:100%;height:100%;overflow:auto;scrollbar-width:thin;overflow-anchor:none}
+.mini-graph-scroll:focus-visible{outline:1px solid var(--ink-dim);outline-offset:-1px}
+.mini-graph-expand{position:absolute;top:0;right:0;width:28px;height:28px;pointer-events:none}
+.mini-graph-expand .orrery-expand{pointer-events:auto}
+.mini-graph-zoom{position:absolute;top:4px;right:32px;display:flex;gap:3px}
+.mini-graph-zoom button{
+  width:22px;height:20px;padding:0;border:1px solid var(--hair);border-radius:4px;
+  background:var(--panel-2);font:13px/1 var(--mono);color:var(--ink-dim);cursor:pointer;
+}
+.mini-graph-zoom button:not(:disabled):is(:hover,:focus-visible){color:var(--ink);border-color:var(--ink-dim)}
+.mini-graph-zoom button:disabled{cursor:default;opacity:.45}
+.miniorrery{display:block;overflow:hidden}
 .miniorrery.telemetry-network{
   background:radial-gradient(ellipse at center,rgb(var(--theme-accent-rgb) / .055),transparent 62%);
 }
@@ -31,6 +45,21 @@
   stroke:var(--ink);stroke-width:.8;
   vector-effect:non-scaling-stroke;pointer-events:none;
 }
+.orrery-history-edge{
+  fill:none;stroke:var(--ink-dim);
+  vector-effect:non-scaling-stroke;pointer-events:none;
+}
+.orrery-mail-edge{cursor:pointer;outline:none}
+.orrery-mail-edge > :first-child{fill:none;pointer-events:none}
+.orrery-mail-edge-hit{
+  fill:none;stroke:transparent;stroke-width:14px;vector-effect:non-scaling-stroke;pointer-events:stroke;
+}
+.orrery-mail-edge:is(:hover,:focus-visible) > :first-child{
+  stroke:var(--ink);stroke-opacity:.56;
+}
+.orrery-mail-edge:hover > .orrery-comm-edge{stroke-opacity:.76}
+.orrery-mail-edge:hover > .mail-live{stroke:var(--amber);stroke-opacity:1}
+.orrery-mail-edge:focus-visible > :first-child{stroke:var(--amber);stroke-opacity:1;stroke-width:3}
 .orrery-agent,.orrery-expand{cursor:pointer;outline:none}
 .orrery-hit{fill:transparent;stroke:none}
 .mini-portrait-fallback{fill:#24282f}
@@ -191,9 +220,6 @@
 /* Center-pane selection: a static hairline outside the working arc. */
 .mini-selection-ring{
   fill:none;stroke:var(--ink);stroke-width:.75;pointer-events:none;
-}
-.miniorrery.orrery-mode{
-  width:100%;margin:4px 0 0;
 }
 
 /* Compact provider seats preserve node positions and the selection extent. */
