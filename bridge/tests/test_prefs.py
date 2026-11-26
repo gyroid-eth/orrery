@@ -8,6 +8,10 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
+from test_cockpit_tour import tour_browser
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import orrery_backend as ob  # noqa: E402
@@ -50,3 +54,24 @@ def test_round_trip_through_the_file(tmp_path):
     assert ob.prefs_rev(path) == rev1 and rev1 > 0
     path.write_text("{not json")
     assert ob.read_prefs(path) == {}
+
+
+@pytest.fixture
+def legacy_mini_startup(tmp_path):
+    path = tmp_path / 'prefs.json'
+    path.write_text(json.dumps({
+        'version': 1,
+        'prefs': {'oc-mini-view': 'network', 'oc-mini-network-depth': '3'},
+    }), encoding='utf-8')
+    return {
+        'oc-mini-view': 'orrery', 'oc-mini-network-depth': '1', 'oc-mini-mail-graph': '1',
+    }, ob.prefs_response(path).body
+
+
+@pytest.mark.parametrize('tour_browser', ['legacy_mini_startup'], indirect=True)
+def test_mail_links_default_to_keep_when_upgrading_saved_preferences(tour_browser):
+    _, evaluate = tour_browser
+    assert evaluate("OC.miniView()") == {'mode': 'network', 'depth': 3, 'mailLinks': 'keep'}
+    assert evaluate("document.getElementById('miniMailLinks').value") == 'keep'
+    assert evaluate("document.getElementById('mailGraphBtn').getAttribute('aria-expanded')") == 'true'
+    assert evaluate("localStorage.getItem('oc-mini-mail-links')") is None
