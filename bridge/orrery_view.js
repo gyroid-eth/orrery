@@ -103,11 +103,11 @@ function activateAgent(agent){
   if(planetarium&&planetarium.classList.contains('on'))closePlanetarium();
   OC.jumpToAgent(agent.name);
 }
-function makeInteractive(group,agent){
+function makeInteractive(group,agent,status=stateOf(agent)){
   group.setAttribute('role','button');
   group.setAttribute('tabindex','0');
   const role=roleOf(agent),model=modelOf(agent);
-  group.setAttribute('aria-label',`Jump to ${agent.name}, ${model}${role?`, ${role}`:''}, ${stateOf(agent)}`);
+  group.setAttribute('aria-label',`Jump to ${agent.name}, ${model}${role?`, ${role}`:''}, ${status}`);
   group.addEventListener('click',()=>activateAgent(agent));
   group.addEventListener('keydown',event=>{
     if(event.key==='Enter'||event.key===' '){
@@ -599,7 +599,7 @@ function drawProviderBadge(group,agent,x,y,portraitRadius,size=14){
   group.appendChild(seat);
   return label;
 }
-function drawAgentCaption(group,{agent,x,y},dimensions,provider){
+function drawAgentCaption(group,{agent,x,y},dimensions,provider,action=''){
   const role=roleOf(agent);
   const title=svgEl('title');
   title.textContent=[agent.name,role,modelOf(agent),provider].filter(Boolean).join(' · ');
@@ -615,10 +615,13 @@ function drawAgentCaption(group,{agent,x,y},dimensions,provider){
   name.className='orrery-caption-name';
   name.textContent=agent.name;
   text.appendChild(name);
-  if(role){
+  if(role||action){
     const roleLabel=document.createElement('div');
     roleLabel.className='orrery-caption-role';
-    roleLabel.textContent=role;
+    if(action){
+      roleLabel.classList.add('orrery-caption-action');
+      OC.paintActionText(roleLabel,`${action}…`,true);
+    }else roleLabel.textContent=role;
     text.appendChild(roleLabel);
   }
   caption.appendChild(text);
@@ -626,6 +629,7 @@ function drawAgentCaption(group,{agent,x,y},dimensions,provider){
 }
 function drawMiniAgent(target,defs,position,index,dimensions){
   const {agent,x,y,hue,working}=position;
+  const action=OC.pendingAgentAction(agent.name);
   const portraitRadius=8.5;
   const ringRadius=11;
   const clipId=`mini-portrait-${index}`;
@@ -633,10 +637,10 @@ function drawMiniAgent(target,defs,position,index,dimensions){
   clip.appendChild(svgEl('circle',{cx:x,cy:y,r:portraitRadius}));
   defs.appendChild(clip);
   const group=svgEl('g',{
-    class:'orrery-agent mini-agent'+(working?' is-working':'')+(position.networkFocus?' is-network-focus':''),
+    class:'orrery-agent mini-agent'+(working&&!action?' is-working':'')+(position.networkFocus?' is-network-focus':''),
     'data-agent':agent.name,
   });
-  makeInteractive(group,agent);
+  makeInteractive(group,agent,action||stateOf(agent));
   group.appendChild(svgEl('circle',{class:'orrery-hit',cx:x,cy:y,r:14}));
   group.appendChild(svgEl('circle',{
     class:'mini-portrait-fallback',cx:x,cy:y,r:portraitRadius,
@@ -673,7 +677,7 @@ function drawMiniAgent(target,defs,position,index,dimensions){
   // silently painted over by the face (2026-08-06).
   const providerLabel=drawProviderBadge(group,agent,x,y,portraitRadius);
   drawStateGlyph(group,agent,x,y,false);
-  drawAgentCaption(group,position,dimensions,providerLabel);
+  drawAgentCaption(group,position,dimensions,providerLabel,action);
   target.appendChild(group);
   return group;
 }
@@ -874,9 +878,15 @@ function renderMini(){
   const dimensions={...MINI,width:width/scale,height:height/scale};
   const flights=preservedFlights(miniSvg);
   miniSvg.replaceChildren();
+  // Keep a restarting or exiting node through stale roster snapshots.
+  const agents=new Map(liveAgents.filter(agent=>agent?.name).map(agent=>[agent.name,agent]));
+  for(const agent of OC.graphPendingAgents()){
+    if(agent&&!agents.has(agent.name))agents.set(agent.name,agent);
+  }
+  const visible=[...agents.values()];
   const layout=miniMode==='network'
-    ?telemetryMiniLayout(liveAgents,miniFocusName,miniNetworkDepth,dimensions)
-    :layoutAgents(liveAgents,dimensions);
+    ?telemetryMiniLayout(visible,miniFocusName,miniNetworkDepth,dimensions)
+    :layoutAgents(visible,dimensions);
   prepareMotion(miniMotion,layout,resized);
   miniSvg.setAttribute('viewBox',`0 0 ${layout.width} ${layout.height}`);
   miniSvg.classList.toggle('orrery-mode',miniMode==='orrery');
@@ -1356,6 +1366,15 @@ document.addEventListener('oc:agents',event=>{
 });
 document.addEventListener('oc:mail',event=>
   receiveMail(event.detail&&event.detail.messages));
+document.addEventListener('oc:agent-action',renderMini);
+document.addEventListener('oc:agent-exit-confirmed',event=>{
+  const name=event.detail.name;
+  const node=miniMotion.nodes.get(name);
+  if(!node)return;
+  window.OrreryExitDust?.play(node,miniSvg.closest('.mini-graph-scroll')||miniSvg);
+  miniMotion.states.delete(name);
+  node.remove();
+});
 document.addEventListener('oc:focus-agent',event=>{
   miniFocusName=event.detail&&event.detail.name||'';
   if(miniMode==='network')renderMini();

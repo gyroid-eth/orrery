@@ -2917,7 +2917,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "dbd187adf90aa3f04f6b9927b20f5c0a790089b411bdcfc6acda685c6388b695",
+        "digest": "9eacff5d0617184e106e9955f5ef409e473991e082fb8de65a454452adb3c5b6",
         "expected": 78,
         "records": [
           {
@@ -3425,35 +3425,35 @@
             "value": "7.5px"
           },
           {
-            "line": 73,
+            "line": 74,
             "property": "font-size",
             "selector": ".planet-agent .orrery-caption-role",
             "source": "bridge/orrery_view.css",
             "value": "11px"
           },
           {
-            "line": 79,
+            "line": 80,
             "property": "font-size",
             "selector": ".orrery-expand text",
             "source": "bridge/orrery_view.css",
             "value": "11px"
           },
           {
-            "line": 123,
+            "line": 124,
             "property": "font-size",
             "selector": ".orrery-comet-label",
             "source": "bridge/orrery_view.css",
             "value": "10px"
           },
           {
-            "line": 148,
+            "line": 149,
             "property": "font-size",
             "selector": ".planetarium-note",
             "source": "bridge/orrery_view.css",
             "value": "9px"
           },
           {
-            "line": 203,
+            "line": 204,
             "property": "font-size",
             "selector": ".mini-provider-fallback",
             "source": "bridge/orrery_view.css",
@@ -3480,7 +3480,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "2e38e16ce49b318ca1f33876fb09aab78ac004c832e3ac929cb4ce102e22104a",
+        "digest": "27732e8dfb8e51b99786778183c947ea41831602a1151709b5b119f72444262c",
         "expected": 22,
         "records": [
           {
@@ -3624,14 +3624,14 @@
             "value": ".1em"
           },
           {
-            "line": 148,
+            "line": 149,
             "property": "letter-spacing",
             "selector": ".planetarium-note",
             "source": "bridge/orrery_view.css",
             "value": ".18em"
           },
           {
-            "line": 152,
+            "line": 153,
             "property": "letter-spacing",
             "selector": ".planetarium-telemetry",
             "source": "bridge/orrery_view.css",
@@ -3642,7 +3642,7 @@
       }
     }
   },
-  "inventory_digest": "486d1fabc2ef6b819fb6adca24a81242a4a65423660c90011a913232409e561e",
+  "inventory_digest": "3761a5cabdd56efaa93ca167046c204799c3f0cf5b539f9f617e89cd5992f960",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -3654,11 +3654,11 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "cfa2e61cec46857009da3ad93ebd42bcfe831f85457a280cf1abbe49d9764343",
+  "source_digest": "adc6096d6ea08e5cdc4d581d4727a9fee22f0a8c15a407ecd4c275bb88e25972",
   "source_files": {
-    "bridge/cockpit.html": "8d295de9b96d4af354ca295c5a71974519104ef350e82068281c5e69c3953507",
+    "bridge/cockpit.html": "26903f308d40569053181debe18ada302bb2cc215ce1467b851fcf9cf2993869",
     "bridge/mail_view.css": "10362070e9d67994cfd1c0584eea9f8ca1cf3d4402ea85dc1dfce3574c26584d",
-    "bridge/orrery_view.css": "09fd0b9366053f804b82687d3b9d67b94aaefa5a06f226f2abebb4f2ccb2e6a2"
+    "bridge/orrery_view.css": "c9cfc79f5539249344bb1c85303a6153a26c80718b992432625ab3f293792e56"
   },
   "surface": "cockpit",
   "validation": {

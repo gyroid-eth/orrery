@@ -481,11 +481,15 @@ def test_api54_browser_mode_restart_validates_and_resumes_the_same_conversation(
 def test_permission_restart_reattaches_the_open_tab_to_the_new_pane(roster, close_order, stay):
     js, wait, state = roster
     controls = {'computer_use': {'value': 'off', 'can_change': True, 'action': 'restart'}}
-    active = ACTIVE | {'permission_controls': controls}
+    active = ACTIVE | {'permission_controls': controls, 'annot': {'role': 'Fixture reviewer'}}
     stopped = EXITED | {'permission_controls': {'computer_use': controls['computer_use'] | {'action': 'resume'}}}
     state['checks'] = [(200, [active]), (200, [])]
     state['stop_checks'] = [stopped]
     js(f"currentAgentNamed('CopperFixture').permission_controls={json.dumps(controls)}")
+    js("""currentAgentNamed('CopperFixture').annot={role:'Fixture reviewer'};
+      if(document.getElementById('orrery').hasAttribute('hidden'))document.getElementById('mailGraphBtn').click();
+      window.graphAction=()=>document.querySelector('#orrery [data-agent=CopperFixture] .orrery-caption-role');
+    """)
     js("""
       socket=null;clearTimeout(reconnectTimer);
       window.sentFrames=[];send=frame=>{sentFrames.push(frame);return true;};
@@ -510,11 +514,13 @@ def test_permission_restart_reattaches_the_open_tab_to_the_new_pane(roster, clos
     wait("typeof allowRestartJump==='function'")
     assert js("sessionGroups.get('CopperFixture').state.textContent==='Restarting'")
     assert js("stageEl.querySelector('.terminal-action-notice').ariaLabel==='Restarting CopperFixture…'")
+    assert js("graphAction().textContent==='Restarting…'")
     letters = "tiles.get('CopperFixture').querySelectorAll('.cname > span')"
     assert js(f"getComputedStyle({letters}[0]).animationDuration") == '1.6s'
     assert js(f"getComputedStyle({letters}[1]).animationDelay") == '0.07s'
     js.client.call('Emulation.setEmulatedMedia', features=[{'name': 'prefers-reduced-motion', 'value': 'reduce'}])
     assert js(f"getComputedStyle({letters}[0]).animationName") == 'none'
+    assert js("getComputedStyle(graphAction().firstElementChild).animationName==='none'")
     js.client.call('Emulation.setEmulatedMedia', features=[])
     if close_order == 'list':
         js("handle({type:'sessions',sessions:['IndigoFixture']})")
@@ -526,6 +532,7 @@ def test_permission_restart_reattaches_the_open_tab_to_the_new_pane(roster, clos
        "renderRoster();showAgentDetail(tiles.get('CopperFixture'))")
     assert js("tiles.get('CopperFixture').querySelector('.cname').textContent==='CopperFixture'")
     assert js("agentDetail.querySelector('.agent-detail-pending-action').textContent==='Restarting'")
+    assert js("graphAction().textContent==='Restarting…'")
     if not stay:
         js("setActive('%142')")
     if close_order == 'manual':
@@ -553,6 +560,7 @@ def test_permission_restart_reattaches_the_open_tab_to_the_new_pane(roster, clos
       handle({type:'status',state:'closed',session:'CopperFixture',sessionGone:true,incarnation:'old'});
     """)
     wait("!permissionRestarts.has('CopperFixture')")
+    assert js("graphAction().textContent==='Fixture reviewer'")
     assert js("sessionGroups.get('CopperFixture').el===originalGroup && panes.has('%143')")
     assert js('activeId') == ('%143' if stay else '%142')
     assert js("!stageEl.querySelector('.terminal-action-notice')&&!tiles.get('CopperFixture').querySelector('.terminal-action-wave')")
@@ -635,6 +643,11 @@ def test_exit_dust_waits_for_success_and_departure_and_releases_the_tab(
     ])
     js("""
       setRosterSelectMode(false);
+      Object.defineProperty(document,'hidden',{value:false});
+      setMailPaneWidth(380,mailPaneBounds());
+      localStorage.setItem('oc-mini-graph-height','352');
+      document.dispatchEvent(new CustomEvent('oc:prefs-changed',{detail:{keys:['oc-mini-graph-height']}}));
+      if(document.getElementById('orrery').hasAttribute('hidden'))document.getElementById('mailGraphBtn').click();
       socket=null;clearTimeout(reconnectTimer);send=()=>true;
       handle({type:'sessions',sessions:['CopperFixture','IndigoFixture']});
       handle({type:'reset',session:'CopperFixture',incarnation:'old',panes:[
@@ -656,6 +669,7 @@ def test_exit_dust_waits_for_success_and_departure_and_releases_the_tab(
       };
       true;
     """)
+    assert js("document.querySelector('#orrery [data-agent=CopperFixture] .orrery-caption-action').textContent==='Exiting…'")
     if depart_first:
         js("""
           handle({type:'status',state:'closed',session:'CopperFixture',sessionGone:true,incarnation:'old'});
@@ -664,6 +678,7 @@ def test_exit_dust_waits_for_success_and_departure_and_releases_the_tab(
         wait("pendingAgentExits.get('CopperFixture').departed")
         assert js("tiles.has('CopperFixture')&&sessionGroups.has('CopperFixture')")
     assert js("!document.querySelector('canvas.exit-dust')")
+    assert js("document.getElementById('orrery').clientWidth>0")
     body = {"ok": True} if accepted else {"ok": False, "error": "Exit refused"}
     js(f"resolveExit(new Response({json.dumps(json.dumps(body))},{{status:{200 if accepted else 400}}}))")
     if not depart_first:
@@ -673,9 +688,11 @@ def test_exit_dust_waits_for_success_and_departure_and_releases_the_tab(
     wait("!pendingAgentExits.has('CopperFixture')&&!tiles.has('CopperFixture')")
     if not accepted:
         assert js("toastEl.textContent.includes('Exit refused')&&!document.querySelector('canvas.exit-dust')")
+        assert js("!document.querySelector('#orrery [data-agent=CopperFixture] .orrery-caption-action')")
         return
     assert js("!sessionGroups.has('CopperFixture') && activeId==='%142'")
-    assert js("document.querySelectorAll('canvas.exit-dust').length") == (0 if reduced else 2)
+    assert js("!document.querySelector('#orrery [data-agent=CopperFixture]')")
+    assert js("document.querySelectorAll('canvas.exit-dust').length") == (0 if reduced else 3)
     if not reduced:
         assert js("Array.from(document.querySelectorAll('canvas.exit-dust')).every(canvas=>canvas.getAttribute('aria-hidden')==='true')")
         js("advanceDust(performance.now()+2000)")

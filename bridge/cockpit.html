@@ -4161,7 +4161,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "dbd187adf90aa3f04f6b9927b20f5c0a790089b411bdcfc6acda685c6388b695",
+        "digest": "9eacff5d0617184e106e9955f5ef409e473991e082fb8de65a454452adb3c5b6",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4254,7 +4254,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "2e38e16ce49b318ca1f33876fb09aab78ac004c832e3ac929cb4ce102e22104a",
+        "digest": "27732e8dfb8e51b99786778183c947ea41831602a1151709b5b119f72444262c",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -4283,9 +4283,9 @@
       }
     }
   },
-  "inventory_digest": "486d1fabc2ef6b819fb6adca24a81242a4a65423660c90011a913232409e561e",
+  "inventory_digest": "3761a5cabdd56efaa93ca167046c204799c3f0cf5b539f9f617e89cd5992f960",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "cfa2e61cec46857009da3ad93ebd42bcfe831f85457a280cf1abbe49d9764343",
+  "source_digest": "adc6096d6ea08e5cdc4d581d4727a9fee22f0a8c15a407ecd4c275bb88e25972",
   "surface": "cockpit",
   "version": 1
 }
@@ -9409,6 +9409,7 @@ function finishAgentExits(exits){
     const group=sessionGroups.get(name);
     dust?.play(tiles.get(name),rosterEl);
     dust?.play(group?.el,tabsEl);
+    document.dispatchEvent(new CustomEvent('oc:agent-exit-confirmed',{detail:{name}}));
     clearAgentExit(name,action,{repaint:false});
     if(group)detachSession(name,false);
   }
@@ -9988,6 +9989,7 @@ function refreshAgentActionDisplay(name){
   if(detailAnchor?.dataset.agent===name)showAgentDetail(detailAnchor);
   paintTerminalActions();
   promptCard.refresh();
+  document.dispatchEvent(new CustomEvent('oc:agent-action',{detail:{name}}));
 }
 function finishPermissionRestart(session,{failed=false}={}){
   const restart=permissionRestarts.get(session);
@@ -10671,6 +10673,8 @@ function assignLineageHues(live){
    They subscribe to 'oc:agents' / 'oc:mail' document events for updates. */
 window.OC=Object.freeze({
   esc,relTime,jumpToAgent,rootOf,providerPresentation,
+  pendingAgentAction,paintActionText,
+  graphPendingAgents:()=>[...permissionRestarts.values(),...pendingAgentExits.values()].map(action=>action.original),
   railPositions,railMoveRows,railRevealRows,
   renderPeerAvatar:(name,existing)=>currentAgentNamed(name)?conversationAvatar(name,'',existing):null,
   lineageHue,                       // Map: agent name -> lineage hex

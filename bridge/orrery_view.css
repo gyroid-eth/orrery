@@ -70,6 +70,7 @@
 }
 .orrery-caption-name,.orrery-caption-role{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .orrery-caption-role{font-size:7.5px;line-height:9px;font-weight:400;color:var(--ink-dim)}
+.orrery-caption-action{color:var(--amber);font-weight:600}
 .planet-agent .orrery-caption{font-size:15px;line-height:19px}
 .planet-agent .orrery-caption-role{font-size:11px;line-height:15px}
 .orrery-expand rect{
