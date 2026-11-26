@@ -36,6 +36,11 @@
 .conversation-step-outcome.has-exit-code{margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
 .conversation-step-outcome.has-exit-code+.conversation-step-duration{margin-left:0}
 .conversation-step-target{color:var(--ink-dim);font-size:10px;line-height:1.35;overflow-wrap:anywhere;white-space:pre-wrap}
+.conversation-step.has-step-image{position:relative}
+.has-step-image .conversation-step-target{text-decoration:underline;text-underline-offset:2px}
+.conversation-step-image:not([hidden]){position:absolute;inset:0;padding:0;border:0;border-radius:4px;background:transparent;cursor:pointer}
+.conversation-step-image:hover{background:rgb(var(--theme-ink-rgb) / .04)}
+.conversation-step-image:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .conversation-steps-inner:has(.conversation-step-diff:not([hidden])){max-width:540px}
 .conversation-step-copy>:is(.conversation-step-top,.conversation-step-target){max-width:282px}
 .conversation-step-diff-toggle{display:inline-flex;align-items:baseline;gap:5px;min-width:0;flex-wrap:wrap;
