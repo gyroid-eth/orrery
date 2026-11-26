@@ -1,5 +1,9 @@
 # 常駐 agent の enrollment と起動
 
+![常駐 agent のサンプル profile が起動前確認を通過し、起動後に終了コード 0 で端末に戻る](images/consolidated/persistent-agent-lifecycle.gif)
+
+合成の provider を使った起動例です。profile の確認、起動、プロセス終了の順に表示しています。
+
 > English version: [persistent-agents.en.md](en/persistent-agents.md)
 
 [Launcher と identity](launchers.md) · [トラブルシューティング](telemetry-troubleshooting.md) · [README に戻る](../README.md)

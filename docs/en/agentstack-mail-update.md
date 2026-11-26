@@ -1,5 +1,9 @@
 # Updating a live ORRERY Mail service
 
+![The Mail update plan shows the running build and candidate, then the terminal reports the switch](../images/consolidated/agentstack-mail-update.png)
+
+In this isolated example, the terminal shows the plan first, then reports candidate verification and the completed switch.
+
 > 日本語版: [agentstack-mail-update.md](../agentstack-mail-update.md)
 
 This document covers shipping a new build of `agentstack_mail` onto a machine

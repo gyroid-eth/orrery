@@ -1,5 +1,9 @@
 # 設定
 
+![端末で設定した demo-vault が New agent の作業フォルダーに選ばれ、配下のフォルダーが開く](images/consolidated/telemetry-spawn-directories.png)
+
+サンプル設定では、`AGENTSTACK_SPAWN_DIRS` の先頭に置いた `demo-vault` が New agent の既定の作業フォルダーに選ばれています。
+
 > English version: [configuration.en.md](en/telemetry-configuration.md)
 
 [前: API reference](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/api.md) · [README に戻る](../README.md) · [次: トラブルシューティング](telemetry-troubleshooting.md)

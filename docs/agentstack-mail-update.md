@@ -1,5 +1,9 @@
 # 稼働中の ORRERY Mail service を更新する
 
+![ORRERY Mail の更新計画で旧版と更新先を確認し、切り替え後の結果を表示する端末](images/consolidated/agentstack-mail-update.png)
+
+隔離した例。計画を表示してから更新を実行すると、候補の確認と切り替えの結果が出ます。
+
 > English version: [agentstack-mail-update.en.md](en/agentstack-mail-update.md)
 
 この文書は、すでに traffic を捌いている machine へ `agentstack_mail` の新しい

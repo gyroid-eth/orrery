@@ -1,5 +1,9 @@
 # 利用者単位の ORRERY 指示への移行
 
+![指示の移行計画に移行元と利用者単位のファイルが出て、確認後に完了と表示される](images/consolidated/instruction-migration.png)
+
+サンプルの指示ファイルで、計画表示、利用者の確認、移行完了の順に進めた例です。
+
 [English](en/instruction-migration.md)
 
 <a id="what-changes"></a>

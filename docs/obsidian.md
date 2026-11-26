@@ -1,5 +1,9 @@
 # Obsidian と一緒に使う
 
+![Reader の返事に付いた Daily review.md のチップを押して、デモ vault のメモを読み、会話に戻る](images/consolidated/obsidian-file-chip.gif)
+
+デモ vault のメモは、返事のファイルチップから Reader 内で開けます。
+
 > English version: [obsidian.en.md](en/obsidian.md)
 
 [README に戻る](../README.md)

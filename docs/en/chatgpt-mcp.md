@@ -1,5 +1,9 @@
 # Optional ORRERY MCP adapter (read only)
 
+![Sample connection settings, read-only check result, and the three MCP tools](../images/consolidated/chatgpt-mcp.png)
+
+This example uses a fixture endpoint. Run `pair` and `check`, then confirm the tool list from the client.
+
 Phase 1 of upstream Issue #395 exposes exactly orrery_status, orrery_list_agents and orrery_get_agent. There is no spawning, messaging, OAuth or service installation. The regular installer, service startup configuration, UI, hooks and Mail operations are unchanged. Dashboard calls are limited to GET /api/version, fresh GET /api/agents, and legacy GET /api/agents?days=30.
 
 ## Compatibility and exposed scope

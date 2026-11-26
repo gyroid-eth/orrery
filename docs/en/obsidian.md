@@ -1,5 +1,9 @@
 # Using it with Obsidian
 
+![Open Daily review.md from a Reader reply, inspect the demo vault note, and return to the conversation](../images/consolidated/obsidian-file-chip.gif)
+
+The file chip in the reply opens a note from the sample vault inside Reader.
+
 > 日本語版: [obsidian.md](../obsidian.md)
 
 [Back to README](../../README.en.md)

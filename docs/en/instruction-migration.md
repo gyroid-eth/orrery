@@ -1,5 +1,9 @@
 # Moving ORRERY instructions to the user scope
 
+![The instruction migration plan shows the source and user file, then completes after confirmation](../images/consolidated/instruction-migration.png)
+
+This example uses sample instruction files to show the plan, the confirmation, and the result.
+
 [日本語](../instruction-migration.md)
 
 <a id="what-changes"></a>

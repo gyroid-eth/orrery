@@ -1,5 +1,9 @@
 # トラブルシューティング
 
+![dashboard のログが見つからない環境で agentstack-doctor --report が診断と環境情報を出す](images/consolidated/telemetry-troubleshooting.png)
+
+隔離した環境で dashboard のログが見つからない例です。`agentstack-doctor --report` でエラーと報告用の環境情報を確認します。
+
 > English version: [troubleshooting.en.md](en/telemetry-troubleshooting.md)
 
 [前: 設定](telemetry-configuration.md) · [README に戻る](../README.md) · [次: 第三者コンポーネント](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/third-party.md)

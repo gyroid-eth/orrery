@@ -1,5 +1,9 @@
 # Troubleshooting
 
+![agentstack-doctor --report shows the missing dashboard log and environment details](../images/consolidated/telemetry-troubleshooting.png)
+
+This isolated example has no dashboard log. Use `agentstack-doctor --report` to check the error and collect environment details.
+
 > 日本語版: [troubleshooting.md](../telemetry-troubleshooting.md)
 
 [Previous: Configuration](telemetry-configuration.md) · [Back to README](../../README.en.md) · [Next: Third-party components](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/third-party.md)

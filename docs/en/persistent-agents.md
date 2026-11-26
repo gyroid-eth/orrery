@@ -1,5 +1,9 @@
 # Persistent-agent enrollment and startup
 
+![Inspect a sample persistent-agent profile, run it, and return to the terminal with exit status 0](../images/consolidated/persistent-agent-lifecycle.gif)
+
+This example uses a fixture provider to show the profile check, launch, and process exit.
+
 > 日本語版: [persistent-agents.md](../persistent-agents.md)
 
 [Launchers and identity](launchers.md) · [Troubleshooting](telemetry-troubleshooting.md) · [Back to README](../../README.en.md)
