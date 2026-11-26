@@ -1632,7 +1632,7 @@
           <label class="settings-choice"><input id="miniViewOrrery" type="radio" name="miniView" value="orrery">Orrery</label>
           <label class="settings-choice"><input id="miniViewNetwork" type="radio" name="miniView" value="network">Telemetry network</label>
         </div>
-        <div class="settings-help">Telemetry network centers the active tab and follows lineage plus recent mail links.</div>
+        <div class="settings-help">Telemetry network centers the active tab and follows lineage and Mail links.</div>
       </div>
       <div class="settings-row">
         <label class="settings-toggle-row" for="miniNetworkDepth">
@@ -1644,6 +1644,18 @@
             <option value="1">1 hop</option>
             <option value="2" selected>2 hops</option>
             <option value="3">3 hops</option>
+          </select>
+        </label>
+      </div>
+      <div class="settings-row">
+        <label class="settings-toggle-row" for="miniMailLinks">
+          <span class="settings-toggle-copy">
+            <span class="settings-row-name">Mail links</span>
+            <span class="settings-help">Recent Mail is highlighted for 90 seconds in both modes.</span>
+          </span>
+          <select class="settings-select" id="miniMailLinks">
+            <option value="keep" selected>Keep visible</option>
+            <option value="recent">Fade after 90 seconds</option>
           </select>
         </label>
       </div>
@@ -3107,6 +3119,11 @@
             "value": "var(--ink)"
           },
           {
+            "property": "stroke",
+            "selector": ".orrery-history-edge",
+            "value": "var(--ink-dim)"
+          },
+          {
             "property": "fill",
             "selector": ".mini-initial",
             "value": "var(--ink)"
@@ -3879,6 +3896,11 @@
             "value": "var(--ink-faint)"
           },
           {
+            "property": "stroke",
+            "selector": ".orrery-history-edge",
+            "value": "var(--ink-dim)"
+          },
+          {
             "property": "color",
             "selector": ".orrery-caption-role",
             "value": "var(--ink-dim)"
@@ -4124,7 +4146,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "13048c6028cc56508a3e5283f4ebc57b5edee14d5ebc08da268e31ebb286a423",
+        "digest": "c1c4d2aa988effc5db03d98482e8ea1d5e367efcbc45d1eb76df7c5a446148c7",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4217,7 +4239,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "b3e0a4e2ac7bcd83c911eab7e9ac3ac34e30e3dd477de4b354c3809aecdfd29b",
+        "digest": "7e97e01d56196c33ab79e10dd3a598607be8e3034bff0250858e42733a1f5f44",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -4246,9 +4268,9 @@
       }
     }
   },
-  "inventory_digest": "1e923c3e2e56484ce5327d0161a7e3db258d08467d7dc48f71b6b46524eaf9d8",
+  "inventory_digest": "f1a047bfb0dc54e8052be7308a739a6b0b1c092fd95a5e495a661cae260cb75a",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "b19bca5d2b3e98ae0bc42878c317ef86ede4d722cc73545b3053d6c5b84a8e18",
+  "source_digest": "527ed82a2ae33f15685cf0578961e88d5bc52192acc11fd996b51393c1e24366",
   "surface": "cockpit",
   "version": 1
 }
@@ -4974,6 +4996,7 @@ const terminalSettingsReset=document.getElementById('terminalSettingsReset');
 const miniViewOrrery=document.getElementById('miniViewOrrery');
 const miniViewNetwork=document.getElementById('miniViewNetwork');
 const miniNetworkDepthSelect=document.getElementById('miniNetworkDepth');
+const miniMailLinksSelect=document.getElementById('miniMailLinks');
 const tabsEmpty=document.createElement('span');
 tabsEmpty.className='empty';tabsEmpty.textContent='waiting for sessions…';tabsEl.appendChild(tabsEmpty);
 
@@ -5005,6 +5028,7 @@ const TERM_FONT_STORAGE_KEY='oc-term-font';
 const TERM_FONT_AUTOSHRINK_STORAGE_KEY='oc-term-autoshrink';
 const MINI_VIEW_STORAGE_KEY='oc-mini-view';
 const MINI_NETWORK_DEPTH_STORAGE_KEY='oc-mini-network-depth';
+const MINI_MAIL_LINKS_STORAGE_KEY='oc-mini-mail-links';
 const THEME_AXIS_LABELS={
   'dim-contrast':'Muted contrast',
   'small-text':'Small text',
@@ -5105,6 +5129,7 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
 const THEME_GLOW_SCALE_EXPECTED=THEME_GLOW_EFFECT_MANIFEST.filter(effect=>effect.mode==='scale').length;
 let terminalFontSize=TERM_FONT_DEFAULT,terminalAutoShrink=true;
 let miniViewMode='orrery';
+let miniMailLinks='keep';
 let miniNetworkDepth=2;
 let themeAxisState=normalizeThemeAxisState(null);
 let themeAxisTransactionActive=false;
@@ -5123,6 +5148,7 @@ try{
     terminalAutoShrink=storedAutoShrink==='true';
   }
   if(localStorage.getItem(MINI_VIEW_STORAGE_KEY)==='network')miniViewMode='network';
+  if(localStorage.getItem(MINI_MAIL_LINKS_STORAGE_KEY)==='recent')miniMailLinks='recent';
   const storedNetworkDepth=Number(localStorage.getItem(MINI_NETWORK_DEPTH_STORAGE_KEY));
   if([1,2,3].includes(storedNetworkDepth))miniNetworkDepth=storedNetworkDepth;
 }catch(_){/* storage can be unavailable in private/restricted webviews */}
@@ -6099,17 +6125,24 @@ function paintMiniViewSettings(){
   miniViewOrrery.checked=miniViewMode==='orrery';
   miniViewNetwork.checked=miniViewMode==='network';
   miniNetworkDepthSelect.value=String(miniNetworkDepth);
+  miniMailLinksSelect.value=miniMailLinks;
+}
+function announceMiniView(){
+  paintMiniViewSettings();
+  document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{
+    mode:miniViewMode,depth:miniNetworkDepth,mailLinks:miniMailLinks,
+  }}));
 }
 function setMiniViewMode(mode){
-  miniViewMode=mode==='network'?'network':'orrery';paintMiniViewSettings();
+  miniViewMode=mode==='network'?'network':'orrery';
   try{localStorage.setItem(MINI_VIEW_STORAGE_KEY,miniViewMode);}catch(_){/* live-only preference */}
-  document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{mode:miniViewMode,depth:miniNetworkDepth}}));
+  announceMiniView();
 }
 function setMiniNetworkDepth(depth){
   const next=Number(depth);
-  miniNetworkDepth=[1,2,3].includes(next)?next:2;paintMiniViewSettings();
+  miniNetworkDepth=[1,2,3].includes(next)?next:2;
   try{localStorage.setItem(MINI_NETWORK_DEPTH_STORAGE_KEY,String(miniNetworkDepth));}catch(_){/* live-only preference */}
-  document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{mode:miniViewMode,depth:miniNetworkDepth}}));
+  announceMiniView();
 }
 function applyTerminalSettings({fit=true}={}){
   const effectiveSize=currentTerminalFontSize();
@@ -6149,6 +6182,11 @@ terminalAutoShrinkToggle.addEventListener('change',()=>{
 miniViewOrrery.addEventListener('change',()=>{if(miniViewOrrery.checked)setMiniViewMode('orrery');});
 miniViewNetwork.addEventListener('change',()=>{if(miniViewNetwork.checked)setMiniViewMode('network');});
 miniNetworkDepthSelect.addEventListener('change',()=>setMiniNetworkDepth(miniNetworkDepthSelect.value));
+miniMailLinksSelect.addEventListener('change',()=>{
+  miniMailLinks=miniMailLinksSelect.value==='recent'?'recent':'keep';
+  try{localStorage.setItem(MINI_MAIL_LINKS_STORAGE_KEY,miniMailLinks);}catch(_){/* live-only preference */}
+  announceMiniView();
+});
 /* The backend stamps every response with its boot id. When it changes, the
    page this window is running was served by a previous backend: reload so the
    app window and a fresh browser tab always show the same cockpit. The
@@ -6162,11 +6200,12 @@ function noteBackendBoot(id){
 /* a preference changed in another window (prefs_sync.js): apply it here too */
 document.addEventListener('oc:prefs-changed',event=>{
   const keys=new Set(event.detail&&event.detail.keys||[]);
-  if(keys.has(MINI_VIEW_STORAGE_KEY)||keys.has(MINI_NETWORK_DEPTH_STORAGE_KEY)){
+  if(keys.has(MINI_VIEW_STORAGE_KEY)||keys.has(MINI_NETWORK_DEPTH_STORAGE_KEY)||keys.has(MINI_MAIL_LINKS_STORAGE_KEY)){
     const mode=localStorage.getItem(MINI_VIEW_STORAGE_KEY)==='network'?'network':'orrery';
     const depth=Number(localStorage.getItem(MINI_NETWORK_DEPTH_STORAGE_KEY));
-    miniViewMode=mode;miniNetworkDepth=[1,2,3].includes(depth)?depth:2;paintMiniViewSettings();
-    document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{mode:miniViewMode,depth:miniNetworkDepth}}));
+    miniViewMode=mode;miniNetworkDepth=[1,2,3].includes(depth)?depth:2;
+    miniMailLinks=localStorage.getItem(MINI_MAIL_LINKS_STORAGE_KEY)==='recent'?'recent':'keep';
+    announceMiniView();
   }
   if(keys.has(TERM_FONT_STORAGE_KEY)||keys.has(TERM_FONT_AUTOSHRINK_STORAGE_KEY)){
     const storedFont=localStorage.getItem(TERM_FONT_STORAGE_KEY),storedShrink=localStorage.getItem(TERM_FONT_AUTOSHRINK_STORAGE_KEY);
@@ -10329,7 +10368,7 @@ window.OC=Object.freeze({
   get lineageParent(){return lineageParent;},  // Map: child -> parent
   agents:()=>currentAgents,
   activeAgent:()=>activeSession(),
-  miniView:()=>({mode:miniViewMode,depth:miniNetworkDepth}),
+  miniView:()=>({mode:miniViewMode,depth:miniNetworkDepth,mailLinks:miniMailLinks}),
   mailBacklog:()=>mailBacklog.slice(),  // live-window messages seen so far (≤100)
 });
 

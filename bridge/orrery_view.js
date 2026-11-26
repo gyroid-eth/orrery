@@ -33,6 +33,7 @@ const PLANET={
   captionWidth:104,captionTop:37,captionHeight:34,nodeAbove:37,
 };
 const MAIL_EDGE_LIFETIME=90000;
+const MAIL_HISTORY_REFRESH=30000;
 const COMM_PROMOTION_HYSTERESIS=4000;
 const MAX_COMETS=6;
 const MOTION_STIFFNESS=150;
@@ -51,6 +52,8 @@ let planetLastFocus=null;
 let activeComets=0;
 let activeMailRoute=null;
 const commPairs=new Map();
+let historyPairs=new Map(),historyRequest=null,historyTimer=null;
+let keepMailLinks=OC.miniView?.().mailLinks!=='recent';
 let commRefreshTimer=null;
 let motionFrameId=null;
 let motionLastTime=null;
@@ -329,9 +332,13 @@ function telemetryNetworkSubset(live,focus,depth,now=Date.now()){
     if(!adjacent.has(parent)||!adjacent.has(child))return;
     adjacent.get(parent).add(child);adjacent.get(child).add(parent);
   });
-  commPairs.forEach(pair=>{
-    if(now-pair.ts>=MAIL_EDGE_LIFETIME||!adjacent.has(pair.a)||!adjacent.has(pair.b))return;
+  const connect=pair=>{
+    if(!adjacent.has(pair.a)||!adjacent.has(pair.b))return;
     adjacent.get(pair.a).add(pair.b);adjacent.get(pair.b).add(pair.a);
+  };
+  if(keepMailLinks)historyPairs.forEach(connect);
+  commPairs.forEach(pair=>{
+    if(now-pair.ts<MAIL_EDGE_LIFETIME)connect(pair);
   });
   const visible=new Set([focus]);
   let frontier=[focus];
@@ -475,20 +482,16 @@ function updateSurfaceGeometry(surface){
     edge.setAttribute('x2',to.x);edge.setAttribute('y2',to.y);
     edge.style.opacity=String(Math.min(from.opacity,to.opacity));
   });
-  const commLayer=commLayerOf(surface.target);
-  if(commLayer){
-    commLayer.querySelectorAll('.orrery-comm-edge').forEach(edge=>{
-      const from=surface.states.get(edge.dataset.a);
-      const to=surface.states.get(edge.dataset.b);
-      if(!from||!to)return;
-      const curve=commPathBetween(
-        from,to,surface.positions,surface.layoutDimensions||surface.dimensions);
-      edge.setAttribute('d',curve.d);
-      const life=Number(edge.dataset.life||0);
-      edge.setAttribute('stroke-opacity',
-        (.58*life*Math.min(from.opacity,to.opacity)).toFixed(3));
-    });
-  }
+  surface.target.querySelectorAll('.orrery-comm-edge,.orrery-history-edge').forEach(edge=>{
+    const from=surface.states.get(edge.dataset.a);
+    const to=surface.states.get(edge.dataset.b);
+    if(!from||!to)return;
+    const curve=commPathBetween(
+      from,to,surface.positions,surface.layoutDimensions||surface.dimensions);
+    edge.setAttribute('d',curve.d);
+    const alpha=edge.dataset.life===undefined ? .22 : .58*Number(edge.dataset.life);
+    edge.setAttribute('stroke-opacity',(alpha*Math.min(from.opacity,to.opacity)).toFixed(3));
+  });
   if(activeMailRoute)renderMailFocus(surface);
 }
 function finishSurfaceMotion(surface){
@@ -886,6 +889,8 @@ function renderMini(){
     :'Live agent spawn and communication graph');
   const defs=svgEl('defs');
   miniSvg.appendChild(defs);
+  miniSvg.appendChild(svgEl('g',{class:'orrery-history-layer','aria-hidden':'true'}));
+  renderMailHistory();
   const spawnLayer=drawSpawnEdges(miniSvg,layout,false);
   miniSvg.appendChild(svgEl('g',{class:'orrery-comm-layer'}));
   const nodes=svgEl('g',{class:'orrery-node-layer'});
@@ -1076,6 +1081,57 @@ function recordMessages(messages,serverNowMs=null){
       }
     });
   });
+}
+function renderMailHistory(){
+  const layer=miniSvg.querySelector('.orrery-history-layer');
+  layer.replaceChildren();
+  if(!keepMailLinks)return;
+  historyPairs.forEach(({a,b,count})=>{
+    if(!miniPositions.has(a)||!miniPositions.has(b))return;
+    // The dashboard keeps one displayed count per pair across directions and kinds.
+    const width=Math.min(6,1+Math.log2(count+1));
+    layer.appendChild(svgEl('path',{
+      class:'orrery-history-edge','data-a':a,'data-b':b,'stroke-width':width.toFixed(2),
+    }));
+  });
+}
+function syncMailHistory(){
+  if(!keepMailLinks||document.hidden||!miniSvg.clientWidth||!miniSvg.clientHeight){
+    clearTimeout(historyTimer);historyTimer=null;
+    historyRequest?.abort();historyRequest=null;
+    return;
+  }
+  if(historyRequest||historyTimer!==null)return;
+  const request=new AbortController();
+  historyRequest=request;
+  // Match NETWORK's default node window. Its counts include all deliveries
+  // between the returned agents, with no cutoff based on an edge's age.
+  fetch('/telemetry/graph?days=1',{cache:'no-store',signal:request.signal})
+    .then(response=>response.ok?response.json():null)
+    .then(data=>{
+      if(historyRequest!==request||data?.error||!Array.isArray(data?.edges))return;
+      const pairs=new Map();
+      for(const {source,target,count} of data.edges){
+        if(typeof source!=='string'||typeof target!=='string'||!source||!target||source===target||
+           !Number.isFinite(count)||count<=0)continue;
+        const key=pairKey(source,target);
+        const prior=pairs.get(key);
+        if(prior)prior.count+=count;
+        else {
+          const [a,b]=source.localeCompare(target)<=0?[source,target]:[target,source];
+          pairs.set(key,{a,b,count});
+        }
+      }
+      if(pairs.size===historyPairs.size&&[...pairs].every(([key,pair])=>historyPairs.get(key)?.count===pair.count))return;
+      historyPairs=pairs;
+      if(miniMode==='network')renderMini();
+      else {renderMailHistory();updateSurfaceGeometry(miniMotion);}
+    }).catch(()=>{/* keep the last available history and the live Mail highlights */})
+    .finally(()=>{
+      if(historyRequest!==request)return;
+      historyRequest=null;
+      historyTimer=setTimeout(()=>{historyTimer=null;syncMailHistory();},MAIL_HISTORY_REFRESH);
+    });
 }
 function commLayerOf(target){
   return [...target.children].find(child=>
@@ -1365,8 +1421,10 @@ document.addEventListener('oc:mini-view',event=>{
   const detail=event.detail||{};
   miniMode=detail.mode==='network'?'network':'orrery';
   miniNetworkDepth=[1,2,3].includes(Number(detail.depth))?Number(detail.depth):2;
+  keepMailLinks=detail.mailLinks!=='recent';
   miniFocusName=OC.activeAgent&&OC.activeAgent()||miniFocusName;
   renderMini();
+  syncMailHistory();
 });
 window.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&planetarium&&planetarium.classList.contains('on')){
@@ -1390,6 +1448,8 @@ renderMini();
 new ResizeObserver(()=>{
   const width=miniSvg.clientWidth,height=miniSvg.clientHeight;
   if(width&&height&&(width!==miniWidth||height!==miniHeight))renderMini();
+  syncMailHistory();
 }).observe(miniSvg);
+document.addEventListener('visibilitychange',syncMailHistory);
 seedRecentMail();
 })();

@@ -31,6 +31,10 @@
   stroke:var(--ink);stroke-width:.8;
   vector-effect:non-scaling-stroke;pointer-events:none;
 }
+.orrery-history-edge{
+  fill:none;stroke:var(--ink-dim);
+  vector-effect:non-scaling-stroke;pointer-events:none;
+}
 .orrery-agent,.orrery-expand{cursor:pointer;outline:none}
 .orrery-hit{fill:transparent;stroke:none}
 .mini-portrait-fallback{fill:#24282f}

@@ -317,6 +317,48 @@ def test_selected_parent_child_mail_overlays_the_spawn_line(mini_browser):
     assert ' Q ' in result['diagonal']
 
 
+def test_mini_graph_keeps_mail_pairs_by_default_and_can_use_only_recent_links(mini_browser):
+    client, evaluate = mini_browser
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    assert evaluate("document.getElementById('miniMailLinks').value") == 'keep'
+    retained = evaluate("""(async()=>{
+      const settings=document.getElementById('miniMailLinks'),graph=document.getElementById('orrery');
+      window.setMailLinks=value=>{settings.value=value;settings.dispatchEvent(new Event('change'));};
+      window.mailLinksState=()=>{
+        const history=graph.querySelector('.orrery-history-edge[data-a=Pilot][data-b=Watcher]');
+        return {watcher:!!graph.querySelector('[data-agent=Watcher]'),
+          countWidth:history?.getAttribute('stroke-width')??null,
+          live:!!graph.querySelector('.orrery-comm-edge[data-a=Pilot][data-b=Watcher]')};
+      };
+      setMailLinks('recent');
+      const fetchOriginal=window.fetch;
+      window.fetch=(url,...args)=>url==='/telemetry/graph?days=1'
+        ? Promise.resolve(new Response(JSON.stringify({edges:[
+            {source:'Pilot',target:'Watcher',kind:'to',count:2,last_ts:1},
+            {source:'Watcher',target:'Pilot',kind:'cc',count:3,last_ts:2},
+          ]})))
+        : fetchOriginal(url,...args);
+      setMiniViewMode('network');
+      setMiniNetworkDepth(1);
+      localStorage.removeItem('oc-mini-mail-links');
+      document.dispatchEvent(new CustomEvent('oc:prefs-changed',{detail:{keys:['oc-mini-mail-links']}}));
+      for(let i=0;i<60&&!mailLinksState().watcher;i++)await new Promise(resolve=>setTimeout(resolve,20));
+      return mailLinksState();
+    })()""")
+    assert retained == {'watcher': True, 'countWidth': '3.58', 'live': False}
+    assert evaluate("setMailLinks('recent');mailLinksState()") == {
+        'watcher': False, 'countWidth': None, 'live': False}
+    assert evaluate("localStorage.getItem('oc-mini-mail-links')") == 'recent'
+    assert evaluate("""document.dispatchEvent(new CustomEvent('oc:mail',
+      {detail:{messages:[{sender:'Pilot',recipient:'Watcher',ts:Date.now()}]}}));mailLinksState()""") == {
+        'watcher': True, 'countWidth': None, 'live': True}
+    assert evaluate("""const realNow=Date.now;Date.now=()=>realNow()+91000;
+      document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      mailLinksState()""") == {'watcher': False, 'countWidth': None, 'live': False}
+    assert evaluate("setMailLinks('keep');mailLinksState()") == retained
+
+
 def graph_resize_metrics(evaluate):
     return evaluate("""(()=>{
       const graph=document.getElementById('orrery'),divider=document.getElementById('mailGraphDivider');

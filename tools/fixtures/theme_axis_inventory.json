@@ -2,8 +2,8 @@
   "axes": {
     "background": {
       "effect": {
-        "digest": "bb0b33d5f124b6a751d41a2e1000b5fc9f93bea924029af1004b5800f168021d",
-        "expected": 309,
+        "digest": "ca87b1d3f873c920b1798e452a77e711c33ecc1d83af5768d15bdef474c2be06",
+        "expected": 310,
         "records": [
           {
             "property": "background",
@@ -1311,6 +1311,11 @@
             "value": "var(--ink)"
           },
           {
+            "property": "stroke",
+            "selector": ".orrery-history-edge",
+            "value": "var(--ink-dim)"
+          },
+          {
             "property": "fill",
             "selector": ".mini-initial",
             "value": "var(--ink)"
@@ -1696,8 +1701,8 @@
     },
     "dim-contrast": {
       "effect": {
-        "digest": "cd0c9925d53f8ac47eea681d04044b238079b42890762a7d35e27fba7bed1d5e",
-        "expected": 113,
+        "digest": "12fabadcd7cc4141ab22e53a79e9689ac729e5880d842eedb401e13cd3ff9223",
+        "expected": 114,
         "records": [
           {
             "property": "color",
@@ -2193,6 +2198,11 @@
             "property": "color",
             "selector": ".pane-out-chip .back",
             "value": "var(--ink-faint)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-history-edge",
+            "value": "var(--ink-dim)"
           },
           {
             "property": "color",
@@ -2907,7 +2917,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "13048c6028cc56508a3e5283f4ebc57b5edee14d5ebc08da268e31ebb286a423",
+        "digest": "c1c4d2aa988effc5db03d98482e8ea1d5e367efcbc45d1eb76df7c5a446148c7",
         "expected": 78,
         "records": [
           {
@@ -3401,49 +3411,49 @@
             "value": "11px"
           },
           {
-            "line": 37,
+            "line": 41,
             "property": "font-size",
             "selector": ".mini-initial",
             "source": "bridge/orrery_view.css",
             "value": "8px"
           },
           {
-            "line": 71,
+            "line": 75,
             "property": "font-size",
             "selector": ".orrery-caption-role",
             "source": "bridge/orrery_view.css",
             "value": "7.5px"
           },
           {
-            "line": 73,
+            "line": 77,
             "property": "font-size",
             "selector": ".planet-agent .orrery-caption-role",
             "source": "bridge/orrery_view.css",
             "value": "11px"
           },
           {
-            "line": 79,
+            "line": 83,
             "property": "font-size",
             "selector": ".orrery-expand text",
             "source": "bridge/orrery_view.css",
             "value": "11px"
           },
           {
-            "line": 123,
+            "line": 127,
             "property": "font-size",
             "selector": ".orrery-comet-label",
             "source": "bridge/orrery_view.css",
             "value": "10px"
           },
           {
-            "line": 148,
+            "line": 152,
             "property": "font-size",
             "selector": ".planetarium-note",
             "source": "bridge/orrery_view.css",
             "value": "9px"
           },
           {
-            "line": 203,
+            "line": 207,
             "property": "font-size",
             "selector": ".mini-provider-fallback",
             "source": "bridge/orrery_view.css",
@@ -3470,7 +3480,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "b3e0a4e2ac7bcd83c911eab7e9ac3ac34e30e3dd477de4b354c3809aecdfd29b",
+        "digest": "7e97e01d56196c33ab79e10dd3a598607be8e3034bff0250858e42733a1f5f44",
         "expected": 22,
         "records": [
           {
@@ -3614,14 +3624,14 @@
             "value": ".1em"
           },
           {
-            "line": 148,
+            "line": 152,
             "property": "letter-spacing",
             "selector": ".planetarium-note",
             "source": "bridge/orrery_view.css",
             "value": ".18em"
           },
           {
-            "line": 152,
+            "line": 156,
             "property": "letter-spacing",
             "selector": ".planetarium-telemetry",
             "source": "bridge/orrery_view.css",
@@ -3632,7 +3642,7 @@
       }
     }
   },
-  "inventory_digest": "1e923c3e2e56484ce5327d0161a7e3db258d08467d7dc48f71b6b46524eaf9d8",
+  "inventory_digest": "f1a047bfb0dc54e8052be7308a739a6b0b1c092fd95a5e495a661cae260cb75a",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -3644,11 +3654,11 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "b19bca5d2b3e98ae0bc42878c317ef86ede4d722cc73545b3053d6c5b84a8e18",
+  "source_digest": "527ed82a2ae33f15685cf0578961e88d5bc52192acc11fd996b51393c1e24366",
   "source_files": {
-    "bridge/cockpit.html": "0e9f3178215f4bc86a478f647a62cca49290897db82773437aa067556d8c5281",
+    "bridge/cockpit.html": "3b12fec0bafac35247e287f88c8e8d72cf7d9fcadff0e1abc0b1a9601674dc92",
     "bridge/mail_view.css": "7139ca3c6fc352f2f5213e06b589f2919befb93e79ff858c147d20c3f28f1a8a",
-    "bridge/orrery_view.css": "09fd0b9366053f804b82687d3b9d67b94aaefa5a06f226f2abebb4f2ccb2e6a2"
+    "bridge/orrery_view.css": "077c512bba9485954e42e67af6109ac92dc33fa65a3cc26605b1a2912feddbc0"
   },
   "surface": "cockpit",
   "validation": {
