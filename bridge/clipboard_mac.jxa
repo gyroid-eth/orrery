@@ -3,6 +3,7 @@ ObjC.import("AppKit");
 // Used by the desktop shell in its GUI session and by the local browser backend.
 const unit = 1024 * 1024;
 const maxFiles = 5;
+const imageTypes = {jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp"};
 
 function copiedPaths(clipboard) {
   const items = clipboard.pasteboardItems;
@@ -21,11 +22,27 @@ function copiedPaths(clipboard) {
   return paths;
 }
 
-function regularFile(path) {
-  if (!path.startsWith("/")) return false;
+function fileSnapshot(path, remaining) {
+  if (!path.startsWith("/")) return null;
   const attributes = $.NSFileManager.defaultManager.attributesOfItemAtPathError(path, null);
-  return !attributes.isNil() &&
-    ObjC.unwrap(attributes.objectForKey($.NSFileType)) === ObjC.unwrap($.NSFileTypeRegular);
+  if (attributes.isNil() ||
+      ObjC.unwrap(attributes.objectForKey($.NSFileType)) !== ObjC.unwrap($.NSFileTypeRegular)) return null;
+  const size = Number(ObjC.unwrap(attributes.objectForKey($.NSFileSize)));
+  if (!size || size > remaining) return {path};
+  // O_RDONLY | O_NONBLOCK | O_NOFOLLOW on macOS.
+  const fd = $.open(path, 0x0004 | 0x0100);
+  if (fd < 0) return {path};
+  const file = $.NSFileHandle.alloc.initWithFileDescriptorCloseOnDealloc(fd, true);
+  try {
+    const data = file.readDataOfLength(remaining + 1);
+    if (data.isNil() || !data.length || data.length > remaining) return {path};
+    const name = path.split("/").pop();
+    const extension = name.split(".").pop().toLowerCase();
+    const type = Object.prototype.hasOwnProperty.call(imageTypes, extension) ? imageTypes[extension] : "";
+    return {bytes: data.length, attachment: {name, type, data: ObjC.unwrap(data.base64EncodedStringWithOptions(0))}};
+  } finally {
+    file.closeFile;
+  }
 }
 
 function imageSnapshot(clipboard) {
@@ -52,7 +69,18 @@ function run(argv) {
   const out = {changeCount, attachments: [], paths: [], skipped: 0};
   if (!changeCount) return JSON.stringify(out);
   if (!files.length) return JSON.stringify({...out, ...imageSnapshot(clipboard)});
-  out.paths = files.slice(0, maxFiles).filter(regularFile);
-  out.skipped = files.length - out.paths.length;
+  ObjC.bindFunction("open", ["int", ["char *", "int"]]);
+  let remaining = 50 * unit;
+  for (const path of files.slice(0, maxFiles)) {
+    let item;
+    try { item = fileSnapshot(path, remaining); } catch (_) { item = {path}; }
+    if (item?.attachment) {
+      out.attachments.push(item.attachment);
+      remaining -= item.bytes;
+    } else if (item?.path) {
+      out.paths.push(item.path);
+    }
+  }
+  out.skipped = files.length - out.paths.length - out.attachments.length;
   return JSON.stringify(out);
 }

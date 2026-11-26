@@ -4415,9 +4415,9 @@
       }
     }
   },
-  "inventory_digest": "46ca070f7404dfc37737e69cf8af6028d81a6138e3ee319ecf7a4e0225622e13",
+  "inventory_digest": "4b5e7b0be0c7d8eef3b446235147db6279cf9f6d5a08aa85652015222f994f16",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "87e01a28ba1c02668b0ea295b0a7461712ec5d7cc042a940cded1c3ebb214138",
+  "source_digest": "3041259e1530906113fbd251f16518ebf3b92d36653a4c5f02d104a265fd040b",
   "surface": "cockpit",
   "version": 1
 }
@@ -4949,11 +4949,11 @@ function paletteShortcutLabel(host){return usesAltShortcuts(host)?'Alt+K':'⌘K'
 function splitClickLabel(host){return usesAltShortcuts(host)?'Ctrl+click':'⌘+click';}
 function terminalActionText(host){return usesAltShortcuts(host)?'WIN TERMINAL':'GHOSTTY';}
 /* Native fallback for clipboard payloads the browser could not read. */
-const PASTE_UNSUPPORTED_MESSAGE='The WSL backend cannot read the Windows clipboard. Use the attachment picker.';
+const PASTE_UNSUPPORTED_MESSAGE='The browser did not provide a clipboard file. Use the attachment picker or drop the file.';
 const PASTE_HOST_UNKNOWN_MESSAGE='Could not identify the clipboard host. Try again or use the attachment picker.';
 function composerPasteRefusal(host){
   const kind=host&&host.host;
-  if(kind==='wsl')return host.file_paste?'':PASTE_UNSUPPORTED_MESSAGE;
+  if(kind==='wsl')return PASTE_UNSUPPORTED_MESSAGE;
   if(kind!=='mac'&&kind!=='linux')return PASTE_HOST_UNKNOWN_MESSAGE;
   return '';
 }
@@ -12634,7 +12634,7 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
     for(const record of records){
       const target=await resolveComposerTarget(record,connection);
       const valid=()=>socket===connection&&sameRecipient(record,target)&&composerTargetPresent(target)&&stillValid();
-      let status='refused',receipt=null,problem='';
+      let status='refused',receipt=null,problem='',originalPath=false;
       if(target&&valid()){
         if(readerApproval?.question(target)){
           if(records.length===1&&!entries.length)status=await readerApproval.answerDraft(target,record.draft);
@@ -12656,6 +12656,7 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
           continue;
         }
         const claude=record.vocabulary.program==='claude';
+        originalPath=paths.some(path=>path.startsWith('/'));
         const references=paths.map(path=>path.startsWith('/')?
           "[file: '"+path.replaceAll("'","'\\''")+"']":(claude?'@':'')+path).join('\n')+
           (claude&&paths.at(-1)?.startsWith('./')?' ':'');
@@ -12672,7 +12673,7 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
         }
       }
       if(status!=='accepted')receipt?.cancel();
-      results.push({...record,status,receipt,problem});
+      results.push({...record,status,receipt,problem,originalPath});
       releaseComposerTarget(record.name);
     }
     const sent=results.filter(result=>result.status==='accepted');
@@ -12682,6 +12683,7 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
     const names=entries=>entries.map(record=>record.problem?record.name+' ('+record.problem+')':record.name).join(', ');
     const summary=[
       sent.length?'Sent to '+names(sent):'',
+      sent.some(result=>result.originalPath)?'Original file path sent (over 50 MiB)':'',
       refused.length?'Not sent to '+names(refused):'',
       unknown.length?'Delivery unconfirmed for '+names(unknown):'',
     ].filter(Boolean).join(' · ');
@@ -12776,7 +12778,6 @@ const promptFiles=OrreryPromptAttachments.mount({
   picker:document.getElementById('promptFilePicker'),list:document.getElementById('promptFiles'),
   onChange:()=>{hideSendGuard();promptCard.refresh();},
   onError:message=>showToast(message,true),mayEdit:()=>!promptBusy,
-  pickPaths:window.__TAURI__?.core?.invoke?()=>window.__TAURI__.core.invoke('pick_attachment_paths'):null,
 });
 const nativePromptWebview=window.__TAURI__?.webview?.getCurrentWebview?.();
 nativePromptWebview?.onDragDropEvent(({payload})=>{
@@ -12810,8 +12811,8 @@ sendGuardFix.addEventListener('click',()=>{
 sendGuardRaw.addEventListener('click',()=>{hideSendGuard();sendPrompt({bypassGuard:true});});
 sendGuardCancel.addEventListener('click',()=>{hideSendGuard();promptInput.focus();});
 
-/* A paste stages browser files first. Finder and Explorer file copies can
-   reach the DOM without File objects, so ask the local host in that case. */
+/* A paste stages browser files first. On Mac, Finder can expose only file
+   URLs to the page, so use the local clipboard reader for that fallback. */
 async function readClipboardAttachments(){
   const invoke=window.__TAURI__?.core?.invoke;
   if(invoke){
@@ -12839,7 +12840,7 @@ function handleComposerPaste(event){
   if(!files.length&&!fileHint&&data?.getData('text/plain'))return;
   event.preventDefault();
   if(promptBusy)return;
-  if(files.length&&(hostPlatform.host!=='mac'||files.every(file=>file.path))){
+  if(files.length){
     promptFiles.add(files);return;
   }
   const refusal=composerPasteRefusal(hostPlatform);
@@ -12848,7 +12849,7 @@ function handleComposerPaste(event){
     if(hostPlatform.host==='unknown')loadHostPlatform();
     return;
   }
-  void promptFiles.paste(readClipboardAttachments,files);
+  void promptFiles.paste(readClipboardAttachments);
 }
 promptInput.addEventListener('paste',handleComposerPaste);
 
