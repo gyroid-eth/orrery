@@ -15,7 +15,10 @@ import urllib.parse
 from pathlib import Path
 
 from browser import camera
+from guide_scenes import save_guides, save_permission_guide
+from hero_scene import save_readme_phone, save_team_hero
 from PIL import Image, ImageDraw
+from reader_scene import save_reader
 from scenes import save_cockpit, save_dashboard, save_phone
 
 
@@ -48,8 +51,16 @@ def chart(destination):
 
 
 @contextlib.contextmanager
-def fixtures(root):
+def fixtures(root, *, guide_board=None, team_hero=None, reader_demo=None, readme_phone=False):
     command = [sys.executable, str(Path(__file__).with_name("fixture.py")), root]
+    if guide_board is not None:
+        command.extend(["--guide-board", guide_board])
+    if team_hero:
+        command.extend(["--team-hero", team_hero])
+    if reader_demo:
+        command.extend(["--reader-demo", reader_demo])
+    if readme_phone:
+        command.append("--readme-phone")
     with subprocess.Popen(
         command, stdout=subprocess.PIPE, text=True, bufsize=1
     ) as process:
@@ -102,9 +113,14 @@ def main():
         "--cdp", default=os.environ.get("ORRERY_CDP_URL", "http://127.0.0.1:9250")
     )
     parser.add_argument(
-        "--group", choices=("all", "cockpit", "dashboard", "phone"), default="all"
+        "--group", choices=("all", "cockpit", "dashboard", "phone", "guides", "hero", "reader", "permissions", "readme-phone"), default="all"
+    )
+    parser.add_argument(
+        "--guide-board", type=Path, help="Tracked task note from the public demo vault (required for guides, hero, reader and permissions)"
     )
     args = parser.parse_args()
+    if args.group in {"guides", "hero", "reader", "permissions"} and args.guide_board is None:
+        parser.error(f"--group {args.group} requires --guide-board")
     if urllib.parse.urlsplit(args.cdp).hostname not in {
         "127.0.0.1",
         "localhost",
@@ -115,6 +131,25 @@ def main():
         root = Path(directory)
         snapshot(args.cockpit_source.resolve(), root / "app")
         snapshot(args.telemetry_source.resolve(), root / "tel")
+        if args.group == "readme-phone":
+            with fixtures(root, readme_phone=True) as (_, phone):
+                with camera(args.cdp, (390, 844), phone=True) as browser:
+                    save_readme_phone(browser, args.output / "cockpit", phone)
+            return
+        if args.group == "permissions":
+            with fixtures(root, guide_board=args.guide_board.resolve()) as (cockpit, _):
+                with camera(args.cdp, (1320, 760)) as browser:
+                    save_permission_guide(browser, args.output / "cockpit", cockpit)
+            return
+        if args.group in {"hero", "reader"}:
+            save_scene = save_team_hero if args.group == "hero" else save_reader
+            key = "team_hero" if args.group == "hero" else "reader_demo"
+            viewport = (1320, 760) if args.group == "hero" else (1320, 850)
+            for language in ("ja", "en"):
+                with fixtures(root, guide_board=args.guide_board.resolve(), **{key: language}) as (cockpit, _):
+                    with camera(args.cdp, viewport) as browser:
+                        save_scene(browser, args.output / "cockpit", cockpit, language)
+            return
         subprocess.run(
             [
                 "bash",
@@ -124,6 +159,11 @@ def main():
             ],
             check=True,
         )
+        if args.group == "guides":
+            with fixtures(root, guide_board=args.guide_board.resolve()) as (cockpit, _):
+                with camera(args.cdp, (1320, 760)) as browser:
+                    save_guides(browser, args.output / "cockpit", cockpit)
+            return
         chart(root / "sample-chart.png")
         staged = root / "staged"
         with fixtures(root) as (cockpit, phone):

@@ -154,6 +154,8 @@ ORRERY_E2E_V2=1 .venv/bin/python tests/e2e_bridge.py -v
 
 利用者の環境では1〜3のいずれかを absolute path で設定します。未設定時の mail API は `ok:false` と `project key not configured` を返します。ORRERY Telemetry と異なる値を設定すると、roster と mail rail が別 project を示すことがあります。
 
+installer で切り替える手順は[作業 folder を変える](install.md#作業-folder-を変える)にあります。すでに動いている agent の Mail の project は起動時のものなので、新しい project に入れるには起動し直します。
+
 ### ORRERY Mail DB
 
 legacy で `scripts/start-cockpit.sh` を使う場合、`ORRERY_MAIL_DB`、shell の `AGENTSTACK_MAIL_DB`、インストール済み Telemetry の `env.sh` の `AGENTSTACK_MAIL_DB` の順で選び、値があれば backend へ `ORRERY_MAIL_DB` として渡します。backend を直接起動する場合は `ORRERY_MAIL_DB`、`config.json` の `mail_db`、既定 path の順です。fresh では保護された dashboard API から Mail を読みます。

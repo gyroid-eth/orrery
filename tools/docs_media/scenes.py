@@ -124,7 +124,6 @@ def save_cockpit(c, root, url):
     c.click("#mailGraphBtn")
     c.wait("document.querySelectorAll('.split-cell').length===3")
     j("terminalFontSize=14;applyTerminalSettings()")
-    d.still("docs/images/cockpit_overview.png", (1488, 900))
     j(
         "replaceSplitSessions([]);splitVisible=false;focusSession('AmberCurie');renderStage()"
     )
@@ -141,17 +140,7 @@ def save_cockpit(c, root, url):
         "docs/images/cockpit_history.png",
         crop=(int(review[0]) - 6, 100, int(review[2]) + 6, 734),
     )
-    j("conversationView.close();showAgentDetail(tiles.get('PatientFaraday'))")
-    c.wait("!agentDetail.hidden && agentDetail.querySelector('[data-computer]')")
-    bounds = c.rect("#agentDetail")
-    crop = (
-        0,
-        max(0, int(bounds[1]) - 18),
-        min(c.size[0], int(bounds[2]) + 24),
-        min(c.size[1], int(bounds[3]) + 28),
-    )
-    d.still("docs/images/cockpit_roster_detail.png", crop=crop)
-    j("hideAgentDetail(tiles.get('PatientFaraday'));focusSession('PatientFaraday')")
+    j("conversationView.close();focusSession('PatientFaraday')")
     c.input("#promptInput", "/")
     c.wait("document.querySelectorAll('.sm-it').length>=2")
     bounds = c.rect(".prompt-card")
@@ -252,41 +241,6 @@ def save_cockpit(c, root, url):
     )
     d.still("docs/images/cockpit_telemetry_open_in_cockpit.png", crop=crop)
     c.click("#networkClose")
-
-    j("OrreryFullTour.checklist.show()")
-    c.wait("!OrreryFullTour.checklist.el.hidden")
-    tour_size = (1080, 675)
-    frames = [(d.frame(tour_size), 1850)]
-    c.click("#newAgentBtn")
-    c.wait("spawnOverlay.classList.contains('on')")
-    j("""(() => {
-      const task = document.querySelector('#spawnTask');
-      task.value = '';
-      task.dispatchEvent(new Event('input', {bubbles: true}));
-    })()""")
-    frames.extend(d.type_frames("#spawnTask", "Check the release.", tour_size))
-    # The response is a fixture. No shell, tmux, agent, or Mail process runs.
-    c.click("#spawnDirButton")
-    c.wait("!document.querySelector('#spawnDirUse').disabled")
-    c.click("#spawnDirUse")
-    c.wait("!document.querySelector('#spawnSubmit').disabled")
-    frames.append((d.frame(tour_size), 1100))
-    c.click("#spawnSubmit")
-    c.wait(
-        "!spawnOverlay.classList.contains('on') || spawnStatus.classList.contains('error')"
-    )
-    if j("spawnOverlay.classList.contains('on')"):
-        raise RuntimeError("The fixture launch failed")
-    j("pollAgents()")
-    c.wait("document.querySelector('#roster [data-agent=WarmLovelace]')")
-    c.click('#roster [data-agent="WarmLovelace"]')
-    c.wait("activeSession()==='WarmLovelace'")
-    frames.append((d.frame(tour_size), 1650))
-    frames.extend(d.type_frames("#promptInput", "What changed?", tour_size))
-    c.key("Enter")
-    c.wait("document.getElementById('promptInput').value===''")
-    frames.append((d.frame(tour_size), 2450))
-    d.gif("docs/images/fulltour/1-start-choose-talk.gif", frames)
 
 
 def save_dashboard(c, root, url):

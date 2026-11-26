@@ -1,0 +1,647 @@
+"""Capture the task guides from the real cockpit and number its screen map."""
+
+from __future__ import annotations
+
+import base64
+import io
+import json
+import shutil
+import subprocess
+import tempfile
+import time
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+from scenes import Gallery
+
+GUIDES = Path("docs/images/guides")
+VIEWPORT = (1320, 760)
+PREFERENCES = """
+localStorage.setItem('oc-first-flight-v1','{"seen":true,"open":false}');
+localStorage.setItem('oc-full-tour-v1','{"seen":true,"open":false}');
+localStorage.setItem('orrery.color-theme.v1','dark');
+localStorage.setItem('oc-mini-mail-graph','1');
+localStorage.setItem('oc-mini-graph-height','248');
+"""
+
+
+class GuideFrames:
+    def __init__(self, camera):
+        self.camera = camera
+        self.use_screenshot = True
+
+    def shot(self):
+        page = self.camera.page
+        if self.use_screenshot:
+            try:
+                shot = page.call("Page.captureScreenshot", timeout=3, format="png",
+                                 fromSurface=True, captureBeyondViewport=False)
+                image = Image.open(io.BytesIO(base64.b64decode(shot["data"]))).convert("RGB")
+                if image.size == self.camera.size:
+                    return image
+            except TimeoutError:
+                pass
+            self.use_screenshot = False
+
+        width, height = self.camera.size
+        dpi = 96 * self.camera.scale
+        pdf = page.call("Page.printToPDF", printBackground=True, paperWidth=width / dpi,
+                        paperHeight=height / dpi, marginLeft=0, marginRight=0,
+                        marginTop=0, marginBottom=0)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "frame"
+            source = output.with_suffix(".pdf")
+            source.write_bytes(base64.b64decode(pdf["data"]))
+            subprocess.run(
+                ["pdftoppm", "-singlefile", "-r", str(dpi), "-png", source, output],
+                check=True,
+            )
+            with Image.open(output.with_suffix(".png")) as image:
+                return image.convert("RGB").crop((0, 0, width, height))
+
+
+def crop_rect(camera, selector, *, padding=3, height=None):
+    left, top, right, bottom = camera.rect(selector)
+    if height is not None:
+        bottom = min(bottom, top + height)
+    viewport_width, viewport_height = (pixels // camera.scale for pixels in camera.size)
+    return (
+        max(0, round(left - padding)), max(0, round(top - padding)),
+        min(viewport_width, round(right + padding)), min(viewport_height, round(bottom + padding)),
+    )
+
+
+def save_map(camera, gallery, destination):
+    image = gallery.frame()
+    pen = ImageDraw.Draw(image)
+    font = ImageFont.load_default(size=17)
+    # In the same order as the legend in docs/cockpit-map.md.
+    markers = [
+        ("#newAgentBtn", .79, 1.22),
+        ("#roster", .09, .16),
+        ("#conversationToggle", .08, 1.02),
+        (".promptbar", .04, .02),
+        ("#orrery", .08, .15),
+        ("#mail", .957, .025),
+        (".topstat.crew", .94, 1.92),
+        ("#networkBtn", .91, 1.04),
+        ("#settingsBtn", .12, 1.04),
+        ("#usageBtn", .93, 1.04),
+        ("#planetariumBtn", .50, 1.04),
+        ("#rosterSelectBtn", .12, 1.04),
+    ]
+    radius = 13
+    for number, (selector, fx, fy) in enumerate(markers, 1):
+        left, top, right, bottom = camera.rect(selector)
+        x, y = left + (right - left) * fx, top + (bottom - top) * fy
+        pen.ellipse((x-radius, y-radius, x+radius, y+radius), fill="#fff3d8",
+                    outline="#d98a32", width=2)
+        pen.text((x, y), str(number), font=font, anchor="mm", fill="#22222a")
+    image.save(destination / GUIDES / "cockpit-map.png")
+
+
+def select_reader(camera):
+    camera.click("#conversationToggle")
+    camera.wait("document.querySelector('.conversation-file')")
+    if not camera.js("document.querySelector('.screen').classList.contains('conversation-full')"):
+        camera.click(".conversation-expand")
+    camera.wait("document.querySelector('.screen').classList.contains('conversation-full')")
+    # Let the rail transition settle before taking a discrete shot.
+    time.sleep(.26)
+
+
+def type_in_cuts(camera, gallery, selector, chunks, frames, area):
+    for text, hold in chunks:
+        camera.input(selector, text)
+        frames.append((gallery.frame(crop=area), hold))
+
+
+def save_start(camera, gallery):
+    camera.click("#newAgentBtn")
+    camera.wait("spawnOverlay.classList.contains('on') && spawnCatalog?.providers?.length>=5")
+    camera.click("#spawnDirButton")
+    camera.wait("!document.querySelector('#spawnDirUse').disabled")
+    camera.click("#spawnDirUse")
+    camera.wait("document.querySelector('#spawnDirSheet').hidden")
+
+    launch = crop_rect(camera, "#spawnLauncher", padding=20)
+    frames = [(gallery.frame(crop=launch), 660)]
+    type_in_cuts(camera, gallery, "#spawnTask",
+                 [("Review the ", 240), ("task board", 1160)], frames, launch)
+    camera.wait("!document.querySelector('#spawnSubmit').disabled")
+    camera.click("#spawnSubmit")
+    camera.wait("!spawnOverlay.classList.contains('on') || spawnStatus.classList.contains('error')")
+    if camera.js("spawnOverlay.classList.contains('on')"):
+        raise RuntimeError(camera.js("spawnStatus.textContent"))
+    camera.js("pollAgents()")
+    camera.wait("document.querySelector('#roster [data-agent=WarmLovelace]') && availableSessions.has('WarmLovelace')")
+    new_agent = "#roster [data-agent=WarmLovelace]"
+    camera.click(new_agent)
+    camera.wait("activeSession()==='WarmLovelace'")
+    time.sleep(.32)
+    left, top, right, bottom = crop_rect(camera, new_agent, padding=10)
+    frames.append((gallery.frame(crop=(left, max(56, top - 65), right, bottom)), 950))
+    compose = crop_rect(camera, ".promptbar", padding=8)
+    type_in_cuts(camera, gallery, "#promptInput",
+                 [("What should we ", 260), ("work on next?", 1160)], frames, compose)
+    camera.key("Enter")
+    camera.wait("document.querySelector('#promptInput').value===''")
+    select_reader(camera)
+    frames.append((gallery.frame(crop=crop_rect(camera, ".screen", height=365)), 2600))
+    color = "#101114"
+    size = (760, 346)
+    gallery.gif(GUIDES / "start-an-agent.gif", [
+        (ImageOps.pad(image, size, color=color), duration) for image, duration in frames
+    ])
+    camera.js("conversationView.close();focusSession('AmberCurie');renderStage()")
+
+
+def collect_screencast(page, seconds, crop, *, frame_step=.092):
+    frames = []
+    last_frame = float("-inf")
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        try:
+            packet = json.loads(page.socket.recv(timeout=.25))
+        except TimeoutError:
+            continue
+        if packet.get("method") != "Page.screencastFrame":
+            continue
+        event = packet["params"]
+        page.socket.send(json.dumps({
+            "id": next(page.sequence), "method": "Page.screencastFrameAck",
+            "params": {"sessionId": event["sessionId"]},
+        }))
+        metadata = event["metadata"]
+        timestamp = metadata["timestamp"]
+        if timestamp - last_frame < frame_step:
+            continue
+        last_frame = timestamp
+        image = Image.open(io.BytesIO(base64.b64decode(event["data"]))).convert("RGB")
+        scale = image.width / metadata["deviceWidth"]
+        frames.append((timestamp, image.crop(tuple(round(edge * scale) for edge in crop))))
+    return frames
+
+
+def capture_sequence(camera, area, seconds, action, *, frame_step=.042, min_frames=5):
+    """Schedule actions, then collect each changed frame up to the sampling rate."""
+    page = camera.page
+    camera.js(action)
+    page.call("Page.startScreencast", format="jpeg", quality=89,
+              maxWidth=1600, maxHeight=1000, everyNthFrame=1)
+    try:
+        frames = collect_screencast(page, seconds, area, frame_step=frame_step)
+    finally:
+        page.call("Page.stopScreencast")
+    if len(frames) < min_frames:
+        raise RuntimeError("Chrome did not record the sequence")
+    timed = [
+        (image, round((after - before) * 100) * 10)
+        for (before, image), (after, _) in zip(frames, frames[1:])
+    ]
+    timed.append((frames[-1][1], max(90, round(seconds * 1000) - sum(ms for _, ms in timed))))
+    return timed
+
+
+def save_read_mail(camera, gallery):
+    camera.wait("activeSession()==='AmberCurie' && document.querySelector('.mail-request')")
+    camera.page.call("Emulation.setEmulatedMedia", features=[
+        {"name": "prefers-reduced-motion", "value": "no-preference"},
+    ])
+    left, top, right, _ = crop_rect(camera, "#mailRail")
+    crop = left, top, right, min(top + 526, VIEWPORT[1])
+    page = camera.page
+    page.call("Page.startScreencast", format="jpeg", quality=86,
+              maxWidth=1600, maxHeight=1000, everyNthFrame=1)
+    try:
+        camera.js("""
+        (() => {
+          setTimeout(async () => {
+            await fetch('/fixture-guide-mail', {method:'POST'});
+            await pollMail();
+          }, 650);
+          setTimeout(() => {
+            const row = [...document.querySelectorAll('.mail-request')]
+              .find(item => item.textContent.includes('Task board reviewed'));
+            row?.click();
+          }, 3600);
+          return true;
+        })()
+        """)
+        frames = collect_screencast(page, 5, crop)
+    finally:
+        page.call("Page.stopScreencast")
+    if len(frames) < 10:
+        raise RuntimeError("Mail screencast did not capture the arrival")
+    camera.wait("document.querySelector('.drawer-body')?.innerText.includes('experiment notes')")
+    pictures = [
+        (image, min(1000, max(90, round((after-before) * 100) * 10)))
+        for (before, image), (after, _) in zip(frames, frames[1:])
+    ]
+    pictures.append((frames[-1][1], 6800 - sum(duration for _, duration in pictures)))
+    if pictures[-1][1] < 1300:
+        raise RuntimeError("The Mail preview needs time to be read")
+    gallery.gif(GUIDES / "read-mail.gif", pictures)
+
+
+def cut(gallery, name, frames, size):
+    pictures = []
+    for image, hold in frames:
+        limit = tuple(min(target, round(source * 1.35)) for source, target in zip(image.size, size))
+        fitted = ImageOps.contain(image, limit, method=Image.Resampling.LANCZOS)
+        canvas = Image.new("RGB", size, "#101114")
+        canvas.paste(fitted, ((size[0] - fitted.width) // 2, (size[1] - fitted.height) // 2))
+        pictures.append((canvas, hold))
+    gallery.gif(GUIDES / name, pictures)
+
+
+def header_control_frame(camera, gallery, selector):
+    area = union_crop(camera, (selector, ".topstat.crew", ".header-actions", "#usageBtn"))
+    image = gallery.frame(crop=area)
+    left, top, right, bottom = camera.rect(selector)
+    pen = ImageDraw.Draw(image)
+    pen.rounded_rectangle((left-area[0], top-area[1], right-area[0], bottom-area[1]),
+                          radius=5, outline="#e5a75a", width=2)
+    return image
+
+
+def panel_frame(camera, gallery, selector, *, height=None):
+    return gallery.frame(crop=crop_rect(camera, selector, padding=8, height=height))
+
+
+def union_crop(camera, selectors):
+    boxes = [crop_rect(camera, selector, padding=8) for selector in selectors]
+    return min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)
+
+
+def move_pointer(camera, selector, *, click=False):
+    left, top, right, bottom = camera.rect(selector)
+    point = {"x": (left + right) / 2, "y": (top + bottom) / 2}
+    camera.page.call("Input.dispatchMouseEvent", type="mouseMoved", **point)
+    if click:
+        for event in ("mousePressed", "mouseReleased"):
+            camera.page.call("Input.dispatchMouseEvent", type=event, button="left", clickCount=1, **point)
+
+
+def save_first_flight(camera, gallery):
+    camera.click("#settingsBtn")
+    camera.wait("document.getElementById('settingsPopover').matches(':popover-open')")
+    camera.js("document.getElementById('firstFlightBtn').scrollIntoView({block:'center'})")
+    menu = panel_frame(camera, gallery, ".flight-settings")
+    camera.click("#firstFlightBtn")
+    camera.wait("document.querySelector('.flight-guide[data-tour=first-flight]:not([hidden])')")
+    panel = ".flight-guide[data-tour=first-flight] .flight-panel"
+    frames = [(menu, 1800), (panel_frame(camera, gallery, panel, height=463), 2450)]
+    camera.click(".flight-guide[data-tour=first-flight] [data-step=talk] .flight-line")
+    camera.wait("OrreryTour.firstFlight.state.current.id==='talk'")
+    frames.append((panel_frame(camera, gallery, panel, height=463), 2100))
+    cut(gallery, "first-flight.gif", frames, (475, 479))
+    camera.click(".flight-guide[data-tour=first-flight] .flight-close")
+
+    camera.click("#settingsBtn")
+    camera.js("document.getElementById('helpMapBtn').scrollIntoView({block:'center'})")
+    menu = panel_frame(camera, gallery, ".flight-settings")
+    camera.click("#helpMapBtn")
+    camera.wait("document.querySelector('.flight-map:not([hidden]) .flight-map-note[data-step=settings]').offsetWidth")
+    time.sleep(.2)
+    area = union_crop(camera, (
+        "#settingsBtn",
+        ".flight-map-note[data-step=settings]",
+        ".flight-map-note[data-step=usage]",
+    ))
+    cut(gallery, "help-map.gif", [(menu, 1850), (gallery.frame(crop=area), 4250)], (650, 360))
+    camera.click(".flight-map-close")
+
+
+def save_usage(camera, gallery):
+    activity = union_crop(camera, (".topstat.crew", "#needChip"))
+    gallery.still(GUIDES / "agent-activity.png", crop=activity)
+    button = header_control_frame(camera, gallery, "#usageBtn")
+    camera.click("#usageBtn")
+    camera.wait("document.querySelector('#usagePopover:popover-open .up-reset')?.textContent.includes('next reset')")
+    popup = panel_frame(camera, gallery, "#usagePopover")
+    cut(gallery, "check-usage.gif", [(button, 1550), (popup, 4750)], (540, 334))
+    camera.js("document.getElementById('usagePopover').hidePopover()")
+
+
+def save_settings(camera, gallery):
+    camera.click("#settingsBtn")
+    frames = []
+    for selector, change, duration in (
+        ("#colorThemePreference", "this.value='light';this.dispatchEvent(new Event('change',{bubbles:true}));", 2300),
+        ("#terminalFontSize", "this.value='15';this.dispatchEvent(new Event('input',{bubbles:true}));", 2050),
+        ("#miniViewNetwork", "this.click();", 2300),
+    ):
+        camera.js(f"""(() => {{
+          const control=document.querySelector({json.dumps(selector)});
+          control.scrollIntoView({{block:'center'}});
+          (function(){{{change}}}).call(control);
+        }})()""")
+        time.sleep(.17)
+        area = camera.js(f"""(() => {{
+          const row = document.querySelector({json.dumps(selector)}).closest('.settings-row')
+            || document.querySelector({json.dumps(selector)}).closest('section');
+          const b=row.getBoundingClientRect(), panel=document.querySelector('#settingsPopover').getBoundingClientRect();
+          return [Math.round(panel.left),Math.max(0,Math.round(b.top-15)),
+            Math.round(panel.right),Math.min(innerHeight,Math.round(b.bottom+15))];
+        }})()""")
+        frames.append((gallery.frame(crop=area), duration))
+    cut(gallery, "adjust-cockpit.gif", frames, (535, 206))
+    camera.click("#miniViewOrrery")
+    camera.js("""const theme=document.getElementById('colorThemePreference');
+      theme.value='dark';theme.dispatchEvent(new Event('change',{bubbles:true}));
+      document.getElementById('settingsPopover').hidePopover()""")
+
+
+def save_planetarium(camera, gallery):
+    header = header_control_frame(camera, gallery, "#planetariumBtn")
+    camera.click("#planetariumBtn")
+    planet_agent = ".planet-agent[data-agent=BrightHopper]"
+    camera.wait(f"document.querySelector('#planetariumOverlay.on {planet_agent}')")
+    areas = camera.js("""(() => {
+      const rects = [...document.querySelectorAll('.planet-agent')].map(n=>n.getBoundingClientRect());
+      return [Math.max(0,Math.round(Math.min(...rects.map(r=>r.left))-12)),
+        Math.max(0,Math.round(Math.min(...rects.map(r=>r.top))-12)),
+        Math.min(innerWidth,Math.round(Math.max(...rects.map(r=>r.right))+12)),
+        Math.min(innerHeight,Math.round(Math.max(...rects.map(r=>r.bottom))+12))];
+    })()""")
+    graph = gallery.frame(crop=areas)
+    move_pointer(camera, planet_agent + " .orrery-hit", click=True)
+    camera.wait("activeSession()==='BrightHopper' && !document.getElementById('planetariumOverlay').classList.contains('on')")
+    target = panel_frame(camera, gallery, ".screen", height=184)
+    cut(gallery, "planetarium.gif", [(header, 1100), (graph, 3650), (target, 2050)], (675, 303))
+    camera.click("#roster [data-agent=AmberCurie]")
+    camera.wait("activeSession()==='AmberCurie'")
+
+
+def save_mini_details(camera, gallery):
+    target = "#orrery .mini-agent[data-agent=PatientFaraday] .orrery-hit"
+    rail = crop_rect(camera, "#mailRail", padding=0, height=530)
+    frames = [(gallery.frame(crop=rail), 1250)]
+    move_pointer(camera, target)
+    camera.wait("!agentDetail.hidden && agentDetail.querySelector('[data-browser=temporary]')")
+    frames.append((gallery.frame(crop=rail), 3500))
+    move_pointer(camera, "#newAgentBtn")
+    camera.wait("agentDetail.hidden")
+    frames.append((gallery.frame(crop=rail), 1300))
+    gallery.gif(GUIDES / "mini-graph-detail.gif", frames)
+
+    move_pointer(camera, "#roster [data-agent=PatientFaraday]")
+    camera.wait("!agentDetail.hidden && agentDetail.querySelector('[data-browser=temporary]')")
+    gallery.still("docs/images/cockpit_roster_detail.png", crop=crop_rect(camera, "#agentDetail"))
+    move_pointer(camera, "#newAgentBtn")
+    camera.wait("agentDetail.hidden")
+
+    graph = crop_rect(camera, "#orrery", padding=5)
+    ready = gallery.frame(crop=graph)
+    move_pointer(camera, target)
+    camera.wait("!agentDetail.hidden && agentDetail.querySelector('[data-computer=off]')")
+    camera.click("#agentDetail [data-computer=off]")
+    camera.wait("document.querySelector('.agent-permission-confirm[open]')")
+    prompt = panel_frame(camera, gallery, ".agent-permission-confirm")
+    camera.js("permissionApply.click()")
+    camera.wait("document.querySelector('#orrery .mini-agent[data-agent=PatientFaraday]')?.textContent.includes('Restarting')")
+    pending = gallery.frame(crop=graph)
+    camera.wait("!pendingAgentAction('PatientFaraday')")
+    camera.js("pollAgents()")
+    camera.wait("document.querySelector('#orrery .mini-agent[data-agent=PatientFaraday]') && currentAgentNamed('PatientFaraday').computer_use==='off'")
+    restored = gallery.frame(crop=graph)
+    cut(gallery, "mini-graph-restart.gif", [(ready, 1150), (prompt, 1600), (pending, 2350), (restored, 1750)], (560, 330))
+
+
+def motion_frames(camera, area, seconds, action, *, frame_step=.09):
+    page = camera.page
+    page.call("Page.startScreencast", format="jpeg", quality=86,
+              maxWidth=1600, maxHeight=1000, everyNthFrame=1)
+    try:
+        camera.js(action)
+        frames = collect_screencast(page, seconds, area)
+    finally:
+        page.call("Page.stopScreencast")
+    if len(frames) < 5:
+        raise RuntimeError("Chrome did not record the transition")
+    sampled = [frames[0]]
+    for frame in frames[1:]:
+        if frame[0] - sampled[-1][0] >= frame_step:
+            sampled.append(frame)
+    if sampled[-1][0] != frames[-1][0]:
+        sampled.append(frames[-1])
+    frames = sampled
+    return [
+        (image, min(650, max(90, round((after-before)*100)*10)))
+        for (before, image), (after, _) in zip(frames, frames[1:])
+    ] + [(frames[-1][1], 260)]
+
+
+def save_permission_switch(camera, gallery):
+    name = "PatientFaraday"
+    tile = f"#roster [data-agent={name}]"
+    details = f"#orrery .mini-agent[data-agent={name}] .orrery-hit"
+    dialog = ".agent-permission-confirm[open]"
+    controls = ("[data-computer=control]", "[data-browser=temporary]")
+
+    def show_card():
+        move_pointer(camera, "#newAgentBtn")
+        move_pointer(camera, details)
+        camera.wait("!agentDetail.hidden && agentDetail.querySelector('[data-browser=temporary]')")
+
+    # Pin the agent so its real name row can be cropped from the same spot
+    # before, during, and after each change in the activity order.
+    camera.click(f"{tile} .pin-toggle")
+    show_card()
+    if not camera.js("agentDetail.querySelector('[data-computer=off][aria-pressed=true]')"):
+        camera.click("#agentDetail [data-computer=off]")
+        camera.click(".agent-permission-confirm [value=apply]")
+        camera.wait("!pendingAgentAction('PatientFaraday') && currentAgentNamed('PatientFaraday').computer_use==='off'")
+        show_card()
+    rail_left, _, rail_right, _ = crop_rect(camera, "#mailRail", padding=0)
+    _, graph_top, _, graph_bottom = crop_rect(camera, "#orrery", padding=1)
+    _, _, _, card_bottom = crop_rect(camera, "#agentDetail", padding=4)
+    rail = (rail_left, graph_top, rail_right, card_bottom)
+    graph = (rail_left, graph_top, rail_right, graph_bottom)
+    name_selector = f"{tile} .cname"
+    roster = crop_rect(camera, name_selector, padding=6)
+    viewport = (0, 0, *(pixels // camera.scale for pixels in camera.size))
+    width = max(432, rail[2] - rail[0])
+    height = rail[3] - rail[1] + roster[3] - roster[1] + 16
+
+    def still():
+        # Use the same browser surface and pixel coordinates as the motion.
+        return capture_sequence(camera, viewport, .4, "true", min_frames=1)[-1][0]
+
+    def rail_frame(image, name_crop, *, restarting=False):
+        canvas = Image.new("RGB", (width, height), "#101114")
+        title = image.crop(name_crop)
+        panel = image.crop(graph if restarting else rail)
+        canvas.paste(title, (12, 4))
+        canvas.paste(panel, ((width - panel.width) // 2, roster[3] - roster[1] + 9))
+        return canvas
+
+    def confirmation_frame():
+        image = still().crop(crop_rect(camera, dialog, padding=4))
+        return ImageOps.pad(image, (width, height), color="#101114")
+
+    frames = [(rail_frame(still(), roster), 1250)]
+    for selector in controls:
+        move_pointer(camera, "#agentDetail " + selector, click=True)
+        camera.wait(f"document.querySelector('{dialog}') && permissionApply.textContent==='Restart'")
+        frames.append((confirmation_frame(), 1500))
+        name_crop = crop_rect(camera, name_selector, padding=6)
+        moving = capture_sequence(camera, viewport, 2.15, """
+          (() => {
+            const name='PatientFaraday';
+            const pending=()=>{
+              const row=document.querySelector('#roster [data-agent='+name+']');
+              const graph=document.querySelector('#orrery .mini-agent[data-agent='+name+']');
+              return row?.querySelector('.cname.terminal-action-wave') &&
+                row.querySelector('.agent-status')?.getAttribute('aria-label')?.includes('Restarting') &&
+                graph?.textContent.includes('Restarting');
+            };
+            const obs=new MutationObserver(()=>{if(pending())window.docRestartShowsBoth=true;});
+            window.docRestartShowsBoth=false;
+            window.docRestartObserver=obs;
+            obs.observe(document.querySelector('.app'),{subtree:true,childList:true,characterData:true});
+            setTimeout(()=>permissionApply.click(),170);
+            return true;
+          })()
+        """, frame_step=.041)
+        # The modal is the previous shot. Continue at the first changing rail frame.
+        frames.extend((rail_frame(image, name_crop, restarting=True), hold) for image, hold in moving[1:])
+        if not camera.js("window.docRestartObserver.disconnect();window.docRestartShowsBoth"):
+            raise RuntimeError("Restarting must be visible in Agents and Mini Graph")
+        camera.wait("!pendingAgentAction('PatientFaraday')")
+        camera.js("pollAgents()")
+        show_card()
+        camera.wait(f"agentDetail.querySelector('{selector}[aria-pressed=true]') && "
+                    f"currentAgentNamed('{name}').act_state==='work'")
+        frames.append((rail_frame(still(), crop_rect(camera, name_selector, padding=6)), 1050))
+    file = GUIDES / "permission-switch.gif"
+    gallery.gif(file, frames)
+    output = gallery.root / file
+    if shutil.which("gifsicle"):
+        packed = output.with_suffix(".optimized.gif")
+        subprocess.run(["gifsicle", "-O3", str(output), "-o", str(packed)], check=True)
+        if packed.stat().st_size < output.stat().st_size:
+            packed.replace(output)
+        else:
+            packed.unlink()
+    with Image.open(output) as result:
+        count = result.n_frames
+    if count < 35 or output.stat().st_size > 1_500_000:
+        raise RuntimeError(f"Permission GIF: {count} frames, {output.stat().st_size} bytes")
+    print(f"Permission GIF: {count} frames, {output.stat().st_size} bytes", flush=True)
+    camera.click(f"{tile} .pin-toggle")
+    move_pointer(camera, "#newAgentBtn")
+
+
+def save_select(camera, gallery):
+    roster = crop_rect(camera, ".col.roster", padding=0, height=609)
+    top = header_control_frame(camera, gallery, "#needChip")
+    frames = [(top, 1050), (gallery.frame(crop=roster), 750)]
+    camera.click("#rosterSelectBtn")
+    camera.click("#roster [data-agent=WarmLovelace]")
+    camera.click("#roster [data-agent=PatientFaraday]")
+    camera.wait("document.getElementById('rosterBulkCount').textContent.includes('2 selected')")
+    frames.append((gallery.frame(crop=roster), 1150))
+    camera.click("#rosterBulkExit")
+    camera.wait("document.getElementById('rosterBulkExit').textContent.includes('Confirm')")
+    frames.append((gallery.frame(crop=roster), 800))
+    frames.extend(motion_frames(camera, roster, 4.45, """
+      (() => {
+        window.docDustCount=0;
+        window.docDustObserver=new MutationObserver(records=>{
+          for(const record of records)for(const node of record.addedNodes){
+            if(node.classList?.contains('exit-dust'))window.docDustCount+=1;
+          }
+        });
+        docDustObserver.observe(document.body,{childList:true,subtree:true});
+        window.docDustPoll=setInterval(()=>pollAgents(),240);
+        setTimeout(()=>document.getElementById('rosterBulkExit').click(),380);
+        return true;
+      })()
+    """))
+    dust = camera.js("clearInterval(docDustPoll);docDustObserver.disconnect();docDustCount")
+    camera.wait("!document.querySelector('#roster [data-agent=PatientFaraday],#roster [data-agent=WarmLovelace]')")
+    if dust < 2:
+        raise RuntimeError(f"Expected the actual exit dust effect, saw {dust} canvases")
+    print("Exit dust canvases:", dust, flush=True)
+    frames.append((gallery.frame(crop=roster), 1150))
+    cut(gallery, "select-agents.gif", frames, (448, 555))
+
+
+def save_telemetry(camera, gallery):
+    header = header_control_frame(camera, gallery, "#networkBtn")
+    camera.click("#networkBtn")
+    camera.wait("networkFrame.contentDocument?.querySelector('#demo-card .go')", timeout=18)
+    camera.js("""(async () => {
+      const win=networkFrame.contentWindow, doc=networkFrame.contentDocument;
+      doc.querySelector('#demo-card .go').click();
+      doc.querySelector('#demo-strip')?.remove();
+      doc.querySelector('#demo-ring')?.remove();
+      const demo=win.AGENTSTACK_DEMO;
+      demo.stories['docs-reel']=await (await fetch('/fixture-reel')).json();
+      demo.useStory('docs-reel');
+      const frozen=win.Date.now()+38000;
+      win.Date.now=()=>frozen;
+      win.setView('net');
+      await win.netTick();
+      win.openPanel('Bright-Curie');
+    })()""")
+    camera.wait("networkFrame.contentDocument?.querySelector('#term .tm-box')?.innerText.includes('OPEN IN COCKPIT')")
+    areas = camera.js("""(() => {
+      const iframe=networkFrame.getBoundingClientRect(), doc=networkFrame.contentDocument;
+      const panel=doc.querySelector('#term .tm-box').getBoundingClientRect();
+      const actions=doc.querySelector('#tm-exit-btn').getBoundingClientRect();
+      const left=Math.round(iframe.left+panel.left), top=Math.round(iframe.top+panel.top);
+      const right=Math.round(iframe.left+panel.right), actionStart=Math.round(iframe.left+actions.left-8);
+      return [[left,top,left+570,Math.min(innerHeight,top+268)],
+        [Math.max(0,actionStart),top,Math.min(innerWidth,right),top+83]];
+    })()""")
+    cut(gallery, "view-telemetry.gif", [
+        (header, 1250), (gallery.frame(crop=areas[0]), 3200), (gallery.frame(crop=areas[1]), 2400)
+    ], (680, 320))
+    camera.click("#networkClose")
+
+
+def open_guides(camera, url):
+    camera.open(url + "/cockpit.html?demo=1", """
+      typeof availableSessions !== 'undefined' && availableSessions.has('AmberCurie')
+    """, PREFERENCES)
+    camera.js("""
+      const printStyle=document.createElement('style');
+      printStyle.textContent='@media print{.app{height:759px}}';
+      document.head.append(printStyle);
+      document.querySelector('.grid').style.setProperty('--mail-width','406px');
+      Promise.all([pollAgents(),pollGraph(),pollMail(),document.fonts.ready])
+    """)
+    camera.wait("document.querySelector('#roster [data-agent=AmberCurie]')")
+    camera.click("#roster [data-agent=AmberCurie]")
+    camera.wait("""
+      activeSession()==='AmberCurie' &&
+      document.querySelectorAll('#orrery .mini-agent').length>=4 &&
+      document.querySelector('.mail-request')
+    """)
+
+
+def save_permission_guide(camera, destination, url):
+    open_guides(camera, url)
+    save_permission_switch(camera, Gallery(destination, GuideFrames(camera)))
+
+
+def save_guides(camera, destination, url):
+    (destination / GUIDES).mkdir(parents=True, exist_ok=True)
+    open_guides(camera, url)
+    gallery = Gallery(destination, GuideFrames(camera))
+    save_map(camera, gallery, destination)
+    save_start(camera, gallery)
+    save_read_mail(camera, gallery)
+    camera.js("document.querySelector('.maildrawer .drawer-head button').click()")
+    save_first_flight(camera, gallery)
+    save_usage(camera, gallery)
+    save_settings(camera, gallery)
+    save_planetarium(camera, gallery)
+    save_mini_details(camera, gallery)
+    save_permission_switch(camera, gallery)
+    save_select(camera, gallery)
+    save_telemetry(camera, gallery)

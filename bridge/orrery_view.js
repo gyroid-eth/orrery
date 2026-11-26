@@ -106,7 +106,7 @@ function svgEl(tag,attrs={}){
   return el;
 }
 function stateOf(agent){
-  return String(agent.act_state||(agent.running?'work':'idle')).replaceAll('_',' ');
+  return String(agent.act_state||(agent.running?'activity unknown':'idle')).replaceAll('_',' ');
 }
 function roleOf(agent){
   return String(agent&&agent.annot&&agent.annot.role||'').trim();
