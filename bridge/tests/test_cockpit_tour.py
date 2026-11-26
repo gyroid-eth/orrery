@@ -209,7 +209,7 @@ def test_pending_spawn_wait_resolves_for_ready_and_rejects_for_failure():
 
 
 @pytest.fixture
-def tour_browser():
+def tour_browser(request):
     """Connect to an existing CDP browser; serve only this isolated checkout."""
     import contextlib
     import sys
@@ -223,6 +223,9 @@ def tour_browser():
     sys.path.insert(0, str(BRIDGE.parent))
     from tools.theme_axis_browser_test import _WebSocket
 
+    startup_fixture = getattr(request, 'param', None)
+    local_storage, prefs_body = request.getfixturevalue(startup_fixture) if startup_fixture else ({}, None)
+
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(BRIDGE), **kwargs)
@@ -231,6 +234,14 @@ def tour_browser():
             pass
 
         def do_GET(self):
+            if self.path == '/telemetry/prefs' and prefs_body is not None:
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(prefs_body)))
+                self.send_header('Cache-Control', 'no-store')
+                self.end_headers()
+                self.wfile.write(prefs_body)
+                return
             if self.path.startswith(('/telemetry/', '/ws', '/api/')):
                 self.send_error(404)
                 return
@@ -251,13 +262,20 @@ def tour_browser():
 
     server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    request = urllib.request.Request(endpoint + '/json/new?about:blank', method='PUT')
-    tab = json.load(urllib.request.urlopen(request, timeout=5))
+    new_tab = urllib.request.Request(endpoint + '/json/new?about:blank', method='PUT')
+    tab = json.load(urllib.request.urlopen(new_tab, timeout=5))
     client = _WebSocket(tab['webSocketDebuggerUrl'])
     try:
         client.call('Page.enable')
         client.call('Runtime.enable')
         client.call('Emulation.setDeviceMetricsOverride', width=1600, height=1000, deviceScaleFactor=1, mobile=False)
+        if local_storage:
+            client.call('Network.enable')
+            client.call('Network.setCacheDisabled', cacheDisabled=True)
+            client.call('Page.addScriptToEvaluateOnNewDocument',
+                        source="if(window===window.top){localStorage.clear();"
+                               f"Object.entries({json.dumps(local_storage)}).forEach("
+                               "([key,value])=>localStorage.setItem(key,value));}")
         client.call('Page.navigate', url=f'http://127.0.0.1:{server.server_port}/cockpit.html')
 
         def evaluate(expression):
@@ -379,6 +397,7 @@ def test_dom_map_never_draws_crossing_leaders_while_the_window_changes(tour_brow
     """
     client, evaluate = tour_browser
     seen, bad = set(), []
+    evaluate("if(!document.getElementById('orrery').hasAttribute('hidden'))document.getElementById('mailGraphBtn').click()")
 
     def check(width, height):
         client.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=1, mobile=False)

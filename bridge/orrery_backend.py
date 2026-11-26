@@ -691,11 +691,12 @@ BACKEND_COMMIT = _checkout_commit()
 # app window and browser tabs. Drafts, histories and caches stay per window.
 # Mirrors SYNC_RE in bridge/prefs_sync.js.
 PREFS_KEY_RE = re.compile(
-    r"^(oc-(term-|mini-|split-|pinned-)|orrery\.(color-theme|spawn-advanced)"
+    r"^(oc-(term-|mini-|split-|pinned-)|oc-mail-(view|layout-v1)$|orrery\.(color-theme|spawn-advanced)"
     r"|orrery\.demo\.shared\.v1$|agentstack\.theme-profile\.v1\.state$|agentdash\.(netparams|netctl|holdMs))"
 )
 PREFS_MAX_VALUE = 16 * 1024
 PREFS_MAX_KEYS = 200
+MAIL_LAYOUT_VERSION_KEY = "oc-mail-layout-v1"
 
 
 def prefs_key_ok(key: object) -> bool:
@@ -761,7 +762,26 @@ def prefs_response(path: Path = PREFS_PATH) -> web.Response:
                              headers={"Cache-Control": "no-store"})
 
 
+def migrate_mail_layout(prefs: dict[str, str]) -> dict[str, str]:
+    if prefs.get(MAIL_LAYOUT_VERSION_KEY) == "1":
+        return prefs
+    return {
+        **prefs,
+        "oc-mail-view": "timeline",
+        "oc-mini-mail-graph": "1",
+        MAIL_LAYOUT_VERSION_KEY: "1",
+    }
+
+
 async def serve_prefs(request: web.Request) -> web.Response:
+    async with request.app[PREFS_LOCK_KEY]:
+        current = read_prefs()
+        migrated = migrate_mail_layout(current)
+        if migrated != current:
+            try:
+                await asyncio.to_thread(write_prefs, migrated)
+            except OSError:
+                return web.json_response({"error": "write_failed"}, status=500)
     return prefs_response()
 
 
@@ -771,7 +791,7 @@ async def update_prefs(request: web.Request) -> web.Response:
     except ValueError:
         return web.json_response({"error": "invalid_json"}, status=400)
     async with request.app[PREFS_LOCK_KEY]:
-        merged = merge_prefs(read_prefs(), body)
+        merged = merge_prefs(migrate_mail_layout(read_prefs()), body)
         try:
             await asyncio.to_thread(write_prefs, merged)
         except OSError:
