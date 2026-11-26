@@ -109,6 +109,25 @@ def test_action_switches_to_stop_only_for_an_empty_working_draft(cockpit, reduce
     ]
 
 
+def test_light_send_keeps_paper_fill_and_marks_only_a_sendable_draft(cockpit):
+    js, wait, _ = terminal(cockpit)
+    appearance = """(()=>{const style=getComputedStyle(promptSendBtn);
+        return [style.backgroundColor,style.borderColor,style.color,promptSendBtn.title];})()"""
+    dark_idle = js(appearance)
+    js("OrreryColorTheme.setPreference('light')")
+    neutral = ['rgb(253, 252, 248)', 'rgb(131, 129, 121)', 'rgb(97, 94, 85)']
+    assert js(appearance) == [*neutral, 'Send message']
+    js("currentAgents[0].act_state='work';document.dispatchEvent(new Event('oc:agents'))")
+    assert js(appearance) == [*neutral, 'Stop agent (Esc)']
+    js("promptInput.value='Draft';promptInput.dispatchEvent(new Event('input'))")
+    assert js(appearance) == [neutral[0], 'rgb(172, 117, 0)', 'rgb(137, 92, 0)', 'Send message']
+    js("promptSendBtn.click()")
+    wait("promptInput.value===''&&!promptBusy")
+    assert js(appearance) == [*neutral, 'Stop agent (Esc)']
+    js("currentAgents[0].act_state='wait';document.dispatchEvent(new Event('oc:agents'));OrreryColorTheme.setPreference('dark')")
+    assert js(appearance) == dark_idle
+
+
 def test_idle_escape_reports_key_delivery(cockpit):
     js, wait, _ = terminal(cockpit)
     js("""window.send=packet=>{
@@ -176,6 +195,11 @@ def test_roster_selection_sends_each_agent_once_and_keeps_only_failed_targets(co
     assert js('activeId') == '%901'
     expected = ['%901', '%903'] if rejected else ['%901', '%902', '%903']
     assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.paneId)") == ['%901','%902','%903']
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        'Also sent to QuietCopernicus, EmeraldBose. You can contact each other via ORRERY Mail.\n\nShared draft',
+        'Also sent to ReviewFixture, EmeraldBose. You can contact each other via ORRERY Mail.\n\nShared draft',
+        'Also sent to ReviewFixture, QuietCopernicus. You can contact each other via ORRERY Mail.\n\nShared draft',
+    ]
     assert js("receipts.map(receipt=>receipt.name)") == [
         {'%901':'ReviewFixture','%902':'QuietCopernicus','%903':'EmeraldBose'}[pane] for pane in expected
     ]
@@ -186,6 +210,40 @@ def test_roster_selection_sends_each_agent_once_and_keeps_only_failed_targets(co
         assert js("toastEl.textContent.includes('Not sent to QuietCopernicus')")
     if status == 'unknown':
         assert js("toastEl.textContent.includes('Delivery unconfirmed for QuietCopernicus')")
+
+
+def test_recipient_visibility_menu_keeps_hidden_drafts_private(cockpit):
+    js, wait, _ = recipients(cockpit)
+    js("""window.visibilityButton=document.querySelector('.prompt-visibility-trigger');
+      window.visibilityOptions=[...document.querySelectorAll('.prompt-visibility-option')];
+      promptRecipients.set(['ReviewFixture']);""")
+    assert js("visibilityButton.parentElement.hidden")
+    js("promptRecipients.set(['ReviewFixture','QuietCopernicus']);visibilityButton.click()")
+    assert js("visibilityButton.title") == 'Visible recipients (To/Cc)'
+    assert js("document.activeElement===visibilityOptions[0]")
+    js("""document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
+      document.activeElement.click()""")
+    assert js("visibilityButton.title") == 'Hidden recipients (Bcc)'
+    assert js("visibilityOptions[1].getAttribute('aria-label')") == 'Hidden recipients (Bcc)'
+    assert js("localStorage.getItem(PROMPT_VISIBILITY_KEY)") == 'hidden'
+    assert js("visibilityButton.getAttribute('aria-expanded')") == 'false'
+    js("promptInput.value='Independent draft';sendPrompt()")
+    wait("!promptBusy")
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        'Independent draft', 'Independent draft',
+    ]
+    assert js("localStorage.getItem(PROMPT_VISIBILITY_KEY)") is None
+    js("promptRecipients.set(['ReviewFixture','QuietCopernicus'])")
+    assert js("visibilityButton.title") == 'Visible recipients (To/Cc)'
+
+
+def test_visible_recipients_do_not_prepend_a_header_to_slash_commands(cockpit):
+    js, wait, _ = recipients(cockpit)
+    js("promptRecipients.set(['ReviewFixture','QuietCopernicus']);promptInput.value='/help';sendPrompt()")
+    wait("!promptBusy")
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        '/help', '/help',
+    ]
 
 
 @pytest.mark.parametrize('claude_status', ['accepted', 'unknown'])
@@ -223,7 +281,9 @@ def test_attachment_drop_remove_and_delivery_per_cli(cockpit, claude_status):
         ['ReviewFixture', 'txt', 'Fixture data'], ['QuietCopernicus', 'txt', 'Fixture data'],
     ]
     assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        'Also sent to QuietCopernicus. You can contact each other via ORRERY Mail.\n\n'
         'Read this\n\n./.orrery-input-files/' + 'a' * 32 + '.txt',
+        'Also sent to ReviewFixture. You can contact each other via ORRERY Mail.\n\n'
         'Read this\n\n@./.orrery-input-files/' + 'a' * 32 + '.txt ',
     ]
     assert js("packets.filter(packet=>packet.type==='input')") == []

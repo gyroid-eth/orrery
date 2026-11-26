@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -33,25 +36,27 @@ process.stdout.write(JSON.stringify({vars:theme.cssVariables,report:core.contras
 """
     )
     assert result["vars"] == {
-        "--bg": "#f5efe1",
-        "--panel": "#e8dfcd",
-        "--panel-2": "#ddd2bc",
-        "--elev": "#d1c3a9",
-        "--ink": "#010100",
-        "--ink-dim": "#3a3528",
-        "--ink-faint": "#545148",
-        "--amber": "#704a00",
+        "--bg": "#f8f6f1",
+        "--panel": "#fdfcf8",
+        "--panel-2": "#f1eee7",
+        "--elev": "#f1eee7",
+        "--ink": "#25231f",
+        "--ink-dim": "#615e55",
+        "--ink-faint": "#615e55",
+        "--amber": "#895c00",
         "--amber-glow": "transparent",
         "--ln-local": "#005c50",
         "--ln-remote": "#673f8d",
         "--ln-delegate": "#335b16",
-        "--theme-surface-terminal": "#fdf7ea",
+        "--theme-surface-terminal": "#fdfcf8",
         "--theme-status-alert": "#a6060e",
         "--theme-status-question": "#005a65",
-        "--theme-border-control": "#5f5c52",
-        "--theme-focus-ring": "#704a00",
-        "--theme-ink-rgb": "1 1 0",
-        "--theme-accent-rgb": "112 74 0",
+        "--theme-border-control": "#838179",
+        "--theme-focus-ring": "#895c00",
+        "--theme-accent-edge": "#ac7500",
+        "--theme-accent-fill": "#f2b65a",
+        "--theme-ink-rgb": "37 35 31",
+        "--theme-accent-rgb": "137 92 0",
         "--theme-local-rgb": "0 92 80",
         "--theme-remote-rgb": "103 63 141",
         "--theme-delegate-rgb": "51 91 22",
@@ -59,10 +64,10 @@ process.stdout.write(JSON.stringify({vars:theme.cssVariables,report:core.contras
         "--theme-google-rgb": "37 87 111",
         "--theme-alert-rgb": "166 6 14",
         "--theme-question-rgb": "0 90 101",
-        "--hair": "rgb(1 1 0 / 0.16)",
-        "--hair-2": "rgb(1 1 0 / 0.08)",
-        "--theme-shadow-low": "rgb(1 1 0 / 0.12)",
-        "--theme-shadow-high": "rgb(1 1 0 / 0.08)",
+        "--hair": "rgb(37 35 31 / 0.26)",
+        "--hair-2": "rgb(37 35 31 / 0.16)",
+        "--theme-shadow-low": "rgb(37 35 31 / 0.12)",
+        "--theme-shadow-high": "rgb(37 35 31 / 0.08)"
     }
     for role, measurement in result["report"].items():
         assert measurement["passes"], role
@@ -70,7 +75,7 @@ process.stdout.write(JSON.stringify({vars:theme.cssVariables,report:core.contras
     assert min(
         measurement["ratio"]
         for role, measurement in result["report"].items()
-        if role != "control"
+        if role not in {"control", "accentEdge"}
     ) >= 4.5
     assert result["report"]["control"]["ratio"] >= 3
 
@@ -113,8 +118,8 @@ process.stdout.write(JSON.stringify({theme:theme.terminalTheme,ratios}));
     }
     for role, ratio in result["ratios"].items():
         assert ratio >= 4.5, role
-    assert result["theme"]["background"] == "#fdf7ea"
-    assert result["theme"]["foreground"] == "#010100"
+    assert result["theme"]["background"] == "#fdfcf8"
+    assert result["theme"]["foreground"] == "#25231f"
 
 
 def test_light_stylesheet_cannot_mutate_physical_dark_default():
@@ -156,3 +161,27 @@ def test_color_theme_javascript_has_valid_syntax():
             timeout=10,
             check=True,
         )
+
+
+def test_mobile_telemetry_shares_the_cockpit_palette():
+    telemetry_core = os.environ.get("ORRERY_TELEMETRY_THEME_CORE")
+    if not telemetry_core:
+        pytest.skip("set ORRERY_TELEMETRY_THEME_CORE to dashboard/theme_core.js")
+    result = _node(
+        f'''
+const cockpit=require('./bridge/theme_core.js').deriveWarmPaperLightTheme();
+const telemetry=require({json.dumps(str(Path(telemetry_core).resolve()))}).deriveWarmPaperLightTheme();
+process.stdout.write(JSON.stringify({{cockpit:cockpit.cssVariables,telemetry:telemetry.cssVariables}}));
+'''
+    )
+    cockpit, telemetry = result["cockpit"], result["telemetry"]
+    # Shared UI roles used by both the desktop and mobile implementations.
+    shared = {
+        "--bg", "--panel", "--panel-2", "--elev", "--ink", "--ink-dim",
+        "--ink-faint", "--amber", "--theme-accent-fill", "--theme-accent-edge",
+        "--theme-focus-ring", "--theme-border-control", "--theme-surface-terminal",
+        "--theme-ink-rgb", "--theme-accent-rgb", "--theme-shadow-low", "--theme-shadow-high",
+        "--hair", "--hair-2", "--ln-local", "--ln-remote", "--ln-delegate",
+        "--theme-status-alert", "--theme-status-question",
+    }
+    assert {key: cockpit[key] for key in shared} == {key: telemetry[key] for key in shared}

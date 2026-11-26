@@ -54,6 +54,36 @@ def test_no_local_input_preserves_cloud_presentation_and_badge_dom(tour_browser)
     assert actual == json.loads(FIXTURE.read_text())
 
 
+def test_light_graph_uses_original_logo_artwork_and_readable_seats(tour_browser):
+    _, evaluate = tour_browser
+    rendered_badges(evaluate, [
+        dict(provider='openai', model='gpt-demo'),
+        dict(provider='local', model='glm-4.7'),
+        dict(provider='local', model='inkling-2-mini'),
+        dict(provider='other', program='custom-cli'),
+    ])
+    result = evaluate("""(()=>{
+      function measure(theme){
+        OrreryColorTheme.setPreference(theme);
+        return ['#orrery','.planetarium-svg'].map(selector=>{
+          const badges=[...document.querySelectorAll(selector+' .mini-provider-badge')];
+          const badge=name=>badges.find(el=>el.parentElement.dataset.agent===name);
+          const seat=name=>getComputedStyle(badge(name).querySelector('.mini-provider-seat')).fill;
+          const fallback=getComputedStyle(badge('Badge3').querySelector('text')).fill;
+          const filter=name=>getComputedStyle(badge(name).querySelector('image')).filter;
+          return {filters:[filter('Badge0'),filter('Badge1')],fills:[seat('Badge0'),seat('Badge1')],
+            empty:seat('Badge2'),fallbackSeat:seat('Badge3'),fallback};
+        });
+      }
+      return {light:measure('light'),dark:measure('dark')};
+    })()""")
+    for light, dark in zip(result['light'], result['dark']):
+        assert light['filters'] == dark['filters'] == ['none', 'none']
+        assert light['fills'] == [light['fallback']] * 2
+        assert light['empty'] == light['fallbackSeat'] != light['fallback']
+        assert dark['fills'] == [dark['fallbackSeat']] * 2
+
+
 def test_explicit_local_uses_resolved_model_and_unknown_keeps_an_empty_hexagon(tour_browser):
     _, evaluate = tour_browser
     cases = [
@@ -68,9 +98,14 @@ def test_explicit_local_uses_resolved_model_and_unknown_keeps_an_empty_hexagon(t
         dict(provider='local', program='codex', model='custom-7b'),
         dict(provider=' LOCAL ', program='claude', model='DeepSeek display', model_raw='Qwen/Qwen3-8B-Q4_K_M'),
         dict(provider='local', program='codex', model='DeepSeek-R1-Distill-Qwen-7B'),
+        dict(provider='strata', locality='local', program='dsh', model='Inkling 2 Mini', model_raw='inkling-2-mini'),
+        dict(provider='local', program='hermes', model='thinkingmachines/Inkling-2-Mini'),
+        dict(provider='local', program='hermes', model='custom-inkling-2-mini-alias'),
     ]
     actual = rendered_badges(evaluate, cases)
-    for result, asset in zip(actual, ['qwen', 'glm', None, None, 'glm', 'glm', 'deepseek', 'deepseek', None, 'qwen', 'deepseek']):
+    expected = ['qwen', 'glm', None, None, 'glm', 'glm', 'deepseek', 'deepseek', None, 'qwen', 'deepseek',
+                'thinking-machines', 'thinking-machines', None]
+    for result, asset in zip(actual, expected, strict=True):
         assert result['presentation']['local'] is True
         assert result['presentation']['compactText'] == ''
         assert 'local-provider-badge' in result['roster']
@@ -82,6 +117,8 @@ def test_explicit_local_uses_resolved_model_and_unknown_keeps_an_empty_hexagon(t
             assert result['presentation']['provider']['asset'] == asset
             if asset == 'glm':
                 assert result['presentation']['text'] == 'GLM · Local'
+            if asset == 'thinking-machines':
+                assert result['presentation']['text'] == 'Thinking Machines Lab · Local'
             for surface in ['roster', 'mini', 'planet']:
                 assert 'cockpit-assets/' + asset + '.svg' in result[surface]
         else:
@@ -162,23 +199,27 @@ def test_strata_roster_reconciliation_clears_local_shape_and_stale_maker(tour_br
     assert result['cloud'] == json.loads(FIXTURE.read_text())[3]['roster']
 
 
-def test_picker_glm_and_deepseek_models_use_local_maker_badges(tour_browser):
+def test_picker_models_use_local_maker_badges(tour_browser):
     _, evaluate = tour_browser
     result = evaluate("""(()=>{
       document.querySelectorAll('.flight-close').forEach(e=>e.click());
       spawnCatalog={providers:[{id:'local-fixture',locality:'local',label:'Local fixture',
-        models:[{id:'glm-5.3-flash'},{id:'deepseek-v4.1-flash'}],
+        models:[{id:'glm-5.3-flash'},{id:'deepseek-v4.1-flash'},{id:'inkling-2-mini'}],
         harnesses:[{id:'hermes',available:true,default:true}]}],naming:{},dirs:[]};
       selFamily='local';selProvider=null;selModel=null;selHarness=null;
       spawnModelSearch.value='';renderProviderTabs();
-      return ['glm-5.3-flash','deepseek-v4.1-flash'].map(model=>{
+      return ['glm-5.3-flash','deepseek-v4.1-flash','inkling-2-mini'].map(model=>{
         modelChoices.querySelector('input[value="'+model+'"]').click();
         const badge=document.getElementById('spawnModelMark');
         return {model,title:badge.title,src:badge.querySelector('img').getAttribute('src')};
       });
     })()""")
-    assert len(result) == 2
-    for row, model, asset in zip(result, ['glm-5.3-flash', 'deepseek-v4.1-flash'], ['glm', 'deepseek']):
+    expected = [
+        ('glm-5.3-flash', 'glm', 'GLM'),
+        ('deepseek-v4.1-flash', 'deepseek', 'DeepSeek'),
+        ('inkling-2-mini', 'thinking-machines', 'Thinking Machines Lab'),
+    ]
+    for row, (model, asset, maker) in zip(result, expected, strict=True):
         assert row['model'] == model
-        assert row['title'] == ('GLM' if asset == 'glm' else 'DeepSeek') + ' · Local'
+        assert row['title'] == maker + ' · Local'
         assert row['src'] == 'cockpit-assets/' + asset + '.svg'

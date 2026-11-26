@@ -66,8 +66,9 @@ def test_unsupported_agents_explain_why_controls_are_disabled():
         ({"running": False, "resume_capability": "no_history"}, "Conversation cannot be resumed"),
     ]:
         markup = render(base | fields)
-        assert markup.count(' disabled') == 4
+        assert 'data-computer' not in markup and 'data-browser' not in markup
         assert f'title="Browser use: On ({reason})"' in markup
+        assert f'>{reason}</small>' in markup
     assert 'title="Browser use: On (Requires Telemetry API 45)"' in render(base, api=44)
 
 
@@ -88,7 +89,8 @@ def test_antigravity_card_discloses_launch_permissions_and_a_reason_for_unknown(
         "browser_use_reason": "Antigravity browser mode was not recorded",
     }, api=53)
     assert 'title="Harness: Antigravity"' in markup
-    assert 'data-computer="view" aria-pressed="true"' in markup
+    assert 'data-computer' not in markup
+    assert '<span>View</span>' in markup
     assert 'Browser use: Unknown (Antigravity browser mode was not recorded)' in markup
 
 
@@ -109,7 +111,51 @@ def test_api46_permission_reason_is_rendered_as_text():
         "permission_resume_reason": 'Missing "settings" <details>',
     }, api=46)
     assert 'title="Browser use: On (Missing &quot;settings&quot; &lt;details&gt;)"' in markup
-    assert markup.count(' disabled') == 4
+    assert 'data-computer' not in markup and 'data-browser' not in markup
+
+
+def test_permission_controls_can_offer_only_one_action_and_keep_display_evidence():
+    agent = {
+        "name": "FixtureAgent", "running": True, "harness_kind": "dsh",
+        "computer_use": "off", "browser_use": True,
+        "permission_controls": {
+            "computer_use": {"value": "view", "source": "relay", "can_change": True, "action": "restart"},
+            "browser_use": {"value": False, "source": "launch", "can_change": False,
+                            "change_reason": "Browser needs human setup"},
+        },
+    }
+    markup = render(agent, api=54)
+    assert 'data-computer="view" aria-pressed="true"' in markup
+    assert 'data-browser' not in markup
+    assert 'Browser needs human setup</small>' in markup
+    assert 'title="Browser use: Off (ORRERY launch selection)"' in markup
+
+
+def test_api54_keeps_legacy_values_read_only_without_a_server_verdict():
+    markup = render({
+        "name": "FixtureAgent", "running": True, "harness_kind": "codex",
+        "category": "agent", "parent_state": "child", "history_binding": "bound",
+        "history_session_id": "known", "computer_use": "control",
+    }, api=54)
+    assert 'data-computer' not in markup
+    assert '<span>Control</span>' in markup
+    assert '>Permission information unavailable</small>' in markup
+
+
+def test_api54_shows_the_browser_choices_in_order_and_marks_the_current_mode():
+    markup = render({
+        "name": "FixtureAgent", "running": True, "harness_kind": "codex",
+        "permission_controls": {
+            "browser_use": {"value": True, "mode": "temporary", "options": ["temporary", "off"],
+                            "can_change": True, "action": "restart"},
+        },
+    }, api=54)
+    assert markup.index('data-browser="off"') < markup.index('data-browser="temporary"') < markup.index('data-browser="personal"')
+    assert 'data-browser="temporary" aria-pressed="true"' in markup
+    assert 'title="Browser use: Temporary Chrome"' in markup and '>Temp</button>' in markup
+    assert 'title="Browser use: My Chrome (unavailable for this agent)" disabled' in markup
+    assert 'role="switch"' not in markup
+
 
 def test_live_process_observations_show_unknown_and_reason_without_controls():
     agent = {
@@ -118,11 +164,10 @@ def test_live_process_observations_show_unknown_and_reason_without_controls():
         "computer_use_reason": "Screen relay mode could not be verified",
     }
     markup = render(agent, api=52)
-    assert 'aria-label="Computer use: Unknown. Screen relay mode could not be verified"' in markup
+    assert 'aria-label="Computer use: Unknown (Screen relay mode could not be verified)"' in markup
     assert '<small>Screen relay mode could not be verified</small>' in markup
-    assert 'aria-label="Browser use: On"' in markup
+    assert 'aria-label="Browser use: On (' in markup
     assert 'data-browser' not in markup and 'data-computer' not in markup
-    assert 'agent-detail-observed' not in render(agent, api=51)
 
 
 def test_shared_unknown_reason_appears_once_visibly():
@@ -151,7 +196,7 @@ def test_known_context_fields_render_independently_and_home_matches_on_a_path_bo
     partial = render({"name": "FixtureAgent", "parent_state": "top", "ctx_used": 27,
                       "cwd": "/home/fixture-other/project", "browser_use": True})
     assert 'aria-label="Top level"' in partial
-    assert 'aria-label="Browser use" title="Browser use: On (Standalone agent)"' in partial
+    assert 'aria-label="Browser use: On (Standalone agent)"' in partial
     assert 'aria-label="Context window: 27% used"' in partial
     assert "tokens" not in partial
     assert "/<wbr>home/<wbr>fixture-other/<wbr>project" in partial
