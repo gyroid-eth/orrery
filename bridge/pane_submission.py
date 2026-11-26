@@ -14,6 +14,7 @@ import subprocess
 import time
 import uuid
 from dataclasses import dataclass
+from unicodedata import east_asian_width
 
 
 METADATA = ('#{socket_path}\t#{pid}\t#{pane_id}\t#{pane_pid}\t#{cursor_y}\t#{pane_in_mode}'
@@ -40,7 +41,7 @@ CLAUDE_SUGGESTION = re.compile(r'^[  ]*\x1b\[(?:[0-9]+;)*2(?:;[0-9]+)*m[^\x1b]+
 CLAUDE_ARGUMENT_HINT = re.compile(r'\x1b\[(?:38;5;246|(?:0;)?2)m[^\x1b]+'
                                   r'(?:\x1b\[(?:0|22|39)?m)?[ \t]*$')
 COLLAPSED = re.compile(r'\[Pasted text #\d+(?: \+\d+ lines?)?\]')
-HERMES_PASTE = re.compile(r'\[Pasted text #(\d+): (\d+) lines → /.+/pastes/paste_\1_\d{6}\.txt\]')
+HERMES_PASTE = re.compile(r'\[Pastedtext#(\d+):(\d+)lines→/.+/pastes/paste_\1_\d{6}\.txt\]')
 HERMES_HINT = re.compile(r'^(?:msg=[\w-]+ · /queue · /bg · /steer · Ctrl\+C cancel|cli\.tui\.placeholder_busy)$')
 HERMES_STATUS = re.compile(r'^(?:[^│]+ │ )?☤ \S')
 ITALIC_CHANGE = re.compile(r'\x1b\[(0|3|23)m')
@@ -493,25 +494,27 @@ def ready(observed, text, *, operator=False):
     command = bare_slash(text)
     if command is not None or observed.selected:
         return command is not None and command!='/' and command==observed.draft==observed.selected_command
+    shown = ''.join(observed.draft.split())
+    expected = ''.join(text.split())
     if observed.scrolled:
         # Only the end of a tall draft is visible, so it must end the text.
-        shown=''.join(observed.draft.split())
-        return len(shown)>=16 and ''.join(text.split()).endswith(shown)
-    if ''.join(observed.draft.split())==''.join(text.split()):
+        return len(shown)>=16 and expected.endswith(shown)
+    if shown == expected:
         return True
     if observed.dsh_clipped and (operator or text.startswith('ORRERY Mail notification: ')):
-        shown = ''.join(observed.draft.split())
-        return len(shown) >= 24 and ''.join(text.split()).endswith(shown)
+        # Fullwidth and wide characters occupy two cells of the visible suffix.
+        visible_cells = sum(2 if east_asian_width(char) in ('F', 'W') else 1 for char in shown)
+        return visible_cells >= 24 and expected.endswith(shown)
     # Claude represents a pasted multiline or long prompt as this native
     # capsule. The caller required an empty editor before sending the paste.
     if COLLAPSED.fullmatch(observed.draft):
         return True
-    compact=' '.join(observed.draft.split())
     if observed.hermes:
-        marker=HERMES_PASTE.fullmatch(compact)
+        # A narrow pane can wrap anywhere in the native paste card's path.
+        marker=HERMES_PASTE.fullmatch(shown)
         return bool(marker and int(marker[2])==text.count('\n')+1)
     if observed.dsh:
-        marker=DSH_PASTE.fullmatch(compact)
+        marker=DSH_PASTE.fullmatch(' '.join(observed.draft.split()))
         if marker:
             preview=marker[3].removesuffix('…').removesuffix('...').rstrip()
             return (bool(preview) and ' '.join(text.split()).startswith(preview)
