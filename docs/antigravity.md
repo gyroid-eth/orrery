@@ -148,9 +148,10 @@ API 53 では macOS の **Computer use** で Off／View／Control を選べま�
   コミットに解決できる worktree base（既定は `HEAD`）が必要です。
 - `agy`、`tmux`、選択された Python、adapter hook、Gemini provider の helper が必要です。
 - `AGENTSTACK_GEMINI_MODELS` を明示した場合、モデルはその許可リストに限定されます。
-  未設定なら、同梱の `gemini-3.8-flash-{high,medium,low}` と `agy models` が返した有効な
-  Gemini ID を表示します。モデルの取得は起動前の検査と同じ方法で `agy` を探すため、
-  Dashboard の PATH に `~/.local/bin` がなくても標準の場所を使えます。
+  未設定なら、`agy models` が返した有効な Gemini ID を表示します。有効な結果が得られないときは、
+  同梱の `gemini-3.8-flash-{high,medium,low}` を使います。モデルの取得時は起動前の検査と同じ方法で
+  `agy` を探すため、Dashboard の PATH に `~/.local/bin` がなくても標準の場所を使えます。
+  この取得時に CLI がモデルサービスと通信する場合があります。ORRERY は CLI の認証情報を読みません。
   `gemini-3.8-flash` しか表示されない場合は、`agy models` の結果、Dashboard を再起動したか、
   許可リストの設定を確認します。
   取得を待つ時間は5秒、出力は64 KiBまでです。成功は5分間キャッシュされ、失敗時は前回の
@@ -158,26 +159,26 @@ API 53 では macOS の **Computer use** で Off／View／Control を選べま�
   許可リストに Claude／Codex と同じ ID を指定すると Antigravity のタブは無効になります。
   リストにない正式な Gemini ID も起動時に指定でき、利用可否は CLI が確認します。
 
-The model card displays each Gemini family once (for example, `gemini-3.8-flash`
-and `gemini-4-argon`). The original `gemini-3.8-flash-high` remains the default;
-only efforts present in the current model list are offered for each family.
-Before registration, Dashboard resolves the selected effort to the corresponding CLI model:
-`low` → `gemini-3.8-flash-low`, `medium` → `gemini-3.8-flash-medium`, and
-`high` → `gemini-3.8-flash-high`. Registration, launch logs, and `agy --model`
-use that same resolved id alongside the explicit `--effort`. A custom model
-allow-list must include the matching variant; otherwise the request is rejected
-before registration. Without a custom allow-list, a formal `gemini-*` ID is
-validated by the CLI instead of being refused simply because discovery omitted it.
-Model IDs without an effort suffix are passed unchanged. Spawn and `dry_run`
-do not run `agy models`; discovery is used only for the picker.
+モデル欄には `gemini-3.8-flash` や `gemini-4-argon` など、モデルの系統ごとに1項目を表示します。
+自動で用意した候補に `gemini-3.8-flash-high` がある場合は、それが既定です。系統ごとに、現在の一覧にある
+モデルで利用可能な Effort を選べます。
 
-Engine and isolation rules:
+登録前に、Dashboard は選んだ Effort を対応するモデル ID に解決します。たとえば
+`low` は `gemini-3.8-flash-low`、`medium` は `gemini-3.8-flash-medium`、`high` は
+`gemini-3.8-flash-high` になります。Mail の登録と起動ログには解決後のモデル ID を記録し、
+起動時は `agy --model` に同じ ID を渡し、`--effort` も明示します。許可リストを使う場合は、
+対応するモデル ID も含めてください。含まれていなければ登録前に拒否します。許可リストが
+未設定なら、一覧に出なかった正式な `gemini-*` ID も CLI が利用可否を確認します。
+Effort の接尾辞がないモデル ID はそのまま渡します。モデルの取得は候補を表示するために行い、
+起動時と `dry_run` では `agy models` を実行しません。
 
-- **Effort is explicit.** The Dashboard selects no effort for Antigravity, keeps
-  `SPAWN` disabled until an available effort is chosen (`low`, `medium`, `high`,
-  or `xhigh` where the catalog lists that variant), and the server
-  rejects a request without one (`effort required for provider gemini`). The
-  CLI launchers' `high` fallback is not applied to Dashboard launches.
+起動と隔離の規則は次のとおりです。
+
+- **Effort を調整できるモデルでは選択が必要です。** `low`、`medium`、`high`、または候補にある
+  `xhigh` を選ぶと `SPAWN` が有効になります。未指定のリクエストはサーバーが
+  `effort required for provider gemini` で拒否します。CLI launcher の既定の `high` は
+  Dashboard での起動には適用されません。
+- **Orchestrator モデルの Effort は固定です。** Effort を選ぶ欄は表示されず、モデル ID だけで起動します。
 - **委任起動は isolated worktree を使います。** macOS の親なし起動で worktree を作るには、
   Isolation を選びます。
 - **委任起動は予約対象（resources）が必要です。** 親なし起動では resources を空欄にします。

@@ -151,8 +151,9 @@ The dashboard checks launch requirements before registering with ORRERY Mail.
 - The launcher requires `agy`, `tmux`, the selected Python, the adapter hook,
   and the Gemini provider helpers.
 - `AGENTSTACK_GEMINI_MODELS`, when explicitly set, is the restrictive model
-  allow-list. Otherwise, the picker combines the bundled `gemini-3.8-flash-{high,medium,low}`
-  candidates with valid Gemini IDs from the installed `agy models` CLI. This
+  allow-list. Otherwise, the picker uses the valid Gemini IDs returned by
+  the installed `agy models` CLI. If discovery has no usable result, it falls
+  back to the bundled `gemini-3.8-flash-{high,medium,low}` list. This
   read may contact the CLI's model service; ORRERY reads no CLI credentials.
   Discovery uses the same binary lookup as spawn preflight, including `~/.local/bin`
   when the Dashboard's service PATH omits it. If only `gemini-3.8-flash` appears,
@@ -165,8 +166,9 @@ The dashboard checks launch requirements before registering with ORRERY Mail.
   explicit allow-list that reuses a Claude/Codex ID disables the Antigravity tab.
 
 The model card displays each Gemini family once (for example, `gemini-3.8-flash`
-and `gemini-4-argon`). The original `gemini-3.8-flash-high` remains the default;
-only efforts present in the current model list are offered for each family.
+and `gemini-4-argon`). In the automatically generated list, `gemini-3.8-flash-high`
+is the default when available.
+The current model list determines the effort choices for each family.
 Before registration, Dashboard resolves the selected effort to the corresponding CLI model:
 `low` → `gemini-3.8-flash-low`, `medium` → `gemini-3.8-flash-medium`, and
 `high` → `gemini-3.8-flash-high`. Registration, launch logs, and `agy --model`
@@ -179,11 +181,13 @@ do not run `agy models`; discovery is used only for the picker.
 
 Engine and isolation rules:
 
-- **Effort is explicit.** The Dashboard selects no effort for Antigravity, keeps
+- **Choose an effort for models with adjustable effort.** The Dashboard keeps
   `SPAWN` disabled until an available effort is chosen (`low`, `medium`, `high`,
   or `xhigh` where the catalog lists that variant), and the server
   rejects a request without one (`effort required for provider gemini`). The
   CLI launchers' `high` fallback is not applied to Dashboard launches.
+- **Orchestrator models have fixed effort.** The picker hides the effort
+  control and launches with just the model ID.
 - **Delegated launches use an isolated worktree.** On macOS, a standalone
   launch creates a worktree when you select Isolation.
 - **Delegated launches require resources.** Leave resources blank for a standalone launch.
