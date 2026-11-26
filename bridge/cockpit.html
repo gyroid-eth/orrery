@@ -1764,6 +1764,7 @@
 <script src="vendor/xterm-5.5.0/xterm.js"></script>
 <script src="vendor/addon-fit-0.10.0/addon-fit.js"></script>
 <script src="vendor/addon-web-links-0.11.0/addon-web-links.js"></script>
+<script src="local_model_makers.js"></script>
 <script src="roster_descriptor.js"></script>
 <script src="roster_edit.js"></script>
 <script src="demo_mask.js"></script>
@@ -8862,9 +8863,8 @@ const ROSTER_PROVIDER={
   anthropic:{asset:'anthropic',label:'Claude'},
   openai:{asset:'openai',label:'Codex (OpenAI)'},
   google:{asset:'google',label:'Gemini'},
-  deepseek:{asset:'deepseek',label:'DeepSeek'},
-  qwen:{asset:'qwen',label:'Qwen'},
-  glm:{asset:'glm',label:'GLM'},
+  ...Object.fromEntries(Object.entries(window.OrreryLocalModelMakers).map(
+    ([asset,{label}])=>[asset,{asset,label}])),
 };
 function rosterIsLocal(agent){
   const provider=String(agent.provider||'').trim().toLowerCase();
@@ -8878,11 +8878,7 @@ function rosterProviderKey(agent){
   // Backend identity or explicit locality selects the local presentation.
   // Use the resolved model ID, never the adapter/program or profile nickname.
   if(rosterIsLocal(agent)){
-    const model=String(agent.model_raw||agent.model||'').toLowerCase();
-    if(/deepseek/.test(model))return 'deepseek';
-    if(/qwen/.test(model))return 'qwen';
-    if(/(?:^|[^a-z0-9])glm/.test(model))return 'glm';
-    return '';
+    return window.orreryLocalModelMaker(String(agent.model_raw||agent.model||''));
   }
   if(Object.hasOwn(alias,provider))return alias[provider];
   const model=String(agent.model||'').toLowerCase();
