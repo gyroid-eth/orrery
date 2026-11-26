@@ -151,19 +151,24 @@ def test_any_tour_keeps_its_own_steps_key_and_fold():
              'saved': ['seen', 'open', 'folded', 'done', 'focus']}
 
 
-def prompt(connected=True, pane=True, text='Hello', guarded=False):
+def prompt(connected=True, pane=True, text='Hello', guarded=False, restarting=False):
     source = (BRIDGE / 'cockpit.html').read_text()
     # sendPrompt fixes its target pane when it starts; take those helpers as they are.
     fn = re.search(r'function captureComposerTarget\([^)]*\)\{.*?(?=\n(?:async )?function sendInterrupt)', source, re.S).group()
+    pending_action = re.search(r'function pendingAgentAction\(session\)\{.*?\n\}', source, re.S).group()
     # Load the same browser script that supplies recipientPrefix to sendPrompt.
     return node("globalThis.window={};"
                 f"require({json.dumps(str(BRIDGE / 'prompt_recipients.js'))});"
                 "const {OrreryPromptRecipients}=window;"
+                # This prompt runs before the Reader's optional approval UI is mounted.
+                "const readerApproval=null;"
                 "const events=[];const activeId='pane';const socket={};"
                 f"const promptInput={{value:{json.dumps(text)},"
                 "getBoundingClientRect(){return {top:0,right:120,width:120};}};"
                 f"const panes=new Map({json.dumps([['pane', {'session': 'Test', 'meta': {}}]] if pane else [])});"
                 "const sessionGroups=new Map(),promptRecipientPins=new Map();"
+                f"const permissionRestarts=new Map({json.dumps([['Test', {}]] if restarting else [])});"
+                "const pendingAgentExits=new Map(),OrreryDemo={mask:text=>text};"
                 "const promptFiles={entries:[],clear(){}};"
                 "const promptRecipients={names:[],visibility:'visible',close(){},set(){}};"
                 "const promptCard={refresh(){}};const targetProgram=()=> 'claude';"
@@ -176,11 +181,12 @@ def prompt(connected=True, pane=True, text='Hello', guarded=False):
                 f"function inspectPrompt(){{return {'{}' if guarded else 'null'};}}"
                 "function showToast(){}function showSendGuard(){}function hideSendGuard(){}"
                 "function pushPromptHistory(){}function saveDraft(){}function closeSlashMenu(){}const toastEl={classList:{add(){}}};"
-                + fn + ";Promise.resolve(sendPrompt()).then(()=>console.log(JSON.stringify({events,value:promptInput.value})));")
+                + pending_action + fn + ";Promise.resolve(sendPrompt()).then(()=>console.log(JSON.stringify({events,value:promptInput.value})));")
 
 
 def test_talk_completes_only_for_a_sent_nonempty_unguarded_prompt():
     assert prompt()['events'] == ['talk']
+    assert prompt(restarting=True) == {'events': [], 'value': 'Hello'}
     assert prompt(False)['events'] == []
     assert prompt(False)['value'] == 'Hello'
     assert prompt(pane=False)['events'] == []
@@ -203,7 +209,7 @@ def test_pending_spawn_wait_resolves_for_ready_and_rejects_for_failure():
 
 
 @pytest.fixture
-def tour_browser():
+def tour_browser(request):
     """Connect to an existing CDP browser; serve only this isolated checkout."""
     import contextlib
     import sys
@@ -217,6 +223,9 @@ def tour_browser():
     sys.path.insert(0, str(BRIDGE.parent))
     from tools.theme_axis_browser_test import _WebSocket
 
+    startup_fixture = getattr(request, 'param', None)
+    local_storage, prefs_body = request.getfixturevalue(startup_fixture) if startup_fixture else ({}, None)
+
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(BRIDGE), **kwargs)
@@ -225,6 +234,14 @@ def tour_browser():
             pass
 
         def do_GET(self):
+            if self.path == '/telemetry/prefs' and prefs_body is not None:
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(prefs_body)))
+                self.send_header('Cache-Control', 'no-store')
+                self.end_headers()
+                self.wfile.write(prefs_body)
+                return
             if self.path.startswith(('/telemetry/', '/ws', '/api/')):
                 self.send_error(404)
                 return
@@ -245,13 +262,20 @@ def tour_browser():
 
     server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    request = urllib.request.Request(endpoint + '/json/new?about:blank', method='PUT')
-    tab = json.load(urllib.request.urlopen(request, timeout=5))
+    new_tab = urllib.request.Request(endpoint + '/json/new?about:blank', method='PUT')
+    tab = json.load(urllib.request.urlopen(new_tab, timeout=5))
     client = _WebSocket(tab['webSocketDebuggerUrl'])
     try:
         client.call('Page.enable')
         client.call('Runtime.enable')
         client.call('Emulation.setDeviceMetricsOverride', width=1600, height=1000, deviceScaleFactor=1, mobile=False)
+        if local_storage:
+            client.call('Network.enable')
+            client.call('Network.setCacheDisabled', cacheDisabled=True)
+            client.call('Page.addScriptToEvaluateOnNewDocument',
+                        source="if(window===window.top){localStorage.clear();"
+                               f"Object.entries({json.dumps(local_storage)}).forEach("
+                               "([key,value])=>localStorage.setItem(key,value));}")
         client.call('Page.navigate', url=f'http://127.0.0.1:{server.server_port}/cockpit.html')
 
         def evaluate(expression):
@@ -373,6 +397,7 @@ def test_dom_map_never_draws_crossing_leaders_while_the_window_changes(tour_brow
     """
     client, evaluate = tour_browser
     seen, bad = set(), []
+    evaluate("if(!document.getElementById('orrery').hasAttribute('hidden'))document.getElementById('mailGraphBtn').click()")
 
     def check(width, height):
         client.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=1, mobile=False)
@@ -516,7 +541,7 @@ RING_STATE = """(()=>{
 
 def test_dom_the_next_control_gets_a_cyan_ring_and_a_here_tag(tour_browser):
     client, evaluate = tour_browser
-    evaluate("OrreryTour.firstFlight.reset();OrreryTour.firstFlight.show()")
+    evaluate("document.documentElement.dataset.colorTheme='dark';OrreryTour.firstFlight.reset();OrreryTour.firstFlight.show()")
     shown = evaluate(RING_STATE)
     assert all(shown.get(key) for key in ('ring', 'around', 'here', 'hereOnScreen', 'hereClearOfPanel', 'hereClearOfControls')), shown
     assert (shown['target'], shown['colour'], shown['pulse']) == ('newAgentBtn', 'rgb(63, 210, 230)', 'flight-ring-pulse'), shown
@@ -805,7 +830,7 @@ def test_dom_checklist_pops_out_to_its_own_window_and_comes_back(tour_browser):
             if in_popup("Boolean(window.OrreryTour&&OrreryTour.state)"):
                 break
             time.sleep(.1)
-        for _ in range(30):
+        for _ in range(40):
             if evaluate("OrreryTour.firstFlight.el.hidden"):
                 break
             time.sleep(.1)

@@ -89,17 +89,25 @@ def command_summary(command):
     return ''
 
 
-def claude_call(block, ts):
-    key = opaque(block.get('id'))
-    name = label(block.get('name'))
-    return dict(id=key, phase='call', tool=name, detail=summary(name, block.get('input')),
+def tool_call(call_id, name, args, ts):
+    key = opaque(call_id)
+    name = label(name)
+    return dict(id=key, phase='call', tool=name, detail=summary(name, args),
                 started=ts) if key and name else None
 
 
-def claude_result(block, ts):
-    key = opaque(block.get('tool_use_id'))
+def tool_result(call_id, ts, *, failed=False):
+    key = opaque(call_id)
     return dict(id=key, phase='result', ended=ts,
-                status='failed' if block.get('is_error') is True else 'done') if key else None
+                status='failed' if failed else 'done') if key else None
+
+
+def claude_call(block, ts):
+    return tool_call(block.get('id'), block.get('name'), block.get('input'), ts)
+
+
+def claude_result(block, ts):
+    return tool_result(block.get('tool_use_id'), ts, failed=block.get('is_error') is True)
 
 
 def codex_completed_item(raw):

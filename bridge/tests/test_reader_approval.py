@@ -65,6 +65,60 @@ class Bridge:
         if self.unknown:raise TimeoutError()
 
 
+def hermes_question(*, other=False, draft='', question='Which generated report should we use?'):
+    width=56
+    title='╭─ Hermes Agent needs your input '
+    other_label='Other (type below)' if other else 'Other (type your answer)'
+    body=['1 question', '▸ '+question, '  '+('  ' if other else '❯ ')+'1. Summary report',
+          '    2. Detailed report', '    3. No report', '  '+('❯ ' if other else '  ')+'4. '+other_label]
+    hint='type your answer and press Enter' if other else '↑/↓ to select, Enter to lock, Tab next question'
+    return '\n'.join([title+'─'*(width-len(title)-1)+'╮',*('│ '+row.ljust(width-4)+' │' for row in body),
+        '╰'+'─'*(width-2)+'╯',hint+'  (3474',' ☤ fixture-model · 0% · 15s','─'*width,
+        ('✎ '+draft) if other else '?'])
+
+
+@pytest.mark.parametrize('case',['choice','other','changed','occupied','old-view'])
+def test_hermes_question_revalidates_and_sends_only_the_confirmed_answer(tmp_path,case):
+    async def run():
+        b=Bridge(tmp_path)
+        b.screen=hermes_question(other=case=='occupied',draft='Another answer' if case=='occupied' else '')
+        b.command='zsh'
+        async def capture(pane,*,styled=False):
+            assert styled
+            return await Bridge.approval_capture_locked(b,pane)
+        async def send(pane,keys,*,proof=None):
+            b.writes.append(keys)
+            if keys==['4']:b.screen=hermes_question(other=True,draft='\x1b[0;3mtype your answer here and press Enter\x1b[0m')
+            if keys[0]=='-H':
+                assert bytes(int(k,16) for k in keys[1:])==b'\x1b[200~custom answer\x1b[201~'
+                b.screen=hermes_question(other=True,draft='custom answer')
+        async def harness(pane):return 'hermes'
+        b.approval_capture_locked=capture
+        b.approval_keys_locked=send
+        coordinator=ApprovalCoordinator(b,harness_resolver=harness)
+        if case=='old-view':
+            b.screen+='\n❯ Ordinary command'
+            assert (await coordinator.inspect('%1','peer'))['state']=='terminal'
+            return
+        view=await coordinator.inspect('%1','peer')
+        assert view['kind']=='question' and 'draft' not in view
+        if case=='changed':
+            b.screen=hermes_question(question='Use a different generated report?')
+        elif case=='choice':
+            b.screen=b.screen.replace('(3474','(3473')
+        answer=await coordinator.answer('%1','peer',view['token'],
+            2 if case=='choice' else 0 if case=='occupied' else 4,'answer-once',
+            text=None if case=='choice' else 'custom answer')
+        if case in ('changed','occupied'):
+            assert answer['state'] in ('changed','refused') and not b.writes
+        elif case=='choice':
+            assert answer['state']=='sent' and b.writes==[['2']]
+        else:
+            assert answer['state']=='sent' and [operation[0] for operation in b.writes]==['4','-H','Enter']
+            assert 'custom answer' not in (tmp_path/'approval-actions.jsonl').read_text()
+    asyncio.run(run())
+
+
 def test_recheck_deduplicate_and_log(tmp_path):
     async def run():
         b=Bridge(tmp_path);c=ApprovalCoordinator(b)
@@ -238,3 +292,45 @@ def test_unattached_approval_gets_an_explicit_unsent_reply(tmp_path):
         await manager.handle_message(peer,set(),dict(type='approval-answer',paneId='%1',session='Fixture',requestId='request'))
         assert peer.frames==[dict(type='approval',paneId='%1',session='Fixture',requestId='request',state='unavailable',message='Pane unavailable')]
     asyncio.run(run())
+
+@pytest.mark.parametrize('harness,screen,labels,multiple', [
+    ('codex', """  Question 1/1 (1 unanswered)
+  Which report?
+  › 1. Summary            Use the short report.
+    2. Detailed           Use the complete report.
+    3. None of the above  Optionally, add details in notes (tab)
+  tab to add notes | enter to submit answer | esc to interrupt""",
+        ['Summary', 'Detailed', 'None of the above'], False),
+    ('dsh', """    ─────────────▾  📋 Question 1/1   ─────────────
+    ◈ Reports
+    Which report?
+    ❯○ Summary
+       Use the short report.
+     ◉ Detailed
+       Use the complete report.
+     ✎ Custom answer： Type directly…
+    ↑/↓ select · Space multi-select · Ctrl+V paste · Type text to attach an answer · Enter submit · Esc
+    cancel · Ctrl+K to fold / click the header
+   108/131k 0.1%
+   esc to interrupt""",
+        ['Summary', 'Detailed', 'Custom answer'], True),
+    ('agy', """Question
+────────────────────────────────────────────────────
+Question 1/1: Which report?
+> 1. [ ] Summary
+  2. [x] Detailed
+  3. Write-in...
+  ↑/↓ Navigate · space Toggle · enter Submit · esc Skip
+esc to cancel                           plan · Gemini 3.1 Pro · low""",
+        ['Summary', 'Detailed', 'Write-in...'], True),
+])
+def test_native_question_options_require_current_controls(harness,screen,labels,multiple):
+    result=parse_screen(screen,'zsh',harness)
+    assert result['kind']=='question' and result['multiple'] is multiple
+    assert result['body']=='Which report?'
+    assert [item['label'] for item in result['choices']]==labels
+    assert result['choices'][-1]['other']
+    assert not parse_screen(screen+'\n❯ Ordinary composer', 'zsh', harness)
+    assert not parse_screen(screen, 'zsh', 'unknown')
+    if multiple:
+        assert [item['id'] for item in result['choices'] if item['checked']]==[2]

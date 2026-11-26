@@ -56,6 +56,7 @@ def test_assignments_group_under_direct_recipients_and_only_show_reply_arrival(c
 
 def test_keyboard_route_and_filter_preserve_the_assignment(cockpit):
     js, wait, client = prepare(cockpit)
+    js("document.getElementById('mailGraphBtn').click()")
     assert js("document.getElementById('orrery').hasAttribute('hidden')")
     assert js("document.getElementById('mailSelectedRoute').hidden")
     js("document.getElementById('mailGraphBtn').click()")
@@ -127,7 +128,6 @@ def test_thread_load_keeps_scroll_and_focus_during_live_arrival(cockpit):
 
 def test_timeline_orders_requests_and_shares_both_kinds_of_reply_link(cockpit):
     js, wait, _ = prepare(cockpit, recipient=False)
-    assert js("localStorage.getItem('oc-mail-view')") is None
     assert js("document.getElementById('mailViewBtn').title") == 'Group by recipient'
     js("""emitFixtureMail([feedMessages[2],
       {id:120,sender:'LeadNode',recipients:['BuildNode','WatchNode'],subject:'Run both checks',ts:2000000006},
