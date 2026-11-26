@@ -553,11 +553,14 @@
   .agent-detail-permissions .agent-detail-item{align-items:center;min-height:24px}
   .agent-detail-permissions .agent-detail-icon{margin-top:0}
   .agent-detail-permissions .agent-detail-item+.agent-detail-item{padding-left:10px;border-left:1px solid var(--hair)}
-  .agent-detail-observed{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+  .agent-detail-observed{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;
+    border-color:var(--hair);background:var(--panel-2);
+  }
   .agent-detail-observed .agent-detail-item{align-items:flex-start}
   .agent-detail-observed .agent-detail-icon{margin-top:1px}
-  .agent-detail-observed small{display:block;color:var(--ink-dim);overflow-wrap:anywhere}
-  .agent-detail-observed-reason{grid-column:1/-1}
+  .agent-detail-permissions small{display:block;color:var(--ink-dim);overflow-wrap:anywhere}
+  .agent-detail-observed-reason{grid-column:1/-1;width:100%}
   .agent-detail-modes{display:flex;align-items:center;flex-wrap:wrap;gap:1px;color:var(--ink-dim)}
   .agent-detail-modes button,.agent-detail-browser-toggle{
     min-height:24px;padding:2px 5px;border:0;border-radius:4px;background:transparent;
@@ -581,6 +584,22 @@
   .agent-detail-browser-toggle{color:var(--ink-dim)}
   .agent-detail-switch.unknown{justify-content:center}
   .agent-detail-switch.unknown::before{width:8px;height:1px}
+  #mailRail .agent-detail[data-mini-dock]{
+    position:static;z-index:auto;flex:0 1 auto;width:auto;min-height:0;max-height:35vh;
+    margin:2px 16px 0;padding:7px 7px 10px;border:0;border-bottom:1px solid var(--hair);border-radius:0;
+    background:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;
+    font:12px/1.45 var(--rail-sans);font-variant-numeric:tabular-nums;
+  }
+  .agent-detail[data-mini-dock] .agent-detail-name{color:var(--ink);font:600 12px/1.45 var(--rail-sans)}
+  .agent-detail[data-mini-dock] .agent-detail-identity{margin-top:3px}
+  .agent-detail[data-mini-dock] .agent-detail-meta{margin-top:6px;gap:3px}
+  .agent-detail[data-mini-dock] .agent-detail-permissions{
+    display:grid;grid-template-columns:minmax(0,1fr);gap:0;margin-top:6px;padding:0;
+    border:0;border-radius:0;background:transparent;
+  }
+  .agent-detail[data-mini-dock] .agent-detail-permissions .agent-detail-item{
+    padding:4px 0;min-height:0;border:0;border-top:1px solid var(--hair);
+  }
   .agent-permission-confirm{
     width:min(390px,calc(100vw - 24px));margin:auto;padding:16px;border:1px solid var(--hair);border-radius:10px;
     color:var(--ink);background:var(--panel);font:13px/1.45 var(--rail-sans);
@@ -1452,7 +1471,7 @@
             <ul class="prompt-attachments" id="promptFiles" aria-label="Attachments" hidden></ul>
             <div class="prompt-footer">
               <span class="prompt-meta"><img class="prompt-ava" id="promptAva" alt="" hidden><span class="prompt-target" id="promptTarget">—</span></span>
-              <input id="promptFilePicker" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.txt,.md,.csv,.json" multiple hidden>
+              <input id="promptFilePicker" type="file" multiple hidden>
               <button class="prompt-clip" id="promptClip" type="button" title="Attach files" aria-label="Attach files">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 14 6-6a2 2 0 0 1 3 3l-7 7a4 4 0 0 1-6-6l8-8a6 6 0 0 1 8 8l-8 8"/></svg>
               </button>
@@ -1803,6 +1822,7 @@
 <script src="vendor/xterm-5.5.0/xterm.js"></script>
 <script src="vendor/addon-fit-0.10.0/addon-fit.js"></script>
 <script src="vendor/addon-web-links-0.11.0/addon-web-links.js"></script>
+<script src="local_model_makers.js"></script>
 <script src="roster_descriptor.js"></script>
 <script src="roster_edit.js"></script>
 <script src="demo_mask.js"></script>
@@ -2253,8 +2273,18 @@
             "value": "1px solid var(--hair)"
           },
           {
+            "property": "border-color",
+            "selector": ".agent-detail-observed",
+            "value": "var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".agent-detail-observed",
+            "value": "var(--panel-2)"
+          },
+          {
             "property": "color",
-            "selector": ".agent-detail-observed small",
+            "selector": ".agent-detail-permissions small",
             "value": "var(--ink-dim)"
           },
           {
@@ -2281,6 +2311,21 @@
             "property": "color",
             "selector": ".agent-detail-browser-toggle",
             "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": "#mailRail .agent-detail[data-mini-dock]",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail[data-mini-dock] .agent-detail-name",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".agent-detail[data-mini-dock] .agent-detail-permissions .agent-detail-item",
+            "value": "1px solid var(--hair)"
           },
           {
             "property": "border",
@@ -3118,6 +3163,36 @@
             "value": "var(--panel)"
           },
           {
+            "property": "outline",
+            "selector": ".mini-graph-scroll:focus-visible",
+            "value": "1px solid var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".mini-graph-zoom button",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mini-graph-zoom button",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-zoom button",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-zoom button:not(:disabled):is(:hover,:focus-visible)",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".mini-graph-zoom button:not(:disabled):is(:hover,:focus-visible)",
+            "value": "var(--ink-dim)"
+          },
+          {
             "property": "stroke",
             "selector": ".orrery-comm-edge",
             "value": "var(--ink)"
@@ -3126,6 +3201,11 @@
             "property": "stroke",
             "selector": ".orrery-history-edge",
             "value": "var(--ink-dim)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-mail-edge:is(:hover,:focus-visible) > :first-child",
+            "value": "var(--ink)"
           },
           {
             "property": "fill",
@@ -3596,7 +3676,7 @@
           },
           {
             "property": "color",
-            "selector": ".agent-detail-observed small",
+            "selector": ".agent-detail-permissions small",
             "value": "var(--ink-dim)"
           },
           {
@@ -3900,6 +3980,21 @@
             "value": "var(--ink-faint)"
           },
           {
+            "property": "outline",
+            "selector": ".mini-graph-scroll:focus-visible",
+            "value": "1px solid var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-zoom button",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".mini-graph-zoom button:not(:disabled):is(:hover,:focus-visible)",
+            "value": "var(--ink-dim)"
+          },
+          {
             "property": "stroke",
             "selector": ".orrery-history-edge",
             "value": "var(--ink-dim)"
@@ -4088,7 +4183,7 @@
         "unit": "effect-component"
       },
       "source": {
-        "digest": "cbca21589e1ec9e1baa9bfe2451cb7f0b08b0c5e44ede3d9b36a3a7e20d249e6",
+        "digest": "a8ec14f4847e277d164c0fcbf89355c1fcf1fa846d1d5f58e4e02c5bf98eb7df",
         "records": [
           ":root\u0000--amber-glow",
           ".miniorrery.telemetry-network\u0000background",
@@ -4105,6 +4200,7 @@
           ":is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .face\u0000box-shadow",
           ".medal .face::after\u0000background",
           ".agent-detail\u0000box-shadow",
+          "#mailRail .agent-detail[data-mini-dock]\u0000box-shadow",
           ".term\u0000background",
           ".layout-picker\u0000box-shadow",
           ".session-label.active-session\u0000box-shadow",
@@ -4150,7 +4246,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "c1c4d2aa988effc5db03d98482e8ea1d5e367efcbc45d1eb76df7c5a446148c7",
+        "digest": "14f1b5e85f71d2504649b94e0da76d956607909d5b5424aeb73d62063ae1be96",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4243,7 +4339,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "7e97e01d56196c33ab79e10dd3a598607be8e3034bff0250858e42733a1f5f44",
+        "digest": "24b7810f2372431d6846530261461d37eb52aa5833bde56cc89f18af11163588",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -4272,9 +4368,9 @@
       }
     }
   },
-  "inventory_digest": "f1a047bfb0dc54e8052be7308a739a6b0b1c092fd95a5e495a661cae260cb75a",
+  "inventory_digest": "7c3640e386ac795f2ea8fe2d541a7dfee53bef56aa99af94a2d67a17f0b96351",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "527ed82a2ae33f15685cf0578961e88d5bc52192acc11fd996b51393c1e24366",
+  "source_digest": "003eaa049134517f58b1d17db39307b0de4f29b2ecffdfbd42ec0565d69e4f8d",
   "surface": "cockpit",
   "version": 1
 }
@@ -5095,6 +5191,7 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   [':is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .face','box-shadow',['state'],'preserve'],
   ['.medal .face::after','background',['elevation'],'preserve'],
   ['.agent-detail','box-shadow',['elevation'],'preserve'],
+  ['#mailRail .agent-detail[data-mini-dock]','box-shadow',['elevation'],'preserve'],
   ['.term','background',['elevation'],'preserve'],
   ['.layout-picker','box-shadow',['elevation','emissive'],'scale','html[data-theme-axis="glow"] .layout-picker'],
   ['.session-label.active-session','box-shadow',['state'],'preserve'],
@@ -8950,9 +9047,8 @@ const ROSTER_PROVIDER={
   anthropic:{asset:'anthropic',label:'Claude'},
   openai:{asset:'openai',label:'Codex (OpenAI)'},
   google:{asset:'google',label:'Gemini'},
-  deepseek:{asset:'deepseek',label:'DeepSeek'},
-  qwen:{asset:'qwen',label:'Qwen'},
-  glm:{asset:'glm',label:'GLM'},
+  ...Object.fromEntries(Object.entries(window.OrreryLocalModelMakers).map(
+    ([asset,{label}])=>[asset,{asset,label}])),
 };
 function rosterIsLocal(agent){
   const provider=String(agent.provider||'').trim().toLowerCase();
@@ -8966,11 +9062,7 @@ function rosterProviderKey(agent){
   // Backend identity or explicit locality selects the local presentation.
   // Use the resolved model ID, never the adapter/program or profile nickname.
   if(rosterIsLocal(agent)){
-    const model=String(agent.model_raw||agent.model||'').toLowerCase();
-    if(/deepseek/.test(model))return 'deepseek';
-    if(/qwen/.test(model))return 'qwen';
-    if(/(?:^|[^a-z0-9])glm/.test(model))return 'glm';
-    return '';
+    return window.orreryLocalModelMaker(String(agent.model_raw||agent.model||''));
   }
   if(Object.hasOwn(alias,provider))return alias[provider];
   const model=String(agent.model||'').toLowerCase();
@@ -9155,8 +9247,10 @@ const pinnedAgents=storedRosterNames(PINNED_AGENT_KEY),foldedAgents=storedRoster
 let rosterRows=[],rosterRowsByName=new Map();
 const agentDetail=document.createElement('div');
 agentDetail.id='agentDetail';agentDetail.className='agent-detail';agentDetail.setAttribute('role','group');
-agentDetail.setAttribute('aria-labelledby','agentDetailName');agentDetail.hidden=true;
-let detailAnchor=null,detailHideTimer=0,detailRendered='';
+agentDetail.setAttribute('aria-labelledby','agentDetailName');agentDetail.tabIndex=-1;agentDetail.hidden=true;
+const detailGraph=document.getElementById('orrery'),detailGraphDivider=document.getElementById('mailGraphDivider');
+detailGraphDivider.after(agentDetail);
+let detailAnchor=null,detailHideTimer=0,detailRendered='',restoringMiniFocus=false;
 let permissionChangeBusy=false,permissionApi=null,permissionApiRequest=null,permissionApiCheckedAt=-Infinity;
 let selectedAgent=null,currentAgents=[];
 const descriptorStore=RosterDescriptor.createStableDescriptorStore();
@@ -9202,7 +9296,7 @@ function paintBulkTileState(el,agent){
   const eligible=isBulkSelectableAgent(agent);
   const selected=eligible&&bulkSelectedAgents.has(agent.name);
   el.classList.toggle('bulk-ineligible',rosterSelectMode&&!eligible);
-  el.classList.toggle('permission-target',rosterSelectMode&&!eligible&&!agentPermissionBlockReason(agent,permissionApi));
+  el.classList.toggle('permission-target',rosterSelectMode&&!eligible&&canChangeAgentPermissions(agent,permissionApi));
   el.classList.toggle('bulk-selected',rosterSelectMode&&selected);
   if(rosterSelectMode){
     el.setAttribute('aria-selected',String(selected));
@@ -9458,7 +9552,9 @@ rosterBulkReboot.addEventListener('click',runBulkReboot);
 
 const AGENT_DETAIL_HARNESSES=new Map([['claude','Claude Code'],['codex','Codex CLI'],['dsh','dsh'],['hermes','Hermes'],['antigravity','Antigravity']]);
 const AGENT_DETAIL_COMPUTER=new Map([['off','Off'],['view','View'],['control','Control']]);
+const AGENT_DETAIL_BROWSER=new Map([['off','Off'],['temporary','Temporary Chrome'],['personal','My Chrome']]);
 const STANDALONE_PERMISSION_API=46;
+const PERMISSION_CONTROLS_API=54;
 const AGENT_DETAIL_TOKENS=new Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1});
 const AGENT_DETAIL_ICONS={
   role:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M5.5 16a3.5 3.5 0 0 1 7 0m3-6h2.5m-2.5 4H18"/>',
@@ -9510,22 +9606,44 @@ function agentPermissionBlockReason(a,api){
   }
   return '';
 }
+function agentPermissionSetting(a,key,api){
+  const control=api>=PERMISSION_CONTROLS_API?a.permission_controls?.[key]:null;
+  const server=api>=PERMISSION_CONTROLS_API;
+  const value=control?control.value:a[key];
+  const source=control?control.source:a[key+'_source'];
+  const action=a.running===true?'restart':'resume';
+  const options=Array.isArray(control?.options)?control.options.filter(mode=>AGENT_DETAIL_BROWSER.has(mode)):[];
+  const reason=server?
+    (control?.can_change===true&&control.action===action&&(key!=='browser_use'||options.length)
+      ?'':control?.change_reason||'Permission information unavailable'):
+    agentPermissionBlockReason(a,api)||(api>=52&&a.permission_source==='process'?'Observed process permissions':'');
+  return {
+    value:key==='computer_use'?(AGENT_DETAIL_COMPUTER.has(value)?value:null):(typeof value==='boolean'?value:null),
+    observation: (control?control.observation_reason:a[key+'_reason'])||
+      (source==='relay'?'Current screen relay':source==='launch'?'ORRERY launch selection':null),
+    reason,
+    action:reason?null:action,
+    mode:AGENT_DETAIL_BROWSER.has(control?.mode)?control.mode:null,
+    options,
+  };
+}
+function canChangeAgentPermissions(a,api){
+  return ['computer_use','browser_use'].some(key=>agentPermissionSetting(a,key,api).action);
+}
 function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false){
   const text=value=>typeof value==='string'&&value.trim()?value:null;
   const cwd=text(a.cwd),home=homeDir?.replace(/\/+$/,'');
   const directory=cwd&&home&&(cwd===home||cwd.startsWith(home+'/'))?'~'+cwd.slice(home.length):cwd;
-  const source=value=>value==='relay'?'Current screen relay':value==='launch'?'ORRERY launch selection':null;
+  const setting=key=>{
+    const value=agentPermissionSetting(a,key,api);
+    return busy&&value.action?{...value,reason:'Agent action in progress',action:null}:value;
+  };
   return {
     name:a.name,role:text(a.annot?.role),
     parentState:a.parent_state,parent:a.parent_state==='child'?text(a.parent_agent):null,
-    computer:AGENT_DETAIL_COMPUTER.has(a.computer_use)?a.computer_use:null,
-    browser:typeof a.browser_use==='boolean'?a.browser_use:null,
-    processPermissions:api>=52&&a.permission_source==='process',
-    computerReason:text(a.computer_use_reason)||source(a.computer_use_source),
-    browserReason:text(a.browser_use_reason)||source(a.browser_use_source),
+    computer:setting('computer_use'),browser:setting('browser_use'),
     permissions:Boolean(a.harness_kind||a.lifecycle==='persistent'||a.surface==='codex-app'||permissionConversationOnly(a)||
-      a.computer_use||typeof a.browser_use==='boolean'),
-    permissionReason:agentPermissionBlockReason(a,api)||(busy?'Agent action in progress':''),
+      a.computer_use||typeof a.browser_use==='boolean'||a.permission_controls),
     model:text(a.model_id),harness:AGENT_DETAIL_HARNESSES.get(a.harness_kind)??null,effort:text(a.effort),
     tokens:Number.isSafeInteger(a.ctx_window_tokens)&&a.ctx_window_tokens>0?a.ctx_window_tokens:null,
     used:agentContextUsed(a),
@@ -9544,43 +9662,35 @@ function agentDetailItem(icon,label,body='',path=null){
 }
 function agentDetailPermissions(detail){
   if(!detail.permissions)return '';
-  if(detail.processPermissions){
-    const computer=AGENT_DETAIL_COMPUTER.get(detail.computer)||'Unknown';
-    const browser=detail.browser===null?'Unknown':detail.browser?'On':'Off';
-    const shared=detail.computerReason&&detail.computerReason===detail.browserReason?detail.computerReason:'';
-    const mark=(icon,label,value,reason)=>agentDetailItem(icon,
-      `${label}: ${value}${reason?`. ${reason}`:''}`,
-      `<span class="agent-detail-value">${value}${reason&&!shared?`<small>${esc(reason)}</small>`:''}</span>`);
-    return `<div class="agent-detail-permissions agent-detail-observed" role="group" aria-label="Observed permissions">
-      ${mark('computer','Computer use',computer,detail.computerReason)}
-      ${mark('browser','Browser use',browser,detail.browserReason)}
-      ${shared?`<small class="agent-detail-observed-reason" aria-hidden="true">${esc(shared)}</small>`:''}
-    </div>`;
-  }
-  const disabled=reason=>reason?' disabled':'';
-  const title=(label,reason)=>esc(reason?`${label} (${reason})`:label);
-  const computer=detail.computer?AGENT_DETAIL_COMPUTER.get(detail.computer):'Unknown';
-  const computerTitle=title('Computer use: '+computer,detail.computerReason||detail.permissionReason);
-  const modes=[...AGENT_DETAIL_COMPUTER].map(([value,label])=>{
-    const reason=detail.permissionReason;
-    const current=value===detail.computer;
-    return `<button type="button" data-computer="${value}" aria-pressed="${current}"
-      aria-label="Computer use: ${label}" title="${title(`Computer use: ${label}`,reason)}"
-      ${current?'class="current"':''}${disabled(reason)}>${label}</button>`;
-  }).join('');
-  const browserLabel=`Browser use: ${detail.browser===null?'Unknown':detail.browser?'On':'Off'}`;
-  const browserTitle=title(browserLabel,detail.browserReason||detail.permissionReason);
-  const switchState=detail.browser===null?' unknown':detail.browser?' on':'';
-  return `<div class="agent-detail-permissions" role="group" aria-label="Permissions">
-    <div class="agent-detail-item" role="group" aria-label="${detail.computerReason?computerTitle:'Computer use'}" title="${computerTitle}">
-      ${agentDetailIcon('computer')}<span class="agent-detail-modes">${modes}</span>
-    </div>
-    <div class="agent-detail-item" title="${browserTitle}">
+  const {computer,browser}=detail;
+  const computerValue=AGENT_DETAIL_COMPUTER.get(computer.value)||'Unknown';
+  const browserValue=AGENT_DETAIL_BROWSER.get(browser.mode)||(browser.value===null?'Unknown':browser.value?'On':'Off');
+  const description=(label,value,reason)=>`${label}: ${value}${reason?` (${reason})`:''}`;
+  const readOnly=!computer.action&&!browser.action;
+  const shared=[...new Set(['observation','reason'].map(key=>
+    readOnly&&computer[key]===browser[key]?computer[key]:null).filter(Boolean))];
+  const note=value=>value?`<small>${esc(value)}</small>`:'';
+  const mark=(icon,label,value,setting)=>agentDetailItem(icon,
+    description(label,value,setting.observation||setting.reason),
+    `<span class="agent-detail-value"><small>${label}</small><span>${value}</span>
+      ${[...new Set([setting.observation,setting.reason])].filter(value=>!shared.includes(value)).map(note).join('')}</span>`);
+  const modes=[...AGENT_DETAIL_COMPUTER].map(([value,label])=>
+    `<button type="button" data-computer="${value}" aria-pressed="${value===computer.value}"
+      aria-label="Computer use: ${label}" title="Computer use: ${label}"
+      ${value===computer.value?'class="current"':''}>${label}</button>`).join('');
+  const browserTitle=esc(description('Browser use',browserValue,browser.observation));
+  const switchState=browser.value===null?' unknown':browser.value?' on':'';
+  return `<div class="agent-detail-permissions${readOnly?' agent-detail-observed':''}" role="group"
+    aria-label="${readOnly?'Read-only permissions':'Permissions'}">
+    ${computer.action?agentDetailItem('computer',description('Computer use',computerValue,computer.observation),
+      `<span class="agent-detail-modes">${modes}</span>`):mark('computer','Computer use',computerValue,computer)}
+    ${browser.action?`<div class="agent-detail-item" title="${browserTitle}">
       ${agentDetailIcon('browser')}<button class="agent-detail-browser-toggle" type="button" data-browser
-        ${detail.browser===null?'':`role="switch" aria-checked="${detail.browser}"`}
-        aria-label="${detail.browser===null||detail.browserReason?browserTitle:'Browser use'}" title="${browserTitle}"${disabled(detail.permissionReason)}>
-        <span class="agent-detail-switch${switchState}" aria-hidden="true"></span></button>
-    </div>
+        ${browser.options.length||browser.value===null?'':`role="switch" aria-checked="${browser.value}"`}
+        aria-label="${browser.options.length||browser.value===null||browser.observation?browserTitle:'Browser use'}" title="${browserTitle}">
+        ${browser.options.length?browserValue:`<span class="agent-detail-switch${switchState}" aria-hidden="true"></span>`}</button></div>`:
+      mark('browser','Browser use',browserValue,browser)}
+    ${shared.map(value=>`<small class="agent-detail-observed-reason">${esc(value)}</small>`).join('')}
   </div>`;
 }
 function agentDetailHTML(detail){
@@ -9615,7 +9725,9 @@ function agentDetailHTML(detail){
     ${agentDetailPermissions(detail)}
     ${group('meta',text('model','Model',detail.model)+group('runtime',runtime)+contextRow+text('directory','Working directory',detail.directory))}`;
 }
+function isMiniDetailAnchor(el){return el?.classList.contains('mini-agent');}
 function positionAgentDetail(el){
+  if(isMiniDetailAnchor(el))return;
   const gap=10,edge=12,anchor=el.getBoundingClientRect();
   const card=agentDetail.getBoundingClientRect();
   let left=anchor.right+gap,top=anchor.top;
@@ -9634,6 +9746,8 @@ function positionAgentDetail(el){
 }
 function showAgentDetail(el){
   const a=currentAgentNamed(el&&el.dataset.agent);if(!a)return;
+  const mini=isMiniDetailAnchor(el);
+  if(mini&&(!el.isConnected||detailGraph.hasAttribute('hidden')))return;
   if(rosterEditor.isEditing(a.name)||el.matches('.filtered-out,.folded-out')){hideAgentDetail(el);return;}
   if(detailAnchor!==el)clearTimeout(detailHideTimer);
   detailAnchor=el;
@@ -9642,41 +9756,89 @@ function showAgentDetail(el){
   const html=agentDetailHTML(agentDetailModel(a,hostPlatform.home_dir,hiddenChildren,permissionApi,
     bulkActionBusy||permissionChangeBusy));
   const focused=agentDetail.contains(document.activeElement)?document.activeElement:null;
-  if(el.nextElementSibling!==agentDetail)el.after(agentDetail);
+  const mount=mini?detailGraphDivider:el;
+  agentDetail.toggleAttribute('data-mini-dock',mini);
+  if(mount.nextElementSibling!==agentDetail)mount.after(agentDetail);
   if(detailRendered!==html){
     agentDetail.innerHTML=html;detailRendered=html;
     const replacement=focused?.matches('[data-browser]')?agentDetail.querySelector('[data-browser]'):
-      focused&&agentDetail.querySelector(`[data-computer="${focused.dataset.computer}"]`);
-    if(replacement?.disabled)el.focus({preventScroll:true});
+      focused?.matches('[data-computer]')?agentDetail.querySelector(`[data-computer="${focused.dataset.computer}"]`):null;
+    if(focused&&focused!==agentDetail&&(!replacement||replacement.disabled))el.focus({preventScroll:true});
     else replacement?.focus({preventScroll:true});
   }
   if(agentDetail.contains(focused)&&focused!==document.activeElement)focused.focus({preventScroll:true});
   setHidden(agentDetail,false);positionAgentDetail(el);
-  if(permissionCli(a))loadPermissionApi();
+  if(a.permission_controls||permissionCli(a))loadPermissionApi();
 }
 function hideAgentDetail(el){
   if(detailAnchor!==el)return;
   clearTimeout(detailHideTimer);
   detailAnchor=null;agentDetail.hidden=true;
 }
+function agentDetailHasFocus(el){
+  const focused=document.activeElement;
+  return (el.contains(focused)||agentDetail.contains(focused))&&
+    (!isMiniDetailAnchor(el)||focused.matches(':focus-visible'));
+}
 function scheduleAgentDetailHide(el){
   clearTimeout(detailHideTimer);
   detailHideTimer=setTimeout(()=>{
-    if(!el.contains(document.activeElement)&&!agentDetail.contains(document.activeElement)&&
-      !el.matches(':hover')&&!agentDetail.matches(':hover'))hideAgentDetail(el);
+    if(!agentDetailHasFocus(el)&&!el.matches(':hover')&&!agentDetail.matches(':hover'))hideAgentDetail(el);
   },160);
 }
+function syncMiniAgentDetail(nodes,focusedName){
+  const previous=detailAnchor;
+  if(isMiniDetailAnchor(previous)){
+    const node=nodes.get(previous.dataset.agent);
+    if(node)showAgentDetail(node);
+    if(node&&detailAnchor===node)scheduleAgentDetailHide(node);
+    else hideAgentDetail(previous);
+  }
+  const focused=nodes.get(focusedName);
+  if(focused){
+    // A redraw should preserve keyboard focus and any explicit dismissal.
+    restoringMiniFocus=true;
+    try{focused.focus({preventScroll:true});}finally{restoringMiniFocus=false;}
+  }
+}
+new MutationObserver(()=>{
+  if(detailGraph.hasAttribute('hidden')&&isMiniDetailAnchor(detailAnchor))hideAgentDetail(detailAnchor);
+}).observe(detailGraph,{attributes:true,attributeFilter:['hidden']});
 agentDetail.addEventListener('mouseenter',()=>clearTimeout(detailHideTimer));
 agentDetail.addEventListener('mouseleave',()=>{if(detailAnchor)scheduleAgentDetailHide(detailAnchor);});
 agentDetail.addEventListener('focusout',()=>{if(detailAnchor)scheduleAgentDetailHide(detailAnchor);});
-function bindAgentDetail(el){
-  el.tabIndex=0;el.setAttribute('role','button');
-  el.addEventListener('mouseenter',()=>showAgentDetail(el));
-  el.addEventListener('mouseleave',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
-  el.addEventListener('focusin',()=>showAgentDetail(el));
+function bindAgentDetail(el,mini=false){
+  let hoverTimer;
+  if(mini){
+    el.setAttribute('aria-controls',agentDetail.id);
+    el.setAttribute('aria-keyshortcuts','F2');
+  }else{
+    el.tabIndex=0;el.setAttribute('role','button');
+  }
+  el.addEventListener('mouseenter',()=>{
+    if(!mini||!isMiniDetailAnchor(detailAnchor)||detailAnchor===el)showAgentDetail(el);
+    // Let the pointer cross other nodes on its way down to the dock.
+    else hoverTimer=setTimeout(()=>{
+      if(el.matches(':hover')&&(!detailAnchor||!agentDetailHasFocus(detailAnchor)))showAgentDetail(el);
+    },120);
+  });
+  el.addEventListener('mouseleave',()=>{
+    clearTimeout(hoverTimer);
+    if(detailAnchor===el)scheduleAgentDetailHide(el);
+  });
+  el.addEventListener('focusin',()=>{
+    if(!mini||(!restoringMiniFocus&&el.matches(':focus-visible')))showAgentDetail(el);
+  });
   el.addEventListener('focusout',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
   el.addEventListener('keydown',event=>{
     if(event.target!==el)return;
+    if(mini){
+      if(event.key!=='F2')return;
+      event.preventDefault();
+      showAgentDetail(el);
+      if(detailAnchor===el)(agentDetail.querySelector('button:not(:disabled)')||agentDetail).focus();
+      return;
+    }
     if(event.key!=='Enter'&&event.key!==' ')return;
     event.preventDefault();handleRosterTileClick(el.dataset.agent,event);
   });
@@ -9718,7 +9880,7 @@ permissionConfirm.innerHTML=`<form method="dialog">
     </div>
     <div class="agent-detail-item">${agentDetailIcon('browser')}
       <select name="browser" title="Browser use" aria-label="Browser use" required>
-        <option value="">Choose a setting</option><option value="off">Off</option><option value="on">On</option>
+        <option value="">Choose a setting</option>
       </select>
     </div>
   </div>
@@ -9736,20 +9898,30 @@ permissionConfirm.addEventListener('keydown',event=>event.stopPropagation());
 agentDetail.addEventListener('click',event=>{
   const button=event.target.closest('[data-computer],[data-browser]');
   const a=currentAgentNamed(detailAnchor?.dataset.agent);
-  if(!button||button.disabled||!a||permissionConfirm.open||bulkActionBusy||permissionChangeBusy||
-    agentPermissionBlockReason(a,permissionApi))return;
+  if(!button||button.disabled||!a||permissionConfirm.open||bulkActionBusy||permissionChangeBusy)return;
   const computer=button.dataset.computer;
-  if(computer&&computer===a.computer_use)return;
+  const key=computer?'computer_use':'browser_use';
+  const setting=agentPermissionSetting(a,key,permissionApi);
+  if(!setting.action||computer&&computer===setting.value)return;
   permissionComputer.parentElement.hidden=permissionComputer.disabled=!computer;
   permissionBrowser.parentElement.hidden=permissionBrowser.disabled=Boolean(computer);
   permissionComputer.value=computer||'';
-  permissionBrowser.value=typeof a.browser_use==='boolean'?(a.browser_use?'off':'on'):'';
-  pendingPermissionChange={agent:a,key:computer?'computer_use':'browser_use'};
+  const modes=key==='browser_use'&&setting.options.length>0;
+  if(!computer){
+    const options=modes?setting.options.filter(mode=>mode!==setting.mode).map(mode=>[mode,AGENT_DETAIL_BROWSER.get(mode)]):
+      [['off','Off'],['on','On']];
+    permissionBrowser.replaceChildren(new Option('Choose a setting',''),
+      ...options.map(([value,label])=>new Option(label,value)));
+    permissionBrowser.value=modes?'':typeof setting.value==='boolean'?(setting.value?'off':'on'):'';
+  }
+  pendingPermissionChange={agent:a,key,modes};
   const name=OrreryDemo.mask(a.name);
   setText(permissionApply,a.running?'Restart':'Resume');
-  setText(permissionConfirm.querySelector('p'),a.running?
+  const description=a.running?
     `Restart ${name} in the same conversation with this permission change? Any work in progress will be interrupted.`:
-    `Resume ${name} in the same conversation with this permission change?`);
+    `Resume ${name} in the same conversation with this permission change?`;
+  const managed=a.permission_managed_launch===true?' ORRERY will use a managed launch to apply the permission.':'';
+  setText(permissionConfirm.querySelector('p'),description+managed);
   permissionConfirm.showModal();
 });
 permissionConfirm.addEventListener('cancel',()=>{pendingPermissionChange=null;});
@@ -9759,27 +9931,31 @@ permissionConfirm.addEventListener('submit',event=>{
   pendingPermissionChange=null;
   permissionConfirm.close();
   if(change&&event.submitter===permissionApply){
-    const {agent,key}=change;
-    changeAgentPermission(agent,key,key==='computer_use'?permissionComputer.value:permissionBrowser.value==='on');
+    const {agent,key,modes}=change;
+    const value=key==='computer_use'?permissionComputer.value:modes?permissionBrowser.value:permissionBrowser.value==='on';
+    changeAgentPermission(agent,key,value);
   }
 });
 function samePermissionConversation(a,b){
-  return ['history_session_id','harness_kind','parent_state','project_key'].every(key=>a[key]===b[key]);
+  return ['history_session_id','harness_kind','parent_state','project_key','permission_managed_launch'].every(key=>a[key]===b[key]);
 }
-async function confirmPermissionStop(original,api,signal){
+async function confirmPermissionStop(original,key,api,signal){
   // The live roster also omits finished tmux panes. Permission resumes need
   // the retained conversation and a gone/retired row before trying jump.
   const rows=await agentActionRoster('/telemetry/agents',signal);
   const stopped=rows?.find(row=>row?.name===original.name);
-  if(!stopped||stopped.running!==false||!['gone','retired'].includes(stopped.category))return false;
+  if(!stopped||stopped.running!==false||(!['gone','retired'].includes(stopped.category)&&
+      !(original.permission_managed_launch===true&&stopped.permission_managed_launch===true&&stopped.category==='finished')))return false;
   if(!samePermissionConversation(stopped,original))throw new Error('The stopped conversation changed');
-  const reason=agentPermissionBlockReason(stopped,api);
+  const reason=agentPermissionSetting(stopped,key,api).reason;
   if(reason)throw new Error(reason);
   return true;
 }
 async function changeAgentPermission(original,key,value){
   const {name}=original;
-  if(permissionChangeBusy||bulkActionBusy||value===original[key])return;
+  const browserMode=key==='browser_use'&&typeof value==='string';
+  const originalSetting=agentPermissionSetting(original,key,permissionApi);
+  if(permissionChangeBusy||bulkActionBusy||value===(browserMode?originalSetting.mode:originalSetting.value))return;
   permissionChangeBusy=true;updateRosterBulkUI();
   if(detailAnchor)showAgentDetail(detailAnchor);
   const label=OrreryDemo.mask(name),restart=original.running===true;
@@ -9793,11 +9969,15 @@ async function changeAgentPermission(original,key,value){
       (await agentActionRoster(LIVE_AGENT_ROSTER,AbortSignal.timeout(8000)))?.find(row=>row?.name===name):
       currentAgentNamed(name);
     if(!agent)throw new Error('Could not verify the agent in the roster');
-    const reason=agentPermissionBlockReason(agent,api);
-    if(reason)throw new Error(reason);
-    if(!samePermissionConversation(agent,original)||['created','category','running',key].some(
-      key=>agent[key]!==original[key]))throw new Error('The agent changed. Choose permissions again');
-    const permission={history_session_id:agent.history_session_id,[key]:value};
+    const current=agentPermissionSetting(agent,key,api);
+    if(current.reason)throw new Error(current.reason);
+    if(!samePermissionConversation(agent,original)||['created','category','running'].some(
+      key=>agent[key]!==original[key])||current.value!==originalSetting.value||current.mode!==originalSetting.mode){
+      throw new Error('The agent changed. Choose permissions again');
+    }
+    if(browserMode&&!current.options.includes(value))throw new Error('The Browser mode is no longer available');
+    const permission={history_session_id:agent.history_session_id,[browserMode?'browser_mode':key]:value};
+    if(agent.permission_managed_launch===true)permission.adopt=true;
     const jump={session:name,open_terminal:false,open:false,permission};
     if(restart){
       const exit={session:name};
@@ -9809,7 +9989,7 @@ async function changeAgentPermission(original,key,value){
       stage='exit';showToast(`Stopping ${label}…`,false,65000);
       await postBulkAgentAction('exit',exit);
       stage='wait';showToast(`Waiting for ${label} to stop…`,false,30000);
-      await waitForBulkRebootExit(name,30000,1500,signal=>confirmPermissionStop(agent,api,signal));
+      await waitForBulkRebootExit(name,30000,1500,signal=>confirmPermissionStop(agent,key,api,signal));
     }
     stage='resume';showToast(`Resuming ${label}…`,false,65000);
     const result=await postBulkAgentAction('jump',jump);
@@ -10275,7 +10455,7 @@ async function loadStoppedSelectAgents(){
     const roster=await response.json();
     if(controller.signal.aborted||!Array.isArray(roster?.agents))return;
     stoppedSelectAgents=roster.agents.filter(agent=>agent&&(agent.category==='finished'&&isBulkSelectableAgent(agent)||
-      agent.running===false&&!agentPermissionBlockReason(agent,api)))
+      agent.running===false&&canChangeAgentPermissions(agent,api)))
       .map(prepareRosterRow);
     if(stoppedSelectAgents.length)renderRoster();
   }catch(_){/* live selections remain available if the history request fails */}
@@ -10366,6 +10546,7 @@ function assignLineageHues(live){
    They subscribe to 'oc:agents' / 'oc:mail' document events for updates. */
 window.OC=Object.freeze({
   esc,relTime,jumpToAgent,rootOf,providerPresentation,
+  bindMiniAgentDetail:node=>bindAgentDetail(node,true),syncMiniAgentDetail,
   railPositions,railMoveRows,railArrive,
   renderPeerAvatar:(name,existing)=>currentAgentNamed(name)?conversationAvatar(name,'',existing):null,
   lineageHue,                       // Map: agent name -> lineage hex
@@ -12144,7 +12325,9 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
           continue;
         }
         const claude=record.vocabulary.program==='claude';
-        const references=paths.map(path=>(claude?'@':'')+path).join('\n')+(claude&&paths.length?' ':'');
+        const references=paths.map(path=>path.startsWith('/')?
+          "[file: '"+path.replaceAll("'","'\\''")+"']":(claude?'@':'')+path).join('\n')+
+          (claude&&paths.at(-1)?.startsWith('./')?' ':'');
         const body=[record.draft,references].filter(Boolean).join('\n\n');
         // The chooser leaves a space for arguments. A bare command should reach
         // the terminal without it so the terminal can show its matching picker.
@@ -12260,7 +12443,15 @@ const promptFiles=OrreryPromptAttachments.mount({
   picker:document.getElementById('promptFilePicker'),list:document.getElementById('promptFiles'),
   onChange:()=>{hideSendGuard();promptCard.refresh();},
   onError:message=>showToast(message,true),mayEdit:()=>!promptBusy,
+  pickPaths:window.__TAURI__?.core?.invoke?()=>window.__TAURI__.core.invoke('pick_attachment_paths'):null,
 });
+const nativePromptWebview=window.__TAURI__?.webview?.getCurrentWebview?.();
+nativePromptWebview?.onDragDropEvent(({payload})=>{
+  const host=promptInput.closest('.promptbar'),position=payload.position;
+  const over=position&&host.contains(document.elementFromPoint(position.x/devicePixelRatio,position.y/devicePixelRatio));
+  host.toggleAttribute('data-dragging',Boolean(over&&!promptBusy&&(payload.type==='enter'||payload.type==='over')));
+  if(over&&payload.type==='drop')promptFiles.addPaths(payload.paths);
+}).catch(()=>{/* Browser drag events remain available. */});
 const promptCard=OrreryPromptComposer.mount({
   input:promptInput,button:promptSendBtn,
   getDestination:()=>{
@@ -12292,7 +12483,7 @@ async function readClipboardAttachments(){
     try{
       const result=await Promise.race([
         invoke('clipboard_file_paths',{attachments:true}),
-        new Promise((_,reject)=>{timeout=setTimeout(reject,4500);}),
+        new Promise((_,reject)=>{timeout=setTimeout(reject,16000);}),
       ]);
       if(Array.isArray(result?.attachments))return result;
     }catch(_){}finally{clearTimeout(timeout);}
@@ -12312,14 +12503,16 @@ function handleComposerPaste(event){
   if(!files.length&&!fileHint&&data?.getData('text/plain'))return;
   event.preventDefault();
   if(promptBusy)return;
-  if(files.length){promptFiles.add(files);return;}
+  if(files.length&&(hostPlatform.host!=='mac'||files.every(file=>file.path))){
+    promptFiles.add(files);return;
+  }
   const refusal=composerPasteRefusal(hostPlatform);
   if(refusal){
     showToast(refusal,true);
     if(hostPlatform.host==='unknown')loadHostPlatform();
     return;
   }
-  void promptFiles.paste(readClipboardAttachments);
+  void promptFiles.paste(readClipboardAttachments,files);
 }
 promptInput.addEventListener('paste',handleComposerPaste);
 

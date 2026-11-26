@@ -682,6 +682,9 @@ function syncMiniEdgeHighlight(){
 function miniAgentName(element){
   return element?.closest?.('.mini-agent')?.dataset.agent||'';
 }
+function miniKeyboardAgentName(element){
+  return element?.matches?.(':focus-visible')?miniAgentName(element):'';
+}
 function appendMailEdge(layer,edge,a,b,mini){
   if(!mini){layer.appendChild(edge);return;}
   const label=`Show mail between ${a} and ${b}`;
@@ -757,11 +760,13 @@ function drawProviderBadge(group,agent,x,y,portraitRadius,size=14){
   group.appendChild(seat);
   return label;
 }
-function drawAgentCaption(group,{agent,x,y},dimensions,provider){
+function drawAgentCaption(group,{agent,x,y},dimensions,provider,showTitle=true){
   const role=roleOf(agent);
-  const title=svgEl('title');
-  title.textContent=[agent.name,role,modelOf(agent),provider].filter(Boolean).join(' · ');
-  group.prepend(title);
+  if(showTitle){
+    const title=svgEl('title');
+    title.textContent=[agent.name,role,modelOf(agent),provider].filter(Boolean).join(' · ');
+    group.prepend(title);
+  }
 
   // Keep the full text in the DOM so Demo can mask whole names before the
   // browser clips them to the cell.
@@ -795,6 +800,7 @@ function drawMiniAgent(target,defs,position,index,dimensions){
     'data-agent':agent.name,
   });
   makeInteractive(group,agent);
+  OC.bindMiniAgentDetail?.(group);
   group.appendChild(svgEl('circle',{class:'orrery-hit',cx:x,cy:y,r:14}));
   group.appendChild(svgEl('circle',{
     class:'mini-portrait-fallback',cx:x,cy:y,r:portraitRadius,
@@ -831,7 +837,7 @@ function drawMiniAgent(target,defs,position,index,dimensions){
   // silently painted over by the face (2026-08-06).
   const providerLabel=drawProviderBadge(group,agent,x,y,portraitRadius);
   drawStateGlyph(group,agent,x,y,false);
-  drawAgentCaption(group,position,dimensions,providerLabel);
+  drawAgentCaption(group,position,dimensions,providerLabel,!OC.bindMiniAgentDetail);
   target.appendChild(group);
   return group;
 }
@@ -1108,7 +1114,7 @@ function installMiniZoom(){
   miniViewport.addEventListener('gestureend',()=>{gestureZoom=null;});
 }
 function renderMini({recenter=false}={}){
-  const focused=focusedEdgeKey(miniSvg);
+  const focusedEdge=focusedEdgeKey(miniSvg);
   const focusedAgent=miniAgentName(document.activeElement);
   miniViewport.classList.toggle('orrery-mode',miniMode==='orrery');
   const width=miniViewport.clientWidth||miniWidth,height=miniViewport.clientHeight||miniHeight;
@@ -1159,11 +1165,10 @@ function renderMini({recenter=false}={}){
   renderMailHistory();
   syncMiniSelection();
   refreshCommEdges();
-  restoreEdgeFocus(miniSvg,focused);
-  const focusedNode=miniMotion.nodes.get(focusedAgent);
-  if(focusedNode)focusedNode.focus({preventScroll:true});
+  OC.syncMiniAgentDetail?.(miniMotion.nodes,focusedAgent);
+  restoreEdgeFocus(miniSvg,focusedEdge);
   if(!layout.positions.has(miniHoveredAgent))miniHoveredAgent='';
-  miniFocusedAgent=miniAgentName(document.activeElement);
+  miniFocusedAgent=miniKeyboardAgentName(document.activeElement);
   syncMiniEdgeHighlight();
   if(focusWasVisible&&!miniFocusVisible())centerMiniViewport();
   syncMotionLoop();
@@ -1750,11 +1755,11 @@ miniSvg.addEventListener('pointerleave',()=>{
   syncMiniEdgeHighlight();
 });
 miniSvg.addEventListener('focusin',event=>{
-  miniFocusedAgent=miniAgentName(event.target);
+  miniFocusedAgent=miniKeyboardAgentName(event.target);
   syncMiniEdgeHighlight();
 });
 miniSvg.addEventListener('focusout',event=>{
-  miniFocusedAgent=miniAgentName(event.relatedTarget);
+  miniFocusedAgent=miniKeyboardAgentName(event.relatedTarget);
   syncMiniEdgeHighlight();
 });
 addExpandAffordance(miniExpand,{...MINI,width:28,height:28},false);
