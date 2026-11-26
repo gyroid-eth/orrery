@@ -67,7 +67,7 @@ Finder から起動する desktop app と Python backend が同じ file を読�
 
 既存の設定を残し、`enable_mobile_terminal`だけを`true`にします。`scripts/start-cockpit.sh`、`get.sh`からのsetup、FinderからのORRERY.appは、いずれも新しく起動するPython backendでこの設定を読みます。独自にbackendを起動する場合は、既存の`--enable-mobile-terminal`も引き続き使えます。reader側にも別の有効化が必要です。
 
-**稼働中のbackendには設定が反映されません。** 現在の起動方法と管理元を確認し、その手順で明示的に停止・再起動してください。ORRERY.appを閉じても共有backendは残るため、appを開き直すだけでは反映されないことがあります。管理元が分からない場合は止まり、使用中のポートへの二重起動や一括killはしません。有効化後の送信を伴わない確認と、agent・本人それぞれの手順は[Telemetryのスマホガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md#スマホからpaneを確認して送る)を参照してください。
+**稼働中のbackendには設定が反映されません。** 現在の起動方法と管理元を確認し、その手順で明示的に停止・再起動してください。ORRERY.appを閉じても共有backendは残るため、appを開き直すだけでは反映されないことがあります。管理元が分からない場合は止まり、使用中のポートへの二重起動や一括killはしません。有効化後の送信を伴わない確認と、agent・本人それぞれの手順は[Telemetryのスマホガイド](mobile.md#スマホからpaneを確認して送る)を参照してください。
 
 戻すときは`false`にするか項目を除き、独自の起動引数に`--enable-mobile-terminal`があればそれも外して、同じ手順で再起動します。
 
@@ -77,7 +77,7 @@ Finder から起動する desktop app と Python backend が同じ file を読�
 
 **Send from phone**を切り替えると、このbackendのadapterがその場で切り替わり（再起動なし）、上の`enable_mobile_terminal`も同じ値に書き換えます。ほかのkeyはそのまま残します。fileがJSONとして読めないときは書き換えず、その実行中だけ切り替えます。terminalで`agentstack-mobile off`などを実行した場合は、次にSettingsを開いたときにadapterと`enable_mobile_terminal`が揃います。ただし、手で起動したreaderが8781で動いている間（節に**MANUAL**と出る）と、Settingsを一度も使っていない間は、今までどおり`enable_mobile_terminal`の値のまま変えません。手で起動したreaderでTerminalを使っている人は、更新しても何も変わりません。
 
-demo modeでは、Phoneの節はTailscaleのlogin・スマホで開くaddress・ServeのURLを画面に出しません。そのためloginとaddressはdemo modeでは設定できず、未設定のまま**Phone access**を押すと、スイッチのすぐ下にdemo modeを切って1回設定するよう出ます（**Turn off demo mode**のボタン付き）。設定した後は、demo modeのままオン・オフできます。Telemetryが無いときは、節に「agentstack-mobile was not found」と出ます。手順と制限は[Telemetryのスマホ手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md#cockpitのsettingsからオンにする)を参照してください。
+demo modeでは、Phoneの節はTailscaleのlogin・スマホで開くaddress・ServeのURLを画面に出しません。そのためloginとaddressはdemo modeでは設定できず、未設定のまま**Phone access**を押すと、スイッチのすぐ下にdemo modeを切って1回設定するよう出ます（**Turn off demo mode**のボタン付き）。設定した後は、demo modeのままオン・オフできます。Telemetryが無いときは、節に「agentstack-mobile was not found」と出ます。手順と制限は[Telemetryのスマホ手順](mobile.md#cockpitのsettingsからオンにする)を参照してください。
 
 ### Desktop app の environment
 
@@ -270,7 +270,7 @@ local は default な Harness でも札を出します。
 
 初めてDeepSeek・dsh / Hermesを使う場合は、ガイドと同じ次の順で準備します。cockpitにAPIキーを入力する画面はなく、通常の更新だけでは未設定の接続先は使えるようになりません。
 
-1. Telemetryの[初期設定ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md)を開き、TelemetryのソースフォルダーでdshかHermes（必要なら両方）を追加します。
+1. Telemetryの[初期設定ガイド](native-setup.md)を開き、TelemetryのソースフォルダーでdshかHermes（必要なら両方）を追加します。
 2. DeepSeekの場合はAPIキーを取得するか既存のキーを使い、このコンピューターに未保存ならOS別の手順で保存します。Localの場合は、サーバーの接続情報と、必要ならそのサーバー用のキーを用意します。
 3. ガイドに沿って接続設定を確認・有効化し、最後のinstallコマンドを自分で1回実行してTelemetryに反映します。
 4. cockpitに戻り、`+ NEW AGENT`で設定した`Model`と`Harness`を選びます。

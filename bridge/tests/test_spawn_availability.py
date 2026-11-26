@@ -46,7 +46,7 @@ def test_unavailable_harness_explains_preparation_and_recovers_when_ready(tour_b
     })()''')
     assert result['blocked']['disabled']
     assert 'Install or repair this harness' in result['blocked']['reason']
-    assert result['blocked']['link'].endswith('/docs/native-setup.en.md')
+    assert result['blocked']['link'].endswith('/docs/en/native-setup.md')
     assert result['blocked']['linkVisible'] and result['blocked']['harnessHidden']
     assert result['blocked']['status'] == 'Install or repair this harness. Open model settings for setup.'
     assert result['ready'] and result['status'] == ''

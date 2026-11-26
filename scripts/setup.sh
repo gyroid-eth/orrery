@@ -695,7 +695,7 @@ if [ "$mode" = update ]; then
     pass_mail="--mail=${mail_choice}"
   elif [ "$mail_choice" = update ]; then
     stop "--mail update was asked for, but this cockpit's update.sh cannot take --mail yet; nothing was changed." \
-      "To switch ORRERY Mail now, follow orrery-telemetry's docs/agentstack-mail-update.md" \
+      "To switch ORRERY Mail now, follow https://github.com/gyroid-eth/orrery/blob/master/docs/agentstack-mail-update.md" \
       "(install.sh --mail update), or run this without --mail."
   else
     mail_env="$mail_choice"
@@ -1437,7 +1437,7 @@ case "$action" in
 esac
 say ""
 say "  DeepSeek / Local: install dsh or Hermes, save the provider key, and configure the connection:"
-say "    https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md"
+say "    https://github.com/gyroid-eth/orrery/blob/master/docs/en/native-setup.md"
 say "  This installer has not verified API credentials or a model connection."
 say ""
 if [ -z "$agent_cli" ]; then

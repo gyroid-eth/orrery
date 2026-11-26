@@ -241,7 +241,7 @@ case "${STUB_DOCTOR:-ok}" in
   mailnewer)
     echo "ok: everything else"
     echo "warn: ORRERY Mail (running ccccccc) lacks register_agent.existing_agent_id, which this install relies on: STUB-NEEDED-FOR" >&2
-    echo "      Update ORRERY Mail from an orrery-telemetry checkout at least as new as the running build (docs/agentstack-mail-update.md)." >&2
+    echo "      Update ORRERY Mail from an orrery-telemetry checkout at least as new as the running build (https://github.com/gyroid-eth/orrery/blob/master/docs/en/agentstack-mail-update.md)." >&2
     echo "mail-features: status=missing missing=register_agent.existing_agent_id running=ccccccc"
     exit 0 ;;
   mailmissing)

@@ -420,6 +420,6 @@ say "=============================================================="
 if [ "$plugin_status" -ne 0 ]; then
   say ""
   say "  NG    The Codex plugin refresh failed (see its output above);"
-  say "        everything else was updated. See orrery-telemetry's docs/codex-app.md."
+  say "        everything else was updated. See https://github.com/gyroid-eth/orrery/blob/master/docs/en/codex-app.md."
   exit 1
 fi

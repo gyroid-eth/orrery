@@ -11,7 +11,7 @@ Japanese is the source of record. The English entry point is the [English README
 - [Quick start](../../README.en.md#get-started) — Install the base and continue to the first-flight guide.
 - [Installation](install.md) — Check the one-line installer prerequisites, plan, and results, then open cockpit.
 - [Install with help from your agent](install-with-agent.md) — A starter prompt, plan review, and human approval.
-- [ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.en.md) — The read-only adapter.
+- [ChatGPT MCP](chatgpt-mcp.md) — The read-only adapter.
 - [Research set](research-set.md) — Add digest-paper and a public demo vault after the base installation.
 
 ## Choose a task
@@ -50,6 +50,28 @@ Japanese is the source of record. The English entry point is the [English README
 ## Troubleshoot
 
 - [Troubleshooting](troubleshooting.md) — Isolate startup, connection, port, tmux, and CDN problems.
+
+## Telemetry guides and setup
+
+- [Update and recover ORRERY Mail](agentstack-mail-update.md)
+- [Use Gemini](antigravity.md)
+- [Connect Codex App](codex-app.md)
+- [View and control the screen](computer-use.md)
+- [Telemetry settings](telemetry-configuration.md)
+- [Inspect status and history in Telemetry](dashboard.md)
+- [Delegate work to agents](delegation.md)
+- [Get started with Telemetry on its own](getting-started.md)
+- [Migrate ORRERY instructions](instruction-migration.md)
+- [Install, update, or remove Telemetry on its own](telemetry-install.md)
+- [Start and resume agents](launchers.md)
+- [Read and send prompts from a phone](mobile.md)
+- [Set up DeepSeek and local LLMs](native-setup.md)
+- [Use ORRERY with Obsidian](obsidian.md)
+- [Set up persistent agents](persistent-agents.md)
+- [Troubleshoot Telemetry](telemetry-troubleshooting.md)
+- [Try the native Windows development launcher](windows-local.md)
+- [Store an API key in the WSL keyring](wsl-keyring.md)
+- [Read from ChatGPT](chatgpt-mcp.md)
 
 ## Design and development
 

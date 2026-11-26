@@ -133,7 +133,7 @@ Click the tile to enter its terminal, read the question, and send your answer fr
 
 ![Use need you to filter for agents awaiting input, read a question, and reply with 1](../images/cockpit_need_you.gif)
 
-See [Spotting agents that need you](#spotting-agents-that-need-you) for how this looks in the TELEMETRY DECK and NETWORK. See [Telemetry DECK](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/dashboard.en.md#deck) for the automatic Mail notice sent to a parent when its child is waiting on screens such as an approval or sign-in.
+See [Spotting agents that need you](#spotting-agents-that-need-you) for how this looks in the TELEMETRY DECK and NETWORK. See [Telemetry DECK](dashboard.md#deck) for the automatic Mail notice sent to a parent when its child is waiting on screens such as an approval or sign-in.
 
 ### Copy a name
 
@@ -262,7 +262,7 @@ While you are scrolled up reading past output, new output does not pull you back
 
 ### Optional Terminal on your phone
 
-The separate Telemetry mobile reader can show a short pane preview above a confirmed one-line input. **Settings → Phone** (**Phone access** and **Send from phone**) switches the reader and this adapter together ([settings](configuration.md#settings--phone)). Set by hand, the backend adapter is off by default. Set `enable_mobile_terminal` to JSON `true` in the [shared settings](configuration.md#enable-mobile-terminal-through-normal-startup), then explicitly restart the backend through its current launch procedure. Reusing an already running backend does not apply the setting. The reader also needs API 31, the matching `orrery-mobile-pane-v1` capability and its own opt-in. Restricting access to your operating devices is recommended; multiple personal phones and tablets are fine. The [Telemetry phone guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md) separates agent and human steps.
+The separate Telemetry mobile reader can show a short pane preview above a confirmed one-line input. **Settings → Phone** (**Phone access** and **Send from phone**) switches the reader and this adapter together ([settings](configuration.md#settings--phone)). Set by hand, the backend adapter is off by default. Set `enable_mobile_terminal` to JSON `true` in the [shared settings](configuration.md#enable-mobile-terminal-through-normal-startup), then explicitly restart the backend through its current launch procedure. Reusing an already running backend does not apply the setting. The reader also needs API 31, the matching `orrery-mobile-pane-v1` capability and its own opt-in. Restricting access to your operating devices is recommended; multiple personal phones and tablets are fine. The [Telemetry phone guide](mobile.md) separates agent and human steps.
 
 The adapter uses only existing PC-managed legacy panes, with the shared target guard and fresh socket/server/session/pane/kernel-birth checks. It does not guess a pane from an agent alias, start an agent, use another socket/global target, or require Codex launch records. Multiple panes require a choice; unknown targets stay unavailable. Sessions may be outside the reader's current metadata project.
 
@@ -428,7 +428,7 @@ Only during development, `?ws=ws://127.0.0.1:<port>/ws` can override the WebSock
 
 ## NEW AGENT
 
-For Gemini, install and sign in to Antigravity CLI (`agy`), then complete the [Telemetry setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.en.md). In the macOS cockpit, select **Antigravity** and your model in **NEW AGENT**.
+For Gemini, install and sign in to Antigravity CLI (`agy`), then complete the [Telemetry setup](antigravity.md). In the macOS cockpit, select **Antigravity** and your model in **NEW AGENT**.
 
 `+ NEW AGENT` uses the spawn API of the ORRERY Telemetry dashboard. When the dashboard is offline, part of the catalog may be shown but spawn cannot be run.
 
@@ -436,7 +436,7 @@ This is the cockpit's own form. Standalone Telemetry has a separate NEW AGENT sc
 
 For your first DeepSeek, dsh, or Hermes setup, follow the guide in the order below. A normal update does not complete these steps, and this screen has no API-key field.
 
-1. Open Telemetry's [initial setup guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) and add dsh, Hermes, or both from your Telemetry source folder.
+1. Open Telemetry's [initial setup guide](native-setup.md) and add dsh, Hermes, or both from your Telemetry source folder.
 2. For DeepSeek, create an API key or use an existing one. If it is not already saved on this computer, follow the OS-specific steps to save it. For Local, prepare the server's connection details and its own API key if needed.
 3. Review and enable the connection settings following the guide, then run the final install command yourself once to apply them to Telemetry.
 4. Return to the cockpit and select your configured `Model` and `Harness` in `+ NEW AGENT`.
@@ -448,9 +448,9 @@ For your first DeepSeek, dsh, or Hermes setup, follow the guide in the order bel
 3. Choose a `Harness` on the right. DeepSeek and Local offer the dsh / Hermes entries in your catalog. Unavailable entries cannot be selected. They show a preparation or compatibility explanation, such as a missing runtime or key-store reader, with a setup-guide link.
 4. Check `Helper model` and `Effort` when shown, then set the launch directory and task below. See [Standard New Agent for DeepSeek and Local](configuration.md#standard-new-agent-for-deepseek-and-local) for details.
 
-5. In macOS legacy mode, when the Telemetry API 53 or later catalog supplies `computer_modes`, choose **Off** (no screen tools), **View** (inspect), or **Control** (inspect and interact) under **Computer use** for Claude Code, Codex CLI, dsh, Hermes, or Antigravity CLI. Older catalogs can show a switch that uses the compatibility Cua Driver selection. **Browser** offers the available modes from Off, Temporary Chrome, and My Chrome. Older catalogs can show a single switch. Fresh mode hides these controls. See the [phone guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md) for the separate mobile launch form.
+5. In macOS legacy mode, when the Telemetry API 53 or later catalog supplies `computer_modes`, choose **Off** (no screen tools), **View** (inspect), or **Control** (inspect and interact) under **Computer use** for Claude Code, Codex CLI, dsh, Hermes, or Antigravity CLI. Older catalogs can show a switch that uses the compatibility Cua Driver selection. **Browser** offers the available modes from Off, Temporary Chrome, and My Chrome. Older catalogs can show a single switch. Fresh mode hides these controls. See the [phone guide](mobile.md) for the separate mobile launch form.
 
-The cockpit launches independent agents. Antigravity requires macOS and a Telemetry catalog that advertises standalone support (API 50 or later). Supported launches can use a folder outside Git. Use standalone Telemetry's NEW AGENT form to select a parent or Isolation. With an older Telemetry that does not support standalone Antigravity, use its delegated launch form. See Telemetry's [Computer use](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/computer-use.en.md) and [Antigravity](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.en.md) guides for setup and compatibility.
+The cockpit launches independent agents. Antigravity requires macOS and a Telemetry catalog that advertises standalone support (API 50 or later). Supported launches can use a folder outside Git. Use standalone Telemetry's NEW AGENT form to select a parent or Isolation. With an older Telemetry that does not support standalone Antigravity, use its delegated launch form. See Telemetry's [Computer use](computer-use.md) and [Antigravity](antigravity.md) guides for setup and compatibility.
 
 ![Choose a provider and harness in Model and effort, then open the computer and browser menus](../images/cockpit-native-spawn.gif)
 
