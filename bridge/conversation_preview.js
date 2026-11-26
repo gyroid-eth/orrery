@@ -343,9 +343,15 @@
         target?.focus();
       }
     }
-    function close(){closeLightbox(false);current=null;cancel();selected=null;markSelected();host.hidden=true;host.replaceChildren();host.parentElement.classList.remove('conversation-has-preview');onClose();}
+    function close(){
+      closeLightbox(false);current=null;cancel();selected=null;markSelected();host.hidden=true;host.replaceChildren();
+      host.classList.remove('conversation-preview-document');
+      host.parentElement.classList.remove('conversation-has-preview');onClose();
+    }
     async function open(ref){
       onBeforeOpen();cancel();current=null;selected=ref;markSelected();const token=generation;
+      const isMarkdown=/\.(?:md|markdown)$/i.test(ref.label);
+      host.classList.toggle('conversation-preview-document',isMarkdown);
       host.hidden=false;host.parentElement.classList.add('conversation-has-preview');onActivate(ref);
       const head=create('div','conversation-preview-head'),title=fileLabel('h3','conversation-preview-title',ref.label);
       const closeButton=iconButton('conversation-preview-close','close','Close preview',()=>{close();host.closest('.conversation-panel').querySelector('.conversation-scroll')?.focus();});
@@ -377,7 +383,7 @@
            (data.text.length<=MAX_TEXT||[...data.text].length<=MAX_TEXT)){
           const raw=create('pre','conversation-preview-text',data.text),markdown=root.OrreryConversationMarkdown;
           if(markdown){raw.textContent='';markdown.renderText(data.text,raw);}
-          if(/\.(?:md|markdown)$/i.test(ref.label)&&typeof markdown?.renderDocument==='function'){
+          if(isMarkdown&&typeof markdown?.renderDocument==='function'){
             // Drawn as a document by default; Source shows the file's own text.
             // Both views are inert (text nodes only); see conversation_markdown.js.
             let doc=null;
