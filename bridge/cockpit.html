@@ -220,7 +220,6 @@
     z-index:4;grid-column:3;grid-row:1;justify-self:start;translate:-50% 0;width:12px;cursor:col-resize;
   }
   .mail-graph-divider{flex:0 0 12px;cursor:row-resize}
-  .miniorrery[hidden]+.mail-graph-divider{display:none}
   .mail-divider::after,.mail-graph-divider::after{
     content:"";position:absolute;left:50%;top:50%;translate:-50% -50%;
     border-radius:2px;background:var(--ink-faint);
@@ -589,6 +588,43 @@
   .agent-detail-browser-toggle{color:var(--ink-dim)}
   .agent-detail-switch.unknown{justify-content:center}
   .agent-detail-switch.unknown::before{width:8px;height:1px}
+  #mailRail .agent-detail[data-mini-dock]{
+    --agent-detail-label-width:clamp(66px,26%,89px);
+    position:static;z-index:auto;flex:0 1 auto;width:auto;min-height:0;max-height:35vh;
+    margin:0 16px 3px;padding:10px 6px;border:0;border-bottom:1px solid var(--hair);border-radius:0;
+    background:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;
+    font:13px/1.4 var(--rail-sans);font-variant-numeric:tabular-nums;
+  }
+  .agent-detail-dock-heading{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .agent-detail-dock-heading > :last-child{min-width:0}
+  .agent-detail-dock-portrait{flex:none}
+  .agent-detail-dock-portrait > .conversation-avatar.medal{display:block;width:34px;height:34px;margin:0}
+  .agent-detail-dock-portrait .conversation-avatar .face{font-size:13px}
+  .agent-detail-dock-portrait .conversation-avatar .provider-badge{width:17px;height:17px;right:-3px;bottom:-3px}
+  .agent-detail-dock-portrait .conversation-avatar .provider-badge .provider-logo{max-width:11px;height:10px}
+  .agent-detail[data-mini-dock] .agent-detail-name{color:var(--ink);font:500 17px/1.2 var(--serif)}
+  .agent-detail[data-mini-dock] .agent-detail-identity{margin-top:2px;font-size:12px}
+  .agent-detail[data-mini-dock] .agent-detail-identity .agent-detail-item{align-items:center}
+  .agent-detail[data-mini-dock] .agent-detail-identity .agent-detail-item:has(.agent-detail-role) > svg{display:none}
+  .agent-detail[data-mini-dock] :is(.agent-detail-meta,.agent-detail-permissions){
+    display:grid;grid-template-columns:minmax(0,1fr);gap:0;margin:0;
+  }
+  .agent-detail[data-mini-dock] :is(.agent-detail-meta,.agent-detail-permissions) > .agent-detail-item{
+    display:grid;grid-template-columns:var(--agent-detail-label-width) minmax(0,1fr);
+    gap:6px;align-items:center;min-height:24px;padding:0;border:0;
+  }
+  .agent-detail-dock-label{display:flex;align-items:center;gap:5px;color:var(--ink-dim);font-size:12px}
+  .agent-detail-dock-label .agent-detail-icon{width:13px;height:13px;margin:0}
+  .agent-detail[data-mini-dock] :is(.agent-detail-model,.agent-detail-directory){color:var(--ink);font-weight:400}
+  .agent-detail[data-mini-dock] .agent-detail-permissions{
+    margin-top:5px;padding:5px 0 0;border:0;border-radius:0;background:transparent;
+  }
+  .agent-detail[data-mini-dock] .agent-detail-meta + .agent-detail-permissions{border-top:1px solid var(--hair)}
+  .agent-detail[data-mini-dock] .agent-detail-browser-toggle{justify-self:start}
+  .agent-detail[data-mini-dock] .agent-detail-permissions .agent-detail-modes{min-width:0}
+  .agent-detail[data-mini-dock] .agent-detail-observed-reason{
+    padding-left:calc(var(--agent-detail-label-width) + 6px);
+  }
   .agent-permission-confirm{
     width:min(390px,calc(100vw - 24px));margin:auto;padding:16px;border:1px solid var(--hair);border-radius:10px;
     color:var(--ink);background:var(--panel);font:13px/1.45 var(--rail-sans);
@@ -1517,7 +1553,12 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg>
         </button>
       </div>
-      <svg class="miniorrery" viewBox="0 0 280 120" id="orrery" hidden></svg>
+      <div class="mini-graph" id="miniGraphViewport">
+        <div class="mini-graph-scroll" role="region" aria-label="Mini graph">
+          <svg class="miniorrery" viewBox="0 0 280 120" id="orrery" hidden></svg>
+        </div>
+        <svg class="mini-graph-expand" viewBox="0 0 28 28"></svg>
+      </div>
       <div class="mail-graph-divider" id="mailGraphDivider" role="separator" tabindex="0" aria-orientation="horizontal"
            aria-controls="orrery" aria-label="Resize mini graph"
            title="Resize mini graph with Up or Down arrows or drag. Enter or double-click to reset."></div>
@@ -1657,7 +1698,7 @@
           <label class="settings-choice"><input id="miniViewOrrery" type="radio" name="miniView" value="orrery">Orrery</label>
           <label class="settings-choice"><input id="miniViewNetwork" type="radio" name="miniView" value="network">Telemetry network</label>
         </div>
-        <div class="settings-help">Telemetry network centers the active tab and follows lineage plus recent mail links.</div>
+        <div class="settings-help">Telemetry network centers the active tab and follows lineage and Mail links.</div>
       </div>
       <div class="settings-row">
         <label class="settings-toggle-row" for="miniNetworkDepth">
@@ -1669,6 +1710,18 @@
             <option value="1">1 hop</option>
             <option value="2" selected>2 hops</option>
             <option value="3">3 hops</option>
+          </select>
+        </label>
+      </div>
+      <div class="settings-row">
+        <label class="settings-toggle-row" for="miniMailLinks">
+          <span class="settings-toggle-copy">
+            <span class="settings-row-name">Mail links</span>
+            <span class="settings-help">Recent Mail is highlighted for 90 seconds in both modes.</span>
+          </span>
+          <select class="settings-select" id="miniMailLinks">
+            <option value="keep" selected>Keep visible</option>
+            <option value="recent">Fade after 90 seconds</option>
           </select>
         </label>
       </div>
@@ -2302,6 +2355,31 @@
             "property": "color",
             "selector": ".agent-detail-browser-toggle",
             "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border-bottom",
+            "selector": "#mailRail .agent-detail[data-mini-dock]",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail[data-mini-dock] .agent-detail-name",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail-dock-label",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail[data-mini-dock] :is(.agent-detail-model,.agent-detail-directory)",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".agent-detail[data-mini-dock] .agent-detail-meta + .agent-detail-permissions",
+            "value": "1px solid var(--hair)"
           },
           {
             "property": "border",
@@ -3139,8 +3217,68 @@
             "value": "var(--panel)"
           },
           {
+            "property": "outline",
+            "selector": ".mini-graph-scroll:focus-visible",
+            "value": "1px solid var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".mini-graph-tools button",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mini-graph-tools button",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-tools button",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-tools button:not(:disabled):is(:hover,:focus-visible,[aria-expanded=true])",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".mini-graph-tools button:not(:disabled):is(:hover,:focus-visible,[aria-expanded=true])",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".mini-graph-appearance",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mini-graph-appearance",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-appearance",
+            "value": "var(--ink)"
+          },
+          {
             "property": "stroke",
             "selector": ".orrery-comm-edge",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-history-edge",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-mail-edge-halo",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-mail-edge > .orrery-mail-edge-core",
             "value": "var(--ink)"
           },
           {
@@ -3632,6 +3770,11 @@
           },
           {
             "property": "color",
+            "selector": ".agent-detail-dock-label",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
             "selector": ".layout-chip",
             "value": "var(--ink-dim)"
           },
@@ -3916,6 +4059,26 @@
             "value": "var(--ink-faint)"
           },
           {
+            "property": "outline",
+            "selector": ".mini-graph-scroll:focus-visible",
+            "value": "1px solid var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-tools button",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".mini-graph-tools button:not(:disabled):is(:hover,:focus-visible,[aria-expanded=true])",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-history-edge",
+            "value": "var(--ink-dim)"
+          },
+          {
             "property": "color",
             "selector": ".orrery-caption-role",
             "value": "var(--ink-dim)"
@@ -4099,7 +4262,7 @@
         "unit": "effect-component"
       },
       "source": {
-        "digest": "cbca21589e1ec9e1baa9bfe2451cb7f0b08b0c5e44ede3d9b36a3a7e20d249e6",
+        "digest": "a8ec14f4847e277d164c0fcbf89355c1fcf1fa846d1d5f58e4e02c5bf98eb7df",
         "records": [
           ":root\u0000--amber-glow",
           ".miniorrery.telemetry-network\u0000background",
@@ -4116,6 +4279,7 @@
           ":is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .face\u0000box-shadow",
           ".medal .face::after\u0000background",
           ".agent-detail\u0000box-shadow",
+          "#mailRail .agent-detail[data-mini-dock]\u0000box-shadow",
           ".term\u0000background",
           ".layout-picker\u0000box-shadow",
           ".session-label.active-session\u0000box-shadow",
@@ -4161,7 +4325,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "9eacff5d0617184e106e9955f5ef409e473991e082fb8de65a454452adb3c5b6",
+        "digest": "e3c1734e13fcbdab032068d6a3aade16a41a1a44dd834659f21ec1bd719e3f97",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4254,7 +4418,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "27732e8dfb8e51b99786778183c947ea41831602a1151709b5b119f72444262c",
+        "digest": "210586fe272db2c693e922e5b43ad12f79e5e5196644ec01e1954e881e259af5",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -4283,9 +4447,9 @@
       }
     }
   },
-  "inventory_digest": "3761a5cabdd56efaa93ca167046c204799c3f0cf5b539f9f617e89cd5992f960",
+  "inventory_digest": "70b6807a0b797ea26b3f17dad1516921fb7b02cf8f33730fa5e9191a68ec2cef",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "adc6096d6ea08e5cdc4d581d4727a9fee22f0a8c15a407ecd4c275bb88e25972",
+  "source_digest": "babaddf5e4c6c47b556da54ceb61fa422721a0d980c785a02d277fea2f008b5a",
   "surface": "cockpit",
   "version": 1
 }
@@ -5011,6 +5175,7 @@ const terminalSettingsReset=document.getElementById('terminalSettingsReset');
 const miniViewOrrery=document.getElementById('miniViewOrrery');
 const miniViewNetwork=document.getElementById('miniViewNetwork');
 const miniNetworkDepthSelect=document.getElementById('miniNetworkDepth');
+const miniMailLinksSelect=document.getElementById('miniMailLinks');
 const tabsEmpty=document.createElement('span');
 tabsEmpty.className='empty';tabsEmpty.textContent='waiting for sessions…';tabsEl.appendChild(tabsEmpty);
 
@@ -5044,6 +5209,7 @@ const TERM_FONT_STORAGE_KEY='oc-term-font';
 const TERM_FONT_AUTOSHRINK_STORAGE_KEY='oc-term-autoshrink';
 const MINI_VIEW_STORAGE_KEY='oc-mini-view';
 const MINI_NETWORK_DEPTH_STORAGE_KEY='oc-mini-network-depth';
+const MINI_MAIL_LINKS_STORAGE_KEY='oc-mini-mail-links';
 const THEME_AXIS_LABELS={
   'dim-contrast':'Muted contrast',
   'small-text':'Small text',
@@ -5106,6 +5272,7 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   [':is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .face','box-shadow',['state'],'preserve'],
   ['.medal .face::after','background',['elevation'],'preserve'],
   ['.agent-detail','box-shadow',['elevation'],'preserve'],
+  ['#mailRail .agent-detail[data-mini-dock]','box-shadow',['elevation'],'preserve'],
   ['.term','background',['elevation'],'preserve'],
   ['.layout-picker','box-shadow',['elevation','emissive'],'scale','html[data-theme-axis="glow"] .layout-picker'],
   ['.session-label.active-session','box-shadow',['state'],'preserve'],
@@ -5144,6 +5311,7 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
 const THEME_GLOW_SCALE_EXPECTED=THEME_GLOW_EFFECT_MANIFEST.filter(effect=>effect.mode==='scale').length;
 let terminalFontSize=TERM_FONT_DEFAULT,terminalAutoShrink=true;
 let miniViewMode='orrery';
+let miniMailLinks='keep';
 let miniNetworkDepth=2;
 let themeAxisState=normalizeThemeAxisState(null);
 let themeAxisTransactionActive=false;
@@ -5162,6 +5330,7 @@ try{
     terminalAutoShrink=storedAutoShrink==='true';
   }
   if(localStorage.getItem(MINI_VIEW_STORAGE_KEY)==='network')miniViewMode='network';
+  if(localStorage.getItem(MINI_MAIL_LINKS_STORAGE_KEY)==='recent')miniMailLinks='recent';
   const storedNetworkDepth=Number(localStorage.getItem(MINI_NETWORK_DEPTH_STORAGE_KEY));
   if([1,2,3].includes(storedNetworkDepth))miniNetworkDepth=storedNetworkDepth;
 }catch(_){/* storage can be unavailable in private/restricted webviews */}
@@ -6140,17 +6309,24 @@ function paintMiniViewSettings(){
   miniViewOrrery.checked=miniViewMode==='orrery';
   miniViewNetwork.checked=miniViewMode==='network';
   miniNetworkDepthSelect.value=String(miniNetworkDepth);
+  miniMailLinksSelect.value=miniMailLinks;
+}
+function announceMiniView(){
+  paintMiniViewSettings();
+  document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{
+    mode:miniViewMode,depth:miniNetworkDepth,mailLinks:miniMailLinks,
+  }}));
 }
 function setMiniViewMode(mode){
-  miniViewMode=mode==='network'?'network':'orrery';paintMiniViewSettings();
+  miniViewMode=mode==='network'?'network':'orrery';
   try{localStorage.setItem(MINI_VIEW_STORAGE_KEY,miniViewMode);}catch(_){/* live-only preference */}
-  document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{mode:miniViewMode,depth:miniNetworkDepth}}));
+  announceMiniView();
 }
 function setMiniNetworkDepth(depth){
   const next=Number(depth);
-  miniNetworkDepth=[1,2,3].includes(next)?next:2;paintMiniViewSettings();
+  miniNetworkDepth=[1,2,3].includes(next)?next:2;
   try{localStorage.setItem(MINI_NETWORK_DEPTH_STORAGE_KEY,String(miniNetworkDepth));}catch(_){/* live-only preference */}
-  document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{mode:miniViewMode,depth:miniNetworkDepth}}));
+  announceMiniView();
 }
 function applyTerminalSettings({fit=true}={}){
   const effectiveSize=currentTerminalFontSize();
@@ -6190,6 +6366,11 @@ terminalAutoShrinkToggle.addEventListener('change',()=>{
 miniViewOrrery.addEventListener('change',()=>{if(miniViewOrrery.checked)setMiniViewMode('orrery');});
 miniViewNetwork.addEventListener('change',()=>{if(miniViewNetwork.checked)setMiniViewMode('network');});
 miniNetworkDepthSelect.addEventListener('change',()=>setMiniNetworkDepth(miniNetworkDepthSelect.value));
+miniMailLinksSelect.addEventListener('change',()=>{
+  miniMailLinks=miniMailLinksSelect.value==='recent'?'recent':'keep';
+  try{localStorage.setItem(MINI_MAIL_LINKS_STORAGE_KEY,miniMailLinks);}catch(_){/* live-only preference */}
+  announceMiniView();
+});
 /* The backend stamps every response with its boot id. When it changes, the
    page this window is running was served by a previous backend: reload so the
    app window and a fresh browser tab always show the same cockpit. The
@@ -6203,11 +6384,12 @@ function noteBackendBoot(id){
 /* a preference changed in another window (prefs_sync.js): apply it here too */
 document.addEventListener('oc:prefs-changed',event=>{
   const keys=new Set(event.detail&&event.detail.keys||[]);
-  if(keys.has(MINI_VIEW_STORAGE_KEY)||keys.has(MINI_NETWORK_DEPTH_STORAGE_KEY)){
+  if(keys.has(MINI_VIEW_STORAGE_KEY)||keys.has(MINI_NETWORK_DEPTH_STORAGE_KEY)||keys.has(MINI_MAIL_LINKS_STORAGE_KEY)){
     const mode=localStorage.getItem(MINI_VIEW_STORAGE_KEY)==='network'?'network':'orrery';
     const depth=Number(localStorage.getItem(MINI_NETWORK_DEPTH_STORAGE_KEY));
-    miniViewMode=mode;miniNetworkDepth=[1,2,3].includes(depth)?depth:2;paintMiniViewSettings();
-    document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{mode:miniViewMode,depth:miniNetworkDepth}}));
+    miniViewMode=mode;miniNetworkDepth=[1,2,3].includes(depth)?depth:2;
+    miniMailLinks=localStorage.getItem(MINI_MAIL_LINKS_STORAGE_KEY)==='recent'?'recent':'keep';
+    announceMiniView();
   }
   if(keys.has(TERM_FONT_STORAGE_KEY)||keys.has(TERM_FONT_AUTOSHRINK_STORAGE_KEY)){
     const storedFont=localStorage.getItem(TERM_FONT_STORAGE_KEY),storedShrink=localStorage.getItem(TERM_FONT_AUTOSHRINK_STORAGE_KEY);
@@ -9214,8 +9396,10 @@ const pinnedAgents=storedRosterNames(PINNED_AGENT_KEY),foldedAgents=storedRoster
 let rosterRows=[],rosterRowsByName=new Map();
 const agentDetail=document.createElement('div');
 agentDetail.id='agentDetail';agentDetail.className='agent-detail';agentDetail.setAttribute('role','group');
-agentDetail.setAttribute('aria-labelledby','agentDetailName');agentDetail.hidden=true;
-let detailAnchor=null,detailHideTimer=0,detailRendered='';
+agentDetail.setAttribute('aria-labelledby','agentDetailName');agentDetail.tabIndex=-1;agentDetail.hidden=true;
+const detailGraph=document.getElementById('orrery'),detailGraphDivider=document.getElementById('mailGraphDivider');
+detailGraphDivider.after(agentDetail);
+let detailAnchor=null,detailHideTimer=0,detailRendered='',restoringMiniFocus=false;
 let permissionChangeBusy=false,permissionApi=null,permissionApiRequest=null,permissionApiCheckedAt=-Infinity;
 let selectedAgent=null,currentAgents=[];
 const descriptorStore=RosterDescriptor.createStableDescriptorStore();
@@ -9603,7 +9787,6 @@ const PERMISSION_CONTROLS_API=54;
 const AGENT_DETAIL_TOKENS=new Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1});
 const AGENT_DETAIL_ICONS={
   role:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M5.5 16a3.5 3.5 0 0 1 7 0m3-6h2.5m-2.5 4H18"/>',
-  top:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2"/>',
   children:'<path d="M6 5v14h7M6 12h7"/><circle cx="16" cy="12" r="2"/><circle cx="16" cy="19" r="2"/>',
   parent:'<circle cx="12" cy="5" r="2"/><rect x="3" y="16" width="5" height="4" rx="1"/><rect x="16" y="16" width="5" height="4" rx="1"/><path d="M12 7v5m-6.5 4v-4h13v4"/>',
   computer:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4m-4 0h8"/>',
@@ -9686,7 +9869,7 @@ function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false,pendin
   };
   return {
     name:a.name,role:text(a.annot?.role),pendingAction,
-    parentState:a.parent_state,parent:a.parent_state==='child'?text(a.parent_agent):null,
+    parent:a.parent_state==='child'?text(a.parent_agent):null,
     computer:setting('computer_use'),browser:setting('browser_use'),
     permissions:Boolean(a.harness_kind||a.lifecycle==='persistent'||a.surface==='codex-app'||permissionConversationOnly(a)||
       a.computer_use||typeof a.browser_use==='boolean'||a.permission_controls),
@@ -9700,13 +9883,16 @@ function agentDetailIcon(icon){
   return `<svg class="agent-detail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${AGENT_DETAIL_ICONS[icon]}</svg>`;
 }
-function agentDetailItem(icon,label,body='',path=null){
+function agentDetailDockLabel(label,icon=''){
+  return `<span class="agent-detail-dock-label" aria-hidden="true">${icon?agentDetailIcon(icon):''}${esc(label)}</span>`;
+}
+function agentDetailItem(icon,label,body='',path=null,mark=agentDetailIcon(icon)){
   const description=esc(label);
   const pathAttribute=path===null?'':` data-demo-path-value="${esc(path)}"`;
   return `<div class="agent-detail-item" role="group" title="${description}" aria-label="${description}"${pathAttribute}>
-    ${agentDetailIcon(icon)}${body}</div>`;
+    ${mark}${body}</div>`;
 }
-function agentDetailPermissions(detail){
+function agentDetailPermissions(detail,mini=false){
   if(!detail.permissions)return '';
   const {computer,browser}=detail;
   const computerValue=AGENT_DETAIL_COMPUTER.get(computer.value)||'Unknown';
@@ -9716,10 +9902,13 @@ function agentDetailPermissions(detail){
   const shared=[...new Set(['observation','reason'].map(key=>
     readOnly&&computer[key]===browser[key]?computer[key]:null).filter(Boolean))];
   const note=value=>value?`<small>${esc(value)}</small>`:'';
+  const computerMark=mini?agentDetailDockLabel('Computer','computer'):agentDetailIcon('computer');
+  const browserMark=mini?agentDetailDockLabel('Browser','browser'):agentDetailIcon('browser');
   const mark=(icon,label,value,setting)=>agentDetailItem(icon,
     description(label,value,setting.observation||setting.reason),
-    `<span class="agent-detail-value"><small>${label}</small><span>${value}</span>
-      ${[...new Set([setting.observation,setting.reason])].filter(value=>!shared.includes(value)).map(note).join('')}</span>`);
+    `<span class="agent-detail-value">${mini?'':note(label)}<span>${value}</span>
+      ${[...new Set([setting.observation,setting.reason])].filter(value=>!shared.includes(value)).map(note).join('')}</span>`,
+    null,icon==='computer'?computerMark:browserMark);
   const choices=(field,label,modes,current,available=null)=>`<span class="agent-detail-modes">${[...modes].map(([value,text])=>{
     const disabled=available&&!available.includes(value);
     const title=`${label}: ${text}${disabled?' (unavailable for this agent)':''}`;
@@ -9733,10 +9922,10 @@ function agentDetailPermissions(detail){
   return `<div class="agent-detail-permissions${readOnly?' agent-detail-observed':''}" role="group"
     aria-label="${readOnly?'Read-only permissions':'Permissions'}">
     ${computer.action?agentDetailItem('computer',description('Computer use',computerValue,computer.observation),
-      choices('computer','Computer use',AGENT_DETAIL_COMPUTER,computer.value)):mark('computer','Computer use',computerValue,computer)}
+      choices('computer','Computer use',AGENT_DETAIL_COMPUTER,computer.value),null,computerMark):mark('computer','Computer use',computerValue,computer)}
     ${browser.action?(browser.options.length?agentDetailItem('browser',description('Browser use',browserValue,browser.observation),
-      choices('browser','Browser use',AGENT_DETAIL_BROWSER,browser.mode,browser.options)):`<div class="agent-detail-item" title="${browserTitle}">
-      ${agentDetailIcon('browser')}<button class="agent-detail-browser-toggle" type="button" data-browser
+      choices('browser','Browser use',AGENT_DETAIL_BROWSER,browser.mode,browser.options),null,browserMark):`<div class="agent-detail-item" title="${browserTitle}">
+      ${browserMark}<button class="agent-detail-browser-toggle" type="button" data-browser
         ${browser.value===null?'':`role="switch" aria-checked="${browser.value}"`}
         aria-label="${browser.value===null||browser.observation?browserTitle:'Browser use'}" title="${browserTitle}">
         <span class="agent-detail-switch${switchState}" aria-hidden="true"></span></button></div>`):
@@ -9744,9 +9933,9 @@ function agentDetailPermissions(detail){
     ${shared.map(value=>`<small class="agent-detail-observed-reason">${esc(value)}</small>`).join('')}
   </div>`;
 }
-function agentDetailHTML(detail){
+function agentDetailHTML(detail,mini=false){
   const group=(name,content)=>content?`<div class="agent-detail-${name}">${content}</div>`:'';
-  const text=(icon,label,value)=>{
+  const text=(icon,label,value,caption='')=>{
     if(!value)return'';
     const directory=icon==='directory';
     const escaped=esc(value);
@@ -9756,12 +9945,19 @@ function agentDetailHTML(detail){
     const content=directory&&!demoDirectory?escaped.replaceAll('/','/<wbr>'):escaped;
     return agentDetailItem(icon,`${label}: ${directory?detail.cwd:value}`,
       `<span class="agent-detail-value agent-detail-${icon}"${demoDirectory?' data-demo-path':''}>${content}</span>`,
-      demoDirectory?detail.cwd:null);
+      demoDirectory?detail.cwd:null,mini&&caption?agentDetailDockLabel(caption):undefined);
   };
-  let lineage='';
-  if(detail.parentState==='top')lineage=agentDetailItem('top','Top level');
-  if(detail.parentState==='child')lineage=detail.parent?text('parent','Parent',detail.parent):agentDetailItem('parent','Child agent');
+  let lineage=text('parent','Parent',detail.parent);
   if(detail.hiddenChildren?.length)lineage+=text('children','Hidden descendants',detail.hiddenChildren.join(', '));
+  const action=detail.pendingAction?
+    `<span class="agent-detail-pending-action" title="${esc(detail.pendingAction+' '+detail.name+'…')}">${esc(detail.pendingAction)}</span>`:'';
+  const name=`<div class="agent-detail-name" id="agentDetailName">${esc(detail.name)}${action}</div>`;
+  const identity=group('identity',text('role','Role',detail.role)+lineage);
+  const model=text('model','Model',detail.model,'Model');
+  const harness=text('harness','Harness',detail.harness,'Harness');
+  const directory=text('directory','Working directory',detail.directory,'Folder');
+  if(mini)return `<div class="agent-detail-dock-heading"><div class="agent-detail-dock-portrait"></div><div>${name}${identity}</div></div>
+    ${group('meta',model+harness+directory)}${agentDetailPermissions(detail,true)}`;
   const context=[];
   if(detail.tokens!==null)context.push(detail.tokens.toLocaleString('en')+' tokens');
   if(detail.used!==null)context.push(detail.used+'% used');
@@ -9770,15 +9966,12 @@ function agentDetailHTML(detail){
       ${detail.tokens===null?'':`<span>${AGENT_DETAIL_TOKENS.format(detail.tokens)}</span>`}
       ${detail.used===null?'':`<span class="agent-detail-meter${detail.used>CONTEXT_HOT_PERCENT?' hot':''}" aria-hidden="true"><i style="width:${detail.used}%"></i></span><strong>${detail.used}%</strong>`}
     </span>`):'';
-  const runtime=text('harness','Harness',detail.harness)+text('effort','Effort',detail.effort);
-  const action=detail.pendingAction?
-    `<span class="agent-detail-pending-action" title="${esc(detail.pendingAction+' '+detail.name+'…')}">${esc(detail.pendingAction)}</span>`:'';
-  return `<div class="agent-detail-name" id="agentDetailName">${esc(detail.name)}${action}</div>
-    ${group('identity',text('role','Role',detail.role)+lineage)}
-    ${agentDetailPermissions(detail)}
-    ${group('meta',text('model','Model',detail.model)+group('runtime',runtime)+contextRow+text('directory','Working directory',detail.directory))}`;
+  const runtime=harness+text('effort','Effort',detail.effort);
+  return `${name}${identity}${agentDetailPermissions(detail)}${group('meta',model+group('runtime',runtime)+contextRow+directory)}`;
 }
+function isMiniDetailAnchor(el){return el?.classList.contains('mini-agent');}
 function positionAgentDetail(el){
+  if(isMiniDetailAnchor(el))return;
   const gap=10,edge=12,anchor=el.getBoundingClientRect();
   const card=agentDetail.getBoundingClientRect();
   let left=anchor.right+gap,top=anchor.top;
@@ -9797,21 +9990,30 @@ function positionAgentDetail(el){
 }
 function showAgentDetail(el){
   const a=currentAgentNamed(el&&el.dataset.agent);if(!a)return;
+  const mini=isMiniDetailAnchor(el);
+  if(mini&&(!el.isConnected||detailGraph.hasAttribute('hidden')))return;
   if(rosterEditor.isEditing(a.name)||el.matches('.filtered-out,.folded-out')){hideAgentDetail(el);return;}
   if(detailAnchor!==el)clearTimeout(detailHideTimer);
   detailAnchor=el;
   const row=rosterRowsByName.get(a.name);
   const hiddenChildren=row?.folded?rosterRows.slice(row.index+1,row.end).map(child=>child.name):[];
   const html=agentDetailHTML(agentDetailModel(a,hostPlatform.home_dir,hiddenChildren,permissionApi,
-    bulkActionBusy||permissionChangeBusy,pendingAgentAction(a.name)));
+    bulkActionBusy||permissionChangeBusy,pendingAgentAction(a.name)),mini);
   const focused=agentDetail.contains(document.activeElement)?document.activeElement:null;
-  if(el.nextElementSibling!==agentDetail)el.after(agentDetail);
+  const mount=mini?detailGraphDivider:el;
+  agentDetail.toggleAttribute('data-mini-dock',mini);
+  if(mount.nextElementSibling!==agentDetail)mount.after(agentDetail);
   if(detailRendered!==html){
     agentDetail.innerHTML=html;detailRendered=html;
     const replacement=focused?.matches('[data-browser]')?agentDetail.querySelector(`[data-browser="${focused.dataset.browser}"]`):
-      focused&&agentDetail.querySelector(`[data-computer="${focused.dataset.computer}"]`);
-    if(focused&&(!replacement||replacement.disabled))el.focus({preventScroll:true});
+      focused?.matches('[data-computer]')?agentDetail.querySelector(`[data-computer="${focused.dataset.computer}"]`):null;
+    if(focused&&focused!==agentDetail&&(!replacement||replacement.disabled))el.focus({preventScroll:true});
     else replacement?.focus({preventScroll:true});
+  }
+  const portrait=mini&&agentDetail.querySelector('.agent-detail-dock-portrait');
+  if(portrait){
+    const avatar=conversationAvatar(a.name,'',portrait.firstElementChild);
+    if(avatar!==portrait.firstElementChild)portrait.appendChild(avatar);
   }
   if(agentDetail.contains(focused)&&focused!==document.activeElement)focused.focus({preventScroll:true});
   setHidden(agentDetail,false);positionAgentDetail(el);
@@ -9822,24 +10024,70 @@ function hideAgentDetail(el){
   clearTimeout(detailHideTimer);
   detailAnchor=null;agentDetail.hidden=true;
 }
+function agentDetailHasFocus(el){
+  const focused=document.activeElement;
+  return (el.contains(focused)||agentDetail.contains(focused))&&
+    (!isMiniDetailAnchor(el)||focused.matches(':focus-visible'));
+}
 function scheduleAgentDetailHide(el){
   clearTimeout(detailHideTimer);
   detailHideTimer=setTimeout(()=>{
-    if(!el.contains(document.activeElement)&&!agentDetail.contains(document.activeElement)&&
-      !el.matches(':hover')&&!agentDetail.matches(':hover'))hideAgentDetail(el);
+    if(!agentDetailHasFocus(el)&&!el.matches(':hover')&&!agentDetail.matches(':hover'))hideAgentDetail(el);
   },160);
 }
+function syncMiniAgentDetail(nodes,focusedName){
+  const previous=detailAnchor;
+  if(isMiniDetailAnchor(previous)){
+    const node=nodes.get(previous.dataset.agent);
+    if(node)showAgentDetail(node);
+    if(node&&detailAnchor===node)scheduleAgentDetailHide(node);
+    else hideAgentDetail(previous);
+  }
+  const focused=nodes.get(focusedName);
+  if(focused){
+    // A redraw should preserve keyboard focus and any explicit dismissal.
+    restoringMiniFocus=true;
+    try{focused.focus({preventScroll:true});}finally{restoringMiniFocus=false;}
+  }
+}
+new MutationObserver(()=>{
+  if(detailGraph.hasAttribute('hidden')&&isMiniDetailAnchor(detailAnchor))hideAgentDetail(detailAnchor);
+}).observe(detailGraph,{attributes:true,attributeFilter:['hidden']});
 agentDetail.addEventListener('mouseenter',()=>clearTimeout(detailHideTimer));
 agentDetail.addEventListener('mouseleave',()=>{if(detailAnchor)scheduleAgentDetailHide(detailAnchor);});
 agentDetail.addEventListener('focusout',()=>{if(detailAnchor)scheduleAgentDetailHide(detailAnchor);});
-function bindAgentDetail(el){
-  el.tabIndex=0;el.setAttribute('role','button');
-  el.addEventListener('mouseenter',()=>showAgentDetail(el));
-  el.addEventListener('mouseleave',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
-  el.addEventListener('focusin',()=>showAgentDetail(el));
+function bindAgentDetail(el,mini=false){
+  let hoverTimer;
+  if(mini){
+    el.setAttribute('aria-controls',agentDetail.id);
+    el.setAttribute('aria-keyshortcuts','F2');
+  }else{
+    el.tabIndex=0;el.setAttribute('role','button');
+  }
+  el.addEventListener('mouseenter',()=>{
+    if(!mini||!isMiniDetailAnchor(detailAnchor)||detailAnchor===el)showAgentDetail(el);
+    // Let the pointer cross other nodes on its way down to the dock.
+    else hoverTimer=setTimeout(()=>{
+      if(el.matches(':hover')&&(!detailAnchor||!agentDetailHasFocus(detailAnchor)))showAgentDetail(el);
+    },120);
+  });
+  el.addEventListener('mouseleave',()=>{
+    clearTimeout(hoverTimer);
+    if(detailAnchor===el)scheduleAgentDetailHide(el);
+  });
+  el.addEventListener('focusin',()=>{
+    if(!mini||(!restoringMiniFocus&&el.matches(':focus-visible')))showAgentDetail(el);
+  });
   el.addEventListener('focusout',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
   el.addEventListener('keydown',event=>{
     if(event.target!==el)return;
+    if(mini){
+      if(event.key!=='F2')return;
+      event.preventDefault();
+      showAgentDetail(el);
+      if(detailAnchor===el)(agentDetail.querySelector('button:not(:disabled)')||agentDetail).focus();
+      return;
+    }
     if(event.key!=='Enter'&&event.key!==' ')return;
     event.preventDefault();handleRosterTileClick(el.dataset.agent,event);
   });
@@ -10675,13 +10923,14 @@ window.OC=Object.freeze({
   esc,relTime,jumpToAgent,rootOf,providerPresentation,
   pendingAgentAction,paintActionText,
   graphPendingAgents:()=>[...permissionRestarts.values(),...pendingAgentExits.values()].map(action=>action.original),
-  railPositions,railMoveRows,railRevealRows,
+  bindMiniAgentDetail:node=>bindAgentDetail(node,true),syncMiniAgentDetail,
+  railPositions,railMoveRows,railArrive,railRevealRows,
   renderPeerAvatar:(name,existing)=>currentAgentNamed(name)?conversationAvatar(name,'',existing):null,
   lineageHue,                       // Map: agent name -> lineage hex
   get lineageParent(){return lineageParent;},  // Map: child -> parent
   agents:()=>currentAgents,
   activeAgent:()=>activeSession(),
-  miniView:()=>({mode:miniViewMode,depth:miniNetworkDepth}),
+  miniView:()=>({mode:miniViewMode,depth:miniNetworkDepth,mailLinks:miniMailLinks}),
   mailBacklog:()=>mailBacklog.slice(),  // live-window messages seen so far (≤100)
 });
 

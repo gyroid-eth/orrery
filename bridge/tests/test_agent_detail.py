@@ -195,7 +195,7 @@ def test_unknown_fields_leave_no_rows_and_legacy_fields_never_render():
 def test_known_context_fields_render_independently_and_home_matches_on_a_path_boundary():
     partial = render({"name": "FixtureAgent", "parent_state": "top", "ctx_used": 27,
                       "cwd": "/home/fixture-other/project", "browser_use": True})
-    assert 'aria-label="Top level"' in partial
+    assert 'agent-detail-identity' not in partial
     assert 'aria-label="Browser use: On (Standalone agent)"' in partial
     assert 'aria-label="Context window: 27% used"' in partial
     assert "tokens" not in partial
