@@ -27,12 +27,13 @@
     question:Object.freeze({L:.85564,C:.13791,H:208.39}),
     ansiBlue:Object.freeze({L:.70233,C:.06700,H:232.06}),
   });
-  const WARM_PAPER_SEED=Object.freeze({
-    canvas:Object.freeze({L:.95301,C:.01964,H:87.51}),
-    depthScale:1.48,
-    depthChroma:.145,
-    depthHue:-34,
-    terminalLift:.017,
+  // Canonical paper palette. Telemetry mirrors the shared roles for its
+  // standalone dashboard and mobile reader.
+  const WARM_PAPER_PALETTE=Object.freeze({
+    canvas:'#f8f6f1',panel:'#fdfcf8',strong:'#f1eee7',
+    primary:'#25231f',secondary:'#615e55',control:'#838179',
+    local:'#005c50',remote:'#673f8d',delegate:'#335b16',
+    alert:'#a6060e',question:'#005a65',blue:'#25576f',
   });
 
   function oklchToLinear({L,C,H}){
@@ -97,36 +98,17 @@
   const rgbChannels=rgb=>rgb.join(' ');
   const rgba=(rgb,alpha)=>`rgb(${rgbChannels(rgb)} / ${alpha})`;
 
-  function deriveSurface(role){
-    const dark=DARK_SEEDS[role];
-    const depth=(dark.L-DARK_SEEDS.canvas.L)*WARM_PAPER_SEED.depthScale;
-    const base=WARM_PAPER_SEED.canvas;
-    const terminalLift=role==='terminal'?WARM_PAPER_SEED.terminalLift:0;
-    return fit({
-      L:Math.min(.985,base.L-depth+terminalLift),
-      C:Math.max(0,base.C+WARM_PAPER_SEED.depthChroma*depth),
-      H:(base.H+WARM_PAPER_SEED.depthHue*depth+360)%360,
-    });
-  }
-
   function deriveWarmPaperLightTheme(){
-    const roles={
-      canvas:deriveSurface('canvas'),panel:deriveSurface('panel'),
-      strong:deriveSurface('strong'),elevated:deriveSurface('elevated'),
-      terminal:deriveSurface('terminal'),
-    };
+    const roles=Object.fromEntries(Object.entries(WARM_PAPER_PALETTE).map(([name,color])=>[
+      name,Object.freeze({rgb:Object.freeze(color.slice(1).match(/../g).map(part=>parseInt(part,16)))}),
+    ]));
+    roles.elevated=roles.strong;
+    roles.terminal=roles.panel;
+    roles.muted=roles.secondary;
     const darkest=roles.elevated.rgb;
-    roles.primary=solveL(DARK_SEEDS.primary,darkest,12);
-    roles.secondary=solveL(DARK_SEEDS.secondary,darkest,7);
-    roles.muted=solveL(DARK_SEEDS.muted,darkest,4.5);
-    roles.accent=solveL(DARK_SEEDS.accent,darkest,4.5);
-    roles.local=solveL(DARK_SEEDS.local,darkest,4.5);
-    roles.remote=solveL(DARK_SEEDS.remote,darkest,4.5);
-    roles.delegate=solveL(DARK_SEEDS.delegate,darkest,4.5);
-    roles.alert=solveL(DARK_SEEDS.alert,darkest,4.5);
-    roles.question=solveL(DARK_SEEDS.question,darkest,4.5);
-    roles.blue=solveL(DARK_SEEDS.ansiBlue,darkest,4.5);
-    roles.control=solveL(DARK_SEEDS.muted,darkest,3);
+    roles.accent=solveL(DARK_SEEDS.accent,darkest,5);
+    roles.accentEdge=solveL(DARK_SEEDS.accent,darkest,3.4);
+    roles.accentFill=fit(DARK_SEEDS.accent);
     const bright=seed=>solveL({...seed,C:seed.C*1.18},darkest,4.5);
     roles.brightAlert=bright(DARK_SEEDS.alert);
     roles.brightDelegate=bright(DARK_SEEDS.delegate);
@@ -147,6 +129,8 @@
       '--theme-status-question':hex(roles.question.rgb),
       '--theme-border-control':hex(roles.control.rgb),
       '--theme-focus-ring':hex(roles.accent.rgb),
+      '--theme-accent-edge':hex(roles.accentEdge.rgb),
+      '--theme-accent-fill':hex(roles.accentFill.rgb),
       '--theme-ink-rgb':rgbChannels(roles.primary.rgb),
       '--theme-accent-rgb':rgbChannels(roles.accent.rgb),
       '--theme-local-rgb':rgbChannels(roles.local.rgb),
@@ -160,7 +144,7 @@
       '--theme-google-rgb':rgbChannels(roles.blue.rgb),
       '--theme-alert-rgb':rgbChannels(roles.alert.rgb),
       '--theme-question-rgb':rgbChannels(roles.question.rgb),
-      '--hair':rgba(roles.primary.rgb,.16),'--hair-2':rgba(roles.primary.rgb,.08),
+      '--hair':rgba(roles.primary.rgb,.26),'--hair-2':rgba(roles.primary.rgb,.16),
       '--theme-shadow-low':rgba(roles.primary.rgb,.12),
       '--theme-shadow-high':rgba(roles.primary.rgb,.08),
     };
@@ -185,7 +169,7 @@
 
   function contrastReport(theme=deriveWarmPaperLightTheme()){
     const background=theme.roles.elevated.rgb;
-    const targets={primary:12,secondary:7,muted:4.5,accent:4.5,
+    const targets={primary:12,secondary:4.5,muted:4.5,accent:5,accentEdge:3.4,
       local:4.5,remote:4.5,delegate:4.5,alert:4.5,question:4.5,blue:4.5,
       brightAlert:4.5,brightDelegate:4.5,brightAccent:4.5,brightBlue:4.5,
       brightRemote:4.5,brightLocal:4.5,control:3};
@@ -196,7 +180,7 @@
   }
 
   return Object.freeze({
-    DARK_SEEDS,WARM_PAPER_SEED,clamp01,lerp,mixHue,fit,contrast,solveL,
+    DARK_SEEDS,clamp01,lerp,mixHue,fit,contrast,solveL,
     deriveWarmPaperLightTheme,contrastReport,hex,
   });
 });

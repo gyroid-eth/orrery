@@ -97,6 +97,7 @@ function emit(pane,rows){
 function scrolledUp(pane,rows){pane.buf.viewportY=Math.max(0,pane.buf.viewportY-rows);}
 function atBottom(pane){return pane.buf.viewportY===pane.buf.baseY;}
 const panes=new Map();
+const permissionRestarts=new Map();
 console.log(JSON.stringify(run()));
 """
 

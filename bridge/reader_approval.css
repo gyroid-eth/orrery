@@ -21,6 +21,7 @@
 .reader-approval-full{font:11px/1.7 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;
   padding:11px 13px;margin:10px 0 15px;border:1px solid var(--hair);border-radius:5px;background:rgb(var(--theme-ink-rgb) / .025)}
 .reader-approval-choices{display:grid;gap:6px;margin-top:11px}
+.reader-approval-choice[aria-pressed=true]{border-color:var(--amber);color:var(--amber)}
 .reader-approval-choice.is-once{border-color:color-mix(in srgb,var(--amber) 50%,var(--hair));background:color-mix(in srgb,var(--amber) 9%,transparent)}
 .reader-approval-choice:not(:disabled):hover,.reader-approval-terminal:hover{background:rgb(var(--theme-ink-rgb) / .04)}
 .reader-approval kbd{display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:20px;height:21px;

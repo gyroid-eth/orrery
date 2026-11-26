@@ -29,7 +29,7 @@ from conversation_images import input_images, saved_path, dsh_image_path
 from conversation_markdown_images import IMAGE_EXT, local_image_target, markdown_image_targets
 import conversation_step_command as step_command
 import conversation_step_diff as step_diff
-from mobile_attachment_store import DIRECTORIES, FORMATS, attachment_label
+from mobile_attachment_store import ATTACHMENT_NAME, DIRECTORIES, FILE_SUFFIX, attachment_label, valid_extension
 
 MAX_RECORD=1024*1024
 MAX_TEXT=128*1024
@@ -41,8 +41,7 @@ TEXT_EXT={'.txt','.md','.py','.js','.mjs','.cjs','.ts','.tsx','.jsx','.css','.sc
           '.yaml','.yml','.toml','.ini','.cfg','.csv','.tsv','.xml','.html','.svg','.sh','.bash','.zsh',
           '.rs','.go','.c','.h','.cpp','.hpp','.java','.kt','.sql','.diff','.patch','.log','.rst'}
 RASTER_FORMATS=('PNG','JPEG','GIF','WEBP')
-ATTACHMENT_NAME=re.compile(r'[a-f0-9]{32}\.([a-z]{2,4})\Z')
-COMPOSER_ATTACHMENT=re.compile(r'@?(\./\.orrery-input-(?:images|files)/[a-f0-9]{32}\.[a-z]{2,4})\Z')
+COMPOSER_ATTACHMENT=re.compile(rf'@?(\./\.orrery-input-(?:images|files)/[a-f0-9]{{32}}(?:\.{FILE_SUFFIX})?)\Z')
 PHONE_ATTACHMENT=re.compile(r"(?:\A| )\[(image|file): ('(?:[^']|'\\'')*')\]\Z")
 
 
@@ -159,7 +158,7 @@ def stored_attachment(path, cwd):
         return None
     kind=next((kind for kind,folder in DIRECTORIES.items() if path.parent.name==folder),None)
     name=ATTACHMENT_NAME.fullmatch(path.name)
-    if not kind or not name or name[1] not in FORMATS[kind]:
+    if not kind or not name or not valid_extension(kind, name[1] or ''):
         return None
     try:
         folder=path.parent.lstat()
@@ -179,7 +178,7 @@ def stored_attachment(path, cwd):
                     label=attachment_label(os.read(fd,641).decode('utf-8'))
         except (PreviewUnavailable,UnicodeError):
             pass  # Older uploads have no original filename.
-        return dict(path=str(path),kind=kind,signature=signature,label=label,extension=name[1])
+        return dict(path=str(path),kind=kind,signature=signature,label=label,extension=name[1] or '')
     except (OSError,PreviewUnavailable):
         return None
 
@@ -460,7 +459,8 @@ class ReferenceStore:
                 if ref not in self.refs or self.refs[ref]['key']!=key:ref=secrets.token_urlsafe(24)
                 self.by_key[key]=ref
                 offset=event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id'])
-                label=attachment['label'] or f"Attachment {index+1}.{attachment['extension']}"
+                extension=attachment['extension']
+                label=attachment['label'] or f"Attachment {index+1}"+('.'+extension if extension else '')
                 self.refs[ref]=dict(key=key,row=binding(row),inode=identity(stream),offset=offset,
                                     digest=digest,attachment=attachment,label=label,expires=self.clock()+self.ttl)
                 self.refs.move_to_end(ref)
