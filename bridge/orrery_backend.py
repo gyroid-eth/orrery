@@ -973,6 +973,7 @@ def list_tmux_sessions(tmux_bin: str) -> list[dict[str, Any]]:
     # A concurrent first pin must not turn an older roster reply into a warning.
     watch_server = (isinstance(tmux_bin, LegacyTargetBoundary) and tmux_bin.pin is not None
                     and tmux_bin.pin['server_pid'] is not None)
+    generation = tmux_bin.generation if watch_server else None
     result = subprocess.run(
         tmux_argv(tmux_bin, "list-sessions", "-F", SESSION_FORMAT),
         capture_output=True,
@@ -998,7 +999,8 @@ def list_tmux_sessions(tmux_bin: str) -> list[dict[str, Any]]:
             # The normal roster query sees the current PID even when an
             # inherited TMUX points at the same socket with the old PID.
             if watch_server:
-                tmux_bin.observe_server_pid(int(server_pid) if server_pid.isdecimal() else None)
+                tmux_bin.observe_server_pid(int(server_pid) if server_pid.isdecimal() else None,
+                                            generation=generation)
             sessions.append(
                 {
                     "session": session,
@@ -1018,7 +1020,7 @@ def list_tmux_sessions(tmux_bin: str) -> list[dict[str, Any]]:
 
 
 SESSION_LIST_SHARE_SECONDS = 2.0
-_session_list_shared: dict[Any, tuple[float, "asyncio.Task[list[dict[str, Any]]]"]] = {}
+_session_list_shared: dict[Any, tuple[float, "asyncio.Task[list[dict[str, Any]]]", int | None]] = {}
 
 
 async def shared_session_list(tmux_bin) -> list[dict[str, Any]]:
@@ -1032,18 +1034,37 @@ async def shared_session_list(tmux_bin) -> list[dict[str, Any]]:
     session that appears is still seen within that much of the ordinary beat.
     """
     key = tmux_bin if isinstance(tmux_bin, str) else id(tmux_bin)
-    now = time.monotonic()
-    shared = _session_list_shared.get(key)
-    if (
-        shared is None
-        or shared[1].get_loop() is not asyncio.get_running_loop()
-        or (shared[1].done() and now - shared[0] >= SESSION_LIST_SHARE_SECONDS)
-    ):
-        task = asyncio.ensure_future(asyncio.to_thread(list_tmux_sessions, tmux_bin))
-        _session_list_shared[key] = shared = (now, task)
-        # a failure is also shared for that long, but never kept beyond it
-        task.add_done_callback(lambda finished: finished.cancelled() or finished.exception())
-    return await asyncio.shield(shared[1])
+    while True:
+        now = time.monotonic()
+        shared = _session_list_shared.get(key)
+        generation = getattr(tmux_bin, "generation", None)
+        if (
+            shared is None
+            or shared[1].get_loop() is not asyncio.get_running_loop()
+            or shared[2] != generation
+            or (shared[1].done() and now - shared[0] >= SESSION_LIST_SHARE_SECONDS)
+        ):
+            task = asyncio.ensure_future(asyncio.to_thread(list_tmux_sessions, tmux_bin))
+            _session_list_shared[key] = shared = (now, task, generation)
+            task.add_done_callback(lambda finished: finished.cancelled() or finished.exception())
+        try:
+            sessions = await asyncio.shield(shared[1])
+        except Exception:
+            if (_session_list_shared.get(key) is shared
+                    and generation == getattr(tmux_bin, "generation", None)):
+                raise
+        else:
+            if (_session_list_shared.get(key) is shared
+                    and generation == getattr(tmux_bin, "generation", None)):
+                return sessions
+        # Even existing waiters must retry after the server is re-pinned.
+        if _session_list_shared.get(key) is shared:
+            _session_list_shared.pop(key)
+
+
+def invalidate_shared_session_list(tmux_bin) -> None:
+    key = tmux_bin if isinstance(tmux_bin, str) else id(tmux_bin)
+    _session_list_shared.pop(key, None)
 
 
 def pane_tmux_session(tmux_bin: str, pane_id: str) -> str | None:
@@ -1194,6 +1215,79 @@ class SessionBridgeManager:
         self._lock = asyncio.Lock()
         self._closed = False
         self._roster_task: asyncio.Task[None] | None = None
+        self._legacy_epoch = 0
+        self._legacy_peers: dict[WebSocketPeer, int] = {}
+        self._legacy_retiring: list[tuple[SessionState, subprocess.Popen | None]] | None = None
+        self._legacy_recovery_lock = asyncio.Lock()
+        self._attach_errors: dict[tuple[str | None, str], float] = {}
+
+    def _log_attach_error(self, session: str | None, exc: Exception) -> None:
+        reason = str(exc) if isinstance(exc, TargetRefused) else type(exc).__name__
+        key = (session, reason)
+        now = time.monotonic()
+        if now - self._attach_errors.get(key, -float("inf")) < 60:
+            return
+        self._attach_errors[key] = now
+        if len(self._attach_errors) > 1024:
+            self._attach_errors.pop(next(iter(self._attach_errors)))
+        operation = f"failed to attach {session!r}" if session is not None else "cannot rebind tmux"
+        print(f"ORRERY recorder {operation}: {reason}", file=sys.stderr, flush=True)
+
+    def _legacy_peer_current(self, peer: WebSocketPeer) -> bool:
+        return (
+            self._legacy_peers.setdefault(peer, self._legacy_epoch) == self._legacy_epoch
+            and self._legacy_retiring is None
+        )
+
+    @staticmethod
+    async def _close_restarted_peer(peer: WebSocketPeer) -> None:
+        response = getattr(peer, "response", None)
+        if response is not None:
+            await asyncio.wait_for(response.close(code=1012, message=b"tmux server restarted"), timeout=2)
+
+    async def _recover_legacy_socket(self) -> bool:
+        boundary = self.tmux_bin
+        if not isinstance(boundary, LegacyTargetBoundary):
+            return True
+        async with self._legacy_recovery_lock:
+            try:
+                if self._legacy_retiring is None:
+                    if not await asyncio.to_thread(boundary.socket_replaced):
+                        return True
+                    async with self._lock:
+                        if self._closed:
+                            return False
+                        self._legacy_epoch += 1
+                        self._legacy_retiring = [(state, state.bridge.process) for state in self.states.values()]
+                        self.states.clear()
+                        invalidate_shared_session_list(boundary)
+
+                peers = {peer for peer, epoch in self._legacy_peers.items()
+                         if epoch != self._legacy_epoch}
+                for state, _ in self._legacy_retiring:
+                    peers.update(state.bridge.clients)
+                await asyncio.gather(*(self._close_restarted_peer(peer) for peer in peers),
+                                     return_exceptions=True)
+                # Old window claims cannot be restored on the replacement server.
+                retired = await asyncio.gather(*(state.bridge.stop() for state, _ in self._legacy_retiring),
+                                               return_exceptions=True)
+                self._legacy_retiring = [
+                    (state, process) for (state, process), result in zip(self._legacy_retiring, retired)
+                    if isinstance(result, BaseException) or (process is not None and process.poll() is None)
+                ]
+                if self._legacy_retiring:
+                    raise TargetRefused("TMUX_CONTROL_RETIRE_FAILED")
+                if self._closed:
+                    return False
+                rebound = await asyncio.to_thread(boundary.rebind_server)
+                invalidate_shared_session_list(boundary)
+                self._legacy_retiring = None
+                if rebound:
+                    print("ORRERY recorder revalidated a restarted tmux server", file=sys.stderr, flush=True)
+                return True
+            except (OSError, RuntimeError) as exc:
+                self._log_attach_error(None, exc)
+                return False
 
     async def start(self) -> None:
         await self._prune_history()
@@ -1238,6 +1332,8 @@ class SessionBridgeManager:
     async def _reconcile_sessions(self) -> None:
         if isinstance(self.tmux_bin,FreshTargetBoundary):
             await self._reconcile_fresh();return
+        if not await self._recover_legacy_socket():
+            return
         try:
             sessions = await shared_session_list(self.tmux_bin)
         except (OSError, RuntimeError):
@@ -1254,6 +1350,8 @@ class SessionBridgeManager:
                 self.states.pop(session)
                 for session, state in list(self.states.items())
                 if session not in live_sessions
+                or (state.bridge.config.session_created is not None
+                    and state.bridge.config.session_created != live_sessions[session])
                 or state.bridge.process is None
                 or state.bridge.process.poll() is not None
             ]
@@ -1268,18 +1366,13 @@ class SessionBridgeManager:
             try:
                 await self._ensure_bridge(session, session_created)
             except Exception as exc:
-                print(
-                    f"ORRERY recorder failed to attach {session!r}: "
-                    f"{str(exc) if isinstance(exc, TargetRefused) else type(exc).__name__}",
-                    file=sys.stderr,
-                    flush=True,
-                )
+                self._log_attach_error(session, exc)
 
     async def _ensure_bridge(
         self,
         session: str,
         session_created: int | None = None,
-        *, ref=None,
+        *, ref=None, legacy_epoch=None,
     ) -> SessionState | None:
         if isinstance(self.tmux_bin,FreshTargetBoundary):
             target=await asyncio.to_thread(self.tmux_bin.resolve,session,ref)
@@ -1287,16 +1380,23 @@ class SessionBridgeManager:
         async with self._lock:
             if self._closed:
                 return None
+            if self._legacy_retiring is not None or (legacy_epoch is not None and legacy_epoch != self._legacy_epoch):
+                raise TargetRefused("TMUX_SOCKET_CHANGED")
             state = self.states.get(session)
             if state is not None:
                 return state
 
+            target = self.tmux_bin
+            if isinstance(target, LegacyTargetBoundary):
+                if target.pin is not None and target.pin["server_pid"] is None:
+                    await asyncio.to_thread(target.admit, "attach", session=session)
+                target = target.pinned_copy()
             bridge = SessionTmuxBridge(
                 ControlConfig(
                     host=DEFAULT_HOST,
                     port=0,
                     session=session,
-                    tmux_bin=self.tmux_bin,
+                    tmux_bin=target,
                     session_created=session_created,
                     history_dir=self.history_dir,
                 )
@@ -1346,7 +1446,15 @@ class SessionBridgeManager:
         async with self._lock:
             if self._closed:return
             stale=[self.states.pop(key) for key in list(self.states) if key not in targets]
-        for state in stale:await self._stop_bridge(state)
+        if stale:
+            invalidate_shared_session_list(self.tmux_bin)
+        for state in stale:
+            await self._stop_bridge(state)
+            if state.bridge.clients:
+                # A new route may be published later. Keep the affected tab
+                # ready to reattach through the same trusted host.
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(state.bridge._broadcast_closed(), timeout=2)
         for target in targets.values():
             if getattr(target,'proof',{}).get('ended') is True:
                 # Finished recorders have no automatic lifetime after the
@@ -1400,6 +1508,11 @@ class SessionBridgeManager:
     ) -> None:
         if isinstance(self.tmux_bin,FreshTargetBoundary):
             await self._attach_fresh(peer,attached,session);return
+        legacy_epoch = None
+        if isinstance(self.tmux_bin, LegacyTargetBoundary):
+            if not self._legacy_peer_current(peer):
+                raise TargetRefused("TMUX_SOCKET_CHANGED")
+            legacy_epoch = self._legacy_epoch
         try:
             await asyncio.to_thread(require_target, self.tmux_bin, "attach", session=session)
         except TargetRefused as exc:
@@ -1431,7 +1544,7 @@ class SessionBridgeManager:
             return
 
         try:
-            state = await self._ensure_bridge(session)
+            state = await self._ensure_bridge(session, legacy_epoch=legacy_epoch)
         except Exception as exc:
             await send_error(
                 peer,
@@ -1444,7 +1557,8 @@ class SessionBridgeManager:
             return
 
         async with self._lock:
-            if self.states.get(session) is not state:
+            if (self.states.get(session) is not state
+                    or (legacy_epoch is not None and not self._legacy_peer_current(peer))):
                 await send_error(peer, session, f"tmux session not found: {session}")
                 return
             state.bridge.clients.add(peer)
@@ -1509,6 +1623,7 @@ class SessionBridgeManager:
     ) -> None:
         for session in list(attached):
             await self.detach(peer, attached, session)
+        self._legacy_peers.pop(peer, None)
 
     async def handle_message(
         self,
@@ -1518,6 +1633,8 @@ class SessionBridgeManager:
         *, approval_request=None,
     ) -> None:
         message_type = payload.get("type")
+        if isinstance(self.tmux_bin, LegacyTargetBoundary) and not self._legacy_peer_current(peer):
+            raise TargetRefused("TMUX_SOCKET_CHANGED")
 
         if isinstance(self.tmux_bin,FreshTargetBoundary) and message_type in {'attach','detach','refresh'}:
             if set(payload)-{'type','session','mail_instance_id','mail_agent_id'}:raise TargetRefused('FRESH_TARGET_QUERY_INVALID')
@@ -1787,8 +1904,9 @@ class SessionBridgeManager:
             self._closed = True
             roster_task = self._roster_task
             self._roster_task = None
-            states = list(self.states.values())
+            states = list(self.states.values()) + [state for state, _ in (self._legacy_retiring or [])]
             self.states.clear()
+            self._legacy_peers.clear()
         if roster_task is not None:
             roster_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -5042,14 +5160,21 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
     attached: set[str] = set()
     manager = request.app[BRIDGE_MANAGER_KEY]
     tmux_bin = request.app[TMUX_BIN_KEY]
+    legacy = isinstance(manager, SessionBridgeManager) and isinstance(tmux_bin, LegacyTargetBoundary)
     refresher: asyncio.Task[None] | None = None
 
     try:
+        if legacy and not manager._legacy_peer_current(peer):
+            await manager._close_restarted_peer(peer)
+            return response
         try:
-            sessions = await asyncio.to_thread(list_tmux_sessions, tmux_bin)
+            sessions = await shared_session_list(tmux_bin)
         except OSError as exc:
             _warn_tmux_gone(tmux_bin, exc)
             sessions = []
+        if legacy and not manager._legacy_peer_current(peer):
+            await manager._close_restarted_peer(peer)
+            return response
         initial = _session_list_message(tmux_bin, sessions)
         await peer.send_json(initial)
         refresher = asyncio.create_task(_session_list_refresher(peer, tmux_bin, initial))

@@ -74,8 +74,8 @@ def test_connections_share_one_tmux_session_list(monkeypatch):
         assert len(calls) == 1
         # an answer older than the share window is not reused
         key = "tmux"
-        started, task = ob._session_list_shared[key]
-        ob._session_list_shared[key] = (started - ob.SESSION_LIST_SHARE_SECONDS - 1, task)
+        started, task, generation = ob._session_list_shared[key]
+        ob._session_list_shared[key] = (started - ob.SESSION_LIST_SHARE_SECONDS - 1, task, generation)
         await ob.shared_session_list("tmux")
         assert len(calls) == 2
 
@@ -97,8 +97,8 @@ def test_a_failed_session_list_reaches_every_waiter_and_is_not_kept(monkeypatch)
             *(ob.shared_session_list("tmux") for _ in range(3)), return_exceptions=True
         )
         assert all(isinstance(item, OSError) for item in results) and len(calls) == 1
-        started, task = ob._session_list_shared["tmux"]
-        ob._session_list_shared["tmux"] = (started - ob.SESSION_LIST_SHARE_SECONDS - 1, task)
+        started, task, generation = ob._session_list_shared["tmux"]
+        ob._session_list_shared["tmux"] = (started - ob.SESSION_LIST_SHARE_SECONDS - 1, task, generation)
         monkeypatch.setattr(ob, "list_tmux_sessions", lambda tmux_bin: [])
         assert await ob.shared_session_list("tmux") == []
 

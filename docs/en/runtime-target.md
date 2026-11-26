@@ -1,6 +1,8 @@
 # Protecting legacy cockpit tmux targets
 
-With a healthy shared helper, cockpit pins one legacy endpoint and uses an explicit absolute `tmux -S` socket thereafter. It calls Telemetry's shared admission before control attach, input, split/close, and opening a terminal. A changed socket or server PID is refused; it never falls back to bare tmux. Only an initially absent server may pin the first server appearing at the same endpoint.
+With a healthy shared helper, cockpit pins one legacy endpoint and uses an explicit absolute `tmux -S` socket thereafter. It calls Telemetry's shared admission before control attach, input, split/close, and opening a terminal. When the socket or server PID changes, operations using the old connection are refused.
+
+When a new server appears on the default socket, cockpit stops the old control clients, verifies the same endpoint again, and reconnects open tabs. Input resumes once the new connection is ready. If cockpit starts with the server absent, it pins the first server to appear at the same endpoint. A cockpit launched with an inherited `TMUX` keeps its original socket and server pin.
 
 This protects legacy consumers. Global dedicated terminals, WebSocket references, and pane windows belong to a later change. It does not enable new global launches. Pure legacy operations and the existing split/close restriction on auxiliary sessions remain.
 

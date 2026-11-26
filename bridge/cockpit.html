@@ -7463,14 +7463,14 @@ function closeSplitCellPane(session){
 function noteBackendClosed(session){closedByBackend.add(session);}
 // A session the backend ended is back: attach its tab again, by the usual
 // rule (no priority: with the cockpit full, nothing is displaced). Until an
-// attach goes out (the link was down, the cockpit full), it is tried again
-// with the next list; closing its tab, or closing it by hand, ends that.
+// attach is confirmed, it is tried again with the next list if needed.
+// Closing its tab by hand ends that.
 function restoreClosedSessions(availableNames){
   const available=new Set(availableNames);
   for(const session of [...closedByBackend]){
     if(manualDetached.has(session)||!sessionGroups.has(session)){closedByBackend.delete(session);continue;}
     if(pendingAgentExits.has(session))continue;
-    if(available.has(session)&&requestAttach(session))closedByBackend.delete(session);
+    if(available.has(session))requestAttach(session);
   }
 }
 function pruneSplitSessions(availableNames){
@@ -7991,6 +7991,7 @@ function resetSession(msg){
   const group=ensureSessionGroup(session);
   group.incarnation=typeof msg.incarnation==='string'?msg.incarnation:null;
   group.attachGeneration=typeof msg.attachGeneration==='string'?msg.attachGeneration:null;
+  closedByBackend.delete(session);
   requestedSessions.delete(session);attachedSessions.add(session);
   setGroupState(session,'live');
   (Array.isArray(msg.panes)?msg.panes:[]).forEach(meta=>createPane(session,meta));
@@ -8909,12 +8910,13 @@ function connect(){
     if(socket!==nextSocket)return;
     try{handle(JSON.parse(event.data));}catch(_){/* ignore malformed backend events */}
   });
-  nextSocket.addEventListener('close',()=>{
+  nextSocket.addEventListener('close',event=>{
     if(socket!==nextSocket)return;
     cancelComposerAcks();
     document.dispatchEvent(new Event('oc:reader-connection'));
     readerApproval?.disconnected();
     readerActivity?.disconnected();
+    if(event.code===1012)occupiedSessions().forEach(noteBackendClosed);
     attachedSessions.clear();requestedSessions.clear();
     sessionGroups.forEach((_,session)=>setGroupState(session,'closed'));
     refreshHeaderStats();setLink('closed','disconnected');scheduleReconnect();
