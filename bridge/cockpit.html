@@ -220,7 +220,6 @@
     z-index:4;grid-column:3;grid-row:1;justify-self:start;translate:-50% 0;width:12px;cursor:col-resize;
   }
   .mail-graph-divider{flex:0 0 12px;cursor:row-resize}
-  .miniorrery[hidden]+.mail-graph-divider{display:none}
   .mail-divider::after,.mail-graph-divider::after{
     content:"";position:absolute;left:50%;top:50%;translate:-50% -50%;
     border-radius:2px;background:var(--ink-faint);
@@ -1492,7 +1491,12 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg>
         </button>
       </div>
-      <svg class="miniorrery" viewBox="0 0 280 120" id="orrery" hidden></svg>
+      <div class="mini-graph" id="miniGraphViewport">
+        <div class="mini-graph-scroll" role="region" aria-label="Mini graph">
+          <svg class="miniorrery" viewBox="0 0 280 120" id="orrery" hidden></svg>
+        </div>
+        <svg class="mini-graph-expand" viewBox="0 0 28 28"></svg>
+      </div>
       <div class="mail-graph-divider" id="mailGraphDivider" role="separator" tabindex="0" aria-orientation="horizontal"
            aria-controls="orrery" aria-label="Resize mini graph"
            title="Resize mini graph with Up or Down arrows or drag. Enter or double-click to reset."></div>

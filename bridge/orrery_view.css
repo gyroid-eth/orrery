@@ -1,10 +1,17 @@
 /* ── real spawn + communication graph (right rail + planetarium) ──
    Owned by orrery_view.js. Loaded from cockpit.html. */
-.miniorrery{
-  position:relative;display:block;flex:none;
+.mini-graph{
+  position:relative;flex:none;
   width:calc(100% - 12px);height:200px;margin:4px 6px 0;
-  overflow:hidden;
 }
+.mini-graph:has(.miniorrery[hidden]),
+.mini-graph:has(.miniorrery[hidden])+.mail-graph-divider{display:none}
+.mini-graph.orrery-mode{width:100%;margin:4px 0 0}
+.mini-graph-scroll{width:100%;height:100%;overflow:auto;scrollbar-width:thin;overflow-anchor:none}
+.mini-graph-scroll:focus-visible{outline:1px solid var(--ink-dim);outline-offset:-1px}
+.mini-graph-expand{position:absolute;top:0;right:0;width:28px;height:28px;pointer-events:none}
+.mini-graph-expand .orrery-expand{pointer-events:auto}
+.miniorrery{display:block;overflow:hidden}
 .miniorrery.telemetry-network{
   background:radial-gradient(ellipse at center,rgb(var(--theme-accent-rgb) / .055),transparent 62%);
 }
@@ -195,9 +202,6 @@
 /* Center-pane selection: a static hairline outside the working arc. */
 .mini-selection-ring{
   fill:none;stroke:var(--ink);stroke-width:.75;pointer-events:none;
-}
-.miniorrery.orrery-mode{
-  width:100%;margin:4px 0 0;
 }
 
 /* Compact provider seats preserve node positions and the selection extent. */

@@ -20,7 +20,7 @@ def mini_browser(tour_browser):
     client, evaluate = tour_browser
     evaluate("""(()=>{
       document.querySelectorAll('.flight-close').forEach(e=>e.click());
-      document.getElementById('mailGraphBtn').click();
+      if(document.getElementById('orrery').hasAttribute('hidden'))document.getElementById('mailGraphBtn').click();
       setMiniViewMode('orrery');
       const names=['Pilot','Helper','Watcher'];
       currentAgents=names.map(name=>({name,category:'agent',running:true,
@@ -177,7 +177,7 @@ def test_deep_and_wide_layouts_keep_the_whole_selected_ring_visible(mini_browser
       const bounds={left:center.x-radius*matrix.a,right:center.x+radius*matrix.a,
         top:center.y-radius*matrix.d,bottom:center.y+radius*matrix.d};
       const rect=e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};
-      return {bounds,viewport:rect(svg),rail:rect(svg.closest('.col')),
+      return {bounds,viewport:rect(svg.parentElement),rail:rect(svg.closest('.col')),
         centered:['cx','cy'].every(key=>ring.getAttribute(key)===ring.parentElement.querySelector('.orrery-hit').getAttribute(key)),
         workRadius:Number(ring.parentElement.querySelector('.orrery-motion-ring').getAttribute('r'))};
     })()""".replace('SHAPE', json.dumps(shape)))
@@ -359,11 +359,49 @@ def test_mini_graph_keeps_mail_pairs_by_default_and_can_use_only_recent_links(mi
     assert evaluate("setMailLinks('keep');mailLinksState()") == retained
 
 
+@pytest.mark.parametrize('mode', ['network', 'orrery'])
+def test_dense_mini_graph_keeps_names_readable_and_pans_the_whole_graph(mini_browser, mode):
+    client, evaluate = mini_browser
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    result = evaluate("""(()=>{
+      setMailPaneWidth(260,mailPaneBounds());
+      setMiniViewMode(MODE);
+      const svg=document.getElementById('orrery'),scroll=svg.parentElement;
+      const names=['Pilot','Helper',...Array.from({length:30},(_,i)=>'FixtureAgent'+i)];
+      currentAgents=names.map(name=>({name,provider:'openai'}));
+      names.slice(1).forEach(name=>OC.lineageParent.set(name,'Pilot'));
+      const refresh=()=>document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      refresh();
+      const pilot=svg.querySelector('[data-agent=Pilot]'),name=pilot.querySelector('.orrery-caption-name');
+      const nameSize=Number.parseFloat(getComputedStyle(name).fontSize)*pilot.getScreenCTM().a;
+      const portrait=pilot.querySelector('.mini-portrait').getBoundingClientRect().width;
+      const control=scroll.parentElement.querySelector('.orrery-expand');
+      const inside=element=>{
+        const r=element.getBoundingClientRect(),bounds=scroll.getBoundingClientRect();
+        return r.left>=bounds.left&&r.right<=bounds.right&&r.top>=bounds.top&&r.bottom<=bounds.bottom;
+      };
+      const startVisible=inside(pilot);
+      scroll.scrollLeft=scroll.scrollWidth;
+      scroll.scrollTop=scroll.scrollHeight;
+      const pan=[scroll.scrollLeft,scroll.scrollTop];
+      const reached=[...svg.querySelectorAll('.mini-agent')].some(node=>node!==pilot&&inside(node));
+      refresh();
+      return {count:svg.querySelectorAll('.mini-agent').length,nameSize,portrait,startVisible,reached,pan,
+        preserved:[scroll.scrollLeft,scroll.scrollTop],expandVisible:inside(control),keyboard:scroll.tabIndex};
+    })()""".replace('MODE', json.dumps(mode)))
+    assert result['count'] == 32
+    assert result['nameSize'] >= 11.6 and result['portrait'] >= 22, result
+    assert result['startVisible'] and result['reached'] and result['expandVisible'], result
+    assert result['pan'] != [0, 0] and result['pan'] == result['preserved'], result
+    assert result['keyboard'] == 0
+
+
 def graph_resize_metrics(evaluate):
     return evaluate("""(()=>{
       const graph=document.getElementById('orrery'),divider=document.getElementById('mailGraphDivider');
       const portrait=graph.querySelector('.orrery-hit');
-      return {height:graph.clientHeight,viewBox:graph.getAttribute('viewBox'),
+      return {height:document.getElementById('miniGraphViewport').clientHeight,viewBox:graph.getAttribute('viewBox'),
         portrait:portrait?.getBoundingClientRect().width||0,
         mail:document.getElementById('mail').clientHeight,
         min:Number(divider.getAttribute('aria-valuemin')),max:Number(divider.getAttribute('aria-valuemax')),
@@ -435,7 +473,7 @@ def test_mail_graph_keyboard_clamps_and_restores_height_after_reload(mini_browse
     client.call('Page.reload', ignoreCache=True)
     for _ in range(100):
         try:
-            if evaluate("!window.graphResizeBeforeReload&&document.getElementById('orrery')?.clientHeight===496"):
+            if evaluate("!window.graphResizeBeforeReload&&document.getElementById('miniGraphViewport')?.clientHeight===496"):
                 break
         except RuntimeError as error:
             if 'Inspected target navigated or closed' not in str(error):
