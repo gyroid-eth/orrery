@@ -2,8 +2,8 @@
   "axes": {
     "background": {
       "effect": {
-        "digest": "e8950107473602bae5de0ac6119b9d34ef53809e004dbc47a86a044c05012d49",
-        "expected": 322,
+        "digest": "b71b20bfddec27726eca134b1729059acb9c97ca522ece44ebb8de97e6ff7a9a",
+        "expected": 326,
         "records": [
           {
             "property": "background",
@@ -1337,28 +1337,43 @@
           },
           {
             "property": "border",
-            "selector": ".mini-graph-zoom button",
+            "selector": ".mini-graph-tools button",
             "value": "1px solid var(--hair)"
           },
           {
             "property": "background",
-            "selector": ".mini-graph-zoom button",
+            "selector": ".mini-graph-tools button",
             "value": "var(--panel-2)"
           },
           {
             "property": "color",
-            "selector": ".mini-graph-zoom button",
+            "selector": ".mini-graph-tools button",
             "value": "var(--ink-dim)"
           },
           {
             "property": "color",
-            "selector": ".mini-graph-zoom button:not(:disabled):is(:hover,:focus-visible)",
+            "selector": ".mini-graph-tools button:not(:disabled):is(:hover,:focus-visible,[aria-expanded=true])",
             "value": "var(--ink)"
           },
           {
             "property": "border-color",
-            "selector": ".mini-graph-zoom button:not(:disabled):is(:hover,:focus-visible)",
+            "selector": ".mini-graph-tools button:not(:disabled):is(:hover,:focus-visible,[aria-expanded=true])",
             "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".mini-graph-appearance",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mini-graph-appearance",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-appearance",
+            "value": "var(--ink)"
           },
           {
             "property": "stroke",
@@ -1372,7 +1387,12 @@
           },
           {
             "property": "stroke",
-            "selector": ".orrery-mail-edge:is(:hover,:focus-visible) > :first-child",
+            "selector": ".orrery-mail-edge-halo",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-mail-edge > .orrery-mail-edge-core",
             "value": "var(--ink)"
           },
           {
@@ -1761,7 +1781,7 @@
     },
     "dim-contrast": {
       "effect": {
-        "digest": "365c114ea51e1160a828d1aea782aae6e88c0cbea25b58e1581663c0c2103888",
+        "digest": "32f3ff27ca0b2f4217d9eca5c6522502e1a3f44bcd6854f81052e17732756cf1",
         "expected": 117,
         "records": [
           {
@@ -2266,12 +2286,12 @@
           },
           {
             "property": "color",
-            "selector": ".mini-graph-zoom button",
+            "selector": ".mini-graph-tools button",
             "value": "var(--ink-dim)"
           },
           {
             "property": "border-color",
-            "selector": ".mini-graph-zoom button:not(:disabled):is(:hover,:focus-visible)",
+            "selector": ".mini-graph-tools button:not(:disabled):is(:hover,:focus-visible,[aria-expanded=true])",
             "value": "var(--ink-dim)"
           },
           {
@@ -3000,7 +3020,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "14f1b5e85f71d2504649b94e0da76d956607909d5b5424aeb73d62063ae1be96",
+        "digest": "c552cb449dab3c401fd5860de7b383f454aaf722732165f23fb29c05e485aa51",
         "expected": 78,
         "records": [
           {
@@ -3494,49 +3514,49 @@
             "value": "11px"
           },
           {
-            "line": 66,
+            "line": 92,
             "property": "font-size",
             "selector": ".mini-initial",
             "source": "bridge/orrery_view.css",
             "value": "8px"
           },
           {
-            "line": 100,
+            "line": 126,
             "property": "font-size",
             "selector": ".orrery-caption-role",
             "source": "bridge/orrery_view.css",
             "value": "7.5px"
           },
           {
-            "line": 102,
+            "line": 128,
             "property": "font-size",
             "selector": ".planet-agent .orrery-caption-role",
             "source": "bridge/orrery_view.css",
             "value": "11px"
           },
           {
-            "line": 108,
+            "line": 134,
             "property": "font-size",
             "selector": ".orrery-expand text",
             "source": "bridge/orrery_view.css",
             "value": "11px"
           },
           {
-            "line": 152,
+            "line": 178,
             "property": "font-size",
             "selector": ".orrery-comet-label",
             "source": "bridge/orrery_view.css",
             "value": "10px"
           },
           {
-            "line": 177,
+            "line": 203,
             "property": "font-size",
             "selector": ".planetarium-note",
             "source": "bridge/orrery_view.css",
             "value": "9px"
           },
           {
-            "line": 229,
+            "line": 255,
             "property": "font-size",
             "selector": ".mini-provider-fallback",
             "source": "bridge/orrery_view.css",
@@ -3563,7 +3583,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "24b7810f2372431d6846530261461d37eb52aa5833bde56cc89f18af11163588",
+        "digest": "ddb855f79c0b02be6bfc189793e7c4f3fbe98dd4c4f633adc5114a55ee2074d8",
         "expected": 22,
         "records": [
           {
@@ -3707,14 +3727,14 @@
             "value": ".1em"
           },
           {
-            "line": 177,
+            "line": 203,
             "property": "letter-spacing",
             "selector": ".planetarium-note",
             "source": "bridge/orrery_view.css",
             "value": ".18em"
           },
           {
-            "line": 181,
+            "line": 207,
             "property": "letter-spacing",
             "selector": ".planetarium-telemetry",
             "source": "bridge/orrery_view.css",
@@ -3725,7 +3745,7 @@
       }
     }
   },
-  "inventory_digest": "7c3640e386ac795f2ea8fe2d541a7dfee53bef56aa99af94a2d67a17f0b96351",
+  "inventory_digest": "8d899ae95a6ad9e36b2b9cb8123ef53520b5090526d3d30eb53705602fd075a9",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -3737,11 +3757,11 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "003eaa049134517f58b1d17db39307b0de4f29b2ecffdfbd42ec0565d69e4f8d",
+  "source_digest": "164915cac75a79758c440d46c33e5bad472a0e33d3c15d40981838b556454a95",
   "source_files": {
     "bridge/cockpit.html": "77ad19c0bd7508fbe528caa772bb1c73021217eee342ec220d21f248e1aaaa67",
     "bridge/mail_view.css": "7139ca3c6fc352f2f5213e06b589f2919befb93e79ff858c147d20c3f28f1a8a",
-    "bridge/orrery_view.css": "3ba1e7c3880aa455af022e2cf99c0322a76f50547c6b322b5f10ceaedebce372"
+    "bridge/orrery_view.css": "da0edc98694e59f8ad21d48f8d808a0a74ce57edb5447a22f5e066d1fe22fa46"
   },
   "surface": "cockpit",
   "validation": {

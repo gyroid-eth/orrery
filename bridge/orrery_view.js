@@ -25,6 +25,18 @@ const MINI={
   captionWidth:62,captionTop:15,captionHeight:20,nodeAbove:20,
 };
 const MINI_HEIGHT_KEY='oc-mini-graph-height';
+const MINI_APPEARANCE_KEY='oc-mini-appearance-v1';
+const MINI_APPEARANCE_RANGES={
+  haloWidth:{label:'Maximum halo width',min:2,max:12,step:.5,value:7,unit:'px'},
+  haloOpacity:{label:'Halo opacity',min:0,max:35,step:1,value:12,unit:'%'},
+  coreWidth:{label:'Core width',min:.5,max:2,step:.1,value:1,unit:'px'},
+  opacityFloor:{label:'Minimum line opacity',min:20,max:80,step:1,value:50,unit:'%'},
+  nodeSize:{label:'Node size',min:70,max:160,step:5,value:100,unit:'%'},
+  nameSize:{label:'Name text size',min:7,max:14,step:.5,value:9,unit:'px'},
+  ringGap:{label:'Ring spacing',min:0,max:26,step:1,value:4,unit:'px'},
+};
+let miniAppearance=readMiniAppearance();
+let miniAppearancePanel=null;
 // Keep about 12 px names on open, with room for wide names in the scene.
 const MINI_PREFERRED_SCALE=1.3;
 const MINI_MAX_CAPTION_WIDTH=112;
@@ -369,7 +381,8 @@ function ringNetworkOffsets(names,dimensions){
   const rx=dimensions.width/2-dimensions.xPadding;
   const ry=dimensions.height/2-Math.max(dimensions.topPadding,dimensions.bottomPadding);
   if(rx<=0||ry<=0)return null;
-  const [horizontal,vertical]=captionClearance(dimensions);
+  const horizontal=dimensions.captionWidth+miniAppearance.ringGap;
+  const vertical=dimensions.nodeAbove+dimensions.captionTop+dimensions.captionHeight+miniAppearance.ringGap/2;
   const overlaps=(a,b)=>Math.abs(a.x-b.x)<horizontal&&Math.abs(a.y-b.y)<vertical;
   const fits=(positions,placed)=>positions.every((point,index)=>
     !placed.some(other=>overlaps(point,other))&&
@@ -446,7 +459,7 @@ function fitMiniTree(live,dimensions){
 function miniCaptionWidth(agents){
   if(!miniCaptionMeasure)return MINI.captionWidth;
   const font=getComputedStyle(miniSvg).getPropertyValue('--rail-sans').trim()||'sans-serif';
-  miniCaptionMeasure.font=`600 9px ${font}`;
+  miniCaptionMeasure.font=`600 ${miniAppearance.nameSize}px ${font}`;
   let width=MINI.captionWidth;
   for(const agent of agents){
     width=Math.max(width,Math.ceil(miniCaptionMeasure.measureText(agent.name||'').width)+3);
@@ -459,10 +472,16 @@ function fitMiniScene(live,width,height){
   const agents=subset?[...subset.distances.keys()].map(name=>subset.byName.get(name)):live;
   const scale=Math.max(MINI_PREFERRED_SCALE,Math.min(width/MINI.width,height/MINI.height));
   const captionWidth=miniCaptionWidth(agents),xPadding=Math.max(MINI.xPadding,captionWidth/2+3);
+  const nodeScale=miniAppearance.nodeSize/100,nameSize=miniAppearance.nameSize;
+  const captionTop=Math.ceil(MINI.captionTop*nodeScale),nodeAbove=Math.ceil(MINI.nodeAbove*nodeScale);
+  const captionHeight=nameSize+2+(miniAppearance.showRoles?9:0);
+  const topPadding=Math.max(MINI.topPadding,nodeAbove+2);
+  const bottomPadding=Math.max(MINI.bottomPadding,captionTop+captionHeight+2);
   // Find a scene with room for both caption rows. Fitting the whole scene is
   // the minimum zoom, and its readable scale determines the opening zoom.
   for(let zoom=1;;zoom*=1.12){
-    const dimensions={...MINI,captionWidth,xPadding,width:width/scale*zoom,height:height/scale*zoom};
+    const dimensions={...MINI,captionWidth,captionTop,captionHeight,nodeAbove,nodeScale,nameSize,
+      xPadding,topPadding,bottomPadding,showRoles:miniAppearance.showRoles,width:width/scale*zoom,height:height/scale*zoom};
     const layout=subset?telemetryMiniLayout(subset,miniFocusName,dimensions):fitMiniTree(live,dimensions);
     if(layout)return {layout,dimensions,zoom};
   }
@@ -566,6 +585,12 @@ function miniParallelOffsets(surface){
   }
   return offsets;
 }
+function updateMiniEdgeGeometry(edge,d,opacity){
+  edge.setAttribute('d',d);
+  edge.previousElementSibling.setAttribute('d',d);
+  edge.nextElementSibling.setAttribute('d',d);
+  edge.parentElement.style.opacity=String(opacity);
+}
 function updateSurfaceGeometry(surface){
   surface.states.forEach((state,name)=>{
     const cutout=surface.edgeCutouts?.get(name);
@@ -583,15 +608,14 @@ function updateSurfaceGeometry(surface){
     const from=surface.states.get(edge.dataset.parent);
     const to=surface.states.get(edge.dataset.child);
     if(!from||!to)return;
+    const opacity=Math.min(from.opacity,to.opacity);
     if(surface===miniMotion){
       const offset=surface.edgeOffsets.get(pairKey(from.name,to.name));
       const curve=commPathBetween(from,to,surface.positions,surface.layoutDimensions,offset);
-      edge.setAttribute('d',curve.d);
-      edge.nextElementSibling.setAttribute('d',curve.d);
-    }
+      updateMiniEdgeGeometry(edge,curve.d,opacity);
+    }else edge.style.opacity=String(opacity);
     edge.setAttribute('x1',from.x);edge.setAttribute('y1',from.y);
     edge.setAttribute('x2',to.x);edge.setAttribute('y2',to.y);
-    edge.style.opacity=String(Math.min(from.opacity,to.opacity));
   });
   surface.target.querySelectorAll('.orrery-comm-edge,.orrery-history-edge').forEach(edge=>{
     const from=surface.states.get(edge.dataset.a);
@@ -599,11 +623,15 @@ function updateSurfaceGeometry(surface){
     if(!from||!to)return;
     const offset=surface.edgeOffsets?.get(pairKey(from.name,to.name));
     const curve=commPathBetween(from,to,surface.positions,surface.layoutDimensions||surface.dimensions,offset);
-    edge.setAttribute('d',curve.d);
-    if(surface===miniMotion)edge.nextElementSibling.setAttribute('d',curve.d);
     const life=Number(edge.dataset.life||0);
-    const alpha=edge.classList.contains('orrery-history-edge') ? .22+.36*life : .58*life;
-    edge.setAttribute('stroke-opacity',(alpha*Math.min(from.opacity,to.opacity)).toFixed(3));
+    const opacity=Math.min(from.opacity,to.opacity);
+    if(surface===miniMotion){
+      updateMiniEdgeGeometry(edge,curve.d,opacity);
+      edge.style.setProperty('--mini-edge-core-opacity',(.64+.28*life).toFixed(3));
+    }else{
+      edge.setAttribute('d',curve.d);
+      edge.setAttribute('stroke-opacity',(.58*life*opacity).toFixed(3));
+    }
   });
   if(activeMailRoute)renderMailFocus(surface);
 }
@@ -683,17 +711,22 @@ function miniAgentName(element){
 function miniKeyboardAgentName(element){
   return element?.matches?.(':focus-visible')?miniAgentName(element):'';
 }
-function appendMailEdge(layer,edge,a,b,mini){
+function setMiniEdgeVolume(group,count){
+  group.style.setProperty('--mini-edge-volume-width',`${(2+Math.log2(count+1)).toFixed(2)}px`);
+}
+function appendMailEdge(layer,edge,a,b,mini,count=0){
   if(!mini){layer.appendChild(edge);return;}
   const label=`Show mail between ${a} and ${b}`;
   const group=svgEl('g',{class:'orrery-mail-edge',role:'button',tabindex:'0',
     'aria-label':label,'aria-controls':'mail','data-edge-from':a,'data-edge-to':b,
     'data-edge-key':`${edge.getAttribute('class')}:${pairKey(a,b)}`});
-  const width=edge.getAttribute('stroke-width');
-  if(width)group.style.setProperty('--mail-edge-width',`${width}px`);
+  if(count)setMiniEdgeVolume(group,count);
+  edge.classList.add('orrery-mail-edge-core');
   highlightMiniEdge(group,miniHoveredAgent||miniFocusedAgent);
-  const hit=svgEl('path',{class:'orrery-mail-edge-hit',d:edge.getAttribute('d')||''});
-  group.append(edge,hit);
+  const d=edge.getAttribute('d')||'';
+  const halo=svgEl('path',{class:'orrery-mail-edge-halo',d,'aria-hidden':'true'});
+  const hit=svgEl('path',{class:'orrery-mail-edge-hit',d});
+  group.append(halo,edge,hit);
   const activate=()=>document.dispatchEvent(new CustomEvent('oc:filter-mail-pair',{detail:{a,b}}));
   group.addEventListener('click',activate);
   group.addEventListener('keydown',event=>{
@@ -775,8 +808,12 @@ function drawAgentCaption(group,{agent,x,y},dimensions,provider,showTitle=true){
   const name=document.createElement('div');
   name.className='orrery-caption-name';
   name.textContent=agent.name;
+  if(dimensions.nameSize){
+    name.style.fontSize=`${dimensions.nameSize}px`;
+    name.style.lineHeight=`${dimensions.nameSize+2}px`;
+  }
   text.appendChild(name);
-  if(role){
+  if(role&&dimensions.showRoles!==false){
     const roleLabel=document.createElement('div');
     roleLabel.className='orrery-caption-role';
     roleLabel.textContent=role;
@@ -799,15 +836,18 @@ function drawMiniAgent(target,defs,position,index,dimensions){
   });
   makeInteractive(group,agent);
   OC.bindMiniAgentDetail?.(group);
-  group.appendChild(svgEl('circle',{class:'orrery-hit',cx:x,cy:y,r:14}));
-  group.appendChild(svgEl('circle',{
+  const scale=dimensions.nodeScale;
+  const face=scale===1?group:svgEl('g',{transform:`translate(${x} ${y}) scale(${scale}) translate(${-x} ${-y})`});
+  if(face!==group)group.appendChild(face);
+  face.appendChild(svgEl('circle',{class:'orrery-hit',cx:x,cy:y,r:14}));
+  face.appendChild(svgEl('circle',{
     class:'mini-portrait-fallback',cx:x,cy:y,r:portraitRadius,
   }));
   const fallback=svgEl('text',{
     class:'mini-initial',x,y:y+2.7,'text-anchor':'middle',
   });
   fallback.textContent=initialLetter(agent.name);
-  group.appendChild(fallback);
+  face.appendChild(fallback);
   const image=svgEl('image',{
     class:'mini-portrait',
     x:x-portraitRadius,y:y-portraitRadius,
@@ -818,23 +858,23 @@ function drawMiniAgent(target,defs,position,index,dimensions){
     'aria-hidden':'true',
   });
   image.addEventListener('error',()=>image.classList.add('failed'));
-  group.appendChild(image);
+  face.appendChild(image);
   // Neutral ring in the compact rail (2026-07-30 product decision): spawn edges already
   // tie families together at this scale — lineage hue stays in the dense
   // fullscreen views (planetarium / NETWORK) only.
-  group.appendChild(svgEl('circle',{
+  face.appendChild(svgEl('circle',{
     class:'mini-lineage-ring',cx:x,cy:y,r:ringRadius,
     stroke:'rgba(236,229,214,.30)',
   }));
-  group.appendChild(svgEl('circle',{
+  face.appendChild(svgEl('circle',{
     class:'orrery-motion-ring mini-motion-ring',cx:x,cy:y,r:ringRadius+2.7,
     pathLength:'100',
   }));
   // Last, so the portrait cannot bury it: SVG has no z-index — paint order is
   // DOM order. Drawn before the <image>, "someone is waiting on you" was
   // silently painted over by the face (2026-08-06).
-  const providerLabel=drawProviderBadge(group,agent,x,y,portraitRadius);
-  drawStateGlyph(group,agent,x,y,false);
+  const providerLabel=drawProviderBadge(face,agent,x,y,portraitRadius);
+  drawStateGlyph(face,agent,x,y,false);
   drawAgentCaption(group,position,dimensions,providerLabel,!OC.bindMiniAgentDetail);
   target.appendChild(group);
   return group;
@@ -940,7 +980,7 @@ function syncMiniSelection(){
   if(!group)return;
   const hit=group.querySelector('.orrery-hit');
   group.appendChild(svgEl('circle',{
-    class:'mini-selection-ring',cx:hit.getAttribute('cx'),cy:hit.getAttribute('cy'),r:19.5,
+    class:'mini-selection-ring',cx:hit.getAttribute('cx'),cy:hit.getAttribute('cy'),r:19.5*miniAppearance.nodeSize/100,
   }));
 }
 function installMiniGraphDivider(){
@@ -1069,11 +1109,109 @@ function setMiniZoom(next,clientX,clientY){
   miniScroll.scrollLeft=left;
   miniScroll.scrollTop=top;
 }
+function normalizeMiniAppearance(saved){
+  const next={showRoles:typeof saved?.showRoles==='boolean'?saved.showRoles:true};
+  for(const [key,{min,max,step,value}] of Object.entries(MINI_APPEARANCE_RANGES)){
+    const raw=saved?.[key];
+    const clamped=Number.isFinite(raw)?Math.max(min,Math.min(max,raw)):value;
+    next[key]=Number((min+Math.round((clamped-min)/step)*step).toFixed(2));
+  }
+  return next;
+}
+function readMiniAppearance(){
+  try{return normalizeMiniAppearance(JSON.parse(localStorage.getItem(MINI_APPEARANCE_KEY)));}
+  catch(_){return normalizeMiniAppearance(null);}
+}
+function paintMiniAppearance(){
+  const style=miniSvg.style;
+  style.setProperty('--mini-edge-halo-max',`${miniAppearance.haloWidth}px`);
+  style.setProperty('--mini-edge-halo-opacity',miniAppearance.haloOpacity/100);
+  style.setProperty('--mini-edge-core-width',`${miniAppearance.coreWidth}px`);
+  style.setProperty('--mini-edge-opacity-floor',miniAppearance.opacityFloor/100);
+  for(const input of miniAppearancePanel.querySelectorAll('input[data-appearance]')){
+    const field=input.dataset.appearance;
+    if(input.type==='checkbox')input.checked=miniAppearance[field];
+    else{
+      input.value=miniAppearance[field];
+      input.nextElementSibling.value=`${miniAppearance[field]} ${MINI_APPEARANCE_RANGES[field].unit}`;
+    }
+  }
+}
+function applyMiniAppearance(next,save=false){
+  const previous=miniAppearance;
+  miniAppearance=normalizeMiniAppearance(next);
+  if(save){
+    try{localStorage.setItem(MINI_APPEARANCE_KEY,JSON.stringify(miniAppearance));}
+    catch(_){/* live-only preference */}
+  }
+  paintMiniAppearance();
+  if(['nodeSize','nameSize','showRoles','ringGap'].some(key=>previous[key]!==miniAppearance[key])){
+    renderMini({recenter:true});
+  }
+}
+function positionMiniAppearancePanel(){
+  const bounds=miniViewport.getBoundingClientRect(),gap=8;
+  if(!bounds.width){
+    if(miniAppearancePanel.matches(':popover-open'))miniAppearancePanel.hidePopover();
+    return;
+  }
+  const width=Math.min(320,innerWidth-2*gap,Math.max(230,bounds.width));
+  const below=innerHeight-bounds.bottom-2*gap;
+  const beside=below<180&&bounds.left>=width+2*gap;
+  const above=!beside&&below<126&&bounds.top>=142;
+  const left=beside?bounds.left-gap-width:Math.min(innerWidth-width-gap,Math.max(gap,bounds.left));
+  const top=beside?Math.max(gap,Math.min(bounds.top,innerHeight-180)):
+    above?gap:bounds.bottom+gap;
+  const maxHeight=above?bounds.top-2*gap:innerHeight-top-gap;
+  Object.assign(miniAppearancePanel.style,{width:`${width}px`,left:`${left}px`,
+    top:`${top}px`,maxHeight:`${maxHeight}px`});
+}
+function installMiniAppearance(){
+  const button=miniViewport.querySelector('.mini-graph-appearance-trigger');
+  const icon=document.querySelector('#settingsBtn svg').cloneNode(true);
+  icon.removeAttribute('class');button.appendChild(icon);
+  const ranges=Object.entries(MINI_APPEARANCE_RANGES).map(([field,{label,min,max,step}])=>`
+    <div class="mini-appearance-range">
+      <label for="miniAppearance-${field}">${label}</label>
+      <input class="settings-range" id="miniAppearance-${field}" type="range" min="${min}" max="${max}"
+        step="${step}" data-appearance="${field}"><output for="miniAppearance-${field}"></output>
+    </div>`).join('');
+  miniViewport.insertAdjacentHTML('beforeend',`<section id="miniGraphAppearance" class="mini-graph-appearance"
+    popover="auto" role="dialog" aria-label="Mini graph settings">
+    <h2>Mini graph</h2>${ranges}
+    <label class="settings-toggle-row"><span>Show role</span><span class="settings-switch">
+      <input type="checkbox" data-appearance="showRoles"></span></label>
+    <button type="button" class="modal-btn mini-appearance-reset">Reset to defaults</button>
+  </section>`);
+  miniAppearancePanel=document.getElementById('miniGraphAppearance');
+  miniAppearancePanel.addEventListener('beforetoggle',event=>{
+    if(event.newState==='open')positionMiniAppearancePanel();
+  });
+  miniAppearancePanel.addEventListener('toggle',event=>button.setAttribute('aria-expanded',String(event.newState==='open')));
+  miniAppearancePanel.addEventListener('input',event=>{
+    const input=event.target,field=input.dataset.appearance;
+    if(field)applyMiniAppearance({...miniAppearance,[field]:input.type==='checkbox'?input.checked:input.valueAsNumber},true);
+  });
+  miniAppearancePanel.querySelector('.mini-appearance-reset').addEventListener('click',()=>applyMiniAppearance(null,true));
+  document.addEventListener('oc:prefs-changed',event=>{
+    if(event.detail?.keys?.includes(MINI_APPEARANCE_KEY))applyMiniAppearance(readMiniAppearance());
+  });
+  window.addEventListener('storage',event=>{
+    if(event.key===MINI_APPEARANCE_KEY)applyMiniAppearance(readMiniAppearance());
+  });
+  window.addEventListener('resize',()=>{
+    if(miniAppearancePanel.matches(':popover-open'))positionMiniAppearancePanel();
+  });
+  paintMiniAppearance();
+}
 function installMiniZoom(){
   miniViewport.insertAdjacentHTML('beforeend',
-    '<div class="mini-graph-zoom" role="group" aria-label="Mini graph zoom">'+
+    '<div class="mini-graph-tools"><div class="mini-graph-zoom" role="group" aria-label="Mini graph zoom">'+
     '<button type="button" aria-label="Zoom out" title="Zoom out" disabled>−</button>'+
-    '<button type="button" aria-label="Zoom in" title="Zoom in">+</button></div>');
+    '<button type="button" aria-label="Zoom in" title="Zoom in">+</button></div>'+
+    '<button class="mini-graph-appearance-trigger" type="button" popovertarget="miniGraphAppearance"'+
+    ' aria-controls="miniGraphAppearance" aria-haspopup="dialog" aria-expanded="false"'+
+    ' aria-label="Mini graph settings" title="Mini graph settings"></button></div>');
   miniZoomControls=miniViewport.querySelectorAll('.mini-graph-zoom button');
   const [out,into]=miniZoomControls;
   out.addEventListener('click',()=>{
@@ -1086,6 +1224,7 @@ function installMiniZoom(){
   });
   let gestureZoom=null;
   miniViewport.addEventListener('wheel',event=>{
+    if(miniAppearancePanel?.contains(event.target))return;
     if(!event.ctrlKey&&!event.metaKey){
       if(miniOverflow)miniViewAdjusted=true;
       return;
@@ -1099,10 +1238,12 @@ function installMiniZoom(){
     setMiniZoom(miniZoom*Math.exp(-event.deltaY*units*sensitivity),event.clientX,event.clientY);
   },{passive:false});
   miniViewport.addEventListener('gesturestart',event=>{
+    if(miniAppearancePanel?.contains(event.target))return;
     event.preventDefault();
     gestureZoom=miniZoom;
   },{passive:false});
   miniViewport.addEventListener('gesturechange',event=>{
+    if(miniAppearancePanel?.contains(event.target))return;
     event.preventDefault();
     if(gestureZoom!==null&&Number.isFinite(event.scale))setMiniZoom(gestureZoom*event.scale,event.clientX,event.clientY);
   },{passive:false});
@@ -1178,7 +1319,7 @@ function renderMini({recenter=false}={}){
   mask.appendChild(svgEl('rect',{width:layout.width,height:layout.height,fill:'white'}));
   miniMotion.edgeCutouts=new Map();
   miniMotion.states.forEach((state,name)=>{
-    const cutout=svgEl('circle',{cx:state.x,cy:state.y,r:17,fill:'black'});
+    const cutout=svgEl('circle',{cx:state.x,cy:state.y,r:17*dimensions.nodeScale,fill:'black'});
     mask.appendChild(cutout);
     miniMotion.edgeCutouts.set(name,cutout);
   });
@@ -1384,17 +1525,19 @@ function renderMailHistory(){
   const layer=miniSvg.querySelector('.orrery-history-layer');
   const focused=focusedEdgeKey(layer);
   layer.replaceChildren();
-  const spawn=new Set(miniMotion.spawnEdges.map(edge=>pairKey(edge.dataset.parent,edge.dataset.child)));
+  const spawn=new Map(miniMotion.spawnEdges.map(edge=>[pairKey(edge.dataset.parent,edge.dataset.child),edge]));
+  spawn.forEach(edge=>edge.parentElement.style.removeProperty('--mini-edge-volume-width'));
   if(!keepMailLinks)return;
   historyPairs.forEach(({a,b,count})=>{
     if(!miniPositions.has(a)||!miniPositions.has(b))return;
-    // A spawn line already represents this pair. Retained Mail has only a
-    // small width range so busy relationships stay as light as the other edges.
-    if(spawn.has(pairKey(a,b)))return;
-    const width=Math.min(1.5,1.15+.07*Math.log2(Math.max(1,count)));
+    const existing=spawn.get(pairKey(a,b));
+    if(existing){
+      setMiniEdgeVolume(existing.parentElement,count);
+      return;
+    }
     appendMailEdge(layer,svgEl('path',{
-      class:'orrery-history-edge','data-a':a,'data-b':b,'stroke-width':width.toFixed(2),
-    }),a,b,true);
+      class:'orrery-history-edge','data-a':a,'data-b':b,
+    }),a,b,true,count);
   });
   restoreEdgeFocus(layer,focused);
 }
@@ -1512,7 +1655,7 @@ function renderMailFocus(surface){
     const offset=surface.edgeOffsets?.get(pairKey(from.name,to.name));
     const curve=commPathBetween(from,to,surface.positions,dimensions,offset);
     const distance=Math.hypot(to.x-from.x,to.y-from.y);
-    const t=Math.max(.45,1-(dimensions.large?27:18)/Math.max(distance,1));
+    const t=Math.max(.45,1-(dimensions.large?27:18*miniAppearance.nodeSize/100)/Math.max(distance,1));
     const tip=curve.point(t),base=curve.point(t-.05);
     const angle=Math.atan2(tip.y-base.y,tip.x-base.x),length=dimensions.large?9:5;
     const wing=turn=>`${tip.x-length*Math.cos(angle+turn)} ${tip.y-length*Math.sin(angle+turn)}`;
@@ -1571,7 +1714,6 @@ function renderCommLayer(target,positions,dimensions){
       activeHistory.add(history);
       history.dataset.life=life.toFixed(5);
       history.classList.add('mail-live');
-      history.setAttribute('stroke-opacity',((.22+.36*life)*Math.min(from.opacity,to.opacity)).toFixed(3));
       return;
     }
     const curve=commPathBetween(from,to,positions,dimensions);
@@ -1586,7 +1728,6 @@ function renderCommLayer(target,positions,dimensions){
     if(activeHistory.has(edge)||edge.dataset.life===undefined)return;
     delete edge.dataset.life;
     edge.classList.remove('mail-live');
-    edge.setAttribute('stroke-opacity','.22');
   });
   markLiveSpawnEdges(target,liveLineage);
   restoreEdgeFocus(layer,focused);
@@ -1796,6 +1937,7 @@ miniSvg.addEventListener('focusout',event=>{
 });
 addExpandAffordance(miniExpand,{...MINI,width:28,height:28},false);
 installMiniZoom();
+installMiniAppearance();
 installMiniPan();
 installMiniGraphDivider();
 renderMini();
@@ -1803,6 +1945,7 @@ new ResizeObserver(()=>{
   const width=miniViewport.clientWidth,height=miniViewport.clientHeight;
   if(width&&height&&(width!==miniWidth||height!==miniHeight))renderMini();
   syncMailHistory();
+  if(miniAppearancePanel?.matches(':popover-open'))positionMiniAppearancePanel();
 }).observe(miniViewport);
 document.addEventListener('visibilitychange',syncMailHistory);
 seedRecentMail();

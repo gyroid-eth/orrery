@@ -3169,28 +3169,43 @@
           },
           {
             "property": "border",
-            "selector": ".mini-graph-zoom button",
+            "selector": ".mini-graph-tools button",
             "value": "1px solid var(--hair)"
           },
           {
             "property": "background",
-            "selector": ".mini-graph-zoom button",
+            "selector": ".mini-graph-tools button",
             "value": "var(--panel-2)"
           },
           {
             "property": "color",
-            "selector": ".mini-graph-zoom button",
+            "selector": ".mini-graph-tools button",
             "value": "var(--ink-dim)"
           },
           {
             "property": "color",
-            "selector": ".mini-graph-zoom button:not(:disabled):is(:hover,:focus-visible)",
+            "selector": ".mini-graph-tools button:not(:disabled):is(:hover,:focus-visible,[aria-expanded=true])",
             "value": "var(--ink)"
           },
           {
             "property": "border-color",
-            "selector": ".mini-graph-zoom button:not(:disabled):is(:hover,:focus-visible)",
+            "selector": ".mini-graph-tools button:not(:disabled):is(:hover,:focus-visible,[aria-expanded=true])",
             "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".mini-graph-appearance",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mini-graph-appearance",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-appearance",
+            "value": "var(--ink)"
           },
           {
             "property": "stroke",
@@ -3204,7 +3219,12 @@
           },
           {
             "property": "stroke",
-            "selector": ".orrery-mail-edge:is(:hover,:focus-visible) > :first-child",
+            "selector": ".orrery-mail-edge-halo",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-mail-edge > .orrery-mail-edge-core",
             "value": "var(--ink)"
           },
           {
@@ -3986,12 +4006,12 @@
           },
           {
             "property": "color",
-            "selector": ".mini-graph-zoom button",
+            "selector": ".mini-graph-tools button",
             "value": "var(--ink-dim)"
           },
           {
             "property": "border-color",
-            "selector": ".mini-graph-zoom button:not(:disabled):is(:hover,:focus-visible)",
+            "selector": ".mini-graph-tools button:not(:disabled):is(:hover,:focus-visible,[aria-expanded=true])",
             "value": "var(--ink-dim)"
           },
           {
@@ -4246,7 +4266,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "14f1b5e85f71d2504649b94e0da76d956607909d5b5424aeb73d62063ae1be96",
+        "digest": "c552cb449dab3c401fd5860de7b383f454aaf722732165f23fb29c05e485aa51",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4339,7 +4359,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "24b7810f2372431d6846530261461d37eb52aa5833bde56cc89f18af11163588",
+        "digest": "ddb855f79c0b02be6bfc189793e7c4f3fbe98dd4c4f633adc5114a55ee2074d8",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -4368,9 +4388,9 @@
       }
     }
   },
-  "inventory_digest": "7c3640e386ac795f2ea8fe2d541a7dfee53bef56aa99af94a2d67a17f0b96351",
+  "inventory_digest": "8d899ae95a6ad9e36b2b9cb8123ef53520b5090526d3d30eb53705602fd075a9",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "003eaa049134517f58b1d17db39307b0de4f29b2ecffdfbd42ec0565d69e4f8d",
+  "source_digest": "164915cac75a79758c440d46c33e5bad472a0e33d3c15d40981838b556454a95",
   "surface": "cockpit",
   "version": 1
 }

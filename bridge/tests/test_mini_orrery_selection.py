@@ -510,7 +510,7 @@ def test_mini_graph_keeps_mail_pairs_by_default_and_can_use_only_recent_links(mi
       window.mailLinksState=()=>{
         const history=graph.querySelector('.orrery-history-edge[data-a=Pilot][data-b=Watcher]');
         return {watcher:!!graph.querySelector('[data-agent=Watcher]'),
-          countWidth:history?.getAttribute('stroke-width')??null,
+          countWidth:history?getComputedStyle(history.previousElementSibling).strokeWidth:null,
           live:!!graph.querySelector('.orrery-comm-edge[data-a=Pilot][data-b=Watcher]')};
       };
       setMailLinks('recent');
@@ -528,7 +528,7 @@ def test_mini_graph_keeps_mail_pairs_by_default_and_can_use_only_recent_links(mi
       for(let i=0;i<60&&!mailLinksState().watcher;i++)await new Promise(resolve=>setTimeout(resolve,20));
       return mailLinksState();
     })()""")
-    assert retained == {'watcher': True, 'countWidth': '1.31', 'live': False}
+    assert retained == {'watcher': True, 'countWidth': '4.58px', 'live': False}
     assert evaluate("setMailLinks('recent');mailLinksState()") == {
         'watcher': False, 'countWidth': None, 'live': False}
     assert evaluate("localStorage.getItem('oc-mini-mail-links')") == 'recent'
@@ -597,10 +597,10 @@ def test_graph_edge_mouse_and_keyboard_filter_mail_both_ways(mini_browser):
     client.call('Input.dispatchMouseEvent', type='mouseMoved', **xy)
     for _ in range(20):
         opacity = evaluate("getComputedStyle(document.querySelector('.orrery-history-edge')).strokeOpacity")
-        if opacity == '0.56':
+        if opacity == '0.98':
             break
         time.sleep(.025)
-    assert opacity == '0.56'
+    assert opacity == '0.98'
     client.call('Input.dispatchMouseEvent', type='mousePressed', button='left', clickCount=1, **xy)
     client.call('Input.dispatchMouseEvent', type='mouseReleased', button='left', clickCount=1, **xy)
     assert evaluate("edgeChip()") == 'Helper ↔ Watcher'
@@ -620,7 +620,7 @@ def test_graph_edge_mouse_and_keyboard_filter_mail_both_ways(mini_browser):
     for kind, pair in [('spawn', 'Helper ↔ Pilot'), ('comm', 'Pilot ↔ Watcher')]:
         evaluate(f"""document.querySelector('#orrery .orrery-{kind}-edge').parentElement.focus();
           document.dispatchEvent(new CustomEvent('oc:agents',{{detail:{{agents:currentAgents}}}}))""")
-        assert evaluate(f"document.activeElement.firstElementChild?.classList.contains('orrery-{kind}-edge')")
+        assert evaluate(f"Boolean(document.activeElement.querySelector('.orrery-{kind}-edge'))")
         client.call('Input.dispatchKeyEvent', type='keyDown', key='Enter', code='Enter', windowsVirtualKeyCode=13)
         client.call('Input.dispatchKeyEvent', type='keyUp', key='Enter', code='Enter', windowsVirtualKeyCode=13)
         assert evaluate('edgeChip()') == pair
@@ -647,23 +647,33 @@ def test_hover_and_focus_emphasize_only_incident_mini_edges_and_merge_mail_pairs
       window.edgeHighlight=()=>{
         const edges=[...svg.querySelectorAll('.orrery-mail-edge')];
         return {count:edges.length,incident:edges.filter(el=>el.classList.contains('is-incident')).length,
-          active:svg.classList.contains('has-node-edge-highlight'),straight:edges.every(el=>
-            el.firstElementChild.getAttribute('d').includes(' L ')),
+          active:svg.classList.contains('has-node-edge-highlight'),straight:edges.every(el=>{
+            const paths=[...el.querySelectorAll('path')].map(path=>path.getAttribute('d'));
+            return paths[0].includes(' L ')&&new Set(paths).size===1;
+          }),
           merged:!!svg.querySelector('.orrery-history-edge.mail-live')&&
             !svg.querySelector('.orrery-history-edge[data-a=Helper][data-b=Pilot]'),
-          fade:getComputedStyle(edges[0]).transitionDuration};
+          fade:getComputedStyle(edges[0].querySelector('.orrery-mail-edge-core')).transitionDuration};
       };
       const helper=svg.querySelector('[data-agent=Helper] .orrery-hit').getBoundingClientRect();
       return {x:helper.left+helper.width/2,y:helper.top+helper.height/2};
     })()""")
     assert evaluate("""(()=>{
       const graph=document.getElementById('orrery');
-      const width=selector=>getComputedStyle(graph.querySelector(selector)).strokeWidth;
-      return [width('.orrery-spawn-edge'),width('.orrery-history-edge.mail-live')];
-    })()""") == ['1.15px', '1.5px']
+      return ['.orrery-spawn-edge','.orrery-history-edge.mail-live'].map(selector=>{
+        const edge=graph.querySelector(selector),halo=edge.previousElementSibling;
+        return [getComputedStyle(edge).strokeWidth,getComputedStyle(halo).strokeWidth];
+      });
+    })()""") == [['1px', '7px'], ['1px', '7px']]
     expected = {'count': 3, 'incident': 2, 'active': True, 'straight': True, 'merged': True, 'fade': '0.16s'}
     client.call('Input.dispatchMouseEvent', type='mouseMoved', **point)
     assert evaluate('edgeHighlight()') == expected
+    for _ in range(20):
+        floor = evaluate("getComputedStyle(document.querySelector('.orrery-mail-edge:not(.is-incident) .orrery-mail-edge-core')).strokeOpacity")
+        if floor == '0.5':
+            break
+        time.sleep(.025)
+    assert floor == '0.5'
     client.call('Input.dispatchMouseEvent', type='mouseMoved', x=20, y=100)
     assert not evaluate('edgeHighlight().active')
     evaluate("document.querySelector('#orrery [data-agent=Helper]').focus()")
@@ -673,6 +683,70 @@ def test_hover_and_focus_emphasize_only_incident_mini_edges_and_merge_mail_pairs
     assert evaluate('edgeHighlight()') == expected
     evaluate('document.activeElement.blur()')
     assert not evaluate('edgeHighlight().active')
+
+
+def test_mini_appearance_panel_previews_and_persists_controls_outside_the_graph(mini_browser):
+    client, evaluate = mini_browser
+    client.call('Emulation.setFocusEmulationEnabled', enabled=True)
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    evaluate("""(()=>{
+      currentAgentNamed('Pilot').annot={role:'Fixture reviewer'};
+      document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      window.graphAppearance=()=>{
+        const graph=document.getElementById('orrery'),panel=document.getElementById('miniGraphAppearance');
+        const pilot=graph.querySelector('[data-agent=Pilot]'),edge=graph.querySelector('.orrery-mail-edge-core');
+        const b=graph.parentElement.getBoundingClientRect(),p=panel.getBoundingClientRect();
+        return {open:panel.matches(':popover-open'),clear:p.top>=b.bottom||p.bottom<=b.top||p.right<=b.left,
+          core:getComputedStyle(edge).strokeWidth,
+          portrait:pilot.querySelector('.mini-portrait-fallback').getBoundingClientRect().width,
+          font:getComputedStyle(pilot.querySelector('.orrery-caption-name')).fontSize,
+          role:!!pilot.querySelector('.orrery-caption-role')};
+      };
+      window.changedGraphAppearance=(field,value)=>{
+        const input=document.querySelector('#miniGraphAppearance [data-appearance='+field+']');
+        if(input.type==='checkbox')input.checked=value;
+        else input.value=value;
+        input.dispatchEvent(new Event('input',{bubbles:true}));
+      };
+      document.querySelector('.mini-graph-appearance-trigger').click();
+    })()""")
+    before = evaluate('graphAppearance()')
+    assert before['open'] and before['clear'] and before['role']
+    assert before['core'] == '1px' and before['font'] == '9px'
+    evaluate("""changedGraphAppearance('coreWidth',1.4);changedGraphAppearance('haloWidth',5);
+      changedGraphAppearance('haloOpacity',22);changedGraphAppearance('opacityFloor',61);
+      changedGraphAppearance('nodeSize',135);changedGraphAppearance('nameSize',11);
+      changedGraphAppearance('ringGap',12);changedGraphAppearance('showRoles',false);""")
+    after = evaluate('graphAppearance()')
+    assert after['open'] and after['clear'] and not after['role']
+    assert after['core'] == '1.4px' and after['font'] == '11px' and after['portrait'] > before['portrait']
+    expected = {'coreWidth': 1.4, 'haloWidth': 5, 'haloOpacity': 22, 'opacityFloor': 61,
+                'nodeSize': 135, 'nameSize': 11, 'ringGap': 12, 'showRoles': False}
+    assert evaluate("JSON.parse(localStorage.getItem('oc-mini-appearance-v1'))") == expected
+    assert evaluate("OrreryPrefs.synced('oc-mini-appearance-v1')")
+
+    for kind in ('mousePressed', 'mouseReleased'):
+        client.call('Input.dispatchMouseEvent', type=kind, x=510, y=72, button='left', clickCount=1)
+    assert not evaluate('graphAppearance().open')
+    evaluate("document.querySelector('.mini-graph-appearance-trigger').click()")
+    assert evaluate('graphAppearance().open')
+    evaluate("document.querySelector('.mini-graph-appearance-trigger').click()")
+    assert not evaluate('graphAppearance().open')
+
+    evaluate('window.beforeAppearanceReload=true')
+    client.call('Page.reload', ignoreCache=True)
+    for _ in range(100):
+        if evaluate("!window.beforeAppearanceReload&&Boolean(document.getElementById('miniGraphAppearance'))"):
+            break
+        time.sleep(.025)
+    assert evaluate("JSON.parse(localStorage.getItem('oc-mini-appearance-v1'))") == expected
+    assert evaluate("document.querySelector('#miniGraphAppearance [data-appearance=showRoles]').checked") is False
+    evaluate("document.querySelector('.mini-graph-appearance-trigger').click()")
+    evaluate("document.querySelector('.mini-appearance-reset').click()")
+    assert evaluate("JSON.parse(localStorage.getItem('oc-mini-appearance-v1'))") == {
+        'coreWidth': 1, 'haloWidth': 7, 'haloOpacity': 12, 'opacityFloor': 50,
+        'nodeSize': 100, 'nameSize': 9, 'ringGap': 4, 'showRoles': True}
 
 
 @pytest.mark.parametrize('mode,count', [('network', 16), ('orrery', 24)])
