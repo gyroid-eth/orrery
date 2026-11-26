@@ -138,6 +138,12 @@ def test_a_return_that_could_not_attach_is_tried_again(tour_browser):  # noqa: F
     evaluate("window.send=m=>{window.__sent.push(m);return true;}")
     evaluate(BACK % "['A','B','C']")
     after = evaluate(STATE)
+    assert evaluate("closedByBackend.has('B')")
+    # The replacement server can reject an attach sent over the old socket.
+    evaluate("handle({type:'error',session:'B',message:'TMUX_SOCKET_CHANGED'})")
+    evaluate(BACK % "['A','B','C']")
+    assert evaluate(STATE)['attachB']
+    evaluate("handle({type:'reset',session:'B',incarnation:'new',panes:[]})")
     noted_after = evaluate("closedByBackend.has('B')")
     evaluate(CLEANUP)
     assert first == {'noted': True, 'requested': False}, first

@@ -1178,6 +1178,55 @@ def test_real_wrapper_catalog_current_bridges_wire_panes_history_and_input_do_no
     asyncio.run(run())
 
 
+def test_recreated_fresh_socket_needs_new_trusted_route(tmp_path, monkeypatch):
+    async def run():
+        async with private_targets(tmp_path, monkeypatch) as (_, _, _, _, root, first, second, _):
+            writes = []
+            install_synthetic_control(monkeypatch, writes)
+            manager = ob.SessionBridgeManager(root, history_dir=tmp_path / "history")
+            peer, attached = Peer(), set()
+            try:
+                await manager._attach_fresh(peer, attached, "Alpha")
+                host_socket = root.host_socket
+                assert host_socket is not None
+                previous = manager.states[next(iter(attached))].bridge
+                previous_target = previous.config.tmux_bin
+                previous_wire = previous_target.wire_pane
+                run_dir, route = first[:2]
+                transport = second[3]["Transport"]
+                original_init = transport.__init__
+
+                def replacement_socket(self, path):
+                    original_init(self, path)
+                    if self.path == Path(route["socket_path"]):
+                        self.identity = (33, 44)
+
+                monkeypatch.setattr(transport, "__init__", replacement_socket)
+                # The old route disappears before a new proof is published.
+                await manager._reconcile_sessions()
+                assert previous_target.key not in manager.states and previous._closed
+                assert any(m.get("type") == "status" and m.get("session") == "Alpha"
+                           and m.get("state") == "closed" and not m.get("sessionGone")
+                           for m in peer.messages)
+                with pytest.raises(boundary.TargetRefused):
+                    await manager._attach_fresh(peer, attached, "Alpha")
+
+                helpers.replace(run_dir / "tmux.json", dict(route, socket_identity=[33, 44]))
+                await manager._reconcile_sessions()
+                await manager._attach_fresh(peer, attached, "Alpha")
+                current = manager.states[next(iter(attached))].bridge.config.tmux_bin
+                assert root.host_socket == host_socket and current.ref == previous_target.ref
+                assert current.proof["route"]["socket_identity"] == [33, 44]
+                assert current.wire_pane != previous_wire and current.pane_id == previous_target.pane_id
+                await manager.handle_message(peer, attached, dict(type="input", paneId=previous_wire, data="old"))
+                await manager.handle_message(peer, attached, dict(type="input", paneId=current.wire_pane, data="new"))
+                assert [key for key, args in writes if args[0] == "send-keys"] == [current.key]
+            finally:
+                await manager.close()
+
+    asyncio.run(run())
+
+
 def ended_husk_driver(entry, cwd, outcome):
     """A launcher child exits before the pane's original PID execs a bare shell."""
     return ('import json,os,pathlib,subprocess\n'

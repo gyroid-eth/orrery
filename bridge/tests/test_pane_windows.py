@@ -371,7 +371,7 @@ def test_another_sessions_reset_does_not_fill_a_selected_outside_sessions_stage(
     script = r"""
 let activeId=null,pendingJump=null,splitVisible=false,focusedSplitSession=null;
 let paneWindowSelection='WindowAgent';
-const requestedSessions=new Set(),attachedSessions=new Set();
+const requestedSessions=new Set(),attachedSessions=new Set(),closedByBackend=new Set();
 const composerAttaching=new Map(),permissionRestarts=new Map();
 const document={dispatchEvent(){}};
 class CustomEvent{constructor(type,options){this.type=type;this.detail=options.detail;}}
@@ -419,7 +419,7 @@ let activeId=null,pendingJump=null,splitVisible=false,focusedSplitSession=null;
 let paneWindowSelection='WindowAgent';
 const paneWindows=new Map([['WindowAgent',{}],['OtherWindow',{}]]);
 const availableSessions=new Set(['MainAgent']),manualDetached=new Set();
-const requestedSessions=new Set(),attachedSessions=new Set();
+const requestedSessions=new Set(),attachedSessions=new Set(),closedByBackend=new Set();
 const composerAttaching=new Map(),permissionRestarts=new Map();
 const document={dispatchEvent(){}};
 class CustomEvent{constructor(type,options){this.type=type;this.detail=options.detail;}}

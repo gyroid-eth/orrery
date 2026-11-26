@@ -6,6 +6,7 @@ retain the old behavior when fixed-layout absence has been proved here.
 from __future__ import annotations
 
 import asyncio
+import copy
 import os
 import hashlib
 import json
@@ -406,13 +407,14 @@ class LegacyTargetBoundary:
 
     def __init__(self, binary, *, home=None, environ=None):
         self.binary = binary
-        self._pin_lock = threading.Lock()  # ephemeral consumer pin, no lock file
+        self._pin_lock = threading.RLock()  # ephemeral consumer pin, no lock file
         self.environment = dict(os.environ if environ is None else environ)
         self.home = Path(home or self.environment.get('AGENTSTACK_HOME') or Path.home() / '.agentstack')
         self.shared = None
         self.transport = None
         self.pin = None
         self.tmux_restarted = False
+        self.generation = 0
         self._pane_proofs = {}
         self.validate = None
         self._settings_stamp = None
@@ -452,17 +454,85 @@ class LegacyTargetBoundary:
     def __str__(self):
         return str(self.binary)
 
+    def pinned_copy(self):
+        """A control client keeps its own server pin until it is stopped."""
+        if self.shared is None:
+            return self
+        with self._pin_lock:
+            target = copy.copy(self)
+            target._pin_lock = threading.RLock()
+            target._pane_proofs = {}
+            return target
+
+    def history_server(self):
+        if self.pin is None or self.pin['server_pid'] is None or self.transport.identity is None:
+            return None
+        return {'pid': self.pin['server_pid'], 'socket': list(self.transport.identity)}
+
+    def socket_replaced(self):
+        """Detect rollover of the default socket without changing admission."""
+        if self.shared is None or self.pin['server_pid'] is None or self.environment.get('TMUX'):
+            return False
+        with self._pin_lock:
+            try:
+                current = self.shared['legacy_transport'](binary=self.binary, environ=self.environment)
+                pid = current.public()['server_pid']
+                # A successor can reuse the inode. Read its PID from tmux even
+                # when the socket identity is unchanged, before using the roster.
+                return pid is not None and (
+                    pid != self.pin['server_pid'] or current.identity != self.transport.identity
+                )
+            except (Exception, SystemExit) as exc:
+                self._helper_failure(exc)
+                raise TargetRefused('TMUX_TARGET_UNAVAILABLE') from exc
+
+    def rebind_server(self):
+        """Verify a successor on the same default endpoint after retiring clients."""
+        if self.shared is None or self.environment.get('TMUX'):
+            raise TargetRefused('TMUX_SOCKET_CHANGED')
+        with self._pin_lock:
+            try:
+                candidate = self.shared['legacy_transport'](binary=self.binary, environ=self.environment)
+                public = candidate.public()
+                self.validate({'contract':self.shared['CONTRACT'],'ok':True,**public},
+                              self.shared['result_schema']('legacy-transport'))
+                if any(public[key] != self.pin[key] for key in
+                       ('transport', 'socket_path', 'argv', 'environment_unset')):
+                    raise TargetRefused('TMUX_SOCKET_CHANGED')
+                if candidate.identity is None or public['server_pid'] is None:
+                    raise TargetRefused('TMUX_TARGET_UNAVAILABLE')
+                self.shared['global_proofs'](self.home)
+                confirmed = self.shared['legacy_transport'](binary=self.binary, environ=self.environment)
+                if confirmed.identity != candidate.identity or confirmed.public() != public:
+                    raise TargetRefused('TMUX_SOCKET_CHANGED')
+                if candidate.identity == self.transport.identity and public == self.pin:
+                    self.tmux_restarted = False
+                    return False
+                self.transport, self.pin = confirmed, public
+                self.prefix = confirmed.argv
+                self._pane_proofs.clear()
+                self.tmux_restarted = False
+                self.generation += 1
+                return True
+            except TargetRefused:
+                raise
+            except (Exception, SystemExit) as exc:
+                self._helper_failure(exc)
+                raise TargetRefused('TMUX_TARGET_UNAVAILABLE') from exc
+
     def env(self):
         if self.shared is None:
             return dict(self.environment)  # old bare-tmux endpoint semantics
         return {k: v for k, v in self.environment.items() if k not in ('TMUX', 'TMUX_PANE')}
 
-    def observe_server_pid(self, server_pid: int | None) -> None:
-        # The warning stays latched until the backend starts with a new pin.
-        if server_pid is not None and self.shared is not None and self.pin is not None:
-            pinned_pid = self.pin['server_pid']
-            if pinned_pid is not None and server_pid != pinned_pid:
-                self.tmux_restarted = True
+    def observe_server_pid(self, server_pid: int | None, *, generation=None) -> None:
+        with self._pin_lock:
+            if generation is not None and self.generation != generation:
+                return
+            if server_pid is not None and self.pin is not None:
+                pinned_pid = self.pin['server_pid']
+                if pinned_pid is not None and server_pid != pinned_pid:
+                    self.tmux_restarted = True
 
     def _installed_hint(self):
         """Reuse the installed literal reader; never execute env.sh or parse it twice."""
@@ -572,20 +642,26 @@ class LegacyTargetBoundary:
         try:
             key = (session, pane, window)
             cacheable = reuse and window is None and operation in ('input', 'capture')
+            with self._pin_lock:
+                generation, transport = self.generation, self.transport
             # The cheap shared pane query validates the pinned socket inode
             # on both sides. PID/membership changes invalidate a cached proof.
-            if cacheable and self.transport.identity is not None:
-                rows = self.shared['panes'](self.transport, session=session, pane=pane)
+            if cacheable and transport.identity is not None:
+                rows = self.shared['panes'](transport, session=session, pane=pane)
                 with self._pin_lock:
+                    if generation != self.generation:
+                        raise TargetRefused('TMUX_SOCKET_CHANGED')
                     cached = self._pane_proofs.get(key)
-                if cached and time.monotonic() < cached[0] and rows == cached[1]:
-                    return {**cached[2], 'operation': operation}
+                    if cached and time.monotonic() < cached[0] and rows == cached[1]:
+                        return {**cached[2], 'operation': operation}
             proof_started = time.monotonic()
             refreshed = self.shared['legacy_transport'](binary=self.binary, environ=self.environment)
             public = refreshed.public()
             self.validate({'contract':self.shared['CONTRACT'],'ok':True,**public},
                           self.shared['result_schema']('legacy-transport'))
             with self._pin_lock:
+                if generation != self.generation:
+                    raise TargetRefused('TMUX_SOCKET_CHANGED')
                 self.observe_server_pid(public['server_pid'])
                 self.pin = self.shared['check_pinned_transport'](self.pin, public)
                 if self.transport.identity is None:
@@ -596,6 +672,8 @@ class LegacyTargetBoundary:
                 **selector, operation=operation)
             self.validate(value, self.shared['result_schema']('legacy-target'))
             with self._pin_lock:
+                if generation != self.generation:
+                    raise TargetRefused('TMUX_SOCKET_CHANGED')
                 self.shared['check_pinned_transport'](self.pin, value)
                 if cacheable:
                     rows = [{k:v for k,v in row.items() if k != 'process_start'} for row in value['panes']]
@@ -606,6 +684,8 @@ class LegacyTargetBoundary:
                 else:
                     self._pane_proofs.clear()
             return value
+        except TargetRefused:
+            raise
         except (Exception, SystemExit) as exc:
             self._helper_failure(exc)
             self._fallback_admit()

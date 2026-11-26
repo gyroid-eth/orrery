@@ -706,6 +706,10 @@ class TmuxControlBridge:
             "saved_ts": time.time(),
             "lines": rendered,
         }
+        if isinstance(self.config.tmux_bin, LegacyTargetBoundary):
+            server = self.config.tmux_bin.history_server()
+            if server is not None:
+                payload["legacy_server"] = server
         try:
             await asyncio.to_thread(write_history_file, path, payload)
         except Exception as exc:
@@ -755,10 +759,15 @@ class TmuxControlBridge:
             return []
 
         stored_session_created = payload.get("session_created")
+        legacy = self.config.tmux_bin
+        server_changed = isinstance(legacy, LegacyTargetBoundary) and (
+            "legacy_server" in payload or legacy.generation > 0
+        ) and payload.get("legacy_server") != legacy.history_server()
         if (
             not isinstance(stored_session_created, int)
             or isinstance(stored_session_created, bool)
             or stored_session_created != self._session_created
+            or server_changed
         ):
             try:
                 path.unlink()
