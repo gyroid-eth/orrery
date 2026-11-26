@@ -28,6 +28,7 @@
   }
   const bounded=value=>Math.min(1,Math.max(0,value));
   const WORD=70,WORD_SPRING=[340,26],REPLY_MS=430,COPY_MS=580,FLIGHT_MS=610;
+  const MAX_REPLY_WORDS_PER_FRAME=8;
   const wordFrame=value=>({
     top:(1-value)*6+'px',filter:`blur(${(1-bounded(value))*4}px)`,opacity:bounded(value),
   });
@@ -167,28 +168,28 @@
       recordedQueue.length=queueIndex=0;
       followingRecorded=false;frontier=null;
     }
-    function revealNext(){
+    function revealNext(now){
       recordedFrame=0;
       if(!allowed()){finishRecorded();return;}
       while(queueIndex<recordedQueue.length&&!recordedQueue[queueIndex].word.isConnected)unqueue(recordedQueue[queueIndex++]);
-      // Show every word that is due this frame, so a short interval is not
-      // capped at one word per frame on long replies.
-      const now=performance.now();
-      if(nextWord<now-50)nextWord=now;
-      let shown=false;
-      while(now>=nextWord&&queueIndex<recordedQueue.length){
+      // Keep the schedule through slow frames, then discard any delay that
+      // would need more than one readable batch to catch up.
+      if(!nextWord)nextWord=now;
+      let shown=0;
+      while(now>=nextWord&&queueIndex<recordedQueue.length&&shown<MAX_REPLY_WORDS_PER_FRAME){
         const cue=recordedQueue[queueIndex++];
         if(!cue.word.isConnected){unqueue(cue);continue;}
         unqueue(cue);
         animate(cue.word,recordedFrames,{duration:REPLY_MS});
         for(const decoration of cue.decorations)rise(decoration,0,0,190);
         nextWord+=cue.interval;
-        frontier=cue.word;shown=true;
+        frontier=cue.word;shown++;
       }
+      if(shown===MAX_REPLY_WORDS_PER_FRAME)nextWord=Math.max(nextWord,now);
       if(shown&&followingRecorded)followReply(frontier);
       if(queueIndex<recordedQueue.length)recordedFrame=requestAnimationFrame(revealNext);
       else{
-        recordedQueue.length=queueIndex=0;
+        recordedQueue.length=queueIndex=nextWord=0;
         const followed=followingRecorded;
         followingRecorded=false;frontier=null;
         if(followed)follow({settled:true});
