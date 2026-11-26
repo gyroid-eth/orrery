@@ -599,11 +599,13 @@ function drawProviderBadge(group,agent,x,y,portraitRadius,size=14){
   group.appendChild(seat);
   return label;
 }
-function drawAgentCaption(group,{agent,x,y},dimensions,provider){
+function drawAgentCaption(group,{agent,x,y},dimensions,provider,showTitle=true){
   const role=roleOf(agent);
-  const title=svgEl('title');
-  title.textContent=[agent.name,role,modelOf(agent),provider].filter(Boolean).join(' · ');
-  group.prepend(title);
+  if(showTitle){
+    const title=svgEl('title');
+    title.textContent=[agent.name,role,modelOf(agent),provider].filter(Boolean).join(' · ');
+    group.prepend(title);
+  }
 
   // Keep the full text in the DOM so Demo can mask whole names before the
   // browser clips them to the cell.
@@ -637,6 +639,7 @@ function drawMiniAgent(target,defs,position,index,dimensions){
     'data-agent':agent.name,
   });
   makeInteractive(group,agent);
+  OC.bindMiniAgentDetail?.(group);
   group.appendChild(svgEl('circle',{class:'orrery-hit',cx:x,cy:y,r:14}));
   group.appendChild(svgEl('circle',{
     class:'mini-portrait-fallback',cx:x,cy:y,r:portraitRadius,
@@ -673,7 +676,7 @@ function drawMiniAgent(target,defs,position,index,dimensions){
   // silently painted over by the face (2026-08-06).
   const providerLabel=drawProviderBadge(group,agent,x,y,portraitRadius);
   drawStateGlyph(group,agent,x,y,false);
-  drawAgentCaption(group,position,dimensions,providerLabel);
+  drawAgentCaption(group,position,dimensions,providerLabel,!OC.bindMiniAgentDetail);
   target.appendChild(group);
   return group;
 }
@@ -873,6 +876,7 @@ function renderMini(){
   const scale=Math.min(width/MINI.width,height/MINI.height);
   const dimensions={...MINI,width:width/scale,height:height/scale};
   const flights=preservedFlights(miniSvg);
+  const focused=miniSvg.contains(document.activeElement)&&document.activeElement.dataset.agent;
   miniSvg.replaceChildren();
   const layout=miniMode==='network'
     ?telemetryMiniLayout(liveAgents,miniFocusName,miniNetworkDepth,dimensions)
@@ -904,6 +908,7 @@ function renderMini(){
   syncMiniSelection();
   refreshCommEdges();
   updateSurfaceGeometry(miniMotion);
+  OC.syncMiniAgentDetail?.(miniMotion.nodes,focused);
   syncMotionLoop();
 }
 function renderPlanetarium(){

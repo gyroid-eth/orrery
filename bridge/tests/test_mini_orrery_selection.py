@@ -18,9 +18,15 @@ SELECTED = "[...document.querySelectorAll('#orrery .mini-selection-ring')].map(e
 @pytest.fixture
 def mini_browser(tour_browser):
     client, evaluate = tour_browser
+    for _ in range(100):
+        if evaluate("Boolean(window.OrreryRail&&document.querySelector('#mail .mailview-list'))"):
+            break
+        time.sleep(.02)
+    else:
+        pytest.fail('mini graph and mail view did not mount')
     evaluate("""(()=>{
       document.querySelectorAll('.flight-close').forEach(e=>e.click());
-      document.getElementById('mailGraphBtn').click();
+      if(document.getElementById('orrery').hasAttribute('hidden'))document.getElementById('mailGraphBtn').click();
       setMiniViewMode('orrery');
       const names=['Pilot','Helper','Watcher'];
       currentAgents=names.map(name=>({name,category:'agent',running:true,
@@ -125,6 +131,87 @@ def test_network_and_planetarium_do_not_get_the_selection_ring(mini_browser):
         'network': [], 'planet': 0, 'planetNodes': 3, 'orrery': ['Pilot']}
 
 
+def test_mini_node_hover_docks_the_roster_card_without_covering_the_graph(mini_browser):
+    client, evaluate = mini_browser
+    before = evaluate("""(()=>{
+      const agent=currentAgentNamed('Pilot');
+      Object.assign(agent,{model_id:'fixture-model',harness_kind:'codex',cwd:'/fixture/release',
+        annot:{role:'Release review'},permission_controls:{
+          computer_use:{value:'view',can_change:true,action:'restart'},
+          browser_use:{value:true,mode:'temporary',options:['off','temporary','personal'],
+            can_change:true,action:'restart'}}});
+      permissionApi=55;permissionApiCheckedAt=performance.now();
+      tileFor(agent);tiles.get('Pilot').dispatchEvent(new MouseEvent('mouseenter'));
+      const graph=document.getElementById('orrery');
+      window.fixtureDetail=agentDetail;
+      const {x,y,width,height}=graph.querySelector('[data-agent="Pilot"] .orrery-hit').getBoundingClientRect();
+      return {card:agentDetail.innerHTML,graph:graph.getBoundingClientRect().toJSON(),
+        x:x+width/2,y:y+height/2};
+    })()""")
+    for text in ('Pilot', 'fixture-model', 'Codex', 'Release review', '/fixture/release',
+                 'data-computer="view"', 'Temporary Chrome'):
+        assert text in before['card']
+    client.call('Input.dispatchMouseEvent', type='mouseMoved', x=before['x'], y=before['y'])
+    after = evaluate("""(()=>{
+      const graph=document.getElementById('orrery');
+      const card=agentDetail.getBoundingClientRect();
+      return {same:agentDetail===window.fixtureDetail,visible:!agentDetail.hidden,
+        card:agentDetail.innerHTML,graph:graph.getBoundingClientRect().toJSON(),
+        below:card.top>=graph.getBoundingClientRect().bottom,
+        docked:agentDetail.previousElementSibling.id==='mailGraphDivider',
+        point:{x:card.left+card.width/2,y:card.top+card.height/2}};
+    })()""")
+    assert after == {**after, 'same': True, 'visible': True, 'card': before['card'],
+                     'graph': before['graph'], 'below': True, 'docked': True}
+    client.call('Input.dispatchMouseEvent', type='mouseMoved', **after['point'])
+    assert evaluate("""(async()=>{
+      await new Promise(resolve=>setTimeout(resolve,200));
+      return !agentDetail.hidden&&agentDetail.matches(':hover');
+    })()""")
+    client.call('Input.dispatchMouseEvent', type='mouseMoved', x=500, y=100)
+    assert evaluate("""(async()=>{
+      await new Promise(resolve=>setTimeout(resolve,200));return agentDetail.hidden;
+    })()""")
+
+
+def test_mini_node_keyboard_opens_shared_permissions_across_redraws(mini_browser):
+    client, evaluate = mini_browser
+    client.call('Emulation.setFocusEmulationEnabled', enabled=True)
+    assert evaluate("""(async()=>{
+      Object.assign(currentAgentNamed('Helper'),{harness_kind:'codex',permission_controls:{
+        browser_use:{value:true,mode:'temporary',options:['off','temporary','personal'],
+          can_change:true,action:'restart'}}});
+      permissionApi=55;permissionApiCheckedAt=performance.now();
+      const graph=document.getElementById('orrery');
+      const node=()=>graph.querySelector('[data-agent="Helper"]');
+      const key=(target,key)=>target.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true}));
+      const draw=()=>document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      const first=node();first.focus();
+      const shown=!agentDetail.hidden;
+      draw();
+      const restored=node()!==first&&document.activeElement===node();
+      key(node(),'F2');
+      const button=agentDetail.querySelector('[data-browser]');draw();
+      const retained=document.activeElement===button&&detailAnchor===node();
+      button.click();
+      const permission=permissionConfirm.open&&pendingPermissionChange.agent.name==='Helper'&&
+        [...permissionBrowser.options].map(option=>option.value).join(',')===',off,personal';
+      permissionConfirm.querySelector('[value="cancel"]').click();
+      await new Promise(resolve=>setTimeout(resolve,0));
+      button.focus();key(button,'Escape');
+      draw();
+      const dismissed=agentDetail.hidden&&document.activeElement===node();
+      return {restored,retained,permission,dismissed,shown};
+    })()""") == dict(restored=True, retained=True, permission=True, dismissed=True, shown=True)
+    assert evaluate("""(async()=>{
+      document.getElementById('mailGraphDivider').focus();
+      document.querySelector('#orrery [data-agent="Helper"]').focus();
+      if(agentDetail.hidden)return false;
+      document.getElementById('mailGraphBtn').click();
+      await Promise.resolve();return agentDetail.hidden;
+    })()""")
+
+
 @pytest.mark.parametrize('theme', ['dark', 'light'])
 @pytest.mark.parametrize('reduced', [False, True])
 def test_theme_static_ring_and_working_arc_coexist(mini_browser, theme, reduced):
@@ -204,7 +291,7 @@ def test_orrery_model_labels_keep_the_raw_id_instead_of_shortening_it(mini_brows
 
 
 @pytest.mark.parametrize('mode', ['orrery', 'network'])
-def test_graph_captions_fit_dense_layout_and_keep_the_full_tooltip(mini_browser, mode):
+def test_graph_captions_fit_dense_layout_and_keep_the_full_name(mini_browser, mode):
     client, evaluate = mini_browser
     client.call('Emulation.setEmulatedMedia', features=[
         {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
@@ -233,8 +320,9 @@ def test_graph_captions_fit_dense_layout_and_keep_the_full_tooltip(mini_browser,
           caption.y>portrait.y+portrait.height&&boxes.every((other,j)=>i===j||
             (!overlaps(caption,other.caption)&&!overlaps(caption,other.portrait)))),
           ellipsis:getComputedStyle(name).textOverflow==='ellipsis'&&name.scrollWidth>name.clientWidth,
-          full:long.querySelector(':scope > title').textContent.includes(longName)&&
-            long.getAttribute('aria-label').includes(longName),
+          full:long.getAttribute('aria-label').includes(longName)&&
+            (selector==='#orrery'?long.getAttribute('aria-controls')==='agentDetail':
+              long.querySelector(':scope > title').textContent.includes(longName)),
           role:long.querySelector('.orrery-caption-role').textContent,
           noRole:!nodes.find(node=>node.dataset.agent==='Pilot').querySelector('.orrery-caption-role')};
       });

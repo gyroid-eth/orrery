@@ -535,6 +535,7 @@
     color:var(--ink);font-size:12px;line-height:1.4;
   }
   .agent-detail[hidden]{display:none}
+  .agent-detail[data-mini-dock]{position:static;flex:0 1 auto;width:auto;min-height:0;max-height:35vh;margin:2px 10px 8px}
   .agent-detail-name{font-family:var(--serif);font-size:19px;line-height:1.2;color:var(--amber);overflow-wrap:anywhere}
   .agent-detail-identity,.agent-detail-runtime{
     display:flex;flex-wrap:wrap;align-items:center;gap:5px 11px;color:var(--ink-dim);
@@ -4138,7 +4139,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "bc8b87b7b118cc18819541fd8954cbe24212e9afa7d71854f8d1342f59cf1d55",
+        "digest": "33e2c3a061432bff3084b1cc7564e924bd26e691e92ce6c5729353c4bb60d5bd",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4231,7 +4232,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "4490e22491b00edd06996186ac877b7380f620b7f7a57dd2eef657259509be02",
+        "digest": "53f03de04e647e6ef3b1d78db56306d0fcd5bb74f0e513d29539f7e28ce01cd1",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -4260,9 +4261,9 @@
       }
     }
   },
-  "inventory_digest": "a9d0781a2c34fa0187e0c65adc6cf3e0930bea06ce3082d1d0a65e0f12239fb0",
+  "inventory_digest": "9cebef362187db95b0fcbd1661d03705593f745fef96fa8928e2e87e24cf7007",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "afbb599b9be02a6794fe7b3a2e1d1830ccd121b32eb41631fb12117e768cd794",
+  "source_digest": "b12764081c5adac8d4592fdf71d8cec499dd8e1a7747a87e24b12e2b29b967ef",
   "surface": "cockpit",
   "version": 1
 }
@@ -9121,8 +9122,10 @@ const pinnedAgents=storedRosterNames(PINNED_AGENT_KEY),foldedAgents=storedRoster
 let rosterRows=[],rosterRowsByName=new Map();
 const agentDetail=document.createElement('div');
 agentDetail.id='agentDetail';agentDetail.className='agent-detail';agentDetail.setAttribute('role','group');
-agentDetail.setAttribute('aria-labelledby','agentDetailName');agentDetail.hidden=true;
-let detailAnchor=null,detailHideTimer=0,detailRendered='';
+agentDetail.setAttribute('aria-labelledby','agentDetailName');agentDetail.tabIndex=-1;agentDetail.hidden=true;
+const detailGraph=document.getElementById('orrery'),detailGraphDivider=document.getElementById('mailGraphDivider');
+detailGraphDivider.after(agentDetail);
+let detailAnchor=null,detailHideTimer=0,detailRendered='',restoringMiniFocus=false;
 let permissionChangeBusy=false,permissionApi=null,permissionApiRequest=null,permissionApiCheckedAt=-Infinity;
 let selectedAgent=null,currentAgents=[];
 const descriptorStore=RosterDescriptor.createStableDescriptorStore();
@@ -9597,7 +9600,9 @@ function agentDetailHTML(detail){
     ${agentDetailPermissions(detail)}
     ${group('meta',text('model','Model',detail.model)+group('runtime',runtime)+contextRow+text('directory','Working directory',detail.directory))}`;
 }
+function isMiniDetailAnchor(el){return el?.classList.contains('mini-agent');}
 function positionAgentDetail(el){
+  if(isMiniDetailAnchor(el))return;
   const gap=10,edge=12,anchor=el.getBoundingClientRect();
   const card=agentDetail.getBoundingClientRect();
   let left=anchor.right+gap,top=anchor.top;
@@ -9616,6 +9621,8 @@ function positionAgentDetail(el){
 }
 function showAgentDetail(el){
   const a=currentAgentNamed(el&&el.dataset.agent);if(!a)return;
+  const mini=isMiniDetailAnchor(el);
+  if(mini&&(!el.isConnected||detailGraph.hasAttribute('hidden')))return;
   if(rosterEditor.isEditing(a.name)||el.matches('.filtered-out,.folded-out')){hideAgentDetail(el);return;}
   if(detailAnchor!==el)clearTimeout(detailHideTimer);
   detailAnchor=el;
@@ -9624,12 +9631,14 @@ function showAgentDetail(el){
   const html=agentDetailHTML(agentDetailModel(a,hostPlatform.home_dir,hiddenChildren,permissionApi,
     bulkActionBusy||permissionChangeBusy));
   const focused=agentDetail.contains(document.activeElement)?document.activeElement:null;
-  if(el.nextElementSibling!==agentDetail)el.after(agentDetail);
+  const mount=mini?detailGraphDivider:el;
+  agentDetail.toggleAttribute('data-mini-dock',mini);
+  if(mount.nextElementSibling!==agentDetail)mount.after(agentDetail);
   if(detailRendered!==html){
     agentDetail.innerHTML=html;detailRendered=html;
     const replacement=focused?.matches('[data-browser]')?agentDetail.querySelector('[data-browser]'):
-      focused&&agentDetail.querySelector(`[data-computer="${focused.dataset.computer}"]`);
-    if(focused&&(!replacement||replacement.disabled))el.focus({preventScroll:true});
+      focused?.matches('[data-computer]')?agentDetail.querySelector(`[data-computer="${focused.dataset.computer}"]`):null;
+    if(focused&&focused!==agentDetail&&(!replacement||replacement.disabled))el.focus({preventScroll:true});
     else replacement?.focus({preventScroll:true});
   }
   if(agentDetail.contains(focused)&&focused!==document.activeElement)focused.focus({preventScroll:true});
@@ -9645,20 +9654,64 @@ function scheduleAgentDetailHide(el){
   clearTimeout(detailHideTimer);
   detailHideTimer=setTimeout(()=>{
     if(!el.contains(document.activeElement)&&!agentDetail.contains(document.activeElement)&&
-      !el.matches(':hover')&&!agentDetail.matches(':hover'))hideAgentDetail(el);
+      !el.matches(':hover')&&!agentDetail.matches(':hover')&&
+      !(isMiniDetailAnchor(el)&&detailGraph.matches(':hover')))hideAgentDetail(el);
   },160);
 }
+detailGraph.addEventListener('mouseleave',()=>{
+  if(isMiniDetailAnchor(detailAnchor))scheduleAgentDetailHide(detailAnchor);
+});
+function syncMiniAgentDetail(nodes,focusedName){
+  const previous=detailAnchor;
+  if(isMiniDetailAnchor(previous)){
+    const node=nodes.get(previous.dataset.agent);
+    if(node)showAgentDetail(node);
+    if(node&&detailAnchor===node)scheduleAgentDetailHide(node);
+    else hideAgentDetail(previous);
+  }
+  const focused=nodes.get(focusedName);
+  if(focused){
+    // A redraw should preserve keyboard focus and any explicit dismissal.
+    restoringMiniFocus=true;
+    try{focused.focus({preventScroll:true});}finally{restoringMiniFocus=false;}
+  }
+}
+new MutationObserver(()=>{
+  if(detailGraph.hasAttribute('hidden')&&isMiniDetailAnchor(detailAnchor))hideAgentDetail(detailAnchor);
+}).observe(detailGraph,{attributes:true,attributeFilter:['hidden']});
 agentDetail.addEventListener('mouseenter',()=>clearTimeout(detailHideTimer));
 agentDetail.addEventListener('mouseleave',()=>{if(detailAnchor)scheduleAgentDetailHide(detailAnchor);});
 agentDetail.addEventListener('focusout',()=>{if(detailAnchor)scheduleAgentDetailHide(detailAnchor);});
-function bindAgentDetail(el){
-  el.tabIndex=0;el.setAttribute('role','button');
-  el.addEventListener('mouseenter',()=>showAgentDetail(el));
-  el.addEventListener('mouseleave',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
-  el.addEventListener('focusin',()=>showAgentDetail(el));
+function bindAgentDetail(el,mini=false){
+  let hoverTimer;
+  if(mini){
+    el.setAttribute('aria-controls',agentDetail.id);
+    el.setAttribute('aria-keyshortcuts','F2');
+  }else{
+    el.tabIndex=0;el.setAttribute('role','button');
+  }
+  el.addEventListener('mouseenter',()=>{
+    if(!mini||!isMiniDetailAnchor(detailAnchor)||detailAnchor===el)showAgentDetail(el);
+    // Let the pointer cross other nodes on its way down to the dock.
+    else hoverTimer=setTimeout(()=>{
+      if(el.matches(':hover')&&!agentDetail.contains(document.activeElement))showAgentDetail(el);
+    },120);
+  });
+  el.addEventListener('mouseleave',()=>{
+    clearTimeout(hoverTimer);
+    if(detailAnchor===el)scheduleAgentDetailHide(el);
+  });
+  el.addEventListener('focusin',()=>{if(!mini||!restoringMiniFocus)showAgentDetail(el);});
   el.addEventListener('focusout',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
   el.addEventListener('keydown',event=>{
     if(event.target!==el)return;
+    if(mini){
+      if(event.key!=='F2')return;
+      event.preventDefault();
+      showAgentDetail(el);
+      if(detailAnchor===el)(agentDetail.querySelector('button:not(:disabled)')||agentDetail).focus();
+      return;
+    }
     if(event.key!=='Enter'&&event.key!==' ')return;
     event.preventDefault();handleRosterTileClick(el.dataset.agent,event);
   });
@@ -10366,6 +10419,7 @@ function assignLineageHues(live){
    They subscribe to 'oc:agents' / 'oc:mail' document events for updates. */
 window.OC=Object.freeze({
   esc,relTime,jumpToAgent,rootOf,providerPresentation,
+  bindMiniAgentDetail:node=>bindAgentDetail(node,true),syncMiniAgentDetail,
   railPositions,railMoveRows,railArrive,
   renderPeerAvatar:(name,existing)=>currentAgentNamed(name)?conversationAvatar(name,'',existing):null,
   lineageHue,                       // Map: agent name -> lineage hex
