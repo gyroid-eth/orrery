@@ -104,6 +104,31 @@ def test_long_reply_starts_at_top_and_reads_wrapped_table_across_columns(cockpit
     assert words.index('LeftFirst') < words.index('RightFirst') < words.index('LeftLast') < words.index('RightLast')
 
 
+def test_recorded_reply_catches_up_after_slow_frames_with_a_bounded_batch(cockpit):
+    js, wait, _ = prepare(cockpit)
+    words = [f'word{i}' for i in range(83)]
+    js("""
+      const requestFrame=window.requestAnimationFrame;
+      window.revealFrame=null;
+      window.requestAnimationFrame=callback=>{
+        if(callback.name!=='revealNext')return requestFrame(callback);
+        revealFrame=callback;return -1;
+      };
+      window.stepReveal=now=>{
+        const start=startedAnimations.length,callback=revealFrame;
+        revealFrame=null;callback(now);
+        return startedAnimations.length-start;
+      };
+    """)
+    js(f"replyPage=[makeReply('low-fps',{json.dumps(' '.join(words))})];conversationView.refresh()")
+    wait("Boolean(revealFrame)")
+    assert js("[1000,1080,1160,2000,2010].map(stepReveal)") == [1, 8, 8, 8, 2]
+    assert js("""
+      for(let time=2090;revealFrame&&time<4000;time+=80)stepReveal(time);
+      startedAnimations.map(animation=>animation.effect.target.textContent)
+    """) == words
+
+
 @pytest.mark.parametrize('program,provider,mode', [
     ('claude-code','claude','cursor'), ('dsh','dsh','cursor'), ('hermes','hermes','snapshot'),
     ('antigravity','antigravity','cursor'),
