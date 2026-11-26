@@ -78,14 +78,36 @@ def test_mini_graph_remembers_both_states_across_loads(cockpit):
     toggle = "document.getElementById('mailGraphBtn')"
     key = 'oc-mini-mail-graph'
 
-    assert js(f"{graph}.hasAttribute('hidden')")
-    for value in ('1', '0'):
+    js('window.beforeGraphReload=true')
+    client.call('Page.navigate', url=address)
+    wait("!window.beforeGraphReload&&Boolean(document.querySelector('#mail .mailcards'))")
+    assert not js(f"{graph}.hasAttribute('hidden')")
+    for value in ('0', '1'):
         js(f"{toggle}.click()")
         assert js(f"localStorage.getItem('{key}')") == value
+        js('window.beforeGraphReload=true')
         client.call('Page.navigate', url=address)
-        wait("Boolean(document.querySelector('#mail .mailcards'))")
+        wait("!window.beforeGraphReload&&Boolean(document.querySelector('#mail .mailcards'))")
         assert js(f"{toggle}.getAttribute('aria-expanded')") == str(value == '1').lower()
         assert js(f"{graph}.hasAttribute('hidden')") == (value == '0')
+
+
+def test_old_local_mail_preferences_migrate_once_across_reloads(cockpit):
+    js, wait, client, _, _ = cockpit
+    wait("Boolean(document.querySelector('#mail .mailcards'))")
+    client.call('Page.removeScriptToEvaluateOnNewDocument', identifier=js.storage_bootstrap)
+    address = js('location.href')
+    js("""localStorage.removeItem('oc-mail-layout-v1');
+      localStorage.setItem('oc-mail-view','recipient');localStorage.setItem('oc-mini-mail-graph','0');""")
+    client.call('Page.navigate', url=address)
+    wait("document.getElementById('mailViewBtn')?.title==='Group by recipient'")
+    assert js("localStorage.getItem('oc-mail-layout-v1')") == '1'
+    assert js("document.getElementById('mailGraphBtn').getAttribute('aria-expanded')") == 'true'
+    js("document.getElementById('mailViewBtn').click();document.getElementById('mailGraphBtn').click();")
+    js('OrreryPrefs.flush()')
+    client.call('Page.navigate', url=address)
+    wait("document.getElementById('mailViewBtn')?.title==='Show thread timeline'")
+    assert js("document.getElementById('mailGraphBtn').getAttribute('aria-expanded')") == 'false'
 
 
 @pytest.mark.parametrize('cockpit',['disabled'],indirect=True)

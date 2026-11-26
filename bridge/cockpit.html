@@ -220,7 +220,6 @@
     z-index:4;grid-column:3;grid-row:1;justify-self:start;translate:-50% 0;width:12px;cursor:col-resize;
   }
   .mail-graph-divider{flex:0 0 12px;cursor:row-resize}
-  .miniorrery[hidden]+.mail-graph-divider{display:none}
   .mail-divider::after,.mail-graph-divider::after{
     content:"";position:absolute;left:50%;top:50%;translate:-50% -50%;
     border-radius:2px;background:var(--ink-faint);
@@ -589,6 +588,31 @@
   .agent-detail-browser-toggle{color:var(--ink-dim)}
   .agent-detail-switch.unknown{justify-content:center}
   .agent-detail-switch.unknown::before{width:8px;height:1px}
+  #mailRail .agent-detail[data-mini-dock]{
+    --agent-detail-row-height:24px;
+    position:static;z-index:auto;flex:0 1 auto;width:auto;min-height:0;max-height:35vh;
+    margin:2px 16px 0;padding:7px 7px 10px;border:0;border-radius:0;
+    background:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;
+    font:12px/1.45 var(--rail-sans);font-variant-numeric:tabular-nums;
+  }
+  .agent-detail[data-mini-dock] .agent-detail-name{
+    display:grid;align-content:center;min-height:var(--agent-detail-row-height);
+    color:var(--ink);font:inherit;font-weight:600;
+  }
+  .agent-detail[data-mini-dock] :is(.agent-detail-identity,.agent-detail-runtime,.agent-detail-meta){
+    margin-top:0;row-gap:0;
+  }
+  .agent-detail[data-mini-dock] .agent-detail-item{min-height:var(--agent-detail-row-height);align-items:center}
+  .agent-detail[data-mini-dock] .agent-detail-icon{margin-top:0}
+  .agent-detail[data-mini-dock] :is(.agent-detail-model,.agent-detail-context strong,.agent-detail-modes .current){font-weight:400}
+  .agent-detail[data-mini-dock] .agent-detail-permissions{
+    display:grid;grid-template-columns:minmax(0,1fr);gap:0;padding:0;
+    border:0;border-radius:0;background:transparent;
+  }
+  .agent-detail[data-mini-dock] .agent-detail-permissions .agent-detail-item{padding:0;border:0}
+  .agent-detail[data-mini-dock] > :is(.agent-detail-permissions,.agent-detail-meta){
+    margin-top:4px;padding-top:4px;border-top:1px solid var(--hair);
+  }
   .agent-permission-confirm{
     width:min(390px,calc(100vw - 24px));margin:auto;padding:16px;border:1px solid var(--hair);border-radius:10px;
     color:var(--ink);background:var(--panel);font:13px/1.45 var(--rail-sans);
@@ -1517,7 +1541,12 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg>
         </button>
       </div>
-      <svg class="miniorrery" viewBox="0 0 280 120" id="orrery" hidden></svg>
+      <div class="mini-graph" id="miniGraphViewport">
+        <div class="mini-graph-scroll" role="region" aria-label="Mini graph">
+          <svg class="miniorrery" viewBox="0 0 280 120" id="orrery" hidden></svg>
+        </div>
+        <svg class="mini-graph-expand" viewBox="0 0 28 28"></svg>
+      </div>
       <div class="mail-graph-divider" id="mailGraphDivider" role="separator" tabindex="0" aria-orientation="horizontal"
            aria-controls="orrery" aria-label="Resize mini graph"
            title="Resize mini graph with Up or Down arrows or drag. Enter or double-click to reset."></div>
@@ -1657,7 +1686,7 @@
           <label class="settings-choice"><input id="miniViewOrrery" type="radio" name="miniView" value="orrery">Orrery</label>
           <label class="settings-choice"><input id="miniViewNetwork" type="radio" name="miniView" value="network">Telemetry network</label>
         </div>
-        <div class="settings-help">Telemetry network centers the active tab and follows lineage plus recent mail links.</div>
+        <div class="settings-help">Telemetry network centers the active tab and follows lineage and Mail links.</div>
       </div>
       <div class="settings-row">
         <label class="settings-toggle-row" for="miniNetworkDepth">
@@ -1669,6 +1698,18 @@
             <option value="1">1 hop</option>
             <option value="2" selected>2 hops</option>
             <option value="3">3 hops</option>
+          </select>
+        </label>
+      </div>
+      <div class="settings-row">
+        <label class="settings-toggle-row" for="miniMailLinks">
+          <span class="settings-toggle-copy">
+            <span class="settings-row-name">Mail links</span>
+            <span class="settings-help">Recent Mail is highlighted for 90 seconds in both modes.</span>
+          </span>
+          <select class="settings-select" id="miniMailLinks">
+            <option value="keep" selected>Keep visible</option>
+            <option value="recent">Fade after 90 seconds</option>
           </select>
         </label>
       </div>
@@ -2302,6 +2343,16 @@
             "property": "color",
             "selector": ".agent-detail-browser-toggle",
             "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail[data-mini-dock] .agent-detail-name",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".agent-detail[data-mini-dock] > :is(.agent-detail-permissions,.agent-detail-meta)",
+            "value": "1px solid var(--hair)"
           },
           {
             "property": "border",
@@ -3139,8 +3190,68 @@
             "value": "var(--panel)"
           },
           {
+            "property": "outline",
+            "selector": ".mini-graph-scroll:focus-visible",
+            "value": "1px solid var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".mini-graph-tools button",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mini-graph-tools button",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-tools button",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-tools button:not(:disabled):is(:hover,:focus-visible,[aria-expanded=true])",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".mini-graph-tools button:not(:disabled):is(:hover,:focus-visible,[aria-expanded=true])",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".mini-graph-appearance",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mini-graph-appearance",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-appearance",
+            "value": "var(--ink)"
+          },
+          {
             "property": "stroke",
             "selector": ".orrery-comm-edge",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-history-edge",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-mail-edge-halo",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-mail-edge > .orrery-mail-edge-core",
             "value": "var(--ink)"
           },
           {
@@ -3916,6 +4027,26 @@
             "value": "var(--ink-faint)"
           },
           {
+            "property": "outline",
+            "selector": ".mini-graph-scroll:focus-visible",
+            "value": "1px solid var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-tools button",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".mini-graph-tools button:not(:disabled):is(:hover,:focus-visible,[aria-expanded=true])",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-history-edge",
+            "value": "var(--ink-dim)"
+          },
+          {
             "property": "color",
             "selector": ".orrery-caption-role",
             "value": "var(--ink-dim)"
@@ -4099,7 +4230,7 @@
         "unit": "effect-component"
       },
       "source": {
-        "digest": "cbca21589e1ec9e1baa9bfe2451cb7f0b08b0c5e44ede3d9b36a3a7e20d249e6",
+        "digest": "a8ec14f4847e277d164c0fcbf89355c1fcf1fa846d1d5f58e4e02c5bf98eb7df",
         "records": [
           ":root\u0000--amber-glow",
           ".miniorrery.telemetry-network\u0000background",
@@ -4116,6 +4247,7 @@
           ":is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .face\u0000box-shadow",
           ".medal .face::after\u0000background",
           ".agent-detail\u0000box-shadow",
+          "#mailRail .agent-detail[data-mini-dock]\u0000box-shadow",
           ".term\u0000background",
           ".layout-picker\u0000box-shadow",
           ".session-label.active-session\u0000box-shadow",
@@ -4161,7 +4293,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "dbd187adf90aa3f04f6b9927b20f5c0a790089b411bdcfc6acda685c6388b695",
+        "digest": "98f32f786bae0463d79f75c88d95a2de9393a4cab11b4f9f018cf38bae4841f3",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4254,7 +4386,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "2e38e16ce49b318ca1f33876fb09aab78ac004c832e3ac929cb4ce102e22104a",
+        "digest": "edb21c5c600730fc7412ded99338a09b847e26ee9a9d5abc8121658998c714e2",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -4283,9 +4415,9 @@
       }
     }
   },
-  "inventory_digest": "63f68f0deacde04c7a660cfdafeb05ec2f2c4f9e998e0671af685a58aa8a8540",
+  "inventory_digest": "c71253abf9ef47436d93bb95eabf4efe7fabec7411c1434a5a1c9b0029b3802c",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "a9bd46fa98f627fd48721643f927877d394999db48f2b691fc3f6249361991a8",
+  "source_digest": "b8e72314776ac33bd1c02cfc97a7f7d972f8abcee0796c52ca5fd0f1143c21fb",
   "surface": "cockpit",
   "version": 1
 }
@@ -5011,6 +5143,7 @@ const terminalSettingsReset=document.getElementById('terminalSettingsReset');
 const miniViewOrrery=document.getElementById('miniViewOrrery');
 const miniViewNetwork=document.getElementById('miniViewNetwork');
 const miniNetworkDepthSelect=document.getElementById('miniNetworkDepth');
+const miniMailLinksSelect=document.getElementById('miniMailLinks');
 const tabsEmpty=document.createElement('span');
 tabsEmpty.className='empty';tabsEmpty.textContent='waiting for sessions…';tabsEl.appendChild(tabsEmpty);
 
@@ -5044,6 +5177,7 @@ const TERM_FONT_STORAGE_KEY='oc-term-font';
 const TERM_FONT_AUTOSHRINK_STORAGE_KEY='oc-term-autoshrink';
 const MINI_VIEW_STORAGE_KEY='oc-mini-view';
 const MINI_NETWORK_DEPTH_STORAGE_KEY='oc-mini-network-depth';
+const MINI_MAIL_LINKS_STORAGE_KEY='oc-mini-mail-links';
 const THEME_AXIS_LABELS={
   'dim-contrast':'Muted contrast',
   'small-text':'Small text',
@@ -5106,6 +5240,7 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   [':is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .face','box-shadow',['state'],'preserve'],
   ['.medal .face::after','background',['elevation'],'preserve'],
   ['.agent-detail','box-shadow',['elevation'],'preserve'],
+  ['#mailRail .agent-detail[data-mini-dock]','box-shadow',['elevation'],'preserve'],
   ['.term','background',['elevation'],'preserve'],
   ['.layout-picker','box-shadow',['elevation','emissive'],'scale','html[data-theme-axis="glow"] .layout-picker'],
   ['.session-label.active-session','box-shadow',['state'],'preserve'],
@@ -5144,6 +5279,7 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
 const THEME_GLOW_SCALE_EXPECTED=THEME_GLOW_EFFECT_MANIFEST.filter(effect=>effect.mode==='scale').length;
 let terminalFontSize=TERM_FONT_DEFAULT,terminalAutoShrink=true;
 let miniViewMode='orrery';
+let miniMailLinks='keep';
 let miniNetworkDepth=2;
 let themeAxisState=normalizeThemeAxisState(null);
 let themeAxisTransactionActive=false;
@@ -5162,6 +5298,7 @@ try{
     terminalAutoShrink=storedAutoShrink==='true';
   }
   if(localStorage.getItem(MINI_VIEW_STORAGE_KEY)==='network')miniViewMode='network';
+  if(localStorage.getItem(MINI_MAIL_LINKS_STORAGE_KEY)==='recent')miniMailLinks='recent';
   const storedNetworkDepth=Number(localStorage.getItem(MINI_NETWORK_DEPTH_STORAGE_KEY));
   if([1,2,3].includes(storedNetworkDepth))miniNetworkDepth=storedNetworkDepth;
 }catch(_){/* storage can be unavailable in private/restricted webviews */}
@@ -6140,17 +6277,24 @@ function paintMiniViewSettings(){
   miniViewOrrery.checked=miniViewMode==='orrery';
   miniViewNetwork.checked=miniViewMode==='network';
   miniNetworkDepthSelect.value=String(miniNetworkDepth);
+  miniMailLinksSelect.value=miniMailLinks;
+}
+function announceMiniView(){
+  paintMiniViewSettings();
+  document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{
+    mode:miniViewMode,depth:miniNetworkDepth,mailLinks:miniMailLinks,
+  }}));
 }
 function setMiniViewMode(mode){
-  miniViewMode=mode==='network'?'network':'orrery';paintMiniViewSettings();
+  miniViewMode=mode==='network'?'network':'orrery';
   try{localStorage.setItem(MINI_VIEW_STORAGE_KEY,miniViewMode);}catch(_){/* live-only preference */}
-  document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{mode:miniViewMode,depth:miniNetworkDepth}}));
+  announceMiniView();
 }
 function setMiniNetworkDepth(depth){
   const next=Number(depth);
-  miniNetworkDepth=[1,2,3].includes(next)?next:2;paintMiniViewSettings();
+  miniNetworkDepth=[1,2,3].includes(next)?next:2;
   try{localStorage.setItem(MINI_NETWORK_DEPTH_STORAGE_KEY,String(miniNetworkDepth));}catch(_){/* live-only preference */}
-  document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{mode:miniViewMode,depth:miniNetworkDepth}}));
+  announceMiniView();
 }
 function applyTerminalSettings({fit=true}={}){
   const effectiveSize=currentTerminalFontSize();
@@ -6190,6 +6334,11 @@ terminalAutoShrinkToggle.addEventListener('change',()=>{
 miniViewOrrery.addEventListener('change',()=>{if(miniViewOrrery.checked)setMiniViewMode('orrery');});
 miniViewNetwork.addEventListener('change',()=>{if(miniViewNetwork.checked)setMiniViewMode('network');});
 miniNetworkDepthSelect.addEventListener('change',()=>setMiniNetworkDepth(miniNetworkDepthSelect.value));
+miniMailLinksSelect.addEventListener('change',()=>{
+  miniMailLinks=miniMailLinksSelect.value==='recent'?'recent':'keep';
+  try{localStorage.setItem(MINI_MAIL_LINKS_STORAGE_KEY,miniMailLinks);}catch(_){/* live-only preference */}
+  announceMiniView();
+});
 /* The backend stamps every response with its boot id. When it changes, the
    page this window is running was served by a previous backend: reload so the
    app window and a fresh browser tab always show the same cockpit. The
@@ -6203,11 +6352,12 @@ function noteBackendBoot(id){
 /* a preference changed in another window (prefs_sync.js): apply it here too */
 document.addEventListener('oc:prefs-changed',event=>{
   const keys=new Set(event.detail&&event.detail.keys||[]);
-  if(keys.has(MINI_VIEW_STORAGE_KEY)||keys.has(MINI_NETWORK_DEPTH_STORAGE_KEY)){
+  if(keys.has(MINI_VIEW_STORAGE_KEY)||keys.has(MINI_NETWORK_DEPTH_STORAGE_KEY)||keys.has(MINI_MAIL_LINKS_STORAGE_KEY)){
     const mode=localStorage.getItem(MINI_VIEW_STORAGE_KEY)==='network'?'network':'orrery';
     const depth=Number(localStorage.getItem(MINI_NETWORK_DEPTH_STORAGE_KEY));
-    miniViewMode=mode;miniNetworkDepth=[1,2,3].includes(depth)?depth:2;paintMiniViewSettings();
-    document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{mode:miniViewMode,depth:miniNetworkDepth}}));
+    miniViewMode=mode;miniNetworkDepth=[1,2,3].includes(depth)?depth:2;
+    miniMailLinks=localStorage.getItem(MINI_MAIL_LINKS_STORAGE_KEY)==='recent'?'recent':'keep';
+    announceMiniView();
   }
   if(keys.has(TERM_FONT_STORAGE_KEY)||keys.has(TERM_FONT_AUTOSHRINK_STORAGE_KEY)){
     const storedFont=localStorage.getItem(TERM_FONT_STORAGE_KEY),storedShrink=localStorage.getItem(TERM_FONT_AUTOSHRINK_STORAGE_KEY);
@@ -9214,8 +9364,10 @@ const pinnedAgents=storedRosterNames(PINNED_AGENT_KEY),foldedAgents=storedRoster
 let rosterRows=[],rosterRowsByName=new Map();
 const agentDetail=document.createElement('div');
 agentDetail.id='agentDetail';agentDetail.className='agent-detail';agentDetail.setAttribute('role','group');
-agentDetail.setAttribute('aria-labelledby','agentDetailName');agentDetail.hidden=true;
-let detailAnchor=null,detailHideTimer=0,detailRendered='';
+agentDetail.setAttribute('aria-labelledby','agentDetailName');agentDetail.tabIndex=-1;agentDetail.hidden=true;
+const detailGraph=document.getElementById('orrery'),detailGraphDivider=document.getElementById('mailGraphDivider');
+detailGraphDivider.after(agentDetail);
+let detailAnchor=null,detailHideTimer=0,detailRendered='',restoringMiniFocus=false;
 let permissionChangeBusy=false,permissionApi=null,permissionApiRequest=null,permissionApiCheckedAt=-Infinity;
 let selectedAgent=null,currentAgents=[];
 const descriptorStore=RosterDescriptor.createStableDescriptorStore();
@@ -9774,7 +9926,9 @@ function agentDetailHTML(detail){
     ${agentDetailPermissions(detail)}
     ${group('meta',text('model','Model',detail.model)+group('runtime',runtime)+contextRow+text('directory','Working directory',detail.directory))}`;
 }
+function isMiniDetailAnchor(el){return el?.classList.contains('mini-agent');}
 function positionAgentDetail(el){
+  if(isMiniDetailAnchor(el))return;
   const gap=10,edge=12,anchor=el.getBoundingClientRect();
   const card=agentDetail.getBoundingClientRect();
   let left=anchor.right+gap,top=anchor.top;
@@ -9793,6 +9947,8 @@ function positionAgentDetail(el){
 }
 function showAgentDetail(el){
   const a=currentAgentNamed(el&&el.dataset.agent);if(!a)return;
+  const mini=isMiniDetailAnchor(el);
+  if(mini&&(!el.isConnected||detailGraph.hasAttribute('hidden')))return;
   if(rosterEditor.isEditing(a.name)||el.matches('.filtered-out,.folded-out')){hideAgentDetail(el);return;}
   if(detailAnchor!==el)clearTimeout(detailHideTimer);
   detailAnchor=el;
@@ -9801,12 +9957,14 @@ function showAgentDetail(el){
   const html=agentDetailHTML(agentDetailModel(a,hostPlatform.home_dir,hiddenChildren,permissionApi,
     bulkActionBusy||permissionChangeBusy,pendingAgentAction(a.name)));
   const focused=agentDetail.contains(document.activeElement)?document.activeElement:null;
-  if(el.nextElementSibling!==agentDetail)el.after(agentDetail);
+  const mount=mini?detailGraphDivider:el;
+  agentDetail.toggleAttribute('data-mini-dock',mini);
+  if(mount.nextElementSibling!==agentDetail)mount.after(agentDetail);
   if(detailRendered!==html){
     agentDetail.innerHTML=html;detailRendered=html;
     const replacement=focused?.matches('[data-browser]')?agentDetail.querySelector(`[data-browser="${focused.dataset.browser}"]`):
-      focused&&agentDetail.querySelector(`[data-computer="${focused.dataset.computer}"]`);
-    if(focused&&(!replacement||replacement.disabled))el.focus({preventScroll:true});
+      focused?.matches('[data-computer]')?agentDetail.querySelector(`[data-computer="${focused.dataset.computer}"]`):null;
+    if(focused&&focused!==agentDetail&&(!replacement||replacement.disabled))el.focus({preventScroll:true});
     else replacement?.focus({preventScroll:true});
   }
   if(agentDetail.contains(focused)&&focused!==document.activeElement)focused.focus({preventScroll:true});
@@ -9818,24 +9976,70 @@ function hideAgentDetail(el){
   clearTimeout(detailHideTimer);
   detailAnchor=null;agentDetail.hidden=true;
 }
+function agentDetailHasFocus(el){
+  const focused=document.activeElement;
+  return (el.contains(focused)||agentDetail.contains(focused))&&
+    (!isMiniDetailAnchor(el)||focused.matches(':focus-visible'));
+}
 function scheduleAgentDetailHide(el){
   clearTimeout(detailHideTimer);
   detailHideTimer=setTimeout(()=>{
-    if(!el.contains(document.activeElement)&&!agentDetail.contains(document.activeElement)&&
-      !el.matches(':hover')&&!agentDetail.matches(':hover'))hideAgentDetail(el);
+    if(!agentDetailHasFocus(el)&&!el.matches(':hover')&&!agentDetail.matches(':hover'))hideAgentDetail(el);
   },160);
 }
+function syncMiniAgentDetail(nodes,focusedName){
+  const previous=detailAnchor;
+  if(isMiniDetailAnchor(previous)){
+    const node=nodes.get(previous.dataset.agent);
+    if(node)showAgentDetail(node);
+    if(node&&detailAnchor===node)scheduleAgentDetailHide(node);
+    else hideAgentDetail(previous);
+  }
+  const focused=nodes.get(focusedName);
+  if(focused){
+    // A redraw should preserve keyboard focus and any explicit dismissal.
+    restoringMiniFocus=true;
+    try{focused.focus({preventScroll:true});}finally{restoringMiniFocus=false;}
+  }
+}
+new MutationObserver(()=>{
+  if(detailGraph.hasAttribute('hidden')&&isMiniDetailAnchor(detailAnchor))hideAgentDetail(detailAnchor);
+}).observe(detailGraph,{attributes:true,attributeFilter:['hidden']});
 agentDetail.addEventListener('mouseenter',()=>clearTimeout(detailHideTimer));
 agentDetail.addEventListener('mouseleave',()=>{if(detailAnchor)scheduleAgentDetailHide(detailAnchor);});
 agentDetail.addEventListener('focusout',()=>{if(detailAnchor)scheduleAgentDetailHide(detailAnchor);});
-function bindAgentDetail(el){
-  el.tabIndex=0;el.setAttribute('role','button');
-  el.addEventListener('mouseenter',()=>showAgentDetail(el));
-  el.addEventListener('mouseleave',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
-  el.addEventListener('focusin',()=>showAgentDetail(el));
+function bindAgentDetail(el,mini=false){
+  let hoverTimer;
+  if(mini){
+    el.setAttribute('aria-controls',agentDetail.id);
+    el.setAttribute('aria-keyshortcuts','F2');
+  }else{
+    el.tabIndex=0;el.setAttribute('role','button');
+  }
+  el.addEventListener('mouseenter',()=>{
+    if(!mini||!isMiniDetailAnchor(detailAnchor)||detailAnchor===el)showAgentDetail(el);
+    // Let the pointer cross other nodes on its way down to the dock.
+    else hoverTimer=setTimeout(()=>{
+      if(el.matches(':hover')&&(!detailAnchor||!agentDetailHasFocus(detailAnchor)))showAgentDetail(el);
+    },120);
+  });
+  el.addEventListener('mouseleave',()=>{
+    clearTimeout(hoverTimer);
+    if(detailAnchor===el)scheduleAgentDetailHide(el);
+  });
+  el.addEventListener('focusin',()=>{
+    if(!mini||(!restoringMiniFocus&&el.matches(':focus-visible')))showAgentDetail(el);
+  });
   el.addEventListener('focusout',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
   el.addEventListener('keydown',event=>{
     if(event.target!==el)return;
+    if(mini){
+      if(event.key!=='F2')return;
+      event.preventDefault();
+      showAgentDetail(el);
+      if(detailAnchor===el)(agentDetail.querySelector('button:not(:disabled)')||agentDetail).focus();
+      return;
+    }
     if(event.key!=='Enter'&&event.key!==' ')return;
     event.preventDefault();handleRosterTileClick(el.dataset.agent,event);
   });
@@ -10661,13 +10865,14 @@ function assignLineageHues(live){
    They subscribe to 'oc:agents' / 'oc:mail' document events for updates. */
 window.OC=Object.freeze({
   esc,relTime,jumpToAgent,rootOf,providerPresentation,
+  bindMiniAgentDetail:node=>bindAgentDetail(node,true),syncMiniAgentDetail,
   railPositions,railMoveRows,railArrive,
   renderPeerAvatar:(name,existing)=>currentAgentNamed(name)?conversationAvatar(name,'',existing):null,
   lineageHue,                       // Map: agent name -> lineage hex
   get lineageParent(){return lineageParent;},  // Map: child -> parent
   agents:()=>currentAgents,
   activeAgent:()=>activeSession(),
-  miniView:()=>({mode:miniViewMode,depth:miniNetworkDepth}),
+  miniView:()=>({mode:miniViewMode,depth:miniNetworkDepth,mailLinks:miniMailLinks}),
   mailBacklog:()=>mailBacklog.slice(),  // live-window messages seen so far (≤100)
 });
 
