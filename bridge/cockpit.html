@@ -4415,9 +4415,9 @@
       }
     }
   },
-  "inventory_digest": "46ca070f7404dfc37737e69cf8af6028d81a6138e3ee319ecf7a4e0225622e13",
+  "inventory_digest": "7d8f58ab765a84fccae9fbd622f3cd336bd2f93ab3cc3efff8519075a4423902",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "87e01a28ba1c02668b0ea295b0a7461712ec5d7cc042a940cded1c3ebb214138",
+  "source_digest": "962391fa53ccf9efafbe4c2c198af3a921c75c46a87f5ece05b4f44311fbbdc8",
   "surface": "cockpit",
   "version": 1
 }
@@ -11347,7 +11347,9 @@ function renderProviderTabs(keepChoice=false){
     providerTabs.append(b);
   });
   const local=selFamily==='local',choices=entries.filter(e=>e.family===selFamily);
-  spawnModelSearch.hidden=spawnModelSearchField.hidden=!local&&choices.length<spawnSearchThreshold;
+  const rowCount=selFamily==='gemini'?[...new Set(choices.map(e=>e.provider))].reduce((count,provider)=>count+
+    SpawnPicker.displayModels(provider,choices.filter(e=>e.provider===provider).map(e=>e.model),selModel).length,0):choices.length;
+  spawnModelSearch.hidden=spawnModelSearchField.hidden=!local&&rowCount<spawnSearchThreshold;
   const hadDynamicSelection=Number.isInteger(selUrlIndex);
   let selected=choices.find(e=>e.provider.id===selProvider&&e.model.id===selModel&&
     (!Number.isInteger(e.model.url_index)||e.model.url_index===selUrlIndex)&&(!e.model.url_key||e.model.url_key===selUrlKey));
@@ -11564,12 +11566,13 @@ function renderSpawnModelChip(){
   if(maker)spawnModelMark.append(spawnBrand(maker.asset+'.svg'));
   spawnModelMark.classList.toggle('spawn-local-maker',Boolean(maker));
   spawnModelMark.title=maker?maker.label+' · Local':'';
-  const name=model?.display_name||model?.id||'Model';
+  const geminiFamily=SpawnPicker.geminiFamily(provider,model?.id);
+  const name=geminiFamily||model?.display_name||model?.id||'Model';
   spawnModelLabel.textContent=compactSpawnModelLabel(name);
   const info=effortsForModel(provider,selModel);
   const effort=effectiveSpawnEffort(provider,selModel);
   const harness=provider&&model&&SpawnPicker.harnesses(provider,model).find(h=>h.id===selHarness);
-  const description=[name,model?.id!==name?model?.id:'',spawnModelMark.title,harness?.label,effort].filter(Boolean).join(' · ');
+  const description=[name,!geminiFamily&&model?.id!==name?model?.id:'',spawnModelMark.title,harness?.label,effort].filter(Boolean).join(' · ');
   spawnModelButton.title=description;spawnModelButton.setAttribute('aria-label','Model and effort: '+description);
   spawnPips.hidden=!info.efforts?.length;
   const index=info.efforts?.indexOf(effort)??-1;
@@ -11672,7 +11675,8 @@ function renderModels(){
   }
   modelChoices.replaceChildren();
   const query=spawnModelSearch.hidden?'':spawnModelSearch.value.trim().toLowerCase();
-  const {current,older}=splitOverflowModels({...provider,models});
+  const rows=SpawnPicker.displayModels(provider,models,selModel);
+  const {current,older}=splitOverflowModels({...provider,models:rows});
   const addModel=(parent,model)=>{
     const label=document.createElement('label');label.className='model-choice';
     const input=document.createElement('input');
@@ -11681,13 +11685,13 @@ function renderModels(){
       selModel=model.id;selHarness=null;spawnProblem='';spawnChooseAgain=false;renderHarnesses();
       saveSpawnDraft();
     });
-    const name=document.createElement('span');name.className='model-choice-name';name.textContent=model.id;
+    const name=document.createElement('span');name.className='model-choice-name';name.textContent=model.pickerLabel||model.id;
     label.append(input,name);
-    label.title=[model.id,model.badge].filter(Boolean).join(' · ');
+    label.title=[name.textContent,model.badge].filter(Boolean).join(' · ');
     parent.appendChild(label);
   };
   if(query){
-    const matches=[...current,...older].filter(model=>model.id.toLowerCase().includes(query));
+    const matches=[...current,...older].filter(model=>(model.variantIds||[model.id]).some(id=>id.toLowerCase().includes(query)));
     matches.forEach(model=>addModel(modelChoices,model));
     if(!matches.length){
       const empty=document.createElement('p');empty.className='spawn-empty';empty.textContent='No models found. Try another name.';

@@ -42,6 +42,26 @@
   function entries(catalog){return (catalog.providers||[]).flatMap(provider=>(provider.models||[])
     .filter(model=>model&&model.id).map(model=>({provider,model,key:JSON.stringify([provider.id,model.id,
       ...(Number.isInteger(model.url_index)?[model.url_index]:[]),...(model.url_key?[model.url_key]:[])]),family:family(provider,model)})));}
+  function geminiFamily(provider,id){
+    if(provider?.id!=='gemini'||!id||!Array.isArray(provider.efforts))return '';
+    const split=id.lastIndexOf('-');
+    return split>0&&provider.efforts.includes(id.slice(split+1))?id.slice(0,split):'';
+  }
+  function displayModels(provider,models,selectedId){
+    if(provider?.id!=='gemini')return models;
+    const groups=new Map(),ids=new Set(models.map(model=>model.id));
+    for(const model of models){
+      const family=geminiFamily(provider,model.id);
+      if(!family){groups.set('id:'+model.id,model);continue;}
+      const key='family:'+family,previous=groups.get(key);
+      const keepPrevious=previous&&model.id!==selectedId&&(previous.id===selectedId||!model.default);
+      const representative=keepPrevious?previous:model;
+      // Keep the catalog ID for saved selections and for the launch request.
+      const pickerLabel=ids.has(family)?family+' (effort variants)':family;
+      groups.set(key,{...representative,pickerLabel,variantIds:[...(previous?.variantIds||[]),model.id]});
+    }
+    return [...groups.values()];
+  }
   function value(provider,model,key){return model&&Object.hasOwn(model,key)?model[key]:provider[key];}
   function harnesses(provider,model){
     const supplied=value(provider,model,'harnesses');
@@ -79,5 +99,5 @@
     if(!id||agent.category&&agent.category!=='agent')return null;
     return {id:key,...harnessInfo(id)};
   }
-  return {harnessKey,harnessInfo,unavailableReason,locality,family,entries,value,harnesses,helperModels,metadata,recent,remember,rosterHarness};
+  return {harnessKey,harnessInfo,unavailableReason,locality,family,entries,geminiFamily,displayModels,value,harnesses,helperModels,metadata,recent,remember,rosterHarness};
 });
