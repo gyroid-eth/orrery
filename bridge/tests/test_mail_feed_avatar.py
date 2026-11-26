@@ -114,7 +114,7 @@ def test_active_mail_filter_can_be_cleared_with_one_click(cockpit):
     assert js("document.querySelector('.mail-clear-filter span').textContent") == 'BuildNode'
 
 
-def test_mini_comets_follow_unique_recipient_edges_for_1700_ms(cockpit):
+def test_mini_comets_follow_unique_recipients_and_ripple_once_on_arrival(cockpit):
     js, wait, client, _, _ = cockpit
     client.call('Emulation.setEmulatedMedia', features=[
         {'name': 'prefers-reduced-motion', 'value': 'no-preference'},
@@ -129,17 +129,19 @@ def test_mini_comets_follow_unique_recipient_edges_for_1700_ms(cockpit):
       const graph=document.getElementById('orrery');
       if(graph.hasAttribute('hidden'))document.getElementById('mailGraphBtn').click();
       const nextFrame=window.requestAnimationFrame;
-      const callbacks=[];
+      const callbacks=[],ripples=[];
       window.requestAnimationFrame=callback=>{
-        if(callback.name!=='animateFlight')return nextFrame(callback);
-        callbacks.push(callback);
-        return 0;
+        if(callback.name==='animateFlight'){callbacks.push(callback);return 0;}
+        if(callback.name==='animateRipple'){ripples.push(callback);return 0;}
+        return nextFrame(callback);
       };
       window.advanceFlights=timestamp=>callbacks.splice(0).forEach(callback=>callback(timestamp));
+      window.advanceRipples=timestamp=>ripples.splice(0).forEach(callback=>callback(timestamp));
       window.sendFixtureComet=id=>document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages:[{
         id,sender:'Sender',recipient:'FirstRecipient',recipients:['FirstRecipient',{name:'SecondRecipient'}],
       }]}}));
       window.cometFlights=()=>[...graph.querySelectorAll('.orrery-comet-flight')];
+      window.arrivalRipples=()=>[...graph.querySelectorAll('.orrery-comet-ripple')];
       sendFixtureComet(142);
     })()""")
     wait('cometFlights().length===2')
@@ -153,15 +155,29 @@ def test_mini_comets_follow_unique_recipient_edges_for_1700_ms(cockpit):
         });
       })""")
     assert js('advanceFlights(11699);cometFlights().length') == 2
+    assert js('arrivalRipples().length') == 0
     assert js('advanceFlights(11700);cometFlights().length') == 0
+    assert js("""advanceRipples(11700);arrivalRipples().length===2&&
+      ['FirstRecipient','SecondRecipient'].every(name=>{
+        const graph=document.getElementById('orrery');
+        const face=graph.querySelector('[data-agent='+name+'] .orrery-hit').getBoundingClientRect();
+        return arrivalRipples().some(ring=>{
+          const center=new DOMPoint(ring.cx.baseVal.value,ring.cy.baseVal.value).matrixTransform(ring.getScreenCTM());
+          return Math.hypot(center.x-face.x-face.width/2,center.y-face.y-face.height/2)<1;
+        });
+      })""")
+    assert js('advanceRipples(11975);arrivalRipples().map(ring=>ring.r.baseVal.value)') == [19.5, 19.5]
+    assert js('advanceRipples(12250);arrivalRipples().length') == 0
     client.call('Emulation.setEmulatedMedia', features=[
         {'name': 'prefers-reduced-motion', 'value': 'reduce'},
     ])
     assert js("""(async()=>{
       sendFixtureComet(143);
       await new Promise(requestAnimationFrame);
-      return cometFlights().length;
-    })()""") == 0
+      return [cometFlights().length,arrivalRipples().length];
+    })()""") == [0, 0]
+
+
 def test_mini_graph_remembers_both_states_across_loads(cockpit):
     js, wait, client, _, _ = cockpit
     wait("Boolean(document.querySelector('#mail .mailcards'))")

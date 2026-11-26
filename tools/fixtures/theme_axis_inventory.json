@@ -2,8 +2,8 @@
   "axes": {
     "background": {
       "effect": {
-        "digest": "339aef39d9ad2a433a8df9324a02a5b3016b6e25421c6259cdab36ab4790055e",
-        "expected": 328,
+        "digest": "bb0cf1578627fd07a2e7a503fec1413408c8f111037a281142f487936dce9d62",
+        "expected": 331,
         "records": [
           {
             "property": "background",
@@ -1403,6 +1403,21 @@
           {
             "property": "stroke",
             "selector": ".orrery-mail-edge > .orrery-mail-edge-core",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border",
+            "selector": ".mini-edge-subject",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mini-edge-subject",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-edge-subject",
             "value": "var(--ink)"
           },
           {
@@ -3035,7 +3050,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "e3c1734e13fcbdab032068d6a3aade16a41a1a44dd834659f21ec1bd719e3f97",
+        "digest": "e0a232323616b5a5cab0fa35db5625431c84663725318c9cb771165f486fb076",
         "expected": 78,
         "records": [
           {
@@ -3529,49 +3544,49 @@
             "value": "11px"
           },
           {
-            "line": 92,
+            "line": 99,
             "property": "font-size",
             "selector": ".mini-initial",
             "source": "bridge/orrery_view.css",
             "value": "8px"
           },
           {
-            "line": 126,
+            "line": 133,
             "property": "font-size",
             "selector": ".orrery-caption-role",
             "source": "bridge/orrery_view.css",
             "value": "7.5px"
           },
           {
-            "line": 129,
+            "line": 136,
             "property": "font-size",
             "selector": ".planet-agent .orrery-caption-role",
             "source": "bridge/orrery_view.css",
             "value": "11px"
           },
           {
-            "line": 135,
+            "line": 142,
             "property": "font-size",
             "selector": ".orrery-expand text",
             "source": "bridge/orrery_view.css",
             "value": "11px"
           },
           {
-            "line": 179,
+            "line": 189,
             "property": "font-size",
             "selector": ".orrery-comet-label",
             "source": "bridge/orrery_view.css",
             "value": "10px"
           },
           {
-            "line": 204,
+            "line": 214,
             "property": "font-size",
             "selector": ".planetarium-note",
             "source": "bridge/orrery_view.css",
             "value": "9px"
           },
           {
-            "line": 256,
+            "line": 266,
             "property": "font-size",
             "selector": ".mini-provider-fallback",
             "source": "bridge/orrery_view.css",
@@ -3598,7 +3613,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "210586fe272db2c693e922e5b43ad12f79e5e5196644ec01e1954e881e259af5",
+        "digest": "f147fbb54b7642693d2f5d00687d0f2dc62c8c700cefb96b578865983650db60",
         "expected": 22,
         "records": [
           {
@@ -3742,14 +3757,14 @@
             "value": ".1em"
           },
           {
-            "line": 204,
+            "line": 214,
             "property": "letter-spacing",
             "selector": ".planetarium-note",
             "source": "bridge/orrery_view.css",
             "value": ".18em"
           },
           {
-            "line": 208,
+            "line": 218,
             "property": "letter-spacing",
             "selector": ".planetarium-telemetry",
             "source": "bridge/orrery_view.css",
@@ -3760,7 +3775,7 @@
       }
     }
   },
-  "inventory_digest": "70b6807a0b797ea26b3f17dad1516921fb7b02cf8f33730fa5e9191a68ec2cef",
+  "inventory_digest": "d4c3c4261aeeac447ea720047babb7718d9a27c63fb382ecc1d8be6de3cd3949",
   "rules": {
     "dynamic": "immutable pre-apply eligible-element snapshot",
     "glow": "classified selector/property declaration surfaces; mutate mode=scale components",
@@ -3772,11 +3787,11 @@
     "visibility": "pre-apply rendered nonzero box intersecting viewport"
   },
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "babaddf5e4c6c47b556da54ceb61fa422721a0d980c785a02d277fea2f008b5a",
+  "source_digest": "7307e5bfe7b07a19d5fd19efc062d7f7efbbe66dd20d8dd510a7b1416cdfd9c0",
   "source_files": {
     "bridge/cockpit.html": "14fc5dab179885dbec21365fc9e05796b85de9c6fb2bd7b915b2ffb32838710f",
     "bridge/mail_view.css": "10362070e9d67994cfd1c0584eea9f8ca1cf3d4402ea85dc1dfce3574c26584d",
-    "bridge/orrery_view.css": "2f29e810c2823be10edec1f6178b98d21f95d0904d4ac227558a570641bb0572"
+    "bridge/orrery_view.css": "caae8b0bbb40a1e0b101626956f366a704a81d136c2e01c358aea04571114124"
   },
   "surface": "cockpit",
   "validation": {

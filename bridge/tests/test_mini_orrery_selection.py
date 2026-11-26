@@ -642,6 +642,47 @@ def test_graph_edge_mouse_and_keyboard_filter_mail_both_ways(mini_browser):
         assert evaluate('edgeChip()') == pair
 
 
+def test_hover_shows_latest_pair_subject_without_filtering_mail(mini_browser):
+    client, evaluate = mini_browser
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    point = evaluate("""(()=>{
+      const original=window.fetch;
+      const ts=Date.now()/1000-600;
+      window.fetch=(url,...args)=>{
+        if(typeof url==='string'&&url.startsWith('/telemetry/mail/recent?limit=100&agent=')){
+          return Promise.resolve(new Response(JSON.stringify({messages:[
+            {id:111,ts,sender:'Pilot',recipient:'Helper',subject:'Earlier'},
+            {id:113,ts,sender:'Helper',recipients:['Pilot','Watcher'],subject:'Latest <review>'},
+            {id:112,ts,sender:'Pilot',recipient:'Helper',subject:'Still earlier'},
+          ]})));
+        }
+        return original(url,...args);
+      };
+      const edge=document.querySelector('#orrery .orrery-spawn-edge');
+      const hit=edge.parentElement;
+      for(const ratio of [.5,.4,.6,.3,.7]){
+        const point=edge.getPointAtLength(edge.getTotalLength()*ratio).matrixTransform(edge.getScreenCTM());
+        if(document.elementFromPoint(point.x,point.y)?.closest('.orrery-mail-edge')===hit){
+          return {x:point.x,y:point.y};
+        }
+      }
+      return null;
+    })()""")
+    assert point is not None
+    client.call('Input.dispatchMouseEvent', type='mouseMoved', **point)
+    for _ in range(40):
+        subject = evaluate("document.querySelector('#miniEdgeSubject:not([hidden])')?.textContent")
+        if subject:
+            break
+        time.sleep(.025)
+    assert subject == 'Latest <review>'
+    assert evaluate("!document.querySelector('#miniEdgeSubject').children.length")
+    assert evaluate("document.querySelector('.mail-filter-summary').hidden")
+    client.call('Input.dispatchMouseEvent', type='mouseMoved', x=540, y=80)
+    assert evaluate("document.getElementById('miniEdgeSubject').hidden")
+
+
 def test_hover_and_focus_emphasize_only_incident_mini_edges_and_merge_mail_pairs(mini_browser):
     client, evaluate = mini_browser
     client.call('Emulation.setFocusEmulationEnabled', enabled=True)
@@ -753,9 +794,15 @@ def test_mini_appearance_panel_previews_and_persists_controls_outside_the_graph(
     evaluate('window.beforeAppearanceReload=true')
     client.call('Page.reload', ignoreCache=True)
     for _ in range(100):
-        if evaluate("!window.beforeAppearanceReload&&Boolean(document.getElementById('miniGraphAppearance'))"):
-            break
+        try:
+            if evaluate("!window.beforeAppearanceReload&&Boolean(document.getElementById('miniGraphAppearance'))"):
+                break
+        except RuntimeError as error:
+            if 'Inspected target navigated or closed' not in str(error):
+                raise
         time.sleep(.025)
+    else:
+        pytest.fail('Mini Graph appearance panel did not mount again')
     assert evaluate("JSON.parse(localStorage.getItem('oc-mini-appearance-v1'))") == expected
     assert evaluate("document.querySelector('#miniGraphAppearance [data-appearance=showRoles]').checked") is False
     evaluate("document.querySelector('.mini-graph-appearance-trigger').click()")
