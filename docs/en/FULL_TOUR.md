@@ -3,7 +3,7 @@
 [日本語](../FULL_TOUR.md) · [Documentation index](README.md)
 
 Open **Settings → Getting started → Full tour** for the extended workshop
-checklist. Your first flight remains a separate seven-step introduction with
+checklist. [Your first flight](first-flight.md) is a separate seven-step introduction with
 its own saved progress. Full tour has sixteen steps and takes about ten
 minutes, depending on agent startup and the game.
 
@@ -11,7 +11,7 @@ minutes, depending on agent startup and the game.
 
    The recording uses fictional agents in an isolated cockpit.
 
-   ![Full tour in a demo environment. Enter a task in NEW AGENT, select the agent, and send the first message](../images/fulltour/1-start-choose-talk.gif)
+   ![Enter a task in New agent, select the agent, send the first message, and follow the agent’s work in Reader](../images/guides/start-an-agent.gif)
 
 2. Choose it in the agent list.
 3. Send a prompt below the terminal.

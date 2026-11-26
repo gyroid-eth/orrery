@@ -1,344 +1,105 @@
 # ORRERY
 
-> English version: [README.en.md](README.en.md)
+> English: [README.en.md](README.en.md)
 
-<img src="app/icons-src/orrery-1024.png" alt="ORRERY icon" width="96">
+<img src="app/icons-src/orrery-1024.png" alt="ORRERY のアイコン" width="96">
 
-ORRERY は、agent のターミナルを並べて操作し、Mail のやり取りや利用枠を確認できる cockpit です。Claude Code、Codex CLI、Gemini（Antigravity CLI）、dsh または Hermes を使う DeepSeek／Local models に対応します。
+ORRERY は、AI agent どうしを直接話させ、チームで仕事を進めるための cockpit です。
 
-## クイックスタート
+オーケストレータの agent に頼むと、オーケストレータが子の agent に仕事を分け、agent どうしが ORRERY Mail で依頼と報告をやり取りします。あなたが agent の間で伝言を運ぶ必要はなく、その様子は一つの画面でそのまま見えます。Claude Code・Codex・Gemini・DeepSeek・Local LLM を、同じ画面と同じ操作で混ぜて使えます。
 
-**まずブラウザーで cockpit を開きます。** macOS のターミナルか Ubuntu 24.04 以降（Windows では WSL2 の Ubuntu）で、下の前提をそろえてから実行します。この1行で cockpit と [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry/blob/master/README.md) をまとめて導入します。
+![Claude のオーケストレータが Codex・Gemini・DeepSeek・Local LLM の子に仕事を分け、子からの報告が Mail で届き、オーケストレータがまとめる](docs/images/guides/team-hero.gif)
+
+## 何ができるか
+
+### agent どうしのやり取りが見える
+
+agent が別の agent に Mail を送ると、右の Mini Graph で送り手から受け手へ光が走り、受け手の下に件名が出ます。一覧から本文を開けば、誰が誰に何を頼んだかを、その場で読めます。
+
+![Mini Graph を光が走り、届いた Mail を一覧から開く](docs/images/guides/read-mail.gif)
+
+詳しくは [届いた ORRERY Mail を読む](docs/read-mail.md) と [Mini Graph で agent の詳細を見る](docs/inspect-mini-graph.md)。
+
+### agent の作業を読みやすく見る
+
+terminal には、agent の発言・ツールの呼び出し・長い出力が一度に流れてきます。Reader は、そこから発言と操作と結果を取り出し、長い出力を折りたたんで、人が追える形に整えます。表や差分、agent が触ったファイルも、その場で開けます。
+
+![Reader で agent の返事を読み、参照ファイルを開く](docs/images/guides/read-a-file.gif)
+
+詳しくは [Reader で作業と参照ファイルを見る](docs/read-a-file.md)。
+
+### 画面操作とブラウザ操作を、いつでも切り替える
+
+agent ごとに、画面操作（computer use）とブラウザ操作を、作業の途中でも切り替えられます。画面操作は「使わない・見るだけ・操作する」から選べます。ブラウザは、ログイン済みの自分の Chrome を使わせるか、あなたの cookie やログインを引き継がない一時的なブラウザで作業させるかを、仕事に合わせて使い分けられます。切り替えると agent は起こし直され、その間は一覧と mini graph に起こし直し中の表示が出ます。会話の引き継ぎに対応した agent は、それまでの会話を保ったまま作業に戻ります。
+
+![agent の詳細で画面操作とブラウザ操作を切り替え、起こし直しの表示を経て作業に戻る](docs/images/guides/permission-switch.gif)
+
+詳しくは [Mini Graph で agent の詳細と起こし直しを見る](docs/inspect-mini-graph.md)。
+
+### スマホやタブレット から操作する
+
+出先でも、スマホやタブレット のブラウザから同じ agent たちを見られます。agent を選んで作業を読み、そのまま指示を打って送れます。接続は Tailscale を通り、あなたの Tailscale のアカウントからだけ開けます。
+
+![スマホで agent を選び、作業を読み、指示を送る](docs/images/guides/mobile.gif)
+
+詳しくは [スマホから使う](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md)。
+
+### あなたの判断を待つ agent が分かる
+
+承認や返事を待っている agent には印が付き、画面上部の need you に数が出ます。何体かをまとめて選び、同じ依頼を一度に送ったり、まとめて終わらせたりもできます。
+
+![need you の数を見て、agent をまとめて選ぶ](docs/images/guides/select-agents.gif)
+
+詳しくは [agent の状態を見てまとめて選ぶ](docs/manage-agents.md)。
+
+画面のどこに何があるかは、[画面一覧](docs/cockpit-map.md)に番号つきでまとめています。ほかの使い方は[目的別のガイド](docs/README.md#目的から選ぶ)から選べます。
+
+## 始める
+
+macOS か Ubuntu 24.04 以降（Windows では WSL2 の Ubuntu）のターミナルで、次の 1 行を実行します。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
 ```
 
-### 始める前に
+先に Python 3.11 以上・git・tmux・curl を入れておきます。足りないものがあれば、installer が入れ方を表示して止まります。
 
-- **macOS**（Homebrew 導入済み）。`brew install curl git tmux python@3.13`。macOS 同梱の `lsof` を使います。
-- **Ubuntu／WSL2**。Ubuntu のシェルで `sudo apt update && sudo apt install -y ca-certificates curl git tmux python3 python3-venv xz-utils`。Hermes を使う場合は `sudo apt install libatomic1` も実行します。
+installer は、何を入れるかの計画を表示します。確かめて `yes` と入力すると導入が進み、最後に cockpit の URL（既定は `http://127.0.0.1:8791/cockpit.html`）が表示されます。ブラウザで開くと最初のガイド（Your first flight）が始まり、agent の起動から Mail を読むところまでを、画面の上で順に案内します。
 
-先に **Python 3.11 以上**を用意します。uv で導入済みの Python も使えます。一行版はソースを取得する前に前提を検査し、不足があれば対応方法を表示して止まります。uv 自体は必要に応じて共通 installer が入れます。[導入の詳細](docs/install.md#1-行で入れる更新する)・[利用中の agent に導入を手伝ってもらう](docs/install-with-agent.md)
+Claude Code と Codex は、それぞれの CLI にログインしておけば、そのまま使えます。Gemini・DeepSeek・Local LLM、スマホからの閲覧、Obsidian との連携などの準備は、[導入ガイド](docs/install.md)にまとめています。使っている agent に導入を手伝ってもらうこともできます（[手順](docs/install-with-agent.md)）。
 
-### 共通部分の完了
+## 仕組み
 
-ターミナルに表示される計画を確認し、自分で **`yes` と入力して Enter** を押します。`ORRERY's base is ready` は doctor と Mail の往復・予約・dashboard の selftest が通ったことを示します。表示された `Open:` の URL（既定は `http://127.0.0.1:8791/cockpit.html`）をブラウザーで開き、**Your first flight** が見えれば共通部分の導入は完了です。ガイドは `Settings → Getting started → Your first flight` からも開けます。警告や失敗が出たら、[導入ガイド](docs/install.md#1-行で入れる更新する)で表示に対応する手順を確認します。
+ORRERY は 2 つの repository でできています。この repository が画面（cockpit）で、[ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) が agent の状態の記録・ORRERY Mail・installer を受け持ちます。agent は tmux の中で動くので、ブラウザを閉じても作業は止まりません。
 
-### 使う機能を追加する
+![cockpit と Telemetry は同じ agent を見る 2 つの画面](docs/images/cockpit_telemetry_relation.svg)
 
-共通部分を入れたら、使う項目だけを設定します。CLI のログインと各 API の接続は、選んだガイドの初回起動で確認します。
-
-| 使う機能 | 準備するものと手順 |
-| --- | --- |
-| Claude Code / Codex CLI | 使う CLI を入れてログイン。[Mac](docs/install.md#mac) / [WSL](docs/install.md#windows-11) |
-| DeepSeek / Local（dsh・Hermes） | API 接続、model、必要なキーと鍵束を準備。dsh は Node.js 24.2 以上を使用。[初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
-| Gemini（Antigravity） | Antigravity CLI（`agy`）を入れてサインインし、Telemetry で Gemini の設定を済ませます。macOS の cockpit の NEW AGENT で **Antigravity** と model を選びます。[Gemini の導入ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.md) |
-| 画面操作 | Cua Driver と OS の画面収録・操作の許可。[Computer use](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/computer-use.md) |
-| ブラウザー操作 | Chrome と利用する harness の接続設定。[ブラウザーの設定と許可](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/delegation.md#ブラウザと-computer-use-何が届くか人がやること) |
-| スマホ | Tailscale の設定と端末の到達範囲の確認。[スマホ閲覧](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md) |
-| ChatGPT MCP | 既定ポート 8792 の読み取り専用アダプターをペアリングし、専用 Tunnel と workspace を設定。[ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.md) |
-| Obsidian の研究セット | Obsidian と研究用の vault・skill を追加。[研究セット](docs/research-set.md) |
-| Codex App | Codex App と対応 CLI、plugin の導入と hook の承認。[Codex App 統合](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/codex-app.md) |
-
-![cockpitとTelemetryは同じagentを見る2つの画面。Claude Code・Codexは各CLI、DeepSeek・LocalはdshかHermesで動き、tmuxとMailを使う](docs/images/cockpit_telemetry_relation.svg)
-
-### 入るものと置き場所
-
-| 場所 | 中身 |
-| --- | --- |
-| `~/orrery` | cockpit の source（起動・更新の script） |
-| `~/orrery-telemetry` | Telemetry・Mail・hook・installer の source。実際に動くのは `~/.agentstack` に入れた方 |
-| `~/.agentstack` | 実際に動いている本体、設定 `env.sh`、Mail の DB |
-| `~/orrery-work` | agent の作業 folder（project folder）。`+ NEW AGENT` の既定の folder。Mail と予約は作業フォルダの設定に従う |
-
-既定ポートは cockpit が 8791、Telemetry が 8770、新規の Mail が 18765 です。作業 folder の変え方とアンインストールは[作業 folder とアンインストール](#作業-folder-とアンインストール)にあります。
-
-![ORRERY Cockpit。左に Agents、中央に3つのターミナルと入力欄、右に mini-orrery と Mail](docs/images/cockpit_overview.png)
-
-Claude Code、Codex、Antigravity の架空の agent をターミナル3つに分けて表示しています。
-
-左の roster で agent を選び、中央のターミナルで指示し、右の mini-orrery と Mail で親子関係とやり取りを追います。ターミナルだけなら ORRERY Telemetry が止まっていても使え、連携する機能は状態を表示して縮退します。
-
-**紹介動画**: 「Orrery」（約 90 秒・日本語）は、agent どうしが直接話すことで AI の間の仲介が要らなくなる、という ORRERY の考え方を図解で説明する動画です（実際の画面ではありません）。
+紹介動画（約 90 秒・日本語）では、agent どうしが直接話すと何が変わるかを、図で説明しています。
 
 [![紹介動画「Orrery」（YouTube）](https://i.ytimg.com/vi/JXoa93TQolU/hqdefault.jpg)](https://youtu.be/JXoa93TQolU)
 
-## できること
-
-### 会話を読み返す（Reader）
-
-代替画面を使う agent の会話は、端末のスクロールバックだけでは遡れません。Reader は、記録された会話を読み取り専用で表示します。pane の **Reader アイコン** を押してください。もう一度押すと閉じます。既定はオンです。**Settings → Appearance → Reader** をオフにするとパネルとボタンが消え、履歴の読み込みも止まります。
-
-pane の見出しと roster のカードは telemetry の表示用モデル名をそのまま使い、完全な ID は title に残します。見出しは provider のロゴ・agent 名・モデルの順で、モデルが不明なら省きます。active かつ作業中のロゴはゆっくり明暗し、返事待ちや動きを減らす設定では静止します。狭い pane ではモデルを名前より先に省略し、ロゴと操作ボタンを残します。分割 pane を閉じる × は、他の操作と同じ枠付きアイコンで見出しの一番右にあります。
-
-![架空の会話を表示した Reader。発言に Markdown の表とファイルチップがある](docs/images/cockpit_history.png)
-
-履歴は端末の横に開き、pane 上部の **⤢** で pane 全体に広げ、もう一度押すと元の幅に戻せます。狭い画面では pane 全体に表示します。スクロールしている間は新しい記録が来ても読んでいる位置を保ち、**Load earlier** がある場合は過去へ遡れます（1回で最大約300件。tool の呼び出しと結果も1件ずつ数えます。手元に置く量には上限（800件または 2 MiB）があり、遡って超えると新しい側を外して更新を止めます。最下部で新着を読んでいるときは古い側から外します）。過去を読んでいるときだけ本文の右下に重ねて出る **↓（最新へ）** で最新に戻れます。CLAIMED では Reader を横に開くと端末を残りの幅に合わせ、閉じると元の幅に戻します。全幅では端末に重ねて表示します。FOLLOW では外部の端末の幅を保つため、一部が Reader に隠れます。分割中は各 pane の **Reader アイコン** で独立して開き、全幅や preview もその区画内に収まります。履歴を操作した pane が下の prompt 欄の送り先になります。別の pane を閉じても、残った pane の履歴の表示幅・読み位置・開いた Mail や preview は保たれます。幅が変わると読み位置が1〜2行ずれることがあります。
-
-全幅でも入力欄から送信できます。履歴を読むキーは端末に送られず、Enter または **SEND** で明示的に送ります。送信すると対象 pane の preview を閉じ、履歴は最新を追います。送信中に対象の端末や接続が変わった場合は中止して知らせます。送信後は、対象の履歴の末尾に「Sent → agent 名 · Awaiting record」の仮の行が現れ、対応する発言が記録されると置き換わります。これは agent が処理を確認したことを示すものではありません。照合できない場合は「Record not matched」と表示し、**Dismiss** で仮の行を閉じられます。`! cmd` の送信は、記録されたシェルのコマンドとも照合します。
-
-発言の本文を選択すると **Reply with reference** が現れます。押すと、選んだ文章が元の入力欄の上に引用として付きます。返信を書いて **SEND** を押すと、発言元・時刻・記録上の発言ID・引用文と一緒に送ります。引用の **×（Remove reference）** は、入力した返信を残して引用だけを外します。画像・ファイルは preview の **Reply with reference** から、その名前と発言元を参照できます。ファイル自体の再添付は行いません。別の agent や別セッションに切り替わった場合は、元の会話に戻るか参照を外すまで引用付きの送信を止めます。
-
-Codex の現在の端末表示から compact 中と確認できる間は、Reader 上部に **Compacting context…** と端末が報告した経過時間を表示します。過去の発言を読んでいても見え、完了・接続切断時に消えます。現在は Codex の既知の端末ステータスに対応しています。同じ内容と順序の snapshot を繰り返し受け取った場合は、メッセージのDOMを付け直さず、選択中の文章と開いた表示を保ちます。
-
-履歴の中身を見せる前には、必ず telemetry の dashboard でその agent の記録の対応を確かめます。記録が変わっていないという中身のない応答は、最後の確認から最大30秒、確かめずに返します。保持できるのは cockpit 全体で4本（1つのページでも最大4本）です。それを超えた pane は4秒ごとの読み込みになります（その後に通信・読み取り・描画の時間が加わります）。ただし、上限に達したときに記録が変わった pane は、2秒以上何も変わらずに保持している pane から枠を譲り受けます。譲った pane は4秒ごとの読み込みに戻ります。Hermes では、同じ state.db に別の session だけが書いた場合も記録が変わったと数えるので、中身の変わらない pane が枠を受け取ることがあります（そのとき、譲った pane は4秒ごとの読み込みになります）。利用者の操作の間は、どの tab でも保持をしません。操作がすべて終わった時点で保持に戻ります。操作として数えるのは、URL を開く・Finder や Explorer で表示する・Ghostty を開く・EXIT・spawn・記録の file の表示、clipboard の file の読み取り、file の preview、履歴の Load earlier と Retry、NETWORK の画面からの操作（jump・kill・EXIT・注記・spawn・再開）です。端末の path に mouse を重ねたときの確認、NETWORK の画面が自動で送る error 報告と、spawn の folder 一覧などの上に挙げていない GET は、利用者が押して始まったものでも数えません。操作は response の header が届いた時点で終わったと数えます（preview の本文を受け取っている間に保持が戻ることがあります）。操作は、自分の tab でも別の tab でも、90秒（dashboard が spawn に許す最長）を過ぎると数えるのをやめます。後から開いた tab は、開いたときに他の tab で進行中の操作を一度問い合わせます。NETWORK の画面が途中で移動したときは、その画面の操作をその時点で終わったと数えます。prompt の送信は WebSocket で送るので、保持とは接続を取り合いません。dashboard が API 36 以降なら、1人分を返す `/api/agents/<name>/history-binding` で確かめ、それより前の dashboard や、この route が使えないときは、従来どおり roster 全体で確かめます（[API](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/api.md)）。
-
-agent の発言は Markdown の見出し・太字・箇条書き・引用・inline code などを描きます。コードの塊は横にスクロールでき、**Copy** で改行や空白を含む中身をコピーできます。生の HTML は文字のまま表示し、Markdown の画像を取りには行きません。人が打った本文は文字のままです。表も横にスクロールでき、**Copy Markdown** で元の表をコピーできます。
-
-Claude の `!` の記録は **SHELL** と表示し、続くコマンドと出力を1つのまとまりにします。長い出力は短く表示し、**Show all** で開けます。slash command もコマンドと出力の塊として表示します。文字参照は認識した記録の中だけで戻し、コマンドもコピーできます。background task などの system 通知は、人の発言と区別した短い1行で表示し、押すと記録の詳細を開閉できます。Claude・Codex の compact の記録も **Context compacted** の1行になり、記録に読める要約がある場合は開いて読めます。セッションが変わったときは前の表示を消し、**New session** と表示して自動で読み直します。変化が続く場合は通常の間隔で確認し、Retry は不要です。
-
-記録に file の参照や編集要求の差分があれば、file チップや差分を表示します。Claude の SendUserFile で渡された file と、agent が ORRERY Mail の `show_files` で見せた file や画像も、チップから preview できます（Claude・Codex・dsh・Hermes のどれでも同じです）。チップを押すと現在の text や画像を preview できます。`.md` は見出し・表・箇条書き・code などを描いた形で開き、**Source** で元の文字に切り替えられます（生の HTML は文字のまま出し、画像は読みに行かず、リンクは http(s) と mailto だけを新しい tab で開きます）。記録された差分と現在の file は別物です。**Reveal in file manager** を押すと Finder や Explorer で選択します。
-
-発言や tool の本文を押すと、同じ pane の端末に残る文字列を探し、一意に一致した場合だけその行へ移ります。見つからない、複数一致する、または検索上限に達した場合は移動せずに知らせます。文字の選択・コピーや file チップはそれぞれの操作のままです。
-
-記録内の ORRERY Mail 通知と送信要求は、向き・相手・件名のカードとして表示します。押すと記録された本文が開きます。通知が preview の場合は続きが Mail にあると示します。Mail server から本文を取得したり既読にしたりせず、送信要求を配信完了とは扱いません。
-
-表示できない場合は、パネルに理由と次の操作が表示されます。起動直後や最初の発言前なら少し待って再試行し、古い会話や紐付けを確認できない場合は新しい子を開いてください。Codex の記録が観測されない場合は ORRERY plugin を有効にして `/hooks` で確認し、新しく起動します。記録が無効・書き込み不可の場合は provider の記録設定や保存先を確認します。古い dashboard、未対応の形式、dsh の依存関係不足なども画面に案内されます。
-
-legacy では Codex と、Telemetry API 35 以降で紐付けを確認した Claude Code・dsh・Hermes を読めます。古い dashboard では Codex のみです。Claude・Codex・dsh は過去ページを読めます。dsh は記録された append の時系列、Hermes は現在の bound segment の直近 snapshot（最大200件）で、圧縮前の segment は含みません。fresh は保護された API の直近の本文 snapshot（最大200件、量の制限あり）で、過去ページと tool の要約には未対応です。保持上限で更新が止まったときは、一番下までスクロールすると最新を読み直して追随を再開します。**↓（最新へ）** でも再開できます。端末から消えた代替画面の描画は復元できません。[操作と上限の詳細](bridge/README.md)
-
-### 科学者の顔とモデルを選んで起動する（NEW AGENT）
-
-`+ NEW AGENT` で科学者の肖像を選ぶと名前が決まり、形容詞は調整できます。対応環境で準備した Claude・Codex・Gemini（画面では **Antigravity**）・DeepSeek・Local models から選べます。DeepSeek と Local では dsh／Hermes の Harness も選べます。
-
-**DeepSeek・dsh / Hermesを初めて使う人へ:** 通常の更新だけでは、APIキーや接続先は設定されません。cockpitにはAPIキーを入力する画面はありません。次の順で準備します。
-
-1. Telemetryの[初期設定ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md)を開き、TelemetryのソースフォルダーでdshかHermes（必要なら両方）を追加します。
-2. DeepSeekの場合はAPIキーを取得するか既存のキーを使い、このコンピューターに未保存ならOS別の手順で保存します。Localの場合は、対応するサーバーの接続情報と専用キーを用意します。現在のORRERY経路はキーの参照が必須で、HermesではHTTPSも必要です。詳しくは同じ初期設定ガイドの対応条件を確認してください。
-3. ガイドに沿って接続設定を確認・有効化し、最後のinstallコマンドを自分で1回実行してTelemetryに反映します。
-4. cockpitに戻り、`+ NEW AGENT`で設定した`Model`と`Harness`を選びます。
-
-![Model and effort で provider と Harness を選び、画面操作とブラウザーのメニューを開く](docs/images/cockpit-native-spawn.gif)
-
-録画では架空のカタログを使っています。Telemetry 単体の NEW AGENT は別の画面です。画像は起動前の選択までを示します。
-
-→ [使い方: NEW AGENT](docs/usage.md#new-agent)・肖像の出典とライセンスは [CREDITS](CREDITS.md)
-
-### 打っている途中で流されない
-
-たくさんの agent を同時に動かしていると、親の agent のターミナルに指示を打っている途中で、他の agent からの通知が同じターミナルに流れ込み、書きかけの文が埋もれてしまいます。cockpit では、指示はターミナルの下にある別の入力欄（composer）に打つので、ターミナルに何が流れてきても書きかけはそのまま残ります。送り先は、roster や tab で agent をクリックするだけで切り替わり、文はそのまま持ち越されます。
-
-選んだ agent が作業中で下書きが空なら、入力欄に **■** が出ます。ボタンを押すか `Esc` で中断できます。
-
-![実行中の入力欄に出る停止ボタン ■。Esc を押すと実行が中断される](docs/images/cockpit_composer_calm.gif)
-
-→ [使い方: Prompt composer](docs/usage.md#prompt-composer)
-
-### 人の判断が要る agent が一目で分かる
-
-何体の agent を動かしていても、手が止まって人の判断を待っている agent だけが roster で光り（承認待ちは赤く点滅、質問待ちは水色でゆっくり明滅）、header に `N need you` が出ます。`need you` を押すとその agent だけに絞られ、tile をクリックすればそのターミナルに入って質問を読めます。composer から答えを送れば点滅は消えます。人の判断が要る agent を探し回らず、止まった順に片付けられます。
-
-![need you で人の入力を待つ agent に絞り、質問を開いて 1 と答える](docs/images/cockpit_need_you.gif)
-
-TELEMETRY でも同じく、質問待ちは `?`、承認待ちは赤い枠と `APPROVAL` で見分けられます。
-
-→ [使い方: 人の判断が要る agent](docs/usage.md#人の判断が要る-agent)・[介入待ちの見分け方（TELEMETRY）](docs/usage.md#介入待ちの見分け方)
-
-### agent 同士が何を話しているかを、その場で読める
-
-agent は ORRERY Mail で互いに依頼し、報告し、指摘し合います。その Mail が右の rail に新しい順に流れてくるので、ターミナルを一つずつ開かなくても、チームの会話をその場で読めます。card をクリックすると本文が、`thread` を押すとその話の往復が時系列で開きます。roster で agent を選ぶと、その agent が関わる Mail だけに絞られます。
-
-→ [使い方: ORRERY Mail](docs/usage.md#orrery-mail)
-
-### よく見る agent を上に固定する（Pin）
-
-何体も動いていると、roster は状態（承認待ち・作業中・待機）の順に並び替わり続けます。親の agent やレビュー役など、いつも見る agent を pin すれば、並び替えに関係なく一番上に留まり、区切り線の上にまとまります。tile に mouse を乗せて右上の pin を押すだけで、もう一度押せば外れます。pin は ORRERY.app とブラウザの tab の間で共有され、agent が retire すると自動で外れます（pin があるのは左の roster だけです）。
-
-→ [使い方: Pin](docs/usage.md#pin)
-
-<a id="複数の端末を並べるsplit"></a>
-
-### 複数のターミナルを並べる（Split）
-
-`Cmd` / `Ctrl` を押しながら agent を選ぶと、最大 12 体のターミナルを一つの画面に並べられます。名札を drag すると位置を入れ替え、境目を drag すると幅を変えられます。親の agent と、その子たちの進み具合を同時に見張れます。
-
-→ [使い方: Split](docs/usage.md#split)
-
-<a id="一つの端末を外に出す独立の窓"></a>
-
-### 一つのターミナルを外に出す（独立の窓）
-
-tab の名札をターミナルの上へ drag すると、cockpit の上に浮かぶ小さな窓になります（`FLOAT`）。そのまま cockpit の外へ出すか `↗` を押すと、独立の窓になり（`WINDOW`）、別のモニターに置いて大きく見られます。窓を閉じれば元の tab に戻ります。ORRERY.app でも、Mac と WSL のブラウザでも使えます。
-
-→ [使い方: 独立の窓](docs/usage.md#独立の窓)
-
-<a id="端末から開く端末に渡す"></a>
-
-### ターミナルから開く・ターミナルに渡す
-
-agent がターミナルに出した URL はクリックで既定のブラウザに、ファイルのパスはクリックで Finder（Windows ではエクスプローラー）に開きます。逆に、Finder（Windows ではエクスプローラー）でコピーしたファイルを composer に貼ると、その絶対パスが入り、そのまま agent に渡せます。スクリーンショットの画像を貼ると、Mac では agent の CLI がそのまま受け取り、Windows（WSL2）では画像を保存してそのパスが入ります。
-
-→ [使い方: ターミナルから開く・ターミナルに渡す](docs/usage.md#ターミナルから開くターミナルに渡す)・[WSL でのファイル・画像の貼り付け](docs/usage.md#wsl-でのファイル画像の貼り付け)
-
-### 明るい配色（light mode）
-
-Settings の Color theme で、暗い配色（Dark）と、紙のような明るい配色（Light）を切り替えられます。ターミナルの中の色や、埋め込みの TELEMETRY まで一緒に変わり、diff の赤と緑の背景の上でも文字が読める濃さに補正します。`System` にすると OS の外観に合わせます。
-
-→ [使い方: 配色テーマ（light mode）](docs/usage.md#配色テーマlight-mode)
-
-### 画面のユーザー名を伏せる（デモモード）
-
-録画・ライブのデモ・画面共有のために、画面に出るユーザー名と機体名を `********` のように伏せられます。Settings の Demo mode を入れるか、URL に `?demo=1` を付けます。roster・tooltip・Mail・Planetarium・埋め込みの TELEMETRY・ターミナルの中身まで伏せ、画面の隅に `DEMO` と出ます。伏せるのは表示だけで、ターミナルの中の path や URL をクリックしたときと、コピーした文字は本当の値です。Mail に書かれた人の名前なども伏せたいときは、Settings の「Also mask these words」に語を足します。
-
-→ [設定: 保存データとプライバシー](docs/configuration.md#保存データとプライバシー)
-
-### 利用枠の残りを見る（残量表示）
-
-header の `LEFT` に、Claude と Codex のアカウントの利用枠があと何 % 残っているかが出ます。クリックすると、5 時間の枠・週の枠・モデル別の枠を、reset までの時間つきで並べます。数字は緑・黄・赤で変わり、取れないときは理由を出します。
-
-→ [使い方: Usage（残量表示）](docs/usage.md#usage残量表示)
-
-### 名前をコピーする・詳細を見る（Roster）
-
-roster の tile に mouse を乗せると、名前をコピーする icon が出ます。コピーした名前は Mail の宛先や指示文にそのまま貼れます。tile の詳細 card には、最後に動いた時刻や成果物の数が並びます。
-
-→ [使い方: Roster](docs/usage.md#roster)
-
-### 親子関係と通信を見渡す（Planetarium）
-
-header の `PLANETARIUM` で、誰が誰を起動したかの木を画面いっぱいに開きます。直近 90 秒に Mail が行き来した二者の間には線が光り、Mail が届くたびに彗星が飛ぶので、チームのどこで会話が起きているかが一目で分かります。node をクリックすると、その agent のターミナルへそのまま移ります。
-
-![Planetarium に並ぶ親子のツリーと、親を持たない独立した agent](docs/images/cockpit_planetarium.png)
-
-→ [使い方: Planetarium](docs/usage.md#planetarium)
-
-### チーム全体の状態を見る（TELEMETRY）
-
-header の `TELEMETRY` で、ORRERY Telemetry の dashboard を cockpit の中に開きます。`DECK` は agent ごとの card、`NETWORK` は agent 同士のつながりを node と線で見せ、agent を選べば会話と tool の履歴、成果物の一覧も読めます。`OPEN IN COCKPIT` を押すと、その agent のターミナルにそのまま戻ります。別の画面に行かずに、cockpit の中でチーム全体を見渡し、そのまま手元のターミナルへ戻れます。終了した agent の再開もここから行います。
-
-![埋め込み Telemetry の詳細で OPEN IN COCKPIT を押すと、その agent のターミナルに戻る](docs/images/cockpit_telemetry_open_in_cockpit.png)
-
-**REPLAY**: 仕事が終わった後に、チームが何をどの順でやったかを、録画のように見直せます。NETWORK で `SELECT` を押して agent を選び `Replay` を押すと、選んだ agent の履歴が時間軸で再生され、誰が誰を起動し（spawn）、どんな Mail を送り合ったかが、件名つきで順に現れます。速さの目盛りで早送りし、下の時間軸をクリックすれば好きな時刻に飛べます。
-
-→ [使い方: TELEMETRY](docs/usage.md#telemetry)
-
-### Obsidian と一緒に使う
-
-Obsidian の vault の中で agent を動かすと、作業ログ・論文ノート・タスクがそのまま Markdown のノートになり、人は Obsidian の Daily Note と Kanban で見るだけで済みます。agent がターミナルに出したノートのパスは、cockpit でクリックすれば開けます。ORRERY は Obsidian が無くても使えます。これは便利な使い方の 1 つです。
-
-→ [Obsidian と一緒に使う](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/obsidian.md)（ORRERY Telemetry の文書）・vault を作業 folder にする手順は[作業 folder を変える](#作業-folder-を変える)・すぐ試せるひな形 [orrery-demo-vault](https://github.com/gyroid-eth/orrery-demo-vault)
-
-論文の読書ノートは、add-on の [orrery-digest-paper](https://github.com/gyroid-eth/orrery-digest-paper) が作ります。Claude が書き、Codex が本文と図に照らして確かめます（Zotero を使う人向けの版もあります）。add-on と demo vault は [研究セットの 1 行](docs/research-set.md) でまとめて入ります。
-
-### Windows（WSL2）でも同じ画面で
-
-WSL2 で backend を動かし、Windows のブラウザで開けば、Mac と同じ画面を使えます。shortcut は `Alt+K` などに、外で開くターミナルは Windows Terminal に、リンクの開き先は Windows のブラウザとエクスプローラーに切り替わります。エクスプローラーでコピーしたファイルやスクリーンショットも、composer に貼ればパスとして agent に渡せます。
-
-→ [使い方: Windows（WSL2）での違い](docs/usage.md#windowswsl2での違い)
-
-### ほかにできること
-
-- agent と tmux session を検索して、そのターミナルへ移る（`Cmd+K` / WSL は `Alt+K`）
-- composer から送信。送信履歴、`/` か `$` で skill と command の候補、session を消す command や記号の取り違えを送る前に止める送信ガード（[Prompt composer](docs/usage.md#prompt-composer)）
-- cockpit から ORRERY Telemetry の NEW AGENT と一括 EXIT（[NEW AGENT](docs/usage.md#new-agent)）
-
-## 動作要件
-
-- 共通導入は macOS のターミナルまたは Ubuntu（Windows では WSL2）で行い、cockpit はブラウザーで開きます。[OS ごとの確認状況](docs/install.md#動作環境)
-- cockpit 単体の起動と Telemetry を含む共通インストールには、Python 3.11 以上と `tmux` が必要です
-- 共通インストールには `curl` と `git` が必要です。macOS では同梱の `lsof` を使います。Ubuntu／WSL2 では `xz` が必要で、`lsof` がなければ `/proc` でポートの使用元を確認します
-- Homebrew で入れた `tmux` が見つからない Mac では、`brew shellenv` を shell に設定して `/opt/homebrew/bin` を PATH に通す（installer が `tmux` を「Missing」と言うのは、これが無いときです）
-- 稼働中の [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry)（全連携機能を使う場合）
-- ORRERY Mail SQLite（mail rail を使う場合）
-- 導入と更新には配布元へ接続できるネットワークが必要です。端末の `xterm.js` と addon は同梱しています
-
-詳細と役割別の要件は[インストール](docs/install.md)を参照してください。
-
-## 作業 folder とアンインストール
-
-### 作業 folder を変える
-
-install の 1 行に `--project-key` を足します。後から変えるときも、同じ 1 行に `--project-key` を付けて実行し直します。
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key ~/my-project
-```
-
-**Obsidian の vault を agent に扱わせたいとき**は、`--project-key` に vault の path を渡します（例: `--project-key ~/Documents/MyVault`）。利用者単位の指示は [指示の移行](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.md) を参照してください。**WSL2 では、作業 folder は Ubuntu の home の中に置きます。** Windows 側の folder（`/mnt/c/…`）を `--project-key` に渡すと、1 行の installer は何も変えずに止まります。Windows 側の vault は作業 folder にせず、作業 folder を Ubuntu の home に置いたまま、agent に `/mnt/c/…` の path を渡して扱わせます（[研究セット](docs/research-set.md)がこの形です）。
-
-- 旧版の作業フォルダーに指示の block があれば、[指示の移行](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.md#legacy-blocks)で確認します。
-- Mail は project 単位です。変える前に起動していた agent は Telemetry に出続けますが、古い project のままで、新しい agent と Mail が通じません。EXIT して起動し直してください。
-- `+ NEW AGENT` の folder の候補は、既定では作業 folder と `~` です。変えるには `cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"`（project key は引き継がれます。指定した folder だけになるので、作業 folder も入れます）。
-- ORRERY の管理下で agent を起動するには、`+ NEW AGENT`、`~/.agentstack/bin/agent-start <作業 folder>`、または Codex 用の `agent-start-codex` を使います。
-
-### アンインストール
-
-`agentstack-uninstall` が消すのは `~/.agentstack` の中（と service、settings の変更）だけです。source・作業 folder・uv は残ります。
-
-```bash
-~/.agentstack/bin/agentstack-uninstall --dry-run      # 先に確認
-~/.agentstack/bin/agentstack-uninstall --purge-data   # Mail の DB も消す（残すなら付けない）
-```
-
-次に cockpit を止めます。1 行の installer が裏で起動した cockpit は、別の tmux server で動いています。installer の最後に表示された `Stop it:` の行（既定は `tmux -L orrery-cockpit kill-session -t cockpit-8791`）を実行します。自分で `start-cockpit.sh` を動かしたなら、その窓で `Ctrl-C` です。`ORRERY.app` は終了します。`http://127.0.0.1:8791/` が開かなくなったことを確かめてから、source を消します。
-
-```bash
-rm -rf ~/orrery ~/orrery-telemetry
-```
-
-作業 folder（`~/orrery-work` など）は自分の仕事の場所なので、消すかどうかは自分で決めます。入れた `uv` は `~/.local/bin` に残ります。
-
-## 画面のガイドで始める
-
-1. **Your first flight** — 初回に右側へ出る7項目のガイドを通します。agent の起動、選択、入力など、画面の説明どおりに操作すると ✓ が付きます。Mail を読んだ項目は `Mark as read` で確認します。閉じたガイドは `Settings → Getting started → Your first flight` から開けます。
-2. **Show help map** — 同じ `Getting started` の `Show help map` を押し、主要な部品の注記を見ながら画面を見回します。`Esc` または画面のクリックで閉じられます。
-3. **Full tour** — 同じ場所の `Full tour` で16段の操作を順に試します。子とのしりとり、ターミナルの配置、Telemetry の EXIT / RESUME、NETWORK / REPLAY からターミナルへの帰還までを案内します。ゲームはガイドの ✓ が付いた後も3往復まで終えます。進行は最初のガイドとは別に保存されます（[Full tour の説明](docs/FULL_TOUR.md)）。
-
-普段の操作は、画面内のガイドと help map から始めてください。操作の詳しい参照は[使い方](docs/usage.md)、表示や接続が合わないときは[トラブルシューティング](docs/troubleshooting.md)へ進みます。ガイドで起動するagentにも、選んだCLIやAPI接続先の通常の利用枠・料金条件が適用されます。
-
-## 更新・手動導入
-
-更新も上の1行から行えます。cockpit の folder で `./scripts/update.sh` を実行する方法や再起動の条件は[更新手順](docs/install.md#5-更新する)を参照してください。
-
-**以前の版から更新する人へ:** 既存の設定とMailのDBを引き継ぎ、既定では動いているMailを切り替えません（`--mail keep`）。子のOSターミナル窓は自動で開かない設定が既定ですが、明示して選んだ設定は保持します。必要な窓は`Open tmux`で開けます。DeepSeek/Localの追加は任意で、通常更新だけではAPIキーや接続先は設定されません。Telemetry側の変更は[変更履歴](https://github.com/gyroid-eth/orrery-telemetry/blob/master/CHANGELOG.md)で確認できます。
-
-DeepSeek・dsh / Hermesを新しく追加する場合は、更新後に[初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md)も行ってください。Claude Code / Codexを使うための更新と、APIの接続準備は別の作業です。
-
-手動での clone・venv・backend の起動、Telemetry と同じ project key / Mail DB の設定、desktop app の build と sidecar の設定は[インストール](docs/install.md)と[設定](docs/configuration.md)にまとめています。
-
-## macOS アプリを使う（上級）
-
-ブラウザーで agent の操作に慣れたら、macOS ではソースから `ORRERY.app` をビルドできます。ビルドには Node.js / npm と Rust / Cargo が必要です。アプリと専用 installer、global hotkey は macOS 向けです。配布用のビルドは提供していません。[ビルドと起動](docs/install.md#desktop-app-を-build-する)
-
-## ドキュメント
-
-目的から探すときは[全 docs の索引](docs/README.md)へ。
-
-日本語文書が正本です。英語版は [README.en.md](README.en.md) と `docs/en/` にあり、この表のすべての文書に対応する英語版があります。
-
-| 文書 | 内容 |
-| --- | --- |
-| [インストール](docs/install.md) | 要件、venv、ORRERY Telemetry との接続、backend、`ORRERY.app` |
-| [agent と進める導入](docs/install-with-agent.md) | 計画と承認を分け、導入を手伝ってもらう |
-| [ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.md) | 読み取り専用アダプターと専用 Tunnel |
-| [設定](docs/configuration.md) | 環境変数の全数、既定値、接続先と保存先 |
-| [使い方](docs/usage.md) | roster、terminal、split、spawn、mail、TELEMETRY、replay |
-| [トラブルシューティング](docs/troubleshooting.md) | 起動、port、`:8770`、`pyte`、tmux、端末の配信 |
-| [アーキテクチャ概要](docs/ARCHITECTURE_OVERVIEW.md) | tmux、Codex App、network、データ保持、肖像画像の扱い |
-| [実装アーキテクチャ](docs/ARCHITECTURE.md) | backend、HTTP / WebSocket、tmux 制御の詳細 |
-| [旧 tmux 対象の保護](docs/runtime-target.md) | 接続先の固定、global pane の拒否と修復 |
-| [デザイン言語](docs/DESIGN.md) | cockpit の視覚・motion・色・typography |
-
-## 構成
-
-```text
-ORRERY.app / browser
-        │ HTTP + WebSocket (:8791)
-        ▼
-ORRERY Python backend
-  ├─ tmux control mode ── local agent sessions
-  ├─ read-only SQLite ─── ORRERY Mail
-  └─ HTTP proxy ───────── ORRERY Telemetry dashboard (:8770)
-```
-
-ORRERY backend は ORRERY Telemetry の `server.py` を import せず、HTTP proxy と独自の tmux / mail / portrait handler で連携します。ターミナル入力、window size の claim、spawn、EXIT は状態を変更する操作です。単なる read-only viewer ではありません。
+## もっと知る
+
+- [目的別のガイド](docs/README.md#目的から選ぶ)
+- [画面一覧](docs/cockpit-map.md)
+- [導入・更新・アンインストール](docs/install.md)
+- [設定と保存されるデータ](docs/configuration.md)
+- [うまく動かないとき](docs/troubleshooting.md)
+- [全体の設計](docs/ARCHITECTURE_OVERVIEW.md)
 
 ## セキュリティとプライバシー
 
-backend は `127.0.0.1` だけに bind し、外部 bind を拒否します。ただし localhost 上の認証機構はないため、信頼できないローカルプロセスがある環境では起動しないでください。
+cockpit は `127.0.0.1` だけで待ち受け、ほかの機械からの接続は受けません。同じ機械の中では認証をしないので、信頼できないプログラムが動く機械では使わないでください。
 
-terminal recorder は既定で `~/.orrery/history` に履歴を保存し、prompt の draft と最大50件の送信履歴は browser の `localStorage` に残ります。機密情報を入力する運用では、保存先と保持方針を[設定](docs/configuration.md#保存データとプライバシー)で確認してください。
+端末の記録は `~/.orrery/history` に、入力の下書きと最近 50 件の送信はブラウザに残ります。機密を扱うときは、[保存されるデータ](docs/configuration.md#保存データとプライバシー)を先に確かめてください。
+
+## ライセンス
+
+この repository は **PolyForm Perimeter License 1.0.1** です（肖像画像を除く。下の「第三者コンポーネント」を参照）。source-available であり、OSI の意味での open source ではありません。全文は [LICENSE](LICENSE) にあります。© 2026 gyroid.
+
+- 目的を問わず、使う・変える・配ることができます
+- ただし、**このソフトウェアと競合する製品を他者に提供すること**はできません。無償の配布、別の言語への移植、service・library・plug-in としての提供も競合に含みます
+- 無保証です。サポートは約束しません
 
 ## 第三者コンポーネント
 
@@ -346,17 +107,6 @@ ORRERY は ORRERY Telemetry、`tmux`、`xterm.js` などと連携します。こ
 
 `assets/portraits/`・`assets/portraits_64/` の肖像画像は PolyForm Perimeter License の対象外です。各画像のライセンス（public domain、CC0、CC BY 4.0、CC BY-SA 2.0 / 4.0）、作者、出典、加工内容は [CREDITS.md](CREDITS.md) に従います。CC BY-SA の画像は、加工後の画像も同じ CC BY-SA で提供します。manifest / CREDITS にない portrait は配布承認済み asset とみなしません。ただし `assets/portraits_px/` のドット絵 50枚は、作者 gyroid が ChatGPT（OpenAI の画像生成）で文章の指示だけから生成したものです。写真は入力に使っていません。repository と同じ条件（PolyForm Perimeter License 1.0.1）で配布します。
 
-## ライセンス
-
-本 repository は **PolyForm Perimeter License 1.0.1** です（肖像画像を除く。[第三者コンポーネント](#第三者コンポーネント)を参照）。source-available であり、OSI の意味での open source ではありません。全文は [LICENSE](LICENSE) を参照してください。© 2026 gyroid.
-
-- 利用・改変・再配布は目的を問わず可能です
-- ただし**本ソフトウェアと競合する製品を他者へ提供すること**はできません。無償配布・別言語への移植・service / library / plug-in としての提供も競合に含まれます
-- 無保証です。サポートの提供は約束しません
-
 ## 不具合の報告
 
-不具合は GitHub repository の Issues へ報告してください。task 名、再現手順、ORRERY / ORRERY Telemetry の起動 log、`/telemetry/health` の結果を添えると切り分けが早くなります。
-
-split 中は各 pane の見出しに provider のロゴ・名前・モデルと Reader・全幅・別窓のアイコンをまとめます。
-ボタンはその見出しの pane が対象です。
+GitHub の Issues に報告してください。再現の手順、ORRERY と ORRERY Telemetry の起動 log、`/telemetry/health` の結果を添えると、原因を早く絞れます。

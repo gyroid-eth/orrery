@@ -4,13 +4,29 @@
 
 操作の入口は画面内の **Your first flight → help map → Full tour**。cockpit の `Settings → Getting started` から開けます。ここは install・update・困ったときと、必要に応じて読む詳しい参照の目次です。
 
+日本語の文書が正本です。英語の入口は [README.en.md](../README.en.md) で、下の各ガイドにも対応する英語版があります。
+
 ## はじめる
 
-- [Quick start](../README.md#クイックスタート) — 本体を入れて初回ガイドへ進む。
+- [Quick start](../README.md#始める) — 本体を入れて初回ガイドへ進む。
 - [インストール](install.md) — 1行 install の前提・計画・確認結果を読み、まず cockpit を開く。
 - [利用中の agent と導入を進める](install-with-agent.md) — 依頼文、計画、利用者の承認。
 - [ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.md) — 読み取り専用アダプター。
 - [研究セット](research-set.md) — digest-paper と公開 demo vault を本体の後に追加する。
+
+## 目的から選ぶ
+
+- [最初のガイドと Help map を開く](first-flight.md)
+- [agent を起動して依頼する](start-an-agent.md)
+- [agent の状態を見てまとめて選ぶ](manage-agents.md)
+- [Reader で作業と参照ファイルを見る](read-a-file.md)
+- [届いた ORRERY Mail を読む](read-mail.md)
+- [Mini Graph で agent の詳細と再起動を見る](inspect-mini-graph.md)
+- [利用枠の残りとリセット時刻を見る](check-usage.md)
+- [Telemetry で状態と履歴を見る](view-telemetry.md)
+- [agent の親子関係をたどる](trace-agent-family.md)
+- [cockpit の見た目を調整する](adjust-cockpit.md)
+- [Cockpit の画面一覧](cockpit-map.md)
 
 ## 使い方
 

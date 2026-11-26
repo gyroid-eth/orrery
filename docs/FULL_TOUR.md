@@ -2,13 +2,13 @@
 
 [English](en/FULL_TOUR.md) · [ドキュメント索引](README.md)
 
-**Settings → Getting started → Full tour** を開くと、講演・演習向けの詳しい checklist が出ます。Your first flight は7段の入門ガイドとして残り、進行も別に保存されます。Full tour は16段です。agent の起動とゲームにかかる時間によりますが、目安は約10分です。
+**Settings → Getting started → Full tour** を開くと、講演・演習向けの詳しい checklist が出ます。[Your first flight](first-flight.md) は7段の入門ガイドで、進行も別に保存されます。Full tour は16段です。agent の起動とゲームにかかる時間によりますが、目安は約10分です。
 
 1. `NEW AGENT` で agent を起動する。
 
    録画では隔離した cockpit で架空の agent を使っています。
 
-   ![デモ環境の Full tour。NEW AGENT でタスクを入力し、agent を選んで最初のメッセージを送る](images/fulltour/1-start-choose-talk.gif)
+   ![New agent でタスクを入力し、agent を選んで最初のメッセージを送り、Reader で作業の結果を見る](images/guides/start-an-agent.gif)
 
 2. agent 一覧から、その agent を選ぶ。
 3. terminal の下の入力欄から prompt を送る。

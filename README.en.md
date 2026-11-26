@@ -1,354 +1,112 @@
 # ORRERY
 
-> Japanese is the source of truth: [日本語版 (README.md)](README.md)
+> 日本語 [README.md](README.md)
 
 <img src="app/icons-src/orrery-1024.png" alt="ORRERY icon" width="96">
 
-ORRERY is a cockpit for arranging agent terminals, sending instructions, and following Mail and usage quotas. It supports Claude Code, Codex CLI, Gemini through Antigravity CLI, and DeepSeek or Local models through dsh or Hermes.
+ORRERY is a cockpit for AI agents to talk directly to each other and work as a team.
 
-## Quick start
+Give an orchestrator agent a task, and it will divide the work among child agents. The agents send each other requests and reports through ORRERY Mail. You can watch it all on one screen without relaying messages between agents yourself. You can mix Claude Code, Codex, Gemini, DeepSeek, and local LLMs in the same interface and operate them the same way.
 
-**Start with the cockpit in your browser.** Run this line after preparing your Mac or Ubuntu 24.04 or later. On Windows, use the Ubuntu shell in WSL2. The command installs both the cockpit and [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry/blob/master/README.en.md).
+![A Claude orchestrator delegates to Codex, Gemini, DeepSeek, and a local LLM, receives their reports by Mail, and summarizes them](docs/images/guides/team-hero.en.gif)
+
+## What you can do
+
+### See agents talk to each other
+
+When one agent sends Mail to another, a light travels from sender to recipient in the Mini Graph on the right, and the subject appears below the recipient. Open the message from the list to read who asked whom to do what.
+
+![A light travels across the Mini Graph, and an incoming Mail message opens from the list](docs/images/guides/read-mail.gif)
+
+See [Read incoming ORRERY Mail](docs/en/read-mail.md) and [See agent details in the Mini Graph](docs/en/inspect-mini-graph.md).
+
+### Follow an agent’s work in Reader
+
+In a terminal, agent messages, tool calls, and long outputs scroll past together. Reader separates messages, operations, and results and folds long output so you can follow the work. You can also view tables, diffs, and files the agent worked with right there.
+
+![Read an agent’s reply in Reader and open a referenced file](docs/images/guides/read-a-file.en.gif)
+
+See [Follow the work and open referenced files in Reader](docs/en/read-a-file.md).
+
+### Switch computer and browser controls at any time
+
+You can change each agent’s computer and browser permissions while it works. For computer use, choose Off, View, or Control. For browser use, let the agent work in your signed-in Chrome or choose a temporary browser that doesn’t inherit your cookies or sign-ins. When you switch, the agent restarts and the roster and Mini Graph show that it is restarting. Agents that support resuming a conversation return to work with their conversation intact.
+
+![Change computer and browser controls in the agent details, see the restart indicator, and return to work](docs/images/guides/permission-switch.gif)
+
+See [See agent details and restarts in the Mini Graph](docs/en/inspect-mini-graph.md).
+
+### Work from a phone or tablet
+
+You can see the same agents in your phone or tablet browser while away from your computer. Select an agent, read its work, and type and send it an instruction. The connection goes through Tailscale, and access is limited to your Tailscale account.
+
+![Select an agent on a phone, read its work, and send an instruction](docs/images/guides/mobile.gif)
+
+See [Use ORRERY on a phone](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md).
+
+### See which agents need a decision from you
+
+Agents waiting for approval or an answer are marked, and **need you** at the top of the screen shows how many are waiting. You can select several agents to send them the same request at once or exit them together.
+
+![Check the need you count and select several agents](docs/images/guides/select-agents.gif)
+
+See [Check agent status and select multiple agents](docs/en/manage-agents.md).
+
+The numbered [cockpit map](docs/en/cockpit-map.md) shows where to find things. For other tasks, [choose a guide](docs/en/README.md#choose-a-task).
+
+## Get started
+
+Run this line in a terminal on macOS or Ubuntu 24.04 or later. On Windows, use Ubuntu in WSL2.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
 ```
 
-### Before you start
+Install Python 3.11 or later, git, tmux, and curl first. If anything is missing, the installer shows you how to install it and stops.
 
-- **macOS** with Homebrew installed. Run `brew install curl git tmux python@3.13`. Use the `lsof` included with macOS.
-- **Ubuntu / WSL2**. In the Ubuntu shell, run `sudo apt update && sudo apt install -y ca-certificates curl git tmux python3 python3-venv xz-utils`. For Hermes, also run `sudo apt install libatomic1`.
+The installer shows a plan of what it will install. Review it and type `yes` to proceed. It displays the cockpit URL at the end (by default, `http://127.0.0.1:8791/cockpit.html`). Open it in your browser to start **Your first flight**, an on-screen guide from launching an agent to reading Mail.
 
-Have **Python 3.11 or later** available before you run the command. An interpreter already installed through uv also works. The one-line installer checks prerequisites before fetching the source and stops with instructions if anything is missing. The shared installer adds uv itself if needed. [Detailed installation](docs/en/install.md#install-or-update-with-one-line) · [Get help from your agent](docs/en/install-with-agent.md)
+If you’re signed in to the Claude Code or Codex CLI, you can start using it immediately. The [installation guide](docs/en/install.md) covers Gemini, DeepSeek, local LLMs, phone access, and Obsidian integration. An agent you already use can also help with the installation ([instructions](docs/en/install-with-agent.md)).
 
-### Check that the base install is complete
+## How it works
 
-Review the plan in your terminal, then **type `yes` and press Enter** yourself to proceed. `ORRERY's base is ready` means the doctor and the selftest for Mail round trips, reservations, and dashboard access passed. Open the printed `Open:` URL in your browser (default `http://127.0.0.1:8791/cockpit.html`) and look for **Your first flight**. You can reopen it from `Settings → Getting started → Your first flight`. If a check warns or fails, use the message to find the matching step in the [installation guide](docs/en/install.md#install-or-update-with-one-line).
+ORRERY consists of two repositories. This repository provides the cockpit. [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) records agent status and provides ORRERY Mail and the installer. Agents run inside tmux, so they keep working when you close the browser.
 
-### Add the features you use
+![The cockpit and Telemetry are two views of the same agents](docs/images/cockpit_telemetry_relation.svg)
 
-Set up the features you want after the base install. Each guide covers the first launch that verifies your CLI login or API connection.
+The introductory video (about 90 seconds, in Japanese) illustrates what changes when agents talk directly to each other.
 
-| Feature | What to prepare and where to start |
-| --- | --- |
-| Claude Code / Codex CLI | Install and sign in to your chosen CLI. [Mac](docs/en/install.md#mac) / [WSL](docs/en/install.md#windows-11) |
-| DeepSeek / Local (dsh or Hermes) | Prepare the API connection, model, and required key and key store. dsh uses Node.js 24.2 or later. [API setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) |
-| Gemini (Antigravity) | Install Antigravity CLI (`agy`), sign in, and complete the Gemini setup in Telemetry. In the macOS cockpit, choose **Antigravity** and a model in NEW AGENT. [Gemini setup guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.en.md) |
-| Computer use | Set up Cua Driver and grant OS screen recording and interaction permissions. [Computer use](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/computer-use.en.md) |
-| Browser use | Set up Chrome and the connection for your harness. [Browser setup and approvals](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/delegation.en.md#browser-and-computer-use-what-is-reachable-and-what-a-person-does) |
-| Phone | Configure Tailscale and check which devices can reach the reader. [Phone access](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md) |
-| ChatGPT MCP | Pair the read-only adapter (default port 8792) and connect a dedicated tunnel and workspace. [ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.en.md) |
-| Obsidian research set | Add Obsidian, a research vault, and the research skill. [Research set](docs/en/research-set.md) |
-| Codex App | Set up Codex App and the required CLI, install the plugin, and review the hooks. [Codex App integration](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/codex-app.en.md) |
+[![“Orrery” introductory video on YouTube](https://i.ytimg.com/vi/JXoa93TQolU/hqdefault.jpg)](https://youtu.be/JXoa93TQolU)
 
-![The cockpit and Telemetry show the same agents. Claude Code and Codex use their CLIs; DeepSeek and Local use dsh or Hermes. Agents run in tmux and communicate through Mail](docs/images/cockpit_telemetry_relation.svg)
+## Learn more
 
-### What goes where
-
-| Location | What it holds |
-| --- | --- |
-| `~/orrery` | The cockpit source (start and update scripts) |
-| `~/orrery-telemetry` | The source of Telemetry, Mail, hooks, and the installer. What actually runs is the copy installed in `~/.agentstack` |
-| `~/.agentstack` | The running installation, the `env.sh` settings, and the Mail DB |
-| `~/orrery-work` | The agents' work folder (the project folder). It is the default folder of `+ NEW AGENT`. Mail and reservations follow the work-folder settings |
-
-Default ports are 8791 for the cockpit, 8770 for Telemetry, and 18765 for a new Mail installation. For changing the work folder and uninstalling, see [Work folder and Uninstall](#work-folder-and-uninstall).
-
-![ORRERY Cockpit with Agents on the left, three terminal panes and the composer in the center, and the mini-orrery and Mail on the right](docs/images/cockpit_overview.png)
-
-The three panes show fictional agents running Claude Code, Codex, and Antigravity.
-
-Pick an agent in the roster on the left, give instructions in the terminal in the center, and follow parent–child relationships and messages in the mini-orrery and Mail on the right. The terminals work even when ORRERY Telemetry is not running; features that depend on it show their status and degrade gracefully.
-
-**Introduction video**: "Orrery" (90 s) is an illustrated explainer of the idea behind ORRERY: agents talk to each other directly, so you no longer relay between AIs. It does not show the actual screens. A [Japanese version](https://youtu.be/JXoa93TQolU) is also available.
-
-[![Introduction video "Orrery" (YouTube)](https://i.ytimg.com/vi/Jpc1ad7c90k/hqdefault.jpg)](https://youtu.be/Jpc1ad7c90k)
-
-## What you can do
-
-### Read a conversation (Reader)
-
-An agent using an alternate-screen TUI cannot be reviewed with terminal scrollback alone. Reader displays its recorded conversation in a read-only panel. Press the **Reader icon** in the pane; press it again to close. The setting is on by default; turning off **Settings → Appearance → Reader** closes the panel, removes the button, and stops history reads.
-
-Pane headers and roster cards use telemetry's display model name without shortening it; the title retains the full ID. Headers show the provider logo, agent name, and model, omitting missing models. An active, working agent's logo slowly brightens and dims; waiting agents and reduced-motion mode stay still. Narrow panes truncate the model before the name, keeping the logo and action buttons visible. The split pane close button is the rightmost header action and shares the other icons' size and border.
-
-![Reader with a fictional conversation, a Markdown table, and file chips](docs/images/cockpit_history.png)
-
-The reader opens beside the terminal; the pane header’s **⤢** expands it across the pane; press it again to restore the side panel. On narrow screens it fills the pane. While you scroll, new records do not move your reading position. Use **Load earlier** where available to go back (up to about 300 records at a time, counting each tool call and result as one; the reader keeps up to 800 records or 2 MiB, and going back beyond that releases the newest records and pauses updates until you scroll back to the bottom or select **↓ (Latest)**, while reading new records at the bottom releases the oldest), and use **↓ (Latest)**, shown over the lower-right corner only while reading earlier messages, to return to the newest records. In CLAIMED mode, opening Reader beside the terminal fits the terminal to the remaining width; closing Reader restores its width. Full-width Reader overlays the terminal. FOLLOW keeps the external terminal’s width, so Reader can cover part of it. In a split, each pane's **Reader icon** opens an independent reader; full width and previews stay within that pane. Interacting with a reader selects its pane as the prompt composer target. Closing another pane preserves the surviving reader’s width mode, position, expanded Mail, and preview. A width change can shift the reading position by one or two lines.
-
-The composer remains available in full-width view. Reading keys stay in the reader; use Enter or **SEND** to submit explicitly. Submission closes that pane's preview and resumes following its newest history. If the target terminal or connection changes during submission, the send is cancelled with a notice. After sending, a temporary “Sent → agent · Awaiting record” row appears at the end of that pane’s history and is replaced when the matching user message is recorded. It does not mean the agent has acknowledged the prompt. If the record cannot be matched confidently, the row says “Record not matched”; **Dismiss** closes that temporary row. A sent `! cmd` also matches its recorded shell command.
-
-Reader always confirms the agent's record binding with the telemetry dashboard before it shows content. An answer without content (the record has not changed) is returned without a new confirmation for up to 30 s after the last one. At most four requests are held across the cockpit (up to four on one page); a pane beyond that polls every 4 s (network, reading and drawing time come on top). At the limit, a pane whose record has changed takes the slot of one that has held for 2 s or more with nothing new; that one goes back to polling every 4 s. For Hermes, a write by another session to the same state.db also counts as a change, so a pane with nothing new may take a slot (the pane that gave it up then polls every 4 s). While any user operation is in flight, no tab holds a request; holding resumes once all of them have ended. User operations are: opening a URL, revealing a file in Finder or Explorer, opening Ghostty, EXIT, spawn, revealing a recorded file, reading the clipboard files, a file preview, Reader’s Load earlier and Retry, and the NETWORK view’s actions (jump, kill, EXIT, annotate, spawn, reactivate). Hovering a terminal path (its existence check) is not one, nor is the NETWORK view’s automatic error report, nor is any GET not listed here, such as the spawn folder list, even when you started it. An operation counts as ended when its response headers arrive (holding may resume while a preview body is still downloading), and any operation, in this tab or another, stops counting after 90 s (the longest the dashboard allows a spawn); a tab opened later asks the others once for the operations already in flight; when the NETWORK view navigates away, its operations end there. Prompts are sent over the WebSocket and never compete with held requests for a connection. With dashboard API 36 or later it asks `/api/agents/<name>/history-binding` for that one agent; with an older dashboard, or when that route fails, it asks for the whole roster as before ([API](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/api.en.md)).
-
-Assistant messages render Markdown headings, bold text, lists, quotes and inline code. Code blocks scroll horizontally; **Copy** copies their contents, including whitespace and newlines. Raw HTML stays text and Markdown images are never fetched. Human prose stays literal text. Tables also scroll horizontally; **Copy Markdown** copies the original table.
-
-Claude’s `!` records appear under **SHELL**, with adjacent command and output records grouped together. Long output is shortened; **Show all** expands it. Slash-command records also appear as command and output blocks. Character references are decoded only inside recognized records, and commands can be copied. System notices, such as background tasks, appear as a short line distinct from human messages; select one to expand or collapse its recorded details. Claude and Codex compaction records also appear as **Context compacted**; expand one to read its summary when the provider recorded readable text. A session change clears the previous display, briefly shows **New session**, and reloads automatically. Repeated changes return to the normal polling interval without requiring Retry.
-
-When records contain file references or edit-request diffs, the reader shows file chips and diffs. Files delivered with Claude’s SendUserFile, and files or images an agent shows with ORRERY Mail’s `show_files` (Claude, Codex, dsh or Hermes), also have chips for preview. Select a chip to preview the current text or image. A `.md` file opens drawn as a document (headings, tables, lists, code and more); **Source** switches to its original text. Raw HTML stays text, images are never fetched, and only http(s) and mailto links open, in a new tab. A recorded diff and the current file are distinct. **Reveal in file manager** selects the file in Finder or Explorer when pressed.
-
-Select a message or tool text to search for it in the same pane's retained terminal text. The reader moves to the line only for a unique match; it shows a notice and stays put if there is no match, more than one match, or the search limit is reached. Text selection, copying, and file chips retain their own actions.
-
-Recorded ORRERY Mail notifications and send requests appear as cards with direction, correspondent, and subject. Select a card to expand the recorded body. A preview notification indicates that the rest is in Mail. The reader does not fetch bodies from the Mail server or mark messages read, and a send request does not confirm delivery.
-
-When history is unavailable, the panel shows a reason and next step. Shortly after launch or before the first message, wait and retry; for an old conversation or an unverified binding, open a newly launched child. If Codex recording was not observed, enable the ORRERY plugin, review its hooks in `/hooks`, and start a new process. For disabled recording or a write failure, check the provider's recording settings or storage permissions. The panel also identifies older dashboards, unsupported formats, and missing dsh dependencies.
-
-Legacy mode reads Codex and, with Telemetry API 35 or later, bound Claude Code, dsh, and Hermes records. Older dashboards support Codex only. Claude, Codex, and dsh offer older pages. dsh shows a recorded append timeline; Hermes shows a recent snapshot of the active bound segment (up to 200 events), excluding segments before compaction. Fresh mode uses the protected API's recent text snapshot (up to 200 messages, subject to size limits) and does not offer older pages or tool summaries. If updates pause at the retention limit, scrolling back to the bottom reloads the newest messages and resumes following. **↓ (Latest)** also resumes them. Alternate-screen frames no longer retained by the terminal cannot be restored. See [operation and limits](bridge/README.md).
-
-### Choose a scientist's portrait and a model (NEW AGENT)
-
-Open `+ NEW AGENT` and select a scientist's portrait to generate a name. You can adjust its adjective. On supported setups, choose a configured provider from Claude, Codex, Gemini (shown as **Antigravity**), DeepSeek, or Local models. DeepSeek and Local also offer dsh and Hermes as harness choices.
-
-**First-time setup for DeepSeek, dsh, and Hermes:** A normal update does not set up API keys or connections. The cockpit has no API-key entry screen. Prepare them in this order:
-
-1. Open Telemetry's [initial setup guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) and add dsh, Hermes, or both from your Telemetry source folder.
-2. For DeepSeek, create an API key or use an existing one. If it is not already saved on this computer, follow the OS-specific steps to save it. For Local, prepare a compatible server's connection details and its own access key. The current ORRERY path requires a key reference; Hermes also requires HTTPS. Check the compatibility requirements in the same setup guide.
-3. Review and enable the connection settings following the guide, then run the final install command yourself once to apply them to Telemetry.
-4. Return to the cockpit and select your configured `Model` and `Harness` in `+ NEW AGENT`.
-
-![Choose a provider and harness in Model and effort, then open the computer and browser menus](docs/images/cockpit-native-spawn.gif)
-
-The recording uses the cockpit interface and a fictional catalog. It shows the controls up to launch.
-
-→ [Usage: NEW AGENT](docs/en/usage.md#new-agent) · Portrait sources and licenses: [CREDITS](CREDITS.md)
-
-### Your half-typed message is not swept away
-
-When many agents run at once, notifications from other agents can pour into the same terminal while you are typing an instruction to a parent agent, burying what you have written so far. In the cockpit you type instructions into a separate input box (the composer) below the terminal, so whatever scrolls through the terminal, your draft stays put. To change the recipient, just click an agent in the roster or on a tab; the text carries over.
-
-The composer shows **■** while the selected agent is working and the draft is empty. Press it or `Esc` to interrupt.
-
-![The composer shows a square Stop button while the agent is working. Esc interrupts the agent](docs/images/cockpit_composer_calm.gif)
-
-→ [Usage: Prompt composer](docs/en/usage.md#prompt-composer)
-
-### Spot the agents that need a human decision at a glance
-
-However many agents you run, only the agents whose work has stopped while they wait for a human decision light up in the roster (an approval wait blinks red, a question wait pulses slowly in light blue), and `N need you` appears in the header. Press `need you` to narrow the roster to just those agents, click a tile to enter its terminal and read the question. Send your answer from the composer and the blinking stops. You can clear the stopped agents in the order they stopped, without hunting for them.
-
-![Use need you to filter for agents awaiting input, read a question, and reply with 1](docs/images/cockpit_need_you.gif)
-
-The same holds in TELEMETRY: a question wait is shown by `?`, and an approval wait by a red frame and `APPROVAL`.
-
-This DECK example uses the former name “AGENTSTACK · TELEMETRY.” The current name is ORRERY Telemetry.
-
-→ [Usage: Agents that need a human decision](docs/en/usage.md#agents-that-need-a-human-decision) · [Spotting agents that need you (TELEMETRY)](docs/en/usage.md#spotting-agents-that-need-you)
-
-### Read what agents are saying to each other, right where you are
-
-Agents ask, report, and point things out to each other through ORRERY Mail. That Mail streams down the rail on the right, newest first, so you can read the team's conversation without opening each terminal one by one. Click a card to read the body, or press `thread` to open the back-and-forth of that conversation in time order. Selecting an agent in the roster narrows the list to only the Mail that agent is involved in.
-
-→ [Usage: ORRERY Mail](docs/en/usage.md#orrery-mail)
-
-### Pin the agents you watch most to the top (Pin)
-
-With many agents running, the roster keeps reordering by state (approval wait, working, idle). Pin the agents you always look at, such as a parent agent or a reviewer, and they stay at the very top regardless of reordering, grouped above a divider line. Just hover over a tile and press the pin at its upper right; press it again to unpin. Pins are shared between ORRERY.app and browser tabs, and an agent is unpinned automatically when it retires (pins exist only in the roster on the left).
-
-→ [Usage: Pin](docs/en/usage.md#pin)
-
-### Put several terminals side by side (Split)
-
-Hold `Cmd` / `Ctrl` while selecting agents to line up to 12 terminals on one screen. Drag a name tag to swap positions, and drag a border to change widths. You can watch a parent agent and the progress of its children at the same time.
-
-→ [Usage: Split](docs/en/usage.md#split)
-
-### Take one terminal out (standalone window)
-
-Drag a tab's name tag onto the terminal to make it a small window floating above the cockpit (`FLOAT`). Drag it out of the cockpit, or press `↗`, and it becomes a standalone window (`WINDOW`) that you can place on another monitor and view larger. Close the window and it returns to its tab. It works in ORRERY.app and in browsers on Mac and WSL.
-
-→ [Usage: Standalone window](docs/en/usage.md#standalone-window)
-
-### Open from the terminal, hand to the terminal
-
-A URL an agent prints in the terminal opens in your default browser when clicked, and a file path opens in Finder (File Explorer on Windows). In the other direction, paste a file you copied in Finder (File Explorer on Windows) into the composer and its absolute path is inserted, ready to hand to the agent. Paste a screenshot and, on Mac, the agent's CLI receives it as is; on Windows (WSL2), the image is saved and its path is inserted.
-
-→ [Usage: Open from and hand to the terminal](docs/en/usage.md#open-from-and-hand-to-the-terminal) · [Pasting files and images on WSL](docs/en/usage.md#pasting-files-and-images-on-wsl)
-
-### A light color scheme (light mode)
-
-In Settings, Color theme switches between a dark scheme (Dark) and a paper-like light scheme (Light). Colors inside the terminal and the embedded TELEMETRY change with it, and text is adjusted to stay readable even on the red and green backgrounds of a diff. `System` follows your OS appearance.
-
-→ [Usage: Color theme (light mode)](docs/en/usage.md#color-theme-light-mode)
-
-### Hide your user name on screen (demo mode)
-
-For recordings, live demos and screen sharing, the cockpit can show your user name and machine name masked, like `********`. Turn on Demo mode in Settings, or add `?demo=1` to the URL. The roster, tooltips, Mail, Planetarium, the embedded TELEMETRY and the terminal contents are masked, and `DEMO` shows in a corner. Only the display changes: clicking a path or URL in a terminal, and copying text, still use the real values. To also hide other words, such as a person's name written in Mail, add them under "Also mask these words" in Settings.
-
-→ [Configuration: Stored data and privacy](docs/en/configuration.md#stored-data-and-privacy)
-
-### See how much quota is left (Usage)
-
-`LEFT` in the header shows what percentage of your Claude and Codex account quota remains. Click it to see the 5-hour window, the weekly window, and per-model windows, each with the time until reset. The numbers change between green, yellow, and red, and when a value cannot be fetched, the reason is shown.
-
-→ [Usage: Usage (remaining quota)](docs/en/usage.md#usage-remaining-quota)
-
-### Copy a name, see the details (Roster)
-
-Hover over a roster tile to show a copy icon. A copied name can be pasted straight into a Mail recipient or an instruction. The detail card of a tile lists the last time the agent was active and the number of its deliverables.
-
-→ [Usage: Roster](docs/en/usage.md#roster)
-
-### See parent–child relationships and traffic (Planetarium)
-
-`PLANETARIUM` in the header opens, full screen, a tree of who launched whom. A line lights up between any two agents that exchanged Mail in the last 90 seconds, and a comet flies each time Mail arrives, so you can see at a glance where in the team conversations are happening. Click a node to jump straight to that agent's terminal.
-
-![Planetarium showing a parent–child tree and a separate standalone agent](docs/images/cockpit_planetarium.png)
-
-→ [Usage: Planetarium](docs/en/usage.md#planetarium)
-
-### See the state of the whole team (TELEMETRY)
-
-`TELEMETRY` in the header opens the ORRERY Telemetry dashboard inside the cockpit. `DECK` shows one card per agent, and `NETWORK` shows the connections between agents as nodes and lines; select an agent to read its conversation and tool history and the list of its deliverables. Press `OPEN IN COCKPIT` to return straight to that agent's terminal. Without going to another screen, you can survey the whole team inside the cockpit and go right back to the terminal at hand. Resuming finished agents is also done here.
-
-![OPEN IN COCKPIT in an embedded Telemetry agent panel returns to that agent’s terminal](docs/images/cockpit_telemetry_open_in_cockpit.png)
-
-**REPLAY**: After the work is done, you can review what the team did and in what order, like a recording. Press `SELECT` in NETWORK, choose agents, and press `Replay`; the history of the chosen agents plays out along a time axis, and who launched whom (spawn) and what Mail they sent each other appear in order, with subjects. Fast-forward with the speed scale, and click the time axis below to jump to any moment.
-
-→ [Usage: TELEMETRY](docs/en/usage.md#telemetry)
-
-### Use it together with Obsidian
-
-When you run agents inside an Obsidian vault, work logs, paper notes, and tasks become Markdown notes as they are, and all a person has to do is look at them in Obsidian's Daily Note and Kanban. A note path that an agent prints in the terminal opens when you click it in the cockpit. ORRERY works without Obsidian; this is just one convenient way to use it.
-
-→ [Use it together with Obsidian](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/obsidian.en.md) (an ORRERY Telemetry document) · to make a vault the work folder, see [Change the work folder](#change-the-work-folder) · a template you can try right away, [orrery-demo-vault](https://github.com/gyroid-eth/orrery-demo-vault)
-
-Reading notes for papers come from the add-on [orrery-digest-paper](https://github.com/gyroid-eth/orrery-digest-paper): Claude writes the note, and Codex checks it against the text and the figures (a version for Zotero users is included). The add-on and the demo vault come together with [the research set's one line](docs/en/research-set.md).
-
-### The same screen on Windows (WSL2)
-
-Run the backend in WSL2 and open it in a Windows browser to use the same screen as on Mac. Shortcuts change to `Alt+K` and so on, the terminal opened externally becomes Windows Terminal, and links open in the Windows browser and File Explorer. Files copied in File Explorer and screenshots can also be handed to the agent as paths by pasting them into the composer.
-
-→ [Usage: Differences on Windows (WSL2)](docs/en/usage.md#differences-on-windows-wsl2)
-
-### And more
-
-- Search agents and tmux sessions and jump to their terminals (`Cmd+K`; `Alt+K` on WSL)
-- Send from the composer. Send history, suggestions for skills and commands with `/` or `$`, and a send guard that stops commands that would delete a session, or mistyped symbols, before they are sent ([Prompt composer](docs/en/usage.md#prompt-composer))
-- NEW AGENT and bulk EXIT of ORRERY Telemetry from the cockpit ([NEW AGENT](docs/en/usage.md#new-agent))
-
-## Requirements
-
-- Run shared setup in a macOS terminal or in Ubuntu (in WSL2 on Windows), then open the cockpit in a browser. [OS verification status](docs/en/install.md#requirements)
-- Starting the cockpit on its own and installing it together with Telemetry both require Python 3.11 or later and `tmux`
-- Shared installation also requires `curl` and `git`. On macOS it uses the bundled `lsof`. Ubuntu / WSL2 requires `xz` and can check port ownership through `/proc` if `lsof` is unavailable
-- On a Mac where `tmux` installed by Homebrew is not found, set up `brew shellenv` in your shell so `/opt/homebrew/bin` is on PATH (the installer reports `tmux` as "Missing" when it is not)
-- A running [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) (to use all integrated features)
-- ORRERY Mail SQLite (to use the mail rail)
-- Network access to the distribution sources when installing or updating. The terminal bundles `xterm.js` and its addons
-
-See [Installation](docs/en/install.md) for details and requirements by role.
-
-## Work folder and Uninstall
-
-### Change the work folder
-
-Add `--project-key` to the install line. To change it later, run the same line again with `--project-key`.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key ~/my-project
-```
-
-**To have agents work on an Obsidian vault**, pass the vault's path as `--project-key` (for example `--project-key ~/Documents/MyVault`). See [instruction migration](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.en.md) for user-scoped instructions. **On WSL2, keep the work folder inside the Ubuntu home.** If you pass a Windows-side folder (`/mnt/c/…`) as `--project-key`, the one-line installer stops without changing anything. Do not make a Windows-side vault the work folder: keep the work folder in the Ubuntu home and hand agents the `/mnt/c/…` path to work on, as the [research set](docs/en/research-set.md) does.
-
-- If an old working folder still contains a managed block, review [instruction migration](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.en.md#legacy-blocks).
-- Mail is scoped per project. Agents that were already running keep showing in Telemetry, but they stay on the old project and cannot exchange Mail with new agents. EXIT them and start them again.
-- The folder choices of `+ NEW AGENT` are the work folder and `~` by default. To change them, use `cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"` (the project key is kept).
-- Start a managed agent with `+ NEW AGENT`, `~/.agentstack/bin/agent-start <work folder>`, or `agent-start-codex` for Codex.
-
-### Uninstall
-
-`agentstack-uninstall` removes only what is inside `~/.agentstack` (plus the services and the settings changes). The source folders, your work folder, and uv stay.
-
-```bash
-~/.agentstack/bin/agentstack-uninstall --dry-run      # check first
-~/.agentstack/bin/agentstack-uninstall --purge-data   # also delete the Mail DB (omit to keep it)
-```
-
-Then stop the cockpit. A cockpit that the one-line installer started in the background runs in its own tmux server. Run the `Stop it:` line the installer printed at the end (by default `tmux -L orrery-cockpit kill-session -t cockpit-8791`). If you ran `start-cockpit.sh` yourself, press `Ctrl-C` in that window. Quit `ORRERY.app`. Check that `http://127.0.0.1:8791/` no longer opens, then remove the source folders.
-
-```bash
-rm -rf ~/orrery ~/orrery-telemetry
-```
-
-Your work folder (such as `~/orrery-work`) is where your own work lives; delete it only if you decide to. `uv`, if the installer added it, stays in `~/.local/bin`.
-
-## Start with the guides on screen
-
-1. **Your first flight** — Follow the seven-item guide on the right on your first visit. Starting an agent, choosing it, and sending a prompt check off as you use the controls described on screen. Confirm the Mail-reading item with `Mark as read`. Reopen a closed guide from `Settings → Getting started → Your first flight`.
-2. **Show help map** — Choose `Show help map` in the same `Getting started` section and look around the annotated controls. Press `Esc` or click the screen to close it.
-3. **Full tour** — Choose `Full tour` there to try sixteen steps in order: shiritori with a child, arranging terminals, Telemetry EXIT / RESUME, NETWORK / REPLAY, and returning to a terminal. Finish all three game round trips even after its step checks off. Progress is saved separately from the first guide ([Full tour details](docs/en/FULL_TOUR.md)).
-
-For everyday controls, start with the in-app guides and help map. [Usage](docs/en/usage.md) is the detailed reference; if the screen or connection differs, use [Troubleshooting](docs/en/troubleshooting.md). Agents started during the guides follow the usual usage limits and pricing of your chosen CLI or API provider.
-
-## Update and manual setup
-
-The same one line also updates an existing install. See [Update](docs/en/install.md#5-update) for the alternative `./scripts/update.sh` command in the cockpit folder and when to restart.
-
-**Updating from an earlier version:** existing settings and the Mail database are retained. By default, the running Mail service is kept (`--mail keep`). Child OS terminal windows stay closed by default, while an explicitly selected setting is preserved; use `Open tmux` when you need a window. Adding DeepSeek or Local is optional: a normal update does not configure API keys or connections. See the [Telemetry changelog](https://github.com/gyroid-eth/orrery-telemetry/blob/master/CHANGELOG.md) for changes on that side.
-
-To add DeepSeek, dsh, or Hermes for the first time, follow the [initial setup guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) after updating. Updating an existing Claude Code / Codex setup does not configure an API connection.
-
-[Installation](docs/en/install.md) and [Configuration](docs/en/configuration.md) cover manual clone / venv / backend setup, matching Telemetry's project key and Mail DB, building the desktop app, and setting its sidecar path.
-
-## Use the macOS app (advanced)
-
-Once you are comfortable operating agents in the browser, you can build `ORRERY.app` from source on macOS. Building requires Node.js / npm and Rust / Cargo. The app, its installer, and the global hotkey are macOS features. There is currently no prebuilt distribution. [Build and run the app](docs/en/install.md#build-the-desktop-app)
-
-## Documentation
-
-Find material by purpose in the [complete docs index](docs/en/README.md).
-
-The Japanese documents are the source of truth. The English versions are in README.en.md and `docs/en/`, and every document in this table has an English version.
-
-| Document | Contents |
-| --- | --- |
-| [Installation](docs/en/install.md) | Requirements, venv, connecting to ORRERY Telemetry, the backend, `ORRERY.app` |
-| [Install with help from your agent](docs/en/install-with-agent.md) | Review the plan and keep approvals in your hands |
-| [ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.en.md) | Read-only adapter and dedicated tunnel |
-| [Configuration](docs/en/configuration.md) | All environment variables, defaults, connection targets and storage locations |
-| [Usage](docs/en/usage.md) | Roster, terminal, split, spawn, mail, TELEMETRY, replay |
-| [Troubleshooting](docs/en/troubleshooting.md) | Startup, ports, `:8770`, `pyte`, tmux, and terminal assets |
-| [Architecture overview](docs/en/ARCHITECTURE_OVERVIEW.md) | tmux, Codex App, network, data retention, handling of portrait images |
-| [Implementation architecture](docs/en/ARCHITECTURE.md) | Details of the backend, HTTP / WebSocket, and tmux control |
-| [Legacy tmux target protection](docs/en/runtime-target.md) | Pinned endpoints, global pane refusals and repair |
-| [Design language](docs/en/DESIGN.md) | The cockpit's visuals, motion, color, and typography |
-
-## Structure
-
-```text
-ORRERY.app / browser
-        │ HTTP + WebSocket (:8791)
-        ▼
-ORRERY Python backend
-  ├─ tmux control mode ── local agent sessions
-  ├─ read-only SQLite ─── ORRERY Mail
-  └─ HTTP proxy ───────── ORRERY Telemetry dashboard (:8770)
-```
-
-The ORRERY backend does not import ORRERY Telemetry's `server.py`; it works with it through an HTTP proxy and its own tmux / mail / portrait handlers. Terminal input, window size claims, spawn, and EXIT change state. It is not a mere read-only viewer.
+- [Choose a guide by task](docs/en/README.md#choose-a-task)
+- [Cockpit map](docs/en/cockpit-map.md)
+- [Install, update, or uninstall](docs/en/install.md)
+- [Configuration and stored data](docs/en/configuration.md)
+- [Troubleshooting](docs/en/troubleshooting.md)
+- [Architecture overview](docs/en/ARCHITECTURE_OVERVIEW.md)
 
 ## Security and privacy
 
-The backend binds only to `127.0.0.1` and refuses external binds. However, there is no authentication on localhost, so do not run it in an environment with untrusted local processes.
+The cockpit listens only on `127.0.0.1` and does not accept connections from other machines. It does not authenticate requests from the same machine, so use it on a machine where you trust the programs that run.
 
-The terminal recorder saves history to `~/.orrery/history` by default, and prompt drafts and up to 50 sent messages remain in the browser's `localStorage`. If you enter confidential information, check the storage locations and retention policy in [Configuration](docs/en/configuration.md#stored-data-and-privacy).
-
-## Third-party components
-
-ORRERY works with ORRERY Telemetry, `tmux`, `xterm.js`, and others. This repository does not contain ORRERY Mail code. For ORRERY Mail's license and third-party notices, see [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry).
-
-The portrait images in `assets/portraits/` and `assets/portraits_64/` are outside the PolyForm Perimeter License. The license of each image (public domain, CC0, CC BY 4.0, CC BY-SA 2.0 / 4.0), its author, source, and the processing applied follow [CREDITS.md](CREDITS.md). Processed CC BY-SA images are also provided under the same CC BY-SA. A portrait that is not in the manifest / CREDITS is not treated as an asset approved for distribution. However, the 50 pixel-art portraits in `assets/portraits_px/` were generated by the author, gyroid, with ChatGPT (OpenAI image generation) from text instructions alone. No photographs were used as input. They are distributed under the same terms as the repository (PolyForm Perimeter License 1.0.1).
+Terminal history is stored in `~/.orrery/history`. The browser keeps drafts and the last 50 messages you sent. Before working with sensitive information, check [what data is stored](docs/en/configuration.md#stored-data-and-privacy).
 
 ## License
 
-This repository is under the **PolyForm Perimeter License 1.0.1** (except the portrait images; see [Third-party components](#third-party-components)). It is source-available, not open source in the OSI sense. See [LICENSE](LICENSE) for the full text. © 2026 gyroid.
+This repository uses the **PolyForm Perimeter License 1.0.1**, with the exception of portrait images (see “Third-party components” below). It is source-available and does not meet the OSI definition of open source. See [LICENSE](LICENSE) for the full text. © 2026 gyroid.
 
-- You may use, modify, and redistribute it for any purpose
-- However, you may **not offer a product that competes with this software to others**. Free distribution, porting to another language, and offering it as a service / library / plug-in also count as competing
-- It comes with no warranty. No support is promised
+- You may use, modify, and distribute it for any purpose.
+- You may not **provide others with a product that competes with this software**. This includes offering it at no charge, porting it to another language, or providing it as a service, library, or plug-in.
+- It comes without a warranty or a promise of support.
 
-## Reporting problems
+## Third-party components
 
-Report problems in the GitHub repository's Issues. Including the task name, the steps to reproduce, the startup logs of ORRERY / ORRERY Telemetry, and the result of `/telemetry/health` will speed up isolating the cause.
+ORRERY integrates with ORRERY Telemetry, `tmux`, `xterm.js`, and other components. This repository does not contain the ORRERY Mail code. See [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry) for the ORRERY Mail license and third-party notices.
 
-In split view, each pane's title bar shows its name and status, with Reader,
-full-width and window icons. Each action targets that pane; the single-pane header stays unchanged.
+The portraits in `assets/portraits/` and `assets/portraits_64/` are outside the scope of the PolyForm Perimeter License. See [CREDITS.md](CREDITS.md) for each image’s license (public domain, CC0, CC BY 4.0, or CC BY-SA 2.0 / 4.0), author, source, and modifications. Modified CC BY-SA images use the same CC BY-SA license. Portraits missing from the manifest or CREDITS are not considered cleared for distribution. The 50 pixel-art portraits in `assets/portraits_px/` were generated by gyroid using ChatGPT (OpenAI image generation) from text prompts alone. No photographs were used as inputs. These images are distributed under the same terms as the repository (PolyForm Perimeter License 1.0.1).
+
+## Report a problem
+
+Report problems in GitHub Issues. Include steps to reproduce, the ORRERY and ORRERY Telemetry startup logs, and the result from `/telemetry/health` to help narrow down the cause.

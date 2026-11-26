@@ -6,7 +6,7 @@
 
 ## Install or update with one line
 
-On macOS, Ubuntu 24.04 or later, or Ubuntu in WSL2 on Windows, [prepare your system](../../README.en.md#before-you-start) and run the shared installer below. Setup is complete when the terminal reports `ORRERY's base is ready` and the printed URL opens the cockpit with **Your first flight** in your browser.
+On macOS, Ubuntu 24.04 or later, or Ubuntu in WSL2 on Windows, [prepare your system](#before-you-start) and run the shared installer below. Open the printed `Open:` URL (default `http://127.0.0.1:8791/cockpit.html`) and check for **Your first flight**. The line `ORRERY's base is ready` means doctor and the Mail round-trip, reservation, and dashboard selftests passed. If a check warns or fails, use the message to find the matching step under [When something is missing](#when-something-is-missing).
 
 The installer installs both components, runs the doctor and selftest, and starts the cockpit in the background. The same command updates an existing installation.
 
@@ -28,7 +28,30 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - At the end it shows the results of the 4 settings changes, the Mail action, and doctor/selftest. When the shared checks pass, the final message starts with `ORRERY's base is ready`. It names a detected Claude/Codex CLI, but does not verify its sign-in or an API connection. DeepSeek/Local users continue with the initial setup and launch check below
 - If a cockpit of another version that this setup did not start is already running, it is not stopped; you are told to press Ctrl-C in its window and run the same line again
 - **When something fails**: a check that fails before you type yes means the setup changed nothing (what `get.sh` did before it stays, and the screen says so: a newly downloaded cockpit checkout, or git data fetched into an old one). After that, **nothing is rolled back**: you get a table of what changed since the first attempt and the line that carries on (the first attempt's record, in `~/.orrery-install/`, is kept until a run passes every check). There is no command to go back to the previous version
-- To uninstall a new install, use the printed `<orrery-telemetry checkout>/scripts/uninstall.sh` (the Mail database stays unless `--purge-data`; the 2 checkouts, uv and Python stay). To uninstall, see [Uninstall](../../README.en.md#uninstall) in the README. **Do not use it to undo an update**: it removes the whole install
+- To uninstall a new install, use the printed `<orrery-telemetry checkout>/scripts/uninstall.sh` (the Mail database stays unless `--purge-data`; the 2 checkouts, uv and Python stay). To uninstall, see [Uninstall the shared install](#uninstall-the-shared-install). **Do not use it to undo an update**: it removes the whole install
+
+### Before you start
+
+- **macOS** with Homebrew installed. Run `brew install curl git tmux python@3.13`. Use the `lsof` included with macOS.
+- **Ubuntu / WSL2**. In the Ubuntu shell, run `sudo apt update && sudo apt install -y ca-certificates curl git tmux python3 python3-venv xz-utils`. For Hermes, also run `sudo apt install libatomic1`.
+
+Install **Python 3.11 or later**. An interpreter installed through uv also works.
+
+### Add the features you use
+
+Set up the features you want after the base install. Each guide covers the first launch that verifies your CLI login or API connection.
+
+| Feature | What to prepare and where to start |
+| --- | --- |
+| Claude Code / Codex CLI | Install and sign in to your chosen CLI. [Mac](#mac) / [WSL](#windows-11) |
+| DeepSeek / Local (dsh or Hermes) | Prepare the API connection, model, and required key and key store. dsh uses Node.js 24.2 or later. [API setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) |
+| Gemini (Antigravity) | Install Antigravity CLI (`agy`), sign in, and complete the Gemini setup in Telemetry. In the macOS cockpit, choose **Antigravity** and a model in NEW AGENT. [Gemini setup guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.en.md) |
+| Computer use | Set up Cua Driver and grant OS screen recording and interaction permissions. [Computer use](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/computer-use.en.md) |
+| Browser use | Set up Chrome and the connection for your harness. [Browser setup and approvals](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/delegation.en.md#browser-and-computer-use-what-is-reachable-and-what-a-person-does) |
+| Phone | Configure Tailscale and check which devices can reach the reader. [Phone access](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md) |
+| ChatGPT MCP | Pair the read-only adapter (default port 8792) and connect a dedicated tunnel and workspace. [ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.en.md) |
+| Obsidian research set | Add Obsidian, a research vault, and the research skill. [Research set](research-set.md) |
+| Codex App | Set up Codex App and the required CLI, install the plugin, and review the hooks. [Codex App integration](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/codex-app.en.md) |
 
 ### First-time setup for DeepSeek, dsh, and Hermes
 
@@ -98,11 +121,14 @@ So you can check before installing it on your own computer, here is what is inst
 
 | Where | What |
 | --- | --- |
-| `~/orrery`, `~/orrery-telemetry` | ORRERY's source |
+| `~/orrery` | Cockpit source, including the start and update scripts |
+| `~/orrery-telemetry` | Source for Telemetry, Mail, hooks, and the installer. The installed copy runs from `~/.agentstack` |
 | `~/.agentstack` | the parts that actually run, their settings, and Mail's records |
 | `~/.orrery`, `~/.orrery-install` | screen history and settings, and install records |
 | `~/orrery-work` | the agents' work folder (`--project-key` or the research set can make it another folder) |
 | `uv` in `~/.local/bin` | a Python tool (installed only if missing) |
+
+By default the cockpit uses port 8791, Telemetry uses 8770, and a new Mail install uses 18765. Mail and reservations follow the project setting. The installed settings file is `~/.agentstack/env.sh`.
 
 **Settings it adds to (the previous content is kept as a backup)**
 
@@ -118,7 +144,7 @@ So you can check before installing it on your own computer, here is what is inst
 
 By default, Claude and Codex user settings live in the home directory of the operating system where setup runs. For WSL2 that is the Ubuntu home. If you override the settings locations, review those paths before approval. ORRERY leaves shell dotfiles alone. The cockpit and Mail bind to `127.0.0.1` by default. [Instruction migration](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.en.md)
 
-**Uninstall**: if you installed the Codex plugin, **first** remove it with `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` (its record is inside `~/.agentstack`, so it cannot be removed once that is gone). Then follow [Uninstall](../../README.en.md#uninstall) in the README (`~/.agentstack/bin/agentstack-uninstall --purge-data` removes `~/.agentstack`, the background entries and the skill links, and takes back what was added to `~/.claude/settings.json` and `~/.claude.json`; then stop the cockpit and run `rm -rf ~/orrery ~/orrery-telemetry`). The ORRERY blocks in `~/.codex/AGENTS.md` and in the work folder's `CLAUDE.md` stay; delete what is between the markers by hand if you do not want them. All of the source is public on GitHub ([orrery](https://github.com/gyroid-eth/orrery), [orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)).
+For removal, see [Uninstall the shared install](#uninstall-the-shared-install).
 
 ### Mac
 
@@ -317,6 +343,8 @@ If you want to use Obsidian, set it up after you have opened the cockpit in your
 
 ### Using it with Obsidian
 
+If an agent works in an Obsidian vault, its work logs, paper notes, and tasks can be Markdown files you can see in Daily Note and Kanban. Select a note path from the cockpit terminal to open it. ORRERY works without Obsidian. Use the [public demo vault](https://github.com/gyroid-eth/orrery-demo-vault) to practice, or [set an existing vault as the work folder](#change-the-work-folder). The [research set](research-set.md) includes the vault and the [digest-paper add-on](https://github.com/gyroid-eth/orrery-digest-paper). In the reading-note workflow, Claude writes the note and Codex checks it against the paper and figures. There is also a Zotero variant.
+
 The same on Mac and Windows (on Windows, type it in the Ubuntu window). This installs the research set: digest-paper, which turns papers into reading notes, and a practice Obsidian vault. Choose **one** of the two lines: the English vault and requests (`--lang en`), or the Japanese ones (no option).
 
 English:
@@ -447,6 +475,8 @@ If no agents appear in the list on the left, start one from the cockpit's NEW AG
 
 #### 5. Update
 
+Existing installs keep their settings and Mail database. Updates leave the running Mail service in place by default (`--mail keep`). New child agents normally open in the cockpit without a separate OS terminal. An explicit choice is preserved, and **Open tmux** opens a window as needed. Updating alone does not set up DeepSeek or local API connections. See the [Telemetry changelog](https://github.com/gyroid-eth/orrery-telemetry/blob/master/CHANGELOG.md) for changes on that side.
+
 To add DeepSeek, dsh, or Hermes for the first time, also complete the [initial setup](#first-time-setup-for-deepseek-dsh-and-hermes) after updating. An update alone does not configure API keys or connections.
 
 Run this in the cockpit folder. It brings orrery-telemetry and the cockpit up to date in one go.
@@ -506,6 +536,8 @@ To check the prerequisites and prepare the Python environment without starting t
 - Shortcuts such as `Cmd+K` become `Alt+K` and so on. For the list of differences, see ["Differences on Windows (WSL2)" in Usage](usage.md#differences-on-windows-wsl2)
 
 ## Requirements
+
+The shared installer also needs `curl` and `git`. On macOS it uses the bundled `lsof`. On Ubuntu or WSL2 it needs `xz` and checks port ownership through `/proc` if `lsof` is unavailable. If the installer cannot find Homebrew’s `tmux`, configure `brew shellenv` in your shell to put Homebrew’s bin directory on PATH (typically `/opt/homebrew/bin` on Apple silicon).
 
 `ORRERY.app` is officially supported on macOS. The Python backend assumes Unix / tmux and has no macOS-only guard. Using it in a browser on Windows WSL2 (Ubuntu) is also still being verified ([For first-time installers](#for-first-time-installers-browser-mac--windows-wsl2)). Other operating systems are not guaranteed as a product.
 
@@ -633,6 +665,8 @@ You can change the standalone backend's port with `PORT` or `--port`, but `ORRER
 
 ## Build the desktop app
 
+The app, its dedicated installer, and the global hotkey are for macOS. Build the app from source with Node.js/npm and Rust/Cargo. We don’t provide a build for distribution. See the [desktop app development guide](../../app/README.md).
+
 This advanced macOS option is for after you are comfortable operating agents in the browser. Build `ORRERY.app` from source.
 
 ```bash
@@ -711,6 +745,8 @@ The app starts even if all of them fail. Check the startup log for the binding t
 
 ## Data locations and uninstall
 
+### Remove the macOS app
+
 Deleting `ORRERY.app` alone does not delete the related checkout, backend, history, ORRERY Telemetry, or tmux sessions.
 
 | Item | Default location / state | After the app is deleted |
@@ -738,6 +774,42 @@ To delete the optional data too, check each item individually before you delete 
 5. The WebView / browser localStorage for the ORRERY origin
 
 ORRERY Telemetry, the ORRERY Mail DB, and the user's tmux sessions are shared infrastructure and user data. Do not delete them in ORRERY's uninstall steps.
+
+### Change the work folder
+
+Add `--project-key` to the install line. To change it later, run the same line again with `--project-key`.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key ~/my-project
+```
+
+**To have agents work on an Obsidian vault**, pass the vault's path as `--project-key` (for example `--project-key ~/Documents/MyVault`). See [instruction migration](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.en.md) for user-scoped instructions. **On WSL2, keep the work folder inside the Ubuntu home.** If you pass a Windows-side folder (`/mnt/c/…`) as `--project-key`, the one-line installer stops without changing anything. Do not make a Windows-side vault the work folder: keep the work folder in the Ubuntu home and hand agents the `/mnt/c/…` path to work on, as the [research set](research-set.md) does.
+
+- If an old working folder still contains a managed block, review [instruction migration](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.en.md#legacy-blocks).
+- Mail is scoped per project. Agents that were already running keep showing in Telemetry, but they stay on the old project and cannot exchange Mail with new agents. EXIT them and start them again.
+- The folder choices of `+ NEW AGENT` are the work folder and `~` by default. To change them, use `cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"` (the project key is kept).
+- Start a managed agent with `+ NEW AGENT`, `~/.agentstack/bin/agent-start <work folder>`, or `agent-start-codex` for Codex.
+
+Include the work folder in a custom list of spawn folders. Only listed folders will be available.
+
+### Uninstall the shared install
+
+If you installed the Codex plugin, remove it first with `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh`. That script needs the installation record in `~/.agentstack`. [Instruction migration](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.en.md) explains which managed blocks are removed automatically and which need manual review.
+
+`agentstack-uninstall` removes only what is inside `~/.agentstack` (plus the services and the settings changes). The source folders, your work folder, and uv stay.
+
+```bash
+~/.agentstack/bin/agentstack-uninstall --dry-run      # check first
+~/.agentstack/bin/agentstack-uninstall --purge-data   # also delete the Mail DB (omit to keep it)
+```
+
+Then stop the cockpit. A cockpit that the one-line installer started in the background runs in its own tmux server. Run the `Stop it:` line the installer printed at the end (by default `tmux -L orrery-cockpit kill-session -t cockpit-8791`). If you ran `start-cockpit.sh` yourself, press `Ctrl-C` in that window. Quit `ORRERY.app`. Check that `http://127.0.0.1:8791/` no longer opens, then remove the source folders.
+
+```bash
+rm -rf ~/orrery ~/orrery-telemetry
+```
+
+Your work folder (such as `~/orrery-work`) is where your own work lives; delete it only if you decide to. `uv`, if the installer added it, stays in `~/.local/bin`.
 
 ## Related documents
 

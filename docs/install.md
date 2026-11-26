@@ -6,7 +6,7 @@
 
 ## 1 行で入れる・更新する
 
-macOS、Ubuntu 24.04 以降、Windows の WSL2 Ubuntu では、[README の準備](../README.md#始める前に)を済ませてから共通の1行を実行します。導入の完了は、表示された URL をブラウザーで開いて **Your first flight** が見えることと、ターミナルに `ORRERY's base is ready` が出ることで確かめます。
+macOS、Ubuntu 24.04 以降、Windows の WSL2 Ubuntu では、[始める前に](#始める前に)を済ませてから共通の1行を実行します。表示された `Open:` の URL（既定は `http://127.0.0.1:8791/cockpit.html`）をブラウザーで開き、**Your first flight** が見えることを確かめます。ターミナルの `ORRERY's base is ready` は doctor と Mail の往復・予約・dashboard の selftest が通ったことを示します。警告や失敗が出たら[足りないものがあるとき](#足りないものがあるとき)で表示に対応する手順を確認します。
 
 installer は両方を導入して doctor と selftest を実行し、cockpit をバックグラウンドで起動します。同じ1行で既存の導入も更新できます。
 
@@ -28,7 +28,30 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 - 最後に、4項目の適用結果、Mailの扱い、doctorとselftestの結果を出します。共通部分の確認が通ると`ORRERY's base is ready`で始まる案内が出ます。検出したClaude/Codex CLIの名前は表示しますが、ログインやAPI接続は検査していません。DeepSeek/Localを使う人は下の初回設定と実起動確認へ進みます
 - この setup が起動したのではない cockpit が別の版で動いているときは、止めずに「その窓で Ctrl-C して、同じ 1 行をもう一度」と案内します
 - **失敗したとき**: 承認の前の検査で止まったときは、setup は何も変えていません（ただし入口の `get.sh` がその前に行ったこと、つまり新しく取得した cockpit の checkout、または従来版の `.git` への取得は残り、画面にそう出ます）。承認の後に失敗したときは**巻き戻しません**。最初の試みの時点と今とで何が変わったかを表で出し、続きから進める 1 行を出します（その表の「最初」は、すべての確認が通るまで上書きされません。`~/.orrery-install/`）。前の版に戻すコマンドは用意していません
-- 新しく入れたものをアンインストールするときは、表示された `<orrery-telemetry の checkout>/scripts/uninstall.sh` を使います（Mail の DB は `--purge-data` を付けない限り残ります。2 つの checkout・uv・Python も残ります）。アンインストールの手順は README の[アンインストール](../README.md#アンインストール)です。**更新の取り消しには使わないでください**（既存の環境ごと取り除きます）
+- 新しく入れたものをアンインストールするときは、表示された `<orrery-telemetry の checkout>/scripts/uninstall.sh` を使います（Mail の DB は `--purge-data` を付けない限り残ります。2 つの checkout・uv・Python も残ります）。手順は[共通インストールのアンインストール](#共通インストールのアンインストール)を参照してください。**更新の取り消しには使わないでください**（既存の環境ごと取り除きます）
+
+### 始める前に
+
+- **macOS**（Homebrew 導入済み）。`brew install curl git tmux python@3.13`。macOS 同梱の `lsof` を使います。
+- **Ubuntu／WSL2**。Ubuntu のシェルで `sudo apt update && sudo apt install -y ca-certificates curl git tmux python3 python3-venv xz-utils`。Hermes を使う場合は `sudo apt install libatomic1` も実行します。
+
+**Python 3.11 以上**を用意します。uv で導入済みの Python も使えます。
+
+### 使う機能を追加する
+
+共通部分を入れたら、使う項目だけを設定します。CLI のログインと各 API の接続は、選んだガイドの初回起動で確認します。
+
+| 使う機能 | 準備するものと手順 |
+| --- | --- |
+| Claude Code / Codex CLI | 使う CLI を入れてログイン。[Mac](#mac) / [WSL](#windows-11) |
+| DeepSeek / Local（dsh・Hermes） | API 接続、model、必要なキーと鍵束を準備。dsh は Node.js 24.2 以上を使用。[初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
+| Gemini（Antigravity） | Antigravity CLI（`agy`）を入れてサインインし、Telemetry で Gemini の設定を済ませます。macOS の cockpit の NEW AGENT で **Antigravity** と model を選びます。[Gemini の導入ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.md) |
+| 画面操作 | Cua Driver と OS の画面収録・操作の許可。[Computer use](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/computer-use.md) |
+| ブラウザー操作 | Chrome と利用する harness の接続設定。[ブラウザーの設定と許可](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/delegation.md#ブラウザと-computer-use-何が届くか人がやること) |
+| スマホ | Tailscale の設定と端末の到達範囲の確認。[スマホ閲覧](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md) |
+| ChatGPT MCP | 既定ポート 8792 の読み取り専用アダプターをペアリングし、専用 Tunnel と workspace を設定。[ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.md) |
+| Obsidian の研究セット | Obsidian と研究用の vault・skill を追加。[研究セット](research-set.md) |
+| Codex App | Codex App と対応 CLI、plugin の導入と hook の承認。[Codex App 統合](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/codex-app.md) |
 
 ### DeepSeek・dsh / Hermes の初回設定
 
@@ -98,11 +121,14 @@ DeepSeek/Localだけを使う場合、ClaudeやChatGPTへのログインは不�
 
 | 場所 | 中身 |
 | --- | --- |
-| `~/orrery`・`~/orrery-telemetry` | ORRERY の source |
+| `~/orrery` | cockpit の source、起動と更新の script |
+| `~/orrery-telemetry` | Telemetry・Mail・hook・installer の source。実際に動くのは `~/.agentstack` に入れた方 |
 | `~/.agentstack` | 実際に動いている本体・設定・Mail の記録 |
 | `~/.orrery`・`~/.orrery-install` | 画面の履歴と設定・install の記録 |
 | `~/orrery-work` | agent の作業 folder（`--project-key` や研究セットで別の folder にできます） |
 | `~/.local/bin` の `uv` | Python の道具（無いときだけ入れます） |
+
+既定ポートは cockpit が 8791、Telemetry が 8770、新規の Mail が 18765 です。Mail と予約は project の設定に従います。実行中の設定は `~/.agentstack/env.sh` にあります。
 
 **書き足す設定（書き換える前の内容は backup に残します）**
 
@@ -118,7 +144,7 @@ DeepSeek/Localだけを使う場合、ClaudeやChatGPTへのログインは不�
 
 既定の保存先では Claude と Codex の利用者設定を各 OS の home に置きます。WSL2 では Ubuntu の側です。設定の保存先を変更している場合は、承認前に表示される path を確認します。ORRERY はシェルの dotfile を変更しません。画面と Mail は既定で `127.0.0.1` で待ち受けます。[指示の移行](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.md)
 
-**アンインストール**: Codex の plugin を入れた人は、**最初に** `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` で外します（plugin の記録は `~/.agentstack` の中にあるので、先に消すと外せなくなります）。そのあとは README の[アンインストール](../README.md#アンインストール)の手順です（`~/.agentstack/bin/agentstack-uninstall --purge-data` で `~/.agentstack`・裏で動かす登録・skill のリンクを消し、`~/.claude/settings.json` と `~/.claude.json` に書き足した分を戻します。cockpit を止めてから `rm -rf ~/orrery ~/orrery-telemetry`）。[指示の取り外し](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.md)では、記録済みの block と手動確認の対象を区別します。source はすべて GitHub で公開しています（[orrery](https://github.com/gyroid-eth/orrery)・[orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)）。
+削除は[共通インストールのアンインストール](#共通インストールのアンインストール)を参照してください。
 
 ### Mac
 
@@ -317,6 +343,8 @@ Obsidian を使う場合は、ブラウザーの cockpit を開けることを�
 
 ### Obsidian と一緒に使う
 
+Obsidian の vault で agent を動かすと、作業ログ・論文ノート・タスクを Markdown にでき、Daily Note や Kanban で確認できます。agent がターミナルに出したノートのパスは cockpit から開けます。ORRERY は Obsidian がなくても動きます。試すには[公開 demo vault](https://github.com/gyroid-eth/orrery-demo-vault)、手元の vault を使うには[作業 folder の変更](#作業-folder-を変える)を参照してください。[研究セット](research-set.md)には demo vault と [digest-paper](https://github.com/gyroid-eth/orrery-digest-paper) が入ります。読書ノートは Claude が書き、Codex が本文と図に照らして確認します。Zotero 向けの版もあります。
+
 Mac も Windows も同じです（Windows は Ubuntu の画面で打ちます）。研究セット（論文を読書ノートにする digest-paper と、練習用の Obsidian の vault）を入れます。次の 2 行の**どちらか 1 つ**を打ちます。英語の vault と頼み方の文（`--lang en`）か、日本語のもの（オプション無し）です。
 
 英語:
@@ -447,6 +475,8 @@ script は 1 回で次を行います。
 
 #### 5. 更新する
 
+以前の版から更新するときは既存の設定と Mail の DB を引き継ぎ、既定では動いている Mail を切り替えません（`--mail keep`）。子は既定で OS の端末窓を自動で開きません。明示した設定は引き継ぎ、必要な窓は **Open tmux** で開けます。通常更新だけでは DeepSeek や Local の API 接続先・キーは設定されません。Telemetry 側の変更は[変更履歴](https://github.com/gyroid-eth/orrery-telemetry/blob/master/CHANGELOG.md)で確認できます。
+
 DeepSeek・dsh / Hermesを初めて追加する場合は、通常の更新後に[初回設定](#deepseekdsh--hermes-の初回設定)も必要です。更新だけではAPIキーや接続先は設定されません。
 
 cockpit の folder で次を実行します。orrery-telemetry と cockpit が 1 回で最新になります。
@@ -506,6 +536,8 @@ script は前提をまとめて確かめ、足りないものを `NG` の行で�
 - `Cmd+K` などの shortcut は `Alt+K` などに変わります。違いの一覧は [使い方の「Windows（WSL2）での違い」](usage.md#windowswsl2での違い) を参照してください
 
 ## 動作環境
+
+共通導入では `curl` と `git` も使います。macOS では同梱の `lsof`、Ubuntu／WSL2 では `xz` を使い、`lsof` がなければ `/proc` でポートの使用元を確認します。Homebrew で入れた `tmux` が見つからないときは、`brew shellenv` を shell に設定して Homebrew の bin（Apple silicon では通常 `/opt/homebrew/bin`）を PATH に通します。
 
 `ORRERY.app` の正式な利用対象は macOS です。Python backend は Unix / tmux を前提にしており、macOS 専用 guard はありません。ブラウザで開く使い方は Windows の WSL2（Ubuntu）でも確認中です（[はじめて入れる人へ](#はじめて入れる人へブラウザで使うmac--windows-wsl2)）。それ以外の OS は製品として保証していません。
 
@@ -633,6 +665,8 @@ open http://127.0.0.1:8791/cockpit.html
 
 ## desktop app を build する
 
+アプリと専用 installer、global hotkey は macOS 向けです。Node.js/npm と Rust/Cargo で source からビルドします。配布用のビルドは提供していません。[開発用の設定](../app/README.md)も参照できます。
+
 ブラウザー版で agent の操作に慣れた人向けの macOS 上級手順です。`ORRERY.app` はソースからビルドします。
 
 ```bash
@@ -711,6 +745,8 @@ app は次の順に登録を試み、最初に利用できる key を採用し�
 
 ## データの置き場所とアンインストール
 
+### macOS アプリを削除する
+
 `ORRERY.app` を削除するだけでは、関連する checkout、backend、履歴、ORRERY Telemetry、tmux session は削除されません。
 
 | 対象 | 既定の場所 / 状態 | app 削除後 |
@@ -738,6 +774,40 @@ app は次の順に登録を試み、最初に利用できる key を採用し�
 5. ORRERY origin の WebView / browser localStorage
 
 ORRERY Telemetry、ORRERY Mail DB、利用者の tmux session は共有基盤・利用者データです。ORRERY のアンインストール手順で削除しないでください。
+
+### 作業 folder を変える
+
+install の 1 行に `--project-key` を足します。後から変えるときも、同じ 1 行に `--project-key` を付けて実行し直します。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash -s -- --project-key ~/my-project
+```
+
+**Obsidian の vault を agent に扱わせたいとき**は、`--project-key` に vault の path を渡します（例: `--project-key ~/Documents/MyVault`）。利用者単位の指示は [指示の移行](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.md) を参照してください。**WSL2 では、作業 folder は Ubuntu の home の中に置きます。** Windows 側の folder（`/mnt/c/…`）を `--project-key` に渡すと、1 行の installer は何も変えずに止まります。Windows 側の vault は作業 folder にせず、作業 folder を Ubuntu の home に置いたまま、agent に `/mnt/c/…` の path を渡して扱わせます（[研究セット](research-set.md)がこの形です）。
+
+- 旧版の作業フォルダーに指示の block があれば、[指示の移行](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.md#legacy-blocks)で確認します。
+- Mail は project 単位です。変える前に起動していた agent は Telemetry に出続けますが、古い project のままで、新しい agent と Mail が通じません。EXIT して起動し直してください。
+- `+ NEW AGENT` の folder の候補は、既定では作業 folder と `~` です。変えるには `cd ~/orrery-telemetry && ./scripts/install.sh --spawn-dirs "$HOME/a:$HOME/b"`（project key は引き継がれます。指定した folder だけになるので、作業 folder も入れます）。
+- ORRERY の管理下で agent を起動するには、`+ NEW AGENT`、`~/.agentstack/bin/agent-start <作業 folder>`、または Codex 用の `agent-start-codex` を使います。
+
+### 共通インストールのアンインストール
+
+Codex の plugin を入れた場合は、先に `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` で外します。外す処理には `~/.agentstack` の中の導入記録が必要です。[指示の取り外し](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.md)で、記録済みの block と手動で確認する箇所が分かります。
+
+`agentstack-uninstall` が消すのは `~/.agentstack` の中（と service、settings の変更）だけです。source・作業 folder・uv は残ります。
+
+```bash
+~/.agentstack/bin/agentstack-uninstall --dry-run      # 先に確認
+~/.agentstack/bin/agentstack-uninstall --purge-data   # Mail の DB も消す（残すなら付けない）
+```
+
+次に cockpit を止めます。1 行の installer が裏で起動した cockpit は、別の tmux server で動いています。installer の最後に表示された `Stop it:` の行（既定は `tmux -L orrery-cockpit kill-session -t cockpit-8791`）を実行します。自分で `start-cockpit.sh` を動かしたなら、その窓で `Ctrl-C` です。`ORRERY.app` は終了します。`http://127.0.0.1:8791/` が開かなくなったことを確かめてから、source を消します。
+
+```bash
+rm -rf ~/orrery ~/orrery-telemetry
+```
+
+作業 folder（`~/orrery-work` など）は自分の仕事の場所なので、消すかどうかは自分で決めます。入れた `uv` は `~/.local/bin` に残ります。
 
 ## 関連文書
 

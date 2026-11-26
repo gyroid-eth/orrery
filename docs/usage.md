@@ -8,6 +8,8 @@ ORRERY cockpit は、左の roster、中央の terminal、右の ORRERY Mail rai
 
 ## やりたいことから探す
 
+[目的別ガイド](README.md#目的から選ぶ)・[画面一覧](cockpit-map.md)から、実画面の短い見本を開けます。
+
 | やりたいこと | 操作 | 詳細 |
 | --- | --- | --- |
 | 稼働中の agent を見つけたい | 左 roster を検索し、tile をクリック | [Roster](#roster) |
@@ -112,7 +114,7 @@ Antigravity では Telemetry API 53 以降が ORRERY の起動時の選択を表
 
 詳細 card から道具を変更できるのは、legacy の Claude Code／Codex CLI で、会話の照合と Restart／Resume の条件を満たす場合です。親付きは Telemetry API 45 以降、親なしは API 46 以降と保存済みの起動設定が必要です。表示された項目を選んで、同じ会話の **Restart** または **Resume** を確認します。Restart は作業中のターンを中断します。Codex App、常駐 agent、会話のみの Resume などでは変更ボタンに理由が出ます。
 
-![Agent にカーソルを置くと、詳細に Computer use の Off・View・Control と Browser の状態が出る](images/cockpit_roster_detail.png)
+![Agent にカーソルを置くと、詳細に Computer use と Browser の現在の権限と選択肢が出る](images/cockpit_roster_detail.png)
 
 成果物（Deliverables）は、ORRERY Telemetry が project の `logs/` から集めた、その agent の作業ログ（`LOG_*.md` のうち frontmatter の `agent:` がその agent のもの）です。一覧は TELEMETRY の agent panel の `Output` タブで開けます（[TELEMETRY](#telemetry)）。
 
@@ -199,6 +201,48 @@ Select mode では eligible な live agent を複数選び、ORRERY Telemetry �
 
 これは agent process へ終了を依頼する変更操作です。mail の読み取りや UI filter とは異なり、実行前に対象を再確認してください。ORRERY Telemetry dashboard が不達の場合は利用できません。
 
+## Reader
+
+Reader は agent の作業を追う主な画面です。ペイン上部の Reader アイコンを押すと、発言、作業ステップ、表、差分が読みやすく整い、参照ファイルをその場で開けます。ペインが狭い場合は Reader が全面に開きます。**Settings → Appearance → Open agents in** から、agent を開くときの表示を選べます。
+
+[Reader で作業と参照ファイルを見る](read-a-file.md)
+
+### 表示・履歴・参照ファイル
+
+Reader アイコンをもう一度押すと閉じます。**Settings → Appearance → Reader** をオフにすると、パネルとボタンが消え、履歴の読み込みが止まります。ペインの見出しには provider のロゴ、agent 名、表示用のモデル名が並びます。完全なモデル ID は title で確認できます。幅が狭いとモデル名から省略し、名前と操作は残ります。選択中の agent が作業中はロゴがゆっくり明滅し、待機中や動きを減らす設定では静止します。一番右の **×** で分割ペインを閉じます。
+
+履歴は端末の横に開き、pane 上部の **⤢** で pane 全体に広げ、もう一度押すと元の幅に戻せます。狭い画面では pane 全体に表示します。スクロールしている間は新しい記録が来ても読んでいる位置を保ち、**Load earlier** がある場合は過去へ遡れます（1回で最大約300件。tool の呼び出しと結果も1件ずつ数えます。手元に置く量には上限（800件または 2 MiB）があり、遡って超えると新しい側を外して更新を止めます。最下部で新着を読んでいるときは古い側から外します）。過去を読んでいるときだけ本文の右下に重ねて出る **↓（最新へ）** で最新に戻れます。CLAIMED では Reader を横に開くと端末を残りの幅に合わせ、閉じると元の幅に戻します。全幅では端末に重ねて表示します。FOLLOW では外部の端末の幅を保つため、一部が Reader に隠れます。分割中は各 pane の **Reader アイコン** で独立して開き、全幅や preview もその区画内に収まります。履歴を操作した pane が下の prompt 欄の送り先になります。別の pane を閉じても、残った pane の履歴の表示幅・読み位置・開いた Mail や preview は保たれます。幅が変わると読み位置が1〜2行ずれることがあります。
+
+全幅でも入力欄から送信できます。履歴を読むキーは端末に送られず、Enter または **SEND** で明示的に送ります。送信すると対象 pane の preview を閉じ、履歴は最新を追います。送信中に対象の端末や接続が変わった場合は中止して知らせます。送信後は、対象の履歴の末尾に「Sent → agent 名 · Awaiting record」の仮の行が現れ、対応する発言が記録されると置き換わります。これは agent が処理を確認したことを示すものではありません。照合できない場合は「Record not matched」と表示し、**Dismiss** で仮の行を閉じられます。`! cmd` の送信は、記録されたシェルのコマンドとも照合します。
+
+発言の本文を選択すると **Reply with reference** が現れます。押すと、選んだ文章が元の入力欄の上に引用として付きます。返信を書いて **SEND** を押すと、発言元・時刻・記録上の発言ID・引用文と一緒に送ります。引用の **×（Remove reference）** は、入力した返信を残して引用だけを外します。画像・ファイルは preview の **Reply with reference** から、その名前と発言元を参照できます。ファイル自体の再添付は行いません。別の agent や別セッションに切り替わった場合は、元の会話に戻るか参照を外すまで引用付きの送信を止めます。
+
+Codex の現在の端末表示から compact 中と確認できる間は、Reader 上部に **Compacting context…** と端末が報告した経過時間を表示します。過去の発言を読んでいても見え、完了・接続切断時に消えます。現在は Codex の既知の端末ステータスに対応しています。同じ内容と順序の snapshot を繰り返し受け取った場合は、メッセージのDOMを付け直さず、選択中の文章と開いた表示を保ちます。
+
+履歴の中身を見せる前には、必ず telemetry の dashboard でその agent の記録の対応を確かめます。記録が変わっていないという中身のない応答は、最後の確認から最大30秒、確かめずに返します。保持できるのは cockpit 全体で4本（1つのページでも最大4本）です。それを超えた pane は4秒ごとの読み込みになります（その後に通信・読み取り・描画の時間が加わります）。ただし、上限に達したときに記録が変わった pane は、2秒以上何も変わらずに保持している pane から枠を譲り受けます。譲った pane は4秒ごとの読み込みに戻ります。Hermes では、同じ state.db に別の session だけが書いた場合も記録が変わったと数えるので、中身の変わらない pane が枠を受け取ることがあります（そのとき、譲った pane は4秒ごとの読み込みになります）。利用者の操作の間は、どの tab でも保持をしません。操作がすべて終わった時点で保持に戻ります。操作として数えるのは、URL を開く・Finder や Explorer で表示する・Ghostty を開く・EXIT・spawn・記録の file の表示、clipboard の file の読み取り、file の preview、履歴の Load earlier と Retry、NETWORK の画面からの操作（jump・kill・EXIT・注記・spawn・再開）です。端末の path に mouse を重ねたときの確認、NETWORK の画面が自動で送る error 報告と、spawn の folder 一覧などの上に挙げていない GET は、利用者が押して始まったものでも数えません。操作は response の header が届いた時点で終わったと数えます（preview の本文を受け取っている間に保持が戻ることがあります）。操作は、自分の tab でも別の tab でも、90秒（dashboard が spawn に許す最長）を過ぎると数えるのをやめます。後から開いた tab は、開いたときに他の tab で進行中の操作を一度問い合わせます。NETWORK の画面が途中で移動したときは、その画面の操作をその時点で終わったと数えます。prompt の送信は WebSocket で送るので、保持とは接続を取り合いません。dashboard が API 36 以降なら、1人分を返す `/api/agents/<name>/history-binding` で確かめ、それより前の dashboard や、この route が使えないときは、従来どおり roster 全体で確かめます（[API](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/api.md)）。
+
+agent の発言は Markdown の見出し・太字・箇条書き・引用・inline code などを描きます。コードの塊は横にスクロールでき、**Copy** で改行や空白を含む中身をコピーできます。生の HTML は文字のまま表示し、Markdown の画像を取りには行きません。人が打った本文は文字のままです。表も横にスクロールでき、**Copy Markdown** で元の表をコピーできます。
+
+Claude の `!` の記録は **SHELL** と表示し、続くコマンドと出力を1つのまとまりにします。長い出力は短く表示し、**Show all** で開けます。slash command もコマンドと出力の塊として表示します。文字参照は認識した記録の中だけで戻し、コマンドもコピーできます。background task などの system 通知は、人の発言と区別した短い1行で表示し、押すと記録の詳細を開閉できます。Claude・Codex の compact の記録も **Context compacted** の1行になり、記録に読める要約がある場合は開いて読めます。セッションが変わったときは前の表示を消し、**New session** と表示して自動で読み直します。変化が続く場合は通常の間隔で確認し、Retry は不要です。
+
+記録に file の参照や編集要求の差分があれば、file チップや差分を表示します。Claude の SendUserFile で渡された file と、agent が ORRERY Mail の `show_files` で見せた file や画像も、チップから preview できます（Claude・Codex・dsh・Hermes のどれでも同じです）。チップを押すと現在の text や画像を preview できます。`.md` は見出し・表・箇条書き・code などを描いた形で開き、**Source** で元の文字に切り替えられます（生の HTML は文字のまま出し、画像は読みに行かず、リンクは http(s) と mailto だけを新しい tab で開きます）。記録された差分と現在の file は別物です。**Reveal in file manager** を押すと Finder や Explorer で選択します。
+
+発言や tool の本文を押すと、同じ pane の端末に残る文字列を探し、一意に一致した場合だけその行へ移ります。見つからない、複数一致する、または検索上限に達した場合は移動せずに知らせます。文字の選択・コピーや file チップはそれぞれの操作のままです。
+
+記録内の ORRERY Mail 通知と送信要求は、向き・相手・件名のカードとして表示します。押すと記録された本文が開きます。通知が preview の場合は続きが Mail にあると示します。Mail server から本文を取得したり既読にしたりせず、送信要求を配信完了とは扱いません。
+
+表示できない場合は、パネルに理由と次の操作が表示されます。起動直後や最初の発言前なら少し待って再試行し、古い会話や紐付けを確認できない場合は新しい子を開いてください。Codex の記録が観測されない場合は ORRERY plugin を有効にして `/hooks` で確認し、新しく起動します。記録が無効・書き込み不可の場合は provider の記録設定や保存先を確認します。古い dashboard、未対応の形式、dsh の依存関係不足なども画面に案内されます。
+
+legacy では Codex と、Telemetry API 35 以降で紐付けを確認した Claude Code・dsh・Hermes を読めます。古い dashboard では Codex のみです。Claude・Codex・dsh は過去ページを読めます。dsh は記録された append の時系列、Hermes は現在の bound segment の直近 snapshot（最大200件）で、圧縮前の segment は含みません。fresh は保護された API の直近の本文 snapshot（最大200件、量の制限あり）で、過去ページと tool の要約には未対応です。保持上限で更新が止まったときは、一番下までスクロールすると最新を読み直して追随を再開します。**↓（最新へ）** でも再開できます。端末から消えた代替画面の描画は復元できません。[操作と上限の詳細](../bridge/README.md)
+
+### Reader で承認する
+
+PC の Reader では、承認待ちになると入力欄のすぐ上に `Approval needed` の帯が出ます。クリックまたは Enter で全文と選択肢を開くと、「今回だけ許可」に focus が移り、もう一度 Enter で送れます。継続的に許可する選択肢は既定になりません。
+
+対応するのは Codex の MCP tool の4択、sandbox 外のコマンドの3択、Claude の作業外 Read の4択です。全文を読めない画面や別の形では、`Open terminal to review` から同じ pane を開いて確認します。押す直前に画面が変わっていればキーを送らず、確認し直す帯に更新します。
+
+`Response sent` はキーが届いたことを表し、処理の成功を保証しません。画面が解消するまでは再送できません。`Outcome unknown` が出た場合は自動再送せず、Terminal で確認してください。
+
 ## Terminal
 
 terminal は `xterm.js` を使い、ORRERY backend の `/ws` と tmux control mode を介して pane を操作します。
@@ -215,14 +259,6 @@ active な session label / pane tab を再クリックしても末尾へ移動�
 backend は起動時に live tmux session ごとに recorder connection を一つ接続します。browser からの pane attach は tile / palette の操作時に遅延実行されます。
 
 上に scroll して過去の出力を読んでいる間は、新しい出力が来ても末尾へ引き戻しません。backend を再起動すると、cockpit は page を自動で読み直します（composer の下書きは残る）。
-
-### Reader で承認する
-
-PC の Reader では、承認待ちになると入力欄のすぐ上に `Approval needed` の帯が出ます。クリックまたは Enter で全文と選択肢を開くと、「今回だけ許可」に focus が移り、もう一度 Enter で送れます。継続的に許可する選択肢は既定になりません。
-
-対応するのは Codex の MCP tool の4択、sandbox 外のコマンドの3択、Claude の作業外 Read の4択です。全文を読めない画面や別の形では、`Open terminal to review` から同じ pane を開いて確認します。押す直前に画面が変わっていればキーを送らず、確認し直す帯に更新します。
-
-`Response sent` はキーが届いたことを表し、処理の成功を保証しません。画面が解消するまでは再送できません。`Outcome unknown` が出た場合は自動再送せず、Terminal で確認してください。
 
 ### スマホのTerminal（別途有効化）
 
@@ -394,6 +430,8 @@ http://127.0.0.1:8791/cockpit.html?session=<session-name>
 
 ## NEW AGENT
 
+Gemini を使うには Antigravity CLI（`agy`）を入れてサインインし、[Telemetry 側の準備](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.md)を済ませます。macOS の cockpit の **NEW AGENT** で **Antigravity** と model を選びます。
+
 `+ NEW AGENT` は ORRERY Telemetry dashboard の spawn API を使います。dashboard が offline の場合、catalog の一部を表示できても spawn は実行できません。
 
 操作するのは cockpit 本体の form です。Telemetry 単体の NEW AGENT とは別の画面です。
@@ -438,6 +476,8 @@ scientist を選ぶと未使用の adjective が自動で一つ選ばれ、name 
 filesystem browser は hidden directory を除外し、最大200件を返します。ただし ORRERY の `/telemetry/fs/dirs` には root allowlist がないため、localhost-only の利用境界を維持してください。
 
 ## Mini-orrery
+
+[詳細カードと再起動の GIF](inspect-mini-graph.md)
 
 mini-orrery は live agent の spawn forest と、直近90秒の mail edge / comet を表示します。
 

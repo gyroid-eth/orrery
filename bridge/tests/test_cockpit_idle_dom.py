@@ -175,6 +175,18 @@ def test_classes_the_poll_does_not_own_survive_it(cockpit):
     assert js("tiles.get('AlphaNode').classList.contains('working')") is True
 
 
+def test_running_agent_with_missing_activity_has_unknown_graph_label(cockpit):
+    js, wait, state = cockpit
+    state['agents'][1]['act_state'] = None
+    js.client.call('Page.reload')
+    wait("""Boolean(document.querySelector('#orrery [data-agent="BetaNode"]:not(.is-working)'))""")
+    assert js("""(()=>{
+      const node=document.querySelector('#orrery [data-agent="BetaNode"]');
+      return [node.getAttribute('aria-label').split(', ').at(-1),
+        tiles.get('BetaNode').classList.contains('working')];
+    })()""") == ['activity unknown', False]
+
+
 def test_a_mail_event_draws_a_line_between_the_two_agents(cockpit):
     js, wait, state = cockpit
     settle(js)
