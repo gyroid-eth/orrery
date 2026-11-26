@@ -14,7 +14,7 @@ def terminal(cockpit):
     js, wait, client, *_ = cockpit
     stable_roster(js)
     js("""window.packets=[];window.send=packet=>{packets.push(packet);
-              if(packet.type==='submit-prompt')queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'}));
+              if(['submit-prompt','interrupt'].includes(packet.type))queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,id:packet.inputAck,status:'accepted'}));
               return true};
         rosterAnnotationEpoch++;currentAgents=[{name:'ReviewFixture',running:true,program:'codex'}];
         createPane('ReviewFixture',{paneId:'%901',windowId:'@901',width:80,height:20});
@@ -22,8 +22,12 @@ def terminal(cockpit):
     return js, wait, client
 
 
-@pytest.mark.parametrize('status', ['accepted', 'completion-mismatch'])
-def test_slash_submission_keeps_the_draft_and_explains_a_different_selection(cockpit, status):
+@pytest.mark.parametrize('status,reason', [
+    ('accepted', None),
+    ('completion-mismatch', 'Terminal selected a different slash command'),
+    ('completion-unverified', 'Could not confirm the slash command in the terminal'),
+])
+def test_slash_submission_keeps_an_unconfirmed_draft_and_explains_why(cockpit, status, reason):
     js, wait, _ = terminal(cockpit)
     js("window.receiptStatus=" + json.dumps(status) + """;
       window.send=packet=>{
@@ -36,9 +40,31 @@ def test_slash_submission_keeps_the_draft_and_explains_a_different_selection(coc
     wait("!promptBusy&&packets.some(packet=>packet.type==='submit-prompt')")
     assert js("packets.find(packet=>packet.type==='submit-prompt').data") == '/status'
     assert js('promptInput.value') == ('' if status == 'accepted' else '/status')
-    assert js("toastEl.textContent.includes('Terminal selected a different slash command')") == (
-        status == 'completion-mismatch'
-    )
+    if reason:
+        assert reason in js('toastEl.textContent')
+
+
+def test_slash_picker_space_is_only_used_while_editing(cockpit):
+    js, wait, _ = terminal(cockpit)
+    js("""currentAgents[0].program='claude-code';
+      const base=fetch;
+      window.fetch=(url,options)=>String(url).startsWith('/telemetry/skills')
+        ? Promise.resolve(Response.json({skills:[{name:'log',kind:'skill'}],prefix:'/'}))
+        : base(url,options);
+      skillCatalogs.clear();skillRequests.clear();
+      promptInput.value='/lo';promptInput.focus();promptInput.setSelectionRange(3,3);
+      promptInput.dispatchEvent(new Event('input'));""")
+    wait("!slashMenu.hidden&&Array.from(slashMenu.querySelectorAll('.sm-name')).some(item=>item.textContent==='/log')")
+    js("Array.from(slashMenu.querySelectorAll('.sm-it')).find(item=>item.querySelector('.sm-name').textContent==='/log').dispatchEvent(new MouseEvent('mousedown'));")
+    assert js('promptInput.value') == '/log '
+    js('sendPrompt()')
+    wait("!promptBusy&&packets.some(packet=>packet.type==='submit-prompt')")
+    assert js("packets.find(packet=>packet.type==='submit-prompt').data") == '/log'
+    assert js('promptInput.value') == ''
+
+    js("packets.length=0;promptInput.value='/log an argument ';sendPrompt()")
+    wait("!promptBusy&&packets.some(packet=>packet.type==='submit-prompt')")
+    assert js("packets.find(packet=>packet.type==='submit-prompt').data") == '/log an argument '
 
 
 def test_card_fills_stage_and_resizes_the_textarea(cockpit):
@@ -62,7 +88,8 @@ def test_action_switches_to_stop_only_for_an_empty_working_draft(cockpit, reduce
     assert js('promptSendBtn.disabled')
     js("currentAgents[0].act_state='work';document.dispatchEvent(new Event('oc:agents'));promptSendBtn.click()")
     assert js('promptSendBtn.title') == 'Stop agent (Esc)'
-    assert js("packets.find(packet=>packet.type==='input').data") == '\x1b'
+    assert js("packets.find(packet=>packet.type==='interrupt').paneId") == '%901'
+    wait("toastEl.textContent.includes('Interrupted → ReviewFixture')")
     square = "document.querySelector('.prompt-square').style.transform==='scale(1)'"
     if reduced:
         assert js(square)
@@ -70,6 +97,9 @@ def test_action_switches_to_stop_only_for_an_empty_working_draft(cockpit, reduce
         wait(square)
     js(r"promptInput.value='First line\nSecond line';promptInput.dispatchEvent(new Event('input'))")
     assert js('promptSendBtn.title') == 'Send message'
+    js("promptInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
+    assert js("packets.filter(packet=>packet.type==='interrupt').length") == 2
+    assert js('promptInput.value') == 'First line\nSecond line'
     if reduced:
         assert js('promptInput.clientHeight') == 56
     js("packets.length=0;promptSendBtn.click()")
@@ -77,6 +107,38 @@ def test_action_switches_to_stop_only_for_an_empty_working_draft(cockpit, reduce
     assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
         'First line\nSecond line',
     ]
+
+
+def test_light_send_keeps_paper_fill_and_marks_only_a_sendable_draft(cockpit):
+    js, wait, _ = terminal(cockpit)
+    appearance = """(()=>{const style=getComputedStyle(promptSendBtn);
+        return [style.backgroundColor,style.borderColor,style.color,promptSendBtn.title];})()"""
+    dark_idle = js(appearance)
+    js("OrreryColorTheme.setPreference('light')")
+    neutral = ['rgb(253, 252, 248)', 'rgb(131, 129, 121)', 'rgb(97, 94, 85)']
+    assert js(appearance) == [*neutral, 'Send message']
+    js("currentAgents[0].act_state='work';document.dispatchEvent(new Event('oc:agents'))")
+    assert js(appearance) == [*neutral, 'Stop agent (Esc)']
+    js("promptInput.value='Draft';promptInput.dispatchEvent(new Event('input'))")
+    assert js(appearance) == [neutral[0], 'rgb(172, 117, 0)', 'rgb(137, 92, 0)', 'Send message']
+    js("promptSendBtn.click()")
+    wait("promptInput.value===''&&!promptBusy")
+    assert js(appearance) == [*neutral, 'Stop agent (Esc)']
+    js("currentAgents[0].act_state='wait';document.dispatchEvent(new Event('oc:agents'));OrreryColorTheme.setPreference('dark')")
+    assert js(appearance) == dark_idle
+
+
+def test_idle_escape_reports_key_delivery(cockpit):
+    js, wait, _ = terminal(cockpit)
+    js("""window.send=packet=>{
+        packets.push(packet);
+        if(packet.type==='interrupt')queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,
+          id:packet.inputAck,status:'sent'}));
+        return true;
+      };
+      promptInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));""")
+    wait("toastEl.textContent.includes('Esc → ReviewFixture')")
+    assert js("packets.find(packet=>packet.type==='interrupt').paneId") == '%901'
 
 
 def recipients(cockpit):
@@ -133,6 +195,11 @@ def test_roster_selection_sends_each_agent_once_and_keeps_only_failed_targets(co
     assert js('activeId') == '%901'
     expected = ['%901', '%903'] if rejected else ['%901', '%902', '%903']
     assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.paneId)") == ['%901','%902','%903']
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        'Also sent to QuietCopernicus, EmeraldBose. You can contact each other via ORRERY Mail.\n\nShared draft',
+        'Also sent to ReviewFixture, EmeraldBose. You can contact each other via ORRERY Mail.\n\nShared draft',
+        'Also sent to ReviewFixture, QuietCopernicus. You can contact each other via ORRERY Mail.\n\nShared draft',
+    ]
     assert js("receipts.map(receipt=>receipt.name)") == [
         {'%901':'ReviewFixture','%902':'QuietCopernicus','%903':'EmeraldBose'}[pane] for pane in expected
     ]
@@ -143,6 +210,40 @@ def test_roster_selection_sends_each_agent_once_and_keeps_only_failed_targets(co
         assert js("toastEl.textContent.includes('Not sent to QuietCopernicus')")
     if status == 'unknown':
         assert js("toastEl.textContent.includes('Delivery unconfirmed for QuietCopernicus')")
+
+
+def test_recipient_visibility_menu_keeps_hidden_drafts_private(cockpit):
+    js, wait, _ = recipients(cockpit)
+    js("""window.visibilityButton=document.querySelector('.prompt-visibility-trigger');
+      window.visibilityOptions=[...document.querySelectorAll('.prompt-visibility-option')];
+      promptRecipients.set(['ReviewFixture']);""")
+    assert js("visibilityButton.parentElement.hidden")
+    js("promptRecipients.set(['ReviewFixture','QuietCopernicus']);visibilityButton.click()")
+    assert js("visibilityButton.title") == 'Visible recipients (To/Cc)'
+    assert js("document.activeElement===visibilityOptions[0]")
+    js("""document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
+      document.activeElement.click()""")
+    assert js("visibilityButton.title") == 'Hidden recipients (Bcc)'
+    assert js("visibilityOptions[1].getAttribute('aria-label')") == 'Hidden recipients (Bcc)'
+    assert js("localStorage.getItem(PROMPT_VISIBILITY_KEY)") == 'hidden'
+    assert js("visibilityButton.getAttribute('aria-expanded')") == 'false'
+    js("promptInput.value='Independent draft';sendPrompt()")
+    wait("!promptBusy")
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        'Independent draft', 'Independent draft',
+    ]
+    assert js("localStorage.getItem(PROMPT_VISIBILITY_KEY)") is None
+    js("promptRecipients.set(['ReviewFixture','QuietCopernicus'])")
+    assert js("visibilityButton.title") == 'Visible recipients (To/Cc)'
+
+
+def test_visible_recipients_do_not_prepend_a_header_to_slash_commands(cockpit):
+    js, wait, _ = recipients(cockpit)
+    js("promptRecipients.set(['ReviewFixture','QuietCopernicus']);promptInput.value='/help';sendPrompt()")
+    wait("!promptBusy")
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        '/help', '/help',
+    ]
 
 
 @pytest.mark.parametrize('claude_status', ['accepted', 'unknown'])
@@ -160,6 +261,7 @@ def test_attachment_drop_remove_and_delivery_per_cli(cockpit, claude_status):
         transfer.items.add(new File(['Fixture data'],'notes.txt',{type:'text/plain'}));
         document.querySelector('.promptbar').dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));
       };
+      hostPlatform={host:'wsl',file_paste:false};
       dropFile();""")
     assert js("document.querySelector('.prompt-file-name').textContent") == 'notes.txt'
     js("document.querySelector('.prompt-file-remove').click()")
@@ -180,7 +282,9 @@ def test_attachment_drop_remove_and_delivery_per_cli(cockpit, claude_status):
         ['ReviewFixture', 'txt', 'Fixture data'], ['QuietCopernicus', 'txt', 'Fixture data'],
     ]
     assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        'Also sent to QuietCopernicus. You can contact each other via ORRERY Mail.\n\n'
         'Read this\n\n./.orrery-input-files/' + 'a' * 32 + '.txt',
+        'Also sent to ReviewFixture. You can contact each other via ORRERY Mail.\n\n'
         'Read this\n\n@./.orrery-input-files/' + 'a' * 32 + '.txt ',
     ]
     assert js("packets.filter(packet=>packet.type==='input')") == []
@@ -192,11 +296,90 @@ def test_attachment_drop_remove_and_delivery_per_cli(cockpit, claude_status):
         assert js("toastEl.textContent.includes('Delivery unconfirmed for QuietCopernicus')")
 
 
+def test_native_attachments_send_the_workspace_copy_or_disclose_the_original_path(cockpit):
+    js, wait, _ = recipients(cockpit)
+    js("""window.uploads=[];
+      const base=fetch;
+      window.fetch=(url,options)=>{
+        if(!String(url).includes('/telemetry/prompt-attachment'))return base(url,options);
+        const entry=JSON.parse(options.body);
+        uploads.push(entry);
+        return Promise.resolve(Response.json(entry.sourcePath.endsWith('.mov')?
+          {original:true,path:entry.sourcePath}:{path:'./.orrery-input-images/'+'a'.repeat(32)+'.png'}));
+      };
+      promptFiles.addPaths(['/fixture/Desktop/Screenshot.png','/fixture/Big movie.mov']);
+      promptInput.value='Compare these';
+      sendPrompt();""")
+    wait('!promptBusy')
+    assert js("uploads.map(({kind,sourcePath})=>[kind,sourcePath])") == [
+        ['path', '/fixture/Desktop/Screenshot.png'], ['path', '/fixture/Big movie.mov'],
+    ]
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        "Compare these\n\n./.orrery-input-images/" + "a" * 32 + ".png\n[file: '/fixture/Big movie.mov']",
+    ]
+    assert js("toastEl.textContent.includes('Original file path sent (over 50 MiB)')")
+
+
+@pytest.mark.parametrize('shell', ['old-mac-app', 'new-mac-app', 'wsl-browser'])
+def test_attachment_picker_uses_the_browser_file_input(cockpit, shell, tmp_path):
+    js, wait, client, _, _ = cockpit
+    if shell.endswith('-app'):
+        client.call('Page.addScriptToEvaluateOnNewDocument', source=(
+            "window.nativePickerCalls=[];window.__TAURI__={core:{invoke:async cmd=>{"
+            "if(cmd!=='pick_attachment_paths')throw Error('Fixture IPC');nativePickerCalls.push(cmd);"
+            + ("throw Error('Unknown command');" if shell=='old-mac-app' else "return ['/fixture/Desktop/Notes.txt'];")
+            + "}}};"))
+        client.call('Page.reload', ignoreCache=True)
+        wait("Boolean(window.nativePickerCalls)&&typeof conversationView!=='undefined'&&typeof createPane==='function'")
+        js("clearTimeout(reconnectTimer);scheduleReconnect=()=>{}")
+    js, wait, client = recipients(cockpit)
+    js("""window.uploads=[];window.opens=0;
+      const input=document.getElementById('promptFilePicker');
+      input.click=()=>{opens++};
+      const base=fetch;
+      window.fetch=(url,options)=>{
+        if(url!=='/telemetry/prompt-attachment')return base(url,options);
+        uploads.push(JSON.parse(options.body));
+        return Promise.resolve(Response.json({path:'./.orrery-input-files/'+'a'.repeat(32)+'.txt'}));
+      };
+      hostPlatform={host:""" + json.dumps('wsl' if shell=='wsl-browser' else 'mac') + """,file_paste:false};
+      document.getElementById('promptClip').click();""")
+    assert js('opens') == 1
+    assert js('window.nativePickerCalls||[]') == []
+    source = tmp_path / 'Desktop' / 'Notes.txt'
+    source.parent.mkdir()
+    source.write_text('Browser-readable bytes')
+    document = client.call('DOM.getDocument')
+    selected = client.call('DOM.querySelector', nodeId=document['root']['nodeId'], selector='#promptFilePicker')
+    client.call('DOM.setFileInputFiles', nodeId=selected['nodeId'], files=[str(source)])
+    wait("promptFiles.entries.length===1")
+    js("sendPrompt()")
+    wait("!promptBusy&&uploads.length===1")
+    assert js("uploads.map(({kind,sourcePath,data})=>[kind,sourcePath??null,atob(data)])") == [
+        ['file', None, 'Browser-readable bytes']]
+    assert js("packets.some(packet=>packet.type==='submit-prompt'&&packet.data.includes('.orrery-input-files'))")
+
+
+def test_attachment_refusal_keeps_the_draft_and_explains_the_workspace_issue(cockpit):
+    js, wait, _ = recipients(cockpit)
+    js("""const base=fetch;
+      window.fetch=(url,options)=>url==='/telemetry/prompt-attachment'?
+        Promise.resolve(Response.json({error:'attachment_workspace_unwritable'},{status:422})):
+        base(url,options);
+      promptFiles.add([new File(['Fixture data'],'notes.txt')]);
+      promptInput.value='Keep this draft';
+      sendPrompt();""")
+    wait("!promptBusy&&toastEl.textContent.includes('Check its permissions')")
+    assert js("promptInput.value==='Keep this draft'&&promptFiles.entries.length===1")
+    assert not js("packets.some(packet=>packet.type==='submit-prompt')")
+
+
 @pytest.mark.parametrize('route, program', [
     ('browser-files', 'claude-code'), ('mac-app', 'claude-code'),
-    ('mac-http', 'claude-code'), ('wsl-http', 'claude-code'),
+    ('mac-http', 'claude-code'), ('mac-old-files', 'claude-code'),
+    ('mac-new-files', 'claude-code'),
     ('browser-files', 'codex'), ('browser-files', 'dsh'),
-    ('browser-files', 'hermes'), ('wsl-http', 'agy'),
+    ('browser-files', 'hermes'), ('browser-files', 'agy'),
 ])
 def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, route, program):
     from test_conversation_input_images import png
@@ -222,8 +405,9 @@ def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, rout
         uploads.push(JSON.parse(options.body));
         return Promise.resolve(Response.json({path:'./.orrery-input-images/'+'a'.repeat(32)+'.png'}));
       };
-      if(pasteRoute==='mac-app')window.__TAURI__={core:{invoke:(cmd,args)=>{
-        reads.push([cmd,args.attachments]);return clipboardReply();
+      if(['mac-app','mac-old-files','mac-new-files'].includes(pasteRoute))window.__TAURI__={core:{invoke:(cmd,args)=>{
+        reads.push([cmd,args.attachments]);
+        return pasteRoute==='mac-old-files'?Promise.resolve(['/fixture/Desktop/legacy.png']):clipboardReply();
       }}};
       hostPlatform={host:pasteRoute.startsWith('mac')?'mac':'wsl',file_paste:pasteRoute!=='browser-files'};
       window.send=packet=>{
@@ -234,14 +418,11 @@ def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, rout
       window.pasteFixture=mode=>{
         const clipboard=new DataTransfer();
         if(mode==='text')clipboard.setData('text/plain','ordinary text');
-        else if(pasteRoute==='browser-files'){
+        else if(pasteRoute.endsWith('-files')){
           const image=Uint8Array.from(atob(copyFixture.attachments[0].data),c=>c.charCodeAt(0));
           clipboard.items.add(new File([image],'Clipboard image.png',{type:'image/png'}));
           clipboard.items.add(new File(['# Clipboard note'],'資料 1.md',{type:'text/markdown'}));
           clipboard.setData('text/plain','This file paste must not replace the draft.');
-        }else if(pasteRoute==='wsl-http'){
-          clipboard.setData('text/uri-list','file:///C:/Users/fixture/Notes.md');
-          clipboard.setData('text/plain','C:\\Users\\fixture\\Notes.md');
         }
         return promptInput.dispatchEvent(new ClipboardEvent('paste',{clipboardData:clipboard,bubbles:true,cancelable:true}));
       };
@@ -253,7 +434,7 @@ def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, rout
     assert js("pasteFixture('text')") is True
     assert js('reads.length') == 0
     assert not js("pasteFixture('files')")
-    if route != 'browser-files':
+    if not route.endswith('-files'):
         wait('releaseClipboard!==null')
         assert js('promptFiles.pending&&promptSendBtn.disabled')
         js('void sendPrompt()')
@@ -264,7 +445,7 @@ def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, rout
     assert js("Array.from(document.querySelectorAll('.prompt-file-name'),node=>node.textContent)") == [
         'Clipboard image.png', '資料 1.md']
     expected_reads = ([['clipboard_file_paths', True]] if route == 'mac-app' else
-                      [] if route == 'browser-files' else
+                      [] if route.endswith('-files') else
                       [['/telemetry/clipboard/attachments', 'POST', '{}']])
     assert js('reads') == expected_reads
     assert js('promptInput.value') == 'Compare the pasted screenshot.'
@@ -272,7 +453,7 @@ def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, rout
     assert js("packets.filter(packet=>['input','submit-prompt'].includes(packet.type))") == []
 
     capture = os.environ.get('ORRERY_PASTE_CAPTURE_DIR')
-    if capture and route == 'wsl-http' and program == 'claude-code':
+    if capture and route == 'browser-files' and program == 'claude-code':
         js("document.querySelector('.prompt-ava').src='/cockpit-assets/anthropic.svg'")
         wait("document.querySelector('.prompt-ava').naturalWidth>0")
         for theme in ('dark', 'light'):

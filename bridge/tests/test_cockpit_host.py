@@ -80,8 +80,8 @@ async function paste(host,{files=[],items=[],types=[],plain='',uris='',app,busy=
   listeners.get('paste')(event);
   await new Promise(resolve=>setImmediate(resolve));
   const attachments=await Promise.all(promptFiles.entries.map(async entry=>({
-    name:entry.file.name,kind:entry.kind,preview:!!entry.preview,
-    data:Buffer.from(await entry.file.arrayBuffer()).toString('base64'),
+    name:entry.name,kind:entry.kind,preview:!!entry.preview,path:entry.path,
+    data:entry.file?Buffer.from(await entry.file.arrayBuffer()).toString('base64'):null,
   })));
   return {prevented:event.prevented,value:promptInput.value,hostReloads,attachments,
     calls:[...calls],sent:[...sent],toasts:[...toasts]};
@@ -137,8 +137,30 @@ def test_browser_files_stage_on_mac_wsl_and_linux_even_without_a_host_reader():
         assert_staged(out, [("Clipboard image.png", "image", True), ("資料 with space.txt", "file", False)])
         assert out["attachments"][0]["data"].startswith("iVBORw0KGgo")
         assert out["attachments"][1]["data"] == "Rml4dHVyZSBub3Rl"
-        assert out["calls"] == out["toasts"] == []
+        assert out["calls"] == []
+        assert out["toasts"] == []
         assert out["hostReloads"] == 0
+
+
+def test_mac_file_copy_uses_available_browser_bytes_for_a_small_file():
+    result = _paste("""
+      const path='/fixtures/Screen recording 1.02.mov';
+      return paste(MAC,{files:[new File(['fixture'],'Screen recording 1.02.mov')],
+                        app:{attachments:[],paths:[path]}});
+    """)
+    assert_staged(result,[("Screen recording 1.02.mov","file",False)])
+    assert result["calls"] == []
+    assert "path" not in result["attachments"][0]
+    assert result["attachments"][0]["data"] == "Zml4dHVyZQ=="
+
+
+def test_mac_stages_a_copied_image_and_a_path_from_the_same_snapshot():
+    result = _paste("""
+      return paste(MAC,{app:{attachments:[IMAGE],paths:['/fixtures/Big movie.mov']}});
+    """)
+    assert_staged(result,[("Clipboard image.png","image",True),("Big movie.mov","file",False)])
+    assert result["attachments"][0]["data"].startswith("iVBORw0KGgo")
+    assert result["attachments"][1]["path"] == "/fixtures/Big movie.mov"
 
 
 def test_linux_reads_an_image_from_clipboard_items_if_file_list_is_empty():
@@ -154,7 +176,7 @@ def test_wsl_without_reader_keeps_the_draft_and_reports_why_native_paste_is_unav
     assert_staged(result, [])
     assert result["calls"] == []
     [error] = result["toasts"]
-    assert error["isError"] and "Windows clipboard" in error["message"]
+    assert error["isError"] and "attachment picker or drop" in error["message"]
 
 
 def test_unknown_host_refreshes_platform_before_trying_native_paste():
@@ -165,23 +187,23 @@ def test_unknown_host_refreshes_platform_before_trying_native_paste():
     assert [toast["isError"] for toast in result["toasts"]] == [True]
 
 
-def test_wsl_reader_stages_explorer_bytes_and_screenshots_without_inserting_windows_paths():
+def test_wsl_stages_explorer_and_screenshot_bytes_without_a_backend_clipboard_read():
     result = _paste("""return {
       explorer:await paste(WSL_READER,{
         uris:'file:///C:/Users/u/Note%20one.txt',plain:'C:/Users/u/Note one.txt',
-        answer:{attachments:[NOTE]},
+        files:[fileOf(NOTE)],
       }),
-      screenshot:await paste(WSL_READER,{types:['Files'],answer:{attachments:[IMAGE]}}),
+      screenshot:await paste(WSL_READER,{types:['Files'],items:[{kind:'file',getAsFile:()=>fileOf(IMAGE)}]}),
     };""")
     assert_staged(result["explorer"], [("資料 with space.txt", "file", False)])
     assert_staged(result["screenshot"], [("Clipboard image.png", "image", True)])
     for out in result.values():
-        assert out["calls"] == [HTTP]
+        assert out["calls"] == []
         assert out["toasts"] == []
 
 
-def test_wsl_keeps_successful_files_when_the_native_reader_skips_one():
-    result = _paste("""return paste(WSL_READER,{answer:{attachments:[NOTE],skipped:1}});""")
+def test_mac_keeps_successful_files_when_the_native_reader_skips_one():
+    result = _paste("""return paste(MAC,{answer:{attachments:[NOTE],skipped:1}});""")
     assert_staged(result, [("資料 with space.txt", "file", False)])
     assert result["calls"] == [HTTP]
     assert result["toasts"] == [{"message": "1 clipboard item could not be attached.", "isError": True}]
@@ -194,9 +216,9 @@ def test_native_reader_failures_do_not_send_to_the_terminal():
       await paste(LINUX,{answer:{error:'clipboard_unsupported'}}),
       await paste(MAC,{answer:null}),
     ];""")
-    for out in result:
+    for index,out in enumerate(result):
         assert_staged(out, [])
-        assert out["calls"] == [HTTP]
+        assert out["calls"] == ([] if index < 2 else [HTTP])
         assert [toast["isError"] for toast in out["toasts"]] == [True]
 
 
@@ -315,6 +337,8 @@ def test_fresh_output_gap_uses_actual_caller_to_stop_only_affected_session_and_r
 const groups=new Map(),sessionGroups=groups,panes=new Map(),sent=[],toasts=[],links=[];
 const attachedSessions=new Set(),requestedSessions=new Set(),availableSessions=new Map([['Alpha',{}],['Beta',{}]]);
 const manualDetached=new Set(),paneWindows=new Set(),selectedPaneBySession=new Map();
+const permissionRestarts=new Map();
+const pendingAgentExits=new Map();
 let pendingJump=null,activeId=null,splitVisible=false,focusedSplitSession=null,paneWindowSelection=null;
 function ensureSessionGroup(session){
   if(!groups.has(session))groups.set(session,{incarnation:null,attachGeneration:null,
@@ -322,6 +346,7 @@ function ensureSessionGroup(session){
   return groups.get(session);
 }
 function closeSessionPanes(session){for(const [key,p] of panes)if(p.session===session)panes.delete(key);}
+function paintSessionAction(group){group.state.textContent={connecting:'…',live:'live',error:'error',closed:'closed'}[group.connectionState]||'';}
 function removeSplitSessionState(){} function removeSessionGroup(s){groups.delete(s);}
 function renderStage(){} function refreshHeaderStats(){} function refreshSessionGroup(){}
 function showToast(message,isError){toasts.push({message,isError});}

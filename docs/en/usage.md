@@ -102,13 +102,17 @@ The order is: pinned agents → waiting for approval / an answer → working →
 
 The search box filters by name, description (task or pane title), and role (or the cwd difference when there is none). The model and provider are not searched. While filtering, the count is shown as `N/M`, and when nothing matches, a `searched: task, role, cwd · Clear` bar appears.
 
-![Roster search. Left: filtered to one match by "test". Right: no match, with the searched bar shown](../images/cockpit_roster_search.png)
-
 Rows in warmup, finished, gone, and retired states are not shown in the left roster. Agents from the Codex App Bridge appear in telemetry but have no tmux pane, so the terminal jump becomes an offline hint.
 
 Clicking a tile also switches the right mail rail's filter to that agent. Hovering over a tile (or focusing it with `Tab`) shows a detail card on the right. It lists the pane title, the subject of the latest mail, the last active time, the time it was registered with ORRERY Mail, the start time, provider / model / command, the number of deliverables (Deliverables; shown only when there is at least one), and the source and specificity of the description being shown.
 
-![The detail card shown by hovering over CoralCurie's tile. It has a row "Deliverables 3"](../images/cockpit_roster_detail.png)
+Check **Computer use** and **Browser use** in the detail card. For a running Claude Code or Codex CLI agent without a launch record, Telemetry API 52 or later provides a read-only observation from launch arguments and descendant processes. An item shows `Unknown` and a reason if the process, its arguments, the screen relay mode, or the Claude Chrome flag cannot be verified.
+
+For Antigravity, Telemetry API 53 or later shows the ORRERY launch selection or the effective screen mode when it can verify the running relay. If it cannot establish a value from the available records, the item shows `Unknown` and a reason.
+
+The detail card offers changes for legacy Claude Code or Codex CLI sessions with a verified conversation and a supported restart or resume. Delegated sessions need Telemetry API 45 or later. Standalone sessions need API 46 or later and saved launch settings. Select a setting and confirm **Restart** or **Resume** in the same conversation. Restart interrupts the current turn. For Codex App, persistent agents, conversation-only resume, and other ineligible sessions, the controls show the reason.
+
+![Hover over an agent to inspect Computer use modes Off, View, and Control, and its Browser state](../images/cockpit_roster_detail.png)
 
 Deliverables are that agent's work logs (`LOG_*.md` files whose frontmatter `agent:` is that agent) that ORRERY Telemetry collects from the project's `logs/`. The list can be opened in the `Output` tab of the TELEMETRY agent panel ([TELEMETRY](#telemetry)).
 
@@ -125,11 +129,9 @@ An agent whose work has stopped while it waits for an answer to a question (`?`)
 
 Click the tile to enter its terminal, read the question, and send your answer from the composer. Once you answer and the agent starts moving again, the blinking and `need you` disappear.
 
-![Among 7 agents, only PearlFaraday blinks red and 1 need you appears. Narrowing with need you, clicking the tile to read the approval question, and sending 1 from the composer makes the blinking stop](../images/cockpit_need_you.gif)
+![Use need you to filter for agents awaiting input, read a question, and reply with 1](../images/cockpit_need_you.gif)
 
-How this looks in the TELEMETRY DECK and NETWORK is described in [Spotting agents that need you](#spotting-agents-that-need-you).
-
-![Roster tiles. WildNewton is pinned to the top, and CosmicGuericke shows the copy icon and detail card on hover](../images/cockpit_roster_pin_copy.png)
+See [Spotting agents that need you](#spotting-agents-that-need-you) for how this looks in the TELEMETRY DECK and NETWORK. See [Telemetry DECK](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/dashboard.en.md#deck) for the automatic Mail notice sent to a parent when its child is waiting on screens such as an approval or sign-in.
 
 ### Copy a name
 
@@ -149,8 +151,6 @@ With many agents running, the roster keeps reordering by state. If you pin the a
 
 Pressing the pin icon at the top right of a tile pins that agent to the top of the roster. A divider separates the pinned agents from the rest. Press it again to unpin (`PINNED` / `UNPINNED` is shown).
 
-![While the roster reorders as states change, pinning JadeNoether keeps it at the top and draws a divider. Pressing it again unpins it](../images/cockpit_pin.gif)
-
 Pin is a feature of the left roster only. The right mail rail and the mini-orrery have no pin. The pin state is shared between ORRERY.app and browser tabs, like Settings, and is removed automatically when the agent retires. The icon is not shown during Select mode.
 
 ## Usage (remaining quota)
@@ -161,15 +161,11 @@ Clicking the pill opens `Usage left`, which lays out the windows returned by the
 
 In Settings, `Usage` lets you show or hide each provider, including Claude, Codex, Antigravity (Gemini), and DeepSeek. The choice applies to both the `LEFT` pill and `Usage left` and is saved in this browser. Providers that appear later are shown by default. A DeepSeek balance below $5 uses the same alert red as a low quota in both the pill and balance row. At $5 or above, or when the balance is unknown, its color is unchanged.
 
-![Usage left. Claude shows 5H 64%, 7D 41%, FABLE 18%; Codex shows 5H 88%, 7D 47%. Codex's additional limit Spark is untouched](../images/cockpit_usage_popover.png)
-
 - **Claude**: `5h` (the 5-hour quota), `7d` (the weekly quota), and per-model weekly quotas (such as `FABLE`; only when the server returns them)
 - **Codex**: `5h` and `7d`. Named additional quotas such as Spark are shown separately under `ADDITIONAL LIMIT` and are not used for the pill's value. When an additional quota has not been used at all, it is collapsed into one line: `untouched · 5h / 7d at 100% left`
 - **Antigravity (Gemini)**: shown only when Telemetry reports it. `Gemini Models` (5H / 7D) and model-specific quotas such as `ARGON` appear as regular dials, matching the other providers. The `Claude and GPT models` group is omitted from the Antigravity display without changing the Telemetry response. The pill shows the lowest remaining percentage among the displayed Gemini quotas; the applicable quota depends on the model.
 - Number and ring colors: green above 50%, yellow at 50% or below, red at 20% or below
 - Under each dial is the time until reset (`in 2h 59m`, `in 3d`). To the right of the heading is the time of the earliest reset
-
-![Clicking LEFT opens Usage left, and the remaining amount decreases. 5H goes from 64% to 19%, and the color changes from green to yellow to red](../images/cockpit_usage.gif)
 
 **Source and update interval**: the cockpit does not read providers directly. It receives the values that the ORRERY Telemetry dashboard has read (`/api/quotas`) through the ORRERY backend.
 
@@ -234,15 +230,13 @@ The separate Telemetry mobile reader can show a short pane preview above a confi
 
 The adapter uses only existing PC-managed legacy panes, with the shared target guard and fresh socket/server/session/pane/kernel-birth checks. It does not guess a pane from an agent alias, start an agent, use another socket/global target, or require Codex launch records. Multiple panes require a choice; unknown targets stay unavailable. Sessions may be outside the reader's current metadata project.
 
-Only the selected open foreground pane refreshes every 3 seconds. Preview is literal text, at most 40 lines/6 KiB, with 64 KiB collection, a 3 second capture deadline and a 16 KiB serialized response limit. Recorder/restored history is not forwarded. Capture overflow discards the body without shifting ACK correspondence; missing termination quarantines the stream. Text may contain secrets; the existing PC recorder/OS recording is not erased by closing the phone sheet.
+Only the selected open foreground pane refreshes every 3 seconds. Preview is literal text, normally up to 120 lines / 12 KiB through the phone relay. Compatibility requests without the expanded preview selection get 40 lines / 6 KiB. The collection limit is 64 KiB, the capture deadline is three seconds, and the serialized response limit is 16 KiB. Recorder/restored history is not forwarded. Capture overflow discards the body without shifting ACK correspondence; missing termination quarantines the stream. Text may contain secrets; the existing PC recorder/OS recording is not erased by closing the phone sheet.
 
 Every line (at most 4 KiB UTF-8) requires Review→Send once. Review fixes the pane, exact text, Enter and 30 second expiry; changing the pane or losing preview requires a new review. One write lock covers fresh validation and all chunks/Enter; all tmux ACKs are awaited after releasing it. Received means terminal acceptance, not agent execution/completion. Partial failure/timeout is unknown, with no replay or remaining-chunk compensation. The same pane can change programs or become a shell; existing input, other writers and changes after the final check remain outside the guarantee. Phone close/background clears the preview/draft/unsent confirmation; ordinary PC input and history behavior remain unchanged. Real phone policy, keyboard and real-target acceptance are separate from repository fixtures.
 
 ## Open from and hand to the terminal
 
 URLs and file paths that an agent printed in the terminal can be opened with a click. Conversely, you can hand a local file to an agent just by pasting it.
-
-![Clicking a URL in the terminal opens it in the browser (URL toast), clicking a path shows it in Finder (FINDER toast), and pasting a file into the composer inserts its path](../images/cockpit_open_paste.gif)
 
 - **Click a URL**: opens in the default browser (`https://` and `http://` only)
 - **Click a path**: an absolute path such as `/…` or `~/…` is shown in Finder (Explorer on Windows). A file is shown selected, and a folder is opened. Paths with spaces are also made links automatically up to the part that exists. A single word such as `/compact` or a relative path does not become a link
@@ -262,17 +256,11 @@ Holding `Cmd` or `Ctrl` while choosing agents / sessions lets you show up to 12 
 - Resize by dragging a divider
 - Reorder by dragging a label
 
-![A Split of three. CoralCurie's name tag is dragged to PearlFaraday's cell to swap positions (SPLIT · CoralCurie ↔ PearlFaraday), then a divider is dragged to change the width](../images/cockpit_split_drag.gif)
-
 Hovering over a cell's name tag shows `×`. Pressing it removes that session from the cockpit (the tmux session remains), and when only one is left, the view returns to single view. Dragging a name tag can be canceled with `Esc`.
 
 Even if you temporarily leave the Split and show a single session, the member list remains in the `SPLIT n` chip, and pressing the chip restores it. The identity label at the top of a Split cell is focused by a click, and dragging it to another cell swaps the two positions. Divider ratios can be changed by dragging, and a divider in a grid layout is reset to equal ratios by a double-click.
 
 Pressing the `⊞` chip to the right of `SPLIT n` in the tab strip (which shows the current layout name) opens the list of layouts available for that number of sessions. For 2 items they are ROW / COLUMN; for 3, WIDE / MAIN-L / ROW / COLUMN; for 4 or more, GRID / ROW / COLUMN. The chosen layout is remembered for each number of sessions. The tab of a session that is in the Split gets a `⊞` mark.
-
-![A Split of three. A ROW layout with the terminals of SteelCurie, HazelBell, and FoggyLavoisier side by side in three columns](../images/cockpit_split.png)
-
-![The list of 3-pane layouts opened from the `⊞ WIDE` chip](../images/cockpit_split_layout.png)
 
 This Split is a display feature that lines up multiple sessions. Unlike tmux's `split-window`, it does not create new panes in ordinary agent sessions.
 
@@ -286,11 +274,7 @@ You can take one session's terminal out of the cockpit, floating it or opening i
 - **Make it a standalone window**: drag the session label out of the cockpit and release it. For a floating window, move its title bar out. When the window is maximized and there is no outside, release it at the edge, 8px in (the ghost shows `OWN WINDOW`). You can also open it by pressing `↗ WINDOW` in the header of the active pane
 - **Bring it back**: when you close the window, the session returns to its original cockpit tab and comes to the front. You can also bring it back with `⇤` on a floating window, `⇤ COCKPIT` in the header of a standalone window, or `⇤` on the chip in the tab strip
 
-![Dragging a session's name tag from the tab strip over the terminal to float it (FLOAT), moving it by the title bar, making it a standalone window with ↗ (WINDOW chip), and closing the window to return it to the tab](../images/cockpit_pane_float.gif)
-
 A session that is outside stays in the tab strip as a `◰ FLOAT` / `↗ WINDOW` chip. Clicking the chip brings that window to the front. When you choose that agent from the roster or the palette, the cockpit does not open it a second time; it brings the window to the front. A session that was in a Split leaves the Split when taken out. When it returns, it comes back as an ordinary tab.
-
-![JadeNoether floating over the cockpit and CoralCurie open in a standalone window. The tab strip shows ◰ FLOAT and ↗ WINDOW chips](../images/cockpit_pane_window.png)
 
 The content of a standalone window is the same cockpit page opened in a single-session view (`cockpit.html?solo=1&session=<name>`). From the backend's point of view, it is just one more websocket on the same session. The connection to tmux (the recorder) does not increase. While a session is outside, the cockpit detaches that session, so the same session is never drawn at two widths at the same time. Claim / Follow works at the size of the window that went outside.
 
@@ -336,47 +320,56 @@ The composer is an input box separate from the terminal. If you type directly in
 
 The destination is the agent of the pane that is active at that moment (its face and name appear to the left of the composer). If you click a roster tile or a tab to make another agent active, only the destination switches, and the text you are typing carries over as it is.
 
-![While typing an instruction to CoralCurie, notifications flow in but the draft stays; click OnyxDarwin in the roster to change the destination and send](../images/cockpit_composer_calm.gif)
+![The composer shows a square Stop button while the agent is working. Esc interrupts the agent](../images/cockpit_composer_calm.gif)
 
 There is only one draft in the cockpit, and it is not split per destination agent. It is saved every time you type, survives a reload or a restart of ORRERY.app, and disappears when you send. It is stored in that window's `localStorage` and is not shared with other windows. Each standalone window has its own draft per session (it returns to the cockpit when closed; see [Standalone window](#standalone-window)).
 
-The composer sends a bracketed paste to the active pane, then sends a carriage return 250 ms later.
+The composer pastes into the target pane and checks that the input is ready before sending Enter. It checks each pane when you choose multiple recipients.
 
 | Action | Behavior |
 | --- | --- |
 | `Enter` | Send |
 | `Shift+Enter` | New line |
-| `Esc` | Interrupt |
+| `Esc` or the stop button (■) | Request an interrupt for the selected agent |
 | `↑` / `↓` | Send history of up to 50 entries |
 | File paste | Put the path of the copied file into the composer (a path containing spaces is wrapped in quotes) |
 | Image paste | Mac: forward a literal `Ctrl+V` to the TUI. WSL: save the image as a PNG and put its path into the composer |
 
 There is a guard that prevents accidental sending on Enter during IME composition. The send history is also stored in `localStorage`.
 
-`⎋ STOP` is the same interrupt as `Esc`, and `SEND ⏎` is the same send as `Enter`. When you send, `sent → <agent>` is shown. The face and name of the destination agent appear to the left of the composer. Pasting a file inserts its path ([Open from and hand to the terminal](#open-from-and-hand-to-the-terminal)).
+The send button works like `Enter`. Once acceptance is confirmed, you see `Sent to <agent>`. You can send plain text from the composer while Hermes is working. Hermes handles it according to its busy-input setting, which defaults to interrupting the current turn. Automatic ORRERY Mail notifications wait while Hermes is busy.
+
+When the selected agent is working and the composer has no draft, attachment, or explicit recipient, the send button becomes the stop button (■). When a suggestion menu is open, `Esc` closes it first.
+
+`Esc` and the stop button send `Ctrl+C` to a working Hermes agent or `Esc` to the other harnesses. When a working agent returns to its input prompt, the cockpit shows `Interrupted → <name>`. When Esc reaches an idle agent, it shows `⎋ Esc → <name>`. The interrupt request is refused for an idle Hermes agent because `Ctrl+C` can exit Hermes.
 
 ### Skill and command suggestions
 
-When the input starts with `/` or `$`, up to 8 skills and built-in commands of the destination CLI are offered as suggestions. Choose with `↑` / `↓` and confirm with `Tab` or `Enter`, and it is inserted with that CLI's correct symbol (`/` for Claude and Gemini, `$` for Codex).
+When the input starts with `/` or `$`, up to eight suggestions appear for the destination CLI. Choose with `↑` / `↓` and use `Tab` or `Enter` to insert the suggestion. Built-in commands use `/`. Skills use `/` for Claude and Antigravity and `$` for Codex.
 
 | Destination | Where skills are looked up | Built-ins |
 | --- | --- | --- |
 | Claude Code | `~/.claude/skills` | compact / clear / model / mcp / resume / help |
-| Codex | `~/.codex/skills` (including bundled skills) | compact / new / model / approvals / status / help |
+| Codex CLI | Native catalog using the verified pane's `CODEX_HOME` and working folder. Without a verified target, only built-ins are offered | compact / new / model / approvals / status / help |
+| Antigravity CLI | `~/.gemini/antigravity-cli/skills` | compact / skills / help |
 | Gemini | `~/.gemini/skills` | compress / clear / model / mcp / stats / help |
 
-![Typing $r to a Codex agent offers $review-pr (skill) and approvals (built-in) as suggestions](../images/cockpit_skill_menu.png)
+For dsh and Hermes the cockpit checks the terminal's own slash suggestions. Its composer has no separate skill catalog for these harnesses.
+
+![Typing / in the Codex composer offers the /approvals command and the $review-pr skill](../images/cockpit_skill_menu.png)
+
+A bare slash command is sent with the trailing space left by the suggestion picker removed. Input with arguments is sent as entered. If the terminal shows no suggestions (including Antigravity’s `No matches`), the command is sent when the terminal input matches it. If the terminal selects a different suggestion or its selection cannot be verified, the composer keeps the draft and withholds submission.
+
+For a command that opens a different CLI screen, such as `/help` or `/model`, the cockpit confirms acceptance when it recognizes the screen for the submitted command.
 
 ### Send guard
 
 Before sending, if the first line is one of the following, it is not sent, and a confirmation bar appears above the composer.
 
-- **A built-in that ends or deletes the session**: Claude's `/clear` `/logout` `/exit` `/quit`, Codex's `/logout` `/quit` `/exit` `/new`, Gemini's `/clear` `/exit` `/quit`
-- **A mixed-up symbol**: when you try to send `/name` to Codex or `$name` to Claude. If a skill with the same name exists, a button to correct the symbol and send is shown
+- **A built-in that ends or deletes the session**: Claude's `/clear` `/logout` `/exit` `/quit`, Codex's `/logout` `/quit` `/exit` `/new` `/clear`, and Antigravity and Gemini's `/clear` `/exit` `/quit`
+- **A mismatched skill prefix or an unrecognized Codex command**. For example, if you try to send `/review-pr` to Codex and a skill of that name exists, the guard offers to send `$review-pr`
 
 The buttons on the bar are: correct and send (for example `send as $review-pr`), `send as typed` (send it as is), and `cancel`.
-
-![Trying to send /review-pr 3 to a Codex agent is stopped with "codex runs skills as $review-pr", and you can choose send as $review-pr](../images/cockpit_send_guard.png)
 
 ## Jump palette and shortcuts
 
@@ -413,30 +406,30 @@ For your first DeepSeek, dsh, or Hermes setup, follow the guide in the order bel
 **Once setup is complete, use the form as follows.**
 
 1. Select a portrait under `Choose a scientist`, or leave `AUTO` selected.
-2. Under `Model`, choose Claude, Codex, DeepSeek, or Local models, then select a model in the middle column. Local models can be searched.
+2. Under `Model`, choose from the available groups, then select a model in the middle column. The groups include Claude, Codex, DeepSeek, Local models, and Antigravity when installed. Local models can be searched.
 3. Choose a `Harness` on the right. DeepSeek and Local offer the dsh / Hermes entries in your catalog. Unavailable entries cannot be selected. They show a preparation or compatibility explanation, such as a missing runtime or key-store reader, with a setup-guide link.
 4. Check `Helper model` and `Effort` when shown, then set the launch directory and task below. See [Standard New Agent for DeepSeek and Local](configuration.md#standard-new-agent-for-deepseek-and-local) for details.
 
-![The cockpit's NEW AGENT: Curie's portrait and name, all four families (Claude, Codex, DeepSeek, Local models), and DeepSeek's dsh and Hermes choices](../images/cockpit-native-spawn.png)
+5. In macOS legacy mode, when the Telemetry API 53 or later catalog supplies `computer_modes`, choose **Off** (no screen tools), **View** (inspect), or **Control** (inspect and interact) under **Computer use** for Claude Code, Codex CLI, dsh, Hermes, or Antigravity CLI. Older catalogs can show a switch that uses the compatibility Cua Driver selection. **Browser** offers the available modes from Off, Temporary Chrome, and My Chrome. Older catalogs can show a single switch. Fresh mode hides these controls. See the [phone guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md) for the separate mobile launch form.
 
-![The same actual screen switches Claude → Codex → DeepSeek (dsh, Hermes) → Local models (dsh, Hermes)](../images/cockpit-native-spawn.gif)
+The cockpit launches independent agents. Antigravity requires macOS and a Telemetry catalog that advertises standalone support (API 50 or later). Supported launches can use a folder outside Git. Use standalone Telemetry's NEW AGENT form to select a parent or Isolation. With an older Telemetry that does not support standalone Antigravity, use its delegated launch form. See Telemetry's [Computer use](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/computer-use.en.md) and [Antigravity](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.en.md) guides for setup and compatibility.
 
-These captures use the actual screen and its live catalog, cropped to the name, portraits, model, and Harness controls. `Spawn` was not pressed. Available models and Harnesses depend on your installation. Portrait sources and licenses are in [CREDITS](../../CREDITS.md).
+![Choose a provider and harness in Model and effort, then open the computer and browser menus](../images/cockpit-native-spawn.gif)
+
+The GIF uses the cockpit UI with a demo catalog and shows the choices before launch. Available models and Harnesses depend on your installation. Portrait sources and licenses are in [CREDITS](../../CREDITS.md).
 
 Input fields:
 
 - Identity: Auto, or Scientist + Adjective
-- Claude / Codex / DeepSeek / Local models, Harness, and Helper model / reasoning effort when shown
+- Model, Harness, and Helper model / reasoning effort when shown
 - Working directory
+- Computer use and Browser when available
 - Task (required, up to 4000 characters)
-- Standalone or parent
-- Role / emoji / group
-- Worktree / base revision
-- Headless or Ghostty
+- Role
 
-Parent candidates are running agents. Auto sends `name:null`, and the final validation of name, model, effort, and directory is done by the ORRERY Telemetry server.
+Auto sends `name:null`. Telemetry validates the name, model, effort, and directory. Parent, group, worktree, and base revision are options in the separate Telemetry ADVANCED form.
 
-When you press `Spawn`, progress appears at the bottom right. It is `LAUNCHING · <name>`, then `SPAWNED · <name>` if it launched, or `SPAWN FAILED · <name> · <reason>` if it failed. If no result comes back after 140 seconds, `no verdict after 140s` is shown (the agent may have started, so check the roster).
+After you press `Spawn`, the cockpit waits for the launch result until the deadline Telemetry reports. If Telemetry supplies no deadline, it waits 140 seconds. When you see `No launch result after …s`, check the roster before retrying.
 
 When you choose a scientist, an unused adjective is chosen automatically, and you can re-roll it with 🎲 on the name card. In the spawn modal on the embedded TELEMETRY side, on a name collision, `SHUFFLE` has the server propose another verified name for the same scientist.
 
@@ -464,9 +457,7 @@ Open the overlay with `PLANETARIUM` in the header, or `⤢` at the top right of 
 - Agent jump
 - `OPEN TELEMETRY`
 
-![Planetarium. Spawn lines extend from the parent LuckyGoodall to the children BraveTuring and GreenMaxwell, and LimeGalileo, which has no parent, sits as a separate tree](../images/cockpit_planetarium.png)
-
-![Opening the tree in PLANETARIUM; lines light up each time Mail arrives. Clicking a node jumps to its terminal](../images/cockpit_planetarium.gif)
+![Planetarium showing a parent–child tree and a separate standalone agent](../images/cockpit_planetarium.png)
 
 Clicking a node moves to that agent's terminal and closes the overlay. `Esc`, a click outside, or `⤢` at the top right also closes it. Even if you set the mini-orrery to the Telemetry network view in Settings, the Planetarium always draws the spawn forest. The Planetarium is a lineage exploration inside the cockpit. Its role differs from the full NETWORK / DIGEST REPLAY of the ORRERY Telemetry dashboard.
 
@@ -479,11 +470,7 @@ The right rail merges the live message window of ORRERY Telemetry with the recen
 - Safe, limited Markdown
 - Thread view (up to 50 items)
 
-![New Mail flows in; reading the body from a card and the back-and-forth from a thread; selecting an agent in the roster narrows the list to its Mail](../images/cockpit_mail.gif)
-
 Clicking a mail card switches the lower half of the rail to a drawer for that message. The drawer shows the sender, the recipients (distinguishing to / cc), the exact time and elapsed time, importance, subject, and body. A message with a thread switches to a chronological view with `thread (n)`, and clicking an item in the thread opens that message. `←` or `Esc` returns to the list.
-
-![Left: the mail rail list. At the top, the mini-orrery shows the parent–child tree, and below it the filter chips and cards. Right: the drawer opened by clicking a card](../images/cockpit_mail_rail.png)
 
 Clicking a mail card or a sender name does not move you to a terminal. To open an agent's terminal, use a tile in the left roster or a node in the mini-orrery. In the other direction they are linked: selecting a roster tile, pressing a mini-orrery node, or focusing a terminal pane switches the filter chip to that agent (for a pane, only when that agent's mail is in the list). If you select an agent that is not shown in the chips, that agent's recent mail is additionally fetched.
 To the right of the right rail's heading, it normally says `live · 5m`. If it says `project key not configured` there, the project key used to read the Mail DB has not been set ([Configuration](configuration.md)).
@@ -498,31 +485,19 @@ Everything below is an actual screen of the ORRERY Telemetry dashboard embedded 
 
 ### Initial state
 
-![The initial state of the TELEMETRY DECK with three agents](../images/deck_start.png)
-
 What to look at: in `DECK`, you can check `RUNNING` / `AGENTS` at the top and each card's name, model, task, and running state at a glance.
-
-![The initial state of the TELEMETRY NETWORK, with three independent nodes visible](../images/net_start.png)
 
 What to look at: `3 nodes · 0 links` is shown at the top left of `NETWORK`, and you can see the three agents that have no links yet as individual nodes.
 
 ### With more agents and traffic
 
-![The TELEMETRY DECK with 12 agents and received traffic](../images/deck_growing.png)
-
 What to look at: as agents increase, the cards grow to 12, and on cards with `RX` you can also tell the counterpart, task, and importance on the same screen.
-
-![The TELEMETRY NETWORK with 12 nodes and links spreading](../images/net_growing.png)
 
 What to look at: from `12 nodes · 6 links · 6 spawn / total 12` and the lines between nodes, you can get an overview of the growth and the spread of connections.
 
 ### Spotting agents that need you
 
-![The TELEMETRY DECK. Waiting for an answer is shown by a question mark, and waiting for approval by a red frame and APPROVAL](../images/deck_humanloop.png)
-
 What to look at: the `?` at the top right of a card means waiting for an answer to a question, and the red outer frame and `APPROVAL` mean waiting for approval. Tell them apart from ordinary running cards and identify the agents that need a human decision first.
-
-![The TELEMETRY NETWORK. Among 12 densely connected nodes, a question mark for an agent that needs you is visible](../images/net_humanloop.png)
 
 What to look at: even when traffic becomes dense, you can find agents that need you by the `?` near a node. Check the distinction between waiting for an answer and waiting for approval in the `DECK` display.
 
@@ -560,17 +535,13 @@ From the cockpit to the dashboard, it sends a stop of updates (`net-pause`) when
 
 ### Open in cockpit from TELEMETRY
 
-![Opening the DECK with TELEMETRY in the header, selecting an agent in NETWORK, and returning to its terminal with OPEN IN COCKPIT](../images/cockpit_telemetry.gif)
-
 Clicking a card in the TELEMETRY `DECK` opens that agent's panel. Pressing `OPEN IN COCKPIT` at the top right closes TELEMETRY and opens that agent's terminal in the cockpit. When the dashboard is opened by itself (`http://127.0.0.1:8770/`), the same button becomes `OPEN TMUX`, and the dashboard's server opens a terminal window.
 
-![The TELEMETRY agent panel. EXIT, OPEN IN COCKPIT, and Close are lined up at the top right](../images/cockpit_telemetry_open_in_cockpit.png)
+![OPEN IN COCKPIT in an embedded Telemetry agent panel returns to that agent’s terminal](../images/cockpit_telemetry_open_in_cockpit.png)
 
 There is no button to move from a standalone dashboard to the cockpit. When you want to open a specific agent on the cockpit side, use a `cockpit.html?session=<session-name>` URL ([Jump palette and shortcuts](#jump-palette-and-shortcuts)).
 
 ## REPLAY
-
-![Selecting agents in NETWORK and pressing Replay plays back spawn and Mail along a time axis. Raising the speed and clicking the time axis jumps to the later part](../images/cockpit_replay.gif)
 
 How to operate: press `SELECT` in TELEMETRY's `NETWORK`, click nodes to choose two or more agents, and press `Replay` in the bar that appears below. `PLAY` / `PAUSE` plays and pauses, the `SPD` scale sets the speed (×1 to ×10000), `HOLD` sets how long Mail speech bubbles stay on screen, and clicking the time axis jumps to any moment. `✕ CLOSE` or `Esc` ends it.
 
@@ -602,12 +573,6 @@ The color scheme (Dark / Light / System) is also in Settings ([Color theme (ligh
 
 In Settings, under `Appearance` › `Color theme`, you can choose `Dark` (default), `Light`, or `System`. Light is a scheme with dark text on a warm, paper-like ground. You can use them as needed: Dark in a dark room, Light in a bright room or for long stretches of reading and writing.
 
-![The same screen in Dark. A Split with two terminals, the roster on the left, and Mail on the right](../images/cockpit_theme_dark.png)
-
-![The same screen in Light. The terminals, roster, Mail, and header all switch to a bright scheme](../images/cockpit_theme_light.png)
-
-![Opening Settings, switching Color theme to Light, and switching back to Dark](../images/cockpit_theme_switch.gif)
-
 When you choose Light, the following switch together.
 
 - The whole cockpit screen (the roster, terminal frames, Mail, the mini-orrery, Settings, and so on)
@@ -636,10 +601,6 @@ When you run the backend in WSL2 and open it in a Windows-side browser, the cock
 | Standalone window | An ORRERY.app window (a popup in a browser) | A popup in the Windows browser (popups must be allowed) |
 
 `Cmd` corresponds to the Windows key on Windows, which the OS uses, and `Ctrl+K` / `Ctrl+1`–`9` are used by the browser, so WSL uses `Alt`. `Alt+K` / `Alt+1`–`9` are received by the cockpit even when the terminal has focus, and are not sent to the agent.
-
-![The Jump palette opened on WSL. Alt+K is shown at the top left](../images/cockpit_palette_wsl.png)
-
-![The pane header on WSL. The rightmost button becomes WIN TERMINAL](../images/cockpit_pane_header_wsl.png)
 
 When `WIN TERMINAL` cannot be pressed, hovering over the button shows the reason (`wt.exe` is not on PATH, `WSL_DISTRO_NAME` is missing, and so on). If Windows Terminal is not installed, get it from the Microsoft Store. While the backend has not yet returned its environment, file / image pasting is held back so that a paste success is not shown by mistake.
 

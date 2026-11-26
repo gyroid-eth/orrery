@@ -49,14 +49,30 @@
   // `fill(cell,value)` writes one cell; the conversation keeps cells as text.
   function tableNode(block,fill=(cell,value)=>renderText(value,cell)){
     const container=document.createElement('div');container.className='conversation-table';
-    const copy=document.createElement('button');copy.type='button';copy.className='cockpit-control conversation-table-copy';copy.textContent='Copy Markdown';
-    copy.addEventListener('click',async event=>{event.stopPropagation();try{await navigator.clipboard.writeText(block.raw);copy.textContent='Copied';}catch(_){copy.textContent='Copy unavailable';}});
-    copy.addEventListener('keydown',event=>event.stopPropagation());
+    const copy=document.createElement('button');copy.type='button';copy.className='cockpit-control conversation-table-copy';
+    copy.title='Copy Markdown';copy.setAttribute('aria-label',copy.title);
+    const namespace='http://www.w3.org/2000/svg';
+    const icon=document.createElementNS(namespace,'svg'),glyph=document.createElementNS(namespace,'path');
+    for(const [name,value] of Object.entries({viewBox:'0 0 16 16',width:'16',height:'16',fill:'none',stroke:'currentColor','stroke-width':'1.4','stroke-linecap':'round','stroke-linejoin':'round','aria-hidden':'true'})){
+      icon.setAttribute(name,value);
+    }
+    glyph.setAttribute('d','M6 6h7v7H6z M10 6V3H3v7h3');icon.appendChild(glyph);copy.appendChild(icon);
+    const status=document.createElement('span');status.className='conversation-status';status.setAttribute('role','status');
+    copy.addEventListener('click',async event=>{
+      event.stopPropagation();status.textContent='';
+      try{
+        await navigator.clipboard.writeText(block.raw);
+        glyph.setAttribute('d','m3 8 3 3 7-7');status.textContent='Markdown copied';
+      }catch(_){
+        glyph.setAttribute('d','M8 3v6 M8 12v.01');status.textContent='Copy unavailable';
+      }
+    });
+    copy.addEventListener('keydown',event=>{if(event.key!=='Escape')event.stopPropagation();});
     const scroll=document.createElement('div');scroll.className='conversation-table-scroll';scroll.tabIndex=0;scroll.setAttribute('role','region');scroll.setAttribute('aria-label','Markdown table; scroll horizontally for more columns');
     const table=document.createElement('table'),head=document.createElement('thead'),body=document.createElement('tbody');
     function row(values,header){const tr=document.createElement('tr');values.forEach((value,i)=>{const cell=document.createElement(header?'th':'td');fill(cell,value);cell.style.textAlign=block.align[i];if(header)cell.scope='col';tr.appendChild(cell);});return tr;}
     head.appendChild(row(block.header,true));for(const values of block.rows)body.appendChild(row(values,false));
-    table.append(head,body);scroll.appendChild(table);container.append(copy,scroll);return container;
+    table.append(head,body);scroll.appendChild(table);container.append(copy,status,scroll);return container;
   }
   function render(text,host){
     const blocks=parse(text);

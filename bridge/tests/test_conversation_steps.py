@@ -50,6 +50,35 @@ def claude_events(records):
             for index, event in normalize(record, 'claude', 'synthetic')]
 
 
+@pytest.mark.parametrize('provider,label', [('dsh','dsh'), ('hermes','Hermes'), ('antigravity','Antigravity')])
+def test_recorded_tools_group_when_agent_is_idle(provider, label):
+    if provider == 'dsh':
+        records = [
+            dict(type='tool/call', time=1000, data=dict(name='read_file', callId='read-1',
+                 arguments={'path': '/fixture/notes.md'})),
+            dict(type='tool/result', time=2000, data=dict(message=dict(toolCallId='read-1', isError=True))),
+        ]
+    elif provider == 'hermes':
+        records = [
+            dict(role='assistant', timestamp=1, tool_calls=[dict(id='read-1',
+                 function=dict(name='read_file', arguments='{"path":"/fixture/notes.md"}'))]),
+            dict(role='tool', tool_call_id='read-1', timestamp=2, content='{"error":"fixture"}'),
+        ]
+    else:
+        path = Path(__file__).parent / 'fixtures/antigravity-show-files.jsonl'
+        records = [json.loads(line) for line in path.read_text().splitlines()]
+    events = [dict(event,id=f'{number}:{index}') for number, record in enumerate(records)
+              for index, event in normalize(record, provider, 'synthetic')]
+    grouped = model(events,label)
+    first, = [group for group in grouped['groups'] if group['steps']]
+    steps = first['steps']
+    assert steps[0]['tool'] == 'read_file'
+    assert steps[0]['detail'] == 'notes.md'
+    assert [step['status'] for step in steps] == (
+        ['observed', 'observed'] if provider == 'antigravity' else ['failed'])
+    assert set(grouped['consumed']) == {event['id'] for event in events if event['kind'].startswith('tool')}
+
+
 def segmented_records(provider, separator='assistant'):
     notice = ('ORRERY Mail notification: message from PeerFixture [normal]: Review ready. '
               'Body (complete; no inbox fetch needed): The fixture is ready.')
@@ -233,9 +262,11 @@ def test_consecutive_claude_outputs_do_not_create_empty_intermediate_runs():
     assert len(grouped['groups'][0]['steps']) == 1
 
 
-@pytest.mark.parametrize('provider',['dsh','Hermes','unsupported'])
-def test_other_providers_keep_existing_tool_groups(provider):
-    out=model([dict(id='tool',kind='tool',step={'id':opaque('call'),'phase':'complete'})],provider)
+@pytest.mark.parametrize('provider,native', [
+    ('dsh',False), ('Hermes',False), ('Antigravity',False), ('unsupported',True),
+])
+def test_unbound_or_unsupported_records_keep_existing_tool_groups(provider,native):
+    out=model([dict(id='tool',kind='tool',step={'id':opaque('call'),'phase':'complete'})],provider,native=native)
     assert out == {'groups':[], 'consumed':[]}
 
 

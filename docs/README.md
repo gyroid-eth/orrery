@@ -8,6 +8,8 @@
 
 - [Quick start](../README.md#クイックスタート) — 本体を入れて初回ガイドへ進む。
 - [インストール](install.md) — 1行 install の前提・計画・確認結果を読み、まず cockpit を開く。
+- [利用中の agent と導入を進める](install-with-agent.md) — 依頼文、計画、利用者の承認。
+- [ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.md) — 読み取り専用アダプター。
 - [研究セット](research-set.md) — digest-paper と公開 demo vault を本体の後に追加する。
 
 ## 使い方

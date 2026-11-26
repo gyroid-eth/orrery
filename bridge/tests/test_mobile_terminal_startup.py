@@ -43,6 +43,18 @@ def probe(tmp_path, config, *args):
                           capture_output=True, text=True, timeout=10)
 
 
+def test_backend_entry_point_rejects_python_310_before_loading_dependencies(tmp_path):
+    code = (
+        "import runpy, sys\n"
+        "sys.version_info = (3, 10, 0)\n"
+        "runpy.run_path(sys.argv[1], run_name='__main__')\n"
+    )
+    result = subprocess.run([sys.executable, "-S", "-c", code, str(BRIDGE / "orrery_backend.py")],
+                            env=environment(tmp_path), capture_output=True, text=True, timeout=10)
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Python 3.11 or newer is required."
+
+
 @pytest.mark.parametrize('config,expected', [
     (None, False), ('{}', False), ('{broken', False), ('[]', False),
     ('{"enable_mobile_terminal":false}', False), ('{"enable_mobile_terminal":true}', True),

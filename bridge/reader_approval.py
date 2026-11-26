@@ -9,6 +9,8 @@ import secrets
 import time
 from pathlib import Path
 
+from question_screen import parse_question, question_candidate, same_question, valid_choice
+
 MAX_BYTES = 65536
 HEADINGS = ('Allow the ', 'Would you like to run the following command?', 'Read outside the working directories')
 MCP_CHOICES = ['Allow', 'Allow for this session', 'Always allow', 'Cancel']
@@ -25,6 +27,10 @@ class ApprovalNotSent(RuntimeError):
 
 def parse_screen(text, command, harness=None):
     """Return only complete known menus. Never fill missing text from a template."""
+    question = parse_question(text, harness)
+    if question:
+        question.update(default=question['selected'], summary=question['body'])
+        return question
     if not isinstance(text, str) or len(text.encode('utf-8')) > MAX_BYTES:
         return None
     lines = [line.rstrip() for line in text.splitlines()]
@@ -109,12 +115,37 @@ class ApprovalCoordinator:
 
     def _digest(self, snapshot):
         b = self.bridge
-        return hashlib.sha256(json.dumps([b._incarnation, b.config.session_created, snapshot], sort_keys=True).encode()).hexdigest()
+        fields = snapshot
+        if (question := self._parse(snapshot)) and question['kind'] == 'question':
+            # The countdown and unrelated history can redraw without changing
+            # the current question. The identity, options and draft still bind it.
+            fields = [snapshot['identity'], question]
+        return hashlib.sha256(json.dumps([b._incarnation, b.config.session_created, fields], sort_keys=True).encode()).hexdigest()
 
     async def _capture(self, pane):
         harness = (await self.harness_resolver(pane) or 'unknown') if self.harness_resolver else None
-        snapshot = await self.bridge.approval_capture_locked(pane)
+        if harness == 'hermes':
+            snapshot = await self.bridge.approval_capture_locked(pane, styled=True)
+        else:
+            snapshot = await self.bridge.approval_capture_locked(pane)
+            if harness in ('codex', 'dsh', 'agy', 'claude') and question_candidate(snapshot['text']):
+                snapshot = await self.bridge.approval_capture_locked(pane, styled=True)
         return dict(snapshot, harness=harness)
+
+    @staticmethod
+    def _parse(snapshot):
+        return parse_screen(snapshot['text'], snapshot['command'], snapshot.get('harness'))
+
+    @staticmethod
+    def _content(parsed):
+        return (parsed['kind'], parsed['body'], tuple(c['label'] for c in parsed['choices']), parsed.get('position'))
+
+    @staticmethod
+    def _ready(token, parsed):
+        result = dict(state='ready', token=token, **{k: v for k, v in parsed.items() if k != 'draft'})
+        if parsed['kind'] == 'question':
+            result['draft_empty'] = not parsed['draft']
+        return result
 
     def _view(self, pane, owner, snapshot):
         digest = self._digest(snapshot)
@@ -122,15 +153,16 @@ class ApprovalCoordinator:
         if row is None or row['digest'] != digest:
             row = dict(digest=digest, snapshot=snapshot, used=False, result=None)
             self.screens[pane] = row
-        parsed = parse_screen(snapshot['text'], snapshot['command'], snapshot.get('harness'))
+        parsed = self._parse(snapshot)
         if not parsed:
             candidate = re.search(r'Allow the |Would you like to run|Read outside|Allow this read outside|Do you want to proceed\?|Allow for this session|Yes, proceed|Yes, but ask again|keep allowing any reads', snapshot['text'])
+            candidate = candidate or question_candidate(snapshot['text'])
             if not candidate:
                 self.answered.pop(pane, None)
             return dict(state='terminal' if candidate else 'none', message='Approval needs terminal review' if candidate else 'Prompt closed')
         # Geometry and the selection marker can change while an answered menu
         # remains on screen. Neither change makes it a new approval.
-        content = (parsed['kind'], parsed['body'], tuple(c['label'] for c in parsed['choices']))
+        content = self._content(parsed)
         previous = self.answered.get(pane)
         if previous and previous[0] == content:
             return dict(previous[1]['result'] or dict(state='unknown', message='Outcome unknown — check terminal'))
@@ -139,12 +171,12 @@ class ApprovalCoordinator:
         # Re-inspecting a stable screen must not invalidate another tab's token.
         for token, item in self.tokens.items():
             if item['row'] is row and item['owner'] is owner:
-                return dict(state='ready', token=token, **parsed)
+                return self._ready(token, parsed)
         if len(self.tokens) >= 256:
             self.tokens.pop(next(iter(self.tokens)))
         token = secrets.token_urlsafe(24)
         self.tokens[token] = dict(row=row, owner=owner, pane=pane, incarnation=self.bridge._incarnation)
-        return dict(state='ready', token=token, **parsed)
+        return self._ready(token, parsed)
 
     async def inspect(self, pane, owner):
         try:
@@ -172,9 +204,110 @@ class ApprovalCoordinator:
         except OSError:
             return True
 
-    async def answer(self, pane, owner, token, choice, operation, *, proof=None):
+    @staticmethod
+    def _move(selected, target):
+        delta = target - selected
+        return ['Down' if delta > 0 else 'Up'] * abs(delta)
+
+    @classmethod
+    def _answer_plan(cls, question, choice, raw):
+        if question['mode'] == 'other':
+            return []
+        if question['harness'] == 'hermes':
+            if question['multiple']:
+                wanted = set(choice)
+                return [str(option['id']) for option in question['choices']
+                        if option['checked'] != (option['id'] in wanted)]
+            return [str(choice)]
+        if question['harness'] in ('dsh', 'agy'):
+            if question['multiple']:
+                keys = []
+                focus = question['selected']
+                for option in question['choices']:
+                    option_id = option['id']
+                    if not option.get('other') and option['checked'] != (option_id in choice):
+                        keys.extend(cls._move(focus, option_id) + ['Space'])
+                        focus = option_id
+                return keys
+            if raw is not None and question['harness'] == 'dsh':
+                return ['Tab']
+            return cls._move(question['selected'], choice) + ['Enter']
+        keys = cls._move(question['selected'], choice)
+        return keys + (['Tab'] if raw is not None else ['Enter'])
+
+    async def _question_keys(self, pane, snapshot, question, choice, keys, raw, proof, valid):
+        """Validate the active question again after entering an answer editor."""
+        async def observe():
+            if valid is not None and not valid():
+                raise RuntimeError('question answer expired')
+            current = await self.bridge.approval_capture_locked(pane, styled=True)
+            if current['identity'] != snapshot['identity']:
+                raise RuntimeError('question pane changed')
+            return parse_screen(current['text'], current['command'], question['harness'])
+
+        async def wait_for(test):
+            while True:
+                view = await observe()
+                if view is not None:
+                    if not same_question(question, view):
+                        raise RuntimeError('question changed during input')
+                    if test(view):
+                        return view
+                await asyncio.sleep(.06)
+
+        async def write(batch):
+            await self.bridge.approval_keys_locked(pane, batch, proof=proof)
+
+        wrote = False
+        try:
+            if keys:
+                await write(keys)
+                wrote = True
+            if question['multiple'] and question['mode'] == 'choice':
+                wanted = {option['id'] for option in question['choices']
+                          if option['id'] in choice and (question['harness'] == 'hermes' or not option.get('other'))}
+                current = await wait_for(lambda view: view['mode'] == 'choice' and view['multiple'] and
+                                         {option['id'] for option in view['choices'] if option['checked']} == wanted)
+                commit = ['Enter']
+                if raw is not None:
+                    if question['harness'] == 'dsh':
+                        commit = ['Tab']
+                    elif question['harness'] == 'agy':
+                        other = next(option['id'] for option in question['choices'] if option.get('other'))
+                        commit = self._move(current['selected'], other) + ['Enter']
+                await write(commit)
+                wrote = True
+            if raw is None:
+                return
+            if question['mode'] == 'choice':
+                current = await wait_for(lambda view: view['mode'] == 'other')
+                if current['draft'] or (question['harness'] == 'codex' and current['selected'] != choice):
+                    raise RuntimeError('Other editor changed or is occupied')
+            batch = b'\x1b[200~' + raw + b'\x1b[201~'
+            await write(['-H', *(f'{byte:02x}' for byte in batch)])
+            wrote = True
+            wanted = raw.decode('utf-8').strip()
+            previous = None
+            def settled(view):
+                nonlocal previous
+                if view['mode'] != 'other':
+                    raise RuntimeError('answer editor closed')
+                draft = view['draft']
+                stable = draft == previous and draft.replace('\n', '') == wanted
+                previous = draft
+                return stable
+            await asyncio.sleep(.06)
+            await wait_for(settled)
+            await write(['Enter'])
+        except ApprovalNotSent:
+            if not wrote:
+                raise
+            raise RuntimeError('question input already started') from None
+
+    async def answer(self, pane, owner, token, choice, operation, *, proof=None, text=None,
+                     check=None, claim=None, valid=None):
         if (not isinstance(operation, str) or not re.fullmatch(r'[\w-]{1,96}', operation)
-                or not isinstance(token, str) or type(choice) is not int):
+                or not isinstance(token, str) or not valid_choice(choice)):
             return dict(state='refused', message='Response not sent — invalid request')
         receipt_key = (owner, operation)
         started = False;row = None;keys = []
@@ -196,19 +329,48 @@ class ApprovalCoordinator:
                     if self._digest(snapshot) != row['digest']:
                         self._view(pane, owner, snapshot)
                         return dict(state='changed', message='Approval changed — review again')
-                    parsed = parse_screen(snapshot['text'], snapshot['command'], snapshot.get('harness'))
-                    if not parsed or choice not in [c['id'] for c in parsed['choices']]:
+                    parsed = self._parse(snapshot)
+                    if not parsed:
+                        return dict(state='refused', message='Response not sent — panel changed')
+                    is_question = parsed['kind'] == 'question'
+                    freeform = is_question and parsed['mode'] == 'other'
+                    multiple = is_question and parsed['multiple'] and not freeform
+                    requested = choice if isinstance(choice, list) else [choice]
+                    options = [option for option in parsed['choices'] if option['id'] in requested]
+                    if (multiple != isinstance(choice, list) or
+                            (choice != 0 if freeform else len(options) != len(requested))):
                         return dict(state='refused', message='Response not sent — invalid choice')
-                    if parsed['kind'] == 'command':
+                    raw = None
+                    if is_question:
+                        if parsed['draft']:
+                            return dict(state='refused', message='The answer editor already contains a draft')
+                        if freeform or any(option.get('other') for option in options):
+                            from mobile_input import InputRefused, validate_text
+                            try:
+                                raw = validate_text(text)
+                            except InputRefused:
+                                return dict(state='refused', message='Enter an answer for Other', retryable=True)
+                        elif text is not None:
+                            return dict(state='refused', message='Choose Other to enter a written answer')
+                        keys = self._answer_plan(parsed, choice, raw)
+                    elif text is not None:
+                        return dict(state='refused', message='This approval only accepts a choice')
+                    elif parsed['kind'] == 'command':
                         keys = [['y'], ['p'], ['Escape']][choice - 1]
                     else:
-                        delta = choice - parsed['selected']
-                        keys = ['Down' if delta > 0 else 'Up'] * abs(delta) + ['Enter']
+                        keys = self._move(parsed['selected'], choice) + ['Enter']
                     # Consume across tabs before the first possible key write.
+                    if check is not None and not await check():
+                        return dict(state='refused', message='Pane changed — review again')
+                    if claim is not None and not claim():
+                        return dict(state='refused', message='Response not sent — input expired')
                     row['used'] = True
                     warning = self._log(pane, operation, choice, keys, 'dispatching')
                     started = True
-                    await self.bridge.approval_keys_locked(pane, keys, proof=proof)
+                    if is_question:
+                        await self._question_keys(pane, snapshot, parsed, choice, keys, raw, proof, valid)
+                    else:
+                        await self.bridge.approval_keys_locked(pane, keys, proof=proof)
                     result = dict(state='sent', message='Response sent · Waiting for terminal', logWarning=warning)
         except ApprovalNotSent:
             # Admission/revision checks failed before any possible key byte.
@@ -223,8 +385,8 @@ class ApprovalCoordinator:
             result['logWarning'] = self._log(pane, operation, choice, keys, result['state']) or result.get('logWarning', False)
         if row is not None and row['used']:
             row['result'] = result
-            parsed = parse_screen(row['snapshot']['text'], row['snapshot']['command'], row['snapshot'].get('harness'))
-            content = (parsed['kind'], parsed['body'], tuple(c['label'] for c in parsed['choices']))
+            parsed = self._parse(row['snapshot'])
+            content = self._content(parsed)
             self.answered[pane] = (content, row)
         if len(self.receipts) >= 512:
             self.receipts.pop(next(iter(self.receipts)))

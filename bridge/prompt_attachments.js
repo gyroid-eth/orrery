@@ -2,9 +2,11 @@
 (function(root){
   'use strict';
   const imageTypes=new Set(['jpg','jpeg','png','webp']);
-  const fileTypes=new Set(['pdf','txt','md','csv','json']);
-  const maxFiles=5,mebibyte=1024*1024;
+  const maxFiles=5,mebibyte=1024*1024,fileLimit=50;
   const clipboardImageExtensions={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'};
+  function pathName(path){
+    return typeof path==='string'&&/^\/(?:[^\x00-\x1f\x7f-\x9f]+)$/u.test(path)?path.split('/').pop():'';
+  }
   function eventFiles(data){
     const files=Array.from(data?.files||[]);
     if(!files.length)for(const item of Array.from(data?.items||[])){
@@ -13,7 +15,7 @@
     }
     return files.map(file=>{
       const extension=clipboardImageExtensions[file.type];
-      if(!extension||kindFor(file)?.kind==='image')return file;
+      if(pathName(file.path)||!extension||kindFor(file).kind==='image')return file;
       return new File([file],file.name?file.name+'.'+extension:'Clipboard image.'+extension,
         {type:file.type,lastModified:file.lastModified});
     });
@@ -24,18 +26,20 @@
       if(typeof item?.name!=='string'||item.name.length>256||/[\\/]/u.test(item.name)||
          typeof item.data!=='string'||!item.data)return [];
       const format=kindFor({name:item.name});
-      if(!format||item.data.length>4*Math.ceil(format.maxBytes/3))return [];
+      if(item.data.length>4*Math.ceil(format.maxBytes/3))return [];
       try{
-        const bytes=Uint8Array.from(atob(item.data),value=>value.charCodeAt(0));
+        const binary=atob(item.data),bytes=new Uint8Array(binary.length);
+        for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
         return [new File([bytes],item.name,{type:item.type||'',lastModified:item.modified||0})];
       }catch(_){return [];}
     });
   }
   function kindFor(file){
-    const extension=file.name.split('.').pop().toLowerCase();
-    if(imageTypes.has(extension))return {kind:'image',extension,maxBytes:10*mebibyte};
-    if(fileTypes.has(extension))return {kind:'file',extension,maxBytes:5*mebibyte};
-    return null;
+    const dot=file.name.lastIndexOf('.');
+    const suffix=dot>0?file.name.slice(dot+1).toLowerCase():'';
+    const extension=/^[a-z0-9]{1,32}$/.test(suffix)?suffix:'';
+    if(imageTypes.has(extension))return {kind:'image',extension,maxBytes:fileLimit*mebibyte};
+    return {kind:'file',extension,maxBytes:fileLimit*mebibyte};
   }
   function dataFor(file){
     return new Promise((resolve,reject)=>{
@@ -71,8 +75,8 @@
             'M3 1h6l4 4v12H3z M9 1v5h4 M5 10h6 M5 13h5');
           line.setAttribute('stroke','currentColor');line.setAttribute('fill','none');icon.append(line);
         }
-        label.textContent=entry.file.name;item.title=entry.file.name;
-        remove.type='button';remove.textContent='×';remove.title='Remove '+entry.file.name;
+        label.textContent=entry.name;item.title=entry.name;
+        remove.type='button';remove.textContent='×';remove.title='Remove '+entry.name;
         remove.setAttribute('aria-label',remove.title);
         remove.onclick=()=>{
           if(!mayEdit())return;
@@ -85,24 +89,47 @@
       }));
       onChange();
     }
-    function add(files){
+    function append(entry){
+      if(entries.length===maxFiles){onError('Attach up to '+maxFiles+' files.');return false;}
+      entries.push(entry);return true;
+    }
+    function appendPath(path){
+      const name=pathName(path);
+      if(!name||entries.some(entry=>entry.path===path))return true;
+      return append({path,name,kind:'file',extension:kindFor({name}).extension});
+    }
+    function addPaths(paths){
       if(!mayEdit())return;
-      const unsupported=[],oversized=[];
-      for(const file of files){
-        const format=kindFor(file);
-        if(!format){unsupported.push(file.name);continue;}
-        if(!file.size||file.size>format.maxBytes){oversized.push(file.name);continue;}
-        if(entries.some(entry=>entry.file.name===file.name&&entry.file.size===file.size&&entry.file.lastModified===file.lastModified))continue;
-        if(entries.length===maxFiles){onError('Attach up to '+maxFiles+' files.');break;}
-        const mime=format.extension==='jpg'||format.extension==='jpeg'?'image/jpeg':'image/'+format.extension;
-        const preview=format.kind==='image'?URL.createObjectURL(file.slice(0,file.size,mime)):null;
-        entries.push({file,...format,preview});
-      }
-      if(unsupported.length)onError('Unsupported file type: '+unsupported.join(', '));
-      else if(oversized.length)onError('Empty or too large: '+oversized.join(', '));
+      for(const path of paths)if(!appendPath(path))break;
       paint();
     }
-    clip.onclick=()=>{if(mayEdit())picker.click();};
+    function add(files){
+      if(!mayEdit())return;
+      const errors=[];
+      for(const file of Array.from(files)){
+        const format=kindFor(file);
+        if(file.size>format.maxBytes&&pathName(file.path)){
+          if(!appendPath(file.path))break;
+          continue;
+        }
+        if(!file.size){errors.push(file.name+' is empty.');continue;}
+        if(file.size>format.maxBytes){
+          errors.push(file.name+' exceeds '+format.maxBytes/mebibyte+' MiB.');continue;
+        }
+        if(entries.some(entry=>entry.file&&entry.name===file.name&&entry.file.size===file.size&&entry.file.lastModified===file.lastModified))continue;
+        const mime=format.extension==='jpg'||format.extension==='jpeg'?'image/jpeg':'image/'+format.extension;
+        const preview=format.kind==='image'?URL.createObjectURL(file.slice(0,file.size,mime)):null;
+        if(!append({file,name:file.name,...format,preview})){
+          if(preview)URL.revokeObjectURL(preview);
+          break;
+        }
+      }
+      if(errors.length)onError(errors.join(' '));
+      paint();
+    }
+    clip.onclick=()=>{
+      if(mayEdit()&&!pending)picker.click();
+    };
     picker.onchange=()=>{add(picker.files);picker.value='';};
     const dropping=event=>Array.from(event.dataTransfer?.types||[]).includes('Files');
     host.addEventListener('dragenter',event=>{
@@ -130,33 +157,57 @@
       try{
         const result=await read();
         if(!mayEdit())return;
+        const paths=Array.isArray(result.paths)?result.paths.filter(pathName):[];
         const snapshot=Array.isArray(result.attachments)?result.attachments:[];
         const files=snapshotFiles(snapshot);
         if(files.length)add(files);
+        if(paths.length)addPaths(paths);
         const skipped=(result.skipped||0)+snapshot.length-files.length;
-        if(result.error&&!files.length)onError('Could not read clipboard attachments.');
+        if(result.oversized)onError('Clipboard selection exceeds the size limit (50 MiB, or 10 MiB for a clipboard-only image).');
+        else if(result.error&&!files.length&&!paths.length)onError('Could not read clipboard attachments.');
         else if(skipped)onError(skipped===1?'1 clipboard item could not be attached.':skipped+' clipboard items could not be attached.');
-        else if(!files.length)onError('No supported files or images on the clipboard.');
+        else if(!files.length&&!paths.length)onError('No files or images on the clipboard.');
       }catch(_){
         if(mayEdit())onError('Could not read clipboard attachments.');
       }finally{
         pending=false;onChange();
       }
     }
-    return {add,clear,paste,get pending(){return pending;},get entries(){return entries.slice();}};
+    return {add,addPaths,clear,paste,get pending(){return pending;},get entries(){return entries.slice();}};
   }
   async function upload(target,entries){
     const paths=[];
     for(const entry of entries){
-      const data=await dataFor(entry.file);
-      const body={...target,kind:entry.kind,data,label:entry.file.name.slice(0,256)};
-      if(entry.kind==='file')body.format=entry.extension;
+      const label=entry.name.slice(0,256);
+      const body=entry.path?{...target,kind:'path',sourcePath:entry.path,label}:
+        {...target,kind:entry.kind,data:await dataFor(entry.file),label};
+      if(!entry.path&&entry.kind==='file')body.format=entry.extension;
       const response=await fetch('/telemetry/prompt-attachment',{
         method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),
       });
       const payload=await response.json();
-      if(!response.ok||typeof payload.path!=='string'||!/^\.\/\.orrery-input-(images|files)\/[a-f0-9]{32}\.[a-z0-9]+$/.test(payload.path))
-        throw new Error('Could not save '+entry.file.name+' in the agent workspace.');
+      if(response.status===413||payload.error==='file_too_large'||payload.error==='image_too_large')
+        throw new Error(entry.name+' exceeds 50 MiB.');
+      const reasons={
+        attachment_source_unreadable:'The original file could not be read. Select it using the attachment picker.',
+        attachment_target_changed:'The target pane changed. Re-select the recipient and try again.',
+        attachment_workspace_unavailable:'The agent workspace is unavailable. Reopen the agent and try again.',
+        attachment_workspace_unwritable:'The agent workspace is not writable. Check its permissions and try again.',
+        attachment_workspace_full:'The agent workspace is out of disk space. Free some space and try again.',
+        image_folder_full:'The agent’s .orrery-input-images folder is full. Move old inputs you no longer need out of that folder and try again.',
+        file_folder_full:'The agent’s .orrery-input-files folder is full. Move old inputs you no longer need out of that folder and try again.',
+        image_invalid:'The image could not be decoded. Open it and export a new copy.',
+        image_format_unsupported:'Export the image as a single-frame PNG, JPEG or WebP and try again.',
+        image_pixels_too_large:'The image exceeds 24 megapixels. Resize it and try again.',
+        image_decoder_unavailable:'Image decoding is unavailable on the cockpit host.',
+      };
+      if(!response.ok&&Object.hasOwn(reasons,payload.error))
+        throw new Error(entry.name+': '+reasons[payload.error]);
+      if(response.ok&&entry.path&&payload.original===true&&payload.path===entry.path){
+        paths.push(payload.path);continue;
+      }
+      if(!response.ok||typeof payload.path!=='string'||!/^\.\/\.orrery-input-(?:images|files)\/[a-f0-9]{32}(?:\.[a-z0-9]{1,32})?$/.test(payload.path))
+        throw new Error('Could not save '+entry.name+' in the agent workspace.');
       paths.push(payload.path);
     }
     return paths;

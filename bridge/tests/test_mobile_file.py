@@ -24,22 +24,25 @@ def document(kind, data):
     ('md', '# A note\n'.encode()),
     ('csv', b'a,b\r\n1,2\r\n'),
     ('json', b'{"artifact":1}\n'),
+    ('mov', b'\0\0\0\x14ftypqt  \xff'),
+    ('zip', b'PK\x03\x04\0binary'),
+    ('', b'\0\xff'),
+    ('html', b'<p>note</p>'),
+    ('pdf', b'opaque document bytes'),
+    ('txt', b'\0a'),
+    ('md', b'\xff'),
 ])
 def test_document_bytes_are_preserved_in_a_private_workspace_file(tmp_path, kind, body):
     path = Path(save_file(tmp_path, document(kind, body)))
     assert path.parent == tmp_path / '.orrery-input-files'
-    assert path.suffix == '.' + kind and len(path.stem) == 32
+    assert path.suffix == ('.' + kind if kind else '') and len(path.stem) == 32
     assert path.read_bytes() == body
     assert path.stat().st_mode & 0o777 == 0o600
     assert (path.parent / '.gitignore').read_bytes() == b'*\n'
 
 
 @pytest.mark.parametrize('upload,reason', [
-    (document('html', b'<p>note</p>'), 'file_format_unsupported'),
-    (document('../pdf', b'%PDF-1.7\n'), 'file_format_unsupported'),
-    (document('pdf', b'just text'), 'file_format_unsupported'),
-    (document('txt', b'\0a'), 'file_format_unsupported'),
-    (document('md', b'\xff'), 'file_format_unsupported'),
+    (document('../pdf', b'%PDF-1.7\n'), 'file_format_invalid'),
     (document('json', b''), 'file_empty'),
     (dict(format='txt', data='not valid base64'), 'file_invalid'),
     (dict(format='txt', data='YQ==', path='elsewhere'), 'file_invalid'),
@@ -61,21 +64,29 @@ def test_document_size_limit_and_symlink_rejection(tmp_path):
     assert not list(other.iterdir())
 
 
-def test_parallel_uploads_share_the_folder_cap(tmp_path):
+def test_parallel_uploads_share_the_folder_cap(tmp_path, monkeypatch):
+    import mobile_attachment_store
+
+    monkeypatch.setattr(mobile_attachment_store, 'MAX_STORED_ATTACHMENTS', 3)
     upload = document('txt', b'fixture')
-    for _ in range(49):
-        save_file(tmp_path, upload)
-
-    def save(_):
-        try:
-            return Path(save_file(tmp_path, upload))
-        except ValueError as error:
-            return str(error)
-
+    existing = {Path(save_file(tmp_path, upload)) for _ in range(2)}
     with ThreadPoolExecutor(max_workers=2) as workers:
-        a, b = workers.map(save, range(2))
-    assert [item for item in (a,b) if isinstance(item,str)] == ['file_folder_full']
-    assert len(list((tmp_path / '.orrery-input-files').glob('*.txt'))) == 50
+        a, b = workers.map(lambda _: Path(save_file(tmp_path, upload)), range(2))
+    retained = set((tmp_path / '.orrery-input-files').glob('*.txt'))
+    assert {a, b}.issubset(retained)
+    assert len(retained) == 3 and len(existing & retained) == 1
+
+
+def test_failed_upload_keeps_the_existing_file_at_capacity(tmp_path, monkeypatch):
+    import mobile_attachment_store
+
+    monkeypatch.setattr(mobile_attachment_store, 'MAX_STORED_ATTACHMENTS', 1)
+    old = Path(save_file(tmp_path, document('txt', b'old'), label='original.txt'))
+    monkeypatch.setattr(mobile_attachment_store.secrets, 'token_hex', lambda _: old.stem)
+    with pytest.raises(FileExistsError):
+        save_file(tmp_path, document('txt', b'new'))
+    assert old.read_bytes() == b'old'
+    assert old.with_name(old.name + '.label').read_text() == 'original.txt'
 
 
 def test_file_route_needs_the_verified_pane_and_never_sends_on_upload(tmp_path):
@@ -141,10 +152,10 @@ def test_file_route_needs_the_verified_pane_and_never_sends_on_upload(tmp_path):
                 _, probe = await post('file', choice=choice, revision=revision, file=None)
                 assert probe['enabled'] and 'path' not in probe
                 assert not (tmp_path / '.orrery-input-files').exists()
-                content = b'Read the attached data.\n'
-                assert (await post('file', choice=choice, revision='0'*64, file=document('txt', content)))[0] == 403
+                content = b'PK\x03\x04\0binary'
+                assert (await post('file', choice=choice, revision='0'*64, file=document('zip', content)))[0] == 403
                 assert not (tmp_path / '.orrery-input-files').exists()
-                status, attached = await post('file', choice=choice, revision=revision, file=document('txt', content))
+                status, attached = await post('file', choice=choice, revision=revision, file=document('zip', content))
                 assert status == 200 and Path(attached['path']).read_bytes() == content and not sent
                 text = f"Review [file: '{attached['path']}']"
                 _, prepared = await post('prepare', choice=choice, revision=revision, text=text)
@@ -154,8 +165,8 @@ def test_file_route_needs_the_verified_pane_and_never_sends_on_upload(tmp_path):
                 assert (await post('commit', **keys))[1]['state'] == 'accepted'
                 assert sent == [('%3', text)]
                 proof_version += 1
-                assert (await post('file', choice=choice, revision=revision, file=document('txt', content)))[0] == 403
-                assert len(list((tmp_path / '.orrery-input-files').glob('*.txt'))) == 1
+                assert (await post('file', choice=choice, revision=revision, file=document('zip', content)))[0] == 403
+                assert len(list((tmp_path / '.orrery-input-files').glob('*.zip'))) == 1
         finally:
             await runner.cleanup()
 

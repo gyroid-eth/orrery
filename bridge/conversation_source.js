@@ -18,6 +18,7 @@
     dashboard_unavailable:'The telemetry dashboard could not answer. Retry in a moment.',
     reference_expired:'This reference expired or its conversation changed. Reload Reader and select it again.',
     preview_path_denied:'This file is outside the permitted preview folders.',
+    preview_permission_denied:'OS permissions do not allow reading this file.',
     preview_type_denied:'This file type cannot be previewed safely.',
     preview_too_large:'This file exceeds the preview size or pixel limit.',
     preview_text_too_large:'This file exceeds the 131,072-character preview limit.',

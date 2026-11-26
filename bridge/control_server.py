@@ -465,6 +465,7 @@ class TmuxControlBridge:
         self._block_boundary: bytes | None = None
         self._discard_block_line = False
         self._write_lock = asyncio.Lock()
+        self._last_hermes_interrupt = None
         self._refresh_lock = asyncio.Lock()
         self._history_flush_lock = asyncio.Lock()
         self._refresh_task: asyncio.Task[None] | None = None
@@ -1536,14 +1537,14 @@ class TmuxControlBridge:
             raise RuntimeError('approval capture unavailable')
         return result.lines
 
-    async def approval_capture_locked(self, pane_id):
+    async def approval_capture_locked(self, pane_id, *, styled=False):
         """Only the current tmux screen, never saved or recorder history."""
         fields = '#{session_id}\t#{session_name}\t#{pane_id}\t#{pane_pid}\t#{pane_width}\t#{pane_height}\t#{pane_in_mode}\t#{alternate_on}\t#{pane_current_command}'
         args = ['display-message', '-p', '-t', pane_id, fields]
         for _ in range(3):
             revision = self._approval_revisions.get(pane_id, 0)
             before = await self._approval_command_locked(args, limit=4096)
-            lines = await self._approval_command_locked(['capture-pane', '-p', '-J', '-t', pane_id])
+            lines = await self._approval_command_locked(['capture-pane', '-p', '-e' if styled else '-J', '-t', pane_id])
             after = await self._approval_command_locked(args, limit=4096)
             # Output received anywhere in this transaction invalidates its text,
             # including output while the final metadata command was pending.
@@ -1636,6 +1637,13 @@ class TmuxControlBridge:
 
     async def submit_prompt(self, pane_id: str, text: str, *, proof=None) -> str:
         """Hold the host pane lock through visible paste, Enter, and confirmation."""
+        return await self._composer_effect(pane_id, text, proof=proof)
+
+    async def interrupt(self, pane_id: str, *, proof=None) -> str:
+        """Interrupt the current turn and check that its editor returns."""
+        return await self._composer_effect(pane_id, None, proof=proof)
+
+    async def _composer_effect(self, pane_id: str, text: str | None, *, proof) -> str:
         import pane_submission as submission
         if not re.fullmatch(r'%[0-9]+', pane_id):
             return 'refused'
@@ -1646,6 +1654,7 @@ class TmuxControlBridge:
         deadline = time.monotonic() + submission.TIMEOUT
         name = 'orrery-compose-' + uuid.uuid4().hex
         paste = ['paste-buffer', '-r', '-p', '-d', '-b', name, '-t', pane_id]
+        escape = ['send-keys', '-t', pane_id, 'Escape']
         pending = None
 
         async def command(args, limit=4096):
@@ -1672,15 +1681,32 @@ class TmuxControlBridge:
 
         async def admit():
             if proof is None:
-                await asyncio.to_thread(admit_command, target, paste, session=self.config.session)
+                await asyncio.to_thread(admit_command, target, escape if text is None else paste,
+                                        session=self.config.session)
             else:
                 await proof.check()
                 if proof.closed:
                     raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
 
+        async def capture_draft(identity):
+            view = await capture()
+            if view is None or view.identity != identity or not view.redrawing:
+                return view
+            redraw_deadline = min(deadline, time.monotonic() + submission.REDRAW_GRACE)
+            while time.monotonic() < redraw_deadline:
+                await asyncio.sleep(submission.POLL)
+                view = await capture()
+                if view is not None and view.identity != identity:
+                    return view
+                if view is not None and not view.redrawing:
+                    await admit()
+                    return await capture()
+            return view
+
         async with self._write_lock:
             lock = None
-            loaded = pasted = False
+            loaded = wrote = False
+            problem = None
             try:
                 await admit()
                 observed = await capture()
@@ -1694,9 +1720,42 @@ class TmuxControlBridge:
                 if lock is None:
                     return 'refused'
 
-                before = await capture()
-                if (before is None or before.identity != observed.identity
-                        or not before.empty or not before.allows_paste(text)):
+                if text is None:
+                    await admit()
+                before = await capture() if text is None else await capture_draft(observed.identity)
+                if before is None or before.identity != observed.identity:
+                    return 'refused'
+                if text is None:
+                    keys = escape
+                    if before.hermes:
+                        # An idle Ctrl+C can exit Hermes. A second Ctrl+C within
+                        # two seconds can force an exit even during a running turn.
+                        now = time.monotonic()
+                        last = self._last_hermes_interrupt
+                        if (not before.running or not before.empty or
+                                (last is not None and last[0] == before.identity and now - last[1] < 2)):
+                            return 'refused'
+                        self._last_hermes_interrupt = before.identity, now
+                        keys = ['send-keys', '-t', pane_id, 'C-c']
+                    wrote = True
+                    result = await command(keys)
+                    if not result.ok or result.overflow:
+                        return 'unknown'
+                    if not before.running:
+                        return 'sent'
+                    while time.monotonic() < deadline:
+                        view = await capture()
+                        if view is not None:
+                            if view.identity != before.identity:
+                                return 'unknown'
+                            if (view.editor == before.editor and view.draft is not None
+                                    and not view.waiting and not view.selected
+                                    and not view.running and not view.hermes_busy):
+                                return 'accepted'
+                        await asyncio.sleep(submission.POLL)
+                    return 'unknown'
+
+                if not before.empty or not before.allows_paste(text, operator=True):
                     return 'refused'
                 with tempfile.TemporaryDirectory(prefix='orrery-compose-') as tmp:
                     path = Path(tmp) / 'prompt'
@@ -1706,11 +1765,11 @@ class TmuxControlBridge:
                         return 'refused'
                     loaded = True
                 await admit()
-                current = await capture()
+                current = await capture_draft(before.identity)
                 if (current is None or current.identity != before.identity
-                        or not current.empty or not current.allows_paste(text)):
+                        or not current.empty or not current.allows_paste(text, operator=True)):
                     return 'refused'
-                pasted = True
+                wrote = True
                 result = await command(paste)
                 if not result.ok or result.overflow:
                     return 'unknown'
@@ -1719,44 +1778,52 @@ class TmuxControlBridge:
                 # Wait for the editor to render the same draft on consecutive
                 # observations. Some editors still treat a near-paste Enter as a newline.
                 previous = None
+                menu_wait = submission.SlashMenuWait(text, operator=True)
                 while time.monotonic() < deadline:
                     view = await capture()
                     choice = None
+                    problem = submission.completion_problem(view, text, operator=True)
+                    is_ready = menu_wait.ready(view)
                     if view is not None:
                         if view.identity != before.identity:
                             return 'unknown'
-                        if submission.ready(view, text) or submission.mismatched_command(view, text):
+                        if is_ready or problem == 'completion-mismatch':
                             choice = (view.draft, view.selected_command)
                         if choice is not None and choice == previous:
                             await admit()
                             view = await capture()
+                            confirmed = menu_wait.ready(view)
                             if (view is not None and view.identity == before.identity
                                     and (view.draft, view.selected_command) == choice):
-                                if submission.ready(view, text):
+                                if confirmed and time.monotonic() < deadline:
+                                    problem = None
                                     result = await command(['send-keys', '-t', pane_id, 'C-m'])
                                     if not result.ok or result.overflow:
                                         return 'unknown'
+                                    entered_from = view
                                     break
-                                if submission.mismatched_command(view, text):
+                                if submission.mismatched_command(view, text, operator=True):
                                     return 'completion-mismatch'
                     previous = choice
                     await asyncio.sleep(submission.POLL)
                 else:
-                    return 'unknown'
+                    return 'completion-unverified' if problem == 'completion-unverified' else 'unknown'
 
                 while time.monotonic() < deadline:
                     view = await capture()
                     if view is not None:
                         if view.identity != before.identity:
                             return 'unknown'
-                        if view.empty:
+                        if submission.accepted_after_enter(entered_from, view, text):
                             return 'accepted'
                     await asyncio.sleep(submission.POLL)
                 return 'unknown'
             except (OSError, RuntimeError, asyncio.TimeoutError, asyncio.CancelledError):
                 if pending is not None:
                     self._abort_mobile_stream()
-                return 'unknown' if pasted else 'refused'
+                if problem == 'completion-unverified':
+                    return problem
+                return 'unknown' if wrote else 'refused'
             finally:
                 try:
                     if loaded and self.master_fd is not None and not self._closed:

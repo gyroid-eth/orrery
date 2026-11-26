@@ -87,13 +87,16 @@ In demo mode the Phone section does not put the Tailscale login, the phone addre
 
 | environment variable | default | purpose |
 | --- | --- | --- |
-| `ORRERY_MAIL_DB` | `config.mail_db`, then `~/.agentstack/mail/storage.sqlite3` | The ORRERY Mail SQLite that ORRERY opens read-only. There is no fallback to `AGENTSTACK_MAIL_DB` |
+| `ORRERY_MAIL_DB` | `config.mail_db`, then `~/.agentstack/mail/storage.sqlite3` | The ORRERY Mail SQLite the backend opens read-only. See [precedence](#orrery-mail-db) for how the startup script inherits a path |
 | `ORRERY_PROJECT_KEY` | `AGENTSTACK_PROJECT_KEY`, then `config.project_key`, finally unset | `projects.human_key` for mail queries. In a user's environment, specify an absolute path |
 | `AGENTSTACK_PROJECT_KEY` | `config.project_key`, then unset | The common fallback for the ORRERY project key. The same value as ORRERY Telemetry is recommended |
 | `ORRERY_PORTRAIT_DIR` | `<repo>/assets/portraits_64` | Normal portraits |
 | `ORRERY_PORTRAIT_DIR_HI` | `<repo>/assets/portraits` | `hi=1` portraits |
 | `ORRERY_PORTRAIT_DIR_PX` | `<repo>/assets/portraits_px` | `style=pixel` portraits |
 | `AGENTSTACK_ANNOTATIONS` | `config.annotations_path`, then the ORRERY Telemetry runtime / legacy path | A file fallback read only when the dashboard annotation API is unreachable |
+| `ORRERY_PREFS_PATH` | `~/.orrery/prefs.json` | File where the cockpit reads and writes shared preferences |
+| `ORRERY_NO_OPEN` | `0` | Set to `1` to skip opening the browser after shared setup starts or restarts the backend |
+| `ORRERY_COCKPIT_TMUX_SOCKET` | `orrery-cockpit` | Dedicated tmux socket for the cockpit backend started by shared setup |
 | `ORRERY_HISTORY_DIR` | `~/.orrery/history` | Where the terminal recorder saves its JSON |
 | `AGENTSTACK_ORRERY_ROOT` | `config.orrery_root`, then unset | The root where the Tauri sidecar looks for the checkout |
 | `ORRERY_BACKEND_PYTHON` | `<root>/bridge/.venv/bin/python` | The sidecar's Python |
@@ -153,7 +156,7 @@ In a user's environment, set one of 1 to 3 as an absolute path. When it is unset
 
 ### ORRERY Mail DB
 
-ORRERY reads `ORRERY_MAIL_DB`, then `mail_db` in `config.json`, then the default path, in that order. ORRERY Telemetry's `AGENTSTACK_MAIL_DB` is not inherited automatically, so for anything other than the default, set the same path on both sides.
+In legacy mode, `scripts/start-cockpit.sh` checks `ORRERY_MAIL_DB`, the shell's `AGENTSTACK_MAIL_DB`, and then `AGENTSTACK_MAIL_DB` in Telemetry's installed `env.sh`. It passes the selected path to the backend as `ORRERY_MAIL_DB`. A direct backend launch checks `ORRERY_MAIL_DB`, then `mail_db` in `config.json`, then the default path. Fresh mode reads Mail through the protected dashboard API.
 
 SQLite is opened read-only in this form:
 
@@ -176,13 +179,7 @@ This file fallback is used only when the dashboard's `/api/annotations` is unrea
 
 ### ORRERY Telemetry dashboard
 
-ORRERY's destination is fixed to:
-
-```text
-http://127.0.0.1:8770
-```
-
-Do not change the port on the ORRERY Telemetry side. The APIs it needs are `/api/agents`, `/api/messages-since`, `/api/graph`, `/api/spawn`, `/api/spawn-names`, `/api/annotations`, and `/api/exit`.
+The default dashboard URL is `http://127.0.0.1:8770`. Set `ORRERY_DASHBOARD_URL` to override it. If unset, `scripts/start-cockpit.sh` uses `AGENTSTACK_PORT` from Telemetry's installed `env.sh`. Set `ORRERY_DASHBOARD_URL` explicitly when launching the backend directly with a custom Telemetry port. The APIs it needs are `/api/agents`, `/api/messages-since`, `/api/graph`, `/api/spawn`, `/api/spawn-names`, `/api/annotations`, and `/api/exit`.
 
 ### tmux
 
@@ -207,7 +204,7 @@ The terminal recorder flushes pane JSON to `ORRERY_HISTORY_DIR` every 30 seconds
 - Normal history is kept for 7 days
 - Orphans with no corresponding session are kept for 24 hours
 
-The prompt composer saves a draft and up to 50 sent-history entries in browser `localStorage`. Font, split layout, the mini-orrery mode / depth, and the open / closed state of NEW AGENT's Advanced panel are also saved in `localStorage`. `~/.orrery/config.json` is a user setting that remains even after the app is deleted.
+The prompt composer saves a draft and up to 50 sent-history entries in browser `localStorage`. Font, split layout, the mini-orrery mode / depth are also saved in `localStorage`. `~/.orrery/config.json` is a user setting that remains even after the app is deleted.
 
 On a shared Mac, during screen sharing, or with confidential sessions, consider the following:
 

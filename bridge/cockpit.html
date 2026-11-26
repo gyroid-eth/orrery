@@ -215,15 +215,21 @@
   .col{min-height:0;display:flex;flex-direction:column;overflow:hidden}
   .col.roster{border-right:1px solid var(--hair)}
   .col.mail{grid-column:3;grid-row:1;border-left:1px solid var(--hair)}
+  .mail-divider,.mail-graph-divider{position:relative;touch-action:none;outline:none}
   .mail-divider{
-    position:relative;z-index:4;grid-column:3;grid-row:1;justify-self:start;translate:-50% 0;width:12px;
-    cursor:col-resize;touch-action:none;outline:none;
+    z-index:4;grid-column:3;grid-row:1;justify-self:start;translate:-50% 0;width:12px;cursor:col-resize;
   }
-  .mail-divider::after{
+  .mail-graph-divider{flex:0 0 12px;cursor:row-resize}
+  .mail-divider::after,.mail-graph-divider::after{
     content:"";position:absolute;left:50%;top:50%;translate:-50% -50%;
-    width:2px;height:32px;border-radius:2px;background:var(--ink-faint);
+    border-radius:2px;background:var(--ink-faint);
   }
-  .mail-divider:is(:hover,:focus-visible,.dragging)::after{background:var(--amber);width:3px}
+  .mail-divider::after{width:2px;height:32px}
+  .mail-graph-divider::after{width:32px;height:2px}
+  .mail-divider:is(:hover,:focus-visible,.dragging)::after,
+  .mail-graph-divider:is(:hover,:focus-visible,.dragging)::after{background:var(--amber)}
+  .mail-divider:is(:hover,:focus-visible,.dragging)::after{width:3px}
+  .mail-graph-divider:is(:hover,:focus-visible,.dragging)::after{height:3px}
 
   .colhead{
     display:flex;align-items:center;justify-content:space-between;
@@ -316,6 +322,7 @@
     border:1px solid var(--ink-dim);
   }
   .agent.working .agent-status{background:var(--ink-dim)}
+  .agent .agent-status[data-pending-action]{border-color:var(--amber);background:var(--amber)}
   .agent.ask .agent-status,.agent.question .agent-status{
     background:var(--theme-status-alert,#ff6a5d);border-color:var(--theme-status-alert,#ff6a5d)
   }
@@ -457,6 +464,7 @@
   .cbody{min-width:0;display:flex;flex-direction:column;gap:3px}
   .crow1{display:flex;align-items:baseline;gap:8px}
   .cname{font-family:var(--serif);font-size:16px;font-weight:500;letter-spacing:.01em;line-height:1;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .agent[data-exiting] .cname{font-size:13px}
   .pill{font-size:9.5px;letter-spacing:.07em;padding:2px 6px;border-radius:4px;border:1px solid var(--hair);color:var(--ink-dim);text-transform:uppercase;white-space:nowrap}
   .pill.eng-claude{color:var(--ln-local);border-color:rgb(var(--theme-local-rgb) / .3)}
   .pill.eng-codex{color:var(--ln-delegate);border-color:rgb(var(--theme-delegate-rgb) / .3)}
@@ -529,6 +537,7 @@
   }
   .agent-detail[hidden]{display:none}
   .agent-detail-name{font-family:var(--serif);font-size:19px;line-height:1.2;color:var(--amber);overflow-wrap:anywhere}
+  .agent-detail-pending-action{margin-inline-start:8px;font:10px var(--mono)}
   .agent-detail-identity,.agent-detail-runtime{
     display:flex;flex-wrap:wrap;align-items:center;gap:5px 11px;color:var(--ink-dim);
   }
@@ -547,10 +556,19 @@
   .agent-detail-permissions .agent-detail-item{align-items:center;min-height:24px}
   .agent-detail-permissions .agent-detail-icon{margin-top:0}
   .agent-detail-permissions .agent-detail-item+.agent-detail-item{padding-left:10px;border-left:1px solid var(--hair)}
+  .agent-detail-permissions:has([data-browser="temporary"]) > .agent-detail-item+.agent-detail-item{padding-left:0;border-left:0}
+  .agent-detail-observed{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;
+    border-color:var(--hair);background:var(--panel-2);
+  }
+  .agent-detail-observed .agent-detail-item{align-items:flex-start}
+  .agent-detail-observed .agent-detail-icon{margin-top:1px}
+  .agent-detail-permissions small{display:block;color:var(--ink-dim);overflow-wrap:anywhere}
+  .agent-detail-observed-reason{grid-column:1/-1;width:100%}
   .agent-detail-modes{display:flex;align-items:center;flex-wrap:wrap;gap:1px;color:var(--ink-dim)}
   .agent-detail-modes button,.agent-detail-browser-toggle{
     min-height:24px;padding:2px 5px;border:0;border-radius:4px;background:transparent;
-    color:inherit;font:inherit;cursor:pointer;
+    color:inherit;font:inherit;cursor:pointer;white-space:nowrap;
   }
   .agent-detail-permissions button:not(:disabled):hover{background:var(--rail-selection);color:var(--amber)}
   .agent-detail-permissions button:focus-visible{outline:1px solid var(--amber);outline-offset:1px}
@@ -570,6 +588,31 @@
   .agent-detail-browser-toggle{color:var(--ink-dim)}
   .agent-detail-switch.unknown{justify-content:center}
   .agent-detail-switch.unknown::before{width:8px;height:1px}
+  #mailRail .agent-detail[data-mini-dock]{
+    --agent-detail-row-height:24px;
+    position:static;z-index:auto;flex:0 1 auto;width:auto;min-height:0;max-height:35vh;
+    margin:2px 16px 0;padding:7px 7px 10px;border:0;border-radius:0;
+    background:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;
+    font:12px/1.45 var(--rail-sans);font-variant-numeric:tabular-nums;
+  }
+  .agent-detail[data-mini-dock] .agent-detail-name{
+    display:grid;align-content:center;min-height:var(--agent-detail-row-height);
+    color:var(--ink);font:inherit;font-weight:600;
+  }
+  .agent-detail[data-mini-dock] :is(.agent-detail-identity,.agent-detail-runtime,.agent-detail-meta){
+    margin-top:0;row-gap:0;
+  }
+  .agent-detail[data-mini-dock] .agent-detail-item{min-height:var(--agent-detail-row-height);align-items:center}
+  .agent-detail[data-mini-dock] .agent-detail-icon{margin-top:0}
+  .agent-detail[data-mini-dock] :is(.agent-detail-model,.agent-detail-context strong,.agent-detail-modes .current){font-weight:400}
+  .agent-detail[data-mini-dock] .agent-detail-permissions{
+    display:grid;grid-template-columns:minmax(0,1fr);gap:0;padding:0;
+    border:0;border-radius:0;background:transparent;
+  }
+  .agent-detail[data-mini-dock] .agent-detail-permissions .agent-detail-item{padding:0;border:0}
+  .agent-detail[data-mini-dock] > :is(.agent-detail-permissions,.agent-detail-meta){
+    margin-top:4px;padding-top:4px;border-top:1px solid var(--hair);
+  }
   .agent-permission-confirm{
     width:min(390px,calc(100vw - 24px));margin:auto;padding:16px;border:1px solid var(--hair);border-radius:10px;
     color:var(--ink);background:var(--panel);font:13px/1.45 var(--rail-sans);
@@ -680,6 +723,7 @@
   .session-ava{width:16px;height:16px;border-radius:50%;align-self:center;
     margin-right:1px;background:#24282f}
   .session-panes .empty{padding:0 5px 5px;align-self:center}
+  .session-group[data-pending-action] .session-panes .empty{display:none!important}
   .tab{
     display:flex;align-items:center;gap:8px;padding:0 14px 5px;border-radius:10px 10px 0 0;
     font-size:11.5px;color:var(--ink-dim);cursor:pointer;white-space:nowrap;
@@ -778,6 +822,20 @@
     border-radius:7px;padding:3px 3px 3px 4px;background:var(--prompt-middle);transform-origin:left center}
   .prompt-faces{display:flex;flex:none;padding-left:5px}
   .prompt-faces .prompt-ava{margin-left:-5px}
+  .prompt-visibility{position:relative;flex:none;border-left:1px solid var(--prompt-strong);padding-left:5px}
+  .prompt-visibility[hidden],.prompt-visibility-menu[hidden]{display:none}
+  .prompt-visibility-trigger,.prompt-visibility-option{border:0;border-radius:5px;background:transparent;
+    color:var(--ink);cursor:pointer;font:600 12px var(--rail-sans);white-space:nowrap}
+  .prompt-visibility-trigger{padding:3px 4px}
+  .prompt-visibility-trigger:hover,.prompt-visibility-trigger[aria-expanded="true"],
+  .prompt-visibility-option[aria-checked="true"]{background:var(--prompt-strong)}
+  .prompt-visibility-menu{position:absolute;z-index:3;bottom:calc(100% + 9px);left:0;display:grid;gap:3px;
+    padding:5px;border:1px solid var(--prompt-strong);border-radius:9px;background:var(--elev);
+    box-shadow:0 8px 24px var(--theme-shadow-low,rgb(0 0 0 / .2))}
+  .prompt-visibility-option{padding:7px 10px;text-align:left}
+  .prompt-visibility-option:hover{background:var(--prompt-middle)}
+  .prompt-visibility-trigger:focus-visible,.prompt-visibility-option:focus-visible{
+    outline:2px solid var(--ink-dim);outline-offset:-2px}
   .prompt-remove-recipient{border:0;border-radius:5px;background:none;color:var(--ink-dim);
     width:22px;height:21px;padding:0;cursor:pointer;font:16px/1 var(--rail-sans)}
   .prompt-remove-recipient:hover{background:var(--prompt-strong);color:var(--ink)}
@@ -879,6 +937,23 @@
   .split-cell-status{display:inline-flex;align-items:center;gap:5px;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-faint);font:9px var(--mono);text-transform:uppercase;cursor:default}
   .split-cell-status:empty{display:none}
   .split-cell-status.live{color:var(--amber)}
+  .terminal-action-notice{
+    position:absolute;z-index:5;inset:50% auto auto 50%;translate:-50% -50%;
+    inline-size:max-content;max-inline-size:calc(100% - 24px);color:var(--amber);
+    font:600 clamp(16px,2.1vw,23px)/1.3 var(--rail-sans);text-align:center;pointer-events:none
+  }
+  .split-cell .terminal-action-notice{font-size:clamp(13px,6.5cqw,20px)}
+  [data-terminal-action] > .termhost{opacity:.22}
+  [data-terminal-action] > :is(.stage-empty,.split-cell-empty){visibility:hidden}
+  /* AI Text Loading by Kokonut UI, © 2025 kokonutUI (MIT).
+     https://kokonutui.com/docs/ai/ai-text-loading
+     https://github.com/kokonut-labs/kokonutui/blob/main/LICENSE */
+  .terminal-action-wave > span{display:inline-block;white-space:pre}
+  @media (prefers-reduced-motion:no-preference){
+    .terminal-action-wave > span{animation:terminal-action-wave 1.6s ease-in-out var(--action-delay) infinite both}
+  }
+  @keyframes terminal-action-wave{50%{opacity:.3}}
+  .exit-dust{position:fixed;z-index:40;pointer-events:none}
   .split-cell.focused > .split-cell-head{box-shadow:inset 3px 0 var(--amber)}
   .pane-action-short,.pane-action-icon{display:none}
   @container split-pane (max-width:320px){
@@ -1263,6 +1338,15 @@
   @media(max-width:680px){
     .grid{grid-template-columns:1fr}.col.roster,.col.mail{display:none}
   }
+  @media(max-width:480px){
+    .promptbar:has(.prompt-visibility:not([hidden])){padding-inline:10px}
+    .prompt-card:has(.prompt-visibility:not([hidden])){padding-inline:12px}
+    .prompt-chosen:has(.prompt-visibility:not([hidden])){gap:4px}
+    .prompt-chosen:has(.prompt-visibility:not([hidden])) .prompt-target{flex:none}
+    .prompt-chosen:has(.prompt-visibility:not([hidden])) .prompt-ava{width:18px;height:18px}
+    .prompt-visibility{padding-left:3px}
+    .prompt-visibility-trigger{padding-inline:3px}
+  }
   @media(max-width:360px){
     .cockpit-header .brand .mark{font-size:16px}
     .header-actions{gap:1px}
@@ -1418,7 +1502,7 @@
             <ul class="prompt-attachments" id="promptFiles" aria-label="Attachments" hidden></ul>
             <div class="prompt-footer">
               <span class="prompt-meta"><img class="prompt-ava" id="promptAva" alt="" hidden><span class="prompt-target" id="promptTarget">—</span></span>
-              <input id="promptFilePicker" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.txt,.md,.csv,.json" multiple hidden>
+              <input id="promptFilePicker" type="file" multiple hidden>
               <button class="prompt-clip" id="promptClip" type="button" title="Attach files" aria-label="Attach files">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 14 6-6a2 2 0 0 1 3 3l-7 7a4 4 0 0 1-6-6l8-8a6 6 0 0 1 8 8l-8 8"/></svg>
               </button>
@@ -1457,7 +1541,15 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg>
         </button>
       </div>
-      <svg class="miniorrery" viewBox="0 0 280 120" id="orrery" hidden></svg>
+      <div class="mini-graph" id="miniGraphViewport">
+        <div class="mini-graph-scroll" role="region" aria-label="Mini graph">
+          <svg class="miniorrery" viewBox="0 0 280 120" id="orrery" hidden></svg>
+        </div>
+        <svg class="mini-graph-expand" viewBox="0 0 28 28"></svg>
+      </div>
+      <div class="mail-graph-divider" id="mailGraphDivider" role="separator" tabindex="0" aria-orientation="horizontal"
+           aria-controls="orrery" aria-label="Resize mini graph"
+           title="Resize mini graph with Up or Down arrows or drag. Enter or double-click to reset."></div>
       <div class="mail-selected-route" id="mailSelectedRoute" hidden></div>
       <div class="scroll" id="mail"></div>
       <!-- legend removed (2026-07-30 product decision): the design should be self-evident;
@@ -1594,7 +1686,7 @@
           <label class="settings-choice"><input id="miniViewOrrery" type="radio" name="miniView" value="orrery">Orrery</label>
           <label class="settings-choice"><input id="miniViewNetwork" type="radio" name="miniView" value="network">Telemetry network</label>
         </div>
-        <div class="settings-help">Telemetry network centers the active tab and follows lineage plus recent mail links.</div>
+        <div class="settings-help">Telemetry network centers the active tab and follows lineage and Mail links.</div>
       </div>
       <div class="settings-row">
         <label class="settings-toggle-row" for="miniNetworkDepth">
@@ -1606,6 +1698,18 @@
             <option value="1">1 hop</option>
             <option value="2" selected>2 hops</option>
             <option value="3">3 hops</option>
+          </select>
+        </label>
+      </div>
+      <div class="settings-row">
+        <label class="settings-toggle-row" for="miniMailLinks">
+          <span class="settings-toggle-copy">
+            <span class="settings-row-name">Mail links</span>
+            <span class="settings-help">Recent Mail is highlighted for 90 seconds in both modes.</span>
+          </span>
+          <select class="settings-select" id="miniMailLinks">
+            <option value="keep" selected>Keep visible</option>
+            <option value="recent">Fade after 90 seconds</option>
           </select>
         </label>
       </div>
@@ -1686,6 +1790,7 @@
           <button type="button" role="switch" id="spawnComputerUse" aria-label="Computer use" title="Computer use" aria-checked="false"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-computer"/></svg></button>
           <button type="button" role="switch" id="spawnBrowserUse" aria-label="Browser" title="Browser" aria-checked="false"><svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-browser"/></svg></button>
         </div>
+        <div id="spawnComputerMenu" class="spawn-browser-menu" popover aria-label="Computer use" role="group"></div>
         <div id="spawnBrowserMenu" class="spawn-browser-menu" popover aria-label="Browser" role="group"></div>
         <button id="spawnSubmit" type="submit" title="Launch (⌘↵)" disabled>Launch<span id="spawnLaunchFill" aria-hidden="true"></span></button>
       </div>
@@ -1748,11 +1853,13 @@
 <script src="vendor/xterm-5.5.0/xterm.js"></script>
 <script src="vendor/addon-fit-0.10.0/addon-fit.js"></script>
 <script src="vendor/addon-web-links-0.11.0/addon-web-links.js"></script>
+<script src="local_model_makers.js"></script>
 <script src="roster_descriptor.js"></script>
 <script src="roster_edit.js"></script>
 <script src="demo_mask.js"></script>
 <script src="demo_mode.js"></script>
 <script src="prompt_spring.js"></script>
+<script src="exit_dust.js"></script>
 <script src="prompt_composer.js"></script>
 <script src="prompt_recipients.js"></script>
 <script src="prompt_attachments.js"></script>
@@ -1849,7 +1956,7 @@
           },
           {
             "property": "background",
-            "selector": ".mail-divider::after",
+            "selector": ".mail-divider::after,.mail-graph-divider::after",
             "value": "var(--ink-faint)"
           },
           {
@@ -2198,6 +2305,21 @@
             "value": "1px solid var(--hair)"
           },
           {
+            "property": "border-color",
+            "selector": ".agent-detail-observed",
+            "value": "var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".agent-detail-observed",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail-permissions small",
+            "value": "var(--ink-dim)"
+          },
+          {
             "property": "color",
             "selector": ".agent-detail-modes",
             "value": "var(--ink-dim)"
@@ -2221,6 +2343,16 @@
             "property": "color",
             "selector": ".agent-detail-browser-toggle",
             "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail[data-mini-dock] .agent-detail-name",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-top",
+            "selector": ".agent-detail[data-mini-dock] > :is(.agent-detail-permissions,.agent-detail-meta)",
+            "value": "1px solid var(--hair)"
           },
           {
             "property": "border",
@@ -2525,6 +2657,21 @@
           {
             "property": "outline",
             "selector": "#promptSend:focus-visible",
+            "value": "2px solid var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-visibility-trigger,.prompt-visibility-option",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".prompt-visibility-menu",
+            "value": "var(--elev)"
+          },
+          {
+            "property": "outline",
+            "selector": ".prompt-visibility-trigger:focus-visible,.prompt-visibility-option:focus-visible",
             "value": "2px solid var(--ink-dim)"
           },
           {
@@ -3043,8 +3190,68 @@
             "value": "var(--panel)"
           },
           {
+            "property": "outline",
+            "selector": ".mini-graph-scroll:focus-visible",
+            "value": "1px solid var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".mini-graph-tools button",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mini-graph-tools button",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-tools button",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-tools button:not(:disabled):is(:hover,:focus-visible,[aria-expanded=true])",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".mini-graph-tools button:not(:disabled):is(:hover,:focus-visible,[aria-expanded=true])",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border",
+            "selector": ".mini-graph-appearance",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mini-graph-appearance",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-appearance",
+            "value": "var(--ink)"
+          },
+          {
             "property": "stroke",
             "selector": ".orrery-comm-edge",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-history-edge",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-mail-edge-halo",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-mail-edge > .orrery-mail-edge-core",
             "value": "var(--ink)"
           },
           {
@@ -3356,7 +3563,7 @@
           },
           {
             "property": "background",
-            "selector": ".mail-divider::after",
+            "selector": ".mail-divider::after,.mail-graph-divider::after",
             "value": "var(--ink-faint)"
           },
           {
@@ -3516,6 +3723,11 @@
           },
           {
             "property": "color",
+            "selector": ".agent-detail-permissions small",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
             "selector": ".agent-detail-modes",
             "value": "var(--ink-dim)"
           },
@@ -3622,6 +3834,11 @@
           {
             "property": "outline",
             "selector": "#promptSend:focus-visible",
+            "value": "2px solid var(--ink-dim)"
+          },
+          {
+            "property": "outline",
+            "selector": ".prompt-visibility-trigger:focus-visible,.prompt-visibility-option:focus-visible",
             "value": "2px solid var(--ink-dim)"
           },
           {
@@ -3810,6 +4027,26 @@
             "value": "var(--ink-faint)"
           },
           {
+            "property": "outline",
+            "selector": ".mini-graph-scroll:focus-visible",
+            "value": "1px solid var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-graph-tools button",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "border-color",
+            "selector": ".mini-graph-tools button:not(:disabled):is(:hover,:focus-visible,[aria-expanded=true])",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "stroke",
+            "selector": ".orrery-history-edge",
+            "value": "var(--ink-dim)"
+          },
+          {
             "property": "color",
             "selector": ".orrery-caption-role",
             "value": "var(--ink-dim)"
@@ -3993,7 +4230,7 @@
         "unit": "effect-component"
       },
       "source": {
-        "digest": "483e1e0152588dc18b5bfc9078ca36a7d8bb8999836a99a6fa763326568d34ac",
+        "digest": "a8ec14f4847e277d164c0fcbf89355c1fcf1fa846d1d5f58e4e02c5bf98eb7df",
         "records": [
           ":root\u0000--amber-glow",
           ".miniorrery.telemetry-network\u0000background",
@@ -4010,6 +4247,7 @@
           ":is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .face\u0000box-shadow",
           ".medal .face::after\u0000background",
           ".agent-detail\u0000box-shadow",
+          "#mailRail .agent-detail[data-mini-dock]\u0000box-shadow",
           ".term\u0000background",
           ".layout-picker\u0000box-shadow",
           ".session-label.active-session\u0000box-shadow",
@@ -4018,6 +4256,7 @@
           ".tab.active-pane .led\u0000box-shadow",
           ".screen\u0000box-shadow",
           ".screen .glassglow\u0000background",
+          ".prompt-visibility-menu\u0000box-shadow",
           ".slashmenu\u0000box-shadow",
           ".sendguard\u0000box-shadow",
           ".network-panel\u0000box-shadow",
@@ -4054,7 +4293,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "1a98656e8fe5ea3db1e990b0b871d6f00c16644b01035b113c1b6b4438d35a38",
+        "digest": "98f32f786bae0463d79f75c88d95a2de9393a4cab11b4f9f018cf38bae4841f3",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4147,7 +4386,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "d1228ba83facf5e54b0feb59e2749799404bf8501b79517471658184d337f73c",
+        "digest": "edb21c5c600730fc7412ded99338a09b847e26ee9a9d5abc8121658998c714e2",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -4176,9 +4415,9 @@
       }
     }
   },
-  "inventory_digest": "1cbb7bf6b6123e7bf754e3b4955d7479b87ee54253acab47d22550ffcc7480d3",
+  "inventory_digest": "82431d1bc39dcd3d5d082ed1892ccc0acb70cfdbe4abc5832f343da896b0a243",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "943b93c15c3116d53ad7db9f86dfada553499a54b2ebe83839dcae9f90f887cf",
+  "source_digest": "9e7ca275b77214bc97b76a7fe05b6dc246bf98de544b8c38c30bf24f426d0bea",
   "surface": "cockpit",
   "version": 1
 }
@@ -4710,11 +4949,11 @@ function paletteShortcutLabel(host){return usesAltShortcuts(host)?'Alt+K':'⌘K'
 function splitClickLabel(host){return usesAltShortcuts(host)?'Ctrl+click':'⌘+click';}
 function terminalActionText(host){return usesAltShortcuts(host)?'WIN TERMINAL':'GHOSTTY';}
 /* Native fallback for clipboard payloads the browser could not read. */
-const PASTE_UNSUPPORTED_MESSAGE='The WSL backend cannot read the Windows clipboard. Use the attachment picker.';
+const PASTE_UNSUPPORTED_MESSAGE='The browser did not provide a clipboard file. Use the attachment picker or drop the file.';
 const PASTE_HOST_UNKNOWN_MESSAGE='Could not identify the clipboard host. Try again or use the attachment picker.';
 function composerPasteRefusal(host){
   const kind=host&&host.host;
-  if(kind==='wsl')return host.file_paste?'':PASTE_UNSUPPORTED_MESSAGE;
+  if(kind==='wsl')return PASTE_UNSUPPORTED_MESSAGE;
   if(kind!=='mac'&&kind!=='linux')return PASTE_HOST_UNKNOWN_MESSAGE;
   return '';
 }
@@ -4904,6 +5143,7 @@ const terminalSettingsReset=document.getElementById('terminalSettingsReset');
 const miniViewOrrery=document.getElementById('miniViewOrrery');
 const miniViewNetwork=document.getElementById('miniViewNetwork');
 const miniNetworkDepthSelect=document.getElementById('miniNetworkDepth');
+const miniMailLinksSelect=document.getElementById('miniMailLinks');
 const tabsEmpty=document.createElement('span');
 tabsEmpty.className='empty';tabsEmpty.textContent='waiting for sessions…';tabsEl.appendChild(tabsEmpty);
 
@@ -4917,6 +5157,8 @@ const manualDetached=new Set();
 // back (a RESUME), its tab attaches again; putting it in a split is left to
 // the person. One closed by hand has no tab and is not here.
 const closedByBackend=new Set();
+const permissionRestarts=new Map();
+const pendingAgentExits=new Map();
 const claimedSessions=new Set();
 const splitSessions=[];
 const selectedPaneBySession=new Map();
@@ -4935,6 +5177,7 @@ const TERM_FONT_STORAGE_KEY='oc-term-font';
 const TERM_FONT_AUTOSHRINK_STORAGE_KEY='oc-term-autoshrink';
 const MINI_VIEW_STORAGE_KEY='oc-mini-view';
 const MINI_NETWORK_DEPTH_STORAGE_KEY='oc-mini-network-depth';
+const MINI_MAIL_LINKS_STORAGE_KEY='oc-mini-mail-links';
 const THEME_AXIS_LABELS={
   'dim-contrast':'Muted contrast',
   'small-text':'Small text',
@@ -4997,6 +5240,7 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   [':is(.mail-assignee-name,.mail-peer-avatar) .conversation-avatar .face','box-shadow',['state'],'preserve'],
   ['.medal .face::after','background',['elevation'],'preserve'],
   ['.agent-detail','box-shadow',['elevation'],'preserve'],
+  ['#mailRail .agent-detail[data-mini-dock]','box-shadow',['elevation'],'preserve'],
   ['.term','background',['elevation'],'preserve'],
   ['.layout-picker','box-shadow',['elevation','emissive'],'scale','html[data-theme-axis="glow"] .layout-picker'],
   ['.session-label.active-session','box-shadow',['state'],'preserve'],
@@ -5005,6 +5249,7 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   ['.tab.active-pane .led','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .tab.active-pane .led'],
   ['.screen','box-shadow',['elevation'],'preserve'],
   ['.screen .glassglow','background',['emissive'],'scale','html[data-theme-axis="glow"] .screen .glassglow'],
+  ['.prompt-visibility-menu','box-shadow',['elevation'],'preserve'],
   ['.slashmenu','box-shadow',['elevation'],'preserve'],
   ['.sendguard','box-shadow',['state','elevation'],'preserve'],
   ['.network-panel','box-shadow',['elevation'],'preserve'],
@@ -5034,6 +5279,7 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
 const THEME_GLOW_SCALE_EXPECTED=THEME_GLOW_EFFECT_MANIFEST.filter(effect=>effect.mode==='scale').length;
 let terminalFontSize=TERM_FONT_DEFAULT,terminalAutoShrink=true;
 let miniViewMode='orrery';
+let miniMailLinks='keep';
 let miniNetworkDepth=2;
 let themeAxisState=normalizeThemeAxisState(null);
 let themeAxisTransactionActive=false;
@@ -5052,6 +5298,7 @@ try{
     terminalAutoShrink=storedAutoShrink==='true';
   }
   if(localStorage.getItem(MINI_VIEW_STORAGE_KEY)==='network')miniViewMode='network';
+  if(localStorage.getItem(MINI_MAIL_LINKS_STORAGE_KEY)==='recent')miniMailLinks='recent';
   const storedNetworkDepth=Number(localStorage.getItem(MINI_NETWORK_DEPTH_STORAGE_KEY));
   if([1,2,3].includes(storedNetworkDepth))miniNetworkDepth=storedNetworkDepth;
 }catch(_){/* storage can be unavailable in private/restricted webviews */}
@@ -5994,6 +6241,8 @@ let readerApproval=null;
 let readerActivity=null;
 function send(payload){
   if(!socket||socket.readyState!==WebSocket.OPEN)return false;
+  if(['input','submit-prompt','interrupt','codex-page'].includes(payload.type)
+    &&pendingAgentAction(panes.get(payload.paneId)?.session))return false;
   socket.send(JSON.stringify(payload));return true;
 }
 function paneTitle(m){return m.windowName||m.currentCommand||m.paneId;}
@@ -6028,17 +6277,24 @@ function paintMiniViewSettings(){
   miniViewOrrery.checked=miniViewMode==='orrery';
   miniViewNetwork.checked=miniViewMode==='network';
   miniNetworkDepthSelect.value=String(miniNetworkDepth);
+  miniMailLinksSelect.value=miniMailLinks;
+}
+function announceMiniView(){
+  paintMiniViewSettings();
+  document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{
+    mode:miniViewMode,depth:miniNetworkDepth,mailLinks:miniMailLinks,
+  }}));
 }
 function setMiniViewMode(mode){
-  miniViewMode=mode==='network'?'network':'orrery';paintMiniViewSettings();
+  miniViewMode=mode==='network'?'network':'orrery';
   try{localStorage.setItem(MINI_VIEW_STORAGE_KEY,miniViewMode);}catch(_){/* live-only preference */}
-  document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{mode:miniViewMode,depth:miniNetworkDepth}}));
+  announceMiniView();
 }
 function setMiniNetworkDepth(depth){
   const next=Number(depth);
-  miniNetworkDepth=[1,2,3].includes(next)?next:2;paintMiniViewSettings();
+  miniNetworkDepth=[1,2,3].includes(next)?next:2;
   try{localStorage.setItem(MINI_NETWORK_DEPTH_STORAGE_KEY,String(miniNetworkDepth));}catch(_){/* live-only preference */}
-  document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{mode:miniViewMode,depth:miniNetworkDepth}}));
+  announceMiniView();
 }
 function applyTerminalSettings({fit=true}={}){
   const effectiveSize=currentTerminalFontSize();
@@ -6078,6 +6334,11 @@ terminalAutoShrinkToggle.addEventListener('change',()=>{
 miniViewOrrery.addEventListener('change',()=>{if(miniViewOrrery.checked)setMiniViewMode('orrery');});
 miniViewNetwork.addEventListener('change',()=>{if(miniViewNetwork.checked)setMiniViewMode('network');});
 miniNetworkDepthSelect.addEventListener('change',()=>setMiniNetworkDepth(miniNetworkDepthSelect.value));
+miniMailLinksSelect.addEventListener('change',()=>{
+  miniMailLinks=miniMailLinksSelect.value==='recent'?'recent':'keep';
+  try{localStorage.setItem(MINI_MAIL_LINKS_STORAGE_KEY,miniMailLinks);}catch(_){/* live-only preference */}
+  announceMiniView();
+});
 /* The backend stamps every response with its boot id. When it changes, the
    page this window is running was served by a previous backend: reload so the
    app window and a fresh browser tab always show the same cockpit. The
@@ -6091,11 +6352,12 @@ function noteBackendBoot(id){
 /* a preference changed in another window (prefs_sync.js): apply it here too */
 document.addEventListener('oc:prefs-changed',event=>{
   const keys=new Set(event.detail&&event.detail.keys||[]);
-  if(keys.has(MINI_VIEW_STORAGE_KEY)||keys.has(MINI_NETWORK_DEPTH_STORAGE_KEY)){
+  if(keys.has(MINI_VIEW_STORAGE_KEY)||keys.has(MINI_NETWORK_DEPTH_STORAGE_KEY)||keys.has(MINI_MAIL_LINKS_STORAGE_KEY)){
     const mode=localStorage.getItem(MINI_VIEW_STORAGE_KEY)==='network'?'network':'orrery';
     const depth=Number(localStorage.getItem(MINI_NETWORK_DEPTH_STORAGE_KEY));
-    miniViewMode=mode;miniNetworkDepth=[1,2,3].includes(depth)?depth:2;paintMiniViewSettings();
-    document.dispatchEvent(new CustomEvent('oc:mini-view',{detail:{mode:miniViewMode,depth:miniNetworkDepth}}));
+    miniViewMode=mode;miniNetworkDepth=[1,2,3].includes(depth)?depth:2;
+    miniMailLinks=localStorage.getItem(MINI_MAIL_LINKS_STORAGE_KEY)==='recent'?'recent':'keep';
+    announceMiniView();
   }
   if(keys.has(TERM_FONT_STORAGE_KEY)||keys.has(TERM_FONT_AUTOSHRINK_STORAGE_KEY)){
     const storedFont=localStorage.getItem(TERM_FONT_STORAGE_KEY),storedShrink=localStorage.getItem(TERM_FONT_AUTOSHRINK_STORAGE_KEY);
@@ -6186,7 +6448,8 @@ function refreshSplitDecorations(){
 function setGroupState(session,state){
   const group=sessionGroups.get(session);if(!group)return;
   group.el.classList.toggle('live',state==='live');
-  group.state.textContent=state==='connecting'?'…':state==='live'?'live':state==='error'?'error':state==='closed'?'closed':'';
+  group.connectionState=state;
+  paintSessionAction(group,session);
 }
 function refreshSessionGroup(session){
   const group=sessionGroups.get(session);if(!group)return;
@@ -6225,6 +6488,13 @@ function ensureSessionGroup(session){
   el.append(label,paneTabs);tabsEl.appendChild(el);
   group={el,label,state,detach,paneTabs,empty,splitMark};sessionGroups.set(session,group);
   refreshSplitDecorations();return group;
+}
+function paintSessionAction(group,session){
+  const action=pendingAgentAction(session);
+  const connection=group.connectionState||'connecting';
+  group.el.toggleAttribute('data-pending-action',Boolean(action));
+  setText(group.state,action||({connecting:'…',live:'live',error:'error',closed:'closed'})[connection]||'');
+  setTitle(group.state,action?`${action} ${OrreryDemo.mask(session)}…`:'');
 }
 function removeSessionGroup(session){
   closedByBackend.delete(session);
@@ -6763,6 +7033,10 @@ function endPaneSnapshot(pane,token=null){
   // pane OBJECT (rather than looking it up by id) is what keeps a held
   // callback from the pane a reset has already replaced out of the new one.
   landPaneOnBottom(pane);
+  const restart=permissionRestarts.get(pane.session);
+  if(restart?.attached&&panes.get(paneIdForSession(pane.session))===pane){
+    finishPermissionRestart(pane.session);
+  }
 }
 /* Landing a pane the terminal's way. jumpPaneToBottom (the ↓ BOTTOM button,
    ⌘↓) also writes the viewport's scrollTop, which is right for a settled
@@ -7064,6 +7338,7 @@ function renderStage({fit=true}={}){
   applyTerminalSettings({fit:false});
   panes.forEach(paintPaneBottomJump);
   refreshSplitDecorations();
+  paintTerminalActions();
   if(fit)queueStageFit(activeId);
   if(fullTourSplitPending&&splitVisible&&members.length>=2&&
      members.every(session=>splitCells.get(session)?.querySelector('.termhost.on'))){
@@ -7080,6 +7355,7 @@ function paintPendingSession(session){
   paintPaneHeading(scrName.closest('.pane-heading'),session,'connecting');
   paintClaimToggle();paintGhosttyAction();
   if(sessChip)sessChip.textContent=session;
+  paintTerminalActions();
 }
 function blurTerminalFocus(){
   panes.forEach(p=>{try{p.term.blur();}catch(_){}});
@@ -7146,6 +7422,7 @@ function restoreClosedSessions(availableNames){
   const available=new Set(availableNames);
   for(const session of [...closedByBackend]){
     if(manualDetached.has(session)||!sessionGroups.has(session)){closedByBackend.delete(session);continue;}
+    if(pendingAgentExits.has(session))continue;
     if(available.has(session)&&requestAttach(session))closedByBackend.delete(session);
   }
 }
@@ -7574,15 +7851,27 @@ function closePane(paneId,deferFocus=false){
   }
   refreshSessionGroup(session);renderStage();
 }
-function closeSessionPanes(session){
+function closeSessionPanes(session,deferFocus=false){
   const ids=[...panes.entries()].filter(([,p])=>p.session===session).map(([id])=>id);
   const lostActive=ids.includes(activeId);
   ids.forEach(id=>closePane(id,true));
   selectedPaneBySession.delete(session);
-  if(lostActive)focusStageFallback();else renderStage();
+  if(lostActive&&!deferFocus)focusStageFallback();else renderStage();
+  return lostActive;
 }
-function forgetSession(session,{removeGroup=true}={}){
+function forgetSession(session,{removeGroup=true,preserveRestart=false}={}){
+  const restart=preserveRestart&&permissionRestarts.get(session);
   attachedSessions.delete(session);requestedSessions.delete(session);
+  if(restart?.keepTab){
+    restart.waiting=true;
+    if(closeSessionPanes(session,true)){
+      restart.focus=true;
+      paintPendingSession(session);
+      promptTarget.textContent='—';promptAva.hidden=true;refreshComposerVocabulary();
+    }
+    setGroupState(session,'connecting');
+    return;
+  }
   removeSplitSessionState(session);
   closeSessionPanes(session);
   if(removeGroup)removeSessionGroup(session);else setGroupState(session,'closed');
@@ -7602,16 +7891,24 @@ function freshOutputIncomplete(msg){
   refreshHeaderStats();
   return true;
 }
-function detachSession(session,remember=false,{keepTab=false}={}){
+function detachSession(session,remember=false,{keepTab=false,preserveRestart=false}={}){
   if(attachedSessions.has(session)||requestedSessions.has(session)){
     releaseSessionClaim(session,{resize:false});
     send({type:"detach",session});
   }
-  if(remember)manualDetached.add(session);
-  forgetSession(session,{removeGroup:!keepTab});
+  const restart=remember&&permissionRestarts.get(session);
+  const lostRestartFocus=restart?.focus&&!activeId&&scrName.title===session;
+  if(remember){
+    manualDetached.add(session);
+    if(restart){restart.keepTab=false;restart.focus=false;if(restart.accepted)finishPermissionRestart(session);}
+  }
+  forgetSession(session,{removeGroup:!keepTab,preserveRestart});
+  if(lostRestartFocus)focusStageFallback();
 }
 function requestAttach(session,priority=false,reference={}){
   if(!paneSessionAllowed(session))return false;
+  const restart=permissionRestarts.get(session);
+  if(restart?.keepTab&&restart.waiting&&!restart.accepted)return false;
   if(!availableSessions.has(session)||attachedSessions.has(session)||requestedSessions.has(session))return false;
   manualDetached.delete(session);
   const occupied=occupiedSessions();
@@ -7629,6 +7926,18 @@ function requestAttach(session,priority=false,reference={}){
 }
 function resetSession(msg){
   const session=msg.session;if(!session)return;
+  const restart=permissionRestarts.get(session);
+  if(restart?.keepTab&&restart.waiting){
+    if(!restart.accepted)return;
+    if(msg.incarnation&&msg.incarnation===restart.incarnation){
+      if(!restart.attached){
+        requestedSessions.delete(session);
+        send({type:'detach',session});
+      }
+      return;
+    }
+    restart.attached=true;
+  }
   const wasActive=activeSession()===session;
   const wasSplitFocus=splitVisible&&focusedSplitSession===session;
   closeSessionPanes(session);
@@ -7642,6 +7951,7 @@ function resetSession(msg){
   const background=composerAttaching.has(session)&&pendingJump!==session;
   if(background)renderStage();
   else if(pendingJump===session){pendingJump=null;focusSession(session);}
+  else if(restart?.attached)renderStage();
   else if(wasSplitFocus)focusSplitSession(session);
   else if(!splitVisible&&(wasActive||(activeId===null&&!paneWindowSelection)))focusSession(session);
   else renderStage();
@@ -7657,10 +7967,15 @@ function handleSessions(items){
   });
   // A session that left the list while shown was ended by the backend, as a
   // closed message says: note it, and keep its tab (below) like closed does.
-  occupiedSessions().forEach(session=>{if(!names.includes(session))noteBackendClosed(session);});
-  pruneSplitSessions(names);
+  const restartingTabs=[...permissionRestarts].filter(([,restart])=>restart.keepTab).map(([session])=>session);
+  occupiedSessions().forEach(session=>{
+    if(!names.includes(session)&&!permissionRestarts.get(session)?.keepTab&&!pendingAgentExits.has(session)){
+      noteBackendClosed(session);
+    }
+  });
+  pruneSplitSessions([...names,...restartingTabs]);
   const plan=attachmentPlan(names,[...occupiedSessions()],[...manualDetached],MAX_ATTACHED_SESSIONS);
-  plan.detach.forEach(session=>detachSession(session,false,{keepTab:true}));
+  plan.detach.forEach(session=>detachSession(session,false,{keepTab:true,preserveRestart:true}));
   // After those leave: a slot the same list frees is there for a return.
   restoreClosedSessions(names);
   // Lazy attach (2026-07-30 product decision): the cockpit opens with NO tabs — a
@@ -7675,9 +7990,13 @@ function handleSessions(items){
     // resume from the NETWORK embed takes a couple of seconds to reach
     // tmux) — keep waiting through early ticks instead of giving up on
     // the first roster that doesn't list it yet.
-    else if(Date.now()-pendingJumpSince>8000){showOfflineHint(pendingJump);pendingJump=null;}
+    else if(!permissionRestarts.has(pendingJump)&&Date.now()-pendingJumpSince>8000){
+      showOfflineHint(pendingJump);pendingJump=null;
+    }
   }
-  sortSessionGroups(names);renderStage();
+  // Keep the open tab in place while its session is missing from tmux.
+  if(!restartingTabs.length)sortSessionGroups(names);
+  renderStage();
   applyAutoClaims();
   if(paletteOverlay.classList.contains('on'))renderPalette();
 }
@@ -8487,7 +8806,11 @@ function handle(msg){
     case "update":updatePane(msg.session,msg.pane);break;
     case "close":{
       const p=panes.get(msg.paneId);
-      if(p&&p.session===msg.session)closePane(msg.paneId);
+      if(p&&p.session===msg.session){
+        if(permissionRestarts.get(p.session)?.keepTab&&panesInSession(p.session).length===1){
+          detachSession(p.session,false,{keepTab:true,preserveRestart:true});
+        }else closePane(msg.paneId);
+      }
       break;
     }
     case "output":{
@@ -8507,15 +8830,20 @@ function handle(msg){
       if(msg.state==='closed'&&msg.session){
         const incarnation=sessionGroups.get(msg.session)?.incarnation;
         if(incarnation&&msg.incarnation&&incarnation!==msg.incarnation)break;
+        const restart=permissionRestarts.get(msg.session);
+        if(restart?.keepTab&&restart.waiting&&msg.incarnation&&msg.incarnation===restart.incarnation)break;
         const sessionGone=msg.sessionGone===true;
-        if(!sessionGone)noteBackendClosed(msg.session);
-        forgetSession(msg.session,{removeGroup:sessionGone});
+        const exiting=pendingAgentExits.has(msg.session);
+        if(!sessionGone&&!restart?.keepTab&&!exiting)noteBackendClosed(msg.session);
+        forgetSession(msg.session,{removeGroup:sessionGone&&!exiting,preserveRestart:true});
       }
       break;
     case "error":
       if(freshOutputIncomplete(msg))break;
       if(msg.session){
         const wasRequesting=requestedSessions.delete(msg.session);
+        const restart=permissionRestarts.get(msg.session);
+        if(wasRequesting&&restart?.accepted&&typeof msg.message==='string')restart.attachError=msg.message;
         if(wasRequesting)setGroupState(msg.session,'error');
         if(pendingJump===msg.session){showOfflineHint(msg.session);pendingJump=null;}
       }
@@ -8836,9 +9164,8 @@ const ROSTER_PROVIDER={
   anthropic:{asset:'anthropic',label:'Claude'},
   openai:{asset:'openai',label:'Codex (OpenAI)'},
   google:{asset:'google',label:'Gemini'},
-  deepseek:{asset:'deepseek',label:'DeepSeek'},
-  qwen:{asset:'qwen',label:'Qwen'},
-  glm:{asset:'glm',label:'GLM'},
+  ...Object.fromEntries(Object.entries(window.OrreryLocalModelMakers).map(
+    ([asset,{label}])=>[asset,{asset,label}])),
 };
 function rosterIsLocal(agent){
   const provider=String(agent.provider||'').trim().toLowerCase();
@@ -8852,11 +9179,7 @@ function rosterProviderKey(agent){
   // Backend identity or explicit locality selects the local presentation.
   // Use the resolved model ID, never the adapter/program or profile nickname.
   if(rosterIsLocal(agent)){
-    const model=String(agent.model_raw||agent.model||'').toLowerCase();
-    if(/deepseek/.test(model))return 'deepseek';
-    if(/qwen/.test(model))return 'qwen';
-    if(/(?:^|[^a-z0-9])glm/.test(model))return 'glm';
-    return '';
+    return window.orreryLocalModelMaker(String(agent.model_raw||agent.model||''));
   }
   if(Object.hasOwn(alias,provider))return alias[provider];
   const model=String(agent.model||'').toLowerCase();
@@ -9041,8 +9364,10 @@ const pinnedAgents=storedRosterNames(PINNED_AGENT_KEY),foldedAgents=storedRoster
 let rosterRows=[],rosterRowsByName=new Map();
 const agentDetail=document.createElement('div');
 agentDetail.id='agentDetail';agentDetail.className='agent-detail';agentDetail.setAttribute('role','group');
-agentDetail.setAttribute('aria-labelledby','agentDetailName');agentDetail.hidden=true;
-let detailAnchor=null,detailHideTimer=0,detailRendered='';
+agentDetail.setAttribute('aria-labelledby','agentDetailName');agentDetail.tabIndex=-1;agentDetail.hidden=true;
+const detailGraph=document.getElementById('orrery'),detailGraphDivider=document.getElementById('mailGraphDivider');
+detailGraphDivider.after(agentDetail);
+let detailAnchor=null,detailHideTimer=0,detailRendered='',restoringMiniFocus=false;
 let permissionChangeBusy=false,permissionApi=null,permissionApiRequest=null,permissionApiCheckedAt=-Infinity;
 let selectedAgent=null,currentAgents=[];
 const descriptorStore=RosterDescriptor.createStableDescriptorStore();
@@ -9088,7 +9413,7 @@ function paintBulkTileState(el,agent){
   const eligible=isBulkSelectableAgent(agent);
   const selected=eligible&&bulkSelectedAgents.has(agent.name);
   el.classList.toggle('bulk-ineligible',rosterSelectMode&&!eligible);
-  el.classList.toggle('permission-target',rosterSelectMode&&!eligible&&!agentPermissionBlockReason(agent,permissionApi));
+  el.classList.toggle('permission-target',rosterSelectMode&&!eligible&&canChangeAgentPermissions(agent,permissionApi));
   el.classList.toggle('bulk-selected',rosterSelectMode&&selected);
   if(rosterSelectMode){
     el.setAttribute('aria-selected',String(selected));
@@ -9114,7 +9439,7 @@ function updateRosterBulkUI(){
   const count=bulkSelectedAgents.size;
   const exitCount=[...bulkSelectedAgents].filter(name=>{
     const agent=currentAgentNamed(name);
-    return isBulkSelectableAgent(agent)&&isBulkExitEligibleAgent(agent);
+    return !pendingAgentAction(name)&&isBulkSelectableAgent(agent)&&isBulkExitEligibleAgent(agent);
   }).length;
   const busy=Boolean(bulkActionBusy||permissionChangeBusy);
   setHidden(rosterBulkBar,count===0);
@@ -9198,21 +9523,99 @@ async function agentActionRoster(path,signal){
   const roster=response?.ok?await response.json().catch(()=>null):null;
   return Array.isArray(roster?.agents)?roster.agents:null;
 }
+function beginAgentExit(name){
+  const agent=currentAgentNamed(name);
+  if(!agent||pendingAgentAction(name))return null;
+  const action={original:agent};
+  pendingAgentExits.set(name,action);
+  refreshAgentActionDisplay(name);
+  return action;
+}
+function clearAgentExit(name,action,{repaint=true}={}){
+  if(pendingAgentExits.get(name)!==action)return false;
+  clearTimeout(action.timer);
+  pendingAgentExits.delete(name);
+  if(repaint){
+    if(action.departed)renderRoster();
+    refreshAgentActionDisplay(name);
+  }
+  return true;
+}
+function exitError(name,action,message){
+  if(clearAgentExit(name,action))
+    showToast(`Exit failed for ${OrreryDemo.mask(name)} · ${OrreryDemo.mask(message)}`,true,9000);
+}
+function waitForAgentToLeaveRoster(name,action){
+  if(pendingAgentExits.get(name)!==action)return;
+  action.accepted=true;
+  if(action.departed){finishAgentExits([[name,action]]);return;}
+  action.timer=setTimeout(()=>exitError(name,action,'The roster has not confirmed that the agent stopped'),30000);
+}
+function finishAgentExits(exits){
+  const positions=new Map([
+    ...railPositions(tiles.values(),rosterEl),
+    ...railPositions([...sessionGroups.values()].map(group=>group.el),tabsEl),
+  ]);
+  const dust=window.OrreryExitDust;
+  for(const [name,action] of exits){
+    const group=sessionGroups.get(name);
+    dust?.play(tiles.get(name),rosterEl);
+    dust?.play(group?.el,tabsEl);
+    clearAgentExit(name,action,{repaint:false});
+    if(group)detachSession(name,false);
+  }
+  renderRoster();
+  if(positions.size)railMoveRows(positions,dust?.layoutMotion());
+}
+function observeNetworkExits(view,fetchInFrame){
+  const unresolved=new Map();
+  view.addEventListener('pagehide',()=>{
+    unresolved.forEach((name,action)=>exitError(name,action,'The request was cancelled'));
+    unresolved.clear();
+  },{once:true});
+  return async (input,options)=>{
+    let name;
+    try{
+      const url=new URL(typeof input==='string'?input:input.url,view.location.href);
+      if(url.origin===location.origin&&url.pathname==='/api/exit'&&options?.method==='POST'){
+        name=JSON.parse(options.body)?.session;
+      }
+    }catch(_){/* other requests pass through */}
+    const action=typeof name==='string'&&beginAgentExit(name);
+    if(!action)return fetchInFrame(input,options);
+    unresolved.set(action,name);
+    try{
+      const response=await fetchInFrame(input,options);
+      const result=await response.clone().json().catch(()=>null);
+      if(response.ok&&result?.ok)waitForAgentToLeaveRoster(name,action);
+      else exitError(name,action,result?.error||`HTTP ${response.status}`);
+      return response;
+    }catch(error){
+      exitError(name,action,String(error?.message||error));
+      throw error;
+    }finally{
+      unresolved.delete(action);
+    }
+  };
+}
 async function runBulkExit(){
   if(bulkActionBusy||permissionChangeBusy)return;
   const names=[...bulkSelectedAgents].filter(name=>{
     const agent=currentAgentNamed(name);
-    return isBulkSelectableAgent(agent)&&isBulkExitEligibleAgent(agent);
+    return !pendingAgentAction(name)&&isBulkSelectableAgent(agent)&&isBulkExitEligibleAgent(agent);
   });
   if(!names.length||!confirmBulkAction('exit'))return;
   clearBulkActionArm();bulkActionBusy='exit';updateRosterBulkUI();
+  const exits=names.map(name=>[name,beginAgentExit(name)]);
   let succeeded=0,failed=0;
   const failures=[];
-  for(const name of names){
+  for(const [name,action] of exits){
     try{
       await postBulkAgentAction('exit',{session:name});
+      waitForAgentToLeaveRoster(name,action);
       succeeded+=1;
     }catch(error){
+      clearAgentExit(name,action);
       failed+=1;failures.push(`${name}: ${String(error&&error.message||error)}`);
     }
   }
@@ -9342,9 +9745,12 @@ rosterBulkMessage.addEventListener('click',()=>{
 });
 rosterBulkReboot.addEventListener('click',runBulkReboot);
 
-const AGENT_DETAIL_HARNESSES=new Map([['claude','Claude Code'],['codex','Codex CLI'],['dsh','dsh'],['hermes','Hermes']]);
+const AGENT_DETAIL_HARNESSES=new Map([['claude','Claude Code'],['codex','Codex CLI'],['dsh','dsh'],['hermes','Hermes'],['antigravity','Antigravity']]);
 const AGENT_DETAIL_COMPUTER=new Map([['off','Off'],['view','View'],['control','Control']]);
+const AGENT_DETAIL_BROWSER=new Map([['off','Off'],['temporary','Temporary Chrome'],['personal','My Chrome']]);
+const AGENT_DETAIL_BROWSER_SHORT=new Map([['temporary','Temp']]);
 const STANDALONE_PERMISSION_API=46;
+const PERMISSION_CONTROLS_API=54;
 const AGENT_DETAIL_TOKENS=new Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1});
 const AGENT_DETAIL_ICONS={
   role:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M5.5 16a3.5 3.5 0 0 1 7 0m3-6h2.5m-2.5 4H18"/>',
@@ -9396,18 +9802,45 @@ function agentPermissionBlockReason(a,api){
   }
   return '';
 }
-function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false){
+function agentPermissionSetting(a,key,api){
+  const control=api>=PERMISSION_CONTROLS_API?a.permission_controls?.[key]:null;
+  const server=api>=PERMISSION_CONTROLS_API;
+  const value=control?control.value:a[key];
+  const source=control?control.source:a[key+'_source'];
+  const action=a.running===true?'restart':'resume';
+  const options=Array.isArray(control?.options)?control.options.filter(mode=>AGENT_DETAIL_BROWSER.has(mode)):[];
+  const reason=server?
+    (control?.can_change===true&&control.action===action&&(key!=='browser_use'||options.length)
+      ?'':control?.change_reason||'Permission information unavailable'):
+    agentPermissionBlockReason(a,api)||(api>=52&&a.permission_source==='process'?'Observed process permissions':'');
+  return {
+    value:key==='computer_use'?(AGENT_DETAIL_COMPUTER.has(value)?value:null):(typeof value==='boolean'?value:null),
+    observation: (control?control.observation_reason:a[key+'_reason'])||
+      (source==='relay'?'Current screen relay':source==='launch'?'ORRERY launch selection':null),
+    reason,
+    action:reason?null:action,
+    mode:AGENT_DETAIL_BROWSER.has(control?.mode)?control.mode:control&&key==='browser_use'&&value===false?'off':null,
+    options,
+  };
+}
+function canChangeAgentPermissions(a,api){
+  return ['computer_use','browser_use'].some(key=>agentPermissionSetting(a,key,api).action);
+}
+function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false,pendingAction=''){
   const text=value=>typeof value==='string'&&value.trim()?value:null;
   const cwd=text(a.cwd),home=homeDir?.replace(/\/+$/,'');
   const directory=cwd&&home&&(cwd===home||cwd.startsWith(home+'/'))?'~'+cwd.slice(home.length):cwd;
+  const setting=key=>{
+    const value=agentPermissionSetting(a,key,api);
+    return (busy||pendingAction)&&value.action?
+      {...value,reason:pendingAction?null:'Agent action in progress',action:null}:value;
+  };
   return {
-    name:a.name,role:text(a.annot?.role),
+    name:a.name,role:text(a.annot?.role),pendingAction,
     parentState:a.parent_state,parent:a.parent_state==='child'?text(a.parent_agent):null,
-    computer:AGENT_DETAIL_COMPUTER.has(a.computer_use)?a.computer_use:null,
-    browser:typeof a.browser_use==='boolean'?a.browser_use:null,
+    computer:setting('computer_use'),browser:setting('browser_use'),
     permissions:Boolean(a.harness_kind||a.lifecycle==='persistent'||a.surface==='codex-app'||permissionConversationOnly(a)||
-      a.computer_use||typeof a.browser_use==='boolean'),
-    permissionReason:agentPermissionBlockReason(a,api)||(busy?'Agent action in progress':''),
+      a.computer_use||typeof a.browser_use==='boolean'||a.permission_controls),
     model:text(a.model_id),harness:AGENT_DETAIL_HARNESSES.get(a.harness_kind)??null,effort:text(a.effort),
     tokens:Number.isSafeInteger(a.ctx_window_tokens)&&a.ctx_window_tokens>0?a.ctx_window_tokens:null,
     used:agentContextUsed(a),
@@ -9426,28 +9859,40 @@ function agentDetailItem(icon,label,body='',path=null){
 }
 function agentDetailPermissions(detail){
   if(!detail.permissions)return '';
-  const disabled=reason=>reason?' disabled':'';
-  const title=(label,reason)=>esc(reason?`${label} (${reason})`:label);
-  const computer=detail.computer?AGENT_DETAIL_COMPUTER.get(detail.computer):'Unknown';
-  const modes=[...AGENT_DETAIL_COMPUTER].map(([value,label])=>{
-    const reason=detail.permissionReason;
-    const current=value===detail.computer;
-    return `<button type="button" data-computer="${value}" aria-pressed="${current}"
-      aria-label="Computer use: ${label}" title="${title(`Computer use: ${label}`,reason)}"
-      ${current?'class="current"':''}${disabled(reason)}>${label}</button>`;
-  }).join('');
-  const browserLabel=`Browser use: ${detail.browser===null?'Unknown':detail.browser?'On':'Off'}`;
-  const switchState=detail.browser===null?' unknown':detail.browser?' on':'';
-  return `<div class="agent-detail-permissions" role="group" aria-label="Permissions">
-    <div class="agent-detail-item" role="group" aria-label="Computer use" title="${title(`Computer use: ${computer}`,detail.permissionReason)}">
-      ${agentDetailIcon('computer')}<span class="agent-detail-modes">${modes}</span>
-    </div>
-    <div class="agent-detail-item" title="${title(browserLabel,detail.permissionReason)}">
+  const {computer,browser}=detail;
+  const computerValue=AGENT_DETAIL_COMPUTER.get(computer.value)||'Unknown';
+  const browserValue=AGENT_DETAIL_BROWSER.get(browser.mode)||(browser.value===null?'Unknown':browser.value?'On':'Off');
+  const description=(label,value,reason)=>`${label}: ${value}${reason?` (${reason})`:''}`;
+  const readOnly=!computer.action&&!browser.action;
+  const shared=[...new Set(['observation','reason'].map(key=>
+    readOnly&&computer[key]===browser[key]?computer[key]:null).filter(Boolean))];
+  const note=value=>value?`<small>${esc(value)}</small>`:'';
+  const mark=(icon,label,value,setting)=>agentDetailItem(icon,
+    description(label,value,setting.observation||setting.reason),
+    `<span class="agent-detail-value"><small>${label}</small><span>${value}</span>
+      ${[...new Set([setting.observation,setting.reason])].filter(value=>!shared.includes(value)).map(note).join('')}</span>`);
+  const choices=(field,label,modes,current,available=null)=>`<span class="agent-detail-modes">${[...modes].map(([value,text])=>{
+    const disabled=available&&!available.includes(value);
+    const title=`${label}: ${text}${disabled?' (unavailable for this agent)':''}`;
+    const compact=field==='browser'?(AGENT_DETAIL_BROWSER_SHORT.get(value)||text):text;
+    return `<button type="button" data-${field}="${value}" aria-pressed="${value===current}"
+      aria-label="${title}" title="${title}" ${disabled?'disabled ':''}
+      ${value===current?'class="current"':''}>${compact}</button>`;
+  }).join('')}</span>`;
+  const browserTitle=esc(description('Browser use',browserValue,browser.observation));
+  const switchState=browser.value===null?' unknown':browser.value?' on':'';
+  return `<div class="agent-detail-permissions${readOnly?' agent-detail-observed':''}" role="group"
+    aria-label="${readOnly?'Read-only permissions':'Permissions'}">
+    ${computer.action?agentDetailItem('computer',description('Computer use',computerValue,computer.observation),
+      choices('computer','Computer use',AGENT_DETAIL_COMPUTER,computer.value)):mark('computer','Computer use',computerValue,computer)}
+    ${browser.action?(browser.options.length?agentDetailItem('browser',description('Browser use',browserValue,browser.observation),
+      choices('browser','Browser use',AGENT_DETAIL_BROWSER,browser.mode,browser.options)):`<div class="agent-detail-item" title="${browserTitle}">
       ${agentDetailIcon('browser')}<button class="agent-detail-browser-toggle" type="button" data-browser
-        ${detail.browser===null?'':`role="switch" aria-checked="${detail.browser}"`}
-        aria-label="${detail.browser===null?browserLabel:'Browser use'}" title="${title(browserLabel,detail.permissionReason)}"${disabled(detail.permissionReason)}>
-        <span class="agent-detail-switch${switchState}" aria-hidden="true"></span></button>
-    </div>
+        ${browser.value===null?'':`role="switch" aria-checked="${browser.value}"`}
+        aria-label="${browser.value===null||browser.observation?browserTitle:'Browser use'}" title="${browserTitle}">
+        <span class="agent-detail-switch${switchState}" aria-hidden="true"></span></button></div>`):
+      mark('browser','Browser use',browserValue,browser)}
+    ${shared.map(value=>`<small class="agent-detail-observed-reason">${esc(value)}</small>`).join('')}
   </div>`;
 }
 function agentDetailHTML(detail){
@@ -9477,12 +9922,16 @@ function agentDetailHTML(detail){
       ${detail.used===null?'':`<span class="agent-detail-meter${detail.used>CONTEXT_HOT_PERCENT?' hot':''}" aria-hidden="true"><i style="width:${detail.used}%"></i></span><strong>${detail.used}%</strong>`}
     </span>`):'';
   const runtime=text('harness','Harness',detail.harness)+text('effort','Effort',detail.effort);
-  return `<div class="agent-detail-name" id="agentDetailName">${esc(detail.name)}</div>
+  const action=detail.pendingAction?
+    `<span class="agent-detail-pending-action" title="${esc(detail.pendingAction+' '+detail.name+'…')}">${esc(detail.pendingAction)}</span>`:'';
+  return `<div class="agent-detail-name" id="agentDetailName">${esc(detail.name)}${action}</div>
     ${group('identity',text('role','Role',detail.role)+lineage)}
     ${agentDetailPermissions(detail)}
     ${group('meta',text('model','Model',detail.model)+group('runtime',runtime)+contextRow+text('directory','Working directory',detail.directory))}`;
 }
+function isMiniDetailAnchor(el){return el?.classList.contains('mini-agent');}
 function positionAgentDetail(el){
+  if(isMiniDetailAnchor(el))return;
   const gap=10,edge=12,anchor=el.getBoundingClientRect();
   const card=agentDetail.getBoundingClientRect();
   let left=anchor.right+gap,top=anchor.top;
@@ -9501,49 +9950,99 @@ function positionAgentDetail(el){
 }
 function showAgentDetail(el){
   const a=currentAgentNamed(el&&el.dataset.agent);if(!a)return;
+  const mini=isMiniDetailAnchor(el);
+  if(mini&&(!el.isConnected||detailGraph.hasAttribute('hidden')))return;
   if(rosterEditor.isEditing(a.name)||el.matches('.filtered-out,.folded-out')){hideAgentDetail(el);return;}
   if(detailAnchor!==el)clearTimeout(detailHideTimer);
   detailAnchor=el;
   const row=rosterRowsByName.get(a.name);
   const hiddenChildren=row?.folded?rosterRows.slice(row.index+1,row.end).map(child=>child.name):[];
   const html=agentDetailHTML(agentDetailModel(a,hostPlatform.home_dir,hiddenChildren,permissionApi,
-    bulkActionBusy||permissionChangeBusy));
+    bulkActionBusy||permissionChangeBusy,pendingAgentAction(a.name)));
   const focused=agentDetail.contains(document.activeElement)?document.activeElement:null;
-  if(el.nextElementSibling!==agentDetail)el.after(agentDetail);
+  const mount=mini?detailGraphDivider:el;
+  agentDetail.toggleAttribute('data-mini-dock',mini);
+  if(mount.nextElementSibling!==agentDetail)mount.after(agentDetail);
   if(detailRendered!==html){
     agentDetail.innerHTML=html;detailRendered=html;
-    const replacement=focused?.matches('[data-browser]')?agentDetail.querySelector('[data-browser]'):
-      focused&&agentDetail.querySelector(`[data-computer="${focused.dataset.computer}"]`);
-    if(replacement?.disabled)el.focus({preventScroll:true});
+    const replacement=focused?.matches('[data-browser]')?agentDetail.querySelector(`[data-browser="${focused.dataset.browser}"]`):
+      focused?.matches('[data-computer]')?agentDetail.querySelector(`[data-computer="${focused.dataset.computer}"]`):null;
+    if(focused&&focused!==agentDetail&&(!replacement||replacement.disabled))el.focus({preventScroll:true});
     else replacement?.focus({preventScroll:true});
   }
   if(agentDetail.contains(focused)&&focused!==document.activeElement)focused.focus({preventScroll:true});
   setHidden(agentDetail,false);positionAgentDetail(el);
-  if(permissionCli(a))loadPermissionApi();
+  if(a.permission_controls||permissionCli(a))loadPermissionApi();
 }
 function hideAgentDetail(el){
   if(detailAnchor!==el)return;
   clearTimeout(detailHideTimer);
   detailAnchor=null;agentDetail.hidden=true;
 }
+function agentDetailHasFocus(el){
+  const focused=document.activeElement;
+  return (el.contains(focused)||agentDetail.contains(focused))&&
+    (!isMiniDetailAnchor(el)||focused.matches(':focus-visible'));
+}
 function scheduleAgentDetailHide(el){
   clearTimeout(detailHideTimer);
   detailHideTimer=setTimeout(()=>{
-    if(!el.contains(document.activeElement)&&!agentDetail.contains(document.activeElement)&&
-      !el.matches(':hover')&&!agentDetail.matches(':hover'))hideAgentDetail(el);
+    if(!agentDetailHasFocus(el)&&!el.matches(':hover')&&!agentDetail.matches(':hover'))hideAgentDetail(el);
   },160);
 }
+function syncMiniAgentDetail(nodes,focusedName){
+  const previous=detailAnchor;
+  if(isMiniDetailAnchor(previous)){
+    const node=nodes.get(previous.dataset.agent);
+    if(node)showAgentDetail(node);
+    if(node&&detailAnchor===node)scheduleAgentDetailHide(node);
+    else hideAgentDetail(previous);
+  }
+  const focused=nodes.get(focusedName);
+  if(focused){
+    // A redraw should preserve keyboard focus and any explicit dismissal.
+    restoringMiniFocus=true;
+    try{focused.focus({preventScroll:true});}finally{restoringMiniFocus=false;}
+  }
+}
+new MutationObserver(()=>{
+  if(detailGraph.hasAttribute('hidden')&&isMiniDetailAnchor(detailAnchor))hideAgentDetail(detailAnchor);
+}).observe(detailGraph,{attributes:true,attributeFilter:['hidden']});
 agentDetail.addEventListener('mouseenter',()=>clearTimeout(detailHideTimer));
 agentDetail.addEventListener('mouseleave',()=>{if(detailAnchor)scheduleAgentDetailHide(detailAnchor);});
 agentDetail.addEventListener('focusout',()=>{if(detailAnchor)scheduleAgentDetailHide(detailAnchor);});
-function bindAgentDetail(el){
-  el.tabIndex=0;el.setAttribute('role','button');
-  el.addEventListener('mouseenter',()=>showAgentDetail(el));
-  el.addEventListener('mouseleave',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
-  el.addEventListener('focusin',()=>showAgentDetail(el));
+function bindAgentDetail(el,mini=false){
+  let hoverTimer;
+  if(mini){
+    el.setAttribute('aria-controls',agentDetail.id);
+    el.setAttribute('aria-keyshortcuts','F2');
+  }else{
+    el.tabIndex=0;el.setAttribute('role','button');
+  }
+  el.addEventListener('mouseenter',()=>{
+    if(!mini||!isMiniDetailAnchor(detailAnchor)||detailAnchor===el)showAgentDetail(el);
+    // Let the pointer cross other nodes on its way down to the dock.
+    else hoverTimer=setTimeout(()=>{
+      if(el.matches(':hover')&&(!detailAnchor||!agentDetailHasFocus(detailAnchor)))showAgentDetail(el);
+    },120);
+  });
+  el.addEventListener('mouseleave',()=>{
+    clearTimeout(hoverTimer);
+    if(detailAnchor===el)scheduleAgentDetailHide(el);
+  });
+  el.addEventListener('focusin',()=>{
+    if(!mini||(!restoringMiniFocus&&el.matches(':focus-visible')))showAgentDetail(el);
+  });
   el.addEventListener('focusout',()=>{if(detailAnchor===el)scheduleAgentDetailHide(el);});
   el.addEventListener('keydown',event=>{
     if(event.target!==el)return;
+    if(mini){
+      if(event.key!=='F2')return;
+      event.preventDefault();
+      showAgentDetail(el);
+      if(detailAnchor===el)(agentDetail.querySelector('button:not(:disabled)')||agentDetail).focus();
+      return;
+    }
     if(event.key!=='Enter'&&event.key!==' ')return;
     event.preventDefault();handleRosterTileClick(el.dataset.agent,event);
   });
@@ -9585,7 +10084,7 @@ permissionConfirm.innerHTML=`<form method="dialog">
     </div>
     <div class="agent-detail-item">${agentDetailIcon('browser')}
       <select name="browser" title="Browser use" aria-label="Browser use" required>
-        <option value="">Choose a setting</option><option value="off">Off</option><option value="on">On</option>
+        <option value="">Choose a setting</option>
       </select>
     </div>
   </div>
@@ -9603,20 +10102,32 @@ permissionConfirm.addEventListener('keydown',event=>event.stopPropagation());
 agentDetail.addEventListener('click',event=>{
   const button=event.target.closest('[data-computer],[data-browser]');
   const a=currentAgentNamed(detailAnchor?.dataset.agent);
-  if(!button||button.disabled||!a||permissionConfirm.open||bulkActionBusy||permissionChangeBusy||
-    agentPermissionBlockReason(a,permissionApi))return;
+  if(!button||button.disabled||!a||permissionConfirm.open||bulkActionBusy||permissionChangeBusy)return;
   const computer=button.dataset.computer;
-  if(computer&&computer===a.computer_use)return;
+  const browserMode=button.dataset.browser;
+  const key=computer?'computer_use':'browser_use';
+  const setting=agentPermissionSetting(a,key,permissionApi);
+  if(!setting.action||computer&&computer===setting.value
+    ||browserMode&&(browserMode===setting.mode||!setting.options.includes(browserMode)))return;
   permissionComputer.parentElement.hidden=permissionComputer.disabled=!computer;
   permissionBrowser.parentElement.hidden=permissionBrowser.disabled=Boolean(computer);
   permissionComputer.value=computer||'';
-  permissionBrowser.value=typeof a.browser_use==='boolean'?(a.browser_use?'off':'on'):'';
-  pendingPermissionChange={agent:a,key:computer?'computer_use':'browser_use'};
+  const modes=key==='browser_use'&&setting.options.length>0;
+  if(!computer){
+    const options=modes?setting.options.filter(mode=>mode!==setting.mode).map(mode=>[mode,AGENT_DETAIL_BROWSER.get(mode)]):
+      [['off','Off'],['on','On']];
+    permissionBrowser.replaceChildren(new Option('Choose a setting',''),
+      ...options.map(([value,label])=>new Option(label,value)));
+    permissionBrowser.value=modes?(browserMode||''):typeof setting.value==='boolean'?(setting.value?'off':'on'):'';
+  }
+  pendingPermissionChange={agent:a,key,modes};
   const name=OrreryDemo.mask(a.name);
   setText(permissionApply,a.running?'Restart':'Resume');
-  setText(permissionConfirm.querySelector('p'),a.running?
+  const description=a.running?
     `Restart ${name} in the same conversation with this permission change? Any work in progress will be interrupted.`:
-    `Resume ${name} in the same conversation with this permission change?`);
+    `Resume ${name} in the same conversation with this permission change?`;
+  const managed=a.permission_managed_launch===true?' ORRERY will use a managed launch to apply the permission.':'';
+  setText(permissionConfirm.querySelector('p'),description+managed);
   permissionConfirm.showModal();
 });
 permissionConfirm.addEventListener('cancel',()=>{pendingPermissionChange=null;});
@@ -9626,30 +10137,122 @@ permissionConfirm.addEventListener('submit',event=>{
   pendingPermissionChange=null;
   permissionConfirm.close();
   if(change&&event.submitter===permissionApply){
-    const {agent,key}=change;
-    changeAgentPermission(agent,key,key==='computer_use'?permissionComputer.value:permissionBrowser.value==='on');
+    const {agent,key,modes}=change;
+    const value=key==='computer_use'?permissionComputer.value:modes?permissionBrowser.value:permissionBrowser.value==='on';
+    changeAgentPermission(agent,key,value);
   }
 });
 function samePermissionConversation(a,b){
-  return ['history_session_id','harness_kind','parent_state','project_key'].every(key=>a[key]===b[key]);
+  return ['history_session_id','harness_kind','parent_state','project_key','permission_managed_launch'].every(key=>a[key]===b[key]);
 }
-async function confirmPermissionStop(original,api,signal){
+function pendingAgentAction(session){
+  if(permissionRestarts.has(session))return 'Restarting';
+  if(pendingAgentExits.has(session))return 'Exiting';
+  return '';
+}
+function paintActionText(node,text,active){
+  const wasActive=node.classList.contains('terminal-action-wave');
+  if(wasActive===active&&node.textContent===text)return;
+  node.classList.toggle('terminal-action-wave',active);
+  if(!active){node.textContent=text;return;}
+  const letters=Array.from(text,(letter,index)=>{
+    const span=document.createElement('span');
+    span.textContent=letter;
+    span.style.setProperty('--action-delay',`${index*70}ms`);
+    return span;
+  });
+  node.replaceChildren(...letters);
+}
+function paintTerminalAction(host,session){
+  const action=pendingAgentAction(session);
+  let notice=host.querySelector(':scope > .terminal-action-notice');
+  host.toggleAttribute('data-terminal-action',Boolean(action));
+  if(!action){notice?.remove();return;}
+  const text=`${action} ${OrreryDemo.mask(session)}…`;
+  if(!notice){
+    notice=document.createElement('div');
+    notice.className='terminal-action-notice';
+    notice.setAttribute('role','status');
+    notice.appendChild(document.createElement('span')).setAttribute('aria-hidden','true');
+    host.appendChild(notice);
+  }
+  setTitle(notice,text);setAttr(notice,'aria-label',text);
+  paintActionText(notice.firstElementChild,text,true);
+}
+function paintTerminalActions(){
+  const held=permissionRestarts.get(scrName.title)?.focus?scrName.title:null;
+  paintTerminalAction(stageEl,splitVisible?null:activeSession()||held);
+  splitCells.forEach((cell,session)=>paintTerminalAction(cell,splitVisible?session:null));
+}
+function refreshAgentActionDisplay(name){
+  const group=sessionGroups.get(name);
+  if(group)paintSessionAction(group,name);
+  const tile=tiles.get(name),agent=currentAgentNamed(name);
+  if(tile&&agent)paintTile(tile,agent);
+  if(detailAnchor?.dataset.agent===name)showAgentDetail(detailAnchor);
+  paintTerminalActions();
+  promptCard.refresh();
+}
+function finishPermissionRestart(session,{failed=false}={}){
+  const restart=permissionRestarts.get(session);
+  if(!restart)return;
+  const restoreFocus=restart.focus&&!activeId&&!pendingJump&&!paneWindowSelection&&!terminalLessAgent
+    &&(!splitVisible||focusedSplitSession===session);
+  permissionRestarts.delete(session);
+  clearTimeout(restart.timer);
+  if(restart.waiting&&!restart.attached&&restart.keepTab){
+    setGroupState(session,'closed');
+    noteBackendClosed(session);
+    removeSplitSessionState(session);
+  }
+  if(restoreFocus){
+    if(failed||!paneIdForSession(session))focusStageFallback();
+    else focusSession(session);
+  }
+  if(!liveRosterAgents.some(agent=>agent.name===session))renderRoster();
+  refreshAgentActionDisplay(session);
+}
+function reconnectPermissionRestartTab(session,restart){
+  if(!restart.keepTab){finishPermissionRestart(session);return;}
+  // The HTTP confirmation can beat either the old closed frame or the first
+  // pane list. Release the old subscription and accept only a fresh reset.
+  detachSession(session,false,{keepTab:true,preserveRestart:true});
+  const deadline=performance.now()+30000;
+  const retry=()=>{
+    if(performance.now()>=deadline){
+      finishPermissionRestart(session,{failed:true});
+      const reason=OrreryDemo.mask(restart.attachError||'No new pane became available');
+      showToast(`Could not reconnect the terminal for ${OrreryDemo.mask(session)} · ${reason}`,true,9000);
+      return;
+    }
+    requestAttach(session);
+    restart.timer=setTimeout(retry,1200);
+  };
+  retry();
+}
+async function confirmPermissionStop(original,key,api,signal){
   // The live roster also omits finished tmux panes. Permission resumes need
   // the retained conversation and a gone/retired row before trying jump.
   const rows=await agentActionRoster('/telemetry/agents',signal);
   const stopped=rows?.find(row=>row?.name===original.name);
-  if(!stopped||stopped.running!==false||!['gone','retired'].includes(stopped.category))return false;
+  if(!stopped||stopped.running!==false||(!['gone','retired'].includes(stopped.category)&&
+      !(original.permission_managed_launch===true&&stopped.permission_managed_launch===true&&stopped.category==='finished')))return false;
   if(!samePermissionConversation(stopped,original))throw new Error('The stopped conversation changed');
-  const reason=agentPermissionBlockReason(stopped,api);
+  const reason=agentPermissionSetting(stopped,key,api).reason;
   if(reason)throw new Error(reason);
   return true;
 }
 async function changeAgentPermission(original,key,value){
   const {name}=original;
-  if(permissionChangeBusy||bulkActionBusy||value===original[key])return;
+  const browserMode=key==='browser_use'&&typeof value==='string';
+  const originalSetting=agentPermissionSetting(original,key,permissionApi);
+  if(permissionChangeBusy||bulkActionBusy||pendingAgentAction(name)
+    ||value===(browserMode?originalSetting.mode:originalSetting.value))return;
   permissionChangeBusy=true;updateRosterBulkUI();
-  if(detailAnchor)showAgentDetail(detailAnchor);
   const label=OrreryDemo.mask(name),restart=original.running===true;
+  const tab=restart?{original,keepTab:sessionGroups.has(name),incarnation:sessionGroups.get(name)?.incarnation}:null;
+  if(tab){permissionRestarts.set(name,tab);refreshAgentActionDisplay(name);}
+  if(detailAnchor)showAgentDetail(detailAnchor);
   let stage='check';
   showToast(`Checking ${label}…`,false,65000);
   try{
@@ -9660,11 +10263,15 @@ async function changeAgentPermission(original,key,value){
       (await agentActionRoster(LIVE_AGENT_ROSTER,AbortSignal.timeout(8000)))?.find(row=>row?.name===name):
       currentAgentNamed(name);
     if(!agent)throw new Error('Could not verify the agent in the roster');
-    const reason=agentPermissionBlockReason(agent,api);
-    if(reason)throw new Error(reason);
-    if(!samePermissionConversation(agent,original)||['created','category','running',key].some(
-      key=>agent[key]!==original[key]))throw new Error('The agent changed. Choose permissions again');
-    const permission={history_session_id:agent.history_session_id,[key]:value};
+    const current=agentPermissionSetting(agent,key,api);
+    if(current.reason)throw new Error(current.reason);
+    if(!samePermissionConversation(agent,original)||['created','category','running'].some(
+      key=>agent[key]!==original[key])||current.value!==originalSetting.value||current.mode!==originalSetting.mode){
+      throw new Error('The agent changed. Choose permissions again');
+    }
+    if(browserMode&&!current.options.includes(value))throw new Error('The Browser mode is no longer available');
+    const permission={history_session_id:agent.history_session_id,[browserMode?'browser_mode':key]:value};
+    if(agent.permission_managed_launch===true)permission.adopt=true;
     const jump={session:name,open_terminal:false,open:false,permission};
     if(restart){
       const exit={session:name};
@@ -9676,15 +10283,17 @@ async function changeAgentPermission(original,key,value){
       stage='exit';showToast(`Stopping ${label}…`,false,65000);
       await postBulkAgentAction('exit',exit);
       stage='wait';showToast(`Waiting for ${label} to stop…`,false,30000);
-      await waitForBulkRebootExit(name,30000,1500,signal=>confirmPermissionStop(agent,api,signal));
+      await waitForBulkRebootExit(name,30000,1500,signal=>confirmPermissionStop(agent,key,api,signal));
     }
     stage='resume';showToast(`Resuming ${label}…`,false,65000);
     const result=await postBulkAgentAction('jump',jump);
     if(result.action!=='resumed'||result.tools_changed!==true){
       throw new Error('Telemetry did not confirm the new permissions');
     }
+    if(tab){tab.accepted=true;reconnectPermissionRestartTab(name,tab);}
     showToast(`Resume accepted for ${label} with updated permissions.`);
   }catch(error){
+    if(tab)finishPermissionRestart(name,{failed:true});
     const reason=OrreryDemo.mask(String(error?.message||error).replace(/\s+/g,' ').trim());
     const confirmationPending=stage==='resume'&&error?.resumeConfirmationPending;
     const message=confirmationPending?label:{
@@ -9765,16 +10374,23 @@ function tileFor(a){
 }
 
 function paintTile(el,a){
+  const action=pendingAgentAction(a.name);
+  el.toggleAttribute('data-exiting',action==='Exiting');
   el.classList.toggle('working',a.running&&a.act_state==='work');
   el.classList.toggle('ask',a.running&&a.act_state==='ask');
   el.classList.toggle('question',a.running&&a.act_state==='question');
   el.classList.toggle('sel',a.name===selectedAgent);
-  const status=!a.running?'Offline':agentNeedsYou(a)?'Needs your input':a.act_state==='work'?'Working':'Waiting';
+  const label=action?`${action} ${OrreryDemo.mask(a.name)}…`:'';
+  const status=label||(!a.running?'Offline':agentNeedsYou(a)?'Needs your input':a.act_state==='work'?'Working':'Waiting');
   const dot=el.querySelector('.agent-status');
+  dot.toggleAttribute('data-pending-action',Boolean(action));
   setAttr(dot,'aria-label',status);
   setTitle(dot,status);
   paintAgentPortrait(el.querySelector('.face'),a.name);
-  setText(el.querySelector('.cname'),a.name);
+  const name=el.querySelector('.cname');
+  setTitle(name,label);
+  const displayName=action==='Exiting'?label:action?OrreryDemo.mask(a.name):a.name;
+  paintActionText(name,displayName,Boolean(action));
   paintRosterProvider(el,a);
   const role=el.querySelector('.roster-role'),value=a.annot?.role||'';
   setHidden(role,!value);
@@ -9955,7 +10571,7 @@ function railPositions(elements,viewport){
   }
   return positions;
 }
-function railMoveRows(positions){
+function railMoveRows(positions,motion={duration:275,easing:railEase}){
   // Batch reads around the DOM writes and keep the on-screen position of
   // an interrupted animation as the next animation's starting point.
   for(const el of positions.keys())railMoves.get(el)?.cancel();
@@ -9972,7 +10588,7 @@ function railMoveRows(positions){
     const x=delta.x-(outer?.x||0),y=delta.y-(outer?.y||0);
     if(Math.abs(x)+Math.abs(y)<=1)continue;
     railMoves.set(el,el.animate([{transform:`translate(${x}px,${y}px)`},{transform:'none'}],
-      {duration:275,easing:railEase}));
+      motion));
   }
 }
 function railArrive(el,source,viewport){
@@ -10109,7 +10725,14 @@ function renderRoster(){
     if(positions.has(parent))arrivalPortraits.set(a.name,parent.querySelector('.medal').getBoundingClientRect());
   }
   const seen=new Set(liveRosterAgents.map(agent=>agent.name));
-  const agents=liveRosterAgents.concat(stoppedSelectAgents.filter(agent=>!seen.has(agent.name)));
+  const restarting=[];
+  permissionRestarts.forEach(({original},name)=>{
+    if(!seen.has(name)){restarting.push(original);seen.add(name);}
+  });
+  pendingAgentExits.forEach(({original,departed},name)=>{
+    if(departed&&!seen.has(name)){restarting.push(original);seen.add(name);}
+  });
+  const agents=liveRosterAgents.concat(restarting,stoppedSelectAgents.filter(agent=>!seen.has(agent.name)));
   descriptorStore.retain(agents.map(agent=>agent.name));
   agents.forEach(agent=>{agent.descriptor=descriptorStore.get(agent,agents);});
   currentAgents=agents;
@@ -10142,7 +10765,7 @@ async function loadStoppedSelectAgents(){
     const roster=await response.json();
     if(controller.signal.aborted||!Array.isArray(roster?.agents))return;
     stoppedSelectAgents=roster.agents.filter(agent=>agent&&(agent.category==='finished'&&isBulkSelectableAgent(agent)||
-      agent.running===false&&!agentPermissionBlockReason(agent,api)))
+      agent.running===false&&canChangeAgentPermissions(agent,api)))
       .map(prepareRosterRow);
     if(stoppedSelectAgents.length)renderRoster();
   }catch(_){/* live selections remain available if the history request fails */}
@@ -10172,7 +10795,19 @@ async function pollAgents(){
     // 浮上するようになったため明示除外（claim され改名された時点で現れる）。
     liveRosterAgents=(d.agents||[]).filter(a=>
       (a.running||a.category==='agent')&&a.category!=='warmup').map(prepareRosterRow);
-    renderRoster();
+    const liveByName=new Map(liveRosterAgents.map(agent=>[agent.name,agent]));
+    const completed=[];
+    pendingAgentExits.forEach((action,name)=>{
+      const agent=liveByName.get(name);
+      if(!agent){
+        action.departed=true;
+        if(action.accepted)completed.push([name,action]);
+      }else if(action.original.created&&agent.created&&action.original.created!==agent.created){
+        action.departed=false;
+        clearAgentExit(name,action);
+      }else action.departed=false;
+    });
+    if(completed.length)finishAgentExits(completed);else renderRoster();
     rosterTag.hidden=true;rosterTag.textContent='';agentDot.className='dot open';
   }catch(e){rosterTag.hidden=false;rosterTag.textContent='dashboard offline';agentDot.className='dot error';return false;}
 }
@@ -10233,13 +10868,14 @@ function assignLineageHues(live){
    They subscribe to 'oc:agents' / 'oc:mail' document events for updates. */
 window.OC=Object.freeze({
   esc,relTime,jumpToAgent,rootOf,providerPresentation,
+  bindMiniAgentDetail:node=>bindAgentDetail(node,true),syncMiniAgentDetail,
   railPositions,railMoveRows,railArrive,
   renderPeerAvatar:(name,existing)=>currentAgentNamed(name)?conversationAvatar(name,'',existing):null,
   lineageHue,                       // Map: agent name -> lineage hex
   get lineageParent(){return lineageParent;},  // Map: child -> parent
   agents:()=>currentAgents,
   activeAgent:()=>activeSession(),
-  miniView:()=>({mode:miniViewMode,depth:miniNetworkDepth}),
+  miniView:()=>({mode:miniViewMode,depth:miniNetworkDepth,mailLinks:miniMailLinks}),
   mailBacklog:()=>mailBacklog.slice(),  // live-window messages seen so far (≤100)
 });
 
@@ -10558,77 +11194,95 @@ const spawnHarnessBar=document.getElementById('spawnHarnessBar');
 const spawnTools=document.getElementById('spawnTools');
 const spawnComputerUse=document.getElementById('spawnComputerUse');
 const spawnBrowserUse=document.getElementById('spawnBrowserUse');
+const spawnComputerMenu=document.getElementById('spawnComputerMenu');
 const spawnBrowserMenu=document.getElementById('spawnBrowserMenu');
+const spawnComputerLabels={off:'Off',view:'View',control:'Control'};
 const spawnBrowserLabels={off:'Off',temporary:'Temporary Chrome',personal:'My Chrome'};
+let spawnComputerMode='off';
 let spawnBrowserMode='off';
-const spawnBrowserChoices=Object.entries(spawnBrowserLabels).map(([mode,label])=>{
-  const button=document.createElement('button');
-  button.type='button';button.textContent=label;
-  button.onclick=()=>{
-    if(spawnFormIsBusy())++spawnFormRevision;
-    spawnBrowserMode=mode;paintSpawnBrowser(spawnBrowserModes());
-    spawnBrowserMenu.hidePopover();spawnBrowserUse.focus({preventScroll:true});
-    spawnProblem='';updateSpawnAvailability();saveSpawnDraft();
-  };
-  spawnBrowserMenu.append(button);
-  return [mode,button];
+function spawnModeChoices(menu,control,labels,select){
+  return Object.entries(labels).map(([mode,label])=>{
+    const button=document.createElement('button');
+    button.type='button';button.textContent=label;
+    button.onclick=()=>{
+      if(spawnFormIsBusy())++spawnFormRevision;
+      select(mode);
+      menu.hidePopover();control.focus({preventScroll:true});
+      spawnProblem='';updateSpawnAvailability();saveSpawnDraft();
+    };
+    menu.append(button);
+    return [mode,button];
+  });
+}
+const spawnComputerChoices=spawnModeChoices(spawnComputerMenu,spawnComputerUse,spawnComputerLabels,mode=>{
+  spawnComputerMode=mode;paintSpawnComputer(spawnComputerModes());
+});
+const spawnBrowserChoices=spawnModeChoices(spawnBrowserMenu,spawnBrowserUse,spawnBrowserLabels,mode=>{
+  spawnBrowserMode=mode;paintSpawnBrowser(spawnBrowserModes());
 });
 const spawnToolSwitches=[spawnComputerUse,spawnBrowserUse];
 const CODEX_BROWSER_REQUIREMENT='Codex Browser requires [mcp_servers.chrome-devtools] or a chrome-devtools-mcp server in config.toml.';
 let spawnToolsRoute=null;
-for(const control of spawnToolSwitches){
+for(const [control,menu,available] of [
+  [spawnComputerUse,spawnComputerMenu,spawnComputerModes],
+  [spawnBrowserUse,spawnBrowserMenu,spawnBrowserModes],
+]){
   control.addEventListener('click',()=>{
     if(control===spawnComputerUse&&control.getAttribute('aria-disabled')==='true')return;
-    if(control===spawnBrowserUse&&spawnBrowserModes()){
-      if(spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
+    if(available()){
+      if(menu.matches(':popover-open'))menu.hidePopover();
       else if(control.getAttribute('aria-disabled')!=='true'){
-        spawnBrowserMenu.showPopover({source:control});
-        const anchor=control.getBoundingClientRect(),box=spawnBrowserMenu.getBoundingClientRect();
+        menu.showPopover({source:control});
+        const anchor=control.getBoundingClientRect(),box=menu.getBoundingClientRect();
         const left=Math.max(12,Math.min(anchor.left,innerWidth-box.width-12));
         const top=anchor.bottom+box.height+18<innerHeight?anchor.bottom+6:Math.max(12,anchor.top-box.height-6);
-        Object.assign(spawnBrowserMenu.style,{left:left+'px',top:top+'px'});
-        spawnBrowserMenu.querySelector('[aria-pressed=true]:not([hidden])')?.focus({preventScroll:true});
+        Object.assign(menu.style,{left:left+'px',top:top+'px'});
+        menu.querySelector('[aria-pressed=true]:not([hidden])')?.focus({preventScroll:true});
       }
       return;
     }
     // The submitted tools belong to the launch already waiting for a result.
     if(spawnFormIsBusy())++spawnFormRevision;
-    control.setAttribute('aria-checked',String(control.getAttribute('aria-checked')!=='true'));
+    const enabled=control.getAttribute('aria-checked')!=='true';
+    control.setAttribute('aria-checked',String(enabled));
+    if(control===spawnComputerUse)spawnComputerMode=enabled?'control':'off';
+    else spawnBrowserMode=enabled?'personal':'off';
     spawnProblem='';updateSpawnAvailability();saveSpawnDraft();
   });
+  menu.addEventListener('toggle',()=>{
+    if(available())control.setAttribute('aria-expanded',String(menu.matches(':popover-open')));
+  });
 }
-spawnBrowserMenu.addEventListener('toggle',()=>{
-  if(spawnBrowserModes())spawnBrowserUse.setAttribute('aria-expanded',String(spawnBrowserMenu.matches(':popover-open')));
-});
 spawnHelper.addEventListener('change',saveSpawnDraft);
 const ncPortrait=document.getElementById('ncPortrait');
 const ncDiceFace=document.getElementById('ncDiceFace');
 const ncName=document.getElementById('ncName');
 const ncAdjWrap=document.getElementById('ncAdjWrap');
 let spawnCatalogSignature=null;
+let spawnChooseAgain=false;
 const spawnCatalogLoader=SpawnCatalogLoader.create({
   isOpen:()=>spawnOverlay.classList.contains('on'),
   fetchCatalog:async signal=>{
     const r=await fetch('/telemetry/spawn-catalog',{signal,cache:'no-store'});
     if(!r.ok)throw new Error('catalog unavailable');
-    return r.json();
+    return {catalog:await r.json(),stale:r.headers?.get('X-Orrery-Catalog-State')==='stale'};
   },
   onState:({catalog,status})=>{
     const data=catalog||{providers:[],dirs:[],naming:{adjectives:[],scientists:[],taken:[]}};
     spawnCatalog={...data,stale:status==='stale',loading:status==='loading',unavailable:status==='unavailable'};
     const signature=(catalog?'':status)+JSON.stringify(data);
     if(signature===spawnCatalogSignature){updateSpawnAvailability();return;}
+    const refreshing=spawnCatalogSignature!==null;
     spawnCatalogSignature=signature;
     spawnTaken=new Set(((data.naming||{}).taken||[]).map(n=>String(n).toLowerCase()));
     if(catalog?.providers.length&&spawnPendingSelection)restoreSpawnSelection();
-    else renderProviderTabs();
+    else renderProviderTabs(refreshing);
     renderAgentStrip();
     if(catalog)renderDirs();
     if(spawnOpenSheet)positionSpawnSheet(spawnOpenSheet,spawnOpenChip);
   },
 });
 function loadSpawnCatalog(){
-  spawnCatalogSignature=null;
   return spawnCatalogLoader.refresh();
 }
 function providerById(id){return (spawnCatalog&&spawnCatalog.providers||[]).find(p=>p.id===id)||null;}
@@ -10656,7 +11310,7 @@ function moveSpawnMarker(group,marker){
   marker.style.width=selected.offsetWidth+'px';
   marker.style.transform=`translateX(${selected.offsetLeft}px)`;
 }
-function renderProviderTabs(){
+function renderProviderTabs(keepChoice=false){
   const entries=SpawnPicker.entries(spawnCatalog);
   const providers=spawnCatalog.providers||[];
   const hasFamily=id=>entries.some(e=>e.family===id)||providers.some(p=>SpawnPicker.family(p,{})===id);
@@ -10684,7 +11338,7 @@ function renderProviderTabs(){
     b.addEventListener('click',()=>{
       if(selFamily===f.id)return;
       selFamily=f.id;selProvider=null;selModel=null;selUrlIndex=null;selUrlKey=null;
-      selEffort=null;selHarness=null;spawnToolsRoute=null;spawnProblem='';
+      selEffort=null;selHarness=null;spawnToolsRoute=null;spawnProblem='';spawnChooseAgain=false;
       if(f.id!=='local')spawnModelSearch.value='';
       else restoreSpawnModelSearch();
       renderProviderTabs();
@@ -10698,7 +11352,12 @@ function renderProviderTabs(){
   const hadDynamicSelection=Number.isInteger(selUrlIndex);
   let selected=choices.find(e=>e.provider.id===selProvider&&e.model.id===selModel&&
     (!Number.isInteger(e.model.url_index)||e.model.url_index===selUrlIndex)&&(!e.model.url_key||e.model.url_key===selUrlKey));
-  if(!selected&&!hadDynamicSelection)selected=choices.find(e=>e.model.default&&SpawnPicker.harnesses(e.provider,e.model).some(h=>h.available))||choices.find(e=>SpawnPicker.harnesses(e.provider,e.model).some(h=>h.available))||choices.find(e=>!e.provider.dynamic_models);
+  if(keepChoice&&selModel&&(!selected||(selHarness&&!SpawnPicker.harnesses(selected.provider,selected.model)
+      .some(h=>h.id===selHarness&&h.available)))){
+    // A background refresh must not switch the route of a prepared launch.
+    spawnChooseAgain=true;selected=null;
+  }
+  if(!selected&&!hadDynamicSelection&&!spawnChooseAgain)selected=choices.find(e=>e.model.default&&SpawnPicker.harnesses(e.provider,e.model).some(h=>h.available))||choices.find(e=>SpawnPicker.harnesses(e.provider,e.model).some(h=>h.available))||choices.find(e=>!e.provider.dynamic_models);
   selProvider=selected?selected.provider.id:(providers.find(p=>SpawnPicker.family(p,{})===selFamily)||{}).id||null;
   selModel=selected?selected.model.id:null;
   selUrlIndex=selected&&Number.isInteger(selected.model.url_index)?selected.model.url_index:hadDynamicSelection?selUrlIndex:null;
@@ -10730,7 +11389,7 @@ function renderLocalModels(){
     label.classList.toggle('unavailable',input.disabled);
     input.addEventListener('change',()=>{
       selProvider=entry.provider.id;selModel=entry.model.id;selUrlIndex=entry.model.url_index??null;
-      selUrlKey=entry.model.url_key??null;selEffort=null;selHarness=null;spawnProblem='';renderHarnesses();
+      selUrlKey=entry.model.url_key??null;selEffort=null;selHarness=null;spawnProblem='';spawnChooseAgain=false;renderHarnesses();
       saveSpawnDraft();
     });
     const name=document.createElement('span');name.className='model-choice-name';name.textContent=entry.model.display_name||entry.model.id;
@@ -10747,6 +11406,43 @@ function renderLocalModels(){
   }
 }
 function selectedSpawnModel(){const p=providerById(selProvider);return p&&(p.models||[]).find(m=>m.id===selModel&&(!Number.isInteger(m.url_index)||m.url_index===selUrlIndex)&&(!m.url_key||m.url_key===selUrlKey))||null;}
+function spawnUsesManagedScreen(){
+  return spawnCatalog?.computer_use_transport==='orrery-screen';
+}
+function spawnComputerModes(){
+  const modes=spawnCatalog?.computer_modes;
+  return spawnCatalog?.runtime_mode!=='fresh'&&!spawnUsesManagedScreen()&&Array.isArray(modes)?
+    Object.keys(spawnComputerLabels).filter(mode=>modes.includes(mode)):null;
+}
+function paintSpawnComputer(modes){
+  if(!modes){
+    if(spawnComputerMenu.matches(':popover-open'))spawnComputerMenu.hidePopover();
+    delete spawnComputerUse.dataset.computerMode;
+    const managedScreen=spawnUsesManagedScreen();
+    const disabled=managedScreen&&spawnCatalog.computer_use!==true;
+    const reason=disabled&&(spawnCatalog.computer_use_reason||'Computer use is unavailable.');
+    if(disabled)spawnComputerMode='off';
+    spawnComputerUse.setAttribute('role','switch');
+    spawnComputerUse.setAttribute('aria-checked',String(spawnComputerMode==='control'));
+    for(const attr of ['aria-expanded','aria-controls','aria-disabled'])spawnComputerUse.removeAttribute(attr);
+    if(disabled)spawnComputerUse.setAttribute('aria-disabled','true');
+    spawnComputerUse.setAttribute('aria-label',reason?'Computer use: '+reason:'Computer use');
+    spawnComputerUse.title=reason||(managedScreen?'Computer use on Windows':'Computer use');
+    return;
+  }
+  if(!modes.includes(spawnComputerMode))spawnComputerMode='off';
+  spawnComputerUse.dataset.computerMode=spawnComputerMode;
+  spawnComputerUse.removeAttribute('role');spawnComputerUse.removeAttribute('aria-checked');
+  spawnComputerUse.setAttribute('aria-controls',spawnComputerMenu.id);
+  spawnComputerUse.setAttribute('aria-expanded',String(spawnComputerMenu.matches(':popover-open')));
+  spawnComputerUse.setAttribute('aria-disabled',String(!modes.length));
+  spawnComputerUse.title='Computer use: '+(modes.length?spawnComputerLabels[spawnComputerMode]:'Unavailable');
+  spawnComputerUse.setAttribute('aria-label',spawnComputerUse.title);
+  for(const [mode,button] of spawnComputerChoices){
+    button.hidden=!modes.includes(mode);
+    button.setAttribute('aria-pressed',String(mode===spawnComputerMode));
+  }
+}
 function spawnBrowserModes(){
   const key=selProvider==='gemini'?'antigravity':SpawnPicker.harnessKey(selHarness);
   const modes=spawnCatalog?.browser_modes?.[key];
@@ -10755,7 +11451,7 @@ function spawnBrowserModes(){
 }
 function paintSpawnBrowser(modes){
   if(!modes)return;
-  if(!modes.includes(spawnBrowserMode))spawnBrowserMode=modes.includes('personal')?'personal':'off';
+  if(!modes.includes(spawnBrowserMode))spawnBrowserMode='off';
   spawnBrowserUse.dataset.browserMode=spawnBrowserMode;
   spawnBrowserUse.removeAttribute('role');spawnBrowserUse.removeAttribute('aria-checked');
   spawnBrowserUse.setAttribute('aria-controls',spawnBrowserMenu.id);
@@ -10772,24 +11468,26 @@ function paintSpawnBrowser(modes){
 }
 function renderSpawnTools(){
   const harness=SpawnPicker.harnessKey(selHarness);
-  const modes=spawnBrowserModes();
-  const managedScreen=spawnCatalog?.computer_use_transport==='orrery-screen';
-  const screenDisabled=managedScreen&&spawnCatalog.computer_use!==true;
-  const screenReason=screenDisabled&&(spawnCatalog.computer_use_reason||'Computer use is unavailable.');
-  if(screenDisabled)spawnComputerUse.setAttribute('aria-disabled','true');
-  else spawnComputerUse.removeAttribute('aria-disabled');
-  spawnComputerUse.title=screenReason||(managedScreen?'Computer use on Windows':'Computer use');
-  spawnComputerUse.setAttribute('aria-label',screenReason?'Computer use: '+screenReason:'Computer use');
-  if(screenDisabled)spawnComputerUse.setAttribute('aria-checked','false');
-  spawnTools.hidden=spawnCatalog?.runtime_mode==='fresh'||(!modes&&!['claude-code','codex','dsh','hermes'].includes(harness));
-  spawnComputerUse.hidden=Boolean(modes&&selProvider==='gemini');
-  const route=spawnTools.hidden?null:JSON.stringify([selProvider,harness,modes,managedScreen]);
+  const modes=spawnBrowserModes(),computerModes=spawnComputerModes();
+  const antigravity=selProvider==='gemini';
+  const managedScreen=spawnUsesManagedScreen();
+  spawnTools.hidden=spawnCatalog?.runtime_mode==='fresh'||
+    (!modes&&!(antigravity&&computerModes)&&!['claude-code','codex','dsh','hermes'].includes(harness));
+  spawnComputerUse.hidden=antigravity&&!computerModes;
+  spawnBrowserUse.hidden=antigravity&&!modes;
+  const route=selProvider&&harness?JSON.stringify([selProvider,harness,managedScreen]):null;
+  const changed=route!==spawnToolsRoute;
+  if(changed){
+    if(spawnComputerMenu.matches(':popover-open'))spawnComputerMenu.hidePopover();
+    if(spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
+    const computerOn=Boolean(route)&&harness!=='dsh'&&!antigravity&&!managedScreen;
+    spawnComputerMode=computerOn?'control':'off';
+    const browserOn=Boolean(route)&&(modes?modes.includes('personal'):harness!=='dsh'&&harness!=='codex');
+    spawnBrowserMode=browserOn?'personal':'off';
+  }
+  spawnToolsRoute=route;
+  paintSpawnComputer(spawnTools.hidden?null:computerModes);
   if(modes){
-    if(route!==spawnToolsRoute){
-      spawnBrowserMode=modes.includes('personal')?'personal':'off';
-      spawnComputerUse.setAttribute('aria-checked',String(!managedScreen&&harness!=='dsh'&&!spawnComputerUse.hidden));
-    }
-    spawnToolsRoute=route;
     paintSpawnBrowser(modes);
     return;
   }
@@ -10800,33 +11498,33 @@ function renderSpawnTools(){
     if(spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
   }
   spawnBrowserUse.title=harness==='codex'?CODEX_BROWSER_REQUIREMENT:'Browser';
-  if(route===spawnToolsRoute)return;
-  spawnToolsRoute=route;
-  const defaultOn=Boolean(route)&&harness!=='dsh';
-  spawnComputerUse.setAttribute('aria-checked',String(defaultOn&&!managedScreen));
-  spawnBrowserUse.setAttribute('aria-checked',String(defaultOn&&harness!=='codex'));
+  spawnBrowserUse.setAttribute('aria-checked',String(spawnBrowserMode==='personal'));
 }
 function spawnToolOptions(){
   if(spawnCatalog?.runtime_mode==='fresh'||spawnTools.hidden)return {};
   const harness=SpawnPicker.harnessKey(selHarness);
   const native=harness==='dsh'||harness==='hermes';
-  const computer=!spawnComputerUse.hidden&&spawnComputerUse.getAttribute('aria-disabled')!=='true'&&
-    spawnComputerUse.getAttribute('aria-checked')==='true';
-  const screen=computer&&spawnCatalog?.computer_use_transport==='orrery-screen';
-  const modes=spawnBrowserModes();
-  const screenTools=screen?{screen:{server:'orrery-screen',access:'operate'}}:{};
-  if(modes)return {tools:{...screenTools,...(computer&&!screen?{mcp:['cua-driver']}:{}),
-    ...(modes.includes(spawnBrowserMode)?{browser_mode:spawnBrowserMode}:{})}};
+  const computer=!spawnComputerUse.hidden&&spawnComputerUse.getAttribute('aria-checked')==='true';
+  const managedScreen=spawnUsesManagedScreen();
+  const modes=spawnBrowserModes(),computerModes=spawnComputerModes();
+  let screen={};
+  if(managedScreen&&computer&&spawnCatalog.computer_use===true){
+    screen={screen:{server:'orrery-screen',access:'operate'}};
+  }else if(computerModes?.includes(spawnComputerMode)&&spawnComputerMode!=='off'){
+    screen={screen:{access:spawnComputerMode==='view'?'read':'operate'}};
+  }
+  if(modes||selProvider==='gemini')return {tools:{...screen,...(computer&&!managedScreen?{mcp:['cua-driver']}:{}),
+    ...(modes?.includes(spawnBrowserMode)?{browser_mode:spawnBrowserMode}:{})}};
   const browser=spawnBrowserUse.getAttribute('aria-checked')==='true';
   const supportsBrowserOff=spawnCatalog?.supports_browser_off===true;
   const mcp=[];
-  if(computer&&!screen)mcp.push('cua-driver');
+  if(computer&&!managedScreen)mcp.push('cua-driver');
   // Native harnesses can copy an MCP server without the per-tool approvals that tools.browser requests.
   if(browser&&native)mcp.push('chrome-devtools');
   return {
     // Older Telemetry has only the base selector to suppress inherited Chrome.
     ...(!supportsBrowserOff&&(!browser||(harness==='codex'&&!computer))?{base:'mail-only'}:{}),
-    tools:{...screenTools,...(mcp.length?{mcp}:{}),...(browser&&!native?{browser:{}}:{}),
+    tools:{...screen,...(mcp.length?{mcp}:{}),...(browser&&!native?{browser:{}}:{}),
       ...(!browser&&supportsBrowserOff?{browser_off:true}:{})},
   };
 }
@@ -10900,6 +11598,7 @@ function updateSpawnAvailability(){
   const unavailable=harnesses.find(h=>!h.available);
   const missingEffort=provider&&model&&spawnExplicitEffortMissing(provider,selModel);
   const issue=spawnCatalog?.unavailable?'Model catalog unavailable. Open the model sheet to retry.':
+    spawnChooseAgain?'Selected model or harness is no longer available. Choose again.':
     provider?.model_error&&!model?`${provider.model_error}. Check model settings.`:
     model&&!harness?(unavailable?`${SpawnPicker.unavailableReason(unavailable)}. Open model settings for setup.`:'No available harness. Choose another model.'):
     !model&&Number.isInteger(selUrlIndex)?'Model unavailable. Choose another model.':
@@ -10983,7 +11682,7 @@ function splitOverflowModels(provider){
 function renderModels(){
   const provider=providerById(selProvider)||{models:[]};
   const models=(provider.models||[]).filter(model=>(model.locality||provider.locality||'cloud')!=='local');
-  if(!selModel||!models.some(model=>model.id===selModel)){
+  if(!spawnChooseAgain&&(!selModel||!models.some(model=>model.id===selModel))){
     selModel=(models.find(model=>model.default)||models[0])?.id||null;
   }
   modelChoices.replaceChildren();
@@ -10994,7 +11693,7 @@ function renderModels(){
     const input=document.createElement('input');
     input.type='radio';input.name='spawnModel';input.value=model.id;input.checked=model.id===selModel;
     input.addEventListener('change',()=>{
-      selModel=model.id;selHarness=null;spawnProblem='';renderHarnesses();
+      selModel=model.id;selHarness=null;spawnProblem='';spawnChooseAgain=false;renderHarnesses();
       saveSpawnDraft();
     });
     const name=document.createElement('span');name.className='model-choice-name';name.textContent=model.id;
@@ -11285,8 +11984,9 @@ function saveSpawnDraft(){
     urlIndex:selUrlIndex,urlKey:/^[a-f0-9]{64}$/.test(selUrlKey)?selUrlKey:null,
     helper:spawnHelper.disabled?null:spawnHelper.value,
     tools:spawnTools.hidden?null:spawnToolSwitches.map(control=>control.getAttribute('aria-checked')==='true'),
-    browserMode:spawnBrowserModes()?spawnBrowserMode:null,
-    ...(spawnCatalog?.computer_use_transport==='orrery-screen'?{computerTransport:'orrery-screen'}:{}),
+    computerMode:spawnTools.hidden?null:spawnComputerMode,
+    browserMode:spawnTools.hidden?null:spawnBrowserMode,
+    ...(spawnUsesManagedScreen()?{computerTransport:'orrery-screen'}:{}),
   };
   // Keep only editable draft fields in this viewer's storage.
   spawnShownDraft=JSON.stringify({
@@ -11306,17 +12006,11 @@ function restoreSpawnSelection(){
   if(selProvider!==saved.provider||selHarness!==saved.harness)return;
   if([...spawnHelper.options].some(option=>option.value===saved.helper))spawnHelper.value=saved.helper;
   if(!spawnTools.hidden&&saved.tools){
-    spawnToolSwitches.forEach((control,index)=>{
-      if(control===spawnComputerUse&&(control.getAttribute('aria-disabled')==='true'||
-          (spawnCatalog?.computer_use_transport==='orrery-screen'&&saved.computerTransport!=='orrery-screen')))return;
-      control.setAttribute('aria-checked',String(saved.tools[index]));
-    });
-    const modes=spawnBrowserModes();
-    if(modes){
-      const restored=saved.browserMode||(saved.tools[1]?'personal':'off');
-      if(modes.includes(restored))spawnBrowserMode=restored;
-      paintSpawnBrowser(modes);
+    if(!spawnUsesManagedScreen()||saved.computerTransport==='orrery-screen'){
+      spawnComputerMode=saved.computerMode||(saved.tools[0]?'control':'off');
     }
+    spawnBrowserMode=saved.browserMode||(saved.tools[1]?'personal':'off');
+    renderSpawnTools();
     updateSpawnAvailability();
   }
 }
@@ -11331,6 +12025,7 @@ function prepareSpawnForm(raw,task=''){
     urlIndex:Number.isInteger(saved.urlIndex)&&saved.urlIndex>=0?saved.urlIndex:null,
     urlKey:/^[a-f0-9]{64}$/.test(saved.urlKey)?saved.urlKey:null,
     tools:Array.isArray(saved.tools)&&saved.tools.length===spawnToolSwitches.length&&saved.tools.every(value=>typeof value==='boolean')?saved.tools:null,
+    computerMode:Object.hasOwn(spawnComputerLabels,saved.computerMode)?saved.computerMode:null,
     browserMode:Object.hasOwn(spawnBrowserLabels,saved.browserMode)?saved.browserMode:null,
     computerTransport:saved.computerTransport==='orrery-screen'?'orrery-screen':null,
   }:null;
@@ -11342,7 +12037,7 @@ function prepareSpawnForm(raw,task=''){
   selScientist=spawnDraftText(draft?.scientist);
   ++spawnDirDefaultEpoch;
   spawnDirPath=spawnDraftText(draft?.dir);renderSpawnDirPath();
-  spawnProblem='';
+  spawnProblem='';spawnChooseAgain=false;
   selProvider=selModel=selEffort=selFamily=selHarness=selUrlIndex=selUrlKey=spawnToolsRoute=null;
   spawnModelSearch.value='';
   renderSpawnTools();renderSpawnModelChip();updateNameCard();
@@ -11374,6 +12069,8 @@ function openSpawnModal({from=document.getElementById('newAgentBtn').getBounding
   spawnOverlay.classList.add('on');spawnOverlay.setAttribute('aria-hidden','false');
   if(task&&spawnShownDraft===null)saveSpawnDraft();
   sizeSpawnTask();
+  // A fresh form needs its catalog rendered even if the same tab already has it.
+  spawnCatalogSignature=null;
   loadSpawnCatalog().then(()=>{
     if(selFamily==='local'){restoreSpawnModelSearch();renderLocalModels();}
     updateNameCard();
@@ -11383,6 +12080,7 @@ function openSpawnModal({from=document.getElementById('newAgentBtn').getBounding
   });
 }
 function closeSpawnModal(){
+  if(spawnComputerMenu.matches(':popover-open'))spawnComputerMenu.hidePopover();
   if(spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
   spawnCatalogLoader.stop();++spawnDirDefaultEpoch;
   dismissSpawnSheet();
@@ -11741,11 +12439,14 @@ let histIndex=-1,histDraft='';
    accidental reloads. Saved on every input, cleared only by a send. */
 const PROMPT_DRAFT_KEY=soloSession?paneDraftKey(paneScope,soloSession):'oc-prompt-draft';
 const PROMPT_RECIPIENTS_KEY=PROMPT_DRAFT_KEY+':recipients';
+const PROMPT_VISIBILITY_KEY=PROMPT_DRAFT_KEY+':recipient-visibility';
 let promptRecipientPins=new Map();
+let savedPromptVisibility;
 try{
   const savedDraft=localStorage.getItem(PROMPT_DRAFT_KEY);
   if(savedDraft)promptInput.value=savedDraft;
   const saved=JSON.parse(localStorage.getItem(PROMPT_RECIPIENTS_KEY)||'[]');
+  savedPromptVisibility=localStorage.getItem(PROMPT_VISIBILITY_KEY);
   if(Array.isArray(saved)){
     for(const record of saved.slice(0,256)){
       if(record&&typeof record.name==='string'&&/^[A-Za-z][A-Za-z0-9_-]{0,95}$/.test(record.name)){
@@ -11762,6 +12463,8 @@ function saveDraft(){
     else localStorage.removeItem(PROMPT_DRAFT_KEY);
     if(promptRecipientPins.size)localStorage.setItem(PROMPT_RECIPIENTS_KEY,JSON.stringify([...promptRecipientPins.values()]));
     else localStorage.removeItem(PROMPT_RECIPIENTS_KEY);
+    if(promptRecipientPins.size&&promptRecipients.visibility==='hidden')localStorage.setItem(PROMPT_VISIBILITY_KEY,'hidden');
+    else localStorage.removeItem(PROMPT_VISIBILITY_KEY);
   }catch(_){/* quota */}
 }
 window.addEventListener('beforeunload',saveDraft);
@@ -11858,16 +12561,16 @@ function receiveComposerAck(message){
 function cancelComposerAcks(){
   for(const pending of composerAcks.values())pending.done('unknown');
 }
-function submitComposerPrompt(target,data){
+function requestComposerInput(target,message){
   return new Promise(resolve=>{
     const id=Date.now()+':'+(++promptAckSequence);
     const done=status=>{
       clearTimeout(timer);composerAcks.delete(id);
-      resolve(['accepted','refused','completion-mismatch'].includes(status)?status:'unknown');
+      resolve(['accepted','sent','refused','completion-mismatch','completion-unverified'].includes(status)?status:'unknown');
     };
     const timer=setTimeout(()=>done('unknown'),6500);
     composerAcks.set(id,{done,paneId:target.paneId});
-    const payload={type:'submit-prompt',paneId:target.paneId,session:target.session,incarnation:target.incarnation,inputAck:id,data};
+    const payload={...message,paneId:target.paneId,session:target.session,incarnation:target.incarnation,inputAck:id};
     for(const key of ['mail_instance_id','mail_agent_id']){
       if(target.pane.meta[key])payload[key]=target.pane.meta[key];
     }
@@ -11877,6 +12580,8 @@ function submitComposerPrompt(target,data){
 }
 function recipientRefusal(agent){
   if(!agent?.name)return 'Agent unavailable';
+  const action=pendingAgentAction(agent.name);
+  if(action)return action;
   if(agent.lifecycle==='persistent'||agent.category==='warmup')return 'This agent is managed separately';
   if(/^codex-app/.test(String(agent.harness||agent.program||agent.cmd||''))||agentHasNoTerminal(agent.name))
     return 'This agent has no terminal input';
@@ -11948,8 +12653,15 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
     for(const record of records){
       const target=await resolveComposerTarget(record,connection);
       const valid=()=>socket===connection&&sameRecipient(record,target)&&composerTargetPresent(target)&&stillValid();
-      let status='refused',receipt=null,problem='';
+      let status='refused',receipt=null,problem='',originalPath=false;
       if(target&&valid()){
+        if(readerApproval?.question(target)){
+          if(records.length===1&&!entries.length)status=await readerApproval.answerDraft(target,record.draft);
+          else problem='Answer this question without attachments or other recipients';
+          results.push({...record,status,receipt,problem});
+          releaseComposerTarget(record.name);
+          continue;
+        }
         let paths=[];
         if(entries.length){
           try{
@@ -11963,26 +12675,34 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
           continue;
         }
         const claude=record.vocabulary.program==='claude';
-        const references=paths.map(path=>(claude?'@':'')+path).join('\n')+(claude&&paths.length?' ':'');
+        originalPath=paths.some(path=>path.startsWith('/'));
+        const references=paths.map(path=>path.startsWith('/')?
+          "[file: '"+path.replaceAll("'","'\\''")+"']":(claude?'@':'')+path).join('\n')+
+          (claude&&paths.at(-1)?.startsWith('./')?' ':'');
         const body=[record.draft,references].filter(Boolean).join('\n\n');
-        const text=compose(body);
-        receipt=trackPrompt(target,text,compose(record.draft),entries);
-        status=await submitComposerPrompt(target,text);
+        // The chooser leaves a space for arguments. A bare command should reach
+        // the terminal without it so the terminal can show its matching picker.
+        const text=compose(body,record).replace(/^(\/[\p{L}\p{N}_.:-]+)[ \t]+$/u,'$1');
+        receipt=trackPrompt(target,text,compose(record.draft,record),entries);
+        status=await requestComposerInput(target,{type:'submit-prompt',data:text});
         if(status==='completion-mismatch'){
           status='refused';problem='Terminal selected a different slash command';
+        }else if(status==='completion-unverified'){
+          status='refused';problem='Could not confirm the slash command in the terminal';
         }
       }
       if(status!=='accepted')receipt?.cancel();
-      results.push({...record,status,receipt,problem});
+      results.push({...record,status,receipt,problem,originalPath});
       releaseComposerTarget(record.name);
     }
     const sent=results.filter(result=>result.status==='accepted');
     const refused=results.filter(result=>result.status==='refused');
     const unknown=results.filter(result=>result.status==='unknown');
-    sent.forEach(({receipt})=>receipt.publish(sent.length));
+    sent.forEach(({receipt})=>receipt?.publish(sent.length));
     const names=entries=>entries.map(record=>record.problem?record.name+' ('+record.problem+')':record.name).join(', ');
     const summary=[
       sent.length?'Sent to '+names(sent):'',
+      sent.some(result=>result.originalPath)?'Original file path sent (over 50 MiB)':'',
       refused.length?'Not sent to '+names(refused):'',
       unknown.length?'Delivery unconfirmed for '+names(unknown):'',
     ].filter(Boolean).join(' · ');
@@ -12010,6 +12730,8 @@ function sendPrompt(opts={}){
   if(!draft.trim()&&!entries.length)return;
   const target=captureComposerTarget();
   const names=promptRecipients.names;
+  const action=!names.length&&pendingAgentAction(target?.session);
+  if(action){showToast(`${action} ${OrreryDemo.mask(target.session)}…`);return;}
   if(!target&&!names.length){showToast('Select an agent first.',true);return;}
   const referenceGuard=readerReply?.guard();
   if(referenceGuard&&!referenceGuard(target))return;
@@ -12030,19 +12752,25 @@ function sendPrompt(opts={}){
   function deliver(){
     hideSendGuard();
     const plain=readerReply?.compose('')||'';
-    return sendPreparedPrompt(records,draft,value=>plain+value,()=>!referenceGuard||referenceGuard(target),entries,Boolean(names.length));
+    const mode=promptRecipients.visibility;
+    const recipients=mode==='visible'&&names.length>1?records.filter(record=>sameRecipient(record)).map(record=>record.name):[];
+    const compose=(value,record)=>plain+OrreryPromptRecipients.recipientPrefix(mode,recipients,record.name,draft)+value;
+    return sendPreparedPrompt(records,draft,compose,()=>!referenceGuard||referenceGuard(target),entries,Boolean(names.length));
   }
 }
-function sendInterrupt(){
-  const p=panes.get(activeId);
-  if(!p){showToast('no pane focused — click an agent first');return;}
-  // bare ESC = same interrupt a human types in the TUI; the agent stops and
-  // reads the next prompt. Composer text is deliberately left untouched.
-  send({type:"input",paneId:activeId,data:"\x1b"});
-  showToast(`⎋ interrupt → ${p.session}`);
+async function sendInterrupt(){
+  const target=captureComposerTarget();
+  if(!target){showToast('Select an agent first.',true);return;}
+  const status=await requestComposerInput(target,{type:'interrupt'});
+  if(status==='accepted')showToast(`Interrupted → ${target.session}`);
+  else if(status==='sent')showToast(`⎋ Esc → ${target.session}`);
+  else if(status==='refused')showToast(`Interrupt not sent → ${target.session}`,true);
+  else showToast(`Could not confirm interruption → ${target.session}`,true);
 }
 const promptRecipients=OrreryPromptRecipients.mount({
   input:promptInput,meta:document.querySelector('.prompt-meta'),
+  initialVisibility:promptRecipientPins.size?savedPromptVisibility:null,
+  onVisibilityChange:saveDraft,
   portrait:name=>{
     const image=document.createElement('img');image.className='prompt-ava';image.alt='';
     image.src='/telemetry/portrait?v=3&name='+encodeURIComponent(name);
@@ -12070,14 +12798,24 @@ const promptFiles=OrreryPromptAttachments.mount({
   onChange:()=>{hideSendGuard();promptCard.refresh();},
   onError:message=>showToast(message,true),mayEdit:()=>!promptBusy,
 });
+const nativePromptWebview=window.__TAURI__?.webview?.getCurrentWebview?.();
+nativePromptWebview?.onDragDropEvent(({payload})=>{
+  const host=promptInput.closest('.promptbar'),position=payload.position;
+  const over=position&&host.contains(document.elementFromPoint(position.x/devicePixelRatio,position.y/devicePixelRatio));
+  host.toggleAttribute('data-dragging',Boolean(over&&!promptBusy&&(payload.type==='enter'||payload.type==='over')));
+  if(over&&payload.type==='drop')promptFiles.addPaths(payload.paths);
+}).catch(()=>{/* Browser drag events remain available. */});
 const promptCard=OrreryPromptComposer.mount({
   input:promptInput,button:promptSendBtn,
   getDestination:()=>{
     const pane=panes.get(activeId);
     const agent=pane&&currentAgentNamed(pane.session);
     const names=promptRecipients.names;
+    const held=permissionRestarts.get(scrName.title)?.focus?scrName.title:null;
+    const changing=names.length?names.every(name=>pendingAgentAction(name)):Boolean(pendingAgentAction(pane?.session||held));
     return {label:names.length>1?`${names.length} agents`:names[0]||pane?.session,
-      count:names.length,explicit:names.length>0,pending:promptBusy||promptFiles.pending,hasFiles:promptFiles.entries.length>0,
+      count:names.length,explicit:names.length>0,pending:promptBusy||promptFiles.pending||changing,
+      hasFiles:promptFiles.entries.length>0,
       working:agent?.running===true&&agent.act_state==='work'};
   },
   submit:()=>sendPrompt(),interrupt:sendInterrupt,onHeightSettled:scheduleFit,
@@ -12092,8 +12830,8 @@ sendGuardFix.addEventListener('click',()=>{
 sendGuardRaw.addEventListener('click',()=>{hideSendGuard();sendPrompt({bypassGuard:true});});
 sendGuardCancel.addEventListener('click',()=>{hideSendGuard();promptInput.focus();});
 
-/* A paste stages browser files first. Finder and Explorer file copies can
-   reach the DOM without File objects, so ask the local host in that case. */
+/* A paste stages browser files first. On Mac, Finder can expose only file
+   URLs to the page, so use the local clipboard reader for that fallback. */
 async function readClipboardAttachments(){
   const invoke=window.__TAURI__?.core?.invoke;
   if(invoke){
@@ -12101,7 +12839,7 @@ async function readClipboardAttachments(){
     try{
       const result=await Promise.race([
         invoke('clipboard_file_paths',{attachments:true}),
-        new Promise((_,reject)=>{timeout=setTimeout(reject,4500);}),
+        new Promise((_,reject)=>{timeout=setTimeout(reject,16000);}),
       ]);
       if(Array.isArray(result?.attachments))return result;
     }catch(_){}finally{clearTimeout(timeout);}
@@ -12121,7 +12859,9 @@ function handleComposerPaste(event){
   if(!files.length&&!fileHint&&data?.getData('text/plain'))return;
   event.preventDefault();
   if(promptBusy)return;
-  if(files.length){promptFiles.add(files);return;}
+  if(files.length){
+    promptFiles.add(files);return;
+  }
   const refusal=composerPasteRefusal(hostPlatform);
   if(refusal){
     showToast(refusal,true);
@@ -12436,6 +13176,7 @@ const conversationView=(()=>{
       readerApproval=OrreryReaderApproval.mount({
         screen:document.querySelector('.screen'),getPane:()=>panes.get(activeId),
         getPanes:()=>panes.values(),send:payload=>send(payload),openTerminal:()=>conversationView.close(),
+        focusPrompt:()=>promptInput.focus(),
       });
       // A user operation (conversation_view.js userRequest: the named POSTs,
       // the clipboard files, a file preview; from the NETWORK frame the
@@ -12454,7 +13195,7 @@ const conversationView=(()=>{
           if(view&&view.location.origin===location.origin&&!view.__orreryHoldsYield){
             view.__orreryHoldsYield=true;
             const tracked=OrreryConversation.trackFetch(view.fetch.bind(view),{frame:true});
-            view.fetch=tracked;frameFetch=tracked;
+            view.fetch=observeNetworkExits(view,tracked);frameFetch=tracked;
             view.addEventListener('pagehide',()=>tracked.endAll());
           }
         }catch(_){/* another origin: nothing to wrap */}};

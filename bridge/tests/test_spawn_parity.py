@@ -50,6 +50,39 @@ def catalog():
         naming=dict(scientists=['Tesla'],adjectives=['Bold'],taken=[]),dirs=[])
 
 
+@pytest.mark.parametrize('provider,harness', [
+    ('claude','claude-code'), ('codex','codex-cli'), ('deepseek','dsh'),
+    ('deepseek','hermes'), ('gemini','antigravity'),
+])
+def test_all_five_harnesses_offer_the_three_computer_use_modes(tour_browser, provider, harness):
+    _,evaluate=tour_browser
+    available=catalog()
+    available['computer_modes']=['off','view','control']
+    available['browser_modes']={key:['off','temporary','personal'] for key in
+                              ('claude-code','codex','dsh','hermes','antigravity')}
+    gemini=next(item for item in available['providers'] if item['id']=='gemini')
+    gemini['models'][0]['harnesses'][0]['id']='antigravity'
+    result=evaluate('''(()=>{
+      spawnOverlay.classList.add('on');spawnCatalog=CATALOG;
+      selFamily=null;selProvider=null;selModel=null;selHarness=null;renderProviderTabs();
+      providerTabs.querySelector('[data-family="'+FAMILY+'"]').click();
+      spawnHarnesses.querySelector('[data-harness="'+HARNESS+'"]').click();
+      const output={};
+      spawnComputerUse.click();
+      output.labels=[...spawnComputerMenu.querySelectorAll('button:not([hidden])')].map(b=>b.textContent);
+      spawnComputerChoices[1][1].click();output.view=spawnPayloadFromForm();
+      spawnComputerUse.click();spawnComputerChoices[2][1].click();output.control=spawnPayloadFromForm();
+      spawnComputerUse.click();spawnComputerChoices[0][1].click();output.off=spawnPayloadFromForm();
+      return output;
+    })()'''.replace('CATALOG',json.dumps(available)).replace('FAMILY',json.dumps(provider))
+        .replace('HARNESS',json.dumps(harness)))
+    assert result['labels'] == ['Off','View','Control']
+    assert result['view']['standalone'] and result['view']['tools']['screen'] == {'access':'read'}
+    assert result['control']['tools']['screen'] == {'access':'operate'}
+    assert 'screen' not in result['off']['tools']
+    assert result['off']['tools']['browser_mode'] == 'personal'
+
+
 @pytest.mark.parametrize('provider,harness', [('claude','claude-code'),('codex','codex-cli'),('gemini','gemini'),
     ('deepseek','dsh'),('deepseek','hermes'),('strata','dsh'),('strata','hermes')])
 def test_all_families_use_the_same_standalone_form_payload(tour_browser,provider,harness):

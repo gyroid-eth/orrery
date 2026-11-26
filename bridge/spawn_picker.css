@@ -109,6 +109,8 @@ html[data-color-theme="light"] #spawnOverlay {
 #spawnForm #spawnComputerUse[aria-disabled="true"]{opacity:.55;cursor:not-allowed}
 .spawn-tools button[aria-checked="true"] svg {animation:spawn-pop .5s var(--spawn-spring)}
 #spawnForm .spawn-tools button[data-browser-mode=personal]{color:var(--amber);background:var(--panel-2)}
+#spawnForm .spawn-tools button:is([data-computer-mode=view],[data-computer-mode=control]){color:var(--amber);background:var(--panel-2)}
+#spawnForm .spawn-tools button[data-computer-mode=view] svg{opacity:.68}
 #spawnForm .spawn-tools button[data-browser-mode=temporary]{position:relative}
 #spawnForm .spawn-tools button[data-browser-mode=temporary]::after{content:"";position:absolute;right:5px;bottom:5px;
   width:5px;height:5px;border-radius:50%;background:var(--amber)}

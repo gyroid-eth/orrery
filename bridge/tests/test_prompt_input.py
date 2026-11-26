@@ -17,6 +17,205 @@ import orrery_backend as backend
 import pane_submission as submission
 
 
+NATIVE_PROMPTS = json.loads(
+    (Path(__file__).parent / 'fixtures/pane_slash_harnesses.json').read_text(encoding='utf-8'))
+
+
+def native_meta(snapshot):
+    return '\t'.join(['/tmp/fixture.sock', '100', '%1', '200', *snapshot['meta']])
+
+
+def native_frame(snapshot):
+    return submission.frame(native_meta(snapshot), snapshot['lines'], '%1')
+
+
+NATIVE_CASES = [pytest.param(harness, case, id=f'{harness}-{case["case"]}')
+                for harness, fixture in NATIVE_PROMPTS.items() for case in fixture['cases']]
+
+HERMES_REDRAW = {
+    'meta': ['0', '0', '2', '1', 'zsh'],
+    'lines': ['\x1b[38;5;230m❯ \x1b[3m\x1b[38;5;136mWhat changed in this repo recently?\x1b[0m', ''],
+}
+HERMES_NOTICE = next(case for case in NATIVE_PROMPTS['hermes']['cases'] if case['case'] == 'notice-short')
+SUBMISSION_CASES = [
+    *NATIVE_CASES,
+    pytest.param('hermes', dict(HERMES_NOTICE, redraw=HERMES_REDRAW), id='hermes-after-width-change'),
+]
+
+
+def test_hermes_redraw_needs_another_capture_before_using_the_editor():
+    view = native_frame(HERMES_REDRAW)
+    assert view.redrawing
+    assert not view.empty
+
+
+def test_each_native_slash_picker_has_notice_and_slash_fixtures():
+    assert set(NATIVE_PROMPTS) == set(submission.SLASH_PICKERS)
+    for fixture in NATIVE_PROMPTS.values():
+        cases = {case['case'] for case in fixture['cases']}
+        assert {'slash-exact', 'slash-prefix', 'slash-idle', 'slash-busy', 'notice-short'} <= cases
+        assert any(case.startswith('notice-long') for case in cases)
+
+
+@pytest.mark.parametrize('prompt_row,bottom,column,empty', [
+    ('    │ ❯ \x1b[38;5;145mSay something, or type / for commands', '    ╰' + '─' * 44, 8, True),
+    ('    │ ❯\x1b[38;5;145mSay something, or t…  │', '    ╰' + '─' * 24 + '╯', 7, True),
+    ('    │ ❯ Say something, or type / for commands', '    ╰' + '─' * 44, 8, False),
+    ('    │ ❯ \x1b[38;5;145mSay something different', '    ╰' + '─' * 44, 8, False),
+])
+def test_dsh_welcome_editor_recognizes_truncated_placeholder(prompt_row, bottom, column, empty):
+    observed = submission.frame(
+        native_meta({'meta': ['1', '0', str(column), '1', 'node']}),
+        ['    ╭' + bottom[5:], prompt_row, bottom],
+        '%1',
+    )
+
+    assert observed.editor == 'dsh'
+    assert observed.empty is empty
+
+
+def test_dsh_welcome_editor_confirms_the_visible_end_of_a_composer_paste():
+    bottom = '    ╰' + '─' * 48 + '╯'
+    observed = submission.frame(
+        native_meta({'meta': ['1', '0', '51', '1', 'node']}),
+        ['    ╭' + bottom[5:], '    │ ❯ mazonと楽天どちらで買ったらいいか議論して。  │', bottom],
+        '%1',
+    )
+    text = 'お互い相談してamazonと楽天どちらで買ったらいいか議論して。'
+
+    assert submission.ready(observed, text, operator=True)
+    assert not submission.ready(observed, text + '続き', operator=True)
+    assert not submission.ready(observed, text)
+
+
+@pytest.mark.parametrize('harness,case', NATIVE_CASES)
+def test_native_prompt_fixture(harness, case):
+    assert native_frame(case.get('before', NATIVE_PROMPTS[harness]['before'])).empty
+    observed = native_frame(case['view'])
+    assert observed.selected_command == case['selected']
+    assert submission.ready(observed, case['text']) is case['ready']
+    if after := case.get('after'):
+        assert native_frame(after).empty is case.get('accepted', case['ready'])
+    if observed.dsh_clipped:
+        # A different text ending cannot justify Enter with a clipped draft.
+        assert not submission.ready(observed, case['text'] + ' another sentence')
+
+
+@pytest.mark.parametrize('harness,case', SUBMISSION_CASES)
+def test_watcher_enters_only_the_verified_native_draft(monkeypatch, harness, case):
+    before = case.get('before', NATIVE_PROMPTS[harness]['before'])
+    accepted = case.get('accepted', case['ready'])
+    should_enter = case.get('enter', accepted)
+    redraw = case.get('redraw')
+    stage = redraw or before
+    entered = []
+    reasons = []
+    elapsed = 0.0
+
+    def tick(seconds):
+        nonlocal elapsed
+        elapsed += seconds
+
+    def tmux(*args, input=None):
+        nonlocal stage
+        output = ''
+        if args[0] == 'display-message':
+            output = '\n'.join([native_meta(stage), *stage['lines'], ''])
+            if stage is redraw and elapsed >= submission.POLL:
+                stage = before
+        elif args[0] == 'load-buffer':
+            assert input == case['text']
+        elif args[0] == 'paste-buffer':
+            stage = case['view']
+        elif args[0] == 'send-keys':
+            entered.append(args[-1])
+            stage = case.get('after', before)
+        else:
+            assert args[0] == 'delete-buffer'
+        return subprocess.CompletedProcess(args, 0, output, '')
+
+    monkeypatch.setattr(submission, 'time', SimpleNamespace(monotonic=lambda: elapsed, sleep=tick))
+    monkeypatch.setattr(submission, 'try_lock', lambda _: os.open(os.devnull, os.O_RDONLY))
+    result = submission.submit(tmux, lambda: True, '%1', case['text'], on_wait=reasons.append)
+    assert entered == (['C-m'] if should_enter else [])
+    assert result == ('accepted' if accepted else 'unknown')
+    if accepted:
+        assert not reasons
+    elif should_enter:
+        assert reasons == ['enter_not_confirmed']
+    else:
+        assert reasons == (['completion_mismatch'] if case['selected'] else ['completion_unverified'])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('harness,case', SUBMISSION_CASES)
+async def test_cockpit_enters_only_the_verified_native_draft(monkeypatch, tmp_path, harness, case):
+    bridge = control.TmuxControlBridge(control.ControlConfig('127.0.0.1', 0, 'Fixture', 'tmux',
+                                                            history_dir=tmp_path))
+    bridge.master_fd = 100
+    monkeypatch.setattr(control, 'admit_command', lambda *args, **kwargs: None)
+    monkeypatch.setattr(submission, 'try_lock', lambda _: os.open(os.devnull, os.O_RDONLY))
+    monkeypatch.setattr(submission, 'POLL', .001)
+    monkeypatch.setattr(submission, 'TIMEOUT', 1)
+    before = case.get('before', NATIVE_PROMPTS[harness]['before'])
+    accepted = case.get('accepted', case['ready'])
+    should_enter = case.get('enter', accepted)
+    redraw = case.get('redraw')
+    stage = redraw or before
+    metadata_reads = 0
+    entered = []
+
+    async def write(data):
+        nonlocal stage, metadata_reads
+        args = shlex.split(data.decode())
+        rows = []
+        if args[0] == 'display-message':
+            rows = [native_meta(stage)]
+            metadata_reads += 1
+            if stage is redraw and metadata_reads == 6:
+                stage = before
+        elif args[0] == 'capture-pane':
+            rows = stage['lines']
+        elif args[0] == 'load-buffer':
+            assert Path(args[-1]).read_text() == case['text']
+        elif args[0] == 'paste-buffer':
+            stage = case['view']
+        else:
+            assert args[0] == 'send-keys'
+            entered.append(args[-1])
+            stage = case.get('after', before)
+        pending = bridge._pending_blocks.popleft()
+        pending.set_result(control.CommandResult(ok=True, lines=rows))
+
+    monkeypatch.setattr(bridge, '_write_master', write)
+    result = await bridge.submit_prompt('%1', case['text'])
+    assert entered == (['C-m'] if should_enter else [])
+    if accepted:
+        assert result == 'accepted'
+    elif should_enter:
+        assert result == 'unknown'
+    else:
+        assert result == ('completion-mismatch' if case['selected'] else 'completion-unverified')
+
+
+def test_slash_grace_does_not_treat_an_unreadable_picker_as_absent(monkeypatch):
+    now = 0
+    monkeypatch.setattr(submission, 'time', SimpleNamespace(monotonic=lambda: now))
+    wait = submission.SlashMenuWait('/log')
+    border = '─' * 32
+    metadata = '/tmp/fixture.sock\t100\t%1\t200\t1\t0\t6\t1\tclaude'
+    literal = submission.frame(metadata, [border, '❯ /log', border], '%1')
+    unreadable = submission.frame(metadata.replace('\t1\t0\t6', '\t2\t0\t6'),
+                                  ['    /login  Switch accounts', border, '❯ /log', border], '%1')
+    assert unreadable.selected and unreadable.selected_command is None
+    assert not wait.ready(literal)
+    now = submission.SLASH_MENU_WAIT
+    assert wait.ready(literal)
+    assert not wait.ready(unreadable)
+    now *= 3
+    assert not wait.ready(literal)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize('successful', [True, False])
 async def test_confirmed_input_uses_the_result_of_each_chunk(monkeypatch, tmp_path, successful):
@@ -415,3 +614,51 @@ def test_claude_prompt_suggestion_is_an_empty_editor(styled, column, empty):
     lines = [border, styled, border, '  fixture | Opus | ctx: 22% used']
     metadata = f'/tmp/fixture.sock\t100\t%1\t200\t1\t0\t{column}\t1\tclaude'
     assert submission.frame(metadata, lines, '%1').empty is empty
+
+
+@pytest.mark.parametrize('suffix,column,draft', [
+    ('  \x1b[38;5;246m<テーマ名> [プロジェクト]\x1b[39m', 7, '/log'),
+    ('  \x1b[2m[optional arguments]\x1b[22m', 7, '/log'),
+    ('  \x1b[38;5;246m<テーマ名> [プロジェクト]\x1b[39m', 22, '/log  <テーマ名> [プロジェクト]'),
+    ('  <テーマ名> [プロジェクト]', 7, '/log  <テーマ名> [プロジェクト]'),
+    ('  \x1b[38;5;2mcolored input\x1b[39m', 7, '/log  colored input'),
+    (' project \x1b[38;5;246m[another argument]\x1b[39m', 15, '/log project [another argument]'),
+])
+def test_claude_slash_argument_hint_is_outside_the_draft(suffix, column, draft):
+    border = '─' * 110
+    styled = '\x1b[38;5;246m❯\xa0\x1b[38;5;153m/log\x1b[39m' + suffix
+    rows = [border, styled, border, '  Fixture status | Opus | ctx: 22% used',
+            '  ⏵⏵ auto mode on (shift+tab to cycle)']
+    metadata = f'/tmp/fixture.sock\t100\t%1\t200\t1\t0\t{column}\t1\tclaude'
+    assert submission.frame(metadata, rows, '%1').draft == draft
+
+
+def test_claude_scrolled_draft_shows_only_its_end():
+    # A tall draft scrolls inside Claude's frame and hides the prompt glyph.
+    rows = ['\x1b[38;5;244m───\x1b[39m \x1b[2m↑ 3 more\x1b[0m \x1b[38;5;244m' + '─' * 20,
+            '\x1b[39m  the middle of a long notification that wraps',
+            '  and ends here. Fetch inbox to read the rest.',
+            '\x1b[38;5;244m' + '─' * 24,
+            '  fixture | Opus | ctx: 22% used']
+    metadata = '/tmp/fixture.sock\t100\t%1\t200\t2\t0\t48\t1\tclaude'
+    view = submission.frame(metadata, rows, '%1')
+    assert view.scrolled and not view.empty
+    text = ('ORRERY Mail notification: the start is hidden above, then '
+            'the middle of a long notification that wraps and ends here. '
+            'Fetch inbox to read the rest.')
+    assert submission.ready(view, text)
+    assert not submission.ready(view, 'A different prompt that ends elsewhere.')
+
+
+def test_claude_scrolled_draft_with_a_named_border():
+    # A named session draws its name at the right of the scrolled border.
+    rows = ['─── ↑ 1 more ' + '─' * 20 + ' FixtureAgent ─',
+            '  the middle of a long notification that wraps',
+            '  and ends here. Fetch inbox to read the rest.',
+            '─' * 40,
+            '  fixture | Opus | ctx: 22% used']
+    metadata = '/tmp/fixture.sock\t100\t%1\t200\t2\t0\t48\t1\tclaude'
+    view = submission.frame(metadata, rows, '%1')
+    assert view.scrolled and not view.empty
+    assert submission.ready(view, 'ORRERY Mail notification: hidden start, then the middle of '
+                            'a long notification that wraps and ends here. Fetch inbox to read the rest.')

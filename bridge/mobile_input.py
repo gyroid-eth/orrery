@@ -19,6 +19,8 @@ import time
 import unicodedata
 from urllib.parse import unquote
 
+from question_screen import question_candidate, valid_choice
+
 CONTRACT='orrery-mobile-pane-v1'
 MAX_TEXT_BYTES=4096
 MAX_JSON_BYTES=16384
@@ -106,7 +108,7 @@ async def _held_admission(admission,deadline):
 
 @contextlib.asynccontextmanager
 async def _deadline(deadline):
-    # Cockpit supports Python3.10, which predates asyncio.timeout_at.
+    # Use the monotonic deadline shared with the admission worker.
     task=asyncio.current_task()
     timer=asyncio.get_running_loop().call_later(max(0,deadline-time.monotonic()),task.cancel)
     try: yield
@@ -317,9 +319,11 @@ class PaneResolver:
 
 class InputCoordinator:
     """One reader/owner scoped, bounded, memory-only pane/confirmation authority."""
-    def __init__(self,resolver,get_bridge,*,enabled=False,clock=time.monotonic,image_workspace=None):
+    def __init__(self,resolver,get_bridge,*,enabled=False,clock=time.monotonic,image_workspace=None,
+                 approval_for=None):
         self.resolver=resolver;self.get_bridge=get_bridge;self.enabled=enabled;self.clock=clock
         self.image_workspace=image_workspace
+        self.approval_for=approval_for
         self.fresh=getattr(resolver,'fresh',False)
         self.epoch=secrets.token_hex(16);self.choices={};self.intents={};self.busy=set();self.rates={};self.previews=set()
 
@@ -327,6 +331,7 @@ class InputCoordinator:
         timer=row.pop('timer',None)
         if timer is not None:timer.cancel()
         row.update(state=state,text=None,descriptor=None,finished=self.clock())
+        row.pop('question',None)
 
     def _prune(self):
         now=self.clock()
@@ -379,6 +384,8 @@ class InputCoordinator:
         fields={'capability':set(),'targets':{'name'},'preview':{'choice'},'prepare':{'choice','revision','text'},
                 'commit':{'intent','confirmation'},'cancel':{'intent'},'status':{'intent'},
                 'image':{'choice','revision','image'},'file':{'choice','revision','file'}}
+        if operation=='prepare' and isinstance(payload,dict) and 'question' in payload:
+            fields['prepare'].add('question')
         if self.fresh and operation=='targets' and isinstance(payload,dict) and ('mail_instance_id' in payload or 'mail_agent_id' in payload):
             fields['targets']|={'mail_instance_id','mail_agent_id'}
             if not _matches(EPOCH,payload.get('mail_instance_id')) or not _integer(payload.get('mail_agent_id')):
@@ -412,7 +419,8 @@ class InputCoordinator:
             if upload is None:return self._reply(target=target,enabled=root is not None)
             if root is None:raise InputRefused(operation+'_workspace_unavailable')
             save=mobile_image.save_image if operation=='image' else mobile_file.save_file
-            try:path=save(root,upload,**({'label':attachment_label} if attachment_label is not None else {}))
+            options={'label':attachment_label} if attachment_label is not None else {}
+            try:path=await asyncio.to_thread(save,root,upload,**options)
             except (ValueError,OSError) as error:raise InputRefused(str(error) if isinstance(error,ValueError) else operation+'_save_failed') from None
             return self._reply(target=target,enabled=True,path=path)
         if operation=='targets':
@@ -485,6 +493,14 @@ class InputCoordinator:
                     text,truncated,controls=terminal_text(result.lines,max_lines=max_lines,max_bytes=max_bytes)
                     value=self._reply(target=target,text='',truncated=truncated,controls_removed=controls,
                         observed_at=int(time.time()),max_lines=max_lines,max_bytes=max_bytes)
+                    row['question']=None
+                    if self.approval_for and question_candidate(text):
+                        owner=row.setdefault('question_owner',object())
+                        question=await self.approval_for(row['bridge']).inspect(row['pane_id'],owner)
+                        if question.get('state')=='ready' and question.get('kind')=='question':
+                            row['question']=question
+                            value['question']={k:question[k] for k in
+                                ('token','kind','harness','mode','body','choices','draft_empty','multiple')}
                     # Fit the complete serialized envelope, including escaped quotes.
                     budget=MAX_JSON_BYTES-len(encode_json(value))
                     size=lambda tail:len(json.dumps(tail,ensure_ascii=False).encode('utf-8'))-2
@@ -505,6 +521,29 @@ class InputCoordinator:
                     return value
                 finally:self.previews.discard(preview_key)
             validate_text(payload['text'])
+            answer=None
+            if row.get('question') is not None or 'question' in payload:
+                question=row.get('question')
+                choice=payload.get('question')
+                if (question is None or not isinstance(choice,dict) or set(choice)!={'token','choice'}
+                        or choice['token']!=question['token'] or not valid_choice(choice['choice'])):
+                    raise InputRefused('input_target_changed')
+                selected=choice['choice']
+                freeform=question['mode']=='other'
+                multiple=question.get('multiple',False) and not freeform
+                requested=selected if isinstance(selected,list) else [selected]
+                options=[item for item in question['choices'] if item['id'] in requested]
+                if (multiple!=isinstance(selected,list)
+                        or (selected!=0 if freeform else len(options)!=len(requested))
+                        or question['draft_empty'] is not True):
+                    raise InputRefused('input_target_changed')
+                if freeform or any(option.get('other') for option in options):
+                    text=payload['text']
+                else:
+                    if payload['text']!=' · '.join(option['label'] for option in options):
+                        raise InputRefused('input_request_invalid')
+                    text=None
+                answer=dict(choice,owner=row['question_owner'],text=text)
             if (row['proof'] is None or not _matches(REVISION,payload['revision'])
                     or payload['revision']!=target['revision']):raise InputRefused('input_target_changed')
             self._prune()
@@ -513,6 +552,8 @@ class InputCoordinator:
             descriptor={k:row[k] for k in ('bridge','pane_id','proof','name','incarnation','ref')}
             pending=dict(intent=intent,confirmation=confirmation,epoch=self.epoch,scope=scope,target=target,
                 descriptor=descriptor,text=payload['text'],state='prepared',expires=now+30,cancelled=False,finished=now)
+            if answer is not None:
+                pending['question']=answer
             self.intents[intent]=pending
             def expire():
                 if pending['state']=='prepared':self._finish(pending,'expired')
@@ -542,6 +583,20 @@ class InputCoordinator:
         try:
             bridge=await self._bridge(descriptor)
             if bridge is not descriptor['bridge'] or not valid():outcome='refused'
+            elif question:=row.get('question'):
+                async def check():
+                    return valid() and await self._read(descriptor,time.monotonic()+3)==descriptor['proof']
+                proof=None
+                if self.fresh:
+                    from runtime_target import FreshEffectProof
+                    proof=FreshEffectProof(bridge.config.tmux_bin,'input')
+                try:
+                    answer=await self.approval_for(bridge).answer(descriptor['pane_id'],question['owner'],
+                        question['token'],question['choice'],row['intent'],text=question['text'],
+                        check=check,claim=claim,valid=valid,**({'proof':proof} if proof else {}))
+                finally:
+                    if proof is not None:proof.close()
+                outcome={'sent':'accepted','unknown':'unknown'}.get(answer['state'],'refused')
             else:
                 outcome=await bridge.send_confirmed_input(descriptor['pane_id'],row['text'],
                     admission=lambda deadline:self.resolver.admission(descriptor,deadline),valid=valid,claim=claim,

@@ -29,7 +29,7 @@ from conversation_images import input_images, saved_path, dsh_image_path
 from conversation_markdown_images import IMAGE_EXT, local_image_target, markdown_image_targets
 import conversation_step_command as step_command
 import conversation_step_diff as step_diff
-from mobile_attachment_store import DIRECTORIES, FORMATS, attachment_label
+from mobile_attachment_store import ATTACHMENT_NAME, DIRECTORIES, FILE_SUFFIX, attachment_label, valid_extension
 
 MAX_RECORD=1024*1024
 MAX_TEXT=128*1024
@@ -41,8 +41,7 @@ TEXT_EXT={'.txt','.md','.py','.js','.mjs','.cjs','.ts','.tsx','.jsx','.css','.sc
           '.yaml','.yml','.toml','.ini','.cfg','.csv','.tsv','.xml','.html','.svg','.sh','.bash','.zsh',
           '.rs','.go','.c','.h','.cpp','.hpp','.java','.kt','.sql','.diff','.patch','.log','.rst'}
 RASTER_FORMATS=('PNG','JPEG','GIF','WEBP')
-ATTACHMENT_NAME=re.compile(r'[a-f0-9]{32}\.([a-z]{2,4})\Z')
-COMPOSER_ATTACHMENT=re.compile(r'@?(\./\.orrery-input-(?:images|files)/[a-f0-9]{32}\.[a-z]{2,4})\Z')
+COMPOSER_ATTACHMENT=re.compile(rf'@?(\./\.orrery-input-(?:images|files)/[a-f0-9]{{32}}(?:\.{FILE_SUFFIX})?)\Z')
 PHONE_ATTACHMENT=re.compile(r"(?:\A| )\[(image|file): ('(?:[^']|'\\'')*')\]\Z")
 
 
@@ -143,6 +142,7 @@ def open_file(path):
         info=os.fstat(fd)
         if not stat.S_ISREG(info.st_mode) or info.st_nlink!=1:raise PreviewUnavailable('preview_type_denied')
         yield fd,info
+    except PermissionError:raise PreviewUnavailable('preview_permission_denied') from None
     except OSError:raise PreviewUnavailable('preview_unavailable') from None
     finally:
         if fd is not None:os.close(fd)
@@ -159,7 +159,7 @@ def stored_attachment(path, cwd):
         return None
     kind=next((kind for kind,folder in DIRECTORIES.items() if path.parent.name==folder),None)
     name=ATTACHMENT_NAME.fullmatch(path.name)
-    if not kind or not name or name[1] not in FORMATS[kind]:
+    if not kind or not name or not valid_extension(kind, name[1] or ''):
         return None
     try:
         folder=path.parent.lstat()
@@ -179,7 +179,7 @@ def stored_attachment(path, cwd):
                     label=attachment_label(os.read(fd,641).decode('utf-8'))
         except (PreviewUnavailable,UnicodeError):
             pass  # Older uploads have no original filename.
-        return dict(path=str(path),kind=kind,signature=signature,label=label,extension=name[1])
+        return dict(path=str(path),kind=kind,signature=signature,label=label,extension=name[1] or '')
     except (OSError,PreviewUnavailable):
         return None
 
@@ -245,7 +245,7 @@ class ReferenceStore:
         if len(self.by_key)>len(self.refs):
             self.by_key={value['key']:ref for ref,value in self.refs.items()}
 
-    def policy(self,value,cwd,*,shown=False):
+    def policy(self,value,cwd,*,shown=False,show_files=False):
         if (not isinstance(value,str) or re.search(r'[\x00-\x1f\x7f]|://|^~',value)
                 or '..' in Path(value).parts):raise PreviewUnavailable('preview_path_denied')
         if not os.path.isabs(value):
@@ -266,10 +266,9 @@ class ReferenceStore:
         if canonical!=path:raise PreviewUnavailable('preview_path_denied')
         roots=((*self.workspace_roots,cwd) if cwd else self.workspace_roots)
         is_image=path.suffix.lower() in IMAGE_EXT
-        allowed=any(path.is_relative_to(root) for root in roots)
-        # Only explicit delivery calls grant their particular raster image
-        # outside configured roots. Callers derive this from the pinned record,
-        # never from a client flag, tool result, caption or an adjacent path.
+        allowed=(show_files and os.path.isabs(value)) or any(path.is_relative_to(root) for root in roots)
+        # A recorded show_files call grants its absolute paths. Other explicit
+        # delivery calls grant their raster images, as before.
         if not allowed and is_image:allowed=shown or any(path.is_relative_to(root) for root in self.image_roots)
         if not allowed:raise PreviewUnavailable('preview_path_denied')
         if not is_image and path.suffix.lower() not in TEXT_EXT and path.name not in {'Makefile','Dockerfile','LICENSE'}:
@@ -370,7 +369,8 @@ class ReferenceStore:
         with self.lock:
             self.prune()
             for index,value in enumerate(projection['paths']):
-                try:path=self.policy(value,cwd,shown=value in projection['shown_paths'])
+                try:path=self.policy(value,cwd,shown=value in projection['shown_paths'],
+                                     show_files=value in projection.get('show_files_paths',()))
                 except (PreviewUnavailable,OSError,ValueError):continue
                 key=(binding(row),identity(stream),event['id'],digest,index,str(path))
                 ref=self.by_key.get(key)
@@ -460,7 +460,8 @@ class ReferenceStore:
                 if ref not in self.refs or self.refs[ref]['key']!=key:ref=secrets.token_urlsafe(24)
                 self.by_key[key]=ref
                 offset=event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id'])
-                label=attachment['label'] or f"Attachment {index+1}.{attachment['extension']}"
+                extension=attachment['extension']
+                label=attachment['label'] or f"Attachment {index+1}"+('.'+extension if extension else '')
                 self.refs[ref]=dict(key=key,row=binding(row),inode=identity(stream),offset=offset,
                                     digest=digest,attachment=attachment,label=label,expires=self.clock()+self.ttl)
                 self.refs.move_to_end(ref)
@@ -539,8 +540,10 @@ class ReferenceStore:
                 else:
                     projection=extract_artifacts(item);paths=projection['paths']
                     if entry['index']>=len(paths):raise PreviewUnavailable('reference_expired')
-                    value=paths[entry['index']];shown=value in projection['shown_paths']
-                    path=self.policy(value,workspace(stream),shown=shown)
+                    value=paths[entry['index']]
+                    options=dict(shown=value in projection['shown_paths'],
+                                 show_files=value in projection.get('show_files_paths',()))
+                    path=self.policy(value,workspace(stream),**options)
                     if str(path)!=entry['key'][-1]:raise PreviewUnavailable('reference_expired')
                     result=self.read_file(path,thumbnail=thumbnail,mobile=mobile)
                 # Revalidate both the source record and file descriptor identity
@@ -550,7 +553,7 @@ class ReferenceStore:
                     if original.resolve(strict=True)!=path:raise PreviewUnavailable('reference_expired')
                 elif attachment:
                     if stored_attachment(path,cwd)!=attachment:raise PreviewUnavailable('reference_expired')
-                elif not entry.get('input_image') and self.policy(value,workspace(stream),shown=shown)!=path:raise PreviewUnavailable('reference_expired')
+                elif not entry.get('input_image') and self.policy(value,workspace(stream),**options)!=path:raise PreviewUnavailable('reference_expired')
                 stream.assert_identity()
             return path if reveal else result
         except (HistoryUnavailable,OSError,ValueError,KeyError,TypeError) as exc:

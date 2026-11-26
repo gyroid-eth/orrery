@@ -6,17 +6,21 @@
 
 ## 1 行で入れる・更新する
 
-Mac のターミナル、または Windows では WSL2 の Ubuntu の中で、次の 1 行を打ちます。orrery-telemetry と cockpit の両方が入り、動作の確認（doctor と、Mail の往復を試す selftest）まで済ませてから、cockpit を**裏で**起動して URL を出し、ブラウザで開きます。実行後は同じターミナルで、選んだ接続先の準備を続けられます。すでに入っている人では、同じ 1 行が更新になります（telemetry だけ・古い版・setup.sh の無い従来の版・detached でも）。
+macOS、Ubuntu 24.04 以降、Windows の WSL2 Ubuntu では、[README の準備](../README.md#始める前に)を済ませてから共通の1行を実行します。導入の完了は、表示された URL をブラウザーで開いて **Your first flight** が見えることと、ターミナルに `ORRERY's base is ready` が出ることで確かめます。
+
+installer は両方を導入して doctor と selftest を実行し、cockpit をバックグラウンドで起動します。同じ1行で既存の導入も更新できます。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
 ```
 
 - **何を信頼して何が動くか**: 信頼するのは GitHub の `gyroid-eth/orrery` と `gyroid-eth/orrery-telemetry` だけです（checkout の origin がこの URL と完全に一致しないときは、触らずに止まります）。動くのは `get.sh`、cockpit の `scripts/setup.sh`、orrery-telemetry の `scripts/install.sh`、必要なときだけ uv の公式 installer です
-- **何も変えずに確かめる**: `curl -fsSL …/get.sh | bash -s -- --check`（前提と計画だけ）、`… | bash -s -- --dry-run`（加えて 4 項目の変更の preview）。どちらも HOME に何も書きません（必要な取得は一時 folder で行い、終われば消します）
+- **適用する前に確認する**。 `curl -fsSL …/get.sh | bash -s -- --check`（前提と計画だけ）、`… | bash -s -- --dry-run`（加えて 4 項目の変更の preview）。利用者設定への適用は行いません。必要な取得は一時 folder で行います
 - **終了コードで判定する CI や script** では、`curl | bash` は取得の失敗を 0 と返すことがあるので、`curl -fsSL …/get.sh -o get.sh && bash get.sh --yes` のように保存してから実行します
-- 前提（git・tmux・curl・uv・Python 3.11 以上）はまとめて確かめます。git・tmux・curl が足りなければ入れる 1 行を出して、何も変えずに止まります。uv と Python は sudo なしで入れられるので計画に入れます（shell の設定 file は変えません）
-- 変更の前に計画を 1 画面にまとめ、**`yes` と打って Enter** で 1 回だけ承認します。変わるのは 4 つです: `~/.claude.json`（MCP）、`~/.claude/settings.json`（hooks と permissions）、`~/.codex/AGENTS.md`（Codex の全作業に効く global な block）、project の `CLAUDE.md`（block）。どれも先に backup を取ります（この 4 つのほかに作る folder や裏で動く service は[何が入り、どこが変わるか](#何が入りどこが変わるか)）。各変更ごとに preview を見て答えたいときは `--ask-each`、計画を読んだうえで質問を省くときは `--yes` を付けます（`… | bash -s -- --ask-each`）
+- 入口の `get.sh` は source を取得する前に、git・tmux・curl・Python 3.11 以上などの前提を確認します。`scripts/setup.sh` を直接実行した場合も前提を確認します。uv で導入済みの Python も使えます。対応する Python が見つからなければ、不足分を入れるコマンド（macOS なら `brew install python@3.12`、Ubuntu なら `sudo apt update && sudo apt install -y python3` など）を表示して止まります
+- uv 自体が無い場合や実行できない場合は、計画に追加し、承認後に sudo なしで `~/.local/bin` に入れます（shell の設定 file は変えません）
+- 計画を確認し、進むときは自分で **`yes` と入力して Enter** を押します。利用者設定の変更対象は、Claude の MCP 登録と settings、Claude の利用者指示、Codex の利用者指示の最大4項目です。共通 setup の計画に作業フォルダーの `CLAUDE.md` が表示される版でも、現行 Telemetry の指示の書き込み先は利用者単位です。個別の preview は `--ask-each`、包括承認は計画を読んで自分で `--yes` を選ぶ場合に使います。[同意と保存先](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.md#consent)
+- `--no-start` は導入と確認まで行い、cockpit backend の起動・再起動を省きます。`ORRERY_NO_OPEN=1` は起動時のブラウザー自動表示だけを省きます。専用の tmux socket を変える場合は `ORRERY_COCKPIT_TMUX_SOCKET` を設定します（既定 `orrery-cockpit`）。[起動設定](configuration.md#runtime--build-変数)
 - agent に作業させる folder は、指定が無ければ `~/orrery-work` です（質問はしません。計画の画面に出ます）。別の folder にするときは `… | bash -s -- --project-key ~/my-project`
 - cockpit は専用の tmux server（`tmux -L orrery-cockpit`）で動きます。agent の tmux とは別なので、agent の一覧には出ません。出力を見る: `tmux -L orrery-cockpit attach`（Ctrl-b、d で戻る）。止める: `tmux -L orrery-cockpit kill-server`。もう一度起動する: 同じ 1 行。update のときは、自分が起動した cockpit なら新しい版で起動し直します（それ以外の cockpit は止めずに案内だけ）
 - 確認の selftest が作る試験用の agent 2 つは、cockpit の一覧と network には出しません（dashboard には残ります）
@@ -109,21 +113,12 @@ DeepSeek/Localだけを使う場合、ClaudeやChatGPTへのログインは不�
 | `~/.claude/skills`・`~/.codex/skills` | ORRERY の skill（`delegate`・`log`）へのリンク |
 | `~/.codex/AGENTS.md` | ORRERY の指示（marker で囲んだ block だけ） |
 | `~/.codex/config.toml` | Codex の plugin と、その hook の承認（[Codex の plugin を入れる](#codex-の-plugin-を入れるcodex-を使う人)をしたときだけ） |
-| 作業 folder の `CLAUDE.md` | ORRERY の指示（block。元の内容はそのまま残ります） |
-| Mac: `~/Library/LaunchAgents`／Ubuntu: `~/.config/systemd/user` | Mail と Telemetry を裏で動かす登録（cockpit はここに登録せず、専用の tmux server `tmux -L orrery-cockpit` で動きます） |
+| `$CLAUDE_CONFIG_DIR/CLAUDE.md`（既定 `~/.claude/CLAUDE.md`） | Claude の利用者単位の ORRERY 指示（marker 内の block） |
+| Mac: `~/Library/LaunchAgents`／Ubuntu: `~/.config/systemd/user` | Telemetry・Mail・Mail watcher を裏で動かす登録（cockpit はここに登録せず、専用の tmux server `tmux -L orrery-cockpit` で動きます） |
 
-**変えないもの**: `~/.zshrc` や `~/.bashrc`（ORRERY は書き換えません。Claude Code や Codex の PATH の行は、自分で足す分です）、home の外（指定した作業 folder の `CLAUDE.md` と、その隣に置く backup を除きます。研究セットで Windows 側の vault を作業 folder にしたときも同じです）、Windows の設定。Windows に入れた Codex や Claude Code にも影響しません。この手順の既定の保存先では（`CODEX_HOME`・`AGENTSTACK_CLAUDE_SETTINGS`・`AGENTSTACK_CLAUDE_JSON` で保存先を Windows 側に変えておらず、`~/.codex` や `~/.claude` を Windows 側と link などで共有していなければ）、ORRERY が書く設定は Ubuntu の home（`~/.codex`・`~/.claude`）の中だけで、Windows 側の `C:\Users\…\.codex` や `.claude` には触れません（研究セットの vault は Windows 側にあるので、Windows の Claude Code でその vault を開くと、`CLAUDE.md` の ORRERY の block も読みます）。画面と Mail は `127.0.0.1`（この PC の中だけ）で待ち受け、外からはつながりません。
+既定の保存先では Claude と Codex の利用者設定を各 OS の home に置きます。WSL2 では Ubuntu の側です。設定の保存先を変更している場合は、承認前に表示される path を確認します。ORRERY はシェルの dotfile を変更しません。画面と Mail は既定で `127.0.0.1` で待ち受けます。[指示の移行](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.md)
 
-**アンインストール**: Codex の plugin を入れた人は、**最初に** `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` で外します（plugin の記録は `~/.agentstack` の中にあるので、先に消すと外せなくなります）。そのあとは README の[アンインストール](../README.md#アンインストール)の手順です（`~/.agentstack/bin/agentstack-uninstall --purge-data` で `~/.agentstack`・裏で動かす登録・skill のリンクを消し、`~/.claude/settings.json` と `~/.claude.json` に書き足した分を戻します。cockpit を止めてから `rm -rf ~/orrery ~/orrery-telemetry`）。`~/.codex/AGENTS.md` と作業 folder の `CLAUDE.md` の ORRERY の block は残るので、要らなければ marker の間を手で消します。source はすべて GitHub で公開しています（[orrery](https://github.com/gyroid-eth/orrery)・[orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)）。
-
-### 0. Obsidian（一緒に使う場合）
-
-Obsidian（ノートのアプリ）と一緒に使う人は、先に Obsidian を入れます。使わない人は飛ばして、「Mac」か「Windows 11」へ進んでください（ORRERY は Obsidian が無くても動きます）。
-
-- **Mac**: https://obsidian.md/ から Mac 版を download し、Applications に入れます
-- **Windows 11**: https://obsidian.md/ から Windows 版の installer を download して実行します。Obsidian は **Windows 側**に入れます（WSL2 の Ubuntu の中ではありません）
-
-**確かめ**: Obsidian を起動して、vault を選ぶ画面（「Create new vault」「Open folder as vault」などが並ぶ画面）が出れば準備完了です。
+**アンインストール**: Codex の plugin を入れた人は、**最初に** `~/orrery-telemetry/scripts/uninstall-codex-app-integration.sh` で外します（plugin の記録は `~/.agentstack` の中にあるので、先に消すと外せなくなります）。そのあとは README の[アンインストール](../README.md#アンインストール)の手順です（`~/.agentstack/bin/agentstack-uninstall --purge-data` で `~/.agentstack`・裏で動かす登録・skill のリンクを消し、`~/.claude/settings.json` と `~/.claude.json` に書き足した分を戻します。cockpit を止めてから `rm -rf ~/orrery ~/orrery-telemetry`）。[指示の取り外し](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/instruction-migration.md)では、記録済みの block と手動確認の対象を区別します。source はすべて GitHub で公開しています（[orrery](https://github.com/gyroid-eth/orrery)・[orrery-telemetry](https://github.com/gyroid-eth/orrery-telemetry)）。
 
 ### Mac
 
@@ -150,8 +145,10 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 ```
 
 ```bash
-brew install tmux
+brew install curl git tmux python@3.13 xz
 ```
+
+`lsof` は macOS 同梱のものを使います。
 
 **確かめ**: 次の 2 つのコマンドが、それぞれ版を表示します（`Homebrew 4.…` と `tmux 3.…` のような 1 行）。
 
@@ -165,11 +162,7 @@ tmux -V
 
 **2. ORRERY**
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
-```
-
-計画の画面が出るので、読んで `yes` と打ち、Enter を押します。数十秒から数分で終わり、ブラウザで cockpit が開きます。足りないもの（git・tmux・curl）があると、何も変えずに止まって入れる方法を表示します。止まったときは、表示された「続け方」の 1 行を打ち直してください。
+[共通の1行](#1-行で入れる更新する)を実行し、完了表示とブラウザーの cockpit を確かめます。
 
 **3. Claude Code / Codexを使う場合：CLIを入れてログインする**
 
@@ -246,8 +239,10 @@ wsl --set-version Ubuntu 2
 **以降は全部 Ubuntu の画面**（`ユーザー名@PC名:~$`）で打ちます。必要な道具を入れます（すでに入っていれば何も起きません）。
 
 ```bash
-sudo apt update && sudo apt install -y git tmux curl
+sudo apt update && sudo apt install -y ca-certificates curl git tmux python3 python3-venv lsof xz-utils
 ```
+
+Hermes を使う場合は `sudo apt install libatomic1` も実行します。
 
 **確かめ**: 次が、git・tmux・curl の版を 3 行で表示します。
 
@@ -257,11 +252,7 @@ git --version && tmux -V && curl --version | head -n 1
 
 **2. ORRERY**
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/get.sh | bash
-```
-
-計画の画面が出るので、読んで `yes` と打ち、Enter を押します。数十秒から数分で終わり、cockpit の URL（`http://127.0.0.1:8791/cockpit.html`）が表示されます。Windows のブラウザが自動で開かなければ、その URL を Windows のブラウザに貼ります。足りないものがあると何も変えずに止まるので、表示された「続け方」の 1 行を打ち直してください。
+Ubuntu の中で[共通の1行](#1-行で入れる更新する)を実行し、報告された URL を Windows のブラウザーで開きます。
 
 **3. Claude Code / Codexを使う場合：CLIを入れてログインする**
 
@@ -314,6 +305,15 @@ claude
 ログインし（ブラウザが開かなければ、表示された URL を Windows のブラウザに貼ります）、最初の質問にすべて答えて、入力欄が出たら `/exit` と打ちます。
 
 Claude Code/Codexを選んだ人は、ここまででcockpitの`+ NEW AGENT`からそのagentを起動できます。続いて Obsidian と使う人は、「Obsidian と一緒に使う」へ進んでください。Codex を使う人は、そのあと（Obsidian を使わない人は今）「[Codex の plugin を入れる](#codex-の-plugin-を入れるcodex-を使う人)」も行います。
+
+### 0. Obsidian（一緒に使う場合）
+
+Obsidian を使う場合は、ブラウザーの cockpit を開けることを確かめてから準備します。
+
+- **Mac**: https://obsidian.md/ から Mac 版を download し、Applications に入れます
+- **Windows 11**: https://obsidian.md/ から Windows 版の installer を download して実行します。Obsidian は **Windows 側**に入れます（WSL2 の Ubuntu の中ではありません）
+
+**確かめ**: Obsidian を起動して、vault を選ぶ画面（「Create new vault」「Open folder as vault」などが並ぶ画面）が出れば準備完了です。
 
 ### Obsidian と一緒に使う
 
@@ -414,7 +414,7 @@ repository の中で:
 
 script は 1 回で次を行います。
 
-1. cockpit単体の前提を確認（Python 3.10以上・tmux・orrery-telemetryの設定・project key・dashboardの応答。共通導入とTelemetryには別途Python 3.11以上が必要。orrery-telemetryの版が古ければ警告だけ出す）
+1. cockpit 単体の前提を確認（Python 3.11 以上・tmux・orrery-telemetry の設定・project key・dashboard の応答。orrery-telemetry の版が古ければ警告だけ出す）
 2. `bridge/.venv` に Python の環境を作り、`bridge/requirements.txt` の package を入れる（初回だけ時間がかかります。2 回目からは変更が無ければ飛ばします）
 3. orrery-telemetry の設定（`~/.agentstack/env.sh` の project key・Mail DB・dashboard の port）を引き継ぐ。`~/.agentstack` や `~/.orrery` の設定 file は書き換えません
 4. backend を**この窓の中で**起動し、応答を確かめてから開く URL を表示する
@@ -478,7 +478,7 @@ script は前提をまとめて確かめ、足りないものを `NG` の行で�
 
 | 表示（抜粋） | 意味と直し方 |
 | --- | --- |
-| `Python 3.10 or newer is required.` | Python が古いか無い。Mac は `brew install python@3.13`、Ubuntu は `sudo apt install python3`。特定の Python を使うなら `ORRERY_PYTHON=/path/to/python3 ./scripts/start-cockpit.sh` |
+| `Python 3.11 or newer is required.` | Python が古いか無い。Mac は `brew install python@3.13`、Ubuntu 24.04 では `sudo apt install python3` で 3.12 を入れられます。特定の Python 3.11 以上を使うなら `ORRERY_PYTHON=/path/to/python3 ./scripts/start-cockpit.sh` |
 | `tmux is not installed.` | Mac は `brew install tmux`、Ubuntu は `sudo apt install tmux` |
 | `orrery-telemetry is not installed` | `~/.agentstack/env.sh` が無い。手順 0 の orrery-telemetry を先に入れる |
 | `No project key is configured.` | orrery-telemetry の installer を `--project-key /absolute/path/to/your-project` 付きで入れ直す |
@@ -522,12 +522,12 @@ APIの組合せと確認範囲は[Telemetryの対応表](https://github.com/gyro
 
 必須:
 
-以下はcockpit単体の起動要件です。上の共通インストールとTelemetryはPython 3.11以上が必要です。共通installerは適したPythonがなければuvで3.12を用意します。単体の3.10要件だけで共通導入の前提がそろうわけではありません。
+以下は cockpit 単体の起動要件です。[共通インストール](#1-行で入れる更新する)と Telemetry 単体の導入でも、Python 3.11 以上を先に用意します。Telemetry の `scripts/install.sh` は導入済みの Python を選び、ORRERY Mail の仮想環境を作るときはその Python を uv に渡します。
 
-- Python 3.10 以上
+- Python 3.11 以上
 - `tmux`
 - `pip` と `venv`
-- runtime CDN に接続できるネットワーク
+- 導入・更新時に配布元へ接続できるネットワーク。端末の `xterm.js` と addon は同梱
 
 desktop app の開発・build 時:
 
@@ -552,7 +552,7 @@ git clone https://github.com/gyroid-eth/orrery.git
 cd orrery
 ```
 
-backend 専用 virtual environment を作ります。
+Python 3.11 以上で backend 専用 virtual environment を作ります。`python3 --version` で確認し、必要に応じて `python3` を対応する実行ファイルに置き換えてください。既存の `bridge/.venv` が古い Python を使っている場合は、backend を停止した状態でその環境を別名に移し、作り直します。
 
 ```bash
 python3 -m venv bridge/.venv
@@ -632,6 +632,8 @@ open http://127.0.0.1:8791/cockpit.html
 `PORT` または `--port` で backend 単体の port は変更できますが、`ORRERY.app` は常に `:8791` を開きます。desktop app と組み合わせる場合は変更しないでください。`HOST` は `127.0.0.1` だけが許可されます。
 
 ## desktop app を build する
+
+ブラウザー版で agent の操作に慣れた人向けの macOS 上級手順です。`ORRERY.app` はソースからビルドします。
 
 ```bash
 cd app
