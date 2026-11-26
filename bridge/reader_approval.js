@@ -1,6 +1,8 @@
 /* Presentation and candidate detection only; the bridge owns approval parsing. */
 (function(root){
   'use strict';
+  // These cues come from the terminal. The bridge checks the actual question.
+  const LOCALIZED_QUESTION_HINTS=[' が入力を求めています','📋 提问 · 第 '];
   function mount({screen,getPane,getPanes,send,openTerminal,focusPrompt}){
     const rows=new Map();let sequence=0,painted=null;
     const bar=document.createElement('section');bar.className='reader-approval';bar.hidden=true;bar.tabIndex=-1;
@@ -168,7 +170,8 @@
       const text=lines.join('\n');
       if(row.seen===text&&!force)return;
       row.seen=text;
-      const candidate=/Allow the |Would you like to run|Read outside|Allow this read outside|Do you want to proceed\?|Allow for this session|Yes, proceed|Yes, but ask again|keep allowing any reads| needs your input| が入力を求めています|to submit answer|tab to add notes \| enter to|tab or esc to clear notes \| enter to|📋 Question |📋 提问 · 第 |Navigate · enter Select · esc Skip|space Toggle · enter Submit · esc Skip|enter Submit · esc Back/.test(text);
+      const candidate=/Allow the |Would you like to run|Read outside|Allow this read outside|Do you want to proceed\?|Allow for this session|Yes, proceed|Yes, but ask again|keep allowing any reads| needs your input|to submit answer|tab to add notes \| enter to|tab or esc to clear notes \| enter to|📋 Question |Navigate · enter Select · esc Skip|space Toggle · enter Submit · esc Skip|enter Submit · esc Back/.test(text)||
+        LOCALIZED_QUESTION_HINTS.some(hint=>text.includes(hint));
       if(!candidate){
         if(!['none','closed','unavailable'].includes(row.state))transmit(row,{type:'approval-inspect'});
         paint();return;

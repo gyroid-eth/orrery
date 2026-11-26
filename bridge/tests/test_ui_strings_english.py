@@ -145,6 +145,10 @@ ALLOWED = {
     "cockpit_full_tour.js": re.compile(r"\bconst SHIRITORI_PROMPT="),
     # RELAY_JAPANESE: words stripped from Japanese relay text, never shown.
     "roster_descriptor.js": re.compile(r"^\d+: ('[^']*',)+$"),
+    # Exact native Hermes and dsh terminal cues, never cockpit copy.
+    "reader_approval.js": re.compile(
+        r"^\d+: const LOCALIZED_QUESTION_HINTS=\[' が入力を求めています','📋 提问 · 第 '\];$"
+    ),
 }
 
 
