@@ -1,7 +1,13 @@
-/* Explicit destinations are separate from the text delivered to an agent. */
+/* Selected destinations and recipient visibility for composer messages. */
 (function(root){
   'use strict';
   const rowHeight=40,padding=4,limit=6;
+  const visibilityLabels={visible:'Visible recipients',hidden:'Hidden recipients'};
+  function recipientPrefix(mode,names,recipient,draft){
+    if(mode!=='visible'||/^\s*\//u.test(draft))return '';
+    const others=names.filter(name=>name!==recipient);
+    return others.length?`Also sent to ${others.join(', ')}. You can contact each other via ORRERY Mail.\n\n`:'';
+  }
   function queryAt(text,start,end){
     if(start!==end)return null;
     const match=/(?:^|\s)@([\p{L}\p{N}_-]*)$/u.exec(text.slice(0,start));
@@ -18,7 +24,7 @@
   const element=(tag,cls)=>{
     const node=document.createElement(tag);node.className=cls;return node;
   };
-  function mount({input,meta,portrait,getAgents,getRole,getRefusal,getProvider,onChange,onText}){
+  function mount({input,meta,portrait,getAgents,getRole,getRefusal,getProvider,onChange,onText,initialVisibility,onVisibilityChange}){
     const picker=element('div','prompt-mentions'),band=element('div','prompt-mention-band');
     picker.id='promptMentions';picker.setAttribute('role','listbox');picker.setAttribute('aria-label','Choose a recipient');
     band.setAttribute('aria-hidden','true');picker.append(band);document.body.append(picker);
@@ -28,7 +34,56 @@
     const chosen=element('span','prompt-chosen'),faces=element('span','prompt-faces');
     const count=element('span','prompt-target'),remove=element('button','prompt-remove-recipient');
     remove.type='button';remove.textContent='×';remove.title='Clear recipients';remove.setAttribute('aria-label',remove.title);
-    chosen.append(faces,count,remove);meta.after(chosen);chosen.hidden=true;
+    const visibilityControl=element('span','prompt-visibility');
+    const visibilityButton=element('button','prompt-visibility-trigger');
+    const visibilityMenu=element('span','prompt-visibility-menu');
+    visibilityButton.type='button';visibilityButton.setAttribute('aria-haspopup','menu');
+    visibilityButton.setAttribute('aria-expanded','false');visibilityButton.setAttribute('aria-controls','promptVisibilityMenu');
+    visibilityMenu.id='promptVisibilityMenu';visibilityMenu.hidden=true;
+    visibilityMenu.setAttribute('role','menu');visibilityMenu.setAttribute('aria-label','Recipient visibility');
+    let visibility=initialVisibility==='hidden'?'hidden':'visible';
+    const choices=Object.entries(visibilityLabels).map(([mode,label])=>{
+      const button=element('button','prompt-visibility-option');
+      button.type='button';button.tabIndex=-1;button.textContent=label;
+      button.title=label+(mode==='visible'?' (To/Cc)':' (Bcc)');
+      button.setAttribute('aria-label',button.title);
+      button.setAttribute('role','menuitemradio');
+      button.addEventListener('click',()=>{
+        visibility=mode;paintVisibility();closeVisibility(true);onVisibilityChange();
+      });
+      visibilityMenu.append(button);
+      return [mode,button];
+    });
+    function paintVisibility(){
+      const selected=choices.find(([mode])=>mode===visibility)[1];
+      visibilityButton.textContent=visibilityLabels[visibility]+' ⌄';
+      visibilityButton.title=selected.title;
+      visibilityButton.setAttribute('aria-label',selected.title);
+      for(const [mode,button] of choices)button.setAttribute('aria-checked',String(mode===visibility));
+    }
+    function openVisibility(){
+      visibilityMenu.hidden=false;visibilityButton.setAttribute('aria-expanded','true');
+      choices.find(([mode])=>mode===visibility)[1].focus({preventScroll:true});
+    }
+    function closeVisibility(focus=false){
+      if(visibilityMenu.hidden)return;
+      visibilityMenu.hidden=true;visibilityButton.setAttribute('aria-expanded','false');
+      if(focus)visibilityButton.focus({preventScroll:true});
+    }
+    visibilityButton.addEventListener('click',()=>visibilityMenu.hidden?openVisibility():closeVisibility(true));
+    visibilityControl.addEventListener('keydown',event=>{
+      if(event.key==='Escape'&&!visibilityMenu.hidden){
+        event.preventDefault();event.stopPropagation();closeVisibility(true);
+      }
+      if(event.key!=='ArrowDown'&&event.key!=='ArrowUp')return;
+      event.preventDefault();
+      if(visibilityMenu.hidden){openVisibility();return;}
+      const current=choices.findIndex(([,button])=>button===document.activeElement);
+      const step=event.key==='ArrowDown'?1:-1;
+      choices[(current+step+choices.length)%choices.length][1].focus({preventScroll:true});
+    });
+    visibilityControl.append(visibilityButton,visibilityMenu);visibilityControl.hidden=true;paintVisibility();
+    chosen.append(faces,count,visibilityControl,remove);meta.after(chosen);chosen.hidden=true;
     const media=root.matchMedia('(prefers-reduced-motion: reduce)');
     const allowed=()=>!media.matches&&!document.hidden;
     const state=(value,stiffness,damping)=>({value,target:value,velocity:0,stiffness,damping});
@@ -165,6 +220,9 @@
         chosen.hidden=false;removing=false;
         chip.value=.6;chip.velocity=0;chip.target=1;
       }else{removing=true;chip.target=0;}
+      visibilityControl.hidden=names.length<2;
+      if(visibilityControl.hidden)closeVisibility();
+      if(!names.length){visibility='visible';paintVisibility();}
       meta.hidden=names.length>0;
       onChange();draw();
     }
@@ -207,9 +265,14 @@
     new ResizeObserver(reposition).observe(input.closest('.promptbar'),{box:'border-box'});
     media.addEventListener('change',draw);
     document.addEventListener('visibilitychange',draw);
-    document.addEventListener('pointerdown',event=>{if(event.target!==input&&!picker.contains(event.target))close();});
+    document.addEventListener('pointerdown',event=>{
+      if(event.target!==input&&!picker.contains(event.target))close();
+      if(!visibilityControl.contains(event.target))closeVisibility();
+    });
+    document.addEventListener('focusin',event=>{if(!visibilityControl.contains(event.target))closeVisibility();});
     picker.hidden=true;picker.inert=true;
-    return {update,close,handleKey,set,get names(){return names.slice();}};
+    return {update,close:()=>{close();closeVisibility();},handleKey,set,
+      get names(){return names.slice();},get visibility(){return visibility;}};
   }
-  root.OrreryPromptRecipients=Object.freeze({mount,queryAt,matches});
+  root.OrreryPromptRecipients=Object.freeze({mount,queryAt,matches,recipientPrefix});
 })(window);
