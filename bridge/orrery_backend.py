@@ -1557,7 +1557,6 @@ class SessionBridgeManager:
 
         session = state.bridge.config.session
         if message_type in {'approval-inspect', 'approval-answer'}:
-            from reader_approval import ApprovalCoordinator
             bridge = state.bridge
             proof = None
             if isinstance(bridge.config.tmux_bin, FreshPaneBoundary):
@@ -1569,16 +1568,12 @@ class SessionBridgeManager:
                     return
                 proof = proofs[0]
                 pane_id = target.pane_id
-            coordinator = getattr(bridge, '_approval_coordinator', None)
-            if coordinator is None:
-                async def harness(target_pane):
-                    return await approval_harness(approval_request, bridge, target_pane)
-                coordinator = bridge._approval_coordinator = ApprovalCoordinator(bridge, harness_resolver=harness)
+            coordinator = approval_coordinator(approval_request, bridge)
             if message_type == 'approval-inspect':
                 result = await coordinator.inspect(pane_id, peer)
             else:
                 result = await coordinator.answer(pane_id, peer, payload.get('token'), payload.get('choice'),
-                                                  payload.get('operation'), proof=proof)
+                                                  payload.get('operation'), proof=proof, text=payload.get('text'))
             await bridge.send_json(peer, dict(type='approval', paneId=pane_id,
                 requestId=payload.get('requestId'), **result))
             return
@@ -2168,9 +2163,21 @@ async def approval_harness(request, bridge, pane):
             return 'codex'
         if program in ('claude', 'claude-code') and provider in ('anthropic', 'claude'):
             return 'claude'
+        if program == 'hermes':
+            return 'hermes'
     except (ClientError, asyncio.TimeoutError, ValueError, TypeError, KeyError):
         pass
     return None
+
+
+def approval_coordinator(request, bridge):
+    from reader_approval import ApprovalCoordinator
+    coordinator = getattr(bridge, '_approval_coordinator', None)
+    if coordinator is None:
+        async def harness(pane):
+            return await approval_harness(request, bridge, pane)
+        coordinator = bridge._approval_coordinator = ApprovalCoordinator(bridge, harness_resolver=harness)
+    return coordinator
 
 
 async def conversation_bound_row(request: web.Request, name: str, not_before: float | None = None) -> dict:
@@ -5169,8 +5176,10 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
                         or root_path(location.lines[0])!=root):return None
                 return root
         except (HistoryUnavailable,PreviewUnavailable,OSError,ValueError,RuntimeError,ClientError,asyncio.TimeoutError):return None
+    from types import SimpleNamespace
     coordinator = install_routes(app, InputCoordinator(PaneResolver(app[TMUX_BIN_KEY]), mobile_bridge,
-                                                       enabled=mobile_input_enabled,image_workspace=mobile_image_workspace))
+        enabled=mobile_input_enabled,image_workspace=mobile_image_workspace,
+        approval_for=lambda bridge: approval_coordinator(SimpleNamespace(app=app),bridge)))
     import mobile_access
     mobile_access.install(app, coordinator, config_path=CONFIG_PATH)
     app.router.add_get("/telemetry/agents", proxy_dashboard)
