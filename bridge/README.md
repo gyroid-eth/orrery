@@ -43,6 +43,12 @@ Other permanent read failures retain the existing Retry control.
 The single preference uses the existing shared preference mechanism; transcript
 contents and reading position are never saved as preferences.
 
+The desktop composer copies selected attachments up to 50 MiB into the
+recipient's working folder before sending. Supported images use
+`.orrery-input-images` and other files use `.orrery-input-files`. When a
+local selection provides an absolute path for a file over 50 MiB, the
+composer sends the original path and identifies it in the send notification.
+
 The additive `GET /telemetry/conversation?agent=<name>` endpoint accepts an
 agent and optional opaque cursors (`before` or `after`), never a filesystem path.
 In legacy mode only a dashboard `history_binding=bound` row can select a source.

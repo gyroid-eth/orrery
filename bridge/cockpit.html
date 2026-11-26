@@ -4247,9 +4247,9 @@
       }
     }
   },
-  "inventory_digest": "b143b8242e53ed9cc6b27d0c0ae7ebe45ea0d722c0ce730defa2fcacde206ba6",
+  "inventory_digest": "86d0960f393ef746ed38bda6373db4c2b315d03333bdbd8b9ca39a7f544d2093",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "e8daecfc021d964ce6e1935e1e92f48d0c42623d0ad4c8d7ce2d46c0b2f0df8d",
+  "source_digest": "13cd6236dc2fb79e1f5d444d61f0933baba3a94820b6105ba8d30e0672baef9f",
   "surface": "cockpit",
   "version": 1
 }
@@ -12082,7 +12082,7 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
     for(const record of records){
       const target=await resolveComposerTarget(record,connection);
       const valid=()=>socket===connection&&sameRecipient(record,target)&&composerTargetPresent(target)&&stillValid();
-      let status='refused',receipt=null,problem='';
+      let status='refused',receipt=null,problem='',originalPath=false;
       if(target&&valid()){
         let paths=[];
         if(entries.length){
@@ -12097,6 +12097,7 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
           continue;
         }
         const claude=record.vocabulary.program==='claude';
+        originalPath=paths.some(path=>path.startsWith('/'));
         const references=paths.map(path=>path.startsWith('/')?
           "[file: '"+path.replaceAll("'","'\\''")+"']":(claude?'@':'')+path).join('\n')+
           (claude&&paths.at(-1)?.startsWith('./')?' ':'');
@@ -12113,7 +12114,7 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
         }
       }
       if(status!=='accepted')receipt?.cancel();
-      results.push({...record,status,receipt,problem});
+      results.push({...record,status,receipt,problem,originalPath});
       releaseComposerTarget(record.name);
     }
     const sent=results.filter(result=>result.status==='accepted');
@@ -12123,6 +12124,7 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
     const names=entries=>entries.map(record=>record.problem?record.name+' ('+record.problem+')':record.name).join(', ');
     const summary=[
       sent.length?'Sent to '+names(sent):'',
+      sent.some(result=>result.originalPath)?'Original file path sent (over 50 MiB)':'',
       refused.length?'Not sent to '+names(refused):'',
       unknown.length?'Delivery unconfirmed for '+names(unknown):'',
     ].filter(Boolean).join(' · ');

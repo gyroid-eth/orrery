@@ -142,7 +142,7 @@ def test_browser_files_stage_on_mac_wsl_and_linux_even_without_a_host_reader():
         assert out["hostReloads"] == 0
 
 
-def test_mac_file_copy_uses_the_original_path_without_reading_browser_file_bytes():
+def test_mac_file_copy_uses_available_browser_bytes_for_a_small_file():
     result = _paste("""
       const path='/fixtures/Screen recording 1.02.mov';
       return paste(MAC,{files:[new File(['fixture'],'Screen recording 1.02.mov')],
@@ -150,8 +150,17 @@ def test_mac_file_copy_uses_the_original_path_without_reading_browser_file_bytes
     """)
     assert_staged(result,[("Screen recording 1.02.mov","file",False)])
     assert result["calls"] == [APP]
-    assert result["attachments"][0]["path"] == "/fixtures/Screen recording 1.02.mov"
-    assert result["attachments"][0]["data"] is None
+    assert "path" not in result["attachments"][0]
+    assert result["attachments"][0]["data"] == "Zml4dHVyZQ=="
+
+
+def test_mac_stages_a_copied_image_and_a_path_from_the_same_snapshot():
+    result = _paste("""
+      return paste(MAC,{app:{attachments:[IMAGE],paths:['/fixtures/Big movie.mov']}});
+    """)
+    assert_staged(result,[("Clipboard image.png","image",True),("Big movie.mov","file",False)])
+    assert result["attachments"][0]["data"].startswith("iVBORw0KGgo")
+    assert result["attachments"][1]["path"] == "/fixtures/Big movie.mov"
 
 
 def test_linux_reads_an_image_from_clipboard_items_if_file_list_is_empty():

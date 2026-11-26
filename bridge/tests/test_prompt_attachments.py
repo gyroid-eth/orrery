@@ -17,7 +17,8 @@ import orrery_backend as backend
     ('file', 'zip', 'Archive.zip'),
     ('file', '', 'README'),
 ])
-async def test_attachment_is_written_to_the_selected_workspace(monkeypatch, tmp_path, kind, format, label):
+@pytest.mark.parametrize('path_backed', [False, True])
+async def test_attachment_is_written_to_the_selected_workspace(monkeypatch, tmp_path, kind, format, label, path_backed):
     workspace = tmp_path / 'working folder'
     workspace.mkdir()
     incarnation = 'a' * 32
@@ -40,7 +41,13 @@ async def test_attachment_is_written_to_the_selected_workspace(monkeypatch, tmp_
         else:
             body['format'] = format
             data = b'\x00\xfffixture\n'
-        body['data'] = base64.b64encode(data).decode()
+        if path_backed:
+            source = tmp_path / label
+            source.write_bytes(data)
+            body.update(kind='path', sourcePath=str(source))
+            body.pop('format', None)
+        else:
+            body['data'] = base64.b64encode(data).decode()
         body['label'] = label
         missing = await client.post('/telemetry/prompt-attachment', json={**body, 'incarnation': 'b' * 32})
         assert missing.status == 409
@@ -61,6 +68,27 @@ async def test_attachment_is_written_to_the_selected_workspace(monkeypatch, tmp_
         else:
             assert saved.suffix == ('.' + format if format else '')
             assert saved.read_bytes() == data
+
+
+def test_only_a_regular_file_over_the_limit_gets_its_original_path(tmp_path, monkeypatch):
+    import mobile_file
+
+    limit = 64
+    monkeypatch.setattr(mobile_file, 'MAX_FILE_BYTES', limit)
+    source = tmp_path / 'Fixture.zip'
+    workspace = tmp_path / 'workspace'
+    workspace.mkdir()
+    source.write_bytes(b'x' * limit)
+    saved = backend.stage_prompt_attachment_path(workspace, str(source))
+    assert (workspace / saved).read_bytes() == b'x' * limit
+    source.write_bytes(b'x' * (limit + 1))
+    assert backend.stage_prompt_attachment_path(workspace, str(source)) is None
+
+    link = tmp_path / 'link.zip'
+    link.symlink_to(source)
+    for path in (link, tmp_path / 'missing.zip', workspace):
+        with pytest.raises(ValueError, match='attachment_source_unreadable'):
+            backend.stage_prompt_attachment_path(workspace, str(path))
 
 
 @pytest.mark.asyncio

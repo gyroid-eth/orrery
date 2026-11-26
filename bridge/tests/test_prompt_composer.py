@@ -276,6 +276,30 @@ def test_attachment_drop_remove_and_delivery_per_cli(cockpit, claude_status):
         assert js("toastEl.textContent.includes('Delivery unconfirmed for QuietCopernicus')")
 
 
+def test_native_attachments_send_the_workspace_copy_or_disclose_the_original_path(cockpit):
+    js, wait, _ = recipients(cockpit)
+    js("""window.uploads=[];
+      const base=fetch;
+      window.fetch=(url,options)=>{
+        if(!String(url).includes('/telemetry/prompt-attachment'))return base(url,options);
+        const entry=JSON.parse(options.body);
+        uploads.push(entry);
+        return Promise.resolve(Response.json(entry.sourcePath.endsWith('.mov')?
+          {original:true,path:entry.sourcePath}:{path:'./.orrery-input-images/'+'a'.repeat(32)+'.png'}));
+      };
+      promptFiles.addPaths(['/fixture/Desktop/Screenshot.png','/fixture/Big movie.mov']);
+      promptInput.value='Compare these';
+      sendPrompt();""")
+    wait('!promptBusy')
+    assert js("uploads.map(({kind,sourcePath})=>[kind,sourcePath])") == [
+        ['path', '/fixture/Desktop/Screenshot.png'], ['path', '/fixture/Big movie.mov'],
+    ]
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        "Compare these\n\n./.orrery-input-images/" + "a" * 32 + ".png\n[file: '/fixture/Big movie.mov']",
+    ]
+    assert js("toastEl.textContent.includes('Original file path sent (over 50 MiB)')")
+
+
 @pytest.mark.parametrize('route, program', [
     ('browser-files', 'claude-code'), ('mac-app', 'claude-code'),
     ('mac-http', 'claude-code'), ('wsl-http', 'claude-code'),

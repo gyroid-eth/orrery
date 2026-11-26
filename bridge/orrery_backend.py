@@ -4206,18 +4206,45 @@ async def pane_probe_cwd(app: web.Application, session: str, wire_pane: str) -> 
     return Path(cwd) if cwd.startswith("/") and not any(ch in cwd for ch in "\x00\r\n") else None
 
 
+def stage_prompt_attachment_path(workspace, source, *, label=None):
+    """Copy a selected regular file within the desktop upload limit."""
+    from mobile_attachment_store import store, valid_extension
+    from mobile_file import MAX_FILE_BYTES
+    from mobile_image import save_image_bytes
+
+    path = Path(source)
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+        with os.fdopen(fd, 'rb') as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode):
+                raise ValueError('attachment_source_unreadable')
+            if info.st_size > MAX_FILE_BYTES:
+                return None
+            raw = stream.read(MAX_FILE_BYTES + 1)
+    except OSError as error:
+        raise ValueError('attachment_source_unreadable') from error
+    if len(raw) > MAX_FILE_BYTES:
+        return None
+    extension = path.suffix.lower().lstrip('.')
+    if extension in {'jpg', 'jpeg', 'png', 'webp'}:
+        return save_image_bytes(workspace, raw, label=label or path.name)
+    return store(workspace, 'file', extension if valid_extension('file', extension) else '',
+                 raw, label=label or path.name)
+
+
 async def serve_prompt_attachment(request: web.Request) -> web.Response:
-    """Place a selected file in this pane's workspace, with no caller path."""
+    """Place a selected attachment in the bound pane's workspace."""
     from conversation_preview import root_path
-    from mobile_file import MAX_FILE_JSON, save_file
-    from mobile_image import MAX_IMAGE_JSON, save_image
+    from mobile_file import MAX_FILE_BYTES, MAX_FILE_JSON, save_file
+    from mobile_image import save_image
     from mobile_input import InputRefused, decode_json
 
     def reject(error, status):
         return web.json_response({'ok': False, 'error': error}, status=status,
                                  headers={'Cache-Control': 'no-store'})
 
-    max_size = max(MAX_FILE_JSON, MAX_IMAGE_JSON)
+    max_size = MAX_FILE_JSON
     size = request.content_length
     if size is None or size < 1 or size > max_size or request.headers.get('Content-Encoding'):
         return reject('invalid_attachment_size', 413)
@@ -4227,20 +4254,23 @@ async def serve_prompt_attachment(request: web.Request) -> web.Response:
     except (InputRefused, asyncio.TimeoutError, asyncio.IncompleteReadError, OSError):
         return reject('invalid_attachment', 400)
     kind, name, pane, instance = (data.get(key) for key in ('kind', 'session', 'paneId', 'incarnation'))
-    expected = {'kind', 'session', 'paneId', 'incarnation', 'data'}
+    expected = {'kind', 'session', 'paneId', 'incarnation', 'sourcePath' if kind == 'path' else 'data'}
+    source = data.get('sourcePath')
     label = data.get('label')
     if 'label' in data:
         expected.add('label')
     if kind == 'file':
         expected.add('format')
-    if (kind not in ('image', 'file') or set(data) != expected
+    if (kind not in ('image', 'file', 'path') or set(data) != expected
             or not isinstance(name, str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,95}', name)
             or not isinstance(pane, str) or not re.fullmatch(r'(?:%[0-9]+|fresh-[a-f0-9]{64}-[0-9]+)', pane)
             or not isinstance(instance, str) or not re.fullmatch(r'[a-f0-9]{32}', instance)
             or 'label' in data and (not isinstance(label, str) or len(label) > 256)):
         return reject('invalid_attachment_target', 400)
-    if size > (MAX_FILE_JSON if kind == 'file' else MAX_IMAGE_JSON):
-        return reject('invalid_attachment_size', 413)
+    if kind == 'path' and (not isinstance(source, str) or len(source) > 4096
+                           or not source.startswith('/') or re.search(r'[\x00-\x1f\x7f-\x9f]', source)
+                           or '..' in Path(source).parts):
+        return reject('attachment_source_invalid', 400)
 
     state = composer_pane_state(request.app, name, pane)
     if state is None or state.bridge._incarnation != instance:
@@ -4250,18 +4280,24 @@ async def serve_prompt_attachment(request: web.Request) -> web.Response:
         workspace = root_path(str(cwd)) if cwd is not None else None
         if workspace is None:
             return reject('attachment_workspace_unavailable', 409)
-        if kind == 'image':
-            path = await asyncio.to_thread(save_image, workspace, data['data'], label=label)
+        if kind == 'path':
+            path = await asyncio.to_thread(stage_prompt_attachment_path, workspace, source, label=label)
+        elif kind == 'image':
+            path = await asyncio.to_thread(save_image, workspace, data['data'], label=label, max_bytes=MAX_FILE_BYTES)
         else:
             path = await asyncio.to_thread(save_file, workspace,
                                            {'format': data['format'], 'data': data['data']}, label=label)
         current = await pane_probe_cwd(request.app, name, pane)
         if (composer_pane_state(request.app, name, pane) is not state or current != cwd):
             return reject('attachment_target_changed', 409)
+        if path is None:
+            return web.json_response({'ok': True, 'path': source, 'original': True},
+                                     headers={'Cache-Control': 'no-store'})
         relative = './' + Path(path).relative_to(workspace).as_posix()
     except ValueError as error:
         reason = str(error)
-        if reason in {'file_empty', 'file_too_large', 'image_too_large', 'image_pixels_too_large'}:
+        if reason in {'file_empty', 'file_too_large', 'image_too_large', 'image_pixels_too_large',
+                      'attachment_source_unreadable'}:
             return reject(reason, 422)
         return reject('attachment_save_failed', 422)
     except (OSError, TargetRefused):
