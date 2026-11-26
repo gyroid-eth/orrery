@@ -37,9 +37,12 @@ const MINI_APPEARANCE_RANGES={
 };
 let miniAppearance=readMiniAppearance();
 let miniAppearancePanel=null;
-// Keep about 12 px names on open, with room for wide names in the scene.
+// Aim for about 12 px names, with a fit floor of 9.9 px names and 8.25 px
+// roles at the default text sizes.
 const MINI_PREFERRED_SCALE=1.3;
+const MINI_MIN_FIT_SCALE=1.1;
 const MINI_MAX_CAPTION_WIDTH=112;
+const MINI_PORTRAIT_CLEARANCE=17;
 const miniCaptionMeasure=document.createElement('canvas').getContext('2d');
 const MINI_MIN_HEIGHT=120;
 const MINI_MAX_HEIGHT=520;
@@ -377,35 +380,51 @@ function telemetryNetworkSubset(live,focus,depth,now=Date.now()){
   }
   return {byName,distances};
 }
-function ringNetworkOffsets(names,dimensions){
+function ringNetworkOffsets(names,focus,dimensions){
   const rx=dimensions.width/2-dimensions.xPadding;
   const ry=dimensions.height/2-Math.max(dimensions.topPadding,dimensions.bottomPadding);
   if(rx<=0||ry<=0)return null;
-  const horizontal=dimensions.captionWidth+miniAppearance.ringGap;
-  const vertical=dimensions.nodeAbove+dimensions.captionTop+dimensions.captionHeight+miniAppearance.ringGap/2;
-  const overlaps=(a,b)=>Math.abs(a.x-b.x)<horizontal&&Math.abs(a.y-b.y)<vertical;
+  const {captionWidth,captionWidths,captionTop,captionHeight,nodeScale}=dimensions;
+  const portrait=MINI_PORTRAIT_CLEARANCE*nodeScale;
+  const gap=miniAppearance.ringGap;
+  const horizontal=captionWidth+gap,vertical=portrait+captionTop+captionHeight+gap/2;
+  const overlaps=(a,b)=>{
+    const x=Math.abs(a.x-b.x),y=Math.abs(a.y-b.y);
+    const [upper,lower]=a.y<=b.y?[a,b]:[b,a];
+    // A caption can sit beside another portrait even when their full node
+    // bounds intersect. Check the two regions separately to avoid wasted seats.
+    return (x<(a.caption+b.caption)/2+gap&&y<captionHeight+gap/2)||
+      (x<2*portrait+gap&&y<2*portrait+gap/2)||
+      (x<upper.caption/2+portrait+gap&&y<vertical)||
+      (x<lower.caption/2+portrait+gap&&y<portrait-captionTop+gap/2);
+  };
   const fits=(positions,placed)=>positions.every((point,index)=>
     !placed.some(other=>overlaps(point,other))&&
     !positions.slice(0,index).some(other=>overlaps(point,other)));
   const arrangements=[[1],[.6,1],[.53,1],[.7,1],[.42,.71,1],[.48,.74,1],[.32,.58,.79,1]];
-  for(const rings of arrangements){
-    const placed=[{x:0,y:0}];
-    for(const ratio of rings){
-      // Try a few rotations before giving up a seat on this ring.
-      const capacity=Math.min(names.length+1-placed.length,
-        Math.ceil(Math.PI*2*ratio*Math.max(rx,ry)/Math.min(horizontal,vertical)));
-      let seated=[];
-      for(let count=capacity;count>0&&!seated.length;count--){
-        for(const phase of [0,.5,.25,.75]){
-          const positions=Array.from({length:count},(_,i)=>{
-            const angle=(i+phase)*2*Math.PI/count-Math.PI/2;
-            return {x:rx*ratio*Math.cos(angle),y:ry*ratio*Math.sin(angle)};
-          });
-          if(fits(positions,placed)){seated=positions;break;}
+  const rotations=[0,.5,.25,.75];
+  // Retry the whole arrangement so the inner ring can leave room for the
+  // outer ring's captions, even when its first rotation already fits.
+  for(const rotation of rotations){
+    for(const rings of arrangements){
+      const placed=[{x:0,y:0,caption:captionWidths.get(focus)??captionWidth}];
+      for(const ratio of rings){
+        const capacity=Math.min(names.length+1-placed.length,
+          Math.ceil(Math.PI*2*ratio*Math.max(rx,ry)/Math.min(horizontal,vertical)));
+        let seated=[];
+        for(let count=capacity;count>0&&!seated.length;count--){
+          for(const phase of rotations){
+            const positions=Array.from({length:count},(_,i)=>{
+              const angle=(i+phase+rotation)*2*Math.PI/count-Math.PI/2;
+              const caption=captionWidths.get(names[placed.length-1+i])??captionWidth;
+              return {x:rx*ratio*Math.cos(angle),y:ry*ratio*Math.sin(angle),caption};
+            });
+            if(fits(positions,placed)){seated=positions;break;}
+          }
         }
+        placed.push(...seated);
+        if(placed.length===names.length+1)return placed.slice(1).map((point,i)=>({...point,name:names[i]}));
       }
-      placed.push(...seated);
-      if(placed.length===names.length+1)return placed.slice(1).map((point,i)=>({...point,name:names[i]}));
     }
   }
   return null;
@@ -416,7 +435,7 @@ function telemetryMiniLayout(subset,focus,dimensions){
   const mailCount=name=>historyPairs.get(pairKey(focus,name))?.count||0;
   names.sort((a,b)=>mailCount(b)-mailCount(a)||
     subset.distances.get(a)-subset.distances.get(b)||a.localeCompare(b));
-  const offsets=ringNetworkOffsets(names,dimensions);
+  const offsets=ringNetworkOffsets(names,focus,dimensions);
   if(!offsets)return null;
   const positions=new Map();
   [{name:focus,x:0,y:0},...offsets].forEach(({name,x,y})=>{
@@ -456,34 +475,41 @@ function fitMiniTree(live,dimensions){
   }));
   return {...unpromoted,width:dimensions.width,height:dimensions.height};
 }
-function miniCaptionWidth(agents){
-  if(!miniCaptionMeasure)return MINI.captionWidth;
+function measureMiniCaptions(agents,includeRoles){
+  const widths=new Map();
+  if(!miniCaptionMeasure)return widths;
   const font=getComputedStyle(miniSvg).getPropertyValue('--rail-sans').trim()||'sans-serif';
-  miniCaptionMeasure.font=`600 ${miniAppearance.nameSize}px ${font}`;
-  let width=MINI.captionWidth;
   for(const agent of agents){
-    width=Math.max(width,Math.ceil(miniCaptionMeasure.measureText(agent.name||'').width)+3);
-    if(width>=MINI_MAX_CAPTION_WIDTH)return MINI_MAX_CAPTION_WIDTH;
+    miniCaptionMeasure.font=`600 ${miniAppearance.nameSize}px ${font}`;
+    let width=miniCaptionMeasure.measureText(agent.name||'').width;
+    if(includeRoles){
+      miniCaptionMeasure.font=`400 7.5px ${font}`;
+      width=Math.max(width,miniCaptionMeasure.measureText(roleOf(agent)).width);
+    }
+    widths.set(agent.name,Math.min(MINI_MAX_CAPTION_WIDTH,Math.ceil(width)+3));
   }
-  return width;
+  return widths;
 }
 function fitMiniScene(live,width,height){
   const subset=miniMode==='network'&&telemetryNetworkSubset(live,miniFocusName,miniNetworkDepth);
   const agents=subset?[...subset.distances.keys()].map(name=>subset.byName.get(name)):live;
-  const scale=Math.max(MINI_PREFERRED_SCALE,Math.min(width/MINI.width,height/MINI.height));
-  const captionWidth=miniCaptionWidth(agents),xPadding=Math.max(MINI.xPadding,captionWidth/2+3);
+  let scale=Math.max(MINI_PREFERRED_SCALE,Math.min(width/MINI.width,height/MINI.height)),zoom=1;
+  const captions=measureMiniCaptions(agents,subset&&miniAppearance.showRoles);
+  const captionWidth=Math.max(MINI.captionWidth,...captions.values()),xPadding=Math.max(MINI.xPadding,captionWidth/2+3);
   const nodeScale=miniAppearance.nodeSize/100,nameSize=miniAppearance.nameSize;
   const captionTop=Math.ceil(MINI.captionTop*nodeScale),nodeAbove=Math.ceil(MINI.nodeAbove*nodeScale);
   const captionHeight=nameSize+2+(miniAppearance.showRoles?9:0);
   const topPadding=Math.max(MINI.topPadding,nodeAbove+2);
   const bottomPadding=Math.max(MINI.bottomPadding,captionTop+captionHeight+2);
-  // Find a scene with room for both caption rows. Fitting the whole scene is
-  // the minimum zoom, and its readable scale determines the opening zoom.
-  for(let zoom=1;;zoom*=1.12){
-    const dimensions={...MINI,captionWidth,captionTop,captionHeight,nodeAbove,nodeScale,nameSize,
+  // Try the viewport at successively smaller readable scales. Only grow the
+  // scrollable scene after the text reaches its fit floor.
+  for(;;){
+    const dimensions={...MINI,captionWidth,captionWidths:subset?captions:null,captionTop,captionHeight,nodeAbove,nodeScale,nameSize,
       xPadding,topPadding,bottomPadding,showRoles:miniAppearance.showRoles,width:width/scale*zoom,height:height/scale*zoom};
     const layout=subset?telemetryMiniLayout(subset,miniFocusName,dimensions):fitMiniTree(live,dimensions);
     if(layout)return {layout,dimensions,zoom};
+    if(scale>MINI_MIN_FIT_SCALE)scale=Math.max(MINI_MIN_FIT_SCALE,scale/1.12);
+    else zoom*=1.12;
   }
 }
 
@@ -801,8 +827,9 @@ function drawAgentCaption(group,{agent,x,y},dimensions,provider,showTitle=true){
 
   // Keep the full text in the DOM so Demo can mask whole names before the
   // browser clips them to the cell.
-  const caption=svgEl('foreignObject',{x:x-dimensions.captionWidth/2,y:y+dimensions.captionTop,
-    width:dimensions.captionWidth,height:dimensions.captionHeight,'aria-hidden':'true'});
+  const width=dimensions.captionWidths?.get(agent.name)??dimensions.captionWidth;
+  const caption=svgEl('foreignObject',{x:x-width/2,y:y+dimensions.captionTop,
+    width,height:dimensions.captionHeight,'aria-hidden':'true'});
   const text=document.createElement('div');
   text.className='orrery-caption';
   const name=document.createElement('div');
@@ -1319,7 +1346,7 @@ function renderMini({recenter=false}={}){
   mask.appendChild(svgEl('rect',{width:layout.width,height:layout.height,fill:'white'}));
   miniMotion.edgeCutouts=new Map();
   miniMotion.states.forEach((state,name)=>{
-    const cutout=svgEl('circle',{cx:state.x,cy:state.y,r:17*dimensions.nodeScale,fill:'black'});
+    const cutout=svgEl('circle',{cx:state.x,cy:state.y,r:MINI_PORTRAIT_CLEARANCE*dimensions.nodeScale,fill:'black'});
     mask.appendChild(cutout);
     miniMotion.edgeCutouts.set(name,cutout);
   });
@@ -1882,21 +1909,28 @@ document.addEventListener('oc:agents',event=>{
 });
 document.addEventListener('oc:mail',event=>
   receiveMail(event.detail&&event.detail.messages));
-document.addEventListener('oc:focus-agent',event=>{
+document.addEventListener('oc:stage-agent',event=>{
   const name=event.detail&&event.detail.name||'';
   const changed=name!==miniFocusName;
   miniFocusName=name;
-  if(miniMode==='network')renderMini({recenter:changed});
-  else if(changed)centerMiniViewport();
+  if(changed){
+    if(miniMode==='network'){
+      renderMini({recenter:true});
+      return;
+    }
+    miniViewAdjusted=false;
+    miniZoom=miniDefaultZoom;
+    paintMiniZoom();
+    centerMiniViewport();
+  }
+  syncMiniSelection();
 });
-document.addEventListener('oc:stage-agent',syncMiniSelection);
 document.addEventListener('oc:mini-view',event=>{
   const detail=event.detail||{};
   const oldMode=miniMode;
   miniMode=detail.mode==='network'?'network':'orrery';
   miniNetworkDepth=[1,2,3].includes(Number(detail.depth))?Number(detail.depth):2;
   keepMailLinks=detail.mailLinks!=='recent';
-  miniFocusName=OC.activeAgent&&OC.activeAgent()||miniFocusName;
   renderMini({recenter:miniMode!==oldMode});
   syncMailHistory();
 });

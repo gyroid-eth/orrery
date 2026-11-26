@@ -749,6 +749,70 @@ def test_mini_appearance_panel_previews_and_persists_controls_outside_the_graph(
         'nodeSize': 100, 'nameSize': 9, 'ringGap': 4, 'showRoles': True}
 
 
+def test_mini_graph_returns_to_fit_after_agent_selection_changes(mini_browser):
+    client, evaluate = mini_browser
+    client.call('Emulation.setFocusEmulationEnabled', enabled=True)
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    evaluate("""(()=>{
+      setMailPaneWidth(380,mailPaneBounds());
+      window.setGraphHeight=height=>{
+        localStorage.setItem('oc-mini-graph-height',String(height));
+        document.dispatchEvent(new CustomEvent('oc:prefs-changed',{detail:{keys:['oc-mini-graph-height']}}));
+      };
+      setGraphHeight(352);
+      const names=['Pilot','Helper',...Array.from({length:14},(_,i)=>'Peer'+i)];
+      currentAgents=names.map(name=>({name,provider:'openai',annot:{role:'Fixture reviewer'}}));
+      OC.lineageParent.clear();
+      names.slice(1).forEach(name=>OC.lineageParent.set(name,'Pilot'));
+      window.refreshMini=()=>document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      refreshMini();
+      setMiniViewMode('network');setMiniNetworkDepth(1);focusSession('Helper');
+      const svg=document.getElementById('orrery'),scroll=svg.parentElement;
+      window.miniFit=()=>{
+        const nodes=[...svg.querySelectorAll('.mini-agent')],b=scroll.getBoundingClientRect();
+        const visible=nodes.filter(node=>{const r=node.getBoundingClientRect();return r.left>=b.left-.1&&
+          r.right<=b.right+.1&&r.top>=b.top-.1&&r.bottom<=b.bottom+.1;});
+        const textSize=selector=>parseFloat(getComputedStyle(nodes[0].querySelector(selector)).fontSize)*svg.getScreenCTM().a;
+        return {focus:OC.activeAgent(),network:svg.classList.contains('telemetry-network'),count:nodes.length,
+          visible:visible.length,name:textSize('.orrery-caption-name'),role:textSize('.orrery-caption-role'),
+          scale:svg.clientWidth/scroll.clientWidth,pan:[scroll.scrollLeft,scroll.scrollTop]};
+      };
+      window.zoomMini=()=>document.querySelector('.mini-graph-zoom button:last-child').click();
+      zoomMini();zoomMini();scroll.scrollTop=24;
+    })()""")
+    zoomed = evaluate('miniFit()')
+    assert zoomed['focus'] == 'Helper' and zoomed['scale'] > 1 and zoomed['pan'][1] == 24
+    evaluate("focusSession('Helper');refreshMini()")
+    assert evaluate('miniFit()') == zoomed
+
+    point = evaluate("""(()=>{
+      const hit=document.querySelector('#orrery [data-agent=Pilot] .orrery-hit');
+      hit.scrollIntoView({block:'nearest',inline:'nearest'});
+      const r=hit.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};
+    })()""")
+    for kind in ('mousePressed', 'mouseReleased'):
+        client.call('Input.dispatchMouseEvent', type=kind, button='left', clickCount=1, **point)
+    fitted = evaluate('miniFit()')
+    assert fitted['focus'] == 'Pilot' and fitted['network'] and fitted['visible'] == fitted['count'] == 16, fitted
+    assert fitted['scale'] == 1 and fitted['pan'] == [0, 0], fitted
+    assert fitted['name'] >= 9.85 and fitted['role'] >= 8.2, fitted
+
+    resized = evaluate("""(async()=>{
+      zoomMini();setGraphHeight(400);
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      return miniFit();
+    })()""")
+    assert resized['focus'] == 'Pilot' and resized['visible'] == resized['count'] == 16, resized
+    assert resized['scale'] == 1 and resized['pan'] == [0, 0], resized
+
+    evaluate("zoomMini();replaceSplitSessions(['Helper','Watcher']);focusSplitSession('Watcher')")
+    overview = evaluate('miniFit()')
+    assert overview['focus'] is None and not overview['network'], overview
+    assert overview['visible'] == overview['count'] == 16, overview
+    assert overview['scale'] == 1 and overview['pan'] == [0, 0], overview
+
+
 @pytest.mark.parametrize('mode,count', [('network', 16), ('orrery', 24)])
 def test_mini_graph_fits_every_agent_then_zooms_and_fits_again_after_resize(mini_browser, mode, count):
     client, evaluate = mini_browser
@@ -787,7 +851,7 @@ def test_mini_graph_fits_every_agent_then_zooms_and_fits_again_after_resize(mini
     })()""".replace('MODE', json.dumps(mode)).replace('COUNT', str(count)))
     initial = evaluate('miniFitStats()')
     assert initial['count'] == initial['roles'] == count and initial['expand'], initial
-    assert initial['completeNames'] and initial['nameSize'] >= 11.6, initial
+    assert initial['completeNames'] and initial['nameSize'] >= 9.85, initial
 
     def fit_all():
         evaluate("document.querySelector('.mini-graph-zoom button:first-child').click()")
@@ -823,7 +887,7 @@ def test_mini_graph_fits_every_agent_then_zooms_and_fits_again_after_resize(mini
             break
         time.sleep(.03)
     assert resized['height'] == 304 and resized['count'] == resized['roles'] == count, resized
-    assert resized['completeNames'] and resized['nameSize'] >= 11.6, resized
+    assert resized['completeNames'] and resized['nameSize'] >= 9.85, resized
     fit_all()
 
 
