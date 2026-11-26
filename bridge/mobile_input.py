@@ -419,7 +419,8 @@ class InputCoordinator:
             if upload is None:return self._reply(target=target,enabled=root is not None)
             if root is None:raise InputRefused(operation+'_workspace_unavailable')
             save=mobile_image.save_image if operation=='image' else mobile_file.save_file
-            try:path=save(root,upload,**({'label':attachment_label} if attachment_label is not None else {}))
+            options={'label':attachment_label} if attachment_label is not None else {}
+            try:path=await asyncio.to_thread(save,root,upload,**options)
             except (ValueError,OSError) as error:raise InputRefused(str(error) if isinstance(error,ValueError) else operation+'_save_failed') from None
             return self._reply(target=target,enabled=True,path=path)
         if operation=='targets':

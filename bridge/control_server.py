@@ -1688,6 +1688,21 @@ class TmuxControlBridge:
                 if proof.closed:
                     raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
 
+        async def capture_draft(identity):
+            view = await capture()
+            if view is None or view.identity != identity or not view.redrawing:
+                return view
+            redraw_deadline = min(deadline, time.monotonic() + submission.REDRAW_GRACE)
+            while time.monotonic() < redraw_deadline:
+                await asyncio.sleep(submission.POLL)
+                view = await capture()
+                if view is not None and view.identity != identity:
+                    return view
+                if view is not None and not view.redrawing:
+                    await admit()
+                    return await capture()
+            return view
+
         async with self._write_lock:
             lock = None
             loaded = wrote = False
@@ -1707,7 +1722,7 @@ class TmuxControlBridge:
 
                 if text is None:
                     await admit()
-                before = await capture()
+                before = await capture() if text is None else await capture_draft(observed.identity)
                 if before is None or before.identity != observed.identity:
                     return 'refused'
                 if text is None:
@@ -1750,7 +1765,7 @@ class TmuxControlBridge:
                         return 'refused'
                     loaded = True
                 await admit()
-                current = await capture()
+                current = await capture_draft(before.identity)
                 if (current is None or current.identity != before.identity
                         or not current.empty or not current.allows_paste(text, operator=True)):
                     return 'refused'

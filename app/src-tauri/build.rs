@@ -9,6 +9,7 @@ fn main() {
             "retry_backend",
             "active_hotkey",
             "clipboard_file_paths",
+            "pick_attachment_paths",
             "open_external_url",
             "reveal_local_path",
             "set_native_color_theme",

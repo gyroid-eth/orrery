@@ -790,6 +790,20 @@
     border-radius:7px;padding:3px 3px 3px 4px;background:var(--prompt-middle);transform-origin:left center}
   .prompt-faces{display:flex;flex:none;padding-left:5px}
   .prompt-faces .prompt-ava{margin-left:-5px}
+  .prompt-visibility{position:relative;flex:none;border-left:1px solid var(--prompt-strong);padding-left:5px}
+  .prompt-visibility[hidden],.prompt-visibility-menu[hidden]{display:none}
+  .prompt-visibility-trigger,.prompt-visibility-option{border:0;border-radius:5px;background:transparent;
+    color:var(--ink);cursor:pointer;font:600 12px var(--rail-sans);white-space:nowrap}
+  .prompt-visibility-trigger{padding:3px 4px}
+  .prompt-visibility-trigger:hover,.prompt-visibility-trigger[aria-expanded="true"],
+  .prompt-visibility-option[aria-checked="true"]{background:var(--prompt-strong)}
+  .prompt-visibility-menu{position:absolute;z-index:3;bottom:calc(100% + 9px);left:0;display:grid;gap:3px;
+    padding:5px;border:1px solid var(--prompt-strong);border-radius:9px;background:var(--elev);
+    box-shadow:0 8px 24px var(--theme-shadow-low,rgb(0 0 0 / .2))}
+  .prompt-visibility-option{padding:7px 10px;text-align:left}
+  .prompt-visibility-option:hover{background:var(--prompt-middle)}
+  .prompt-visibility-trigger:focus-visible,.prompt-visibility-option:focus-visible{
+    outline:2px solid var(--ink-dim);outline-offset:-2px}
   .prompt-remove-recipient{border:0;border-radius:5px;background:none;color:var(--ink-dim);
     width:22px;height:21px;padding:0;cursor:pointer;font:16px/1 var(--rail-sans)}
   .prompt-remove-recipient:hover{background:var(--prompt-strong);color:var(--ink)}
@@ -1275,6 +1289,15 @@
   @media(max-width:680px){
     .grid{grid-template-columns:1fr}.col.roster,.col.mail{display:none}
   }
+  @media(max-width:480px){
+    .promptbar:has(.prompt-visibility:not([hidden])){padding-inline:10px}
+    .prompt-card:has(.prompt-visibility:not([hidden])){padding-inline:12px}
+    .prompt-chosen:has(.prompt-visibility:not([hidden])){gap:4px}
+    .prompt-chosen:has(.prompt-visibility:not([hidden])) .prompt-target{flex:none}
+    .prompt-chosen:has(.prompt-visibility:not([hidden])) .prompt-ava{width:18px;height:18px}
+    .prompt-visibility{padding-left:3px}
+    .prompt-visibility-trigger{padding-inline:3px}
+  }
   @media(max-width:360px){
     .cockpit-header .brand .mark{font-size:16px}
     .header-actions{gap:1px}
@@ -1430,7 +1453,7 @@
             <ul class="prompt-attachments" id="promptFiles" aria-label="Attachments" hidden></ul>
             <div class="prompt-footer">
               <span class="prompt-meta"><img class="prompt-ava" id="promptAva" alt="" hidden><span class="prompt-target" id="promptTarget">—</span></span>
-              <input id="promptFilePicker" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.txt,.md,.csv,.json" multiple hidden>
+              <input id="promptFilePicker" type="file" multiple hidden>
               <button class="prompt-clip" id="promptClip" type="button" title="Attach files" aria-label="Attach files">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 14 6-6a2 2 0 0 1 3 3l-7 7a4 4 0 0 1-6-6l8-8a6 6 0 0 1 8 8l-8 8"/></svg>
               </button>
@@ -1764,6 +1787,7 @@
 <script src="vendor/xterm-5.5.0/xterm.js"></script>
 <script src="vendor/addon-fit-0.10.0/addon-fit.js"></script>
 <script src="vendor/addon-web-links-0.11.0/addon-web-links.js"></script>
+<script src="local_model_makers.js"></script>
 <script src="roster_descriptor.js"></script>
 <script src="roster_edit.js"></script>
 <script src="demo_mask.js"></script>
@@ -2546,6 +2570,21 @@
           {
             "property": "outline",
             "selector": "#promptSend:focus-visible",
+            "value": "2px solid var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".prompt-visibility-trigger,.prompt-visibility-option",
+            "value": "var(--ink)"
+          },
+          {
+            "property": "background",
+            "selector": ".prompt-visibility-menu",
+            "value": "var(--elev)"
+          },
+          {
+            "property": "outline",
+            "selector": ".prompt-visibility-trigger:focus-visible,.prompt-visibility-option:focus-visible",
             "value": "2px solid var(--ink-dim)"
           },
           {
@@ -3651,6 +3690,11 @@
             "value": "2px solid var(--ink-dim)"
           },
           {
+            "property": "outline",
+            "selector": ".prompt-visibility-trigger:focus-visible,.prompt-visibility-option:focus-visible",
+            "value": "2px solid var(--ink-dim)"
+          },
+          {
             "property": "color",
             "selector": ".prompt-remove-recipient",
             "value": "var(--ink-dim)"
@@ -4019,7 +4063,7 @@
         "unit": "effect-component"
       },
       "source": {
-        "digest": "483e1e0152588dc18b5bfc9078ca36a7d8bb8999836a99a6fa763326568d34ac",
+        "digest": "cbca21589e1ec9e1baa9bfe2451cb7f0b08b0c5e44ede3d9b36a3a7e20d249e6",
         "records": [
           ":root\u0000--amber-glow",
           ".miniorrery.telemetry-network\u0000background",
@@ -4044,6 +4088,7 @@
           ".tab.active-pane .led\u0000box-shadow",
           ".screen\u0000box-shadow",
           ".screen .glassglow\u0000background",
+          ".prompt-visibility-menu\u0000box-shadow",
           ".slashmenu\u0000box-shadow",
           ".sendguard\u0000box-shadow",
           ".network-panel\u0000box-shadow",
@@ -4080,7 +4125,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "24dd7379554d41da9208c395c2dc9cb9e96c96ffb5e3f6eea0b596fa8167ef4d",
+        "digest": "13048c6028cc56508a3e5283f4ebc57b5edee14d5ebc08da268e31ebb286a423",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4173,7 +4218,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "aa011744cdd5e208b8ead23ab8be3ebb73b443dae77f6d3c1c6244295ace4632",
+        "digest": "b3e0a4e2ac7bcd83c911eab7e9ac3ac34e30e3dd477de4b354c3809aecdfd29b",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -4202,9 +4247,9 @@
       }
     }
   },
-  "inventory_digest": "9c04295d35b0318a9b9caffa784da5b7d48228d30873a98428b5f6a5639004ac",
+  "inventory_digest": "52e1c3e12876cc0a642432d52c6dede5d0162382af16aabf432f68eaaec38f0c",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "431096044047487a234fe33225c31bf0c535bc1920c0511f2ddccd6910ae8254",
+  "source_digest": "afd4b163ddaec60caf67af4f0211fb715b184026400c66f429d940d4943e4c4f",
   "surface": "cockpit",
   "version": 1
 }
@@ -5031,6 +5076,7 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   ['.tab.active-pane .led','box-shadow',['state','emissive'],'scale','html[data-theme-axis="glow"] .tab.active-pane .led'],
   ['.screen','box-shadow',['elevation'],'preserve'],
   ['.screen .glassglow','background',['emissive'],'scale','html[data-theme-axis="glow"] .screen .glassglow'],
+  ['.prompt-visibility-menu','box-shadow',['elevation'],'preserve'],
   ['.slashmenu','box-shadow',['elevation'],'preserve'],
   ['.sendguard','box-shadow',['state','elevation'],'preserve'],
   ['.network-panel','box-shadow',['elevation'],'preserve'],
@@ -8862,9 +8908,8 @@ const ROSTER_PROVIDER={
   anthropic:{asset:'anthropic',label:'Claude'},
   openai:{asset:'openai',label:'Codex (OpenAI)'},
   google:{asset:'google',label:'Gemini'},
-  deepseek:{asset:'deepseek',label:'DeepSeek'},
-  qwen:{asset:'qwen',label:'Qwen'},
-  glm:{asset:'glm',label:'GLM'},
+  ...Object.fromEntries(Object.entries(window.OrreryLocalModelMakers).map(
+    ([asset,{label}])=>[asset,{asset,label}])),
 };
 function rosterIsLocal(agent){
   const provider=String(agent.provider||'').trim().toLowerCase();
@@ -8878,11 +8923,7 @@ function rosterProviderKey(agent){
   // Backend identity or explicit locality selects the local presentation.
   // Use the resolved model ID, never the adapter/program or profile nickname.
   if(rosterIsLocal(agent)){
-    const model=String(agent.model_raw||agent.model||'').toLowerCase();
-    if(/deepseek/.test(model))return 'deepseek';
-    if(/qwen/.test(model))return 'qwen';
-    if(/(?:^|[^a-z0-9])glm/.test(model))return 'glm';
-    return '';
+    return window.orreryLocalModelMaker(String(agent.model_raw||agent.model||''));
   }
   if(Object.hasOwn(alias,provider))return alias[provider];
   const model=String(agent.model||'').toLowerCase();
@@ -11829,11 +11870,14 @@ let histIndex=-1,histDraft='';
    accidental reloads. Saved on every input, cleared only by a send. */
 const PROMPT_DRAFT_KEY=soloSession?paneDraftKey(paneScope,soloSession):'oc-prompt-draft';
 const PROMPT_RECIPIENTS_KEY=PROMPT_DRAFT_KEY+':recipients';
+const PROMPT_VISIBILITY_KEY=PROMPT_DRAFT_KEY+':recipient-visibility';
 let promptRecipientPins=new Map();
+let savedPromptVisibility;
 try{
   const savedDraft=localStorage.getItem(PROMPT_DRAFT_KEY);
   if(savedDraft)promptInput.value=savedDraft;
   const saved=JSON.parse(localStorage.getItem(PROMPT_RECIPIENTS_KEY)||'[]');
+  savedPromptVisibility=localStorage.getItem(PROMPT_VISIBILITY_KEY);
   if(Array.isArray(saved)){
     for(const record of saved.slice(0,256)){
       if(record&&typeof record.name==='string'&&/^[A-Za-z][A-Za-z0-9_-]{0,95}$/.test(record.name)){
@@ -11850,6 +11894,8 @@ function saveDraft(){
     else localStorage.removeItem(PROMPT_DRAFT_KEY);
     if(promptRecipientPins.size)localStorage.setItem(PROMPT_RECIPIENTS_KEY,JSON.stringify([...promptRecipientPins.values()]));
     else localStorage.removeItem(PROMPT_RECIPIENTS_KEY);
+    if(promptRecipientPins.size&&promptRecipients.visibility==='hidden')localStorage.setItem(PROMPT_VISIBILITY_KEY,'hidden');
+    else localStorage.removeItem(PROMPT_VISIBILITY_KEY);
   }catch(_){/* quota */}
 }
 window.addEventListener('beforeunload',saveDraft);
@@ -12058,12 +12104,14 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
           continue;
         }
         const claude=record.vocabulary.program==='claude';
-        const references=paths.map(path=>(claude?'@':'')+path).join('\n')+(claude&&paths.length?' ':'');
+        const references=paths.map(path=>path.startsWith('/')?
+          "[file: '"+path.replaceAll("'","'\\''")+"']":(claude?'@':'')+path).join('\n')+
+          (claude&&paths.at(-1)?.startsWith('./')?' ':'');
         const body=[record.draft,references].filter(Boolean).join('\n\n');
         // The chooser leaves a space for arguments. A bare command should reach
         // the terminal without it so the terminal can show its matching picker.
-        const text=compose(body).replace(/^(\/[\p{L}\p{N}_.:-]+)[ \t]+$/u,'$1');
-        receipt=trackPrompt(target,text,compose(record.draft),entries);
+        const text=compose(body,record).replace(/^(\/[\p{L}\p{N}_.:-]+)[ \t]+$/u,'$1');
+        receipt=trackPrompt(target,text,compose(record.draft,record),entries);
         status=await requestComposerInput(target,{type:'submit-prompt',data:text});
         if(status==='completion-mismatch'){
           status='refused';problem='Terminal selected a different slash command';
@@ -12129,7 +12177,10 @@ function sendPrompt(opts={}){
   function deliver(){
     hideSendGuard();
     const plain=readerReply?.compose('')||'';
-    return sendPreparedPrompt(records,draft,value=>plain+value,()=>!referenceGuard||referenceGuard(target),entries,Boolean(names.length));
+    const mode=promptRecipients.visibility;
+    const recipients=mode==='visible'&&names.length>1?records.filter(record=>sameRecipient(record)).map(record=>record.name):[];
+    const compose=(value,record)=>plain+OrreryPromptRecipients.recipientPrefix(mode,recipients,record.name,draft)+value;
+    return sendPreparedPrompt(records,draft,compose,()=>!referenceGuard||referenceGuard(target),entries,Boolean(names.length));
   }
 }
 async function sendInterrupt(){
@@ -12143,6 +12194,8 @@ async function sendInterrupt(){
 }
 const promptRecipients=OrreryPromptRecipients.mount({
   input:promptInput,meta:document.querySelector('.prompt-meta'),
+  initialVisibility:promptRecipientPins.size?savedPromptVisibility:null,
+  onVisibilityChange:saveDraft,
   portrait:name=>{
     const image=document.createElement('img');image.className='prompt-ava';image.alt='';
     image.src='/telemetry/portrait?v=3&name='+encodeURIComponent(name);
@@ -12169,7 +12222,15 @@ const promptFiles=OrreryPromptAttachments.mount({
   picker:document.getElementById('promptFilePicker'),list:document.getElementById('promptFiles'),
   onChange:()=>{hideSendGuard();promptCard.refresh();},
   onError:message=>showToast(message,true),mayEdit:()=>!promptBusy,
+  pickPaths:window.__TAURI__?.core?.invoke?()=>window.__TAURI__.core.invoke('pick_attachment_paths'):null,
 });
+const nativePromptWebview=window.__TAURI__?.webview?.getCurrentWebview?.();
+nativePromptWebview?.onDragDropEvent(({payload})=>{
+  const host=promptInput.closest('.promptbar'),position=payload.position;
+  const over=position&&host.contains(document.elementFromPoint(position.x/devicePixelRatio,position.y/devicePixelRatio));
+  host.toggleAttribute('data-dragging',Boolean(over&&!promptBusy&&(payload.type==='enter'||payload.type==='over')));
+  if(over&&payload.type==='drop')promptFiles.addPaths(payload.paths);
+}).catch(()=>{/* Browser drag events remain available. */});
 const promptCard=OrreryPromptComposer.mount({
   input:promptInput,button:promptSendBtn,
   getDestination:()=>{
@@ -12201,7 +12262,7 @@ async function readClipboardAttachments(){
     try{
       const result=await Promise.race([
         invoke('clipboard_file_paths',{attachments:true}),
-        new Promise((_,reject)=>{timeout=setTimeout(reject,4500);}),
+        new Promise((_,reject)=>{timeout=setTimeout(reject,16000);}),
       ]);
       if(Array.isArray(result?.attachments))return result;
     }catch(_){}finally{clearTimeout(timeout);}
@@ -12221,14 +12282,16 @@ function handleComposerPaste(event){
   if(!files.length&&!fileHint&&data?.getData('text/plain'))return;
   event.preventDefault();
   if(promptBusy)return;
-  if(files.length){promptFiles.add(files);return;}
+  if(files.length&&(hostPlatform.host!=='mac'||files.every(file=>file.path))){
+    promptFiles.add(files);return;
+  }
   const refusal=composerPasteRefusal(hostPlatform);
   if(refusal){
     showToast(refusal,true);
     if(hostPlatform.host==='unknown')loadHostPlatform();
     return;
   }
-  void promptFiles.paste(readClipboardAttachments);
+  void promptFiles.paste(readClipboardAttachments,files);
 }
 promptInput.addEventListener('paste',handleComposerPaste);
 

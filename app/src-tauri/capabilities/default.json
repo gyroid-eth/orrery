@@ -9,6 +9,7 @@
   "permissions": [
     "core:default",
     "allow-clipboard-file-paths",
+    "allow-pick-attachment-paths",
     "allow-open-external-url",
     "allow-reveal-local-path",
     "allow-set-native-color-theme",
