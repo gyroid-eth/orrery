@@ -20,7 +20,7 @@ from pathlib import Path
 from urllib.parse import quote
 from conversation_mail import received, received_queued, sent
 from conversation_images import hermes_content, native_image
-from conversation_steps import claude_call, claude_result, mark_step_boundary, tool_call, tool_result
+from conversation_steps import claude_call, claude_result, image_read_path, mark_step_boundary, tool_call, tool_result
 
 from conversation_history import (AGY_PROGRAMS, HistoryUnavailable, MAX_SCAN, MAX_TEXT, PAGE_SIZE,
     open_bound_transcript, assert_transcript_identity, conversation_binding, read_codex_page, recorded_model)
@@ -208,6 +208,8 @@ def agy_tool(call):
             return prefix + '__' + tool, args.get('Arguments')
     if name == 'read_file' and isinstance(args, dict):
         return name, {'path': args.get('Path') or args.get('path')}
+    if name in {'view_file', 'view_image'} and isinstance(args, dict):
+        return name, {'path': args.get('AbsolutePath') or args.get('Path') or args.get('path')}
     return name, args
 
 
@@ -414,10 +416,13 @@ def artifact_item(item,p,index,event=None):
         calls=item.get('tool_calls')
         if isinstance(calls,list) and index<=len(calls):
             call=calls[index-1]
-            if isinstance(call,dict) and call.get('name')=='call_mcp_tool':
-                name,value=agy_tool(call)
-                if name not in ('mcp__orrery_mail__show_files','mcp__agentstack__show_files') or not isinstance(value,dict):
-                    return {}
+            name,value=agy_tool(call)
+            if image := image_read_path(name, value):
+                return dict(type='recorded_image_read',path=image)
+            if (not isinstance(call,dict) or call.get('name')!='call_mcp_tool'
+                    or name not in ('mcp__orrery_mail__show_files','mcp__agentstack__show_files')
+                    or not isinstance(value,dict)):
+                return {}
     if not isinstance(name,str):return {}
     return dict(type='response_item',payload=dict(type='function_call',name=name,
                 arguments=value if isinstance(value,str) else json.dumps(value)))
@@ -515,6 +520,7 @@ class Reader:
         if self.provider=='antigravity':
             # No UUID header. The authoritative receipt binds the UUID-named
             # directory, and the reader pins and revalidates its regular file.
+            self.cwd=self.row.get('history_workspace')
             return
         if self.provider=='dsh' and self.path.endswith('.zstd'):
             frame=self.frame(0)

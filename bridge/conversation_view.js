@@ -587,7 +587,8 @@
     }
     const preview=root.OrreryConversationPreview?.mount({host:el('.conversation-preview'),source,onBeforeOpen:layoutChanged,onClose:layoutChanged,onActivate:()=>expand(true),mutate:changeTail,
       onReference:onReference?ref=>{
-        const event=ref.path?ref.origin:[...events.values()].find(event=>event.references?.some(value=>value.id===ref.id));
+        const event=ref.path?ref.origin:[...events.values()].find(event=>
+          event.step?.image?.id===ref.id||event.references?.some(value=>value.id===ref.id));
         if(event)reference(event,ref.path||ref.label,'file',()=>preview.close());
       }:null});
     const stopPathLinks=root.OrreryConversationMarkdown?.observePaths?.(panel,source);
@@ -603,6 +604,7 @@
       event.text.replace(/\s+/gu,' ').trim().startsWith(sample.text.replace(/\s+/gu,' ').trim());
     const stepView=root.OrreryConversationSteps?.mount({host:eventsEl,
       mutate:fn=>changeTail(fn,false),onFocusLost:()=>scroll.focus({preventScroll:true}),
+      previewImage:preview?ref=>preview.open(ref):null,
       readDiff:(ref,options)=>source.stepDiff(ref,options),
       readCommand:(ref,options)=>source.stepCommand(ref,options)});
     const byteSize=event=>new TextEncoder().encode(JSON.stringify(event)).byteLength;

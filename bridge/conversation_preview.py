@@ -27,6 +27,7 @@ from conversation_history import codex_event, codex_user_content, open_bound_tra
 from conversation_history import conversation_binding as binding
 from conversation_images import input_images, saved_path, dsh_image_path
 from conversation_markdown_images import IMAGE_EXT, local_image_target, markdown_image_targets
+from conversation_steps import step_image_path
 import conversation_step_command as step_command
 import conversation_step_diff as step_diff
 from mobile_attachment_store import ATTACHMENT_NAME, DIRECTORIES, FILE_SUFFIX, attachment_label, valid_extension
@@ -365,20 +366,27 @@ class ReferenceStore:
             return
         if projection['diff']:
             event['diff']=projection['diff'];event['diff_status']=projection['diff_status']
+        step=event.get('step',{})
+        image=step_image_path(item) if step.get('phase') in {'call','complete'} and step.get('status')!='failed' else None
+        paths=[(value,False) for value in projection['paths']]
+        if image is not None:paths.append((image,True))
         refs=[]
         with self.lock:
             self.prune()
-            for index,value in enumerate(projection['paths']):
-                try:path=self.policy(value,cwd,shown=value in projection['shown_paths'],
-                                     show_files=value in projection.get('show_files_paths',()))
+            for index,(value,step_image) in enumerate(paths):
+                try:path=self.policy(value,cwd,shown=step_image or value in projection['shown_paths'],
+                                     show_files=step_image or value in projection.get('show_files_paths',()))
                 except (PreviewUnavailable,OSError,ValueError):continue
-                key=(binding(row),identity(stream),event['id'],digest,index,str(path))
+                key=(binding(row),identity(stream),event['id'],digest,index,step_image,str(path))
                 ref=self.by_key.get(key)
                 if ref not in self.refs or self.refs[ref]['key']!=key:ref=secrets.token_urlsafe(24)
                 self.by_key[key]=ref
-                self.refs[ref]=dict(key=key,row=binding(row),inode=identity(stream),offset=event['id'] if hasattr(stream,'provider') and stream.provider!='codex' else int(event['id']),digest=digest,index=index,expires=self.clock()+self.ttl)
+                self.refs[ref]=dict(key=key,row=binding(row),inode=identity(stream),offset=offset,digest=digest,
+                                    index=index,step_image=step_image,expires=self.clock()+self.ttl)
                 self.refs.move_to_end(ref)
-                refs.append(dict(id=ref,label=path.name[:160],kind='image' if path.suffix.lower() in IMAGE_EXT else 'file'))
+                reference=dict(id=ref,label=path.name[:160],kind='image' if path.suffix.lower() in IMAGE_EXT else 'file')
+                if step_image:event['step']=dict(step,image=reference)
+                else:refs.append(reference)
             self.prune()
         if refs:event['references']=refs
 
@@ -538,11 +546,16 @@ class ReferenceStore:
                     result=self.read_input(images[entry['index']],stream,thumbnail=thumbnail,mobile=mobile)
                     result=dict(result,label=f"Input image {entry['index']+1}.png",notice='Recorded input image')
                 else:
-                    projection=extract_artifacts(item);paths=projection['paths']
-                    if entry['index']>=len(paths):raise PreviewUnavailable('reference_expired')
-                    value=paths[entry['index']]
-                    options=dict(shown=value in projection['shown_paths'],
-                                 show_files=value in projection.get('show_files_paths',()))
+                    if entry.get('step_image'):
+                        value=step_image_path(item)
+                        if value is None:raise PreviewUnavailable('reference_expired')
+                        options=dict(shown=True,show_files=True)
+                    else:
+                        projection=extract_artifacts(item);paths=projection['paths']
+                        if entry['index']>=len(paths):raise PreviewUnavailable('reference_expired')
+                        value=paths[entry['index']]
+                        options=dict(shown=value in projection['shown_paths'],
+                                     show_files=value in projection.get('show_files_paths',()))
                     path=self.policy(value,workspace(stream),**options)
                     if str(path)!=entry['key'][-1]:raise PreviewUnavailable('reference_expired')
                     result=self.read_file(path,thumbnail=thumbnail,mobile=mobile)
