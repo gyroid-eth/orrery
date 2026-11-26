@@ -29,6 +29,8 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import quote, urlencode
 
+from local_model_makers import LOCAL_MAKER_ASSETS
+
 # Manual and desktop launches can reach this entry point without the shell check.
 if __name__ == "__main__" and sys.version_info < (3, 11):
     raise SystemExit("Python 3.11 or newer is required.")
@@ -5097,7 +5099,7 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "orrery_view.css", "mail_view.css", "spawn_picker.css", "theme_light.css",
     "cockpit_tour.css", "telemetry_light.css",
     "spawn_picker.js", "effort_slider.js", "spawn_catalog_loader.js", "prefs_sync.js", "phone_settings.js",
-    "theme_core.js", "theme_controller.js", "roster_descriptor.js", "roster_edit.js", "demo_mask.js",
+    "theme_core.js", "theme_controller.js", "local_model_makers.js", "roster_descriptor.js", "roster_edit.js", "demo_mask.js",
     "demo_mode.js", "orrery_view.js", "mail_view.js", "cockpit_tour.js",
     "cockpit_full_tour.js", "telemetry_light.js", "prompt_spring.js", "prompt_composer.js", "prompt_recipients.js", "prompt_attachments.js",
     "conversation_source.js", "conversation_view.js", "conversation_view.css", "conversation_preview.js", "conversation_reply.js",
@@ -5110,7 +5112,7 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "vendor/addon-web-links-0.11.0/addon-web-links.js",
 )}
 PUBLIC_FILES.update({"/cockpit-assets/" + name: "assets/" + name for name in (
-    "anthropic.svg", "openai.svg", "google.svg", "qwen.svg", "glm.svg", "deepseek.svg", "dsh.svg", "hermes.png",
+    "anthropic.svg", "openai.svg", "google.svg", "dsh.svg", "hermes.png", *LOCAL_MAKER_ASSETS,
 )})
 
 
