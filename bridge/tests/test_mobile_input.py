@@ -124,7 +124,7 @@ def test_preview_change_discards_body_and_prepared_send_is_once(tmp_path):
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize('other',[False,True])
+@pytest.mark.parametrize('other',[False,True,'multiple'])
 def test_mobile_question_uses_verified_preview_and_confirmed_answer(tmp_path,other):
     import mobile_input as mobile
     from test_reader_approval import hermes_question
@@ -139,7 +139,10 @@ def test_mobile_question_uses_verified_preview_and_confirmed_answer(tmp_path,oth
 
         token='q'*32
         question=dict(state='ready',kind='question',harness='hermes',token=token,mode='choice',
-            body='Which report?',choices=[dict(id=1,label='Summary'),dict(id=2,label='Other',other=True)],draft_empty=True)
+            body='Which report?',choices=[dict(id=1,label='Summary'),dict(id=2,label='Other',other=True)],draft_empty=True,multiple=False)
+        if other=='multiple':
+            question.update(multiple=True,choices=[dict(id=1,label='Summary',checked=False),
+                dict(id=2,label='Detailed',checked=False),dict(id=3,label='Other',other=True,checked=False)])
         calls=[]
         class Approval:
             async def inspect(self,pane,owner):
@@ -163,14 +166,15 @@ def test_mobile_question_uses_verified_preview_and_confirmed_answer(tmp_path,oth
         preview=await coordinator.request('preview',dict(scope,choice=target['choice']))
         assert preview['question']['body']=='Which report?'
         args=dict(scope,choice=target['choice'],revision=preview['target']['revision'],
-                  text='Custom answer' if other else 'Summary')
+                  text='Summary · Detailed' if other=='multiple' else 'Custom answer' if other else 'Summary')
         with pytest.raises(mobile.InputRefused):
             await coordinator.request('prepare',args)
-        prepared=await coordinator.request('prepare',dict(args,question={'token':token,'choice':2 if other else 1}))
+        selected=[1,2] if other=='multiple' else 2 if other else 1
+        prepared=await coordinator.request('prepare',dict(args,question={'token':token,'choice':selected}))
         commit=dict(scope,intent=prepared['intent'],confirmation=prepared['confirmation'])
         assert (await coordinator.request('commit',commit))['state']=='accepted'
         assert (await coordinator.request('commit',commit))['state']=='accepted'
-        assert calls[1:]==([(2,'Custom answer')] if other else [(1,None)])
+        assert calls[1:]==[(selected,'Custom answer' if other is True else None)]
         coordinator.close()
     asyncio.run(scenario())
 

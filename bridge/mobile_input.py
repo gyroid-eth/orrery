@@ -19,6 +19,8 @@ import time
 import unicodedata
 from urllib.parse import unquote
 
+from question_screen import question_candidate, valid_choice
+
 CONTRACT='orrery-mobile-pane-v1'
 MAX_TEXT_BYTES=4096
 MAX_JSON_BYTES=16384
@@ -491,14 +493,13 @@ class InputCoordinator:
                     value=self._reply(target=target,text='',truncated=truncated,controls_removed=controls,
                         observed_at=int(time.time()),max_lines=max_lines,max_bytes=max_bytes)
                     row['question']=None
-                    if (not self.fresh and self.approval_for
-                            and (' needs your input' in text or ' が入力を求めています' in text)):
+                    if self.approval_for and question_candidate(text):
                         owner=row.setdefault('question_owner',object())
                         question=await self.approval_for(row['bridge']).inspect(row['pane_id'],owner)
                         if question.get('state')=='ready' and question.get('kind')=='question':
                             row['question']=question
                             value['question']={k:question[k] for k in
-                                ('token','kind','harness','mode','body','choices','draft_empty')}
+                                ('token','kind','harness','mode','body','choices','draft_empty','multiple')}
                     # Fit the complete serialized envelope, including escaped quotes.
                     budget=MAX_JSON_BYTES-len(encode_json(value))
                     size=lambda tail:len(json.dumps(tail,ensure_ascii=False).encode('utf-8'))-2
@@ -524,18 +525,21 @@ class InputCoordinator:
                 question=row.get('question')
                 choice=payload.get('question')
                 if (question is None or not isinstance(choice,dict) or set(choice)!={'token','choice'}
-                        or choice['token']!=question['token'] or type(choice['choice']) is not int):
+                        or choice['token']!=question['token'] or not valid_choice(choice['choice'])):
                     raise InputRefused('input_target_changed')
-                option=next((item for item in question['choices'] if item['id']==choice['choice']),None)
-                other=question['mode']=='other' and choice['choice']==0
-                if question['mode']=='other' and not other or not other and option is None:
+                selected=choice['choice']
+                freeform=question['mode']=='other'
+                multiple=question.get('multiple',False) and not freeform
+                requested=selected if isinstance(selected,list) else [selected]
+                options=[item for item in question['choices'] if item['id'] in requested]
+                if (multiple!=isinstance(selected,list)
+                        or (selected!=0 if freeform else len(options)!=len(requested))
+                        or question['draft_empty'] is not True):
                     raise InputRefused('input_target_changed')
-                if other or option.get('other'):
-                    if question['draft_empty'] is not True:
-                        raise InputRefused('input_target_changed')
+                if freeform or any(option.get('other') for option in options):
                     text=payload['text']
                 else:
-                    if payload['text']!=option['label']:
+                    if payload['text']!=' · '.join(option['label'] for option in options):
                         raise InputRefused('input_request_invalid')
                     text=None
                 answer=dict(choice,owner=row['question_owner'],text=text)
@@ -581,9 +585,16 @@ class InputCoordinator:
             elif question:=row.get('question'):
                 async def check():
                     return valid() and await self._read(descriptor,time.monotonic()+3)==descriptor['proof']
-                answer=await self.approval_for(bridge).answer(descriptor['pane_id'],question['owner'],
-                    question['token'],question['choice'],row['intent'],text=question['text'],
-                    check=check,claim=claim,valid=valid)
+                proof=None
+                if self.fresh:
+                    from runtime_target import FreshEffectProof
+                    proof=FreshEffectProof(bridge.config.tmux_bin,'input')
+                try:
+                    answer=await self.approval_for(bridge).answer(descriptor['pane_id'],question['owner'],
+                        question['token'],question['choice'],row['intent'],text=question['text'],
+                        check=check,claim=claim,valid=valid,**({'proof':proof} if proof else {}))
+                finally:
+                    if proof is not None:proof.close()
                 outcome={'sent':'accepted','unknown':'unknown'}.get(answer['state'],'refused')
             else:
                 outcome=await bridge.send_confirmed_input(descriptor['pane_id'],row['text'],

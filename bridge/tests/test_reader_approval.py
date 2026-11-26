@@ -292,3 +292,45 @@ def test_unattached_approval_gets_an_explicit_unsent_reply(tmp_path):
         await manager.handle_message(peer,set(),dict(type='approval-answer',paneId='%1',session='Fixture',requestId='request'))
         assert peer.frames==[dict(type='approval',paneId='%1',session='Fixture',requestId='request',state='unavailable',message='Pane unavailable')]
     asyncio.run(run())
+
+@pytest.mark.parametrize('harness,screen,labels,multiple', [
+    ('codex', """  Question 1/1 (1 unanswered)
+  Which report?
+  › 1. Summary            Use the short report.
+    2. Detailed           Use the complete report.
+    3. None of the above  Optionally, add details in notes (tab)
+  tab to add notes | enter to submit answer | esc to interrupt""",
+        ['Summary', 'Detailed', 'None of the above'], False),
+    ('dsh', """    ─────────────▾  📋 Question 1/1   ─────────────
+    ◈ Reports
+    Which report?
+    ❯○ Summary
+       Use the short report.
+     ◉ Detailed
+       Use the complete report.
+     ✎ Custom answer： Type directly…
+    ↑/↓ select · Space multi-select · Ctrl+V paste · Type text to attach an answer · Enter submit · Esc
+    cancel · Ctrl+K to fold / click the header
+   108/131k 0.1%
+   esc to interrupt""",
+        ['Summary', 'Detailed', 'Custom answer'], True),
+    ('agy', """Question
+────────────────────────────────────────────────────
+Question 1/1: Which report?
+> 1. [ ] Summary
+  2. [x] Detailed
+  3. Write-in...
+  ↑/↓ Navigate · space Toggle · enter Submit · esc Skip
+esc to cancel                           plan · Gemini 3.1 Pro · low""",
+        ['Summary', 'Detailed', 'Write-in...'], True),
+])
+def test_native_question_options_require_current_controls(harness,screen,labels,multiple):
+    result=parse_screen(screen,'zsh',harness)
+    assert result['kind']=='question' and result['multiple'] is multiple
+    assert result['body']=='Which report?'
+    assert [item['label'] for item in result['choices']]==labels
+    assert result['choices'][-1]['other']
+    assert not parse_screen(screen+'\n❯ Ordinary composer', 'zsh', harness)
+    assert not parse_screen(screen, 'zsh', 'unknown')
+    if multiple:
+        assert [item['id'] for item in result['choices'] if item['checked']]==[2]

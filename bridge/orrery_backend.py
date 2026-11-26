@@ -2163,8 +2163,10 @@ async def approval_harness(request, bridge, pane):
             return 'codex'
         if program in ('claude', 'claude-code') and provider in ('anthropic', 'claude'):
             return 'claude'
-        if program == 'hermes':
-            return 'hermes'
+        if program in ('hermes', 'dsh'):
+            return program
+        if program in ('agy', 'antigravity', 'gemini-cli') and provider in ('google', 'gemini', 'agy', 'antigravity'):
+            return 'agy'
     except (ClientError, asyncio.TimeoutError, ValueError, TypeError, KeyError):
         pass
     return None
