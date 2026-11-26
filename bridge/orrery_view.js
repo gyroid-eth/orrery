@@ -35,6 +35,8 @@ const PLANET={
 const MAIL_EDGE_LIFETIME=90000;
 const COMM_PROMOTION_HYSTERESIS=4000;
 const MAX_COMETS=6;
+const MAX_QUEUED_COMETS=40;
+const MINI_COMET_TRAVEL_MS=1700;
 const MOTION_STIFFNESS=150;
 const MOTION_DAMPING=22;
 const MOTION_SETTLE_DISTANCE=.1;
@@ -49,6 +51,8 @@ let planetarium=null;
 let planetSvg=null;
 let planetLastFocus=null;
 let activeComets=0;
+let cometId=0;
+const queuedComets=[];
 let activeMailRoute=null;
 const commPairs=new Map();
 let commRefreshTimer=null;
@@ -1035,11 +1039,9 @@ function closePlanetarium(){
 }
 
 function recipientNames(message){
-  if(message.recipient)return [typeof message.recipient==='string'
-    ?message.recipient:message.recipient.name].filter(Boolean);
-  if(!Array.isArray(message.recipients))return [];
-  return message.recipients.map(recipient=>
-    typeof recipient==='string'?recipient:recipient&&recipient.name).filter(Boolean);
+  const recipients=Array.isArray(message.recipients)?message.recipients:[];
+  return [...new Set([message.recipient,...recipients].map(recipient=>
+    typeof recipient==='string'?recipient:recipient?.name||recipient?.recipient).filter(Boolean))];
 }
 function senderName(message){
   return typeof message.sender==='string'
@@ -1278,8 +1280,6 @@ function subjectLabel(subject){
     :characters.slice(0,39).join('')+'…';
 }
 function animateComet(target,positions,fromName,toName,message,large){
-  const from=positions.get(fromName),to=positions.get(toName);
-  if(!from||!to||motionIsReduced())return Promise.resolve();
   const important=/^(high|urgent)$/i.test(message.importance||'');
   const flight=svgEl('g',{
     class:'orrery-comet-flight'+(important?' important':''),
@@ -1288,6 +1288,18 @@ function animateComet(target,positions,fromName,toName,message,large){
     rx:large?20:9,ry:large?3.2:1.45});
   const halo=svgEl('circle',{class:'orrery-comet-halo',cx:0,cy:0,r:large?10:4.8});
   const head=svgEl('circle',{class:'orrery-comet',cx:0,cy:0,r:large?(important?6:4.5):(important?2.9:2.1)});
+  if(!large){
+    const id='mini-comet-tail-'+(++cometId);
+    const gradient=svgEl('linearGradient',{id});
+    gradient.append(
+      svgEl('stop',{offset:0,'stop-color':'var(--amber)','stop-opacity':0}),
+      svgEl('stop',{offset:1,'stop-color':'var(--amber)'}),
+    );
+    const defs=svgEl('defs');
+    defs.appendChild(gradient);
+    flight.appendChild(defs);
+    tail.style.fill=`url(#${id})`;
+  }
   flight.append(tail,halo,head);
   if(large){
     const label=svgEl('text',{
@@ -1298,18 +1310,22 @@ function animateComet(target,positions,fromName,toName,message,large){
     flight.appendChild(label);
   }
   target.appendChild(flight);
-  const duration=700;
+  const duration=large?700:MINI_COMET_TRAVEL_MS;
   return new Promise(resolve=>{
     let started=null;
-    function frame(now){
+    function finish(){flight.remove();resolve();}
+    function animateFlight(now){
+      const from=positions.get(fromName),to=positions.get(toName);
+      if(!target.isConnected||target.hasAttribute('hidden')||document.hidden||motionIsReduced()||
+         !from||from.removing||!to||to.removing){finish();return;}
       if(started===null)started=now;
       const progress=Math.min(1,(now-started)/duration);
       const eased=progress<.5
         ?4*progress*progress*progress
         :1-Math.pow(-2*progress+2,3)/2;
-      const curve=commPathBetween(
-        from,to,positions,large&&planetMotion
-          ?planetMotion.layoutDimensions||PLANET:miniMotion.layoutDimensions||MINI);
+      const dimensions=large?planetMotion.layoutDimensions||PLANET:miniMotion.layoutDimensions||MINI;
+      const offset=large?undefined:miniMotion.edgeOffsets?.get(pairKey(fromName,toName));
+      const curve=commPathBetween(from,to,positions,dimensions,offset);
       const point=curve.point(eased);
       const envelope=cometEnvelope(progress);
       const ahead=curve.point(Math.min(1,eased+.01)),behind=curve.point(Math.max(0,eased-.01));
@@ -1318,10 +1334,10 @@ function animateComet(target,positions,fromName,toName,message,large){
       flight.style.opacity=String(envelope.opacity);
       tail.setAttribute('transform',`rotate(${angle})`);
       tail.style.opacity=String(envelope.tailOpacity);
-      if(progress<1)requestAnimationFrame(frame);
-      else{flight.remove();resolve();}
+      if(progress<1)requestAnimationFrame(animateFlight);
+      else finish();
     }
-    requestAnimationFrame(frame);
+    requestAnimationFrame(animateFlight);
   });
 }
 function cometEnvelope(t){
@@ -1333,30 +1349,40 @@ function cometEnvelope(t){
 }
 function launchComet(message,toName){
   const fromName=senderName(message);
-  if(!fromName||!miniPositions.has(fromName)||!miniPositions.has(toName))return;
-  if(activeComets>=MAX_COMETS)return;
-  activeComets+=1;
-  const animations=[
-    animateComet(miniSvg,miniPositions,fromName,toName,message,false),
-  ];
+  if(!fromName||fromName===toName)return;
+  const animations=[];
+  if(!miniSvg.hasAttribute('hidden')&&miniPositions.has(fromName)&&miniPositions.has(toName)){
+    animations.push(animateComet(miniSvg,miniPositions,fromName,toName,message,false));
+  }
   if(planetarium&&planetarium.classList.contains('on')&&
      planetPositions.has(fromName)&&planetPositions.has(toName)){
     animations.push(animateComet(
       planetSvg,planetPositions,fromName,toName,message,true));
   }
-  Promise.all(animations).finally(()=>{activeComets=Math.max(0,activeComets-1);});
+  if(!animations.length)return;
+  activeComets+=1;
+  Promise.all(animations).finally(()=>{
+    activeComets-=1;
+    drainComets();
+  });
+}
+function drainComets(){
+  if(document.hidden||motionIsReduced()){queuedComets.length=0;return;}
+  while(queuedComets.length&&activeComets<MAX_COMETS){
+    const [message,recipient]=queuedComets.shift();
+    launchComet(message,recipient);
+  }
 }
 function receiveMail(messages){
   recordMessages(messages);
   renderMini();
   renderPlanetarium();
-  const flights=[];
+  if(document.hidden||motionIsReduced())return;
   (messages||[]).forEach(message=>{
-    recipientNames(message).forEach(recipient=>flights.push([message,recipient]));
+    recipientNames(message).forEach(recipient=>queuedComets.push([message,recipient]));
   });
-  requestAnimationFrame(()=>{
-    flights.forEach(([message,recipient])=>launchComet(message,recipient));
-  });
+  if(queuedComets.length>MAX_QUEUED_COMETS)queuedComets.splice(0,queuedComets.length-MAX_QUEUED_COMETS);
+  requestAnimationFrame(drainComets);
 }
 
 document.addEventListener('oc:agents',event=>{

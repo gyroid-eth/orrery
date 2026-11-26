@@ -114,6 +114,54 @@ def test_active_mail_filter_can_be_cleared_with_one_click(cockpit):
     assert js("document.querySelector('.mail-clear-filter span').textContent") == 'BuildNode'
 
 
+def test_mini_comets_follow_unique_recipient_edges_for_1700_ms(cockpit):
+    js, wait, client, _, _ = cockpit
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'no-preference'},
+    ])
+    wait("Boolean(window.OrreryRail&&document.querySelector('#mail .mailcards'))")
+    stable_roster(js)
+    js("""(()=>{
+      Object.defineProperty(document,'hidden',{value:false});
+      const names=['Sender','FirstRecipient','SecondRecipient'];
+      currentAgents=names.map(name=>({name,provider:'openai',running:true}));
+      document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      const graph=document.getElementById('orrery');
+      if(graph.hasAttribute('hidden'))document.getElementById('mailGraphBtn').click();
+      const nextFrame=window.requestAnimationFrame;
+      const callbacks=[];
+      window.requestAnimationFrame=callback=>{
+        if(callback.name!=='animateFlight')return nextFrame(callback);
+        callbacks.push(callback);
+        return 0;
+      };
+      window.advanceFlights=timestamp=>callbacks.splice(0).forEach(callback=>callback(timestamp));
+      window.sendFixtureComet=id=>document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages:[{
+        id,sender:'Sender',recipient:'FirstRecipient',recipients:['FirstRecipient',{name:'SecondRecipient'}],
+      }]}}));
+      window.cometFlights=()=>[...graph.querySelectorAll('.orrery-comet-flight')];
+      sendFixtureComet(142);
+    })()""")
+    wait('cometFlights().length===2')
+    assert js("""advanceFlights(10000);advanceFlights(10850);
+      const edges=[...document.querySelectorAll('#orrery .orrery-comm-edge')];
+      edges.length===2&&edges.every(edge=>{
+        const midpoint=edge.getPointAtLength(edge.getTotalLength()/2);
+        return cometFlights().some(flight=>{
+          const at=flight.transform.baseVal.getItem(0).matrix;
+          return flight.querySelector('linearGradient')&&Math.hypot(at.e-midpoint.x,at.f-midpoint.y)<1;
+        });
+      })""")
+    assert js('advanceFlights(11699);cometFlights().length') == 2
+    assert js('advanceFlights(11700);cometFlights().length') == 0
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'},
+    ])
+    assert js("""(async()=>{
+      sendFixtureComet(143);
+      await new Promise(requestAnimationFrame);
+      return cometFlights().length;
+    })()""") == 0
 def test_mini_graph_remembers_both_states_across_loads(cockpit):
     js, wait, client, _, _ = cockpit
     wait("Boolean(document.querySelector('#mail .mailcards'))")
