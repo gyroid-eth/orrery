@@ -30,6 +30,7 @@ def test_provider_marks_use_the_existing_maker_resolution(cockpit, layout, theme
         ('deepseek', 'DeepSeek V3.2', 'deepseek-v3.2', 'deepseek'),
         ('local', 'Qwen3 32B', 'qwen3-32b', 'qwen'),
         ('local', 'GLM 4.7', 'glm-4.7', 'glm'),
+        ('local', 'Inkling 2 Mini', 'thinkingmachines/Inkling-2-Mini', 'thinking-machines'),
         ('local', 'Custom model', 'custom-model', None),
         ('unknown', 'Custom model', 'custom-model', None),
     ]
@@ -147,14 +148,30 @@ def test_stopped_agent_drops_current_activity_labels(cockpit,layout):
 
 def test_roster_uses_display_model_and_keeps_raw_title_and_context(cockpit):
     js,_,_=prepare(cockpit,'single')
-    cases=[dict(name='DisplayClaude',provider='anthropic',model='Opus 5.5',model_raw='claude-opus-5-5',ctx_window='1M'),dict(name='DisplayCodex',provider='openai',model='GPT-7-Nova',model_raw='gpt-6.1-sol'),dict(name='DisplayLocal',provider='local',model='Qwen3.8 Flash',model_raw='qwen3.8-flash-next-example-quant'),dict(name='DisplayFallback',provider='unknown',model='',model_raw='fallback-id'),dict(name='DisplayCommand',provider='unknown',model='',model_raw='',cmd='custom-cli')]
-    js('window.displayCases='+json.dumps(cases)+";displayCases.forEach(a=>{Object.assign(a,{running:true,category:'agent',program:'custom-cli',act_state:'wait'});currentAgents.push(a);tileFor(a)})")
-    result=js("displayCases.map(a=>{const p=tiles.get(a.name).querySelector('.pill.model');return {text:p.textContent,title:p.title}})")
-    for case,pill in zip(cases,result):
-        expected=(case['model'] or case['model_raw'] or case.get('cmd','—'))+(' · '+case['ctx_window'] if case.get('ctx_window') else '')
-        assert pill['text']==expected,pill
+    cases = [
+        dict(name='DisplayClaude', provider='anthropic', model='Opus 5.5',
+             model_raw='claude-opus-5-5', ctx_used=28),
+        dict(name='DisplayCodex', provider='openai', model='GPT-7-Nova', model_raw='gpt-6.1-sol'),
+        dict(name='DisplayLocal', provider='local', model='Inkling 2 Mini', model_raw='inkling-2-mini'),
+        dict(name='DisplayFallback', provider='unknown', model='', model_raw='fallback-id'),
+        dict(name='DisplayCommand', provider='unknown', model='', model_raw=''),
+    ]
+    # The mocked roster may poll between CDP calls. Inspect each fixture tile
+    # in the same browser task that creates it.
+    result=js(json.dumps(cases)+""".map(a=>{
+      Object.assign(a,{running:true,category:'agent',program:'custom-cli',act_state:'wait'});
+      currentAgents.push(a);
+      tileFor(a);
+      const tile=tiles.get(a.name),model=tile.querySelector('.roster-model'),context=tile.querySelector('.roster-context');
+      return {text:model.textContent,title:model.title,hidden:model.hidden,
+        context:context.hidden?null:Number(context.getAttribute('aria-valuenow'))};
+    })""")
+    for case, row in zip(cases, result, strict=True):
+        expected = case['model'] or case['model_raw']
+        assert row['text'] == expected and row['hidden'] is (not expected)
+        assert row['context'] == case.get('ctx_used')
         if case['model_raw']:
-            assert case['model_raw'] in pill['title'],pill
+            assert case['model_raw'] in row['title']
 
 
 @pytest.mark.parametrize('previous', ['terminal-less', 'window'])
