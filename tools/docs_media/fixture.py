@@ -12,6 +12,9 @@ from aiohttp import web
 parser = argparse.ArgumentParser()
 parser.add_argument("snapshot", type=Path)
 parser.add_argument("--guide-board", type=Path)
+parser.add_argument("--team-hero", choices=("ja", "en"))
+parser.add_argument("--reader-demo", choices=("ja", "en"))
+parser.add_argument("--readme-phone", action="store_true")
 args = parser.parse_args()
 base = args.snapshot
 bridge = base / "app/bridge"
@@ -121,7 +124,7 @@ agents[5]["act_state"] = "ask"
 
 
 def guide_permissions(agent, action):
-    mode = "personal" if agent["browser_use"] else "off"
+    mode = agent.get("browser_mode", "personal") if agent["browser_use"] else "off"
     agent["permission_controls"] = {
         "computer_use": dict(value=agent["computer_use"], source="launch", can_change=True, action=action),
         "browser_use": dict(value=agent["browser_use"], mode=mode, options=["off", "temporary", "personal"],
@@ -258,6 +261,116 @@ if args.guide_board:
             references=[dict(id="a" * 32, label=args.guide_board.name, kind="file")],
         ),
     ]
+if args.reader_demo:
+    japanese = args.reader_demo == "ja"
+    board_sections = re.split(r"^## ", preview_text, flags=re.M)[1:]
+    counts = [sum(line.startswith(("- [ ]", "- [x]")) for line in section.splitlines())
+              for section in board_sections[1:4]]
+    request, plan, result, report, board, labels, next_action = (
+        ("タスク板を見て、今日やることを整理して。",
+         "タスクを状態ごとに数え、取りかかる順番をまとめます。",
+         "まず今日の Daily Note を作り、そのあと ORRERY の導入を確認します。",
+         "タスク確認.md", args.guide_board.name, ("状態", "件数", "未着手", "作業中", "完了"),
+         ("Daily Note を作る", "Telemetry と cockpit を入れる", "しりとりで通信を確認する"))
+        if japanese else
+        ("Check the task board and plan today's work.",
+         "I'll count the tasks by status and put the next steps in order.",
+         "Start with today's Daily Note, then check the ORRERY installation.",
+         "task-review.md", "tasks.md", ("Status", "Count", "To do", "In progress", "Done"),
+         ("Create today's Daily Note", "Install Telemetry and the cockpit", "Test agent messaging"))
+    )
+    table = [f"| {labels[0]} | {labels[1]} |", "| --- | ---: |"] + [
+        f"| {label} | {count} |" for label, count in zip(labels[2:], counts, strict=True)
+    ]
+    preview_text = "# " + report.removesuffix(".md") + "\n\n" + "\n".join(
+        [result, "", *table, "", "## " + ("今日の順番" if japanese else "Today's plan"), ""]
+        + [f"{number}. {item}" for number, item in enumerate(next_action, 1)]
+    )
+    events = [
+        dict(id="reader-request", kind="text", role="user", ts=fake_stamp, text=request),
+        dict(id="reader-plan", kind="text", role="assistant", ts=fake_stamp, text=plan),
+    ]
+    for i, (tool, detail) in enumerate((("Read", board), ("Bash", "rg -n '^##' " + board), ("Write", report)), 1):
+        step_id = f"{i:032x}"
+        events.extend([
+            dict(id=f"reader-call-{i}", kind="tool", role="assistant", text=tool, ts=fake_stamp,
+                 step=dict(id=step_id, phase="call", tool=tool, title=detail, started=i * 1000)),
+            dict(id=f"reader-result-{i}", kind="tool_result", role="assistant", text=detail, ts=fake_stamp,
+                 step=dict(id=step_id, phase="result", status="success", ended=(i + 1) * 1000)),
+        ])
+    events.append(dict(
+        id="reader-summary", kind="text", role="assistant", ts=fake_stamp, step_boundary=True,
+        text=result + "\n\n" + "\n".join(table),
+        references=[dict(id="a" * 32, label=report, kind="file")],
+    ))
+    section_lines = [[line for line in section.splitlines() if line] for section in board_sections]
+    if not japanese:
+        section_lines = [
+            ["Ideas", "- [ ] Try digest-paper on another paper", "- [ ] Save frequent requests as skills"],
+            ["To do", *[f"- [ ] {item}" for item in next_action], "- [ ] Convert a paper to Markdown",
+             "- [ ] Generate reading notes", "- [ ] Record work in the Daily Note"],
+            ["In progress"], ["Done", "- [x] Set up the demo vault"],
+        ]
+    reader_terminal = [f"\x1b[1m● Read({board})\x1b[0m"] + [
+        f"\x1b[90m{line:2} │\x1b[0m {value}"
+        for line, value in enumerate(["## " + part[0] if index == 0 else part[index]
+                                     for part in section_lines for index in range(len(part))], 1)
+    ] + [
+        f"\x1b[1m● Bash(rg -n '^##' {board})\x1b[0m",
+        *[f"  {label}: {count}" for label, count in zip(labels[2:], counts, strict=True)],
+        f"\x1b[1m● Write({report})\x1b[0m",
+        *[f"\x1b[32m+ {line}\x1b[0m" for line in preview_text.splitlines() if line],
+        f"\x1b[37m● {result}\x1b[0m",
+    ]
+    agents[0]["act_state"] = "wait"
+if args.team_hero:
+    # The cockpit consumes the same roster, Mail and Reader responses as it
+    # normally does. The exercise itself is deterministic and starts no CLI.
+    hero = {"accepted": False, "size": 1}
+    agents[0]["act_state"] = "wait"
+    for agent, role in zip(agents[1:5], ("件数確認", "作業順", "導入手順", "通信の確認"), strict=True):
+        agent.update(parent_agent=names[0], parent_state="child", act_state="work",
+                     annot={"role": role})
+    spawn = [dict(source=names[0], target=agent["name"], ts=int(now)) for agent in agents[1:5]]
+    messages = []
+    pending = re.search(r"^## 未着手\s*\n(.*?)(?=^## |\Z)", preview_text, re.M | re.S)
+    pending_count = len(re.findall(r"^- \[ \]", pending.group(1), re.M))
+    hero_reports = [
+        (f"未着手は {pending_count} 件", f"タスク板の未着手は {pending_count} 件です。"),
+        ("Daily Note から", "まず今日の Daily Note を作ります。"),
+        ("ORRERY の導入", "Telemetry と cockpit を入れる手順を確認しました。"),
+        ("通信をしりとりで確認", "しりとりで agent 間のやり取りを確認できます。"),
+    ]
+    events = [
+        dict(id="hero-request", kind="text", role="user", ts=fake_stamp, text="今日のタスクを整理して"),
+        dict(id="hero-summary", kind="text", role="assistant", ts=fake_stamp, text=(
+            "4 体の報告をまとめました。\n\n"
+            "| 担当 | 結果 |\n| --- | --- |\n"
+            f"| Codex | 未着手は {pending_count} 件 |\n"
+            "| Gemini | 今日の Daily Note を作る |\n"
+            "| DeepSeek | Telemetry と cockpit を入れる |\n"
+            "| Local LLM の Qwen | しりとりで通信を確認 |"
+        )),
+    ]
+    if args.team_hero == "en":
+        for agent, role in zip(agents[1:5], ("Task count", "Work order", "Installation", "Messaging"), strict=True):
+            agent["annot"]["role"] = role
+        hero_reports = [
+            (f"{pending_count} open tasks", f"The board has {pending_count} open tasks."),
+            ("Start with the Daily Note", "Create today's Daily Note first."),
+            ("ORRERY setup", "I checked the steps for installing Telemetry and the cockpit."),
+            ("Test agent messaging", "Use a word game to test agent-to-agent messages."),
+        ]
+        events[0]["text"] = "Plan today's tasks"
+        events[1]["text"] = (
+            "Here are the four reports.\n\n"
+            "| Agent | Result |\n| --- | --- |\n"
+            f"| Codex | {pending_count} open tasks |\n"
+            "| Gemini | Create today's Daily Note |\n"
+            "| DeepSeek | Install Telemetry and the cockpit |\n"
+            "| Qwen (local LLM) | Test agent messaging |"
+        )
+
 harness = lambda a, default: dict(
     id=a,
     label={"dsh": "dsh", "hermes": "Hermes", "antigravity": "Antigravity"}[a],
@@ -440,6 +553,11 @@ if args.guide_board:
         "AmberCurie": "❯ What should we work on next?\r\n\r\n● Reading the demo task board…\r\n",
         "WarmLovelace": "● Ready to review the task board.\r\n",
     })
+if args.team_hero:
+    TERMINAL_OUTPUT[names[0]] = ("● チームへの依頼を待っています。\r\n" if args.team_hero == "ja"
+                                 else "● Waiting for the team's request.\r\n")
+if args.reader_demo:
+    TERMINAL_OUTPUT[names[0]] = f"❯ {request}\r\n\r\n● {plan}\r\n\r\n"
 PAUSED_REVIEW = (
     "Paused the review. The keyboard checklist and mobile captures are ready."
 )
@@ -456,7 +574,7 @@ async def ws_handle(req):
     ws = web.WebSocketResponse()
     await ws.prepare(req)
     connections.add(ws)
-    await ws.send_json(dict(type="sessions", sessions=names))
+    await ws.send_json(dict(type="sessions", sessions=names[:hero["size"]] if args.team_hero else names))
     async for msg in ws:
         if msg.type.name != "TEXT":
             continue
@@ -500,6 +618,8 @@ async def ws_handle(req):
                     status="accepted",
                 )
             )
+            if args.team_hero and typ == "submit-prompt" and p.get("session") == names[0]:
+                hero["accepted"] = True
             if typ in ("interrupt", "submit-prompt") and p.get("session") in names:
                 row = agents[names.index(p["session"])]
                 row["act_state"] = "wait"
@@ -651,9 +771,31 @@ async def app_handle(req):
         return J(identity)
     if path == "/telemetry/platform":
         return J(dict(host="mac", home_dir=identity["home"], file_paste=True))
+    if args.reader_demo and path == "/fixture-reader-output" and req.method == "POST":
+        for line in reader_terminal:
+            for socket in tuple(connections):
+                await socket.send_json(dict(type="output", session=names[0], paneId="%100", data=line + "\r\n"))
+            await asyncio.sleep(.063)
+        return J(dict(ok=True))
+    if args.team_hero and path == "/fixture-team" and req.method == "POST":
+        if not hero["accepted"]:
+            return J(dict(ok=False), status=409)
+        hero["size"] = min(5, hero["size"] + 1)
+        for socket in tuple(connections):
+            await socket.send_json(dict(type="sessions", sessions=names[:hero["size"]]))
+        return J(dict(ok=True))
+    if args.team_hero and path == "/fixture-team-report" and req.method == "POST":
+        index = len(messages)
+        if hero["size"] != 5 or index >= len(hero_reports):
+            return J(dict(ok=False), status=409)
+        subject, body = hero_reports[index]
+        messages.append(dict(id=501+index, sender=names[index+1], recipient=names[0],
+                             ts=int(time.time()), subject=subject, body_md=body))
+        agents[index+1]["act_state"] = "wait"
+        return J(dict(ok=True))
     if path == "/telemetry/agents":
         rows = [a for a in agents if a["running"]] if args.guide_board and q.get("scope") == "live" else agents
-        return J(dict(agents=rows))
+        return J(dict(agents=rows[:hero["size"]] if args.team_hero else rows))
     if path == "/telemetry/messages":
         return J(dict(ok=True, messages=messages, now=int(now)))
     if args.guide_board and path == "/fixture-guide-mail" and req.method == "POST":
@@ -664,6 +806,9 @@ async def app_handle(req):
         ))
         return J(dict(ok=True))
     if path == "/telemetry/graph":
+        if args.team_hero:
+            return J(dict(nodes=agents[:hero["size"]], edges=[], spawn=spawn[:hero["size"]-1],
+                          degraded=False, unrepresented_edges=0))
         return J(graph)
     if path == "/telemetry/mail/recent":
         return J(dict(ok=True, messages=messages))
@@ -683,7 +828,10 @@ async def app_handle(req):
         await asyncio.sleep(1.1)
         if "computer_use" in permission:
             agent["computer_use"] = permission["computer_use"]
-        agent.update(running=True, category="agent", state="run", act_state="wait")
+        if "browser_mode" in permission:
+            agent["browser_mode"] = permission["browser_mode"]
+            agent["browser_use"] = permission["browser_mode"] != "off"
+        agent.update(running=True, category="agent", state="run", act_state="work" if permission else "wait")
         guide_permissions(agent, "restart")
         return J(dict(ok=True, action="resumed", tools_changed=bool(permission)))
     if path in ("/telemetry/spawn-catalog", "/fixture-catalog"):
@@ -741,6 +889,22 @@ async def app_handle(req):
             )
         )
     if path == "/telemetry/conversation":
+        if args.reader_demo:
+            if q.get("after"):
+                await asyncio.sleep(.5)
+            return J(dict(ok=True, agent=q.get("agent"), events=[] if q.get("after") else events,
+                          provider="claude", mode="cursor", after="reader:1", has_older=False))
+        if args.team_hero:
+            selected = events[:1] if hero["accepted"] else []
+            if len(messages) == len(hero_reports):
+                message = messages[-1]
+                selected = [events[0], dict(
+                    id="hero-mail", kind="tool", role="assistant", ts=fake_stamp, text="ORRERY Mail",
+                    mail=[dict(direction="received", sender=message["sender"], recipients=[names[0]],
+                               subject=message["subject"], body=message["body_md"], coverage="request")],
+                ), events[1]]
+            return J(dict(ok=True, agent=q.get("agent"), events=selected, provider="claude",
+                          mode="snapshot", has_older=False))
         tail = q.get("after")
         paused = q.get("agent") == "AmberCurie" and stopped_review
         update = (
@@ -809,6 +973,8 @@ terminal_agent.update(
     browser_use=False,
     browser_use_source="launch",
 )
+if args.readme_phone:
+    terminal_agent["act_state"] = "question"
 phone_agent_names = {row["name"] for row in phone_agents}
 
 

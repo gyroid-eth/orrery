@@ -14,6 +14,8 @@ Open **Settings → Getting started → Your first flight**. Select a step to se
 
 ![Show help map labels the screen controls, including Settings and Usage left](../images/guides/help-map.gif)
 
-Open **Settings → Getting started → Show help map** to see the controls explained in place. Press **Esc** to close it. For **Select** and **Working and waiting**, see [Check and select agents](manage-agents.md). For **Usage left**, see [Check your usage allowance](check-usage.md).
+Open **Settings → Getting started → Show help map** to see the controls explained in place. Press **Esc** or click the screen to close it. For **Select** and **Working and waiting**, see [Check and select agents](manage-agents.md). For **Usage left**, see [Check your usage allowance](check-usage.md).
+
+For a longer walkthrough, open **Settings → Getting started → Full tour**. It has 16 steps, with separate saved progress. Try the word game with a child agent, arrange terminal panes, use Telemetry **EXIT** and **RESUME**, and return to the terminal from **NETWORK** or **REPLAY**. Finish three exchanges in the game even if its checkmark appears sooner. The CLI or API you chose applies its normal quotas and pricing to agents started by either guide.
 
 [日本語](../first-flight.md) · [Cockpit map](cockpit-map.md) · [Full tour](FULL_TOUR.md)

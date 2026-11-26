@@ -4,9 +4,11 @@
 
 Start with **Your first flight → help map → Full tour** on screen, from cockpit’s `Settings → Getting started`. This index is for install/update, troubleshooting, and detailed references when you need them.
 
+Japanese is the source of record. The English entry point is the [English README](../../README.en.md), and each guide below has a Japanese counterpart.
+
 ## Start here
 
-- [Quick start](../../README.en.md#quick-start) — Install the base and continue to the first-flight guide.
+- [Quick start](../../README.en.md#get-started) — Install the base and continue to the first-flight guide.
 - [Installation](install.md) — Check the one-line installer prerequisites, plan, and results, then open cockpit.
 - [Install with help from your agent](install-with-agent.md) — A starter prompt, plan review, and human approval.
 - [ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.en.md) — The read-only adapter.

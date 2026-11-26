@@ -10,6 +10,18 @@ ORRERY is made of two screens: the cockpit, which operates terminals, and Teleme
 
 ![The cockpit is the screen for operating terminals; Telemetry is the dashboard and agent-graph screen. The cockpit can embed the Telemetry screen. Agents run in tmux, are visible from both screens, and talk through Mail](../images/cockpit_telemetry_relation.svg)
 
+```text
+ORRERY.app / browser
+        │ HTTP + WebSocket (:8791)
+        ▼
+ORRERY Python backend
+  ├─ tmux control mode ── local agent sessions
+  ├─ read-only SQLite ─── ORRERY Mail
+  └─ HTTP proxy ───────── ORRERY Telemetry dashboard (:8770)
+```
+
+The cockpit backend imports no Telemetry `server.py` code. It uses its own tmux, Mail, and portrait handlers and reaches the dashboard via HTTP. Local terminals remain available when Telemetry is offline. Features that depend on Telemetry show the connection status and limit the available operations. Terminal input, window size claims, spawn, and EXIT change state. See [Components](ARCHITECTURE.md#components) for responsibilities.
+
 ## Agreement with tmux
 
 The agent name must match the tmux session name for a roster jump to work.

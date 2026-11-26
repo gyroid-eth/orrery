@@ -10,6 +10,18 @@ ORRERY は、terminal を操作する画面の cockpit と、dashboard と agent
 
 ![cockpit は terminal を操作する画面、Telemetry は dashboard と agent graph の画面。cockpit は Telemetry の画面を埋め込める。agent は tmux の中で動き、両方の画面から見え、Mail で話す](images/cockpit_telemetry_relation.svg)
 
+```text
+ORRERY.app / browser
+        │ HTTP + WebSocket (:8791)
+        ▼
+ORRERY Python backend
+  ├─ tmux control mode ── local agent sessions
+  ├─ read-only SQLite ─── ORRERY Mail
+  └─ HTTP proxy ───────── ORRERY Telemetry dashboard (:8770)
+```
+
+cockpit の backend は Telemetry の `server.py` を import せず、独自の tmux・Mail・portrait handler と HTTP proxy を使います。Telemetry が止まっていても手元のターミナルは使えます。連携機能は接続状況を表示して操作を制限します。端末入力、window size の claim、spawn、EXIT はそれぞれ状態を変更します。責務の内訳は [Component](ARCHITECTURE.md#component) にあります。
+
 ## tmux との取り決め
 
 agent name と tmux session name の一致が roster jump の前提です。

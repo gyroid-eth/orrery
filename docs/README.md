@@ -4,9 +4,11 @@
 
 操作の入口は画面内の **Your first flight → help map → Full tour**。cockpit の `Settings → Getting started` から開けます。ここは install・update・困ったときと、必要に応じて読む詳しい参照の目次です。
 
+日本語の文書が正本です。英語の入口は [README.en.md](../README.en.md) で、下の各ガイドにも対応する英語版があります。
+
 ## はじめる
 
-- [Quick start](../README.md#クイックスタート) — 本体を入れて初回ガイドへ進む。
+- [Quick start](../README.md#始める) — 本体を入れて初回ガイドへ進む。
 - [インストール](install.md) — 1行 install の前提・計画・確認結果を読み、まず cockpit を開く。
 - [利用中の agent と導入を進める](install-with-agent.md) — 依頼文、計画、利用者の承認。
 - [ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.md) — 読み取り専用アダプター。

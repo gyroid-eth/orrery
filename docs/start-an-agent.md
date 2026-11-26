@@ -6,4 +6,6 @@
 2. 左の一覧で起動した agent を選び、中央の下にある入力欄に依頼を書いて **Enter** を押します。
 3. ペイン上部の Reader アイコンを押すと、作業の流れと返事を読みやすく確認できます。
 
+科学者の肖像を選ぶと名前が決まり、形容詞は変えられます。DeepSeek と Local は[接続の初回設定](install.md#deepseekdsh--hermes-の初回設定)を済ませ、**Harness** で dsh または Hermes を選びます。[Telemetry の dashboard](view-telemetry.md) から起動するときは、Telemetry の **NEW AGENT** を使います。
+
 [English](en/start-an-agent.md) · [画面一覧](cockpit-map.md) · [NEW AGENT の詳しい設定](usage.md#new-agent)

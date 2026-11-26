@@ -20,7 +20,8 @@ Pass `--group cockpit`, `--group dashboard`, or `--group phone` to iterate on a 
 ## Cockpit task guides
 
 Use the public demo vault's task note to capture the guides and the numbered
-cockpit map. The same GIFs are used by both documentation languages.
+cockpit map. Both languages use the same control demonstrations. The Reader
+and team clips have separate recordings for each language.
 
 ```sh
 git -C /path/to/orrery-demo-vault show '1e10555:01_Planning/タスク.md' > /tmp/タスク.md
@@ -55,3 +56,29 @@ permissions illustration in the usage guide.
 | `docs/images/deck_growing.png` and `docs/images/deck_humanloop.png` | Telemetry's Japanese and English dashboard guides use files with the same names and different contents. |
 
 Review and replace the Telemetry-side assets in a separate Telemetry change.
+
+## README feature clips
+
+Run the cockpit task-guide command above with `--group hero` to capture
+`team-hero.gif` and `team-hero.en.gif`. Install `gifsicle` for lossless frame
+optimization within the 3 MB limit. The fixture starts with one agent. Submitting the typed
+request makes four fictional child agents available in the roster and graph.
+The script records their staggered Mail arrivals and scrolls Reader to the
+parent's summary of the public demo vault task board. It uses fixed crops
+during the moving shots. Review the five-agent roster, the comet subjects,
+and all four rows of the final table before copying the file.
+
+Use `--group reader` to record `read-a-file.gif` and `read-a-file.en.gif` from
+the same task board. The full center pane stays in view as the terminal
+streams output, Reader displays the grouped tools and table, and a reference
+chip opens a Markdown preview before returning to the conversation.
+
+The regular `--group guides` run also captures `permission-switch.gif` with
+both roster and Mini Graph, and `select-agents.gif` through the exit animation.
+
+Run the same command with `--group readme-phone` for `mobile.gif` and
+`mobile-ipad.png`. This group can omit `--guide-board`. It uses the real
+Telemetry phone page at 390 px with the isolated relay fixture, then checks
+the side-by-side tablet layout at 820 px. Review the roster selection, typed
+characters, confirmation, and send receipt. The fixture has no Tailscale
+service and uses no real browser profile, agent process, or Mail.
