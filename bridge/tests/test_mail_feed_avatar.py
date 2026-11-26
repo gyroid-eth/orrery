@@ -114,7 +114,7 @@ def test_active_mail_filter_can_be_cleared_with_one_click(cockpit):
     assert js("document.querySelector('.mail-clear-filter span').textContent") == 'BuildNode'
 
 
-def test_mini_comets_follow_unique_recipients_and_ripple_once_on_arrival(cockpit):
+def test_mini_comets_show_arrival_ripples_and_subjects_for_each_recipient(cockpit):
     js, wait, client, _, _ = cockpit
     client.call('Emulation.setEmulatedMedia', features=[
         {'name': 'prefers-reduced-motion', 'value': 'no-preference'},
@@ -124,7 +124,7 @@ def test_mini_comets_follow_unique_recipients_and_ripple_once_on_arrival(cockpit
     js("""(()=>{
       Object.defineProperty(document,'hidden',{value:false});
       const names=['Sender','FirstRecipient','SecondRecipient'];
-      currentAgents=names.map(name=>({name,provider:'openai',running:true}));
+      currentAgents=names.map(name=>({name,provider:'openai',running:true,annot:{role:'Original role'}}));
       document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
       const graph=document.getElementById('orrery');
       if(graph.hasAttribute('hidden'))document.getElementById('mailGraphBtn').click();
@@ -137,12 +137,14 @@ def test_mini_comets_follow_unique_recipients_and_ripple_once_on_arrival(cockpit
       };
       window.advanceFlights=timestamp=>callbacks.splice(0).forEach(callback=>callback(timestamp));
       window.advanceRipples=timestamp=>ripples.splice(0).forEach(callback=>callback(timestamp));
-      window.sendFixtureComet=id=>document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages:[{
+      window.sendFixtureComet=(id,subject)=>document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages:[{
+        subject,
         id,sender:'Sender',recipient:'FirstRecipient',recipients:['FirstRecipient',{name:'SecondRecipient'}],
       }]}}));
       window.cometFlights=()=>[...graph.querySelectorAll('.orrery-comet-flight')];
       window.arrivalRipples=()=>[...graph.querySelectorAll('.orrery-comet-ripple')];
-      sendFixtureComet(142);
+      window.arrivalCaptions=()=>[...graph.querySelectorAll('.orrery-caption-arrival')];
+      sendFixtureComet(142,'First delivery');
     })()""")
     wait('cometFlights().length===2')
     assert js("""advanceFlights(10000);advanceFlights(10850);
@@ -156,7 +158,14 @@ def test_mini_comets_follow_unique_recipients_and_ripple_once_on_arrival(cockpit
       })""")
     assert js('advanceFlights(11699);cometFlights().length') == 2
     assert js('arrivalRipples().length') == 0
+    assert js('arrivalCaptions().length') == 0
     assert js('advanceFlights(11700);cometFlights().length') == 0
+    assert js("""arrivalCaptions().map(caption=>[
+      caption.closest('.mini-agent').dataset.agent,caption.textContent,
+    ]).sort()""") == [
+        ['FirstRecipient', 'First delivery'],
+        ['SecondRecipient', 'First delivery'],
+    ]
     assert js("""advanceRipples(11700);arrivalRipples().length===2&&
       ['FirstRecipient','SecondRecipient'].every(name=>{
         const graph=document.getElementById('orrery');
@@ -172,10 +181,22 @@ def test_mini_comets_follow_unique_recipients_and_ripple_once_on_arrival(cockpit
         {'name': 'prefers-reduced-motion', 'value': 'reduce'},
     ])
     assert js("""(async()=>{
-      sendFixtureComet(143);
+      sendFixtureComet(143,'<img src=x> Updated delivery with a long subject for the compact graph');
       await new Promise(requestAnimationFrame);
       return [cometFlights().length,arrivalRipples().length];
     })()""") == [0, 0]
+    assert js("""(()=>{
+      document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      return arrivalCaptions().length===2&&arrivalCaptions().every(caption=>{
+        const subject=caption.querySelector('.orrery-arrival-subject');
+        return caption.querySelector('.orrery-arrival-count').textContent==='+1'&&
+          !subject.querySelector('img')&&subject.textContent.startsWith('<img src=x>')&&
+          subject.scrollWidth>subject.clientWidth&&subject.getAnimations().length===0;
+      });
+    })()""")
+    wait('arrivalCaptions().length===0')
+    assert js("""['FirstRecipient','SecondRecipient'].every(name=>document.querySelector(
+      '#orrery [data-agent='+name+'] .orrery-caption-role').textContent==='Original role')""")
 
 
 def test_mini_graph_remembers_both_states_across_loads(cockpit):

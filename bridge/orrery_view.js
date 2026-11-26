@@ -61,6 +61,7 @@ const MAX_COMETS=6;
 const MAX_QUEUED_COMETS=40;
 const MINI_COMET_TRAVEL_MS=1700;
 const MINI_RIPPLE_MS=550;
+const MINI_ARRIVAL_SUBJECT_MS=2000;
 const MOTION_STIFFNESS=150;
 const MOTION_DAMPING=22;
 const MOTION_SETTLE_DISTANCE=.1;
@@ -78,6 +79,7 @@ let activeComets=0;
 let cometId=0;
 const queuedComets=[];
 const miniRipples=new Map();
+const miniArrivalSubjects=new Map();
 const latestEdgeSubjects=new Map(),edgeSubjectFetches=new Map();
 let activeMailRoute=null;
 const commPairs=new Map();
@@ -918,6 +920,8 @@ function drawMiniAgent(target,defs,position,index,dimensions){
   const providerLabel=drawProviderBadge(face,agent,x,y,portraitRadius);
   drawStateGlyph(face,agent,x,y,false);
   drawAgentCaption(group,position,dimensions,providerLabel,!OC.bindMiniAgentDetail,action);
+  const arrival=miniArrivalSubjects.get(agent.name);
+  if(arrival)paintMiniArrivalCaption(group,agent,arrival);
   target.appendChild(group);
   return group;
 }
@@ -1934,6 +1938,53 @@ function subjectLabel(subject){
     ?characters.join('')
     :characters.slice(0,39).join('')+'…';
 }
+function paintMiniArrivalCaption(group,agent,arrival){
+  const textBlock=group?.querySelector('.orrery-caption');
+  if(!textBlock||!miniAppearance.showRoles)return;
+  let caption=textBlock.querySelector('.orrery-caption-role');
+  if(caption?.classList.contains('orrery-caption-action'))return;
+  if(!caption){
+    if(!arrival)return;
+    caption=document.createElement('div');
+    caption.className='orrery-caption-role';
+    textBlock.appendChild(caption);
+  }
+  caption.classList.toggle('orrery-caption-arrival',Boolean(arrival));
+  if(!arrival){
+    const role=roleOf(agent);
+    if(role)caption.textContent=role;
+    else caption.remove();
+    return;
+  }
+  const text=document.createElement('span');
+  text.className='orrery-arrival-subject';
+  text.textContent=arrival.subject;
+  caption.replaceChildren(text);
+  if(arrival.count>1){
+    const count=document.createElement('span');
+    count.className='orrery-arrival-count';
+    count.textContent='+'+(arrival.count-1);
+    caption.appendChild(count);
+  }
+  const delay=`${arrival.started-performance.now()}ms`;
+  for(const part of caption.children)part.style.animationDelay=delay;
+}
+function showMiniArrivalSubject(recipient,message){
+  const previous=miniArrivalSubjects.get(recipient);
+  clearTimeout(previous?.timeout);
+  const arrival={
+    subject:String(message.subject||'').trim()||'(No subject)',
+    count:(previous?.count||0)+1,
+    started:performance.now(),
+  };
+  const paint=value=>paintMiniArrivalCaption(miniMotion.nodes.get(recipient),miniPositions.get(recipient)?.agent,value);
+  miniArrivalSubjects.set(recipient,arrival);
+  paint(arrival);
+  arrival.timeout=setTimeout(()=>{
+    miniArrivalSubjects.delete(recipient);
+    paint(null);
+  },MINI_ARRIVAL_SUBJECT_MS);
+}
 function playMiniArrivalRipple(recipient){
   miniRipples.get(recipient)?.remove();
   const ring=svgEl('circle',{class:'orrery-comet-ripple','aria-hidden':'true',opacity:0});
@@ -2016,7 +2067,10 @@ function animateComet(target,positions,fromName,toName,message,large){
       tail.style.opacity=String(envelope.tailOpacity);
       if(progress<1)requestAnimationFrame(animateFlight);
       else{
-        if(!large)playMiniArrivalRipple(toName);
+        if(!large){
+          playMiniArrivalRipple(toName);
+          showMiniArrivalSubject(toName,message);
+        }
         finish();
       }
     }
@@ -2060,7 +2114,18 @@ function receiveMail(messages){
   recordMessages(messages);
   renderMini();
   renderPlanetarium();
-  if(document.hidden||motionIsReduced())return;
+  if(document.hidden)return;
+  if(motionIsReduced()){
+    if(miniSvg.hasAttribute('hidden'))return;
+    for(const message of messages||[]){
+      const sender=senderName(message);
+      if(!miniPositions.has(sender))continue;
+      for(const recipient of recipientNames(message)){
+        if(recipient!==sender&&miniPositions.has(recipient))showMiniArrivalSubject(recipient,message);
+      }
+    }
+    return;
+  }
   (messages||[]).forEach(message=>{
     recipientNames(message).forEach(recipient=>queuedComets.push([message,recipient]));
   });
