@@ -4,7 +4,7 @@
 
 <img src="app/icons-src/orrery-1024.png" alt="ORRERY icon" width="96">
 
-ORRERY is a cockpit for arranging agent terminals, sending instructions, and following Mail and usage quotas. It supports Claude Code, Codex CLI, the optional Antigravity provider, and DeepSeek or Local models through dsh or Hermes.
+ORRERY is a cockpit for arranging agent terminals, sending instructions, and following Mail and usage quotas. It supports Claude Code, Codex CLI, Gemini through Antigravity CLI, and DeepSeek or Local models through dsh or Hermes.
 
 ## Quick start
 
@@ -33,7 +33,7 @@ Set up the features you want after the base install. Each guide covers the first
 | --- | --- |
 | Claude Code / Codex CLI | Install and sign in to your chosen CLI. [Mac](docs/en/install.md#mac) / [WSL](docs/en/install.md#windows-11) |
 | DeepSeek / Local (dsh or Hermes) | Prepare the API connection, model, and required key and key store. dsh uses Node.js 24.2 or later. [API setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md) |
-| Antigravity | Sign in to the Antigravity CLI and install the optional provider. [Antigravity](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.en.md) |
+| Gemini (Antigravity) | Install Antigravity CLI (`agy`), sign in, and complete the Gemini setup in Telemetry. In the macOS cockpit, choose **Antigravity** and a model in NEW AGENT. [Gemini setup guide](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.en.md) |
 | Computer use | Set up Cua Driver and grant OS screen recording and interaction permissions. [Computer use](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/computer-use.en.md) |
 | Browser use | Set up Chrome and the connection for your harness. [Browser setup and approvals](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/delegation.en.md#browser-and-computer-use-what-is-reachable-and-what-a-person-does) |
 | Phone | Configure Tailscale and check which devices can reach the reader. [Phone access](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md) |
@@ -96,7 +96,7 @@ Legacy mode reads Codex and, with Telemetry API 35 or later, bound Claude Code, 
 
 ### Choose a scientist's portrait and a model (NEW AGENT)
 
-Open `+ NEW AGENT` and select a scientist's portrait to generate a name; you can adjust its adjective. Choose from Claude, Codex, DeepSeek, Local models, or Antigravity when installed on a supported setup. DeepSeek and Local also offer dsh and Hermes as harness choices.
+Open `+ NEW AGENT` and select a scientist's portrait to generate a name. You can adjust its adjective. On supported setups, choose a configured provider from Claude, Codex, Gemini (shown as **Antigravity**), DeepSeek, or Local models. DeepSeek and Local also offer dsh and Hermes as harness choices.
 
 **First-time setup for DeepSeek, dsh, and Hermes:** A normal update does not set up API keys or connections. The cockpit has no API-key entry screen. Prepare them in this order:
 

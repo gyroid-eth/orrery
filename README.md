@@ -4,7 +4,7 @@
 
 <img src="app/icons-src/orrery-1024.png" alt="ORRERY icon" width="96">
 
-ORRERY は、agent のターミナルを並べて操作し、Mail のやり取りや利用枠を確認できる cockpit です。Claude Code、Codex CLI、導入済みの Antigravity、dsh または Hermes を使う DeepSeek／Local models に対応します。
+ORRERY は、agent のターミナルを並べて操作し、Mail のやり取りや利用枠を確認できる cockpit です。Claude Code、Codex CLI、Gemini（Antigravity CLI）、dsh または Hermes を使う DeepSeek／Local models に対応します。
 
 ## クイックスタート
 
@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 | --- | --- |
 | Claude Code / Codex CLI | 使う CLI を入れてログイン。[Mac](docs/install.md#mac) / [WSL](docs/install.md#windows-11) |
 | DeepSeek / Local（dsh・Hermes） | API 接続、model、必要なキーと鍵束を準備。dsh は Node.js 24.2 以上を使用。[初期設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md) |
-| Antigravity | Antigravity CLI のログインと追加 provider の導入。[Antigravity](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.md) |
+| Gemini（Antigravity） | Antigravity CLI（`agy`）を入れてサインインし、Telemetry で Gemini の設定を済ませます。macOS の cockpit の NEW AGENT で **Antigravity** と model を選びます。[Gemini の導入ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.md) |
 | 画面操作 | Cua Driver と OS の画面収録・操作の許可。[Computer use](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/computer-use.md) |
 | ブラウザー操作 | Chrome と利用する harness の接続設定。[ブラウザーの設定と許可](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/delegation.md#ブラウザと-computer-use-何が届くか人がやること) |
 | スマホ | Tailscale の設定と端末の到達範囲の確認。[スマホ閲覧](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md) |
@@ -100,7 +100,7 @@ legacy では Codex と、Telemetry API 35 以降で紐付けを確認した Cla
 
 ### 科学者の顔とモデルを選んで起動する（NEW AGENT）
 
-`+ NEW AGENT` で科学者の肖像を選ぶと名前が決まり、形容詞は調整できます。Claude・Codex・DeepSeek・Local models と、対応環境で導入済みの Antigravity から選べます。DeepSeek と Local では dsh／Hermes の Harness も選べます。
+`+ NEW AGENT` で科学者の肖像を選ぶと名前が決まり、形容詞は調整できます。対応環境で準備した Claude・Codex・Gemini（画面では **Antigravity**）・DeepSeek・Local models から選べます。DeepSeek と Local では dsh／Hermes の Harness も選べます。
 
 **DeepSeek・dsh / Hermesを初めて使う人へ:** 通常の更新だけでは、APIキーや接続先は設定されません。cockpitにはAPIキーを入力する画面はありません。次の順で準備します。
 
