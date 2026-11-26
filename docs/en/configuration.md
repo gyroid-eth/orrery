@@ -154,6 +154,8 @@ ORRERY_E2E_V2=1 .venv/bin/python tests/e2e_bridge.py -v
 
 In a user's environment, set one of 1 to 3 as an absolute path. When it is unset, the mail API returns `ok:false` and `project key not configured`. If you set a value different from ORRERY Telemetry's, the roster and the mail rail may point at different projects.
 
+For changing the work folder with the installer, see [Change the work folder](install.md#change-the-work-folder). Running agents keep their original Mail project and must restart to join the new one.
+
 ### ORRERY Mail DB
 
 In legacy mode, `scripts/start-cockpit.sh` checks `ORRERY_MAIL_DB`, the shell's `AGENTSTACK_MAIL_DB`, and then `AGENTSTACK_MAIL_DB` in Telemetry's installed `env.sh`. It passes the selected path to the backend as `ORRERY_MAIL_DB`. A direct backend launch checks `ORRERY_MAIL_DB`, then `mail_db` in `config.json`, then the default path. Fresh mode reads Mail through the protected dashboard API.
