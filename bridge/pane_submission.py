@@ -33,6 +33,7 @@ CLAUDE_NAMED_BORDER = re.compile(r'^[─━]{8,}[ \t]+\S(?:.*\S)?[ \t]+[─━]+
 CLAUDE_SCROLLED_BORDER = re.compile(
     r'^[─━]{2,}[ \t]+[↑↓][ \t]+\d+[ \t]+more(?:[ \t]+[─━]+(?:[ \t]+\S(?:.*\S)?[ \t]+[─━]+)?)?$')
 SGR = re.compile(r'\x1b\[[0-9;:]*m')
+OSC8 = re.compile(r'\x1b\]8;[^;\x1b\x07]*;[^\x1b\x07]*(?:\x1b\\|\x07)')
 DIM = re.compile(r'\x1b\[(?:[0-9]+;)*2(?:;[0-9]+)*m')
 CLAUDE_QUEUE_HINT = 'Press up to edit queued messages'
 CLAUDE_SUGGESTION = re.compile(r'^[  ]*\x1b\[(?:[0-9]+;)*2(?:;[0-9]+)*m[^\x1b]+(?:\x1b\[(?:0|22)?m[  ]*)?$')
@@ -96,6 +97,7 @@ class Frame:
     running: bool = False
     slash_view: tuple[str, str] | None = None
     redrawing: bool = False
+    draft_continues: bool = False
 
     @property
     def identity(self):
@@ -282,6 +284,8 @@ def frame(metadata, lines, pane):
     command = fields[8].rsplit('/', 1)[-1].lower().lstrip('-').removesuffix('.exe')
     if mode or cursor>=len(lines):
         return Frame(*base,None,False)
+    # tmux adds a link target to the styled capture, separate from its visible text.
+    lines=[OSC8.sub('',line) for line in lines]
     plain=[SGR.sub('',line) for line in lines]
     slash_view = _slash_view(plain)
     if bracketed is False:
@@ -420,7 +424,8 @@ def frame(metadata, lines, pane):
                      bool(hermes), boxed, bracketed, command,
                      slash_picker=editor is not None, selected_command=selected_command,
                      dsh_clipped=dsh_clipped, hermes_busy=hermes_busy, editor=editor,
-                     running=running, slash_view=slash_view)
+                     running=running, slash_view=slash_view,
+                     draft_continues=bool(tail and not (lower or footer)))
     return Frame(*base,None,False,slash_view=slash_view)
 
 
@@ -559,9 +564,11 @@ def capture(command,pane):
     return frame(metadata,screen.splitlines(),pane) if separator else None
 
 
-def same_hermes_notice(view,text):
-    """Compare all visible rows, allowing whitespace lost at a terminal wrap."""
-    if (not view.hermes or view.waiting or view.selected or not view.draft
+def same_notice(view,text):
+    """Require the full notice in a known editor, allowing whitespace lost at wraps."""
+    if (view.editor not in ('claude','codex','dsh','hermes','agy')
+            or view.waiting or view.selected or not view.draft
+            or view.scrolled or view.dsh_clipped or view.draft_continues
             or not text.startswith('ORRERY Mail notification: message from ')):
         return False
     remaining=text
@@ -615,7 +622,7 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
         if before.waiting:
             return defer('refused', 'editor_waiting')
         resuming=not before.empty
-        if resuming and not same_hermes_notice(before,text):
+        if resuming and not same_notice(before,text):
             return defer('refused', 'editor_not_empty')
         if not before.allows_paste(text):
             return defer('refused', 'paste_unavailable')
@@ -641,7 +648,7 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
             problem=None
             menu_wait = SlashMenuWait(text)
             def confirmed_draft(view):
-                return (not resuming or same_hermes_notice(view,text)) and menu_wait.ready(view)
+                return (not resuming or same_notice(view,text)) and menu_wait.ready(view)
             while time.monotonic()<end:
                 view=capture(command,pane)
                 if not view or view.identity!=before.identity:return defer('unknown', 'pane_changed')
