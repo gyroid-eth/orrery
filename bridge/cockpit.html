@@ -4283,9 +4283,9 @@
       }
     }
   },
-  "inventory_digest": "7c5702bb8f40b36037616c10d29bd5cd53f6d368b50bf0c73ca7f172333e0f84",
+  "inventory_digest": "486d1fabc2ef6b819fb6adca24a81242a4a65423660c90011a913232409e561e",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "52591793f1dfaade7e0657f74cd3909cbc1739a97a03d04316ffed162b53777c",
+  "source_digest": "cfa2e61cec46857009da3ad93ebd42bcfe831f85457a280cf1abbe49d9764343",
   "surface": "cockpit",
   "version": 1
 }
@@ -10356,6 +10356,7 @@ const railMotionPreference=matchMedia('(prefers-reduced-motion: reduce)');
 const railMoves=new WeakMap();
 const RAIL_SPRING='linear(0,.035 5%,.141 10%,.43 20%,.75 35%,.97 52%,1.025 66%,1.008 82%,1)';
 const railEase=CSS.supports('animation-timing-function',RAIL_SPRING)?RAIL_SPRING:'cubic-bezier(.2,.8,.2,1)';
+const railRowMotion={duration:275,easing:railEase};
 function railPositions(elements,viewport){
   const positions=new Map();
   if(railMotionPreference.matches||document.hidden||!viewport?.getClientRects().length)return positions;
@@ -10367,7 +10368,7 @@ function railPositions(elements,viewport){
   }
   return positions;
 }
-function railMoveRows(positions,motion={duration:275,easing:railEase}){
+function railMoveRows(positions,motion=railRowMotion){
   // Batch reads around the DOM writes and keep the on-screen position of
   // an interrupted animation as the next animation's starting point.
   for(const el of positions.keys())railMoves.get(el)?.cancel();
@@ -10385,6 +10386,12 @@ function railMoveRows(positions,motion={duration:275,easing:railEase}){
     if(Math.abs(x)+Math.abs(y)<=1)continue;
     railMoves.set(el,el.animate([{transform:`translate(${x}px,${y}px)`},{transform:'none'}],
       motion));
+  }
+}
+function railRevealRows(elements,viewport){
+  // Reveal each arriving row in place as the existing rows make room.
+  for(const el of railPositions(elements,viewport).keys()){
+    el.animate([{clipPath:'inset(0 0 100% 0)'},{clipPath:'inset(0)'}],railRowMotion);
   }
 }
 function railArrive(el,source,viewport){
@@ -10664,7 +10671,7 @@ function assignLineageHues(live){
    They subscribe to 'oc:agents' / 'oc:mail' document events for updates. */
 window.OC=Object.freeze({
   esc,relTime,jumpToAgent,rootOf,providerPresentation,
-  railPositions,railMoveRows,railArrive,
+  railPositions,railMoveRows,railRevealRows,
   renderPeerAvatar:(name,existing)=>currentAgentNamed(name)?conversationAvatar(name,'',existing):null,
   lineageHue,                       // Map: agent name -> lineage hex
   get lineageParent(){return lineageParent;},  // Map: child -> parent

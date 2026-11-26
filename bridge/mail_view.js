@@ -549,14 +549,6 @@ function reconcile(parent,want){
     next=node.nextElementSibling;
   }
 }
-function originFor(sender){
-  const selector='[data-agent="'+CSS.escape(sender)+'"]';
-  const node=(!graph.hasAttribute('hidden')&&graph.querySelector(selector))
-    ||document.querySelector('#roster .agent'+selector+':not(.filtered-out,.folded-out)');
-  const rect=node?.getBoundingClientRect?.();
-  return rect?.width&&rect.height?rect:null;
-}
-
 function renderMail({animate=false,fresh=new Set()}={}){
   const filters=[activeFilter,waitingOnly?'Awaiting a reply':''].filter(Boolean);
   const filtered=filters.length>0;
@@ -574,7 +566,7 @@ function renderMail({animate=false,fresh=new Set()}={}){
     ...[...groupsByName.values()].map(group=>group.el),
     ...[...rowsByKey.values()].map(row=>row.el)
   ],listEl):null;
-  const groups=new Map(),used=new Set(),arrivals=[],timelineRows=[];
+  const groups=new Map(),used=new Set(),arrivals=new Set(),timelineRows=[];
   for(const a of visible){
     const existing=rowsByKey.get(a.key);
     const row=existing||makeRow(a);
@@ -586,10 +578,10 @@ function renderMail({animate=false,fresh=new Set()}={}){
     if(timeline){
       paintTimelineReplies(row);
       timelineRows.push(row.el);
-      if(!existing&&fresh.has(a.request.key))arrivals.push([row.el,a.request.sender]);
+      if(!existing&&fresh.has(a.request.key))arrivals.add(row.el);
       else if(latest&&lastReply!==latest.key&&fresh.has(latest.key)){
         const button=row.history?.querySelector('[data-reply="'+CSS.escape(latest.key)+'"]');
-        if(button)arrivals.push([button,latest.sender]);
+        if(button)arrivals.add(button);
       }
       continue;
     }
@@ -598,8 +590,8 @@ function renderMail({animate=false,fresh=new Set()}={}){
     groupsByName.set(a.recipient,group);
     if(!groups.has(group))groups.set(group,[]);
     groups.get(group).push(row.el);
-    if((newGroup||!existing)&&fresh.has(a.request.key))arrivals.push([newGroup?group.el:row.el,a.request.sender]);
-    else if(latest&&lastReply!==latest.key&&fresh.has(latest.key))arrivals.push([row.reply,latest.sender]);
+    if((newGroup||!existing)&&fresh.has(a.request.key))arrivals.add(newGroup?group.el:row.el);
+    else if(latest&&lastReply!==latest.key&&fresh.has(latest.key))arrivals.add(row.reply);
   }
   for(const [group,rows] of groups)reconcile(group.list,rows);
   const visibleGroups=new Set(groups.keys());
@@ -617,7 +609,12 @@ function renderMail({animate=false,fresh=new Set()}={}){
   if(focus?.isConnected&&focus!==document.activeElement)focus.focus({preventScroll:true});
   else if(focus&&!cardsEl.contains(document.activeElement)){hoveredRoute=focusedRoute=null;emitRoute();}
   if(moving)OC.railMoveRows(moving);
-  for(const [node,sender] of arrivals)OC.railArrive(node,originFor(sender),listEl);
+  if(arrivals.size){
+    const revealed=[...arrivals].filter(node=>!arrivals.has(node.parentElement.closest('.mail-assignee')));
+    cardsEl.querySelectorAll('.mail-arrival-still').forEach(node=>node.classList.remove('mail-arrival-still'));
+    if(motion.matches)revealed.forEach(node=>node.classList.add('mail-arrival-still'));
+    else OC.railRevealRows(revealed,listEl);
+  }
 }
 function ingest(list,{live=false}={}){
   const fresh=new Set();

@@ -153,4 +153,6 @@
 .drawer-empty {color:var(--theme-status-alert,#ff6a5d)}
 @media (prefers-reduced-motion: reduce) {
   .agent,.mailview-host button {transition:none}
+  .mail-arrival-still .mail-subject,
+  .mail-arrival-still:is(.mail-reply,.thread-item) .mail-route {color:var(--amber)}
 }

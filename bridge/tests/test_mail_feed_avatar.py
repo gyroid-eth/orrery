@@ -48,6 +48,51 @@ def test_roster_refresh_keeps_focused_assignment_and_drops_stale_portrait(cockpi
     assert js("Boolean(keptGroup.querySelector('.mail-assignee-fallback'))")
 
 
+@pytest.mark.parametrize('reduced', [False, True])
+def test_live_mail_reveals_in_place_as_existing_rows_move(cockpit, reduced):
+    js, wait, client, _, _ = cockpit
+    client.call('Emulation.setEmulatedMedia', features=[{
+        'name': 'prefers-reduced-motion', 'value': 'reduce' if reduced else 'no-preference',
+    }])
+    wait("Boolean(document.querySelector('#mail .mailcards'))")
+    result = js("""(async()=>{
+      await fetch('/telemetry/mail/recent?limit=40');
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const mail=document.getElementById('mail');
+      const receive=id=>document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages:[{
+        id,ts:id,sender:'UnlistedSender',recipient:'FixtureRecipient',subject:'Fixture '+id,
+      }]}}));
+      const post=2000000000;
+      receive(post);
+      mail.getAnimations({subtree:true}).forEach(animation=>animation.finish());
+      const previous=mail.querySelector('.mail-assignment');
+      const originalY=previous.getBoundingClientRect().top;
+      receive(post+1);
+      const incoming=mail.querySelector('.mail-assignment');
+      const effects=element=>element.getAnimations().map(animation=>({
+        frames:animation.effect.getKeyframes().map(({transform,clipPath})=>({transform,clipPath})),
+        duration:animation.effect.getTiming().duration,
+        easing:animation.effect.getTiming().easing,
+      }));
+      return {incoming:effects(incoming),previous:effects(previous),sameY:previous.getBoundingClientRect().top===originalY,
+        cue:incoming.classList.contains('mail-arrival-still'),previousCue:previous.classList.contains('mail-arrival-still'),
+        subject:incoming.querySelector('.mail-subject').textContent};
+    })()""")
+    assert result['subject'] == 'Fixture 2000000001'
+    assert result['cue'] is reduced and not result['previousCue']
+    if reduced:
+        assert result['incoming'] == result['previous'] == []
+        assert not result['sameY']
+    else:
+        incoming, = result['incoming']
+        previous, = result['previous']
+        assert incoming['duration'] == previous['duration'] == 275
+        assert incoming['easing'] == previous['easing']
+        assert incoming['frames'] == [{'clipPath': 'inset(0px 0px 100%)'}, {'clipPath': 'inset(0px)'}]
+        assert previous['frames'][0]['transform'].startswith('translate(0px, -')
+        assert result['sameY']
+
+
 def test_active_mail_filter_can_be_cleared_with_one_click(cockpit):
     js, wait = prepare(cockpit, width=240)
     js("""window.filterMail=name=>document.dispatchEvent(new CustomEvent('oc:filter-agent',{detail:{agent:name}}));
