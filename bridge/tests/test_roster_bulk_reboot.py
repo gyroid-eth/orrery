@@ -221,6 +221,13 @@ def open_permissions(js, name, selector):
     js(f"showAgentDetail(tiles.get({json.dumps(name)}));agentDetail.querySelector({json.dumps(selector)}).click()")
 
 
+def assert_read_only_permissions(js, name, reason):
+    js(f"showAgentDetail(tiles.get({json.dumps(name)}))")
+    assert js("agentDetail.querySelector('[data-browser],[data-computer]')===null")
+    assert reason in js("agentDetail.innerText")
+    assert not js("permissionConfirm.open")
+
+
 def permission_jump(name='SlateFixture', sid=SID, **permission):
     return '/api/jump', {'session': name, 'open': False, 'open_terminal': False,
                          'permission': {'history_session_id': sid, **permission}}
@@ -254,9 +261,7 @@ def test_permission_resume_sends_only_one_change_from_the_keyboard(roster):
 
 def test_cancel_and_disabled_permissions_send_no_actions(roster):
     js, wait, state = roster
-    open_permissions(js, 'BeaconFixture', '[data-computer="control"]')
-    assert js("agentDetail.querySelector('[data-computer=control]').title").endswith('(Persistent agent)')
-    assert not js('permissionConfirm.open')
+    assert_read_only_permissions(js, 'BeaconFixture', 'Persistent agent')
     open_permissions(js, 'SlateFixture', '[data-computer="control"]')
     assert js("document.activeElement.value") == 'cancel'
     js.client.call('Input.dispatchKeyEvent', type='keyDown', key='Escape', code='Escape', windowsVirtualKeyCode=27)
@@ -270,9 +275,7 @@ def test_finished_husk_and_conversation_only_controls_are_disabled(roster):
     js, wait, state = roster
     for name, reason in [('QuartzFixture', 'Exit this agent first'),
                          ('AmberFixture', 'Conversation-only resume has no saved permissions')]:
-        open_permissions(js, name, '[data-computer="control"]')
-        assert not js('permissionConfirm.open')
-        assert js("agentDetail.querySelector('[data-computer=control]').title").endswith(f'({reason})')
+        assert_read_only_permissions(js, name, reason)
     assert state['trace'] == []
 
 
@@ -402,24 +405,20 @@ def test_permission_restart_does_not_resume_a_replacement_conversation(roster):
 
 def test_older_api_keeps_standalone_permissions_disabled(roster):
     js, wait, state = roster
-    open_permissions(js, 'IndigoFixture', '[data-browser]')
-    assert not js('permissionConfirm.open')
-    assert js("agentDetail.querySelector('[data-browser]').title").endswith('(Standalone agent)')
+    assert_read_only_permissions(js, 'IndigoFixture', 'Standalone agent')
     assert not js("tiles.has('JadeFixture')")
     assert state['trace'] == []
 
     state['api'] = 46
     js("permissionApiCheckedAt=-Infinity;showAgentDetail(tiles.get('IndigoFixture'))")
-    wait("!agentDetail.querySelector('[data-browser]').disabled")
+    wait("agentDetail.querySelector('[data-browser]')?.disabled===false")
     assert state['trace'] == []
 
 
 @pytest.mark.parametrize('roster', [46], indirect=True)
 def test_api46_enables_stopped_standalone_and_shows_direct_launch_reason(roster):
     js, wait, state = roster
-    open_permissions(js, 'OpalFixture', '[data-browser]')
-    assert not js('permissionConfirm.open')
-    assert js("agentDetail.querySelector('[data-browser]').title").endswith('(No saved launch settings; use Resume)')
+    assert_read_only_permissions(js, 'OpalFixture', 'No saved launch settings; use Resume')
     open_permissions(js, 'JadeFixture', '[data-browser]')
     assert js('permissionApply.textContent') == 'Resume'
     js('permissionApply.click()')
@@ -442,6 +441,30 @@ def test_api46_validates_restart_and_sends_the_same_conversation_to_exit(roster,
         ('roster', 200, ['agent']),
         (path, jump | {'check_only': True}),
         ('/api/exit', {'session': name, 'history_session_id': sid}),
+        ('roster', 200, []), ('history', 'gone'), (path, jump),
+    ]
+
+
+@pytest.mark.parametrize('roster', [54], indirect=True)
+def test_api54_browser_mode_restart_validates_and_resumes_the_same_conversation(roster):
+    js, wait, state = roster
+    browser = {'value': False, 'mode': 'off', 'options': ['off', 'temporary', 'personal'], 'can_change': True}
+    controls = {'browser_use': browser | {'action': 'restart'}}
+    active = ACTIVE | {'permission_controls': controls}
+    stopped = EXITED | {'permission_controls': {'browser_use': browser | {'action': 'resume'}}}
+    state['checks'] = [(200, [active]), (200, [])]
+    state['stop_checks'] = [stopped]
+    js(f"currentAgentNamed('CopperFixture').permission_controls={json.dumps(controls)}")
+    open_permissions(js, 'CopperFixture', '[data-browser]')
+    assert js("permissionApply.textContent") == "Restart"
+    assert js("!permissionBrowser.validity.valid")
+    js("permissionBrowser.value='temporary';permissionApply.click()")
+    wait("toastEl.textContent.startsWith('Resume accepted')")
+    path, jump = permission_jump('CopperFixture', ACTIVE_SID, browser_mode='temporary')
+    assert state['trace'] == [
+        ('roster', 200, ['agent']),
+        (path, jump | {'check_only': True}),
+        ('/api/exit', {'session': 'CopperFixture', 'history_session_id': ACTIVE_SID}),
         ('roster', 200, []), ('history', 'gone'), (path, jump),
     ]
 
