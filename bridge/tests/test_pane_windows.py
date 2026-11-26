@@ -17,6 +17,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 SOURCES = Path(os.environ.get("ORRERY_BRIDGE_SOURCES", ROOT))
 COCKPIT = SOURCES / "cockpit.html"
@@ -334,15 +336,16 @@ def test_the_apps_closed_event_is_matched_to_this_backend():
     assert 'serde_json::json!({ "session": session, "url": url.as_str() })' in lib
 
 
-def test_selecting_an_outside_session_clears_the_previous_central_terminal():
+@pytest.mark.parametrize('reader', [False, True])
+def test_selecting_an_outside_session_clears_the_previous_central_terminal(reader):
     body = _function_body("jumpToSessionTarget")
     script = r"""
-let activeId='main-pane',pendingJump='old-jump',splitVisible=true;
+let activeId='main-pane',pendingJump='old-jump',pendingJumpReader=false,splitVisible=true;
 let terminalLessAgent=null,paneWindowSelection=null;
 const paneWindows=new Map([['WindowAgent',{kind:'window'}]]);
 const scrName={closest(){return null;}},scrPath={},scrBadge={},promptTarget={textContent:'MainAgent'},promptAva={hidden:false};
 const stageEmpty={style:{display:'none'}};
-let visible=['main-pane'],blurred=false,focused=[];
+let visible=['main-pane'],blurred=false,focused=[],messages=[];
 const document={activeElement:{blur(){blurred=true;}}};
 function blurTerminalFocus(){blurred=true;}
 function renderStage(){visible=activeId?[activeId]:[];}
@@ -351,18 +354,21 @@ function paintPaneHeading(){}
 function refreshHeaderStats(){}
 function refreshComposerVocabulary(){}
 function focusPaneWindow(name){focused.push(name);}
+function postPaneMessage(message){messages.push(message);}
 function resolveJump(){throw Error('must not attach a session in another window');}
 FUNCTION
-jumpToSessionTarget('WindowAgent');
+jumpToSessionTarget('WindowAgent',{reader:READER});
 console.log(JSON.stringify({activeId,pendingJump,splitVisible,visible,blurred,focused,
-  prompt:promptTarget.textContent,avatarHidden:promptAva.hidden}));
-""".replace("FUNCTION", "function jumpToSessionTarget(name,{forceFocus=false}={}){\n" + body + "\n}")
+  prompt:promptTarget.textContent,avatarHidden:promptAva.hidden,messages}));
+""".replace("FUNCTION", "function jumpToSessionTarget(name,{forceFocus=false,reader=false}={}){\n" + body + "\n}")
+    script = script.replace("READER", json.dumps(reader))
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == {
         "activeId": None, "pendingJump": None, "splitVisible": False,
         "visible": [], "blurred": True, "focused": ["WindowAgent"],
         "prompt": "—", "avatarHidden": True,
+        "messages": [{"type": "open-reader", "session": "WindowAgent"}] if reader else [],
     }
 
 
