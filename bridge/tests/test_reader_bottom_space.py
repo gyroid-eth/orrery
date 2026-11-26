@@ -77,3 +77,30 @@ def test_changing_latest_clearance_keeps_the_same_reading_character(cockpit, the
         assert abs(js('bottomCharacterTop()')-before) <= 1
         assert js('document.activeElement===readerScroll')
     assert js("packets.filter(p=>['input','codex-page'].includes(p.type))") == []
+
+
+def test_latest_padding_does_not_restart_split_reader_layout(cockpit):
+    js, _, _ = opened(cockpit, 'dark', 'split-phone')
+    js("readerScroll.scrollTop=readerScroll.scrollHeight;readerScroll.dispatchEvent(new Event('scroll'))")
+    wait_reading_layout(js)
+    result = js("""(async()=>{
+      const button=reader.querySelector('.conversation-bottom');
+      const startedHidden=button.hidden;
+      const before=readerScroll.getBoundingClientRect().toJSON();
+      const states=[];
+      const observer=new MutationObserver(()=>states.push(reader.dataset.conversationLayout));
+      observer.observe(reader,{attributeFilter:['data-conversation-layout']});
+      readerScroll.dispatchEvent(new WheelEvent('wheel'));
+      readerScroll.scrollTop=100;
+      readerScroll.dispatchEvent(new Event('scroll'));
+      const shown=!button.hidden;
+      await new Promise(resolve=>setTimeout(resolve,250));
+      observer.disconnect();
+      return {
+        startedHidden,shown,stillShown:!button.hidden,scrollTop:readerScroll.scrollTop,
+        sameViewport:JSON.stringify(before)===JSON.stringify(readerScroll.getBoundingClientRect()),
+        restarted:states.includes('pending'),
+      };
+    })()""")
+    assert result == dict(startedHidden=True, shown=True, stillShown=True, scrollTop=100,
+                          sameViewport=True, restarted=False)
