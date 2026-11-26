@@ -41,6 +41,37 @@ def test_each_native_slash_picker_has_notice_and_slash_fixtures():
         assert any(case.startswith('notice-long') for case in cases)
 
 
+@pytest.mark.parametrize('prompt_row,bottom,column,empty', [
+    ('    │ ❯ \x1b[38;5;145mSay something, or type / for commands', '    ╰' + '─' * 44, 8, True),
+    ('    │ ❯\x1b[38;5;145mSay something, or t…  │', '    ╰' + '─' * 24 + '╯', 7, True),
+    ('    │ ❯ Say something, or type / for commands', '    ╰' + '─' * 44, 8, False),
+    ('    │ ❯ \x1b[38;5;145mSay something different', '    ╰' + '─' * 44, 8, False),
+])
+def test_dsh_welcome_editor_recognizes_truncated_placeholder(prompt_row, bottom, column, empty):
+    observed = submission.frame(
+        native_meta({'meta': ['1', '0', str(column), '1', 'node']}),
+        ['    ╭' + bottom[5:], prompt_row, bottom],
+        '%1',
+    )
+
+    assert observed.editor == 'dsh'
+    assert observed.empty is empty
+
+
+def test_dsh_welcome_editor_confirms_the_visible_end_of_a_composer_paste():
+    bottom = '    ╰' + '─' * 48 + '╯'
+    observed = submission.frame(
+        native_meta({'meta': ['1', '0', '51', '1', 'node']}),
+        ['    ╭' + bottom[5:], '    │ ❯ mazonと楽天どちらで買ったらいいか議論して。  │', bottom],
+        '%1',
+    )
+    text = 'お互い相談してamazonと楽天どちらで買ったらいいか議論して。'
+
+    assert submission.ready(observed, text, operator=True)
+    assert not submission.ready(observed, text + '続き', operator=True)
+    assert not submission.ready(observed, text)
+
+
 @pytest.mark.parametrize('harness,case', NATIVE_CASES)
 def test_native_prompt_fixture(harness, case):
     assert native_frame(case.get('before', NATIVE_PROMPTS[harness]['before'])).empty
