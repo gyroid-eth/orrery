@@ -30,6 +30,7 @@ html[data-color-theme="light"] .medal .face,
 html[data-color-theme="light"] .session-ava{background:var(--elev)}
 html[data-color-theme="light"] .mini-portrait-fallback,
 html[data-color-theme="light"] .planet-portrait-fallback{fill:var(--elev)}
+html[data-color-theme="light"] .mini-lineage-ring{stroke:var(--ink-dim)}
 html[data-color-theme="light"] .medal .face::after{
   background:linear-gradient(145deg,rgb(255 255 255/.3),transparent 48%,rgb(var(--theme-ink-rgb)/.1));
   mix-blend-mode:normal;
@@ -178,8 +179,11 @@ html[data-color-theme="light"] .up-logo{filter:brightness(0)}
 html[data-color-theme="light"] .provider-badge{background:var(--panel);border-color:var(--hair)}
 html[data-color-theme="light"] .provider-logo{filter:brightness(0)}
 html[data-color-theme="light"] .mini-provider-seat{fill:var(--panel);stroke:var(--hair)}
-html[data-color-theme="light"] .mini-provider-logo{filter:brightness(0)}
+/* WKWebView drops CSS-filtered SVG provider images. Keep the original bone
+   artwork on an ink seat. Unavailable logos still use the paper fallback. */
+html[data-color-theme="light"] .mini-provider-badge:has(.mini-provider-logo) .mini-provider-seat{fill:var(--ink)}
 
 html[data-color-theme="light"] .provider-badge.local-provider-badge{background:none;border:0}
 html[data-color-theme="light"] .local-provider-rim polygon{fill:var(--panel);stroke:#667d18}
 html[data-color-theme="light"] .local-provider-badge .mini-provider-seat{stroke:#667d18}
+html[data-color-theme="light"] #spawnModelMark.spawn-local-maker .spawn-brand{filter:brightness(0)}
