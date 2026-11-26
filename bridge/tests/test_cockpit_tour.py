@@ -391,6 +391,7 @@ def test_dom_map_never_draws_crossing_leaders_while_the_window_changes(tour_brow
     """
     client, evaluate = tour_browser
     seen, bad = set(), []
+    evaluate("if(!document.getElementById('orrery').hasAttribute('hidden'))document.getElementById('mailGraphBtn').click()")
 
     def check(width, height):
         client.call('Emulation.setDeviceMetricsOverride', width=width, height=height, deviceScaleFactor=1, mobile=False)

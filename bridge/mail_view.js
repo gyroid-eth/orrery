@@ -23,8 +23,7 @@ let hoveredRoute=null,focusedRoute=null;
 const GRAPH_KEY='oc-mini-mail-graph';
 let manualGraphOpen=readGraphPreference();
 const VIEW_KEY='oc-mail-view';
-let timeline=true;
-try{timeline=localStorage.getItem(VIEW_KEY)!=='recipient';}catch(_){/* preference unavailable */}
+let timeline=readTimelinePreference();
 let seeded=false;
 
 mailEl.classList.add('mailview-host');
@@ -412,7 +411,7 @@ function paintGraph(){
     (route.recipients.join(', ')||'no direct recipient'));
 }
 function readGraphPreference(){
-  try{return localStorage.getItem(GRAPH_KEY)==='1';}catch(_){return false;}
+  try{return localStorage.getItem(GRAPH_KEY)!=='0';}catch(_){return true;}
 }
 function syncGraphPreference(){
   manualGraphOpen=readGraphPreference();
@@ -428,9 +427,11 @@ graphButton.addEventListener('click',()=>{
 });
 window.addEventListener('storage',event=>{
   if(event.key===GRAPH_KEY)syncGraphPreference();
+  if(event.key===VIEW_KEY)syncTimelinePreference();
 });
 document.addEventListener('oc:prefs-changed',event=>{
   if(event.detail?.keys?.includes(GRAPH_KEY))syncGraphPreference();
+  if(event.detail?.keys?.includes(VIEW_KEY))syncTimelinePreference();
 });
 
 function paintView(){
@@ -438,13 +439,27 @@ function paintView(){
   viewButton.setAttribute('aria-label',viewButton.title);
   viewButton.innerHTML=icon(timeline?'group':'thread');
 }
-viewButton.addEventListener('click',()=>{
+function readTimelinePreference(){
+  try{return localStorage.getItem(VIEW_KEY)!=='recipient';}catch(_){return true;}
+}
+function syncTimelinePreference(){
+  const next=readTimelinePreference();
+  if(next===timeline)return;
+  setTimeline(next);
+}
+function setTimeline(next){
   if(drawer)closeDrawer(false);
-  timeline=!timeline;
-  try{localStorage.setItem(VIEW_KEY,timeline?'timeline':'recipient');}catch(_){/* preference unavailable */}
+  timeline=next;
   paintView();
   renderMail();
   listEl.scrollTop=0;
+}
+viewButton.addEventListener('click',()=>{
+  setTimeline(!timeline);
+  try{
+    localStorage.setItem(VIEW_KEY,timeline?'timeline':'recipient');
+    window.OrreryPrefs?.flush();
+  }catch(_){/* preference unavailable */}
 });
 
 function paintPortrait(group){

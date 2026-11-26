@@ -238,14 +238,17 @@ def test_graph_captions_fit_dense_layout_and_keep_the_full_tooltip(mini_browser,
           ellipsis:getComputedStyle(name).textOverflow==='ellipsis'&&name.scrollWidth>name.clientWidth,
           full:long.querySelector(':scope > title').textContent.includes(longName)&&
             long.getAttribute('aria-label').includes(longName),
-          role:long.querySelector('.orrery-caption-role').textContent,
+          role:long.querySelector('.orrery-caption-role')?.textContent??null,
           noRole:!nodes.find(node=>node.dataset.agent==='Pilot').querySelector('.orrery-caption-role')};
       });
     })()""".replace('MODE', json.dumps(mode)))
-    assert result == [dict(count=16, clear=True, ellipsis=True, full=True, role='Fixture release review', noRole=True)] * 2
+    expected = dict(count=16, clear=True, ellipsis=True, full=True, noRole=True)
+    assert {key: result[0][key] for key in expected} == expected
+    assert result[0]['role'] in (None, 'Fixture release review')
+    assert result[1] == dict(expected, role='Fixture release review')
 
 
-def test_mail_edges_and_selected_routes_bend_only_around_a_portrait(mini_browser):
+def test_mini_mail_edges_stay_straight_and_portraits_mask_them(mini_browser):
     client, evaluate = mini_browser
     client.call('Emulation.setEmulatedMedia', features=[
         {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
@@ -273,6 +276,7 @@ def test_mail_edges_and_selected_routes_bend_only_around_a_portrait(mini_browser
         }));
         const midpoint=path=>path.getPointAtLength(path.getTotalLength()/2);
         return {clear:clear.includes(' L '),bent:blocked.getAttribute('d').includes(' Q '),
+          masked:blocked.closest('.orrery-comm-layer').getAttribute('mask')==='url(#mini-edge-cutouts)',
           selectedMatches:focus().getAttribute('d')===blocked.getAttribute('d'),
           clearance,midpoint:midpoint(blocked),focus,midpointOf:midpoint};
       });
@@ -282,10 +286,12 @@ def test_mail_edges_and_selected_routes_bend_only_around_a_portrait(mini_browser
         return {...rest,reverseMatches:Math.hypot(midpoint.x-reverse.x,midpoint.y-reverse.y)<.01};
       });
     })()""")
-    for graph, radius in zip(result, (14, 32), strict=True):
-        assert graph['clear'] and graph['bent'], graph
+    mini, planet = result
+    for graph in result:
+        assert graph['clear'], graph
         assert graph['selectedMatches'] and graph['reverseMatches'], graph
-        assert graph['clearance'] >= radius, graph
+    assert mini['masked'] and not mini['bent'] and 6 < mini['clearance'] < 10, mini
+    assert planet['bent'] and planet['clearance'] >= 32, planet
 
 
 def test_selected_parent_child_mail_overlays_the_spawn_line(mini_browser):
@@ -306,18 +312,16 @@ def test_selected_parent_child_mail_overlays_the_spawn_line(mini_browser):
       const graphs=['#orrery','.planetarium-svg'].map(selector=>{
         const svg=document.querySelector(selector);
         const spawn=svg.querySelector('.orrery-spawn-edge[data-parent=Pilot][data-child=PeerG]');
-        const [x1,y1,x2,y2]=['x1','y1','x2','y2'].map(key=>spawn.getAttribute(key));
-        const d=svg.querySelector('.orrery-mail-focus path').getAttribute('d');
-        return {horizontal:Math.abs(y1-y2)<.01,overlaid:d===`M ${x2} ${y2} L ${x1} ${y1}`};
+        const path=svg.querySelector('.orrery-mail-focus path');
+        return [0,.25,.5,.75,1].every(t=>{
+          const a=path.getPointAtLength(t*path.getTotalLength());
+          const b=spawn.getPointAtLength((1-t)*spawn.getTotalLength());
+          return Math.hypot(a.x-b.x,a.y-b.y)<.1;
+        });
       });
-      // The same central portrait blocks a diagonal route in the radial rail.
-      show('PeerB','PeerF');
-      return {graphs,diagonal:document.querySelector('#orrery .orrery-mail-focus path').getAttribute('d')};
+      return graphs;
     })()""")
-    assert result['graphs'] == [
-        {'horizontal': True, 'overlaid': True}, {'horizontal': False, 'overlaid': True},
-    ]
-    assert ' Q ' in result['diagonal']
+    assert result == [True, True]
 
 
 def test_mini_graph_keeps_mail_pairs_by_default_and_can_use_only_recent_links(mini_browser):
@@ -405,16 +409,23 @@ def test_graph_edge_mouse_and_keyboard_filter_mail_both_ways(mini_browser):
         const p=edge.getPointAtLength(length*t).matrixTransform(matrix);
         const q=edge.getPointAtLength(length*t+1).matrixTransform(matrix);
         const step=Math.hypot(q.x-p.x,q.y-p.y);
-        const x=p.x-(q.y-p.y)*5/step,y=p.y+(q.x-p.x)*5/step;
-        const hit=document.elementFromPoint(x,y);
-        if(hit?.parentElement===edge.parentElement&&hit.classList.contains('orrery-mail-edge-hit'))return {x,y};
+        for(const side of [-5,5]){
+          const x=p.x-(q.y-p.y)*side/step,y=p.y+(q.x-p.x)*side/step;
+          const hit=document.elementFromPoint(x,y);
+          if(hit?.parentElement===edge.parentElement&&hit.classList.contains('orrery-mail-edge-hit'))return {x,y};
+        }
       }
       return null;
     })()""")
     assert point is not None
     xy = point
     client.call('Input.dispatchMouseEvent', type='mouseMoved', **xy)
-    assert evaluate("getComputedStyle(document.querySelector('.orrery-history-edge')).strokeOpacity") == '0.56'
+    for _ in range(20):
+        opacity = evaluate("getComputedStyle(document.querySelector('.orrery-history-edge')).strokeOpacity")
+        if opacity == '0.56':
+            break
+        time.sleep(.025)
+    assert opacity == '0.56'
     client.call('Input.dispatchMouseEvent', type='mousePressed', button='left', clickCount=1, **xy)
     client.call('Input.dispatchMouseEvent', type='mouseReleased', button='left', clickCount=1, **xy)
     assert evaluate("edgeChip()") == 'Helper ↔ Watcher'
@@ -440,42 +451,115 @@ def test_graph_edge_mouse_and_keyboard_filter_mail_both_ways(mini_browser):
         assert evaluate('edgeChip()') == pair
 
 
-@pytest.mark.parametrize('mode', ['network', 'orrery'])
-def test_dense_mini_graph_keeps_names_readable_and_pans_the_whole_graph(mini_browser, mode):
+def test_hover_and_focus_emphasize_only_incident_mini_edges_and_merge_mail_pairs(mini_browser):
     client, evaluate = mini_browser
+    client.call('Emulation.setFocusEmulationEnabled', enabled=True)
     client.call('Emulation.setEmulatedMedia', features=[
         {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
-    result = evaluate("""(()=>{
-      setMailPaneWidth(260,mailPaneBounds());
+    point = evaluate("""(async()=>{
+      const settings=document.getElementById('miniMailLinks');
+      settings.value='recent';settings.dispatchEvent(new Event('change'));
+      const originalFetch=window.fetch;
+      window.fetch=(url,...args)=>url==='/telemetry/graph?days=1'?
+        Promise.resolve(new Response(JSON.stringify({edges:[
+          {source:'Pilot',target:'Helper',count:4},{source:'Pilot',target:'Watcher',count:7},
+          {source:'Helper',target:'Watcher',count:2}
+        ]}))):originalFetch(url,...args);
+      settings.value='keep';settings.dispatchEvent(new Event('change'));
+      const svg=document.getElementById('orrery');
+      for(let i=0;i<60&&!svg.querySelector('.orrery-history-edge');i++)await new Promise(r=>setTimeout(r,20));
+      document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages:[{sender:'Pilot',recipient:'Watcher'}]}}));
+      window.edgeHighlight=()=>{
+        const edges=[...svg.querySelectorAll('.orrery-mail-edge')];
+        return {count:edges.length,incident:edges.filter(el=>el.classList.contains('is-incident')).length,
+          active:svg.classList.contains('has-node-edge-highlight'),straight:edges.every(el=>
+            el.firstElementChild.getAttribute('d').includes(' L ')),
+          merged:!!svg.querySelector('.orrery-history-edge.mail-live')&&
+            !svg.querySelector('.orrery-history-edge[data-a=Helper][data-b=Pilot]'),
+          fade:getComputedStyle(edges[0]).transitionDuration};
+      };
+      const helper=svg.querySelector('[data-agent=Helper] .orrery-hit').getBoundingClientRect();
+      return {x:helper.left+helper.width/2,y:helper.top+helper.height/2};
+    })()""")
+    expected = {'count': 3, 'incident': 2, 'active': True, 'straight': True, 'merged': True, 'fade': '0.16s'}
+    client.call('Input.dispatchMouseEvent', type='mouseMoved', **point)
+    assert evaluate('edgeHighlight()') == expected
+    client.call('Input.dispatchMouseEvent', type='mouseMoved', x=20, y=100)
+    assert not evaluate('edgeHighlight().active')
+    evaluate("document.querySelector('#orrery [data-agent=Helper]').focus()")
+    assert evaluate('edgeHighlight()') == expected
+    evaluate("document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}))")
+    assert evaluate('document.activeElement.dataset.agent') == 'Helper'
+    assert evaluate('edgeHighlight()') == expected
+    evaluate('document.activeElement.blur()')
+    assert not evaluate('edgeHighlight().active')
+
+
+@pytest.mark.parametrize('mode,count', [('network', 16), ('orrery', 24)])
+def test_mini_graph_fits_every_agent_then_zooms_and_fits_again_after_resize(mini_browser, mode, count):
+    client, evaluate = mini_browser
+    client.call('Emulation.setFocusEmulationEnabled', enabled=True)
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    point = evaluate("""(()=>{
+      setMailPaneWidth(380,mailPaneBounds());
+      window.setGraphHeight=height=>{
+        localStorage.setItem('oc-mini-graph-height',String(height));
+        document.dispatchEvent(new CustomEvent('oc:prefs-changed',{detail:{keys:['oc-mini-graph-height']}}));
+      };
+      setGraphHeight(352);
       setMiniViewMode(MODE);
       const svg=document.getElementById('orrery'),scroll=svg.parentElement;
-      const names=['Pilot','Helper',...Array.from({length:30},(_,i)=>'FixtureAgent'+i)];
-      currentAgents=names.map(name=>({name,provider:'openai'}));
+      const names=['Pilot','Helper',...Array.from({length:COUNT-2},(_,i)=>'FixtureAgent'+i)];
+      currentAgents=names.map(name=>({name,provider:'openai',annot:{role:'Fixture reviewer'}}));
       names.slice(1).forEach(name=>OC.lineageParent.set(name,'Pilot'));
-      const refresh=()=>document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
-      refresh();
-      const pilot=svg.querySelector('[data-agent=Pilot]'),name=pilot.querySelector('.orrery-caption-name');
-      const nameSize=Number.parseFloat(getComputedStyle(name).fontSize)*pilot.getScreenCTM().a;
-      const portrait=pilot.querySelector('.mini-portrait').getBoundingClientRect().width;
-      const control=scroll.parentElement.querySelector('.orrery-expand');
-      const inside=element=>{
-        const r=element.getBoundingClientRect(),bounds=scroll.getBoundingClientRect();
-        return r.left>=bounds.left&&r.right<=bounds.right&&r.top>=bounds.top&&r.bottom<=bounds.bottom;
+      window.refreshMini=()=>document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      refreshMini();
+      window.miniFitStats=()=>{
+        const nodes=[...svg.querySelectorAll('.mini-agent')],name=nodes[0].querySelector('.orrery-caption-name');
+        const inside=el=>{
+          const r=el.getBoundingClientRect(),b=scroll.getBoundingClientRect();
+          return r.left>=b.left-.1&&r.right<=b.right+.1&&r.top>=b.top-.1&&r.bottom<=b.bottom+.1;
+        };
+        return {count:nodes.length,all:nodes.every(inside),nameSize:parseFloat(getComputedStyle(name).fontSize)*svg.getScreenCTM().a,
+          zoom:svg.clientWidth/scroll.clientWidth,pan:[scroll.scrollLeft,scroll.scrollTop],
+          expand:inside(scroll.parentElement.querySelector('.orrery-expand')),height:scroll.clientHeight};
       };
-      const startVisible=inside(pilot);
-      scroll.scrollLeft=scroll.scrollWidth;
-      scroll.scrollTop=scroll.scrollHeight;
-      const pan=[scroll.scrollLeft,scroll.scrollTop];
-      const reached=[...svg.querySelectorAll('.mini-agent')].some(node=>node!==pilot&&inside(node));
-      refresh();
-      return {count:svg.querySelectorAll('.mini-agent').length,nameSize,portrait,startVisible,reached,pan,
-        preserved:[scroll.scrollLeft,scroll.scrollTop],expandVisible:inside(control),keyboard:scroll.tabIndex};
-    })()""".replace('MODE', json.dumps(mode)))
-    assert result['count'] == 32
-    assert result['nameSize'] >= 11.6 and result['portrait'] >= 22, result
-    assert result['startVisible'] and result['reached'] and result['expandVisible'], result
-    assert result['pan'] != [0, 0] and result['pan'] == result['preserved'], result
-    assert result['keyboard'] == 0
+      const b=scroll.getBoundingClientRect();
+      return {x:Math.round(b.left+b.width/2),y:Math.round(b.top+b.height/2)};
+    })()""".replace('MODE', json.dumps(mode)).replace('COUNT', str(count)))
+    initial = evaluate('miniFitStats()')
+    assert initial['count'] == count and initial['all'] and initial['expand'], initial
+    assert initial['zoom'] == 1 and initial['nameSize'] >= 8.99, initial
+
+    def wheel(delta, modifiers=0):
+        client.call('Input.dispatchMouseEvent', type='mouseWheel', deltaX=0, deltaY=delta,
+                    modifiers=modifiers, **point)
+
+    wheel(-160, 2)
+    zoomed = evaluate('miniFitStats()')
+    assert zoomed['zoom'] > 1.2 and zoomed['expand'], zoomed
+    wheel(70)
+    for _ in range(20):
+        panned = evaluate('miniFitStats()')
+        if panned['pan'][1] > zoomed['pan'][1]:
+            break
+        time.sleep(.03)
+    assert panned['pan'][1] > zoomed['pan'][1] and panned['zoom'] == zoomed['zoom'], panned
+    evaluate('refreshMini()')
+    assert evaluate('miniFitStats().pan') == panned['pan']
+    wheel(1000, 4)
+    assert evaluate('miniFitStats().all&&miniFitStats().zoom===1')
+    wheel(-140, 4)
+    assert evaluate('miniFitStats().zoom') > 1.2
+    evaluate('setGraphHeight(304)')
+    for _ in range(20):
+        resized = evaluate('miniFitStats()')
+        if resized['zoom'] == 1:
+            break
+        time.sleep(.03)
+    assert resized['height'] == 304 and resized['all'] and resized['count'] == count, resized
+    assert resized['zoom'] == 1 and resized['nameSize'] >= 8.99, resized
 
 
 def test_dense_network_centers_focus_and_puts_frequent_mail_on_the_inner_ring(mini_browser):
@@ -484,6 +568,8 @@ def test_dense_network_centers_focus_and_puts_frequent_mail_on_the_inner_ring(mi
         {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
     result = evaluate("""(async()=>{
       setMailPaneWidth(380,mailPaneBounds());
+      localStorage.setItem('oc-mini-graph-height','352');
+      document.dispatchEvent(new CustomEvent('oc:prefs-changed',{detail:{keys:['oc-mini-graph-height']}}));
       const settings=document.getElementById('miniMailLinks');
       settings.value='recent';settings.dispatchEvent(new Event('change'));
       const peers=Array.from({length:15},(_,i)=>'Peer'+String(i).padStart(2,'0'));
@@ -498,8 +584,9 @@ def test_dense_network_centers_focus_and_puts_frequent_mail_on_the_inner_ring(mi
       setMiniViewMode('network');
       settings.value='keep';settings.dispatchEvent(new Event('change'));
       const svg=document.getElementById('orrery');
-      for(let i=0;i<60&&!svg.querySelector('.orrery-history-edge');i++)await new Promise(r=>setTimeout(r,20));
-      if(!svg.querySelector('.orrery-history-edge'))throw new Error('Fixture Mail history did not load');
+      const retained=()=>svg.querySelector('.orrery-spawn-edge[data-child=Peer14]')?.parentElement.style.getPropertyValue('--mail-edge-width');
+      for(let i=0;i<60&&!retained();i++)await new Promise(r=>setTimeout(r,20));
+      if(!retained())throw new Error('Fixture Mail history did not load');
       const hit=name=>svg.querySelector(`[data-agent="${name}"] .orrery-hit`);
       const center=name=>{
         const el=hit(name);
@@ -513,10 +600,10 @@ def test_dense_network_centers_focus_and_puts_frequent_mail_on_the_inner_ring(mi
       const [out,into]=document.querySelectorAll('.mini-graph-zoom button');
       const scale=()=>hit('Pilot').getScreenCTM().a;
       const normal=scale();into.click();const enlarged=scale();out.click();
-      return {centered:x===box.width/2&&y===box.height/2,normal,enlarged,restored:scale(),
-        inner:radius('Peer14'),outer:radius('Peer10'),rings:new Set(peers.map(name=>Math.round(radius(name)))).size};
+      return {centered:Math.abs(x-box.width/2)<.01&&Math.abs(y-box.height/2)<.01,
+        normal,enlarged,restored:scale(),inner:radius('Peer14'),outer:radius('Peer10')};
     })()""")
-    assert result['centered'] and result['rings'] == 2, result
+    assert result['centered'], result
     assert result['inner'] < result['outer'], result
     assert result['enlarged'] > result['normal'] == result['restored'], result
 

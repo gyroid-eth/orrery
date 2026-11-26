@@ -4,9 +4,11 @@ Run from bridge/: ``python -m pytest tests/test_prefs.py``.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -54,6 +56,28 @@ def test_round_trip_through_the_file(tmp_path):
     assert ob.prefs_rev(path) == rev1 and rev1 > 0
     path.write_text("{not json")
     assert ob.read_prefs(path) == {}
+
+
+@pytest.mark.asyncio
+async def test_old_shared_mail_layout_migrates_once_and_keeps_later_choices(tmp_path, monkeypatch):
+    path = tmp_path / 'prefs.json'
+    old = {'oc-mail-view': 'recipient', 'oc-mini-mail-graph': '0', 'oc-mini-view': 'network'}
+    ob.write_prefs(old, path)
+    read, write, response = ob.read_prefs, ob.write_prefs, ob.prefs_response
+    monkeypatch.setattr(ob, 'read_prefs', lambda _path=path: read(path))
+    monkeypatch.setattr(ob, 'write_prefs', lambda value: write(value, path))
+    monkeypatch.setattr(ob, 'prefs_response', lambda: response(path))
+
+    async def change():
+        return {'set': {'oc-mail-view': 'recipient', 'oc-mini-mail-graph': '0'}}
+
+    request = SimpleNamespace(app={ob.PREFS_LOCK_KEY: asyncio.Lock()}, json=change)
+    first = json.loads((await ob.serve_prefs(request)).body)
+    assert first['prefs'] == {**old, 'oc-mail-view': 'timeline', 'oc-mini-mail-graph': '1', 'oc-mail-layout-v1': '1'}
+    assert read(path) == first['prefs']
+    await ob.update_prefs(request)
+    second = json.loads((await ob.serve_prefs(request)).body)
+    assert second['prefs'] == {**old, 'oc-mail-layout-v1': '1'}
 
 
 @pytest.fixture

@@ -7,7 +7,7 @@
 .mini-graph:has(.miniorrery[hidden]),
 .mini-graph:has(.miniorrery[hidden])+.mail-graph-divider{display:none}
 .mini-graph.orrery-mode{width:100%;margin:4px 0 0}
-.mini-graph-scroll{width:100%;height:100%;overflow:auto;scrollbar-width:thin;overflow-anchor:none}
+.mini-graph-scroll{width:100%;height:100%;overflow:auto;scrollbar-width:thin;overflow-anchor:none;overscroll-behavior:contain}
 .mini-graph-scroll:focus-visible{outline:1px solid var(--ink-dim);outline-offset:-1px}
 .mini-graph-expand{position:absolute;top:0;right:0;width:28px;height:28px;pointer-events:none}
 .mini-graph-expand .orrery-expand{pointer-events:auto}
@@ -19,6 +19,7 @@
 .mini-graph-zoom button:not(:disabled):is(:hover,:focus-visible){color:var(--ink);border-color:var(--ink-dim)}
 .mini-graph-zoom button:disabled{cursor:default;opacity:.45}
 .miniorrery{display:block;overflow:hidden}
+.miniorrery.hide-mini-captions .mini-agent foreignObject{visibility:hidden}
 .miniorrery.telemetry-network{
   background:radial-gradient(ellipse at center,rgb(var(--theme-accent-rgb) / .055),transparent 62%);
 }
@@ -35,8 +36,7 @@
    not already tell us — spawning always sends the task message, so the pair
    is connected by definition. What the mail adds is that it is happening
    now, and one line can carry that by brightening instead of being drawn
-   twice. Pairs with no spawn edge still get their own curve: there, the
-   curve is the only thing saying the two are related at all. */
+   twice. Pairs with no spawn edge get their own Mail line. */
 .orrery-spawn-edge.mail-live{
   stroke:rgb(var(--theme-accent-rgb) / .92);stroke-width:1.7;
 }
@@ -49,8 +49,13 @@
   fill:none;stroke:var(--ink-dim);
   vector-effect:non-scaling-stroke;pointer-events:none;
 }
-.orrery-mail-edge{cursor:pointer;outline:none}
-.orrery-mail-edge > :first-child{fill:none;pointer-events:none}
+.orrery-mail-edge{cursor:pointer;outline:none;transition:opacity 160ms}
+.orrery-mail-edge > :first-child{
+  fill:none;pointer-events:none;transition:stroke 160ms,stroke-width 160ms,stroke-opacity 160ms;
+}
+.orrery-mail-edge > .orrery-spawn-edge{stroke-width:var(--mail-edge-width,1.15px)}
+.orrery-mail-edge > .orrery-spawn-edge.mail-live{stroke-width:max(var(--mail-edge-width,1.15px),1.7px)}
+.orrery-mail-edge > .orrery-history-edge.mail-live{stroke:var(--ink)}
 .orrery-mail-edge-hit{
   fill:none;stroke:transparent;stroke-width:14px;vector-effect:non-scaling-stroke;pointer-events:stroke;
 }
@@ -60,6 +65,11 @@
 .orrery-mail-edge:hover > .orrery-comm-edge{stroke-opacity:.76}
 .orrery-mail-edge:hover > .mail-live{stroke:var(--amber);stroke-opacity:1}
 .orrery-mail-edge:focus-visible > :first-child{stroke:var(--amber);stroke-opacity:1;stroke-width:3}
+.miniorrery.has-node-edge-highlight .orrery-mail-edge:not(.is-incident,:hover,:focus-visible){opacity:.55}
+.miniorrery.has-node-edge-highlight .orrery-mail-edge.is-incident > :first-child{
+  stroke:var(--ink);stroke-opacity:.76;
+  stroke-width:max(2.3px,calc(var(--mail-edge-width,1.15px) + .6px));
+}
 .orrery-agent,.orrery-expand{cursor:pointer;outline:none}
 .orrery-hit{fill:transparent;stroke:none}
 .mini-portrait-fallback{fill:#24282f}
