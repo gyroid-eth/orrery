@@ -180,6 +180,37 @@ def test_clicking_an_image_step_opens_the_existing_reader_preview(cockpit, provi
         (folder/'desktop-preview.png').write_bytes(base64.b64decode(client.call('Page.captureScreenshot', format='png')['data']))
 
 
+@pytest.mark.parametrize('cockpit', [False, True], indirect=True, ids=['desktop', 'phone'])
+def test_files_from_separate_steps_pack_and_wrap_below_the_heading(cockpit):
+    rows = events('codex')
+    labels = ['reader-before.png', 'reader-after.png', 'reader-before-and-after-measurements.txt']
+    for index, label in enumerate(labels):
+        row = project(native('McpToolCall', ident='show-'+str(index), server='orrery-mail',
+                             tool='show_files', status='completed'), 11+index)
+        row['references'] = [dict(id=f'{index:032d}', kind='file', label=label)]
+        rows.append(row)
+    rows.append(project(dict(type='event_msg', payload=dict(type='task_complete',
+                                                            turn_id='turn-one', duration_ms=12000)), 15))
+    js, wait, _ = prepare(cockpit, 'codex', rows=rows, working=False)
+    geometry = js("""(()=>{
+      const card=document.querySelector('.conversation-steps');
+      const buttons=[...document.querySelectorAll('.conversation-step-record .conversation-file')];
+      const [first,second,third]=buttons.map(button=>button.getBoundingClientRect());
+      return {underHeading:first.top-card.getBoundingClientRect().bottom, sameLine:first.top===second.top,
+        horizontalGap:second.left-first.right, wrappedGap:third.top-first.bottom,
+        fits:third.right<=card.getBoundingClientRect().right,
+        closed:card.querySelector('.conversation-steps-toggle').getAttribute('aria-expanded')==='false'};
+    })()""")
+    assert geometry['closed'] and geometry['fits']
+    assert 0 <= geometry['underHeading'] <= 6
+    assert geometry['sameLine'] and 0 < geometry['horizontalGap'] <= 8
+    assert 0 < geometry['wrappedGap'] <= 8
+    js("""OrreryConversationSource.Source.prototype.reference=async()=>({kind:'text',text:'Recorded file.'});
+          document.querySelectorAll('.conversation-step-record .conversation-file')[1].click()""")
+    wait("document.querySelector('.conversation-preview-title')?.textContent==='reader-after.png'")
+    wait("document.querySelector('.conversation-preview-text')?.textContent==='Recorded file.'")
+
+
 def test_append_keeps_existing_row_selection_and_earlier_pair_fills_without_duplicate(cockpit):
     rows=events('claude')
     js,wait,client=prepare(cockpit,'claude',rows=rows)

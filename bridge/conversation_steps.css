@@ -75,6 +75,10 @@ html[data-color-theme="light"] .conversation-step-diff-minus{color:#9b2d2d}
 .conversation-step-diff-fold:hover{color:var(--ink)}
 .conversation-steps-notice{margin:4px 0 0 8px;color:var(--ink-dim);font-size:11px}
 .conversation-step-record>.conversation-byline{display:none}
+.conversation-steps.conversation-steps-with-files{margin-bottom:4px}
+.conversation-event.conversation-step-files:not([hidden]){display:inline-block;box-sizing:border-box;max-width:100%;
+  padding:0 6px 6px 0;border:0;vertical-align:top}
+.conversation-step-files>.conversation-files{padding-top:0}
 .conversation-steps.is-paused *{animation-play-state:paused}
 @media(pointer:coarse){.conversation-steps-toggle{min-height:44px}}
 @media(prefers-reduced-motion:reduce){
