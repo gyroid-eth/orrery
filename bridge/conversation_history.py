@@ -382,7 +382,8 @@ def conversation_binding(row):
                      and row.get('history_binding') == 'bound'
                      and row.get('history_session_id') and row.get('transcript_path'))
     receipt = None if native_claude else row.get('history_receipt_ts')
-    return (*[row.get(key) for key in keys], receipt)
+    cwd = row.get('history_workspace') if row.get('program') in AGY_PROGRAMS else None
+    return (*[row.get(key) for key in keys], receipt, cwd)
 
 
 def open_reader(row, expect_inode=None):

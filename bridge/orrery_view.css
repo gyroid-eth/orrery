@@ -79,6 +79,13 @@
 .orrery-mail-edge-hit{
   fill:none;stroke:transparent;stroke-width:14px;vector-effect:non-scaling-stroke;pointer-events:stroke;
 }
+.mini-edge-subject{
+  position:absolute;z-index:2;pointer-events:none;
+  max-width:min(300px,calc(100% - 16px));overflow:hidden;overflow-wrap:anywhere;
+  padding:5px 8px;border:1px solid var(--hair);border-radius:6px;
+  background:var(--panel-2);color:var(--ink);font:11px/1.4 var(--rail-sans);
+}
+.mini-edge-subject:not([hidden]){display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3}
 .miniorrery.has-node-edge-highlight .orrery-mail-edge:not(.is-incident,:hover,:focus-visible)>.orrery-mail-edge-core{
   stroke-opacity:var(--mini-edge-opacity-floor);
 }
@@ -125,6 +132,20 @@
 }
 .orrery-caption-name,.orrery-caption-role{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .orrery-caption-role{font-size:7.5px;line-height:9px;font-weight:400;color:var(--ink-dim)}
+.orrery-caption-action{color:var(--amber);font-weight:600}
+.orrery-caption-arrival{
+  display:flex;align-items:baseline;justify-content:center;gap:2px;
+  color:var(--amber);font-weight:600;
+}
+.orrery-caption-arrival>span{animation:orrery-arrival-subject 2s linear both}
+.orrery-arrival-subject{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.orrery-arrival-count{flex:none;font-size:.87em;font-variant-numeric:tabular-nums}
+@keyframes orrery-arrival-subject{
+  0%{opacity:.35}
+  8.5%,90%{opacity:1}
+  100%{opacity:0}
+}
+@media(prefers-reduced-motion:reduce){.orrery-caption-arrival>span{animation:none}}
 .planet-agent .orrery-caption{font-size:15px;line-height:19px}
 .planet-agent .orrery-caption-role{font-size:11px;line-height:15px}
 .orrery-expand rect{
@@ -143,6 +164,9 @@
 .orrery-comet-flight.important{fill:var(--amber)}
 .orrery-comet-tail{fill:var(--amber);opacity:.45}
 .orrery-comet-halo{fill:var(--ink);opacity:.24}
+.orrery-comet-ripple{
+  fill:none;stroke:var(--amber);stroke-width:1.2;vector-effect:non-scaling-stroke;pointer-events:none;
+}
 /* 承認待ち(!)と質問待ち(?)は色で区別する。literal color で書くのは、暖色テーマが
    --cyan を --amber に alias しており、変数だとまさに区別が要る場面で区別が消えるため。
    dashboard 側 (.askbub/.qbub) と同じ意味・同じ2色。 */

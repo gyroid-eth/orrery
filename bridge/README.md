@@ -181,6 +181,9 @@ previewed outside the working folder, on the desktop and phone. Relative text
 paths use the conversation's working folder and configured workspace roots.
 `SendUserFile` can preview explicitly named raster images outside those roots.
 Other tools' references use the existing workspace and image roots.
+In the Reader's agent steps, click a recorded image read to open the same
+preview. Relative paths use the agent's working folder. Explicit absolute
+image paths use the same checks as `show_files` and display the current file.
 Every preview rechecks the original bound record, OS read permissions,
 canonical path, symbolic links, file type, bytes and pixels. Images are
 reencoded as PNG before delivery. Caption, status and result prose grant no

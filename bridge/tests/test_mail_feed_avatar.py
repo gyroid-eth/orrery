@@ -48,6 +48,51 @@ def test_roster_refresh_keeps_focused_assignment_and_drops_stale_portrait(cockpi
     assert js("Boolean(keptGroup.querySelector('.mail-assignee-fallback'))")
 
 
+@pytest.mark.parametrize('reduced', [False, True])
+def test_live_mail_reveals_in_place_as_existing_rows_move(cockpit, reduced):
+    js, wait, client, _, _ = cockpit
+    client.call('Emulation.setEmulatedMedia', features=[{
+        'name': 'prefers-reduced-motion', 'value': 'reduce' if reduced else 'no-preference',
+    }])
+    wait("Boolean(document.querySelector('#mail .mailcards'))")
+    result = js("""(async()=>{
+      await fetch('/telemetry/mail/recent?limit=40');
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const mail=document.getElementById('mail');
+      const receive=id=>document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages:[{
+        id,ts:id,sender:'UnlistedSender',recipient:'FixtureRecipient',subject:'Fixture '+id,
+      }]}}));
+      const post=2000000000;
+      receive(post);
+      mail.getAnimations({subtree:true}).forEach(animation=>animation.finish());
+      const previous=mail.querySelector('.mail-assignment');
+      const originalY=previous.getBoundingClientRect().top;
+      receive(post+1);
+      const incoming=mail.querySelector('.mail-assignment');
+      const effects=element=>element.getAnimations().map(animation=>({
+        frames:animation.effect.getKeyframes().map(({transform,clipPath})=>({transform,clipPath})),
+        duration:animation.effect.getTiming().duration,
+        easing:animation.effect.getTiming().easing,
+      }));
+      return {incoming:effects(incoming),previous:effects(previous),sameY:previous.getBoundingClientRect().top===originalY,
+        cue:incoming.classList.contains('mail-arrival-still'),previousCue:previous.classList.contains('mail-arrival-still'),
+        subject:incoming.querySelector('.mail-subject').textContent};
+    })()""")
+    assert result['subject'] == 'Fixture 2000000001'
+    assert result['cue'] is reduced and not result['previousCue']
+    if reduced:
+        assert result['incoming'] == result['previous'] == []
+        assert not result['sameY']
+    else:
+        incoming, = result['incoming']
+        previous, = result['previous']
+        assert incoming['duration'] == previous['duration'] == 275
+        assert incoming['easing'] == previous['easing']
+        assert incoming['frames'] == [{'clipPath': 'inset(0px 0px 100%)'}, {'clipPath': 'inset(0px)'}]
+        assert previous['frames'][0]['transform'].startswith('translate(0px, -')
+        assert result['sameY']
+
+
 def test_active_mail_filter_can_be_cleared_with_one_click(cockpit):
     js, wait = prepare(cockpit, width=240)
     js("""window.filterMail=name=>document.dispatchEvent(new CustomEvent('oc:filter-agent',{detail:{agent:name}}));
@@ -67,6 +112,91 @@ def test_active_mail_filter_can_be_cleared_with_one_click(cockpit):
     assert js("document.activeElement.id") == 'mailFilterBtn'
     js("filterMail('BuildNode')")
     assert js("document.querySelector('.mail-clear-filter span').textContent") == 'BuildNode'
+
+
+def test_mini_comets_show_arrival_ripples_and_subjects_for_each_recipient(cockpit):
+    js, wait, client, _, _ = cockpit
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'no-preference'},
+    ])
+    wait("Boolean(window.OrreryRail&&document.querySelector('#mail .mailcards'))")
+    stable_roster(js)
+    js("""(()=>{
+      Object.defineProperty(document,'hidden',{value:false});
+      const names=['Sender','FirstRecipient','SecondRecipient'];
+      currentAgents=names.map(name=>({name,provider:'openai',running:true,annot:{role:'Original role'}}));
+      document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      const graph=document.getElementById('orrery');
+      if(graph.hasAttribute('hidden'))document.getElementById('mailGraphBtn').click();
+      const nextFrame=window.requestAnimationFrame;
+      const callbacks=[],ripples=[];
+      window.requestAnimationFrame=callback=>{
+        if(callback.name==='animateFlight'){callbacks.push(callback);return 0;}
+        if(callback.name==='animateRipple'){ripples.push(callback);return 0;}
+        return nextFrame(callback);
+      };
+      window.advanceFlights=timestamp=>callbacks.splice(0).forEach(callback=>callback(timestamp));
+      window.advanceRipples=timestamp=>ripples.splice(0).forEach(callback=>callback(timestamp));
+      window.sendFixtureComet=(id,subject)=>document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages:[{
+        subject,
+        id,sender:'Sender',recipient:'FirstRecipient',recipients:['FirstRecipient',{name:'SecondRecipient'}],
+      }]}}));
+      window.cometFlights=()=>[...graph.querySelectorAll('.orrery-comet-flight')];
+      window.arrivalRipples=()=>[...graph.querySelectorAll('.orrery-comet-ripple')];
+      window.arrivalCaptions=()=>[...graph.querySelectorAll('.orrery-caption-arrival')];
+      sendFixtureComet(142,'First delivery');
+    })()""")
+    wait('cometFlights().length===2')
+    assert js("""advanceFlights(10000);advanceFlights(10850);
+      const edges=[...document.querySelectorAll('#orrery .orrery-comm-edge')];
+      edges.length===2&&edges.every(edge=>{
+        const midpoint=edge.getPointAtLength(edge.getTotalLength()/2);
+        return cometFlights().some(flight=>{
+          const at=flight.transform.baseVal.getItem(0).matrix;
+          return flight.querySelector('linearGradient')&&Math.hypot(at.e-midpoint.x,at.f-midpoint.y)<1;
+        });
+      })""")
+    assert js('advanceFlights(11699);cometFlights().length') == 2
+    assert js('arrivalRipples().length') == 0
+    assert js('arrivalCaptions().length') == 0
+    assert js('advanceFlights(11700);cometFlights().length') == 0
+    assert js("""arrivalCaptions().map(caption=>[
+      caption.closest('.mini-agent').dataset.agent,caption.textContent,
+    ]).sort()""") == [
+        ['FirstRecipient', 'First delivery'],
+        ['SecondRecipient', 'First delivery'],
+    ]
+    assert js("""advanceRipples(11700);arrivalRipples().length===2&&
+      ['FirstRecipient','SecondRecipient'].every(name=>{
+        const graph=document.getElementById('orrery');
+        const face=graph.querySelector('[data-agent='+name+'] .orrery-hit').getBoundingClientRect();
+        return arrivalRipples().some(ring=>{
+          const center=new DOMPoint(ring.cx.baseVal.value,ring.cy.baseVal.value).matrixTransform(ring.getScreenCTM());
+          return Math.hypot(center.x-face.x-face.width/2,center.y-face.y-face.height/2)<1;
+        });
+      })""")
+    assert js('advanceRipples(11975);arrivalRipples().map(ring=>ring.r.baseVal.value)') == [19.5, 19.5]
+    assert js('advanceRipples(12250);arrivalRipples().length') == 0
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'},
+    ])
+    assert js("""(async()=>{
+      sendFixtureComet(143,'<img src=x> Updated delivery with a long subject for the compact graph');
+      await new Promise(requestAnimationFrame);
+      return [cometFlights().length,arrivalRipples().length];
+    })()""") == [0, 0]
+    assert js("""(()=>{
+      document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      return arrivalCaptions().length===2&&arrivalCaptions().every(caption=>{
+        const subject=caption.querySelector('.orrery-arrival-subject');
+        return caption.querySelector('.orrery-arrival-count').textContent==='+1'&&
+          !subject.querySelector('img')&&subject.textContent.startsWith('<img src=x>')&&
+          subject.scrollWidth>subject.clientWidth&&subject.getAnimations().length===0;
+      });
+    })()""")
+    wait('arrivalCaptions().length===0')
+    assert js("""['FirstRecipient','SecondRecipient'].every(name=>document.querySelector(
+      '#orrery [data-agent='+name+'] .orrery-caption-role').textContent==='Original role')""")
 
 
 def test_mini_graph_remembers_both_states_across_loads(cockpit):
