@@ -31,15 +31,21 @@ ACTIVE = agent('CopperFixture', **CHILD, created=123456, history_session_id=ACTI
 HUSK = ACTIVE | {'category': 'finished', 'running': False, 'resume_capability': 'ready'}
 EXITED = HUSK | {'category': 'gone', 'created': 0}
 STOPPED = agent('QuartzFixture', 'finished', **CHILD, history_session_id=SID, resume_capability='ready')
-RETIRED = agent('SlateFixture', 'retired', **CHILD, history_session_id=SID, resume_capability='ready')
+RESUME_COMPUTER = {'computer_use': {'value': 'off', 'can_change': True, 'action': 'resume'}}
+RESUMABLE = agent('SlateFixture', 'gone', **CHILD, history_session_id=SID, resume_capability='ready',
+                  permission_controls=RESUME_COMPUTER)
+RETIRED_CHILD = RESUMABLE | {'name': 'RetiredFixture', 'category': 'retired', 'retired': True,
+                             'harness_kind': 'dsh', 'parent_agent': ACTIVE['name']}
+RETIRED_BY_CATEGORY = agent('ArchiveFixture', 'retired', permission_controls=RESUME_COMPUTER)
+RETIRED_BY_FLAG = agent('RetiredFlagFixture', 'finished', retired=True)
 PERSISTENT = agent('BeaconFixture', **CHILD, lifecycle='persistent')
 CONVERSATION = agent('AmberFixture', mail_status='unavailable', browser_use=True, computer_use='off')
 TOP_SID = '21234567-1234-1234-1234-012345678901'
-TOP_RETIRED_SID = '31234567-1234-1234-1234-012345678901'
+TOP_RESUMABLE_SID = '31234567-1234-1234-1234-012345678901'
 TOP = ACTIVE | {'name': 'IndigoFixture', 'parent_state': 'top', 'history_session_id': TOP_SID,
                 'permission_resume_supported': True}
 TOP_EXITED = TOP | {'category': 'gone', 'running': False, 'created': 0, 'resume_capability': 'ready'}
-TOP_RETIRED = TOP_EXITED | {'name': 'JadeFixture', 'category': 'retired', 'history_session_id': TOP_RETIRED_SID}
+TOP_RESUMABLE = TOP_EXITED | {'name': 'JadeFixture', 'history_session_id': TOP_RESUMABLE_SID}
 TOP_DIRECT = TOP | {'name': 'OpalFixture', 'permission_resume_supported': False,
                     'permission_resume_reason': 'No saved launch settings; use Resume'}
 
@@ -50,8 +56,9 @@ def roster(request):
     if not cdp:
         pytest.skip('set ORRERY_CDP_URL to an existing test browser')
     live = [ACTIVE, PERSISTENT, CONVERSATION, TOP, TOP_DIRECT]
-    state = {'trace': [], 'checks': [], 'stop_checks': [], 'failures': {},
+    state = {'trace': [], 'checks': [], 'stop_checks': [], 'failures': {}, 'retired': [],
              'api': getattr(request, 'param', 45)}
+    history = [STOPPED, RESUMABLE, TOP_RESUMABLE, RETIRED_CHILD, RETIRED_BY_CATEGORY, RETIRED_BY_FLAG]
 
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
@@ -75,13 +82,13 @@ def roster(request):
                     if self.headers.get('X-Fixture-Stop-Check') == '1':
                         row = state['stop_checks'].pop(0) if state['stop_checks'] else EXITED
                         state['trace'].append(('history', row['category']))
-                        self.answer({'agents': [row, STOPPED, RETIRED, TOP_RETIRED]})
+                        self.answer({'agents': [row, *history]})
                         return
-                    self.answer({'agents': [*live, STOPPED, RETIRED, TOP_RETIRED]})
+                    self.answer({'agents': [*live, *history]})
                     return
                 status, rows = state['checks'].pop(0) if state['checks'] else (200, live)
                 state['trace'].append(('roster', status, [row['category'] for row in rows]))
-                self.answer({'agents': rows} if status == 200 else {'error': 'busy'}, status)
+                self.answer({'agents': rows, 'retired': state['retired']} if status == 200 else {'error': 'busy'}, status)
             elif path.path == '/api/version':
                 self.answer({'api': state['api']})
             elif path.path.startswith(('/api/', '/telemetry/')):
@@ -163,6 +170,24 @@ def roster(request):
 
 def jump(name):
     return '/api/jump', {'session': name, 'open_terminal': False, 'open': False}
+
+
+@pytest.mark.parametrize('roster', [55], indirect=True)
+def test_select_keeps_resumable_agents_but_excludes_retired_children(roster):
+    js, wait, state = roster
+    retired = json.dumps([row['name'] for row in (RETIRED_CHILD, RETIRED_BY_CATEGORY, RETIRED_BY_FLAG)])
+    no_retired = f"{retired}.every(name=>!tiles.has(name))"
+
+    js('rosterSelectBtn.click()')
+    assert js(f"!rosterSelectMode&&tiles.has('CopperFixture')&&!tiles.has('SlateFixture')&&{no_retired}")
+    js('rosterSelectBtn.click()')
+    wait("rosterSelectMode&&tiles.has('SlateFixture')")
+    assert js(no_retired)
+    assert js("tiles.get('SlateFixture').classList.contains('permission-target')")
+
+    state['retired'] = ['SlateFixture']
+    js('window.fetch=fixtureFetch;pollAgents()')
+    assert js("rosterSelectMode&&tiles.has('QuartzFixture')&&!tiles.has('SlateFixture')")
 
 
 @pytest.mark.parametrize('stopped_row', [[], [agent('CopperFixture', 'finished')]],
@@ -423,7 +448,7 @@ def test_api46_enables_stopped_standalone_and_shows_direct_launch_reason(roster)
     assert js('permissionApply.textContent') == 'Resume'
     js('permissionApply.click()')
     wait("toastEl.textContent.startsWith('Resume accepted')")
-    assert state['trace'] == [permission_jump('JadeFixture', TOP_RETIRED_SID, browser_use=True)]
+    assert state['trace'] == [permission_jump('JadeFixture', TOP_RESUMABLE_SID, browser_use=True)]
 
 
 @pytest.mark.parametrize('roster', [46], indirect=True)
@@ -722,7 +747,7 @@ def test_api46_preflight_failure_leaves_the_standalone_running(roster):
 @pytest.mark.parametrize('active', [True, False], ids=['restart', 'resume'])
 def test_api46_pending_codex_resume_displays_the_api_instructions(roster, active):
     js, wait, state = roster
-    target = TOP if active else TOP_RETIRED
+    target = TOP if active else TOP_RESUMABLE
     name, sid = target['name'], target['history_session_id']
     if active:
         state['checks'] = [(200, [TOP]), (200, [])]

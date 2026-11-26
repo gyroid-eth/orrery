@@ -4415,9 +4415,9 @@
       }
     }
   },
-  "inventory_digest": "8537c241b0bef744d5987fd8eeea0f9c8bd739ca2ed7a9dc278db76ce7bcb529",
+  "inventory_digest": "eefc8fe1db23c2ffdb3e4e1a5613fde6e8004bd19f8e5e61c5509948b9eadaa9",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "95b5489f63a76ac2e6f887a05ccea9bd4ebc1df4cbd116ae3672cf5e4577cf17",
+  "source_digest": "669c3f113178bede7600d4c30b542c165387132d2dd14ab7010155fb6e634cd1",
   "surface": "cockpit",
   "version": 1
 }
@@ -9378,6 +9378,7 @@ const bulkSelectedAgents=new Set();
 const BULK_ACTION_ARM_MS=3000;
 let rosterSelectMode=false,bulkActionArmed=null,bulkActionBusy=null,bulkActionArmTimer=null;
 let liveRosterAgents=[],stoppedSelectAgents=[],stoppedSelectRequest=null;
+let liveRetiredNames=new Set();
 
 function isBulkSelectableAgent(agent){
   return Boolean(agent&&agent.name&&agent.lifecycle!=='persistent'&&agent.category!=='warmup'&&
@@ -10477,14 +10478,19 @@ function handlePinToggle(name,event){
 /* The live roster (scope=live) carries the retired names on their own; a
    dashboard without scope support answers the full roster instead, whose
    rows say which are retired. */
+function isRetiredRosterAgent(agent){
+  return agent?.category==='retired'||agent?.retired===true;
+}
 function retiredNamesOf(roster){
   if(roster&&Array.isArray(roster.retired))return roster.retired.filter(name=>typeof name==='string');
-  return ((roster&&roster.agents)||[]).filter(agent=>agent&&agent.category==='retired').map(agent=>agent.name);
+  return ((roster&&roster.agents)||[]).filter(isRetiredRosterAgent).map(agent=>agent.name);
 }
 function pruneRetiredPins(roster){
+  const retiredNames=new Set(retiredNamesOf(roster));
   let dirty=false;
-  retiredNamesOf(roster).forEach(name=>{if(pinnedAgents.delete(name))dirty=true;});
+  retiredNames.forEach(name=>{if(pinnedAgents.delete(name))dirty=true;});
   if(dirty)persistPinnedAgents();
+  return retiredNames;
 }
 
 /* When did this agent last actually do something?
@@ -10732,7 +10738,9 @@ function renderRoster(){
   pendingAgentExits.forEach(({original,departed},name)=>{
     if(departed&&!seen.has(name)){restarting.push(original);seen.add(name);}
   });
-  const agents=liveRosterAgents.concat(restarting,stoppedSelectAgents.filter(agent=>!seen.has(agent.name)));
+  // The live poll may retire a row while Select still has an older history snapshot.
+  const agents=liveRosterAgents.concat(restarting,stoppedSelectAgents.filter(agent=>
+    !seen.has(agent.name)&&!liveRetiredNames.has(agent.name)));
   descriptorStore.retain(agents.map(agent=>agent.name));
   agents.forEach(agent=>{agent.descriptor=descriptorStore.get(agent,agents);});
   currentAgents=agents;
@@ -10755,7 +10763,7 @@ function renderRoster(){
   if(paletteOverlay.classList.contains('on'))renderPalette();
 }
 async function loadStoppedSelectAgents(){
-  // The default roster stays live-only. Select also shows historical permission targets.
+  // Select also shows non-retired history for finished and resumable agents.
   const controller=new AbortController();stoppedSelectRequest=controller;
   try{
     const [response,api]=await Promise.all([
@@ -10764,7 +10772,8 @@ async function loadStoppedSelectAgents(){
     if(!response.ok)return;
     const roster=await response.json();
     if(controller.signal.aborted||!Array.isArray(roster?.agents))return;
-    stoppedSelectAgents=roster.agents.filter(agent=>agent&&(agent.category==='finished'&&isBulkSelectableAgent(agent)||
+    stoppedSelectAgents=roster.agents.filter(agent=>agent&&!isRetiredRosterAgent(agent)&&(
+      agent.category==='finished'&&isBulkSelectableAgent(agent)||
       agent.running===false&&canChangeAgentPermissions(agent,api)))
       .map(prepareRosterRow);
     if(stoppedSelectAgents.length)renderRoster();
@@ -10789,7 +10798,7 @@ async function pollAgents(){
     }
     const d=await response.json();
     if(annotationEpoch!==rosterAnnotationEpoch)return false;
-    pruneRetiredPins(d);
+    liveRetiredNames=pruneRetiredPins(d);
     // warmup(warm-*/pending-*) はプール予熱でありエージェントではない。
     // 従来は名前順で最下部に沈んで見えなかったが、recency ソート導入で
     // 浮上するようになったため明示除外（claim され改名された時点で現れる）。
