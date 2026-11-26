@@ -220,6 +220,82 @@ def test_mini_node_keyboard_opens_shared_permissions_across_redraws(mini_browser
     })()""")
 
 
+def test_mini_hover_card_follows_the_node_and_card_not_the_graph_background(mini_browser):
+    client, evaluate = mini_browser
+    client.call('Emulation.setFocusEmulationEnabled', enabled=True)
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    blank = evaluate("""(()=>{
+      const viewport=document.getElementById('miniGraphViewport');
+      const b=viewport.getBoundingClientRect();
+      for(let y=b.top+32;y<b.bottom-4;y+=12){
+        for(let x=b.left+12;x<b.right-12;x+=12){
+          const hit=document.elementFromPoint(x,y);
+          if(viewport.contains(hit)&&!hit.closest('.mini-agent,.orrery-mail-edge,.mini-graph-zoom,.orrery-expand')){
+            return {x,y};
+          }
+        }
+      }
+    })()""")
+    assert blank
+    visible_name = "agentDetail.hidden?null:agentDetail.querySelector('.agent-detail-name').textContent"
+
+    def center(selector, part=None):
+        return evaluate(f"""(()=>{{
+          const element=document.querySelector({json.dumps(selector)});
+          const sample={json.dumps(part)};
+          const r=(sample?element.querySelector(sample):element).getBoundingClientRect();
+          const x=r.x+r.width/2,y=r.y+r.height/2;
+          return element.contains(document.elementFromPoint(x,y))?{{x,y}}:null;
+        }})()""")
+
+    def node(name):
+        return center(f'#orrery [data-agent="{name}"]', '.orrery-hit')
+
+    def move(point):
+        assert point
+        client.call('Input.dispatchMouseEvent', type='mouseMoved', **point)
+
+    def name_after_grace():
+        return evaluate(f"(async()=>{{await new Promise(resolve=>setTimeout(resolve,220));return {visible_name};}})()")
+
+    move(node('Pilot'))
+    assert evaluate(visible_name) == 'Pilot'
+    move(blank)
+    assert evaluate(visible_name) == 'Pilot'
+    assert name_after_grace() is None
+
+    move(node('Pilot'))
+    assert evaluate(visible_name) == 'Pilot'
+    card = center('#agentDetail')
+    move(blank)
+    move(card)
+    assert evaluate("agentDetail.matches(':hover')"), card
+    assert name_after_grace() == 'Pilot'
+    move(blank)
+    assert name_after_grace() is None
+
+    move(node('Pilot'))
+    move(node('Helper'))
+    assert name_after_grace() == 'Helper'
+
+    client.call('Input.dispatchMouseEvent', type='mousePressed', button='left', clickCount=1, **node('Helper'))
+    assert evaluate("document.activeElement.matches('.mini-agent:not(:focus-visible)')")
+    move(blank)
+    client.call('Input.dispatchMouseEvent', type='mouseReleased', button='left', clickCount=1, **blank)
+    assert name_after_grace() is None
+
+    for event in ('keyDown', 'keyUp'):
+        client.call('Input.dispatchKeyEvent', type=event, key='Tab', code='Tab', windowsVirtualKeyCode=9)
+    evaluate("document.querySelector('#orrery [data-agent=Pilot]').focus()")
+    move(node('Helper'))
+    assert name_after_grace() == 'Pilot'
+    move(blank)
+    assert name_after_grace() == 'Pilot'
+    evaluate("document.getElementById('mailGraphDivider').focus()")
+    assert name_after_grace() is None
+
+
 @pytest.mark.parametrize('theme', ['dark', 'light'])
 @pytest.mark.parametrize('reduced', [False, True])
 def test_theme_static_ring_and_working_arc_coexist(mini_browser, theme, reduced):
