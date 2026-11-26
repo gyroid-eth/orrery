@@ -77,7 +77,7 @@ two paths inside the installer.
 
 ```bash
 ./scripts/install.sh --print-mail-plan         # what would happen to Mail, one line (reads only)
-./scripts/install.sh --dry-run                 # show the whole plan
+./scripts/install.sh --dry-run --update-mail   # show the whole plan
 ./scripts/install.sh --update-mail             # switch (exit 1 if it cannot)
 AGENTSTACK_MAIL_UPDATE=auto ./scripts/install.sh   # switch only when it safely can (opt-in)
 ./scripts/install.sh                           # never switch (default keep, same as --keep-mail)

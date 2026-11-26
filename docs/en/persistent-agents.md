@@ -350,6 +350,12 @@ exec "$HOME/.agentstack/bin/agentstack-persistent" run \
 
 `inspect` matches the profile, connection, Mail UUID, numeric row, name, and credential generation/fingerprint. `run` repeats the same validation and takes a per-profile instance lock before startup. A second instance of the same profile is rejected.
 
+For an interactive profile that passes the checks, `inspect` includes these fields.
+
+```json
+{"ready": true, "lifecycle": "persistent", "interaction": "interactive"}
+```
+
 The launcher never enrolls automatically. It stops with a fixed reason and documentation path if the identity is not enrolled, the local credential is missing, or the authority/row does not match.
 
 After the interactive REPL starts, the operator verifies:

@@ -69,7 +69,7 @@ service root を `AGENTSTACK_MAIL_DIR` として記録しますが、installer �
 
 ```bash
 ./scripts/install.sh --print-mail-plan         # Mail をどうするかを 1 行で（読むだけ）
-./scripts/install.sh --dry-run                 # 計画全体を表示する
+./scripts/install.sh --dry-run --update-mail   # 計画全体を表示する
 ./scripts/install.sh --update-mail             # 差し替える（できなければ exit 1）
 AGENTSTACK_MAIL_UPDATE=auto ./scripts/install.sh   # 安全に差し替えられるときだけ（opt-in）
 ./scripts/install.sh                           # 差し替えない（既定 keep、--keep-mail と同じ）

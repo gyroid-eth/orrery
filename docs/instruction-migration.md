@@ -44,6 +44,12 @@ installer には最大4つの確認箇所（settings merge、MCP entry、Codex �
 
 対話では「利用者側へ移し、既知の元 block を消すか」を一度確認します（`[Y/n]`、Enter は消す）。共有 repo の影響と全文 backup の保持を説明します。明示 `--assume-yes` でも、Git 追跡中・Git 状態不明の source は消さず警告します。編集済み・版不明・壊れた marker は保持し、利用者が local diff を確認して marker 間だけを片付けます。自動 force はありません。利用者側への設置を検証してから元 block を消します。
 
+計画を読み、`apply_argv` に表示されたコマンドを端末で実行します。末尾に `--json` を付けると、移行が完了したときに段階と移行先が表示されます。
+
+```json
+{"stage": "complete", "target_path": "<user-config>/CLAUDE.md"}
+```
+
 ```sh
 agentstack-claude-setup --remove-legacy-block --path /work/repo/CLAUDE.md --dry-run
 agentstack-claude-setup --remove-legacy-block --path /work/repo/CLAUDE.md

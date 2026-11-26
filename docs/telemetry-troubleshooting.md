@@ -23,6 +23,12 @@ dashboard は `/api/version` の正しい JSON response を「実際に配信中
 
 `--- copy from here ---` から `--- copy to here ---` までをそのまま貼ってください。
 
+dashboard のログが見つからないときは、報告用の出力より前に次のように表示されます。
+
+```text
+missing: dashboard log <install-dir>/runtime/dashboard.log
+```
+
 これまでに見つかった不具合は**すべて「報告者の環境と開発機の違い」**から出ており、その差がどこにあるかを突き止めるまでに毎回何往復もかかりました。この出力は、その往復で実際に聞いた項目だけを並べたものです。
 
 | 項目 | これが分かれば判ること |

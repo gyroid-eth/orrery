@@ -44,6 +44,12 @@ Creating a new user file without changing existing files needs no confirmation. 
 
 One interactive prompt asks whether to move instructions and remove known source blocks (`[Y/n]`; Enter removes), explaining shared-repository effects and full-file backup retention. Explicit `--assume-yes` removes only known untracked sources; tracked or unknown Git status remains with a warning. Edited, unknown or malformed blocks stay for a local diff and manual marker-only cleanup. There is no force override. The user target is verified before any source removal.
 
+Review the plan and run the command shown in `apply_argv` in your terminal. If you append `--json`, a completed migration reports the stage and target file.
+
+```json
+{"stage": "complete", "target_path": "<user-config>/CLAUDE.md"}
+```
+
 ```sh
 agentstack-claude-setup --remove-legacy-block --path /work/repo/CLAUDE.md --dry-run
 agentstack-claude-setup --remove-legacy-block --path /work/repo/CLAUDE.md

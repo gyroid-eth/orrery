@@ -1,5 +1,9 @@
 # Configuration
 
+![New agent folder picker showing demo-vault and its subfolders](../images/consolidated/telemetry-spawn-directories.png)
+
+In this example, `demo-vault` is first in `AGENTSTACK_SPAWN_DIRS` and appears as the default folder in New agent.
+
 > 日本語版: [configuration.md](../telemetry-configuration.md)
 
 [Previous: API reference](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/api.en.md) · [Back to README](../../README.en.md) · [Next: Troubleshooting](telemetry-troubleshooting.md)
