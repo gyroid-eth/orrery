@@ -188,6 +188,37 @@ async fn clipboard_file_paths(attachments: Option<bool>) -> Result<serde_json::V
     Err("pasteboard files are only available on macOS".to_owned())
 }
 
+#[cfg(target_os = "macos")]
+#[tauri::command]
+async fn pick_attachment_paths(app: AppHandle) -> Result<Vec<String>, String> {
+    use objc2_app_kit::{NSModalResponseOK, NSOpenPanel};
+    use objc2_foundation::MainThreadMarker;
+
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    app.run_on_main_thread(move || {
+        let result = MainThreadMarker::new().map(|marker| {
+            let panel = NSOpenPanel::openPanel(marker);
+            panel.setCanChooseFiles(true);
+            panel.setCanChooseDirectories(false);
+            panel.setAllowsMultipleSelection(true);
+            if panel.runModal() != NSModalResponseOK {
+                return Vec::new();
+            }
+            panel.URLs().iter().filter_map(|url| url.path().map(|path| path.to_string())).collect()
+        }).ok_or_else(|| "File picker requires the main thread".to_owned());
+        let _ = send.send(result);
+    }).map_err(|error| error.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || receive.recv())
+        .await.map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())?
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+async fn pick_attachment_paths() -> Result<Vec<String>, String> {
+    Err("Native attachment picker is only available on macOS".to_owned())
+}
+
 // Opening links from a pane belongs to the app for the same reason as the
 // pasteboard: on 2026-09-25 a sidecar left from 2026-09-18 ran `open` for every
 // click and answered "opened" while nothing opened, and a freshly started one
@@ -791,6 +822,7 @@ pub fn run() {
             retry_backend,
             active_hotkey,
             clipboard_file_paths,
+            pick_attachment_paths,
             open_external_url,
             reveal_local_path,
             set_native_color_theme,
