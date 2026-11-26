@@ -315,6 +315,7 @@ def test_fresh_output_gap_uses_actual_caller_to_stop_only_affected_session_and_r
 const groups=new Map(),sessionGroups=groups,panes=new Map(),sent=[],toasts=[],links=[];
 const attachedSessions=new Set(),requestedSessions=new Set(),availableSessions=new Map([['Alpha',{}],['Beta',{}]]);
 const manualDetached=new Set(),paneWindows=new Set(),selectedPaneBySession=new Map();
+const permissionRestarts=new Map();
 let pendingJump=null,activeId=null,splitVisible=false,focusedSplitSession=null,paneWindowSelection=null;
 function ensureSessionGroup(session){
   if(!groups.has(session))groups.set(session,{incarnation:null,attachGeneration:null,
@@ -322,6 +323,7 @@ function ensureSessionGroup(session){
   return groups.get(session);
 }
 function closeSessionPanes(session){for(const [key,p] of panes)if(p.session===session)panes.delete(key);}
+function paintSessionAction(group){group.state.textContent={connecting:'…',live:'live',error:'error',closed:'closed'}[group.connectionState]||'';}
 function removeSplitSessionState(){} function removeSessionGroup(s){groups.delete(s);}
 function renderStage(){} function refreshHeaderStats(){} function refreshSessionGroup(){}
 function showToast(message,isError){toasts.push({message,isError});}
