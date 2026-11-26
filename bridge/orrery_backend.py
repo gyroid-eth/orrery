@@ -29,6 +29,8 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import quote, urlencode
 
+from local_model_makers import LOCAL_MAKER_ASSETS
+
 # Manual and desktop launches can reach this entry point without the shell check.
 if __name__ == "__main__" and sys.version_info < (3, 11):
     raise SystemExit("Python 3.11 or newer is required.")
@@ -1557,7 +1559,6 @@ class SessionBridgeManager:
 
         session = state.bridge.config.session
         if message_type in {'approval-inspect', 'approval-answer'}:
-            from reader_approval import ApprovalCoordinator
             bridge = state.bridge
             proof = None
             if isinstance(bridge.config.tmux_bin, FreshPaneBoundary):
@@ -1569,16 +1570,12 @@ class SessionBridgeManager:
                     return
                 proof = proofs[0]
                 pane_id = target.pane_id
-            coordinator = getattr(bridge, '_approval_coordinator', None)
-            if coordinator is None:
-                async def harness(target_pane):
-                    return await approval_harness(approval_request, bridge, target_pane)
-                coordinator = bridge._approval_coordinator = ApprovalCoordinator(bridge, harness_resolver=harness)
+            coordinator = approval_coordinator(approval_request, bridge)
             if message_type == 'approval-inspect':
                 result = await coordinator.inspect(pane_id, peer)
             else:
                 result = await coordinator.answer(pane_id, peer, payload.get('token'), payload.get('choice'),
-                                                  payload.get('operation'), proof=proof)
+                                                  payload.get('operation'), proof=proof, text=payload.get('text'))
             await bridge.send_json(peer, dict(type='approval', paneId=pane_id,
                 requestId=payload.get('requestId'), **result))
             return
@@ -2168,9 +2165,23 @@ async def approval_harness(request, bridge, pane):
             return 'codex'
         if program in ('claude', 'claude-code') and provider in ('anthropic', 'claude'):
             return 'claude'
+        if program in ('hermes', 'dsh'):
+            return program
+        if program in ('agy', 'antigravity', 'gemini-cli') and provider in ('google', 'gemini', 'agy', 'antigravity'):
+            return 'agy'
     except (ClientError, asyncio.TimeoutError, ValueError, TypeError, KeyError):
         pass
     return None
+
+
+def approval_coordinator(request, bridge):
+    from reader_approval import ApprovalCoordinator
+    coordinator = getattr(bridge, '_approval_coordinator', None)
+    if coordinator is None:
+        async def harness(pane):
+            return await approval_harness(request, bridge, pane)
+        coordinator = bridge._approval_coordinator = ApprovalCoordinator(bridge, harness_resolver=harness)
+    return coordinator
 
 
 async def conversation_bound_row(request: web.Request, name: str, not_before: float | None = None) -> dict:
@@ -3416,27 +3427,34 @@ async def serve_clipboard_files(request: web.Request) -> web.Response:
 
 def clipboard_file_snapshots(paths, skipped=0):
     """Read files returned by the OS clipboard reader, using the upload limits."""
-    from mobile_attachment_store import FORMATS
+    from mobile_attachment_store import IMAGE_FORMATS
     from mobile_file import MAX_FILE_BYTES
     from mobile_image import MAX_IMAGE_BYTES
 
-    images = FORMATS['image'] | {'jpeg', 'webp'}
+    images = IMAGE_FORMATS | {'jpeg', 'webp'}
     attachments = []
+    remaining, oversized = MAX_FILE_BYTES, 0
     for path in map(Path, paths):
         extension = path.suffix.lower().lstrip('.')
-        if not path.is_absolute() or extension not in images | FORMATS['file']:
+        if not path.is_absolute():
             skipped += 1
             continue
-        limit = MAX_IMAGE_BYTES if extension in images else MAX_FILE_BYTES
+        limit = min(remaining, MAX_IMAGE_BYTES if extension in images else MAX_FILE_BYTES)
         try:
             fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
             with os.fdopen(fd, 'rb') as handle:
                 info = os.fstat(handle.fileno())
-                if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= limit:
+                if not stat.S_ISREG(info.st_mode) or not info.st_size:
                     raise ValueError('clipboard_file_size')
+                if info.st_size > limit:
+                    oversized += 1
+                    continue
                 data = handle.read(limit + 1)
-            if not data or len(data) > limit:
+            if not data:
                 raise ValueError('clipboard_file_size')
+            if len(data) > limit:
+                oversized += 1
+                continue
         except (OSError, ValueError):
             skipped += 1
             continue
@@ -3444,7 +3462,8 @@ def clipboard_file_snapshots(paths, skipped=0):
             'name': path.name, 'modified': info.st_mtime_ns // 1_000_000,
             'data': base64.b64encode(data).decode('ascii'),
         })
-    return {'attachments': attachments, 'skipped': skipped}
+        remaining -= len(data)
+    return {'attachments': attachments, 'skipped': skipped, **({'oversized': oversized} if oversized else {})}
 
 
 async def serve_clipboard_attachments(request: web.Request) -> web.Response:
@@ -3462,7 +3481,7 @@ async def serve_clipboard_attachments(request: web.Request) -> web.Response:
         try:
             script = _CLIPBOARD_FILES_JXA.read_text(encoding='utf-8')
             rc, output, _ = await _run_reader(
-                ['osascript', '-l', 'JavaScript', '-e', script, '--', 'snapshot'], 4)
+                ['osascript', '-l', 'JavaScript', '-e', script, '--', 'snapshot'], 12)
             result = json.loads(output) if rc == 0 else None
         except (OSError, ValueError, asyncio.TimeoutError):
             result = None
@@ -4207,12 +4226,13 @@ async def serve_prompt_attachment(request: web.Request) -> web.Response:
         return web.json_response({'ok': False, 'error': error}, status=status,
                                  headers={'Cache-Control': 'no-store'})
 
+    max_size = max(MAX_FILE_JSON, MAX_IMAGE_JSON)
     size = request.content_length
-    if size is None or size < 1 or size > MAX_IMAGE_JSON or request.headers.get('Content-Encoding'):
+    if size is None or size < 1 or size > max_size or request.headers.get('Content-Encoding'):
         return reject('invalid_attachment_size', 413)
     try:
-        raw = await asyncio.wait_for(request.content.readexactly(size), timeout=10)
-        data = decode_json(raw, max_bytes=MAX_IMAGE_JSON)
+        raw = await asyncio.wait_for(request.content.readexactly(size), timeout=20)
+        data = decode_json(raw, max_bytes=max_size)
     except (InputRefused, asyncio.TimeoutError, asyncio.IncompleteReadError, OSError):
         return reject('invalid_attachment', 400)
     kind, name, pane, instance = (data.get(key) for key in ('kind', 'session', 'paneId', 'incarnation'))
@@ -4228,7 +4248,7 @@ async def serve_prompt_attachment(request: web.Request) -> web.Response:
             or not isinstance(instance, str) or not re.fullmatch(r'[a-f0-9]{32}', instance)
             or 'label' in data and (not isinstance(label, str) or len(label) > 256)):
         return reject('invalid_attachment_target', 400)
-    if kind == 'file' and size > MAX_FILE_JSON:
+    if size > (MAX_FILE_JSON if kind == 'file' else MAX_IMAGE_JSON):
         return reject('invalid_attachment_size', 413)
 
     state = composer_pane_state(request.app, name, pane)
@@ -4248,7 +4268,12 @@ async def serve_prompt_attachment(request: web.Request) -> web.Response:
         if (composer_pane_state(request.app, name, pane) is not state or current != cwd):
             return reject('attachment_target_changed', 409)
         relative = './' + Path(path).relative_to(workspace).as_posix()
-    except (ValueError, OSError, TargetRefused):
+    except ValueError as error:
+        reason = str(error)
+        if reason in {'file_empty', 'file_too_large', 'image_too_large', 'image_pixels_too_large'}:
+            return reject(reason, 422)
+        return reject('attachment_save_failed', 422)
+    except (OSError, TargetRefused):
         return reject('attachment_save_failed', 422)
     references = request.app.get(CONVERSATION_REFERENCES_KEY)
     if references is not None:
@@ -5097,7 +5122,7 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "orrery_view.css", "mail_view.css", "spawn_picker.css", "theme_light.css",
     "cockpit_tour.css", "telemetry_light.css",
     "spawn_picker.js", "effort_slider.js", "spawn_catalog_loader.js", "prefs_sync.js", "phone_settings.js",
-    "theme_core.js", "theme_controller.js", "roster_descriptor.js", "roster_edit.js", "demo_mask.js",
+    "theme_core.js", "theme_controller.js", "local_model_makers.js", "roster_descriptor.js", "roster_edit.js", "demo_mask.js",
     "demo_mode.js", "orrery_view.js", "mail_view.js", "cockpit_tour.js",
     "cockpit_full_tour.js", "telemetry_light.js", "prompt_spring.js", "exit_dust.js", "prompt_composer.js", "prompt_recipients.js", "prompt_attachments.js",
     "conversation_source.js", "conversation_view.js", "conversation_view.css", "conversation_preview.js", "conversation_reply.js",
@@ -5110,7 +5135,7 @@ PUBLIC_FILES = {"/" + name: name for name in (
     "vendor/addon-web-links-0.11.0/addon-web-links.js",
 )}
 PUBLIC_FILES.update({"/cockpit-assets/" + name: "assets/" + name for name in (
-    "anthropic.svg", "openai.svg", "google.svg", "qwen.svg", "glm.svg", "deepseek.svg", "dsh.svg", "hermes.png",
+    "anthropic.svg", "openai.svg", "google.svg", "dsh.svg", "hermes.png", *LOCAL_MAKER_ASSETS,
 )})
 
 
@@ -5169,8 +5194,10 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
                         or root_path(location.lines[0])!=root):return None
                 return root
         except (HistoryUnavailable,PreviewUnavailable,OSError,ValueError,RuntimeError,ClientError,asyncio.TimeoutError):return None
+    from types import SimpleNamespace
     coordinator = install_routes(app, InputCoordinator(PaneResolver(app[TMUX_BIN_KEY]), mobile_bridge,
-                                                       enabled=mobile_input_enabled,image_workspace=mobile_image_workspace))
+        enabled=mobile_input_enabled,image_workspace=mobile_image_workspace,
+        approval_for=lambda bridge: approval_coordinator(SimpleNamespace(app=app),bridge)))
     import mobile_access
     mobile_access.install(app, coordinator, config_path=CONFIG_PATH)
     app.router.add_get("/telemetry/agents", proxy_dashboard)

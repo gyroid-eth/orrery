@@ -156,7 +156,13 @@ def prompt(connected=True, pane=True, text='Hello', guarded=False, restarting=Fa
     # sendPrompt fixes its target pane when it starts; take those helpers as they are.
     fn = re.search(r'function captureComposerTarget\([^)]*\)\{.*?(?=\n(?:async )?function sendInterrupt)', source, re.S).group()
     pending_action = re.search(r'function pendingAgentAction\(session\)\{.*?\n\}', source, re.S).group()
-    return node("const events=[];const activeId='pane';const socket={};"
+    # Load the same browser script that supplies recipientPrefix to sendPrompt.
+    return node("globalThis.window={};"
+                f"require({json.dumps(str(BRIDGE / 'prompt_recipients.js'))});"
+                "const {OrreryPromptRecipients}=window;"
+                # This prompt runs before the Reader's optional approval UI is mounted.
+                "const readerApproval=null;"
+                "const events=[];const activeId='pane';const socket={};"
                 f"const promptInput={{value:{json.dumps(text)},"
                 "getBoundingClientRect(){return {top:0,right:120,width:120};}};"
                 f"const panes=new Map({json.dumps([['pane', {'session': 'Test', 'meta': {}}]] if pane else [])});"
@@ -164,7 +170,7 @@ def prompt(connected=True, pane=True, text='Hello', guarded=False, restarting=Fa
                 f"const permissionRestarts=new Map({json.dumps([['Test', {}]] if restarting else [])});"
                 "const pendingAgentExits=new Map(),OrreryDemo={mask:text=>text};"
                 "const promptFiles={entries:[],clear(){}};"
-                "const promptRecipients={names:[],close(){},set(){}};"
+                "const promptRecipients={names:[],visibility:'visible',close(){},set(){}};"
                 "const promptCard={refresh(){}};const targetProgram=()=> 'claude';"
                 "function composerVocabulary(){return {program:'claude'};}"
                 # Only the tour step counts here; the receipt events are for the Reader.
@@ -279,9 +285,11 @@ def tour_browser():
 def test_dom_map_escape_and_settings_reopen_keep_progress(tour_browser):
     _, evaluate = tour_browser
     result = evaluate("""(()=>{
-      OrreryTour.firstFlight.reset();
+      const flight=OrreryTour.firstFlight;
+      flight.reset();
+      const start=()=>flight.el.querySelector('li[data-step="start"]');
       document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}));
-      const checked=document.querySelector('[data-step="start"]').classList.contains('done');
+      const checked=start().classList.contains('done');
       document.querySelector('.flight-guide .flight-close').click();
       const closed=document.querySelector('.flight-guide').hidden;
       document.getElementById('firstFlightBtn').click();
@@ -289,7 +297,7 @@ def test_dom_map_escape_and_settings_reopen_keep_progress(tour_browser):
       const shown=!document.querySelector('.flight-map').hidden&&document.querySelector('.flight-guide').hidden;
       document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
       return {checked,closed,shown,restored:!document.querySelector('.flight-guide').hidden,
-        retained:document.querySelector('[data-step="start"]').classList.contains('done'),
+        retained:start().classList.contains('done'),
         mapClosed:document.querySelector('.flight-map').hidden};
     })()""")
     assert all(result.values()), result

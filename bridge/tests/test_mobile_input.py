@@ -124,6 +124,61 @@ def test_preview_change_discards_body_and_prepared_send_is_once(tmp_path):
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize('other',[False,True,'multiple'])
+def test_mobile_question_uses_verified_preview_and_confirmed_answer(tmp_path,other):
+    import mobile_input as mobile
+    from test_reader_approval import hermes_question
+
+    async def scenario():
+        bridge=bridge_fixture(tmp_path)
+        proof={'session':'FixtureCurie','pane_id':'%3','incarnation':bridge._incarnation,'height':24}
+        class Resolver:
+            def read(self,b,p,deadline):
+                assert b is bridge and p=='%3'
+                return proof
+
+        token='q'*32
+        question=dict(state='ready',kind='question',harness='hermes',token=token,mode='choice',
+            body='Which report?',choices=[dict(id=1,label='Summary'),dict(id=2,label='Other',other=True)],draft_empty=True,multiple=False)
+        if other=='multiple':
+            question.update(multiple=True,choices=[dict(id=1,label='Summary',checked=False),
+                dict(id=2,label='Detailed',checked=False),dict(id=3,label='Other',other=True,checked=False)])
+        calls=[]
+        class Approval:
+            async def inspect(self,pane,owner):
+                calls.append(('inspect',owner))
+                return question
+            async def answer(self,pane,owner,provided,choice,operation,*,text,check,claim,valid):
+                assert pane=='%3' and owner is calls[0][1] and provided==token and await check()
+                assert claim() and valid()
+                calls.append((choice,text))
+                return {'state':'sent'}
+
+        async def capture(*args,**kwargs):return SimpleNamespace(lines=hermes_question().splitlines())
+        async def get_bridge(name):return bridge if name=='FixtureCurie' else None
+        async def wrong_route(*args,**kwargs):pytest.fail('question passed to the ordinary composer')
+        bridge.capture_mobile_preview=capture
+        bridge.send_confirmed_input=wrong_route
+        coordinator=mobile.InputCoordinator(Resolver(),get_bridge,enabled=True,approval_for=lambda _:Approval())
+        scope={'contract':mobile.CONTRACT,'owner':'fixture@example.invalid','reader_epoch':'b'*32}
+        scope['epoch']=(await coordinator.request('capability',scope))['epoch']
+        target=(await coordinator.request('targets',dict(scope,name='FixtureCurie')))['targets'][0]
+        preview=await coordinator.request('preview',dict(scope,choice=target['choice']))
+        assert preview['question']['body']=='Which report?'
+        args=dict(scope,choice=target['choice'],revision=preview['target']['revision'],
+                  text='Summary · Detailed' if other=='multiple' else 'Custom answer' if other else 'Summary')
+        with pytest.raises(mobile.InputRefused):
+            await coordinator.request('prepare',args)
+        selected=[1,2] if other=='multiple' else 2 if other else 1
+        prepared=await coordinator.request('prepare',dict(args,question={'token':token,'choice':selected}))
+        commit=dict(scope,intent=prepared['intent'],confirmation=prepared['confirmation'])
+        assert (await coordinator.request('commit',commit))['state']=='accepted'
+        assert (await coordinator.request('commit',commit))['state']=='accepted'
+        assert calls[1:]==[(selected,'Custom answer' if other is True else None)]
+        coordinator.close()
+    asyncio.run(scenario())
+
+
 def test_alternating_agent_catalogs_preserve_both_pane_inputs_and_images(tmp_path):
     pytest.importorskip('PIL')
     import mobile_input as mobile

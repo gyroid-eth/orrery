@@ -374,7 +374,7 @@
       const images=document.createElement('div'),files=document.createElement('div'),urls=[];
       images.className='conversation-inline-images conversation-input-images';files.className='conversation-files';
       for(const entry of attachments||[]){
-        if(!(entry?.file instanceof File))continue;
+        if(!(entry?.file instanceof File)&&!entry?.path)continue;
         if(entry.kind==='image'){
           const tile=document.createElement('span'),image=document.createElement('img');
           tile.className='conversation-inline-image';image.className='conversation-inline-thumbnail';
@@ -382,7 +382,7 @@
           image.alt=entry.file.name;tile.append(image);images.append(tile);
         }else{
           const chip=document.createElement('span');chip.className='conversation-file';
-          chip.textContent='▤ '+entry.file.name;files.append(chip);
+          chip.textContent='▤ '+(entry.name||entry.file.name);files.append(chip);
         }
       }
       if(files.childElementCount)body.append(files);
@@ -1516,7 +1516,11 @@
     },{passive:true});
     listen(window,'resize',()=>{closeNotice({focus:true});paintStatus();layoutChanged();});
     const layoutObserver=new ResizeObserver(layoutChanged);
-    layoutObserver.observe(panel);layoutObserver.observe(scroll);layoutObserver.observe(eventsEl);
+    layoutObserver.observe(panel);
+    // Latest changes the scroll padding. Observe the viewport size so the
+    // button cannot schedule another scroll restoration through that padding.
+    layoutObserver.observe(scroll,{box:'border-box'});
+    layoutObserver.observe(eventsEl);
     const submissionObserver=new ResizeObserver(paintSubmissionExpansion);submissionObserver.observe(pendingEl);
     listen(document,'oc:stage-agent',context);
     listen(document,'oc:focus-agent',context);
