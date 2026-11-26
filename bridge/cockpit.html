@@ -4415,9 +4415,9 @@
       }
     }
   },
-  "inventory_digest": "4b5e7b0be0c7d8eef3b446235147db6279cf9f6d5a08aa85652015222f994f16",
+  "inventory_digest": "8537c241b0bef744d5987fd8eeea0f9c8bd739ca2ed7a9dc278db76ce7bcb529",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "3041259e1530906113fbd251f16518ebf3b92d36653a4c5f02d104a265fd040b",
+  "source_digest": "95b5489f63a76ac2e6f887a05ccea9bd4ebc1df4cbd116ae3672cf5e4577cf17",
   "surface": "cockpit",
   "version": 1
 }
@@ -11347,7 +11347,9 @@ function renderProviderTabs(keepChoice=false){
     providerTabs.append(b);
   });
   const local=selFamily==='local',choices=entries.filter(e=>e.family===selFamily);
-  spawnModelSearch.hidden=spawnModelSearchField.hidden=!local&&choices.length<spawnSearchThreshold;
+  const rowCount=selFamily==='gemini'?[...new Set(choices.map(e=>e.provider))].reduce((count,provider)=>count+
+    SpawnPicker.displayModels(provider,choices.filter(e=>e.provider===provider).map(e=>e.model),selModel).length,0):choices.length;
+  spawnModelSearch.hidden=spawnModelSearchField.hidden=!local&&rowCount<spawnSearchThreshold;
   const hadDynamicSelection=Number.isInteger(selUrlIndex);
   let selected=choices.find(e=>e.provider.id===selProvider&&e.model.id===selModel&&
     (!Number.isInteger(e.model.url_index)||e.model.url_index===selUrlIndex)&&(!e.model.url_key||e.model.url_key===selUrlKey));
@@ -11564,12 +11566,13 @@ function renderSpawnModelChip(){
   if(maker)spawnModelMark.append(spawnBrand(maker.asset+'.svg'));
   spawnModelMark.classList.toggle('spawn-local-maker',Boolean(maker));
   spawnModelMark.title=maker?maker.label+' · Local':'';
-  const name=model?.display_name||model?.id||'Model';
+  const geminiFamily=SpawnPicker.geminiFamily(provider,model?.id);
+  const name=geminiFamily||model?.display_name||model?.id||'Model';
   spawnModelLabel.textContent=compactSpawnModelLabel(name);
   const info=effortsForModel(provider,selModel);
   const effort=effectiveSpawnEffort(provider,selModel);
   const harness=provider&&model&&SpawnPicker.harnesses(provider,model).find(h=>h.id===selHarness);
-  const description=[name,model?.id!==name?model?.id:'',spawnModelMark.title,harness?.label,effort].filter(Boolean).join(' · ');
+  const description=[name,!geminiFamily&&model?.id!==name?model?.id:'',spawnModelMark.title,harness?.label,effort].filter(Boolean).join(' · ');
   spawnModelButton.title=description;spawnModelButton.setAttribute('aria-label','Model and effort: '+description);
   spawnPips.hidden=!info.efforts?.length;
   const index=info.efforts?.indexOf(effort)??-1;
@@ -11672,7 +11675,8 @@ function renderModels(){
   }
   modelChoices.replaceChildren();
   const query=spawnModelSearch.hidden?'':spawnModelSearch.value.trim().toLowerCase();
-  const {current,older}=splitOverflowModels({...provider,models});
+  const rows=SpawnPicker.displayModels(provider,models,selModel);
+  const {current,older}=splitOverflowModels({...provider,models:rows});
   const addModel=(parent,model)=>{
     const label=document.createElement('label');label.className='model-choice';
     const input=document.createElement('input');
@@ -11681,13 +11685,13 @@ function renderModels(){
       selModel=model.id;selHarness=null;spawnProblem='';spawnChooseAgain=false;renderHarnesses();
       saveSpawnDraft();
     });
-    const name=document.createElement('span');name.className='model-choice-name';name.textContent=model.id;
+    const name=document.createElement('span');name.className='model-choice-name';name.textContent=model.pickerLabel||model.id;
     label.append(input,name);
-    label.title=[model.id,model.badge].filter(Boolean).join(' · ');
+    label.title=[name.textContent,model.badge].filter(Boolean).join(' · ');
     parent.appendChild(label);
   };
   if(query){
-    const matches=[...current,...older].filter(model=>model.id.toLowerCase().includes(query));
+    const matches=[...current,...older].filter(model=>(model.variantIds||[model.id]).some(id=>id.toLowerCase().includes(query)));
     matches.forEach(model=>addModel(modelChoices,model));
     if(!matches.length){
       const empty=document.createElement('p');empty.className='spawn-empty';empty.textContent='No models found. Try another name.';
@@ -11737,6 +11741,8 @@ function resolveSpawnEffort(levels,value,fallback){
 }
 function spawnExplicitEffortMissing(provider,model){
   if(!(provider&&provider.capabilities&&provider.capabilities.effort_required))return false;
+  const configured=provider.model_efforts?.[model];
+  if(provider.id==='gemini'&&Array.isArray(configured)&&configured.length===0)return false;
   const levels=effortsForModel(provider,model).efforts;
   return typeof selEffort!=='string'||!Array.isArray(levels)||!levels.includes(selEffort);
 }
