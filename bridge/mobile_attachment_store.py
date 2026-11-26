@@ -9,10 +9,10 @@ import stat
 import time
 
 
-FORMATS = {
-    'image': frozenset({'jpg', 'png'}),
-    'file': frozenset({'pdf', 'txt', 'md', 'csv', 'json'}),
-}
+IMAGE_FORMATS = frozenset({'jpg', 'png'})
+FILE_SUFFIX = r'[a-z0-9]{1,32}'
+FILE_FORMAT = re.compile(rf'(?:{FILE_SUFFIX})?\Z')
+ATTACHMENT_NAME = re.compile(rf'[a-f0-9]{{32}}(?:\.({FILE_SUFFIX}))?\Z')
 DIRECTORIES = {'image': '.orrery-input-images', 'file': '.orrery-input-files'}
 NO_FOLLOW = os.O_NOFOLLOW | os.O_NONBLOCK
 
@@ -37,12 +37,18 @@ def attachment_label(value):
     return re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', value.replace('\\', '/').rsplit('/', 1)[-1]).strip()[:160]
 
 
+def valid_extension(kind, extension):
+    return isinstance(extension, str) and (
+        extension in IMAGE_FORMATS if kind == 'image' else FILE_FORMAT.fullmatch(extension) is not None
+    )
+
+
 def store(workspace, kind, extension, data, *, label=None):
     root = Path(workspace)
     if not root.is_absolute() or not root.is_dir():
         raise ValueError(kind + '_workspace_unavailable')
-    if extension not in FORMATS[kind]:
-        raise ValueError(kind + '_format_unsupported')
+    if not valid_extension(kind, extension):
+        raise ValueError(kind + '_format_invalid')
     folder = DIRECTORIES[kind]
     workspace_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
@@ -63,8 +69,8 @@ def store(workspace, kind, extension, data, *, label=None):
             cutoff = time.time() - 7 * 86400
             count = 0
             for name in os.listdir(directory):
-                stem, dot, suffix = name.rpartition('.')
-                if not dot or suffix not in FORMATS[kind] or not re.fullmatch(r'[a-f0-9]{32}', stem):
+                match = ATTACHMENT_NAME.fullmatch(name)
+                if not match or not valid_extension(kind, match[1] or ''):
                     continue
                 try:
                     info = os.stat(name, dir_fd=directory, follow_symlinks=False)
@@ -82,7 +88,7 @@ def store(workspace, kind, extension, data, *, label=None):
                     continue
             if count >= 50:
                 raise ValueError(kind + '_folder_full')
-            name = secrets.token_hex(16) + '.' + extension
+            name = secrets.token_hex(16) + ('.' + extension if extension else '')
             fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | NO_FOLLOW, 0o600, dir_fd=directory)
             try:
                 with os.fdopen(fd, 'wb') as stream:

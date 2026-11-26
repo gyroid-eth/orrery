@@ -1453,7 +1453,7 @@
             <ul class="prompt-attachments" id="promptFiles" aria-label="Attachments" hidden></ul>
             <div class="prompt-footer">
               <span class="prompt-meta"><img class="prompt-ava" id="promptAva" alt="" hidden><span class="prompt-target" id="promptTarget">—</span></span>
-              <input id="promptFilePicker" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.txt,.md,.csv,.json" multiple hidden>
+              <input id="promptFilePicker" type="file" multiple hidden>
               <button class="prompt-clip" id="promptClip" type="button" title="Attach files" aria-label="Attach files">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 14 6-6a2 2 0 0 1 3 3l-7 7a4 4 0 0 1-6-6l8-8a6 6 0 0 1 8 8l-8 8"/></svg>
               </button>
@@ -4247,9 +4247,9 @@
       }
     }
   },
-  "inventory_digest": "ec6a90c79a8ef0bcd5ee2dbef331725ab8b8e6c2260252de5bff9fcef8b834ef",
+  "inventory_digest": "b143b8242e53ed9cc6b27d0c0ae7ebe45ea0d722c0ce730defa2fcacde206ba6",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "e88eef02bc07c6c00cbad1601d19c0d8ab4e4a9c54957cfa37d47585a7bf4a1e",
+  "source_digest": "e8daecfc021d964ce6e1935e1e92f48d0c42623d0ad4c8d7ce2d46c0b2f0df8d",
   "surface": "cockpit",
   "version": 1
 }
@@ -12097,7 +12097,9 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
           continue;
         }
         const claude=record.vocabulary.program==='claude';
-        const references=paths.map(path=>(claude?'@':'')+path).join('\n')+(claude&&paths.length?' ':'');
+        const references=paths.map(path=>path.startsWith('/')?
+          "[file: '"+path.replaceAll("'","'\\''")+"']":(claude?'@':'')+path).join('\n')+
+          (claude&&paths.at(-1)?.startsWith('./')?' ':'');
         const body=[record.draft,references].filter(Boolean).join('\n\n');
         // The chooser leaves a space for arguments. A bare command should reach
         // the terminal without it so the terminal can show its matching picker.
@@ -12213,7 +12215,15 @@ const promptFiles=OrreryPromptAttachments.mount({
   picker:document.getElementById('promptFilePicker'),list:document.getElementById('promptFiles'),
   onChange:()=>{hideSendGuard();promptCard.refresh();},
   onError:message=>showToast(message,true),mayEdit:()=>!promptBusy,
+  pickPaths:window.__TAURI__?.core?.invoke?()=>window.__TAURI__.core.invoke('pick_attachment_paths'):null,
 });
+const nativePromptWebview=window.__TAURI__?.webview?.getCurrentWebview?.();
+nativePromptWebview?.onDragDropEvent(({payload})=>{
+  const host=promptInput.closest('.promptbar'),position=payload.position;
+  const over=position&&host.contains(document.elementFromPoint(position.x/devicePixelRatio,position.y/devicePixelRatio));
+  host.toggleAttribute('data-dragging',Boolean(over&&!promptBusy&&(payload.type==='enter'||payload.type==='over')));
+  if(over&&payload.type==='drop')promptFiles.addPaths(payload.paths);
+}).catch(()=>{/* Browser drag events remain available. */});
 const promptCard=OrreryPromptComposer.mount({
   input:promptInput,button:promptSendBtn,
   getDestination:()=>{
@@ -12245,7 +12255,7 @@ async function readClipboardAttachments(){
     try{
       const result=await Promise.race([
         invoke('clipboard_file_paths',{attachments:true}),
-        new Promise((_,reject)=>{timeout=setTimeout(reject,4500);}),
+        new Promise((_,reject)=>{timeout=setTimeout(reject,16000);}),
       ]);
       if(Array.isArray(result?.attachments))return result;
     }catch(_){}finally{clearTimeout(timeout);}
@@ -12265,14 +12275,16 @@ function handleComposerPaste(event){
   if(!files.length&&!fileHint&&data?.getData('text/plain'))return;
   event.preventDefault();
   if(promptBusy)return;
-  if(files.length){promptFiles.add(files);return;}
+  if(files.length&&(hostPlatform.host!=='mac'||files.every(file=>file.path))){
+    promptFiles.add(files);return;
+  }
   const refusal=composerPasteRefusal(hostPlatform);
   if(refusal){
     showToast(refusal,true);
     if(hostPlatform.host==='unknown')loadHostPlatform();
     return;
   }
-  void promptFiles.paste(readClipboardAttachments);
+  void promptFiles.paste(readClipboardAttachments,files);
 }
 promptInput.addEventListener('paste',handleComposerPaste);
 

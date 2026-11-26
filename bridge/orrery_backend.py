@@ -3418,27 +3418,34 @@ async def serve_clipboard_files(request: web.Request) -> web.Response:
 
 def clipboard_file_snapshots(paths, skipped=0):
     """Read files returned by the OS clipboard reader, using the upload limits."""
-    from mobile_attachment_store import FORMATS
+    from mobile_attachment_store import IMAGE_FORMATS
     from mobile_file import MAX_FILE_BYTES
     from mobile_image import MAX_IMAGE_BYTES
 
-    images = FORMATS['image'] | {'jpeg', 'webp'}
+    images = IMAGE_FORMATS | {'jpeg', 'webp'}
     attachments = []
+    remaining, oversized = MAX_FILE_BYTES, 0
     for path in map(Path, paths):
         extension = path.suffix.lower().lstrip('.')
-        if not path.is_absolute() or extension not in images | FORMATS['file']:
+        if not path.is_absolute():
             skipped += 1
             continue
-        limit = MAX_IMAGE_BYTES if extension in images else MAX_FILE_BYTES
+        limit = min(remaining, MAX_IMAGE_BYTES if extension in images else MAX_FILE_BYTES)
         try:
             fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
             with os.fdopen(fd, 'rb') as handle:
                 info = os.fstat(handle.fileno())
-                if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= limit:
+                if not stat.S_ISREG(info.st_mode) or not info.st_size:
                     raise ValueError('clipboard_file_size')
+                if info.st_size > limit:
+                    oversized += 1
+                    continue
                 data = handle.read(limit + 1)
-            if not data or len(data) > limit:
+            if not data:
                 raise ValueError('clipboard_file_size')
+            if len(data) > limit:
+                oversized += 1
+                continue
         except (OSError, ValueError):
             skipped += 1
             continue
@@ -3446,7 +3453,8 @@ def clipboard_file_snapshots(paths, skipped=0):
             'name': path.name, 'modified': info.st_mtime_ns // 1_000_000,
             'data': base64.b64encode(data).decode('ascii'),
         })
-    return {'attachments': attachments, 'skipped': skipped}
+        remaining -= len(data)
+    return {'attachments': attachments, 'skipped': skipped, **({'oversized': oversized} if oversized else {})}
 
 
 async def serve_clipboard_attachments(request: web.Request) -> web.Response:
@@ -3464,7 +3472,7 @@ async def serve_clipboard_attachments(request: web.Request) -> web.Response:
         try:
             script = _CLIPBOARD_FILES_JXA.read_text(encoding='utf-8')
             rc, output, _ = await _run_reader(
-                ['osascript', '-l', 'JavaScript', '-e', script, '--', 'snapshot'], 4)
+                ['osascript', '-l', 'JavaScript', '-e', script, '--', 'snapshot'], 12)
             result = json.loads(output) if rc == 0 else None
         except (OSError, ValueError, asyncio.TimeoutError):
             result = None
@@ -4209,12 +4217,13 @@ async def serve_prompt_attachment(request: web.Request) -> web.Response:
         return web.json_response({'ok': False, 'error': error}, status=status,
                                  headers={'Cache-Control': 'no-store'})
 
+    max_size = max(MAX_FILE_JSON, MAX_IMAGE_JSON)
     size = request.content_length
-    if size is None or size < 1 or size > MAX_IMAGE_JSON or request.headers.get('Content-Encoding'):
+    if size is None or size < 1 or size > max_size or request.headers.get('Content-Encoding'):
         return reject('invalid_attachment_size', 413)
     try:
-        raw = await asyncio.wait_for(request.content.readexactly(size), timeout=10)
-        data = decode_json(raw, max_bytes=MAX_IMAGE_JSON)
+        raw = await asyncio.wait_for(request.content.readexactly(size), timeout=20)
+        data = decode_json(raw, max_bytes=max_size)
     except (InputRefused, asyncio.TimeoutError, asyncio.IncompleteReadError, OSError):
         return reject('invalid_attachment', 400)
     kind, name, pane, instance = (data.get(key) for key in ('kind', 'session', 'paneId', 'incarnation'))
@@ -4230,7 +4239,7 @@ async def serve_prompt_attachment(request: web.Request) -> web.Response:
             or not isinstance(instance, str) or not re.fullmatch(r'[a-f0-9]{32}', instance)
             or 'label' in data and (not isinstance(label, str) or len(label) > 256)):
         return reject('invalid_attachment_target', 400)
-    if kind == 'file' and size > MAX_FILE_JSON:
+    if size > (MAX_FILE_JSON if kind == 'file' else MAX_IMAGE_JSON):
         return reject('invalid_attachment_size', 413)
 
     state = composer_pane_state(request.app, name, pane)
@@ -4250,7 +4259,12 @@ async def serve_prompt_attachment(request: web.Request) -> web.Response:
         if (composer_pane_state(request.app, name, pane) is not state or current != cwd):
             return reject('attachment_target_changed', 409)
         relative = './' + Path(path).relative_to(workspace).as_posix()
-    except (ValueError, OSError, TargetRefused):
+    except ValueError as error:
+        reason = str(error)
+        if reason in {'file_empty', 'file_too_large', 'image_too_large', 'image_pixels_too_large'}:
+            return reject(reason, 422)
+        return reject('attachment_save_failed', 422)
+    except (OSError, TargetRefused):
         return reject('attachment_save_failed', 422)
     references = request.app.get(CONVERSATION_REFERENCES_KEY)
     if references is not None:
