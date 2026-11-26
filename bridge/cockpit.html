@@ -4462,9 +4462,9 @@
       }
     }
   },
-  "inventory_digest": "0145c95a575deb0426a9196c5da3435c961e536ded674809b40b02bec805122c",
+  "inventory_digest": "a2f8c229eaaeb96c7e07a1d5d6b9b5c88168ccee96593b39c0f82abe838f7187",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "8093da71e861e7968e65b91262ed1c6dbf41df7ece4fd24f993cd8facd3e9746",
+  "source_digest": "1cd975501f2e2b6f76a76961b0862917b11a919bf5de8d2ed016cc9edeec1422",
   "surface": "cockpit",
   "version": 1
 }
@@ -11298,6 +11298,7 @@ for(const [control,menu,available] of [
   [spawnBrowserUse,spawnBrowserMenu,spawnBrowserModes],
 ]){
   control.addEventListener('click',()=>{
+    if(control===spawnComputerUse&&control.getAttribute('aria-disabled')==='true')return;
     if(available()){
       if(menu.matches(':popover-open'))menu.hidePopover();
       else if(control.getAttribute('aria-disabled')!=='true'){
@@ -11477,20 +11478,28 @@ function renderLocalModels(){
   }
 }
 function selectedSpawnModel(){const p=providerById(selProvider);return p&&(p.models||[]).find(m=>m.id===selModel&&(!Number.isInteger(m.url_index)||m.url_index===selUrlIndex)&&(!m.url_key||m.url_key===selUrlKey))||null;}
+function spawnUsesManagedScreen(){
+  return spawnCatalog?.computer_use_transport==='orrery-screen';
+}
 function spawnComputerModes(){
   const modes=spawnCatalog?.computer_modes;
-  return spawnCatalog?.runtime_mode!=='fresh'&&Array.isArray(modes)?
+  return spawnCatalog?.runtime_mode!=='fresh'&&!spawnUsesManagedScreen()&&Array.isArray(modes)?
     Object.keys(spawnComputerLabels).filter(mode=>modes.includes(mode)):null;
 }
 function paintSpawnComputer(modes){
   if(!modes){
     if(spawnComputerMenu.matches(':popover-open'))spawnComputerMenu.hidePopover();
     delete spawnComputerUse.dataset.computerMode;
+    const managedScreen=spawnUsesManagedScreen();
+    const disabled=managedScreen&&spawnCatalog.computer_use!==true;
+    const reason=disabled&&(spawnCatalog.computer_use_reason||'Computer use is unavailable.');
+    if(disabled)spawnComputerMode='off';
     spawnComputerUse.setAttribute('role','switch');
     spawnComputerUse.setAttribute('aria-checked',String(spawnComputerMode==='control'));
-    spawnComputerUse.setAttribute('aria-label','Computer use');
-    spawnComputerUse.title='Computer use';
     for(const attr of ['aria-expanded','aria-controls','aria-disabled'])spawnComputerUse.removeAttribute(attr);
+    if(disabled)spawnComputerUse.setAttribute('aria-disabled','true');
+    spawnComputerUse.setAttribute('aria-label',reason?'Computer use: '+reason:'Computer use');
+    spawnComputerUse.title=reason||(managedScreen?'Computer use on Windows':'Computer use');
     return;
   }
   if(!modes.includes(spawnComputerMode))spawnComputerMode='off';
@@ -11533,16 +11542,17 @@ function renderSpawnTools(){
   const harness=SpawnPicker.harnessKey(selHarness);
   const modes=spawnBrowserModes(),computerModes=spawnComputerModes();
   const antigravity=selProvider==='gemini';
+  const managedScreen=spawnUsesManagedScreen();
   spawnTools.hidden=spawnCatalog?.runtime_mode==='fresh'||
     (!modes&&!(antigravity&&computerModes)&&!['claude-code','codex','dsh','hermes'].includes(harness));
   spawnComputerUse.hidden=antigravity&&!computerModes;
   spawnBrowserUse.hidden=antigravity&&!modes;
-  const route=selProvider&&harness?JSON.stringify([selProvider,harness]):null;
+  const route=selProvider&&harness?JSON.stringify([selProvider,harness,managedScreen]):null;
   const changed=route!==spawnToolsRoute;
   if(changed){
     if(spawnComputerMenu.matches(':popover-open'))spawnComputerMenu.hidePopover();
     if(spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
-    const computerOn=Boolean(route)&&harness!=='dsh'&&!antigravity;
+    const computerOn=Boolean(route)&&harness!=='dsh'&&!antigravity&&!managedScreen;
     spawnComputerMode=computerOn?'control':'off';
     const browserOn=Boolean(route)&&(modes?modes.includes('personal'):harness!=='dsh'&&harness!=='codex');
     spawnBrowserMode=browserOn?'personal':'off';
@@ -11566,16 +11576,21 @@ function spawnToolOptions(){
   if(spawnCatalog?.runtime_mode==='fresh'||spawnTools.hidden)return {};
   const harness=SpawnPicker.harnessKey(selHarness);
   const native=harness==='dsh'||harness==='hermes';
-  const computer=spawnComputerUse.getAttribute('aria-checked')==='true';
+  const computer=!spawnComputerUse.hidden&&spawnComputerUse.getAttribute('aria-checked')==='true';
+  const managedScreen=spawnUsesManagedScreen();
   const modes=spawnBrowserModes(),computerModes=spawnComputerModes();
-  const screen=computerModes?.includes(spawnComputerMode)&&spawnComputerMode!=='off'?
-    {screen:{access:spawnComputerMode==='view'?'read':'operate'}}:{};
-  if(modes||selProvider==='gemini')return {tools:{...screen,...(computer?{mcp:['cua-driver']}:{}),
+  let screen={};
+  if(managedScreen&&computer&&spawnCatalog.computer_use===true){
+    screen={screen:{server:'orrery-screen',access:'operate'}};
+  }else if(computerModes?.includes(spawnComputerMode)&&spawnComputerMode!=='off'){
+    screen={screen:{access:spawnComputerMode==='view'?'read':'operate'}};
+  }
+  if(modes||selProvider==='gemini')return {tools:{...screen,...(computer&&!managedScreen?{mcp:['cua-driver']}:{}),
     ...(modes?.includes(spawnBrowserMode)?{browser_mode:spawnBrowserMode}:{})}};
   const browser=spawnBrowserUse.getAttribute('aria-checked')==='true';
   const supportsBrowserOff=spawnCatalog?.supports_browser_off===true;
   const mcp=[];
-  if(computer)mcp.push('cua-driver');
+  if(computer&&!managedScreen)mcp.push('cua-driver');
   // Native harnesses can copy an MCP server without the per-tool approvals that tools.browser requests.
   if(browser&&native)mcp.push('chrome-devtools');
   return {
@@ -12047,6 +12062,7 @@ function saveSpawnDraft(){
     tools:spawnTools.hidden?null:spawnToolSwitches.map(control=>control.getAttribute('aria-checked')==='true'),
     computerMode:spawnTools.hidden?null:spawnComputerMode,
     browserMode:spawnTools.hidden?null:spawnBrowserMode,
+    ...(spawnUsesManagedScreen()?{computerTransport:'orrery-screen'}:{}),
   };
   // Keep only editable draft fields in this viewer's storage.
   spawnShownDraft=JSON.stringify({
@@ -12066,7 +12082,9 @@ function restoreSpawnSelection(){
   if(selProvider!==saved.provider||selHarness!==saved.harness)return;
   if([...spawnHelper.options].some(option=>option.value===saved.helper))spawnHelper.value=saved.helper;
   if(!spawnTools.hidden&&saved.tools){
-    spawnComputerMode=saved.computerMode||(saved.tools[0]?'control':'off');
+    if(!spawnUsesManagedScreen()||saved.computerTransport==='orrery-screen'){
+      spawnComputerMode=saved.computerMode||(saved.tools[0]?'control':'off');
+    }
     spawnBrowserMode=saved.browserMode||(saved.tools[1]?'personal':'off');
     renderSpawnTools();
     updateSpawnAvailability();
@@ -12085,6 +12103,7 @@ function prepareSpawnForm(raw,task=''){
     tools:Array.isArray(saved.tools)&&saved.tools.length===spawnToolSwitches.length&&saved.tools.every(value=>typeof value==='boolean')?saved.tools:null,
     computerMode:Object.hasOwn(spawnComputerLabels,saved.computerMode)?saved.computerMode:null,
     browserMode:Object.hasOwn(spawnBrowserLabels,saved.browserMode)?saved.browserMode:null,
+    computerTransport:saved.computerTransport==='orrery-screen'?'orrery-screen':null,
   }:null;
   spawnShownDraft=draft&&typeof draft==='object'&&!Array.isArray(draft)?raw:null;
   spawnForm.reset();
