@@ -4462,9 +4462,9 @@
       }
     }
   },
-  "inventory_digest": "d781f956a1fbabf75f1104cee5dce755f9f77110f323860a85b037bdfbe010d6",
+  "inventory_digest": "0678a41d5f72a2528fe54205adc95c0089fab797d08555495710924f0ad7b030",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "32fa758fb1ac8a166b54e8ec8fd350c7e312c09e4e7900bc3ae15b9dc36ae297",
+  "source_digest": "687047c2e87d5b243c0115a353b217e3424b9aa304aae06881efd88e6c1213b8",
   "surface": "cockpit",
   "version": 1
 }
@@ -9584,7 +9584,7 @@ function clearAgentExit(name,action,{repaint=true}={}){
   clearTimeout(action.timer);
   pendingAgentExits.delete(name);
   if(repaint){
-    if(action.departed)renderRoster();
+    if(!liveRosterAgents.some(agent=>agent.name===name))renderRoster();
     refreshAgentActionDisplay(name);
   }
   return true;
@@ -9598,6 +9598,7 @@ function waitForAgentToLeaveRoster(name,action){
   action.accepted=true;
   if(action.departed){finishAgentExits([[name,action]]);return;}
   action.timer=setTimeout(()=>exitError(name,action,'The roster has not confirmed that the agent stopped'),30000);
+  agentsPoll();
 }
 function finishAgentExits(exits){
   const positions=new Map([
@@ -9605,6 +9606,8 @@ function finishAgentExits(exits){
     ...railPositions([...sessionGroups.values()].map(group=>group.el),tabsEl),
   ]);
   const dust=window.OrreryExitDust;
+  const departed=new Set(exits.map(([name])=>name));
+  stoppedSelectAgents=stoppedSelectAgents.filter(agent=>!departed.has(agent.name));
   for(const [name,action] of exits){
     const group=sessionGroups.get(name);
     dust?.play(tiles.get(name),rosterEl);
@@ -10803,8 +10806,8 @@ function renderRoster(){
   permissionRestarts.forEach(({original},name)=>{
     if(!seen.has(name)){restarting.push(original);seen.add(name);}
   });
-  pendingAgentExits.forEach(({original,departed},name)=>{
-    if(departed&&!seen.has(name)){restarting.push(original);seen.add(name);}
+  pendingAgentExits.forEach(({original},name)=>{
+    if(!seen.has(name)){restarting.push(original);seen.add(name);}
   });
   // The live poll may retire a row while Select still has an older history snapshot.
   const agents=liveRosterAgents.concat(restarting,stoppedSelectAgents.filter(agent=>
@@ -10850,10 +10853,16 @@ async function loadStoppedSelectAgents(){
 }
 async function pollAgents(){
   const annotationEpoch=rosterAnnotationEpoch;
+  const finishedExits=new Set();
+  pendingAgentExits.forEach(action=>{
+    if(action.original.category==='finished')finishedExits.add(action);
+  });
   try{
     // only the live rows and the retired names: the full 30-day roster is
-    // ~30x larger and every non-live row was filtered out below anyway
-    const response=await fetch('/telemetry/agents?scope=live',{cache:'no-store'});
+    // ~30x larger, but a finished shell is already missing from the live list.
+    const response=await (finishedExits.size
+      ?fetch('/telemetry/agents',{cache:'no-store'})
+      :fetch('/telemetry/agents?scope=live',{cache:'no-store'}));
     noteBackendBoot(response.headers.get('X-Orrery-Boot'));
     // a 502/503 is no roster: keep the tiles. Slow is not offline: the backend
     // gave up after 6 s ("dashboard slow"), or the dashboard itself said it is
@@ -10865,20 +10874,24 @@ async function pollAgents(){
       throw new Error(String(response.status));
     }
     const d=await response.json();
-    if(annotationEpoch!==rosterAnnotationEpoch)return false;
+    if(annotationEpoch!==rosterAnnotationEpoch||!Array.isArray(d?.agents))return false;
     liveRetiredNames=pruneRetiredPins(d);
     // warmup(warm-*/pending-*) はプール予熱でありエージェントではない。
     // 従来は名前順で最下部に沈んで見えなかったが、recency ソート導入で
     // 浮上するようになったため明示除外（claim され改名された時点で現れる）。
-    liveRosterAgents=(d.agents||[]).filter(a=>
+    liveRosterAgents=d.agents.filter(a=>
       (a.running||a.category==='agent')&&a.category!=='warmup').map(prepareRosterRow);
     const liveByName=new Map(liveRosterAgents.map(agent=>[agent.name,agent]));
+    const finishedNames=new Set(finishedExits.size
+      ?d.agents.filter(agent=>agent.category==='finished').map(agent=>agent.name):[]);
     const completed=[];
     pendingAgentExits.forEach((action,name)=>{
       const agent=liveByName.get(name);
       if(!agent){
-        action.departed=true;
-        if(action.accepted)completed.push([name,action]);
+        const finished=action.original.category==='finished';
+        if(finished&&!finishedExits.has(action))return;
+        action.departed=!finished||!finishedNames.has(name);
+        if(action.departed&&action.accepted)completed.push([name,action]);
       }else if(action.original.created&&agent.created&&action.original.created!==agent.created){
         action.departed=false;
         clearAgentExit(name,action);
