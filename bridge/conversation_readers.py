@@ -176,6 +176,7 @@ AGY_REQUEST_END = '\n</USER_REQUEST>'
 AGY_UUID = re.compile(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\Z')
 AGY_TRANSCRIPTS = frozenset({'transcript.jsonl','transcript_full.jsonl'})
 AGY_TOOL_NAME = re.compile(r'[A-Za-z0-9_.:-]{1,160}\Z')
+AGY_SHOW_FILES = re.compile(r'mcp(?P<sep>__|_|:)(?:orrery[-_]mail|agentstack)(?P=sep)show_files\Z')
 AGY_RESULT_HEADER = re.compile(r'\ACreated At: [^\n]+\nCompleted At: [^\n]+(?:\n|$)')
 
 
@@ -217,6 +218,8 @@ def agy_normalize(item):
         for slot, call in enumerate(calls[:MAX_BLOCKS-1] if isinstance(calls, list) else [], 1):
             name = call.get('name') if isinstance(call, dict) else None
             if isinstance(name, str) and AGY_TOOL_NAME.fullmatch(name):
+                if AGY_SHOW_FILES.fullmatch(name):
+                    name = 'mcp__orrery_mail__show_files'
                 events.append((slot, sent(tool_event(name, ts), name, call.get('args'))))
         return events
     if kind == 'GENERIC' and source == 'MODEL' and isinstance(content, str) and AGY_RESULT_HEADER.match(content):
@@ -362,6 +365,10 @@ def artifact_item(item,p,index,event=None):
         elif item.get('type')=='tool/result':
             # Only dsh-tool-fs's documented result diff shape, never generic meta.
             return dict(type='recorded_fs_result',diffs=data.get('meta',{}).get('diffs',[]) if isinstance(data.get('meta'),dict) else [])
+    elif p=='antigravity' and index and (event or {}).get('text')=='mcp__orrery_mail__show_files':
+        # The normalized tool event identifies the slot in this same record.
+        name='mcp__orrery_mail__show_files'
+        value=item['tool_calls'][index-1].get('args')
     elif p=='hermes' and index:
         calls=item.get('tool_calls')
         if isinstance(calls,str):

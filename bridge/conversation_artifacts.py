@@ -197,6 +197,7 @@ def extract_artifacts(item: dict) -> dict:
             # The agent names files to show; the preview's own checks decide.
             paths=value.get('paths')
             for filename in paths[:MAX_REFS] if isinstance(paths,list) else []:path(filename,shown=not wrapped)
+            if not wrapped:result['show_files_paths']=result['shown_paths']
         elif name=='SendUserFile' and isinstance(value,dict):
             # Claude's native delivery call records files: string[]. Caption,
             # status and tool-result prose never grant additional references.

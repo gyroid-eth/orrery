@@ -8,6 +8,7 @@ import subprocess
 import pytest
 
 import conversation_history as history
+from conversation_preview import ReferenceStore
 
 
 SID = "12345678-1234-4321-8421-123456789abc"
@@ -48,6 +49,26 @@ def log(tmp_path):
 def page(row, **kwargs):
     with history.open_reader(row) as reader:
         return reader.read_page(**kwargs)
+
+
+@pytest.mark.parametrize('name', ['mcp_orrery_mail_show_files', 'mcp:orrery-mail:show_files', 'mcp:other:show_files'])
+def test_show_files_from_the_recorded_mcp_call(log, tmp_path, name):
+    path, row = log
+    report = tmp_path.resolve() / 'report.md'
+    report.write_text('# Fixture report\n')
+    tool = step(8, 'PLANNER_RESPONSE', 'MODEL', tool_calls=[{'name': name, 'args': {'paths': [str(report)]}}])
+    with path.open('ab') as stream:
+        stream.write(line(tool))
+
+    store = ReferenceStore()
+    with history.open_reader(row) as reader:
+        event = reader.read_page()['events'][-1]
+        store.decorate(row, reader, event)
+    if name == 'mcp:other:show_files':
+        assert not event.get('references')
+        return
+    assert event['text'] == 'mcp__orrery_mail__show_files'
+    assert store.read(event['references'][0]['id'], row, mobile=True)['text'] == '# Fixture report\n'
 
 
 def test_uses_existing_cursor_pages_and_keeps_content_boundaries(log):
