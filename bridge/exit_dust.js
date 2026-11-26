@@ -41,15 +41,21 @@
 
   function drawSnapshot(ctx,node){
     const surface=node.querySelector('.session-label')||node;
+    const mini=surface.classList.contains('mini-agent');
     const style=getComputedStyle(surface),bounds=surface.getBoundingClientRect();
     const panel=style.getPropertyValue('--panel-2').trim()||style.color;
     const background=style.backgroundColor;
-    paintRectangle(ctx,bounds,parseFloat(style.borderTopLeftRadius)||0,
+    if(!mini)paintRectangle(ctx,bounds,parseFloat(style.borderTopLeftRadius)||0,
       background==='rgba(0, 0, 0, 0)'?panel:background);
-    const avatar=surface.querySelector('.face,.session-ava');
+    const avatar=surface.querySelector(mini?'.mini-portrait-fallback':'.face,.session-ava');
     if(avatar?.getClientRects().length){
       const box=avatar.getBoundingClientRect(),appearance=getComputedStyle(avatar);
-      const portrait=avatar instanceof HTMLImageElement?avatar:avatar.querySelector('img');
+      let portrait=avatar instanceof HTMLImageElement?avatar:avatar.querySelector('img');
+      const source=mini&&surface.querySelector('.mini-portrait')?.getAttribute('href');
+      if(source){
+        portrait=new Image();
+        portrait.src=source;
+      }
       ctx.save();
       ctx.beginPath();
       ctx.ellipse(box.left+box.width/2,box.top+box.height/2,box.width/2,box.height/2,0,0,2*Math.PI);
@@ -65,18 +71,22 @@
         ctx.fillStyle=appearance.color;
         ctx.font=`600 ${box.height*.48}px ${appearance.fontFamily}`;
         ctx.textBaseline='middle';ctx.textAlign='center';
-        ctx.fillText(avatar.querySelector('.ini')?.textContent||'',box.left+box.width/2,box.top+box.height/2);
+        const initial=mini?surface.querySelector('.mini-initial'):avatar.querySelector('.ini');
+        ctx.fillText(initial?.textContent||'',box.left+box.width/2,box.top+box.height/2);
       }
       ctx.restore();
     }
-    for(const label of surface.querySelectorAll('.cname,.roster-role,.roster-model,.session-name,.session-state')){
+    const labels=mini?'.orrery-caption-name,.orrery-caption-role':
+      '.cname,.roster-role,.roster-model,.session-name,.session-state';
+    for(const label of surface.querySelectorAll(labels)){
       if(!label.textContent||!label.getClientRects().length)continue;
       const box=label.getBoundingClientRect(),textStyle=getComputedStyle(label);
       if(!box.width)continue;
       ctx.fillStyle=textStyle.color;
       ctx.font=`${textStyle.fontWeight} ${textStyle.fontSize} ${textStyle.fontFamily}`;
       ctx.textBaseline='middle';
-      ctx.fillText(label.textContent.trim(),box.left,box.top+box.height/2,box.width);
+      ctx.textAlign=mini?'center':'left';
+      ctx.fillText(label.textContent.trim(),box.left+(mini?box.width/2:0),box.top+box.height/2,box.width);
     }
   }
 

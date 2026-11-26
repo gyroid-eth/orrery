@@ -137,6 +137,33 @@ def test_catalog_refresh_preserves_screen_choice_independently_of_browser(tour_b
     assert result["narrowed"].get("screen") == (choice if expected == "control" else None)
 
 
+def test_wsl_draft_requires_a_saved_managed_screen_choice(tour_browser):
+    _, evaluate = tour_browser
+    evaluate(BOOTSTRAP)
+    result = evaluate("""(async()=>{
+      const fetchFixture=window.fetch;
+      const catalog={...CATALOG,computer_use:true,computer_use_transport:'orrery-screen'};
+      window.fetch=(input,options)=>new URL(input,location.href).pathname==='/telemetry/spawn-catalog'
+        ?Promise.resolve(Response.json(catalog)):fetchFixture(input,options);
+      writeSpawnDraft(JSON.stringify({task:'Fixture task',selection:{
+        family:'claude',provider:'claude',model:'claude-fixture',harness:'claude-code',
+        tools:[true,true],computerMode:'control',browserMode:'personal',
+      }}));
+      openSpawnModal();
+      await loadSpawnCatalog();
+      const oldDraft=spawnPayloadFromForm().tools;
+      spawnComputerUse.click();
+      const chosen=spawnPayloadFromForm().tools;
+      closeSpawnModal();openSpawnModal();
+      await loadSpawnCatalog();
+      return {oldDraft,chosen,reopened:spawnPayloadFromForm().tools};
+    })()""".replace("CATALOG", json.dumps(CATALOG)))
+    assert result["oldDraft"] == {"browser": {}}
+    assert result["chosen"] == result["reopened"] == {
+        "browser": {}, "screen": {"server": "orrery-screen", "access": "operate"},
+    }
+
+
 def test_restored_task_stays_masked_in_demo_mode(tour_browser):
     client, evaluate = tour_browser
     evaluate(BOOTSTRAP)

@@ -187,7 +187,7 @@ SOFTWARE.
     return {groups,consumed,pending};
   }
 
-  function mount({host,mutate=fn=>fn(),onFocusLost=()=>{},readDiff,readCommand}){
+  function mount({host,mutate=fn=>fn(),onFocusLost=()=>{},readDiff,readCommand,previewImage}){
     const cards=new Map();let model={groups:[],consumed:new Set()},current={},visible=false,timer=0,serial=0,workingModel=false;
     let activeDetail=null;
     function activityState(context){
@@ -361,11 +361,13 @@ SOFTWARE.
       diff.id='conversation-step-diff-'+(++serial)+'-'+Math.random().toString(36).slice(2);
       diff.setAttribute('aria-label','Recorded diff');
       diffButton.setAttribute('aria-expanded','false');diffButton.setAttribute('aria-controls',diff.id);
-      top.append(tool,diffButton,outcome,clock);copy.append(top,detail,diff);node.append(copy);
+      const imageButton=make('button','conversation-step-image');imageButton.type='button';imageButton.hidden=true;
+      top.append(tool,diffButton,outcome,clock);copy.append(top,detail,diff);node.append(copy,imageButton);
       const record={node,tool,outcome,clock,detail,diffButton,diffTool,plus,minus,diff,detailRef:null,detailKind:null,
-        request:null,icon:null,status:'',fingerprint:''};
+        imageButton,image:null,request:null,icon:null,status:'',fingerprint:''};
       diffButton.addEventListener('click',()=>toggleDetail(record));
       detail.addEventListener('click',()=>{if(record.detailRef)toggleDetail(record);});
+      imageButton.addEventListener('click',()=>{if(record.image)previewImage(record.image);});
       return record;
     }
     function updateRow(record,step){
@@ -384,6 +386,12 @@ SOFTWARE.
       const start=time(step.started),end=time(step.ended);
       changed(record.clock,Number.isFinite(start)&&Number.isFinite(end)&&end>=start?duration((end-start)/1000):'');
       changed(record.detail,text(step.detail));record.detail.hidden=!step.detail;
+      const image=step.image;
+      record.image=previewImage&&step.phase==='complete'&&['done','observed'].includes(status)
+        &&image?.kind==='image'&&reference(image.id)&&text(image.label)?image:null;
+      record.imageButton.hidden=!record.image;
+      record.node.classList.toggle('has-step-image',Boolean(record.image));
+      if(record.image)record.imageButton.setAttribute('aria-label','Preview '+image.label);
       const stat=step.diff_stat;
       const diffRef=status==='done'&&readDiff&&reference(step.diff_ref)
         &&stat&&Number.isSafeInteger(stat.added)&&stat.added>=0&&Number.isSafeInteger(stat.removed)&&stat.removed>=0

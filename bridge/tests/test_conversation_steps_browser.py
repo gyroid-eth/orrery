@@ -135,6 +135,51 @@ def test_historical_turn_starts_folded_and_failure_is_not_inferred_from_prose(co
     assert js("[...document.querySelectorAll('.conversation-step-outcome')].map(n=>n.textContent)")==['','Observed','Failed']
 
 
+@pytest.mark.parametrize('provider', ['codex', 'claude'])
+def test_clicking_an_image_step_opens_the_existing_reader_preview(cockpit, provider):
+    from test_conversation_inline_images import image_data
+
+    image = dict(id='i'*32, kind='image', label='diagram.png')
+    rows = events(provider)
+    if provider == 'codex':
+        view = project(native('ImageView', ident='image', path='./diagram.png'), 11)
+        view['step']['image'] = image
+        rows += [view, project(native('ImageView', ident='failed', path='./missing.png', status='failed'), 12)]
+        rows.append(project(dict(type='event_msg', payload=dict(type='task_complete', turn_id='turn-one',
+                                                                duration_ms=12000)), 13))
+    else:
+        image_events = claude_events([
+            c('assistant', [dict(type='tool_use', id='ok', name='Read', input={'file_path':'./diagram.png'}),
+                            dict(type='tool_use', id='failed', name='Read', input={'file_path':'./missing.png'})]),
+            c('user', [dict(type='tool_result', tool_use_id='ok', is_error=False),
+                       dict(type='tool_result', tool_use_id='failed', is_error=True)]),
+        ])
+        rows.extend(dict(event, id='image:'+event['id']) for event in image_events)
+        calls = [row for row in rows if row.get('step',{}).get('phase')=='call']
+        calls[-2]['step']['image'] = image
+        calls[-1]['step']['image'] = dict(image, label='missing.png')
+    js, wait, client = prepare(cockpit, provider, rows=rows, working=False)
+    js('window.previewCalls=[];OrreryConversationSource.Source.prototype.reference=async id=>{'
+       'previewCalls.push(id);return '+json.dumps(image_data())+'};'
+       "document.querySelector('.conversation-steps-toggle').click()")
+    wait("document.querySelectorAll('.conversation-step-image:not([hidden])').length===1")
+    assert js("document.querySelector('.conversation-step-image:not([hidden])').ariaLabel") == 'Preview diagram.png'
+    capture = os.environ.get('ORRERY_STEP_IMAGE_SCREENSHOTS')
+    if capture and provider == 'codex':
+        folder = Path(capture)
+        folder.mkdir(parents=True, exist_ok=True)
+        client.call('Page.bringToFront')
+        wait("document.querySelector('.conversation-step-image:not([hidden])').getBoundingClientRect().height>0")
+        (folder/'desktop-step.png').write_bytes(base64.b64decode(client.call('Page.captureScreenshot', format='png')['data']))
+    js("document.querySelector('.conversation-step-image:not([hidden])').click()")
+    wait("document.querySelector('.conversation-preview-image')?.naturalWidth===640")
+    assert js('previewCalls') == ['i'*32]
+    assert js("document.querySelector('.conversation-preview-title').textContent") == 'diagram.png'
+    assert js("Boolean(document.querySelector('.conversation-preview-fullscreen'))")
+    if capture and provider == 'codex':
+        (folder/'desktop-preview.png').write_bytes(base64.b64decode(client.call('Page.captureScreenshot', format='png')['data']))
+
+
 def test_append_keeps_existing_row_selection_and_earlier_pair_fills_without_duplicate(cockpit):
     rows=events('claude')
     js,wait,client=prepare(cockpit,'claude',rows=rows)
