@@ -46,8 +46,10 @@ html[data-color-theme="light"] .crew-state #agentDot.open{background:var(--theme
 html[data-color-theme="light"] .need-chip{border-color:var(--theme-status-alert)}
 html[data-color-theme="light"] .roster-filter input{background:color-mix(in srgb,var(--panel) 82%,transparent)}
 html[data-color-theme="light"] .promptbar{
-  --prompt-fill:var(--panel);background:var(--bg);border-top:1px solid var(--hair-2);padding-block:12px 14px;
+  --prompt-fill:var(--panel);background:var(--bg);border-top:1px solid var(--hair-2);padding-bottom:14px;
 }
+/* An open reply reference reserves its own top padding in conversation_view.css. */
+html[data-color-theme="light"] .promptbar:not(.has-conversation-reference){padding-top:12px}
 html[data-color-theme="light"] .prompt-card{border:1px solid var(--theme-border-control);border-radius:6px}
 html[data-color-theme="light"] #promptSend,
 html[data-color-theme="light"] #promptSend:hover{
