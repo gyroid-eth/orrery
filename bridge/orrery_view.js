@@ -67,6 +67,8 @@ let miniNetworkDepth=Number(OC.miniView&&OC.miniView().depth)||2;
 let miniFocusName=OC.activeAgent&&OC.activeAgent()||'';
 let miniWidth=MINI.width,miniHeight=MINI.height;
 let miniOverflow=false;
+const MINI_ZOOM_LEVELS=[1,1.25,1.5,2];
+let miniZoomIndex=0;
 
 function svgEl(tag,attrs={}){
   const el=document.createElementNS(SVG_NS,tag);
@@ -359,21 +361,27 @@ function telemetryNetworkSubset(live,focus,depth,now=Date.now()){
   }
   return {byName,distances};
 }
-function compactNetworkOffsets(names,focus,dimensions){
-  const [pitchX,pitchY]=captionClearance(dimensions);
-  // Fit full caption columns to the rail, adding rows when more peers arrive.
-  const columns=Math.max(1,1+Math.floor((dimensions.width-2*dimensions.xPadding)/pitchX));
-  const rows=Math.ceil((names.length+1)/columns);
-  const middleColumn=Math.floor((columns-1)/2),middleRow=Math.floor((rows-1)/2);
-  const cells=[];
-  for(let row=0;row<rows;row++){
-    for(let column=0;column<columns;column++){
-      const x=(column-middleColumn)*pitchX,y=(row-middleRow)*pitchY;
-      cells.push({x,y,distance:x*x+y*y});
-    }
+function ringNetworkOffsets(names,focus,dimensions){
+  const [horizontal,vertical]=captionClearance(dimensions);
+  const overlaps=(a,b)=>Math.abs(a.x-b.x)<horizontal&&Math.abs(a.y-b.y)<vertical;
+  const offsets=[{name:focus,x:0,y:0}];
+  let start=0,radius=0;
+  for(let ring=1;start<names.length;ring++){
+    // Stagger the rings and grow each radius until every caption has room.
+    const count=Math.min(6*ring-1,names.length-start);
+    const angles=Array.from({length:count},(_,index)=>
+      -Math.PI/2+Math.PI*2*(index+(ring%2===0?.5:0))/count);
+    let positions;
+    do{
+      radius+=4;
+      positions=angles.map((angle,index)=>({name:names[start+index],
+        x:Math.cos(angle)*radius,y:Math.sin(angle)*radius}));
+    }while(positions.some((position,index)=>offsets.some(other=>overlaps(position,other))||
+      positions.slice(0,index).some(other=>overlaps(position,other))));
+    offsets.push(...positions);
+    start+=count;
   }
-  cells.sort((a,b)=>a.distance-b.distance||a.y-b.y||a.x-b.x);
-  return [focus,...names].map((name,index)=>({name,x:cells[index].x,y:cells[index].y}));
+  return {offsets,radius};
 }
 function telemetryMiniLayout(live,focus,depth,dimensions){
   const subset=telemetryNetworkSubset(live,focus,depth);
@@ -396,20 +404,18 @@ function telemetryMiniLayout(live,focus,depth,dimensions){
   }
   let width=Math.max(dimensions.width,2*rx*scale+2*dimensions.xPadding);
   let height=Math.max(dimensions.height,2*ry*scale+dimensions.topPadding+dimensions.bottomPadding);
-  let offsetX=0,offsetY=0;
   const fit=dimensions.scale*Math.min(dimensions.width/width,dimensions.height/height);
   if(others.length>8&&fit<MINI_MIN_SCALE){
-    others.sort((a,b)=>subset.distances.get(a)-subset.distances.get(b)||a.localeCompare(b));
-    offsets=compactNetworkOffsets(others,focus,dimensions);
-    const xs=offsets.map(({x})=>x),ys=offsets.map(({y})=>y);
-    const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
-    width=Math.max(dimensions.width,maxX-minX+2*dimensions.xPadding);
-    height=Math.max(dimensions.height,maxY-minY+dimensions.topPadding+dimensions.bottomPadding);
-    offsetX=-(minX+maxX)/2;
-    offsetY=-(minY+maxY)/2;
+    const mailCount=name=>historyPairs.get(pairKey(focus,name))?.count||0;
+    others.sort((a,b)=>mailCount(b)-mailCount(a)||
+      subset.distances.get(a)-subset.distances.get(b)||a.localeCompare(b));
+    const rings=ringNetworkOffsets(others,focus,dimensions);
+    offsets=rings.offsets;
+    width=Math.max(dimensions.width,2*rings.radius+2*dimensions.xPadding);
+    height=Math.max(dimensions.height,2*rings.radius+dimensions.topPadding+dimensions.bottomPadding);
     scale=1;
   }
-  const centerX=width/2+offsetX,centerY=(height+dimensions.topPadding-dimensions.bottomPadding)/2+offsetY;
+  const centerX=width/2,centerY=(height+dimensions.topPadding-dimensions.bottomPadding)/2;
   const positions=new Map();
   const positionFor=(name,x,y,networkFocus=false)=>{
     const agent=subset.byName.get(name);
@@ -500,6 +506,8 @@ function prepareMotion(surface,layout,viewportChanged=false){
 }
 function updateSurfaceGeometry(surface){
   surface.states.forEach((state,name)=>{
+    const cutout=surface.edgeCutouts?.get(name);
+    if(cutout){cutout.setAttribute('cx',state.x);cutout.setAttribute('cy',state.y);}
     const node=surface.nodes.get(name);
     if(node){
       const dx=state.x-state.baseX,dy=state.y-state.baseY;
@@ -513,6 +521,11 @@ function updateSurfaceGeometry(surface){
     const from=surface.states.get(edge.dataset.parent);
     const to=surface.states.get(edge.dataset.child);
     if(!from||!to)return;
+    if(surface===miniMotion){
+      const curve=commPathBetween(from,to,surface.positions,surface.layoutDimensions);
+      edge.setAttribute('d',curve.d);
+      edge.nextElementSibling.setAttribute('d',curve.d);
+    }
     edge.setAttribute('x1',from.x);edge.setAttribute('y1',from.y);
     edge.setAttribute('x2',to.x);edge.setAttribute('y2',to.y);
     edge.style.opacity=String(Math.min(from.opacity,to.opacity));
@@ -524,6 +537,7 @@ function updateSurfaceGeometry(surface){
     const curve=commPathBetween(
       from,to,surface.positions,surface.layoutDimensions||surface.dimensions);
     edge.setAttribute('d',curve.d);
+    if(surface===miniMotion)edge.nextElementSibling.setAttribute('d',curve.d);
     const alpha=edge.dataset.life===undefined ? .22 : .58*Number(edge.dataset.life);
     edge.setAttribute('stroke-opacity',(alpha*Math.min(from.opacity,to.opacity)).toFixed(3));
   });
@@ -538,6 +552,8 @@ function finishSurfaceMotion(surface){
   });
   removing.forEach(name=>{
     const node=surface.nodes.get(name);if(node)node.remove();
+    surface.edgeCutouts?.get(name)?.remove();
+    surface.edgeCutouts?.delete(name);
     surface.nodes.delete(name);surface.states.delete(name);surface.positions.delete(name);
   });
   surface.active=false;surface.settledFrames=0;
@@ -589,16 +605,40 @@ function runMotionFrame(now){
   syncMotionLoop();
 }
 
+function appendMailEdge(layer,edge,a,b,mini){
+  if(!mini){layer.appendChild(edge);return;}
+  const label=`Show mail between ${a} and ${b}`;
+  const group=svgEl('g',{class:'orrery-mail-edge',role:'button',tabindex:'0',
+    'aria-label':label,'aria-controls':'mail',
+    'data-edge-key':`${edge.getAttribute('class')}:${pairKey(a,b)}`});
+  const hit=svgEl('path',{class:'orrery-mail-edge-hit',d:edge.getAttribute('d')||''});
+  group.append(edge,hit);
+  const activate=()=>document.dispatchEvent(new CustomEvent('oc:filter-mail-pair',{detail:{a,b}}));
+  group.addEventListener('click',activate);
+  group.addEventListener('keydown',event=>{
+    if(event.key!=='Enter'&&event.key!==' ')return;
+    event.preventDefault();event.stopPropagation();activate();
+  });
+  layer.appendChild(group);
+}
+function focusedEdgeKey(container){
+  const focused=document.activeElement;
+  return container.contains(focused)?focused.dataset.edgeKey:null;
+}
+function restoreEdgeFocus(container,key){
+  if(key)container.querySelector(`[data-edge-key="${CSS.escape(key)}"]`)?.focus({preventScroll:true});
+}
 function drawSpawnEdges(target,layout,large){
   const layer=svgEl('g',{class:'orrery-spawn-layer'});
+  if(!large)layer.setAttribute('mask','url(#mini-edge-cutouts)');
   layout.parentOf.forEach((parent,child)=>{
     const from=layout.positions.get(parent),to=layout.positions.get(child);
     if(!from||!to)return;
-    layer.appendChild(svgEl('line',{
+    appendMailEdge(layer,svgEl(large?'line':'path',{
       class:'orrery-spawn-edge'+(large?' planet-edge':''),
       x1:from.x,y1:from.y,x2:to.x,y2:to.y,
       'data-parent':parent,'data-child':child,
-    }));
+    }),parent,child,!large);
   });
   target.appendChild(layer);
   return layer;
@@ -925,7 +965,31 @@ function centerMiniViewport(){
   miniScroll.scrollLeft+=center.x-bounds.left-miniScroll.clientWidth/2;
   miniScroll.scrollTop+=center.y-bounds.top-miniScroll.clientHeight/2;
 }
+function installMiniZoom(){
+  miniViewport.insertAdjacentHTML('beforeend',
+    '<div class="mini-graph-zoom" role="group" aria-label="Mini graph zoom">'+
+    '<button type="button" aria-label="Zoom out" title="Zoom out" disabled>−</button>'+
+    '<button type="button" aria-label="Zoom in" title="Zoom in">+</button></div>');
+  const [out,into]=miniViewport.querySelectorAll('.mini-graph-zoom button');
+  function zoom(direction){
+    const x=miniScroll.clientWidth/2,y=miniScroll.clientHeight/2;
+    const previous=MINI_ZOOM_LEVELS[miniZoomIndex];
+    const centerX=miniScroll.scrollLeft+x,centerY=miniScroll.scrollTop+y;
+    miniZoomIndex+=direction;
+    const factor=MINI_ZOOM_LEVELS[miniZoomIndex]/previous;
+    renderMini();
+    miniScroll.scrollLeft=centerX*factor-x;
+    miniScroll.scrollTop=centerY*factor-y;
+    out.disabled=miniZoomIndex===0;
+    into.disabled=miniZoomIndex===MINI_ZOOM_LEVELS.length-1;
+    if(document.activeElement===out&&out.disabled)into.focus({preventScroll:true});
+    else if(document.activeElement===into&&into.disabled)out.focus({preventScroll:true});
+  }
+  out.addEventListener('click',()=>zoom(-1));
+  into.addEventListener('click',()=>zoom(1));
+}
 function renderMini({recenter=false}={}){
+  const focused=focusedEdgeKey(miniSvg);
   miniViewport.classList.toggle('orrery-mode',miniMode==='orrery');
   const width=miniViewport.clientWidth||miniWidth,height=miniViewport.clientHeight||miniHeight;
   const focusWasVisible=miniFocusVisible();
@@ -942,18 +1006,29 @@ function renderMini({recenter=false}={}){
     :layoutAgents(liveAgents,dimensions);
   prepareMotion(miniMotion,layout,resized);
   miniSvg.setAttribute('viewBox',`0 0 ${layout.width} ${layout.height}`);
-  miniSvg.style.width=Math.max(width,layout.width*MINI_MIN_SCALE)+'px';
-  miniSvg.style.height=Math.max(height,layout.height*MINI_MIN_SCALE)+'px';
+  const zoom=MINI_ZOOM_LEVELS[miniZoomIndex];
+  miniSvg.style.width=Math.max(width,layout.width*MINI_MIN_SCALE)*zoom+'px';
+  miniSvg.style.height=Math.max(height,layout.height*MINI_MIN_SCALE)*zoom+'px';
   miniSvg.classList.toggle('telemetry-network',Boolean(layout.networkFocus));
   miniSvg.setAttribute('aria-label',layout.networkFocus
     ?`Telemetry network for ${layout.networkFocus}, ${miniNetworkDepth} hops`
     :'Live agent spawn and communication graph');
   const defs=svgEl('defs');
   miniSvg.appendChild(defs);
-  miniSvg.appendChild(svgEl('g',{class:'orrery-history-layer','aria-hidden':'true'}));
+  const mask=svgEl('mask',{id:'mini-edge-cutouts',maskUnits:'userSpaceOnUse',
+    x:0,y:0,width:layout.width,height:layout.height});
+  mask.appendChild(svgEl('rect',{width:layout.width,height:layout.height,fill:'white'}));
+  miniMotion.edgeCutouts=new Map();
+  miniMotion.states.forEach((state,name)=>{
+    const cutout=svgEl('circle',{cx:state.x,cy:state.y,r:17,fill:'black'});
+    mask.appendChild(cutout);
+    miniMotion.edgeCutouts.set(name,cutout);
+  });
+  defs.appendChild(mask);
+  miniSvg.appendChild(svgEl('g',{class:'orrery-history-layer',mask:'url(#mini-edge-cutouts)'}));
   renderMailHistory();
   const spawnLayer=drawSpawnEdges(miniSvg,layout,false);
-  miniSvg.appendChild(svgEl('g',{class:'orrery-comm-layer'}));
+  miniSvg.appendChild(svgEl('g',{class:'orrery-comm-layer',mask:'url(#mini-edge-cutouts)'}));
   const nodes=svgEl('g',{class:'orrery-node-layer'});
   let index=0;
   miniMotion.nodes.clear();
@@ -965,10 +1040,11 @@ function renderMini({recenter=false}={}){
   });
   miniSvg.appendChild(nodes);
   flights.forEach(flight=>miniSvg.appendChild(flight));
-  miniMotion.spawnEdges=[...spawnLayer.children];
+  miniMotion.spawnEdges=[...spawnLayer.querySelectorAll('.orrery-spawn-edge')];
   syncMiniSelection();
   refreshCommEdges();
   updateSurfaceGeometry(miniMotion);
+  restoreEdgeFocus(miniSvg,focused);
   if(miniScroll.clientWidth){
     const overflow=miniScroll.scrollWidth>miniScroll.clientWidth||miniScroll.scrollHeight>miniScroll.clientHeight;
     const firstOverflow=overflow&&!miniOverflow;
@@ -1152,16 +1228,18 @@ function recordMessages(messages,serverNowMs=null){
 }
 function renderMailHistory(){
   const layer=miniSvg.querySelector('.orrery-history-layer');
+  const focused=focusedEdgeKey(layer);
   layer.replaceChildren();
   if(!keepMailLinks)return;
   historyPairs.forEach(({a,b,count})=>{
     if(!miniPositions.has(a)||!miniPositions.has(b))return;
     // The dashboard keeps one displayed count per pair across directions and kinds.
     const width=Math.min(6,1+Math.log2(count+1));
-    layer.appendChild(svgEl('path',{
+    appendMailEdge(layer,svgEl('path',{
       class:'orrery-history-edge','data-a':a,'data-b':b,'stroke-width':width.toFixed(2),
-    }));
+    }),a,b,true);
   });
+  restoreEdgeFocus(layer,focused);
 }
 function syncMailHistory(){
   if(!keepMailLinks||document.hidden||!miniViewport.clientWidth||!miniViewport.clientHeight){
@@ -1218,9 +1296,9 @@ function commPathBetween(from,to,positions,dimensions){
     point:t=>({x:from.x+dx*t,y:from.y+dy*t}),
   };
   const distance=Math.hypot(dx,dy);
-  if(!distance||isLineagePair(from.name,to.name))return straight;
+  if(!distance||dimensions.large&&isLineagePair(from.name,to.name))return straight;
   // Clear the portrait's outer ring, with room for the edge stroke.
-  const radius=dimensions.large?32:14;
+  const radius=dimensions.large?32:17;
   const nodes=[...positions.values()].filter(node=>node!==from&&node!==to);
   if(!nodes.some(node=>segmentNearNode(from,to,node,radius)))return straight;
 
@@ -1265,6 +1343,7 @@ function renderMailFocus(surface){
   const from=surface.states.get(activeMailRoute.sender);
   if(!layer){
     layer=svgEl('g',{class:'orrery-mail-focus','aria-hidden':'true'});
+    if(surface===miniMotion)layer.setAttribute('mask','url(#mini-edge-cutouts)');
     target.insertBefore(layer,target.querySelector('.orrery-node-layer'));
   }
   layer.replaceChildren();
@@ -1275,7 +1354,7 @@ function renderMailFocus(surface){
     if(!to||to.removing||to===from)continue;
     const curve=commPathBetween(from,to,surface.positions,dimensions);
     const distance=Math.hypot(to.x-from.x,to.y-from.y);
-    const t=Math.max(.45,1-(dimensions.large?27:14)/Math.max(distance,1));
+    const t=Math.max(.45,1-(dimensions.large?27:18)/Math.max(distance,1));
     const tip=curve.point(t),base=curve.point(t-.05);
     const angle=Math.atan2(tip.y-base.y,tip.x-base.x),length=dimensions.large?9:5;
     const wing=turn=>`${tip.x-length*Math.cos(angle+turn)} ${tip.y-length*Math.sin(angle+turn)}`;
@@ -1310,6 +1389,7 @@ function markLiveSpawnEdges(target,liveSet){
 function renderCommLayer(target,positions,dimensions){
   const layer=target&&commLayerOf(target);
   if(!layer)return;
+  const focused=focusedEdgeKey(layer);
   layer.replaceChildren();
   const now=Date.now();
   const liveLineage=new Set();
@@ -1323,14 +1403,15 @@ function renderCommLayer(target,positions,dimensions){
       return;
     }
     const curve=commPathBetween(from,to,positions,dimensions);
-    layer.appendChild(svgEl('path',{
+    appendMailEdge(layer,svgEl('path',{
       class:'orrery-comm-edge',
       d:curve.d,fill:'none',
       'stroke-opacity':(.58*life).toFixed(3),
       'data-a':pair.a,'data-b':pair.b,'data-life':life.toFixed(5),
-    }));
+    }),pair.a,pair.b,target===miniSvg);
   });
   markLiveSpawnEdges(target,liveLineage);
+  restoreEdgeFocus(layer,focused);
 }
 function refreshCommEdges(){
   const now=Date.now();
@@ -1516,6 +1597,7 @@ window.OrreryRail={openPlanetarium,closePlanetarium,
 
 recordMessages(OC.mailBacklog&&OC.mailBacklog());
 addExpandAffordance(miniExpand,{...MINI,width:28,height:28},false);
+installMiniZoom();
 installMiniGraphDivider();
 renderMini();
 new ResizeObserver(()=>{

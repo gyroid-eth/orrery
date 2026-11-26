@@ -19,8 +19,11 @@ SELECTED = "[...document.querySelectorAll('#orrery .mini-selection-ring')].map(e
 def mini_browser(tour_browser):
     client, evaluate = tour_browser
     evaluate("""(()=>{
+      // The second CDP worker can foreground another tab during a history poll.
+      Object.defineProperty(document,'hidden',{value:false});
       document.querySelectorAll('.flight-close').forEach(e=>e.click());
-      if(document.getElementById('orrery').hasAttribute('hidden'))document.getElementById('mailGraphBtn').click();
+      localStorage.setItem('oc-mini-mail-graph','1');
+      document.dispatchEvent(new CustomEvent('oc:prefs-changed',{detail:{keys:['oc-mini-mail-graph']}}));
       setMiniViewMode('orrery');
       const names=['Pilot','Helper','Watcher'];
       currentAgents=names.map(name=>({name,category:'agent',running:true,
@@ -359,6 +362,84 @@ def test_mini_graph_keeps_mail_pairs_by_default_and_can_use_only_recent_links(mi
     assert evaluate("setMailLinks('keep');mailLinksState()") == retained
 
 
+def test_graph_edge_mouse_and_keyboard_filter_mail_both_ways(mini_browser):
+    client, evaluate = mini_browser
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    point = evaluate("""(async()=>{
+      localStorage.setItem('oc-mini-graph-height','352');
+      document.dispatchEvent(new CustomEvent('oc:prefs-changed',{detail:{keys:['oc-mini-graph-height']}}));
+      const settings=document.getElementById('miniMailLinks');
+      const setMailLinks=value=>{settings.value=value;settings.dispatchEvent(new Event('change'));};
+      setMailLinks('recent');
+      const originalFetch=window.fetch;
+      window.loadedPairAgents=[];
+      const item=(id,sender,recipients,subject)=>({id,sender,recipients,subject,ts:Date.now()/1000-200+id-301,
+        thread_id:'shared-thread'});
+      const first=item(301,'Helper',['Watcher','Pilot'],'First direction');
+      const reverse=item(302,'Watcher',['Helper'],'Reverse direction');
+      const unrelated=item(303,'Pilot',['Helper','Watcher'],'Two recipients, different sender');
+      const copy=item(304,'Helper',[{name:'Watcher',kind:'cc'},'Pilot'],'Copied to Watcher');
+      window.fetch=(url,...args)=>{
+        if(url==='/telemetry/graph?days=1')return Promise.resolve(new Response(JSON.stringify({edges:[
+          {source:'Helper',target:'Watcher',count:3}
+        ]})));
+        if(typeof url==='string'&&url.startsWith('/telemetry/mail/recent?limit=100&agent=')){
+          const agent=new URL(url,location.href).searchParams.get('agent');
+          loadedPairAgents.push(agent);
+          return Promise.resolve(new Response(JSON.stringify({messages:agent==='Watcher'?[reverse]:[first,copy]})));
+        }
+        return originalFetch(url,...args);
+      };
+      window.edgeMail=messages=>document.dispatchEvent(new CustomEvent('oc:mail',{detail:{messages}}));
+      edgeMail([first,unrelated,{id:305,sender:'Pilot',recipient:'Watcher',subject:'Recent',ts:Date.now()/1000}]);
+      window.edgeChip=()=>document.querySelector('.mail-clear-filter span').textContent;
+      window.edgeContents=()=>document.querySelector('#mail .mailcards').textContent;
+      const graph=document.getElementById('orrery');
+      setMailLinks('keep');
+      for(let i=0;i<60&&!graph.querySelector('.orrery-history-edge');i++)await new Promise(r=>setTimeout(r,20));
+      const edge=graph.querySelector('.orrery-history-edge');
+      const length=edge.getTotalLength();
+      const matrix=edge.getScreenCTM();
+      for(const t of [.5,.4,.6,.3,.7]){
+        const p=edge.getPointAtLength(length*t).matrixTransform(matrix);
+        const q=edge.getPointAtLength(length*t+1).matrixTransform(matrix);
+        const step=Math.hypot(q.x-p.x,q.y-p.y);
+        const x=p.x-(q.y-p.y)*5/step,y=p.y+(q.x-p.x)*5/step;
+        const hit=document.elementFromPoint(x,y);
+        if(hit?.parentElement===edge.parentElement&&hit.classList.contains('orrery-mail-edge-hit'))return {x,y};
+      }
+      return null;
+    })()""")
+    assert point is not None
+    xy = point
+    client.call('Input.dispatchMouseEvent', type='mouseMoved', **xy)
+    assert evaluate("getComputedStyle(document.querySelector('.orrery-history-edge')).strokeOpacity") == '0.56'
+    client.call('Input.dispatchMouseEvent', type='mousePressed', button='left', clickCount=1, **xy)
+    client.call('Input.dispatchMouseEvent', type='mouseReleased', button='left', clickCount=1, **xy)
+    assert evaluate("edgeChip()") == 'Helper ↔ Watcher'
+    assert evaluate("loadedPairAgents.slice().sort()") == ['Helper', 'Watcher']
+    contents = evaluate("""(async()=>{
+      const complete=()=>['First direction','Reverse direction','Copied to Watcher'].every(s=>edgeContents().includes(s));
+      for(let i=0;i<60&&!complete();i++)await new Promise(r=>setTimeout(r,20));
+      return edgeContents();
+    })()""")
+    assert all(subject in contents for subject in ('First direction', 'Reverse direction', 'Copied to Watcher')), contents
+    assert 'Two recipients, different sender' not in contents
+    evaluate("document.dispatchEvent(new CustomEvent('oc:focus-agent',{detail:{name:'Pilot'}}))")
+    assert evaluate("edgeChip()") == 'Helper ↔ Watcher'
+    evaluate("document.querySelector('.mail-clear-filter').click()")
+    assert evaluate("document.querySelector('.mail-filter-summary').hidden&&edgeContents().includes('Two recipients, different sender')")
+
+    for kind, pair in [('spawn', 'Helper ↔ Pilot'), ('comm', 'Pilot ↔ Watcher')]:
+        evaluate(f"""document.querySelector('#orrery .orrery-{kind}-edge').parentElement.focus();
+          document.dispatchEvent(new CustomEvent('oc:agents',{{detail:{{agents:currentAgents}}}}))""")
+        assert evaluate(f"document.activeElement.firstElementChild?.classList.contains('orrery-{kind}-edge')")
+        client.call('Input.dispatchKeyEvent', type='keyDown', key='Enter', code='Enter', windowsVirtualKeyCode=13)
+        client.call('Input.dispatchKeyEvent', type='keyUp', key='Enter', code='Enter', windowsVirtualKeyCode=13)
+        assert evaluate('edgeChip()') == pair
+
+
 @pytest.mark.parametrize('mode', ['network', 'orrery'])
 def test_dense_mini_graph_keeps_names_readable_and_pans_the_whole_graph(mini_browser, mode):
     client, evaluate = mini_browser
@@ -395,6 +476,49 @@ def test_dense_mini_graph_keeps_names_readable_and_pans_the_whole_graph(mini_bro
     assert result['startVisible'] and result['reached'] and result['expandVisible'], result
     assert result['pan'] != [0, 0] and result['pan'] == result['preserved'], result
     assert result['keyboard'] == 0
+
+
+def test_dense_network_centers_focus_and_puts_frequent_mail_on_the_inner_ring(mini_browser):
+    client, evaluate = mini_browser
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    result = evaluate("""(async()=>{
+      setMailPaneWidth(380,mailPaneBounds());
+      const settings=document.getElementById('miniMailLinks');
+      settings.value='recent';settings.dispatchEvent(new Event('change'));
+      const peers=Array.from({length:15},(_,i)=>'Peer'+String(i).padStart(2,'0'));
+      currentAgents=['Pilot',...peers].map(name=>({name,provider:'openai'}));
+      OC.lineageParent.clear();
+      peers.forEach(name=>OC.lineageParent.set(name,'Pilot'));
+      document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      const originalFetch=window.fetch;
+      window.fetch=(url,...args)=>url==='/telemetry/graph?days=1'?
+        Promise.resolve(new Response(JSON.stringify({edges:[{source:'Pilot',target:'Peer14',count:50}]}))):
+        originalFetch(url,...args);
+      setMiniViewMode('network');
+      settings.value='keep';settings.dispatchEvent(new Event('change'));
+      const svg=document.getElementById('orrery');
+      for(let i=0;i<60&&!svg.querySelector('.orrery-history-edge');i++)await new Promise(r=>setTimeout(r,20));
+      if(!svg.querySelector('.orrery-history-edge'))throw new Error('Fixture Mail history did not load');
+      const hit=name=>svg.querySelector(`[data-agent="${name}"] .orrery-hit`);
+      const center=name=>{
+        const el=hit(name);
+        return [Number(el.getAttribute('cx')),Number(el.getAttribute('cy'))];
+      };
+      const [x,y]=center('Pilot'),box=svg.viewBox.baseVal;
+      const radius=name=>{
+        const [px,py]=center(name);
+        return Math.hypot(px-x,py-y);
+      };
+      const [out,into]=document.querySelectorAll('.mini-graph-zoom button');
+      const scale=()=>hit('Pilot').getScreenCTM().a;
+      const normal=scale();into.click();const enlarged=scale();out.click();
+      return {centered:x===box.width/2&&y===box.height/2,normal,enlarged,restored:scale(),
+        inner:radius('Peer14'),outer:radius('Peer10'),rings:new Set(peers.map(name=>Math.round(radius(name)))).size};
+    })()""")
+    assert result['centered'] and result['rings'] == 2, result
+    assert result['inner'] < result['outer'], result
+    assert result['enlarged'] > result['normal'] == result['restored'], result
 
 
 def graph_resize_metrics(evaluate):
