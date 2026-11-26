@@ -56,13 +56,18 @@ def page(row, **kwargs):
 @pytest.mark.parametrize("server,expected", [
     ("orrery-mail", True), ("agentstack", True), ("unrelated", False), ("orrery_mail", False),
 ])
-def test_native_mcp_file_chip_uses_only_an_explicit_orrery_call(tmp_path, log, server, expected):
+@pytest.mark.parametrize("filename,kind", [("comparison.png", "image"), ("report.md", "text")])
+def test_native_mcp_file_chip_uses_only_an_explicit_orrery_call(tmp_path, log, server, expected, filename, kind):
     path, row = log
-    image = tmp_path / "comparison.png"
-    Image.new("RGB", (32, 16), "teal").save(image)
+    shown = tmp_path / filename
+    if kind == "image":
+        Image.new("RGB", (32, 16), "teal").save(shown)
+    else:
+        shown.write_text("# Fixture report\n")
     # This file is outside all configured roots. It must be explicitly named
     # in the native call, even when a tool result mentions the same path.
     path.write_text(SHOW_FILES_TRANSCRIPT.read_text().replace("/fixture", str(tmp_path.resolve()))
+                    .replace("comparison.png", filename)
                     .replace('"ServerName":"orrery-mail"', f'"ServerName":"{server}"'))
     store = ReferenceStore()
     with history.open_reader(row) as reader:
@@ -70,7 +75,7 @@ def test_native_mcp_file_chip_uses_only_an_explicit_orrery_call(tmp_path, log, s
         store.decorate_all(row, reader, events)
     calls = [event for event in events if event["kind"] == "tool"]
     assert [event["step"]["tool"].split("__")[-1] for event in calls] == ["read_file", "show_files"]
-    assert [event["step"]["detail"] for event in calls] == ["notes.md", "comparison.png"]
+    assert [event["step"]["detail"] for event in calls] == ["notes.md", filename]
     assert all(event["step"]["status"] == "observed" for event in calls)
     assert "Sensitive result placeholder" not in json.dumps(events)
     assert all(not event.get("references") for event in events if event is not calls[1])
@@ -78,8 +83,12 @@ def test_native_mcp_file_chip_uses_only_an_explicit_orrery_call(tmp_path, log, s
     if expected:
         assert calls[1]["text"] == "mcp__orrery_mail__show_files"
         ref, = calls[1]["references"]
-        assert ref["label"] == "comparison.png"
-        assert store.read(ref["id"], row)["kind"] == "image"
+        assert ref["label"] == filename
+        for mobile in (False, True):
+            result = store.read(ref["id"], row, mobile=mobile)
+            assert result["kind"] == kind
+            if kind == "text":
+                assert result["text"] == "# Fixture report\n"
 
 
 def test_uses_existing_cursor_pages_and_keeps_content_boundaries(log):

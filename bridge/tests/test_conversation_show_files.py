@@ -1,5 +1,6 @@
 """ORRERY Mail's show_files call becomes preview chips, in each harness's recorded form."""
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -78,10 +79,50 @@ def test_at_most_24_paths():
     assert len(claude(value={'paths': [f'f{n}.md' for n in range(40)]})['paths']) == 24
 
 
-def test_a_shown_text_file_opens_only_inside_the_working_folder(tmp_path):
+def test_a_shown_absolute_text_file_opens_on_desktop_and_phone(tmp_path):
     (tmp_path / 'report.md').write_text('# Report\n')
     outside = tmp_path.parent / (tmp_path.name + '-outside.md')
     outside.write_text('# Elsewhere\n')
     store, row, event = setup(tmp_path, call('mcp__orrery_mail__show_files', {'paths': ['report.md', str(outside)]}))
-    assert [ref['label'] for ref in event['references']] == ['report.md']
+    assert [ref['label'] for ref in event['references']] == ['report.md', outside.name]
     assert store.read(event['references'][0]['id'], row)['text'] == '# Report\n'
+    ref = event['references'][1]['id']
+    for mobile in (False, True):
+        assert store.read(ref, row, mobile=mobile)['text'] == '# Elsewhere\n'
+
+
+@pytest.mark.parametrize('name', ['Read', 'SendUserFile', 'exec'])
+def test_other_calls_do_not_grant_external_text(tmp_path, name):
+    outside = tmp_path.parent / (tmp_path.name + '-outside.md')
+    outside.write_text('# Elsewhere\n')
+    if name == 'exec':
+        item = call(name, input='await tools.mcp__orrery_mail__show_files('
+                    + json.dumps({'paths': [str(outside)]}) + ');')
+    else:
+        item = call(name, {'file_path': str(outside), 'files': [str(outside)]})
+    _, _, event = setup(tmp_path, item)
+    assert not event.get('references')
+
+
+def test_show_files_keeps_symlink_type_and_permission_checks(tmp_path, monkeypatch):
+    outside = tmp_path.parent / (tmp_path.name + '-outside.md')
+    outside.write_text('# Elsewhere\n')
+    link = tmp_path / 'link.md'
+    link.symlink_to(outside)
+    unsupported = tmp_path / 'program.bin'
+    unsupported.write_bytes(b'\x00')
+    _, _, rejected = setup(tmp_path, call('mcp__orrery_mail__show_files',
+                                         {'paths': list(map(str, [link, unsupported]))}))
+    assert not rejected.get('references')
+
+    store, row, event = setup(tmp_path, call('mcp__orrery_mail__show_files', {'paths': [str(outside)]}))
+    original_open = os.open
+
+    def open_with_denial(path, *args, **kwargs):
+        if path == outside.name and kwargs.get('dir_fd') is not None:
+            raise PermissionError(path)
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, 'open', open_with_denial)
+    with pytest.raises(ValueError, match='preview_permission_denied'):
+        store.read(event['references'][0]['id'], row, mobile=True)
