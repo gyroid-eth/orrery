@@ -1,9 +1,5 @@
 # Moving ORRERY instructions to the user scope
 
-![The instruction migration plan shows the source and user file, then completes after confirmation](../images/consolidated/instruction-migration.png)
-
-This example uses sample instruction files to show the plan, the confirmation, and the result.
-
 [日本語](../instruction-migration.md)
 
 <a id="what-changes"></a>
@@ -47,6 +43,12 @@ The installer has up to four approval sites: settings merge, MCP entry, and the 
 Creating a new user file without changing existing files needs no confirmation. Rewriting an existing file or removing a source block requires confirmation.
 
 One interactive prompt asks whether to move instructions and remove known source blocks (`[Y/n]`; Enter removes), explaining shared-repository effects and full-file backup retention. Explicit `--assume-yes` removes only known untracked sources; tracked or unknown Git status remains with a warning. Edited, unknown or malformed blocks stay for a local diff and manual marker-only cleanup. There is no force override. The user target is verified before any source removal.
+
+Review the plan and run the command shown in `apply_argv` in your terminal. If you append `--json`, a completed migration reports the stage and target file.
+
+```json
+{"stage": "complete", "target_path": "<user-config>/CLAUDE.md"}
+```
 
 ```sh
 agentstack-claude-setup --remove-legacy-block --path /work/repo/CLAUDE.md --dry-run

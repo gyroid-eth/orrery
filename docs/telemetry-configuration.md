@@ -1,6 +1,6 @@
 # 設定
 
-![端末で設定した demo-vault が New agent の作業フォルダーに選ばれ、配下のフォルダーが開く](images/consolidated/telemetry-spawn-directories.png)
+![New agent のフォルダー選択で demo-vault と配下のフォルダーを表示する](images/consolidated/telemetry-spawn-directories.png)
 
 サンプル設定では、`AGENTSTACK_SPAWN_DIRS` の先頭に置いた `demo-vault` が New agent の既定の作業フォルダーに選ばれています。
 

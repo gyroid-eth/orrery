@@ -1,6 +1,6 @@
 # Configuration
 
-![The configured demo-vault folder is selected in New agent and its subfolders appear in the picker](../images/consolidated/telemetry-spawn-directories.png)
+![New agent folder picker showing demo-vault and its subfolders](../images/consolidated/telemetry-spawn-directories.png)
 
 In this example, `demo-vault` is first in `AGENTSTACK_SPAWN_DIRS` and appears as the default folder in New agent.
 

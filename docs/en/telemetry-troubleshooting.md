@@ -1,9 +1,5 @@
 # Troubleshooting
 
-![agentstack-doctor --report shows the missing dashboard log and environment details](../images/consolidated/telemetry-troubleshooting.png)
-
-This isolated example has no dashboard log. Use `agentstack-doctor --report` to check the error and collect environment details.
-
 > 日本語版: [troubleshooting.md](../telemetry-troubleshooting.md)
 
 [Previous: Configuration](telemetry-configuration.md) · [Back to README](../../README.en.md) · [Next: Third-party components](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/third-party.md)
@@ -26,6 +22,12 @@ The dashboard treats a correct JSON response from `/api/version` as canonical ev
 ```
 
 Paste the output verbatim from `--- copy from here ---` through `--- copy to here ---`.
+
+If the dashboard log is missing, the doctor prints a line like this above the report.
+
+```text
+missing: dashboard log <install-dir>/runtime/dashboard.log
+```
 
 **Every defect found so far came from a difference between the reporter's environment and the development machine**, and locating that difference took several exchanges each time. This output contains only the questions actually asked in those exchanges.
 

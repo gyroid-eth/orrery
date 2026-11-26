@@ -1,9 +1,5 @@
 # ORRERY ChatGPT MCP（読み取り専用・任意導入）
 
-![サンプルの接続設定と MCP の確認結果。読み取り専用の 3 ツールが並ぶ](images/consolidated/chatgpt-mcp.png)
-
-合成の接続先で `pair` と `check` を実行し、クライアントからツール一覧を取得した例です。
-
 upstream Issue #395 の第1段階です。公開ツールは `orrery_status`、`orrery_list_agents`、`orrery_get_agent` の3個だけです。spawn・追加指示・Mail送信・OAuth・常駐化は実装しません。通常のinstaller・サービスの起動設定・UI・hook・Mail操作は変えません。Dashboardの呼び出しは `GET /api/version`、freshの `GET /api/agents`、legacyの `GET /api/agents?days=30` だけです。
 
 ## 互換性と公開範囲
@@ -112,6 +108,10 @@ try:
                                "message_enabled_on_server": False}
     denied = call("tools/call", {"name": "orrery_message_commit", "arguments": {}}, 4)["result"]
     assert denied["isError"] is True and denied["structuredContent"]["error"]["code"] == "unknown_tool"
+    agents = call("tools/call", {"name": "orrery_list_agents", "arguments": {}}, 5)["result"]
+    assert agents["isError"] is False
+    print("Agents in scope:", [(agent["name"], agent["running"])
+                                for agent in agents["structuredContent"]["agents"]])
     print("Read-only checks passed. Exposed scope:", json.dumps(value["scope"], ensure_ascii=False))
 except Exception as error:
     raise SystemExit("Connection check failed: " + type(error).__name__) from None

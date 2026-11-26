@@ -1,9 +1,5 @@
 # 稼働中の ORRERY Mail service を更新する
 
-![ORRERY Mail の更新計画で旧版と更新先を確認し、切り替え後の結果を表示する端末](images/consolidated/agentstack-mail-update.png)
-
-隔離した例。計画を表示してから更新を実行すると、候補の確認と切り替えの結果が出ます。
-
 > English version: [agentstack-mail-update.en.md](en/agentstack-mail-update.md)
 
 この文書は、すでに traffic を捌いている machine へ `agentstack_mail` の新しい
@@ -73,7 +69,7 @@ service root を `AGENTSTACK_MAIL_DIR` として記録しますが、installer �
 
 ```bash
 ./scripts/install.sh --print-mail-plan         # Mail をどうするかを 1 行で（読むだけ）
-./scripts/install.sh --dry-run                 # 計画全体を表示する
+./scripts/install.sh --dry-run --update-mail   # 計画全体を表示する
 ./scripts/install.sh --update-mail             # 差し替える（できなければ exit 1）
 AGENTSTACK_MAIL_UPDATE=auto ./scripts/install.sh   # 安全に差し替えられるときだけ（opt-in）
 ./scripts/install.sh                           # 差し替えない（既定 keep、--keep-mail と同じ）

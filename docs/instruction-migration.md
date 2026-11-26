@@ -1,9 +1,5 @@
 # 利用者単位の ORRERY 指示への移行
 
-![指示の移行計画に移行元と利用者単位のファイルが出て、確認後に完了と表示される](images/consolidated/instruction-migration.png)
-
-サンプルの指示ファイルで、計画表示、利用者の確認、移行完了の順に進めた例です。
-
 [English](en/instruction-migration.md)
 
 <a id="what-changes"></a>
@@ -47,6 +43,12 @@ installer には最大4つの確認箇所（settings merge、MCP entry、Codex �
 既存 file の内容を変えず、新しい利用者 file を作るだけなら同意は不要です。既存 file の書換え・元 block の削除には確認が必要です。
 
 対話では「利用者側へ移し、既知の元 block を消すか」を一度確認します（`[Y/n]`、Enter は消す）。共有 repo の影響と全文 backup の保持を説明します。明示 `--assume-yes` でも、Git 追跡中・Git 状態不明の source は消さず警告します。編集済み・版不明・壊れた marker は保持し、利用者が local diff を確認して marker 間だけを片付けます。自動 force はありません。利用者側への設置を検証してから元 block を消します。
+
+計画を読み、`apply_argv` に表示されたコマンドを端末で実行します。末尾に `--json` を付けると、移行が完了したときに段階と移行先が表示されます。
+
+```json
+{"stage": "complete", "target_path": "<user-config>/CLAUDE.md"}
+```
 
 ```sh
 agentstack-claude-setup --remove-legacy-block --path /work/repo/CLAUDE.md --dry-run

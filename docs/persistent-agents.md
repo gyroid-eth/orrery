@@ -1,9 +1,5 @@
 # 常駐 agent の enrollment と起動
 
-![常駐 agent のサンプル profile が起動前確認を通過し、起動後に終了コード 0 で端末に戻る](images/consolidated/persistent-agent-lifecycle.gif)
-
-合成の provider を使った起動例です。profile の確認、起動、プロセス終了の順に表示しています。
-
 > English version: [persistent-agents.en.md](en/persistent-agents.md)
 
 [Launcher と identity](launchers.md) · [トラブルシューティング](telemetry-troubleshooting.md) · [README に戻る](../README.md)
@@ -350,6 +346,12 @@ exec "$HOME/.agentstack/bin/agentstack-persistent" run \
 ```
 
 `inspect` は profile、connection、Mail UUID、数値 row、name、credential generation / fingerprint を照合します。`run` も同じ検証を繰り返し、profile ごとの instance lock を取ってから起動します。同じ profile の二重起動は拒否されます。
+
+対話型の profile が確認を通ると、`inspect` の出力に次の項目が含まれます。
+
+```json
+{"ready": true, "lifecycle": "persistent", "interaction": "interactive"}
+```
 
 launcher は enrollment を自動実行しません。未登録、local credential 不在、authority / row 不一致なら docs path と固定 reason を表示して停止します。
 

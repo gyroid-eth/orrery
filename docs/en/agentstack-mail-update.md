@@ -1,9 +1,5 @@
 # Updating a live ORRERY Mail service
 
-![The Mail update plan shows the running build and candidate, then the terminal reports the switch](../images/consolidated/agentstack-mail-update.png)
-
-In this isolated example, the terminal shows the plan first, then reports candidate verification and the completed switch.
-
 > 日本語版: [agentstack-mail-update.md](../agentstack-mail-update.md)
 
 This document covers shipping a new build of `agentstack_mail` onto a machine
@@ -81,7 +77,7 @@ two paths inside the installer.
 
 ```bash
 ./scripts/install.sh --print-mail-plan         # what would happen to Mail, one line (reads only)
-./scripts/install.sh --dry-run                 # show the whole plan
+./scripts/install.sh --dry-run --update-mail   # show the whole plan
 ./scripts/install.sh --update-mail             # switch (exit 1 if it cannot)
 AGENTSTACK_MAIL_UPDATE=auto ./scripts/install.sh   # switch only when it safely can (opt-in)
 ./scripts/install.sh                           # never switch (default keep, same as --keep-mail)

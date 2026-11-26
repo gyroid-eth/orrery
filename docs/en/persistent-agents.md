@@ -1,9 +1,5 @@
 # Persistent-agent enrollment and startup
 
-![Inspect a sample persistent-agent profile, run it, and return to the terminal with exit status 0](../images/consolidated/persistent-agent-lifecycle.gif)
-
-This example uses a fixture provider to show the profile check, launch, and process exit.
-
 > 日本語版: [persistent-agents.md](../persistent-agents.md)
 
 [Launchers and identity](launchers.md) · [Troubleshooting](telemetry-troubleshooting.md) · [Back to README](../../README.en.md)
@@ -353,6 +349,12 @@ exec "$HOME/.agentstack/bin/agentstack-persistent" run \
 ```
 
 `inspect` matches the profile, connection, Mail UUID, numeric row, name, and credential generation/fingerprint. `run` repeats the same validation and takes a per-profile instance lock before startup. A second instance of the same profile is rejected.
+
+For an interactive profile that passes the checks, `inspect` includes these fields.
+
+```json
+{"ready": true, "lifecycle": "persistent", "interaction": "interactive"}
+```
 
 The launcher never enrolls automatically. It stops with a fixed reason and documentation path if the identity is not enrolled, the local credential is missing, or the authority/row does not match.
 

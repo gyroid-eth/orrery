@@ -1,9 +1,5 @@
 # Optional ORRERY MCP adapter (read only)
 
-![Sample connection settings, read-only check result, and the three MCP tools](../images/consolidated/chatgpt-mcp.png)
-
-This example uses a fixture endpoint. Run `pair` and `check`, then confirm the tool list from the client.
-
 Phase 1 of upstream Issue #395 exposes exactly orrery_status, orrery_list_agents and orrery_get_agent. There is no spawning, messaging, OAuth or service installation. The regular installer, service startup configuration, UI, hooks and Mail operations are unchanged. Dashboard calls are limited to GET /api/version, fresh GET /api/agents, and legacy GET /api/agents?days=30.
 
 ## Compatibility and exposed scope
@@ -112,6 +108,10 @@ try:
                                "message_enabled_on_server": False}
     denied = call("tools/call", {"name": "orrery_message_commit", "arguments": {}}, 4)["result"]
     assert denied["isError"] is True and denied["structuredContent"]["error"]["code"] == "unknown_tool"
+    agents = call("tools/call", {"name": "orrery_list_agents", "arguments": {}}, 5)["result"]
+    assert agents["isError"] is False
+    print("Agents in scope:", [(agent["name"], agent["running"])
+                                for agent in agents["structuredContent"]["agents"]])
     print("Read-only checks passed. Exposed scope:", json.dumps(value["scope"], ensure_ascii=False))
 except Exception as error:
     raise SystemExit("Connection check failed: " + type(error).__name__) from None

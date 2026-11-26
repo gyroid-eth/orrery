@@ -1,9 +1,5 @@
 # トラブルシューティング
 
-![dashboard のログが見つからない環境で agentstack-doctor --report が診断と環境情報を出す](images/consolidated/telemetry-troubleshooting.png)
-
-隔離した環境で dashboard のログが見つからない例です。`agentstack-doctor --report` でエラーと報告用の環境情報を確認します。
-
 > English version: [troubleshooting.en.md](en/telemetry-troubleshooting.md)
 
 [前: 設定](telemetry-configuration.md) · [README に戻る](../README.md) · [次: 第三者コンポーネント](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/third-party.md)
@@ -26,6 +22,12 @@ dashboard は `/api/version` の正しい JSON response を「実際に配信中
 ```
 
 `--- copy from here ---` から `--- copy to here ---` までをそのまま貼ってください。
+
+dashboard のログが見つからないときは、報告用の出力より前に次のように表示されます。
+
+```text
+missing: dashboard log <install-dir>/runtime/dashboard.log
+```
 
 これまでに見つかった不具合は**すべて「報告者の環境と開発機の違い」**から出ており、その差がどこにあるかを突き止めるまでに毎回何往復もかかりました。この出力は、その往復で実際に聞いた項目だけを並べたものです。
 
