@@ -585,20 +585,29 @@
   .agent-detail-switch.unknown{justify-content:center}
   .agent-detail-switch.unknown::before{width:8px;height:1px}
   #mailRail .agent-detail[data-mini-dock]{
+    --agent-detail-row-height:24px;
     position:static;z-index:auto;flex:0 1 auto;width:auto;min-height:0;max-height:35vh;
-    margin:2px 16px 0;padding:7px 7px 10px;border:0;border-bottom:1px solid var(--hair);border-radius:0;
+    margin:2px 16px 0;padding:7px 7px 10px;border:0;border-radius:0;
     background:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;
     font:12px/1.45 var(--rail-sans);font-variant-numeric:tabular-nums;
   }
-  .agent-detail[data-mini-dock] .agent-detail-name{color:var(--ink);font:600 12px/1.45 var(--rail-sans)}
-  .agent-detail[data-mini-dock] .agent-detail-identity{margin-top:3px}
-  .agent-detail[data-mini-dock] .agent-detail-meta{margin-top:6px;gap:3px}
+  .agent-detail[data-mini-dock] .agent-detail-name{
+    display:grid;align-content:center;min-height:var(--agent-detail-row-height);
+    color:var(--ink);font:inherit;font-weight:600;
+  }
+  .agent-detail[data-mini-dock] :is(.agent-detail-identity,.agent-detail-runtime,.agent-detail-meta){
+    margin-top:0;row-gap:0;
+  }
+  .agent-detail[data-mini-dock] .agent-detail-item{min-height:var(--agent-detail-row-height);align-items:center}
+  .agent-detail[data-mini-dock] .agent-detail-icon{margin-top:0}
+  .agent-detail[data-mini-dock] :is(.agent-detail-model,.agent-detail-context strong,.agent-detail-modes .current){font-weight:400}
   .agent-detail[data-mini-dock] .agent-detail-permissions{
-    display:grid;grid-template-columns:minmax(0,1fr);gap:0;margin-top:6px;padding:0;
+    display:grid;grid-template-columns:minmax(0,1fr);gap:0;padding:0;
     border:0;border-radius:0;background:transparent;
   }
-  .agent-detail[data-mini-dock] .agent-detail-permissions .agent-detail-item{
-    padding:4px 0;min-height:0;border:0;border-top:1px solid var(--hair);
+  .agent-detail[data-mini-dock] .agent-detail-permissions .agent-detail-item{padding:0;border:0}
+  .agent-detail[data-mini-dock] > :is(.agent-detail-permissions,.agent-detail-meta){
+    margin-top:4px;padding-top:4px;border-top:1px solid var(--hair);
   }
   .agent-permission-confirm{
     width:min(390px,calc(100vw - 24px));margin:auto;padding:16px;border:1px solid var(--hair);border-radius:10px;
@@ -2313,18 +2322,13 @@
             "value": "var(--ink-dim)"
           },
           {
-            "property": "border-bottom",
-            "selector": "#mailRail .agent-detail[data-mini-dock]",
-            "value": "1px solid var(--hair)"
-          },
-          {
             "property": "color",
             "selector": ".agent-detail[data-mini-dock] .agent-detail-name",
             "value": "var(--ink)"
           },
           {
             "property": "border-top",
-            "selector": ".agent-detail[data-mini-dock] .agent-detail-permissions .agent-detail-item",
+            "selector": ".agent-detail[data-mini-dock] > :is(.agent-detail-permissions,.agent-detail-meta)",
             "value": "1px solid var(--hair)"
           },
           {
@@ -4266,7 +4270,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "c552cb449dab3c401fd5860de7b383f454aaf722732165f23fb29c05e485aa51",
+        "digest": "cf1b5fad0fef990027ed2c5efa6e1b09cdd370d352c08e55c083d08ec7f9c298",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4359,7 +4363,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "ddb855f79c0b02be6bfc189793e7c4f3fbe98dd4c4f633adc5114a55ee2074d8",
+        "digest": "1196eebe155b4d247d603a806395ea0820c400135cd5fa886dce981360ef76e1",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -4388,9 +4392,9 @@
       }
     }
   },
-  "inventory_digest": "8d899ae95a6ad9e36b2b9cb8123ef53520b5090526d3d30eb53705602fd075a9",
+  "inventory_digest": "dd2058548f87b1317109f5f8e46f3329303a0c27627fd93829216cd0415d097d",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "164915cac75a79758c440d46c33e5bad472a0e33d3c15d40981838b556454a95",
+  "source_digest": "91b9af6fb734b740e96c8e7e0804cb542c1e55113703799bc99aafc2915cb3f1",
   "surface": "cockpit",
   "version": 1
 }
