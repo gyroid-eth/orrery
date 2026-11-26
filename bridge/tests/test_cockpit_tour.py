@@ -155,13 +155,17 @@ def prompt(connected=True, pane=True, text='Hello', guarded=False):
     source = (BRIDGE / 'cockpit.html').read_text()
     # sendPrompt fixes its target pane when it starts; take those helpers as they are.
     fn = re.search(r'function captureComposerTarget\([^)]*\)\{.*?(?=\n(?:async )?function sendInterrupt)', source, re.S).group()
-    return node("const events=[];const activeId='pane';const socket={};"
+    # Load the same browser script that supplies recipientPrefix to sendPrompt.
+    return node("globalThis.window={};"
+                f"require({json.dumps(str(BRIDGE / 'prompt_recipients.js'))});"
+                "const {OrreryPromptRecipients}=window;"
+                "const events=[];const activeId='pane';const socket={};"
                 f"const promptInput={{value:{json.dumps(text)},"
                 "getBoundingClientRect(){return {top:0,right:120,width:120};}};"
                 f"const panes=new Map({json.dumps([['pane', {'session': 'Test', 'meta': {}}]] if pane else [])});"
                 "const sessionGroups=new Map(),promptRecipientPins=new Map();"
                 "const promptFiles={entries:[],clear(){}};"
-                "const promptRecipients={names:[],close(){},set(){}};"
+                "const promptRecipients={names:[],visibility:'visible',close(){},set(){}};"
                 "const promptCard={refresh(){}};const targetProgram=()=> 'claude';"
                 "function composerVocabulary(){return {program:'claude'};}"
                 # Only the tour step counts here; the receipt events are for the Reader.
@@ -275,8 +279,11 @@ def tour_browser():
 def test_dom_map_escape_and_settings_reopen_keep_progress(tour_browser):
     _, evaluate = tour_browser
     result = evaluate("""(()=>{
+      const flight=OrreryTour.firstFlight;
+      flight.reset();
+      const start=()=>flight.el.querySelector('li[data-step="start"]');
       document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}));
-      const checked=document.querySelector('[data-step="start"]').classList.contains('done');
+      const checked=start().classList.contains('done');
       document.querySelector('.flight-guide .flight-close').click();
       const closed=document.querySelector('.flight-guide').hidden;
       document.getElementById('firstFlightBtn').click();
@@ -284,7 +291,7 @@ def test_dom_map_escape_and_settings_reopen_keep_progress(tour_browser):
       const shown=!document.querySelector('.flight-map').hidden&&document.querySelector('.flight-guide').hidden;
       document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
       return {checked,closed,shown,restored:!document.querySelector('.flight-guide').hidden,
-        retained:document.querySelector('[data-step="start"]').classList.contains('done'),
+        retained:start().classList.contains('done'),
         mapClosed:document.querySelector('.flight-map').hidden};
     })()""")
     assert all(result.values()), result
@@ -788,7 +795,6 @@ def test_dom_checklist_pops_out_to_its_own_window_and_comes_back(tour_browser):
         time.sleep(.1)
     assert popup, 'no tour window opened'
     try:
-        assert evaluate("OrreryTour.firstFlight.el.hidden") is True
         from tools.theme_axis_browser_test import _WebSocket
         other = _WebSocket(popup['webSocketDebuggerUrl'])
         other.call('Runtime.enable')
@@ -799,6 +805,11 @@ def test_dom_checklist_pops_out_to_its_own_window_and_comes_back(tour_browser):
             if in_popup("Boolean(window.OrreryTour&&OrreryTour.state)"):
                 break
             time.sleep(.1)
+        for _ in range(30):
+            if evaluate("OrreryTour.firstFlight.el.hidden"):
+                break
+            time.sleep(.1)
+        assert evaluate("OrreryTour.firstFlight.el.hidden") is True
         evaluate("document.dispatchEvent(new CustomEvent('oc:tour-action',{detail:{id:'start'}}))")
         for _ in range(30):
             if in_popup("OrreryTour.state.done.has('start')"):
