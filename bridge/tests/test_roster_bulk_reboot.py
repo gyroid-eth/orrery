@@ -57,6 +57,7 @@ def roster(request):
         pytest.skip('set ORRERY_CDP_URL to an existing test browser')
     live = [ACTIVE, PERSISTENT, CONVERSATION, TOP, TOP_DIRECT]
     state = {'trace': [], 'checks': [], 'stop_checks': [], 'failures': {}, 'retired': [],
+             'finished_shell_present': True,
              'api': getattr(request, 'param', 45)}
     history = [STOPPED, RESUMABLE, TOP_RESUMABLE, RETIRED_CHILD, RETIRED_BY_CATEGORY, RETIRED_BY_FLAG]
 
@@ -84,7 +85,10 @@ def roster(request):
                         state['trace'].append(('history', row['category']))
                         self.answer({'agents': [row, *history]})
                         return
-                    self.answer({'agents': [*live, *history]})
+                    rows = history if state['finished_shell_present'] else [
+                        row for row in history if row['name'] != STOPPED['name']
+                    ]
+                    self.answer({'agents': [*live, *rows]})
                     return
                 status, rows = state['checks'].pop(0) if state['checks'] else (200, live)
                 state['trace'].append(('roster', status, [row['category'] for row in rows]))
@@ -630,6 +634,32 @@ def test_confirmed_bulk_exit_marks_each_agent_until_disappearance_or_failure(ros
     assert js("pendingAgentExits.size===0&&!stageEl.querySelector('.terminal-action-notice')")
 
 
+def test_bulk_exit_keeps_both_dust_sources_until_the_finished_shell_disappears(roster):
+    js, wait, state = roster
+    js.client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'no-preference'},
+    ])
+    js("""
+      Object.defineProperty(document,'hidden',{value:false});
+      if(document.getElementById('orrery').hasAttribute('hidden'))document.getElementById('mailGraphBtn').click();
+      setMiniViewMode('orrery');
+      const nextFrame=window.requestAnimationFrame;
+      window.requestAnimationFrame=callback=>callback.name==='animateDust'?0:nextFrame(callback);
+      tiles.get('QuartzFixture').click();rosterBulkExit.click();rosterBulkExit.click();
+    """)
+    wait("!rosterSelectMode&&pendingAgentExits.get('QuartzFixture')?.accepted")
+    js('pollAgents()')
+    assert js("""pendingAgentAction('QuartzFixture')==='Exiting'&&tiles.has('QuartzFixture')&&
+      !!document.querySelector('#orrery [data-agent=QuartzFixture]')&&!document.querySelector('canvas.exit-dust')""")
+
+    state['finished_shell_present'] = False
+    js('pollAgents()')
+    assert js("""!pendingAgentExits.has('QuartzFixture')&&!tiles.has('QuartzFixture')&&
+      !document.querySelector('#orrery [data-agent=QuartzFixture]')""")
+    assert js("""[...document.querySelectorAll('canvas.exit-dust')].map(
+      canvas=>canvas.getBoundingClientRect().right<innerWidth/2)""") == [True, False]
+
+
 @pytest.mark.parametrize("response", ['refused', 'cancelled', 'accepted'])
 def test_embedded_exit_updates_the_parent_without_consuming_its_response(roster, response):
     js, wait, _state = roster
@@ -684,8 +714,11 @@ def test_exit_dust_waits_for_success_and_departure_and_releases_the_tab(
       const frameExit=observeNetworkExits(exitFrame,()=>new Promise(resolve=>{window.resolveExit=resolve;}));
       frameExit('/api/exit',{method:'POST',body:JSON.stringify({session:'CopperFixture'})});
       const originalDustFetch=window.fetch;
+      window.exitFixtureDeparted=false;
       window.fetch=(url,opts)=>url==='/telemetry/agents?scope=live'?
-        Promise.resolve(new Response(JSON.stringify({agents:liveRosterAgents.filter(a=>a.name!=='CopperFixture')}))):
+        Promise.resolve(new Response(JSON.stringify({
+          agents:liveRosterAgents.filter(a=>!exitFixtureDeparted||a.name!=='CopperFixture'),
+        }))):
         originalDustFetch(url,opts);
       const previousFrame=window.requestAnimationFrame;
       window.requestAnimationFrame=callback=>{
@@ -697,6 +730,7 @@ def test_exit_dust_waits_for_success_and_departure_and_releases_the_tab(
     assert js("document.querySelector('#orrery [data-agent=CopperFixture] .orrery-caption-action').textContent==='Exiting…'")
     if depart_first:
         js("""
+          exitFixtureDeparted=true;
           handle({type:'status',state:'closed',session:'CopperFixture',sessionGone:true,incarnation:'old'});
           pollAgents();
         """)
@@ -709,7 +743,7 @@ def test_exit_dust_waits_for_success_and_departure_and_releases_the_tab(
     if not depart_first:
         wait("pendingAgentExits.get('CopperFixture')?.accepted")
         assert js("tiles.has('CopperFixture')&&sessionGroups.has('CopperFixture')&&!document.querySelector('canvas.exit-dust')")
-        js("pollAgents()")
+        js("exitFixtureDeparted=true;pollAgents()")
     wait("!pendingAgentExits.has('CopperFixture')&&!tiles.has('CopperFixture')")
     if not accepted:
         assert js("toastEl.textContent.includes('Exit refused')&&!document.querySelector('canvas.exit-dust')")
