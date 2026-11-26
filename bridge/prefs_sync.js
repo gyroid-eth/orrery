@@ -21,7 +21,7 @@
   'use strict';
   var ENDPOINT='/telemetry/prefs';
   var POLL_MS=4000;
-  var SYNC_RE=/^(oc-(term-|mini-|split-|pinned-)|orrery\.(color-theme|spawn-advanced)|orrery\.demo\.shared\.v1$|agentstack\.theme-profile\.v1\.state$|agentdash\.(netparams|netctl|holdMs))/;
+  var SYNC_RE=/^(oc-(term-|mini-|split-|pinned-)|oc-mail-(view|layout-v1)$|orrery\.(color-theme|spawn-advanced)|orrery\.demo\.shared\.v1$|agentstack\.theme-profile\.v1\.state$|agentdash\.(netparams|netctl|holdMs))/;
   var HISTORY_RE=/history/i;
   function synced(key){return typeof key==='string'&&SYNC_RE.test(key)&&!HISTORY_RE.test(key);}
 
@@ -98,6 +98,13 @@
      of a few hundred bytes costs less than a frame; without it every reader
      would need to become asynchronous. */
   request('GET',undefined,true,function(data){applyRemote(data,false);});
+  // The backend migrates shared state once. Local-only windows also need to
+  // upgrade when opened without a preference service.
+  if(store.getItem('oc-mail-layout-v1')!=='1'){
+    rawSet.call(store,'oc-mail-view','timeline');
+    rawSet.call(store,'oc-mini-mail-graph','1');
+    rawSet.call(store,'oc-mail-layout-v1','1');
+  }
 
   function poll(){
     if(document.hidden)return;

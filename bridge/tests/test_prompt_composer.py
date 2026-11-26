@@ -261,6 +261,7 @@ def test_attachment_drop_remove_and_delivery_per_cli(cockpit, claude_status):
         transfer.items.add(new File(['Fixture data'],'notes.txt',{type:'text/plain'}));
         document.querySelector('.promptbar').dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));
       };
+      hostPlatform={host:'wsl',file_paste:false};
       dropFile();""")
     assert js("document.querySelector('.prompt-file-name').textContent") == 'notes.txt'
     js("document.querySelector('.prompt-file-remove').click()")
@@ -295,11 +296,90 @@ def test_attachment_drop_remove_and_delivery_per_cli(cockpit, claude_status):
         assert js("toastEl.textContent.includes('Delivery unconfirmed for QuietCopernicus')")
 
 
+def test_native_attachments_send_the_workspace_copy_or_disclose_the_original_path(cockpit):
+    js, wait, _ = recipients(cockpit)
+    js("""window.uploads=[];
+      const base=fetch;
+      window.fetch=(url,options)=>{
+        if(!String(url).includes('/telemetry/prompt-attachment'))return base(url,options);
+        const entry=JSON.parse(options.body);
+        uploads.push(entry);
+        return Promise.resolve(Response.json(entry.sourcePath.endsWith('.mov')?
+          {original:true,path:entry.sourcePath}:{path:'./.orrery-input-images/'+'a'.repeat(32)+'.png'}));
+      };
+      promptFiles.addPaths(['/fixture/Desktop/Screenshot.png','/fixture/Big movie.mov']);
+      promptInput.value='Compare these';
+      sendPrompt();""")
+    wait('!promptBusy')
+    assert js("uploads.map(({kind,sourcePath})=>[kind,sourcePath])") == [
+        ['path', '/fixture/Desktop/Screenshot.png'], ['path', '/fixture/Big movie.mov'],
+    ]
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.data)") == [
+        "Compare these\n\n./.orrery-input-images/" + "a" * 32 + ".png\n[file: '/fixture/Big movie.mov']",
+    ]
+    assert js("toastEl.textContent.includes('Original file path sent (over 50 MiB)')")
+
+
+@pytest.mark.parametrize('shell', ['old-mac-app', 'new-mac-app', 'wsl-browser'])
+def test_attachment_picker_uses_the_browser_file_input(cockpit, shell, tmp_path):
+    js, wait, client, _, _ = cockpit
+    if shell.endswith('-app'):
+        client.call('Page.addScriptToEvaluateOnNewDocument', source=(
+            "window.nativePickerCalls=[];window.__TAURI__={core:{invoke:async cmd=>{"
+            "if(cmd!=='pick_attachment_paths')throw Error('Fixture IPC');nativePickerCalls.push(cmd);"
+            + ("throw Error('Unknown command');" if shell=='old-mac-app' else "return ['/fixture/Desktop/Notes.txt'];")
+            + "}}};"))
+        client.call('Page.reload', ignoreCache=True)
+        wait("Boolean(window.nativePickerCalls)&&typeof conversationView!=='undefined'&&typeof createPane==='function'")
+        js("clearTimeout(reconnectTimer);scheduleReconnect=()=>{}")
+    js, wait, client = recipients(cockpit)
+    js("""window.uploads=[];window.opens=0;
+      const input=document.getElementById('promptFilePicker');
+      input.click=()=>{opens++};
+      const base=fetch;
+      window.fetch=(url,options)=>{
+        if(url!=='/telemetry/prompt-attachment')return base(url,options);
+        uploads.push(JSON.parse(options.body));
+        return Promise.resolve(Response.json({path:'./.orrery-input-files/'+'a'.repeat(32)+'.txt'}));
+      };
+      hostPlatform={host:""" + json.dumps('wsl' if shell=='wsl-browser' else 'mac') + """,file_paste:false};
+      document.getElementById('promptClip').click();""")
+    assert js('opens') == 1
+    assert js('window.nativePickerCalls||[]') == []
+    source = tmp_path / 'Desktop' / 'Notes.txt'
+    source.parent.mkdir()
+    source.write_text('Browser-readable bytes')
+    document = client.call('DOM.getDocument')
+    selected = client.call('DOM.querySelector', nodeId=document['root']['nodeId'], selector='#promptFilePicker')
+    client.call('DOM.setFileInputFiles', nodeId=selected['nodeId'], files=[str(source)])
+    wait("promptFiles.entries.length===1")
+    js("sendPrompt()")
+    wait("!promptBusy&&uploads.length===1")
+    assert js("uploads.map(({kind,sourcePath,data})=>[kind,sourcePath??null,atob(data)])") == [
+        ['file', None, 'Browser-readable bytes']]
+    assert js("packets.some(packet=>packet.type==='submit-prompt'&&packet.data.includes('.orrery-input-files'))")
+
+
+def test_attachment_refusal_keeps_the_draft_and_explains_the_workspace_issue(cockpit):
+    js, wait, _ = recipients(cockpit)
+    js("""const base=fetch;
+      window.fetch=(url,options)=>url==='/telemetry/prompt-attachment'?
+        Promise.resolve(Response.json({error:'attachment_workspace_unwritable'},{status:422})):
+        base(url,options);
+      promptFiles.add([new File(['Fixture data'],'notes.txt')]);
+      promptInput.value='Keep this draft';
+      sendPrompt();""")
+    wait("!promptBusy&&toastEl.textContent.includes('Check its permissions')")
+    assert js("promptInput.value==='Keep this draft'&&promptFiles.entries.length===1")
+    assert not js("packets.some(packet=>packet.type==='submit-prompt')")
+
+
 @pytest.mark.parametrize('route, program', [
     ('browser-files', 'claude-code'), ('mac-app', 'claude-code'),
-    ('mac-http', 'claude-code'), ('wsl-http', 'claude-code'),
+    ('mac-http', 'claude-code'), ('mac-old-files', 'claude-code'),
+    ('mac-new-files', 'claude-code'),
     ('browser-files', 'codex'), ('browser-files', 'dsh'),
-    ('browser-files', 'hermes'), ('wsl-http', 'agy'),
+    ('browser-files', 'hermes'), ('browser-files', 'agy'),
 ])
 def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, route, program):
     from test_conversation_input_images import png
@@ -325,8 +405,9 @@ def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, rout
         uploads.push(JSON.parse(options.body));
         return Promise.resolve(Response.json({path:'./.orrery-input-images/'+'a'.repeat(32)+'.png'}));
       };
-      if(pasteRoute==='mac-app')window.__TAURI__={core:{invoke:(cmd,args)=>{
-        reads.push([cmd,args.attachments]);return clipboardReply();
+      if(['mac-app','mac-old-files','mac-new-files'].includes(pasteRoute))window.__TAURI__={core:{invoke:(cmd,args)=>{
+        reads.push([cmd,args.attachments]);
+        return pasteRoute==='mac-old-files'?Promise.resolve(['/fixture/Desktop/legacy.png']):clipboardReply();
       }}};
       hostPlatform={host:pasteRoute.startsWith('mac')?'mac':'wsl',file_paste:pasteRoute!=='browser-files'};
       window.send=packet=>{
@@ -337,14 +418,11 @@ def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, rout
       window.pasteFixture=mode=>{
         const clipboard=new DataTransfer();
         if(mode==='text')clipboard.setData('text/plain','ordinary text');
-        else if(pasteRoute==='browser-files'){
+        else if(pasteRoute.endsWith('-files')){
           const image=Uint8Array.from(atob(copyFixture.attachments[0].data),c=>c.charCodeAt(0));
           clipboard.items.add(new File([image],'Clipboard image.png',{type:'image/png'}));
           clipboard.items.add(new File(['# Clipboard note'],'資料 1.md',{type:'text/markdown'}));
           clipboard.setData('text/plain','This file paste must not replace the draft.');
-        }else if(pasteRoute==='wsl-http'){
-          clipboard.setData('text/uri-list','file:///C:/Users/fixture/Notes.md');
-          clipboard.setData('text/plain','C:\\Users\\fixture\\Notes.md');
         }
         return promptInput.dispatchEvent(new ClipboardEvent('paste',{clipboardData:clipboard,bubbles:true,cancelable:true}));
       };
@@ -356,7 +434,7 @@ def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, rout
     assert js("pasteFixture('text')") is True
     assert js('reads.length') == 0
     assert not js("pasteFixture('files')")
-    if route != 'browser-files':
+    if not route.endswith('-files'):
         wait('releaseClipboard!==null')
         assert js('promptFiles.pending&&promptSendBtn.disabled')
         js('void sendPrompt()')
@@ -367,7 +445,7 @@ def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, rout
     assert js("Array.from(document.querySelectorAll('.prompt-file-name'),node=>node.textContent)") == [
         'Clipboard image.png', '資料 1.md']
     expected_reads = ([['clipboard_file_paths', True]] if route == 'mac-app' else
-                      [] if route == 'browser-files' else
+                      [] if route.endswith('-files') else
                       [['/telemetry/clipboard/attachments', 'POST', '{}']])
     assert js('reads') == expected_reads
     assert js('promptInput.value') == 'Compare the pasted screenshot.'
@@ -375,7 +453,7 @@ def test_clipboard_attachments_are_staged_and_removable_until_send(cockpit, rout
     assert js("packets.filter(packet=>['input','submit-prompt'].includes(packet.type))") == []
 
     capture = os.environ.get('ORRERY_PASTE_CAPTURE_DIR')
-    if capture and route == 'wsl-http' and program == 'claude-code':
+    if capture and route == 'browser-files' and program == 'claude-code':
         js("document.querySelector('.prompt-ava').src='/cockpit-assets/anthropic.svg'")
         wait("document.querySelector('.prompt-ava').naturalWidth>0")
         for theme in ('dark', 'light'):

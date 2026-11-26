@@ -43,6 +43,22 @@ Other permanent read failures retain the existing Retry control.
 The single preference uses the existing shared preference mechanism; transcript
 contents and reading position are never saved as preferences.
 
+The desktop composer copies selected attachments up to 50 MiB into the
+recipient's working folder before sending. The paperclip opens the WebView or
+browser file picker. Files available to the page from selection, drop, or
+paste are uploaded as bytes. On WSL, if the Windows browser cannot supply a
+clipboard file, select or drop the file instead. Some native Mac clipboard or
+drop events provide only an absolute path. Those use the local fallback,
+which requires the host to be able to read the file. For a file over 50 MiB
+with an available local path, the composer sends that path and identifies
+it in the send notification.
+
+Supported images use `.orrery-input-images` and other files use
+`.orrery-input-files`. Each folder retains up to 1,000 attachments from the
+last seven days. After saving an attachment, the host removes expired inputs
+and, when the folder reaches capacity, removes the oldest inputs to make room.
+Removed inputs can no longer open from earlier messages.
+
 The additive `GET /telemetry/conversation?agent=<name>` endpoint accepts an
 agent and optional opaque cursors (`before` or `after`), never a filesystem path.
 In legacy mode only a dashboard `history_binding=bound` row can select a source.
