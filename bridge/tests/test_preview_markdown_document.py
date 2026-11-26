@@ -31,7 +31,7 @@ class Element{
     return `<${this.tag}${a.length?' '+a.join(' '):''}>`+this.children.map(c=>c.html()).join('')+`</${this.tag}>`;
   }
 }
-globalThis.document={createElement:t=>new Element(t),createTextNode:t=>new Text(t)};
+globalThis.document={createElement:t=>new Element(t),createElementNS:(_,t)=>new Element(t),createTextNode:t=>new Text(t)};
 require(process.argv[1]);
 const md=globalThis.OrreryConversationMarkdown;
 const show=text=>md.renderDocument(text,new Element('div')).children.map(c=>c.html()).join('\n');
@@ -77,7 +77,7 @@ def test_a_table_is_drawn_with_inline_marks_in_cells():
     assert '<th>Name</th><th>Value</th>' in out
     assert '<td><code>a</code></td><td><strong>1</strong></td>' in out
     assert '<td>b</td><td></td>' in out                              # a short row is padded
-    assert 'Copy Markdown' in out
+    assert 'title="Copy Markdown"><svg>' in out
 
 
 def test_front_matter_stays_text():
@@ -178,14 +178,14 @@ import sys  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_conversation_review_regressions import cockpit  # noqa: E402,F401
 
-SAMPLE = ('# Generated note\\n\\n| Step | State |\\n|---|---|\\n| build | **ok** |\\n\\n'
-          '<img src=https://example.test/never onerror="window.pwned=1">\\n\\n'
-          '[bad](javascript:void0) [good](https://example.com/)\\n')
+SAMPLE = ('# Generated note\n\n| Step | State |\n|---|---|\n| build | **ok** |\n\n'
+          '<img src=https://example.test/never onerror="window.pwned=1">\n\n'
+          '[bad](javascript:void0) [good](https://example.com/)\n')
 
 
-def open_preview(js, wait, label):
+def open_preview(js, wait, label, text=SAMPLE):
     js("""window.previewRequests=[];OrreryConversationSource.Source.prototype.reference=async(ref,options)=>{
-      previewRequests.push(ref);return {ok:true,kind:'text',text:'""" + SAMPLE + """'};};
+      previewRequests.push(ref);return {ok:true,kind:'text',text:""" + json.dumps(text) + """};};
       OrreryConversationSource.Source.prototype.read=async()=>({mode:'cursor',events:[{id:'artifacts',kind:'tool',role:'assistant',text:'functions.exec',
         references:[{id:'A'.repeat(32),label:""" + json.dumps(label) + """,kind:'file'}]}],before:'file:0',after:'file:1',has_older:false});
       conversationView.close();conversationView.open();""")
@@ -207,6 +207,15 @@ def test_a_markdown_preview_is_a_document_with_a_source_switch(cockpit):  # noqa
     assert js(body + ".querySelectorAll('a').length") == 2
     assert js(body + ".querySelector('a').rel") == 'noopener noreferrer'
     assert js(body + ".querySelector('a').target") == '_blank'
+    table_copy = "document.querySelector('.conversation-table-copy')"
+    assert js(table_copy + ".textContent") == ''
+    assert js(table_copy + ".title") == js(table_copy + ".getAttribute('aria-label')") == 'Copy Markdown'
+    assert js(table_copy + ".querySelector('svg').getAttribute('aria-hidden')") == 'true'
+    js("window.tableCopied=null;Object.defineProperty(navigator,'clipboard',"
+       "{value:{writeText:async text=>tableCopied=text},configurable:true});" + table_copy + ".click()")
+    wait("document.querySelector('.conversation-table [role=status]').textContent==='Markdown copied'")
+    assert js("tableCopied") == '| Step | State |\n|---|---|\n| build | **ok** |\n'
+    assert js(table_copy + ".textContent") == ''
     source = "document.querySelector('.conversation-preview-source')"
     assert js(source + ".getAttribute('aria-pressed')") == 'false'
     js(source + ".click()")
@@ -219,6 +228,51 @@ def test_a_markdown_preview_is_a_document_with_a_source_switch(cockpit):  # noqa
     wait(body + ".querySelector('.conversation-preview-text')!==null")
     js(source + ".click()")
     assert js(body + ".querySelector('h1').textContent") == 'Generated note'
+
+
+@pytest.mark.parametrize(('theme', 'label'), [('dark', 'notes.md'), ('light', 'notes.markdown')])
+def test_markdown_fills_its_pane_and_keeps_inner_scroll(cockpit, theme, label):
+    js, wait, client, _, enable = cockpit
+    enable(mode='cursor', count=2)
+    js("OrreryColorTheme.setPreference(" + json.dumps(theme) + ")")
+    table = '\n'.join('| ' + ' | '.join(row) + ' |' for row in [
+        ['Column ' + str(i) for i in range(16)], ['---'] * 16, ['Measurement'] * 16,
+    ])
+    contents = '# Generated note\n\n' + table + '\n\n- A list item\n\n```sh\npython run.py\n```\n\n'
+    contents += ('## Follow up\n\nKeep the preview open while reading.\n\n') * 40
+    open_preview(js, wait, label, contents)
+    result = js("""(() => {
+        const preview = document.querySelector('.conversation-preview');
+        const pane = preview.parentElement;
+        const box = preview.querySelector('.conversation-preview-content');
+        const scroll = preview.querySelector('.conversation-table-scroll');
+        const bounds = node => ['left','right','top','bottom'].map(key => node.getBoundingClientRect()[key]);
+        const reference = document.createElement('p');
+        reference.className = 'conversation-text';
+        const code = reference.appendChild(document.createElement('code'));
+        box.appendChild(reference);
+        const family = node => getComputedStyle(node).fontFamily;
+        const proseFont = family(reference), codeFont = family(code);
+        reference.remove();
+        scroll.scrollLeft = scroll.scrollWidth;
+        box.scrollTop = box.scrollHeight;
+        return {
+            full: bounds(pane).every((value, index) => value === bounds(preview)[index]),
+            threadHidden: getComputedStyle(pane.querySelector('.conversation-thread')).visibility === 'hidden',
+            vertical: box.scrollTop > 0,
+            horizontal: scroll.scrollLeft > 0 && box.scrollWidth === box.clientWidth,
+            blocks: !!box.querySelector('li') && box.querySelector('pre code').textContent === 'python run.py',
+            fonts: [...box.querySelectorAll('p, h1, h2, li, th, td')].every(node => family(node) === proseFont)
+                && family(box.querySelector('pre code')) === codeFont && codeFont !== proseFont,
+        };
+    })()""")
+    assert all(result.values()), result
+    js("document.querySelector('.conversation-table-copy').focus()")
+    client.call('Input.dispatchKeyEvent', type='keyDown', key='Escape', code='Escape', windowsVirtualKeyCode=27)
+    client.call('Input.dispatchKeyEvent', type='keyUp', key='Escape', code='Escape', windowsVirtualKeyCode=27)
+    wait("document.querySelector('.conversation-preview').hidden")
+    assert js("document.activeElement.matches('.conversation-scroll')")
+    assert js("getComputedStyle(document.querySelector('.conversation-thread')).visibility") == 'visible'
 
 
 @pytest.mark.parametrize('label', ['notes.txt', 'page.html', 'README.md.txt'])
