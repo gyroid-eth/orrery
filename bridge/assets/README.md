@@ -23,3 +23,9 @@ For the pre-existing Claude and OpenAI marks, see the Provider logos section of 
 - Changes: the source SVG is embedded without tracing or redrawing. Only its separate background path (class `st194`, including its border) has opacity set to zero. The three foreground shapes retain their original geometry. As for Qwen, an SVG alpha filter sets the visible colour to bone `#ece2cc`; the light theme uses the existing black-logo filter. The outer viewBox trims transparent margins so the artwork shares the other provider marks' visual scale.
 - 利用は運営者の判断（2026-11-08）。
 - Terms checked: [Z.ai Terms of Use](https://chat.z.ai/legal-agreement/terms-of-service), last updated 2026-04-14, section V.2 restricts logo and other trademark use without prior written consent. No dedicated redistribution or recolouring permission was found in the official material inspected. The operator chose to use the bone-coloured official logo on 2026-11-08 with that restriction understood. This records the operator's decision and does not claim permission from the owner.
+
+## Thinking Machines Lab (`thinking-machines.svg`)
+
+- The official model card identifies Thinking Machines Lab as the maker of Inkling 2 Mini. [Model card](https://thinkingmachines.ai/model-card/inkling-2-mini/) · [Published weights and model card](https://huggingface.co/thinkingmachines/Inkling-2-Mini)
+- The SVG embeds the official site favicon and applies a bone-coloured luminance filter so the two tones remain distinct under the light-theme filter. The source pixels and geometry are preserved. [Official favicon](https://thinkingmachines.ai/images/favicon-32x32.png)
+- The mark identifies the model maker. The model weights' Apache 2.0 license concerns the weights. [Thinking Machines Lab service terms](https://thinkingmachines.ai/legal/terms/)
