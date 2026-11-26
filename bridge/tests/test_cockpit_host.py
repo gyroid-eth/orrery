@@ -337,6 +337,8 @@ def test_fresh_output_gap_uses_actual_caller_to_stop_only_affected_session_and_r
 const groups=new Map(),sessionGroups=groups,panes=new Map(),sent=[],toasts=[],links=[];
 const attachedSessions=new Set(),requestedSessions=new Set(),availableSessions=new Map([['Alpha',{}],['Beta',{}]]);
 const manualDetached=new Set(),paneWindows=new Set(),selectedPaneBySession=new Map();
+const closedByBackend=new Set();
+function noteBackendClosed(session){closedByBackend.add(session);}
 const permissionRestarts=new Map();
 const pendingAgentExits=new Map();
 let pendingJump=null,activeId=null,splitVisible=false,focusedSplitSession=null,paneWindowSelection=null;
@@ -377,11 +379,17 @@ if(!attachedSessions.has('Beta'))throw Error('legacy error changed');
 // If the server cannot send the error, it closes that WebSocket. Exercise
 // the real close callback: the surviving UI must not continue showing live.
 handle({type:'approval',state:'ready'}); // Reader has not been initialized yet.
-connect();events.close();
+connect();events.close({code:1006});
 if(attachedSessions.size||requestedSessions.size||groups.get('Alpha').state.textContent!=='closed'||links.at(-1)[1]!=='disconnected')throw Error('transport failure remained live');
+if(closedByBackend.size)throw Error('ordinary disconnect queued for reattach');
+reset('Alpha','before-restart');reset('Beta','before-restart');
+connect();events.close({code:1012});
+if(!closedByBackend.has('Alpha')||!closedByBackend.has('Beta'))throw Error('restart did not queue open tabs');
+reset('Alpha','after-restart');
+if(closedByBackend.has('Alpha')||!closedByBackend.has('Beta'))throw Error('reset did not confirm only its own tab');
 const approvalEvents=[];
 readerApproval={receive:msg=>approvalEvents.push(msg.state),disconnected:()=>approvalEvents.push('disconnected')};
-handle({type:'approval',state:'ready'});connect();events.close();
+handle({type:'approval',state:'ready'});connect();events.close({code:1006});
 if(JSON.stringify(approvalEvents)!==JSON.stringify(['ready','disconnected']))throw Error('approval lifecycle not forwarded');
 console.log(JSON.stringify({gapVisible:true,reattach:true,oldErrorIgnored:true,otherSessionPreserved:true,transportFailureClosed:true,approvalLifecycle:true}));
 '''

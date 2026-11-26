@@ -471,18 +471,17 @@ class LegacyTargetBoundary:
 
     def socket_replaced(self):
         """Detect rollover of the default socket without changing admission."""
-        if (self.shared is None or 'validate_socket' not in self.shared
-                or self.pin['server_pid'] is None or self.environment.get('TMUX')):
+        if self.shared is None or self.pin['server_pid'] is None or self.environment.get('TMUX'):
             return False
         with self._pin_lock:
             try:
-                # No server is a normal state. Wait for a verifiable successor.
-                self.transport.path.lstat()
-            except FileNotFoundError:
-                return False
-            try:
-                identity = self.shared['validate_socket'](self.transport.path)
-                return identity != self.transport.identity or self.tmux_restarted
+                current = self.shared['legacy_transport'](binary=self.binary, environ=self.environment)
+                pid = current.public()['server_pid']
+                # A successor can reuse the inode. Read its PID from tmux even
+                # when the socket identity is unchanged, before using the roster.
+                return pid is not None and (
+                    pid != self.pin['server_pid'] or current.identity != self.transport.identity
+                )
             except (Exception, SystemExit) as exc:
                 self._helper_failure(exc)
                 raise TargetRefused('TMUX_TARGET_UNAVAILABLE') from exc

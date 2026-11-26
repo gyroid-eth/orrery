@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -52,10 +53,23 @@ def default_server(monkeypatch):
         command = [tmux, "-S", str(socket)]
 
         def run(*args, check=True):
+            old_pid = None
+            if args == ("kill-server",):
+                old_pid = run("display-message", "-p", "#{pid}", check=False).stdout.strip()
             result = subprocess.run([*command, *args], env=env, capture_output=True,
                                     text=True, check=False, timeout=8)
             if check and result.returncode:
                 raise RuntimeError(f"tmux {args}: {result.stderr.strip() or result.stdout.strip()}")
+            if old_pid and old_pid.isdecimal() and not result.returncode:
+                # The client can stop taking commands before the server exits.
+                deadline = time.monotonic() + 5
+                while True:
+                    state = subprocess.run(["ps", "-p", old_pid, "-o", "stat="],
+                                           capture_output=True, text=True, timeout=2).stdout.strip()
+                    if not state or state.startswith("Z"):
+                        break
+                    assert time.monotonic() < deadline, "old tmux server did not exit"
+                    time.sleep(0.02)
             return result
 
         run("new-session", "-d", "-s", "before", "sleep", "300")
@@ -65,19 +79,23 @@ def default_server(monkeypatch):
             run("kill-server", check=False)
 
 
-def test_replaced_socket_is_not_retried_inside_a_refused_admission(default_server):
+@pytest.mark.parametrize("reuse_inode", [False, True])
+def test_replaced_socket_is_not_retried_inside_a_refused_admission(default_server, reuse_inode):
     binary, home, env, socket, run = default_server
     boundary = LegacyTargetBoundary(binary, home=home, environ=env)
-    before = boundary.transport.identity
+    before = boundary.pin["server_pid"]
     assert boundary.admit("capture", session="before")["allowed"]
     run("kill-server")
     run("new-session", "-d", "-s", "after", "sleep", "300")
+    if reuse_inode:
+        # Model the same device/inode being assigned to the successor socket.
+        boundary.transport.identity = boundary.shared["validate_socket"](socket)
     assert boundary.socket_replaced()
     with pytest.raises(TargetRefused, match="^TMUX_SOCKET_CHANGED$"):
         boundary.admit("capture", session="after")
-    assert boundary.transport.identity == before
+    assert boundary.pin["server_pid"] == before
     assert boundary.rebind_server()
-    assert boundary.transport.identity != before
+    assert boundary.pin["server_pid"] != before
     assert boundary.admit("capture", session="after")["allowed"]
 
 
@@ -115,8 +133,7 @@ def test_recorder_rebuilds_bridges_and_preserves_new_session(default_server):
             assert set(manager.states) == {"before"}
             old = manager.states["before"].bridge
             old_pid = boundary.pin["server_pid"]
-            run("kill-server")
-            await asyncio.sleep(0.5)
+            await asyncio.to_thread(run, "kill-server")
             run("new-session", "-d", "-s", "after", "sleep", "300")
             assert old_pid != int(run("display-message", "-p", "#{pid}").stdout.strip())
             await manager._reconcile_sessions()
@@ -127,8 +144,7 @@ def test_recorder_rebuilds_bridges_and_preserves_new_session(default_server):
             await manager._reconcile_sessions()
             assert set(manager.states) == {"after"}
             former = manager.states["after"].bridge
-            run("kill-server")
-            await asyncio.sleep(0.5)
+            await asyncio.to_thread(run, "kill-server")
             run("new-session", "-d", "-s", "again", "sleep", "300")
             await manager._reconcile_sessions()
             assert set(manager.states) == {"again"}
@@ -168,8 +184,7 @@ def test_old_websocket_cannot_inherit_reused_pane_on_server_rollover(default_ser
             attached = set()
             await manager.attach(peer, attached, "before")
             assert manager._legacy_peers[peer] == 0
-            run("kill-server")
-            await asyncio.sleep(0.5)
+            await asyncio.to_thread(run, "kill-server")
             # Reuse the session name and numeric pane ID on the replacement.
             run("new-session", "-d", "-s", "before", "sleep", "300")
             await manager._reconcile_sessions()
