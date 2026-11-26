@@ -6,6 +6,7 @@ import pytest
 from test_cockpit_tour import tour_browser  # noqa: F401  (static cockpit over CDP)
 
 SETUP = """(()=>{
+  socket=null;clearTimeout(reconnectTimer);
   window.__sent=[];window.send=m=>{window.__sent.push(m);return true;};
   for(const name of ['A','B','C']){ensureSessionGroup(name);attachedSessions.add(name);}
   handle({type:'sessions',sessions:['A','B','C']});
