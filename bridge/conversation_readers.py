@@ -20,7 +20,7 @@ from pathlib import Path
 from urllib.parse import quote
 from conversation_mail import received, received_queued, sent
 from conversation_images import hermes_content, native_image
-from conversation_steps import claude_call, claude_result, mark_step_boundary
+from conversation_steps import claude_call, claude_result, mark_step_boundary, tool_call, tool_result
 
 from conversation_history import (AGY_PROGRAMS, HistoryUnavailable, MAX_SCAN, MAX_TEXT, PAGE_SIZE,
     open_bound_transcript, assert_transcript_identity, conversation_binding, read_codex_page, recorded_model)
@@ -52,7 +52,7 @@ def parse(raw):
     try:
         value=json.loads(raw)
         return value if isinstance(value,dict) else {}
-    except (ValueError,UnicodeError):return {}
+    except (ValueError,UnicodeError,RecursionError):return {}
 
 
 def epoch(value, divisor=1):
@@ -84,6 +84,22 @@ def tool_event(name,ts,*,result=False,failed=False):
     if name=='mcp__agentstack__show_files':name='mcp__orrery_mail__show_files'
     return dict(kind='tool_result' if result else 'tool',role='assistant',
                 text=(name[:160]+(' · failed' if failed else ' · completed')) if result else name[:160],ts=ts)
+
+
+def recorded_call(name, args, call_id, ts):
+    event = sent(tool_event(name, ts), name, args)
+    step = tool_call(call_id, name, parse(args) if isinstance(args, str) else args, ts)
+    if step:
+        event['step'] = step
+    return event
+
+
+def recorded_result(name, call_id, ts, *, failed):
+    event = tool_event(name, ts, result=True, failed=failed)
+    step = tool_result(call_id, ts, failed=failed)
+    if step:
+        event['step'] = step
+    return event
 
 
 def blocks_text(content, *, block_limit=MAX_TEXT):
@@ -179,6 +195,22 @@ AGY_TOOL_NAME = re.compile(r'[A-Za-z0-9_.:-]{1,160}\Z')
 AGY_RESULT_HEADER = re.compile(r'\ACreated At: [^\n]+\nCompleted At: [^\n]+(?:\n|$)')
 
 
+def agy_tool(call):
+    if not isinstance(call, dict):
+        return None, None
+    name, args = call.get('name'), call.get('args')
+    if not isinstance(name, str) or not AGY_TOOL_NAME.fullmatch(name):
+        return None, None
+    if name == 'call_mcp_tool' and isinstance(args, dict):
+        server, tool = args.get('ServerName'), args.get('ToolName')
+        if all(isinstance(value, str) and AGY_TOOL_NAME.fullmatch(value) for value in (server, tool)):
+            prefix = 'mcp__' + server.replace('-', '_') if server in ('orrery-mail', 'agentstack') else 'mcp:' + server
+            return prefix + '__' + tool, args.get('Arguments')
+    if name == 'read_file' and isinstance(args, dict):
+        return name, {'path': args.get('Path') or args.get('path')}
+    return name, args
+
+
 def agy_normalize(item):
     """Provider log projection. Hide model-only scaffolding and tool payloads."""
     if type(item.get('step_index')) is not int or item['step_index'] < 0:
@@ -215,9 +247,13 @@ def agy_normalize(item):
             event['truncated'] = True
         calls = item.get('tool_calls')
         for slot, call in enumerate(calls[:MAX_BLOCKS-1] if isinstance(calls, list) else [], 1):
-            name = call.get('name') if isinstance(call, dict) else None
-            if isinstance(name, str) and AGY_TOOL_NAME.fullmatch(name):
-                events.append((slot, sent(tool_event(name, ts), name, call.get('args'))))
+            name, args = agy_tool(call)
+            if name:
+                event = recorded_call(name, args, f"antigravity:{item['step_index']}:{slot}", ts)
+                # The record proves the request. Generic results have no call ID.
+                if step := event.get('step'):
+                    step.update(phase='complete', status='observed')
+                events.append((slot, event))
         return events
     if kind == 'GENERIC' and source == 'MODEL' and isinstance(content, str) and AGY_RESULT_HEADER.match(content):
         # agy 1.5.16 does not put a call ID or exit verdict in this record.
@@ -298,9 +334,11 @@ def normalize(item,p,sid):
             add(0,input_event(content,'dsh',ts))
         elif kind=='assistant/message' and isinstance(data.get('message'),dict):
             add(0,text_event(blocks_text(data['message'].get('content')),'assistant',ts))
-        elif kind=='tool/call':add(0,sent(tool_event(data.get('name'),ts),data.get('name'),data.get('arguments')))
+        elif kind=='tool/call':
+            add(0,recorded_call(data.get('name'),data.get('arguments'),data.get('callId'),ts))
         elif kind=='tool/result' and isinstance(data.get('message'),dict):
-            add(0,tool_event('Tool result',ts,result=True,failed=bool(data['message'].get('isError'))))
+            result=data['message']
+            add(0,recorded_result('Tool result',result.get('toolCallId'),ts,failed=bool(result.get('isError'))))
     elif p=='hermes':
         ts=epoch(item.get('timestamp'));role=item.get('role')
         if item.get('_compressed_summary')==1:
@@ -320,10 +358,12 @@ def normalize(item,p,sid):
                 except ValueError:calls=[]
             for i,call in enumerate(calls[:MAX_BLOCKS] if isinstance(calls,list) else []):
                 if isinstance(call,dict) and isinstance(call.get('function'),dict):
-                    add(i+1,sent(tool_event(call['function'].get('name'),ts),call['function'].get('name'),call['function'].get('arguments')))
+                    function=call['function']
+                    add(i+1,recorded_call(function.get('name'),function.get('arguments'),call.get('id'),ts))
         elif role=='tool':
             result=parse(item.get('content') or '{}')
-            add(0,tool_event(item.get('tool_name') or 'Tool result',ts,result=True,failed=bool(result.get('error') or result.get('is_error') or result.get('success') is False)))
+            failed=bool(result.get('error') or result.get('is_error') or result.get('success') is False)
+            add(0,recorded_result(item.get('tool_name') or 'Tool result',item.get('tool_call_id'),ts,failed=failed))
     # Model metadata belongs to the record, even when it has many text blocks.
     assistant_text=[event for _,event in out if event.get('kind')=='text' and event.get('role')=='assistant']
     if assistant_text:
@@ -370,6 +410,14 @@ def artifact_item(item,p,index,event=None):
         if isinstance(calls,list) and index<=len(calls) and isinstance(calls[index-1],dict):
             f=calls[index-1].get('function',{})
             if isinstance(f,dict):name,value=f.get('name'),f.get('arguments')
+    elif p=='antigravity' and index and item.get('type')=='PLANNER_RESPONSE':
+        calls=item.get('tool_calls')
+        if isinstance(calls,list) and index<=len(calls):
+            call=calls[index-1]
+            if isinstance(call,dict) and call.get('name')=='call_mcp_tool':
+                name,value=agy_tool(call)
+                if name not in ('mcp__orrery_mail__show_files','mcp__agentstack__show_files') or not isinstance(value,dict):
+                    return {}
     if not isinstance(name,str):return {}
     return dict(type='response_item',payload=dict(type='function_call',name=name,
                 arguments=value if isinstance(value,str) else json.dumps(value)))
