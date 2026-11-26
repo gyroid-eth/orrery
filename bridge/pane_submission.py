@@ -74,8 +74,8 @@ AGY_COMMAND_SELECTED = re.compile(r'^>\s+(' + SLASH_NAME.pattern + r')(?=[ \t]|$
 AGY_COMMAND_HELP = '↑/↓ Navigate · enter Select · tab Complete'
 AGY_WORKING = re.compile(r'^[\u2800-\u28ff]\s+Working(?:…|\.\.\.)$')
 CODEX_WORKING = re.compile(r'^• (?:Working|Compacting context) \(.*\besc to interrupt\b')
-# A full Codex row can leave only one space before the dim scroll marker.
-CODEX_SCROLL_ARROW = re.compile(rf'[ \t]+{DIM.pattern}([↑↓])(?:{SGR.pattern})*[ \t]*$')
+# Codex marks the viewport edge with a dim arrow, even flush against the text.
+CODEX_SCROLL_ARROW = re.compile(rf'{DIM.pattern}([↑↓])(?:{SGR.pattern})*[ \t]*$')
 NOTICE_TRAILER = re.compile(r'\s*(?:\.{3}\s+)?(?:Fetch inbox to read the rest\.|Please call fetch_inbox to read it\.)$')
 
 
