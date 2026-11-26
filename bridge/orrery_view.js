@@ -58,6 +58,10 @@ const MAIL_EDGE_LIFETIME=90000;
 const MAIL_HISTORY_REFRESH=30000;
 const COMM_PROMOTION_HYSTERESIS=4000;
 const MAX_COMETS=6;
+const MAX_QUEUED_COMETS=40;
+const MINI_COMET_TRAVEL_MS=1700;
+const MINI_RIPPLE_MS=550;
+const MINI_ARRIVAL_SUBJECT_MS=2000;
 const MOTION_STIFFNESS=150;
 const MOTION_DAMPING=22;
 const MOTION_SETTLE_DISTANCE=.1;
@@ -72,6 +76,11 @@ let planetarium=null;
 let planetSvg=null;
 let planetLastFocus=null;
 let activeComets=0;
+let cometId=0;
+const queuedComets=[];
+const miniRipples=new Map();
+const miniArrivalSubjects=new Map();
+const latestEdgeSubjects=new Map(),edgeSubjectFetches=new Map();
 let activeMailRoute=null;
 const commPairs=new Map();
 let historyPairs=new Map(),historyRequest=null,historyTimer=null;
@@ -88,6 +97,8 @@ const MINI_MAX_ZOOM=2.5;
 let miniZoom=1,miniDefaultZoom=1,miniMaxZoom=MINI_MAX_ZOOM,miniZoomControls;
 let miniViewAdjusted=false;
 let miniHoveredAgent='',miniFocusedAgent='';
+let miniEdgeSubjectTip=null,miniEdgePointer=null,describedMiniEdge=null;
+let miniEdgeSubjectKey='',miniEdgeSubjectTimer=0;
 
 function svgEl(tag,attrs={}){
   const el=document.createElementNS(SVG_NS,tag);
@@ -133,11 +144,11 @@ function activateAgent(agent){
   if(planetarium&&planetarium.classList.contains('on'))closePlanetarium();
   OC.jumpToAgent(agent.name);
 }
-function makeInteractive(group,agent){
+function makeInteractive(group,agent,status=stateOf(agent)){
   group.setAttribute('role','button');
   group.setAttribute('tabindex','0');
   const role=roleOf(agent),model=modelOf(agent);
-  group.setAttribute('aria-label',`Jump to ${agent.name}, ${model}${role?`, ${role}`:''}, ${stateOf(agent)}`);
+  group.setAttribute('aria-label',`Jump to ${agent.name}, ${model}${role?`, ${role}`:''}, ${status}`);
   group.addEventListener('click',()=>activateAgent(agent));
   group.addEventListener('keydown',event=>{
     if(event.key==='Enter'||event.key===' '){
@@ -482,9 +493,10 @@ function measureMiniCaptions(agents,includeRoles){
   for(const agent of agents){
     miniCaptionMeasure.font=`600 ${miniAppearance.nameSize}px ${font}`;
     let width=miniCaptionMeasure.measureText(agent.name||'').width;
-    if(includeRoles){
-      miniCaptionMeasure.font=`400 7.5px ${font}`;
-      width=Math.max(width,miniCaptionMeasure.measureText(roleOf(agent)).width);
+    const action=OC.pendingAgentAction(agent.name);
+    if(action||includeRoles){
+      miniCaptionMeasure.font=`${action?600:400} 7.5px ${font}`;
+      width=Math.max(width,miniCaptionMeasure.measureText(action?`${action}…`:roleOf(agent)).width);
     }
     widths.set(agent.name,Math.min(MINI_MAX_CAPTION_WIDTH,Math.ceil(width)+3));
   }
@@ -498,7 +510,8 @@ function fitMiniScene(live,width,height){
   const captionWidth=Math.max(MINI.captionWidth,...captions.values()),xPadding=Math.max(MINI.xPadding,captionWidth/2+3);
   const nodeScale=miniAppearance.nodeSize/100,nameSize=miniAppearance.nameSize;
   const captionTop=Math.ceil(MINI.captionTop*nodeScale),nodeAbove=Math.ceil(MINI.nodeAbove*nodeScale);
-  const captionHeight=nameSize+2+(miniAppearance.showRoles?9:0);
+  const hasSecondLine=miniAppearance.showRoles||agents.some(agent=>OC.pendingAgentAction(agent.name));
+  const captionHeight=nameSize+2+(hasSecondLine?9:0);
   const topPadding=Math.max(MINI.topPadding,nodeAbove+2);
   const bottomPadding=Math.max(MINI.bottomPadding,captionTop+captionHeight+2);
   // Try the viewport at successively smaller readable scales. Only grow the
@@ -817,7 +830,7 @@ function drawProviderBadge(group,agent,x,y,portraitRadius,size=14){
   group.appendChild(seat);
   return label;
 }
-function drawAgentCaption(group,{agent,x,y},dimensions,provider,showTitle=true){
+function drawAgentCaption(group,{agent,x,y},dimensions,provider,showTitle=true,action=''){
   const role=roleOf(agent);
   if(showTitle){
     const title=svgEl('title');
@@ -840,10 +853,13 @@ function drawAgentCaption(group,{agent,x,y},dimensions,provider,showTitle=true){
     name.style.lineHeight=`${dimensions.nameSize+2}px`;
   }
   text.appendChild(name);
-  if(role&&dimensions.showRoles!==false){
+  if(action||(role&&dimensions.showRoles!==false)){
     const roleLabel=document.createElement('div');
     roleLabel.className='orrery-caption-role';
-    roleLabel.textContent=role;
+    if(action){
+      roleLabel.classList.add('orrery-caption-action');
+      OC.paintActionText(roleLabel,`${action}…`,true);
+    }else roleLabel.textContent=role;
     text.appendChild(roleLabel);
   }
   caption.appendChild(text);
@@ -851,6 +867,7 @@ function drawAgentCaption(group,{agent,x,y},dimensions,provider,showTitle=true){
 }
 function drawMiniAgent(target,defs,position,index,dimensions){
   const {agent,x,y,hue,working}=position;
+  const action=OC.pendingAgentAction(agent.name);
   const portraitRadius=8.5;
   const ringRadius=11;
   const clipId=`mini-portrait-${index}`;
@@ -858,10 +875,10 @@ function drawMiniAgent(target,defs,position,index,dimensions){
   clip.appendChild(svgEl('circle',{cx:x,cy:y,r:portraitRadius}));
   defs.appendChild(clip);
   const group=svgEl('g',{
-    class:'orrery-agent mini-agent'+(working?' is-working':'')+(position.networkFocus?' is-network-focus':''),
+    class:'orrery-agent mini-agent'+(working&&!action?' is-working':'')+(position.networkFocus?' is-network-focus':''),
     'data-agent':agent.name,
   });
-  makeInteractive(group,agent);
+  makeInteractive(group,agent,action||stateOf(agent));
   OC.bindMiniAgentDetail?.(group);
   const scale=dimensions.nodeScale;
   const face=scale===1?group:svgEl('g',{transform:`translate(${x} ${y}) scale(${scale}) translate(${-x} ${-y})`});
@@ -902,7 +919,9 @@ function drawMiniAgent(target,defs,position,index,dimensions){
   // silently painted over by the face (2026-08-06).
   const providerLabel=drawProviderBadge(face,agent,x,y,portraitRadius);
   drawStateGlyph(face,agent,x,y,false);
-  drawAgentCaption(group,position,dimensions,providerLabel,!OC.bindMiniAgentDetail);
+  drawAgentCaption(group,position,dimensions,providerLabel,!OC.bindMiniAgentDetail,action);
+  const arrival=miniArrivalSubjects.get(agent.name);
+  if(arrival)paintMiniArrivalCaption(group,agent,arrival);
   target.appendChild(group);
   return group;
 }
@@ -993,9 +1012,9 @@ function addExpandAffordance(target,dimensions,isOpen){
   target.appendChild(group);
 }
 
-function preservedFlights(target){
+function preservedMailEffects(target){
   return [...target.children].filter(child=>
-    child.classList.contains('orrery-comet-flight'));
+    child.matches('.orrery-comet-flight,.orrery-comet-ripple'));
 }
 function syncMiniSelection(){
   miniSvg.querySelectorAll('.mini-selection-ring').forEach(ring=>ring.remove());
@@ -1324,11 +1343,16 @@ function renderMini({recenter=false}={}){
   miniWidth=width;miniHeight=height;
   const resetView=resized||recenter||!miniMotion.initialized;
   if(resetView)miniViewAdjusted=false;
-  const {layout,dimensions,zoom}=fitMiniScene(liveAgents,width,height);
+  // Keep a restarting or exiting node through stale roster snapshots.
+  const agents=new Map(liveAgents.filter(agent=>agent?.name).map(agent=>[agent.name,agent]));
+  for(const agent of OC.graphPendingAgents()){
+    if(agent&&!agents.has(agent.name))agents.set(agent.name,agent);
+  }
+  const {layout,dimensions,zoom}=fitMiniScene([...agents.values()],width,height);
   miniDefaultZoom=zoom;
   miniMaxZoom=Math.max(MINI_MAX_ZOOM,zoom*1.25);
   miniZoom=miniViewAdjusted?Math.min(miniMaxZoom,miniZoom):zoom;
-  const flights=preservedFlights(miniSvg);
+  const flights=preservedMailEffects(miniSvg);
   miniSvg.replaceChildren();
   const previous=miniMotion.layoutDimensions;
   const geometryChanged=previous&&(previous.width!==layout.width||previous.height!==layout.height);
@@ -1379,7 +1403,7 @@ function renderMini({recenter=false}={}){
 }
 function renderPlanetarium(){
   if(!planetSvg||!planetarium.classList.contains('on'))return;
-  const flights=preservedFlights(planetSvg);
+  const flights=preservedMailEffects(planetSvg);
   planetSvg.replaceChildren();
   /* The planetarium is the forest — its own subtitle says so, and the reason
      to open it is to see who spawned whom. It used to follow the rail's view
@@ -1496,11 +1520,9 @@ function closePlanetarium(){
 }
 
 function recipientNames(message){
-  if(message.recipient)return [typeof message.recipient==='string'
-    ?message.recipient:message.recipient.name].filter(Boolean);
-  if(!Array.isArray(message.recipients))return [];
-  return message.recipients.map(recipient=>
-    typeof recipient==='string'?recipient:recipient&&recipient.name).filter(Boolean);
+  const recipients=Array.isArray(message.recipients)?message.recipients:[];
+  return [...new Set([message.recipient,...recipients].map(recipient=>
+    typeof recipient==='string'?recipient:recipient?.name||recipient?.recipient).filter(Boolean))];
 }
 function senderName(message){
   return typeof message.sender==='string'
@@ -1530,7 +1552,102 @@ function observedMailTime(message,serverNowMs){
 function pairKey(a,b){
   return a.localeCompare(b)<=0?`${a}\u001f${b}`:`${b}\u001f${a}`;
 }
+function rememberEdgeSubjects(messages){
+  for(const message of messages||[]){
+    const sender=senderName(message);
+    if(typeof sender!=='string'||!sender)continue;
+    const ts=timestampMs(message.ts||message.created_ts)??Date.now();
+    const id=Number(message.id)||0;
+    const subject=String(message.subject||'').trim()||'(No subject)';
+    for(const recipient of recipientNames(message)){
+      if(typeof recipient!=='string'||recipient===sender)continue;
+      const key=pairKey(sender,recipient),prior=latestEdgeSubjects.get(key);
+      if(prior&&(prior.ts>ts||prior.ts===ts&&prior.id>=id))continue;
+      latestEdgeSubjects.delete(key);
+      latestEdgeSubjects.set(key,{ts,id,subject});
+    }
+  }
+  while(latestEdgeSubjects.size>512)latestEdgeSubjects.delete(latestEdgeSubjects.keys().next().value);
+}
+function loadEdgeSubjects(agent){
+  if((edgeSubjectFetches.get(agent)||0)>Date.now())return;
+  edgeSubjectFetches.delete(agent);
+  edgeSubjectFetches.set(agent,Date.now()+30000);
+  if(edgeSubjectFetches.size>64)edgeSubjectFetches.delete(edgeSubjectFetches.keys().next().value);
+  const query=new URLSearchParams({limit:100,agent});
+  fetch('/telemetry/mail/recent?'+query,{cache:'no-store'})
+    .then(response=>response.ok?response.json():null)
+    .then(data=>{
+      if(!Array.isArray(data?.messages))return;
+      rememberEdgeSubjects(data.messages);
+      syncMiniEdgeSubject();
+    }).catch(()=>{});
+}
+function syncMiniEdgeSubject(){
+  if(!miniEdgeSubjectTip)return;
+  const hover=miniEdgePointer&&document.elementFromPoint(miniEdgePointer.x,miniEdgePointer.y);
+  const candidate=hover?.closest('.orrery-mail-edge')||
+    (document.activeElement?.matches('.orrery-mail-edge:focus-visible')?document.activeElement:null);
+  const edge=miniSvg.contains(candidate)?candidate:null;
+  const key=edge?pairKey(edge.dataset.edgeFrom,edge.dataset.edgeTo):'';
+  const subject=latestEdgeSubjects.get(key)?.subject;
+  if(key!==miniEdgeSubjectKey){
+    miniEdgeSubjectKey=key;
+    clearTimeout(miniEdgeSubjectTimer);
+    if(edge&&!subject){
+      const {edgeFrom,edgeTo}=edge.dataset;
+      miniEdgeSubjectTimer=setTimeout(()=>{
+        loadEdgeSubjects(edgeFrom);
+        loadEdgeSubjects(edgeTo);
+      },140);
+    }
+  }
+  if(describedMiniEdge!==edge||!subject){
+    describedMiniEdge?.removeAttribute('aria-describedby');
+    describedMiniEdge=null;
+  }
+  miniEdgeSubjectTip.hidden=!subject;
+  if(!subject)return;
+  if(describedMiniEdge!==edge){
+    edge.setAttribute('aria-describedby',miniEdgeSubjectTip.id);
+    describedMiniEdge=edge;
+  }
+  if(miniEdgeSubjectTip.textContent!==subject)miniEdgeSubjectTip.textContent=subject;
+  const bounds=miniViewport.getBoundingClientRect(),anchor=edge.getBoundingClientRect();
+  const point=hover?.closest('.orrery-mail-edge')===edge?miniEdgePointer:
+    {x:anchor.left+anchor.width/2,y:anchor.top+anchor.height/2};
+  const w=miniEdgeSubjectTip.offsetWidth,h=miniEdgeSubjectTip.offsetHeight;
+  const px=point.x-bounds.left,py=point.y-bounds.top;
+  const positions=[[px+10,py-h-10],[px-w-10,py-h-10],[px+10,py+10],[px-w-10,py+10]]
+    .map(([x,y])=>[Math.max(8,Math.min(bounds.width-w-8,x)),Math.max(8,Math.min(bounds.height-h-8,y))]);
+  const nodes=[...miniMotion.nodes.values()].map(node=>node.getBoundingClientRect());
+  const [x,y]=positions.find(([left,top])=>nodes.every(rect=>
+    bounds.left+left+w<=rect.left||bounds.left+left>=rect.right||
+    bounds.top+top+h<=rect.top||bounds.top+top>=rect.bottom))||positions[0];
+  miniEdgeSubjectTip.style.left=x+'px';
+  miniEdgeSubjectTip.style.top=y+'px';
+}
+function installMiniEdgeSubject(){
+  miniEdgeSubjectTip=document.createElement('div');
+  miniEdgeSubjectTip.className='mini-edge-subject';
+  miniEdgeSubjectTip.id='miniEdgeSubject';
+  miniEdgeSubjectTip.setAttribute('role','tooltip');
+  miniEdgeSubjectTip.hidden=true;
+  miniViewport.appendChild(miniEdgeSubjectTip);
+  miniSvg.addEventListener('pointermove',event=>{
+    miniEdgePointer=event.pointerType==='touch'?null:{x:event.clientX,y:event.clientY};
+    syncMiniEdgeSubject();
+  });
+  miniSvg.addEventListener('pointerleave',()=>{
+    miniEdgePointer=null;
+    syncMiniEdgeSubject();
+  });
+  miniSvg.addEventListener('focusin',syncMiniEdgeSubject);
+  miniSvg.addEventListener('focusout',()=>queueMicrotask(syncMiniEdgeSubject));
+  miniScroll.addEventListener('scroll',syncMiniEdgeSubject,{passive:true});
+}
 function recordMessages(messages,serverNowMs=null){
+  rememberEdgeSubjects(messages);
   const now=Date.now();
   (messages||[]).forEach(message=>{
     const from=senderName(message);
@@ -1772,6 +1889,7 @@ function refreshCommEdges(){
   renderCommLayer(miniSvg,miniPositions,miniMotion.layoutDimensions||MINI);
   miniMotion.edgeOffsets=miniParallelOffsets(miniMotion);
   updateSurfaceGeometry(miniMotion);
+  syncMiniEdgeSubject();
   if(planetarium&&planetarium.classList.contains('on')){
     renderCommLayer(
       planetSvg,planetPositions,
@@ -1820,9 +1938,79 @@ function subjectLabel(subject){
     ?characters.join('')
     :characters.slice(0,39).join('')+'…';
 }
+function paintMiniArrivalCaption(group,agent,arrival){
+  const textBlock=group?.querySelector('.orrery-caption');
+  if(!textBlock||!miniAppearance.showRoles)return;
+  let caption=textBlock.querySelector('.orrery-caption-role');
+  if(caption?.classList.contains('orrery-caption-action'))return;
+  if(!caption){
+    if(!arrival)return;
+    caption=document.createElement('div');
+    caption.className='orrery-caption-role';
+    textBlock.appendChild(caption);
+  }
+  caption.classList.toggle('orrery-caption-arrival',Boolean(arrival));
+  if(!arrival){
+    const role=roleOf(agent);
+    if(role)caption.textContent=role;
+    else caption.remove();
+    return;
+  }
+  const text=document.createElement('span');
+  text.className='orrery-arrival-subject';
+  text.textContent=arrival.subject;
+  caption.replaceChildren(text);
+  if(arrival.count>1){
+    const count=document.createElement('span');
+    count.className='orrery-arrival-count';
+    count.textContent='+'+(arrival.count-1);
+    caption.appendChild(count);
+  }
+  const delay=`${arrival.started-performance.now()}ms`;
+  for(const part of caption.children)part.style.animationDelay=delay;
+}
+function showMiniArrivalSubject(recipient,message){
+  const previous=miniArrivalSubjects.get(recipient);
+  clearTimeout(previous?.timeout);
+  const arrival={
+    subject:String(message.subject||'').trim()||'(No subject)',
+    count:(previous?.count||0)+1,
+    started:performance.now(),
+  };
+  const paint=value=>paintMiniArrivalCaption(miniMotion.nodes.get(recipient),miniPositions.get(recipient)?.agent,value);
+  miniArrivalSubjects.set(recipient,arrival);
+  paint(arrival);
+  arrival.timeout=setTimeout(()=>{
+    miniArrivalSubjects.delete(recipient);
+    paint(null);
+  },MINI_ARRIVAL_SUBJECT_MS);
+}
+function playMiniArrivalRipple(recipient){
+  miniRipples.get(recipient)?.remove();
+  const ring=svgEl('circle',{class:'orrery-comet-ripple','aria-hidden':'true',opacity:0});
+  miniRipples.set(recipient,ring);
+  miniSvg.appendChild(ring);
+  let started=null;
+  function animateRipple(now){
+    const node=miniPositions.get(recipient);
+    if(started===null)started=now;
+    const elapsed=now-started;
+    if(!ring.isConnected||!node||node.removing||elapsed>=MINI_RIPPLE_MS||
+       miniSvg.hasAttribute('hidden')||document.hidden||motionIsReduced()){
+      ring.remove();
+      if(miniRipples.get(recipient)===ring)miniRipples.delete(recipient);
+      return;
+    }
+    const progress=elapsed/MINI_RIPPLE_MS;
+    ring.setAttribute('cx',node.x);
+    ring.setAttribute('cy',node.y);
+    ring.setAttribute('r',(13+13*progress)*miniAppearance.nodeSize/100);
+    ring.style.opacity=String(.85*(1-progress));
+    requestAnimationFrame(animateRipple);
+  }
+  requestAnimationFrame(animateRipple);
+}
 function animateComet(target,positions,fromName,toName,message,large){
-  const from=positions.get(fromName),to=positions.get(toName);
-  if(!from||!to||motionIsReduced())return Promise.resolve();
   const important=/^(high|urgent)$/i.test(message.importance||'');
   const flight=svgEl('g',{
     class:'orrery-comet-flight'+(important?' important':''),
@@ -1831,6 +2019,18 @@ function animateComet(target,positions,fromName,toName,message,large){
     rx:large?20:9,ry:large?3.2:1.45});
   const halo=svgEl('circle',{class:'orrery-comet-halo',cx:0,cy:0,r:large?10:4.8});
   const head=svgEl('circle',{class:'orrery-comet',cx:0,cy:0,r:large?(important?6:4.5):(important?2.9:2.1)});
+  if(!large){
+    const id='mini-comet-tail-'+(++cometId);
+    const gradient=svgEl('linearGradient',{id});
+    gradient.append(
+      svgEl('stop',{offset:0,'stop-color':'var(--amber)','stop-opacity':0}),
+      svgEl('stop',{offset:1,'stop-color':'var(--amber)'}),
+    );
+    const defs=svgEl('defs');
+    defs.appendChild(gradient);
+    flight.appendChild(defs);
+    tail.style.fill=`url(#${id})`;
+  }
   flight.append(tail,halo,head);
   if(large){
     const label=svgEl('text',{
@@ -1841,18 +2041,22 @@ function animateComet(target,positions,fromName,toName,message,large){
     flight.appendChild(label);
   }
   target.appendChild(flight);
-  const duration=700;
+  const duration=large?700:MINI_COMET_TRAVEL_MS;
   return new Promise(resolve=>{
     let started=null;
-    function frame(now){
+    function finish(){flight.remove();resolve();}
+    function animateFlight(now){
+      const from=positions.get(fromName),to=positions.get(toName);
+      if(!target.isConnected||target.hasAttribute('hidden')||document.hidden||motionIsReduced()||
+         !from||from.removing||!to||to.removing){finish();return;}
       if(started===null)started=now;
       const progress=Math.min(1,(now-started)/duration);
       const eased=progress<.5
         ?4*progress*progress*progress
         :1-Math.pow(-2*progress+2,3)/2;
-      const curve=commPathBetween(
-        from,to,positions,large&&planetMotion
-          ?planetMotion.layoutDimensions||PLANET:miniMotion.layoutDimensions||MINI);
+      const dimensions=large?planetMotion.layoutDimensions||PLANET:miniMotion.layoutDimensions||MINI;
+      const offset=large?undefined:miniMotion.edgeOffsets?.get(pairKey(fromName,toName));
+      const curve=commPathBetween(from,to,positions,dimensions,offset);
       const point=curve.point(eased);
       const envelope=cometEnvelope(progress);
       const ahead=curve.point(Math.min(1,eased+.01)),behind=curve.point(Math.max(0,eased-.01));
@@ -1861,10 +2065,16 @@ function animateComet(target,positions,fromName,toName,message,large){
       flight.style.opacity=String(envelope.opacity);
       tail.setAttribute('transform',`rotate(${angle})`);
       tail.style.opacity=String(envelope.tailOpacity);
-      if(progress<1)requestAnimationFrame(frame);
-      else{flight.remove();resolve();}
+      if(progress<1)requestAnimationFrame(animateFlight);
+      else{
+        if(!large){
+          playMiniArrivalRipple(toName);
+          showMiniArrivalSubject(toName,message);
+        }
+        finish();
+      }
     }
-    requestAnimationFrame(frame);
+    requestAnimationFrame(animateFlight);
   });
 }
 function cometEnvelope(t){
@@ -1876,30 +2086,51 @@ function cometEnvelope(t){
 }
 function launchComet(message,toName){
   const fromName=senderName(message);
-  if(!fromName||!miniPositions.has(fromName)||!miniPositions.has(toName))return;
-  if(activeComets>=MAX_COMETS)return;
-  activeComets+=1;
-  const animations=[
-    animateComet(miniSvg,miniPositions,fromName,toName,message,false),
-  ];
+  if(!fromName||fromName===toName)return;
+  const animations=[];
+  if(!miniSvg.hasAttribute('hidden')&&miniPositions.has(fromName)&&miniPositions.has(toName)){
+    animations.push(animateComet(miniSvg,miniPositions,fromName,toName,message,false));
+  }
   if(planetarium&&planetarium.classList.contains('on')&&
      planetPositions.has(fromName)&&planetPositions.has(toName)){
     animations.push(animateComet(
       planetSvg,planetPositions,fromName,toName,message,true));
   }
-  Promise.all(animations).finally(()=>{activeComets=Math.max(0,activeComets-1);});
+  if(!animations.length)return;
+  activeComets+=1;
+  Promise.all(animations).finally(()=>{
+    activeComets-=1;
+    drainComets();
+  });
+}
+function drainComets(){
+  if(document.hidden||motionIsReduced()){queuedComets.length=0;return;}
+  while(queuedComets.length&&activeComets<MAX_COMETS){
+    const [message,recipient]=queuedComets.shift();
+    launchComet(message,recipient);
+  }
 }
 function receiveMail(messages){
   recordMessages(messages);
   renderMini();
   renderPlanetarium();
-  const flights=[];
+  if(document.hidden)return;
+  if(motionIsReduced()){
+    if(miniSvg.hasAttribute('hidden'))return;
+    for(const message of messages||[]){
+      const sender=senderName(message);
+      if(!miniPositions.has(sender))continue;
+      for(const recipient of recipientNames(message)){
+        if(recipient!==sender&&miniPositions.has(recipient))showMiniArrivalSubject(recipient,message);
+      }
+    }
+    return;
+  }
   (messages||[]).forEach(message=>{
-    recipientNames(message).forEach(recipient=>flights.push([message,recipient]));
+    recipientNames(message).forEach(recipient=>queuedComets.push([message,recipient]));
   });
-  requestAnimationFrame(()=>{
-    flights.forEach(([message,recipient])=>launchComet(message,recipient));
-  });
+  if(queuedComets.length>MAX_QUEUED_COMETS)queuedComets.splice(0,queuedComets.length-MAX_QUEUED_COMETS);
+  requestAnimationFrame(drainComets);
 }
 
 document.addEventListener('oc:agents',event=>{
@@ -1909,6 +2140,15 @@ document.addEventListener('oc:agents',event=>{
 });
 document.addEventListener('oc:mail',event=>
   receiveMail(event.detail&&event.detail.messages));
+document.addEventListener('oc:agent-action',renderMini);
+document.addEventListener('oc:agent-exit-confirmed',event=>{
+  const name=event.detail.name;
+  const node=miniMotion.nodes.get(name);
+  if(!node)return;
+  window.OrreryExitDust?.play(node,miniSvg.closest('.mini-graph-scroll')||miniSvg);
+  miniMotion.states.delete(name);
+  node.remove();
+});
 document.addEventListener('oc:stage-agent',event=>{
   const name=event.detail&&event.detail.name||'';
   const changed=name!==miniFocusName;
@@ -1972,6 +2212,7 @@ miniSvg.addEventListener('focusout',event=>{
 addExpandAffordance(miniExpand,{...MINI,width:28,height:28},false);
 installMiniZoom();
 installMiniAppearance();
+installMiniEdgeSubject();
 installMiniPan();
 installMiniGraphDivider();
 renderMini();

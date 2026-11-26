@@ -589,29 +589,41 @@
   .agent-detail-switch.unknown{justify-content:center}
   .agent-detail-switch.unknown::before{width:8px;height:1px}
   #mailRail .agent-detail[data-mini-dock]{
-    --agent-detail-row-height:24px;
+    --agent-detail-label-width:clamp(66px,26%,89px);
     position:static;z-index:auto;flex:0 1 auto;width:auto;min-height:0;max-height:35vh;
-    margin:2px 16px 0;padding:7px 7px 10px;border:0;border-radius:0;
+    margin:0 16px 3px;padding:10px 6px;border:0;border-bottom:1px solid var(--hair);border-radius:0;
     background:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;
-    font:12px/1.45 var(--rail-sans);font-variant-numeric:tabular-nums;
+    font:13px/1.4 var(--rail-sans);font-variant-numeric:tabular-nums;
   }
-  .agent-detail[data-mini-dock] .agent-detail-name{
-    display:grid;align-content:center;min-height:var(--agent-detail-row-height);
-    color:var(--ink);font:inherit;font-weight:600;
+  .agent-detail-dock-heading{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .agent-detail-dock-heading > :last-child{min-width:0}
+  .agent-detail-dock-portrait{flex:none}
+  .agent-detail-dock-portrait > .conversation-avatar.medal{display:block;width:34px;height:34px;margin:0}
+  .agent-detail-dock-portrait .conversation-avatar .face{font-size:13px}
+  .agent-detail-dock-portrait .conversation-avatar .provider-badge{width:17px;height:17px;right:-3px;bottom:-3px}
+  .agent-detail-dock-portrait .conversation-avatar .provider-badge .provider-logo{max-width:11px;height:10px}
+  .agent-detail[data-mini-dock] .agent-detail-name{color:var(--ink);font:500 17px/1.2 var(--serif)}
+  .agent-detail[data-mini-dock] .agent-detail-identity{margin-top:2px;font-size:12px}
+  .agent-detail[data-mini-dock] .agent-detail-identity .agent-detail-item{align-items:center}
+  .agent-detail[data-mini-dock] .agent-detail-identity .agent-detail-item:has(.agent-detail-role) > svg{display:none}
+  .agent-detail[data-mini-dock] :is(.agent-detail-meta,.agent-detail-permissions){
+    display:grid;grid-template-columns:minmax(0,1fr);gap:0;margin:0;
   }
-  .agent-detail[data-mini-dock] :is(.agent-detail-identity,.agent-detail-runtime,.agent-detail-meta){
-    margin-top:0;row-gap:0;
+  .agent-detail[data-mini-dock] :is(.agent-detail-meta,.agent-detail-permissions) > .agent-detail-item{
+    display:grid;grid-template-columns:var(--agent-detail-label-width) minmax(0,1fr);
+    gap:6px;align-items:center;min-height:24px;padding:0;border:0;
   }
-  .agent-detail[data-mini-dock] .agent-detail-item{min-height:var(--agent-detail-row-height);align-items:center}
-  .agent-detail[data-mini-dock] .agent-detail-icon{margin-top:0}
-  .agent-detail[data-mini-dock] :is(.agent-detail-model,.agent-detail-context strong,.agent-detail-modes .current){font-weight:400}
+  .agent-detail-dock-label{display:flex;align-items:center;gap:5px;color:var(--ink-dim);font-size:12px}
+  .agent-detail-dock-label .agent-detail-icon{width:13px;height:13px;margin:0}
+  .agent-detail[data-mini-dock] :is(.agent-detail-model,.agent-detail-directory){color:var(--ink);font-weight:400}
   .agent-detail[data-mini-dock] .agent-detail-permissions{
-    display:grid;grid-template-columns:minmax(0,1fr);gap:0;padding:0;
-    border:0;border-radius:0;background:transparent;
+    margin-top:5px;padding:5px 0 0;border:0;border-radius:0;background:transparent;
   }
-  .agent-detail[data-mini-dock] .agent-detail-permissions .agent-detail-item{padding:0;border:0}
-  .agent-detail[data-mini-dock] > :is(.agent-detail-permissions,.agent-detail-meta){
-    margin-top:4px;padding-top:4px;border-top:1px solid var(--hair);
+  .agent-detail[data-mini-dock] .agent-detail-meta + .agent-detail-permissions{border-top:1px solid var(--hair)}
+  .agent-detail[data-mini-dock] .agent-detail-browser-toggle{justify-self:start}
+  .agent-detail[data-mini-dock] .agent-detail-permissions .agent-detail-modes{min-width:0}
+  .agent-detail[data-mini-dock] .agent-detail-observed-reason{
+    padding-left:calc(var(--agent-detail-label-width) + 6px);
   }
   .agent-permission-confirm{
     width:min(390px,calc(100vw - 24px));margin:auto;padding:16px;border:1px solid var(--hair);border-radius:10px;
@@ -2345,13 +2357,28 @@
             "value": "var(--ink-dim)"
           },
           {
+            "property": "border-bottom",
+            "selector": "#mailRail .agent-detail[data-mini-dock]",
+            "value": "1px solid var(--hair)"
+          },
+          {
             "property": "color",
             "selector": ".agent-detail[data-mini-dock] .agent-detail-name",
             "value": "var(--ink)"
           },
           {
+            "property": "color",
+            "selector": ".agent-detail-dock-label",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail[data-mini-dock] :is(.agent-detail-model,.agent-detail-directory)",
+            "value": "var(--ink)"
+          },
+          {
             "property": "border-top",
-            "selector": ".agent-detail[data-mini-dock] > :is(.agent-detail-permissions,.agent-detail-meta)",
+            "selector": ".agent-detail[data-mini-dock] .agent-detail-meta + .agent-detail-permissions",
             "value": "1px solid var(--hair)"
           },
           {
@@ -3255,6 +3282,21 @@
             "value": "var(--ink)"
           },
           {
+            "property": "border",
+            "selector": ".mini-edge-subject",
+            "value": "1px solid var(--hair)"
+          },
+          {
+            "property": "background",
+            "selector": ".mini-edge-subject",
+            "value": "var(--panel-2)"
+          },
+          {
+            "property": "color",
+            "selector": ".mini-edge-subject",
+            "value": "var(--ink)"
+          },
+          {
             "property": "fill",
             "selector": ".mini-initial",
             "value": "var(--ink)"
@@ -3739,6 +3781,11 @@
           {
             "property": "color",
             "selector": ".agent-detail-browser-toggle",
+            "value": "var(--ink-dim)"
+          },
+          {
+            "property": "color",
+            "selector": ".agent-detail-dock-label",
             "value": "var(--ink-dim)"
           },
           {
@@ -4293,7 +4340,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "98f32f786bae0463d79f75c88d95a2de9393a4cab11b4f9f018cf38bae4841f3",
+        "digest": "1809e30b4ee08a8a65680e8e020fe0ab60833b7e508cda8919839773f1a9023d",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4386,7 +4433,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "edb21c5c600730fc7412ded99338a09b847e26ee9a9d5abc8121658998c714e2",
+        "digest": "e9435504341c9baeb6784e9e45e4de79651aa870d8a5fd325e0cdaa10e9a6d09",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -9561,6 +9608,7 @@ function finishAgentExits(exits){
     const group=sessionGroups.get(name);
     dust?.play(tiles.get(name),rosterEl);
     dust?.play(group?.el,tabsEl);
+    document.dispatchEvent(new CustomEvent('oc:agent-exit-confirmed',{detail:{name}}));
     clearAgentExit(name,action,{repaint:false});
     if(group)detachSession(name,false);
   }
@@ -9754,7 +9802,6 @@ const PERMISSION_CONTROLS_API=54;
 const AGENT_DETAIL_TOKENS=new Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1});
 const AGENT_DETAIL_ICONS={
   role:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M5.5 16a3.5 3.5 0 0 1 7 0m3-6h2.5m-2.5 4H18"/>',
-  top:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2"/>',
   children:'<path d="M6 5v14h7M6 12h7"/><circle cx="16" cy="12" r="2"/><circle cx="16" cy="19" r="2"/>',
   parent:'<circle cx="12" cy="5" r="2"/><rect x="3" y="16" width="5" height="4" rx="1"/><rect x="16" y="16" width="5" height="4" rx="1"/><path d="M12 7v5m-6.5 4v-4h13v4"/>',
   computer:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4m-4 0h8"/>',
@@ -9837,7 +9884,7 @@ function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false,pendin
   };
   return {
     name:a.name,role:text(a.annot?.role),pendingAction,
-    parentState:a.parent_state,parent:a.parent_state==='child'?text(a.parent_agent):null,
+    parent:a.parent_state==='child'?text(a.parent_agent):null,
     computer:setting('computer_use'),browser:setting('browser_use'),
     permissions:Boolean(a.harness_kind||a.lifecycle==='persistent'||a.surface==='codex-app'||permissionConversationOnly(a)||
       a.computer_use||typeof a.browser_use==='boolean'||a.permission_controls),
@@ -9851,13 +9898,16 @@ function agentDetailIcon(icon){
   return `<svg class="agent-detail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${AGENT_DETAIL_ICONS[icon]}</svg>`;
 }
-function agentDetailItem(icon,label,body='',path=null){
+function agentDetailDockLabel(label,icon=''){
+  return `<span class="agent-detail-dock-label" aria-hidden="true">${icon?agentDetailIcon(icon):''}${esc(label)}</span>`;
+}
+function agentDetailItem(icon,label,body='',path=null,mark=agentDetailIcon(icon)){
   const description=esc(label);
   const pathAttribute=path===null?'':` data-demo-path-value="${esc(path)}"`;
   return `<div class="agent-detail-item" role="group" title="${description}" aria-label="${description}"${pathAttribute}>
-    ${agentDetailIcon(icon)}${body}</div>`;
+    ${mark}${body}</div>`;
 }
-function agentDetailPermissions(detail){
+function agentDetailPermissions(detail,mini=false){
   if(!detail.permissions)return '';
   const {computer,browser}=detail;
   const computerValue=AGENT_DETAIL_COMPUTER.get(computer.value)||'Unknown';
@@ -9867,10 +9917,13 @@ function agentDetailPermissions(detail){
   const shared=[...new Set(['observation','reason'].map(key=>
     readOnly&&computer[key]===browser[key]?computer[key]:null).filter(Boolean))];
   const note=value=>value?`<small>${esc(value)}</small>`:'';
+  const computerMark=mini?agentDetailDockLabel('Computer','computer'):agentDetailIcon('computer');
+  const browserMark=mini?agentDetailDockLabel('Browser','browser'):agentDetailIcon('browser');
   const mark=(icon,label,value,setting)=>agentDetailItem(icon,
     description(label,value,setting.observation||setting.reason),
-    `<span class="agent-detail-value"><small>${label}</small><span>${value}</span>
-      ${[...new Set([setting.observation,setting.reason])].filter(value=>!shared.includes(value)).map(note).join('')}</span>`);
+    `<span class="agent-detail-value">${mini?'':note(label)}<span>${value}</span>
+      ${[...new Set([setting.observation,setting.reason])].filter(value=>!shared.includes(value)).map(note).join('')}</span>`,
+    null,icon==='computer'?computerMark:browserMark);
   const choices=(field,label,modes,current,available=null)=>`<span class="agent-detail-modes">${[...modes].map(([value,text])=>{
     const disabled=available&&!available.includes(value);
     const title=`${label}: ${text}${disabled?' (unavailable for this agent)':''}`;
@@ -9884,10 +9937,10 @@ function agentDetailPermissions(detail){
   return `<div class="agent-detail-permissions${readOnly?' agent-detail-observed':''}" role="group"
     aria-label="${readOnly?'Read-only permissions':'Permissions'}">
     ${computer.action?agentDetailItem('computer',description('Computer use',computerValue,computer.observation),
-      choices('computer','Computer use',AGENT_DETAIL_COMPUTER,computer.value)):mark('computer','Computer use',computerValue,computer)}
+      choices('computer','Computer use',AGENT_DETAIL_COMPUTER,computer.value),null,computerMark):mark('computer','Computer use',computerValue,computer)}
     ${browser.action?(browser.options.length?agentDetailItem('browser',description('Browser use',browserValue,browser.observation),
-      choices('browser','Browser use',AGENT_DETAIL_BROWSER,browser.mode,browser.options)):`<div class="agent-detail-item" title="${browserTitle}">
-      ${agentDetailIcon('browser')}<button class="agent-detail-browser-toggle" type="button" data-browser
+      choices('browser','Browser use',AGENT_DETAIL_BROWSER,browser.mode,browser.options),null,browserMark):`<div class="agent-detail-item" title="${browserTitle}">
+      ${browserMark}<button class="agent-detail-browser-toggle" type="button" data-browser
         ${browser.value===null?'':`role="switch" aria-checked="${browser.value}"`}
         aria-label="${browser.value===null||browser.observation?browserTitle:'Browser use'}" title="${browserTitle}">
         <span class="agent-detail-switch${switchState}" aria-hidden="true"></span></button></div>`):
@@ -9895,9 +9948,9 @@ function agentDetailPermissions(detail){
     ${shared.map(value=>`<small class="agent-detail-observed-reason">${esc(value)}</small>`).join('')}
   </div>`;
 }
-function agentDetailHTML(detail){
+function agentDetailHTML(detail,mini=false){
   const group=(name,content)=>content?`<div class="agent-detail-${name}">${content}</div>`:'';
-  const text=(icon,label,value)=>{
+  const text=(icon,label,value,caption='')=>{
     if(!value)return'';
     const directory=icon==='directory';
     const escaped=esc(value);
@@ -9907,12 +9960,19 @@ function agentDetailHTML(detail){
     const content=directory&&!demoDirectory?escaped.replaceAll('/','/<wbr>'):escaped;
     return agentDetailItem(icon,`${label}: ${directory?detail.cwd:value}`,
       `<span class="agent-detail-value agent-detail-${icon}"${demoDirectory?' data-demo-path':''}>${content}</span>`,
-      demoDirectory?detail.cwd:null);
+      demoDirectory?detail.cwd:null,mini&&caption?agentDetailDockLabel(caption):undefined);
   };
-  let lineage='';
-  if(detail.parentState==='top')lineage=agentDetailItem('top','Top level');
-  if(detail.parentState==='child')lineage=detail.parent?text('parent','Parent',detail.parent):agentDetailItem('parent','Child agent');
+  let lineage=text('parent','Parent',detail.parent);
   if(detail.hiddenChildren?.length)lineage+=text('children','Hidden descendants',detail.hiddenChildren.join(', '));
+  const action=detail.pendingAction?
+    `<span class="agent-detail-pending-action" title="${esc(detail.pendingAction+' '+detail.name+'…')}">${esc(detail.pendingAction)}</span>`:'';
+  const name=`<div class="agent-detail-name" id="agentDetailName">${esc(detail.name)}${action}</div>`;
+  const identity=group('identity',text('role','Role',detail.role)+lineage);
+  const model=text('model','Model',detail.model,'Model');
+  const harness=text('harness','Harness',detail.harness,'Harness');
+  const directory=text('directory','Working directory',detail.directory,'Folder');
+  if(mini)return `<div class="agent-detail-dock-heading"><div class="agent-detail-dock-portrait"></div><div>${name}${identity}</div></div>
+    ${group('meta',model+harness+directory)}${agentDetailPermissions(detail,true)}`;
   const context=[];
   if(detail.tokens!==null)context.push(detail.tokens.toLocaleString('en')+' tokens');
   if(detail.used!==null)context.push(detail.used+'% used');
@@ -9921,13 +9981,8 @@ function agentDetailHTML(detail){
       ${detail.tokens===null?'':`<span>${AGENT_DETAIL_TOKENS.format(detail.tokens)}</span>`}
       ${detail.used===null?'':`<span class="agent-detail-meter${detail.used>CONTEXT_HOT_PERCENT?' hot':''}" aria-hidden="true"><i style="width:${detail.used}%"></i></span><strong>${detail.used}%</strong>`}
     </span>`):'';
-  const runtime=text('harness','Harness',detail.harness)+text('effort','Effort',detail.effort);
-  const action=detail.pendingAction?
-    `<span class="agent-detail-pending-action" title="${esc(detail.pendingAction+' '+detail.name+'…')}">${esc(detail.pendingAction)}</span>`:'';
-  return `<div class="agent-detail-name" id="agentDetailName">${esc(detail.name)}${action}</div>
-    ${group('identity',text('role','Role',detail.role)+lineage)}
-    ${agentDetailPermissions(detail)}
-    ${group('meta',text('model','Model',detail.model)+group('runtime',runtime)+contextRow+text('directory','Working directory',detail.directory))}`;
+  const runtime=harness+text('effort','Effort',detail.effort);
+  return `${name}${identity}${agentDetailPermissions(detail)}${group('meta',model+group('runtime',runtime)+contextRow+directory)}`;
 }
 function isMiniDetailAnchor(el){return el?.classList.contains('mini-agent');}
 function positionAgentDetail(el){
@@ -9958,7 +10013,7 @@ function showAgentDetail(el){
   const row=rosterRowsByName.get(a.name);
   const hiddenChildren=row?.folded?rosterRows.slice(row.index+1,row.end).map(child=>child.name):[];
   const html=agentDetailHTML(agentDetailModel(a,hostPlatform.home_dir,hiddenChildren,permissionApi,
-    bulkActionBusy||permissionChangeBusy,pendingAgentAction(a.name)));
+    bulkActionBusy||permissionChangeBusy,pendingAgentAction(a.name)),mini);
   const focused=agentDetail.contains(document.activeElement)?document.activeElement:null;
   const mount=mini?detailGraphDivider:el;
   agentDetail.toggleAttribute('data-mini-dock',mini);
@@ -9969,6 +10024,11 @@ function showAgentDetail(el){
       focused?.matches('[data-computer]')?agentDetail.querySelector(`[data-computer="${focused.dataset.computer}"]`):null;
     if(focused&&focused!==agentDetail&&(!replacement||replacement.disabled))el.focus({preventScroll:true});
     else replacement?.focus({preventScroll:true});
+  }
+  const portrait=mini&&agentDetail.querySelector('.agent-detail-dock-portrait');
+  if(portrait){
+    const avatar=conversationAvatar(a.name,'',portrait.firstElementChild);
+    if(avatar!==portrait.firstElementChild)portrait.appendChild(avatar);
   }
   if(agentDetail.contains(focused)&&focused!==document.activeElement)focused.focus({preventScroll:true});
   setHidden(agentDetail,false);positionAgentDetail(el);
@@ -10192,6 +10252,7 @@ function refreshAgentActionDisplay(name){
   if(detailAnchor?.dataset.agent===name)showAgentDetail(detailAnchor);
   paintTerminalActions();
   promptCard.refresh();
+  document.dispatchEvent(new CustomEvent('oc:agent-action',{detail:{name}}));
 }
 function finishPermissionRestart(session,{failed=false}={}){
   const restart=permissionRestarts.get(session);
@@ -10560,6 +10621,7 @@ const railMotionPreference=matchMedia('(prefers-reduced-motion: reduce)');
 const railMoves=new WeakMap();
 const RAIL_SPRING='linear(0,.035 5%,.141 10%,.43 20%,.75 35%,.97 52%,1.025 66%,1.008 82%,1)';
 const railEase=CSS.supports('animation-timing-function',RAIL_SPRING)?RAIL_SPRING:'cubic-bezier(.2,.8,.2,1)';
+const railRowMotion={duration:275,easing:railEase};
 function railPositions(elements,viewport){
   const positions=new Map();
   if(railMotionPreference.matches||document.hidden||!viewport?.getClientRects().length)return positions;
@@ -10571,7 +10633,7 @@ function railPositions(elements,viewport){
   }
   return positions;
 }
-function railMoveRows(positions,motion={duration:275,easing:railEase}){
+function railMoveRows(positions,motion=railRowMotion){
   // Batch reads around the DOM writes and keep the on-screen position of
   // an interrupted animation as the next animation's starting point.
   for(const el of positions.keys())railMoves.get(el)?.cancel();
@@ -10589,6 +10651,12 @@ function railMoveRows(positions,motion={duration:275,easing:railEase}){
     if(Math.abs(x)+Math.abs(y)<=1)continue;
     railMoves.set(el,el.animate([{transform:`translate(${x}px,${y}px)`},{transform:'none'}],
       motion));
+  }
+}
+function railRevealRows(elements,viewport){
+  // Reveal each arriving row in place as the existing rows make room.
+  for(const el of railPositions(elements,viewport).keys()){
+    el.animate([{clipPath:'inset(0 0 100% 0)'},{clipPath:'inset(0)'}],railRowMotion);
   }
 }
 function railArrive(el,source,viewport){
@@ -10868,8 +10936,10 @@ function assignLineageHues(live){
    They subscribe to 'oc:agents' / 'oc:mail' document events for updates. */
 window.OC=Object.freeze({
   esc,relTime,jumpToAgent,rootOf,providerPresentation,
+  pendingAgentAction,paintActionText,
+  graphPendingAgents:()=>[...permissionRestarts.values(),...pendingAgentExits.values()].map(action=>action.original),
   bindMiniAgentDetail:node=>bindAgentDetail(node,true),syncMiniAgentDetail,
-  railPositions,railMoveRows,railArrive,
+  railPositions,railMoveRows,railArrive,railRevealRows,
   renderPeerAvatar:(name,existing)=>currentAgentNamed(name)?conversationAvatar(name,'',existing):null,
   lineageHue,                       // Map: agent name -> lineage hex
   get lineageParent(){return lineageParent;},  // Map: child -> parent
@@ -11348,7 +11418,9 @@ function renderProviderTabs(keepChoice=false){
     providerTabs.append(b);
   });
   const local=selFamily==='local',choices=entries.filter(e=>e.family===selFamily);
-  spawnModelSearch.hidden=spawnModelSearchField.hidden=!local&&choices.length<spawnSearchThreshold;
+  const rowCount=selFamily==='gemini'?[...new Set(choices.map(e=>e.provider))].reduce((count,provider)=>count+
+    SpawnPicker.displayModels(provider,choices.filter(e=>e.provider===provider).map(e=>e.model),selModel).length,0):choices.length;
+  spawnModelSearch.hidden=spawnModelSearchField.hidden=!local&&rowCount<spawnSearchThreshold;
   const hadDynamicSelection=Number.isInteger(selUrlIndex);
   let selected=choices.find(e=>e.provider.id===selProvider&&e.model.id===selModel&&
     (!Number.isInteger(e.model.url_index)||e.model.url_index===selUrlIndex)&&(!e.model.url_key||e.model.url_key===selUrlKey));
@@ -11579,12 +11651,13 @@ function renderSpawnModelChip(){
   if(maker)spawnModelMark.append(spawnBrand(maker.asset+'.svg'));
   spawnModelMark.classList.toggle('spawn-local-maker',Boolean(maker));
   spawnModelMark.title=maker?maker.label+' · Local':'';
-  const name=model?.display_name||model?.id||'Model';
+  const geminiFamily=SpawnPicker.geminiFamily(provider,model?.id);
+  const name=geminiFamily||model?.display_name||model?.id||'Model';
   spawnModelLabel.textContent=compactSpawnModelLabel(name);
   const info=effortsForModel(provider,selModel);
   const effort=effectiveSpawnEffort(provider,selModel);
   const harness=provider&&model&&SpawnPicker.harnesses(provider,model).find(h=>h.id===selHarness);
-  const description=[name,model?.id!==name?model?.id:'',spawnModelMark.title,harness?.label,effort].filter(Boolean).join(' · ');
+  const description=[name,!geminiFamily&&model?.id!==name?model?.id:'',spawnModelMark.title,harness?.label,effort].filter(Boolean).join(' · ');
   spawnModelButton.title=description;spawnModelButton.setAttribute('aria-label','Model and effort: '+description);
   spawnPips.hidden=!info.efforts?.length;
   const index=info.efforts?.indexOf(effort)??-1;
@@ -11687,7 +11760,8 @@ function renderModels(){
   }
   modelChoices.replaceChildren();
   const query=spawnModelSearch.hidden?'':spawnModelSearch.value.trim().toLowerCase();
-  const {current,older}=splitOverflowModels({...provider,models});
+  const rows=SpawnPicker.displayModels(provider,models,selModel);
+  const {current,older}=splitOverflowModels({...provider,models:rows});
   const addModel=(parent,model)=>{
     const label=document.createElement('label');label.className='model-choice';
     const input=document.createElement('input');
@@ -11696,13 +11770,13 @@ function renderModels(){
       selModel=model.id;selHarness=null;spawnProblem='';spawnChooseAgain=false;renderHarnesses();
       saveSpawnDraft();
     });
-    const name=document.createElement('span');name.className='model-choice-name';name.textContent=model.id;
+    const name=document.createElement('span');name.className='model-choice-name';name.textContent=model.pickerLabel||model.id;
     label.append(input,name);
-    label.title=[model.id,model.badge].filter(Boolean).join(' · ');
+    label.title=[name.textContent,model.badge].filter(Boolean).join(' · ');
     parent.appendChild(label);
   };
   if(query){
-    const matches=[...current,...older].filter(model=>model.id.toLowerCase().includes(query));
+    const matches=[...current,...older].filter(model=>(model.variantIds||[model.id]).some(id=>id.toLowerCase().includes(query)));
     matches.forEach(model=>addModel(modelChoices,model));
     if(!matches.length){
       const empty=document.createElement('p');empty.className='spawn-empty';empty.textContent='No models found. Try another name.';
@@ -11752,6 +11826,8 @@ function resolveSpawnEffort(levels,value,fallback){
 }
 function spawnExplicitEffortMissing(provider,model){
   if(!(provider&&provider.capabilities&&provider.capabilities.effort_required))return false;
+  const configured=provider.model_efforts?.[model];
+  if(provider.id==='gemini'&&Array.isArray(configured)&&configured.length===0)return false;
   const levels=effortsForModel(provider,model).efforts;
   return typeof selEffort!=='string'||!Array.isArray(levels)||!levels.includes(selEffort);
 }

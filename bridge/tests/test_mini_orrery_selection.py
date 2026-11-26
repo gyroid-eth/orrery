@@ -134,11 +134,11 @@ def test_network_and_planetarium_do_not_get_the_selection_ring(mini_browser):
         'network': [], 'planet': 0, 'planetNodes': 3, 'orrery': ['Pilot']}
 
 
-def test_mini_node_hover_docks_the_roster_card_without_covering_the_graph(mini_browser):
+def test_mini_node_hover_reuses_the_roster_card_permissions_and_portrait(mini_browser):
     client, evaluate = mini_browser
     before = evaluate("""(()=>{
       const agent=currentAgentNamed('Pilot');
-      Object.assign(agent,{model_id:'fixture-model',harness_kind:'codex',cwd:'/fixture/release',
+      Object.assign(agent,{model_id:'fixture-model',harness_kind:'codex',provider:'openai',cwd:'/fixture/release',
         annot:{role:'Release review'},permission_controls:{
           computer_use:{value:'view',can_change:true,action:'restart'},
           browser_use:{value:true,mode:'temporary',options:['off','temporary','personal'],
@@ -150,8 +150,11 @@ def test_mini_node_hover_docks_the_roster_card_without_covering_the_graph(mini_b
       const node=graph.querySelector('[data-agent="Pilot"]');
       node.scrollIntoView({block:'nearest',inline:'nearest'});
       window.fixtureDetail=agentDetail;
+      window.fixtureControls=()=>[...agentDetail.querySelectorAll('[data-browser],[data-computer]')].map(button=>button.outerHTML);
+      window.fixturePortrait=root=>[...root.querySelectorAll('.face img,.provider-logo')].map(img=>img.getAttribute('src'));
       const {x,y,width,height}=node.querySelector('.orrery-hit').getBoundingClientRect();
       return {card:agentDetail.innerHTML,graph:graph.getBoundingClientRect().toJSON(),
+        controls:fixtureControls(),portrait:fixturePortrait(tiles.get('Pilot').querySelector('.medal')),
         zoomed:graph.querySelector('svg.miniorrery').clientHeight>graph.clientHeight,
         x:x+width/2,y:y+height/2};
     })()""")
@@ -159,18 +162,26 @@ def test_mini_node_hover_docks_the_roster_card_without_covering_the_graph(mini_b
     for text in ('Pilot', 'fixture-model', 'Codex', 'Release review', '/fixture/release',
                  'data-computer="view"', 'Temporary Chrome'):
         assert text in before['card']
+    assert len(before['portrait']) == 2 and all(before['portrait'])
+    assert len(before['controls']) == 6
     client.call('Input.dispatchMouseEvent', type='mouseMoved', x=before['x'], y=before['y'])
     after = evaluate("""(()=>{
       const graph=document.getElementById('miniGraphViewport');
       const card=agentDetail.getBoundingClientRect();
       return {same:agentDetail===window.fixtureDetail,visible:!agentDetail.hidden,
-        card:agentDetail.innerHTML,graph:graph.getBoundingClientRect().toJSON(),
+        card:agentDetail.innerText,graph:graph.getBoundingClientRect().toJSON(),
+        labels:[...agentDetail.querySelectorAll('.agent-detail-dock-label')].map(label=>label.textContent),
+        controls:fixtureControls(),portrait:fixturePortrait(agentDetail.querySelector('.agent-detail-dock-portrait')),
+        portraitWidth:agentDetail.querySelector('.agent-detail-dock-portrait .medal').getBoundingClientRect().width,
         below:card.top>=graph.getBoundingClientRect().bottom,
         docked:agentDetail.previousElementSibling.id==='mailGraphDivider',
         point:{x:card.left+card.width/2,y:card.top+card.height/2}};
     })()""")
-    assert after == {**after, 'same': True, 'visible': True, 'card': before['card'],
-                     'graph': before['graph'], 'below': True, 'docked': True}
+    assert after == {**after, 'same': True, 'visible': True, 'graph': before['graph'], 'below': True,
+                     'docked': True, 'controls': before['controls'], 'portrait': before['portrait'], 'portraitWidth': 34,
+                     'labels': ['Model', 'Harness', 'Folder', 'Computer', 'Browser']}
+    assert all(value in after['card'] for value in ('Pilot', 'fixture-model', 'Codex',
+                                                    'Release review', '/fixture/release'))
     client.call('Input.dispatchMouseEvent', type='mouseMoved', **after['point'])
     assert evaluate("""(async()=>{
       await new Promise(resolve=>setTimeout(resolve,200));
@@ -199,18 +210,23 @@ def test_mini_node_keyboard_opens_shared_permissions_across_redraws(mini_browser
       draw();
       const restored=node()!==first&&document.activeElement===node();
       key(node(),'F2');
-      const button=agentDetail.querySelector('[data-browser]');draw();
+      const opened=document.activeElement.matches('[data-browser="off"]');
+      const personal=()=>agentDetail.querySelector('[data-browser="personal"]');
+      personal().focus();
+      currentAgentNamed('Helper').annot={role:'Release review'};
+      draw();
+      const button=personal();
       const retained=document.activeElement===button&&detailAnchor===node();
       button.click();
       const permission=permissionConfirm.open&&pendingPermissionChange.agent.name==='Helper'&&
-        [...permissionBrowser.options].map(option=>option.value).join(',')===',off,personal';
+        permissionBrowser.value==='personal'&&[...permissionBrowser.options].map(option=>option.value).join(',')===',off,personal';
       permissionConfirm.querySelector('[value="cancel"]').click();
       await new Promise(resolve=>setTimeout(resolve,0));
       button.focus();key(button,'Escape');
       draw();
       const dismissed=agentDetail.hidden&&document.activeElement===node();
-      return {restored,retained,permission,dismissed,shown};
-    })()""") == dict(restored=True, retained=True, permission=True, dismissed=True, shown=True)
+      return {restored,opened,retained,permission,dismissed,shown};
+    })()""") == dict(restored=True, opened=True, retained=True, permission=True, dismissed=True, shown=True)
     assert evaluate("""(async()=>{
       document.getElementById('mailGraphDivider').focus();
       document.querySelector('#orrery [data-agent="Helper"]').focus();
@@ -626,6 +642,47 @@ def test_graph_edge_mouse_and_keyboard_filter_mail_both_ways(mini_browser):
         assert evaluate('edgeChip()') == pair
 
 
+def test_hover_shows_latest_pair_subject_without_filtering_mail(mini_browser):
+    client, evaluate = mini_browser
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    point = evaluate("""(()=>{
+      const original=window.fetch;
+      const ts=Date.now()/1000-600;
+      window.fetch=(url,...args)=>{
+        if(typeof url==='string'&&url.startsWith('/telemetry/mail/recent?limit=100&agent=')){
+          return Promise.resolve(new Response(JSON.stringify({messages:[
+            {id:111,ts,sender:'Pilot',recipient:'Helper',subject:'Earlier'},
+            {id:113,ts,sender:'Helper',recipients:['Pilot','Watcher'],subject:'Latest <review>'},
+            {id:112,ts,sender:'Pilot',recipient:'Helper',subject:'Still earlier'},
+          ]})));
+        }
+        return original(url,...args);
+      };
+      const edge=document.querySelector('#orrery .orrery-spawn-edge');
+      const hit=edge.parentElement;
+      for(const ratio of [.5,.4,.6,.3,.7]){
+        const point=edge.getPointAtLength(edge.getTotalLength()*ratio).matrixTransform(edge.getScreenCTM());
+        if(document.elementFromPoint(point.x,point.y)?.closest('.orrery-mail-edge')===hit){
+          return {x:point.x,y:point.y};
+        }
+      }
+      return null;
+    })()""")
+    assert point is not None
+    client.call('Input.dispatchMouseEvent', type='mouseMoved', **point)
+    for _ in range(40):
+        subject = evaluate("document.querySelector('#miniEdgeSubject:not([hidden])')?.textContent")
+        if subject:
+            break
+        time.sleep(.025)
+    assert subject == 'Latest <review>'
+    assert evaluate("!document.querySelector('#miniEdgeSubject').children.length")
+    assert evaluate("document.querySelector('.mail-filter-summary').hidden")
+    client.call('Input.dispatchMouseEvent', type='mouseMoved', x=540, y=80)
+    assert evaluate("document.getElementById('miniEdgeSubject').hidden")
+
+
 def test_hover_and_focus_emphasize_only_incident_mini_edges_and_merge_mail_pairs(mini_browser):
     client, evaluate = mini_browser
     client.call('Emulation.setFocusEmulationEnabled', enabled=True)
@@ -737,9 +794,15 @@ def test_mini_appearance_panel_previews_and_persists_controls_outside_the_graph(
     evaluate('window.beforeAppearanceReload=true')
     client.call('Page.reload', ignoreCache=True)
     for _ in range(100):
-        if evaluate("!window.beforeAppearanceReload&&Boolean(document.getElementById('miniGraphAppearance'))"):
-            break
+        try:
+            if evaluate("!window.beforeAppearanceReload&&Boolean(document.getElementById('miniGraphAppearance'))"):
+                break
+        except RuntimeError as error:
+            if 'Inspected target navigated or closed' not in str(error):
+                raise
         time.sleep(.025)
+    else:
+        pytest.fail('Mini Graph appearance panel did not mount again')
     assert evaluate("JSON.parse(localStorage.getItem('oc-mini-appearance-v1'))") == expected
     assert evaluate("document.querySelector('#miniGraphAppearance [data-appearance=showRoles]').checked") is False
     evaluate("document.querySelector('.mini-graph-appearance-trigger').click()")
