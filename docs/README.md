@@ -14,6 +14,10 @@
 
 ## 使い方
 
+- [Cockpit の画面一覧](cockpit-map.md)
+- [agent を起動して依頼する](start-an-agent.md)
+- [Reader で参照ファイルを開く](read-a-file.md)
+- [届いた ORRERY Mail を読む](read-mail.md)
 - [使い方](usage.md) — 画面の guide/help map を入口に、必要な操作を詳しく調べる。
 - [Full tour](FULL_TOUR.md) — 16段の実操作とチェックの条件、ゲーム・保存・別窓の仕様。
 

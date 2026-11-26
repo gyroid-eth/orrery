@@ -15,6 +15,7 @@ import urllib.parse
 from pathlib import Path
 
 from browser import camera
+from guide_scenes import save_guides
 from PIL import Image, ImageDraw
 from scenes import save_cockpit, save_dashboard, save_phone
 
@@ -48,8 +49,10 @@ def chart(destination):
 
 
 @contextlib.contextmanager
-def fixtures(root):
+def fixtures(root, *, guide_board=None):
     command = [sys.executable, str(Path(__file__).with_name("fixture.py")), root]
+    if guide_board is not None:
+        command.extend(["--guide-board", guide_board])
     with subprocess.Popen(
         command, stdout=subprocess.PIPE, text=True, bufsize=1
     ) as process:
@@ -102,9 +105,14 @@ def main():
         "--cdp", default=os.environ.get("ORRERY_CDP_URL", "http://127.0.0.1:9250")
     )
     parser.add_argument(
-        "--group", choices=("all", "cockpit", "dashboard", "phone"), default="all"
+        "--group", choices=("all", "cockpit", "dashboard", "phone", "guides"), default="all"
+    )
+    parser.add_argument(
+        "--guide-board", type=Path, help="Tracked task note from the public demo vault (required for --group guides)"
     )
     args = parser.parse_args()
+    if args.group == "guides" and args.guide_board is None:
+        parser.error("--group guides requires --guide-board")
     if urllib.parse.urlsplit(args.cdp).hostname not in {
         "127.0.0.1",
         "localhost",
@@ -115,6 +123,11 @@ def main():
         root = Path(directory)
         snapshot(args.cockpit_source.resolve(), root / "app")
         snapshot(args.telemetry_source.resolve(), root / "tel")
+        if args.group == "guides":
+            with fixtures(root, guide_board=args.guide_board.resolve()) as (cockpit, _):
+                with camera(args.cdp, (1320, 760)) as browser:
+                    save_guides(browser, args.output / "cockpit", cockpit)
+            return
         subprocess.run(
             [
                 "bash",

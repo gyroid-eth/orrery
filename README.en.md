@@ -6,6 +6,13 @@
 
 ORRERY is a cockpit for arranging agent terminals, sending instructions, and following Mail and usage quotas. It supports Claude Code, Codex CLI, the optional Antigravity provider, and DeepSeek or Local models through dsh or Hermes.
 
+![Launch an agent, send it a task, and read the reply in Reader](docs/images/guides/start-an-agent.gif)
+
+- [Start an agent and send a task](docs/en/start-an-agent.md)
+- [Open a referenced file in Reader](docs/en/read-a-file.md)
+- [Read incoming ORRERY Mail](docs/en/read-mail.md)
+- [Cockpit map](docs/en/cockpit-map.md)
+
 ## Quick start
 
 **Start with the cockpit in your browser.** Run this line after preparing your Mac or Ubuntu 24.04 or later. On Windows, use the Ubuntu shell in WSL2. The command installs both the cockpit and [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry/blob/master/README.en.md).
@@ -53,10 +60,6 @@ Set up the features you want after the base install. Each guide covers the first
 | `~/orrery-work` | The agents' work folder (the project folder). It is the default folder of `+ NEW AGENT`. Mail and reservations follow the work-folder settings |
 
 Default ports are 8791 for the cockpit, 8770 for Telemetry, and 18765 for a new Mail installation. For changing the work folder and uninstalling, see [Work folder and Uninstall](#work-folder-and-uninstall).
-
-![ORRERY Cockpit with Agents on the left, three terminal panes and the composer in the center, and the mini-orrery and Mail on the right](docs/images/cockpit_overview.png)
-
-The three panes show fictional agents running Claude Code, Codex, and Antigravity.
 
 Pick an agent in the roster on the left, give instructions in the terminal in the center, and follow parent–child relationships and messages in the mini-orrery and Mail on the right. The terminals work even when ORRERY Telemetry is not running; features that depend on it show their status and degrade gracefully.
 

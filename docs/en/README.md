@@ -14,6 +14,10 @@ Start with **Your first flight → help map → Full tour** on screen, from cock
 
 ## Use the screen
 
+- [Cockpit map](cockpit-map.md)
+- [Start an agent and send a task](start-an-agent.md)
+- [Open a referenced file in Reader](read-a-file.md)
+- [Read incoming ORRERY Mail](read-mail.md)
 - [Usage](usage.md) — Start with in-app guides and help map; look up detailed controls as needed.
 - [Full tour](FULL_TOUR.md) — Sixteen real interactions, completion checks, the game, progress, and pop-out window.
 

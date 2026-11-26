@@ -16,3 +16,27 @@ From Telemetry, run `python3 scripts/refresh-docs-media.py` with the same flags.
 The output contains `cockpit/docs/` and `telemetry/docs/`. Open the images and review the GIF frames before copying them to a documentation checkout. The two Codex `/hooks` illustrations require manual capture in an isolated Codex environment with a human reviewing approval.
 
 Pass `--group cockpit`, `--group dashboard`, or `--group phone` to iterate on a single surface. The default CDP endpoint is `http://127.0.0.1:9250`. Set `ORRERY_CDP_URL` or pass `--cdp` for a different loopback endpoint.
+
+## Cockpit task guides
+
+Use the public demo vault's task note to capture the guides and the numbered
+cockpit map. The same GIFs are used by both documentation languages.
+
+```sh
+git -C /path/to/orrery-demo-vault show '1e10555:01_Planning/タスク.md' > /tmp/タスク.md
+python3 tools/docs_media/refresh.py \
+  --cockpit-source /path/to/orrery-checkout \
+  --telemetry-source /path/to/orrery-telemetry-checkout \
+  --guide-board /tmp/タスク.md \
+  --output /path/to/captures \
+  --group guides
+```
+
+Use Pillow 10.1 or later and have Poppler's `pdftoppm` available for environments
+where Chrome cannot capture an individual still. The Mail clip records the
+real cockpit's motion while an isolated fixture provides fictional messages.
+
+Review each frame before copying the output from `cockpit/docs/images/guides/`.
+These clips prioritize the relevant controls, so their crop changes as the
+task moves from the New agent dialog to the composer or Reader. The cockpit map
+is the full-screen exception. Keep its marker order and both map legends in sync.

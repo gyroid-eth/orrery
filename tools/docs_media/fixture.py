@@ -11,7 +11,9 @@ from aiohttp import web
 
 parser = argparse.ArgumentParser()
 parser.add_argument("snapshot", type=Path)
-base = parser.parse_args().snapshot
+parser.add_argument("--guide-board", type=Path)
+args = parser.parse_args()
+base = args.snapshot
 bridge = base / "app/bridge"
 dash = base / "tel/dashboard"
 sys.path.insert(0, str(base / "tel"))
@@ -24,7 +26,7 @@ network_css = re.search(
     re.S,
 )[1]
 identity = dict(
-    home="/Users/demo",
+    home="/DemoVault" if args.guide_board else "/Users/demo",
     users=["demo"],
     hosts=["demo-studio"],
     words=["demo-studio"],
@@ -40,12 +42,12 @@ names = [
     "SwiftBell",
 ]
 modelids = [
-    "claude-opus-4-7",
-    "gpt-5.6-sol",
-    "gemini-3.1-pro-high",
+    "claude-opus-5-5",
+    "gpt-6.2-sol",
+    "gemini-3.8-flash-high",
     "deepseek-v4-pro",
     "qwen3.6",
-    "gpt-5.6-sol",
+    "gpt-6.2-sol",
     "claude-sonnet-5",
 ]
 programs = [
@@ -79,7 +81,7 @@ agents = [
             "Check the navigation",
             "Review the examples",
         ][i],
-        cwd="/demo-workspace/release-review",
+        cwd=identity["home"] if args.guide_board else "/demo-workspace/release-review",
         created=int(now) - 600,
         ctx_used=44 + i * 6,
         ctx_window_tokens=200000,
@@ -230,6 +232,18 @@ events = [
         ts=fake_stamp,
     ),
 ]
+if args.guide_board:
+    preview_text = args.guide_board.read_text(encoding="utf-8")
+    preview_text = re.sub(r"\A---\n.*?\n---\n", "", preview_text, count=1, flags=re.S)
+    preview_text = "# Task board\n\n" + preview_text.split("%%", 1)[0].strip()
+    events = [
+        dict(id="request", kind="text", role="user", text="What should we work on next?", ts=fake_stamp),
+        dict(
+            id="result", kind="text", role="assistant", ts=fake_stamp,
+            text="I checked the task board. Start by organizing the experiment notes.",
+            references=[dict(id="a" * 32, label=args.guide_board.name, kind="file")],
+        ),
+    ]
 harness = lambda a, default: dict(
     id=a,
     label={"dsh": "dsh", "hermes": "Hermes", "antigravity": "Antigravity"}[a],
@@ -257,14 +271,14 @@ catalog = dict(
             "claude",
             "Claude",
             "claude-code",
-            ["claude-opus-4-7", "claude-sonnet-5"],
+            ["claude-opus-5-5", "claude-sonnet-5"],
             efforts=["low", "medium", "high", "max"],
         ),
         pick(
             "codex",
             "Codex",
             "codex-cli",
-            ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-astra", "gpt-5.5"],
+            ["gpt-6.2-sol", "gpt-6.2-astra", "gpt-6.1-terra", "gpt-6-luna"],
             efforts=["low", "medium", "high", "xhigh"],
         ),
         pick(
@@ -306,7 +320,7 @@ catalog = dict(
         scientists=["Curie", "Faraday", "Turing", "Gauss", "Noether", "Hopper", "Bell"],
     ),
     dirs=[
-        dict(path="/demo-workspace/release-review", label="Release review", exists=True)
+        dict(path=agents[0]["cwd"], label="Demo vault" if args.guide_board else "Release review", exists=True)
     ],
 )
 usage = dict(
@@ -406,6 +420,11 @@ TERMINAL_OUTPUT = {
         "  Remaining task: summarize changes"
     ),
 }
+if args.guide_board:
+    TERMINAL_OUTPUT.update({
+        "AmberCurie": "❯ What should we work on next?\r\n\r\n● Reading the demo task board…\r\n",
+        "WarmLovelace": "● Ready to review the task board.\r\n",
+    })
 PAUSED_REVIEW = (
     "Paused the review. The keyboard checklist and mobile captures are ready."
 )
@@ -475,6 +494,11 @@ async def ws_handle(req):
                     "PatientFaraday": "\r\n❯ 1\r\n\x1b[32m✓ Added the shortcuts to the release notes.\x1b[0m",
                     "WarmLovelace": "\r\n\r\n❯ What changed?\r\n\x1b[32m✓ Added keyboard shortcuts and verified the mobile layout.\x1b[0m",
                 }
+                if args.guide_board:
+                    replies["WarmLovelace"] = (
+                        "\r\n❯ What should we work on next?\r\n"
+                        "● Start by organizing the experiment notes.\r\n"
+                    )
                 if typ == "submit-prompt" and row["name"] in replies:
                     await ws.send_json(
                         dict(
@@ -616,6 +640,13 @@ async def app_handle(req):
         return J(dict(agents=agents))
     if path == "/telemetry/messages":
         return J(dict(ok=True, messages=messages, now=int(now)))
+    if args.guide_board and path == "/fixture-guide-mail" and req.method == "POST":
+        message_id = max(message["id"] for message in messages) + 1
+        messages.append(dict(
+            id=message_id, sender="BrightHopper", recipient="AmberCurie", ts=int(time.time()),
+            subject="Task board reviewed", body_md="Start by organizing the experiment notes.\n\nThe open tasks are in the demo vault.",
+        ))
+        return J(dict(ok=True))
     if path == "/telemetry/graph":
         return J(graph)
     if path == "/telemetry/mail/recent":
@@ -633,8 +664,8 @@ async def app_handle(req):
                 dict(
                     agents[0],
                     name=name,
-                    task="Check the release",
-                    annot=dict(role="Release reviewer"),
+                    task="Review the task board" if args.guide_board else "Check the release",
+                    annot=dict(role="Task reviewer" if args.guide_board else "Release reviewer"),
                     parent_agent=None,
                     history_session_id="fixture-tour-launch",
                     act_state="work",
@@ -647,7 +678,7 @@ async def app_handle(req):
         return J(
             dict(
                 path=identity["home"],
-                dirs=[dict(name="Release review", path=catalog["dirs"][0]["path"])],
+                dirs=[dict(name=catalog["dirs"][0]["label"], path=catalog["dirs"][0]["path"])],
             )
         )
     if path == "/fixture-reel":

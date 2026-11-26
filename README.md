@@ -6,6 +6,13 @@
 
 ORRERY は、agent のターミナルを並べて操作し、Mail のやり取りや利用枠を確認できる cockpit です。Claude Code、Codex CLI、導入済みの Antigravity、dsh または Hermes を使う DeepSeek／Local models に対応します。
 
+![New agent でタスクを選び、依頼を送って Reader で返事を読む](docs/images/guides/start-an-agent.gif)
+
+- [agent を起動して依頼する](docs/start-an-agent.md)
+- [Reader で参照ファイルを開く](docs/read-a-file.md)
+- [届いた ORRERY Mail を読む](docs/read-mail.md)
+- [Cockpit の画面一覧](docs/cockpit-map.md)
+
 ## クイックスタート
 
 **まずブラウザーで cockpit を開きます。** macOS のターミナルか Ubuntu 24.04 以降（Windows では WSL2 の Ubuntu）で、下の前提をそろえてから実行します。この1行で cockpit と [ORRERY Telemetry](https://github.com/gyroid-eth/orrery-telemetry/blob/master/README.md) をまとめて導入します。
@@ -53,10 +60,6 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 | `~/orrery-work` | agent の作業 folder（project folder）。`+ NEW AGENT` の既定の folder。Mail と予約は作業フォルダの設定に従う |
 
 既定ポートは cockpit が 8791、Telemetry が 8770、新規の Mail が 18765 です。作業 folder の変え方とアンインストールは[作業 folder とアンインストール](#作業-folder-とアンインストール)にあります。
-
-![ORRERY Cockpit。左に Agents、中央に3つのターミナルと入力欄、右に mini-orrery と Mail](docs/images/cockpit_overview.png)
-
-Claude Code、Codex、Antigravity の架空の agent をターミナル3つに分けて表示しています。
 
 左の roster で agent を選び、中央のターミナルで指示し、右の mini-orrery と Mail で親子関係とやり取りを追います。ターミナルだけなら ORRERY Telemetry が止まっていても使え、連携する機能は状態を表示して縮退します。
 
