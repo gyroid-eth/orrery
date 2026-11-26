@@ -256,6 +256,13 @@
   .roster-status[hidden]{display:none}
   button,input,select,textarea{font:inherit}
   button{color:inherit}
+  .reader-agent-link{
+    border:0;padding:0;background:none;color:inherit;font:inherit;letter-spacing:inherit;text-align:inherit;
+  }
+  .reader-agent-link:not(:disabled){cursor:pointer}
+  .reader-agent-link:not(:disabled):is(:hover,:focus-visible){color:var(--amber)}
+  .reader-agent-link:focus-visible{outline:1px solid var(--amber);outline-offset:2px}
+  .reader-agent-link:disabled{pointer-events:none}
   .new-agent{
     border:1px solid rgb(var(--theme-accent-rgb) / .3);border-radius:5px;padding:4px 8px;
     background:transparent;color:var(--amber);font-size:9px;letter-spacing:.13em;
@@ -4340,7 +4347,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "1809e30b4ee08a8a65680e8e020fe0ab60833b7e508cda8919839773f1a9023d",
+        "digest": "b7b3b940f4a3937a36b74338e259e1c8461112e4d542082bc4e851cb1ab6fcb2",
         "records": [
           ".sesschip\u0000font-size",
           ".colhead\u0000font-size",
@@ -4433,7 +4440,7 @@
         "unit": "element"
       },
       "source": {
-        "digest": "e9435504341c9baeb6784e9e45e4de79651aa870d8a5fd325e0cdaa10e9a6d09",
+        "digest": "0d34cf72fc789d38d639ec4a90850dee05cfbe78cc2d7746a4f4389764a95561",
         "records": [
           ".colhead\u0000letter-spacing",
           ".new-agent\u0000letter-spacing",
@@ -4462,9 +4469,9 @@
       }
     }
   },
-  "inventory_digest": "7e3c3a73c6748111f8a0b76ce588bccf5dfb07337807491aa035ad1740de966f",
+  "inventory_digest": "88ed8062d7d6b012efce44057c67af6d54f673e26e97adee3cd3cf513df9c328",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "74b200ce5fb3c3eb789a8467e3676f3130339eeed3cdb17a14830aa6321e051f",
+  "source_digest": "dbef4d8d427c38475d2fa4f64c340077440dff13d98646c1c16060a94466ccb5",
   "surface": "cockpit",
   "version": 1
 }
@@ -5214,7 +5221,7 @@ const splitPresetByCount=new Map();
 const splitRatiosByPreset=new Map();
 const splitMultiRatiosByLayout=new Map();
 const splitDividers=[];
-let activeId=null,pendingJump=null,pendingJumpSince=0;
+let activeId=null,pendingJump=null,pendingJumpSince=0,pendingJumpReader=false;
 let splitVisible=false,focusedSplitSession=null;
 let socket=null,resizeTimer=null,stageFitFrame=null;
 let splitLabelDrag=null;
@@ -7998,7 +8005,11 @@ function resetSession(msg){
   refreshSessionGroup(session);
   const background=composerAttaching.has(session)&&pendingJump!==session;
   if(background)renderStage();
-  else if(pendingJump===session){pendingJump=null;focusSession(session);}
+  else if(pendingJump===session){
+    const reader=pendingJumpReader;
+    pendingJump=null;pendingJumpReader=false;focusSession(session);
+    if(reader)conversationView.open(session);
+  }
   else if(restart?.attached)renderStage();
   else if(wasSplitFocus)focusSplitSession(session);
   else if(!splitVisible&&(wasActive||(activeId===null&&!paneWindowSelection)))focusSession(session);
@@ -8095,9 +8106,9 @@ function agentHasNoTerminal(name){
   if(!rec)return false;
   return /^codex-app/.test(String(rec.cmd||''));
 }
-function jumpToSessionTarget(name,{forceFocus=false}={}){
+function jumpToSessionTarget(name,{forceFocus=false,reader=false}={}){
   if(paneWindows.has(name)){
-    pendingJump=null;terminalLessAgent=null;paneWindowSelection=name;
+    pendingJump=null;pendingJumpReader=false;terminalLessAgent=null;paneWindowSelection=name;
     activeId=null;splitVisible=false;blurTerminalFocus();
     renderStage({fit:false});resetHead();
     scrName.textContent=name;scrPath.textContent='';scrBadge.textContent='';
@@ -8105,8 +8116,11 @@ function jumpToSessionTarget(name,{forceFocus=false}={}){
     paintPaneHeading(scrName.closest('.pane-heading'),name,'live');
     promptTarget.textContent='—';promptAva.hidden=true;
     refreshComposerVocabulary();refreshHeaderStats();
-    focusPaneWindow(name);return;
+    focusPaneWindow(name);
+    if(reader)postPaneMessage({type:'open-reader',session:name});
+    return;
   }
+  pendingJumpReader=reader;
   paneWindowSelection=null;
   const decision=resolveJump(
     name,[...availableSessions.keys()],[...attachedSessions],[...requestedSessions],
@@ -8150,7 +8164,12 @@ function jumpToSessionTarget(name,{forceFocus=false}={}){
     pendingJump=name;pendingJumpSince=Date.now();return;
   }
   pendingJump=name;pendingJumpSince=Date.now();
-  if(decision.kind==='focus'){pendingJump=null;if(decision.paneId)setActive(decision.paneId,'auto',{forceFocus});else focusSession(name,{forceFocus});}
+  if(decision.kind==='focus'){
+    pendingJump=null;
+    if(decision.paneId)setActive(decision.paneId,'auto',{forceFocus});
+    else focusSession(name,{forceFocus});
+    if(reader)conversationView.open(name);
+  }
   else if(decision.kind==='attach')requestAttach(name,true);
 }
 function jumpToAgent(name,event=null){
@@ -8761,6 +8780,7 @@ if(paneChannel)paneChannel.addEventListener('message',event=>{
   if(!paneMessageInScope(msg,paneScope))return; /* another backend's window */
   if(soloSession){
     if(msg.type==='hello'){postPaneMessage({type:'open',session:soloSession,embedded:paneEmbedded});return;}
+    if(msg.type==='open-reader'&&msg.session===soloSession){jumpToSessionTarget(soloSession,{reader:true});return;}
     if(msg.session!==soloSession||paneEmbedded)return;
     if(msg.type==='close')closeThisPaneWindow();
     else if(msg.type==='focus'){try{window.focus();postPaneMessage({type:'focused',session:soloSession,request:msg.request});}catch(_){/* no success acknowledgement */}}
@@ -9444,6 +9464,27 @@ function selectAgent(name){selectedAgent=name;tiles.forEach((el,n)=>el.classList
   // used to follow only an activated terminal pane (2026-09-25).
   document.dispatchEvent(new CustomEvent('oc:filter-agent',{detail:{agent:name}}));}
 function currentAgentNamed(name){return currentAgents.find(agent=>agent&&agent.name===name)||null;}
+function configureReaderAgentButton(button,name){
+  const known=Boolean(name&&(!soloSession||name===soloSession)&&currentAgentNamed(name)&&!agentHasNoTerminal(name));
+  let enabled=false;
+  try{enabled=localStorage.getItem('oc-term-conversation-enabled')!=='0';}catch(_){}
+  button.type='button';
+  button.classList.add('reader-agent-link');
+  button.disabled=!known||!enabled;
+  button.dataset.agentName=name;
+  const label=button.disabled?name:'Open '+name+' Reader';
+  button.title=[label,button.dataset.delivery].filter(Boolean).join(' · ');
+  if(button.disabled){
+    button.removeAttribute('aria-label');
+  }else button.ariaLabel=label;
+  if(!button.onclick)button.onclick=event=>{
+    event.stopPropagation();
+    const target=button.dataset.agentName;
+    selectAgent(target);
+    if(activeSession()===target)conversationView.open(target);
+    else jumpToSessionTarget(target,{reader:true});
+  };
+}
 function paintSplitRoles(agents){
   agents.forEach(agent=>{
     const cell=splitCells.get(agent.name);if(!cell||!cell._role)return;
@@ -10964,7 +11005,7 @@ window.OC=Object.freeze({
   graphPendingAgents:()=>[...permissionRestarts.values(),...pendingAgentExits.values()].map(action=>action.original),
   bindMiniAgentDetail:node=>bindAgentDetail(node,true),syncMiniAgentDetail,
   railPositions,railMoveRows,railArrive,railRevealRows,
-  renderPeerAvatar:(name,existing)=>currentAgentNamed(name)?conversationAvatar(name,'',existing):null,
+  renderPeerAvatar:conversationPeerAvatar,configureReaderAgentButton,
   lineageHue,                       // Map: agent name -> lineage hex
   get lineageParent(){return lineageParent;},  // Map: child -> parent
   agents:()=>currentAgents,
@@ -13312,6 +13353,7 @@ const conversationView=(()=>{
         openExternalUrl,
         renderPeerAvatar:conversationPeerAvatar,
         renderAvatar:conversationAvatar,
+        configureAgentButton:configureReaderAgentButton,
         onReference:(value,beforeFocus)=>readerReply.add(value,beforeFocus),
       });
       return instance;
@@ -13340,7 +13382,10 @@ const conversationView=(()=>{
     if(event.key===key&&enabled())ensure();
   });
   if(enabled())ensure();
-  return Object.freeze({ready:ensure,open:async()=>{const view=await ensure();if(view&&enabled())view.open();},
+  return Object.freeze({ready:ensure,open:async(name=null)=>{
+    const view=await ensure();
+    if(view&&enabled()&&(!name||activeSession()===name))view.open();
+  },
     close:()=>instance&&instance.close(),refresh:()=>instance&&instance.refresh()});
 })();
 </script>
