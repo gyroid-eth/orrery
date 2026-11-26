@@ -151,10 +151,11 @@ def test_any_tour_keeps_its_own_steps_key_and_fold():
              'saved': ['seen', 'open', 'folded', 'done', 'focus']}
 
 
-def prompt(connected=True, pane=True, text='Hello', guarded=False):
+def prompt(connected=True, pane=True, text='Hello', guarded=False, restarting=False):
     source = (BRIDGE / 'cockpit.html').read_text()
     # sendPrompt fixes its target pane when it starts; take those helpers as they are.
     fn = re.search(r'function captureComposerTarget\([^)]*\)\{.*?(?=\n(?:async )?function sendInterrupt)', source, re.S).group()
+    pending_action = re.search(r'function pendingAgentAction\(session\)\{.*?\n\}', source, re.S).group()
     # Load the same browser script that supplies recipientPrefix to sendPrompt.
     return node("globalThis.window={};"
                 f"require({json.dumps(str(BRIDGE / 'prompt_recipients.js'))});"
@@ -166,6 +167,8 @@ def prompt(connected=True, pane=True, text='Hello', guarded=False):
                 "getBoundingClientRect(){return {top:0,right:120,width:120};}};"
                 f"const panes=new Map({json.dumps([['pane', {'session': 'Test', 'meta': {}}]] if pane else [])});"
                 "const sessionGroups=new Map(),promptRecipientPins=new Map();"
+                f"const permissionRestarts=new Map({json.dumps([['Test', {}]] if restarting else [])});"
+                "const pendingAgentExits=new Map(),OrreryDemo={mask:text=>text};"
                 "const promptFiles={entries:[],clear(){}};"
                 "const promptRecipients={names:[],visibility:'visible',close(){},set(){}};"
                 "const promptCard={refresh(){}};const targetProgram=()=> 'claude';"
@@ -178,11 +181,12 @@ def prompt(connected=True, pane=True, text='Hello', guarded=False):
                 f"function inspectPrompt(){{return {'{}' if guarded else 'null'};}}"
                 "function showToast(){}function showSendGuard(){}function hideSendGuard(){}"
                 "function pushPromptHistory(){}function saveDraft(){}function closeSlashMenu(){}const toastEl={classList:{add(){}}};"
-                + fn + ";Promise.resolve(sendPrompt()).then(()=>console.log(JSON.stringify({events,value:promptInput.value})));")
+                + pending_action + fn + ";Promise.resolve(sendPrompt()).then(()=>console.log(JSON.stringify({events,value:promptInput.value})));")
 
 
 def test_talk_completes_only_for_a_sent_nonempty_unguarded_prompt():
     assert prompt()['events'] == ['talk']
+    assert prompt(restarting=True) == {'events': [], 'value': 'Hello'}
     assert prompt(False)['events'] == []
     assert prompt(False)['value'] == 'Hello'
     assert prompt(pane=False)['events'] == []
@@ -518,7 +522,7 @@ RING_STATE = """(()=>{
 
 def test_dom_the_next_control_gets_a_cyan_ring_and_a_here_tag(tour_browser):
     client, evaluate = tour_browser
-    evaluate("OrreryTour.firstFlight.reset();OrreryTour.firstFlight.show()")
+    evaluate("document.documentElement.dataset.colorTheme='dark';OrreryTour.firstFlight.reset();OrreryTour.firstFlight.show()")
     shown = evaluate(RING_STATE)
     assert all(shown.get(key) for key in ('ring', 'around', 'here', 'hereOnScreen', 'hereClearOfPanel', 'hereClearOfControls')), shown
     assert (shown['target'], shown['colour'], shown['pulse']) == ('newAgentBtn', 'rgb(63, 210, 230)', 'flight-ring-pulse'), shown
@@ -807,7 +811,7 @@ def test_dom_checklist_pops_out_to_its_own_window_and_comes_back(tour_browser):
             if in_popup("Boolean(window.OrreryTour&&OrreryTour.state)"):
                 break
             time.sleep(.1)
-        for _ in range(30):
+        for _ in range(40):
             if evaluate("OrreryTour.firstFlight.el.hidden"):
                 break
             time.sleep(.1)

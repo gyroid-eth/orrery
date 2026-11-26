@@ -221,6 +221,13 @@ def open_permissions(js, name, selector):
     js(f"showAgentDetail(tiles.get({json.dumps(name)}));agentDetail.querySelector({json.dumps(selector)}).click()")
 
 
+def assert_read_only_permissions(js, name, reason):
+    js(f"showAgentDetail(tiles.get({json.dumps(name)}))")
+    assert js("agentDetail.querySelector('[data-browser],[data-computer]')===null")
+    assert reason in js("agentDetail.innerText")
+    assert not js("permissionConfirm.open")
+
+
 def permission_jump(name='SlateFixture', sid=SID, **permission):
     return '/api/jump', {'session': name, 'open': False, 'open_terminal': False,
                          'permission': {'history_session_id': sid, **permission}}
@@ -254,9 +261,7 @@ def test_permission_resume_sends_only_one_change_from_the_keyboard(roster):
 
 def test_cancel_and_disabled_permissions_send_no_actions(roster):
     js, wait, state = roster
-    open_permissions(js, 'BeaconFixture', '[data-computer="control"]')
-    assert js("agentDetail.querySelector('[data-computer=control]').title").endswith('(Persistent agent)')
-    assert not js('permissionConfirm.open')
+    assert_read_only_permissions(js, 'BeaconFixture', 'Persistent agent')
     open_permissions(js, 'SlateFixture', '[data-computer="control"]')
     assert js("document.activeElement.value") == 'cancel'
     js.client.call('Input.dispatchKeyEvent', type='keyDown', key='Escape', code='Escape', windowsVirtualKeyCode=27)
@@ -270,9 +275,7 @@ def test_finished_husk_and_conversation_only_controls_are_disabled(roster):
     js, wait, state = roster
     for name, reason in [('QuartzFixture', 'Exit this agent first'),
                          ('AmberFixture', 'Conversation-only resume has no saved permissions')]:
-        open_permissions(js, name, '[data-computer="control"]')
-        assert not js('permissionConfirm.open')
-        assert js("agentDetail.querySelector('[data-computer=control]').title").endswith(f'({reason})')
+        assert_read_only_permissions(js, name, reason)
     assert state['trace'] == []
 
 
@@ -402,24 +405,20 @@ def test_permission_restart_does_not_resume_a_replacement_conversation(roster):
 
 def test_older_api_keeps_standalone_permissions_disabled(roster):
     js, wait, state = roster
-    open_permissions(js, 'IndigoFixture', '[data-browser]')
-    assert not js('permissionConfirm.open')
-    assert js("agentDetail.querySelector('[data-browser]').title").endswith('(Standalone agent)')
+    assert_read_only_permissions(js, 'IndigoFixture', 'Standalone agent')
     assert not js("tiles.has('JadeFixture')")
     assert state['trace'] == []
 
     state['api'] = 46
     js("permissionApiCheckedAt=-Infinity;showAgentDetail(tiles.get('IndigoFixture'))")
-    wait("!agentDetail.querySelector('[data-browser]').disabled")
+    wait("agentDetail.querySelector('[data-browser]')?.disabled===false")
     assert state['trace'] == []
 
 
 @pytest.mark.parametrize('roster', [46], indirect=True)
 def test_api46_enables_stopped_standalone_and_shows_direct_launch_reason(roster):
     js, wait, state = roster
-    open_permissions(js, 'OpalFixture', '[data-browser]')
-    assert not js('permissionConfirm.open')
-    assert js("agentDetail.querySelector('[data-browser]').title").endswith('(No saved launch settings; use Resume)')
+    assert_read_only_permissions(js, 'OpalFixture', 'No saved launch settings; use Resume')
     open_permissions(js, 'JadeFixture', '[data-browser]')
     assert js('permissionApply.textContent') == 'Resume'
     js('permissionApply.click()')
@@ -443,6 +442,267 @@ def test_api46_validates_restart_and_sends_the_same_conversation_to_exit(roster,
         (path, jump | {'check_only': True}),
         ('/api/exit', {'session': name, 'history_session_id': sid}),
         ('roster', 200, []), ('history', 'gone'), (path, jump),
+    ]
+
+
+@pytest.mark.parametrize('roster', [54], indirect=True)
+def test_api54_browser_mode_restart_validates_and_resumes_the_same_conversation(roster):
+    js, wait, state = roster
+    browser = {'value': False, 'mode': 'off', 'options': ['off', 'temporary', 'personal'], 'can_change': True}
+    controls = {'browser_use': browser | {'action': 'restart'}}
+    active = ACTIVE | {'permission_controls': controls}
+    stopped = EXITED | {'permission_controls': {'browser_use': browser | {'action': 'resume'}}}
+    state['checks'] = [(200, [active]), (200, [])]
+    state['stop_checks'] = [stopped]
+    js(f"currentAgentNamed('CopperFixture').permission_controls={json.dumps(controls)}")
+    open_permissions(js, 'CopperFixture', '[data-browser="off"]')
+    assert not js('permissionConfirm.open')
+    assert js("Array.from(agentDetail.querySelectorAll('[data-browser]'),button=>button.dataset.browser)") == [
+        'off', 'temporary', 'personal',
+    ]
+    open_permissions(js, 'CopperFixture', '[data-browser="temporary"]')
+    assert js("permissionApply.textContent") == "Restart"
+    assert js("permissionBrowser.validity.valid&&permissionBrowser.value==='temporary'")
+    js("permissionApply.click()")
+    wait("toastEl.textContent.startsWith('Resume accepted')")
+    path, jump = permission_jump('CopperFixture', ACTIVE_SID, browser_mode='temporary')
+    assert state['trace'] == [
+        ('roster', 200, ['agent']),
+        (path, jump | {'check_only': True}),
+        ('/api/exit', {'session': 'CopperFixture', 'history_session_id': ACTIVE_SID}),
+        ('roster', 200, []), ('history', 'gone'), (path, jump),
+    ]
+
+
+@pytest.mark.parametrize('roster', [55], indirect=True)
+@pytest.mark.parametrize(('close_order', 'stay'), [
+    ('status', True), ('list', False), ('pane', True), ('manual', False),
+])
+def test_permission_restart_reattaches_the_open_tab_to_the_new_pane(roster, close_order, stay):
+    js, wait, state = roster
+    controls = {'computer_use': {'value': 'off', 'can_change': True, 'action': 'restart'}}
+    active = ACTIVE | {'permission_controls': controls}
+    stopped = EXITED | {'permission_controls': {'computer_use': controls['computer_use'] | {'action': 'resume'}}}
+    state['checks'] = [(200, [active]), (200, [])]
+    state['stop_checks'] = [stopped]
+    js(f"currentAgentNamed('CopperFixture').permission_controls={json.dumps(controls)}")
+    js("""
+      socket=null;clearTimeout(reconnectTimer);
+      window.sentFrames=[];send=frame=>{sentFrames.push(frame);return true;};
+      handle({type:'sessions',sessions:['CopperFixture','IndigoFixture']});
+      handle({type:'reset',session:'CopperFixture',incarnation:'old',panes:[
+        {paneId:'%141',width:80,height:24,currentCommand:'codex',active:true}]});
+      handle({type:'reset',session:'IndigoFixture',incarnation:'other',panes:[
+        {paneId:'%142',width:80,height:24,currentCommand:'zsh',active:true}]});
+      setActive('%141');
+      window.originalGroup=sessionGroups.get('CopperFixture').el;
+      const beforeRestartFetch=window.fetch;
+      window.fetch=async (url,opts)=>{
+        const reply=await beforeRestartFetch(url,opts);
+        if(url==='/api/jump'&&!JSON.parse(opts.body).check_only){
+          await new Promise(resolve=>{window.allowRestartJump=resolve;});
+        }
+        return reply;
+      };
+    """)
+    open_permissions(js, 'CopperFixture', '[data-computer="view"]')
+    js('permissionApply.click()')
+    wait("typeof allowRestartJump==='function'")
+    assert js("sessionGroups.get('CopperFixture').state.textContent==='Restarting'")
+    assert js("stageEl.querySelector('.terminal-action-notice').ariaLabel==='Restarting CopperFixture…'")
+    letters = "tiles.get('CopperFixture').querySelectorAll('.cname > span')"
+    assert js(f"getComputedStyle({letters}[0]).animationDuration") == '1.6s'
+    assert js(f"getComputedStyle({letters}[1]).animationDelay") == '0.07s'
+    js.client.call('Emulation.setEmulatedMedia', features=[{'name': 'prefers-reduced-motion', 'value': 'reduce'}])
+    assert js(f"getComputedStyle({letters}[0]).animationName") == 'none'
+    js.client.call('Emulation.setEmulatedMedia', features=[])
+    if close_order == 'list':
+        js("handle({type:'sessions',sessions:['IndigoFixture']})")
+    elif close_order in ('pane', 'manual'):
+        js("handle({type:'close',session:'CopperFixture',paneId:'%141'})")
+    js("handle({type:'status',state:'closed',session:'CopperFixture',sessionGone:true,incarnation:'old'})")
+    assert js("sessionGroups.get('CopperFixture').el===originalGroup && activeId===null && !panes.has('%141')")
+    js("window.restartLiveFixture=liveRosterAgents;liveRosterAgents=liveRosterAgents.filter(a=>a.name!=='CopperFixture');"
+       "renderRoster();showAgentDetail(tiles.get('CopperFixture'))")
+    assert js("tiles.get('CopperFixture').querySelector('.cname').textContent==='CopperFixture'")
+    assert js("agentDetail.querySelector('.agent-detail-pending-action').textContent==='Restarting'")
+    if not stay:
+        js("setActive('%142')")
+    if close_order == 'manual':
+        js("sessionGroups.get('CopperFixture').detach.click()")
+    js('allowRestartJump()')
+    wait("toastEl.textContent.startsWith('Resume accepted')")
+    js("handle({type:'sessions',sessions:['CopperFixture','IndigoFixture']})")
+    if close_order == 'manual':
+        assert js("!sessionGroups.has('CopperFixture') && activeId==='%142'")
+        assert js("!sentFrames.some(frame=>frame.type==='attach'&&frame.session==='CopperFixture')")
+        return
+    wait("sentFrames.some(frame=>frame.type==='attach'&&frame.session==='CopperFixture')")
+    js("""
+      handle({type:'reset',session:'CopperFixture',incarnation:'old',panes:[
+        {paneId:'%141',width:80,height:24,currentCommand:'codex',active:true}]});
+      handle({type:'status',state:'closed',session:'CopperFixture',sessionGone:true,incarnation:'old'});
+    """)
+    assert js("!panes.has('%141') && sessionGroups.get('CopperFixture').el===originalGroup")
+    wait("requestedSessions.has('CopperFixture')")
+    js("""
+      liveRosterAgents=restartLiveFixture;renderRoster();
+      handle({type:'reset',session:'CopperFixture',incarnation:'new',panes:[
+        {paneId:'%143',width:80,height:24,currentCommand:'codex',active:true}]});
+      handle({type:'output',session:'CopperFixture',paneId:'%143',snapshot:true,data:'› '});
+      handle({type:'status',state:'closed',session:'CopperFixture',sessionGone:true,incarnation:'old'});
+    """)
+    wait("!permissionRestarts.has('CopperFixture')")
+    assert js("sessionGroups.get('CopperFixture').el===originalGroup && panes.has('%143')")
+    assert js('activeId') == ('%143' if stay else '%142')
+    assert js("!stageEl.querySelector('.terminal-action-notice')&&!tiles.get('CopperFixture').querySelector('.terminal-action-wave')")
+
+
+def test_confirmed_bulk_exit_marks_each_agent_until_disappearance_or_failure(roster):
+    js, wait, state = roster
+    state['failures'][('/api/exit', 'IndigoFixture')] = 'Exit was refused'
+    js("""
+      socket=null;clearTimeout(reconnectTimer);
+      send=()=>true;
+      handle({type:'sessions',sessions:['CopperFixture','IndigoFixture']});
+      handle({type:'reset',session:'CopperFixture',incarnation:'old',panes:[
+       {paneId:'%141',width:80,height:24,currentCommand:'codex',active:true}]});
+      setActive('%141');
+      const exitFetch=window.fetch;
+      window.fetch=async (url,opts)=>{
+        if(url==='/api/exit'&&JSON.parse(opts.body).session==='CopperFixture')
+          await new Promise(resolve=>{window.allowBulkExit=resolve;});
+        return exitFetch(url,opts);
+      };
+      tiles.get('CopperFixture').click();tiles.get('IndigoFixture').click();rosterBulkExit.click();
+    """)
+    assert js("pendingAgentExits.size") == 0
+    js("rosterBulkExit.click()")
+    wait("typeof allowBulkExit==='function'")
+    assert js("Array.from(pendingAgentExits.keys())") == ['CopperFixture', 'IndigoFixture']
+    assert js("stageEl.querySelector('.terminal-action-notice').ariaLabel") == 'Exiting CopperFixture…'
+    assert js("tiles.get('IndigoFixture').querySelector('.cname.terminal-action-wave').textContent") == 'Exiting IndigoFixture…'
+    js("allowBulkExit()")
+    wait("toastEl.textContent.includes('Exit was refused')")
+    assert js("Array.from(pendingAgentExits.keys())") == ['CopperFixture']
+    assert js("!tiles.get('IndigoFixture').querySelector('.terminal-action-wave')")
+    js("""
+      const rosterFetch=window.fetch;
+      window.fetch=(url,opts)=>url==='/telemetry/agents?scope=live'?
+        Promise.resolve(new Response(JSON.stringify({agents:liveRosterAgents.filter(a=>a.name!=='CopperFixture')}))):
+        rosterFetch(url,opts);
+      pollAgents();
+    """)
+    wait("!tiles.has('CopperFixture')")
+    assert js("pendingAgentExits.size===0&&!stageEl.querySelector('.terminal-action-notice')")
+
+
+@pytest.mark.parametrize("response", ['refused', 'cancelled', 'accepted'])
+def test_embedded_exit_updates_the_parent_without_consuming_its_response(roster, response):
+    js, wait, _state = roster
+    js("""
+      window.exitFrame=new EventTarget();exitFrame.location=location;
+      window.frameExit=observeNetworkExits(exitFrame,()=>new Promise(resolve=>{window.resolveFrameExit=resolve;}));
+      window.exitResult=frameExit('/api/exit',{method:'POST',body:JSON.stringify({session:'CopperFixture'})})
+        .then(r=>r.json());
+      true;
+    """)
+    assert js("pendingAgentAction('CopperFixture')") == 'Exiting'
+    if response == 'cancelled':
+        js("exitFrame.dispatchEvent(new Event('pagehide'))")
+        assert js("toastEl.textContent.includes('The request was cancelled')")
+    ok = response != 'refused'
+    payload = {'ok': ok} if ok else {'ok': False, 'error': 'Shell rejected Exit'}
+    js(f"resolveFrameExit(new Response({json.dumps(json.dumps(payload))},{{status:{200 if ok else 400}}}))")
+    assert js("exitResult") == payload
+    if response == 'accepted':
+        assert js("pendingAgentAction('CopperFixture')") == 'Exiting'
+    else:
+        assert js("!pendingAgentAction('CopperFixture')")
+        if response == 'refused':
+            assert js("toastEl.textContent.includes('Shell rejected Exit')")
+
+
+@pytest.mark.parametrize(('depart_first', 'reduced', 'accepted'), [
+    (True, False, True), (False, False, True), (False, True, True), (True, False, False),
+])
+def test_exit_dust_waits_for_success_and_departure_and_releases_the_tab(
+    roster, depart_first, reduced, accepted,
+):
+    js, wait, _state = roster
+    js.client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'reduce' if reduced else 'no-preference'},
+    ])
+    js("""
+      setRosterSelectMode(false);
+      socket=null;clearTimeout(reconnectTimer);send=()=>true;
+      handle({type:'sessions',sessions:['CopperFixture','IndigoFixture']});
+      handle({type:'reset',session:'CopperFixture',incarnation:'old',panes:[
+        {paneId:'%141',width:80,height:24,currentCommand:'codex',active:true}]});
+      handle({type:'reset',session:'IndigoFixture',incarnation:'other',panes:[
+        {paneId:'%142',width:80,height:24,currentCommand:'zsh',active:true}]});
+      setActive('%141');selectAgent('CopperFixture');
+      window.exitFrame=new EventTarget();exitFrame.location=location;
+      const frameExit=observeNetworkExits(exitFrame,()=>new Promise(resolve=>{window.resolveExit=resolve;}));
+      frameExit('/api/exit',{method:'POST',body:JSON.stringify({session:'CopperFixture'})});
+      const originalDustFetch=window.fetch;
+      window.fetch=(url,opts)=>url==='/telemetry/agents?scope=live'?
+        Promise.resolve(new Response(JSON.stringify({agents:liveRosterAgents.filter(a=>a.name!=='CopperFixture')}))):
+        originalDustFetch(url,opts);
+      const previousFrame=window.requestAnimationFrame;
+      window.requestAnimationFrame=callback=>{
+        if(callback.name==='animateDust'){window.advanceDust=callback;return 0;}
+        return previousFrame(callback);
+      };
+      true;
+    """)
+    if depart_first:
+        js("""
+          handle({type:'status',state:'closed',session:'CopperFixture',sessionGone:true,incarnation:'old'});
+          pollAgents();
+        """)
+        wait("pendingAgentExits.get('CopperFixture').departed")
+        assert js("tiles.has('CopperFixture')&&sessionGroups.has('CopperFixture')")
+    assert js("!document.querySelector('canvas.exit-dust')")
+    body = {"ok": True} if accepted else {"ok": False, "error": "Exit refused"}
+    js(f"resolveExit(new Response({json.dumps(json.dumps(body))},{{status:{200 if accepted else 400}}}))")
+    if not depart_first:
+        wait("pendingAgentExits.get('CopperFixture')?.accepted")
+        assert js("tiles.has('CopperFixture')&&sessionGroups.has('CopperFixture')&&!document.querySelector('canvas.exit-dust')")
+        js("pollAgents()")
+    wait("!pendingAgentExits.has('CopperFixture')&&!tiles.has('CopperFixture')")
+    if not accepted:
+        assert js("toastEl.textContent.includes('Exit refused')&&!document.querySelector('canvas.exit-dust')")
+        return
+    assert js("!sessionGroups.has('CopperFixture') && activeId==='%142'")
+    assert js("document.querySelectorAll('canvas.exit-dust').length") == (0 if reduced else 2)
+    if not reduced:
+        assert js("Array.from(document.querySelectorAll('canvas.exit-dust')).every(canvas=>canvas.getAttribute('aria-hidden')==='true')")
+        js("advanceDust(performance.now()+2000)")
+        assert js("!document.querySelector('canvas.exit-dust')")
+
+
+@pytest.mark.parametrize('roster', [55], indirect=True)
+def test_direct_launch_confirms_adoption_and_allows_stopped_shell(roster):
+    js, wait, state = roster
+    computer = {'value': 'off', 'can_change': True, 'action': 'restart'}
+    active = TOP_DIRECT | {'permission_managed_launch': True, 'permission_controls': {'computer_use': computer}}
+    stopped = active | {'category': 'finished', 'running': False,
+                       'permission_controls': {'computer_use': computer | {'action': 'resume'}}}
+    name = active['name']
+    js(f"Object.assign(currentAgentNamed({json.dumps(name)}),{json.dumps(active)})")
+    state['checks'] = [(200, [active]), (200, [])]
+    state['stop_checks'] = [stopped]
+    open_permissions(js, name, '[data-computer="view"]')
+    assert 'managed launch' in js('permissionConfirm.textContent')
+    assert state['trace'] == []
+    js('permissionApply.click()')
+    wait("toastEl.textContent.startsWith('Resume accepted')")
+    path, jump = permission_jump(name, TOP_SID, computer_use='view', adopt=True)
+    assert state['trace'] == [
+        ('roster', 200, ['agent']), (path, jump | {'check_only': True}),
+        ('/api/exit', {'session': name, 'history_session_id': TOP_SID}),
+        ('roster', 200, []), ('history', 'finished'), (path, jump),
     ]
 
 
