@@ -42,7 +42,7 @@ You can see the same agents in your phone or tablet browser while away from your
 
 ![Select an agent on a phone, read its work, and send an instruction](docs/images/guides/mobile.gif)
 
-See [Use ORRERY on a phone](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.en.md).
+See [Use ORRERY on a phone](docs/en/mobile.md).
 
 ### See which agents need a decision from you
 

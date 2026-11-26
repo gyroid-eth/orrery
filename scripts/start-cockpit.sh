@@ -217,7 +217,7 @@ else
     "ORRERY cockpit reads agents, spawn and Mail from orrery-telemetry. Install it first:" \
     "  git clone https://github.com/gyroid-eth/orrery-telemetry.git" \
     "  cd orrery-telemetry && ./scripts/install.sh --project-key /absolute/path/to/your-project" \
-    "See docs/install.md in orrery-telemetry (it has a WSL2 section)."
+    "See https://github.com/gyroid-eth/orrery/blob/master/docs/en/telemetry-install.md#installing-on-windows-wsl2."
 fi
 
 if [ "${AGENTSTACK_RUNTIME_MODE:-legacy}" != fresh ]; then
@@ -509,7 +509,7 @@ if [ -n "$agent_cli" ]; then
 else
   note "neither 'claude' nor 'codex' is on PATH; these two choices need their CLI and login."
   note "DeepSeek / Local use dsh or Hermes instead, with separate API connection setup:"
-  note "https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.en.md"
+  note "https://github.com/gyroid-eth/orrery/blob/master/docs/en/native-setup.md"
 fi
 
 # ---------------------------------------------------------------- WSL helpers

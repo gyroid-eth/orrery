@@ -133,7 +133,7 @@ tile をクリックすればそのターミナルに入り、質問を読んで
 
 ![need you で人の入力を待つ agent に絞り、質問を開いて 1 と答える](images/cockpit_need_you.gif)
 
-TELEMETRY の DECK と NETWORK での見え方は [介入待ちの見分け方](#介入待ちの見分け方) にあります。子が承認やログインなどで止まったときに親へ届く自動通知は、[Telemetry の DECK](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/dashboard.md#deck) を参照してください。
+TELEMETRY の DECK と NETWORK での見え方は [介入待ちの見分け方](#介入待ちの見分け方) にあります。子が承認やログインなどで止まったときに親へ届く自動通知は、[Telemetry の DECK](dashboard.md#deck) を参照してください。
 
 ### 名前のコピー
 
@@ -262,7 +262,7 @@ backend は起動時に live tmux session ごとに recorder connection を一�
 
 ### スマホのTerminal（別途有効化）
 
-別のTelemetry mobile readerで、短いpane画面を見ながら確認付きの1行を送れます。**Settings → Phone**の**Phone access**と**Send from phone**で、readerとこのadapterを一緒に切り替えられます（[設定](configuration.md#settingsのphone)）。手で設定する場合、backend adapterは既定オフです。[共有設定](configuration.md#スマホterminalを通常の起動で有効にする)の`enable_mobile_terminal`をJSONの`true`にし、現在の起動手順でbackendを明示的に再起動します。稼働中のbackendの再利用だけでは反映されません。reader側にもAPI31・対応する`orrery-mobile-pane-v1` capabilityと別の有効化が必要です。操作に使う自分の端末だけへのアクセス制限を推奨しますが、スマホ・タブレットを複数使えます。agentに任せる段と本人の段は[Telemetryのスマホ手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md)を参照してください。
+別のTelemetry mobile readerで、短いpane画面を見ながら確認付きの1行を送れます。**Settings → Phone**の**Phone access**と**Send from phone**で、readerとこのadapterを一緒に切り替えられます（[設定](configuration.md#settingsのphone)）。手で設定する場合、backend adapterは既定オフです。[共有設定](configuration.md#スマホterminalを通常の起動で有効にする)の`enable_mobile_terminal`をJSONの`true`にし、現在の起動手順でbackendを明示的に再起動します。稼働中のbackendの再利用だけでは反映されません。reader側にもAPI31・対応する`orrery-mobile-pane-v1` capabilityと別の有効化が必要です。操作に使う自分の端末だけへのアクセス制限を推奨しますが、スマホ・タブレットを複数使えます。agentに任せる段と本人の段は[Telemetryのスマホ手順](mobile.md)を参照してください。
 
 対象はPCの既存managerが扱うlegacy paneだけで、共有target guardとfreshなsocket/server/session/pane/kernel birthを照合します。agent別名からpaneを推測せず、agent起動・別socket/global対象への迂回・Codex起動recordの要求はしません。複数paneは自分で選び、不明はUnavailableです。sessionはreaderの現在のmetadata project外にある場合もあります。
 
@@ -430,7 +430,7 @@ http://127.0.0.1:8791/cockpit.html?session=<session-name>
 
 ## NEW AGENT
 
-Gemini を使うには Antigravity CLI（`agy`）を入れてサインインし、[Telemetry 側の準備](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.md)を済ませます。macOS の cockpit の **NEW AGENT** で **Antigravity** と model を選びます。
+Gemini を使うには Antigravity CLI（`agy`）を入れてサインインし、[Telemetry 側の準備](antigravity.md)を済ませます。macOS の cockpit の **NEW AGENT** で **Antigravity** と model を選びます。
 
 `+ NEW AGENT` は ORRERY Telemetry dashboard の spawn API を使います。dashboard が offline の場合、catalog の一部を表示できても spawn は実行できません。
 
@@ -438,7 +438,7 @@ Gemini を使うには Antigravity CLI（`agy`）を入れてサインインし�
 
 DeepSeek・dsh / Hermesを初めて使う場合は、ガイドと同じ次の順で準備します。通常の更新だけではこの準備は完了せず、この画面にもAPIキーの入力欄はありません。
 
-1. Telemetryの[初期設定ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/native-setup.md)を開き、TelemetryのソースフォルダーでdshかHermes（必要なら両方）を追加します。
+1. Telemetryの[初期設定ガイド](native-setup.md)を開き、TelemetryのソースフォルダーでdshかHermes（必要なら両方）を追加します。
 2. DeepSeekの場合はAPIキーを取得するか既存のキーを使い、このコンピューターに未保存ならOS別の手順で保存します。Localの場合は、サーバーの接続情報と、必要ならそのサーバー用のキーを用意します。
 3. ガイドに沿って接続設定を確認・有効化し、最後のinstallコマンドを自分で1回実行してTelemetryに反映します。
 4. cockpitに戻り、`+ NEW AGENT`で設定した`Model`と`Harness`を選びます。
@@ -450,9 +450,9 @@ DeepSeek・dsh / Hermesを初めて使う場合は、ガイドと同じ次の順
 3. 右の `Harness` を選びます。DeepSeek・Local では、カタログにある dsh / Hermes から選びます。利用できない候補は選択できません。アプリやキー保存先の準備不足、OS・Mail方式の非対応などの案内と、設定ガイドへのリンクが表示されます。
 4. 表示される場合は `Helper model` と `Effort` を確認し、その下で起動先と task を指定します。詳しくは[DeepSeek・Local の標準 New Agent](configuration.md#deepseeklocal-の標準-new-agent)を参照してください。
 
-5. macOS の legacy 接続で Telemetry API 53 以降のカタログに `computer_modes` がある場合、**Computer use** で **Off**（画面の道具なし）、**View**（確認）、**Control**（確認と操作）を選べます。Claude Code、Codex CLI、dsh、Hermes、Antigravity CLI が対象です。旧カタログではスイッチを表示する場合があり、互換の Cua Driver 指定を使います。**Browser** は利用可能な Off・Temporary Chrome・My Chrome から選びます。古いカタログでは単一のスイッチになる場合があります。fresh ではこの道具欄を表示しません。スマホは専用の [New agent の案内](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md) を参照してください。
+5. macOS の legacy 接続で Telemetry API 53 以降のカタログに `computer_modes` がある場合、**Computer use** で **Off**（画面の道具なし）、**View**（確認）、**Control**（確認と操作）を選べます。Claude Code、Codex CLI、dsh、Hermes、Antigravity CLI が対象です。旧カタログではスイッチを表示する場合があり、互換の Cua Driver 指定を使います。**Browser** は利用可能な Off・Temporary Chrome・My Chrome から選びます。古いカタログでは単一のスイッチになる場合があります。fresh ではこの道具欄を表示しません。スマホは専用の [New agent の案内](mobile.md) を参照してください。
 
-cockpit は独立 agent として起動します。Antigravity の親なし起動には、macOS と、カタログに standalone 対応を返す Telemetry（API 50 以降）が必要です。対応する起動では Git 管理外の作業フォルダーも選べます。親を付ける場合や Isolation を指定する場合は独立した Telemetry の NEW AGENT を使います。古い Telemetry で親なしに対応しない場合は、Telemetry 側の委任起動を使います。準備と併用条件は Telemetry の [Computer use](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/computer-use.md) と [Antigravity](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/antigravity.md) を参照してください。
+cockpit は独立 agent として起動します。Antigravity の親なし起動には、macOS と、カタログに standalone 対応を返す Telemetry（API 50 以降）が必要です。対応する起動では Git 管理外の作業フォルダーも選べます。親を付ける場合や Isolation を指定する場合は独立した Telemetry の NEW AGENT を使います。古い Telemetry で親なしに対応しない場合は、Telemetry 側の委任起動を使います。準備と併用条件は Telemetry の [Computer use](computer-use.md) と [Antigravity](antigravity.md) を参照してください。
 
 ![Model and effort で provider と Harness を選び、画面操作とブラウザーのメニューを開く](images/cockpit-native-spawn.gif)
 
@@ -523,7 +523,7 @@ mail UI は表示専用です。reply / send 操作はありません。DB は S
 
 TELEMETRY button は ORRERY Telemetry dashboard を `/network/?embed=1` の iframe として開きます。ORRERY backend が dashboard root、`/api/*`、`/assets/*`、`/portrait` を同一 origin へ proxy します。
 
-DECK と NETWORK の画面例は [Telemetry の Dashboard ガイド](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/dashboard.md)にあります。
+DECK と NETWORK の画面例は [Telemetry の Dashboard ガイド](dashboard.md)にあります。
 
 ### 最初の状態
 

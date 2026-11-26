@@ -42,7 +42,7 @@ agent ごとに、画面操作（computer use）とブラウザ操作を、作�
 
 ![スマホで agent を選び、作業を読み、指示を送る](docs/images/guides/mobile.gif)
 
-詳しくは [スマホから使う](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/mobile.md)。
+詳しくは [スマホから使う](docs/mobile.md)。
 
 ### あなたの判断を待つ agent が分かる
 

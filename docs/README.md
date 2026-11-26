@@ -11,7 +11,7 @@
 - [Quick start](../README.md#始める) — 本体を入れて初回ガイドへ進む。
 - [インストール](install.md) — 1行 install の前提・計画・確認結果を読み、まず cockpit を開く。
 - [利用中の agent と導入を進める](install-with-agent.md) — 依頼文、計画、利用者の承認。
-- [ChatGPT MCP](https://github.com/gyroid-eth/orrery-telemetry/blob/master/integrations/chatgpt_mcp/README.md) — 読み取り専用アダプター。
+- [ChatGPT MCP](chatgpt-mcp.md) — 読み取り専用アダプター。
 - [研究セット](research-set.md) — digest-paper と公開 demo vault を本体の後に追加する。
 
 ## 目的から選ぶ
@@ -50,6 +50,28 @@
 ## 困ったとき
 
 - [トラブルシューティング](troubleshooting.md) — 起動・接続・port・tmux・CDN の問題を切り分ける。
+
+## Telemetry の利用と設定
+
+- [ORRERY Mail の更新と復旧](agentstack-mail-update.md)
+- [Gemini を使う](antigravity.md)
+- [Codex App とつなぐ](codex-app.md)
+- [画面を見て操作する](computer-use.md)
+- [Telemetry の設定](telemetry-configuration.md)
+- [Telemetry の画面で状態と履歴を調べる](dashboard.md)
+- [agent に仕事を分ける](delegation.md)
+- [Telemetry 単体で始める](getting-started.md)
+- [ORRERY の指示を移行する](instruction-migration.md)
+- [Telemetry 単体を導入・更新・削除する](telemetry-install.md)
+- [agent を起動・再開する](launchers.md)
+- [スマホで見る・指示を送る](mobile.md)
+- [DeepSeek・Local LLM を設定する](native-setup.md)
+- [Obsidian と一緒に使う](obsidian.md)
+- [常駐 agent を用意する](persistent-agents.md)
+- [Telemetry のトラブルを調べる](telemetry-troubleshooting.md)
+- [native Windows の開発用起動を試す](windows-local.md)
+- [WSL の鍵束に API キーを保存する](wsl-keyring.md)
+- [ChatGPT から読み取る](chatgpt-mcp.md)
 
 ## 設計・開発者向け
 
