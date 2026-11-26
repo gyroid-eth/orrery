@@ -4415,9 +4415,9 @@
       }
     }
   },
-  "inventory_digest": "7d8f58ab765a84fccae9fbd622f3cd336bd2f93ab3cc3efff8519075a4423902",
+  "inventory_digest": "38b2aa259536b4f16f26a0b627362622328922b8fa9451c5a796d5a5f0676fe4",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "962391fa53ccf9efafbe4c2c198af3a921c75c46a87f5ece05b4f44311fbbdc8",
+  "source_digest": "fd731dc8bd461a3d441f62409f61c98df79d02e009e5e79867db64a01fbbe0ad",
   "surface": "cockpit",
   "version": 1
 }
@@ -11741,6 +11741,8 @@ function resolveSpawnEffort(levels,value,fallback){
 }
 function spawnExplicitEffortMissing(provider,model){
   if(!(provider&&provider.capabilities&&provider.capabilities.effort_required))return false;
+  const configured=provider.model_efforts?.[model];
+  if(provider.id==='gemini'&&Array.isArray(configured)&&configured.length===0)return false;
   const levels=effortsForModel(provider,model).efforts;
   return typeof selEffort!=='string'||!Array.isArray(levels)||!levels.includes(selEffort);
 }

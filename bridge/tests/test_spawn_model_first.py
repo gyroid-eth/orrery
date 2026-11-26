@@ -465,6 +465,45 @@ def test_gemini_picker_groups_variants_and_submits_the_selected_effort(tour_brow
     assert len(result['expanded']['rows']) == 8 and result['matches'] == [rows[1]]
 
 
+def test_gemini_picker_lists_the_full_cli_catalog_and_launches_fixed_models(tour_browser):
+    _, evaluate = tour_browser
+    standard = ['low', 'medium', 'high']
+    extended = [*standard, 'xhigh']
+    families = {'gemini-3.8-flash': standard, 'gemini-4-neon': extended,
+                'gemini-4-carbon': standard, 'gemini-4-argon': standard, 'gemini-4-hydrogen': extended}
+    fixed = ['gemini-pro-orchestrator-neon', 'gemini-pro-orchestrator', 'gemini-pro-orchestrator-argon']
+    levels = {f'{family}-{effort}': choices for family, choices in families.items() for effort in choices}
+    levels.update({model: [] for model in fixed})
+    provider = dict(id='gemini', program='antigravity', models=list(levels),
+                    default_model='gemini-3.8-flash-high', capabilities={'effort_required':True},
+                    efforts=extended, model_efforts=levels)
+    catalog = ob.normalize_spawn_catalog(dict(providers=[provider], naming={}, dirs=[]))
+    result = evaluate("""(async()=>{
+      spawnCatalog=CATALOG;selFamily=null;selProvider=null;selModel=null;selHarness=null;selEffort=null;
+      spawnTask.value='Fixture task';spawnDirPath='/workspace';renderProviderTabs();
+      const rows=[...modelChoices.querySelectorAll('.model-choice-name')].map(el=>el.textContent);
+      const posts=[],original=window.fetch;
+      window.fetch=(url,options)=>{
+        if(String(url)!=='/telemetry/spawn')return original(url,options);
+        posts.push(JSON.parse(options.body));
+        return Promise.resolve({ok:false,json:async()=>({error:'Fixture'})});
+      };
+      const fixed=[];
+      try{
+        for(const name of FIXED){
+          modelChoices.querySelector('input[value="'+name+'"]').click();
+          fixed.push({slider:!!effortChoices.querySelector('input'),blocked:spawnSubmit.disabled});
+          await submitSpawn(new Event('submit',{cancelable:true}));
+        }
+      }finally{window.fetch=original;}
+      return {rows,fixed,posts};
+    })()""".replace('CATALOG',json.dumps(catalog)).replace('FIXED',json.dumps(fixed)))
+    assert result['rows'] == [*families, *fixed]
+    assert result['fixed'] == [dict(slider=False, blocked=False)] * len(fixed)
+    assert [post['model'] for post in result['posts']] == fixed
+    assert all('effort' not in post for post in result['posts'])
+
+
 @pytest.mark.parametrize('width', [1600, 390])
 def test_launcher_and_model_sheet_fit_and_name_draft_can_be_discarded(tour_browser, width):
     client,evaluate=tour_browser
