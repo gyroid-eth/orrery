@@ -142,16 +142,18 @@ def test_api54_keeps_legacy_values_read_only_without_a_server_verdict():
     assert '>Permission information unavailable</small>' in markup
 
 
-def test_api54_shows_the_browser_mode_as_text_on_the_change_button():
+def test_api54_shows_the_browser_choices_in_order_and_marks_the_current_mode():
     markup = render({
         "name": "FixtureAgent", "running": True, "harness_kind": "codex",
         "permission_controls": {
-            "browser_use": {"value": True, "mode": "temporary", "options": ["off", "temporary", "personal"],
+            "browser_use": {"value": True, "mode": "temporary", "options": ["temporary", "off"],
                             "can_change": True, "action": "restart"},
         },
     }, api=54)
-    assert 'data-browser' in markup
-    assert 'Temporary Chrome</button>' in markup
+    assert markup.index('data-browser="off"') < markup.index('data-browser="temporary"') < markup.index('data-browser="personal"')
+    assert 'data-browser="temporary" aria-pressed="true"' in markup
+    assert 'title="Browser use: Temporary Chrome"' in markup and '>Temp</button>' in markup
+    assert 'title="Browser use: My Chrome (unavailable for this agent)" disabled' in markup
     assert 'role="switch"' not in markup
 
 

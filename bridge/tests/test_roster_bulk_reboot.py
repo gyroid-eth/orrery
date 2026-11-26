@@ -455,10 +455,15 @@ def test_api54_browser_mode_restart_validates_and_resumes_the_same_conversation(
     state['checks'] = [(200, [active]), (200, [])]
     state['stop_checks'] = [stopped]
     js(f"currentAgentNamed('CopperFixture').permission_controls={json.dumps(controls)}")
-    open_permissions(js, 'CopperFixture', '[data-browser]')
+    open_permissions(js, 'CopperFixture', '[data-browser="off"]')
+    assert not js('permissionConfirm.open')
+    assert js("Array.from(agentDetail.querySelectorAll('[data-browser]'),button=>button.dataset.browser)") == [
+        'off', 'temporary', 'personal',
+    ]
+    open_permissions(js, 'CopperFixture', '[data-browser="temporary"]')
     assert js("permissionApply.textContent") == "Restart"
-    assert js("!permissionBrowser.validity.valid")
-    js("permissionBrowser.value='temporary';permissionApply.click()")
+    assert js("permissionBrowser.validity.valid&&permissionBrowser.value==='temporary'")
+    js("permissionApply.click()")
     wait("toastEl.textContent.startsWith('Resume accepted')")
     path, jump = permission_jump('CopperFixture', ACTIVE_SID, browser_mode='temporary')
     assert state['trace'] == [
