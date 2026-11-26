@@ -74,6 +74,8 @@ AGY_COMMAND_SELECTED = re.compile(r'^>\s+(' + SLASH_NAME.pattern + r')(?=[ \t]|$
 AGY_COMMAND_HELP = '↑/↓ Navigate · enter Select · tab Complete'
 AGY_WORKING = re.compile(r'^[\u2800-\u28ff]\s+Working(?:…|\.\.\.)$')
 CODEX_WORKING = re.compile(r'^• (?:Working|Compacting context) \(.*\besc to interrupt\b')
+CODEX_SCROLL_ARROW = re.compile(rf'[ \t]{{2,}}{DIM.pattern}([↑↓])(?:{SGR.pattern})*[ \t]*$')
+NOTICE_TRAILER = re.compile(r'\s*(?:\.{3}\s+)?(?:Fetch inbox to read the rest\.|Please call fetch_inbox to read it\.)$')
 
 
 @dataclass(frozen=True)
@@ -310,7 +312,8 @@ def frame(metadata, lines, pane):
                 break
             draft='\n'.join(row.strip() for row in plain[start+1:cursor+1]).strip()
             return Frame(*base, draft, False, bracketed=bracketed,
-                         foreground_command=command, scrolled=True, slash_view=slash_view)
+                         foreground_command=command, editor='claude', scrolled=True, slash_view=slash_view,
+                         draft_continues='↓' in tail[0])
         match=PROMPT.match(line)
         if not match and '\x1b[38;5;145m' in lines[start].partition('❯')[2]:
             # The narrow dsh welcome screen can draw its hint flush against the glyph.
@@ -346,6 +349,18 @@ def frame(metadata, lines, pane):
             # Claude indents its selected completion row above the editor.
             continue
         body=[first,*plain[start+1:cursor+1]]
+        scrolled = False
+        more_below = False
+        if glyph == '›':
+            top_arrow = CODEX_SCROLL_ARROW.search(lines[start])
+            last_arrow = CODEX_SCROLL_ARROW.search(lines[cursor])
+            if top_arrow:
+                body[0] = body[0].removesuffix(top_arrow[1]).rstrip()
+                scrolled = top_arrow[1] == '↑'
+                more_below = top_arrow[1] == '↓'
+            if last_arrow and last_arrow[1] == '↓':
+                body[-1] = body[-1].rstrip().removesuffix('↓').rstrip()
+                more_below = True
         if boxed:
             body=[part.rstrip().removesuffix('⛶').removesuffix('│').rstrip() for part in body]
         draft='\n'.join(body).strip()
@@ -425,8 +440,8 @@ def frame(metadata, lines, pane):
                      bool(hermes), boxed, bracketed, command,
                      slash_picker=editor is not None, selected_command=selected_command,
                      dsh_clipped=dsh_clipped, hermes_busy=hermes_busy, editor=editor,
-                     running=running, slash_view=slash_view,
-                     draft_continues=bool(tail and not (lower or footer)))
+                     running=running, slash_view=slash_view, scrolled=scrolled,
+                     draft_continues=more_below or bool(tail and not (lower or footer)))
     return Frame(*base,None,False,slash_view=slash_view)
 
 
@@ -487,6 +502,10 @@ class SlashMenuWait:
         return ready(observed, self.text, operator=self.operator)
 
 
+def visible_cells(text):
+    return sum(2 if east_asian_width(char) in ('F', 'W') else 1 for char in text if not char.isspace())
+
+
 def ready(observed, text, *, operator=False):
     if (observed is None or observed.draft is None or observed.waiting
             or not observed.allows_paste(text, operator=operator)):
@@ -498,13 +517,12 @@ def ready(observed, text, *, operator=False):
     expected = ''.join(text.split())
     if observed.scrolled:
         # Only the end of a tall draft is visible, so it must end the text.
-        return len(shown)>=16 and expected.endswith(shown)
+        return not observed.draft_continues and len(shown)>=16 and expected.endswith(shown)
     if shown == expected:
         return True
     if observed.dsh_clipped and (operator or text.startswith('ORRERY Mail notification: ')):
         # Fullwidth and wide characters occupy two cells of the visible suffix.
-        visible_cells = sum(2 if east_asian_width(char) in ('F', 'W') else 1 for char in shown)
-        return visible_cells >= 24 and expected.endswith(shown)
+        return visible_cells(shown) >= 24 and expected.endswith(shown)
     # Claude represents a pasted multiline or long prompt as this native
     # capsule. The caller required an empty editor before sending the paste.
     if COLLAPSED.fullmatch(observed.draft):
@@ -568,12 +586,22 @@ def capture(command,pane):
 
 
 def same_notice(view,text):
-    """Require the full notice in a known editor, allowing whitespace lost at wraps."""
+    """Compare an entire notice or a visible tail in a known, clipped editor."""
     if (view.editor not in ('claude','codex','dsh','hermes','agy')
             or view.waiting or view.selected or not view.draft
-            or view.scrolled or view.dsh_clipped or view.draft_continues
+            or view.draft_continues
             or not text.startswith('ORRERY Mail notification: message from ')):
         return False
+    if view.scrolled or view.dsh_clipped:
+        remaining=text.rstrip()
+        for line in reversed(view.draft.splitlines()):
+            line=line.strip()
+            if not remaining.endswith(line):
+                return False
+            remaining=remaining.removesuffix(line).rstrip()
+        # The generic inbox hint is shared by many unrelated notifications.
+        content_end=len(NOTICE_TRAILER.sub('',text.rstrip()))
+        return bool(remaining and visible_cells(text[len(remaining):content_end])>=24)
     remaining=text
     for line in view.draft.splitlines():
         line=line.strip()
