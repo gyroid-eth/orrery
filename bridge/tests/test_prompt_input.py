@@ -32,6 +32,22 @@ def native_frame(snapshot):
 NATIVE_CASES = [pytest.param(harness, case, id=f'{harness}-{case["case"]}')
                 for harness, fixture in NATIVE_PROMPTS.items() for case in fixture['cases']]
 
+HERMES_REDRAW = {
+    'meta': ['0', '0', '2', '1', 'zsh'],
+    'lines': ['\x1b[38;5;230m❯ \x1b[3m\x1b[38;5;136mWhat changed in this repo recently?\x1b[0m', ''],
+}
+HERMES_NOTICE = next(case for case in NATIVE_PROMPTS['hermes']['cases'] if case['case'] == 'notice-short')
+SUBMISSION_CASES = [
+    *NATIVE_CASES,
+    pytest.param('hermes', dict(HERMES_NOTICE, redraw=HERMES_REDRAW), id='hermes-after-width-change'),
+]
+
+
+def test_hermes_redraw_needs_another_capture_before_using_the_editor():
+    view = native_frame(HERMES_REDRAW)
+    assert view.redrawing
+    assert not view.empty
+
 
 def test_each_native_slash_picker_has_notice_and_slash_fixtures():
     assert set(NATIVE_PROMPTS) == set(submission.SLASH_PICKERS)
@@ -85,12 +101,13 @@ def test_native_prompt_fixture(harness, case):
         assert not submission.ready(observed, case['text'] + ' another sentence')
 
 
-@pytest.mark.parametrize('harness,case', NATIVE_CASES)
+@pytest.mark.parametrize('harness,case', SUBMISSION_CASES)
 def test_watcher_enters_only_the_verified_native_draft(monkeypatch, harness, case):
     before = case.get('before', NATIVE_PROMPTS[harness]['before'])
     accepted = case.get('accepted', case['ready'])
     should_enter = case.get('enter', accepted)
-    stage = before
+    redraw = case.get('redraw')
+    stage = redraw or before
     entered = []
     reasons = []
     elapsed = 0.0
@@ -104,6 +121,8 @@ def test_watcher_enters_only_the_verified_native_draft(monkeypatch, harness, cas
         output = ''
         if args[0] == 'display-message':
             output = '\n'.join([native_meta(stage), *stage['lines'], ''])
+            if stage is redraw and elapsed >= submission.POLL:
+                stage = before
         elif args[0] == 'load-buffer':
             assert input == case['text']
         elif args[0] == 'paste-buffer':
@@ -129,7 +148,7 @@ def test_watcher_enters_only_the_verified_native_draft(monkeypatch, harness, cas
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('harness,case', NATIVE_CASES)
+@pytest.mark.parametrize('harness,case', SUBMISSION_CASES)
 async def test_cockpit_enters_only_the_verified_native_draft(monkeypatch, tmp_path, harness, case):
     bridge = control.TmuxControlBridge(control.ControlConfig('127.0.0.1', 0, 'Fixture', 'tmux',
                                                             history_dir=tmp_path))
@@ -141,15 +160,20 @@ async def test_cockpit_enters_only_the_verified_native_draft(monkeypatch, tmp_pa
     before = case.get('before', NATIVE_PROMPTS[harness]['before'])
     accepted = case.get('accepted', case['ready'])
     should_enter = case.get('enter', accepted)
-    stage = before
+    redraw = case.get('redraw')
+    stage = redraw or before
+    metadata_reads = 0
     entered = []
 
     async def write(data):
-        nonlocal stage
+        nonlocal stage, metadata_reads
         args = shlex.split(data.decode())
         rows = []
         if args[0] == 'display-message':
             rows = [native_meta(stage)]
+            metadata_reads += 1
+            if stage is redraw and metadata_reads == 6:
+                stage = before
         elif args[0] == 'capture-pane':
             rows = stage['lines']
         elif args[0] == 'load-buffer':

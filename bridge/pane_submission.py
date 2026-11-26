@@ -20,6 +20,7 @@ METADATA = ('#{socket_path}\t#{pid}\t#{pane_id}\t#{pane_pid}\t#{cursor_y}\t#{pan
             '\t#{cursor_x}\t#{bracket_paste_flag}\t#{pane_current_command}')
 POLL = .06
 TIMEOUT = 5.0
+REDRAW_GRACE = 1.0
 SLASH_MENU_WAIT = .30
 SHELLS = frozenset({
     'ash', 'bash', 'busybox', 'cmd', 'csh', 'dash', 'elvish', 'fish', 'hush',
@@ -94,6 +95,7 @@ class Frame:
     editor: str | None = None
     running: bool = False
     slash_view: tuple[str, str] | None = None
+    redrawing: bool = False
 
     @property
     def identity(self):
@@ -284,6 +286,12 @@ def frame(metadata, lines, pane):
     slash_view = _slash_view(plain)
     if bracketed is False:
         return Frame(*base,None,False,slash_view=slash_view)
+    if (cursor==0 and column==2 and plain[0].startswith('❯ ')
+            and not any(row.strip() for row in plain[1:])
+            and _hermes_compact_hint(lines[0], plain[0][2:].strip())):
+        # During a Hermes resize the status and rules can disappear for a redraw.
+        # Treat this as a reason to read again, without admitting input.
+        return Frame(*base,None,False,redrawing=True)
     for start in range(cursor,-1,-1):
         line=plain[start].rstrip()
         if BORDER.fullmatch(line.strip()):
@@ -562,6 +570,20 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
             on_wait(reason)
         return status
 
+    def capture_draft(identity):
+        view = capture(command,pane)
+        if view is None or view.identity != identity or not view.redrawing:
+            return view
+        redraw_deadline = min(end, time.monotonic() + REDRAW_GRACE)
+        while time.monotonic() < redraw_deadline:
+            time.sleep(POLL)
+            view = capture(command,pane)
+            if view is not None and view.identity != identity:
+                return view
+            if view is not None and not view.redrawing:
+                return capture(command,pane) if admit() else None
+        return view
+
     try:
         current=capture(command,pane)
         if current is None:
@@ -571,7 +593,7 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
             return defer('refused', 'pane_locked')
         if not admit():
             return defer('refused', 'pane_changed')
-        before=capture(command,pane)
+        before=capture_draft(current.identity)
         if not before or before.identity!=current.identity:
             return defer('refused', 'pane_changed')
         if before.draft is None:
@@ -590,7 +612,7 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
                 return defer('refused', 'submission_deadline')
             if not admit():
                 return defer('refused', 'pane_changed')
-            current=capture(command,pane)
+            current=capture_draft(before.identity)
             if not current or current.identity!=before.identity:
                 return defer('refused', 'pane_changed')
             if not current.empty or not current.allows_paste(text):
