@@ -10,13 +10,38 @@
     hermes:{label:'Hermes',asset:'hermes.png'},
     dsh:{label:'dsh',asset:'dsh.svg'},
   };
+  const INSTALL_GUIDES={
+    'claude-code':{name:'Claude Code CLI',page:'install.md'},
+    codex:{name:'Codex CLI',page:'install.md'},
+    antigravity:{name:'Antigravity CLI (agy)',page:'antigravity.md'},
+    dsh:{name:'dsh',page:'native-setup.md'},
+    hermes:{name:'Hermes',page:'native-setup.md'},
+  };
   function harnessKey(id){
     const key=String(id||'').trim().toLowerCase().split('/').pop();
     return ({claude:'claude-code',claudecode:'claude-code','codex-cli':'codex','dsh-tui':'dsh'})[key]||key;
   }
   function harnessInfo(id){return HARNESS[harnessKey(id)]||{label:id,asset:null};}
+  function guideFor(harness){
+    const key=harnessKey(harness?.id);
+    const id=key==='gemini'?'antigravity':key;
+    return Object.hasOwn(INSTALL_GUIDES,id)?INSTALL_GUIDES[id]:null;
+  }
+  function setupGuide(harness){
+    const guide=guideFor(harness);
+    return guide&&{
+      label:guide.name+' setup',
+      url:'https://github.com/gyroid-eth/orrery/blob/master/docs/en/'+guide.page,
+    };
+  }
+  function needsRuntimeSetup(reason){
+    return ['runtime_not_prepared','plain_generation_required','runtime_version_mismatch',
+      'thin_config_unavailable'].includes(reason);
+  }
   function unavailableReason(harness){
     if(harness&&harness.available)return '';
+    const guide=guideFor(harness);
+    if(guide&&needsRuntimeSetup(harness.reason))return 'Install or repair '+guide.name;
     const messages={
       runtime_not_prepared:'Install or repair this harness',
       credential_reader_unavailable:'Prepare the OS key store',
@@ -99,5 +124,5 @@
     if(!id||agent.category&&agent.category!=='agent')return null;
     return {id:key,...harnessInfo(id)};
   }
-  return {harnessKey,harnessInfo,unavailableReason,locality,family,entries,geminiFamily,displayModels,value,harnesses,helperModels,metadata,recent,remember,rosterHarness};
+  return {harnessKey,harnessInfo,unavailableReason,setupGuide,needsRuntimeSetup,locality,family,entries,geminiFamily,displayModels,value,harnesses,helperModels,metadata,recent,remember,rosterHarness};
 });

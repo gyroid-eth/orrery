@@ -1838,6 +1838,7 @@
             <svg class="spawn-icon" aria-hidden="true"><use href="#spawn-icon-help"/></svg>
           </a>
         </div>
+        <p class="spawn-empty" id="spawnHarnessNotice" role="status" hidden></p>
         <div id="spawnHelperField" hidden>
           <select class="spawn-helper" id="spawnHelper" aria-label="Helper model" title="Helper model"><option value="same">Same as main</option></select>
         </div>
@@ -4462,9 +4463,9 @@
       }
     }
   },
-  "inventory_digest": "7e3c3a73c6748111f8a0b76ce588bccf5dfb07337807491aa035ad1740de966f",
+  "inventory_digest": "dacfd125133427656f456539bd5d2113a8f6716569a538023fce5fee06da4f08",
   "rules_digest": "6c99e073c50d75792d183cd0daa1a345398f7e51e2032df7f377746fb98b7125",
-  "source_digest": "74b200ce5fb3c3eb789a8467e3676f3130339eeed3cdb17a14830aa6321e051f",
+  "source_digest": "e030c409f5d225c3ef11011291820d381ee289b40b88a219c64bc491d6ecc3cf",
   "surface": "cockpit",
   "version": 1
 }
@@ -11284,6 +11285,7 @@ const spawnModelSearch=document.getElementById('spawnModelSearch');
 const spawnHelper=document.getElementById('spawnHelper');
 const spawnHarnesses=document.getElementById('spawnHarnesses');
 const spawnHarnessHelp=document.getElementById('spawnHarnessHelp');
+const spawnHarnessNotice=document.getElementById('spawnHarnessNotice');
 const spawnHarnessBar=document.getElementById('spawnHarnessBar');
 const spawnTools=document.getElementById('spawnTools');
 const spawnComputerUse=document.getElementById('spawnComputerUse');
@@ -11448,8 +11450,9 @@ function renderProviderTabs(keepChoice=false){
   const hadDynamicSelection=Number.isInteger(selUrlIndex);
   let selected=choices.find(e=>e.provider.id===selProvider&&e.model.id===selModel&&
     (!Number.isInteger(e.model.url_index)||e.model.url_index===selUrlIndex)&&(!e.model.url_key||e.model.url_key===selUrlKey));
-  if(keepChoice&&selModel&&(!selected||(selHarness&&!SpawnPicker.harnesses(selected.provider,selected.model)
-      .some(h=>h.id===selHarness&&h.available)))){
+  const availableHarnesses=selected?SpawnPicker.harnesses(selected.provider,selected.model).filter(h=>h.available):[];
+  if(keepChoice&&selModel&&(!selected||(selHarness&&availableHarnesses.length&&
+      !availableHarnesses.some(h=>h.id===selHarness)))){
     // A background refresh must not switch the route of a prepared launch.
     spawnChooseAgain=true;selected=null;
   }
@@ -11624,13 +11627,28 @@ function spawnToolOptions(){
       ...(!browser&&supportsBrowserOff?{browser_off:true}:{})},
   };
 }
+function spawnLocalRuntimeNotice(provider,model){
+  return !model&&provider?.dynamic_models&&SpawnPicker.needsRuntimeSetup(provider.model_error)
+    ?'Install or repair dsh or Hermes':'';
+}
 function renderHarnesses(){
   const p=providerById(selProvider),model=selectedSpawnModel();
   spawnHarnesses.replaceChildren(spawnHarnessMarker);
   const choices=p&&model?SpawnPicker.harnesses(p,model):[];
   if(!choices.some(h=>h.id===selHarness&&h.available))selHarness=(choices.find(h=>h.default&&h.available)||choices.find(h=>h.available)||{}).id||null;
   spawnHarnesses.hidden=choices.length<2;
-  spawnHarnessHelp.hidden=!choices.some(h=>!h.available);
+  const localNotice=spawnLocalRuntimeNotice(p,model);
+  const guide=localNotice?SpawnPicker.setupGuide({id:'dsh'}):
+    choices.filter(h=>!h.available).map(SpawnPicker.setupGuide).find(Boolean);
+  spawnHarnessHelp.hidden=!guide;
+  if(guide){
+    spawnHarnessHelp.href=guide.url;
+    spawnHarnessHelp.title=localNotice?'dsh and Hermes setup':guide.label;
+    spawnHarnessHelp.setAttribute('aria-label',spawnHarnessHelp.title);
+  }
+  const unavailable=localNotice||(choices.length&&!choices.some(h=>h.available)?SpawnPicker.unavailableReason(choices[0]):'');
+  spawnHarnessNotice.textContent=unavailable;
+  spawnHarnessNotice.hidden=!unavailable;
   spawnHarnessBar.hidden=spawnHarnesses.hidden&&spawnHarnessHelp.hidden;
   choices.forEach(h=>{
     const button=document.createElement('button');button.type='button';button.className='spawn-harness';
@@ -11693,11 +11711,13 @@ function updateSpawnAvailability(){
   const harnesses=provider&&model?SpawnPicker.harnesses(provider,model):[];
   const harness=harnesses.find(h=>h.id===selHarness&&h.available);
   const unavailable=harnesses.find(h=>!h.available);
+  const localNotice=spawnLocalRuntimeNotice(provider,model);
   const missingEffort=provider&&model&&spawnExplicitEffortMissing(provider,selModel);
   const issue=spawnCatalog?.unavailable?'Model catalog unavailable. Open the model sheet to retry.':
+    localNotice?`${localNotice}. Open model settings for setup.`:
     spawnChooseAgain?'Selected model or harness is no longer available. Choose again.':
     provider?.model_error&&!model?`${provider.model_error}. Check model settings.`:
-    model&&!harness?(unavailable?`${SpawnPicker.unavailableReason(unavailable)}. Open model settings for setup.`:'No available harness. Choose another model.'):
+    model&&!harness?(unavailable?`${SpawnPicker.unavailableReason(unavailable)}.${SpawnPicker.setupGuide(unavailable)?' Open model settings for setup.':''}`:'No available harness. Choose another model.'):
     !model&&Number.isInteger(selUrlIndex)?'Model unavailable. Choose another model.':
     missingEffort?'Choose an effort in the model sheet.':'';
   const browserNotice=!spawnTools.hidden&&SpawnPicker.harnessKey(selHarness)==='codex'&&
