@@ -49,7 +49,7 @@
       reader.readAsDataURL(file);
     });
   }
-  function mount({host,clip,picker,list,onChange,onError,mayEdit,pickPaths}){
+  function mount({host,clip,picker,list,onChange,onError,mayEdit}){
     let entries=[],dragDepth=0,pending=false;
     const node=(tag,cls)=>{
       const el=document.createElement(tag);el.className=cls;return el;
@@ -103,14 +103,13 @@
       for(const path of paths)if(!appendPath(path))break;
       paint();
     }
-    function add(files,sourcePaths=[]){
+    function add(files){
       if(!mayEdit())return;
       const errors=[];
-      for(const [index,file] of Array.from(files).entries()){
+      for(const file of Array.from(files)){
         const format=kindFor(file);
-        const source=sourcePaths[index]||file.path;
-        if(pathName(source)&&(!file.size||file.size>format.maxBytes)){
-          if(!appendPath(source))break;
+        if(file.size>format.maxBytes&&pathName(file.path)){
+          if(!appendPath(file.path))break;
           continue;
         }
         if(!file.size){errors.push(file.name+' is empty.');continue;}
@@ -128,11 +127,8 @@
       if(errors.length)onError(errors.join(' '));
       paint();
     }
-    clip.onclick=async()=>{
-      if(!mayEdit()||pending)return;
-      if(!pickPaths){picker.click();return;}
-      try{addPaths(await pickPaths());}
-      catch(_){if(mayEdit())picker.click();}
+    clip.onclick=()=>{
+      if(mayEdit()&&!pending)picker.click();
     };
     picker.onchange=()=>{add(picker.files);picker.value='';};
     const dropping=event=>Array.from(event.dataTransfer?.types||[]).includes('Files');
@@ -155,7 +151,7 @@
       event.preventDefault();dragDepth=0;host.removeAttribute('data-dragging');
       add(event.dataTransfer.files);
     });
-    async function paste(read,fallback=[]){
+    async function paste(read){
       if(pending||!mayEdit())return;
       pending=true;onChange();
       try{
@@ -164,16 +160,6 @@
         const paths=Array.isArray(result.paths)?result.paths.filter(pathName):[];
         const snapshot=Array.isArray(result.attachments)?result.attachments:[];
         const files=snapshotFiles(snapshot);
-        if(fallback.length){
-          const selected=files.map(file=>file.name).concat(paths.map(pathName)).sort();
-          const matching=selected.length===fallback.length&&
-            fallback.map(file=>file.name).sort().every((name,index)=>name===selected[index]);
-          if(!matching||!files.length){
-            const matchingPaths=paths.length===fallback.length&&paths.every((path,index)=>pathName(path)===fallback[index].name);
-            add(fallback,matchingPaths?paths:[]);
-            return;
-          }
-        }
         if(files.length)add(files);
         if(paths.length)addPaths(paths);
         const skipped=(result.skipped||0)+snapshot.length-files.length;
@@ -182,8 +168,7 @@
         else if(skipped)onError(skipped===1?'1 clipboard item could not be attached.':skipped+' clipboard items could not be attached.');
         else if(!files.length&&!paths.length)onError('No files or images on the clipboard.');
       }catch(_){
-        if(fallback.length)add(fallback);
-        else if(mayEdit())onError('Could not read clipboard attachments.');
+        if(mayEdit())onError('Could not read clipboard attachments.');
       }finally{
         pending=false;onChange();
       }
@@ -203,8 +188,21 @@
       const payload=await response.json();
       if(response.status===413||payload.error==='file_too_large'||payload.error==='image_too_large')
         throw new Error(entry.name+' exceeds 50 MiB.');
-      if(payload.error==='attachment_source_unreadable')
-        throw new Error('Could not read '+entry.name+' from its original location.');
+      const reasons={
+        attachment_source_unreadable:'The original file could not be read. Select it using the attachment picker.',
+        attachment_target_changed:'The target pane changed. Re-select the recipient and try again.',
+        attachment_workspace_unavailable:'The agent workspace is unavailable. Reopen the agent and try again.',
+        attachment_workspace_unwritable:'The agent workspace is not writable. Check its permissions and try again.',
+        attachment_workspace_full:'The agent workspace is out of disk space. Free some space and try again.',
+        image_folder_full:'The agent’s .orrery-input-images folder is full. Move old inputs you no longer need out of that folder and try again.',
+        file_folder_full:'The agent’s .orrery-input-files folder is full. Move old inputs you no longer need out of that folder and try again.',
+        image_invalid:'The image could not be decoded. Open it and export a new copy.',
+        image_format_unsupported:'Export the image as a single-frame PNG, JPEG or WebP and try again.',
+        image_pixels_too_large:'The image exceeds 24 megapixels. Resize it and try again.',
+        image_decoder_unavailable:'Image decoding is unavailable on the cockpit host.',
+      };
+      if(!response.ok&&Object.hasOwn(reasons,payload.error))
+        throw new Error(entry.name+': '+reasons[payload.error]);
       if(response.ok&&entry.path&&payload.original===true&&payload.path===entry.path){
         paths.push(payload.path);continue;
       }

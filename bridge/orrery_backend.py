@@ -8,6 +8,7 @@ import asyncio
 import base64
 import collections
 import contextlib
+import errno
 import hashlib
 import json
 import logging
@@ -4240,7 +4241,9 @@ async def serve_prompt_attachment(request: web.Request) -> web.Response:
     from mobile_image import save_image
     from mobile_input import InputRefused, decode_json
 
-    def reject(error, status):
+    def reject(error, status, *, os_error=None):
+        logging.warning("ORRERY attachment refused: reason=%s status=%d errno=%s",
+                        error, status, getattr(os_error, 'errno', None))
         return web.json_response({'ok': False, 'error': error}, status=status,
                                  headers={'Cache-Control': 'no-store'})
 
@@ -4251,8 +4254,8 @@ async def serve_prompt_attachment(request: web.Request) -> web.Response:
     try:
         raw = await asyncio.wait_for(request.content.readexactly(size), timeout=20)
         data = decode_json(raw, max_bytes=max_size)
-    except (InputRefused, asyncio.TimeoutError, asyncio.IncompleteReadError, OSError):
-        return reject('invalid_attachment', 400)
+    except (InputRefused, asyncio.TimeoutError, asyncio.IncompleteReadError, OSError) as error:
+        return reject('invalid_attachment', 400, os_error=error)
     kind, name, pane, instance = (data.get(key) for key in ('kind', 'session', 'paneId', 'incarnation'))
     expected = {'kind', 'session', 'paneId', 'incarnation', 'sourcePath' if kind == 'path' else 'data'}
     source = data.get('sourcePath')
@@ -4297,11 +4300,17 @@ async def serve_prompt_attachment(request: web.Request) -> web.Response:
     except ValueError as error:
         reason = str(error)
         if reason in {'file_empty', 'file_too_large', 'image_too_large', 'image_pixels_too_large',
-                      'attachment_source_unreadable'}:
-            return reject(reason, 422)
+                      'image_invalid', 'image_format_unsupported', 'image_decoder_unavailable',
+                      'image_folder_full', 'file_folder_full', 'attachment_source_unreadable'}:
+            return reject(reason, 422, os_error=error.__cause__)
         return reject('attachment_save_failed', 422)
-    except (OSError, TargetRefused):
-        return reject('attachment_save_failed', 422)
+    except PermissionError as error:
+        return reject('attachment_workspace_unwritable', 422, os_error=error)
+    except OSError as error:
+        reason = 'attachment_workspace_full' if error.errno == errno.ENOSPC else 'attachment_save_failed'
+        return reject(reason, 422, os_error=error)
+    except TargetRefused:
+        return reject('attachment_target_changed', 409)
     references = request.app.get(CONVERSATION_REFERENCES_KEY)
     if references is not None:
         references.remember_upload(name, relative, path)

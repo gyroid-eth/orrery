@@ -43,18 +43,29 @@ def test_invalid_or_oversized_image_never_creates_file(tmp_path, value):
     assert not list(tmp_path.glob('.orrery-input-images/*.*'))
 
 
-def test_cleanup_only_expired_random_images_and_cap_at_fifty(tmp_path):
+def test_cleanup_expired_and_oldest_images_keeps_unrelated_files(tmp_path, monkeypatch, caplog):
+    import mobile_attachment_store
     from mobile_image import save_image
+    assert mobile_attachment_store.MAX_STORED_ATTACHMENTS == 1000
+    monkeypatch.setattr(mobile_attachment_store, 'MAX_STORED_ATTACHMENTS', 2)
     directory = tmp_path / '.orrery-input-images'
-    path = Path(save_image(tmp_path, picture()))
-    os.utime(path, (time.time() - 8 * 86400,) * 2)
+    expired = Path(save_image(tmp_path, picture(), label='expired.png'))
+    oldest = Path(save_image(tmp_path, picture(), label='oldest.png'))
+    os.utime(expired, (time.time() - 8 * 86400,) * 2)
+    os.utime(oldest, (time.time() - 86400,) * 2)
     unrelated = directory / 'notes.txt'
     unrelated.write_text('keep')
-    for n in range(50):
-        save_image(tmp_path, picture())
-    assert not path.exists() and unrelated.read_text() == 'keep'
-    with pytest.raises(ValueError, match='image_folder_full'):
-        save_image(tmp_path, picture())
+    link = directory / ('f' * 32 + '.png')
+    link.symlink_to(unrelated)
+    recent = Path(save_image(tmp_path, picture(), label='recent.png'))
+    newest = Path(save_image(tmp_path, picture(), label='newest.png'))
+    for removed in (expired, oldest):
+        assert not removed.exists()
+        assert not removed.with_name(removed.name + '.label').exists()
+    assert recent.is_file() and newest.is_file()
+    assert link.is_symlink() and unrelated.read_text() == 'keep'
+    assert 'kind=image expired=1 evicted=0' in caplog.text
+    assert 'kind=image expired=0 evicted=1' in caplog.text
 
 
 def test_symlink_folder_is_never_used(tmp_path):

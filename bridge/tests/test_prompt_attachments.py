@@ -1,5 +1,7 @@
 import base64
+import errno
 import io
+import random
 from types import SimpleNamespace
 
 from aiohttp import web
@@ -89,6 +91,53 @@ def test_only_a_regular_file_over_the_limit_gets_its_original_path(tmp_path, mon
     for path in (link, tmp_path / 'missing.zip', workspace):
         with pytest.raises(ValueError, match='attachment_source_unreadable'):
             backend.stage_prompt_attachment_path(workspace, str(path))
+
+
+@pytest.mark.asyncio
+async def test_selected_image_bytes_save_even_when_the_desktop_path_cannot_be_read(monkeypatch, tmp_path, caplog):
+    workspace = tmp_path / 'workspace'
+    workspace.mkdir()
+    folder = workspace / '.orrery-input-images'
+    folder.mkdir()
+    for index in range(50):
+        (folder / f'{index:032x}.png').write_bytes(b'previous image')
+    source = tmp_path / 'Desktop' / 'Screenshot.png'
+    original_open = backend.os.open
+
+    def protected_open(path, *args, **kwargs):
+        if str(path) == str(source):
+            raise PermissionError(errno.EPERM, 'Protected folder')
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(backend.os, 'open', protected_open)
+    state = SimpleNamespace(bridge=SimpleNamespace(_incarnation='a' * 32))
+    monkeypatch.setattr(backend, 'composer_pane_state', lambda *args: state)
+
+    async def cwd(*args):
+        return workspace
+
+    monkeypatch.setattr(backend, 'pane_probe_cwd', cwd)
+    app = web.Application()
+    app.router.add_post('/telemetry/prompt-attachment', backend.serve_prompt_attachment)
+    raw = io.BytesIO()
+    size = (2000, 1800)
+    Image.frombytes('RGB', size, random.Random(1).randbytes(size[0] * size[1] * 3)).save(raw, format='PNG')
+    assert raw.tell() > 10 * 1024**2
+    common = {'session': 'Fixture', 'paneId': '%40', 'incarnation': 'a' * 32, 'label': source.name}
+    async with TestClient(TestServer(app)) as client:
+        denied = await client.post('/telemetry/prompt-attachment',
+                                   json={**common, 'kind': 'path', 'sourcePath': str(source)})
+        assert denied.status == 422
+        assert (await denied.json())['error'] == 'attachment_source_unreadable'
+        assert 'reason=attachment_source_unreadable status=422 errno=1' in caplog.text
+        assert str(source) not in caplog.text
+        saved = await client.post('/telemetry/prompt-attachment',
+                                  json={**common, 'kind': 'image', 'data': base64.b64encode(raw.getvalue()).decode()})
+        assert saved.status == 200
+        destination = workspace / (await saved.json())['path']
+        with Image.open(destination) as image:
+            assert image.size == size
+        assert len(list(folder.glob('*.png'))) == 51
 
 
 @pytest.mark.asyncio

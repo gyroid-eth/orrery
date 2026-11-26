@@ -4781,11 +4781,11 @@ function paletteShortcutLabel(host){return usesAltShortcuts(host)?'Alt+K':'⌘K'
 function splitClickLabel(host){return usesAltShortcuts(host)?'Ctrl+click':'⌘+click';}
 function terminalActionText(host){return usesAltShortcuts(host)?'WIN TERMINAL':'GHOSTTY';}
 /* Native fallback for clipboard payloads the browser could not read. */
-const PASTE_UNSUPPORTED_MESSAGE='The WSL backend cannot read the Windows clipboard. Use the attachment picker.';
+const PASTE_UNSUPPORTED_MESSAGE='The browser did not provide a clipboard file. Use the attachment picker or drop the file.';
 const PASTE_HOST_UNKNOWN_MESSAGE='Could not identify the clipboard host. Try again or use the attachment picker.';
 function composerPasteRefusal(host){
   const kind=host&&host.host;
-  if(kind==='wsl')return host.file_paste?'':PASTE_UNSUPPORTED_MESSAGE;
+  if(kind==='wsl')return PASTE_UNSUPPORTED_MESSAGE;
   if(kind!=='mac'&&kind!=='linux')return PASTE_HOST_UNKNOWN_MESSAGE;
   return '';
 }
@@ -12217,7 +12217,6 @@ const promptFiles=OrreryPromptAttachments.mount({
   picker:document.getElementById('promptFilePicker'),list:document.getElementById('promptFiles'),
   onChange:()=>{hideSendGuard();promptCard.refresh();},
   onError:message=>showToast(message,true),mayEdit:()=>!promptBusy,
-  pickPaths:window.__TAURI__?.core?.invoke?()=>window.__TAURI__.core.invoke('pick_attachment_paths'):null,
 });
 const nativePromptWebview=window.__TAURI__?.webview?.getCurrentWebview?.();
 nativePromptWebview?.onDragDropEvent(({payload})=>{
@@ -12248,8 +12247,8 @@ sendGuardFix.addEventListener('click',()=>{
 sendGuardRaw.addEventListener('click',()=>{hideSendGuard();sendPrompt({bypassGuard:true});});
 sendGuardCancel.addEventListener('click',()=>{hideSendGuard();promptInput.focus();});
 
-/* A paste stages browser files first. Finder and Explorer file copies can
-   reach the DOM without File objects, so ask the local host in that case. */
+/* A paste stages browser files first. On Mac, Finder can expose only file
+   URLs to the page, so use the local clipboard reader for that fallback. */
 async function readClipboardAttachments(){
   const invoke=window.__TAURI__?.core?.invoke;
   if(invoke){
@@ -12277,7 +12276,7 @@ function handleComposerPaste(event){
   if(!files.length&&!fileHint&&data?.getData('text/plain'))return;
   event.preventDefault();
   if(promptBusy)return;
-  if(files.length&&(hostPlatform.host!=='mac'||files.every(file=>file.path))){
+  if(files.length){
     promptFiles.add(files);return;
   }
   const refusal=composerPasteRefusal(hostPlatform);
@@ -12286,7 +12285,7 @@ function handleComposerPaste(event){
     if(hostPlatform.host==='unknown')loadHostPlatform();
     return;
   }
-  void promptFiles.paste(readClipboardAttachments,files);
+  void promptFiles.paste(readClipboardAttachments);
 }
 promptInput.addEventListener('paste',handleComposerPaste);
 
