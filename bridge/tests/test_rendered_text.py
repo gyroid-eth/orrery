@@ -68,9 +68,9 @@ Promise.resolve().then(() => console.log(JSON.stringify([detailHtml(message), re
 }), body.html(), fallback, message.body_md])));
 """
     allowed = {
-        'div': {'class'}, 'span': {'class', 'title', 'role', 'aria-label', 'aria-hidden', 'data-mail-peer'},
+        'div': {'class', 'data-reply'}, 'span': {'class', 'title', 'role', 'aria-label', 'aria-hidden', 'data-mail-peer'},
         'h2': set(), 'p': set(), 'code': set(), 'strong': set(),
-        'time': {'title'}, 'button': {'class', 'type', 'data-reply'},
+        'time': {'title'}, 'button': {'class', 'type', 'data-delivery', 'aria-haspopup', 'aria-label'},
         'svg': {'class', 'viewbox', 'aria-hidden'}, 'path': {'d'}, 'circle': {'cx', 'cy', 'r'},
     }
     details, reply, link, body, fallback, original = json.loads(run_markdown(script))
@@ -84,11 +84,13 @@ Promise.resolve().then(() => console.log(JSON.stringify([detailHtml(message), re
     parsed = Tags()
     parsed.feed(details)
     assert ''.join(parsed.text).count(value) == 3  # sender, recipient and subject
-    assert ('span', {'class': 'mail-peer', 'title': value.upper()}) in parsed.tags
+    assert ('button', {'type': 'button', 'class': 'mail-peer', 'data-delivery': value.upper()}) in parsed.tags
     assert [attrs['data-mail-peer'] for _, attrs in parsed.tags if 'data-mail-peer' in attrs] == [value, value]
     parsed = Tags()
     parsed.feed(reply)
-    assert parsed.tags[0] == ('button', {'class': 'thread-item', 'type': 'button', 'data-reply': value})
+    assert parsed.tags[0] == ('div', {'class': 'thread-item', 'data-reply': value})
+    assert parsed.tags[1] == ('button', {'class': 'mail-row-open', 'type': 'button',
+                                        'aria-haspopup': 'dialog', 'aria-label': 'Open message: ' + value})
     assert ''.join(parsed.text).count(value) == 3  # sender, recipient and excerpt
     parsed = Tags()
     parsed.feed(body)

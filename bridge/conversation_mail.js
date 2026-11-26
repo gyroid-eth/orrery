@@ -55,17 +55,19 @@
     }
     for(const details of container.querySelectorAll('.conversation-mail'))layoutThread(details);
   }
-  function refreshPeers(container,renderPeerAvatar){
-    if(typeof renderPeerAvatar!=='function')return;
+  function refreshPeers(container,renderPeerAvatar,configureAgentButton){
     let changed=false;
     for(const peer of container.querySelectorAll('.conversation-mail-peer')){
-      const previous=peer.querySelector('.conversation-avatar'),avatar=renderPeerAvatar(peer.dataset.peerName,previous);
+      const name=peer.dataset.peerName;
+      configureAgentButton?.(peer,name);
+      if(!renderPeerAvatar)continue;
+      const previous=peer.querySelector('.conversation-avatar'),avatar=renderPeerAvatar(name,previous);
       if(avatar===previous)continue;
       changed=true;previous?.remove();if(avatar)peer.prepend(avatar);
     }
     layout(container,changed);
   }
-  function render(event,article,{name='',renderPeerAvatar=null}={}){
+  function render(event,article,{name='',renderPeerAvatar=null,configureAgentButton=null}={}){
     article.classList.add('conversation-mail-event');
     for(const item of event.mail.slice(0,8)){
       if(!item||!['received','sent'].includes(item.direction)||typeof item.subject!=='string')continue;
@@ -84,8 +86,9 @@
       const fullTo=sent?(recipients.join(', ')||to):to,route=create('span','conversation-mail-route');
       route.title=from+' → '+fullTo;
       const peer=(value,self)=>{
-        const span=create('span','conversation-mail-peer'+(self?' is-self':' is-counterpart'));span.dataset.peerName=value;span.title=value;
-        span.appendChild(create('span','conversation-mail-peer-name',value));return span;
+        const control=create(configureAgentButton?'button':'span','conversation-mail-peer'+(self?' is-self':' is-counterpart'));
+        control.dataset.peerName=value;control.title=value;
+        control.appendChild(create('span','conversation-mail-peer-name',value));return control;
       };
       const arrow=create('span','conversation-mail-arrow','→');arrow.setAttribute('aria-hidden','true');
       const chevron=create('span','conversation-mail-chevron','▸');chevron.setAttribute('aria-hidden','true');
@@ -111,7 +114,7 @@
       const line=create('span','conversation-mail-thread');line.hidden=true;line.setAttribute('aria-hidden','true');
       details.append(body,line);details.addEventListener('toggle',()=>layoutThread(details));article.appendChild(details);
     }
-    refreshPeers(article,renderPeerAvatar);return article;
+    refreshPeers(article,renderPeerAvatar,configureAgentButton);return article;
   }
   root.OrreryConversationMail=Object.freeze({render,refreshPeers,layout});
 })(window);

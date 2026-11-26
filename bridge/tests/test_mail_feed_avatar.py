@@ -19,7 +19,7 @@ def prepare(cockpit, width=320, theme='dark'):
       OrreryColorTheme.setPreference("""+json.dumps(theme)+""");
       document.querySelector('.grid').style.gridTemplateColumns="""+json.dumps(f'250px minmax(0,1fr) {width}px')+""";
       window.groupFor=name=>[...document.querySelectorAll('#mail .mail-assignee')].find(
-        group=>group.querySelector('.mail-assignee-name > :last-child').textContent===name);
+        group=>group.querySelector('.mail-assignee-peer > :last-child').textContent===name);
       """)
     wait("document.querySelectorAll('.mail-assignee').length===3")
     return js, wait
@@ -35,12 +35,12 @@ def test_each_direct_recipient_has_an_accessible_heading(cockpit, theme, width):
     assert not js("Boolean(document.querySelector('.mail-subject img'))")
     assert js("""[...document.querySelectorAll('.mail-assignee')].every(
       group=>group.scrollWidth<=group.clientWidth+1&&
-        group.querySelector('.mail-request').getAttribute('aria-label').endsWith('high importance'))""")
+        group.querySelector('.mail-request .mail-row-open').getAttribute('aria-label').endsWith('high importance'))""")
 
 
 def test_roster_refresh_keeps_focused_assignment_and_drops_stale_portrait(cockpit):
     js, _ = prepare(cockpit)
-    js("""window.keptGroup=groupFor('BuildNode');window.keptRequest=keptGroup.querySelector('.mail-request');
+    js("""window.keptGroup=groupFor('BuildNode');window.keptRequest=keptGroup.querySelector('.mail-request .mail-row-open');
       keptRequest.focus();currentAgents=currentAgents.filter(agent=>agent.name!=='BuildNode');
       document.dispatchEvent(new Event('oc:agents'));""")
     assert js("document.activeElement===keptRequest&&keptGroup===groupFor('BuildNode')")
@@ -270,7 +270,7 @@ def test_route_portraits_follow_the_roster_in_both_views_and_detail(cockpit):
     assert js("""[...document.querySelectorAll('.mail-route')].every(
       route=>route.scrollWidth<=route.clientWidth+1)""")
     assert js("portraits('.mail-timeline-start').find(peer=>peer[0]==='ExternalNode')") == ['ExternalNode', None]
-    js("document.querySelector('.mail-timeline-replies button').click()")
+    js("document.querySelector('.mail-timeline-replies .mail-row-open').click()")
     wait("document.querySelector('.mail-md').textContent==='Fixture reply'")
     assert js("portraits('#mailSelectedRoute')") == reply
     assert js("portraits('.drawer-body')") == reply

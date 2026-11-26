@@ -38,9 +38,8 @@
 .conversation-byline{display:flex;gap:10px;align-items:center;margin-bottom:9px;font:calc(var(--conversation-text-size) * 10 / 13) var(--mono);color:var(--ink-dim)}
 .conversation-role{color:var(--amber);font-weight:600;text-transform:uppercase;letter-spacing:.08em}
 :is(.conversation-role,.conversation-working-speaker).conversation-speaker{display:flex;align-items:center;gap:7px;min-width:0;flex:1;color:var(--ink);text-transform:none;letter-spacing:0;font-weight:400}
-.conversation-speaker-name{flex:0 0 auto;max-width:calc(100% - 35px);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 calc(var(--conversation-text-size) * 12 / 13)/1.55 var(--rail-sans)}
-.conversation-speaker-name:last-child{max-width:calc(100% - 28px)}
-.conversation-speaker-name:first-child{max-width:100%}
+.conversation-speaker .reader-agent-link,.conversation-parent .reader-agent-link{display:inline-flex;align-items:center;gap:7px;min-width:0;max-width:100%}
+.conversation-speaker-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 calc(var(--conversation-text-size) * 12 / 13)/1.55 var(--rail-sans)}
 .conversation-speaker+.conversation-time{flex:none;white-space:nowrap}
 .conversation-avatar.medal{flex:none;width:20px;height:20px;margin-right:1px;-webkit-user-select:none;user-select:none}
 .conversation-avatar .face{font-size:10px;box-shadow:0 0 0 1px var(--hair)}

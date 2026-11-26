@@ -32,6 +32,7 @@ def prepare(cockpit, *, recipient=True):
       emitFixtureMail([feedMessages[0],feedMessages[1],feedMessages[3],feedMessages[4]]);
       window.findRequest=subject=>[...document.querySelectorAll('#mail .mail-request')]
         .find(el=>el.querySelector('.mail-subject').textContent===subject);
+      window.requestAction=subject=>findRequest(subject).querySelector('.mail-row-open');
       """)
     wait("Boolean(findRequest('Review the fixture change'))")
     if recipient:
@@ -42,10 +43,10 @@ def prepare(cockpit, *, recipient=True):
 def test_assignments_group_under_direct_recipients_and_only_show_reply_arrival(cockpit):
     js, _, _ = prepare(cockpit)
     assert js("""[...document.querySelectorAll('.mail-assignee')].map(group=>[
-      group.querySelector('.mail-assignee-name > :last-child').textContent,
+      group.querySelector('.mail-assignee-peer > :last-child').textContent,
       group.querySelectorAll('.mail-request').length
     ])""") == [['No direct recipient', 1], ['BuildNode', 2]]
-    assert js("""findRequest('Review the fixture change').getAttribute('aria-label')""") == (
+    assert js("""requestAction('Review the fixture change').getAttribute('aria-label')""") == (
         'Open request: Review the fixture change, LeadNode to BuildNode. Reply received')
     assert js("""findRequest('Check the generated logs').title""") == 'Open request. Awaiting a reply'
     assert js("document.querySelector('.mail-reply:not([hidden]) .mail-reply-excerpt').textContent") == (
@@ -61,7 +62,7 @@ def test_keyboard_route_and_filter_preserve_the_assignment(cockpit):
     assert js("document.getElementById('mailSelectedRoute').hidden")
     js("document.getElementById('mailGraphBtn').click()")
     assert not js("document.getElementById('orrery').hasAttribute('hidden')")
-    js("""window.kept=findRequest('Review the fixture change');kept.focus();
+    js("""window.kept=requestAction('Review the fixture change');kept.focus();
       window.lastRoute=null;document.addEventListener('oc:mail-route',e=>{window.lastRoute=e.detail});
       kept.blur();kept.focus();""")
     assert js('lastRoute') == {'sender': 'LeadNode', 'recipients': ['BuildNode']}
@@ -76,7 +77,7 @@ def test_keyboard_route_and_filter_preserve_the_assignment(cockpit):
     assert js("document.querySelectorAll('.mail-assignee').length") == 1
     assert js("document.activeElement.id") == 'mailFilterBtn'
     js("""document.getElementById('mailFilterBtn').click();document.activeElement.click();
-      findRequest('Review the fixture change').focus();""")
+      requestAction('Review the fixture change').focus();""")
     client.call('Input.dispatchKeyEvent', type='keyDown', key='Enter', code='Enter', windowsVirtualKeyCode=13, text='\r')
     client.call('Input.dispatchKeyEvent', type='keyUp', key='Enter', code='Enter', windowsVirtualKeyCode=13)
     wait("!document.querySelector('.maildrawer').hidden")
@@ -102,7 +103,7 @@ def test_thread_load_keeps_scroll_and_focus_during_live_arrival(cockpit):
         }
         return feedFetch(url,...args);
       };
-      window.opened=findRequest('Review the fixture change');opened.click();
+      window.opened=requestAction('Review the fixture change');opened.click();
     """)
     wait("Boolean(document.querySelector('.mail-md code'))")
     assert js("document.activeElement.dataset.action") == 'close'
@@ -137,7 +138,7 @@ def test_timeline_orders_requests_and_shares_both_kinds_of_reply_link(cockpit):
     assert js("[...document.querySelectorAll('.mail-subject')].map(e=>e.textContent)") == [
         'Run both checks', 'A copied update', 'Check the generated logs', 'Review the fixture change',
     ]
-    linked = """subject=>[...findRequest(subject).parentElement.querySelectorAll('.mail-timeline-replies button')]
+    linked = """subject=>[...findRequest(subject).parentElement.querySelectorAll('.mail-timeline-replies .thread-item')]
       .map(e=>e.dataset.reply)"""
     assert js(f"({linked})('Run both checks')") == ['121', '122']
     assert js(f"({linked})('Review the fixture change')") == ['103', '104']
@@ -241,9 +242,9 @@ def test_explicit_original_id_wins_and_other_deliveries_are_kept(cockpit, recipi
     ]);""")
     assert js("findRequest('First trace request').title") == 'Open request. Reply received'
     assert js("findRequest('Second trace request').title") == 'Open request. Awaiting a reply'
-    assert js("findRequest('Explicit first report').getAttribute('aria-label')").startswith(
+    assert js("requestAction('Explicit first report').getAttribute('aria-label')").startswith(
         'Open request: Explicit first report, DeskNode to AuditNode.')
-    assert js("findRequest('Possible trace report').getAttribute('aria-label')").startswith(
+    assert js("requestAction('Possible trace report').getAttribute('aria-label')").startswith(
         'Open request: Possible trace report, DeskNode to WatchNode.')
     js("""document.getElementById('mailFilterBtn').click();document.activeElement.click();""")
     assert not js("Boolean(findRequest('First trace request'))")
@@ -279,7 +280,7 @@ def test_linked_thread_message_keeps_an_additional_delivery_on_an_existing_route
     ]);""")
     assert js("findRequest('Trace review').title") == 'Open request. Reply received'
     assert js("findRequest('Existing delivery').title") == 'Open request. Awaiting a reply'
-    assert js("findRequest('Report and separate audit request').getAttribute('aria-label')") == (
+    assert js("requestAction('Report and separate audit request').getAttribute('aria-label')") == (
         'Open request: Report and separate audit request, DeskNode to AuditNode. Awaiting a reply')
 
 

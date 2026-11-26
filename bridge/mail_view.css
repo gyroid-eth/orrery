@@ -50,7 +50,8 @@
   display:flex;align-items:center;gap:8px;min-height:29px;margin:0;
   font:500 13px/1.25 var(--serif);
 }
-.mail-assignee-name > :last-child {min-width:0;overflow-wrap:anywhere}
+.mail-assignee-peer {display:flex;align-items:center;gap:8px;max-width:100%}
+.mail-assignee-peer > :last-child {min-width:0;overflow-wrap:anywhere}
 .mail-assignee-name .conversation-avatar.medal,.mail-assignee-fallback {
   flex:none;width:25px;height:25px;margin:0;
 }
@@ -69,7 +70,12 @@
   width:100%;padding:5px 7px;border:0;border-radius:8px;
   background:transparent;color:var(--ink);text-align:left;cursor:pointer;
 }
-.mail-request:is(:hover,:focus-visible),.mail-reply:hover,.thread-item:hover {background:var(--rail-selection)}
+.mail-request,.mail-reply,.thread-item {position:relative;isolation:isolate}
+.mail-row-open {
+  position:absolute;inset:0;z-index:1;width:100%;border:0;border-radius:inherit;background:none;cursor:pointer;
+}
+:is(.mail-request,.mail-reply,.thread-item):is(:hover,:has(> .mail-row-open:focus-visible)) {background:var(--rail-selection)}
+.mail-peer.reader-agent-link:not(:disabled) {position:relative;z-index:2}
 .mail-request {
   display:grid;grid-template-columns:12px minmax(0,1fr) 12px;
   gap:3px 5px;align-items:center;
@@ -81,10 +87,10 @@
 .mail-state.no-reply {visibility:hidden}
 .mail-state.important {color:var(--theme-status-alert,#ff6a5d)}
 .mail-open {display:flex;justify-content:center;color:var(--ink-dim)}
-.mail-request:is(:hover,:focus-visible) .mail-open {color:var(--amber)}
+.mail-request:is(:hover,:has(> .mail-row-open:focus-visible)) .mail-open {color:var(--amber)}
 @media (prefers-reduced-motion: no-preference) {
   .mail-open {transition:transform .15s ease}
-  .mail-request:is(:hover,:focus-visible) .mail-open {transform:translateX(2px)}
+  .mail-request:is(:hover,:has(> .mail-row-open:focus-visible)) .mail-open {transform:translateX(2px)}
 }
 .mail-subject {font-weight:600;overflow-wrap:anywhere}
 .mail-requester {

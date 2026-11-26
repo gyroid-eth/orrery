@@ -114,7 +114,7 @@
   const referenceClock=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
   const missingReference='The quoted message is not in the loaded part of this conversation.';
   let closeActiveNotice=null;
-  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,expandControl=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null,openExternalUrl=null,renderPeerAvatar=null,renderAvatar=null,onReference=null}){
+  function mount({getContext,source=new root.OrreryConversationSource.Source(),pollMs=4000,renderEvent=null,host=null,control=null,expandControl=null,panelId='conversationPanel',bindToggle=true,onActivate=()=>{},onState=()=>{},focusControl=null,jumpToEvent=null,openExternalUrl=null,renderPeerAvatar=null,renderAvatar=null,configureAgentButton=null,onReference=null}){
     let screen=host||document.querySelector('.screen');
     const toggle=control||document.getElementById('conversationToggle');
     const listeners=[];
@@ -301,7 +301,7 @@
       const hidden=!state||compacting||stepActivity||state==='work'&&Boolean(liveRow);
       const speaking=state==='work'&&!hidden;
       workingByline.hidden=!speaking;
-      if(speaking)root.OrreryConversationSpeaker?.paint(workingSpeaker,{name:agent,model:'',harness:providerLabel,context:current,renderAvatar});
+      if(speaking)root.OrreryConversationSpeaker?.paint(workingSpeaker,{name:agent,model:'',harness:providerLabel,context:current,renderAvatar,configureAgentButton});
       if(activityEl.hidden===hidden&&activityEl.dataset.state===(state||'')&&activityTime.textContent===(elapsed?'· '+elapsed:''))return;
       const atBottom=nearBottom();
       activityEl.hidden=hidden;activityEl.dataset.state=state;
@@ -999,7 +999,7 @@
         toggle.addEventListener('click',()=>{if(!detail.hidden)keepReaderFocus(detail);detail.hidden=!detail.hidden;toggle.setAttribute('aria-expanded',String(!detail.hidden));});
         article.append(toggle,detail);return article;
       }
-      if(event.kind==='mail'&&Array.isArray(event.mail)&&root.OrreryConversationMail)return root.OrreryConversationMail.render(event,article,{name:agent,renderPeerAvatar});
+      if(event.kind==='mail'&&Array.isArray(event.mail)&&root.OrreryConversationMail)return root.OrreryConversationMail.render(event,article,{name:agent,renderPeerAvatar,configureAgentButton});
       const byline=document.createElement('div');byline.className='conversation-byline';
       const role=document.createElement('span');role.className='conversation-role';
       const shownText=event.input_display_text??event.text;
@@ -1026,12 +1026,16 @@
       if(parent){
         const avatar=renderPeerAvatar?.(parent);
         role.classList.add('conversation-parent');
-        if(avatar)role.prepend(avatar);
+        const identity=configureAgentButton?document.createElement('button'):role;
+        if(identity!==role){
+          identity.textContent=parent;role.replaceChildren(identity);configureAgentButton(identity,parent);
+        }
+        if(avatar)identity.prepend(avatar);
         role.setAttribute('aria-label',parent);role.title=parent;
       }
       if(event.kind==='text'&&event.role==='assistant'&&root.OrreryConversationSpeaker){
         role.dataset.recordedModel=typeof event.model==='string'?event.model:'';
-        root.OrreryConversationSpeaker.paint(role,{name:agent,model:role.dataset.recordedModel,harness:providerLabel,context:getContext()||{},renderAvatar});
+        root.OrreryConversationSpeaker.paint(role,{name:agent,model:role.dataset.recordedModel,harness:providerLabel,context:getContext()||{},renderAvatar,configureAgentButton});
       }
       byline.appendChild(role);
       if(['tool','tool_result'].includes(event.kind)){
@@ -1086,7 +1090,7 @@
         });
         target.addEventListener('keydown',e=>{if(e.target.closest('button,a')){clearTimeout(jumpTimer);return;}if(!['Enter',' '].includes(e.key)||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey)return;e.preventDefault();e.stopPropagation();clearTimeout(jumpTimer);if(root.getSelection()?.isCollapsed)jump(event);});
       }
-      if(Array.isArray(event.mail)&&root.OrreryConversationMail)root.OrreryConversationMail.render(event,article,{name:agent,renderPeerAvatar});
+      if(Array.isArray(event.mail)&&root.OrreryConversationMail)root.OrreryConversationMail.render(event,article,{name:agent,renderPeerAvatar,configureAgentButton});
       return article;
     }
     function jump(event){
@@ -1373,9 +1377,10 @@
     function context(){
       const current=getContext()||{};const name=String(current.name||''),key=fingerprint(current);
       if(!opened)return;
-      root.OrreryConversationMail?.refreshPeers?.(panel,renderPeerAvatar);
+      root.OrreryConversationMail?.refreshPeers?.(panel,renderPeerAvatar,configureAgentButton);
+      for(const button of panel.querySelectorAll('.conversation-parent .reader-agent-link'))configureAgentButton?.(button,button.dataset.agentName);
       for(const heading of panel.querySelectorAll('.conversation-speaker'))root.OrreryConversationSpeaker?.paint(heading,
-        {name:agent,model:heading.dataset.recordedModel,harness:heading.dataset.harness,context:current,renderAvatar});
+        {name:agent,model:heading.dataset.recordedModel,harness:heading.dataset.harness,context:current,renderAvatar,configureAgentButton});
       if(name===agent&&key===contextKey){paintActivity(current);paintLiveText(current);return;}
       readContext(current);
     }
