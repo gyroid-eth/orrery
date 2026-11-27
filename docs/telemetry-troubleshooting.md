@@ -113,6 +113,8 @@ agent の起動時に、指示ファイル（`~/.claude/CLAUDE.md`、`~/.codex/A
 
 先に計画だけ見るときは `--plan` を付けます。[承認の条件は指示ファイルの移行ガイドを参照してください。](instruction-migration.md#consent)
 
+古い Codex の `AGENTS.md` を片付ける `--remove-legacy-block` は、ファイル自体を削除する場合があるため、`--assume-yes` を付けても端末で `y` の確認が必要です。
+
 ### `[unknown]`（`INSTRUCTION_PATH_UNSAFE: …`）
 
 指示ファイルの所有者が違う、group や他の利用者が書き込める、または path を安全にたどれないとき、ORRERY はそのファイルの確認と更新を見送ります。setup を実行しても、理由になっている条件が残っている間は知らせが続きます。agent の起動と Mail は続けて使えます。

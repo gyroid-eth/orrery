@@ -102,6 +102,8 @@ In a terminal, run the command shown in the notice or installer log. Use `agents
 
 Add `--plan` to preview the changes. [See the instruction migration guide for consent rules.](instruction-migration.md#consent)
 
+The `--remove-legacy-block` command for an old Codex `AGENTS.md` can delete the file itself, so it requires confirmation with `y` in a terminal even with `--assume-yes`.
+
 ### `[unknown]` with `INSTRUCTION_PATH_UNSAFE: …`
 
 ORRERY skips checking and updating an instruction file if it belongs to a different owner, allows group or other users to write, or cannot be reached through a safe path. Setup continues to report the notice while that condition remains. Agent startup and Mail can continue.
