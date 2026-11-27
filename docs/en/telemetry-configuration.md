@@ -294,9 +294,10 @@ These variables change `spawn_child.sh` and `agentstack-preregister-child` behav
 | `AGENTSTACK_FOCUS_CHILD` | unset | When automatic opening is enabled, `1` brings the window forward. It does not enable automatic opening on its own |
 | `AGENTSTACK_STRICT_AGENT_NAMES` | unset | Set to `1` to make an off-list child name an error instead of a warning |
 | `AGENTSTACK_MONITOR_DANGER_CHECK` | `0` | Set to `1` to enable dangerous-command detection in the monitor. Passive by default |
-| `AGENTSTACK_CODEX_CHILD_APPROVAL` | `never` | `--ask-for-approval` for parented Codex children under `workspace-write`, persisted by installer `--codex-approval`. Standalone NEW AGENT starts follow Codex configuration. Full Access always uses `never` |
+| `AGENTSTACK_CHILD_SANDBOX` | `off` | Execution sandbox for delegated children. Persist with installer `--child-sandbox on` or `--child-sandbox off` |
+| `AGENTSTACK_CODEX_CHILD_APPROVAL` | `never` | `--ask-for-approval` for parented Codex children, persisted by installer `--codex-approval`. Standalone NEW AGENT starts follow Codex configuration. Standalone Full Access uses `never` |
 | `AGENTSTACK_CODEX_CHILD_CONFIG_OVERLAY` | unset | Absolute path to a TOML fragment overlaid on every macOS/Linux Codex child's `config.toml`, persisted by installer `--codex-child-overlay <path>` |
-| `AGENTSTACK_CODEX_NETWORK` | `on` | Codex child sandbox network (`-c sandbox_workspace_write.network_access=true`). Disable with `--codex-network off` |
+| `AGENTSTACK_CODEX_NETWORK` | `on` | Network access inside Codex's `workspace-write` sandbox. Disable with `--codex-network off` |
 | `AGENTSTACK_CHILD_DEFAULT_TOOLS` | empty | Tools for new Claude, Codex, dsh and Hermes launches via CLI or standard `/api/spawn`. The common list can include provider overrides such as `;dsh=`. Explicit base/tools/MCP profiles take precedence. [Installer defaults](delegation.md#installer-defaults) |
 | `AGENTSTACK_CODEX_ADD_DIRS` | unset | Additional writable roots for Codex children (`:`-separated), persisted by `--codex-add-dirs` |
 | `AGENTSTACK_WORKTREE_ROOT` | `$AGENTSTACK_HOME/worktrees` | Persistent root for new isolated worktrees; override and persist it by setting the variable when running the installer |
@@ -305,7 +306,17 @@ These variables change `spawn_child.sh` and `agentstack-preregister-child` behav
 | `AGENTSTACK_CHILD_RESUME_RETENTION_DAYS` | `30` | Days to retain resume state / credentials for normally completed Claude / Codex children. Persist with installer `--child-resume-retention-days DAYS`; `0` restores full deletion during cleanup |
 | `AGENTSTACK_WSL_ANCHOR` | `1` | WSL with the legacy dashboard. Holds a hidden `wsl.exe` while an agent runs or starts, or while the dashboard is visible. Releases after 60 idle seconds. Windows configuration is read-only. Set to `0` to disable. Persist with installer `--no-wsl-anchor` / `--wsl-anchor` |
 
-The product assembles Codex child startup flags directly. For parented starts and dashboard resumes without a recorded standalone start, approval defaults to `never`. Network access defaults to on. Writable roots are the project, `AGENTSTACK_SPAWN_DIRS` / `AGENTSTACK_SPAWN_ROOTS`, install directory, `AGENTSTACK_WORKTREE_ROOT`, `~/.claude`, `~/.codex`, child-specific `CODEX_HOME`, and `AGENTSTACK_CODEX_ADD_DIRS`. Only existing directories are included. Set these dashboard service values through the installer. The config overlay applies through `spawn_child.sh` on macOS and Linux, including WSL2.
+After an update, newly launched or resumed delegated children run commands with the OS user's permissions by default. The setting takes effect when a new process starts. Mail registration and reservation checks and provider approval policies still apply. Direct CLI launches and standalone agents keep their existing settings.
+
+| Provider | `off` (default) | `on` |
+| --- | --- | --- |
+| Claude Code | Disables the Bash sandbox | Enables the Claude Code sandbox |
+| Codex CLI | `danger-full-access` | `workspace-write` |
+| Antigravity CLI | `accept-edits`, terminal sandbox disabled, shell commands allowed by default | `auto`, terminal sandbox enabled |
+| dsh | `danger-full-access` | `workspace-write` |
+| Hermes | Local terminal backend | Terminal backend configured in Hermes. Isolation requires a backend such as Docker |
+
+Under `workspace-write`, Codex receives these writable roots if they exist: the project, `AGENTSTACK_SPAWN_DIRS` / `AGENTSTACK_SPAWN_ROOTS`, install directory, `AGENTSTACK_WORKTREE_ROOT`, `~/.claude`, `~/.codex`, child-specific `CODEX_HOME`, and `AGENTSTACK_CODEX_ADD_DIRS`. Set these dashboard service values through the installer. The config overlay applies through `spawn_child.sh` on macOS and Linux, including WSL2.
 
 Every Codex the product launches (children, dashboard resume, `agent-start-codex`, the Windows launcher) gets `-c check_for_update_on_startup=false`. Codex's startup update screen defaults to `npm install -g @openai/codex`, and an unattended child has nobody to decline it; if the child is stopped mid-install, the machine's `codex` is left with neither the old nor the new version usable (#60). Update Codex yourself, for example with `npm install -g @openai/codex@latest`.
 

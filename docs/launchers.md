@@ -249,6 +249,8 @@ macOS の子は NEW AGENT の Computer use、または `--tools screen:read`（V
 - `AGENTSTACK_VAULT` が存在するときだけ `--add-dir`
 - `OPENAI_API_KEY` を除去し、ChatGPT OAuth を優先
 
+親付きの Codex child は既定で `danger-full-access` です。installer の `--child-sandbox on` を使うと、起動・再開時に `workspace-write` が適用されます。承認の設定は `AGENTSTACK_CODEX_CHILD_APPROVAL` で、既定は `never` です。**Temporary Chrome** を選ぶと、ORRERY が認識している Chrome DevTools の道具を承認します。[子の sandbox 設定](telemetry-configuration.md#child-spawn)
+
 dashboard の Codex resume も installer が配る同じ `agentstack-codex-bootstrap` を必ず source し、reserved identity を再登録して fresh resume launch を作ってから `codex resume` を exec します。個人用 `~/.codex/bin` wrapper には依存せず、bootstrap / prepare が失敗すれば resume 自体を開始しません。
 
 Codex child の新規起動と dashboard からの resume は、ログインシェルが設定した PATH を使い、初期化後に子の runtime・project key・ORRERY Mail の URL を再設定します。別 install の設定を `~/.zshenv` から読み込む環境でも、子は起動元の ORRERY に接続します。

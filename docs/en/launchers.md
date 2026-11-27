@@ -249,6 +249,8 @@ On macOS, use Computer use in NEW AGENT or choose `--tools screen:read` (View), 
 - pass `--add-dir` only when `AGENTSTACK_VAULT` exists
 - remove `OPENAI_API_KEY` and prefer ChatGPT OAuth
 
+Delegated Codex children use `danger-full-access` by default. The installer option `--child-sandbox on` applies `workspace-write` at launch and resume. `AGENTSTACK_CODEX_CHILD_APPROVAL` controls approvals and defaults to `never`. Selecting **Temporary Chrome** approves the Chrome DevTools tools ORRERY recognizes. [Child sandbox settings](telemetry-configuration.md#child-spawn)
+
 Dashboard Codex resume also always sources the same installer-distributed `agentstack-codex-bootstrap`, re-registers the reserved identity, and creates a fresh resume launch before it execs `codex resume`. It does not depend on a personal wrapper under `~/.codex/bin`; a bootstrap, prepare, or unretire failure prevents resume from starting. Top-level resumes also call unretire.
 
 A fresh Codex child launch records `launch_origin: child` and its selected `codex_mcp_profile` in the launch expectation. Top-level Codex sessions started by `cx` / `agent-start-codex` or the persistent launcher record `launch_origin: standalone` and carry no child profile. After the official `SessionStart` verifies identity and rollout, that non-secret provenance is copied into the bound session receipt with the numeric agent ID, project, and provider. The receipt remains outside private resume state, credentials, and the isolated home, so the dashboard can distinguish a cleaned-up child, a product-launched top-level session, and a session with unknown origin. A receipt created before provenance existed is not assigned an origin from its name or history and cannot resume.
