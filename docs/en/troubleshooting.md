@@ -110,6 +110,17 @@ In older ORRERY Telemetry builds, depending on the NETWORK layout, the `?` for a
 
 The current build always draws nodes that need a human on top. If you can reproduce this on an older build, update ORRERY Telemetry. Before updating, or if NETWORK is hard to read, switch to `DECK`. A waiting question shows as a `?` at the top right of the card, and a waiting approval shows as a red outline and `APPROVAL`. For real screenshots, see [Usage, "Spotting agents that need you"](usage.md#spotting-agents-that-need-you).
 
+## Cockpit animations are missing
+
+If cockpit animations are missing, check the settings on the OS running your browser. The browser reports the OS setting through `prefers-reduced-motion`. Cockpit respects that setting by disabling the effect when an agent exits, the wave on the **Restarting** notice after a permission change, and the spinning ring for working agents in the mini graph.
+
+For example, these animations were missing in a Windows browser displaying the WSL cockpit over Remote Desktop. **Animation effects** was off in the remote Windows session.
+
+- On Windows, turn on **Settings → Accessibility → Visual effects → Animation effects**. If you use Remote Desktop, also check that animations are enabled in the connection settings. [Microsoft settings guide](https://support.microsoft.com/en-us/accessibility/windows/make-it-easier-to-focus-on-tasks)
+- On macOS, go to **System Settings → Accessibility → Display** and turn off **Reduce motion**. On macOS 27, the switch is under **Accessibility → Motion**. [Apple settings guide](https://support.apple.com/en-gb/guide/mac-help/mchlc03f57a1/27/mac/27)
+
+After changing the setting, reload cockpit in the browser.
+
 ## Mail is not shown
 
 In legacy mode, `scripts/start-cockpit.sh` inherits `AGENTSTACK_MAIL_DB` from Telemetry's settings. For a direct launch from a terminal or the app, set `ORRERY_MAIL_DB` or the shared `mail_db` setting to select a custom database. See [Mail DB precedence](configuration.md#orrery-mail-db).
