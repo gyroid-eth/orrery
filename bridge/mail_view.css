@@ -2,24 +2,24 @@
    shows who received a request and which reply belongs to it. */
 .mail .scroll.mailview-host {
   position:relative;flex:1;min-height:0;display:block;overflow:hidden;padding:0;
-  font:12px/1.45 var(--rail-sans);font-variant-numeric:tabular-nums;
+  font:var(--right-text-size,12px)/1.45 var(--rail-sans);font-variant-numeric:tabular-nums;
 }
 .mailview-host [hidden],.mailfilters[hidden],.mail .miniorrery[hidden],
 .mail-selected-route[hidden],#mailGraphBtn[hidden] {display:none!important}
 .mailview-list {height:100%;overflow-y:auto;padding:9px 16px 20px}
 .mail-head {position:relative;gap:8px}
-.mail .mail-head {font-size:13px}
-.mail-head .tag {margin-left:auto;font:11px var(--rail-sans);color:var(--theme-status-alert,#ff6a5d)}
+.mail .mail-head {font-size:calc(var(--right-text-size,12px) * 13 / 12)}
+.mail-head .tag {margin-left:auto;font:calc(var(--right-text-size,12px) * 11 / 12) var(--rail-sans);color:var(--theme-status-alert,#ff6a5d)}
 .mail-head > :first-child {margin-right:auto}
 .mail-selected-route {
   flex:none;
-  padding:10px 16px;border-bottom:1px solid var(--hair);font:12px/1.45 var(--rail-sans);
+  padding:10px 16px;border-bottom:1px solid var(--hair);font:var(--right-text-size,12px)/1.45 var(--rail-sans);
 }
 .mail-selected-route .mail-route > .mail-icon {color:var(--amber)}
 .mailfilters {
   position:absolute;z-index:5;inset:calc(100% - 3px) 9px auto auto;width:min(224px,calc(100% - 18px));
   max-height:min(320px,55dvh);overflow:auto;padding:6px;border-radius:12px;background:var(--elev);
-  transform-origin:top right;font:12px/1.45 var(--rail-sans);
+  transform-origin:top right;font:var(--right-text-size,12px)/1.45 var(--rail-sans);
   box-shadow:0 0 0 1px var(--hair),0 10px 24px var(--theme-shadow-low,rgb(0 0 0 / .28));
 }
 .mailfilters button {
@@ -33,7 +33,7 @@
 .mail-clear-filter {
   display:inline-flex;align-items:center;gap:6px;max-width:100%;
   padding:3px 7px;border:1px solid var(--hair);border-radius:999px;
-  background:var(--rail-selection);color:var(--ink);font:11px/1.4 var(--rail-sans);cursor:pointer;
+  background:var(--rail-selection);color:var(--ink);font:calc(var(--right-text-size,12px) * 11 / 12)/1.4 var(--rail-sans);cursor:pointer;
 }
 .mail-clear-filter span {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mail-clear-filter:hover {color:var(--amber);border-color:currentColor}
@@ -48,7 +48,7 @@
 .mail-assignee + .mail-assignee {margin-top:14px}
 .mail-assignee-name {
   display:flex;align-items:center;gap:8px;min-height:29px;margin:0;
-  font:500 13px/1.25 var(--serif);
+  font:500 calc(var(--right-text-size,12px) * 13 / 12)/1.25 var(--serif);
 }
 .mail-assignee-peer {display:flex;align-items:center;gap:8px;max-width:100%}
 .mail-assignee-peer > :last-child {min-width:0;overflow-wrap:anywhere}
@@ -98,7 +98,7 @@
 }
 .mail-requester > span {min-width:0;overflow-wrap:anywhere}
 .mail-requester time {margin-left:auto}
-.mailview-host time {flex:none;color:var(--ink-dim);font-size:11px;white-space:nowrap}
+.mailview-host time {flex:none;color:var(--ink-dim);font-size:calc(var(--right-text-size,12px) * 11 / 12);white-space:nowrap}
 .mail-reply {
   display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 5px;
   width:calc(100% - 17px);margin-left:17px;
@@ -144,7 +144,7 @@
 .drawer-scroll {flex:1;min-height:0;overflow-y:auto;padding:0 17px 22px}
 .drawer-route {display:flex;align-items:flex-start;gap:5px;overflow-wrap:anywhere}
 .drawer-route time {margin-left:auto}
-.maildrawer h2 {margin:10px 0;font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+.maildrawer h2 {margin:10px 0;font-size:calc(var(--right-text-size,12px) * 13 / 12);line-height:1.35;overflow-wrap:anywhere}
 .mail-md{min-width:0;overflow-wrap:anywhere}
 .mail-md:not(.conversation-markdown){white-space:pre-wrap}
 .mail-md a{color:var(--amber);text-decoration:underline;text-underline-offset:2px}
@@ -161,4 +161,9 @@
   .agent,.mailview-host button {transition:none}
   .mail-arrival-still .mail-subject,
   .mail-arrival-still:is(.mail-reply,.thread-item) .mail-route {color:var(--amber)}
+}
+
+/* Mail opened from the right rail can use the Reader Markdown renderer. */
+.maildrawer,.mailview-host{
+  --conversation-text-size:calc(var(--right-text-size,12px) * 13 / 12);
 }

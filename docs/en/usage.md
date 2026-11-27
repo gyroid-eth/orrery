@@ -598,15 +598,17 @@ It is not a feature that generates a replay with the ORRERY backend alone. ORRER
 
 The backend keeps settings in `~/.orrery/prefs.json`, shared between ORRERY.app windows and browser tabs. A change made anywhere is reflected in the other windows within a few seconds (prompt drafts and history are per window).
 
-Values you can change in Settings:
+Use **Text size** at the top of Settings to adjust Agents, Reader, Terminal, and the right pane independently. Each slider ranges from 10 to 18 px in 0.5 px steps.
 
-- **Terminal font size** ranges from 10 to 18 px in 0.5 px steps. The terminal updates when you release the slider.
-- **Reader text size** ranges from 10 to 18 px in 1 px steps. It scales the conversation, tool and status rows, Mail and question cards, and file previews.
+- **Agents text size** adjusts the Agents list on the left.
+- **Reader text size** adjusts the conversation, tool and status rows, and Mail and question cards. Reader uses 12 px when you have no saved value.
+- **Terminal font size** updates the terminal when you release the slider.
+- **Right pane text size** adjusts Mail, the mini graph, and file previews.
 - Auto-shrink for 5-way split and above: -1.5 px
 - Mini-orrery mode
 - Telemetry network depth
 
-Values are kept in the browser's `localStorage` and synchronized with the backend's `~/.orrery/prefs.json` about every 4 seconds. Reset restores only the font and auto-shrink; it is not an operation that clears all cockpit state.
+Values are kept in the browser's `localStorage` and synchronized with the backend's `~/.orrery/prefs.json` about every 4 seconds. Reset restores only the Terminal font and auto-shrink; it is not an operation that clears all cockpit state.
 
 The color scheme (Dark / Light / System) is also in Settings ([Color theme (light mode)](#color-theme-light-mode)).
 

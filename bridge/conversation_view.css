@@ -1,5 +1,5 @@
 .conversation-toggle[hidden],.conversation-panel[hidden]{display:none}
-:root{--conversation-text-size:var(--reader-text-size,13px)}
+:root{--conversation-text-size:var(--reader-text-size,12px)}
 .screen.conversation-open{--conversation-width:min(46%,460px)}
 .screen.conversation-open .termstage{clip-path:inset(0 var(--conversation-width) 0 0)}
 .screen.conversation-open .termstage>.termhost:not(.follow){right:var(--conversation-width)}
@@ -165,7 +165,7 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .screen:has(.split-cell.conversation-open) .promptbar{position:absolute;left:0;right:0;top:auto;bottom:0;width:auto;z-index:6}
   .conversation-has-preview .conversation-thread{display:none}
   .conversation-preview{width:100%;border:0}
-  :is(.conversation-panel,.conversation-notices,.reader-approval){--conversation-text-size:calc(var(--reader-text-size,13px) - .5px)}
+  :is(.conversation-panel,.conversation-notices,.reader-approval){--conversation-text-size:calc(var(--reader-text-size,12px) - .5px)}
   .conversation-scroll{padding-left:14px;padding-right:12px}
   .conversation-status-label,.conversation-retry span{display:none}
   .conversation-warning,.conversation-retry svg{display:block}
@@ -185,7 +185,7 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
 .split-cell.conversation-cell>.conversation-panel{position:absolute;left:auto;right:0;top:40px;bottom:0;
   width:var(--conversation-width);height:auto;z-index:4;border-left:1px solid var(--hair)}
 .conversation-cell>.conversation-panel{container:conversation-reader / inline-size}
-@container conversation-reader (max-width:420px){.conversation-body{--conversation-text-size:calc(var(--reader-text-size,13px) - .5px)}}
+@container conversation-reader (max-width:420px){.conversation-body{--conversation-text-size:calc(var(--reader-text-size,12px) - .5px)}}
 @container conversation-reader (max-width:600px){
   .conversation-has-preview .conversation-thread{display:none}
   .conversation-preview{width:100%;border:0}
@@ -445,3 +445,8 @@ html[data-color-theme="light"] .conversation-diff-remove{color:#9b2d2d}
   .conversation-lightbox-image.animate{transition:transform .14s ease-out}
 }
 @keyframes conversation-lightbox-in{from{opacity:0}to{opacity:1}}
+
+/* File previews can also open within a split or full-width Reader. */
+.conversation-preview,.conversation-lightbox{
+  --conversation-text-size:calc(var(--right-text-size,12px) * 13 / 12);
+}
