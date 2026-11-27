@@ -52,6 +52,15 @@ PATH で見つからない場合は `AGENTSTACK_CUA_DRIVER` に実行ファイ�
 
 WSL の中継は普通の stdio パイプを使います。動作には起動経路の WSL interop と、Windows ユーザーの対話ログオンが必要です。interop と distro の寿命は WSL の設定に従います。ログイン中の Windows Terminal、昇格なし、Limited から先に確認します。
 
+ORRERY は relay から Cua Driver を起動するたびに、利用状況送信と自動更新確認を無効にします。Windows で利用者が起動する daemon にも適用するには、daemon を実行する Windows ユーザーで次の 2 行を実行します。ユーザー環境変数に保存されるため、Cua Driver を更新しても設定は残ります。
+
+```powershell
+setx CUA_DRIVER_RS_TELEMETRY_ENABLED false
+setx CUA_DRIVER_RS_UPDATE_CHECK false
+```
+
+Windows にサインインし直し、新しく開いた昇格なしの PowerShell で `Get-Item Env:CUA_DRIVER_RS_TELEMETRY_ENABLED,Env:CUA_DRIVER_RS_UPDATE_CHECK` を実行します。両方が `false` であることを確かめてから、その PowerShell で daemon を起動します。
+
 ## macOS の起動設定
 
 NEW AGENT で View または Control を選ぶと、`orrery-screen` から Cua Driver を呼びます。`--tools screen:read` と `--tools screen:operate` も同じ経路です。`--tools mcp:orrery-screen` は Off で公開し、起動後の切替を待ちます。

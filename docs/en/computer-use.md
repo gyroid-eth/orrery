@@ -52,6 +52,15 @@ Set `AGENTSTACK_CUA_DRIVER` to the executable's absolute path if it is missing f
 
 The WSL relay uses standard stdio pipes. It needs WSL interop on the launch path and an interactive Windows login. Interop and distro lifetime follow WSL settings. Start your checks in Windows Terminal while logged in, unelevated, and using Limited.
 
+ORRERY disables usage telemetry and automatic update checks each time the relay launches Cua Driver. To apply the same settings to the Windows daemon you start, run the following as the Windows user who runs the daemon. These user environment variables persist across Cua Driver updates.
+
+```powershell
+setx CUA_DRIVER_RS_TELEMETRY_ENABLED false
+setx CUA_DRIVER_RS_UPDATE_CHECK false
+```
+
+Sign back in to Windows and open a new, unelevated PowerShell. Run `Get-Item Env:CUA_DRIVER_RS_TELEMETRY_ENABLED,Env:CUA_DRIVER_RS_UPDATE_CHECK`, check that both values are `false`, then start the daemon from that PowerShell.
+
 ## macOS launch settings
 
 Selecting View or Control in NEW AGENT invokes Cua Driver through `orrery-screen`. `--tools screen:read` and `--tools screen:operate` use the same route. `--tools mcp:orrery-screen` exposes the relay in Off and allows the operator to change its permission after launch.
