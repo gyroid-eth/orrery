@@ -121,6 +121,35 @@ For example, these animations were missing in a Windows browser displaying the W
 
 After changing the setting, reload cockpit in the browser.
 
+<a id="computer-use-unavailable"></a>
+## Computer use is grayed out in NEW AGENT
+
+The reason appears at the bottom of NEW AGENT, in the same place as the My Chrome notice. You can also hover over Computer use. On macOS, the choice can be available and the first screen operation can return a Cua Driver error.
+
+| Message or symptom | What to do |
+| --- | --- |
+| `Windows Cua Driver executable was not found or is not executable.` or `Cua Driver が見つかりません。実行ファイルのパスを確認してください。` | If Cua Driver is missing, install the supported version and verify its signature. If it is already installed, check whether it is executable and whether ORRERY can find its path. [Cua Driver setup](computer-use.md#driver-setup) |
+| macOS returns `permissions_pending` during a screen operation | In **System Settings → Privacy & Security**, grant CuaDriver.app **Accessibility** and **Screen Recording**, then try again. [macOS setup](computer-use.md#driver-setup) |
+| `Windows Cua Driver did not answer. Check that its daemon is running.` or `Windows の名前付きパイプを開けません。daemon と所有者・昇格状態を確認してください。` | Start the daemon in an interactive Windows login. Match the Windows account and elevation to the caller from WSL, and check `\\.\pipe\cua-driver` and WSL interop. [Windows and WSL setup](computer-use.md#driver-setup) |
+| Computer use is being checked just after NEW AGENT opens or the dashboard starts | When the check passes, the choice becomes available within a few seconds. If it stays grayed out, reopen NEW AGENT and check the reason at the bottom. |
+| `Install the Windows Cua Driver version supported by ORRERY.` or `Cua Driver の版が承認済みの版と一致しません。` | Check which version ORRERY supports and point it to that executable. [Cua Driver setup](computer-use.md#driver-setup) |
+| `Configure the ORRERY HTTP operator for Computer use.` | Configure the dashboard's operator capability. [Operator setup](computer-use.md#driver-setup) |
+
+To keep usage telemetry and automatic update checks disabled for the Windows daemon, save the Cua Driver preferences for the Windows user who runs it. [Cua Driver privacy settings](computer-use.md#driver-privacy)
+
+<a id="my-chrome-unavailable"></a>
+## An agent using My Chrome cannot connect to Chrome
+
+`list_pages` and other browser tools can fail when `DevToolsActivePort` is missing. The bottom of NEW AGENT may show `Chrome's remote debugging is unavailable …`.
+
+For harnesses that use Chrome DevTools MCP, My Chrome attaches to a running Chrome instance through `--autoConnect`. Enable remote debugging in that instance. For Claude Code, follow the setup for the Claude in Chrome extension.
+
+1. Open `chrome://inspect/#remote-debugging` in Chrome. If you use WSL, open the page in Windows Chrome.
+2. Turn on **Allow remote debugging for this browser instance**. A message such as `Server running at: 127.0.0.1:9222` confirms that it is on.
+3. Ask the agent to retry. If Chrome asks for permission to connect, choose **Allow**.
+
+Leave Chrome open. My Chrome checks for `DevToolsActivePort` in Chrome’s standard user data directory, so avoid starting a separate profile with `--remote-debugging-port`. While the setting is on, apps on this computer can request control of the browser. You can turn the setting off when you finish. [Chrome auto-connect guide](https://developer.chrome.com/docs/devtools/agents/use-cases/auto-connect)
+
 ## Mail is not shown
 
 In legacy mode, `scripts/start-cockpit.sh` inherits `AGENTSTACK_MAIL_DB` from Telemetry's settings. For a direct launch from a terminal or the app, set `ORRERY_MAIL_DB` or the shared `mail_db` setting to select a custom database. See [Mail DB precedence](configuration.md#orrery-mail-db).

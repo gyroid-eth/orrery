@@ -35,6 +35,7 @@ To reproduce the NEW AGENT selection with `/api/spawn`, use `{"tools":{"screen":
 
 You can pass the same `tools` to `/api/jump` when resuming a Claude conversation by itself. This creates a generation for that launch. Omitting extra tools on Resume also revokes the previous generation's screen credential. See the [Resume API example](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/api.en.md#post-apijump).
 
+<a id="driver-setup"></a>
 ## Setup
 
 1. Choose the artifact for your OS from the [Cua Driver 0.55.0 release](https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.55.0) and verify the publisher's SHA256 and signature.
@@ -51,6 +52,24 @@ You can pass the same `tools` to `/api/jump` when resuming a Claude conversation
 Set `AGENTSTACK_CUA_DRIVER` to the executable's absolute path if it is missing from PATH. On WSL, use a WSL path such as `/mnt/c/…/cua-driver.exe`. The exposed tool definitions are pinned to the verified definitions from 0.55.0. Calls fail if the runtime version, input schema, or output schema differs. When updating, compare the pinned definitions with the driver's actual `tools/list`.
 
 The WSL relay uses standard stdio pipes. It needs WSL interop on the launch path and an interactive Windows login. Interop and distro lifetime follow WSL settings. Start your checks in Windows Terminal while logged in, unelevated, and using Limited.
+
+<a id="driver-privacy"></a>
+### Usage telemetry and automatic update checks
+
+On macOS and WSL, ORRERY disables usage telemetry and automatic update checks each time the relay launches Cua Driver. For the Windows daemon, save those preferences in Cua Driver under the Windows account that runs it. The preferences persist across Cua Driver updates.
+
+Open PowerShell as that Windows user and run `cua-driver.exe autostart status`. If the logon task is running, use that daemon. If the task is registered and stopped, sign back in to Windows to run it. If you manage the daemon manually, confirm that no daemon is running, then start it with `cua-driver.exe serve --socket '\\.\pipe\cua-driver'`.
+
+In PowerShell with the same user and elevation, run the commands below. Use the executable's absolute Windows path if it is absent from PATH.
+
+```powershell
+cua-driver.exe telemetry disable
+cua-driver.exe config set update_check_enabled false
+cua-driver.exe telemetry status
+cua-driver.exe config get update_check_enabled
+```
+
+Check for `Telemetry: disabled (source: persisted)` and `false` for the update setting. The startup update check uses the saved preference when the daemon next starts. [Cua Driver operation guide](https://github.com/trycua/cua/blob/cua-driver-rs-v0.55.0/docs/content/docs/cua-driver/guides/operate.mdx)
 
 ## macOS launch settings
 

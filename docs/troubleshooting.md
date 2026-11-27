@@ -121,6 +121,35 @@ cockpit の動きが出ないときは、ブラウザーを動かしている OS
 
 設定を変えたら、ブラウザーで cockpit を読み直します。
 
+<a id="computer-use-unavailable"></a>
+## NEW AGENT の Computer use が薄くて選べない
+
+選べない理由は NEW AGENT の下部に My Chrome の案内と同じ場所で表示されます。Computer use にポインターを置いても確認できます。macOS では選択できても、最初の画面操作で Cua Driver のエラーが返ることがあります。
+
+| 表示や症状 | 対処 |
+| --- | --- |
+| `Windows Cua Driver executable was not found or is not executable.` または `Cua Driver が見つかりません。実行ファイルのパスを確認してください。` | Cua Driver が入っていない場合は、対応版を入れて署名を照合します。すでに入っている場合は、実行できるか、ORRERY からそのパスが見えるかを確認します。[Cua Driver の準備](computer-use.md#driver-setup) |
+| macOS で操作時に `permissions_pending` が返る | **システム設定 → プライバシーとセキュリティ**で、CuaDriver.app に**アクセシビリティ**と**画面収録**を許可してから試し直します。[macOS の準備](computer-use.md#driver-setup) |
+| `Windows Cua Driver did not answer. Check that its daemon is running.` または `Windows の名前付きパイプを開けません。daemon と所有者・昇格状態を確認してください。` | Windows に対話ログオンして daemon を起動します。WSL から呼ぶ側と Windows アカウント・昇格状態を合わせ、`\\.\pipe\cua-driver` と WSL interop を確認します。[Windows＋WSL の準備](computer-use.md#driver-setup) |
+| dashboard の起動直後や NEW AGENT を開いた直後で、Computer use の確認中 | 確認が通ると数秒で選べるようになります。薄いままなら NEW AGENT を開き直し、下部に出る理由を確認します。 |
+| `Install the Windows Cua Driver version supported by ORRERY.` または `Cua Driver の版が承認済みの版と一致しません。` | ORRERY が対応する版を確認し、その版の実行ファイルを指定します。[Cua Driver の準備](computer-use.md#driver-setup) |
+| `Configure the ORRERY HTTP operator for Computer use.` | dashboard の operator capability を設定します。[operator の準備](computer-use.md#driver-setup) |
+
+Windows の daemon の利用状況送信と自動更新確認を止める設定は、Cua Driver のユーザー設定に保存できます。[Cua Driver の通信設定](computer-use.md#driver-privacy)
+
+<a id="my-chrome-unavailable"></a>
+## My Chrome を選んだ agent が Chrome につながらない
+
+`list_pages` などが `DevToolsActivePort` が見つからないというエラーで失敗することがあります。NEW AGENT の下部に `Chrome's remote debugging is unavailable …` と表示される場合もあります。
+
+Claude Code 以外の My Chrome は、`chrome-devtools-mcp --autoConnect` で起動中の Chrome につなぎます。その Chrome でリモートデバッグを有効にしてください。Claude Code の My Chrome は Claude in Chrome 拡張の手順に従います。
+
+1. Chrome で `chrome://inspect/#remote-debugging` を開きます。WSL を使っている場合は Windows 側の Chrome を開きます。
+2. **Allow remote debugging for this browser instance** を有効にします。`Server running at: 127.0.0.1:9222` のような表示が出れば有効です。
+3. agent にもう一度試させます。Chrome が接続の許可を尋ねたら **Allow** を押します。
+
+Chrome は開いたままで構いません。My Chrome は Chrome の標準のユーザーデータフォルダーで `DevToolsActivePort` を探すので、`--remote-debugging-port` を指定して別プロファイルを起動する方法は避けてください。有効にしている間は、この PC のアプリがブラウザーの操作を求められます。使い終わったら同じ設定をオフにできます。[Chrome の自動接続ガイド](https://developer.chrome.com/docs/devtools/agents/use-cases/auto-connect)
+
 ## mail が表示されない
 
 `scripts/start-cockpit.sh` は legacy の Telemetry 設定から `AGENTSTACK_MAIL_DB` を引き継ぎます。backend を手動またはアプリから直接起動して別の DB を使う場合は、`ORRERY_MAIL_DB` または共有設定の `mail_db` を明示します。[DB の優先順位](configuration.md#orrery-mail-db)

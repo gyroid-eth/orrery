@@ -35,6 +35,7 @@ NEW AGENT の選択を `/api/spawn` で指定する場合、View は `{"tools":{
 
 Claude を会話だけで再開するときも、`/api/jump` に同じ `tools` を渡せます。指定した回の起動に世代を作ります。再開時に追加の道具を省略すると、前の世代の画面操作資格も失効します。[再開 API の指定例](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/api.md#post-apijump)
 
+<a id="driver-setup"></a>
 ## 準備
 
 1. [配布元の Cua Driver 0.55.0](https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.55.0) から対象 OS の artifact を選び、配布元の SHA256 と署名を照合します。
@@ -51,6 +52,24 @@ Claude を会話だけで再開するときも、`/api/jump` に同じ `tools` �
 PATH で見つからない場合は `AGENTSTACK_CUA_DRIVER` に実行ファイルの絶対パスを指定します。WSL では `/mnt/c/…/cua-driver.exe` のような WSL 側の絶対パスです。公開される定義は 0.55.0 の確認済みの定義に固定しています。実行時の版・入力・出力 schema のいずれかが違えば、呼び出しを拒否します。更新時は固定した定義と実際の `tools/list` を照合します。
 
 WSL の中継は普通の stdio パイプを使います。動作には起動経路の WSL interop と、Windows ユーザーの対話ログオンが必要です。interop と distro の寿命は WSL の設定に従います。ログイン中の Windows Terminal、昇格なし、Limited から先に確認します。
+
+<a id="driver-privacy"></a>
+### 利用状況送信と自動更新確認
+
+macOS と WSL では、ORRERY が relay から Cua Driver を起動するたびに利用状況送信と自動更新確認を無効にします。Windows の常駐 daemon には、対話ログオンしたユーザーの Cua Driver 設定に停止値を保存します。Cua Driver を更新しても設定は残ります。
+
+daemon を実行する Windows ユーザーで PowerShell を開き、`cua-driver.exe autostart status` で状態を確認します。ログオン時タスクで稼働中なら、その daemon を使います。タスクが登録済みで停止中なら、Windows にサインインし直すと起動します。手動で運用する場合は、稼働中の daemon がないことを確かめてから `cua-driver.exe serve --socket '\\.\pipe\cua-driver'` で起動します。
+
+同じユーザーと昇格状態の PowerShell から次を実行します。PATH にない場合は、Windows 側の実行ファイルの絶対パスを指定します。
+
+```powershell
+cua-driver.exe telemetry disable
+cua-driver.exe config set update_check_enabled false
+cua-driver.exe telemetry status
+cua-driver.exe config get update_check_enabled
+```
+
+利用状況送信が `Telemetry: disabled (source: persisted)`、更新確認が `false` と表示されることを確かめます。次回の起動から、起動時の更新確認にも設定が反映されます。[Cua Driver の運用ガイド](https://github.com/trycua/cua/blob/cua-driver-rs-v0.55.0/docs/content/docs/cua-driver/guides/operate.mdx)
 
 ## macOS の起動設定
 
