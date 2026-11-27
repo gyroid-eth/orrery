@@ -180,9 +180,23 @@ def _process_argv(pid):
             with open(f'/proc/{pid}/cmdline', 'rb') as source:
                 data = source.read(16384)
             return [os.fsdecode(part) for part in data[:-1].split(b'\0')] if data.endswith(b'\0') else []
-        return shlex.split(_process_columns('-ww', '-p', str(pid), '-o', 'args='))
-    except (OSError, ValueError):
+        lexer = shlex.shlex(_process_columns('-ww', '-p', str(pid), '-o', 'args='), posix=True)
+    except OSError:
         return []
+    lexer.whitespace_split = True
+    lexer.commenters = ''
+    # Only the launcher and its entry point identify the pane editor. ps
+    # does not quote arbitrary prompt text at the end of the original argv.
+    prefix = []
+    try:
+        for _ in range(3):
+            value = next(lexer, None)
+            if value is None:
+                break
+            prefix.append(value)
+    except ValueError:
+        pass
+    return prefix
 
 
 def _editor_process(editor, pid, executable):
