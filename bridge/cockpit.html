@@ -1611,10 +1611,15 @@
         <label class="settings-toggle-row" for="readerTextSize">
           <span class="settings-row-name">Reader text size</span>
           <select class="settings-select" id="readerTextSize">
-            <option value="12" title="12 px">Small</option>
-            <option value="13" title="13 px">Default</option>
-            <option value="14" title="14 px">Large</option>
-            <option value="15" title="15 px">Larger</option>
+            <option value="10">10 px</option>
+            <option value="11">11 px</option>
+            <option value="12">12 px</option>
+            <option value="13" selected>13 px (default)</option>
+            <option value="14">14 px</option>
+            <option value="15">15 px</option>
+            <option value="16">16 px</option>
+            <option value="17">17 px</option>
+            <option value="18">18 px</option>
           </select>
         </label>
       </div>
@@ -1682,7 +1687,7 @@
           <output class="settings-value" id="terminalFontValue" for="terminalFontSize">12.5 px</output>
         </div>
         <input class="settings-range" id="terminalFontSize" type="range"
-               min="9" max="16" step="0.5" value="12.5" aria-describedby="terminalFontEffective">
+               min="10" max="18" step="0.5" value="12.5" aria-describedby="terminalFontEffective">
         <div class="settings-help" id="terminalFontEffective">effective 12.5 px</div>
       </div>
       <div class="settings-row">
@@ -2226,8 +2231,8 @@ function sessionClaimed(claimedSessions,session){
   if(typeof claimedSessions.has==='function')return claimedSessions.has(session);
   return normalizedSessionNames(claimedSessions).includes(session);
 }
-const TERM_FONT_MIN=9;
-const TERM_FONT_MAX=16;
+const TERM_FONT_MIN=10;
+const TERM_FONT_MAX=18;
 const TERM_FONT_DEFAULT=12.5;
 const TERM_FONT_STEP=.5;
 const TERM_FONT_SPLIT_THRESHOLD=5;
@@ -3198,10 +3203,13 @@ function currentTerminalFontSize(){
     splitVisible?splitSessions.length:0,
   );
 }
+function paintTerminalFontValue(size){
+  terminalFontRange.setAttribute('aria-valuetext',`${size.toFixed(1)} pixels`);
+  terminalFontValue.textContent=`${size.toFixed(1)} px`;
+}
 function paintTerminalSettings(effectiveSize=currentTerminalFontSize()){
   terminalFontRange.value=String(terminalFontSize);
-  terminalFontRange.setAttribute('aria-valuetext',`${terminalFontSize.toFixed(1)} pixels`);
-  terminalFontValue.textContent=`${terminalFontSize.toFixed(1)} px`;
+  paintTerminalFontValue(terminalFontSize);
   terminalAutoShrinkToggle.checked=terminalAutoShrink;
   const shrunk=effectiveSize!==terminalFontSize;
   terminalFontEffective.textContent=shrunk
@@ -3246,11 +3254,16 @@ function applyTerminalSettings({fit=true}={}){
   // Fit only after every xterm has the new option. queueStageFit deliberately
   // targets visible panes; hidden panes already carry the option and use the
   // same fit path when they become visible. Claimed panes then notify tmux.
-  if(fit&&panes.size)queueStageFit(activeId);
+  if(fit&&panes.size)queueStageFit();
   return effectiveSize;
 }
 terminalFontRange.addEventListener('input',()=>{
-  terminalFontSize=clampTerminalFontSize(terminalFontRange.value);
+  paintTerminalFontValue(clampTerminalFontSize(terminalFontRange.value));
+});
+terminalFontRange.addEventListener('change',()=>{
+  const size=clampTerminalFontSize(terminalFontRange.value);
+  if(size===terminalFontSize)return;
+  terminalFontSize=size;
   persistTerminalSettings();applyTerminalSettings();
 });
 const demoMaskWords=document.getElementById('demoMaskWords');

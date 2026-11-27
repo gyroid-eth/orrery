@@ -1,7 +1,7 @@
 /* @author: @kokonutui · @license: MIT · @website: https://kokonutui.com
    AI Loading State, adapted to ORRERY's recorded operations and theme. */
 .conversation-steps{--steps-ease:cubic-bezier(.23,1,.32,1);min-width:0;margin:10px 0 18px;
-  color:var(--ink-dim);font:12px/1.45 var(--rail-sans)}
+  color:var(--ink-dim);font:calc(var(--conversation-text-size) * 12 / 13)/1.45 var(--rail-sans)}
 .conversation-steps[hidden]{display:none}
 .conversation-steps-toggle{display:flex;align-items:center;gap:6px;max-width:100%;min-height:26px;padding:4px 2px;
   border:0;background:transparent;text-align:left;cursor:pointer;color:var(--ink-dim);font:inherit;font-variant-numeric:tabular-nums}
@@ -29,13 +29,13 @@
 @keyframes conversation-step-check{to{stroke-dashoffset:0}}
 .conversation-step-copy{min-width:0;flex:1}
 .conversation-step-top{display:flex;align-items:baseline;gap:5px}
-.conversation-step-tool{color:var(--ink);font-size:11px;overflow-wrap:anywhere}
-.conversation-step-outcome{color:var(--ink-dim);font-size:10px}
+.conversation-step-tool{color:var(--ink);font-size:calc(var(--conversation-text-size) * 11 / 13);overflow-wrap:anywhere}
+.conversation-step-outcome{color:var(--ink-dim);font-size:calc(var(--conversation-text-size) * 10 / 13)}
 .conversation-step-icon.failed+.conversation-step-copy .conversation-step-outcome{color:var(--amber)}
-.conversation-step-duration{margin-left:auto;color:var(--ink-dim);font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.conversation-step-duration{margin-left:auto;color:var(--ink-dim);font-size:calc(var(--conversation-text-size) * 10 / 13);font-variant-numeric:tabular-nums;white-space:nowrap}
 .conversation-step-outcome.has-exit-code{margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
 .conversation-step-outcome.has-exit-code+.conversation-step-duration{margin-left:0}
-.conversation-step-target{color:var(--ink-dim);font-size:10px;line-height:1.35;overflow-wrap:anywhere;white-space:pre-wrap}
+.conversation-step-target{color:var(--ink-dim);font-size:calc(var(--conversation-text-size) * 10 / 13);line-height:1.35;overflow-wrap:anywhere;white-space:pre-wrap}
 .conversation-step.has-step-image{position:relative}
 .has-step-image .conversation-step-target{text-decoration:underline;text-underline-offset:2px}
 .conversation-step-image:not([hidden]){position:absolute;inset:0;padding:0;border:0;border-radius:4px;background:transparent;cursor:pointer}
@@ -45,8 +45,8 @@
 .conversation-step-copy>:is(.conversation-step-top,.conversation-step-target){max-width:282px}
 .conversation-step-diff-toggle{display:inline-flex;align-items:baseline;gap:5px;min-width:0;flex-wrap:wrap;
   margin:-2px 0 -2px -4px;padding:2px 4px;border:0;border-radius:4px;background:transparent;color:var(--ink);
-  cursor:pointer;text-align:left;font:600 10px/1.45 var(--rail-sans);font-variant-numeric:tabular-nums}
-.conversation-step-diff-name{color:var(--ink);font-size:11px;font-weight:400;overflow-wrap:anywhere}
+  cursor:pointer;text-align:left;font:600 calc(var(--conversation-text-size) * 10 / 13)/1.45 var(--rail-sans);font-variant-numeric:tabular-nums}
+.conversation-step-diff-name{color:var(--ink);font-size:calc(var(--conversation-text-size) * 11 / 13);font-weight:400;overflow-wrap:anywhere}
 .conversation-step-diff-toggle:hover,.conversation-step-diff-toggle[aria-expanded="true"]{background:rgb(var(--theme-accent-rgb) / .13)}
 .conversation-step-diff-toggle[aria-expanded="true"] .conversation-step-diff-name{color:var(--amber)}
 .conversation-step-diff-toggle:focus-visible,.conversation-step-diff-fold:focus-visible{outline:1px solid var(--amber);outline-offset:2px}
@@ -59,13 +59,13 @@ html[data-color-theme="light"] .conversation-step-diff-minus{color:#9b2d2d}
 .conversation-step-diff{margin:6px 0 5px;border:1px solid var(--hair);border-radius:6px;
   overflow:hidden;background:var(--panel-2);color:var(--ink)}
 .conversation-step-diff-head,.conversation-step-diff-note,.conversation-step-diff-fold{padding:5px 9px;
-  color:var(--ink-dim);font:11px/1.5 var(--rail-sans)}
+  color:var(--ink-dim);font:calc(var(--conversation-text-size) * 11 / 13)/1.5 var(--rail-sans)}
 .conversation-step-diff-head{border-bottom:1px solid var(--hair)}
 .conversation-step-diff-code{max-height:310px;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--ink-faint) transparent}
 .conversation-step-command,.conversation-step-output{margin:0;padding:5px 9px;tab-size:2;
-  color:var(--ink);font:11px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
+  color:var(--ink);font:calc(var(--conversation-text-size) * 11 / 13)/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
 .conversation-step-command{border-bottom:1px solid var(--hair);background:rgb(var(--theme-accent-rgb) / .07)}
-.conversation-step-diff-hunk,.conversation-step-diff-line{min-width:max-content;font:11px/1.6 var(--mono);white-space:pre}
+.conversation-step-diff-hunk,.conversation-step-diff-line{min-width:max-content;font:calc(var(--conversation-text-size) * 11 / 13)/1.6 var(--mono);white-space:pre}
 .conversation-step-diff-hunk{padding:2px 8px;color:var(--ink-dim);border-bottom:1px solid var(--hair)}
 .conversation-step-diff-line{display:grid;grid-template-columns:21px 1fr;padding:0 9px 0 5px;tab-size:2}
 .conversation-step-diff-sign{text-align:center;user-select:none}
@@ -73,7 +73,7 @@ html[data-color-theme="light"] .conversation-step-diff-minus{color:#9b2d2d}
 .conversation-step-diff-fold{display:block;width:100%;background:transparent;border-right:0;border-bottom:0;border-left:0;
   cursor:pointer;text-align:left}
 .conversation-step-diff-fold:hover{color:var(--ink)}
-.conversation-steps-notice{margin:4px 0 0 8px;color:var(--ink-dim);font-size:11px}
+.conversation-steps-notice{margin:4px 0 0 8px;color:var(--ink-dim);font-size:calc(var(--conversation-text-size) * 11 / 13)}
 .conversation-step-record>.conversation-byline{display:none}
 .conversation-steps.conversation-steps-with-files{margin-bottom:4px}
 .conversation-event.conversation-step-files:not([hidden]){display:inline-block;box-sizing:border-box;max-width:100%;
