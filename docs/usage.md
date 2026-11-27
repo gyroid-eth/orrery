@@ -602,7 +602,8 @@ ORRERY backend だけで replay を生成する機能ではありません。ORR
 
 Settings で変更できる値:
 
-- terminal font: 9〜16 px、0.5 px step
+- **Terminal font size** は 10〜18 px を 0.5 px 刻みで選べます。スライダーを離すと端末に反映します。
+- **Reader text size** は 10〜18 px を 1 px 刻みで選べます。本文、道具と状態の行、Mail・質問のカード、ファイルのプレビューに反映します。
 - 5-way split 以上の auto-shrink: -1.5 px
 - mini-orrery mode
 - Telemetry network depth

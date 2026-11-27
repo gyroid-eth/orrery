@@ -600,7 +600,8 @@ The backend keeps settings in `~/.orrery/prefs.json`, shared between ORRERY.app 
 
 Values you can change in Settings:
 
-- Terminal font: 9–16 px, in 0.5 px steps
+- **Terminal font size** ranges from 10 to 18 px in 0.5 px steps. The terminal updates when you release the slider.
+- **Reader text size** ranges from 10 to 18 px in 1 px steps. It scales the conversation, tool and status rows, Mail and question cards, and file previews.
 - Auto-shrink for 5-way split and above: -1.5 px
 - Mini-orrery mode
 - Telemetry network depth
