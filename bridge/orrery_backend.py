@@ -1963,6 +1963,61 @@ async def fetch_proxied(
     return body, status, content_type
 
 
+_WSL_COMPUTER_RETRY_REASON = "Windows Cua Driver did not answer. Check that its daemon is running."
+_WSL_CHROME_RETRY_PREFIXES = (
+    "ORRERY cannot check Windows Chrome from WSL.",
+    "ORRERY could not check Chrome on Windows.",
+)
+
+
+def _unconfirmed_computer_use(catalog):
+    return (catalog.get("computer_use_transport") == "orrery-screen"
+            and catalog.get("computer_use") is False
+            and catalog.get("computer_use_reason") == _WSL_COMPUTER_RETRY_REASON)
+
+
+def _unconfirmed_my_chrome(entry):
+    return (isinstance(entry, dict) and entry.get("unavailable") is False
+            and str(entry.get("reason", "")).startswith(_WSL_CHROME_RETRY_PREFIXES))
+
+
+def _retain_catalog_probe_results(catalog, previous):
+    """Keep the last verified value of each independent probe during WSL startup.
+
+    Existing telemetry catalogs report inconclusive checks using these reasons.
+    Missing tools and confirmed unavailability are ordinary catalog results.
+    """
+    checking = _unconfirmed_computer_use(catalog)
+    if (checking and previous.get("computer_use_transport") == "orrery-screen"
+            and isinstance(previous.get("computer_use"), bool)
+            and not _unconfirmed_computer_use(previous)):
+        for key in ("computer_use", "computer_modes", "computer_use_reason"):
+            if key in previous:
+                catalog[key] = previous[key]
+            else:
+                catalog.pop(key, None)
+
+    statuses = catalog.get("personal_browser_status")
+    if not isinstance(statuses, dict):
+        return checking
+    old_statuses = previous.get("personal_browser_status")
+    old_modes = previous.get("browser_modes")
+    for harness, status in list(statuses.items()):
+        if not _unconfirmed_my_chrome(status):
+            continue
+        checking = True
+        modes = old_modes.get(harness) if isinstance(old_modes, dict) else None
+        previous_status = old_statuses.get(harness) if isinstance(old_statuses, dict) else None
+        if isinstance(modes, list) and "personal" in modes and not _unconfirmed_my_chrome(previous_status):
+            if previous_status is None:
+                statuses.pop(harness)
+            else:
+                statuses[harness] = previous_status
+    if not statuses:
+        catalog.pop("personal_browser_status", None)
+    return checking
+
+
 class SpawnCatalogCache:
     """Keep the last picker snapshot for this app and one upstream refresh."""
 
@@ -1975,7 +2030,7 @@ class SpawnCatalogCache:
         self._url = DASHBOARD_URL + PROXY_ROUTES[SPAWN_CATALOG_ROUTE][0]
         self._clock = clock
         self._snapshot: tuple[bytes, int, str] | None = None
-        self._updated_at = 0.0
+        self._updated_at: float | None = None
         self._retry_at = 0.0
         self._pending: asyncio.Task[tuple[bytes, int, str]] | None = None
 
@@ -1994,7 +2049,7 @@ class SpawnCatalogCache:
     async def _fetch(self) -> tuple[bytes, int, str]:
         try:
             result = await fetch_proxied(self._session, SPAWN_CATALOG_ROUTE, self._url, self._tmux_bin)
-            body, status, _ = result
+            body, status, content_type = result
             if status == 200:
                 try:
                     payload = json.loads(body)
@@ -2002,8 +2057,12 @@ class SpawnCatalogCache:
                     payload = None
                 if (isinstance(payload, dict) and payload.get("ok") is not False
                         and isinstance(payload.get("providers"), list)):
+                    previous = json.loads(self._snapshot[0]) if self._snapshot is not None else {}
+                    checking = _retain_catalog_probe_results(payload, previous)
+                    if checking:
+                        result = json.dumps(payload, ensure_ascii=False).encode("utf-8"), status, content_type
                     self._snapshot = result
-                    self._updated_at = self._clock()
+                    self._updated_at = None if checking else self._clock()
             elif 400 <= status < 500 and status not in (408, 429):
                 # An explicitly removed or denied catalog invalidates the snapshot.
                 self._snapshot = None
@@ -2011,14 +2070,16 @@ class SpawnCatalogCache:
         finally:
             self._retry_at = self._clock() + self.RETRY_SECONDS
 
-    async def read(self) -> tuple[tuple[bytes, int, str], bool]:
+    async def read(self) -> tuple[tuple[bytes, int, str], str | None]:
         now = self._clock()
-        if self._snapshot is not None:
-            stale = now - self._updated_at >= self.FRESH_SECONDS
-            if stale and now >= self._retry_at:
-                self.refresh()
-            return self._snapshot, stale
-        return await asyncio.shield(self.refresh()), False
+        if self._snapshot is None:
+            result = await asyncio.shield(self.refresh())
+            return result, "checking" if self._snapshot is not None and self._updated_at is None else None
+        state = ("checking" if self._updated_at is None else
+                 "stale" if now - self._updated_at >= self.FRESH_SECONDS else None)
+        if state and now >= self._retry_at:
+            self.refresh()
+        return self._snapshot, state
 
     async def close(self) -> None:
         if self._pending is not None:
@@ -2114,9 +2175,9 @@ async def proxy_dashboard(request: web.Request) -> web.Response:
     headers = {"Cache-Control": "no-store"}
     try:
         if request.path == SPAWN_CATALOG_ROUTE:
-            (body, status, content_type), stale = await request.app[SPAWN_CATALOG_KEY].read()
-            if stale:
-                headers["X-Orrery-Catalog-State"] = "stale"
+            (body, status, content_type), catalog_state = await request.app[SPAWN_CATALOG_KEY].read()
+            if catalog_state:
+                headers["X-Orrery-Catalog-State"] = catalog_state
         elif request.path in COALESCED_ROUTES:
             task = shared_fetch(request.app[PROXY_INFLIGHT_KEY], http_session, request.path, url, request.app[TMUX_BIN_KEY])
             body, status, content_type = await asyncio.shield(task)
