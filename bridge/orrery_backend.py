@@ -291,6 +291,7 @@ PROXY_ROUTES = {
     "/telemetry/messages": ("/api/messages-since", ("since", "limit")),
     "/telemetry/graph": ("/api/graph", ("all", "days", "spawn_only")),
     SPAWN_CATALOG_ROUTE: ("/api/spawn-names", ()),
+    "/telemetry/suggest-name": ("/api/suggest-name", ("scientist", "choices")),
     "/telemetry/fs/dir-search": ("/api/fs/dir-search", ("q", "under")),
     "/telemetry/spawn-status": ("/api/spawn-status", ("name", "attempt_id", "mail_instance_id", "mail_agent_id")),
 }
@@ -5534,6 +5535,7 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
     app.router.add_get("/telemetry/portrait", serve_portrait)
     app.router.add_get("/telemetry/sessions", serve_sessions)
     app.router.add_get(SPAWN_CATALOG_ROUTE, proxy_dashboard)
+    app.router.add_get("/telemetry/suggest-name", proxy_dashboard)
     app.router.add_get("/telemetry/spawn-status", proxy_dashboard)
     app.router.add_get("/telemetry/skills", serve_skills)
     app.router.add_post("/telemetry/prompt-attachment", serve_prompt_attachment)

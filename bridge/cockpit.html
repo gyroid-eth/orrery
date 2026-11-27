@@ -8761,7 +8761,8 @@ function updateSpawnAvailability(){
   if(busy)spawnForm.setAttribute('aria-busy','true');
   else spawnForm.removeAttribute('aria-busy');
   spawnTask.readOnly=busy;
-  spawnSubmit.disabled=Boolean(spawnAttempt)||!spawnTask.value.trim()||!harness||Boolean(missingEffort)||spawnBrowserBlocked();
+  spawnSubmit.disabled=Boolean(spawnAttempt)||!spawnTask.value.trim()||!harness||Boolean(missingEffort)||spawnBrowserBlocked()
+    ||Boolean(selScientist&&!spawnAdjective.value.trim());
   spawnDiscardDraft.disabled=busy;spawnDiscardDraft.hidden=spawnShownDraft===null;
   spawnStatus.textContent=message;spawnStatus.title=message;spawnStatus.hidden=!message;
 }
@@ -8988,17 +8989,36 @@ function renderSpawnDirCrumbs(path){
   dirCrumbs.scrollLeft=dirCrumbs.scrollWidth;
 }
 
-/* agent picker — every registered name is consumed forever, so the adjective
-   suggestions only offer combinations that are still free */
-function freeAdjectivesFor(scientist){
-  const adjectives=spawnCatalog?.naming?.adjectives||[];
-  if(!scientist)return adjectives;
-  return adjectives.filter(a=>!spawnTaken.has((a+scientist).toLowerCase()));
-}
-function rollAdjective(){
-  const free=freeAdjectivesFor(selScientist);
-  if(!free.length)return '';
-  return free[Math.floor(Math.random()*free.length)];
+let spawnNameChoiceRequest=0,spawnFreeAdjectives=[];
+async function refreshSpawnAdjectives(roll=false){
+  const scientist=selScientist,request=++spawnNameChoiceRequest;
+  const adjective=spawnAdjective.value,revision=spawnFormRevision;
+  spawnFreeAdjectives=[];
+  updateNameCard();
+  if(!scientist)return;
+  let choices=null;
+  try{
+    const response=await fetch('/telemetry/suggest-name?choices=1&scientist='+encodeURIComponent(scientist),{cache:'no-store'});
+    if(response.ok){
+      const result=await response.json();
+      if(Array.isArray(result.adjectives))choices=result.adjectives.filter(a=>typeof a==='string'&&/^[A-Za-z]+$/.test(a));
+    }
+  }catch(_){/* Launch can still verify a manually entered name. */}
+  if(request!==spawnNameChoiceRequest||revision!==spawnFormRevision||scientist!==selScientist)return;
+  spawnFreeAdjectives=choices||[];
+  if(roll&&spawnAdjective.value===adjective&&!spawnFormIsBusy()){
+    if(spawnFreeAdjectives.length){
+      const different=spawnFreeAdjectives.filter(a=>a!==adjective);
+      const pool=different.length?different:spawnFreeAdjectives;
+      spawnAdjective.value=pool[Math.floor(Math.random()*pool.length)];
+      spawnProblem='';
+    }else{
+      spawnProblem=choices?'No available adjective. Choose another scientist or type a name.':
+        'Could not check name availability. Roll again or type a name.';
+    }
+    saveSpawnDraft();
+  }
+  updateNameCard();
 }
 function spawnScientistOptions(){
   return Array.from(agentStrip.querySelectorAll('button:not([hidden])'));
@@ -9026,8 +9046,8 @@ function renderAgentStrip(){
     button.addEventListener('click',()=>{
       selScientist=selScientist===scientist?'':scientist;spawnProblem='';
       for(const option of agentStrip.children)paintSpawnScientistOption(option);
-      if(selScientist)spawnAdjective.value=rollAdjective();
-      updateNameCard();
+      spawnAdjective.value='';
+      refreshSpawnAdjectives(true);
       saveSpawnDraft();
       if(selScientist)spawnAdjective.focus({preventScroll:true});
     });
@@ -9094,7 +9114,7 @@ function updateNameCard(){
   if(isAuto){
     ncName.textContent='';ncName.classList.remove('collide');
   }else{
-    freeAdjectivesFor(selScientist).forEach(adjective=>{
+    spawnFreeAdjectives.forEach(adjective=>{
       const option=document.createElement('option');option.value=adjective;adjOptions.appendChild(option);
     });
     ncPortrait.src=`/telemetry/portrait?v=3&name=${encodeURIComponent(selScientist)}&hi=1`;
@@ -9115,7 +9135,7 @@ function updateSpawnRoleChip(){
 spawnRole.addEventListener('input',()=>{updateSpawnRoleChip();saveSpawnDraft();});
 spawnAdjective.addEventListener('input',()=>{spawnProblem='';updateNameCard();saveSpawnDraft();});
 document.getElementById('adjDice').addEventListener('click',()=>{
-  spawnAdjective.value=rollAdjective();spawnProblem='';updateNameCard();saveSpawnDraft();
+  spawnProblem='';refreshSpawnAdjectives(true);
 });
 
 function readSpawnDraft(){
@@ -9194,6 +9214,7 @@ function prepareSpawnForm(raw,task=''){
   spawnRole.value=spawnDraftText(draft?.role).slice(0,spawnRole.maxLength);
   spawnAdjective.value=spawnDraftText(draft?.adjective).slice(0,spawnAdjective.maxLength);
   selScientist=spawnDraftText(draft?.scientist);
+  ++spawnNameChoiceRequest;spawnFreeAdjectives=[];
   ++spawnDirDefaultEpoch;
   spawnDirPath=spawnDraftText(draft?.dir);renderSpawnDirPath();
   spawnProblem='';spawnChooseAgain=false;
@@ -9228,6 +9249,7 @@ function openSpawnModal({from=document.getElementById('newAgentBtn').getBounding
   spawnLauncher.style.setProperty('--spawn-origin-x',(origin.x-spawnLauncher.offsetLeft)+'px');
   spawnLauncher.style.setProperty('--spawn-origin-y',(origin.y-spawnLauncher.offsetTop)+'px');
   spawnOverlay.classList.add('on');spawnOverlay.setAttribute('aria-hidden','false');
+  if(selScientist)refreshSpawnAdjectives();
   if(task&&spawnShownDraft===null)saveSpawnDraft();
   sizeSpawnTask();
   // A fresh form needs its catalog rendered even if the same tab already has it.
@@ -9364,7 +9386,7 @@ function fillSpawnButton(event){
   fill.animate([{transform:'scale(0)',opacity:1},{transform:'scale(30)',opacity:0}],{duration:520,easing:'ease-out'});
 }
 async function submitSpawn(event){
-  event.preventDefault();if(spawnAttempt||!spawnTask.value.trim()||spawnBrowserBlocked())return;
+  event.preventDefault();if(spawnAttempt||!spawnTask.value.trim()||spawnBrowserBlocked()||(selScientist&&!spawnAdjective.value.trim()))return;
   const p=providerById(selProvider),model=selectedSpawnModel();
   if(!p||!model||!SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available)||spawnExplicitEffortMissing(p,selModel))return;
   const payload=spawnPayloadFromForm();

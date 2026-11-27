@@ -24,6 +24,7 @@ window.fetch=(input,options)=>{
   let data;
   switch(url.pathname){
     case '/telemetry/spawn-catalog': data=CATALOG;break;
+    case '/telemetry/suggest-name': data={adjectives:window.fixtureAdjectives??['Quiet']};break;
     case '/telemetry/fs/dirs': data={path:'/workspace',home:'/workspace',dirs:[]};break;
     case '/telemetry/spawn': data={ok:true,pending:true,child_name:'QuietCurie'};break;
     case '/telemetry/spawn-status': data={ok:true,state:window.fixtureLaunchState,error:'Fixture failure'};break;
@@ -66,6 +67,25 @@ def reload_with_fixture(client, evaluate, source=BOOTSTRAP):
             return
         time.sleep(.05)
     raise AssertionError("Cockpit did not reload")
+
+
+def test_adjectives_come_from_the_launch_name_check_instead_of_the_cached_catalog(tour_browser):
+    _, evaluate = tour_browser
+    evaluate(BOOTSTRAP)
+    result = evaluate("""(async()=>{
+      window.fixtureAdjectives=['Ready'];
+      openSpawnModal();await loadSpawnCatalog();
+      spawnNameButton.click();agentStrip.querySelector('[data-scientist=Curie]').click();
+      await refreshSpawnAdjectives(true);
+      return {name:composedName(),suggestions:[...adjOptions.options].map(option=>option.value)};
+    })()""")
+    assert result == {"name": "ReadyCurie", "suggestions": ["Ready"]}
+    result = evaluate("""(async()=>{
+      window.fixtureAdjectives=['Calm'];
+      await refreshSpawnAdjectives(true);
+      return {name:composedName(),suggestions:[...adjOptions.options].map(option=>option.value)};
+    })()""")
+    assert result == {"name": "CalmCurie", "suggestions": ["Calm"]}
 
 
 def test_new_agent_draft_survives_dismissal_and_reload(tour_browser):
