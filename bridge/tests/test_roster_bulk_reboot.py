@@ -504,16 +504,18 @@ def test_api54_browser_mode_restart_validates_and_resumes_the_same_conversation(
 
 
 @pytest.mark.parametrize('roster', [55], indirect=True)
+@pytest.mark.parametrize('mini_mode', ['orrery', 'network'])
 @pytest.mark.parametrize(('close_order', 'stay'), [
     ('status', True), ('list', False), ('pane', True), ('manual', False),
 ])
-def test_permission_restart_reattaches_the_open_tab_to_the_new_pane(roster, close_order, stay):
+def test_permission_restart_reattaches_the_open_tab_to_the_new_pane(roster, close_order, stay, mini_mode):
     js, wait, state = roster
     controls = {'computer_use': {'value': 'off', 'can_change': True, 'action': 'restart'}}
     active = ACTIVE | {'permission_controls': controls, 'annot': {'role': 'Fixture reviewer'}}
     stopped = EXITED | {'permission_controls': {'computer_use': controls['computer_use'] | {'action': 'resume'}}}
     state['checks'] = [(200, [active]), (200, [])]
     state['stop_checks'] = [stopped]
+    js(f"setMiniViewMode({json.dumps(mini_mode)})")
     js(f"currentAgentNamed('CopperFixture').permission_controls={json.dumps(controls)}")
     js("""currentAgentNamed('CopperFixture').annot={role:'Fixture reviewer'};
       if(document.getElementById('orrery').hasAttribute('hidden'))document.getElementById('mailGraphBtn').click();
@@ -564,6 +566,9 @@ def test_permission_restart_reattaches_the_open_tab_to_the_new_pane(roster, clos
     assert js("graphAction().textContent==='Restarting…'")
     if not stay:
         js("setActive('%142')")
+        if mini_mode == 'network':
+            assert js("document.getElementById('orrery').getAttribute('aria-label').startsWith('Telemetry network for IndigoFixture,')")
+            assert js("graphAction().textContent==='Restarting…'")
     if close_order == 'manual':
         js("sessionGroups.get('CopperFixture').detach.click()")
     js('allowRestartJump()')
@@ -589,10 +594,13 @@ def test_permission_restart_reattaches_the_open_tab_to_the_new_pane(roster, clos
       handle({type:'status',state:'closed',session:'CopperFixture',sessionGone:true,incarnation:'old'});
     """)
     wait("!permissionRestarts.has('CopperFixture')")
-    assert js("graphAction().textContent==='Fixture reviewer'")
     assert js("sessionGroups.get('CopperFixture').el===originalGroup && panes.has('%143')")
     assert js('activeId') == ('%143' if stay else '%142')
     assert js("!stageEl.querySelector('.terminal-action-notice')&&!tiles.get('CopperFixture').querySelector('.terminal-action-wave')")
+    if mini_mode == 'network' and not stay:
+        wait("!graphAction()")
+        js("setActive('%143')")
+    assert js("graphAction().textContent==='Fixture reviewer'")
 
 
 def test_confirmed_bulk_exit_marks_each_agent_until_disappearance_or_failure(roster):
@@ -689,13 +697,15 @@ def test_embedded_exit_updates_the_parent_without_consuming_its_response(roster,
 @pytest.mark.parametrize(('depart_first', 'reduced', 'accepted'), [
     (True, False, True), (False, False, True), (False, True, True), (True, False, False),
 ])
+@pytest.mark.parametrize('mini_mode', ['orrery', 'network'])
 def test_exit_dust_waits_for_success_and_departure_and_releases_the_tab(
-    roster, depart_first, reduced, accepted,
+    roster, depart_first, reduced, accepted, mini_mode,
 ):
     js, wait, _state = roster
     js.client.call('Emulation.setEmulatedMedia', features=[
         {'name': 'prefers-reduced-motion', 'value': 'reduce' if reduced else 'no-preference'},
     ])
+    js(f"setMiniViewMode({json.dumps(mini_mode)})")
     js("""
       setRosterSelectMode(false);
       Object.defineProperty(document,'hidden',{value:false});
@@ -728,6 +738,10 @@ def test_exit_dust_waits_for_success_and_departure_and_releases_the_tab(
       true;
     """)
     assert js("document.querySelector('#orrery [data-agent=CopperFixture] .orrery-caption-action').textContent==='Exiting…'")
+    if mini_mode == 'network':
+        js("setActive('%142')")
+        assert js("document.getElementById('orrery').getAttribute('aria-label').startsWith('Telemetry network for IndigoFixture,')")
+        assert js("document.querySelector('#orrery [data-agent=CopperFixture] .orrery-caption-action').textContent==='Exiting…'")
     if depart_first:
         js("""
           exitFixtureDeparted=true;

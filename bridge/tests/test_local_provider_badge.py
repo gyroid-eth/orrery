@@ -59,7 +59,7 @@ def test_light_graph_uses_original_logo_artwork_and_readable_seats(tour_browser)
     rendered_badges(evaluate, [
         dict(provider='openai', model='gpt-demo'),
         dict(provider='local', model='glm-4.7'),
-        dict(provider='local', model='inkling-2-mini'),
+        dict(provider='local', model='unlisted-local-fixture-model'),
         dict(provider='other', program='custom-cli'),
     ])
     result = evaluate("""(()=>{
