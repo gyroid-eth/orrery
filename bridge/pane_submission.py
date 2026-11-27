@@ -76,7 +76,9 @@ AGY_SCROLL_MARKER = re.compile(
 AGY_PASTE = re.compile(r'\[Pasted\s+text\s+#[1-9]\d*\s+([1-9][0-9]{0,8})\s+chars\]')
 AGY_PLACEHOLDER = {
     'Auto mode: edits & safe commands auto-approved (shift+tab to cycle)',
+    'Accept-edits mode: file edits auto-approved (shift+tab to cycle)',
     'Plan mode: research & plan only (shift+tab to cycle)',
+    'Best-of-N mode: parallel arms, /model to pick models (shift+tab to cycle)',
 }
 DSH_PLACEHOLDER = 'Say something, or type / for commands…'
 DSH_COMPACT_WELCOME_PROMPT = re.compile(r'^(\s*│ )(❯)(\S.*)$')
