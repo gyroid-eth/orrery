@@ -19,6 +19,10 @@ def frame(rows, *, command="zsh", cursor=0):
                  "\x1b[38;2;242;181;144mContext 97% left\x1b[39m", id="terra"),
     pytest.param("  \x1b[38;2;246;226;183mGPT-6-Luna high\x1b[39m · "
                  "\x1b[38;2;242;181;144mContext 88% left\x1b[39m", id="luna"),
+    pytest.param("\x1b[0m  \x1b[38;2;246;226;183mGPT-6-Luna xhigh\x1b[39m · ~/fixture",
+                 id="luna-wsl-context-hidden"),
+    pytest.param("\x1b[49m  \x1b[38;2;246;226;183mGPT-6.2-Astra high\x1b[38;2;117;117;117m · "
+                 "\x1b[38;2;242;181;144mContext 94% left\x1b[38;2;117;117;117m", id="astra"),
 ])
 def test_empty_codex_editor_with_native_status_text(status):
     observed = frame(["› ", "", status, "  ← for agents · ? for shortcuts"])
