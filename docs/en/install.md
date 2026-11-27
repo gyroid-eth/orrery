@@ -463,7 +463,7 @@ When it works, the end of the output looks like this.
 Open the printed `http://127.0.0.1:8791/cockpit.html` in your browser.
 
 - Mac: open it in Safari or Chrome
-- Windows: open it in Edge or Chrome **on the Windows side**. `127.0.0.1` in WSL2 is forwarded to the Windows side, so it reaches the cockpit as is
+- Windows: open it in Edge or Chrome **on the Windows side**, or use the [Windows desktop app](#windows-desktop-app). WSL2 forwards `127.0.0.1` to Windows
 
 If no agents appear in the list on the left, start one from the cockpit's NEW AGENT, or run `~/.agentstack/bin/agent-start /path/to/your-project` (`agent-start-codex` for Codex) in another window.
 
@@ -528,9 +528,37 @@ To check the prerequisites and prepare the Python environment without starting t
 ./scripts/start-cockpit.sh --check
 ```
 
+### Windows desktop app
+
+1. **Install ORRERY in Ubuntu on WSL2 first.** [Shared installation steps](#install-or-update-with-one-line)
+2. Download the Windows x64 installer. [ORRERY_0.1.0_x64-setup.exe](https://github.com/gyroid-eth/orrery-telemetry/releases/latest/download/ORRERY_0.1.0_x64-setup.exe) · [Latest release assets](https://github.com/gyroid-eth/orrery-telemetry/releases/latest)
+3. Open the download folder in PowerShell. Run the command below and check that its `Hash` matches the SHA-256 published with that release.
+
+   ```powershell
+   Get-FileHash -Algorithm SHA256 -LiteralPath .\ORRERY_0.1.0_x64-setup.exe
+   ```
+
+4. Once the hash matches, run the installer. It installs for your current Windows user. The installer is unsigned. If you see **Windows protected your PC** the first time you run it, select **More info** and then **Run anyway**. Organization policy may block the installer. [Microsoft's SmartScreen documentation](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation)
+5. Open **ORRERY** from the Windows Start menu. The app starts the WSL2 cockpit if needed and connects to the running cockpit. The default shortcut to show or hide the window is `Ctrl+Shift+O`. The backend stays up when you close the app, so you return to the same cockpit when you reopen it.
+
+Use the shared update steps inside WSL2 to update the cockpit. You can keep using the Windows app installed by `-setup.exe`.
+
+The app uses the default WSL distro and its default Linux user, with a checkout at `~/orrery` and port `8791`. To override any of those defaults, set the corresponding Windows user environment variable and reopen the app.
+
+| Variable | Value |
+| --- | --- |
+| `ORRERY_WSL_DISTRO` | WSL2 distro name as shown by `wsl.exe --list --verbose` |
+| `ORRERY_WSL_USER` | Linux user who installed ORRERY in that distro |
+| `ORRERY_WSL_ROOT` | Absolute Linux path to the ORRERY checkout |
+| `ORRERY_WSL_PORT` | Cockpit port. If the default is occupied, choose a port that is free in both Windows and WSL |
+
+To stop a backend started by the desktop app, run `tmux -L orrery-app kill-session -t '=cockpit-8791'` as the same WSL user. Substitute the configured port if you changed it. To stop a backend started by the shared installer, use the `Stop it:` command printed during installation.
+
+To build the installer yourself, follow the [Windows build steps](../../app/README.md#windows-build).
+
 ### Differences on Windows (WSL2)
 
-- On WSL2, run the backend inside Ubuntu and open it in a Windows browser. Shared installation, cockpit-specific controls, and API/keyring setup have different verification status; see the [requirements table](#requirements)
+- On WSL2, the backend runs in Linux and opens in the Windows desktop app or a Windows browser. See the [requirements table](#requirements) for the verification status of the shared install, cockpit controls, and API/keyring setup
 - The "open in a window" button in the cockpit opens a Windows Terminal (`wt.exe`) tab instead of Ghostty on a Mac. If you do not have Windows Terminal, install it from the Microsoft Store
 - Files and images can be pasted when WSL can read the Windows clipboard. The backend needs `powershell.exe` and `wslpath`, and must run in WSL within your logged-in Windows desktop. A backend started over SSH may not have access to that clipboard. See [pasting steps and error messages](usage.md#pasting-files-and-images-on-wsl)
 - Shortcuts such as `Cmd+K` become `Alt+K` and so on. For the list of differences, see ["Differences on Windows (WSL2)" in Usage](usage.md#differences-on-windows-wsl2)
@@ -539,15 +567,15 @@ To check the prerequisites and prepare the Python environment without starting t
 
 The shared installer also needs `curl` and `git`. On macOS it uses the bundled `lsof`. On Ubuntu or WSL2 it needs `xz` and checks port ownership through `/proc` if `lsof` is unavailable. If the installer cannot find Homebrew’s `tmux`, configure `brew shellenv` in your shell to put Homebrew’s bin directory on PATH (typically `/opt/homebrew/bin` on Apple silicon).
 
-`ORRERY.app` is officially supported on macOS. The Python backend assumes Unix / tmux and has no macOS-only guard. Using it in a browser on Windows WSL2 (Ubuntu) is also still being verified ([For first-time installers](#for-first-time-installers-browser-mac--windows-wsl2)). Other operating systems are not guaranteed as a product.
+`ORRERY.app` runs on macOS. Windows x64 uses the [Windows desktop app with WSL2](#windows-desktop-app). The Python backend uses Unix and tmux, which run inside WSL2 on Windows.
 
 | Environment / feature | Available path and verification status |
 | --- | --- |
 | macOS cockpit | `ORRERY.app` or a browser; the primary target |
 | Ubuntu WSL2 shared installation | Telemetry installation, Mail, dashboard and existing CLI launch paths have been checked. This does not verify every cockpit-specific control |
-| Ubuntu WSL2 cockpit | Browser-based path. WSL-specific controls such as Windows Terminal and clipboard access remain under verification |
+| WSL2 cockpit | Windows x64 desktop app or a Windows browser. WSL-specific controls such as Windows Terminal and clipboard access remain under verification |
 | WSL2 DeepSeek/Local and keyring | Implemented paths with setup instructions. Fresh-keyring setup and every provider/harness combination have not been verified end to end |
-| Native Windows | No cockpit or API launch path. Telemetry's experimental helper provides only parts of Mail/dashboard |
+| Windows without WSL2 | Telemetry's experimental helper provides parts of Mail and dashboard |
 | Other Linux / headless systems | There are reports of Telemetry use; cockpit and full service operation are not guaranteed as a product |
 
 See [Telemetry's compatibility table](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/managed-catalog.en.md) for API combinations and verification scope. Check the requirements for the features you plan to use before installing.

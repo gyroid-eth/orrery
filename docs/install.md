@@ -463,7 +463,7 @@ script は 1 回で次を行います。
 表示された `http://127.0.0.1:8791/cockpit.html` をブラウザで開きます。
 
 - Mac: Safari や Chrome で開きます
-- Windows: **Windows 側の** Edge や Chrome で開きます。WSL2 の `127.0.0.1` は Windows 側に転送されるので、そのまま届きます
+- Windows: **Windows 側の** Edge や Chrome、または [Windows デスクトップアプリ](#windows-デスクトップアプリ)で開きます。WSL2 の `127.0.0.1` は Windows 側に転送されます
 
 左の一覧にエージェントが出ていなければ、cockpit の NEW AGENT から起動するか、別の窓で `~/.agentstack/bin/agent-start /path/to/your-project`（Codex なら `agent-start-codex`）を実行します。
 
@@ -528,9 +528,37 @@ script は前提をまとめて確かめ、足りないものを `NG` の行で�
 ./scripts/start-cockpit.sh --check
 ```
 
+### Windows デスクトップアプリ
+
+1. **先に WSL2 の Ubuntu に ORRERY を入れます。** [共通インストールの手順](#1-行で入れる更新する)
+2. Windows x64 用のインストーラーをダウンロードします。[ORRERY_0.1.0_x64-setup.exe](https://github.com/gyroid-eth/orrery-telemetry/releases/latest/download/ORRERY_0.1.0_x64-setup.exe) · [最新リリースの Assets](https://github.com/gyroid-eth/orrery-telemetry/releases/latest)
+3. ダウンロード先のフォルダーを PowerShell で開き、次のコマンドで表示される `Hash` が、同じリリースに掲載された SHA-256 と一致することを確かめます。
+
+   ```powershell
+   Get-FileHash -Algorithm SHA256 -LiteralPath .\ORRERY_0.1.0_x64-setup.exe
+   ```
+
+4. 一致したらインストーラーを実行します。インストール先は現在の Windows ユーザーです。未署名のため、初回に **Windows によって PC が保護されました** と表示された場合は、**詳細情報** → **実行** を選びます。組織のポリシーによっては、実行できない場合があります。[Microsoft の SmartScreen の説明](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation)
+5. Windows のスタートメニューから **ORRERY** を開きます。WSL2 の cockpit が停止していれば起動し、すでに動いていれば接続します。ウィンドウの表示・非表示は通常 `Ctrl+Shift+O` です。アプリを閉じても backend は動き続けるので、開き直すと同じ cockpit に戻れます。
+
+cockpit を更新するときは、WSL2 側で共通の更新手順を実行します。Windows の `-setup.exe` を入れ直す必要はありません。
+
+アプリは既定の WSL ディストリビューションと、そのディストリビューションの既定ユーザーを使い、Linux の `~/orrery` にある checkout をポート `8791` で開きます。変更する場合は、Windows のユーザー環境変数を設定してからアプリを開き直します。
+
+| 変数 | 値 |
+| --- | --- |
+| `ORRERY_WSL_DISTRO` | `wsl.exe --list --verbose` に表示される WSL2 ディストリビューション名 |
+| `ORRERY_WSL_USER` | そのディストリビューションで ORRERY を入れた Linux ユーザー名 |
+| `ORRERY_WSL_ROOT` | ORRERY checkout の Linux 側の絶対パス |
+| `ORRERY_WSL_PORT` | cockpit のポート。既定のポートが競合する場合は Windows と WSL の両方で空いている番号を指定 |
+
+アプリが起動した backend を止めるには、同じ WSL ユーザーで `tmux -L orrery-app kill-session -t '=cockpit-8791'` を実行します。別のポートを指定した場合はコマンドの番号を変えます。共通インストールが起動した backend の停止方法は、インストール完了時の `Stop it:` に表示されます。
+
+インストーラーを自分で作る場合は、Windows 側に Node.js、C++ Build Tools、WebView2、64-bit MSVC 版の Rust を用意します。この準備は初回のみです。checkout の `app` フォルダーを PowerShell で開き、`npm.cmd ci` で依存をそろえてから `npm.cmd run build -- --target x86_64-pc-windows-msvc` を実行します。次のリリースでは、依存が変わっていなければ build のコマンドだけで作り直せます。[Windows ビルド手順](../app/README.md#windows-build)
+
 ### Windows（WSL2）で違うところ
 
-- WSL2では、Ubuntu内のbackendをWindowsのブラウザで開きます。共通導入・cockpit固有の操作・APIと鍵束では確認状況が異なります。[動作環境の表](#動作環境)を参照してください
+- WSL2 では、Linux 側の backend を Windows のアプリやブラウザーで開きます。共通導入・cockpit 固有の操作・API と鍵束では確認状況が異なります。[動作環境の表](#動作環境)を参照してください
 - cockpit の中の「窓を開く」ボタンは、Mac の Ghostty の代わりに Windows Terminal（`wt.exe`）のタブを開きます。Windows Terminal が無ければ Microsoft Store から入れます
 - ファイルや画像は、Windowsのクリップボードを読めるWSL環境で貼り付けられます。backendから`powershell.exe`と`wslpath`が使え、WindowsにログインしたデスクトップのWSLで起動していることが前提です。SSHなどからの起動ではデスクトップのクリップボードを読めない場合があります。[貼り付けの手順とエラーの見方](usage.md#wsl-でのファイル画像の貼り付け)を参照してください
 - `Cmd+K` などの shortcut は `Alt+K` などに変わります。違いの一覧は [使い方の「Windows（WSL2）での違い」](usage.md#windowswsl2での違い) を参照してください
@@ -539,15 +567,15 @@ script は前提をまとめて確かめ、足りないものを `NG` の行で�
 
 共通導入では `curl` と `git` も使います。macOS では同梱の `lsof`、Ubuntu／WSL2 では `xz` を使い、`lsof` がなければ `/proc` でポートの使用元を確認します。Homebrew で入れた `tmux` が見つからないときは、`brew shellenv` を shell に設定して Homebrew の bin（Apple silicon では通常 `/opt/homebrew/bin`）を PATH に通します。
 
-`ORRERY.app` の正式な利用対象は macOS です。Python backend は Unix / tmux を前提にしており、macOS 専用 guard はありません。ブラウザで開く使い方は Windows の WSL2（Ubuntu）でも確認中です（[はじめて入れる人へ](#はじめて入れる人へブラウザで使うmac--windows-wsl2)）。それ以外の OS は製品として保証していません。
+`ORRERY.app` は macOS 用です。Windows x64 では [WSL2 と Windows デスクトップアプリ](#windows-デスクトップアプリ)を組み合わせて使えます。Python backend は Unix と tmux を使い、Windows では WSL2 内で動きます。
 
 | 環境・機能 | 提供経路と確認状況 |
 | --- | --- |
 | macOSのcockpit | `ORRERY.app`またはブラウザ。主な利用対象 |
 | Ubuntu WSL2の共通導入 | Telemetryのinstall・Mail・dashboard・既存CLI起動の確認済み経路。cockpit固有の全操作を確認した意味ではない |
-| Ubuntu WSL2のcockpit | ブラウザで利用する経路。Windows TerminalやクリップボードなどWSL固有の操作は確認を継続 |
+| WSL2 の cockpit | Windows x64 デスクトップアプリまたは Windows のブラウザー。Windows Terminal やクリップボードなど WSL 固有の操作は確認を継続 |
 | WSL2のDeepSeek/Localと鍵束 | 実装された経路があり、準備手順を案内。新規鍵束準備を含む全組合せの通し確認は未完了 |
-| Windowsネイティブ | cockpitとAPI起動は対象外。Telemetryの実験的helperはMail/dashboardの一部のみ |
+| WSL2 を使わない Windows 環境 | Telemetry の実験的 helper が Mail と dashboard の一部を扱う |
 | その他のLinux・headless | Telemetryの利用報告はあるが、cockpitや全サービスの動作を製品として保証しない |
 
 APIの組合せと確認範囲は[Telemetryの対応表](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/managed-catalog.md)で確認できます。利用する機能の条件を確かめてから導入してください。

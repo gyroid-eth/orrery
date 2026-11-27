@@ -1,11 +1,8 @@
-use std::{
-    collections::HashMap,
-    fs,
-    io::{Read, Write},
-    net::{SocketAddr, TcpStream},
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::path::{Path, PathBuf};
+#[cfg(any(not(windows), test))]
+use std::{collections::HashMap, fs};
+#[cfg(not(windows))]
+use std::{io::{Read, Write}, net::{SocketAddr, TcpStream}, time::Duration};
 
 use tauri::{
     AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State, Theme, Url, WebviewUrl,
@@ -15,14 +12,21 @@ use tauri_plugin_global_shortcut::{
     Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutEvent, ShortcutState,
 };
 
+#[cfg(windows)]
+mod windows_backend;
+
+#[cfg(not(windows))]
 const BACKEND_URL: &str = "http://127.0.0.1:8791/cockpit.html";
+#[cfg(not(windows))]
 const FALLBACK_URL: &str = "tauri://localhost/index.html";
+#[cfg(any(not(windows), test))]
 const CONFIG_RELATIVE_PATH: &str = ".orrery/config.json";
 
 struct HotkeyBinding(String);
 
 // Ordered fallbacks keep ORRERY usable when a resident macOS utility owns the
 // preferred binding. Change this list to customize the application hotkey.
+#[cfg(not(windows))]
 fn hotkey_candidates() -> [(&'static str, Shortcut); 4] {
     [
         (
@@ -44,6 +48,25 @@ fn hotkey_candidates() -> [(&'static str, Shortcut); 4] {
     ]
 }
 
+#[cfg(windows)]
+fn hotkey_candidates() -> [(&'static str, Shortcut); 3] {
+    [
+        (
+            "Ctrl+Shift+O",
+            Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyO),
+        ),
+        (
+            "Ctrl+Alt+O",
+            Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyO),
+        ),
+        (
+            "Ctrl+Shift+F19",
+            Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::F19),
+        ),
+    ]
+}
+
+#[cfg(not(windows))]
 fn startup_plan() -> Result<serde_json::Value, String> {
     let (python, script) = backend_sidecar_paths()?;
     let loader = script.parent().ok_or("FRESH_STARTUP_UNAVAILABLE")?.join("runtime_target.py");
@@ -79,6 +102,7 @@ fn parse_startup_plan(bytes: &[u8]) -> Result<serde_json::Value, String> {
     Ok(plan)
 }
 
+#[cfg(any(not(windows), test))]
 fn backend_response_matches(response: &[u8], plan: &serde_json::Value) -> bool {
     if plan["identity"]["runtime_mode"] != "fresh" {
         let status = String::from_utf8_lossy(response);
@@ -91,6 +115,7 @@ fn backend_response_matches(response: &[u8], plan: &serde_json::Value) -> bool {
     body["backend"] == "ok" && body["boot"].is_string() && body["runtime"] == plan["identity"]
 }
 
+#[cfg(not(windows))]
 fn backend_online() -> Result<bool, String> {
     let plan = startup_plan()?;
     let address = SocketAddr::from(([127, 0, 0, 1], 8791));
@@ -126,7 +151,16 @@ fn navigate(window: &WebviewWindow, url: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn retry_backend(window: WebviewWindow) -> Result<bool, String> {
+async fn retry_backend(window: WebviewWindow) -> Result<bool, String> {
+    #[cfg(windows)]
+    return windows_backend::connect(window).await;
+
+    #[cfg(not(windows))]
+    retry_sidecar(window)
+}
+
+#[cfg(not(windows))]
+fn retry_sidecar(window: WebviewWindow) -> Result<bool, String> {
     if !backend_online()? {
         return Ok(false);
     }
@@ -624,6 +658,7 @@ fn expand_user_path(value: &str, home: Option<&Path>) -> Option<PathBuf> {
     Some(PathBuf::from(value))
 }
 
+#[cfg(any(not(windows), test))]
 fn load_orrery_config(home: Option<&Path>) -> HashMap<String, serde_json::Value> {
     let Some(home) = home else {
         return HashMap::new();
@@ -657,12 +692,14 @@ fn load_orrery_config(home: Option<&Path>) -> HashMap<String, serde_json::Value>
     }
 }
 
+#[cfg(not(windows))]
 fn env_path(name: &str, home: Option<&Path>) -> Option<PathBuf> {
     std::env::var(name)
         .ok()
         .and_then(|value| expand_user_path(&value, home))
 }
 
+#[cfg(any(not(windows), test))]
 fn config_path(
     config: &HashMap<String, serde_json::Value>,
     name: &str,
@@ -674,6 +711,7 @@ fn config_path(
         .and_then(|value| expand_user_path(value, home))
 }
 
+#[cfg(not(windows))]
 fn backend_sidecar_paths() -> Result<(PathBuf, PathBuf), String> {
     let home = home_directory();
     let config = load_orrery_config(home.as_deref());
@@ -698,6 +736,7 @@ fn backend_sidecar_paths() -> Result<(PathBuf, PathBuf), String> {
     }
 }
 
+#[cfg(not(windows))]
 fn backend_log_stdio() -> (std::process::Stdio, std::process::Stdio) {
     let log = home_directory().map(|home| home.join("Library/Logs/ORRERY/backend.log"));
     let opened = log.and_then(|path| {
@@ -713,6 +752,7 @@ fn backend_log_stdio() -> (std::process::Stdio, std::process::Stdio) {
 // Spawn the backend as a detached sidecar. The process intentionally outlives
 // the app (browsers and other clients share the same backend); it is cheap
 // while idle and attaches tmux sessions lazily.
+#[cfg(not(windows))]
 fn spawn_backend_sidecar() -> Result<(), String> {
     let (python, script) = backend_sidecar_paths()?;
 
@@ -797,24 +837,27 @@ pub fn run() {
             }
             app.manage(HotkeyBinding(active_hotkey.to_owned()));
 
-            let online = backend_online();
-            if matches!(online, Ok(true)) {
-                let window = app.get_webview_window("main").ok_or("ORRERY main window was not created")?;
-                navigate(&window, BACKEND_URL)?;
-            } else {
-                // Offline page keeps retrying every 3 s and auto-navigates to
-                // the cockpit once the sidecar is up.
-                match online {
-                    Ok(false) => if let Err(reason) = spawn_backend_sidecar() {
-                        eprintln!("ORRERY remains offline: {reason}");
-                    },
-                    Err(reason) => eprintln!("ORRERY remains offline: {reason}"),
-                    Ok(true) => {},
+            #[cfg(not(windows))]
+            {
+                let online = backend_online();
+                if matches!(online, Ok(true)) {
+                    let window = app.get_webview_window("main").ok_or("ORRERY main window was not created")?;
+                    navigate(&window, BACKEND_URL)?;
+                } else {
+                    // Offline page keeps retrying every 3 s and auto-navigates to
+                    // the cockpit once the sidecar is up.
+                    match online {
+                        Ok(false) => if let Err(reason) = spawn_backend_sidecar() {
+                            eprintln!("ORRERY remains offline: {reason}");
+                        },
+                        Err(reason) => eprintln!("ORRERY remains offline: {reason}"),
+                        Ok(true) => {},
+                    }
+                    let window = app
+                        .get_webview_window("main")
+                        .ok_or("ORRERY main window was not created")?;
+                    navigate(&window, FALLBACK_URL)?;
                 }
-                let window = app
-                    .get_webview_window("main")
-                    .ok_or("ORRERY main window was not created")?;
-                navigate(&window, FALLBACK_URL)?;
             }
             Ok(())
         })
@@ -896,6 +939,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn reveal_opener_never_opens_a_bundle_or_a_link() {
         let dir = std::env::temp_dir().join(format!("orrery-bundle-{}", std::process::id()));
         let app = dir.join("Report.app");
