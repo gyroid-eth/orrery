@@ -1,0 +1,15 @@
+{
+  "app": {
+    "security": {
+      "capabilities": ["local"]
+    }
+  },
+  "bundle": {
+    "targets": ["nsis"],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

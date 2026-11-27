@@ -7,6 +7,12 @@ const statusText = document.querySelector("#status-text");
 const retrySeconds = document.querySelector("#retry-seconds");
 const retryButton = document.querySelector("#retry-button");
 const hotkeyLabel = document.querySelector("#hotkey-label");
+const windows = /Windows/i.test(navigator.userAgent);
+
+if (windows) {
+  document.querySelector("#backend-instruction").textContent =
+    "ORRERY を入れた WSL2 の環境から cockpit を開きます。";
+}
 
 async function retryBackend() {
   if (checking) {
@@ -24,7 +30,9 @@ async function retryBackend() {
     }
   } catch (error) {
     console.error("backend retry failed", error);
-    statusText.textContent = "接続確認に失敗しました — 再試行を続けます";
+    statusText.textContent = windows
+      ? String(error)
+      : "接続確認に失敗しました — 再試行を続けます";
   } finally {
     checking = false;
     retryButton.disabled = false;
@@ -34,6 +42,9 @@ async function retryBackend() {
 }
 
 retryButton.addEventListener("click", retryBackend);
+if (windows) {
+  retryBackend();
+}
 
 window.__TAURI__.core
   .invoke("active_hotkey")
