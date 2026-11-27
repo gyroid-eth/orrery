@@ -289,6 +289,35 @@ def test_codex_raw_request_and_native_completion_share_one_step_by_id():
         assert step['status'] == 'done'
 
 
+def test_codex_clock_sleep_joins_adjacent_steps_without_a_duplicate_tool_row():
+    call_id = 'clock-sleep-fixture'
+    records = [
+        native('CommandExecution', ident='shell', command=['pytest'], status='completed'),
+        dict(type='response_item', payload=dict(
+            type='function_call', namespace='clock', name='sleep', call_id=call_id,
+            id='fc_fixture', status='completed', arguments='{"duration_ms": 3000}')),
+        native('Extension', ident=call_id, kind='clock.sleep', durationMs=3000),
+        dict(type='response_item', payload=dict(
+            type='function_call_output', call_id=call_id, output='PRIVATE_TOOL_OUTPUT')),
+        native('Extension', ident='search', kind='web.search', query='PRIVATE_QUERY'),
+    ]
+    projected = [project(record, index) for index, record in enumerate(records)]
+    request, completion, output = projected[1:4]
+    assert output is None
+    assert completion['step']['id'] == request['tool_call_id'] == opaque(call_id)
+    assert 'tool_call_id' not in completion  # The extension's item ID supplies the match.
+    events = [event for event in projected if event is not None]
+    result = model(events, 'Codex')
+    [group] = result['groups']
+    assert [step['tool'] for step in group['steps']] == ['Shell', 'sleep', 'web_search']
+    _, sleep, search = group['steps']
+    assert sleep['eventId'] == request['id']
+    assert (sleep['started'], sleep['ended'], sleep['status']) == (1000, 4000, 'observed')
+    assert search['status'] == 'observed'
+    assert set(result['consumed']) == {event['id'] for event in events}
+    assert 'PRIVATE_' not in json.dumps(events)
+
+
 def test_target_summaries_do_not_copy_raw_arguments_or_commands():
     assert summary('Read',dict(file_path='/fixture/a.py',password='SECRET_VALUE')) == 'a.py'
     assert summary('Bash',dict(command='SECRET_VALUE=one curl https://secret.invalid')) == ''

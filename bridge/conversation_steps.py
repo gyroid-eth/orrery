@@ -196,6 +196,8 @@ def codex_completed(raw):
         name, detail = 'view_image', filenames([item.get('path')])
     elif kind in {'WebSearch', 'Extension'} and (kind == 'WebSearch' or item.get('kind') == 'web.search'):
         name = 'web_search'
+    elif kind == 'Extension' and item.get('kind') == 'clock.sleep':
+        name = 'sleep'
     if not name:
         return None
     result = item.get('result')
