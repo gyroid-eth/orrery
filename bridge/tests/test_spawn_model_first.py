@@ -387,12 +387,63 @@ def test_new_agent_explains_unavailable_my_chrome_and_uses_fallback(tour_browser
       const notice=spawnStatus.textContent;
       const disabled=myChrome.disabled;
       spawnCatalog={...spawnCatalog,personal_browser_status:{}};
-      spawnToolsRoute=null;renderSpawnTools();updateSpawnAvailability();
+      renderSpawnTools();updateSpawnAvailability();
       return {fallback,notice,disabled,ready:spawnToolOptions().tools.browser_mode,
               readyNotice:spawnStatus.textContent};
     })()'''.replace('CATALOG', json.dumps(catalog)))
     assert result == {'fallback':fallback, 'disabled':True, 'ready':'personal', 'readyNotice':'',
                       'notice':'My Chrome: Chrome is not running on Windows. Start Google Chrome.'}
+
+
+@pytest.mark.parametrize(('modes', 'fallback'), [
+    (['off','temporary','personal'], 'temporary'),
+    (['off','personal'], 'off'),
+])
+def test_my_chrome_probe_timeout_updates_the_default_but_respects_manual_choice(tour_browser, modes, fallback):
+    _, evaluate = tour_browser
+    catalog = {
+        'browser_modes': {'antigravity': modes},
+        'providers': [{'id': 'gemini', 'program': 'antigravity', 'models': [{'id': 'fixture', 'default': True}]}],
+    }
+    result = evaluate('''(async()=>{
+      let catalog=CATALOG;
+      const unknown={reason:'ORRERY cannot check Windows Chrome from WSL.',unavailable:false};
+      const stopped={reason:'Chrome is not running on Windows.',unavailable:true};
+      const original=window.fetch;
+      const myChrome=spawnBrowserChoices.find(([mode])=>mode==='personal')[1];
+      const off=spawnBrowserChoices.find(([mode])=>mode==='off')[1];
+      const read=()=>({mode:spawnBrowserUse.dataset.browserMode,disabled:myChrome.disabled,
+        launch:!spawnSubmit.disabled,notice:spawnStatus.textContent});
+      const setStatus=status=>{catalog={...catalog,personal_browser_status:status?{antigravity:status}:{}};};
+      const recheck=async status=>{setStatus(status);await loadSpawnCatalog();return read();};
+      window.fetch=(input,options)=>new URL(input,location.href).pathname==='/telemetry/spawn-catalog'
+        ?Promise.resolve(Response.json(catalog)):original(input,options);
+      try{
+        setStatus(unknown);
+        openSpawnModal();
+        await loadSpawnCatalog();
+        spawnTask.value='Fixture task';
+        updateSpawnAvailability();
+        const initial=read(),route=spawnToolsRoute;
+        const ready=await recheck();
+        const timedOut=await recheck(unknown);
+        myChrome.click();
+        const manual=read();
+        const blocked=await recheck(stopped);
+        off.click();
+        const manualOff=await recheck();
+        return {initial,ready,timedOut,manual,blocked,manualOff,sameRoute:route===spawnToolsRoute};
+      }finally{window.fetch=original;closeSpawnModal();}
+    })()'''.replace('CATALOG', json.dumps(catalog)))
+    unknown = {'mode': fallback, 'disabled': False, 'launch': True,
+               'notice': 'My Chrome: ORRERY cannot check Windows Chrome from WSL.'}
+    ready = {'mode': 'personal', 'disabled': False, 'launch': True, 'notice': ''}
+    assert result == {
+        'initial': unknown, 'timedOut': unknown, 'ready': ready, 'manual': {**unknown, 'mode': 'personal'},
+        'blocked': {'mode': 'personal', 'disabled': True, 'launch': False,
+                    'notice': 'My Chrome: Chrome is not running on Windows.'},
+        'manualOff': {**ready, 'mode': 'off'}, 'sameRoute': True,
+    }
 
 
 def test_browser_off_keeps_the_standard_base_on_current_telemetry(tour_browser):
