@@ -41,7 +41,7 @@ EDITOR_EXECUTABLES = {
     'dsh': {'dsh'},
     'hermes': {'hermes'},
 }
-PROMPT = re.compile(r'^(\s*(?:(?:[⌸│☤]|[\w.-]+)\s+)?)([❯›>⌘☤])(?:[ \u00a0]+|$)(.*)')
+PROMPT = re.compile(r'^(\s*(?:(?:[⌸│☤]|[\w.-]+)\s+)?)([❯›»>⌘☤])(?:[ \u00a0]+|$)(.*)')
 BORDER = re.compile(r'^[╭╰]?[─━]{8,}[╮╯]?$')
 CLAUDE_NAMED_BORDER = re.compile(r'^[─━]{8,}[ \t]+\S(?:.*\S)?[ \t]+[─━]+$')
 CLAUDE_SCROLLED_BORDER = re.compile(
@@ -88,7 +88,7 @@ DSH_PASTE_STYLE = re.compile(r'\x1b\[38;5;145m(?=▸ )')
 SLASH_NAME = re.compile(r'/[\w.:-]+')
 SLASH_OPTION = re.compile(r'^[ \t]{2,}' + SLASH_NAME.pattern + r'(?=[ \t]|$)')
 CLAUDE_SLASH_SELECTION = re.compile(r'^[ \t]+❯[ \t]+(' + SLASH_NAME.pattern + r')(?=[ \t]|$)')
-CODEX_SLASH_SELECTION = re.compile(r'^›[ \t]+(' + SLASH_NAME.pattern + r')(?=[ \t]|$)')
+CODEX_SLASH_SELECTION = re.compile(r'^[›»][ \t]+(' + SLASH_NAME.pattern + r')(?=[ \t]|$)')
 SLASH_CONTINUATION = re.compile(r'^[ \t]{8,}[^ \t/❯]')
 REVERSE_VIDEO = re.compile(r'\x1b\[(?:[0-9]+;)*7(?:;[0-9]+)*m')
 CODEX_PICKER_BACKGROUND = re.compile(r'\x1b\[48;2;(?:[0-9]{1,3};){2}[0-9]{1,3}m\Z')
@@ -309,7 +309,7 @@ def _slash_selection(lines, plain, start, *, codex):
         row = plain[index]
         match = selection.match(row)
         if match:
-            highlight = lines[index].partition('›')[0]
+            highlight = lines[index][:lines[index].index(match[0][0])]
             # Codex can draw the active row with an RGB background instead
             # of reverse video. In both cases the style precedes its marker.
             if not codex or REVERSE_VIDEO.search(highlight) or CODEX_PICKER_BACKGROUND.search(highlight):
@@ -578,7 +578,7 @@ def frame(metadata, lines, pane):
             body.pop(0)
             scrolled = True
             more_below = column < _row_width(plain[cursor])
-        if glyph == '›':
+        if glyph in ('›', '»'):
             top_arrow = CODEX_SCROLL_ARROW.search(lines[start])
             last_arrow = CODEX_SCROLL_ARROW.search(lines[cursor])
             if top_arrow:
@@ -626,15 +626,15 @@ def frame(metadata, lines, pane):
                           or bool(CLAUDE_SUGGESTION.match(styled.partition('❯')[2]))))
             hermes_hint = hermes and (not hermes_busy or HERMES_HINT.fullmatch(draft)) and (
                 _hermes_compact_hint(styled, draft) if compact_hermes else '\x1b[3m' in styled)
-            if (glyph=='›' and draft=='Ask Codex to do anything' and '\x1b[2m' in styled
+            if (glyph in ('›', '»') and draft=='Ask Codex to do anything' and '\x1b[2m' in styled
                     or claude_hint or hermes_hint
                     or agy and draft in AGY_PLACEHOLDER):
                 draft=''
         # A caret at the beginning of a multiline draft isn't an empty editor.
         # Check the lower edge or a recognized footer before accepting it.
-        codex_queue_hint = glyph == '›' and bool(tail and tail[0].startswith(CODEX_QUEUE_HINT))
+        codex_queue_hint = glyph in ('›', '»') and bool(tail and tail[0].startswith(CODEX_QUEUE_HINT))
         footer=tail and (codex_queue_hint or tail[0].startswith(('? for shortcuts','← for agents','⏵','⏸')))
-        if glyph == '›' and tail and not footer:
+        if glyph in ('›', '»') and tail and not footer:
             footer = (any(CODEX_CONTEXT_FOOTER.fullmatch(part.strip()) for part in tail[0].split('·'))
                       or tail[0].startswith('% context left')
                       or (len(tail) > 1 and tail[1].startswith(('← for agents', '? for shortcuts'))))
@@ -646,11 +646,11 @@ def frame(metadata, lines, pane):
         if not draft and tail and not (lower or footer or waiting):
             return replace(unavailable, slash_view=slash_view)
         menu=(start>=2 and upper and bool(re.match(r'^[ \t]+❯[ \t]+\S',plain[start-2])))
-        if glyph=='›':
+        if glyph in ('›', '»'):
             previous_row=next((row.strip().lower() for row in reversed(above) if row.strip()), '')
             menu=previous_row.startswith(('enter/tab insert · esc close','enter insert · esc close'))
         editor = ('dsh' if boxed else 'hermes' if hermes else 'agy' if agy else
-                  'codex' if glyph == '›' else 'claude' if upper or command=='claude' else None)
+                  'codex' if glyph in ('›', '»') else 'claude' if upper or command=='claude' else None)
         sized_paste = None
         dsh_paste = None
         if editor == 'codex' and CODEX_PASTE_STYLE.search(lines[start]):
