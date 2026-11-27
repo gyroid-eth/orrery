@@ -533,7 +533,7 @@ function paintRow(row,assignment){
   }
   const title=action+'. '+state;
   if(row.request.title!==title)row.request.title=title;
-  const parties=routePeople(request.sender,targets);
+  const parties=routePeople(request.sender,targets,true);
   const senderLine='<span class="mail-requester">'+parties+timeHtml(request.ts)+'</span>';
   const delivery=timeline?'<span class="mail-timeline-start">'+senderLine+
     (request.excerpt?'<span class="thread-excerpt">'+E(request.excerpt)+'</span>':'')+'</span>':senderLine;
@@ -547,7 +547,7 @@ function paintRow(row,assignment){
   const inferred=assignment.inferred.includes(latest);
   row.reply.title=inferred?'Open possible reply':'Open reply';
   row.reply.firstElementChild.setAttribute('aria-label',row.reply.title+': '+titleFor(latest));
-  const replyHtml=routePeople(latest.sender,latest.recipients)+timeHtml(latest.ts)+
+  const replyHtml=routePeople(latest.sender,latest.recipients,true)+timeHtml(latest.ts)+
     '<span class="mail-reply-excerpt">'+replyExcerpt(latest,inferred)+'</span>';
   paintPeerMarkup(row.reply,replyHtml);
 }
@@ -568,7 +568,7 @@ function paintTimelineReplies(row){
     });
   }
   const inferred=new Set(row.assignment.inferred);
-  const markup=entries.map(message=>replyHtml(message,inferred.has(message))).join('');
+  const markup=entries.map(message=>replyHtml(message,inferred.has(message),true)).join('');
   const focused=row.history.contains(document.activeElement)?document.activeElement.closest('[data-reply]')?.dataset.reply:null;
   if(!paintPeerMarkup(row.history,markup))return;
   for(const item of row.history.children){
@@ -670,13 +670,18 @@ function peerHtml(name,fallback,title=''){
     '<span class="mail-peer-avatar" aria-hidden="true" data-mail-peer="'+label+'"></span>'+
     '<span>'+label+'</span></button>';
 }
-function routePeople(sender,recipients){
-  const destinations=recipients.map(({name,kind})=>peerHtml(name,'No direct recipient',kind==='to'?'':kind.toUpperCase()));
-  return '<span class="mail-route">'+peerHtml(sender,'Unknown sender')+icon('arrow')+
+function routePeople(sender,recipients,compact=false){
+  const shown=compact?recipients.slice(0,1):recipients;
+  const destinations=shown.map(({name,kind})=>peerHtml(name,'No direct recipient',kind==='to'?'':kind.toUpperCase()));
+  if(compact&&recipients.length>1){
+    const title='Other recipients: '+recipients.slice(1).map(({name})=>name).join(', ');
+    destinations.push('<span class="mail-route-more" role="img" title="'+E(title)+'" aria-label="'+E(title)+'">+'+(recipients.length-1)+'</span>');
+  }
+  return '<span class="mail-route'+(compact?' mail-route-compact':'')+'">'+peerHtml(sender,'Unknown sender')+icon('arrow')+
     '<span class="mail-route-recipients">'+(destinations.join(' ')||peerHtml('','No direct recipient'))+'</span></span>';
 }
-function routeHtml(message){
-  return '<div class="drawer-route">'+routePeople(message.sender,message.recipients)+timeHtml(message.ts)+'</div>';
+function routeHtml(message,compact=false){
+  return '<div class="drawer-route">'+routePeople(message.sender,message.recipients,compact)+timeHtml(message.ts)+'</div>';
 }
 function mailRowAction(label=''){
   return '<button class="mail-row-open" type="button" aria-haspopup="dialog" aria-label="'+E(label)+'"></button>';
@@ -703,9 +708,9 @@ function renderDrawerBody(message){
     }
   },()=>{if(paintedBody===item)paintedBody=null;});
 }
-function replyHtml(message,inferred=false){
+function replyHtml(message,inferred=false,compact=false){
   return '<div class="thread-item" data-reply="'+E(message.key)+'">'+mailRowAction('Open message: '+titleFor(message))+
-    routeHtml(message)+'<span class="thread-excerpt">'+replyExcerpt(message,inferred)+'</span></div>';
+    routeHtml(message,compact)+'<span class="thread-excerpt">'+replyExcerpt(message,inferred)+'</span></div>';
 }
 function replyExcerpt(message,inferred){
   const mark=inferred?linkMark('Possible reply (linked by delivery direction)','reverse')+' ':'';
