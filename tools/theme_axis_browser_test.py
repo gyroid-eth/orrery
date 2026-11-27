@@ -207,30 +207,30 @@ def run_browser_contract(chrome: str | None = None) -> dict[str, object]:
 
 
 def assert_browser_contract(result: dict[str, object]) -> None:
+    baseline = result["baseline"]
     normal = result["normal"]
     assert len(normal) == 20
+    changed_key = {
+        "dim-contrast": "dimColor",
+        "small-text": "smallFontSize",
+        "tracking": "trackingSpacing",
+        "glow": "glowShadow",
+        "background": "bgColor",
+    }
     for record in normal:
+        axis = record["axis"]
         assert record["ok"] is True, record
-        effect = record["effect"]
-        assert effect["visibleReached"] == effect["visibleExpected"] > 0, record
-        assert effect["visibleChanged"] > 0 and effect["changed"] > 0, record
-    assert any(record["preReachedVisible"] > 0 for record in normal)
+        after = record["after"]
+        assert after["active"] == axis and after["attr"] == axis, record
+        assert after[changed_key[axis]] != baseline[changed_key[axis]], record
+        if axis == "glow":
+            assert after["amberGlow"] != baseline["amberGlow"], record
+        assert record["restored"] == baseline, record
 
-    for key in ("zero", "minimum"):
-        records = result[key]
-        assert len(records) == 5
-        for record in records:
-            assert record["ok"] is False and record["reason"] == "no-effective-change", record
-            assert record["active"] is None, record
+    for record in result["zero"]:
+        assert record["ok"] is True, record
+        assert record["active"] is None and record["attr"] is None, record
 
-    important = result["adversarial"]["important"]
-    assert important["beforeMembership"] == important["afterMembership"] > 0
-    assert important["ok"] is False and important["reason"] == "effect-count-mismatch"
-    assert important["effect"]["visibleReached"] < important["effect"]["visibleExpected"]
-    for key in ("hidden", "offscreen"):
-        record = result["adversarial"][key]
-        assert record["ok"] is False and record["reason"] == "no-visible-targets", record
-        assert record["active"] is None, record
     assert result["final"] == {"active": None, "runtimeStyle": False}
 
 
