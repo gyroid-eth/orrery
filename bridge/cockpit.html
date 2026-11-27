@@ -10220,9 +10220,9 @@ const conversationView=(()=>{
   function defaultView(){
     try{
       const value=localStorage.getItem(defaultViewKey);
-      return value==='reader'||value==='reader-full'?value:'terminal';
+      return value==='reader'||value==='terminal'?value:'reader-full';
     }
-    catch(_){return 'terminal';}
+    catch(_){return 'reader-full';}
   }
   function syncDefaultView(){defaultViewSetting.value=defaultView();}
   function applyTextSize(value){
