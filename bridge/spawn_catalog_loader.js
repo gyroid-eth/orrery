@@ -4,20 +4,20 @@
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.SpawnCatalogLoader=api;
 })(typeof globalThis!=='undefined'?globalThis:this,()=>({
-  create({fetchCatalog,onState,isOpen,delays=[1000,3000,8000],pollDelay=30000,setTimer=setTimeout,clearTimer=clearTimeout}){
+  create({fetchCatalog,onState,isOpen,delays=[1000,3000,8000],pollDelay=30000,probeDelay=5000,setTimer=setTimeout,clearTimer=clearTimeout}){
     let good=null,pending=null,timer=null,controller=null,epoch=0,failures=0;
     const clear=()=>{if(timer!==null){clearTimer(timer);timer=null;}};
     const publish=status=>onState({catalog:good,status});
-    const scheduleRetry=()=>{timer=setTimer(()=>{timer=null;return refresh();},delays[failures-1]??pollDelay);};
+    const scheduleRetry=delay=>{timer=setTimer(()=>{timer=null;return refresh();},delay??delays[failures-1]??pollDelay);};
     function refresh(){
       if(pending)return pending;
       clear();
       const run=++epoch;controller=new AbortController();
       const signal=controller.signal;
       pending=Promise.resolve().then(async()=>{
-        let catalog,stale;
+        let catalog,stale,checking;
         try{
-          ({catalog,stale}=await fetchCatalog(signal));
+          ({catalog,stale,checking}=await fetchCatalog(signal));
           if(!catalog||catalog.ok===false||!Array.isArray(catalog.providers))throw Error('bad catalog');
         }catch(_){
           if(run!==epoch)return;
@@ -31,10 +31,10 @@
         }
         if(run!==epoch)return;
         good=catalog;
-        if(stale){
+        if(stale||checking){
           failures++;
           publish('stale');
-          if(isOpen())scheduleRetry();
+          if(isOpen())scheduleRetry(checking?probeDelay:undefined);
         }else{
           failures=0;publish('ready');
         }

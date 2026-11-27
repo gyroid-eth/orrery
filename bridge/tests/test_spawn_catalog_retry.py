@@ -244,6 +244,130 @@ def test_failed_refresh_keeps_the_last_snapshot_and_missing_route_clears_it(monk
     asyncio.run(run())
 
 
+CUA_TIMEOUT = "Windows Cua Driver did not answer. Check that its daemon is running."
+CHROME_TIMEOUT = "ORRERY cannot check Windows Chrome from WSL. Check Windows interop."
+DRIVER_MISSING = "Windows Cua Driver executable was not found or is not executable."
+
+
+def wsl_catalog(computer_reason=None, chrome_reason=None):
+    return {
+        "providers": [{"id": "claude", "program": "claude-code", "models": ["fixture"]}],
+        "computer_use_transport": "orrery-screen",
+        "computer_use": computer_reason is None,
+        "computer_modes": ["off"] if computer_reason else ["off", "view", "control"],
+        "browser_modes": {"claude-code": ["off", "temporary", "personal"]},
+        **({"computer_use_reason": computer_reason} if computer_reason else {}),
+        **({"personal_browser_status": {"claude-code": {"reason": chrome_reason, "unavailable": False}}}
+           if chrome_reason else {}),
+    }
+
+
+def test_wsl_probe_timeouts_back_off_and_retain_the_last_verified_result_per_tool(monkeypatch):
+    async def run():
+        now = 0
+        replies = iter([
+            wsl_catalog(CUA_TIMEOUT, CHROME_TIMEOUT),   # warmup before Windows answers
+            wsl_catalog(chrome_reason=CHROME_TIMEOUT),  # Cua Driver recovers first
+            wsl_catalog(CUA_TIMEOUT),                   # Chrome recovers while Cua Driver times out again
+            wsl_catalog(CUA_TIMEOUT, CHROME_TIMEOUT),   # both use the last confirmed results
+            wsl_catalog(DRIVER_MISSING),                # a confirmed failure replaces the old result
+        ])
+        fetches = 0
+
+        async def fetch(*_):
+            nonlocal fetches
+            fetches += 1
+            return json.dumps(next(replies)).encode(), 200, "application/json"
+
+        monkeypatch.setattr(ob, "fetch_proxied", fetch)
+        cache = ob.SpawnCatalogCache(None, "unused", clock=lambda: now)
+        app = web.Application()
+        app[ob.HTTP_SESSION_KEY] = None
+        app[ob.SPAWN_CATALOG_KEY] = cache
+        app.router.add_get(ob.SPAWN_CATALOG_ROUTE, ob.proxy_dashboard)
+        async with TestClient(TestServer(app)) as client:
+            async def read():
+                async with client.get(ob.SPAWN_CATALOG_ROUTE) as response:
+                    assert response.status == 200
+                    return await response.json(), response.headers.get("X-Orrery-Catalog-State")
+
+            try:
+                await cache.refresh()
+                assert await read() == (wsl_catalog(CUA_TIMEOUT, CHROME_TIMEOUT), "checking")
+                now += cache.RETRY_SECONDS - 1
+                assert await read() == (wsl_catalog(CUA_TIMEOUT, CHROME_TIMEOUT), "checking")
+                assert fetches == 1
+                for expected, state in [
+                    (wsl_catalog(chrome_reason=CHROME_TIMEOUT), "checking"),
+                    (wsl_catalog(), "checking"),
+                    (wsl_catalog(), "checking"),
+                    (wsl_catalog(DRIVER_MISSING), None),
+                ]:
+                    now += cache.RETRY_SECONDS
+                    await read()  # The next request starts a shared background refresh.
+                    if cache._pending:
+                        await cache._pending
+                    assert await read() == (expected, state)
+                assert now < cache.FRESH_SECONDS
+                assert fetches == 5
+                assert await read() == (wsl_catalog(DRIVER_MISSING), None)
+            finally:
+                await cache.close()
+
+    asyncio.run(run())
+
+
+def test_open_cockpit_recovers_computer_use_and_keeps_the_draft(tour_browser):
+    _, evaluate = tour_browser
+    catalog = wsl_catalog(CUA_TIMEOUT, CHROME_TIMEOUT)
+    catalog["providers"][0]["models"] = [{"id": "fixture", "default": True}, {"id": "chosen"}]
+    recovered = wsl_catalog()
+    recovered["providers"] = catalog["providers"]
+    result = evaluate('''(async()=>{
+      const original=window.fetch;let ready=false,calls=0;
+      window.fetch=(url,options)=>{
+        if(url==='/telemetry/spawn-catalog'){
+          calls++;
+          return Promise.resolve(Response.json(ready?READY:TIMEOUT,
+            {headers:ready?{}:{'X-Orrery-Catalog-State':'checking'}}));
+        }
+        if(String(url).startsWith('/telemetry/fs/dirs'))
+          return Promise.resolve(Response.json({path:'/workspace',dirs:[]}));
+        return original(url,options);
+      };
+      try{
+        openSpawnModal();await loadSpawnCatalog();
+        const initial={disabled:spawnComputerUse.getAttribute('aria-disabled'),
+          notice:spawnStatus.textContent,visible:!spawnStatus.hidden};
+        spawnModelButton.click();
+        modelChoices.querySelector('input[value=chosen]').click();
+        spawnTask.value='Keep my instruction';
+        spawnTask.dispatchEvent(new Event('input'));
+        spawnBrowserUse.click();
+        spawnBrowserChoices.find(([mode])=>mode==='off')[1].click();
+        ready=true;
+        const deadline=performance.now()+7500;
+        while(spawnComputerUse.getAttribute('aria-disabled')!=='false'){
+          if(performance.now()>deadline)throw Error('Computer use did not recover');
+          await new Promise(resolve=>setTimeout(resolve,25));
+        }
+        spawnComputerUse.click();
+        const choices=spawnComputerChoices.filter(([,button])=>!button.hidden).map(([mode])=>mode);
+        const computerDefault=spawnComputerUse.dataset.computerMode;
+        spawnComputerChoices.find(([mode])=>mode==='view')[1].click();
+        return {initial,calls,choices,computerDefault,model:selModel,task:spawnTask.value,
+          tools:spawnToolOptions().tools,notice:spawnStatus.textContent};
+      }finally{closeSpawnModal();window.fetch=original;}
+    })()'''.replace('READY', json.dumps(recovered)).replace('TIMEOUT', json.dumps(catalog)))
+    assert result == {
+        "initial": {"disabled": "true", "visible": True,
+                    "notice": f"Computer use: {CUA_TIMEOUT} My Chrome: {CHROME_TIMEOUT}"},
+        "calls": 2, "choices": ["off", "view", "control"], "computerDefault": "off",
+        "model": "chosen", "task": "Keep my instruction", "notice": "",
+        "tools": {"screen": {"server": "orrery-screen", "access": "read"}, "browser_mode": "off"},
+    }
+
+
 def test_open_dialog_automatically_recovers_and_keeps_a_stale_selection(tour_browser):
     _,evaluate=tour_browser
     result=evaluate('''(async()=>{

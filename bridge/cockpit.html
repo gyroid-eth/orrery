@@ -8307,7 +8307,8 @@ const spawnCatalogLoader=SpawnCatalogLoader.create({
   fetchCatalog:async signal=>{
     const r=await fetch('/telemetry/spawn-catalog',{signal,cache:'no-store'});
     if(!r.ok)throw new Error('catalog unavailable');
-    return {catalog:await r.json(),stale:r.headers?.get('X-Orrery-Catalog-State')==='stale'};
+    const state=r.headers?.get('X-Orrery-Catalog-State');
+    return {catalog:await r.json(),stale:state==='stale',checking:state==='checking'};
   },
   onState:({catalog,status})=>{
     const data=catalog||{providers:[],dirs:[],naming:{adjectives:[],scientists:[],taken:[]}};
@@ -8454,39 +8455,40 @@ function selectedSpawnModel(){const p=providerById(selProvider);return p&&(p.mod
 function spawnUsesManagedScreen(){
   return spawnCatalog?.computer_use_transport==='orrery-screen';
 }
+function spawnComputerReason(){
+  return spawnUsesManagedScreen()&&spawnCatalog.computer_use!==true?
+    spawnCatalog.computer_use_reason||'Unavailable.':'';
+}
 function spawnComputerModes(){
   const modes=spawnCatalog?.computer_modes;
   return spawnCatalog?.runtime_mode!=='fresh'&&Array.isArray(modes)?
     Object.keys(spawnComputerLabels).filter(mode=>modes.includes(mode)):null;
 }
 function paintSpawnComputer(modes){
+  const reason=spawnComputerReason();
   if(!modes){
     if(spawnComputerMenu.matches(':popover-open'))spawnComputerMenu.hidePopover();
     delete spawnComputerUse.dataset.computerMode;
-    const managedScreen=spawnUsesManagedScreen();
-    const disabled=managedScreen&&spawnCatalog.computer_use!==true;
-    const reason=disabled&&(spawnCatalog.computer_use_reason||'Computer use is unavailable.');
-    if(disabled)spawnComputerMode='off';
     spawnComputerUse.setAttribute('role','switch');
-    spawnComputerUse.setAttribute('aria-checked',String(spawnComputerMode==='control'));
+    spawnComputerUse.setAttribute('aria-checked',String(!reason&&spawnComputerMode==='control'));
     for(const attr of ['aria-expanded','aria-controls','aria-disabled'])spawnComputerUse.removeAttribute(attr);
-    if(disabled)spawnComputerUse.setAttribute('aria-disabled','true');
+    if(reason)spawnComputerUse.setAttribute('aria-disabled','true');
     spawnComputerUse.setAttribute('aria-label',reason?'Computer use: '+reason:'Computer use');
-    spawnComputerUse.title=reason||(managedScreen?'Computer use on Windows':'Computer use');
+    spawnComputerUse.title=reason||(spawnUsesManagedScreen()?'Computer use on Windows':'Computer use');
     return;
   }
-  const reason=spawnUsesManagedScreen()&&spawnCatalog.computer_use!==true?spawnCatalog.computer_use_reason:'';
-  if(!modes.includes(spawnComputerMode))spawnComputerMode='off';
-  spawnComputerUse.dataset.computerMode=spawnComputerMode;
+  const mode=!reason&&modes.includes(spawnComputerMode)?spawnComputerMode:'off';
+  if((reason||!modes.length)&&spawnComputerMenu.matches(':popover-open'))spawnComputerMenu.hidePopover();
+  spawnComputerUse.dataset.computerMode=mode;
   spawnComputerUse.removeAttribute('role');spawnComputerUse.removeAttribute('aria-checked');
   spawnComputerUse.setAttribute('aria-controls',spawnComputerMenu.id);
   spawnComputerUse.setAttribute('aria-expanded',String(spawnComputerMenu.matches(':popover-open')));
   spawnComputerUse.setAttribute('aria-disabled',String(!modes.length||Boolean(reason)));
-  spawnComputerUse.title=reason||'Computer use: '+(modes.length?spawnComputerLabels[spawnComputerMode]:'Unavailable');
+  spawnComputerUse.title=reason||'Computer use: '+(modes.length?spawnComputerLabels[mode]:'Unavailable');
   spawnComputerUse.setAttribute('aria-label',spawnComputerUse.title);
-  for(const [mode,button] of spawnComputerChoices){
-    button.hidden=!modes.includes(mode);
-    button.setAttribute('aria-pressed',String(mode===spawnComputerMode));
+  for(const [choice,button] of spawnComputerChoices){
+    button.hidden=!modes.includes(choice);
+    button.setAttribute('aria-pressed',String(choice===mode));
   }
 }
 function spawnBrowserKey(){
@@ -8577,7 +8579,7 @@ function spawnToolOptions(){
   let screen={};
   if(!computerModes&&managedScreen&&computer&&spawnCatalog.computer_use===true){
     screen={screen:{server:'orrery-screen',access:'operate'}};
-  }else if(computerModes?.includes(spawnComputerMode)&&spawnComputerMode!=='off'){
+  }else if(!spawnComputerReason()&&computerModes?.includes(spawnComputerMode)&&spawnComputerMode!=='off'){
     screen={screen:{...(managedScreen?{server:'orrery-screen'}:{}),access:spawnComputerMode==='view'?'read':'operate'}};
   }
   if(modes||selProvider==='gemini')return {tools:{...screen,...(computer&&!managedScreen?{mcp:['cua-driver']}:{}),
@@ -8691,7 +8693,9 @@ function updateSpawnAvailability(){
   const personal=spawnBrowserModes()?.includes('personal')?spawnPersonalBrowserStatus():null;
   const browserNotice=spawnTools.hidden?'':personal?.reason?('My Chrome: '+personal.reason):
     SpawnPicker.harnessKey(selHarness)==='codex'&&spawnBrowserUse.getAttribute('aria-checked')==='true'?CODEX_BROWSER_REQUIREMENT:'';
-  const message=spawnProblem||issue||browserNotice;
+  const computerReason=!spawnTools.hidden&&!spawnComputerUse.hidden&&spawnComputerReason();
+  const computerNotice=computerReason?'Computer use: '+computerReason:'';
+  const message=spawnProblem||issue||[computerNotice,browserNotice].filter(Boolean).join(' ');
   const busy=spawnFormIsBusy();
   if(busy)spawnForm.setAttribute('aria-busy','true');
   else spawnForm.removeAttribute('aria-busy');
