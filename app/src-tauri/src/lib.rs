@@ -428,6 +428,8 @@ fn pane_window_url(origin: &Url, session: &str) -> Result<Url, String> {
 
 // Builds a cockpit window, or brings back the one already open under the
 // label. `closed` is sent to the main window when it goes away.
+// Keep the commands that call this builder asynchronous. On Windows, creating
+// a WebView2 window from a synchronous Tauri command can deadlock.
 #[allow(clippy::too_many_arguments)]
 fn open_cockpit_window(
     app: &AppHandle,
@@ -468,7 +470,7 @@ fn open_cockpit_window(
 }
 
 #[tauri::command]
-fn open_pane_window(
+async fn open_pane_window(
     app: AppHandle,
     window: WebviewWindow,
     session: String,
@@ -538,7 +540,7 @@ fn tour_window_url(origin: &Url, tour: &str) -> Result<Url, String> {
 }
 
 #[tauri::command]
-fn open_tour_window(
+async fn open_tour_window(
     app: AppHandle,
     window: WebviewWindow,
     tour: String,
