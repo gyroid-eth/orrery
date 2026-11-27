@@ -20,6 +20,14 @@ When one agent sends Mail to another, a light travels from sender to recipient i
 
 See [Read incoming ORRERY Mail](docs/en/read-mail.md) and [See agent details in the Mini Graph](docs/en/inspect-mini-graph.md).
 
+### Send one instruction to several agents
+
+Use **Select** and **Message** in the **Agents** list, or type `@` in the composer to find and add recipients by the start of a name or role, with reasons shown for unavailable suggestions. You can mix Claude Code, Codex, Gemini (Antigravity), dsh, and Hermes and send the same instruction to all of them with a single send. With **Visible recipients**, each agent sees the other recipients’ names and can coordinate with them through ORRERY Mail (choose **Hidden recipients** to keep those names private).
+
+![Use the Agents list and @ in the composer to choose recipients, then send the same instruction to everyone](docs/images/guides/multi-send.gif)
+
+See [Send one instruction to several agents](docs/en/manage-agents.md#send-to-several-agents).
+
 ### Follow an agent’s work in Reader
 
 In a terminal, agent messages, tool calls, and long outputs scroll past together. Reader separates messages, operations, and results and folds long output so you can follow the work. You can also view tables, diffs, and files the agent worked with right there.
@@ -46,7 +54,7 @@ See [Use ORRERY on a phone](docs/en/mobile.md).
 
 ### See which agents need a decision from you
 
-Agents waiting for approval or an answer are marked, and **need you** at the top of the screen shows how many are waiting. You can select several agents to send them the same request at once or exit them together.
+Agents waiting for approval or an answer are marked, and **need you** at the top of the screen shows how many are waiting. You can also select several agents and exit them together.
 
 ![Check the need you count and select several agents](docs/images/guides/select-agents.gif)
 

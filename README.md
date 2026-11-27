@@ -20,6 +20,14 @@ agent が別の agent に Mail を送ると、右の Mini Graph で送り手か�
 
 詳しくは [届いた ORRERY Mail を読む](docs/read-mail.md) と [Mini Graph で agent の詳細を見る](docs/inspect-mini-graph.md)。
 
+### 複数の agent に同じ指示を一度に送る
+
+左の **Agents** で **Select** から複数の agent を選んで **Message** を押すか、入力欄の `@` で名前や役割の先頭から探して宛先を一人ずつ追加できます（送れない候補には理由が出ます）。Claude Code・Codex・Gemini（Antigravity）・dsh・Hermes を混ぜて、同じ操作で 1 つの指示を全員に送れます。**Visible recipients** で送ると各 agent にほかの宛先名が届き、agent どうしで ORRERY Mail を使って連絡を取り合えます（宛先名を伏せる場合は **Hidden recipients**）。
+
+![Agents の選択モードと入力欄の @ から宛先を選び、同じ指示をまとめて送る](docs/images/guides/multi-send.gif)
+
+詳しくは [複数の agent に同じ指示を送る](docs/manage-agents.md#send-to-several-agents)。
+
 ### agent の作業を読みやすく見る
 
 terminal には、agent の発言・ツールの呼び出し・長い出力が一度に流れてきます。Reader は、そこから発言と操作と結果を取り出し、長い出力を折りたたんで、人が追える形に整えます。表や差分、agent が触ったファイルも、その場で開けます。
@@ -46,7 +54,7 @@ agent ごとに、画面操作（computer use）とブラウザ操作を、作�
 
 ### あなたの判断を待つ agent が分かる
 
-承認や返事を待っている agent には印が付き、画面上部の need you に数が出ます。何体かをまとめて選び、同じ依頼を一度に送ったり、まとめて終わらせたりもできます。
+承認や返事を待っている agent には印が付き、画面上部の need you に数が出ます。何体かをまとめて選んで終了することもできます。
 
 ![need you の数を見て、agent をまとめて選ぶ](docs/images/guides/select-agents.gif)
 
