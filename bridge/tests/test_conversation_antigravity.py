@@ -53,6 +53,43 @@ def page(row, **kwargs):
         return reader.read_page(**kwargs)
 
 
+def test_launch_request_replaces_the_trigger_and_keeps_its_cursor(log):
+    path, row = log
+    trigger = "Begin the ORRERY task 123456abcdef"
+    body = "最初の依頼です。\n\nThe second paragraph.\n"
+    metadata = "\n<ADDITIONAL_METADATA>HIDDEN_TIME</ADDITIONAL_METADATA>"
+    path.write_bytes(line(step(0, "USER_INPUT", "USER_EXPLICIT",
+                               f"<USER_REQUEST>\n{trigger}\n</USER_REQUEST>" + metadata)))
+    pending = page(row)
+    assert pending["events"] == []
+    with path.open("ab") as stream:
+        stream.write(line(step(1, "USER_INPUT", "SYSTEM_SDK",
+                               f"<USER_REQUEST>\n{body}\n</USER_REQUEST>" + metadata)))
+        stream.write(line(step(2, "PLANNER_RESPONSE", "MODEL", "Fixture reply.")))
+
+    first = page(row, after=pending["after"], limit=1)
+    request, = first["events"]
+    assert request["text"] == body and request["role"] == "user"
+    assert request["id"] == "0:0:0" and not first["has_older"]
+    newest = page(row, limit=1)
+    assert [event["text"] for event in page(row, before=newest["before"])["events"]] == [body]
+    assert [event["text"] for event in page(row, after=first["after"])["events"]] == ["Fixture reply."]
+
+
+@pytest.mark.parametrize("trigger,first,other_kind,other_source", [
+    ("Begin the ORRERY task 123456abcdef, then explain the output.", 0, "USER_INPUT", "SYSTEM_SDK"),
+    ("Begin the ORRERY task 123456abcdef", 0, "USER_INPUT", "SYSTEM"),
+    ("Begin the ORRERY task 123456abcdef", 0, "PLANNER_RESPONSE", "MODEL"),
+    ("Begin the ORRERY task 123456abcdef", 2, "USER_INPUT", "SYSTEM_SDK"),
+])
+def test_launch_projection_preserves_ordinary_user_prompts(log, trigger, first, other_kind, other_source):
+    path, row = log
+    path.write_bytes(line(step(first, "USER_INPUT", "USER_EXPLICIT",
+                               f"<USER_REQUEST>\n{trigger}\n</USER_REQUEST>")) +
+                     line(step(first + 1, other_kind, other_source, "Unrelated provider record.")))
+    assert [event["text"] for event in page(row)["events"] if event["role"] == "user"] == [trigger]
+
+
 @pytest.mark.parametrize("server,expected", [
     ("orrery-mail", True), ("agentstack", True), ("unrelated", False), ("orrery_mail", False),
 ])
