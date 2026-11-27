@@ -29,6 +29,34 @@ def native_frame(snapshot):
     return submission.frame(native_meta(snapshot), snapshot['lines'], '%1')
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize('capture,harness', [
+    ('claude', 'claude'), ('codex', 'codex'), ('codex-mac', 'codex'),
+    ('dsh', 'dsh'), ('hermes', 'hermes'), ('agy', 'agy'),
+])
+async def test_real_url_drafts_survive_control_mode_capture(capture, harness):
+    # Native capture-pane output before Enter. Codex was captured on Mac and WSL,
+    # Claude and agy on WSL, and dsh and Hermes in isolated Mac terminals.
+    path = Path(__file__).parent / 'fixtures/pane_url_harnesses.json'
+    snapshot = json.loads(path.read_text(encoding='utf-8'))[capture]
+    text = 'https://example.com'
+    assert submission.ready(native_frame(snapshot), text, operator=True)
+
+    bridge = control.TmuxControlBridge(control.ControlConfig('127.0.0.1', 0, 'Fixture', 'tmux'))
+    reply = asyncio.get_running_loop().create_future()
+    bridge._pending_blocks.append(reply)
+    bridge._bounded_blocks[reply] = 262144
+    bridge._handle_line(b'\x1bP1000p%begin 1710000000 1 0')
+    for line in snapshot['lines']:
+        bridge._handle_line(line.encode('utf-8'))
+    bridge._handle_line(b'%end 1710000000 1 0')
+    output = await reply
+    assert output.ok and not output.overflow
+    view = submission.frame(native_meta(snapshot), output.lines, '%1')
+    assert view.editor == harness
+    assert submission.ready(view, text, operator=True)
+
+
 NATIVE_CASES = [pytest.param(harness, case, id=f'{harness}-{case["case"]}')
                 for harness, fixture in NATIVE_PROMPTS.items() for case in fixture['cases']]
 
