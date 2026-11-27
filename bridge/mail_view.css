@@ -100,7 +100,7 @@
 .mail-requester time {margin-left:auto}
 .mailview-host time {flex:none;color:var(--ink-dim);font-size:calc(var(--right-text-size,12px) * 11 / 12);white-space:nowrap}
 .mail-reply {
-  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 5px;
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 5px;align-items:center;
   width:calc(100% - 17px);margin-left:17px;
 }
 .mail-route,.mail-route-recipients,.mail-peer {display:flex;align-items:center;min-width:0}
@@ -111,6 +111,13 @@
 .mail-route > .mail-peer {flex:none;max-width:min(calc(100% - 18px),max(50%,6.5em))}
 .mail-peer > :last-child {white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mail-route > .mail-icon {width:13px;height:13px;color:var(--ink-dim)}
+.mail-route-compact {
+  display:grid;grid-template-columns:minmax(0,max-content) max-content minmax(0,max-content);
+}
+.mail-route-compact > .mail-peer {max-width:none}
+.mail-route-compact .mail-route-recipients {flex-wrap:nowrap;gap:5px}
+.mail-route-more {position:relative;z-index:2;flex:none;white-space:nowrap}
+:is(.mail-requester,.drawer-route) > .mail-route-compact {flex:1 1 auto}
 .mail-peer-avatar,.mail-peer-avatar .conversation-avatar.medal {flex:none;width:16px;height:16px}
 .mail-peer-avatar:empty {border:1px solid var(--hair);border-radius:50%;background:var(--panel-2)}
 .mail-peer-avatar .conversation-avatar.medal {display:block}
@@ -143,6 +150,7 @@
 .drawer-link-source {display:flex;margin-right:auto;padding:0 5px;color:var(--ink-dim)}
 .drawer-scroll {flex:1;min-height:0;overflow-y:auto;padding:0 17px 22px}
 .drawer-route {display:flex;align-items:flex-start;gap:5px;overflow-wrap:anywhere}
+.drawer-route:has(> .mail-route-compact) {align-items:center}
 .drawer-route time {margin-left:auto}
 .maildrawer h2 {margin:10px 0;font-size:calc(var(--right-text-size,12px) * 13 / 12);line-height:1.35;overflow-wrap:anywhere}
 .mail-md{min-width:0;overflow-wrap:anywhere}

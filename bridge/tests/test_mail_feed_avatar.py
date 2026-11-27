@@ -269,7 +269,8 @@ def test_route_portraits_follow_the_roster_in_both_views_and_detail(cockpit):
     assert js("portraits('.mail-timeline-replies')") == reply
     assert js("""[...document.querySelectorAll('.mail-route')].every(
       route=>route.scrollWidth<=route.clientWidth+1)""")
-    assert js("portraits('.mail-timeline-start').find(peer=>peer[0]==='ExternalNode')") == ['ExternalNode', None]
+    assert js("document.querySelector('.mail-timeline-start .mail-route-more').title") == (
+        'Other recipients: AuditNode, ExternalNode')
     js("document.querySelector('.mail-timeline-replies .mail-row-open').click()")
     wait("document.querySelector('.mail-md').textContent==='Fixture reply'")
     assert js("portraits('#mailSelectedRoute')") == reply
