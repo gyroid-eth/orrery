@@ -17,6 +17,20 @@ from tools.theme_axis_browser_test import _WebSocket
 import orrery_backend as backend
 
 
+DSH_QUESTION = '''    ─────────────▾  📋 Question 1/1   ─────────────
+    ◈ Reports
+    Which report?
+    ❯○ Summary
+       Use the short report.
+     ○ Detailed
+       Use the complete report.
+     ✎ Custom answer： Type directly…
+    ↑/↓ select · Ctrl+V paste · Type text to attach an answer · Enter submit · Esc
+    cancel · Ctrl+K to fold / click the header
+   108/131k 0.1%
+   esc to interrupt'''
+
+
 @pytest.fixture
 def approval_browser(fake_pane,tmp_path,monkeypatch):
     if not CDP:pytest.skip('set ORRERY_CDP_URL to an existing browser')
@@ -269,3 +283,64 @@ def test_unsent_preflight_can_be_reviewed_again_in_reader(approval_browser):
     enter(client)
     wait("document.querySelector('.reader-approval-main-title').textContent==='Prompt closed'")
     assert json.loads(pane.result.read_text())==dict(selected=1,key='\r')
+
+
+@pytest.mark.parametrize('kind,text,agent,auto_open', [
+    ('codex-mcp', MCP, None, False),
+    ('claude-read', READ, None, False),
+    ('dsh-question', DSH_QUESTION, dict(name='ApprovalFixture', program='dsh', provider='deepseek', running=True, act_state='ask', history_binding='bound'), True),
+])
+def test_answered_card_dismisses_and_does_not_cover_composer(approval_browser, kind, text, agent, auto_open):
+    js, wait, client, pane, state = approval_browser
+    # Start from none (no active prompt -> card hidden).
+    pane.change('Response received\nWaiting.')
+    wait("document.querySelector('.reader-approval').hidden")
+    if agent is not None:
+        state['agents_override'] = [agent]
+    # Transition: none -> ask (ready).
+    pane.change(text)
+    wait("document.querySelector('.reader-approval:not([hidden])')!==null")
+    if auto_open:
+        wait("document.querySelectorAll('.reader-approval-choice.is-once:not(:disabled)').length===1")
+    else:
+        wait("document.querySelector('.reader-approval-main-title').textContent==='Approval needed'")
+        js("document.querySelector('.reader-approval-toggle').click()")
+        wait("document.querySelectorAll('.reader-approval-choice.is-once:not(:disabled)').length===1")
+    # Even while visible, the card must stay strictly above the composer input.
+    clear = js("""(()=>{
+      const bar=document.querySelector('.reader-approval').getBoundingClientRect();
+      const promptbar=document.querySelector('.promptbar').getBoundingClientRect();
+      const input=document.getElementById('promptInput'), ir=input.getBoundingClientRect();
+      return {above: bar.bottom <= promptbar.top + 1,
+              inputHit: document.elementFromPoint(ir.x + ir.width/2, ir.y + ir.height/2) === input};
+    })()""")
+    assert clear == dict(above=True, inputHit=True)
+    # Transition: ask -> sent -> none (brief closed confirmation, then auto-hide).
+    js("document.querySelector('.reader-approval-choice.is-once').focus()")
+    enter(client)
+    wait("""(()=>{
+      const bar=document.querySelector('.reader-approval');
+      if(!bar||bar.hidden)return false;
+      const title=bar.querySelector('.reader-approval-main-title')?.textContent;
+      if(title!=='Prompt closed')return false;
+      const toggle=bar.querySelector('.reader-approval-toggle');
+      const promptbar=document.querySelector('.promptbar');
+      return toggle.getAttribute('aria-expanded')==='false'
+        &&bar.querySelectorAll('.reader-approval-choice').length===0
+        &&bar.querySelector('.reader-approval-terminal').hidden
+        &&bar.getBoundingClientRect().bottom<=promptbar.getBoundingClientRect().top+1;
+    })()""")
+    assert pane.keys.exists()
+    wait("document.querySelector('.reader-approval').hidden")
+    # Focus moves safely into Reader without leaking keys to the terminal, and composer stays uncovered.
+    js("queueStageFit(activeId)")
+    js("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))")
+    assert js("document.activeElement.closest('.conversation-panel')!==null")
+    before_keys = pane.keys.read_text()
+    client.call('Input.dispatchKeyEvent', type='keyDown', key='q', text='q')
+    client.call('Input.dispatchKeyEvent', type='keyUp', key='q')
+    assert pane.keys.read_text() == before_keys
+    assert js("""(()=>{
+      const input=document.getElementById('promptInput'), ir=input.getBoundingClientRect();
+      return document.elementFromPoint(ir.x + ir.width/2, ir.y + ir.height/2) === input;
+    })()""")
