@@ -6882,6 +6882,7 @@ function agentPermissionSetting(a,key,api){
     action:reason?null:action,
     mode:AGENT_DETAIL_BROWSER.has(control?.mode)?control.mode:control&&key==='browser_use'&&value===false?'off':null,
     options,
+    unavailable:control?.unavailable,
   };
 }
 function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false,pendingAction=''){
@@ -6935,9 +6936,9 @@ function agentDetailPermissions(detail,mini=false){
     `<span class="agent-detail-value">${mini?'':note(label)}<span>${value}</span>
       ${[...new Set([setting.observation,setting.reason])].filter(value=>!shared.includes(value)).map(note).join('')}</span>`,
     null,icon==='computer'?computerMark:browserMark);
-  const choices=(field,label,modes,current,available=null)=>`<span class="agent-detail-modes">${[...modes].map(([value,text])=>{
+  const choices=(field,label,modes,current,available=null,unavailable=null)=>`<span class="agent-detail-modes">${[...modes].map(([value,text])=>{
     const disabled=available&&!available.includes(value);
-    const title=`${label}: ${text}${disabled?' (unavailable for this agent)':''}`;
+    const title=esc(`${label}: ${text}${disabled?` (${unavailable?.[value]?.reason||'unavailable for this agent'})`:''}`);
     const compact=field==='browser'?(AGENT_DETAIL_BROWSER_SHORT.get(value)||text):text;
     return `<button type="button" data-${field}="${value}" aria-pressed="${value===current}"
       aria-label="${title}" title="${title}" ${disabled?'disabled ':''}
@@ -6945,18 +6946,22 @@ function agentDetailPermissions(detail,mini=false){
   }).join('')}</span>`;
   const browserTitle=esc(description('Browser use',browserValue,browser.observation));
   const switchState=browser.value===null?' unknown':browser.value?' on':'';
+  const temporary=browser.unavailable?.temporary;
   return `<div class="agent-detail-permissions${readOnly?' agent-detail-observed':''}" role="group"
     aria-label="${readOnly?'Read-only permissions':'Permissions'}">
     ${computer.action?agentDetailItem('computer',description('Computer use',computerValue,computer.observation),
       choices('computer','Computer use',AGENT_DETAIL_COMPUTER,computer.value),null,computerMark):mark('computer','Computer use',computerValue,computer)}
     ${browser.action?(browser.options.length?agentDetailItem('browser',description('Browser use',browserValue,browser.observation),
-      choices('browser','Browser use',AGENT_DETAIL_BROWSER,browser.mode,browser.options),null,browserMark):`<div class="agent-detail-item" title="${browserTitle}">
+      choices('browser','Browser use',AGENT_DETAIL_BROWSER,browser.mode,browser.options,browser.unavailable),null,browserMark):`<div class="agent-detail-item" title="${browserTitle}">
       ${browserMark}<button class="agent-detail-browser-toggle" type="button" data-browser
         ${browser.value===null?'':`role="switch" aria-checked="${browser.value}"`}
         aria-label="${browser.value===null||browser.observation?browserTitle:'Browser use'}" title="${browserTitle}">
         <span class="agent-detail-switch${switchState}" aria-hidden="true"></span></button></div>`):
       mark('browser','Browser use',browserValue,browser)}
     ${shared.map(value=>`<small class="agent-detail-observed-reason">${esc(value)}</small>`).join('')}
+    ${temporary?.reason?`<small class="agent-detail-observed-reason">${esc(temporary.reason)}
+      ${temporary.instruction?esc(temporary.instruction):''}
+      ${temporary.command?`<br><code>${esc(temporary.command)}</code>`:''}</small>`:''}
   </div>`;
 }
 function agentDetailHTML(detail,mini=false){
