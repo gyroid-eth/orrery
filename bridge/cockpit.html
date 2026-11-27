@@ -9303,7 +9303,7 @@ function spawnFailureReason(status,fallback){
   return status?.error||status?.result?.error||fallback;
 }
 // Poll until the registered child is ready, keeping the task available on failure.
-async function watchSpawnLaunch(name,deadlineSeconds){
+async function watchSpawnLaunch(name,deadlineSeconds,worktreeNotice=''){
   const waitSeconds=Number.isFinite(deadlineSeconds)&&deadlineSeconds>0?deadlineSeconds:140;
   const started=Date.now();
   let phase=null;
@@ -9316,7 +9316,7 @@ async function watchSpawnLaunch(name,deadlineSeconds){
     if(status?.ok&&status.state==='ready')return;
     if(status?.state==='launching'&&status.phase&&status.phase!==phase){
       phase=status.phase;
-      if(phase==='checkout')showToast(`Checking out worktree for ${name}…`,false,8000);
+      if(phase==='checkout')showToast([`Checking out worktree for ${name}…`,worktreeNotice].filter(Boolean).join(' '),false,8000);
       else if(phase==='startup')showToast(`Starting ${name}…`);
     }
     if(status?.state==='failed'||(status?.ok&&status.state&&status.state!=='launching')){
@@ -9411,7 +9411,9 @@ async function submitSpawn(event){
     if(SpawnPicker.locality(p,model)==='local')SpawnPicker.remember(spawnViewerStorage,SPAWN_RECENT_STORAGE_KEY,
       JSON.stringify([p.id,model.id,...(Number.isInteger(model.url_index)?[model.url_index]:[]),...(model.url_key?[model.url_key]:[])]));
     childName=result.child_name||result.tmux_session;
-    if(result.pending)await watchSpawnLaunch(childName,result.verdict_deadline_seconds);
+    const worktreeNotice=typeof result.worktree_notice==='string'?result.worktree_notice:'';
+    if(worktreeNotice)showToast(worktreeNotice,false,8000);
+    if(result.pending)await watchSpawnLaunch(childName,result.verdict_deadline_seconds,worktreeNotice);
     const normalizedName=String(childName||'').toLowerCase();
     const scientist=attempt.scientist||(spawnCatalog?.naming?.scientists||[])
       .find(name=>normalizedName.endsWith(name.toLowerCase()));
