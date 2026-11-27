@@ -121,6 +121,21 @@ cockpit の動きが出ないときは、ブラウザーを動かしている OS
 
 設定を変えたら、ブラウザーで cockpit を読み直します。
 
+## NEW AGENT の Computer use が薄くて選べない
+
+Computer use にポインターを置くと、理由が表示される場合があります。macOS では選択できても、最初の画面操作で Cua Driver のエラーが返ることがあります。
+
+| 表示や症状 | 対処 |
+| --- | --- |
+| `Windows Cua Driver executable was not found or is not executable.` または `Cua Driver が見つかりません。実行ファイルのパスを確認してください。` | Cua Driver が入っていない場合は、対応版を入れて署名を照合します。すでに入っている場合は、実行できるか、ORRERY からそのパスが見えるかを確認します。[Cua Driver の準備](computer-use.md#driver-setup) |
+| macOS で操作時に `permissions_pending` が返る | **システム設定 → プライバシーとセキュリティ**で、CuaDriver.app に**アクセシビリティ**と**画面収録**を許可してから試し直します。[macOS の準備](computer-use.md#driver-setup) |
+| `Windows Cua Driver did not answer. Check that its daemon is running.` または `Windows の名前付きパイプを開けません。daemon と所有者・昇格状態を確認してください。` | Windows に対話ログオンして daemon を起動します。WSL から呼ぶ側と Windows アカウント・昇格状態を合わせ、`\\.\pipe\cua-driver` と WSL interop を確認します。[Windows＋WSL の準備](computer-use.md#driver-setup) |
+| dashboard の起動直後や NEW AGENT を開いた直後で、まだ理由が表示されない | 確認に数秒かかることがあります。少し待ち、選択できないままなら NEW AGENT を開き直して理由を確認します。 |
+| `Install the Windows Cua Driver version supported by ORRERY.` または `Cua Driver の版が承認済みの版と一致しません。` | ORRERY が対応する版を確認し、その版の実行ファイルを指定します。[Cua Driver の準備](computer-use.md#driver-setup) |
+| `Configure the ORRERY HTTP operator for Computer use.` | dashboard の operator capability を設定します。[operator の準備](computer-use.md#driver-setup) |
+
+Windows の daemon の利用状況送信と自動更新確認を止める設定は、Windows ユーザーごとに保存できます。[Cua Driver の通信設定](computer-use.md#driver-privacy)
+
 ## mail が表示されない
 
 `scripts/start-cockpit.sh` は legacy の Telemetry 設定から `AGENTSTACK_MAIL_DB` を引き継ぎます。backend を手動またはアプリから直接起動して別の DB を使う場合は、`ORRERY_MAIL_DB` または共有設定の `mail_db` を明示します。[DB の優先順位](configuration.md#orrery-mail-db)
