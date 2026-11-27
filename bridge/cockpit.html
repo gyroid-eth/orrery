@@ -7363,7 +7363,9 @@ async function changeAgentPermission(original,key,value){
       throw new Error('Telemetry did not confirm the new permissions');
     }
     if(tab){tab.accepted=true;reconnectPermissionRestartTab(name,tab);}
-    showToast(`Resume accepted for ${label} with updated permissions.`);
+    const warning=typeof result.warning==='string'?OrreryDemo.mask(result.warning):'';
+    showToast(`Resume accepted for ${label} with updated permissions.${warning?' · '+warning:''}`,false,warning?12000:undefined);
+    if(warning)toastEl.classList.add('multiline');
   }catch(error){
     if(tab)finishPermissionRestart(name,{failed:true});
     const reason=OrreryDemo.mask(String(error?.message||error).replace(/\s+/g,' ').trim());

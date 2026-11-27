@@ -112,7 +112,8 @@ def roster(request):
             elif body.get('check_only'):
                 self.answer({'ok': True, 'action': 'validated'})
             elif self.path == '/api/jump' and 'permission' in body:
-                self.answer({'ok': True, 'action': 'resumed', 'tools_changed': True})
+                self.answer({'ok': True, 'action': 'resumed', 'tools_changed': True,
+                             'warning': state.get('permission_warning')})
             else:
                 self.answer({'ok': True})
 
@@ -503,7 +504,8 @@ def test_api46_validates_restart_and_sends_the_same_conversation_to_exit(roster,
 
 
 @pytest.mark.parametrize('roster', [54], indirect=True)
-def test_api54_browser_mode_restart_validates_and_resumes_the_same_conversation(roster):
+@pytest.mark.parametrize('mode', ['temporary', 'personal'])
+def test_api54_browser_mode_restart_validates_and_resumes_the_same_conversation(roster, mode):
     js, wait, state = roster
     browser = {'value': False, 'mode': 'off', 'options': ['off', 'temporary', 'personal'], 'can_change': True}
     controls = {'browser_use': browser | {'action': 'restart'}}
@@ -511,18 +513,23 @@ def test_api54_browser_mode_restart_validates_and_resumes_the_same_conversation(
     stopped = EXITED | {'permission_controls': {'browser_use': browser | {'action': 'resume'}}}
     state['checks'] = [(200, [active]), (200, [])]
     state['stop_checks'] = [stopped]
+    if mode == 'personal':
+        state['permission_warning'] = 'In Chrome, choose Allow when “Allow remote debugging?” appears.'
     js(f"currentAgentNamed('CopperFixture').permission_controls={json.dumps(controls)}")
     open_permissions(js, 'CopperFixture', '[data-browser="off"]')
     assert not js('permissionConfirm.open')
     assert js("Array.from(agentDetail.querySelectorAll('[data-browser]'),button=>button.dataset.browser)") == [
         'off', 'temporary', 'personal',
     ]
-    open_permissions(js, 'CopperFixture', '[data-browser="temporary"]')
+    open_permissions(js, 'CopperFixture', f'[data-browser="{mode}"]')
     assert js("permissionApply.textContent") == "Restart"
-    assert js("permissionBrowser.validity.valid&&permissionBrowser.value==='temporary'")
+    assert js(f"permissionBrowser.validity.valid&&permissionBrowser.value==={mode!r}")
     js("permissionApply.click()")
     wait("toastEl.textContent.startsWith('Resume accepted')")
-    path, jump = permission_jump('CopperFixture', ACTIVE_SID, browser_mode='temporary')
+    if mode == 'personal':
+        assert state['permission_warning'] in js('toastEl.textContent')
+        assert js("toastEl.classList.contains('multiline')")
+    path, jump = permission_jump('CopperFixture', ACTIVE_SID, browser_mode=mode)
     assert state['trace'] == [
         ('roster', 200, ['agent']),
         (path, jump | {'check_only': True}),
