@@ -829,11 +829,10 @@ class TmuxControlBridge:
 
     def _handle_line(self, line: str | bytes) -> None:
         raw_line = line.encode("utf-8") if isinstance(line, str) else line
-        raw_line = raw_line.replace(b"\x1bP1000p", b"").replace(b"\x1b\\", b"")
 
         # tmux guarantees notifications never occur inside a command output
         # block. Preserve arbitrary command output (including lines which look
-        # like notifications) before dispatching raw pane output below.
+        # like notifications or contain OSC string terminators).
         if self._current_block is not None:
             text = raw_line.decode("utf-8", "replace")
             terminal = text.startswith("%end") or text.startswith("%error")
@@ -865,6 +864,8 @@ class TmuxControlBridge:
                     return
             self._current_block.append(text)
             return
+
+        raw_line = raw_line.removeprefix(b"\x1bP1000p").removesuffix(b"\x1b\\")
 
         # tmux may pass UTF-8 bytes >= 0x80 through %output verbatim. A pane
         # write can end inside a code point, so decoding the whole control line

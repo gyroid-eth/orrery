@@ -31,6 +31,7 @@ COMMANDS = {
     'agy': ('/help', '/model'),
 }
 PLAIN = 'ORRERY Mail notification: synthetic check.'
+LINK = 'https://example.com'
 BUSY_STATES = {'busy', 'tool', 'starting'}
 SLASH_VIEWS = {
     ('claude', '/help'): ['Help  General   Commands   Custom commands', '←/→ to switch · Esc to close'],
@@ -159,6 +160,9 @@ def run_editor(harness, state, width, entered):
         else:
             draft = (prompt + text + hint).split('\n')
             column = len(draft[-1]) - len(hint)
+            if state == 'links':
+                linked = f'\x1b]8;;{LINK}\x1b\\{LINK}\x1b]8;;\x1b\\'
+                draft = [row.replace(LINK, linked) for row in draft]
         rows = [*before, *draft, *after]
         cursor = f'\x1b[{len(before) + len(draft)};{column + 1}H'
         os.write(1, ('\x1b[2J\x1b[H' + '\r\n'.join(rows) + cursor).encode())
@@ -256,6 +260,12 @@ async def test_mobile_input_and_shared_multiline_composer_in_private_tmux(monkey
 @pytest.mark.parametrize('width', [40, 46, 90])
 async def test_narrow_mail_submission(monkeypatch, harness, width):
     await check_routes(monkeypatch, harness, 'narrow-mail', width, notices=(150, 300, 900))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('harness', COMMANDS)
+async def test_link_uses_real_tmux_control_capture_to_confirm_submit(monkeypatch, harness):
+    await check_routes(monkeypatch, harness, 'links', 81)
 
 
 async def check_routes(monkeypatch, harness, state, width, *, rejected=None, legacy=None, mobile=False, notices=()):
@@ -384,6 +394,8 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None, leg
                             texts = tuple(notice_text(size) for size in notices)
                         if state == 'wrong-modal':
                             texts = ('/help',)
+                        if state == 'links':
+                            texts = ('Plain control message.', LINK, f'Open this test page.\n{LINK}')
                         if legacy:
                             texts = ('> Earlier message\n\nHere is my reply.',) if legacy == 'wrapper' else (
                                 f'printf touched > {entered}\n:',)
