@@ -9996,7 +9996,7 @@ function composerVocabulary(name=promptRecipients.names[0]||activeSession()){
   const program=targetProgram(name);
   const target=name===activeSession()?captureComposerTarget():namedComposerTarget(name);
   const params=new URLSearchParams({program});
-  if(program==='codex'&&target?.incarnation){
+  if(['codex','agy','dsh','hermes'].includes(program)&&target?.incarnation){
     params.set('agent',name);params.set('paneId',target.paneId);params.set('incarnation',target.incarnation);
   }
   return {program,key:params.toString()};

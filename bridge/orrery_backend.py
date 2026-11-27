@@ -3089,13 +3089,25 @@ def inject_telemetry_light(payload: bytes, content_type: str) -> bytes:
 # vocabulary while talking to the other: Claude reads `/log`, Codex reads
 # `$log` and treats a leading `/` as one of its own builtins — so `/log` sent
 # to Codex lands on /logout. Same name, opposite meaning, no warning.
+PRODUCT_SKILLS = os.environ.get("AGENTSTACK_SKILLS_DIR") or str(
+    Path(os.environ.get("AGENTSTACK_HOME") or Path.home() / ".agentstack") / "skills"
+)
+
 SKILL_SOURCES = {
     "claude": {"dir": os.path.expanduser("~/.claude/skills"), "prefix": "/"},
     "codex": {"dir": os.path.expanduser("~/.codex/skills"), "prefix": "$"},
     # Gemini CLI keeps Agent Skills as ~/.gemini/skills/<name>/SKILL.md and
     # runs them with the same slash as Claude.
     "gemini": {"dir": os.path.expanduser("~/.gemini/skills"), "prefix": "/"},
-    "agy": {"dir": os.path.expanduser("~/.gemini/antigravity-cli/skills"), "prefix": "/"},
+    "agy": {
+        "dir": os.path.expanduser("~/.gemini/config/skills"), "prefix": "/",
+        "higher_dirs": [
+            os.path.expanduser("~/.gemini/antigravity-cli/skills"),
+            os.path.expanduser("~/.gemini/skills"),
+        ],
+    },
+    "dsh": {"dir": PRODUCT_SKILLS, "prefix": "/"},
+    "hermes": {"dir": PRODUCT_SKILLS, "prefix": "/"},
 }
 SKILLS_DIR = SKILL_SOURCES["claude"]["dir"]  # kept: older callers import this
 # Composer autocomplete: REPL builtins each TUI understands besides skills.
@@ -3130,6 +3142,8 @@ _BUILTIN_SLASH = {
         {"name": "skills", "kind": "builtin", "description": "List or reload skills"},
         {"name": "help", "kind": "builtin", "description": "Help"},
     ),
+    "dsh": ({"name": "skills", "kind": "builtin", "description": "List available skills"},),
+    "hermes": ({"name": "skills", "kind": "builtin", "description": "List available skills"},),
     "gemini": (
         {"name": "compress", "kind": "builtin", "description": "Summarize and compress the context"},
         {"name": "clear", "kind": "builtin", "description": "Clear the screen and history"},
@@ -3253,12 +3267,160 @@ async def codex_skill_context(request, name, pane_id, incarnation):
     return os.path.abspath(binary), cwd, home
 
 
+def _skill_target(request):
+    name, pane, incarnation = (request.query.get(key, '') for key in ('agent', 'paneId', 'incarnation'))
+    if not (name or pane or incarnation):
+        return None
+    if (not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,95}', name)
+            or not re.fullmatch(r'(?:%[0-9]+|fresh-[a-f0-9]{64}-[0-9]+)', pane)
+            or not re.fullmatch(r'[a-f0-9]{32}', incarnation)):
+        raise ValueError('invalid skill target')
+    return name, pane, incarnation
+
+
+def _agy_project_skill_dirs(cwd):
+    # Match agy's upward discovery. Outside a Git worktree only the cwd applies.
+    ancestors = (cwd, *cwd.parents)
+    git_root = next((root for root in ancestors if (root / '.git').exists()), cwd)
+    directories = []
+    for root in ancestors:
+        directories.extend(str(root / folder / 'skills') for folder in ('.agents', '.agent', '_agents', '_agent'))
+        if root == git_root:
+            break
+    return directories
+
+
+def _merge_skills(items, skills):
+    seen = {item['name'] for item in items}
+    for skill in skills:
+        if skill['name'] not in seen:
+            items.append(skill)
+            seen.add(skill['name'])
+    return items
+
+
+def _merge_skill_dirs(items, directories):
+    return _merge_skills(items, (skill for directory in directories for skill in _collect_skills(directory)))
+
+
+def _agy_personal_manifest(path, seen=frozenset()):
+    try:
+        path = path.resolve()
+        if path in seen:
+            return {}, []
+        manifest = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, RuntimeError, ValueError):
+        return {}, []
+    if not isinstance(manifest, dict):
+        return {}, []
+    parent = path.parent.parent if path.parent.name == '.agents' else path.parent
+    entries = manifest.get('entries')
+    excluded = manifest.get('exclude')
+    inherited = manifest.get('inherits')
+    skills = {}
+    for entry in inherited if isinstance(inherited, list) else []:
+        if not isinstance(entry, dict) or not isinstance(entry.get('path'), str):
+            continue
+        inherited_path = Path(entry['path'])
+        if not inherited_path.is_absolute():
+            continue
+        catalog, _ = _agy_personal_manifest(inherited_path, seen | {path})
+        include_only, skip = entry.get('include_only'), entry.get('exclude')
+        for name, skill in catalog.items():
+            if isinstance(include_only, list) and name not in include_only:
+                continue
+            if isinstance(skip, list) and name in skip:
+                continue
+            skills[name] = skill
+    for entry in entries if isinstance(entries, list) else []:
+        if not isinstance(entry, dict) or not isinstance(entry.get('path'), str) or not entry['path']:
+            continue
+        path = parent / entry['path']
+        direct = path / 'SKILL.md' if path.is_dir() else path
+        if direct.name == 'SKILL.md' and direct.is_file():
+            candidates = [{
+                'name': direct.parent.name, 'kind': 'skill',
+                'description': _read_skill_description(str(direct)),
+            }]
+        else:
+            candidates = _collect_skills(str(path))
+        include_only, skip = entry.get('include_only'), entry.get('exclude')
+        if isinstance(include_only, list):
+            for relative in include_only:
+                if not isinstance(relative, str) or '/' not in relative:
+                    continue
+                folder = Path(relative)
+                if folder.is_absolute() or '..' in folder.parts:
+                    continue
+                nested = path / folder / 'SKILL.md'
+                if nested.is_file() and (not isinstance(skip, list) or relative not in skip):
+                    skills[folder.name] = {
+                        'name': folder.name, 'kind': 'skill',
+                        'description': _read_skill_description(str(nested)),
+                    }
+        for skill in candidates:
+            name = skill['name']
+            if isinstance(include_only, list) and name not in include_only:
+                continue
+            if isinstance(skip, list) and name in skip:
+                continue
+            skills[name] = skill
+    excluded = excluded if isinstance(excluded, list) else []
+    return {name: skill for name, skill in skills.items() if name not in excluded}, excluded
+
+
+def _agy_skills(items, source, workspace_dirs=()):
+    manifest_skills, excluded = _agy_personal_manifest(Path(source['dir']).with_name('skills.json'))
+    _merge_skill_dirs(items, source.get('higher_dirs', ()))
+    standard = [skill for directory in (*workspace_dirs, source['dir']) for skill in _collect_skills(directory)]
+    return _merge_skills(items, (skill for skill in (*standard, *manifest_skills.values())
+                                 if skill['name'] not in excluded))
+
+
+async def _managed_skill_dirs(request, program, target):
+    name, pane, incarnation = target
+    state = composer_pane_state(request.app, name, pane)
+    if state is None or state.bridge._incarnation != incarnation:
+        raise ValueError('skill target changed')
+    if program == 'agy':
+        cwd = await pane_probe_cwd(request.app, name, pane)
+        directories = await asyncio.to_thread(_agy_project_skill_dirs, cwd) if cwd else []
+    else:
+        try:
+            row = await conversation_bound_row(request, name)
+        except HistoryUnavailable:
+            # The launcher installs the bundled skills before the child writes
+            # its first history receipt. Per-profile skills require a binding.
+            directories = [SKILL_SOURCES[program]['dir']]
+        else:
+            if row.get('program') != program:
+                raise ValueError('skill target belongs to another harness')
+            boundary = state.bridge.config.tmux_bin
+            if isinstance(boundary, FreshPaneBoundary) and any(
+                row.get(key) != value for key, value in boundary.ref.items()
+            ):
+                raise ValueError('skill target changed')
+            transcript = Path(row['transcript_path'])
+            if program == 'hermes':
+                if not transcript.is_absolute() or transcript.name != 'state.db':
+                    raise ValueError('Hermes skill profile unavailable')
+                home = transcript.parent
+            else:
+                if not transcript.is_absolute() or len(transcript.parents) < 4 or transcript.parents[2].name != 'sessions':
+                    raise ValueError('dsh skill profile unavailable')
+                home = transcript.parents[3]
+            directories = [str(home / 'skills')]
+    if composer_pane_state(request.app, name, pane) is not state or state.bridge._incarnation != incarnation:
+        raise ValueError('skill target changed')
+    return directories
+
+
 CODEX_SKILLS_KEY = web.AppKey('codex_skill_catalog', dict)
 CODEX_SKILLS_LIMIT = web.AppKey('codex_skill_limit', asyncio.Semaphore)
 
 
 async def serve_skills(request: web.Request) -> web.Response:
-    """A scoped native catalog for Codex. Other programs keep their own catalog."""
+    """Offer skills from the selected harness and its verified pane when available."""
     from codex_skill_catalog import list_skills
 
     program = str(request.query.get("program") or "claude").lower()
@@ -3271,14 +3433,16 @@ async def serve_skills(request: web.Request) -> web.Response:
         return web.json_response({"program": program, "prefix": "/", "skills": []})
 
     items = [dict(entry) for entry in _BUILTIN_SLASH[program]]
+    target = None
+    if program in {'agy', 'codex', 'dsh', 'hermes'}:
+        try:
+            target = _skill_target(request)
+        except ValueError:
+            return web.json_response(dict(program=program, prefix=source["prefix"], skills=items), status=400)
     if program == "codex":
-        name, pane, instance = (request.query.get(key, '') for key in ('agent', 'paneId', 'incarnation'))
-        if not name and not pane and not instance:
+        if target is None:
             return web.json_response(dict(program=program, prefix='$', skills=items))
-        if (not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,95}', name)
-                or not re.fullmatch(r'(?:%[0-9]+|fresh-[a-f0-9]{64}-[0-9]+)', pane)
-                or not re.fullmatch(r'[a-f0-9]{32}', instance)):
-            return web.json_response(dict(program=program, prefix='$', skills=items), status=400)
+        name, pane, instance = target
         cache = request.app[CODEX_SKILLS_KEY]
         key = (name, pane, instance)
         try:
@@ -3304,13 +3468,27 @@ async def serve_skills(request: web.Request) -> web.Response:
             # catalog on the next request.
             return web.json_response(dict(program=program, prefix='$', skills=items), status=503,
                                      headers={'Cache-Control': 'no-store'})
+    elif target is not None and program in {'agy', 'dsh', 'hermes'}:
+        try:
+            async with asyncio.timeout(5):
+                directories = await _managed_skill_dirs(request, program, target)
+                if program == 'agy':
+                    items = await asyncio.to_thread(_agy_skills, items, source, directories)
+                else:
+                    items = await asyncio.to_thread(_merge_skill_dirs, items, directories)
+        except (ClientError, HistoryUnavailable, OSError, KeyError, ValueError, RuntimeError, asyncio.TimeoutError):
+            return web.json_response(dict(program=program, prefix=source["prefix"], skills=items), status=503,
+                                     headers={'Cache-Control': 'no-store'})
     else:
         now = time.monotonic()
         cached = _skills_cache.get(program)
         if cached and now - cached[0] < _SKILLS_CACHE_SECONDS:
             items = cached[1]
         else:
-            items.extend(await asyncio.to_thread(_collect_skills, source["dir"]))
+            if program == 'agy':
+                items = await asyncio.to_thread(_agy_skills, items, source)
+            else:
+                items.extend(await asyncio.to_thread(_collect_skills, source["dir"]))
             _skills_cache[program] = (now, items)
     return web.json_response(dict(program=program, prefix=source["prefix"], skills=items),
                              headers={'Cache-Control': 'no-store'})

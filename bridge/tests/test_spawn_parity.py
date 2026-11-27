@@ -274,8 +274,86 @@ def test_unknown_effort_tolerates_slider_mount_without_children(tour_browser):
     assert result==dict(children=0,hasEffort=False)
 
 
-@pytest.mark.parametrize('program',['dsh','hermes','dsh-tui','unknown'])
-def test_unexposed_native_skills_never_borrow_claude_files(monkeypatch,program):
-    monkeypatch.setattr(ob,'_collect_skills',lambda *_:pytest.fail('must not collect another harness skills'))
-    response=asyncio.run(ob.serve_skills(SimpleNamespace(query={'program':program})))
-    assert json.loads(response.body)==dict(program='dsh' if program=='dsh-tui' else program,prefix='/',skills=[])
+def test_unknown_harness_never_borrows_claude_skills(monkeypatch):
+    monkeypatch.setattr(ob, '_collect_skills', lambda *_: pytest.fail('unexpected skill read'))
+    response = asyncio.run(ob.serve_skills(SimpleNamespace(query={'program': 'unknown'})))
+    assert json.loads(response.body) == dict(program='unknown', prefix='/', skills=[])
+
+
+@pytest.mark.parametrize('program', ['dsh', 'dsh-tui', 'hermes'])
+def test_native_harness_lists_bundled_skills(monkeypatch, tmp_path, program):
+    expected = 'dsh' if program == 'dsh-tui' else program
+    monkeypatch.setitem(ob.SKILL_SOURCES, expected, dict(dir=str(tmp_path), prefix='/'))
+    monkeypatch.setattr(ob, '_skills_cache', {})
+    for name in ('delegate', 'log'):
+        folder = tmp_path / name
+        folder.mkdir()
+        (folder / 'SKILL.md').write_text(f'---\nname: {name}\ndescription: bundled {name}\n---\n')
+    response = asyncio.run(ob.serve_skills(SimpleNamespace(query={'program': program})))
+    result = json.loads(response.body)
+    assert result['program'] == expected and result['prefix'] == '/'
+    assert [item['name'] for item in result['skills'] if item['kind'] == 'skill'] == ['delegate', 'log']
+
+
+@pytest.mark.parametrize('program', ['dsh', 'hermes'])
+def test_reader_catalog_follows_the_bound_native_profile(monkeypatch, tmp_path, program):
+    profile = tmp_path / program
+    skill = profile / 'skills/log'
+    skill.mkdir(parents=True)
+    (skill / 'SKILL.md').write_text('---\nname: log\ndescription: selected profile log\n---\n')
+    transcript = profile / ('state.db' if program == 'hermes' else 'sessions/workspace/native/session.jsonl')
+    valid = 'a' * 32
+    state = SimpleNamespace(bridge=SimpleNamespace(_incarnation=valid, config=SimpleNamespace(tmux_bin=None)))
+    monkeypatch.setattr(ob, 'composer_pane_state', lambda *_: state)
+
+    async def binding(_request, name):
+        assert name == 'FixtureAgent'
+        return {'program': program, 'transcript_path': str(transcript)}
+
+    monkeypatch.setattr(ob, 'conversation_bound_row', binding)
+    query = {'program': program, 'agent': 'FixtureAgent', 'paneId': '%1', 'incarnation': valid}
+    response = asyncio.run(ob.serve_skills(SimpleNamespace(app={}, query=query)))
+    assert [entry['description'] for entry in json.loads(response.body)['skills'] if entry['name'] == 'log'] == [
+        'selected profile log'
+    ]
+    query['incarnation'] = 'b' * 32
+    response = asyncio.run(ob.serve_skills(SimpleNamespace(app={}, query=query)))
+    assert response.status == 503
+    assert all(entry['kind'] == 'builtin' for entry in json.loads(response.body)['skills'])
+
+
+def test_agy_reader_lists_installed_skills_and_keeps_personal_priority(monkeypatch, tmp_path):
+    standard = tmp_path / 'standard'
+    personal = tmp_path / 'personal'
+    bundled = tmp_path / 'bundled'
+    custom = tmp_path / 'custom'
+    for root, name, label in [
+        (bundled, 'log', 'bundled log'),
+        (bundled, 'delegate', 'bundled delegate'),
+        (bundled, 'extra', 'unregistered skill'),
+        (personal, 'log', 'personal log'),
+        (standard, 'hidden', 'excluded skill'),
+        (custom, 'delegate', 'custom delegate'),
+    ]:
+        skill = root / name
+        skill.mkdir(parents=True)
+        (skill / 'SKILL.md').write_text(f'---\nname: {name}\ndescription: {label}\n---\n')
+    manifest = tmp_path / 'skills.json'
+    entries = [{'path': str(bundled), 'include_only': ['delegate', 'log']}]
+    manifest.write_text(json.dumps({'entries': entries, 'exclude': ['hidden']}))
+    monkeypatch.setitem(ob.SKILL_SOURCES, 'agy', dict(dir=str(standard), prefix='/', higher_dirs=[str(personal)]))
+    monkeypatch.setattr(ob, '_skills_cache', {})
+
+    def descriptions():
+        response = asyncio.run(ob.serve_skills(SimpleNamespace(query={'program': 'agy'})))
+        return {entry['name']: entry['description'] for entry in json.loads(response.body)['skills']
+                if entry['kind'] == 'skill'}
+
+    assert descriptions() == {'log': 'personal log', 'delegate': 'bundled delegate'}
+    inherited = tmp_path / 'another-skills.json'
+    inherited.write_text(json.dumps({'entries': [{'path': 'custom/delegate/SKILL.md'}]}))
+    entries[0]['include_only'] = ['log']  # The installer leaves inherited user skills available.
+    manifest.write_text(json.dumps({'entries': entries, 'exclude': ['hidden'],
+                                    'inherits': [{'path': str(inherited)}]}))
+    ob._skills_cache.clear()
+    assert descriptions() == {'log': 'personal log', 'delegate': 'custom delegate'}

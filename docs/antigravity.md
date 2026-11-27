@@ -7,6 +7,18 @@
 ORRERY では、Claude Code や Codex と並んで Google Antigravity CLI（`agy`）を
 使えます。利用者が Antigravity でサインインしたアカウントを使います。
 
+## `/log` と `/delegate`
+
+共通インストーラーは、個人用の `~/.gemini/config/skills.json` に
+同梱の `log` と `delegate` の正本（既定では `~/.agentstack/skills/`）を登録します。
+この場所を使うと、すべてのプロジェクトで Antigravity CLI と IDE の両方から使えます。
+利用者が設定済みの同名スキルが優先されます。
+CLI の候補が古い場合は `/skills reload` を実行します。
+
+Terminal に出る候補は `agy` のものです。Reader の入力欄は、標準のユーザー用または
+作業ツリーのスキルと、個人用の `skills.json` で登録したスキルを候補に出します。Reader で dsh・Hermes のスキルを選ぶと、
+選んだ子の履歴に対応するプロファイルから候補が表示されます。
+
 ## Prerequisites
 
 先に ORRERY core と稼働中の ORRERY Mail を用意します。

@@ -7,6 +7,20 @@ Run the shared installer and sign in to Antigravity CLI. Choose Antigravity and 
 ORRERY can use Google Antigravity CLI (`agy`) alongside Claude Code and Codex.
 The integration uses the user's signed-in Antigravity account.
 
+## `/log` and `/delegate`
+
+The shared installer registers the bundled `log` and `delegate` skills in
+`~/.gemini/config/skills.json`. The manifest points to the source files
+in `~/.agentstack/skills/` by default. This location serves both the
+Antigravity CLI and IDE across all projects. Existing user skills with the
+same name take priority. Run `/skills reload` if the CLI menu needs refreshing.
+
+In Terminal, `agy` supplies suggestions. The Reader composer suggests skills
+from the standard personal and workspace directories and the personal
+`skills.json` manifest. For managed dsh
+and Hermes sessions, the Reader uses the profile associated with the selected
+child's conversation.
+
 ## Prerequisites
 
 Start with ORRERY core installed and ORRERY Mail running. Follow the
