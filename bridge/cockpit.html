@@ -8471,14 +8471,27 @@ function paintSpawnComputer(modes){
     button.setAttribute('aria-pressed',String(mode===spawnComputerMode));
   }
 }
+function spawnBrowserKey(){
+  return selProvider==='gemini'?'antigravity':SpawnPicker.harnessKey(selHarness);
+}
 function spawnBrowserModes(){
-  const key=selProvider==='gemini'?'antigravity':SpawnPicker.harnessKey(selHarness);
-  const modes=spawnCatalog?.browser_modes?.[key];
+  const modes=spawnCatalog?.browser_modes?.[spawnBrowserKey()];
   return spawnCatalog?.runtime_mode!=='fresh'&&Array.isArray(modes)?
     Object.keys(spawnBrowserLabels).filter(mode=>modes.includes(mode)):null;
 }
+function spawnPersonalBrowserStatus(){
+  return spawnCatalog?.personal_browser_status?.[spawnBrowserKey()];
+}
+function defaultSpawnBrowserMode(modes,status){
+  if(status?.unavailable===true)return modes.includes('temporary')?'temporary':'off';
+  return modes.includes('personal')?'personal':'off';
+}
 function paintSpawnBrowser(modes){
   if(!modes)return;
+  const status=spawnPersonalBrowserStatus();
+  if(spawnBrowserMode==='personal'&&status?.unavailable===true){
+    spawnBrowserMode=defaultSpawnBrowserMode(modes,status);
+  }
   if(!modes.includes(spawnBrowserMode))spawnBrowserMode='off';
   spawnBrowserUse.dataset.browserMode=spawnBrowserMode;
   spawnBrowserUse.removeAttribute('role');spawnBrowserUse.removeAttribute('aria-checked');
@@ -8493,6 +8506,8 @@ function paintSpawnBrowser(modes){
   spawnBrowserUse.setAttribute('aria-label',spawnBrowserUse.title);
   for(const [mode,button] of spawnBrowserChoices){
     button.hidden=!modes.includes(mode);
+    button.disabled=mode==='personal'&&status?.unavailable===true;
+    button.title=mode==='personal'?status?.reason||'':'';
     button.setAttribute('aria-pressed',String(mode===spawnBrowserMode));
   }
   if(!modes.length&&spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
@@ -8513,8 +8528,8 @@ function renderSpawnTools(){
     if(spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
     const computerOn=Boolean(route)&&harness!=='dsh'&&!antigravity&&!managedScreen;
     spawnComputerMode=computerOn?'control':'off';
-    const browserOn=Boolean(route)&&(modes?modes.includes('personal'):harness!=='dsh'&&harness!=='codex');
-    spawnBrowserMode=browserOn?'personal':'off';
+    spawnBrowserMode=!route?'off':modes?defaultSpawnBrowserMode(modes,spawnPersonalBrowserStatus()):
+      harness!=='dsh'&&harness!=='codex'?'personal':'off';
   }
   spawnToolsRoute=route;
   paintSpawnComputer(spawnTools.hidden?null:computerModes);
@@ -8652,8 +8667,9 @@ function updateSpawnAvailability(){
     model&&!harness?(unavailable?`${SpawnPicker.unavailableReason(unavailable)}.${SpawnPicker.setupGuide(unavailable)?' Open model settings for setup.':''}`:'No available harness. Choose another model.'):
     !model&&Number.isInteger(selUrlIndex)?'Model unavailable. Choose another model.':
     missingEffort?'Choose an effort in the model sheet.':'';
-  const browserNotice=!spawnTools.hidden&&SpawnPicker.harnessKey(selHarness)==='codex'&&
-    spawnBrowserUse.getAttribute('aria-checked')==='true'?CODEX_BROWSER_REQUIREMENT:'';
+  const personal=spawnBrowserModes()?.includes('personal')?spawnPersonalBrowserStatus():null;
+  const browserNotice=spawnTools.hidden?'':personal?.reason?('My Chrome: '+personal.reason):
+    SpawnPicker.harnessKey(selHarness)==='codex'&&spawnBrowserUse.getAttribute('aria-checked')==='true'?CODEX_BROWSER_REQUIREMENT:'';
   const message=spawnProblem||issue||browserNotice;
   const busy=spawnFormIsBusy();
   if(busy)spawnForm.setAttribute('aria-busy','true');

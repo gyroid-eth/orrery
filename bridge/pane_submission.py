@@ -54,7 +54,9 @@ PASTING = re.compile(r'^\s*(?:Pasting(?:…|\.\.\.)|Waiting for startup\b)', re.
 AGY_MODE = re.compile(
     r'^(?:(?:\? for shortcuts|esc to cancel)\s{2,})?(?:auto|plan|accept[- ]edits)\s+·\s+', re.I)
 AGY_MODE_ONLY = re.compile(r'^(?:(?:\? for shortcuts|esc to cancel)\s{2,})?(?:auto|plan|accept[- ]edits)$', re.I)
-AGY_MODEL_FOOTER = re.compile(r'^Gemini(?:[ -][^·]+)?\s+·\s+(?:low|medium|high)$', re.I)
+AGY_MODEL_FOOTER = re.compile(
+    r'^(?:(?:\? for shortcuts|esc to cancel)\s{2,})?Gemini(?:[ -][^·]+)?\s+·\s+(?:low|medium|high|xhigh|max)$',
+    re.I)
 AGY_PLACEHOLDER = {
     'Auto mode: edits & safe commands auto-approved (shift+tab to cycle)',
     'Plan mode: research & plan only (shift+tab to cycle)',
@@ -236,6 +238,8 @@ def _slash_view(lines):
             return 'agy', '/help'
         if controls.endswith('Keyboard: ↑/↓ Navigate ←/→ Effort enter Select esc Go Back') and 'Switch Model' in rows:
             return 'agy', '/model'
+        if controls.endswith('Keyboard: ↑/↓ Navigate enter Actions esc Exit') and 'MCP Servers' in rows:
+            return 'agy', '/mcp'
     for index, title in enumerate(rows):
         if title == 'Model' and index + 1 < len(rows) and rows[index+1].startswith(
                 'Tab / Shift+Tab providers · ↑/↓ model · Enter select · Esc cancel'):

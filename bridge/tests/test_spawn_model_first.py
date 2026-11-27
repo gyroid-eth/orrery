@@ -366,6 +366,35 @@ def test_wsl_gemini_projects_view_control_and_my_chrome(tour_browser):
         'reason': 'Start Windows Cua Driver.', 'blocked': browser}
 
 
+@pytest.mark.parametrize(('modes', 'fallback'), [
+    (['off','temporary','personal'], 'temporary'),
+    (['off','personal'], 'off'),
+])
+def test_new_agent_explains_unavailable_my_chrome_and_uses_fallback(tour_browser, modes, fallback):
+    _, evaluate = tour_browser
+    catalog = {
+        'browser_modes':{'antigravity':modes},
+        'personal_browser_status':{'antigravity':{
+            'reason':'Chrome is not running on Windows. Start Google Chrome.', 'unavailable':True,
+        }},
+        'providers':[{'id':'gemini','program':'antigravity','models':[{'id':'fixture','default':True}]}],
+    }
+    result = evaluate('''(()=>{
+      spawnCatalog=CATALOG;
+      selFamily=null;selProvider=null;selModel=null;selHarness=null;renderProviderTabs();
+      const myChrome=spawnBrowserChoices.find(([mode])=>mode==='personal')[1];
+      const fallback=spawnToolOptions().tools.browser_mode;
+      const notice=spawnStatus.textContent;
+      const disabled=myChrome.disabled;
+      spawnCatalog={...spawnCatalog,personal_browser_status:{}};
+      spawnToolsRoute=null;renderSpawnTools();updateSpawnAvailability();
+      return {fallback,notice,disabled,ready:spawnToolOptions().tools.browser_mode,
+              readyNotice:spawnStatus.textContent};
+    })()'''.replace('CATALOG', json.dumps(catalog)))
+    assert result == {'fallback':fallback, 'disabled':True, 'ready':'personal', 'readyNotice':'',
+                      'notice':'My Chrome: Chrome is not running on Windows. Start Google Chrome.'}
+
+
 def test_browser_off_keeps_the_standard_base_on_current_telemetry(tour_browser):
     _, evaluate = tour_browser
     result = evaluate('''(()=>{
