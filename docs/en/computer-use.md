@@ -56,14 +56,20 @@ The WSL relay uses standard stdio pipes. It needs WSL interop on the launch path
 <a id="driver-privacy"></a>
 ### Usage telemetry and automatic update checks
 
-ORRERY disables usage telemetry and automatic update checks each time the relay launches Cua Driver. To apply the same settings to the Windows daemon you start, run the following as the Windows user who runs the daemon. These user environment variables persist across Cua Driver updates.
+On macOS, ORRERY disables usage telemetry and automatic update checks each time the relay launches Cua Driver. On Windows, save the preferences in Cua Driver under the Windows account that runs the daemon. The preferences persist across Cua Driver updates.
+
+Open PowerShell as that Windows user and run `cua-driver.exe autostart status`. If the logon task is running, use that daemon. If the task is registered and stopped, sign back in to Windows to run it. If you manage the daemon manually, confirm that no daemon is running, then start it with `cua-driver.exe serve --socket '\\.\pipe\cua-driver'`.
+
+In PowerShell with the same user and elevation, run the commands below. Use the executable's absolute Windows path if it is absent from PATH.
 
 ```powershell
-setx CUA_DRIVER_RS_TELEMETRY_ENABLED false
-setx CUA_DRIVER_RS_UPDATE_CHECK false
+cua-driver.exe telemetry disable
+cua-driver.exe config set update_check_enabled false
+cua-driver.exe telemetry status
+cua-driver.exe config get update_check_enabled
 ```
 
-Sign back in to Windows and open a new, unelevated PowerShell. Run `Get-Item Env:CUA_DRIVER_RS_TELEMETRY_ENABLED,Env:CUA_DRIVER_RS_UPDATE_CHECK`, check that both values are `false`, then start the daemon from that PowerShell.
+Check for `Telemetry: disabled (source: persisted)` and `false` for the update setting. The startup update check uses the saved preference when the daemon next starts. [Cua Driver operation guide](https://github.com/trycua/cua/blob/cua-driver-rs-v0.55.0/docs/content/docs/cua-driver/guides/operate.mdx)
 
 ## macOS launch settings
 

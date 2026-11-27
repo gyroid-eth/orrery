@@ -56,14 +56,20 @@ WSL の中継は普通の stdio パイプを使います。動作には起動経
 <a id="driver-privacy"></a>
 ### 利用状況送信と自動更新確認
 
-ORRERY は relay から Cua Driver を起動するたびに、利用状況送信と自動更新確認を無効にします。Windows で利用者が起動する daemon にも適用するには、daemon を実行する Windows ユーザーで次の 2 行を実行します。ユーザー環境変数に保存されるため、Cua Driver を更新しても設定は残ります。
+macOS では ORRERY が relay から Cua Driver を起動するたびに、利用状況送信と自動更新確認を無効にします。Windows では対話ログオンしたユーザーの Cua Driver 設定に保存します。Cua Driver を更新しても設定は残ります。
+
+daemon を実行する Windows ユーザーで PowerShell を開き、`cua-driver.exe autostart status` で状態を確認します。ログオン時タスクで稼働中なら、その daemon を使います。タスクが登録済みで停止中なら、Windows にサインインし直すと起動します。手動で運用する場合は、稼働中の daemon がないことを確かめてから `cua-driver.exe serve --socket '\\.\pipe\cua-driver'` で起動します。
+
+同じユーザーと昇格状態の PowerShell から次を実行します。PATH にない場合は、Windows 側の実行ファイルの絶対パスを指定します。
 
 ```powershell
-setx CUA_DRIVER_RS_TELEMETRY_ENABLED false
-setx CUA_DRIVER_RS_UPDATE_CHECK false
+cua-driver.exe telemetry disable
+cua-driver.exe config set update_check_enabled false
+cua-driver.exe telemetry status
+cua-driver.exe config get update_check_enabled
 ```
 
-Windows にサインインし直し、新しく開いた昇格なしの PowerShell で `Get-Item Env:CUA_DRIVER_RS_TELEMETRY_ENABLED,Env:CUA_DRIVER_RS_UPDATE_CHECK` を実行します。両方が `false` であることを確かめてから、その PowerShell で daemon を起動します。
+利用状況送信が `Telemetry: disabled (source: persisted)`、更新確認が `false` と表示されることを確かめます。次回の起動から、起動時の更新確認にも設定が反映されます。[Cua Driver の運用ガイド](https://github.com/trycua/cua/blob/cua-driver-rs-v0.55.0/docs/content/docs/cua-driver/guides/operate.mdx)
 
 ## macOS の起動設定
 
