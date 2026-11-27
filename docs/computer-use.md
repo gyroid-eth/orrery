@@ -35,6 +35,7 @@ NEW AGENT の選択を `/api/spawn` で指定する場合、View は `{"tools":{
 
 Claude を会話だけで再開するときも、`/api/jump` に同じ `tools` を渡せます。指定した回の起動に世代を作ります。再開時に追加の道具を省略すると、前の世代の画面操作資格も失効します。[再開 API の指定例](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/api.md#post-apijump)
 
+<a id="driver-setup"></a>
 ## 準備
 
 1. [配布元の Cua Driver 0.55.0](https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.55.0) から対象 OS の artifact を選び、配布元の SHA256 と署名を照合します。
@@ -51,6 +52,9 @@ Claude を会話だけで再開するときも、`/api/jump` に同じ `tools` �
 PATH で見つからない場合は `AGENTSTACK_CUA_DRIVER` に実行ファイルの絶対パスを指定します。WSL では `/mnt/c/…/cua-driver.exe` のような WSL 側の絶対パスです。公開される定義は 0.55.0 の確認済みの定義に固定しています。実行時の版・入力・出力 schema のいずれかが違えば、呼び出しを拒否します。更新時は固定した定義と実際の `tools/list` を照合します。
 
 WSL の中継は普通の stdio パイプを使います。動作には起動経路の WSL interop と、Windows ユーザーの対話ログオンが必要です。interop と distro の寿命は WSL の設定に従います。ログイン中の Windows Terminal、昇格なし、Limited から先に確認します。
+
+<a id="driver-privacy"></a>
+### 利用状況送信と自動更新確認
 
 ORRERY は relay から Cua Driver を起動するたびに、利用状況送信と自動更新確認を無効にします。Windows で利用者が起動する daemon にも適用するには、daemon を実行する Windows ユーザーで次の 2 行を実行します。ユーザー環境変数に保存されるため、Cua Driver を更新しても設定は残ります。
 

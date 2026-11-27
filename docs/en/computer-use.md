@@ -35,6 +35,7 @@ To reproduce the NEW AGENT selection with `/api/spawn`, use `{"tools":{"screen":
 
 You can pass the same `tools` to `/api/jump` when resuming a Claude conversation by itself. This creates a generation for that launch. Omitting extra tools on Resume also revokes the previous generation's screen credential. See the [Resume API example](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/api.en.md#post-apijump).
 
+<a id="driver-setup"></a>
 ## Setup
 
 1. Choose the artifact for your OS from the [Cua Driver 0.55.0 release](https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.55.0) and verify the publisher's SHA256 and signature.
@@ -51,6 +52,9 @@ You can pass the same `tools` to `/api/jump` when resuming a Claude conversation
 Set `AGENTSTACK_CUA_DRIVER` to the executable's absolute path if it is missing from PATH. On WSL, use a WSL path such as `/mnt/c/…/cua-driver.exe`. The exposed tool definitions are pinned to the verified definitions from 0.55.0. Calls fail if the runtime version, input schema, or output schema differs. When updating, compare the pinned definitions with the driver's actual `tools/list`.
 
 The WSL relay uses standard stdio pipes. It needs WSL interop on the launch path and an interactive Windows login. Interop and distro lifetime follow WSL settings. Start your checks in Windows Terminal while logged in, unelevated, and using Limited.
+
+<a id="driver-privacy"></a>
+### Usage telemetry and automatic update checks
 
 ORRERY disables usage telemetry and automatic update checks each time the relay launches Cua Driver. To apply the same settings to the Windows daemon you start, run the following as the Windows user who runs the daemon. These user environment variables persist across Cua Driver updates.
 
