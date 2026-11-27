@@ -1,6 +1,7 @@
 """Run the cockpit WebSocket and watcher against terminal editors in isolated tmux."""
 
 import asyncio
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -15,6 +16,8 @@ from aiohttp import ClientSession
 from aiohttp.test_utils import TestServer
 import pytest
 
+import mobile_access
+import mobile_input
 import orrery_backend as backend
 import pane_submission as submission
 
@@ -133,6 +136,11 @@ def run_editor(harness, state, width, entered):
                 return
             raw.extend(char)
         draft = raw[:-len(end)].decode()
+        if state == 'mobile' and harness == 'hermes':
+            # Hermes may still be processing the paste when Enter is already
+            # readable. Hold back its redraw and consume an early Enter.
+            if select.select([0], [], [], .15)[0]:
+                assert os.read(0, 1) == b'\r'
         show(draft)
         assert os.read(0, 1) == b'\r'
         with entered.open('a') as output:
@@ -187,7 +195,13 @@ async def test_multiline_submission_without_tmux_paste_flag(monkeypatch, legacy)
     await check_routes(monkeypatch, 'hermes', 'idle', 110, legacy=legacy)
 
 
-async def check_routes(monkeypatch, harness, state, width, *, rejected=None, legacy=None):
+@pytest.mark.asyncio
+@pytest.mark.parametrize('harness', COMMANDS)
+async def test_mobile_input_and_shared_multiline_composer_in_private_tmux(monkeypatch, harness):
+    await check_routes(monkeypatch, harness, 'mobile', 80, mobile=True)
+
+
+async def check_routes(monkeypatch, harness, state, width, *, rejected=None, legacy=None, mobile=False):
     tmux = shutil.which('tmux')
     if tmux is None:
         pytest.skip('tmux unavailable')
@@ -231,7 +245,25 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None, leg
             # Keep startup's catalog and recorder traffic inside the fixture.
             monkeypatch.setattr(backend, 'DASHBOARD_URL', 'http://127.0.0.1:1')
             monkeypatch.setenv('ORRERY_HISTORY_DIR', str(root / 'history'))
-            app = backend.create_app(backend.LegacyTargetBoundary(str(wrapper), home=root, environ=env))
+            app = backend.create_app(backend.LegacyTargetBoundary(str(wrapper), home=root, environ=env),
+                                     mobile_input_enabled=mobile)
+            if mobile:
+                class Resolver:
+                    def read(self, bridge, pane_id, deadline):
+                        view = submission.capture(call, pane_id)
+                        assert view is not None and view.pane == pane_id
+                        info = bridge.panes[pane_id]
+                        return dict(session=bridge.config.session, pane_id=pane_id, incarnation=bridge._incarnation,
+                                    identity=[str(view.socket), view.server, view.pane, view.process], height=info.height)
+
+                    @contextlib.contextmanager
+                    def admission(self, row, deadline):
+                        proof = self.read(row['bridge'], row['pane_id'], deadline)
+                        if proof != row['proof']:
+                            raise mobile_input.InputRefused('input_target_changed')
+                        yield proof
+
+                app[mobile_access.INPUT_KEY].resolver = Resolver()
             async with TestServer(app, host='127.0.0.1') as server, ClientSession() as client:
                 async with client.ws_connect(server.make_url('/ws')) as ws:
                     await ws.send_json({'type': 'attach', 'session': 'Fixture'})
@@ -250,6 +282,43 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None, leg
                         view = await get_view()
                         assert view.bracketed is None and view.foreground_command == 'bash'
                     seen = []
+                    if mobile:
+                        scope = dict(contract=mobile_input.CONTRACT, owner='fixture@example.invalid', reader_epoch='1' * 32)
+
+                        async def phone(operation, **values):
+                            origin = str(server.make_url('/')).rstrip('/')
+                            headers = {'Origin': origin, 'X-ORRERY-Mobile-Contract': mobile_input.CONTRACT}
+                            async with client.post(server.make_url('/_mobile/terminal/' + operation),
+                                                   json={**scope, **values}, headers=headers) as response:
+                                payload = await response.json()
+                                assert response.status == 200, payload
+                                return payload
+
+                        scope['epoch'] = (await phone('capability'))['epoch']
+                        targets = await phone('targets', name='Fixture')
+                        choice = targets['targets'][0]['choice']
+                        for text in ('English input from the phone.', 'スマホから日本語を送ります。'):
+                            preview = await phone('preview', choice=choice)
+                            prepared = await phone('prepare', choice=choice, revision=preview['target']['revision'], text=text)
+                            receipt = dict(intent=prepared['intent'], confirmation=prepared['confirmation'])
+                            sent = await phone('commit', **receipt)
+                            assert sent['state'] == 'accepted', (harness, sent)
+                            assert await phone('commit', **receipt) == sent
+                            seen.append(text)
+                            assert [json.loads(line) for line in entered.read_text().splitlines()] == seen
+                            assert (await get_view()).empty
+
+                        # The phone keeps its one-line review contract. Exercise
+                        # multiline through the same shared desktop compositor.
+                        text = 'A multiline prompt.\n日本語を含む二行目です。'
+                        await ws.send_json(dict(type='submit-prompt', paneId=pane, session='Fixture',
+                                                incarnation=reset['incarnation'], inputAck='1:1', data=text))
+                        assert (await receive(ws, 'input-ack'))['status'] == 'accepted'
+                        seen.append(text)
+                        assert [json.loads(line) for line in entered.read_text().splitlines()] == seen
+                        assert (await get_view()).empty
+                        return
+
                     routes = ('cockpit',) if rejected else ('cockpit', 'watcher')
                     for route in routes:
                         texts = (rejected[0],) if rejected else (*COMMANDS[harness], PLAIN)
