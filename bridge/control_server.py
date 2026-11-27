@@ -1827,12 +1827,15 @@ class TmuxControlBridge:
                 else:
                     return 'completion-unverified' if problem == 'completion-unverified' else 'unknown'
 
+                confirmation = submission.SubmissionConfirmation(entered_from, text)
                 while time.monotonic() < deadline:
                     view = await capture()
-                    if view is not None:
+                    if view is None:
+                        confirmation = submission.SubmissionConfirmation(entered_from, text)
+                    else:
                         if view.identity != before.identity:
                             return 'unknown'
-                        if submission.accepted_after_enter(entered_from, view, text):
+                        if confirmation.accepted(view):
                             return 'accepted'
                     await asyncio.sleep(submission.POLL)
                 return 'unknown'
