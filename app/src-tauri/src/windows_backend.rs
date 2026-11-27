@@ -53,7 +53,16 @@ fn windows_health(port: u16) -> Result<Option<Value>, String> {
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     let mut stream = match TcpStream::connect_timeout(&address, Duration::from_millis(500)) {
         Ok(stream) => stream,
-        Err(error) if error.kind() == io::ErrorKind::ConnectionRefused => return Ok(None),
+        // A closed loopback port can time out before Winsock reports refusal.
+        // The WSL probe and health comparison still decide whether to connect.
+        Err(error)
+            if matches!(
+                error.kind(),
+                io::ErrorKind::ConnectionRefused | io::ErrorKind::TimedOut
+            ) =>
+        {
+            return Ok(None);
+        }
         Err(error) => {
             return Err(format!(
                 "Could not connect to Windows localhost port {port}: {error}"

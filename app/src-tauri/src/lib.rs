@@ -19,6 +19,7 @@ mod windows_backend;
 const BACKEND_URL: &str = "http://127.0.0.1:8791/cockpit.html";
 #[cfg(not(windows))]
 const FALLBACK_URL: &str = "tauri://localhost/index.html";
+#[cfg(any(not(windows), test))]
 const CONFIG_RELATIVE_PATH: &str = ".orrery/config.json";
 
 struct HotkeyBinding(String);
