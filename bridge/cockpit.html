@@ -8499,7 +8499,9 @@ function paintSpawnBrowser(modes){
   spawnBrowserUse.setAttribute('aria-expanded',String(spawnBrowserMenu.matches(':popover-open')));
   spawnBrowserUse.setAttribute('aria-disabled',String(!modes.length));
   const limited=!modes.length&&selProvider==='gemini'?'Check Antigravity’s inherited Chrome MCP configuration.':
-    !modes.includes('temporary')?'Install Node.js and npx to use Temporary Chrome.':
+    !modes.includes('temporary')?(spawnUsesManagedScreen()?
+      'Install Google Chrome or Chromium and Node.js inside WSL to use Temporary Chrome.':
+      'Install Node.js and npx to use Temporary Chrome.'):
     spawnUsesManagedScreen()?'My Chrome needs Windows Node.js with npm and Chrome remote debugging.':
     'My Chrome is unavailable for this launch.';
   spawnBrowserUse.title='Browser: '+spawnBrowserLabels[spawnBrowserMode]+(modes.length<spawnBrowserChoices.length?'. '+limited:'');
