@@ -89,6 +89,7 @@ CLAUDE_SLASH_SELECTION = re.compile(r'^[ \t]+❯[ \t]+(' + SLASH_NAME.pattern + 
 CODEX_SLASH_SELECTION = re.compile(r'^›[ \t]+(' + SLASH_NAME.pattern + r')(?=[ \t]|$)')
 SLASH_CONTINUATION = re.compile(r'^[ \t]{8,}[^ \t/❯]')
 REVERSE_VIDEO = re.compile(r'\x1b\[(?:[0-9]+;)*7(?:;[0-9]+)*m')
+CODEX_PICKER_BACKGROUND = re.compile(r'\x1b\[48;2;(?:[0-9]{1,3};){2}[0-9]{1,3}m\Z')
 DSH_COMMAND_MENU = re.compile(r'^\s*╭─ commands · \d+ items? ─+╮$')
 DSH_COMMAND_SELECTED = re.compile(r'^\s*│\s+❯\s+([\w.:-]+)(?=\s|│|$)')
 AGY_COMMAND_SELECTED = re.compile(r'^>\s+(' + SLASH_NAME.pattern + r')(?=[ \t]|$)')
@@ -287,7 +288,10 @@ def _slash_selection(lines, plain, start, *, codex):
         row = plain[index]
         match = selection.match(row)
         if match:
-            if not codex or REVERSE_VIDEO.search(lines[index].partition('›')[0]):
+            highlight = lines[index].partition('›')[0]
+            # Codex can draw the active row with an RGB background instead
+            # of reverse video. In both cases the style precedes its marker.
+            if not codex or REVERSE_VIDEO.search(highlight) or CODEX_PICKER_BACKGROUND.search(highlight):
                 return True, match[1]
             return True, None
         if SLASH_OPTION.match(row):
