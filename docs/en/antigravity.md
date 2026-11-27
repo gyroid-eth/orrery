@@ -30,9 +30,9 @@ Gemini integration files and starts Dashboard on macOS and WSL (Ubuntu).
 Install `agy` and sign in when you want to use Gemini. Use
 `--dashboard-only` for a dashboard-only installation.
 
-For [**NEW AGENT**](#dashboard-new-agent), the launcher configures Mail MCP in the
-private launch configuration for standalone agents or in the worktree for
-delegated agents.
+For [**NEW AGENT**](#dashboard-new-agent), the launcher configures Mail MCP in
+a private launch directory. When you select Isolation for a delegated launch,
+the launcher configures Mail in the child's worktree.
 
 **To send Mail from a top-level `agent-start-gemini` session**, first run
 `scripts/install-gemini-provider.sh --dry-run --configure-mcp`. Show the user
@@ -117,10 +117,11 @@ PARENT_AGENT=<parent-name> \
   /path/to/project
 ```
 
-The launcher pre-registers the child, creates an isolated git worktree, reserves
-declared resources, sends the task to Antigravity over stream-json stdin, and
-uses the session-bound MCP wrapper. Owner-token values are not placed in the
-task, argv, or Antigravity MCP configuration.
+The launcher pre-registers the child and uses the selected working folder.
+Supply `--resources` to reserve paths before launch or `--worktree` to create
+an isolated Git worktree. On macOS and WSL, the launcher opens the interactive
+CLI and submits the first task after MCP is ready. Mail uses the session-bound
+MCP wrapper, with the owner token stored in the private runtime directory.
 
 A nominal Antigravity `SUCCESS` is not enough when required actions were denied
 or the textual response is empty. Those cases are reported to the parent as
@@ -129,14 +130,12 @@ incomplete. A non-zero launcher/runtime status is likewise incomplete.
 ## Dashboard NEW AGENT
 
 [Set up Gemini](#set-up-gemini-in-orrery), then choose Antigravity and a model
-in **NEW AGENT**. On macOS, when the catalog advertises standalone
-support (API 50 or later), leave the parent blank to open an interactive agent in
-the selected folder, including a folder outside Git. The CLI receives the first
-task once. You can use Mail, Reader, and Resume from history.
+in **NEW AGENT**. In API 59 and later on macOS and WSL, choose a working folder
+and select a parent for delegation or leave it blank for an independent agent.
+Both launches can use a folder outside Git. The CLI receives the first task
+once. Mail and Reader are available, and Resume from history is available on macOS.
 ORRERY loads its Mail and hook settings from a private directory for that
-launch and removes the directory when the agent exits. It leaves the selected folder and
-personal configuration untouched. On Linux/WSL, or when the catalog does not advertise
-standalone support, choose a parent to delegate the launch.
+launch when using the selected folder and removes the private directory after exit.
 
 In API 53, macOS offers Off, View, and Control under **Computer use**.
 For **Browser**, choose from the modes the catalog offers.
@@ -146,7 +145,7 @@ See [computer use requirements and setup](computer-use.md) and the
 The dashboard checks launch requirements before registering with ORRERY Mail.
 
 - A delegated launch needs the parent's local owner credential.
-- Delegated launches and standalone launches with Isolation selected need a
+- Launches with Isolation selected need a
   folder in a Git repository and a base that resolves to a commit (default `HEAD`).
 - The launcher requires `agy`, `tmux`, the selected Python, the adapter hook,
   and the Gemini provider helpers.
@@ -188,14 +187,14 @@ Engine and isolation rules:
   CLI launchers' `high` fallback is not applied to Dashboard launches.
 - **Orchestrator models have fixed effort.** The picker hides the effort
   control and launches with just the model ID.
-- **Delegated launches use an isolated worktree.** On macOS, a standalone
-  launch creates a worktree when you select Isolation.
-- **Delegated launches require resources.** Leave resources blank for a standalone launch.
-  For delegation, enter comma-separated paths relative to the
-  repository root, for example `src/**,tests/**`. Absolute paths, `..`, `~`,
+- **Choose Isolation to create a Git worktree.** Launches otherwise use the selected folder.
+- **Resources are optional for delegated launches.** Enter comma-separated paths
+  relative to the working folder or, with Isolation selected, to the worktree root.
+  For example, enter `src/**,tests/**`. Leave resources blank for an independent launch.
+  Absolute paths, `..`, `~`,
   control characters, a leading `-`, backslashes, and `.git` are rejected, as
-  is any existing symlink component that resolves outside the repository. The
-  adapter repeats the check inside the new worktree before reserving anything.
+  is any existing symlink component that resolves outside the working folder. The
+  adapter repeats the check in the launch directory before reserving anything.
   Declarations are normalized (whitespace, `./`, duplicate slashes, repeats)
   before they are reserved, and a leading `-` is rejected in the normalized
   form too (`./-rf`). Wildcards are matched the way a case-insensitive
@@ -203,8 +202,7 @@ Engine and isolation rules:
   is judged against `.git` or `src` in any letter case.
 
 The dedicated launcher passes the first task directly to the Antigravity CLI,
-so Dashboard creates no separate task Mail. Delegated launches on Linux/WSL
-automatically report to the parent when they exit. Interactive agents on macOS
+so Dashboard creates no separate task Mail. Interactive agents on macOS and WSL
 can receive follow-up requests through Mail. `/api/spawn-status` and
 `dashboard/logs/spawn.log` record `provider=gemini`.
 

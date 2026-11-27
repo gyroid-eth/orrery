@@ -29,8 +29,8 @@ agy models
 連携ファイルを導入・更新し、Dashboard を起動します。`agy` の導入とサインインは
 利用者が Gemini を使うときに行います。`--dashboard-only` は同梱の対象外です。
 
-[**NEW AGENT**](#dashboard-new-agent) では、Mail MCP は親なし起動の専用設定か、
-委任起動の作業用 worktree に用意されます。
+[**NEW AGENT**](#dashboard-new-agent) では、Mail MCP を起動ごとの専用設定に用意します。
+委任起動で Isolation を選ぶと、子の worktree に用意します。
 
 **`agent-start-gemini` で立てる親なし agent から Mail を送る場合**は、
 `scripts/install-gemini-provider.sh --dry-run --configure-mcp` で追加先を確認します。
@@ -113,15 +113,14 @@ PARENT_AGENT=<parent-name> \
   /path/to/project
 ```
 
-launcher は子を事前登録し、専用の worktree を作り、宣言したファイルを予約します。
+launcher は子を事前登録し、指定したフォルダで起動します。`--resources` を指定したときは
+対象を起動前に予約します。Git worktree を作るには `--worktree` を付けます。
 Mail はその子に紐付いた MCP wrapper を通ります。owner token は private な runtime に保持します。
 
-macOS では `agy` の対話画面を開き、最初の仕事を `-i` で渡します。
+Mac と WSL では `agy` の対話画面を開き、MCP の準備ができてから最初の仕事を渡します。
 子は Mail の `send_message` で報告したあとも待機し、追加 Mail は共通 watcher が入力欄へ届けます。
-サンドボックスを有効にし、その子の worktree だけを起動時の `trustedWorkspaces` に渡します。
-ネイティブ編集は共通の登録・予約確認を通ります。macOS の対話子には Antigravity Reader の payload が必要です。
-
-Linux／WSL の既存経路は最初の task を stream-json の標準入力に流し、自動報告して終了します。
+サンドボックスを有効にし、起動時に選んだ作業フォルダを使います。
+ネイティブ編集は共通の登録・予約確認を通ります。対話起動には Antigravity Reader の payload が必要です。
 
 A nominal Antigravity `SUCCESS` is not enough when required actions were denied
 or the textual response is empty. Those cases are reported to the parent as
@@ -130,12 +129,11 @@ incomplete. A non-zero launcher/runtime status is likewise incomplete.
 ## Dashboard NEW AGENT
 
 [Gemini の設定](#gemini-を使うための設定)を済ませ、**NEW AGENT** で Antigravity と model を選びます。
-macOS でカタログが親なし起動に対応している場合（API 50 以降）は、親を選ばず、
-指定したフォルダで対話型 agent を起動できます。Git を使っていないフォルダも選べます。
-最初の task は CLI に一度だけ渡り、Mail、Reader、履歴からの Resume を使えます。
+Mac と WSL の API 59 以降では、指定したフォルダから親付き・親なしのどちらでも
+対話型 agent を起動できます。Git を使っていないフォルダも選べます。
+最初の task は CLI に一度だけ渡り、Mail と Reader を使えます。履歴からの Resume は Mac で使えます。
 ORRERY の Mail と hook の設定は起動ごとの専用ディレクトリに置き、終了時に削除します。
 選んだフォルダと個人設定には起動用の設定を書き込みません。
-Linux／WSL や、カタログが親なし起動に対応していない場合は、親を選んで委任起動します。
 
 API 53 では macOS の **Computer use** で Off／View／Control を選べます。
 **Browser** はカタログが示す利用可能なモードから選べます。
@@ -144,7 +142,7 @@ API 53 では macOS の **Computer use** で Off／View／Control を選べま�
 起動条件は ORRERY Mail の登録前に確認します。
 
 - 委任起動には、親の agent とそのローカルの owner 資格が必要です。
-- 委任起動と、親なしで Isolation を選んだ場合は、Git リポジトリ内のフォルダと
+- Isolation を選んだ場合は、Git リポジトリ内のフォルダと
   コミットに解決できる worktree base（既定は `HEAD`）が必要です。
 - `agy`、`tmux`、選択された Python、adapter hook、Gemini provider の helper が必要です。
 - `AGENTSTACK_GEMINI_MODELS` を明示した場合、モデルはその許可リストに限定されます。
@@ -179,20 +177,19 @@ Effort の接尾辞がないモデル ID はそのまま渡します。モデル
   `effort required for provider gemini` で拒否します。CLI launcher の既定の `high` は
   Dashboard での起動には適用されません。
 - **Orchestrator モデルの Effort は固定です。** Effort を選ぶ欄は表示されず、モデル ID だけで起動します。
-- **委任起動は isolated worktree を使います。** macOS の親なし起動で worktree を作るには、
-  Isolation を選びます。
-- **委任起動は予約対象（resources）が必要です。** 親なし起動では resources を空欄にします。
-  委任時はリポジトリの root からの相対パスを `src/**,tests/**` のようにカンマ区切りで指定します。
+- **Isolation を選ぶと Git worktree を作ります。** 通常は指定した作業フォルダで起動します。
+- **委任時は予約対象（resources）を任意で指定できます。** 作業フォルダからの相対パスを
+  `src/**,tests/**` のようにカンマ区切りで指定します。Isolation を使うときは worktree の
+  ルートからの相対パスになります。親なし起動では resources を空欄にします。
   絶対パス、`..`、`~`、制御文字、先頭の `-`、バックスラッシュ、`.git`、
-  リポジトリの外を指す既存のシンボリックリンクを含むパスは拒否します。
+  作業フォルダの外を指す既存のシンボリックリンクを含むパスは拒否します。
   予約前に空白や `./`、連続するスラッシュ、重複を正規化し、`./-rf` のように
   正規化後に `-` で始まるパスも拒否します。既定の APFS のように大文字小文字を区別しない
   ファイルシステムに合わせ、`.GI?/config` や `SR?/**` は `.git` や `src` にも照合します。
-  adapter は予約前に新しい worktree 内でも検査を行います。
+  adapter は予約前に起動先でも検査を行います。
 
 専用 launcher が最初の task を Antigravity の CLI へ直接渡すため、Dashboard は別の
-task Mail を作りません。Linux／WSL の委任は終了時に自動で親へ報告します。
-macOS の対話型 agent は、起動後に Mail から追加の依頼を受け取れます。
+task Mail を作りません。Mac と WSL の対話型 agent は、起動後に Mail から追加の依頼を受け取れます。
 `/api/spawn-status` と `dashboard/logs/spawn.log` は `provider=gemini` を記録します。
 
 Dashboard の起動画面は、provider が返す `capabilities` に従います。Gemini の連携は
@@ -207,7 +204,7 @@ cockpit の左の一覧とスマホの一覧に context window のバーが出�
 Antigravity の statusLine が現在の使用率を返すと表示され、まだ観測値がない間は表示されません。
 
 macOS の対話子は `EXIT` で終了し、予約を解放して保持期間に入ります。
-`Resume` は確認できた同じ登録・worktree・会話 ID を使います。
+`Resume` は確認できた同じ登録・起動時の作業フォルダ・会話 ID を使います。
 再開後に編集するときは必要な予約を取り直します。履歴を照合できない場合は理由を返します。
 
 stream-json の子には、直前に確認した `agy` に `SIGINT` を送り、runner が報告・予約解放・退役を行います。
