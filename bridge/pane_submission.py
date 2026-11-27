@@ -92,7 +92,7 @@ CODEX_SLASH_SELECTION = re.compile(r'^›[ \t]+(' + SLASH_NAME.pattern + r')(?=[
 SLASH_CONTINUATION = re.compile(r'^[ \t]{8,}[^ \t/❯]')
 REVERSE_VIDEO = re.compile(r'\x1b\[(?:[0-9]+;)*7(?:;[0-9]+)*m')
 CODEX_PICKER_BACKGROUND = re.compile(r'\x1b\[48;2;(?:[0-9]{1,3};){2}[0-9]{1,3}m\Z')
-DSH_COMMAND_MENU = re.compile(r'^\s*╭─ commands · \d+ items? ─+╮$')
+DSH_COMMAND_MENU = re.compile(r'^\s*╭─ commands · \d+ items? ─+╮(?: +[▴▾])?$')
 DSH_COMMAND_SELECTED = re.compile(r'^\s*│\s+❯\s+([\w.:-]+)(?=\s|│|$)')
 AGY_COMMAND_SELECTED = re.compile(r'^>\s+(' + SLASH_NAME.pattern + r')(?=[ \t]|$)')
 AGY_COMMAND_HELP = '↑/↓ Navigate · enter Select · tab Complete'
