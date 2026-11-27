@@ -14,6 +14,8 @@ Claude Code にも Codex Desktop にも、最初から subagent の仕組みが�
 
 Codex では `$delegate` でこの skill を呼びます（`/skills` でも選択できます）。Claude Code では `/delegate` です。installer は `${CODEX_HOME:-$HOME/.codex}/skills/delegate` にリンクを作ります。同名の利用者 skill があれば警告して保持するため、競合時は ORRERY の skill が選ばれているか確認してください。
 
+結果を報告したあとや、返事が来るまで進められない質問を送ったあとは、セッションを開いたままターンを終えます。返事は ORRERY Mail の通知で届きます。`sleep` を繰り返して待たないでください。
+
 ## 一言でいうと
 
 - **組み込み subagent** は、親の中で開かれ、答えを返して閉じる**呼び出し**です。外から見えるものは何も残しません。
