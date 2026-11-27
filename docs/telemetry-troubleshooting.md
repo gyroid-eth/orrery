@@ -101,6 +101,24 @@ export AGENTSTACK_PROJECT_KEY=/absolute/project/path
 
 DECK の tmux state は設定なしでも見えます。mail edge、history / replay、spawn だけが使えない状態は意図された縮退動作です。Output は cwd / git root の `logs/` fallback を引き続き探索します。
 
+## 起動のたびに `ORRERY instruction migration: N notices` と出る
+
+agent の起動時に、指示ファイル（`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、作業 folder の `CLAUDE.md` など）の ORRERY 管理ブロックについて、知らせの件数が出ます。各ファイルの path と理由は `agentstack-doctor` で確認できます。
+
+### `[legacy]`、または `differs from the installed template`
+
+管理ブロックがインストール済みの template より古い状態です。SSH や script などの非対話 shell で installer を実行すると、管理ブロックの更新を見送り、install の log に `non-interactive shell; skipping … managed setup` と出ます。理由が `INSTRUCTION_PATH_UNSAFE` の場合は、次の節を確認してください。
+
+端末で、知らせや install の log に出ている command を実行します。Claude は `agentstack-claude-setup`、Codex は `agentstack-codex-setup` です。既存のファイルを書き換える場合は確認を求めます。書き換えるのは管理ブロックだけで、元のファイル全体の控えは、既定では `~/.agentstack/backups/instruction-migration/` に残ります。
+
+先に計画だけ見るときは `--plan` を付けます。[承認の条件は指示ファイルの移行ガイドを参照してください。](instruction-migration.md#consent)
+
+### `[unknown]`（`INSTRUCTION_PATH_UNSAFE: …`）
+
+指示ファイルの所有者が違う、group や他の利用者が書き込める、または path を安全にたどれないとき、ORRERY はそのファイルの確認と更新を見送ります。setup を実行しても、理由になっている条件が残っている間は知らせが続きます。agent の起動と Mail は続けて使えます。
+
+WSL の Windows drive（`/mnt/c/…` など）で Linux の権限メタデータが無効だと、Windows のアクセス権が `rwxrwxrwx` などに見えることがあります。Windows drive（DrvFs）と確認でき、WSL 上の所有者が現在の利用者と一致する場合、ORRERY はこの見かけの権限を区別して確認・更新します。更新時は全文の控えを取ってから、同じファイルに書き込み、読み直して確認します。Windows 側の個別アクセス権はそのファイルに残ります。この知らせが残るときは、`agentstack-doctor` に表示された path と理由を確認してください。[WSL のファイル権限](https://learn.microsoft.com/ja-jp/windows/wsl/file-permissions)
+
 ## Output が空、または link にならない
 
 Output の file は `LOG_*.md` で、frontmatter の `agent:` が dashboard の canonical agent 名と一致する必要があります。

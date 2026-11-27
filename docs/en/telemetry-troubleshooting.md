@@ -90,6 +90,24 @@ export AGENTSTACK_PROJECT_KEY=/absolute/project/path
 
 DECK tmux state remains visible without this configuration. It is an intentional degraded mode where only mail edges, history / replay, and spawn are unavailable. Output still searches the cwd / Git-root `logs/` fallback.
 
+## `ORRERY instruction migration: N notices` appears at startup
+
+When an agent starts, ORRERY reports the number of notices about managed blocks in instruction files such as `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, and `CLAUDE.md` in the working folder. Run `agentstack-doctor` to see the path and reason for each file.
+
+### `[legacy]` or `differs from the installed template`
+
+The managed block is older than the installed template. When the installer runs in a non-interactive shell such as an SSH session or a script, it skips updating the managed block and logs `non-interactive shell; skipping … managed setup`. If the reason is `INSTRUCTION_PATH_UNSAFE`, see the next section.
+
+In a terminal, run the command shown in the notice or installer log. Use `agentstack-claude-setup` for Claude or `agentstack-codex-setup` for Codex. Setup asks for confirmation before changing an existing file. It changes only the managed block and keeps a full copy of the original file under `~/.agentstack/backups/instruction-migration/` by default.
+
+Add `--plan` to preview the changes. [See the instruction migration guide for consent rules.](instruction-migration.md#consent)
+
+### `[unknown]` with `INSTRUCTION_PATH_UNSAFE: …`
+
+ORRERY skips checking and updating an instruction file if it belongs to a different owner, allows group or other users to write, or cannot be reached through a safe path. Setup continues to report the notice while that condition remains. Agent startup and Mail can continue.
+
+On Windows drives in WSL, such as `/mnt/c/…`, Windows permissions can appear as `rwxrwxrwx` when Linux permission metadata is disabled. When ORRERY can confirm a Windows drive mounted through DrvFs and WSL reports the current user as the owner, ORRERY treats those permission bits as synthesized and checks and updates the file. It saves a full copy before writing to the existing file, then reads the result back to verify it. The file keeps its individual Windows access permissions. If the notice persists, check the path and reason in `agentstack-doctor`. [File permissions for WSL](https://learn.microsoft.com/en-us/windows/wsl/file-permissions)
+
 ## Output is empty or not linked
 
 Output files must be named `LOG_*.md`, and frontmatter `agent:` must match the dashboard's canonical agent name.
