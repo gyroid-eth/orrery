@@ -38,29 +38,31 @@ You can pass the same `tools` to `/api/jump` when resuming a Claude conversation
 <a id="driver-setup"></a>
 ## Setup
 
-1. Choose the artifact for your OS from the [Cua Driver 0.55.0 release](https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.55.0) and verify the publisher's SHA256 and signature.
+1. When Cua Driver is missing, the interactive ORRERY Telemetry installer offers to install it. Press Enter or type `y` at `[Y/n]` to download the pinned 0.55.0 release, verify its SHA256 and signature, and install it in your user directory. To install it later, run `agentstack-install-cua-driver` in a terminal. Non-interactive installs print that command.
 2. Prepare the user’s interactive session for the OS.
 3. Use `agentstack-http-operator configure` to set up an operator capability for the dashboard installation. Reuse the capability if it is already configured. See [operator setup](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/global-delivery-client.en.md#operator-ui-access).
 4. Verify that `python -I -m agentstack_mail.screen_mcp --help` runs with the Python interpreter that will start the relay. If needed, set `AGENTSTACK_SCREEN_PYTHON` to the interpreter's absolute path. For launches and resumes from the dashboard, set it in the dashboard's environment.
 
 | OS | Driver command and requirements |
 | --- | --- |
-| macOS | `cua-driver mcp`. Verify the Developer ID and notarization of CuaDriver.app, then grant Accessibility and Screen Recording permissions. If the driver is absent from PATH, the launcher checks the standard Applications locations. |
-| Windows + WSL | `cua-driver.exe mcp --socket \\.\pipe\cua-driver`. Verify the Authenticode signature on Windows. Start the daemon in an interactive Windows login and match the pipe's Windows account and elevation to the executable called from WSL. Use an unelevated session with Limited first. |
-| Linux | `cua-driver mcp`. Use the upstream Linux build in an X11 session or a KDE KWin session the driver supports. |
+| macOS | The installer verifies the app's Developer ID and notarization. In System Settings, grant the app Accessibility and Screen Recording. |
+| Windows + WSL | The installer verifies Authenticode signatures and installs under your Windows user directory. Prepare the daemon in an interactive Windows login and match the pipe's Windows account and elevation to the executable called from WSL. Use an unelevated session with Limited first. |
+| Linux | The installer verifies the publisher's Sigstore signature with `cosign`. Have `cosign` available and use an X11 session or a KDE KWin session the driver supports. |
 
-Set `AGENTSTACK_CUA_DRIVER` to the executable's absolute path if it is missing from PATH. On WSL, use a WSL path such as `/mnt/c/…/cua-driver.exe`. The exposed tool definitions are pinned to the verified definitions from 0.55.0. Calls fail if the runtime version, input schema, or output schema differs. When updating, compare the pinned definitions with the driver's actual `tools/list`.
+ORRERY leaves an existing Cua Driver installation in place. To install manually, choose your OS archive from the [Cua Driver 0.55.0 release](https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.55.0) and verify its SHA256 and signature. When ORRERY raises the pin, run `agentstack-install-cua-driver --upgrade` in a terminal and approve the upgrade for your ORRERY-managed copy.
+
+The relay finds the driver installed by ORRERY. For a manual installation that is absent from PATH, set `AGENTSTACK_CUA_DRIVER` to its absolute path. On WSL, use a WSL path such as `/mnt/c/…/cua-driver.exe`. The exposed tool definitions are pinned to the verified definitions from 0.55.0. Calls fail if the runtime version, input schema, or output schema differs.
 
 The WSL relay uses standard stdio pipes. It needs WSL interop on the launch path and an interactive Windows login. Interop and distro lifetime follow WSL settings. Start your checks in Windows Terminal while logged in, unelevated, and using Limited.
 
 <a id="driver-privacy"></a>
 ### Usage telemetry and automatic update checks
 
-On macOS, ORRERY disables usage telemetry and automatic update checks each time the relay launches Cua Driver. On Windows, save the preferences in Cua Driver under the Windows account that runs the daemon. The preferences persist across Cua Driver updates.
+ORRERY-managed installs and upgrades save the disabled usage telemetry and update check preferences for the interactive user. Use `agentstack-doctor` to check that both are saved. On macOS and WSL, the relay also disables both each time it launches Cua Driver.
 
 Open PowerShell as that Windows user and run `cua-driver.exe autostart status`. If the logon task is running, use that daemon. If the task is registered and stopped, sign back in to Windows to run it. If you manage the daemon manually, confirm that no daemon is running, then start it with `cua-driver.exe serve --socket '\\.\pipe\cua-driver'`.
 
-In PowerShell with the same user and elevation, run the commands below. Use the executable's absolute Windows path if it is absent from PATH.
+To save these preferences manually, run the commands below in PowerShell with the same user and elevation. Use the executable's absolute Windows path if it is absent from PATH.
 
 ```powershell
 cua-driver.exe telemetry disable
@@ -70,6 +72,12 @@ cua-driver.exe config get update_check_enabled
 ```
 
 Check for `Telemetry: disabled (source: persisted)` and `false` for the update setting. The startup update check uses the saved preference when the daemon next starts. [Cua Driver operation guide](https://github.com/trycua/cua/blob/cua-driver-rs-v0.55.0/docs/content/docs/cua-driver/guides/operate.mdx)
+
+After upgrading an ORRERY-managed Windows installation, start the daemon using the new executable path. If you use a logon task, update its action to point to the new executable.
+
+To select the relay on native Linux, launch with `--tools screen:read:orrery-screen` or `--tools screen:operate:orrery-screen`.
+
+When changing the ORRERY pin, run `python3 scripts/update-cua-driver-pins.py <version>` in the Telemetry checkout. It refreshes the supported archive URLs and SHA256 checksums. Compare the new driver's `tools/list` with the relay's pinned definitions.
 
 ## macOS launch settings
 

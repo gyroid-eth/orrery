@@ -38,29 +38,31 @@ Claude を会話だけで再開するときも、`/api/jump` に同じ `tools` �
 <a id="driver-setup"></a>
 ## 準備
 
-1. [配布元の Cua Driver 0.55.0](https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.55.0) から対象 OS の artifact を選び、配布元の SHA256 と署名を照合します。
+1. Cua Driver が見つからない場合、ORRERY Telemetry の対話 install で導入を提案します。`[Y/n]` に Enter か `y` で答えると、固定版 0.55.0 を取得し、SHA256 と署名を照合して利用者の領域に配置します。後から導入するときは端末で `agentstack-install-cua-driver` を実行します。非対話 install は導入コマンドを案内します。
 2. OS に応じてユーザーの対話セッションを準備します。
 3. Dashboard の install root に、既存の `agentstack-http-operator configure` で operator capability を用意します。すでに作成済みならその値を使います。 [operator の設定](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/global-delivery-client.md#operator-ui-access)
 4. Relay を実行する Python で `python -I -m agentstack_mail.screen_mcp --help` が通ることを確認します。必要なら `AGENTSTACK_SCREEN_PYTHON` に対象の Python の絶対パスを指定します。dashboard から起動・resume する場合は dashboard の実行環境に設定を渡します。
 
 | OS | 上流の起動と前提 |
 | --- | --- |
-| macOS | `cua-driver mcp`。CuaDriver.app の Developer ID と公証を確認し、ユーザーがアクセシビリティと画面収録を許可します。PATH に無ければ標準の Applications 配置を探します。 |
-| Windows＋WSL | `cua-driver.exe mcp --socket \\.\pipe\cua-driver`。Windows 側で Authenticode 署名を確認します。ユーザーの対話ログオンで daemon を起動し、名前付きパイプの Windows アカウントと昇格状態を WSL 側から呼ぶ実行ファイルに合わせます。通常は昇格なしと Limited を使います。 |
-| Linux | `cua-driver mcp`。配布元の Linux 版を X11、またはドライバーが扱える KDE の KWin セッションで使います。 |
+| macOS | installer は CuaDriver.app の Developer ID と公証を照合します。利用者がシステム設定でアプリにアクセシビリティと画面収録を許可します。 |
+| Windows＋WSL | installer は Windows 側の利用者領域へ配置し、Authenticode 署名を照合します。Windows の対話ログオンで daemon を用意し、名前付きパイプの Windows アカウントと昇格状態を WSL 側から呼ぶ実行ファイルに合わせます。通常は昇格なしと Limited を使います。 |
+| Linux | installer は `cosign` で配布元の Sigstore 署名を照合します。事前に `cosign` を用意し、X11 または Cua Driver が対応する KDE の KWin セッションで使います。 |
 
-PATH で見つからない場合は `AGENTSTACK_CUA_DRIVER` に実行ファイルの絶対パスを指定します。WSL では `/mnt/c/…/cua-driver.exe` のような WSL 側の絶対パスです。公開される定義は 0.55.0 の確認済みの定義に固定しています。実行時の版・入力・出力 schema のいずれかが違えば、呼び出しを拒否します。更新時は固定した定義と実際の `tools/list` を照合します。
+既存の Cua Driver はそのまま使います。手動で導入する場合は [Cua Driver 0.55.0 の配布ページ](https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.55.0) で対象 OS のアーカイブを選び、SHA256 と署名を照合します。ORRERY 管理の Cua Driver は、ORRERY が固定版を上げたあとに端末で `agentstack-install-cua-driver --upgrade` を実行し、同意して更新できます。
+
+ORRERY が配置した Cua Driver は relay が見つけます。手動で配置した実行ファイルが PATH から見つからない場合は、`AGENTSTACK_CUA_DRIVER` に絶対パスを指定します。WSL では `/mnt/c/…/cua-driver.exe` のような WSL 側の絶対パスです。公開される定義は 0.55.0 の確認済みの定義に固定しています。実行時の版・入力・出力 schema のいずれかが違えば、呼び出しを拒否します。
 
 WSL の中継は普通の stdio パイプを使います。動作には起動経路の WSL interop と、Windows ユーザーの対話ログオンが必要です。interop と distro の寿命は WSL の設定に従います。ログイン中の Windows Terminal、昇格なし、Limited から先に確認します。
 
 <a id="driver-privacy"></a>
 ### 利用状況送信と自動更新確認
 
-macOS では ORRERY が relay から Cua Driver を起動するたびに、利用状況送信と自動更新確認を無効にします。Windows では対話ログオンしたユーザーの Cua Driver 設定に保存します。Cua Driver を更新しても設定は残ります。
+ORRERY 管理の導入や更新では、対話ログオンする利用者の Cua Driver 設定に、利用状況送信と自動更新確認の停止を保存します。両方が保存されているかは `agentstack-doctor` で確認できます。macOS と WSL では relay が Cua Driver を起動するときにも、両方を無効にします。
 
 daemon を実行する Windows ユーザーで PowerShell を開き、`cua-driver.exe autostart status` で状態を確認します。ログオン時タスクで稼働中なら、その daemon を使います。タスクが登録済みで停止中なら、Windows にサインインし直すと起動します。手動で運用する場合は、稼働中の daemon がないことを確かめてから `cua-driver.exe serve --socket '\\.\pipe\cua-driver'` で起動します。
 
-同じユーザーと昇格状態の PowerShell から次を実行します。PATH にない場合は、Windows 側の実行ファイルの絶対パスを指定します。
+停止設定を手動で保存する場合は、同じユーザーと昇格状態の PowerShell から次を実行します。PATH にない場合は、Windows 側の実行ファイルの絶対パスを指定します。
 
 ```powershell
 cua-driver.exe telemetry disable
@@ -70,6 +72,12 @@ cua-driver.exe config get update_check_enabled
 ```
 
 利用状況送信が `Telemetry: disabled (source: persisted)`、更新確認が `false` と表示されることを確かめます。次回の起動から、起動時の更新確認にも設定が反映されます。[Cua Driver の運用ガイド](https://github.com/trycua/cua/blob/cua-driver-rs-v0.55.0/docs/content/docs/cua-driver/guides/operate.mdx)
+
+ORRERY 管理の Windows 版を更新した場合は、新しい実行ファイルのパスから daemon を起動します。ログオン時タスクを使う場合は、そのタスクの起動先も新しい実行ファイルに更新します。
+
+ネイティブ Linux で relay を選ぶときは、起動時に `--tools screen:read:orrery-screen` または `--tools screen:operate:orrery-screen` を指定します。
+
+ORRERY の固定版を変更する場合は、Telemetry checkout で `python3 scripts/update-cua-driver-pins.py <version>` を実行します。対応アーカイブの URL と SHA256 が更新されます。新しい版の `tools/list` は relay の固定定義と照合します。
 
 ## macOS の起動設定
 
