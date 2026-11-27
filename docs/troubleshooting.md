@@ -137,6 +137,19 @@ cockpit の動きが出ないときは、ブラウザーを動かしている OS
 
 Windows の daemon の利用状況送信と自動更新確認を止める設定は、Cua Driver のユーザー設定に保存できます。[Cua Driver の通信設定](computer-use.md#driver-privacy)
 
+<a id="my-chrome-unavailable"></a>
+## My Chrome を選んだ agent が Chrome につながらない
+
+`list_pages` などが `DevToolsActivePort` が見つからないというエラーで失敗することがあります。NEW AGENT の下部に `Chrome's remote debugging is unavailable …` と表示される場合もあります。
+
+Claude Code 以外の My Chrome は、`chrome-devtools-mcp --autoConnect` で起動中の Chrome につなぎます。その Chrome でリモートデバッグを有効にしてください。Claude Code の My Chrome は Claude in Chrome 拡張の手順に従います。
+
+1. Chrome で `chrome://inspect/#remote-debugging` を開きます。WSL を使っている場合は Windows 側の Chrome を開きます。
+2. **Allow remote debugging for this browser instance** を有効にします。`Server running at: 127.0.0.1:9222` のような表示が出れば有効です。
+3. agent にもう一度試させます。Chrome が接続の許可を尋ねたら **Allow** を押します。
+
+Chrome は開いたままで構いません。My Chrome は Chrome の標準のユーザーデータフォルダーで `DevToolsActivePort` を探すので、`--remote-debugging-port` を指定して別プロファイルを起動する方法は避けてください。有効にしている間は、この PC のアプリがブラウザーの操作を求められます。使い終わったら同じ設定をオフにできます。[Chrome の自動接続ガイド](https://developer.chrome.com/docs/devtools/agents/use-cases/auto-connect)
+
 ## mail が表示されない
 
 `scripts/start-cockpit.sh` は legacy の Telemetry 設定から `AGENTSTACK_MAIL_DB` を引き継ぎます。backend を手動またはアプリから直接起動して別の DB を使う場合は、`ORRERY_MAIL_DB` または共有設定の `mail_db` を明示します。[DB の優先順位](configuration.md#orrery-mail-db)

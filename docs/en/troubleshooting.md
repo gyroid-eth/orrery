@@ -137,6 +137,19 @@ The reason appears at the bottom of NEW AGENT, in the same place as the My Chrom
 
 To keep usage telemetry and automatic update checks disabled for the Windows daemon, save the Cua Driver preferences for the Windows user who runs it. [Cua Driver privacy settings](computer-use.md#driver-privacy)
 
+<a id="my-chrome-unavailable"></a>
+## An agent using My Chrome cannot connect to Chrome
+
+`list_pages` and other browser tools can fail when `DevToolsActivePort` is missing. The bottom of NEW AGENT may show `Chrome's remote debugging is unavailable …`.
+
+For harnesses that use Chrome DevTools MCP, My Chrome attaches to a running Chrome instance through `--autoConnect`. Enable remote debugging in that instance. For Claude Code, follow the setup for the Claude in Chrome extension.
+
+1. Open `chrome://inspect/#remote-debugging` in Chrome. If you use WSL, open the page in Windows Chrome.
+2. Turn on **Allow remote debugging for this browser instance**. A message such as `Server running at: 127.0.0.1:9222` confirms that it is on.
+3. Ask the agent to retry. If Chrome asks for permission to connect, choose **Allow**.
+
+Leave Chrome open. My Chrome checks for `DevToolsActivePort` in Chrome’s standard user data directory, so avoid starting a separate profile with `--remote-debugging-port`. While the setting is on, apps on this computer can request control of the browser. You can turn the setting off when you finish. [Chrome auto-connect guide](https://developer.chrome.com/docs/devtools/agents/use-cases/auto-connect)
+
 ## Mail is not shown
 
 In legacy mode, `scripts/start-cockpit.sh` inherits `AGENTSTACK_MAIL_DB` from Telemetry's settings. For a direct launch from a terminal or the app, set `ORRERY_MAIL_DB` or the shared `mail_db` setting to select a custom database. See [Mail DB precedence](configuration.md#orrery-mail-db).
