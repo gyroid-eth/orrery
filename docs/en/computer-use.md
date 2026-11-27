@@ -56,7 +56,7 @@ The WSL relay uses standard stdio pipes. It needs WSL interop on the launch path
 <a id="driver-privacy"></a>
 ### Usage telemetry and automatic update checks
 
-On macOS, ORRERY disables usage telemetry and automatic update checks each time the relay launches Cua Driver. On Windows, save the preferences in Cua Driver under the Windows account that runs the daemon. The preferences persist across Cua Driver updates.
+On macOS and WSL, ORRERY disables usage telemetry and automatic update checks each time the relay launches Cua Driver. For the Windows daemon, save those preferences in Cua Driver under the Windows account that runs it. The preferences persist across Cua Driver updates.
 
 Open PowerShell as that Windows user and run `cua-driver.exe autostart status`. If the logon task is running, use that daemon. If the task is registered and stopped, sign back in to Windows to run it. If you manage the daemon manually, confirm that no daemon is running, then start it with `cua-driver.exe serve --socket '\\.\pipe\cua-driver'`.
 

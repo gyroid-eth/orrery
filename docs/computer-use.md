@@ -56,7 +56,7 @@ WSL の中継は普通の stdio パイプを使います。動作には起動経
 <a id="driver-privacy"></a>
 ### 利用状況送信と自動更新確認
 
-macOS では ORRERY が relay から Cua Driver を起動するたびに、利用状況送信と自動更新確認を無効にします。Windows では対話ログオンしたユーザーの Cua Driver 設定に保存します。Cua Driver を更新しても設定は残ります。
+macOS と WSL では、ORRERY が relay から Cua Driver を起動するたびに利用状況送信と自動更新確認を無効にします。Windows の常駐 daemon には、対話ログオンしたユーザーの Cua Driver 設定に停止値を保存します。Cua Driver を更新しても設定は残ります。
 
 daemon を実行する Windows ユーザーで PowerShell を開き、`cua-driver.exe autostart status` で状態を確認します。ログオン時タスクで稼働中なら、その daemon を使います。タスクが登録済みで停止中なら、Windows にサインインし直すと起動します。手動で運用する場合は、稼働中の daemon がないことを確かめてから `cua-driver.exe serve --socket '\\.\pipe\cua-driver'` で起動します。
 
