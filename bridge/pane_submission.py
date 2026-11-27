@@ -2,7 +2,7 @@
 
 Use the live tmux socket's inode and pane ID, independently of the client,
 working directory, or provider. The lock can retain a digest of our pending
-Codex notice, without storing its text.
+notice when the editor shows only its length, without storing its text.
 """
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ CLAUDE_QUEUE_HINT = 'Press up to edit queued messages'
 CLAUDE_SUGGESTION = re.compile(r'^[  ]*\x1b\[(?:[0-9]+;)*2(?:;[0-9]+)*m[^\x1b]+(?:\x1b\[(?:0|22)?m[  ]*)?$')
 CLAUDE_ARGUMENT_HINT = re.compile(r'\x1b\[(?:38;5;246|(?:0;)?2)m[^\x1b]+'
                                   r'(?:\x1b\[(?:0|22|39)?m)?[ \t]*$')
-COLLAPSED = re.compile(r'\[Pasted text #\d+(?: \+\d+ lines?)?\]')
+COLLAPSED = re.compile(r'\[Pasted text #\d+(?: \+(\d+) lines?)?\]')
 HERMES_PASTE = re.compile(r'\[Pastedtext#(\d+):(\d+)lines→/.+/pastes/paste_\1_\d{6}\.txt\]')
 HERMES_HINT = re.compile(r'^(?:msg=[\w-]+ · /queue · /bg · /steer · Ctrl\+C cancel|cli\.tui\.placeholder_busy)$')
 HERMES_STATUS = re.compile(r'^(?:[^│]+ │ )?☤ \S')
@@ -73,6 +73,7 @@ AGY_MODEL_FOOTER = re.compile(
     re.I)
 AGY_SCROLL_MARKER = re.compile(
     rf'(?:{SGR.pattern}|[ \t])*\x1b\[90m↑ [1-9]\d* more lines?(?:{SGR.pattern})*[ \t]*')
+AGY_PASTE = re.compile(r'\[Pasted\s+text\s+#[1-9]\d*\s+([1-9][0-9]{0,8})\s+chars\]')
 AGY_PLACEHOLDER = {
     'Auto mode: edits & safe commands auto-approved (shift+tab to cycle)',
     'Plan mode: research & plan only (shift+tab to cycle)',
@@ -124,7 +125,7 @@ class Frame:
     redrawing: bool = False
     draft_continues: bool = False
     wrapped_editor: bool = False
-    codex_paste_chars: int | None = None
+    paste_chars: int | None = None
     codex_queue_hint: bool = False
 
     @property
@@ -591,9 +592,11 @@ def frame(metadata, lines, pane):
             menu=previous_row.startswith(('enter/tab insert · esc close','enter insert · esc close'))
         editor = ('dsh' if boxed else 'hermes' if hermes else 'agy' if agy else
                   'codex' if glyph == '›' else 'claude' if upper or command=='claude' else None)
-        codex_paste = None
+        sized_paste = None
         if editor == 'codex' and CODEX_PASTE_STYLE.search(lines[start]):
-            codex_paste = CODEX_PASTE.fullmatch(''.join(draft.split()))
+            sized_paste = CODEX_PASTE.fullmatch(''.join(draft.split()))
+        elif editor == 'agy':
+            sized_paste = AGY_PASTE.fullmatch(draft)
         selected_command = None
         if editor is not None and (draft.startswith('/') or hermes):
             near_menu, selected_command = SLASH_PICKERS[editor](lines, plain, start, cursor)
@@ -623,7 +626,7 @@ def frame(metadata, lines, pane):
                      dsh_clipped=dsh_clipped, hermes_busy=hermes_busy, editor=editor,
                      running=running, slash_view=slash_view, scrolled=scrolled,
                      draft_continues=more_below or bool(tail and not (lower or footer)),
-                     codex_paste_chars=int(codex_paste[1]) if codex_paste else None,
+                     paste_chars=int(sized_paste[1]) if sized_paste else None,
                      codex_queue_hint=codex_queue_hint)
     return replace(unavailable, slash_view=slash_view)
 
@@ -714,6 +717,19 @@ def visible_cells(text):
     return sum(2 if east_asian_width(char) in ('F', 'W') else 1 for char in text if not char.isspace())
 
 
+def _matches_paste_summary(view, text):
+    if view.draft_continues:
+        return False
+    if view.paste_chars is not None:
+        return view.paste_chars == len(text)
+    if view.editor == 'agy' and view.draft:
+        # Antigravity reports lines for a paste containing newlines and
+        # Unicode code points for a long single-line paste.
+        marker = COLLAPSED.fullmatch(' '.join(view.draft.split()))
+        return bool(marker and marker[1] and int(marker[1]) == text.count('\n') + 1)
+    return False
+
+
 def ready(observed, text, *, operator=False):
     if (observed is None or observed.draft is None or observed.waiting
             or not observed.allows_paste(text, operator=operator)):
@@ -730,14 +746,14 @@ def ready(observed, text, *, operator=False):
         return not observed.draft_continues and len(shown)>=16 and expected.endswith(shown)
     if shown == expected:
         return True
-    if observed.codex_paste_chars == len(text) and not observed.draft_continues:
+    if _matches_paste_summary(observed, text):
         return True
     if observed.dsh_clipped and (operator or text.startswith('ORRERY Mail notification: ')):
         # Fullwidth and wide characters occupy two cells of the visible suffix.
         return visible_cells(shown) >= 24 and expected.endswith(shown)
     # Claude represents a pasted multiline or long prompt as this native
     # capsule. The caller required an empty editor before sending the paste.
-    if COLLAPSED.fullmatch(observed.draft):
+    if observed.editor != 'agy' and COLLAPSED.fullmatch(observed.draft):
         return True
     if observed.hermes:
         # A narrow pane can wrap anywhere in the native paste card's path.
@@ -797,9 +813,11 @@ def capture(command,pane):
     return frame(metadata,screen.splitlines(),pane) if separator else None
 
 
-def _codex_notice_digest(view, text):
-    if view.editor == 'codex' and text.startswith('ORRERY Mail notification: message from '):
-        return hashlib.sha256(f'{view.process}\0{text}'.encode()).digest()
+def _notice_paste_digest(view, text):
+    if view.editor in ('agy', 'codex') and text.startswith('ORRERY Mail notification: message from '):
+        # Keep existing Codex receipts and distinguish Antigravity in a reused pane.
+        provider = 'agy\0' if view.editor == 'agy' else ''
+        return hashlib.sha256(f'{provider}{view.process}\0{text}'.encode()).digest()
     return b''
 
 
@@ -875,15 +893,15 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None,claim_handoff=No
         if before.waiting:
             return defer('refused', 'editor_waiting')
         resuming=not before.empty
-        digest = _codex_notice_digest(before, text)
+        digest = _notice_paste_digest(before, text)
 
         def same_draft(view):
             if same_notice(view,text):
                 return True
-            # The capsule exposes only a length. A retry also needs the
+            # The capsule exposes only a count. A retry also needs the
             # digest saved under this pane's lock before our own paste.
-            return (bool(digest) and view.codex_paste_chars == len(text)
-                    and not view.draft_continues and os.pread(fd, len(digest)+1, 0) == digest)
+            return (bool(digest) and view.editor == before.editor and _matches_paste_summary(view, text)
+                    and os.pread(fd, len(digest)+1, 0) == digest)
 
         if resuming and not same_draft(before):
             return defer('refused', 'editor_not_empty')
