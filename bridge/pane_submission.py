@@ -9,11 +9,13 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import shlex
 import stat
 import subprocess
+import sys
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from unicodedata import east_asian_width
 
 
@@ -28,6 +30,15 @@ SHELLS = frozenset({
     'ksh', 'ksh93', 'mksh', 'nu', 'nushell', 'pdksh', 'powershell', 'pwsh',
     'sh', 'tcsh', 'xonsh', 'yash', 'zsh',
 })
+CONTROL_BYTES = re.compile(r'[\x00-\x1f\x7f-\x9f]')
+MULTILINE_CONTROLS = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]')
+EDITOR_EXECUTABLES = {
+    'agy': {'agy', 'gemini'},
+    'claude': {'claude'},
+    'codex': {'codex'},
+    'dsh': {'dsh'},
+    'hermes': {'hermes'},
+}
 PROMPT = re.compile(r'^(\s*(?:(?:[⌸│☤]|[\w.-]+)\s+)?)([❯›>⌘☤])(?:[ \u00a0]+|$)(.*)')
 BORDER = re.compile(r'^[╭╰]?[─━]{8,}[╮╯]?$')
 CLAUDE_NAMED_BORDER = re.compile(r'^[─━]{8,}[ \t]+\S(?:.*\S)?[ \t]+[─━]+$')
@@ -102,6 +113,7 @@ class Frame:
     slash_view: tuple[str, str] | None = None
     redrawing: bool = False
     draft_continues: bool = False
+    wrapped_editor: bool = False
 
     @property
     def identity(self):
@@ -123,7 +135,118 @@ class Frame:
         # other control characters may be acted on before the draft is visible.
         return bool(self.foreground_command) and (
             self.foreground_command not in SHELLS
-            or not re.search(r'[\x00-\x1f\x7f-\x9f]', text))
+            or not CONTROL_BYTES.search(text)
+            or self.wrapped_editor and not MULTILINE_CONTROLS.search(text))
+
+
+def needs_wrapped_editor(view, text):
+    return (text is not None and view is not None and view.bracketed is None
+            and view.foreground_command in SHELLS and view.editor in EDITOR_EXECUTABLES
+            and CONTROL_BYTES.search(text) is not None and not MULTILINE_CONTROLS.search(text))
+
+
+def _process_columns(*args):
+    try:
+        result = subprocess.run(['ps', *args], capture_output=True, text=True, errors='replace',
+                                timeout=.5, check=True)
+    except (OSError, subprocess.SubprocessError):
+        return ''
+    return result.stdout
+
+
+def _process_argv(pid):
+    try:
+        if sys.platform == 'linux':
+            with open(f'/proc/{pid}/cmdline', 'rb') as source:
+                data = source.read(16384)
+            return [os.fsdecode(part) for part in data[:-1].split(b'\0')] if data.endswith(b'\0') else []
+        return shlex.split(_process_columns('-ww', '-p', str(pid), '-o', 'args='))
+    except (OSError, ValueError):
+        return []
+
+
+def _editor_process(editor, pid, executable):
+    if executable in EDITOR_EXECUTABLES[editor]:
+        return True
+    if editor == 'codex' and re.fullmatch(r'codex-(?:aarch64|x86_64)-[\w-]+', executable):
+        return True
+    node = executable in {'node', 'nodejs', 'mainthread'}
+    python = re.fullmatch(r'python(?:\d+(?:\.\d+)*)?', executable)
+    claude_version = editor == 'claude' and re.fullmatch(r'\d+\.\d+\.\d+', executable)
+    if not (node or claude_version or editor == 'hermes' and python):
+        return False
+    if claude_version:
+        if sys.platform == 'linux':
+            try:
+                return os.readlink(f'/proc/{pid}/exe').endswith('/claude/versions/' + executable)
+            except OSError:
+                return False
+        argv = _process_argv(pid)
+        return bool(argv and argv[0].endswith('/claude/versions/' + executable))
+    argv = _process_argv(pid)
+    if len(argv) < 2:
+        return False
+    script = argv[1]
+    if python:
+        return (argv[1:3] == ['-m', 'hermes_cli.main']
+                or script.endswith(('/bin/hermes', '/hermes_cli/main.py')))
+    return script.endswith({
+        'agy': ('/node_modules/@google/gemini-cli/dist/index.js', '/bin/gemini'),
+        'claude': ('/node_modules/@anthropic-ai/claude-code/cli.js', '/bin/claude'),
+        'codex': ('/node_modules/@openai/codex/bin/codex.js', '/bin/codex'),
+        'dsh': ('/node_modules/@deepseek-ai/dsh/lib/bin.js', '/bin/dsh'),
+        'hermes': (),
+    }[editor])
+
+
+def _editor_has_terminal_input(pid, terminal):
+    if sys.platform != 'linux':
+        return True
+    # A background child of a noninteractive shell can share its group, but
+    # Bash normally redirects that child's stdin away from the pane.
+    try:
+        stdin = os.stat(f'/proc/{pid}/fd/0')
+        tty = os.stat('/dev/' + terminal)
+    except OSError:
+        return False
+    return stat.S_ISCHR(stdin.st_mode) and stdin.st_rdev == tty.st_rdev
+
+
+def confirm_wrapped_editor(view):
+    # WSL can report the shell as the foreground group leader even while its
+    # agent is reading. Require that editor in this pane's live foreground group.
+    processes = {}
+    children = {}
+    for line in _process_columns('-axo', 'pid=,ppid=,pgid=,tpgid=,tty=,stat=,comm=').splitlines():
+        parts = line.split(None, 6)
+        if len(parts) != 7:
+            continue
+        try:
+            pid, parent, group, foreground = map(int, parts[:4])
+        except ValueError:
+            continue
+        tty, state, command = parts[4:]
+        processes[pid] = (group, foreground, tty, state, Path(command).name.lower())
+        children.setdefault(parent, []).append(pid)
+    if view.process not in processes:
+        return view
+    _, foreground, tty, _, _ = processes[view.process]
+    if foreground <= 0 or tty == '?':
+        return view
+    pending = children.get(view.process, [])[:]
+    seen = {view.process}
+    while pending:
+        pid = pending.pop()
+        if pid in seen:
+            continue
+        seen.add(pid)
+        pending.extend(children.get(pid, ()))
+        group, active, terminal, state, executable = processes[pid]
+        if (group == foreground == active and terminal == tty and state[0] not in 'TtXZ'
+                and _editor_process(view.editor, pid, executable)
+                and _editor_has_terminal_input(pid, tty)):
+            return replace(view, wrapped_editor=True)
+    return view
 
 
 def _slash_selection(lines, plain, start, *, codex):
@@ -286,14 +409,15 @@ def frame(metadata, lines, pane):
     base=(path,server,pane,process)
     bracketed = fields[7] == '1' if fields[7] else None
     command = fields[8].rsplit('/', 1)[-1].lower().lstrip('-').removesuffix('.exe')
+    unavailable = Frame(*base, None, False, bracketed=bracketed, foreground_command=command)
     if mode or cursor>=len(lines):
-        return Frame(*base,None,False)
+        return unavailable
     # tmux adds a link target to the styled capture, separate from its visible text.
     lines=[OSC8.sub('',line) for line in lines]
     plain=[SGR.sub('',line) for line in lines]
     slash_view = _slash_view(plain)
     if bracketed is False:
-        return Frame(*base,None,False,slash_view=slash_view)
+        return replace(unavailable, slash_view=slash_view)
     if (cursor==0 and column==2 and plain[0].startswith('❯ ')
             and not any(row.strip() for row in plain[1:])
             and _hermes_compact_hint(lines[0], plain[0][2:].strip())):
@@ -407,7 +531,7 @@ def frame(metadata, lines, pane):
         footer=tail and (tail[0].startswith(('? for shortcuts','← for agents','⏵','⏸','% context left','Context '))
                 or re.match(r'gpt-\S+\s+(?:default|low|medium|high|xhigh|max|ultra)\b',tail[0],re.I))
         if not draft and tail and not (lower or footer or waiting):
-            return Frame(*base,None,False,slash_view=slash_view)
+            return replace(unavailable, slash_view=slash_view)
         menu=(start>=2 and upper and bool(re.match(r'^[ \t]+❯[ \t]+\S',plain[start-2])))
         if glyph=='›':
             previous_row=next((row.strip().lower() for row in reversed(above) if row.strip()), '')
@@ -443,7 +567,7 @@ def frame(metadata, lines, pane):
                      dsh_clipped=dsh_clipped, hermes_busy=hermes_busy, editor=editor,
                      running=running, slash_view=slash_view, scrolled=scrolled,
                      draft_continues=more_below or bool(tail and not (lower or footer)))
-    return Frame(*base,None,False,slash_view=slash_view)
+    return replace(unavailable, slash_view=slash_view)
 
 
 def bare_slash(text):
@@ -623,18 +747,22 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
             on_wait(reason)
         return status
 
-    def capture_draft(identity):
+    def capture_input():
         view = capture(command,pane)
+        return confirm_wrapped_editor(view) if needs_wrapped_editor(view, text) else view
+
+    def capture_draft(identity):
+        view = capture_input()
         if view is None or view.identity != identity or not view.redrawing:
             return view
         redraw_deadline = min(end, time.monotonic() + REDRAW_GRACE)
         while time.monotonic() < redraw_deadline:
             time.sleep(POLL)
-            view = capture(command,pane)
+            view = capture_input()
             if view is not None and view.identity != identity:
                 return view
             if view is not None and not view.redrawing:
-                return capture(command,pane) if admit() else None
+                return capture_input() if admit() else None
         return view
 
     try:
@@ -682,7 +810,7 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
             def confirmed_draft(view):
                 return (not resuming or same_notice(view,text)) and menu_wait.ready(view)
             while time.monotonic()<end:
-                view=capture(command,pane)
+                view=capture_input()
                 if not view or view.identity!=before.identity:return defer('unknown', 'pane_changed')
                 problem=completion_problem(view,text)
                 choice=(view.draft,view.selected_command) if confirmed_draft(view) or problem=='completion-mismatch' else None
@@ -691,7 +819,7 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
                         return defer('unknown', 'pane_changed')
                     if time.monotonic()>=end:
                         return defer('unknown', 'submission_deadline')
-                    view=capture(command,pane)
+                    view=capture_input()
                     if not view or view.identity!=before.identity:
                         return defer('unknown', 'pane_changed')
                     confirmed = confirmed_draft(view)

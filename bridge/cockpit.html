@@ -9614,7 +9614,7 @@ function requestComposerInput(target,message){
     const id=Date.now()+':'+(++promptAckSequence);
     const done=status=>{
       clearTimeout(timer);composerAcks.delete(id);
-      resolve(['accepted','sent','refused','completion-mismatch','completion-unverified'].includes(status)?status:'unknown');
+      resolve(['accepted','sent','refused','completion-mismatch','completion-unverified','paste-unavailable'].includes(status)?status:'unknown');
     };
     const timer=setTimeout(()=>done('unknown'),6500);
     composerAcks.set(id,{done,paneId:target.paneId});
@@ -9737,6 +9737,8 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
           status='refused';problem='Terminal selected a different slash command';
         }else if(status==='completion-unverified'){
           status='refused';problem='Could not confirm the slash command in the terminal';
+        }else if(status==='paste-unavailable'){
+          status='refused';problem='Could not verify multiline paste support in this terminal';
         }
       }
       if(status!=='accepted')receipt?.cancel();

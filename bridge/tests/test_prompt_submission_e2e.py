@@ -104,8 +104,10 @@ def run_editor(harness, state, width, entered):
             if selected:
                 after += [f'> {selected}  Fixture command', '↑/↓ Navigate · enter Select · tab Complete']
             after += ['esc to cancel  plan · Fixture' if busy else '  plan · Fixture']
-        rows = [*before, prompt + text + hint, *after]
-        cursor = f'\x1b[{len(before) + 1};{len(prompt) + len(text) + 1}H'
+        draft = (prompt + text + hint).split('\n')
+        rows = [*before, *draft, *after]
+        cursor_column = len(draft[-1]) - len(hint) + 1
+        cursor = f'\x1b[{len(before) + len(draft)};{cursor_column}H'
         os.write(1, ('\x1b[2J\x1b[H' + '\r\n'.join(rows) + cursor).encode())
 
     os.write(1, b'\x1b[?2004h')
@@ -179,7 +181,13 @@ async def test_hermes_interrupt_requires_current_activity(monkeypatch, state):
     await check_routes(monkeypatch, 'hermes', state, 110)
 
 
-async def check_routes(monkeypatch, harness, state, width, *, rejected=None):
+@pytest.mark.asyncio
+@pytest.mark.parametrize('legacy', ['wrapper', 'shell'])
+async def test_multiline_submission_without_tmux_paste_flag(monkeypatch, legacy):
+    await check_routes(monkeypatch, 'hermes', 'idle', 110, legacy=legacy)
+
+
+async def check_routes(monkeypatch, harness, state, width, *, rejected=None, legacy=None):
     tmux = shutil.which('tmux')
     if tmux is None:
         pytest.skip('tmux unavailable')
@@ -189,6 +197,12 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None):
         env = {key: os.environ[key] for key in ('PATH', 'LANG', 'USER', 'LOGNAME') if key in os.environ}
         env.update(HOME=str(root), TMUX_TMPDIR=str(root), LC_CTYPE='C.UTF-8',
                    PYTHONPATH=str(Path(__file__).resolve().parents[1]))
+        if legacy:
+            # Keep tmux's real bracketed paste behaviour but hide its format,
+            # as on tmux 3.6. Both routes issue commands to the real private tmux.
+            monkeypatch.setattr(submission, 'METADATA', submission.METADATA.replace(
+                '#{bracket_paste_flag}', '#{orrery_test_unavailable_flag}'))
+            env.update(PS1='❯ ', INPUTRC='/dev/null')
         argv = [tmux, '-L', 'submission', '-f', '/dev/null']
         wrapper = root / 'tmux'
         wrapper.write_text('#!/bin/sh\nexec ' + shlex.join(
@@ -199,8 +213,19 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None):
             return subprocess.run([*argv, *args], cwd=root, env=env, input=input,
                                   text=True, capture_output=True, timeout=5)
 
-        editor = shlex.join([sys.executable, __file__, harness, state, str(width), str(entered)])
-        launch = call('new-session', '-d', '-s', 'Fixture', '-x', str(width), '-y', '32', editor)
+        fixture = __file__
+        if legacy == 'wrapper':
+            fixture = root / 'bin' / 'hermes'
+            fixture.parent.mkdir()
+            fixture.write_text(f'import runpy\nrunpy.run_path({__file__!r}, run_name="__main__")\n')
+        editor = shlex.join([sys.executable, str(fixture), harness, state, str(width), str(entered)])
+        if legacy == 'wrapper':
+            launch_args = ['/bin/bash', '-c', editor + '; :']
+        elif legacy == 'shell':
+            launch_args = ['/bin/bash', '--noprofile', '--norc', '-i']
+        else:
+            launch_args = [editor]
+        launch = call('new-session', '-d', '-s', 'Fixture', '-x', str(width), '-y', '32', *launch_args)
         assert launch.returncode == 0, launch.stderr
         try:
             # Keep startup's catalog and recorder traffic inside the fixture.
@@ -221,12 +246,18 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None):
                             await asyncio.sleep(.025)
 
                     await asyncio.wait_for(wait_for_editor(), timeout=5)
+                    if legacy:
+                        view = await get_view()
+                        assert view.bracketed is None and view.foreground_command == 'bash'
                     seen = []
                     routes = ('cockpit',) if rejected else ('cockpit', 'watcher')
                     for route in routes:
                         texts = (rejected[0],) if rejected else (*COMMANDS[harness], PLAIN)
                         if state == 'wrong-modal':
                             texts = ('/help',)
+                        if legacy:
+                            texts = ('> Earlier message\n\nHere is my reply.',) if legacy == 'wrapper' else (
+                                f'printf touched > {entered}\n:',)
                         for text in texts:
                             expected = 'accepted'
                             if rejected:
@@ -235,6 +266,8 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None):
                                 expected = 'refused'
                             elif state == 'wrong-modal':
                                 expected = 'unknown'
+                            elif legacy == 'shell':
+                                expected = 'paste-unavailable' if route == 'cockpit' else 'refused'
 
                             if route == 'cockpit':
                                 await ws.send_json(dict(type='submit-prompt', paneId=pane, session='Fixture',
@@ -259,7 +292,7 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None):
                             else:
                                 assert view.empty
 
-                    if not rejected and state != 'wrong-modal':
+                    if not rejected and not legacy and state != 'wrong-modal':
                         await ws.send_json(dict(type='interrupt', paneId=pane, session='Fixture',
                                                 incarnation=reset['incarnation'], inputAck='1:2'))
                         status = (await receive(ws, 'input-ack'))['status']

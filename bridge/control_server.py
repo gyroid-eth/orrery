@@ -1685,7 +1685,10 @@ class TmuxControlBridge:
             current = await command(submission.metadata_command(pane_id))
             if (meta.ok and not meta.overflow and screen.ok and not screen.overflow and current.ok
                     and not current.overflow and len(meta.lines) == 1 and current.lines == meta.lines):
-                return submission.frame(meta.lines[0], screen.lines, pane_id)
+                view = submission.frame(meta.lines[0], screen.lines, pane_id)
+                if submission.needs_wrapped_editor(view, text):
+                    return await asyncio.to_thread(submission.confirm_wrapped_editor, view)
+                return view
             return None
 
         async def admit():
@@ -1764,7 +1767,10 @@ class TmuxControlBridge:
                         await asyncio.sleep(submission.POLL)
                     return 'unknown'
 
-                if not before.empty or not before.allows_paste(text, operator=True):
+                multiline = '\n' in text or '\r' in text
+                if not before.allows_paste(text, operator=True):
+                    return 'paste-unavailable' if multiline else 'refused'
+                if not before.empty:
                     return 'refused'
                 with tempfile.TemporaryDirectory(prefix='orrery-compose-') as tmp:
                     path = Path(tmp) / 'prompt'
@@ -1775,8 +1781,11 @@ class TmuxControlBridge:
                     loaded = True
                 await admit()
                 current = await capture_draft(before.identity)
-                if (current is None or current.identity != before.identity
-                        or not current.empty or not current.allows_paste(text, operator=True)):
+                if current is None or current.identity != before.identity:
+                    return 'refused'
+                if not current.allows_paste(text, operator=True):
+                    return 'paste-unavailable' if multiline else 'refused'
+                if not current.empty:
                     return 'refused'
                 wrote = True
                 result = await command(paste)
