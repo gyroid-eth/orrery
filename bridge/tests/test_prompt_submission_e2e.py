@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from unicodedata import east_asian_width
 
 from aiohttp import ClientSession
 from aiohttp.test_utils import TestServer
@@ -40,6 +41,50 @@ SLASH_VIEWS = {
     ('agy', '/model'): ['Switch Model', 'Keyboard: ↑/↓ Navigate  ←/→ Effort  enter Select',
                         'esc Go Back', 'auto · Gemini 3.8 Flash (Low) · low'],
 }
+
+
+def notice_text(size):
+    body = ('第3ターン「みかん」は「み」で始まっているので、しりとりとしては成立しています。 ⏎ '
+            'ただし「ん」で終わるため、通常ルールでは負けになります。 ⏎ ')
+    return ('ORRERY Mail notification: message from Tester [normal]: しりとり. '
+            'Body (complete; no inbox fetch needed): ' + body * 30)[:size]
+
+
+def wrap_notice(prompt, text, width):
+    rows = ['']
+    column = 0
+    for char in prompt + text:
+        cells = 2 if east_asian_width(char) in ('F', 'W') else 1
+        if column + cells > width:
+            rows.append('')
+            column = 0
+        rows[-1] += char
+        column += cells
+    if column == width:
+        rows.append('')
+        column = 0
+    return rows, column
+
+
+def notice_rows(harness, prompt, text, width):
+    if harness == 'dsh' and len(text) >= 900:
+        chars = len(text.encode('utf-16-le')) // 2
+        pill = f'\x1b[38;5;145m▸ 1 lines・{chars} chars・hover to peek\x1b[39m'
+        return [prompt + ' ' * (width - len(prompt) - 1) + '⛶', '    ' + pill, ''], len(prompt)
+    if len(text) >= 900:
+        summary = {
+            'claude': '[Pasted text #1]',
+            'codex': f'[Pasted Content {len(text)} chars]',
+            'agy': f'[Pasted text #1 {len(text)} chars]',
+        }.get(harness)
+        if summary is not None:
+            styled = f'\x1b[38;5;6m{summary}\x1b[39m' if harness == 'codex' else summary
+            return [prompt + styled], len(prompt) + len(summary)
+    if harness == 'dsh':
+        rows, column = wrap_notice('', text, width - len(prompt))
+        return [prompt + rows[0], *rows[1:]], column if len(rows) > 1 else column + len(prompt)
+    rows, column = wrap_notice(prompt, text, width)
+    return rows[-8:] if harness == 'hermes' else rows, column
 
 
 def run_editor(harness, state, width, entered):
@@ -104,10 +149,15 @@ def run_editor(harness, state, width, entered):
             if selected:
                 after += [f'> {selected}  Fixture command', '↑/↓ Navigate · enter Select · tab Complete']
             after += ['esc to cancel  plan · Fixture' if busy else '  plan · Fixture']
-        draft = (prompt + text + hint).split('\n')
+        if state == 'narrow-mail':
+            draft, column = notice_rows(harness, prompt, text, width)
+            if harness == 'hermes' and width < 60:
+                after = []
+        else:
+            draft = (prompt + text + hint).split('\n')
+            column = len(draft[-1]) - len(hint)
         rows = [*before, *draft, *after]
-        cursor_column = len(draft[-1]) - len(hint) + 1
-        cursor = f'\x1b[{len(before) + len(draft)};{cursor_column}H'
+        cursor = f'\x1b[{len(before) + len(draft)};{column + 1}H'
         os.write(1, ('\x1b[2J\x1b[H' + '\r\n'.join(rows) + cursor).encode())
 
     os.write(1, b'\x1b[?2004h')
@@ -187,7 +237,14 @@ async def test_multiline_submission_without_tmux_paste_flag(monkeypatch, legacy)
     await check_routes(monkeypatch, 'hermes', 'idle', 110, legacy=legacy)
 
 
-async def check_routes(monkeypatch, harness, state, width, *, rejected=None, legacy=None):
+@pytest.mark.asyncio
+@pytest.mark.parametrize('harness', COMMANDS)
+@pytest.mark.parametrize('width', [40, 46, 90])
+async def test_narrow_mail_submission(monkeypatch, harness, width):
+    await check_routes(monkeypatch, harness, 'narrow-mail', width, notices=(150, 300, 900))
+
+
+async def check_routes(monkeypatch, harness, state, width, *, rejected=None, legacy=None, notices=()):
     tmux = shutil.which('tmux')
     if tmux is None:
         pytest.skip('tmux unavailable')
@@ -225,7 +282,8 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None, leg
             launch_args = ['/bin/bash', '--noprofile', '--norc', '-i']
         else:
             launch_args = [editor]
-        launch = call('new-session', '-d', '-s', 'Fixture', '-x', str(width), '-y', '32', *launch_args)
+        launch = call('new-session', '-d', '-s', 'Fixture', '-x', str(width),
+                      '-y', '27' if notices else '32', *launch_args)
         assert launch.returncode == 0, launch.stderr
         try:
             # Keep startup's catalog and recorder traffic inside the fixture.
@@ -253,6 +311,8 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None, leg
                     routes = ('cockpit',) if rejected else ('cockpit', 'watcher')
                     for route in routes:
                         texts = (rejected[0],) if rejected else (*COMMANDS[harness], PLAIN)
+                        if notices:
+                            texts = tuple(notice_text(size) for size in notices)
                         if state == 'wrong-modal':
                             texts = ('/help',)
                         if legacy:
@@ -292,7 +352,7 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None, leg
                             else:
                                 assert view.empty
 
-                    if not rejected and not legacy and state != 'wrong-modal':
+                    if not rejected and not legacy and not notices and state != 'wrong-modal':
                         await ws.send_json(dict(type='interrupt', paneId=pane, session='Fixture',
                                                 incarnation=reset['incarnation'], inputAck='1:2'))
                         status = (await receive(ws, 'input-ack'))['status']
