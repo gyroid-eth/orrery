@@ -11,6 +11,8 @@ NEW AGENT で画面操作を選びます。起動後は agent の詳細から利
 
 macOS の dashboard の NEW AGENT では、Claude Code、Codex CLI、dsh、Hermes、Antigravity CLI で **Computer use** を選べます。同じ3段を Telemetry のスマホ画面と、Telemetry API 53 以降に接続した cockpit でも使えます。
 
+WSL の legacy 起動では、Windows で Cua Driver の daemon が応答すると、NEW AGENT で同じ 3 段を選べます。
+
 | 選択 | ORRERY から渡す画面操作 |
 | --- | --- |
 | Off | 画面の道具を付けない |

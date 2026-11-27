@@ -11,6 +11,8 @@ Choose computer use in NEW AGENT. After launch, open the agent’s details to in
 
 On macOS, the dashboard's NEW AGENT offers **Computer use** for Claude Code, Codex CLI, dsh, Hermes, and Antigravity CLI. The same three modes are available from Telemetry's phone view and from the cockpit connected to Telemetry API 53 or later.
 
+On WSL in legacy mode, NEW AGENT offers the same three modes when the Windows Cua Driver daemon responds.
+
 | Mode | Screen access supplied by ORRERY |
 | --- | --- |
 | Off | No screen tools |

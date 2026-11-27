@@ -46,7 +46,7 @@ curl -fsSL https://raw.githubusercontent.com/gyroid-eth/orrery/master/scripts/ge
 | Claude Code / Codex CLI | 使う CLI を入れてログイン。[Mac](#mac) / [WSL](#windows-11) |
 | DeepSeek / Local（dsh・Hermes） | API 接続、model、必要なキーと鍵束を準備。dsh は Node.js 24.2 以上を使用。[初期設定](native-setup.md) |
 | Gemini（Antigravity） | 共通導入に連携ファイルが含まれます。Antigravity CLI（`agy`）を入れてサインインし、macOS または WSL の cockpit の NEW AGENT で **Antigravity** と model を選びます。[Gemini の導入ガイド](antigravity.md) |
-| 画面操作 | 配布元から Cua Driver 0.55.0 を別途入れ、OS の画面収録・操作を許可します。[導入と署名確認](computer-use.md#driver-setup) · [利用状況送信と更新確認の停止](computer-use.md#driver-privacy) · [選べないとき](troubleshooting.md#computer-use-unavailable) |
+| 画面操作 | Cua Driver が見つからないときは、対話 install で固定版の導入を提案します。後から導入するには `agentstack-install-cua-driver` を実行します。[導入と署名確認](computer-use.md#driver-setup) · [利用状況送信と更新確認の停止](computer-use.md#driver-privacy) · [選べないとき](troubleshooting.md#computer-use-unavailable) |
 | ブラウザー操作 | Chrome と利用する harness の接続設定。[ブラウザーの設定と許可](delegation.md#ブラウザと-computer-use-何が届くか人がやること) |
 | スマホ | Tailscale の設定と端末の到達範囲の確認。[スマホ閲覧](mobile.md) |
 | ChatGPT MCP | 既定ポート 8792 の読み取り専用アダプターをペアリングし、専用 Tunnel と workspace を設定。[ChatGPT MCP](chatgpt-mcp.md) |

@@ -46,7 +46,7 @@ Set up the features you want after the base install. Each guide covers the first
 | Claude Code / Codex CLI | Install and sign in to your chosen CLI. [Mac](#mac) / [WSL](#windows-11) |
 | DeepSeek / Local (dsh or Hermes) | Prepare the API connection, model, and required key and key store. dsh uses Node.js 24.2 or later. [API setup](native-setup.md) |
 | Gemini (Antigravity) | The shared install includes the integration files. Install and sign in to Antigravity CLI (`agy`), then choose **Antigravity** and a model in the cockpit’s NEW AGENT form on macOS or WSL. [Gemini setup guide](antigravity.md) |
-| Computer use | Install Cua Driver 0.55.0 separately from the publisher and grant OS screen recording and interaction permissions. [Install and verify the signature](computer-use.md#driver-setup) · [Disable telemetry and update checks](computer-use.md#driver-privacy) · [Troubleshoot availability](troubleshooting.md#computer-use-unavailable) |
+| Computer use | The interactive installer offers the pinned Cua Driver release when the driver is missing. To install it later, run `agentstack-install-cua-driver`. [Install and verify the signature](computer-use.md#driver-setup) · [Disable telemetry and update checks](computer-use.md#driver-privacy) · [Troubleshoot availability](troubleshooting.md#computer-use-unavailable) |
 | Browser use | Set up Chrome and the connection for your harness. [Browser setup and approvals](delegation.md#browser-and-computer-use-what-is-reachable-and-what-a-person-does) |
 | Phone | Configure Tailscale and check which devices can reach the reader. [Phone access](mobile.md) |
 | ChatGPT MCP | Pair the read-only adapter (default port 8792) and connect a dedicated tunnel and workspace. [ChatGPT MCP](chatgpt-mcp.md) |
