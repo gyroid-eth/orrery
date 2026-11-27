@@ -49,6 +49,22 @@ def test_hermes_redraw_needs_another_capture_before_using_the_editor():
     assert not view.empty
 
 
+@pytest.mark.parametrize('candidates,selected', [
+    (['/exit'], '/exit'),
+    (['/exit-other'], '/exit-other'),
+    (['/exit', '/exit-other'], None),
+])
+def test_compact_hermes_slash_menu_does_not_need_a_lower_rule(candidates, selected):
+    view = native_frame({
+        'meta': ['2', '0', '7', '1', 'bash'],
+        'lines': [' ☤ fixture-model · 42s', '─' * 46, '❯ /exit',
+                  *(f'\x1b[48;5;234m {candidate}  description…\x1b[0m' for candidate in candidates), ''],
+    })
+    assert view.editor == 'hermes' and view.selected and not view.draft_continues
+    assert view.command_ends_at_cursor and view.selected_command == selected
+    assert submission.ready(view, '/exit') is (selected == '/exit')
+
+
 def test_each_native_slash_picker_has_notice_and_slash_fixtures():
     assert set(NATIVE_PROMPTS) == set(submission.SLASH_PICKERS)
     for fixture in NATIVE_PROMPTS.values():
@@ -102,7 +118,7 @@ def test_native_prompt_fixture(harness, case):
 
 
 @pytest.mark.parametrize('harness,case', SUBMISSION_CASES)
-def test_watcher_enters_only_the_verified_native_draft(monkeypatch, harness, case):
+def test_watcher_enters_only_the_verified_native_draft(monkeypatch, tmp_path, harness, case):
     before = case.get('before', NATIVE_PROMPTS[harness]['before'])
     accepted = case.get('accepted', case['ready'])
     should_enter = case.get('enter', accepted)
@@ -135,7 +151,8 @@ def test_watcher_enters_only_the_verified_native_draft(monkeypatch, harness, cas
         return subprocess.CompletedProcess(args, 0, output, '')
 
     monkeypatch.setattr(submission, 'time', SimpleNamespace(monotonic=lambda: elapsed, sleep=tick))
-    monkeypatch.setattr(submission, 'try_lock', lambda _: os.open(os.devnull, os.O_RDONLY))
+    monkeypatch.setattr(submission, 'try_lock',
+                        lambda _: os.open(tmp_path / 'pane.lock', os.O_CREAT | os.O_RDWR, 0o600))
     result = submission.submit(tmux, lambda: True, '%1', case['text'], on_wait=reasons.append)
     assert entered == (['C-m'] if should_enter else [])
     assert result == ('accepted' if accepted else 'unknown')
