@@ -121,6 +121,7 @@ For example, these animations were missing in a Windows browser displaying the W
 
 After changing the setting, reload cockpit in the browser.
 
+<a id="computer-use-unavailable"></a>
 ## Computer use is grayed out in NEW AGENT
 
 The reason appears at the bottom of NEW AGENT, in the same place as the My Chrome notice. You can also hover over Computer use. On macOS, the choice can be available and the first screen operation can return a Cua Driver error.

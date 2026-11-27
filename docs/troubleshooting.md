@@ -121,6 +121,7 @@ cockpit の動きが出ないときは、ブラウザーを動かしている OS
 
 設定を変えたら、ブラウザーで cockpit を読み直します。
 
+<a id="computer-use-unavailable"></a>
 ## NEW AGENT の Computer use が薄くて選べない
 
 選べない理由は NEW AGENT の下部に My Chrome の案内と同じ場所で表示されます。Computer use にポインターを置いても確認できます。macOS では選択できても、最初の画面操作で Cua Driver のエラーが返ることがあります。
