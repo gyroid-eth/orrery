@@ -331,7 +331,7 @@ Conversationの本文で左へ、Terminalの本文で右へ、はっきり横に
 
 安全に試せる専用paneで、別paneへの切替とClose後の開き直しが新しい末尾から始まること、**Review input**→**Edit**で入力が保たれ、確認するpaneと文面が正しいことを確認します。送信を試す場合は、受け手が分かり、副作用のない短いテスト入力を明示的に受け入れるpaneだけを使い、宛先・全文・Enterを確認して**Send once**を1回押し、応答と受理表示を確認してください。実行中のagentや用途不明のshellにはテスト文字を送らないでください。背景では取得が止まり、開いているagent・タブ・読む位置・メモリ内の下書きが残ることも確かめます。復帰時はpaneのrevisionを再確認し、変化・消失した場合は選び直しと再確認が必要です。期限切れの確認は編集へ戻ります。結果不明の送信は再送せず **Check receipt** を残します。
 
-ConversationとTerminalの下には丸い入力欄があります。送り先の肖像と名前はReaderの見出しにあります。複数のReaderを並べて入力欄を開いたときは、入力シートの見出しで送り先を確認できます。UTF-8で4KiB以内の1行を書き、**↑（Review input）**で同じ欄を確認へ切り替えます。宛先agent、まだ送信していないこと、全文と続くEnterを確認し、**Send once**を1回押します。**Edit**で文面を保持して入力に戻れます。確認は30秒で失効し、出力更新で本文や宛先・期限を差し替えません。端末の取得が1回失敗しても、直前に確認した表示と入力を保ちます。取得失敗が続くと自動で再接続してpaneを確認し直します。接続先やpaneが変わった場合は、送信前に再確認が必要になることがあります。送信後も前面で開いていれば同じpaneの応答を見られます。**Received by terminal**はtmuxの受理までで、agentの実行やタスク完了を意味しません。**Outcome unknown**では一部だけ届いた可能性があり、自動再送しません。**Check receipt**は受理状態の照会だけです。
+ConversationとTerminalの下には丸い入力欄があります。送り先の肖像と名前はReaderの見出しにあります。複数のReaderを並べて入力欄を開いたときは、入力シートの見出しで送り先を確認できます。UTF-8で4KiB以内の1行を書き、**↑（Review input）**で同じ欄を確認へ切り替えます。宛先agent、まだ送信していないこと、全文と続くEnterを確認し、**Send once**を1回押します。**Edit**で文面を保持して入力に戻れます。確認は30秒で失効し、出力更新で本文や宛先・期限を差し替えません。端末の取得が1回失敗しても、直前に確認した表示と入力を保ちます。取得失敗が続くと自動で再接続してpaneを確認し直します。接続先やpaneが変わった場合は、送信前に再確認が必要になることがあります。送信後も前面で開いていれば同じpaneの応答を見られます。cockpitはpaneの入力欄が空なのを確認して貼り付け、同じ文面が表示されてからEnterを送ります。**Received by terminal**はEnterの後に入力欄が空になるか、指定したコマンドの画面が開くと表示されます。**Outcome unknown**では一部だけ届いた可能性があり、自動再送しません。**Check receipt**は受理状態の照会だけです。
 
 入力の末尾にある連続したCR/LFは送信文から除き、Reviewと送信には同じ1行を使います。途中の改行・4096 bytes超・使えない文字があるときは入力欄の近くに理由を表示します。
 
@@ -405,4 +405,4 @@ tailscale serve --https=9443 off
 
 [fresh手順](https://github.com/gyroid-eth/orrery-telemetry/blob/master/docs/fresh-global-update.md)で同じhost/UID/contextと新Iを確認し、dashboardを先に、対応Cockpit backendを後に起動します。通常service/Finderは保存済みfresh参照の共通loaderを使いますが、実環境での起動・表示受入は別段です。API34の表示だけで本番切替しません。本人opt-inは同じく既定offです。
 
-freshでは選択したI/Aから現在のnative/socket/paneへ解決し、PC managerが既に管理する同じbridgeだけを使います。表示名、最後のpane、旧project/DBへfallbackしません。choice→preview→確認→一回送信→statusまで同じI/Aと対象を保持します。previewは3秒、ACKは5秒の有限待機で、timeout/unknownを自動再送しません。通常の30秒確認期限・4KiB本文上限とread/ACK分離は維持します。実スマホ・実provider/trust・導入の受入は別に残ります。
+freshでは選択したI/Aから現在のnative/socket/paneへ解決し、PC managerが既に管理する同じbridgeだけを使います。表示名、最後のpane、旧project/DBへfallbackしません。choice→preview→確認→一回送信→statusまで同じI/Aと対象を保持します。previewは3秒、送信の確認は5秒の有限待機で、timeout/unknownを自動再送しません。通常の30秒確認期限・4KiB本文上限とread/ACK分離は維持します。実スマホ・実provider/trust・導入の受入は別に残ります。

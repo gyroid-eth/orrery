@@ -1,4 +1,4 @@
-"""Opt-in pane terminal: finite snapshots and confirmed ACK batches.
+"""Opt-in pane terminal: finite snapshots and confirmed input.
 
 Importing observes nothing. Existing cockpit manager/boundary supply targets;
 no registration DB, launch binding, provider identity or fallback transport.
@@ -113,49 +113,6 @@ async def _deadline(deadline):
     timer=asyncio.get_running_loop().call_later(max(0,deadline-time.monotonic()),task.cancel)
     try: yield
     finally: timer.cancel()
-
-async def confirmed_batch(bridge,pane_id,text,*,admission,valid,claim,deadline=None):
-    """Return accepted/refused/unknown; only accepted means every tmux ACK.
-
-    Unknown never authorizes retry. A completed ACK says nothing about the TUI
-    reading its buffer or starting a model turn. The write lock covers fresh admission and every write, but not ACK waiting.
-    External tmux writers and same-pane program changes remain outside it.
-    """
-    from control_server import make_tmux_command
-    started=False; futures=[]; deadline=time.monotonic()+5 if deadline is None else deadline
-    try:
-        raw=validate_text(text)
-        if not isinstance(pane_id,str) or not re.fullmatch(r'%[0-9]+',pane_id): return 'refused'
-        if deadline<=time.monotonic() or deadline>time.monotonic()+5.01 or not valid(): return 'refused'
-        commands=[b'\x1b[200~']+[raw[i:i+64] for i in range(0,len(raw),64)]+[b'\x1b[201~\r']
-        incarnation=bridge._incarnation
-        async with _deadline(deadline):
-            async with bridge._write_lock:
-                if not valid() or bridge.master_fd is None or bridge._closed: return 'refused'
-                async with _held_admission(admission,deadline) as proof:
-                    if (not valid() or time.monotonic()>=deadline or bridge._closed
-                            or bridge.master_fd is None or bridge._incarnation!=incarnation
-                            or proof['session']!=bridge.config.session
-                            or proof['pane_id']!=pane_id or proof['incarnation']!=incarnation): return 'refused'
-                    if not claim(): return 'refused'
-                    for chunk in commands:
-                        if not valid() or time.monotonic()>=deadline: raise InputRefused('input_cancelled')
-                        future=asyncio.get_running_loop().create_future()
-                        futures.append(future); bridge._pending_blocks.append(future)
-                        args=['send-keys','-t',pane_id,'-H',*[f'{byte:02x}' for byte in chunk]]
-                        # Conservative first-possible-byte boundary. _write_master
-                        # may fail after a short write; its exception cannot prove
-                        # that no bytes reached the existing control connection.
-                        started=True
-                        await bridge._write_master((make_tmux_command(args)+'\n').encode('ascii'))
-            # Both locks have actually been released before waiting for ACKs.
-            results=await asyncio.gather(*futures)
-            return 'accepted' if all(result.ok for result in results) else 'unknown'
-    except (Exception,asyncio.CancelledError):
-        if started:
-            bridge._abort_mobile_stream()
-            return 'unknown'
-        return 'refused'
 
 def decode_json(data, *, max_bytes=MAX_JSON_BYTES):
     if not isinstance(data,bytes) or len(data)>max_bytes:

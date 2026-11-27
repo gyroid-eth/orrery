@@ -1672,10 +1672,18 @@ def test_external_control_bridge_and_same_native_resume_gate(tmp_path,monkeypatc
                 "session=(args[args.index('--resume')+1] if '--resume' in args else args[args.index('resume')+1] if 'resume' in args else str(uuid.uuid4()));transcript=")
             assert native!=NATIVE
             if os.environ.get('ORRERY_EXTERNAL_FRESH_R4')=='1':
+                # Mobile shares the PC composer and waits for the actual
+                # editor to echo the draft before sending a separate Enter.
+                read="  raw+=os.read(0,65536)"
+                after_read=read+r"""
+  if raw.startswith(b'\x1b[200~') and raw.endswith(b'\x1b[201~'):
+   sys.stdout.write('\x1b[2J\x1b[H'+glyph+' '+raw[6:-6].decode('utf-8'));sys.stdout.flush()"""
                 old="   raw=b''"
-                replacement="   if raw.startswith(b'BENCH'):sys.stdout.write('\\r\\n'+raw.decode('ascii')+'\\r\\n'+glyph+' ');sys.stdout.flush()\n   raw=b''"
-                assert native.count(old)==1
-                native=native.replace(old,replacement)
+                replacement=r"""   if raw.startswith(b'BENCH'):sys.stdout.write('\r\n'+raw.decode('ascii')+'\r\n'+glyph+' ');sys.stdout.flush()
+   if raw.startswith(b'\x1b[200~'):sys.stdout.write('\x1b[2J\x1b[H'+glyph+' ');sys.stdout.flush()
+   raw=b''"""
+                assert native.count(read)==native.count(old)==1
+                native=native.replace(read,after_read).replace(old,replacement)
             binary.write_text('#!'+sys.executable+'\n'+native)
             monkeypatch.setenv('AGENTSTACK_'+provider.upper()+'_BIN',str(binary))
             private=Path(tempfile.mkdtemp(prefix='o213-cockpit-target-',dir='/private/tmp'));private.chmod(0o700)

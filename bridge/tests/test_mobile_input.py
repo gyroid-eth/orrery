@@ -272,64 +272,99 @@ def test_alternating_agent_catalogs_preserve_both_pane_inputs_and_images(tmp_pat
 
 make_bridge=bridge_fixture
 
+def composer_replies(bridge, monkeypatch, *, pane='%3', preview=''):
+    """Respond to control requests with an empty, pasted, or submitted editor."""
+    import pane_submission as submission
+    from control_server import CommandResult
+
+    monkeypatch.setattr(submission, 'try_lock', lambda view: os.open(os.devnull, os.O_RDONLY))
+    draft = ''
+    staged = ''
+
+    def reply(data, *, ok=True):
+        nonlocal draft, staged
+        args = shlex.split(data.decode())
+        verb = args[0]
+        lines = []
+        if ok and verb == 'display-message':
+            lines = [f'/private/fixture/tmux.sock\t42\t{pane}\t43\t0\t0\t{2 + len(draft)}\t1\tcodex']
+        elif ok and verb == 'capture-pane':
+            lines = [f'› {draft}', '', 'gpt-fixture default · Context 100% left'] if '-e' in args else [preview]
+        elif ok and verb == 'load-buffer':
+            staged = Path(args[-1]).read_text()
+        elif ok and verb == 'paste-buffer':
+            draft = staged
+        elif ok and verb == 'send-keys' and args[-1] == 'C-m':
+            draft = ''
+        future = bridge._pending_blocks.popleft()
+        if future is not None:
+            bridge._bounded_blocks.pop(future, None)
+            future.set_result(CommandResult(ok, lines))
+    return reply
+
+
 @pytest.mark.parametrize('case',['accepted','replaced','cancelled','expired','claim_lost','partial','ack_timeout','ack_error'])
-def test_confirmed_batch_is_one_locked_intent_with_ack_after_release(tmp_path,case):
+def test_confirmed_mobile_submit_holds_admission_only_through_effect_write(tmp_path,monkeypatch,case):
     async def scenario():
         bridge=make_bridge(tmp_path)
-        assert hasattr(bridge,'send_confirmed_input'), 'finite confirmed-input batch is absent'
-        writes=[]; claimed=[]; held=threading.Event(); valid=[True]; aborted=[]
-        lock_path=tmp_path/'proof-context.lock'; fd=os.open(lock_path,os.O_CREAT|os.O_RDWR,0o600)
-        other=os.open(lock_path,os.O_RDWR)
+        reply=composer_replies(bridge,monkeypatch)
+        writes=[]; effects=[]; claimed=[]; held=threading.Event(); valid=[True]; aborted=[]
+        paste_written=asyncio.Event()
         @contextlib.contextmanager
         def admission(deadline):
-            fcntl.flock(fd,fcntl.LOCK_EX); held.set()
+            if case=='replaced':raise RuntimeError('replaced')
+            held.set()
             try:
                 yield {'session':'FixtureCurie','pane_id':'%3','incarnation':bridge._incarnation}
-            finally:
-                held.clear(); fcntl.flock(fd,fcntl.LOCK_UN)
+            finally:held.clear()
         async def writer(payload):
-            assert held.is_set()
-            with pytest.raises(BlockingIOError): fcntl.flock(other,fcntl.LOCK_EX|fcntl.LOCK_NB)
             writes.append(payload)
-            if case=='partial': raise OSError('synthetic partial stream')
-            if case=='cancelled': valid[0]=False
+            verb=shlex.split(payload.decode())[0]
+            if verb in {'paste-buffer','send-keys'}:
+                assert held.is_set()
+                effects.append(payload)
+            if verb=='paste-buffer':
+                paste_written.set()
+                if case=='partial':raise OSError('synthetic partial stream')
+                if case in {'accepted','ack_timeout','ack_error'}:return
+            reply(payload)
         bridge._write_master=writer
-        bridge._abort_mobile_stream=lambda: aborted.append(True)
+        def abort():
+            aborted.append(True)
+            bridge.master_fd=None
+            bridge._pending_blocks.clear()
+        bridge._abort_mobile_stream=abort
         def claim():
             claimed.append(True)
             return case!='claim_lost'
-        if case=='replaced':
-            @contextlib.contextmanager
-            def admission(deadline): raise RuntimeError('replaced'); yield
-        if case=='cancelled': valid[0]=False
-        if case=='expired': deadline=time.monotonic()-.1
-        else: deadline=time.monotonic()+(.1 if case=='ack_timeout' else 1)
+        if case=='cancelled':valid[0]=False
+        deadline=time.monotonic()+(-.1 if case=='expired' else .2 if case=='ack_timeout' else 2)
         task=asyncio.create_task(bridge.send_confirmed_input('%3','hello',admission=admission,
             valid=lambda:valid[0],claim=claim,deadline=deadline))
         try:
             if case in {'accepted','ack_error'}:
+                await asyncio.wait_for(paste_written.wait(),1)
                 for _ in range(100):
-                    if writes and not held.is_set(): break
+                    if not held.is_set():break
                     await asyncio.sleep(.001)
-                assert writes and not held.is_set() and not task.done()
-                fcntl.flock(other,fcntl.LOCK_EX|fcntl.LOCK_NB); fcntl.flock(other,fcntl.LOCK_UN)
-                for _ in tuple(bridge._pending_blocks):
-                    bridge._handle_line('%begin 0 1 0')
-                    bridge._handle_line('%error 0 1 0' if case=='ack_error' else '%end 0 1 0')
+                assert not held.is_set() and not task.done() and bridge._write_lock.locked()
+                reply(effects[0],ok=case=='accepted')
             outcome=await task
             assert outcome==('accepted' if case=='accepted' else 'unknown' if case in {'partial','ack_timeout','ack_error'} else 'refused')
             assert not held.is_set() and not bridge._write_lock.locked()
-            if case in {'replaced','cancelled','expired','claim_lost'}: assert writes==[]
-            else:
-                assert len(claimed)==1 and writes
-                if case=='accepted':
-                    assert len(writes)==3  # Bracketed paste start/text/end+Enter, one intent.
-                    assert writes[-1].endswith(b'\n')
-            if case=='partial': assert aborted==[True] and len(writes)==1
+            if case in {'replaced','cancelled','expired'}:assert writes==[]
+            if case in {'replaced','cancelled','expired','claim_lost'}:assert effects==[]
+            else:assert len(claimed)==1 and effects[0].startswith(b'paste-buffer')
+            if case=='accepted':
+                assert len(effects)==2 and shlex.split(effects[-1].decode())[-1]=='C-m'
+                first=writes.index(effects[0])
+                last=writes.index(effects[-1])
+                assert any(frame.startswith(b'capture-pane') for frame in writes[first+1:last])
+            if case in {'partial','ack_timeout'}:assert aborted==[True] and len(effects)==1
         finally:
-            if not task.done(): task.cancel(); await task
-            os.close(fd); os.close(other)
+            if not task.done():task.cancel();await task
     asyncio.run(scenario())
+
 
 def test_cancel_while_proof_worker_waits_never_dispatches_later(tmp_path):
     async def scenario():
@@ -410,6 +445,7 @@ def test_exact_utf8_and_escaped_envelope_limits_are_distinct():
 def test_partial_real_control_sink_is_quarantined_without_compensation(tmp_path,monkeypatch,failure):
     async def scenario():
         bridge=make_bridge(tmp_path);read_fd,write_fd=os.pipe();bridge.master_fd=write_fd
+        reply=composer_replies(bridge,monkeypatch)
         closed=[];bridge._schedule_closed=lambda:closed.append(True)
         held=threading.Event();observed=[]
         @contextlib.contextmanager
@@ -422,41 +458,61 @@ def test_partial_real_control_sink_is_quarantined_without_compensation(tmp_path,
             real_write=os.write
             def zero(fd,data):return 0 if fd==write_fd else real_write(fd,data)
             monkeypatch.setattr(os,'write',zero)
-        else:
-            async def partial(data):
-                assert held.is_set();observed.append(data)
-                await original(data[:12])
-                if failure=='cancel':raise asyncio.CancelledError
-                if failure=='write_error':raise OSError('fixture-write-error')
-                await asyncio.sleep(1)
-            bridge._write_master=partial
+
+        async def writer(data):
+            if not data.startswith(b'paste-buffer'):
+                reply(data)
+                return
+            assert held.is_set()
+            observed.append(data)
+            await original(data[:12])
+            if failure=='cancel':raise asyncio.CancelledError
+            if failure=='write_error':raise OSError('fixture-write-error')
+            await asyncio.sleep(1)
+        bridge._write_master=writer
         try:
             outcome=await bridge.send_confirmed_input('%3','hello',admission=admission,
-                valid=lambda:True,claim=lambda:True,deadline=time.monotonic()+.05)
+                valid=lambda:True,claim=lambda:True,deadline=time.monotonic()+.2)
             assert outcome=='unknown' and not held.is_set() and not bridge._write_lock.locked()
             assert bridge.master_fd is None and closed==[True] and not bridge._pending_blocks
-            data=os.read(read_fd,4096)
-            assert data==(b'' if failure=='zero_write' else observed[0][:12])
-            assert b'0d' not in data  # No appended Enter or remaining commands.
+            assert os.read(read_fd,4096)==(b'' if failure=='zero_write' else observed[0][:12])
             with pytest.raises(OSError):os.fstat(write_fd)
         finally:
             os.close(read_fd)
             if bridge.master_fd is not None:os.close(bridge.master_fd)
     asyncio.run(scenario())
 
-def test_cancel_after_first_complete_frame_stops_remaining_text_and_enter(tmp_path):
+
+@pytest.mark.parametrize('reason',['cancelled','target_changed','draft_changed'])
+def test_mobile_paste_does_not_enter_after_confirmation_is_lost(tmp_path,monkeypatch,reason):
     async def scenario():
-        bridge=make_bridge(tmp_path);writes=[];valid=[True];released=[]
+        from control_server import CommandResult
+
+        bridge=make_bridge(tmp_path);writes=[];valid=[True];changed=False
+        reply=composer_replies(bridge,monkeypatch)
         @contextlib.contextmanager
         def admission(deadline):
-            try:yield {'session':'FixtureCurie','pane_id':'%3','incarnation':bridge._incarnation}
-            finally:released.append(True)
-        async def writer(data):writes.append(data);valid[0]=False
-        aborted=[];bridge._write_master=writer;bridge._abort_mobile_stream=lambda:aborted.append(True)
+            if changed and reason=='target_changed':raise RuntimeError('replaced')
+            yield {'session':'FixtureCurie','pane_id':'%3','incarnation':bridge._incarnation}
+        async def writer(data):
+            nonlocal changed
+            writes.append(data)
+            if changed and reason=='draft_changed' and data.startswith(b'capture-pane'):
+                future=bridge._pending_blocks.popleft()
+                bridge._bounded_blocks.pop(future)
+                future.set_result(CommandResult(True,['› someone else typed here']))
+                return
+            reply(data)
+            if data.startswith(b'paste-buffer'):
+                changed=True
+                if reason=='cancelled':valid[0]=False
+        bridge._write_master=writer
         assert await bridge.send_confirmed_input('%3','hello',admission=admission,
-            valid=lambda:valid[0],claim=lambda:True,deadline=time.monotonic()+1)=='unknown'
-        assert len(writes)==1 and released==[True] and aborted==[True]
+            valid=lambda:valid[0],claim=lambda:True,deadline=time.monotonic()+.5)=='unknown'
+        assert changed and not any(data.startswith(b'send-keys') for data in writes)
+        assert not bridge._pending_blocks and bridge.master_fd==99 and not bridge._write_lock.locked()
     asyncio.run(scenario())
+
 
 @pytest.mark.parametrize('reason',['cancel','disable','expire'])
 def test_input_invalidated_while_pc_owns_write_lock_never_reaches_admission(tmp_path,reason):
@@ -480,10 +536,11 @@ def test_input_invalidated_while_pc_owns_write_lock_never_reaches_admission(tmp_
         assert writes==proof_calls==[] and not bridge._write_lock.locked()
     asyncio.run(scenario())
 
-def test_pc_input_cannot_interleave_inside_confirmed_batch(tmp_path,monkeypatch):
+def test_pc_input_cannot_interleave_between_mobile_paste_and_enter(tmp_path,monkeypatch):
     import control_server
     async def scenario():
         bridge=make_bridge(tmp_path);writes=[];pc_task=[];held=threading.Event()
+        reply=composer_replies(bridge,monkeypatch)
         @contextlib.contextmanager
         def admission(deadline):
             held.set()
@@ -491,24 +548,25 @@ def test_pc_input_cannot_interleave_inside_confirmed_batch(tmp_path,monkeypatch)
             finally:held.clear()
         monkeypatch.setattr(control_server,'admit_command',lambda *args,**kwargs:None)
         async def writer(data):
-            writes.append((data,held.is_set()))
-            if len(writes)==1:pc_task.append(asyncio.create_task(bridge.send_input('%3','PC')))
-            await asyncio.sleep(0)
+            if data.startswith(b'paste-buffer'):
+                assert held.is_set()
+                writes.append('paste')
+                pc_task.append(asyncio.create_task(bridge.send_input('%3','PC')))
+            elif data.endswith(b'C-m\n'):
+                assert held.is_set()
+                writes.append('Enter')
+            elif b'50 43' in data:
+                assert not held.is_set()
+                writes.append('PC')
+            reply(data)
         bridge._write_master=writer
-        mobile=asyncio.create_task(bridge.send_confirmed_input('%3','mobile',admission=admission,
-            valid=lambda:True,claim=lambda:True,deadline=time.monotonic()+1))
-        for _ in range(100):
-            if len(writes)==4:break
-            await asyncio.sleep(.001)
-        assert len(writes)==4 and [locked for _,locked in writes]==[True,True,True,False]
-        assert b'50 43' in writes[-1][0]  # PC's literal bytes follow the final Enter.
-        assert not mobile.done() and not held.is_set()
-        for _ in tuple(bridge._pending_blocks):
-            bridge._handle_line('%begin 0 1 0');bridge._handle_line('%end 0 1 0')
-        assert await mobile=='accepted'
+        assert await bridge.send_confirmed_input('%3','mobile',admission=admission,
+            valid=lambda:True,claim=lambda:True,deadline=time.monotonic()+2)=='accepted'
         await pc_task[0]
+        assert writes==['paste','Enter','PC']
         assert not bridge._pending_blocks and not bridge._write_lock.locked()
     asyncio.run(scenario())
+
 
 @pytest.mark.parametrize('case',['valid','helper_missing','wrong_uid','process_unknown','boot_changed','socket_changed','global','session_changed','bridge_changed'])
 def test_real_shared_pane_selector_and_kernel_identity_fail_closed(tmp_path,case):
@@ -795,13 +853,11 @@ def test_fresh_r4_real_create_app_relay_choice_and_once_ack_keep_identity(tmp_pa
                     self.fresh_shared['validate_socket']=lambda path:identity
                     resolvers.append(self)
             monkeypatch.setattr(mobile,'PaneResolver',Resolver)
+            reply=composer_replies(bridge,monkeypatch,pane='%2',preview='fresh selected output')
             async def writer(raw):
                 frames.append(raw)
-                if case=='partial' and b'send-keys' in raw:raise OSError('synthetic partial PTY')
-                future=bridge._pending_blocks.popleft()
-                if future is not None:
-                    from control_server import CommandResult
-                    future.set_result(CommandResult(True,['fresh selected output']))
+                if case=='partial' and raw.startswith(b'paste-buffer'):raise OSError('synthetic partial PTY')
+                reply(raw)
             bridge._write_master=writer
             bridge._abort_mobile_stream=lambda:None  # Synthetic fd99 is never an OS descriptor.
             app=ob.create_app(root,mobile_input_enabled=case!='disabled')
@@ -864,8 +920,11 @@ def test_fresh_r4_real_create_app_relay_choice_and_once_ack_keep_identity(tmp_pa
                 assert status==200 and result['state']==('accepted' if case=='accepted' else 'unknown' if case=='partial' else 'refused')
                 assert all(result['target'][k]==v for k,v in ref.items())
                 sent=frames[before:]
-                assert len(sent)==(3 if case=='accepted' else 1 if case=='partial' else 0)
-                assert all(shlex.split(frame.decode())[:3]==['send-keys','-t','%2'] for frame in sent)
+                effects=[shlex.split(frame.decode()) for frame in sent if frame.startswith((b'paste-buffer', b'send-keys'))]
+                assert [args[0] for args in effects]==(
+                    ['paste-buffer','send-keys'] if case=='accepted' else ['paste-buffer'] if case=='partial' else [])
+                assert all(args[args.index('-t')+1]=='%2' for args in effects)
+                if case=='accepted':assert effects[-1][-1]=='C-m'
                 assert (await asyncio.to_thread(phone,'commit',commit))[1]==result
                 assert (await asyncio.to_thread(phone,'status',dict(epoch=cap['epoch'],intent=prepared['intent'])))[1]==result
                 assert frames[before:]==sent

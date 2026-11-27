@@ -1652,32 +1652,47 @@ class TmuxControlBridge:
         """Interrupt the current turn and check that its editor returns."""
         return await self._composer_effect(pane_id, None, proof=proof)
 
-    async def _composer_effect(self, pane_id: str, text: str | None, *, proof) -> str:
+    async def _composer_effect(self, pane_id: str, text: str | None, *, proof,
+                               deadline=None, mobile_admission=None, valid=None, claim=None) -> str:
         import pane_submission as submission
-        if not re.fullmatch(r'%[0-9]+', pane_id):
+        if not isinstance(pane_id, str) or not re.fullmatch(r'%[0-9]+', pane_id):
             return 'refused'
         target = self.config.tmux_bin
         if isinstance(target, FreshPaneBoundary) and (
-                proof is None or proof.target is not target or proof.purpose != 'input' or pane_id != target.pane_id):
+                pane_id != target.pane_id or (mobile_admission is None and (
+                    proof is None or proof.target is not target or proof.purpose != 'input'))):
             raise TargetRefused('FRESH_TMUX_TARGET_CHANGED')
-        deadline = time.monotonic() + submission.TIMEOUT
+        if deadline is None:
+            deadline = time.monotonic() + submission.TIMEOUT
         name = 'orrery-compose-' + uuid.uuid4().hex
         paste = ['paste-buffer', '-r', '-p', '-d', '-b', name, '-t', pane_id]
         escape = ['send-keys', '-t', pane_id, 'Escape']
         pending = None
 
-        async def command(args, limit=4096):
-            nonlocal pending
+        def check_stream():
             remaining = deadline - time.monotonic()
-            if self.master_fd is None or self._closed or remaining <= 0:
-                raise RuntimeError('tmux prompt deadline elapsed')
+            if (self.master_fd is None or self._closed or remaining <= 0
+                    or (valid is not None and not valid())):
+                raise TargetRefused('tmux prompt unavailable')
+            return remaining
+
+        async def begin_command(args, limit=4096):
+            nonlocal pending
+            remaining = check_stream()
             pending = asyncio.get_running_loop().create_future()
             self._bounded_blocks[pending] = limit
             self._pending_blocks.append(pending)
             await asyncio.wait_for(self._write_master((make_tmux_command(args) + '\n').encode('utf-8')), remaining)
+
+        async def complete_command():
+            nonlocal pending
             result = await asyncio.wait_for(pending, max(0, deadline - time.monotonic()))
             pending = None
             return result
+
+        async def command(args, limit=4096):
+            await begin_command(args, limit)
+            return await complete_command()
 
         async def capture():
             meta = await command(submission.metadata_command(pane_id))
@@ -1691,7 +1706,14 @@ class TmuxControlBridge:
                 return view
             return None
 
-        async def admit():
+        @contextlib.asynccontextmanager
+        async def authorized():
+            check_stream()
+            if mobile_admission is not None:
+                async with mobile_admission():
+                    check_stream()
+                    yield
+                return
             if proof is None:
                 await asyncio.to_thread(admit_command, target, escape if text is None else paste,
                                         session=self.config.session)
@@ -1699,8 +1721,9 @@ class TmuxControlBridge:
                 await proof.check()
                 if proof.closed:
                     raise TargetRefused('FRESH_TARGET_VIEW_CHANGED')
+            yield
 
-        async def capture_draft(identity):
+        async def capture_draft(identity, *, admission_held=False):
             view = await capture()
             if view is None or view.identity != identity or not view.redrawing:
                 return view
@@ -1711,7 +1734,9 @@ class TmuxControlBridge:
                 if view is not None and view.identity != identity:
                     return view
                 if view is not None and not view.redrawing:
-                    await admit()
+                    if not admission_held:
+                        async with authorized():
+                            return await capture()
                     return await capture()
             return view
 
@@ -1720,8 +1745,8 @@ class TmuxControlBridge:
             loaded = wrote = False
             problem = None
             try:
-                await admit()
-                observed = await capture()
+                async with authorized():
+                    observed = await capture()
                 if observed is None:
                     return 'refused'
                 while time.monotonic() < deadline:
@@ -1733,8 +1758,10 @@ class TmuxControlBridge:
                     return 'refused'
 
                 if text is None:
-                    await admit()
-                before = await capture() if text is None else await capture_draft(observed.identity)
+                    async with authorized():
+                        before = await capture()
+                else:
+                    before = await capture_draft(observed.identity)
                 if before is None or before.identity != observed.identity:
                     return 'refused'
                 if text is None:
@@ -1779,16 +1806,19 @@ class TmuxControlBridge:
                     if not result.ok or result.overflow:
                         return 'refused'
                     loaded = True
-                await admit()
-                current = await capture_draft(before.identity)
-                if current is None or current.identity != before.identity:
-                    return 'refused'
-                if not current.allows_paste(text, operator=True):
-                    return 'paste-unavailable' if multiline else 'refused'
-                if not current.empty:
-                    return 'refused'
-                wrote = True
-                result = await command(paste)
+                async with authorized():
+                    current = await capture_draft(before.identity, admission_held=mobile_admission is not None)
+                    if current is None or current.identity != before.identity:
+                        return 'refused'
+                    if not current.allows_paste(text, operator=True):
+                        return 'paste-unavailable' if multiline else 'refused'
+                    if not current.empty or (claim is not None and not claim()):
+                        return 'refused'
+                    wrote = True
+                    await begin_command(paste)
+                # The target admission covers the write. Wait for its ACK
+                # after releasing admission, with the pane still serialized.
+                result = await complete_command()
                 if not result.ok or result.overflow:
                     return 'unknown'
                 loaded = False
@@ -1808,20 +1838,23 @@ class TmuxControlBridge:
                         if is_ready or problem == 'completion-mismatch':
                             choice = (view.draft, view.selected_command)
                         if choice is not None and choice == previous:
-                            await admit()
-                            view = await capture()
-                            confirmed = menu_wait.ready(view)
-                            if (view is not None and view.identity == before.identity
-                                    and (view.draft, view.selected_command) == choice):
-                                if confirmed and time.monotonic() < deadline:
-                                    problem = None
-                                    result = await command(['send-keys', '-t', pane_id, 'C-m'])
-                                    if not result.ok or result.overflow:
-                                        return 'unknown'
-                                    entered_from = view
-                                    break
-                                if submission.mismatched_command(view, text, operator=True):
-                                    return 'completion-mismatch'
+                            entered_from = None
+                            async with authorized():
+                                view = await capture()
+                                confirmed = menu_wait.ready(view)
+                                if (view is not None and view.identity == before.identity
+                                        and (view.draft, view.selected_command) == choice):
+                                    if confirmed and time.monotonic() < deadline:
+                                        problem = None
+                                        await begin_command(['send-keys', '-t', pane_id, 'C-m'])
+                                        entered_from = view
+                                    elif submission.mismatched_command(view, text, operator=True):
+                                        return 'completion-mismatch'
+                            if entered_from is not None:
+                                result = await complete_command()
+                                if not result.ok or result.overflow:
+                                    return 'unknown'
+                                break
                     previous = choice
                     await asyncio.sleep(submission.POLL)
                 else:
@@ -1895,9 +1928,37 @@ class TmuxControlBridge:
 
     async def send_confirmed_input(self, pane_id: str, text: str, *, admission,
                                    valid, claim, deadline=None) -> str:
-        from mobile_input import confirmed_batch
-        return await confirmed_batch(self, pane_id, text, admission=admission,
-                                     valid=valid, claim=claim, deadline=deadline)
+        """Submit a reviewed phone intent through the shared pane composer."""
+        from mobile_input import InputRefused, _deadline, _held_admission, validate_text
+
+        now = time.monotonic()
+        deadline = now + 5 if deadline is None else deadline
+        incarnation = self._incarnation
+
+        def current():
+            return self._incarnation == incarnation and valid()
+
+        @contextlib.asynccontextmanager
+        async def authorize():
+            try:
+                async with _held_admission(admission, deadline) as observed:
+                    if (not isinstance(observed, dict) or observed.get('session') != self.config.session
+                            or observed.get('pane_id') != pane_id or observed.get('incarnation') != incarnation):
+                        raise InputRefused('input_target_changed')
+                    yield
+            except InputRefused as exc:
+                raise TargetRefused('input_target_changed') from exc
+
+        try:
+            validate_text(text)
+            if not now < deadline <= now + 5.01 or not current():
+                return 'refused'
+            async with _deadline(deadline):
+                outcome = await self._composer_effect(pane_id, text, proof=None, deadline=deadline,
+                    mobile_admission=authorize, valid=current, claim=claim)
+        except (InputRefused, asyncio.CancelledError):
+            return 'refused'
+        return 'refused' if outcome == 'paste-unavailable' else outcome
 
     def _abort_mobile_stream(self) -> None:
         """Quarantine unknown ACK synchronization; no replay or agent exit."""
