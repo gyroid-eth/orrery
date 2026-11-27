@@ -430,8 +430,6 @@
   .roster.select-mode .agent.bulk-selected{background:var(--rail-selection)}
   .roster.select-mode .agent.bulk-selected .bulk-check{border-color:var(--amber);background:var(--amber)}
   .roster.select-mode .agent.bulk-selected .bulk-check::after{opacity:1}
-  .roster.select-mode .agent.bulk-ineligible:not(.permission-target){opacity:.38!important;cursor:not-allowed;filter:saturate(.45)}
-  .roster.select-mode .agent.permission-target{cursor:default}
   .agent.offline-hint .agent-status{border-color:var(--theme-status-alert,#ff6a5d)}
   .roster-bulkbar{
     margin:8px 10px 0;padding:8px 9px;display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -2597,6 +2595,7 @@ tabsEmpty.className='empty';tabsEmpty.textContent='waiting for sessions…';tabs
 const panes=new Map();          // paneId -> {session, meta, term, fit, host, tab}
 const sessionGroups=new Map();  // session -> DOM group
 const availableSessions=new Map();
+let haveSessionList=false;
 const attachedSessions=new Set();
 const requestedSessions=new Set();
 const manualDetached=new Set();
@@ -4945,6 +4944,14 @@ function handleSessions(items){
   if(!restartingTabs.length)sortSessionGroups(names);
   renderStage();
   applyAutoClaims();
+  if(Array.isArray(items)){
+    haveSessionList=true;
+    const remaining=finishedSelectAgents.filter(agent=>availableSessions.has(agent.name));
+    if(remaining.length!==finishedSelectAgents.length){
+      finishedSelectAgents=remaining;
+      renderRoster();
+    }
+  }
   if(paletteOverlay.classList.contains('on'))renderPalette();
 }
 
@@ -6334,11 +6341,13 @@ const rosterEditor=OrreryRosterEdit.mount({container:rosterEl,getAgent:currentAg
 const bulkSelectedAgents=new Set();
 const BULK_ACTION_ARM_MS=3000;
 let rosterSelectMode=false,bulkActionArmed=null,bulkActionBusy=null,bulkActionArmTimer=null;
-let liveRosterAgents=[],stoppedSelectAgents=[],stoppedSelectRequest=null;
+let liveRosterAgents=[],finishedSelectAgents=[],finishedSelectRequest=null;
 let liveRetiredNames=new Set();
 
 function isBulkSelectableAgent(agent){
   return Boolean(agent&&agent.name&&agent.lifecycle!=='persistent'&&agent.category!=='warmup'&&
+    agent.category!=='gone'&&agent.category!=='retired'&&
+    ![agent.surface,agent.program,agent.cmd].some(value=>/^codex-app/.test(value||''))&&
     (agent.category==='agent'||isBulkExitEligibleAgent(agent)));
 }
 function isBulkAgentRunning(agent){
@@ -6392,7 +6401,6 @@ function paintBulkTileState(el,agent){
   const eligible=isBulkSelectableAgent(agent);
   const selected=eligible&&bulkSelectedAgents.has(agent.name);
   el.classList.toggle('bulk-ineligible',rosterSelectMode&&!eligible);
-  el.classList.toggle('permission-target',rosterSelectMode&&!eligible&&canChangeAgentPermissions(agent,permissionApi));
   el.classList.toggle('bulk-selected',rosterSelectMode&&selected);
   if(rosterSelectMode){
     el.setAttribute('aria-selected',String(selected));
@@ -6452,13 +6460,12 @@ function setRosterSelectMode(on){
   rosterCol.classList.toggle('select-mode',rosterSelectMode);
   rosterSelectBtn.classList.toggle('on',rosterSelectMode);
   rosterSelectBtn.setAttribute('aria-pressed',String(rosterSelectMode));
-  if(rosterSelectMode)loadStoppedSelectAgents();
-  else{
-    stoppedSelectRequest?.abort();stoppedSelectRequest=null;
-    if(stoppedSelectAgents.length){stoppedSelectAgents=[];renderRoster();return;}
+  if(!rosterSelectMode){
+    finishedSelectRequest?.abort();finishedSelectRequest=null;
+    finishedSelectAgents=[];
   }
-  reorderRoster(currentAgents);
-  refreshBulkTileStates();updateRosterBulkUI();
+  renderRoster();
+  if(rosterSelectMode)loadFinishedSelectAgents();
 }
 function toggleBulkAgent(name){
   const agent=currentAgentNamed(name);
@@ -6538,7 +6545,7 @@ function finishAgentExits(exits){
   ]);
   const dust=window.OrreryExitDust;
   const departed=new Set(exits.map(([name])=>name));
-  stoppedSelectAgents=stoppedSelectAgents.filter(agent=>!departed.has(agent.name));
+  finishedSelectAgents=finishedSelectAgents.filter(agent=>!departed.has(agent.name));
   for(const [name,action] of exits){
     const group=sessionGroups.get(name);
     dust?.play(tiles.get(name),rosterEl);
@@ -6804,9 +6811,6 @@ function agentPermissionSetting(a,key,api){
     mode:AGENT_DETAIL_BROWSER.has(control?.mode)?control.mode:control&&key==='browser_use'&&value===false?'off':null,
     options,
   };
-}
-function canChangeAgentPermissions(a,api){
-  return ['computer_use','browser_use'].some(key=>agentPermissionSetting(a,key,api).action);
 }
 function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false,pendingAction=''){
   const text=value=>typeof value==='string'&&value.trim()?value:null;
@@ -7682,7 +7686,7 @@ function paintRosterFold(el,row,reveal){
 }
 function reorderRoster(live,positions=null){
   const reveal=rosterSelectMode||needOnly||Boolean(normalizeSearchText(rosterFilter.value));
-  const want=rosterOrder(live,reveal);
+  const want=rosterOrder(live.filter(agent=>tiles.has(agent.name)),reveal);
   const current=[...rosterEl.querySelectorAll(':scope > .agent')];
   const orderChanged=want.length!==current.length||want.some((row,i)=>row.name!==current[i].dataset.agent||
     row.depth!==Number(current[i].dataset.rosterDepth));
@@ -7724,8 +7728,9 @@ function prepareRosterRow(agent){
   return agent;
 }
 function renderRoster(){
+  const visible=rosterSelectMode?isBulkSelectableAgent:()=>true;
   const knownNames=new Set(tiles.keys());
-  const incoming=knownNames.size?liveRosterAgents.filter(agent=>!knownNames.has(agent.name)):[];
+  const incoming=knownNames.size?liveRosterAgents.filter(agent=>visible(agent)&&!knownNames.has(agent.name)):[];
   const positions=knownNames.size?(incoming.length?railPositions(tiles.values(),rosterEl):null):new Map();
   const arrivalPortraits=new Map();
   for(const a of incoming){
@@ -7740,15 +7745,17 @@ function renderRoster(){
   pendingAgentExits.forEach(({original},name)=>{
     if(!seen.has(name)){restarting.push(original);seen.add(name);}
   });
-  // The live poll may retire a row while Select still has an older history snapshot.
-  const agents=liveRosterAgents.concat(restarting,stoppedSelectAgents.filter(agent=>
+  // The live poll may retire a row while Select still has an older session snapshot.
+  const agents=liveRosterAgents.concat(restarting,finishedSelectAgents.filter(agent=>
     !seen.has(agent.name)&&!liveRetiredNames.has(agent.name)));
   descriptorStore.retain(agents.map(agent=>agent.name));
   agents.forEach(agent=>{agent.descriptor=descriptorStore.get(agent,agents);});
   currentAgents=agents;
   assignLineageHues(agents);
-  agents.forEach(agent=>{tileFor(agent);seen.add(agent.name);});
-  tiles.forEach((el,name)=>{if(!seen.has(name)){hideAgentDetail(el);el.remove();tiles.delete(name);}});
+  const displayed=agents.filter(visible);
+  const displayedNames=new Set(displayed.map(agent=>agent.name));
+  displayed.forEach(tileFor);
+  tiles.forEach((el,name)=>{if(!displayedNames.has(name)){hideAgentDetail(el);el.remove();tiles.delete(name);}});
   reconcileBulkSelection(agents);
   noteActivity(liveRosterAgents);
   renderCrewCounts(liveRosterAgents);
@@ -7764,23 +7771,17 @@ function renderRoster(){
   document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:liveRosterAgents}}));
   if(paletteOverlay.classList.contains('on'))renderPalette();
 }
-async function loadStoppedSelectAgents(){
-  // Select also shows non-retired history for finished and resumable agents.
-  const controller=new AbortController();stoppedSelectRequest=controller;
+async function loadFinishedSelectAgents(){
+  // A finished agent is selectable while its tmux shell still exists.
+  const controller=new AbortController();finishedSelectRequest=controller;
   try{
-    const [response,api]=await Promise.all([
-      fetch('/telemetry/agents',{cache:'no-store',signal:controller.signal}),loadPermissionApi(),
-    ]);
-    if(!response.ok)return;
-    const roster=await response.json();
-    if(controller.signal.aborted||!Array.isArray(roster?.agents))return;
-    stoppedSelectAgents=roster.agents.filter(agent=>agent&&!isRetiredRosterAgent(agent)&&(
-      agent.category==='finished'&&isBulkSelectableAgent(agent)||
-      agent.running===false&&canChangeAgentPermissions(agent,api)))
+    const agents=await agentActionRoster('/telemetry/agents',controller.signal);
+    if(controller.signal.aborted||!agents)return;
+    finishedSelectAgents=agents.filter(agent=>agent?.category==='finished'&&!isRetiredRosterAgent(agent)&&
+      isBulkSelectableAgent(agent)&&(!haveSessionList||availableSessions.has(agent.name)))
       .map(prepareRosterRow);
-    if(stoppedSelectAgents.length)renderRoster();
-  }catch(_){/* live selections remain available if the history request fails */}
-  finally{if(stoppedSelectRequest===controller)stoppedSelectRequest=null;}
+    if(finishedSelectAgents.length)renderRoster();
+  }finally{if(finishedSelectRequest===controller)finishedSelectRequest=null;}
 }
 async function pollAgents(){
   const annotationEpoch=rosterAnnotationEpoch;

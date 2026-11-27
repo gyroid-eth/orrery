@@ -32,12 +32,13 @@ HUSK = ACTIVE | {'category': 'finished', 'running': False, 'resume_capability': 
 EXITED = HUSK | {'category': 'gone', 'created': 0}
 STOPPED = agent('QuartzFixture', 'finished', **CHILD, history_session_id=SID, resume_capability='ready')
 RESUME_COMPUTER = {'computer_use': {'value': 'off', 'can_change': True, 'action': 'resume'}}
-RESUMABLE = agent('SlateFixture', 'gone', **CHILD, history_session_id=SID, resume_capability='ready',
+RESUMABLE = agent('SlateFixture', 'gone', **CHILD, retired=False, history_session_id=SID, resume_capability='ready',
                   permission_controls=RESUME_COMPUTER)
 RETIRED_CHILD = RESUMABLE | {'name': 'RetiredFixture', 'category': 'retired', 'retired': True,
                              'harness_kind': 'dsh', 'parent_agent': ACTIVE['name']}
 RETIRED_BY_CATEGORY = agent('ArchiveFixture', 'retired', permission_controls=RESUME_COMPUTER)
 RETIRED_BY_FLAG = agent('RetiredFlagFixture', 'finished', retired=True)
+FINISHED_APP = agent('DesktopFixture', 'finished', surface='codex-app')
 PERSISTENT = agent('BeaconFixture', **CHILD, lifecycle='persistent')
 CONVERSATION = agent('AmberFixture', mail_status='unavailable', browser_use=True, computer_use='off')
 TOP_SID = '21234567-1234-1234-1234-012345678901'
@@ -59,7 +60,7 @@ def roster(request):
     state = {'trace': [], 'checks': [], 'stop_checks': [], 'failures': {}, 'retired': [],
              'finished_shell_present': True,
              'api': getattr(request, 'param', 45)}
-    history = [STOPPED, RESUMABLE, TOP_RESUMABLE, RETIRED_CHILD, RETIRED_BY_CATEGORY, RETIRED_BY_FLAG]
+    history = [STOPPED, RESUMABLE, TOP_RESUMABLE, RETIRED_CHILD, RETIRED_BY_CATEGORY, RETIRED_BY_FLAG, FINISHED_APP]
 
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
@@ -162,6 +163,7 @@ def roster(request):
             waitForBulkRebootExit=(name,timeout,poll,confirm)=>waitForExit(name,1200,35,confirm);
             rosterSelectBtn.click();""")
         wait("tiles.has('QuartzFixture')")
+        js('loadPermissionApi()')
         state['trace'].clear()
         yield js, wait, state
     finally:
@@ -176,22 +178,48 @@ def jump(name):
     return '/api/jump', {'session': name, 'open_terminal': False, 'open': False}
 
 
+@pytest.fixture
+def historical_permission_roster(roster):
+    """Give the permission controls historical rows independently of Select."""
+    js, _, _ = roster
+    rows = json.dumps([RESUMABLE, TOP_RESUMABLE])
+    js(f"setRosterSelectMode(false);for(const row of {rows}){{currentAgents.push(row);tileFor(row)}}")
+    return roster
+
+
 @pytest.mark.parametrize('roster', [55], indirect=True)
-def test_select_keeps_resumable_agents_but_excludes_retired_children(roster):
-    js, wait, state = roster
-    retired = json.dumps([row['name'] for row in (RETIRED_CHILD, RETIRED_BY_CATEGORY, RETIRED_BY_FLAG)])
-    no_retired = f"{retired}.every(name=>!tiles.has(name))"
+def test_select_shows_only_agents_with_bulk_checkboxes(roster):
+    js, wait, _ = roster
+    history = json.dumps([row['name'] for row in (
+        RESUMABLE, TOP_RESUMABLE, RETIRED_CHILD, RETIRED_BY_CATEGORY, RETIRED_BY_FLAG, FINISHED_APP,
+    )])
+    no_history = f"{history}.every(name=>!tiles.has(name))"
 
     js('rosterSelectBtn.click()')
-    assert js(f"!rosterSelectMode&&tiles.has('CopperFixture')&&!tiles.has('SlateFixture')&&{no_retired}")
+    assert js(f"!rosterSelectMode&&tiles.has('CopperFixture')&&tiles.has('BeaconFixture')&&{no_history}")
     js('rosterSelectBtn.click()')
-    wait("rosterSelectMode&&tiles.has('SlateFixture')")
-    assert js(no_retired)
-    assert js("tiles.get('SlateFixture').classList.contains('permission-target')")
+    wait("rosterSelectMode&&tiles.has('QuartzFixture')")
+    assert not js("tiles.has('SlateFixture')")
+    assert js(no_history)
+    assert not js("tiles.has('BeaconFixture')")
+    assert js("[...tiles.values()].every(tile=>tile.getAttribute('aria-disabled')==='false')")
+    assert js("getComputedStyle(tiles.get('QuartzFixture').querySelector('.bulk-check')).opacity==='1'")
 
-    state['retired'] = ['SlateFixture']
+
+def test_finished_shell_is_removed_from_selection_when_its_session_closes(roster):
+    js, _, _ = roster
+    js("""handleSessions(['CopperFixture','QuartzFixture']);
+          tiles.get('QuartzFixture').click()""")
+    assert js("bulkSelectedAgents.has('QuartzFixture')")
+    js("handleSessions(['CopperFixture'])")
+    assert js("rosterSelectMode&&!tiles.has('QuartzFixture')&&!bulkSelectedAgents.has('QuartzFixture')")
+
+
+def test_select_removes_a_finished_agent_retired_during_selection(roster):
+    js, _, state = roster
+    state['retired'] = ['QuartzFixture']
     js('window.fetch=fixtureFetch;pollAgents()')
-    assert js("rosterSelectMode&&tiles.has('QuartzFixture')&&!tiles.has('SlateFixture')")
+    assert js("rosterSelectMode&&tiles.has('CopperFixture')&&!tiles.has('QuartzFixture')")
 
 
 @pytest.mark.parametrize('stopped_row', [[], [agent('CopperFixture', 'finished')]],
@@ -217,8 +245,8 @@ def test_confirmed_reboot_checks_exit_then_resumes_each_agent_in_order(roster, s
 
 def test_protection_and_action_specific_confirmation(roster):
     js, wait, state = roster
-    js("tiles.get('BeaconFixture').click()")
-    assert js("tiles.get('BeaconFixture').getAttribute('aria-disabled')") == 'true'
+    js("toggleBulkAgent('BeaconFixture')")
+    assert not js("tiles.has('BeaconFixture')||bulkSelectedAgents.has('BeaconFixture')")
     assert js("rosterBulkBar.hidden")
 
     js("tiles.get('QuartzFixture').click();rosterBulkExit.click();rosterBulkReboot.click()")
@@ -262,8 +290,8 @@ def permission_jump(name='SlateFixture', sid=SID, **permission):
                          'permission': {'history_session_id': sid, **permission}}
 
 
-def test_permission_resume_sends_only_one_change_from_the_keyboard(roster):
-    js, wait, state = roster
+def test_permission_resume_sends_only_one_change_from_the_keyboard(historical_permission_roster):
+    js, wait, state = historical_permission_roster
     js("tiles.get('SlateFixture').focus()")
     assert js("""(()=>{
       const button=agentDetail.querySelector('[data-browser]');
@@ -288,15 +316,15 @@ def test_permission_resume_sends_only_one_change_from_the_keyboard(roster):
     assert state['trace'] == [permission_jump(browser_use=True)]
 
 
-def test_cancel_and_disabled_permissions_send_no_actions(roster):
-    js, wait, state = roster
+def test_cancel_and_disabled_permissions_send_no_actions(historical_permission_roster):
+    js, wait, state = historical_permission_roster
     assert_read_only_permissions(js, 'BeaconFixture', 'Persistent agent')
     open_permissions(js, 'SlateFixture', '[data-computer="control"]')
     assert js("document.activeElement.value") == 'cancel'
     js.client.call('Input.dispatchKeyEvent', type='keyDown', key='Escape', code='Escape', windowsVirtualKeyCode=27)
     js.client.call('Input.dispatchKeyEvent', type='keyUp', key='Escape', code='Escape', windowsVirtualKeyCode=27)
     wait('!permissionConfirm.open&&!pendingPermissionChange')
-    assert js('rosterSelectMode')
+    assert js('!rosterSelectMode')
     assert state['trace'] == []
 
 
@@ -308,8 +336,8 @@ def test_finished_husk_and_conversation_only_controls_are_disabled(roster):
     assert state['trace'] == []
 
 
-def test_stopped_agent_view_resumes_directly_and_reports_api_refusal(roster):
-    js, wait, state = roster
+def test_stopped_agent_view_resumes_directly_and_reports_api_refusal(historical_permission_roster):
+    js, wait, state = historical_permission_roster
     state['failures'][('/api/jump', 'SlateFixture')] = 'Screen relay unavailable'
     open_permissions(js, 'SlateFixture', '[data-computer="view"]')
     assert js('permissionApply.textContent') == 'Resume'
@@ -326,8 +354,8 @@ def test_older_telemetry_does_not_offer_historical_permission_targets(roster):
     assert state['trace'] == []
 
 
-def test_unknown_browser_requires_an_explicit_choice(roster):
-    js, wait, state = roster
+def test_unknown_browser_requires_an_explicit_choice(historical_permission_roster):
+    js, wait, state = historical_permission_roster
     js("currentAgentNamed('SlateFixture').browser_use=null")
     open_permissions(js, 'SlateFixture', '[data-browser]')
     js('permissionApply.click()')
@@ -338,8 +366,8 @@ def test_unknown_browser_requires_an_explicit_choice(roster):
     assert state['trace'] == [permission_jump(browser_use=True)]
 
 
-def test_permission_confirmation_rechecks_a_new_live_row(roster):
-    js, wait, state = roster
+def test_permission_confirmation_rechecks_a_new_live_row(historical_permission_roster):
+    js, wait, state = historical_permission_roster
     open_permissions(js, 'SlateFixture', '[data-computer="control"]')
     js("currentAgents=currentAgents.map(a=>a.name==='SlateFixture'?{...a,category:'agent',running:true}:a);")
     js('permissionApply.click()')
@@ -347,8 +375,8 @@ def test_permission_confirmation_rechecks_a_new_live_row(roster):
     assert state['trace'] == []
 
 
-def test_permission_confirmation_checks_the_current_api_generation(roster):
-    js, wait, state = roster
+def test_permission_confirmation_checks_the_current_api_generation(historical_permission_roster):
+    js, wait, state = historical_permission_roster
     open_permissions(js, 'SlateFixture', '[data-computer="control"]')
     state['api'] = 44
     js('permissionApply.click()')
@@ -445,8 +473,8 @@ def test_older_api_keeps_standalone_permissions_disabled(roster):
 
 
 @pytest.mark.parametrize('roster', [46], indirect=True)
-def test_api46_enables_stopped_standalone_and_shows_direct_launch_reason(roster):
-    js, wait, state = roster
+def test_api46_enables_stopped_standalone_and_shows_direct_launch_reason(historical_permission_roster):
+    js, wait, state = historical_permission_roster
     assert_read_only_permissions(js, 'OpalFixture', 'No saved launch settings; use Resume')
     open_permissions(js, 'JadeFixture', '[data-browser]')
     assert js('permissionApply.textContent') == 'Resume'
@@ -810,8 +838,8 @@ def test_api46_preflight_failure_leaves_the_standalone_running(roster):
 
 @pytest.mark.parametrize('roster', [46], indirect=True)
 @pytest.mark.parametrize('active', [True, False], ids=['restart', 'resume'])
-def test_api46_pending_codex_resume_displays_the_api_instructions(roster, active):
-    js, wait, state = roster
+def test_api46_pending_codex_resume_displays_the_api_instructions(historical_permission_roster, active):
+    js, wait, state = historical_permission_roster
     target = TOP if active else TOP_RESUMABLE
     name, sid = target['name'], target['history_session_id']
     if active:
