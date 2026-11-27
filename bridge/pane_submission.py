@@ -69,7 +69,7 @@ AGY_MODE = re.compile(
     r'^(?:(?:\? for shortcuts|esc to cancel)\s{2,})?(?:auto|plan|accept[- ]edits)\s+·\s+', re.I)
 AGY_MODE_ONLY = re.compile(r'^(?:(?:\? for shortcuts|esc to cancel)\s{2,})?(?:auto|plan|accept[- ]edits)$', re.I)
 AGY_MODEL_FOOTER = re.compile(
-    r'^(?:(?:\? for shortcuts|esc to cancel)\s{2,})?Gemini(?:[ -][^·]+)?\s+·\s+(?:low|medium|high|xhigh|max)$',
+    r'^(?:(?:\? for shortcuts|esc to cancel)\s{2,})?[^·\n]+\s+·\s+(?:low|medium|high|xhigh|max)$',
     re.I)
 AGY_SCROLL_MARKER = re.compile(
     rf'(?:{SGR.pattern}|[ \t])*\x1b\[90m↑ [1-9]\d* more lines?(?:{SGR.pattern})*[ \t]*')
@@ -101,6 +101,9 @@ CODEX_WORKING = re.compile(r'^• (?:Working|Compacting context) \(.*\besc to in
 CODEX_PASTE = re.compile(r'\[PastedContent([1-9][0-9]{0,8})chars\]')
 CODEX_PASTE_STYLE = re.compile(r'\x1b\[(?:36|38;5;6)m(?=\[Pasted)')
 CODEX_QUEUE_HINT = 'tab to queue message'
+CODEX_CONTEXT_FOOTER = re.compile(r'(?:Context (?:100|[1-9]?\d)% (?:left|used)|(?:100|[1-9]?\d)% context left)')
+CODEX_EFFORT_FOOTER = re.compile(
+    r'[^·\n]+\s+(?:default|none|minimal|low|medium|high|xhigh|max|ultra)(?:\s+·(?:\s+.*)?)?', re.I)
 # Codex marks the viewport edge with a dim arrow, even flush against the text.
 CODEX_SCROLL_ARROW = re.compile(rf'{DIM.pattern}([↑↓])(?:{SGR.pattern})*[ \t]*$')
 NOTICE_TRAILER = re.compile(r'\s*(?:\.{3}\s+)?(?:Fetch inbox to read the rest\.|Please call fetch_inbox to read it\.)$')
@@ -630,8 +633,16 @@ def frame(metadata, lines, pane):
         # A caret at the beginning of a multiline draft isn't an empty editor.
         # Check the lower edge or a recognized footer before accepting it.
         codex_queue_hint = glyph == '›' and bool(tail and tail[0].startswith(CODEX_QUEUE_HINT))
-        footer=tail and (codex_queue_hint or tail[0].startswith(('? for shortcuts','← for agents','⏵','⏸','% context left','Context '))
-                or re.match(r'gpt-\S+\s+(?:default|low|medium|high|xhigh|max|ultra)\b',tail[0],re.I))
+        footer=tail and (codex_queue_hint or tail[0].startswith(('? for shortcuts','← for agents','⏵','⏸')))
+        if glyph == '›' and tail and not footer:
+            footer = (any(CODEX_CONTEXT_FOOTER.fullmatch(part.strip()) for part in tail[0].split('·'))
+                      or tail[0].startswith('% context left')
+                      or (len(tail) > 1 and tail[1].startswith(('← for agents', '? for shortcuts'))))
+            if not footer and CODEX_EFFORT_FOOTER.fullmatch(tail[0]):
+                # With Context hidden the native status row is indented and
+                # separated from the composer by an empty row.
+                status = next(row for row in plain[cursor+1:] if row.strip())
+                footer = command == 'codex' or (not plain[cursor+1].strip() and status.startswith('  '))
         if not draft and tail and not (lower or footer or waiting):
             return replace(unavailable, slash_view=slash_view)
         menu=(start>=2 and upper and bool(re.match(r'^[ \t]+❯[ \t]+\S',plain[start-2])))
