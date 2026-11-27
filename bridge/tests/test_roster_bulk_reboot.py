@@ -93,7 +93,8 @@ def roster(request):
                     return
                 status, rows = state['checks'].pop(0) if state['checks'] else (200, live)
                 state['trace'].append(('roster', status, [row['category'] for row in rows]))
-                self.answer({'agents': rows, 'retired': state['retired']} if status == 200 else {'error': 'busy'}, status)
+                self.answer({'agents': rows, 'retired': state['retired']} if status == 200 else
+                            {'error': 'dashboard slow' if status == 502 else 'busy'}, status)
             elif path.path == '/api/version':
                 self.answer({'api': state['api']})
             elif path.path.startswith(('/api/', '/telemetry/')):
@@ -412,6 +413,38 @@ def test_permission_restart_checks_current_conversation_before_exit(roster):
     js('permissionApply.click()')
     wait("toastEl.textContent.includes('The agent changed')")
     assert state['trace'] == [('roster', 200, ['agent'])]
+
+
+@pytest.mark.parametrize(('status','rows','expected'), [
+    (502, [], 'Live roster HTTP 502 (dashboard timed out) after '),
+    (200, [TOP, TOP_DIRECT], 'No live roster row for CopperFixture (2 rows)'),
+])
+def test_permission_restart_distinguishes_http_failure_from_missing_agent(roster, status, rows, expected):
+    js, wait, state = roster
+    state['checks'] = [(status, rows), (status, rows)]
+    open_permissions(js, 'CopperFixture', '[data-browser]')
+    js('permissionApply.click()')
+    wait(f"toastEl.textContent.includes({json.dumps(expected)})")
+    assert state['trace'] == [('roster', status, [row['category'] for row in rows])] * 2
+    if status == 502:
+        assert js(r'/HTTP 502 .* after \d+\.\ds/.test(toastEl.textContent)')
+
+
+def test_permission_restart_retries_a_timed_out_roster_before_sending_exit(roster):
+    js, wait, state = roster
+    state['checks'] = [(502, []), (200, [ACTIVE]), (200, [])]
+    state['stop_checks'] = [EXITED]
+    open_permissions(js, 'CopperFixture', '[data-computer="view"]')
+    js('permissionApply.click()')
+    wait("toastEl.textContent.startsWith('Resume accepted')")
+    assert state['trace'] == [
+        ('roster', 502, []),
+        ('roster', 200, ['agent']),
+        ('/api/exit', {'session': 'CopperFixture'}),
+        ('roster', 200, []),
+        ('history', 'gone'),
+        permission_jump('CopperFixture', ACTIVE_SID, computer_use='view'),
+    ]
 
 
 def test_failed_permission_exit_never_resumes(roster):

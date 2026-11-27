@@ -191,6 +191,27 @@ def test_a_dashboard_that_times_out_gives_every_waiting_tab_a_502_and_is_asked_a
     assert dash.asked_for("/api/agents") == 2
 
 
+def test_permission_roster_does_not_join_the_short_background_poll(monkeypatch):
+    dash = FakeDashboard(delay=0.15)
+    monkeypatch.setattr(ob, "ACTION_ROSTER_PROXY_TIMEOUT", 0.8)
+
+    async def scenario(get, client, url, backend):
+        regular = asyncio.create_task(get("/telemetry/agents?scope=live"))
+        await asyncio.sleep(0.01)
+        async def check_permission():
+            async with client.get(url + "/telemetry/agents?scope=live",
+                                  headers={"X-Orrery-Action-Check": "1"}) as response:
+                return response.status, await response.json()
+        actions = await asyncio.gather(check_permission(), check_permission())
+        return await regular, actions
+
+    regular, actions = run(scenario, dash, upstream_timeout=0.05)
+    assert regular == (502, {"error": "dashboard slow"})
+    assert [status for status, _ in actions] == [200, 200]
+    assert actions[0] == actions[1]
+    assert dash.asked_for("/api/agents") == 2
+
+
 def test_an_error_status_is_passed_on_to_every_waiting_tab():
     dash = FakeDashboard(status=503)
 

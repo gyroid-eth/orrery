@@ -1953,16 +1953,19 @@ async def send_error(
 # computation there (the dashboard computes these in seconds, and computations
 # that overlap slow each other down). These pollers keep only in-flight work.
 CATALOG_PROXY_TIMEOUT = 20.0
+ACTION_ROSTER_PROXY_TIMEOUT = 12.0
 COALESCED_ROUTES = frozenset({"/telemetry/agents", "/telemetry/graph", "/telemetry/messages"})
 
 
 async def fetch_proxied(
-    http_session: ClientSession, path: str, url: str, tmux_bin="tmux"
+    http_session: ClientSession, path: str, url: str, tmux_bin="tmux", *, timeout=None,
 ) -> tuple[bytes, int, str]:
     """One upstream GET for proxy_dashboard: (body, status, content type).
     Raises ClientError / asyncio.TimeoutError when the dashboard does not answer."""
     # Catalog construction can outlast ordinary six-second dashboard polls.
-    options = {"timeout": ClientTimeout(total=CATALOG_PROXY_TIMEOUT)} if path == SPAWN_CATALOG_ROUTE else {}
+    if path == SPAWN_CATALOG_ROUTE:
+        timeout = CATALOG_PROXY_TIMEOUT
+    options = {"timeout": ClientTimeout(total=timeout)} if timeout is not None else {}
     async with http_session.get(url, **options) as response:
         body = await response.read()
         status = response.status
@@ -2104,23 +2107,26 @@ SPAWN_CATALOG_KEY = web.AppKey("spawn_catalog", SpawnCatalogCache)
 
 
 def shared_fetch(
-    inflight: dict[str, "asyncio.Task[tuple[bytes, int, str]]"],
+    inflight: dict[tuple[str, float | None], "asyncio.Task[tuple[bytes, int, str]]"],
     http_session: ClientSession,
     path: str,
     url: str,
     tmux_bin="tmux",
+    *,
+    timeout=None,
 ) -> "asyncio.Task[tuple[bytes, int, str]]":
     """The fetch for `url` already on its way, or a new one. The task is not
     tied to the request that started it, so a tab that closes mid-request
     does not cancel the answer the others wait for."""
-    task = inflight.get(url)
+    key = (url, timeout)
+    task = inflight.get(key)
     if task is None:
-        task = asyncio.create_task(fetch_proxied(http_session, path, url, tmux_bin))
-        inflight[url] = task
+        task = asyncio.create_task(fetch_proxied(http_session, path, url, tmux_bin, timeout=timeout))
+        inflight[key] = task
 
         def done(finished: asyncio.Task) -> None:
-            if inflight.get(url) is finished:
-                del inflight[url]
+            if inflight.get(key) is finished:
+                del inflight[key]
             if not finished.cancelled():
                 finished.exception()  # retrieved, even when every waiter has gone
 
@@ -2192,7 +2198,11 @@ async def proxy_dashboard(request: web.Request) -> web.Response:
             if catalog_state:
                 headers["X-Orrery-Catalog-State"] = catalog_state
         elif request.path in COALESCED_ROUTES:
-            task = shared_fetch(request.app[PROXY_INFLIGHT_KEY], http_session, request.path, url, request.app[TMUX_BIN_KEY])
+            action_check = (request.path == "/telemetry/agents" and kept.get("scope") == "live"
+                            and request.headers.get("X-Orrery-Action-Check") == "1")
+            task = shared_fetch(request.app[PROXY_INFLIGHT_KEY], http_session, request.path, url,
+                                request.app[TMUX_BIN_KEY],
+                                timeout=ACTION_ROSTER_PROXY_TIMEOUT if action_check else None)
             body, status, content_type = await asyncio.shield(task)
         else:
             body, status, content_type = await fetch_proxied(http_session, request.path, url, request.app[TMUX_BIN_KEY])

@@ -6577,10 +6577,38 @@ async function postBulkAgentAction(action,body){
   return result;
 }
 const LIVE_AGENT_ROSTER='/telemetry/agents?scope=live';
-async function agentActionRoster(path,signal){
-  const response=await fetch(path,{cache:'no-store',signal}).catch(()=>null);
-  const roster=response?.ok?await response.json().catch(()=>null):null;
-  return Array.isArray(roster?.agents)?roster.agents:null;
+async function agentActionRoster(path,signal,{diagnose=false}={}){
+  const started=performance.now();
+  const timedOut=()=>signal?.reason?.name==='TimeoutError';
+  const failure=message=>{
+    if(diagnose)throw new Error(`${message} after ${((performance.now()-started)/1000).toFixed(1)}s`);
+    return null;
+  };
+  const options={cache:'no-store',signal};
+  if(diagnose)options.headers={'X-Orrery-Action-Check':'1'};
+  const response=await fetch(path,options).catch(()=>null);
+  if(!response)return failure(timedOut()?'Live roster request timed out':'Live roster request failed');
+  if(!response.ok&&!diagnose)return null;
+  const roster=await response.json().catch(()=>null);
+  if(!response.ok){
+    const upstream=roster?.error==='dashboard slow'?' (dashboard timed out)':'';
+    return failure(`Live roster HTTP ${response.status}${upstream}`);
+  }
+  if(Array.isArray(roster?.agents))return roster.agents;
+  return failure(`Live roster HTTP ${response.status} ${timedOut()?'response timed out':'returned an invalid list'}`);
+}
+async function permissionRestartAgent(name){
+  for(const retry of [false,true]){
+    try{
+      const rows=await agentActionRoster(LIVE_AGENT_ROSTER,AbortSignal.timeout(15000),{diagnose:true});
+      const agent=rows.find(row=>row?.name===name);
+      if(agent)return agent;
+      throw new Error(`No live roster row for ${name} (${rows.length} rows)`);
+    }catch(error){
+      if(retry)throw error;
+      await new Promise(resolve=>setTimeout(resolve,300));
+    }
+  }
 }
 function beginAgentExit(name){
   const agent=currentAgentNamed(name);
@@ -7336,9 +7364,7 @@ async function changeAgentPermission(original,key,value){
     const api=await loadPermissionApi(true);
     if(api===null)throw new Error('Could not check the Telemetry API');
     if(!(api>=45))throw new Error('Requires Telemetry API 45');
-    const agent=restart?
-      (await agentActionRoster(LIVE_AGENT_ROSTER,AbortSignal.timeout(8000)))?.find(row=>row?.name===name):
-      currentAgentNamed(name);
+    const agent=restart?await permissionRestartAgent(name):currentAgentNamed(name);
     if(!agent)throw new Error('Could not verify the agent in the roster');
     const current=agentPermissionSetting(agent,key,api);
     if(current.reason)throw new Error(current.reason);
