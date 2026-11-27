@@ -3,7 +3,8 @@
   'use strict';
   // These cues come from the terminal. The bridge checks the actual question.
   const LOCALIZED_QUESTION_HINTS=[' が入力を求めています','📋 提问 · 第 '];
-  function mount({screen,getPane,getPanes,send,openTerminal,focusPrompt}){
+  const CLOSED_DISMISS_MS=1800;
+  function mount({screen,getPane,getPanes,send,openTerminal,focusPrompt,closeDelayMs=CLOSED_DISMISS_MS}){
     const rows=new Map();let sequence=0,painted=null;
     const bar=document.createElement('section');bar.className='reader-approval';bar.hidden=true;bar.tabIndex=-1;
     bar.setAttribute('aria-label','Approval');
@@ -53,8 +54,17 @@
     function active(){return getPane();}
     function record(p){
       let row=rows.get(p);
-      if(!row){row={pane:p,state:'none',open:false,seen:'',pending:null,dirty:false,data:{},timer:null};rows.set(p,row);}
+      if(!row){row={pane:p,state:'none',open:false,seen:'',pending:null,dirty:false,data:{},timer:null,closeTimer:null};rows.set(p,row);}
       return row;
+    }
+    function clearCloseTimer(row){
+      if(row.closeTimer){clearTimeout(row.closeTimer);row.closeTimer=null;}
+    }
+    function dismissClosed(row){
+      clearCloseTimer(row);
+      if(row.state!=='closed')return;
+      row.state='none';row.open=false;row.data={};row.selection=new Set();
+      paint();
     }
     function visible(p){
       if(!p)return false;
@@ -65,13 +75,20 @@
     const selection=row=>[...(row.selection||[])].sort((a,b)=>a-b);
     function paint(){
       const p=active(),row=p&&rows.get(p);
+      const hadFocus=bar.contains(document.activeElement);
       bar.hidden=!row||row.state==='none'||!visible(p);
-      if(bar.hidden)return;
+      if(bar.hidden){
+        painted=null;
+        if(hadFocus&&visible(p)){
+          const scope=p.host.closest('.split-cell')||screen;
+          scope.querySelector('.conversation-panel:not([hidden]) .conversation-scroll')?.focus({preventScroll:true});
+        }
+        return;
+      }
       const data=row.data,signature=[row,row.state,row.open,data.token,data.message,data.logWarning,row.pending?.id,selection(row).join(',')];
       if(painted&&signature.every((v,i)=>v===painted[i]))return;
       painted=signature;
-      const hadFocus=bar.contains(document.activeElement);
-      const focusedChoice=document.activeElement.dataset?.choice;
+      const focusedChoice=document.activeElement?.dataset?.choice;
       if(focusedChoice)row.focusChoice=focusedChoice;
       const copy=requestCopy(data);
       const waiting=data.kind==='question'?'Waiting for your answer':'Approval needed';
@@ -113,9 +130,9 @@
         submit.onclick=()=>answer(row,selection(row));choices.append(submit);
       }
       status.textContent=data.logWarning?'Response log could not be saved.':'';
-      terminal.hidden=row.state==='ready'||row.state==='sending';
+      terminal.hidden=row.state==='ready'||row.state==='sending'||row.state==='closed';
       if(hadFocus){
-        const target=row.open&&row.state==='ready'&&!row.pending?choices.querySelector(row.wantDefaultFocus?'.is-once':'[data-choice=\"'+row.focusChoice+'\"]'):null;
+        const target=row.open&&row.state==='ready'&&!row.pending?choices.querySelector(row.wantDefaultFocus?'.is-once':'[data-choice="'+row.focusChoice+'"]'):null;
         if(target){target.focus({preventScroll:true});row.wantDefaultFocus=false;}else focusBar();
       }
     }
@@ -129,6 +146,7 @@
     function transmit(row,payload,resolve){
       const id='approval-'+(++sequence);row.pending={id,type:payload.type,resolve};paint();
       if(!send({...payload,paneId:row.pane.meta.paneId,session:row.pane.session,requestId:id})){
+        clearCloseTimer(row);
         row.pending=null;row.state=payload.type==='approval-answer'?'unknown':'unavailable';
         row.data={...row.data,message:payload.type==='approval-answer'?'Outcome unknown — check terminal':'Pane unavailable'};
         resolve?.('unknown');paint();return;
@@ -136,12 +154,14 @@
       clearTimeout(row.timer);
       row.timer=setTimeout(()=>{
         if(row.pending?.id!==id)return;
+        clearCloseTimer(row);
         row.pending=null;row.state=payload.type==='approval-answer'?'unknown':'unavailable';
         row.data={...row.data,message:payload.type==='approval-answer'?'Outcome unknown — check terminal':'Pane unavailable'};resolve?.('unknown');paint();
       },6000);
     }
     function answer(row,choice,text,resolve){
       if(row.state!=='ready'||row.pending||active()!==row.pane){resolve?.('refused');return;}
+      clearCloseTimer(row);
       row.state='sending';paint();focusBar();
       transmit(row,{type:'approval-answer',token:row.data.token,choice,operation:root.crypto.randomUUID(),
         ...(text===undefined?{}:{text})},resolve);
@@ -190,10 +210,13 @@
         row.selection=new Set((message.choices||[]).filter(choice=>choice.checked).map(choice=>choice.id));
       }
       row.state=message.state==='none'&&['sent','closed'].includes(previous)?'closed':message.state==='none'&&previous==='unknown'?'unknown':message.state;
-      if(['terminal','unavailable','changed'].includes(message.state))row.data={};
+      if(row.state!=='closed')clearCloseTimer(row);
+      if(['none','terminal','unavailable','changed'].includes(row.state))row.data={};
       row.data={...row.data,...message};
       resolve?.(message.state==='sent'?'accepted':message.state==='unknown'?'unknown':'refused');
       if(row.state==='unknown'&&message.state==='none')row.data.message='Outcome unknown — check terminal';
+      if(row.state==='none'){row.open=false;row.selection=new Set();}
+      if((row.state==='sent'||row.state==='closed')&&previous!==row.state)row.open=false;
       if(message.state==='changed'){row.open=false;row.seen='';}
       if(message.state==='refused'&&message.retryable)row.open=false;
       paint();
@@ -202,18 +225,20 @@
           if(row.state!=='sent')return;
           row.data={...row.data,message:'Response sent — check terminal'};paint();
         },5000);
+      }else if(row.state==='closed'&&!row.closeTimer){
+        row.closeTimer=setTimeout(()=>dismissClosed(row),closeDelayMs);
       }
       // Output may have arrived before the answer's ACK/response frame.
       if(row.dirty||message.state==='changed'){row.dirty=false;row.seen='';observe(p);}
     }
     function refresh(){
-      for(const [p,row] of rows)if(!p.host.isConnected){clearTimeout(row.timer);row.pending?.resolve?.('unknown');rows.delete(p);}
+      for(const [p,row] of rows)if(!p.host.isConnected){clearTimeout(row.timer);clearCloseTimer(row);row.pending?.resolve?.('unknown');rows.delete(p);}
       paint();observe(active());
     }
     function disconnected(){
       for(const row of rows.values()){
-        clearTimeout(row.timer);row.pending?.resolve?.('unknown');row.pending=null;
-        if(row.state==='none')continue;
+        clearTimeout(row.timer);clearCloseTimer(row);row.pending?.resolve?.('unknown');row.pending=null;
+        if(row.state==='none'||row.state==='closed'){row.state='none';row.open=false;row.data={};row.selection=new Set();continue;}
         row.state=row.state==='sending'?'unknown':'unavailable';
         row.data={...row.data,message:row.state==='unknown'?'Outcome unknown — check terminal':'Pane unavailable'};
       }
