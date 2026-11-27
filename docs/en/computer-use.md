@@ -17,7 +17,7 @@ On macOS, the dashboard's NEW AGENT offers **Computer use** for Claude Code, Cod
 | View | List apps and windows and inspect screen state |
 | Control | View plus interaction such as clicking and typing |
 
-In the cockpit and phone NEW AGENT forms, use **Browser** to choose from Off, Temporary Chrome, and My Chrome where available. Temporary Chrome uses a temporary profile. My Chrome uses your usual Chrome. If Chrome asks for connection permission, respond in Chrome. See [browser setup and approvals](delegation.md#browser-and-computer-use-what-is-reachable-and-what-a-person-does).
+In the cockpit and phone NEW AGENT forms, use **Browser** to choose from Off, Temporary Chrome, and My Browser where available. Temporary Chrome uses a temporary profile. With My Browser, supported harnesses can connect to a running Chrome, Brave, or Edge. Answer any connection prompt in the selected browser. See [browser setup and approvals](delegation.md#browser-and-computer-use-what-is-reachable-and-what-a-person-does).
 
 On macOS, leave the parent field blank to start Antigravity without a parent. Computer use is available for this launch, and Browser is available in the forms that offer it. Git is required when you choose Isolation. Antigravity grants individual screen tools for the session according to the selected screen mode. Existing Ask and Deny rules take precedence. Browser options are hidden if a global Chrome MCP is enabled. See [Antigravity setup and launch](antigravity.md#dashboard-new-agent).
 

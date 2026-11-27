@@ -194,7 +194,9 @@ scripts/canary-embed-task.sh --models opus,sonnet,haiku --places vault,outside -
 
 dsh・Hermes で `--tools mcp:chrome-devtools` を指定すると、同じ Codex の Chrome MCP 定義を使います。Codex に定義がなければ Claude のユーザーまたは起動フォルダの定義を使います。スマホの Browser もこの選択を使います。Chrome の接続許可は引き続き人が応答します。
 
-New Agent の Browser は Off、Temporary Chrome、My Chrome の3択です。Temporary Chrome は子専用の一時プロファイルを使い、Chrome を閉じると削除されます。My Chrome は普段の Chrome を使い、Claude Code は Claude in Chrome、ほかの対応ハーネスでは Chrome DevTools の `--autoConnect` を使います。Mac の Chrome で初回接続の許可を求められたら、Mac の前で応答するまでブラウザ操作が待機します。Antigravity ではグローバルの Chrome MCP が有効だと子の設定で置き換えられないため選択肢を表示しません。
+New Agent の Browser は Off、Temporary Chrome、My Browser の3択です。Temporary Chrome は子専用の一時プロファイルを使い、Chrome を閉じると削除されます。My Browser では、対応ハーネスが macOS または WSL の Windows 側で起動中の Chrome、Brave、Edge に接続します。リモートデバッグを有効にしたブラウザーのうち、OS の既定を優先します。既定が該当しなければ Chrome、Brave、Edge の順で、実際に使う名前が起動前に表示されます。すでに明示した MCP の接続設定はその設定に従います。
+
+リモートデバッグが無効なら、選択欄に出たブラウザーで有効にします。Chrome は `chrome://inspect/#remote-debugging`、Brave は `brave://inspect/#remote-debugging`、Edge は `edge://inspect/#remote-debugging` を開きます。Brave の版によって画面に切替がない場合は、別のユーザーデータ領域でリモートデバッグを指定して起動できます。ブラウザーが接続の許可を求めたら、その画面で応答します。Claude Code は Claude in Chrome の拡張を使います。Antigravity はグローバルの Chrome MCP が有効な場合、この選択肢を表示しません。
 
 これは Codex の既定の MCP 継承に合わせたもので、明示 `--tools browser` の分類済み tool の公開・個別承認とは別です。native の明示 browser も Codex 定義を探しますが、dsh・Hermes がその承認条件を表現できない間は起動を止めます。既定の継承でも、Codex 固有の tool filter/approval など native に写せない項目を捨てて権限を広げず停止します。通常の stdio `command`・`args`・`env`・`cwd` と `enabled` だけの定義が対象です。CLI の表示は `Harness prepare failed: unsupported_mcp_selection`（resume の準備は `Harness resume-prepare failed: unsupported_mcp_selection`）。`native_mcp_selection_unsupported` や `native_mcp_approval_unsupported` は内部の例外理由であり、表示名ではありません。
 

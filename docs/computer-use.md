@@ -17,7 +17,7 @@ macOS の dashboard の NEW AGENT では、Claude Code、Codex CLI、dsh、Herme
 | View | アプリ・窓の一覧と画面状態の読み取り |
 | Control | View に加え、クリック・入力などの操作 |
 
-cockpit とスマホの NEW AGENT では、**Browser** から、利用できる Off・Temporary Chrome・My Chrome を別に選びます。Temporary Chrome は一時プロファイル、My Chrome は普段の Chrome を使います。Chrome で接続許可を求められたら、人が Chrome 上で応答します。[ブラウザの準備と許可](delegation.md#ブラウザと-computer-use-何が届くか人がやること)
+cockpit とスマホの NEW AGENT では、**Browser** から、利用できる Off・Temporary Chrome・My Browser を別に選びます。Temporary Chrome は一時プロファイルを使います。My Browser では、対応ハーネスが起動中の Chrome、Brave、Edge を利用できます。接続の許可を求められたら、選んだブラウザーの画面で応答します。[ブラウザの準備と許可](delegation.md#ブラウザと-computer-use-何が届くか人がやること)
 
 macOS では親の欄を空にして Antigravity を起動できます。この起動でも Computer use と、対応画面での Browser を選べます。Git が必要なのは Isolation を選ぶ場合です。Antigravity の画面の道具は、選択した段に応じて、そのセッションだけ個別に許可されます。既存の Ask・Deny が優先されます。有効なグローバル Chrome MCP があると Browser の選択肢は表示されません。[Antigravity の導入と起動](antigravity.md#dashboard-new-agent)
 

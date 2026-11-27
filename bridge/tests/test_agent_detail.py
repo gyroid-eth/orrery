@@ -153,7 +153,7 @@ def test_api54_shows_the_browser_choices_in_order_and_marks_the_current_mode():
     assert markup.index('data-browser="off"') < markup.index('data-browser="temporary"') < markup.index('data-browser="personal"')
     assert 'data-browser="temporary" aria-pressed="true"' in markup
     assert 'title="Browser use: Temporary Chrome"' in markup and '>Temp</button>' in markup
-    assert 'title="Browser use: My Chrome (unavailable for this agent)" disabled' in markup
+    assert 'title="Browser use: My Browser (unavailable for this agent)" disabled' in markup
     assert 'role="switch"' not in markup
 
 

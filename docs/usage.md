@@ -450,7 +450,7 @@ DeepSeek・dsh / Hermesを初めて使う場合は、ガイドと同じ次の順
 3. 右の `Harness` を選びます。DeepSeek・Local では、カタログにある dsh / Hermes から選びます。利用できない候補は選択できません。アプリやキー保存先の準備不足、OS・Mail方式の非対応などの案内と、設定ガイドへのリンクが表示されます。
 4. 表示される場合は `Helper model` と `Effort` を確認し、その下で起動先と task を指定します。詳しくは[DeepSeek・Local の標準 New Agent](configuration.md#deepseeklocal-の標準-new-agent)を参照してください。
 
-5. macOS の legacy 接続で Telemetry API 53 以降のカタログに `computer_modes` がある場合、**Computer use** で **Off**（画面の道具なし）、**View**（確認）、**Control**（確認と操作）を選べます。Claude Code、Codex CLI、dsh、Hermes、Antigravity CLI が対象です。旧カタログではスイッチを表示する場合があり、互換の Cua Driver 指定を使います。**Browser** は利用可能な Off・Temporary Chrome・My Chrome から選びます。古いカタログでは単一のスイッチになる場合があります。fresh ではこの道具欄を表示しません。スマホは専用の [New agent の案内](mobile.md) を参照してください。
+5. macOS の legacy 接続で Telemetry API 53 以降のカタログに `computer_modes` がある場合、**Computer use** で **Off**（画面の道具なし）、**View**（確認）、**Control**（確認と操作）を選べます。Claude Code、Codex CLI、dsh、Hermes、Antigravity CLI が対象です。旧カタログではスイッチを表示する場合があり、互換の Cua Driver 指定を使います。**Browser** は利用可能な Off・Temporary Chrome・My Browser から選びます。古いカタログでは単一のスイッチになる場合があります。fresh ではこの道具欄を表示しません。スマホは専用の [New agent の案内](mobile.md) を参照してください。
 
 cockpit は独立 agent として起動します。Antigravity の親なし起動には、macOS と、カタログに standalone 対応を返す Telemetry（API 50 以降）が必要です。対応する起動では Git 管理外の作業フォルダーも選べます。親を付ける場合や Isolation を指定する場合は独立した Telemetry の NEW AGENT を使います。古い Telemetry で親なしに対応しない場合は、Telemetry 側の委任起動を使います。準備と併用条件は Telemetry の [Computer use](computer-use.md) と [Antigravity](antigravity.md) を参照してください。
 

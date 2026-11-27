@@ -305,7 +305,7 @@ def test_browser_icon_selects_modes_without_adding_a_layout_control(tour_browser
         agyPayload:spawnToolOptions(),hasText:spawnBrowserUse.textContent.trim()!==''};
     })()''')
     assert result['opened'] and not result['hasText']
-    assert result['choices'] == ['Off','Temporary Chrome','My Chrome']
+    assert result['choices'] == ['Off','Temporary Chrome','My Browser']
     assert result['initial']['tools']['browser_mode'] == 'personal'
     assert result['chosen']['tools']['browser_mode'] == 'temporary'
     assert result['caption'] == 'Browser: Temporary Chrome'
@@ -375,24 +375,27 @@ def test_new_agent_explains_unavailable_my_chrome_and_uses_fallback(tour_browser
     catalog = {
         'browser_modes':{'antigravity':modes},
         'personal_browser_status':{'antigravity':{
-            'reason':'Chrome is not running on Windows. Start Google Chrome.', 'unavailable':True,
+            'reason':'Open brave://inspect/#remote-debugging in Brave and enable remote debugging.',
+            'unavailable':True, 'browser':'Brave',
         }},
         'providers':[{'id':'gemini','program':'antigravity','models':[{'id':'fixture','default':True}]}],
     }
     result = evaluate('''(()=>{
       spawnCatalog=CATALOG;
       selFamily=null;selProvider=null;selModel=null;selHarness=null;renderProviderTabs();
-      const myChrome=spawnBrowserChoices.find(([mode])=>mode==='personal')[1];
+      const myBrowser=spawnBrowserChoices.find(([mode])=>mode==='personal')[1];
       const fallback=spawnToolOptions().tools.browser_mode;
       const notice=spawnStatus.textContent;
-      const disabled=myChrome.disabled;
-      spawnCatalog={...spawnCatalog,personal_browser_status:{}};
+      const disabled=myBrowser.disabled;
+      spawnCatalog={...spawnCatalog,personal_browser_status:{antigravity:{browser:'Brave',reason:'',unavailable:false}}};
       renderSpawnTools();updateSpawnAvailability();
       return {fallback,notice,disabled,ready:spawnToolOptions().tools.browser_mode,
-              readyNotice:spawnStatus.textContent};
+              readyNotice:spawnStatus.textContent, aria:spawnBrowserUse.getAttribute('aria-label')};
     })()'''.replace('CATALOG', json.dumps(catalog)))
-    assert result == {'fallback':fallback, 'disabled':True, 'ready':'personal', 'readyNotice':'',
-                      'notice':'My Chrome: Chrome is not running on Windows. Start Google Chrome.'}
+    assert result == {'fallback':fallback, 'disabled':True, 'ready':'personal',
+                      'readyNotice':'My Browser: Brave',
+                      'aria': 'Browser: My Browser (Brave)' + ('. Install Node.js and npx to use Temporary Chrome.' if fallback == 'off' else ''),
+                      'notice':'My Browser: Open brave://inspect/#remote-debugging in Brave and enable remote debugging.'}
 
 
 @pytest.mark.parametrize(('modes', 'fallback'), [
@@ -436,12 +439,12 @@ def test_my_chrome_probe_timeout_updates_the_default_but_respects_manual_choice(
       }finally{window.fetch=original;closeSpawnModal();}
     })()'''.replace('CATALOG', json.dumps(catalog)))
     unknown = {'mode': fallback, 'disabled': False, 'launch': True,
-               'notice': 'My Chrome: ORRERY cannot check Windows Chrome from WSL.'}
+               'notice': 'My Browser: ORRERY cannot check Windows Chrome from WSL.'}
     ready = {'mode': 'personal', 'disabled': False, 'launch': True, 'notice': ''}
     assert result == {
         'initial': unknown, 'timedOut': unknown, 'ready': ready, 'manual': {**unknown, 'mode': 'personal'},
         'blocked': {'mode': 'personal', 'disabled': True, 'launch': False,
-                    'notice': 'My Chrome: Chrome is not running on Windows.'},
+                    'notice': 'My Browser: Chrome is not running on Windows.'},
         'manualOff': {**ready, 'mode': 'off'}, 'sameRoute': True,
     }
 

@@ -6750,7 +6750,7 @@ rosterBulkReboot.addEventListener('click',runBulkReboot);
 
 const AGENT_DETAIL_HARNESSES=new Map([['claude','Claude Code'],['codex','Codex CLI'],['dsh','dsh'],['hermes','Hermes'],['antigravity','Antigravity']]);
 const AGENT_DETAIL_COMPUTER=new Map([['off','Off'],['view','View'],['control','Control']]);
-const AGENT_DETAIL_BROWSER=new Map([['off','Off'],['temporary','Temporary Chrome'],['personal','My Chrome']]);
+const AGENT_DETAIL_BROWSER=new Map([['off','Off'],['temporary','Temporary Chrome'],['personal','My Browser']]);
 const AGENT_DETAIL_BROWSER_SHORT=new Map([['temporary','Temp']]);
 const STANDALONE_PERMISSION_API=46;
 const PERMISSION_CONTROLS_API=54;
@@ -8235,7 +8235,7 @@ const spawnBrowserUse=document.getElementById('spawnBrowserUse');
 const spawnComputerMenu=document.getElementById('spawnComputerMenu');
 const spawnBrowserMenu=document.getElementById('spawnBrowserMenu');
 const spawnComputerLabels={off:'Off',view:'View',control:'Control'};
-const spawnBrowserLabels={off:'Off',temporary:'Temporary Chrome',personal:'My Chrome'};
+const spawnBrowserLabels={off:'Off',temporary:'Temporary Chrome',personal:'My Browser'};
 let spawnComputerMode='off';
 let spawnBrowserMode='off';
 let spawnBrowserChosen=false;
@@ -8521,14 +8521,15 @@ function paintSpawnBrowser(modes){
     !modes.includes('temporary')?(spawnUsesManagedScreen()?
       'Install Google Chrome or Chromium and Node.js inside WSL to use Temporary Chrome.':
       'Install Node.js and npx to use Temporary Chrome.'):
-    spawnUsesManagedScreen()?'My Chrome needs Windows Node.js with npm and Chrome remote debugging.':
-    'My Chrome is unavailable for this launch.';
-  spawnBrowserUse.title='Browser: '+spawnBrowserLabels[spawnBrowserMode]+(modes.length<spawnBrowserChoices.length?'. '+limited:'');
+    spawnUsesManagedScreen()?'My Browser needs Windows Node.js with npm and remote debugging in Chrome, Brave, or Edge.':
+    'My Browser is unavailable for this launch.';
+  const selectedName=spawnBrowserMode==='personal'&&status?.browser?' ('+status.browser+')':'';
+  spawnBrowserUse.title='Browser: '+spawnBrowserLabels[spawnBrowserMode]+selectedName+(modes.length<spawnBrowserChoices.length?'. '+limited:'');
   spawnBrowserUse.setAttribute('aria-label',spawnBrowserUse.title);
   for(const [mode,button] of spawnBrowserChoices){
     button.hidden=!modes.includes(mode);
     button.disabled=mode==='personal'&&status?.unavailable===true;
-    button.title=mode==='personal'?status?.reason||'':'';
+    button.title=mode==='personal'?status?.reason||status?.browser||'':'';
     button.setAttribute('aria-pressed',String(mode===spawnBrowserMode));
   }
   if(!modes.length&&spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
@@ -8689,7 +8690,8 @@ function updateSpawnAvailability(){
     !model&&Number.isInteger(selUrlIndex)?'Model unavailable. Choose another model.':
     missingEffort?'Choose an effort in the model sheet.':'';
   const personal=spawnBrowserModes()?.includes('personal')?spawnPersonalBrowserStatus():null;
-  const browserNotice=spawnTools.hidden?'':personal?.reason?('My Chrome: '+personal.reason):
+  const browserNotice=spawnTools.hidden?'':personal?.reason?('My Browser: '+personal.reason):
+    spawnBrowserMode==='personal'&&personal?.browser?('My Browser: '+personal.browser):
     SpawnPicker.harnessKey(selHarness)==='codex'&&spawnBrowserUse.getAttribute('aria-checked')==='true'?CODEX_BROWSER_REQUIREMENT:'';
   const message=spawnProblem||issue||browserNotice;
   const busy=spawnFormIsBusy();
