@@ -232,18 +232,12 @@ The macOS interactive route supports Reader and Resume when the dashboard can ve
 
 ## Headless permission caveat
 
-Gemini launchers use the CLI's execution mode and `toolPermission` as shown in
-`/config`. With CLI 1.5.7 or later and no `agentMode` set, Auto is the default
-where available, with `default` mode elsewhere. `accept-edits` approves
-workspace edits, and `plan` is for investigation and planning. Auto depends
-on account and terminal sandbox support. MCP calls may still require approval.
-[Google's CLI permissions guide](https://antigravity.google/docs/permissions?tab=cli)
+Delegated Antigravity children start in `accept-edits` mode with terminal sandboxing off by default.
+`accept-edits` approves workspace edits. ORRERY adds `command(*)` to the session's allow list so shell commands normally run without a prompt. Explicit CLI deny and ask rules take precedence. MCP tools follow their own approval rules.
+Pass `--child-sandbox on` to the installer to use `auto` mode with terminal sandboxing. Auto availability depends on the account and host. [Child sandbox settings](telemetry-configuration.md#child-spawn) · [Google's CLI permissions guide](https://antigravity.google/docs/permissions?tab=cli)
 
-Delegated Gemini runs headless, so a permission request that needs an interactive
-response fails. Its permissions are separate from the
-[Claude/Codex child launch policy](delegation.md). For example, the Codex
-child's `--ask-for-approval never` default does not apply to Gemini. ORRERY leaves
-`--mode`, `--sandbox` and `--dangerously-skip-permissions` unset for Gemini.
+In a stream-json child, a permission request that needs an interactive response fails.
+Direct launches with `agent-start-gemini` use the CLI's execution mode and `toolPermission` settings from `/config`.
 
 In a measured macOS run using Antigravity CLI 1.1.27, headless `view_file`
 inside the delegated worktree was auto-denied until `read_file` was explicitly

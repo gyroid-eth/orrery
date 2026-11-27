@@ -220,6 +220,7 @@ See the [consent contract](instruction-migration.md#consent) for confirmation co
 --reset-settings        do not inherit settings from the existing env.sh (see Upgrade)
 --spawn-dirs PATHS      NEW AGENT launch-directory presets (`:`-separated)
 --spawn-roots PATHS     roots the directory typeahead may browse (`:`-separated)
+--child-sandbox MODE    Sandbox for delegated children (on | off; default off)
 --codex-approval MODE   Codex child `--ask-for-approval` (never | on-request | on-failure | untrusted; default never)
 --codex-network MODE    Codex child sandbox network (on | off; default on)
 --child-default-tools SPEC  Default child tools (e.g. 'mcp:cua-driver;dsh=' clears defaults for dsh)
@@ -434,6 +435,8 @@ Top-level and delegated-child launches protect their selected physical working d
 An empty extras marker is persisted, so an old list cannot be imported again. The old installed field is retained only for direct/unmanaged-hook compatibility; managed launches ignore it. A different nonempty shell/tmux legacy value still warns even when extras exist. `--reset-settings` keeps extras; `AGENTSTACK_EXTRA_PROTECTED_ROOTS=` deliberately clears them. Finish work or release active reservations before cutover, then restart affected sessions together after updating: relative reservation names use the first matching root. See [configuration and migration](telemetry-configuration.md#reservation-protection-and-migration).
 
 ### What a re-install inherits
+
+After updating, newly launched or resumed delegated children run with the sandbox off by default. Pass `--child-sandbox on` to the installer to enable it. The saved setting carries over to later updates. [Provider settings](telemetry-configuration.md#child-spawn)
 
 A re-install decides each setting in this order:
 

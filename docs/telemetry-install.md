@@ -225,6 +225,7 @@ Windows では WSL2 の Ubuntu の中に入れます。Ubuntu の中は Linux �
 --reset-settings        前回の env.sh から設定を引き継がない（Upgrade 参照）
 --spawn-dirs PATHS      NEW AGENT の launch directory preset（`:` 区切り）
 --spawn-roots PATHS     directory typeahead が閲覧できる root（`:` 区切り）
+--child-sandbox MODE    親付きの子の sandbox（on | off、既定 off）
 --codex-approval MODE   Codex child の `--ask-for-approval`（never | on-request | on-failure | untrusted、既定 never）
 --codex-network MODE    Codex child の sandbox network（on | off、既定 on）
 --child-default-tools SPEC  子の既定の道具（例: 'mcp:cua-driver;dsh=' で dsh だけ既定なし）
@@ -440,6 +441,8 @@ installer は payload と `VERSION` を更新し、service を再登録して、
 空でも extras marker を永続化するため、旧 list を再取り込みしません。installed の旧 field は direct/unmanaged hook 互換のためだけに保持し、managed 起動は無視します。shell/tmux の旧値が非空で installed 値と異なれば、extras があっても警告します。`--reset-settings` は extras を保持し、`AGENTSTACK_EXTRA_PROTECTED_ROOTS=` で明示的に解除できます。相対 reservation 名は最初に一致する root から決まるため、cutover 前に作業を完了するか active reservation を解放し、更新後に影響する session をまとめて再起動してください。[設定と移行の詳細](telemetry-configuration.md#reservation-の保護範囲と移行)を参照してください。
 
 ### 前回の設定の引き継ぎ
+
+更新後に起動・再開する親付きの子は、既定で sandbox を使いません。sandbox を使う場合は installer に `--child-sandbox on` を付けます。一度保存した設定は次回の更新にも引き継がれます。[provider ごとの設定](telemetry-configuration.md#child-spawn)
 
 入れ直しでは、各設定を次の順で決めます。
 

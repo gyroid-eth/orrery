@@ -215,17 +215,12 @@ stream-json の子には、直前に確認した `agy` に `SIGINT` を送り、
 
 ## Headless permission caveat
 
-`agent-start-gemini` と stream-json の子は `--mode` を指定しません。
-CLI の `/config` にある実行モードと `toolPermission` が適用されます。1.5.7 以降、
-`agentMode` が未設定なら、利用可能な環境で Auto、それ以外は `default` になります。
-`accept-edits` は作業領域の編集を自動承認し、`plan` は調査と計画に使います。
-Auto が利用できるかはアカウントと端末の sandbox に依存し、MCP の呼び出しには別途確認が出ることがあります。
-[Google の CLI 権限ガイド](https://antigravity.google/docs/permissions?tab=cli)
+親付きの Antigravity child は、既定で `accept-edits` と terminal sandbox 無効で起動します。
+`accept-edits` は作業領域の編集を自動承認します。ORRERY は起動時に `command(*)` を許可に加えるため、shell のコマンドは通常そのまま実行されます。CLI の明示の拒否・確認規則が優先され、MCP にはツールごとの承認規則が適用されます。
+installer に `--child-sandbox on` を付けると `auto` モードと terminal sandbox が有効になります。Auto の利用可否はアカウントと端末に依存します。[`--child-sandbox` の設定](telemetry-configuration.md#child-spawn) · [Google の CLI 権限ガイド](https://antigravity.google/docs/permissions?tab=cli)
 
-Gemini child は headless で動き、対話で答える必要がある承認は失敗として返ります。
-[Claude／Codex の子の起動設定](delegation.md)とは別に扱われます。たとえば親付き Codex の
-`--ask-for-approval never` は Gemini に引き継がれません。ORRERY は Gemini に
-`--sandbox` や `--dangerously-skip-permissions` を追加せず、CLI の設定に従います。
+stream-json の子では、対話で答える必要がある承認は失敗として返ります。
+`agent-start-gemini` で直接起動する場合は、CLI の `/config` で選んだ実行モードと `toolPermission` が適用されます。
 
 In a measured macOS run using Antigravity CLI 1.1.27, headless `view_file`
 inside the delegated worktree was auto-denied until `read_file` was explicitly
