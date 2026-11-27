@@ -875,6 +875,7 @@ function drawAgentCaption(group,{agent,x,y},dimensions,provider,showTitle=true,a
 function drawMiniAgent(target,defs,position,index,dimensions){
   const {agent,x,y,hue,working}=position;
   const action=OC.pendingAgentAction(agent.name);
+  const isWorking=agent.running===true&&working&&!action;
   const portraitRadius=8.5;
   const ringRadius=11;
   const clipId=`mini-portrait-${index}`;
@@ -882,7 +883,7 @@ function drawMiniAgent(target,defs,position,index,dimensions){
   clip.appendChild(svgEl('circle',{cx:x,cy:y,r:portraitRadius}));
   defs.appendChild(clip);
   const group=svgEl('g',{
-    class:'orrery-agent mini-agent'+(working&&!action?' is-working':'')+(position.networkFocus?' is-network-focus':''),
+    class:'orrery-agent mini-agent'+(isWorking?' is-working':'')+(position.networkFocus?' is-network-focus':''),
     'data-agent':agent.name,
   });
   makeInteractive(group,agent,action||stateOf(agent));
@@ -1364,6 +1365,9 @@ function renderMini({recenter=false}={}){
   miniZoom=miniViewAdjusted?Math.min(miniMaxZoom,miniZoom):zoom;
   const flights=preservedMailEffects(miniSvg);
   miniSvg.replaceChildren();
+  // A rebuilt ring starts at the document's current phase so frequent
+  // roster or layout updates cannot keep resetting it to the first frame.
+  miniSvg.style.setProperty('--mini-working-ring-delay',`${-performance.now()}ms`);
   const previous=miniMotion.layoutDimensions;
   const geometryChanged=previous&&(previous.width!==layout.width||previous.height!==layout.height);
   prepareMotion(miniMotion,layout,resized||recenter||geometryChanged);

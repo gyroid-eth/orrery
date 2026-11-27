@@ -126,6 +126,9 @@
 .orrery-agent.is-working .orrery-motion-ring{
   opacity:.9;animation:orrery-spin 1.5s linear infinite;
 }
+.mini-agent.is-working .mini-motion-ring{
+  animation-delay:var(--mini-working-ring-delay,0s);
+}
 .orrery-caption{
   font:600 9px/11px var(--rail-sans);color:var(--ink);text-align:center;
   text-shadow:0 1px var(--bg),0 -1px var(--bg),1px 0 var(--bg),-1px 0 var(--bg);
