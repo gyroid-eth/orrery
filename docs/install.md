@@ -530,9 +530,18 @@ script は前提をまとめて確かめ、足りないものを `NG` の行で�
 
 ### Windows デスクトップアプリ
 
-1. ORRERY を使う WSL2 環境で、先に[共通インストール](#1-行で入れる更新する)を済ませます。
-2. Windows x64 で ORRERY の `-setup.exe` を実行します。インストーラーは現在の Windows ユーザー向けです。手元で作る場合は [Windows ビルド手順](../app/README.md#windows-build)を参照してください。
-3. Windows のスタートメニューから **ORRERY** を開きます。WSL2 の cockpit が停止していれば起動し、すでに動いていれば接続します。ウィンドウの表示・非表示は通常 `Ctrl+Shift+O` です。アプリを閉じても backend は動き続けるので、開き直すと同じ cockpit に戻れます。
+1. **先に WSL2 の Ubuntu に ORRERY を入れます。** [共通インストールの手順](#1-行で入れる更新する)
+2. Windows x64 用のインストーラーをダウンロードします。[ORRERY_0.1.0_x64-setup.exe](https://github.com/gyroid-eth/orrery-telemetry/releases/latest/download/ORRERY_0.1.0_x64-setup.exe) · [最新リリースの Assets](https://github.com/gyroid-eth/orrery-telemetry/releases/latest)
+3. ダウンロード先のフォルダーを PowerShell で開き、次のコマンドで表示される `Hash` が、同じリリースに掲載された SHA-256 と一致することを確かめます。
+
+   ```powershell
+   Get-FileHash -Algorithm SHA256 -LiteralPath .\ORRERY_0.1.0_x64-setup.exe
+   ```
+
+4. 一致したらインストーラーを実行します。インストール先は現在の Windows ユーザーです。未署名のため、初回に **Windows によって PC が保護されました** と表示された場合は、**詳細情報** → **実行** を選びます。組織のポリシーによっては、実行できない場合があります。[Microsoft の SmartScreen の説明](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation)
+5. Windows のスタートメニューから **ORRERY** を開きます。WSL2 の cockpit が停止していれば起動し、すでに動いていれば接続します。ウィンドウの表示・非表示は通常 `Ctrl+Shift+O` です。アプリを閉じても backend は動き続けるので、開き直すと同じ cockpit に戻れます。
+
+cockpit を更新するときは、WSL2 側で共通の更新手順を実行します。Windows の `-setup.exe` を入れ直す必要はありません。
 
 アプリは既定の WSL ディストリビューションと、そのディストリビューションの既定ユーザーを使い、Linux の `~/orrery` にある checkout をポート `8791` で開きます。変更する場合は、Windows のユーザー環境変数を設定してからアプリを開き直します。
 
@@ -544,8 +553,6 @@ script は前提をまとめて確かめ、足りないものを `NG` の行で�
 | `ORRERY_WSL_PORT` | cockpit のポート。既定のポートが競合する場合は Windows と WSL の両方で空いている番号を指定 |
 
 アプリが起動した backend を止めるには、同じ WSL ユーザーで `tmux -L orrery-app kill-session -t '=cockpit-8791'` を実行します。別のポートを指定した場合はコマンドの番号を変えます。共通インストールが起動した backend の停止方法は、インストール完了時の `Stop it:` に表示されます。
-
-未署名のインストーラーでは、ダウンロード時や初回起動時に SmartScreen の警告が出ることがあります。配布元を確認してください。Windows のポリシーによっては実行がブロックされます。[Microsoft の説明](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation)
 
 インストーラーを自分で作る場合は、Windows 側に Node.js、C++ Build Tools、WebView2、64-bit MSVC 版の Rust を用意します。この準備は初回のみです。checkout の `app` フォルダーを PowerShell で開き、`npm.cmd ci` で依存をそろえてから `npm.cmd run build -- --target x86_64-pc-windows-msvc` を実行します。次のリリースでは、依存が変わっていなければ build のコマンドだけで作り直せます。[Windows ビルド手順](../app/README.md#windows-build)
 

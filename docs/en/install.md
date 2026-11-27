@@ -530,9 +530,18 @@ To check the prerequisites and prepare the Python environment without starting t
 
 ### Windows desktop app
 
-1. Run the [shared installer](#install-or-update-with-one-line) in the WSL2 environment where you use ORRERY.
-2. Run the ORRERY `-setup.exe` on Windows x64. The installer runs for your current Windows user. To make the installer yourself, follow the [Windows build steps](../../app/README.md#windows-build).
-3. Open **ORRERY** from the Windows Start menu. The app starts the WSL2 cockpit if needed and connects to the running cockpit. The default shortcut to show or hide the window is `Ctrl+Shift+O`. The backend stays up when you close the app, so you return to the same cockpit when you reopen it.
+1. **Install ORRERY in Ubuntu on WSL2 first.** [Shared installation steps](#install-or-update-with-one-line)
+2. Download the Windows x64 installer. [ORRERY_0.1.0_x64-setup.exe](https://github.com/gyroid-eth/orrery-telemetry/releases/latest/download/ORRERY_0.1.0_x64-setup.exe) · [Latest release assets](https://github.com/gyroid-eth/orrery-telemetry/releases/latest)
+3. Open the download folder in PowerShell. Run the command below and check that its `Hash` matches the SHA-256 published with that release.
+
+   ```powershell
+   Get-FileHash -Algorithm SHA256 -LiteralPath .\ORRERY_0.1.0_x64-setup.exe
+   ```
+
+4. Once the hash matches, run the installer. It installs for your current Windows user. The installer is unsigned. If you see **Windows protected your PC** the first time you run it, select **More info** and then **Run anyway**. Organization policy may block the installer. [Microsoft's SmartScreen documentation](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation)
+5. Open **ORRERY** from the Windows Start menu. The app starts the WSL2 cockpit if needed and connects to the running cockpit. The default shortcut to show or hide the window is `Ctrl+Shift+O`. The backend stays up when you close the app, so you return to the same cockpit when you reopen it.
+
+Use the shared update steps inside WSL2 to update the cockpit. You can keep using the Windows app installed by `-setup.exe`.
 
 The app uses the default WSL distro and its default Linux user, with a checkout at `~/orrery` and port `8791`. To override any of those defaults, set the corresponding Windows user environment variable and reopen the app.
 
@@ -545,7 +554,7 @@ The app uses the default WSL distro and its default Linux user, with a checkout 
 
 To stop a backend started by the desktop app, run `tmux -L orrery-app kill-session -t '=cockpit-8791'` as the same WSL user. Substitute the configured port if you changed it. To stop a backend started by the shared installer, use the `Stop it:` command printed during installation.
 
-SmartScreen may warn when you download or first run an unsigned installer. Verify its source. Windows policy can block unsigned installers. [Microsoft's SmartScreen documentation](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation)
+To build the installer yourself, follow the [Windows build steps](../../app/README.md#windows-build).
 
 ### Differences on Windows (WSL2)
 
