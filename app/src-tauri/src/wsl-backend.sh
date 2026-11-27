@@ -43,7 +43,9 @@ ctmux() { env -u TMUX -u TMUX_PANE tmux -L orrery-app "$@"; }
 
 if ! ctmux has-session -t "=$session" 2>/dev/null; then
     # The second check also covers two app launches racing to create a session.
-    ctmux new-session -d -s "$session" env PORT="$port" HOST=127.0.0.1 ORRERY_NO_UPDATE_CHECK=1 \
+    # tmux injects its own TMUX and TMUX_PANE into the new process.
+    ctmux new-session -d -s "$session" env -u TMUX -u TMUX_PANE \
+        PORT="$port" HOST=127.0.0.1 ORRERY_NO_UPDATE_CHECK=1 \
         bash -c 'exec bash "$1" >> "$2" 2>&1' bash "$script" "$log" ||
         ctmux has-session -t "=$session"
 fi
