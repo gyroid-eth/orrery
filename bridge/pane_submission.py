@@ -829,7 +829,7 @@ def same_notice(view,text):
     return not remaining
 
 
-def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
+def submit(command,admit,pane,text,*,deadline=None,on_wait=None,claim_handoff=None):
     """Watcher path. Refused means a prompt was never pasted."""
     end=time.monotonic()+TIMEOUT if deadline is None else deadline
     fd=None
@@ -889,6 +889,8 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
             return defer('refused', 'editor_not_empty')
         if not before.allows_paste(text):
             return defer('refused', 'paste_unavailable')
+        if resuming and claim_handoff is not None and not claim_handoff(resuming=True):
+            return defer('refused', 'pane_changed')
         name=None if resuming else 'orrery-submit-'+uuid.uuid4().hex
         pasted=resuming
         try:
@@ -904,6 +906,8 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
                     return defer('refused', 'pane_changed')
                 if not current.empty or not current.allows_paste(text):
                     return defer('refused', 'editor_changed')
+                if claim_handoff is not None and not claim_handoff(resuming=False):
+                    return defer('unknown', 'prior_delivery_unconfirmed')
                 if digest:
                     os.ftruncate(fd, 0)
                     os.pwrite(fd, digest, 0)
