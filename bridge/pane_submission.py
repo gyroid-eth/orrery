@@ -16,7 +16,7 @@ import sys
 import time
 import uuid
 from dataclasses import dataclass, replace
-from unicodedata import east_asian_width
+from unicodedata import category, east_asian_width
 
 
 METADATA = ('#{socket_path}\t#{pid}\t#{pane_id}\t#{pane_pid}\t#{cursor_y}\t#{pane_in_mode}'
@@ -55,6 +55,7 @@ COLLAPSED = re.compile(r'\[Pasted text #\d+(?: \+\d+ lines?)?\]')
 HERMES_PASTE = re.compile(r'\[Pastedtext#(\d+):(\d+)lines→/.+/pastes/paste_\1_\d{6}\.txt\]')
 HERMES_HINT = re.compile(r'^(?:msg=[\w-]+ · /queue · /bg · /steer · Ctrl\+C cancel|cli\.tui\.placeholder_busy)$')
 HERMES_STATUS = re.compile(r'^(?:[^│]+ │ )?☤ \S')
+HERMES_EDITOR_ROWS = 8
 ITALIC_CHANGE = re.compile(r'\x1b\[(0|3|23)m')
 HERMES_TOOL_PROGRESS = re.compile(
     r'^  [^ \t┊│].* {2}\(\s*(?:\d+\.\ds|\d+m[0-5]\ds|cli\.shared\.duration_(?:s|ms_compact))'
@@ -427,6 +428,22 @@ def frame(metadata, lines, pane):
     for start in range(cursor,-1,-1):
         line=plain[start].rstrip()
         if BORDER.fullmatch(line.strip()):
+            # The classic Hermes input scrolls within eight rows. When its
+            # first row scrolls out, the status and both rules stay visible.
+            if (start and cursor - start == HERMES_EDITOR_ROWS
+                    and HERMES_STATUS.match(plain[start-1].strip())
+                    and cursor+1 < len(plain) and BORDER.fullmatch(plain[cursor+1].strip())
+                    and not any(row.strip() for row in plain[cursor+2:])):
+                draft = '\n'.join(row.strip() for row in plain[start+1:cursor+1]).strip()
+                if draft and plain[cursor].strip():
+                    last = plain[cursor].rstrip()
+                    width = sum(2 if east_asian_width(c) in ('F', 'W') else 1
+                                for c in last if category(c) not in ('Mn', 'Me', 'Cf'))
+                    busy = _hermes_running(lines, plain, start+1)
+                    return Frame(*base, draft, False, hermes=True, bracketed=bracketed,
+                                 foreground_command=command, scrolled=True, editor='hermes',
+                                 hermes_busy=busy, running=busy, draft_continues=column < width,
+                                 slash_view=slash_view)
             break
         if CLAUDE_SCROLLED_BORDER.fullmatch(line.strip()):
             # A tall Claude draft scrolls inside its frame: the prompt glyph
@@ -641,6 +658,8 @@ def ready(observed, text, *, operator=False):
     shown = ''.join(observed.draft.split())
     expected = ''.join(text.split())
     if observed.scrolled:
+        if observed.hermes:
+            return same_notice(observed, text)
         # Only the end of a tall draft is visible, so it must end the text.
         return not observed.draft_continues and len(shown)>=16 and expected.endswith(shown)
     if shown == expected:
