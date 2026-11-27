@@ -8224,6 +8224,7 @@ const spawnComputerLabels={off:'Off',view:'View',control:'Control'};
 const spawnBrowserLabels={off:'Off',temporary:'Temporary Chrome',personal:'My Chrome'};
 let spawnComputerMode='off';
 let spawnBrowserMode='off';
+let spawnBrowserChosen=false;
 function spawnModeChoices(menu,control,labels,select){
   return Object.entries(labels).map(([mode,label])=>{
     const button=document.createElement('button');
@@ -8242,7 +8243,7 @@ const spawnComputerChoices=spawnModeChoices(spawnComputerMenu,spawnComputerUse,s
   spawnComputerMode=mode;paintSpawnComputer(spawnComputerModes());
 });
 const spawnBrowserChoices=spawnModeChoices(spawnBrowserMenu,spawnBrowserUse,spawnBrowserLabels,mode=>{
-  spawnBrowserMode=mode;paintSpawnBrowser(spawnBrowserModes());
+  spawnBrowserMode=mode;spawnBrowserChosen=true;paintSpawnBrowser(spawnBrowserModes());
 });
 const spawnToolSwitches=[spawnComputerUse,spawnBrowserUse];
 const CODEX_BROWSER_REQUIREMENT='Codex Browser requires [mcp_servers.chrome-devtools] or a chrome-devtools-mcp server in config.toml.';
@@ -8270,7 +8271,10 @@ for(const [control,menu,available] of [
     const enabled=control.getAttribute('aria-checked')!=='true';
     control.setAttribute('aria-checked',String(enabled));
     if(control===spawnComputerUse)spawnComputerMode=enabled?'control':'off';
-    else spawnBrowserMode=enabled?'personal':'off';
+    else{
+      spawnBrowserMode=enabled?'personal':'off';
+      spawnBrowserChosen=true;
+    }
     spawnProblem='';updateSpawnAvailability();saveSpawnDraft();
   });
   menu.addEventListener('toggle',()=>{
@@ -8483,15 +8487,16 @@ function spawnPersonalBrowserStatus(){
   return spawnCatalog?.personal_browser_status?.[spawnBrowserKey()];
 }
 function defaultSpawnBrowserMode(modes,status){
-  if(status?.unavailable===true)return modes.includes('temporary')?'temporary':'off';
+  if(status?.reason||status?.unavailable===true)return modes.includes('temporary')?'temporary':'off';
   return modes.includes('personal')?'personal':'off';
+}
+function spawnBrowserBlocked(){
+  return !spawnTools.hidden&&spawnBrowserMode==='personal'&&spawnPersonalBrowserStatus()?.unavailable===true;
 }
 function paintSpawnBrowser(modes){
   if(!modes)return;
   const status=spawnPersonalBrowserStatus();
-  if(spawnBrowserMode==='personal'&&status?.unavailable===true){
-    spawnBrowserMode=defaultSpawnBrowserMode(modes,status);
-  }
+  if(!spawnBrowserChosen)spawnBrowserMode=defaultSpawnBrowserMode(modes,status);
   if(!modes.includes(spawnBrowserMode))spawnBrowserMode='off';
   spawnBrowserUse.dataset.browserMode=spawnBrowserMode;
   spawnBrowserUse.removeAttribute('role');spawnBrowserUse.removeAttribute('aria-checked');
@@ -8530,8 +8535,8 @@ function renderSpawnTools(){
     if(spawnBrowserMenu.matches(':popover-open'))spawnBrowserMenu.hidePopover();
     const computerOn=Boolean(route)&&harness!=='dsh'&&!antigravity&&!managedScreen;
     spawnComputerMode=computerOn?'control':'off';
-    spawnBrowserMode=!route?'off':modes?defaultSpawnBrowserMode(modes,spawnPersonalBrowserStatus()):
-      harness!=='dsh'&&harness!=='codex'?'personal':'off';
+    spawnBrowserChosen=false;
+    spawnBrowserMode=route&&!modes&&harness!=='dsh'&&harness!=='codex'?'personal':'off';
   }
   spawnToolsRoute=route;
   paintSpawnComputer(spawnTools.hidden?null:computerModes);
@@ -8677,7 +8682,7 @@ function updateSpawnAvailability(){
   if(busy)spawnForm.setAttribute('aria-busy','true');
   else spawnForm.removeAttribute('aria-busy');
   spawnTask.readOnly=busy;
-  spawnSubmit.disabled=Boolean(spawnAttempt)||!spawnTask.value.trim()||!harness||Boolean(missingEffort);
+  spawnSubmit.disabled=Boolean(spawnAttempt)||!spawnTask.value.trim()||!harness||Boolean(missingEffort)||spawnBrowserBlocked();
   spawnDiscardDraft.disabled=busy;spawnDiscardDraft.hidden=spawnShownDraft===null;
   spawnStatus.textContent=message;spawnStatus.title=message;spawnStatus.hidden=!message;
 }
@@ -9056,6 +9061,7 @@ function saveSpawnDraft(){
     tools:spawnTools.hidden?null:spawnToolSwitches.map(control=>control.getAttribute('aria-checked')==='true'),
     computerMode:spawnTools.hidden?null:spawnComputerMode,
     browserMode:spawnTools.hidden?null:spawnBrowserMode,
+    browserChosen:!spawnTools.hidden&&spawnBrowserChosen,
     ...(spawnUsesManagedScreen()?{computerTransport:'orrery-screen'}:{}),
   };
   // Keep only editable draft fields in this viewer's storage.
@@ -9079,7 +9085,10 @@ function restoreSpawnSelection(){
     if(!spawnUsesManagedScreen()||saved.computerTransport==='orrery-screen'){
       spawnComputerMode=saved.computerMode||(saved.tools[0]?'control':'off');
     }
-    spawnBrowserMode=saved.browserMode||(saved.tools[1]?'personal':'off');
+    if(saved.browserChosen){
+      spawnBrowserMode=saved.browserMode||(saved.tools[1]?'personal':'off');
+      spawnBrowserChosen=true;
+    }
     renderSpawnTools();
     updateSpawnAvailability();
   }
@@ -9097,6 +9106,7 @@ function prepareSpawnForm(raw,task=''){
     tools:Array.isArray(saved.tools)&&saved.tools.length===spawnToolSwitches.length&&saved.tools.every(value=>typeof value==='boolean')?saved.tools:null,
     computerMode:Object.hasOwn(spawnComputerLabels,saved.computerMode)?saved.computerMode:null,
     browserMode:Object.hasOwn(spawnBrowserLabels,saved.browserMode)?saved.browserMode:null,
+    browserChosen:saved.browserChosen!==false,
     computerTransport:saved.computerTransport==='orrery-screen'?'orrery-screen':null,
   }:null;
   spawnShownDraft=draft&&typeof draft==='object'&&!Array.isArray(draft)?raw:null;
@@ -9109,6 +9119,8 @@ function prepareSpawnForm(raw,task=''){
   spawnDirPath=spawnDraftText(draft?.dir);renderSpawnDirPath();
   spawnProblem='';spawnChooseAgain=false;
   selProvider=selModel=selEffort=selFamily=selHarness=selUrlIndex=selUrlKey=spawnToolsRoute=null;
+  spawnBrowserChosen=false;
+  spawnBrowserMode='off';
   spawnModelSearch.value='';
   renderSpawnTools();renderSpawnModelChip();updateNameCard();
 }
@@ -9267,7 +9279,7 @@ function fillSpawnButton(event){
   fill.animate([{transform:'scale(0)',opacity:1},{transform:'scale(30)',opacity:0}],{duration:520,easing:'ease-out'});
 }
 async function submitSpawn(event){
-  event.preventDefault();if(spawnAttempt||!spawnTask.value.trim())return;
+  event.preventDefault();if(spawnAttempt||!spawnTask.value.trim()||spawnBrowserBlocked())return;
   const p=providerById(selProvider),model=selectedSpawnModel();
   if(!p||!model||!SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available)||spawnExplicitEffortMissing(p,selModel))return;
   const payload=spawnPayloadFromForm();
