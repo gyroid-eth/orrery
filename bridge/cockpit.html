@@ -2710,7 +2710,7 @@ const THEME_GLOW_EFFECT_MANIFEST=Object.freeze([
   selector,property,categories:Object.freeze(categories),mode,overrideSelector,activationSelector,activationProperty,
 })));
 let terminalFontSize=TERM_FONT_DEFAULT,terminalAutoShrink=true;
-let miniViewMode='orrery';
+let miniViewMode='network';
 let miniMailLinks='keep';
 let miniNetworkDepth=2;
 let themeAxisState=normalizeThemeAxisState(null);
@@ -2722,7 +2722,7 @@ try{
   if(storedAutoShrink==='true'||storedAutoShrink==='false'){
     terminalAutoShrink=storedAutoShrink==='true';
   }
-  if(localStorage.getItem(MINI_VIEW_STORAGE_KEY)==='network')miniViewMode='network';
+  if(localStorage.getItem(MINI_VIEW_STORAGE_KEY)==='orrery')miniViewMode='orrery';
   if(localStorage.getItem(MINI_MAIL_LINKS_STORAGE_KEY)==='recent')miniMailLinks='recent';
   const storedNetworkDepth=Number(localStorage.getItem(MINI_NETWORK_DEPTH_STORAGE_KEY));
   if([1,2,3].includes(storedNetworkDepth))miniNetworkDepth=storedNetworkDepth;
@@ -3228,7 +3228,7 @@ function announceMiniView(){
   }}));
 }
 function setMiniViewMode(mode){
-  miniViewMode=mode==='network'?'network':'orrery';
+  miniViewMode=mode==='orrery'?'orrery':'network';
   try{localStorage.setItem(MINI_VIEW_STORAGE_KEY,miniViewMode);}catch(_){/* live-only preference */}
   announceMiniView();
 }
@@ -3295,7 +3295,7 @@ function noteBackendBoot(id){
 document.addEventListener('oc:prefs-changed',event=>{
   const keys=new Set(event.detail&&event.detail.keys||[]);
   if(keys.has(MINI_VIEW_STORAGE_KEY)||keys.has(MINI_NETWORK_DEPTH_STORAGE_KEY)||keys.has(MINI_MAIL_LINKS_STORAGE_KEY)){
-    const mode=localStorage.getItem(MINI_VIEW_STORAGE_KEY)==='network'?'network':'orrery';
+    const mode=localStorage.getItem(MINI_VIEW_STORAGE_KEY)==='orrery'?'orrery':'network';
     const depth=Number(localStorage.getItem(MINI_NETWORK_DEPTH_STORAGE_KEY));
     miniViewMode=mode;miniNetworkDepth=[1,2,3].includes(depth)?depth:2;
     miniMailLinks=localStorage.getItem(MINI_MAIL_LINKS_STORAGE_KEY)==='recent'?'recent':'keep';

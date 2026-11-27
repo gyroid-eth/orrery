@@ -345,6 +345,54 @@ def test_theme_static_ring_and_working_arc_coexist(mini_browser, theme, reduced)
         'arcAnimation': 'none' if reduced else 'orrery-spin', 'hit': 'none'}
 
 
+@pytest.mark.parametrize('mode', ['orrery', 'network'])
+def test_working_arcs_keep_turning_through_roster_redraws(mini_browser, mode):
+    client, evaluate = mini_browser
+    client.call('Emulation.setEmulatedMedia', features=[
+        {'name': 'prefers-reduced-motion', 'value': 'no-preference'},
+    ])
+    result = evaluate("""(()=>{
+      syncPageHidden();
+      const names=['Pilot','Helper','Watcher','Scout','Relay','Local'];
+      const providers=['anthropic','openai','google','deepseek','strata','local'];
+      currentAgents=names.map((name,i)=>({name,provider:providers[i],running:true,act_state:'work'}));
+      names.slice(1).forEach(name=>OC.lineageParent.set(name,'Pilot'));
+      const redraw=()=>document.dispatchEvent(new CustomEvent('oc:agents',{detail:{agents:currentAgents}}));
+      const sample=name=>{
+        const ring=document.querySelector('#orrery [data-agent="'+name+'"] .mini-motion-ring');
+        const css=getComputedStyle(ring),matrix=new DOMMatrixReadOnly(css.transform);
+        return {name:css.animationName,play:css.animationPlayState,opacity:css.opacity,
+          angle:Math.atan2(matrix.b,matrix.a)*180/Math.PI};
+      };
+      let time=225;
+      Object.defineProperty(performance,'now',{value:()=>time,configurable:true});
+      try{
+        setMiniViewMode(MODE);
+        redraw();
+        const first=names.map(sample);
+        time=675;redraw();
+        const second=names.map(sample);
+        document.documentElement.classList.add('page-hidden');
+        const paused=sample('Pilot').play;
+        document.documentElement.classList.remove('page-hidden');
+        const resumed=sample('Pilot').play;
+        currentAgents[0].act_state='wait';
+        currentAgents[1].running=false;
+        redraw();
+        const stopped=names.slice(0,2).map(sample);
+        return {network:document.getElementById('orrery').classList.contains('telemetry-network'),
+          first,second,paused,resumed,stopped};
+      }finally{delete performance.now;}
+    })()""".replace('MODE', json.dumps(mode)))
+    assert result['network'] == (mode == 'network')
+    for first, second in zip(result['first'], result['second']):
+        assert first['name'] == second['name'] == 'orrery-spin'
+        assert first['play'] == second['play'] == 'running'
+        assert (second['angle'] - first['angle']) % 360 == pytest.approx(108, abs=4)
+    assert result['paused'] == 'paused' and result['resumed'] == 'running'
+    assert [(item['name'], item['opacity']) for item in result['stopped']] == [('none', '0')] * 2
+
+
 @pytest.mark.parametrize('shape', ['chain', 'fan-left', 'fan-right'])
 @pytest.mark.parametrize('theme', ['dark', 'light'])
 def test_deep_and_wide_layouts_keep_the_whole_selected_ring_visible(mini_browser, shape, theme):

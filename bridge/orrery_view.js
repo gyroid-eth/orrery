@@ -88,7 +88,7 @@ let keepMailLinks=OC.miniView?.().mailLinks!=='recent';
 let commRefreshTimer=null;
 let motionFrameId=null;
 let motionLastTime=null;
-let miniMode=(OC.miniView&&OC.miniView().mode)==='network'?'network':'orrery';
+let miniMode=OC.miniView?.().mode==='orrery'?'orrery':'network';
 let miniNetworkDepth=Number(OC.miniView&&OC.miniView().depth)||2;
 let miniFocusName=OC.activeAgent&&OC.activeAgent()||'';
 let miniWidth=MINI.width,miniHeight=MINI.height;
@@ -502,8 +502,15 @@ function measureMiniCaptions(agents,includeRoles){
   }
   return widths;
 }
-function fitMiniScene(live,width,height){
+function fitMiniScene(live,width,height,visibleActions){
   const subset=miniMode==='network'&&telemetryNetworkSubset(live,miniFocusName,miniNetworkDepth);
+  if(subset){
+    // Keep an action already on screen visible if changing focus or losing
+    // an edge moves it outside the new network. It leaves when the action ends.
+    for(const name of visibleActions){
+      if(!subset.distances.has(name))subset.distances.set(name,miniNetworkDepth+1);
+    }
+  }
   const agents=subset?[...subset.distances.keys()].map(name=>subset.byName.get(name)):live;
   let scale=Math.max(MINI_PREFERRED_SCALE,Math.min(width/MINI.width,height/MINI.height)),zoom=1;
   const captions=measureMiniCaptions(agents,subset&&miniAppearance.showRoles);
@@ -868,6 +875,7 @@ function drawAgentCaption(group,{agent,x,y},dimensions,provider,showTitle=true,a
 function drawMiniAgent(target,defs,position,index,dimensions){
   const {agent,x,y,hue,working}=position;
   const action=OC.pendingAgentAction(agent.name);
+  const isWorking=agent.running===true&&working&&!action;
   const portraitRadius=8.5;
   const ringRadius=11;
   const clipId=`mini-portrait-${index}`;
@@ -875,7 +883,7 @@ function drawMiniAgent(target,defs,position,index,dimensions){
   clip.appendChild(svgEl('circle',{cx:x,cy:y,r:portraitRadius}));
   defs.appendChild(clip);
   const group=svgEl('g',{
-    class:'orrery-agent mini-agent'+(working&&!action?' is-working':'')+(position.networkFocus?' is-network-focus':''),
+    class:'orrery-agent mini-agent'+(isWorking?' is-working':'')+(position.networkFocus?' is-network-focus':''),
     'data-agent':agent.name,
   });
   makeInteractive(group,agent,action||stateOf(agent));
@@ -1345,15 +1353,21 @@ function renderMini({recenter=false}={}){
   if(resetView)miniViewAdjusted=false;
   // Keep a restarting or exiting node through stale roster snapshots.
   const agents=new Map(liveAgents.filter(agent=>agent?.name).map(agent=>[agent.name,agent]));
+  const visibleActions=[];
   for(const agent of OC.graphPendingAgents()){
-    if(agent&&!agents.has(agent.name))agents.set(agent.name,agent);
+    if(!agent)continue;
+    if(!agents.has(agent.name))agents.set(agent.name,agent);
+    if(miniMotion.nodes.has(agent.name))visibleActions.push(agent.name);
   }
-  const {layout,dimensions,zoom}=fitMiniScene([...agents.values()],width,height);
+  const {layout,dimensions,zoom}=fitMiniScene([...agents.values()],width,height,visibleActions);
   miniDefaultZoom=zoom;
   miniMaxZoom=Math.max(MINI_MAX_ZOOM,zoom*1.25);
   miniZoom=miniViewAdjusted?Math.min(miniMaxZoom,miniZoom):zoom;
   const flights=preservedMailEffects(miniSvg);
   miniSvg.replaceChildren();
+  // A rebuilt ring starts at the document's current phase so frequent
+  // roster or layout updates cannot keep resetting it to the first frame.
+  miniSvg.style.setProperty('--mini-working-ring-delay',`${-performance.now()}ms`);
   const previous=miniMotion.layoutDimensions;
   const geometryChanged=previous&&(previous.width!==layout.width||previous.height!==layout.height);
   prepareMotion(miniMotion,layout,resized||recenter||geometryChanged);
@@ -2168,7 +2182,7 @@ document.addEventListener('oc:stage-agent',event=>{
 document.addEventListener('oc:mini-view',event=>{
   const detail=event.detail||{};
   const oldMode=miniMode;
-  miniMode=detail.mode==='network'?'network':'orrery';
+  miniMode=detail.mode==='orrery'?'orrery':'network';
   miniNetworkDepth=[1,2,3].includes(Number(detail.depth))?Number(detail.depth):2;
   keepMailLinks=detail.mailLinks!=='recent';
   renderMini({recenter:miniMode!==oldMode});
