@@ -247,6 +247,37 @@ def test_multi_send_continues_after_a_recipient_preparation_fails(cockpit):
     assert js("toastEl.textContent.includes('Not sent to QuietCopernicus')")
 
 
+@pytest.mark.parametrize('attach_status', ['reset', 'error'])
+def test_batch_opens_an_unopened_recipient_and_reports_its_attach_refusal(cockpit, attach_status):
+    js, wait, _ = terminal(cockpit)
+    js("window.attachStatus=" + repr(attach_status) + """;
+      const name='QuietCopernicus';
+      currentAgents.push({name,running:true,program:'claude-code',category:'agent'});
+      availableSessions.set(name,name);
+      const originalSend=window.send;
+      window.send=packet=>{
+        if(packet.type==='attach'&&packet.session===name)queueMicrotask(()=>{
+          if(attachStatus==='error'){
+            handle({type:'error',session:name,message:'maximum 12 attached sessions per client'});
+          }else{
+            handle({type:'reset',session:name,incarnation:'second',
+              panes:[{paneId:'%902',windowId:'@902',width:80,height:20,active:true}]});
+          }
+        });
+        return originalSend(packet);
+      };
+      promptRecipients.set([name,'ReviewFixture']);
+      promptInput.value='Shared draft';sendPrompt();""")
+    wait("!promptBusy&&packets.some(packet=>packet.type==='submit-prompt')")
+    assert js("packets.find(packet=>packet.type==='attach').session") == 'QuietCopernicus'
+    assert js('activeId') == '%901'
+    expected = ['QuietCopernicus', 'ReviewFixture'] if attach_status == 'reset' else ['ReviewFixture']
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.session)") == expected
+    assert js('promptInput.value') == ('' if attach_status == 'reset' else 'Shared draft')
+    if attach_status == 'error':
+        assert 'QuietCopernicus (maximum 12 attached sessions per client)' in js('toastEl.textContent')
+
+
 def test_recipient_visibility_menu_keeps_hidden_drafts_private(cockpit):
     js, wait, _ = recipients(cockpit)
     js("""window.visibilityButton=document.querySelector('.prompt-visibility-trigger');

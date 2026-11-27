@@ -235,6 +235,36 @@ def test_attach_refusal_precedes_pty_creation(endpoint,monkeypatch):
         asyncio.run(bridge.start())
 
 
+@pytest.mark.asyncio
+async def test_legacy_attach_reuses_slots_of_ended_sessions(endpoint):
+    import orrery_backend as backend
+
+    class Peer:
+        def __init__(self):
+            self.messages = []
+
+        async def send_json(self, payload):
+            self.messages.append(payload)
+
+        async def send(self, payload):
+            await self.send_json(json.loads(payload))
+
+    deploy(endpoint['home'])
+    boundary = LegacyTargetBoundary(endpoint['binary'], home=endpoint['home'], environ=endpoint['env'])
+    manager = backend.SessionBridgeManager(boundary, history_dir=endpoint['home'] / 'history')
+    peer = Peer()
+    # The recorder has already reconciled these ended sessions, while the
+    # same browser's WebSocket is still connected.
+    attached = {f'ended-{i}' for i in range(backend.MAX_CLIENT_SESSIONS)}
+    try:
+        await manager.attach(peer, attached, 'orrery-normal')
+        assert peer.messages[0]['type'] == 'reset', peer.messages
+        assert attached == {'orrery-normal'}
+    finally:
+        await manager.disconnect(peer, attached)
+        await manager.close()
+
+
 def test_terminal_argv_carries_the_pinned_linux_socket(endpoint,monkeypatch):
     deploy(endpoint['home'])
     import orrery_backend as backend

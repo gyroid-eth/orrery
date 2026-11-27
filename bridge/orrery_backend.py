@@ -1511,6 +1511,11 @@ class SessionBridgeManager:
     ) -> None:
         if isinstance(self.tmux_bin,FreshTargetBoundary):
             await self._attach_fresh(peer,attached,session);return
+
+        async def refuse(reason: str) -> None:
+            log_agent_action('attach', session, 'refused', reason)
+            await send_error(peer, session, reason)
+
         legacy_epoch = None
         if isinstance(self.tmux_bin, LegacyTargetBoundary):
             if not self._legacy_peer_current(peer):
@@ -1519,8 +1524,14 @@ class SessionBridgeManager:
         try:
             await asyncio.to_thread(require_target, self.tmux_bin, "attach", session=session)
         except TargetRefused as exc:
-            await send_error(peer, session, str(exc))
+            await refuse(str(exc))
             return
+        # Recorder reconciliation can remove a session before the browser
+        # sees it disappear. The peer's set can still contain its old name.
+        attached.intersection_update(
+            name for name, state in self.states.items()
+            if not state.bridge._closed and peer in state.bridge.clients
+        )
         if session in attached:
             state = self.states.get(session)
             if state is not None and peer in state.bridge.clients:
@@ -1529,11 +1540,7 @@ class SessionBridgeManager:
             attached.discard(session)
 
         if len(attached) >= MAX_CLIENT_SESSIONS:
-            await send_error(
-                peer,
-                session,
-                f"maximum {MAX_CLIENT_SESSIONS} attached sessions per client",
-            )
+            await refuse(f"maximum {MAX_CLIENT_SESSIONS} attached sessions per client")
             return
 
         try:
@@ -1543,26 +1550,23 @@ class SessionBridgeManager:
         except OSError:
             exists = False
         if not exists:
-            await send_error(peer, session, f"tmux session not found: {session}")
+            await refuse(f"tmux session not found: {session}")
             return
 
         try:
             state = await self._ensure_bridge(session, legacy_epoch=legacy_epoch)
         except Exception as exc:
-            await send_error(
-                peer,
-                session,
-                str(exc) if isinstance(exc, TargetRefused) else f"failed to attach tmux session: {type(exc).__name__}",
-            )
+            await refuse(str(exc) if isinstance(exc, TargetRefused)
+                         else f"failed to attach tmux session: {type(exc).__name__}")
             return
         if state is None:
-            await send_error(peer, session, "backend is shutting down")
+            await refuse("backend is shutting down")
             return
 
         async with self._lock:
             if (self.states.get(session) is not state
                     or (legacy_epoch is not None and not self._legacy_peer_current(peer))):
-                await send_error(peer, session, f"tmux session not found: {session}")
+                await refuse(f"tmux session not found: {session}")
                 return
             state.bridge.clients.add(peer)
             state.bridge.client_locks.setdefault(peer, asyncio.Lock())
@@ -3008,6 +3012,7 @@ async def log_unrouted_prompt(request: web.Request) -> web.Response:
     data = _action_object(await request.read())
     reason = data.get('reason')
     if reason not in ('target-unavailable', 'target-changed', 'attachment-failed',
+                      'terminal-attach-refused', 'terminal-attach-timeout', 'terminal-attach-limit',
                       'question-with-other-recipients', 'dispatch-failed', 'preparation-failed'):
         return web.json_response({'error': 'invalid prompt routing result'}, status=400)
     log_agent_action('submit-prompt', data.get('recipient'), 'refused', reason)
@@ -5307,11 +5312,10 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
                         await manager.handle_message(peer, attached, payload)
                 except Exception as exc:
                     session = payload.get("session")
-                    await send_error(
-                        peer,
-                        session if isinstance(session, str) else None,
-                        str(exc) if isinstance(exc, TargetRefused) else f"request failed: {type(exc).__name__}",
-                    )
+                    reason = str(exc) if isinstance(exc, TargetRefused) else f"request failed: {type(exc).__name__}"
+                    if payload.get('type') == 'attach':
+                        log_agent_action('attach', session, 'refused', reason)
+                    await send_error(peer, session if isinstance(session, str) else None, reason)
             elif message.type in {
                 WSMsgType.CLOSE,
                 WSMsgType.CLOSED,

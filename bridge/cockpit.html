@@ -5875,7 +5875,12 @@ function handle(msg){
         const wasRequesting=requestedSessions.delete(msg.session);
         const restart=permissionRestarts.get(msg.session);
         if(wasRequesting&&restart?.accepted&&typeof msg.message==='string')restart.attachError=msg.message;
-        if(wasRequesting)setGroupState(msg.session,'error');
+        if(wasRequesting){
+          setGroupState(msg.session,'error');
+          document.dispatchEvent(new CustomEvent('oc:terminal-attach-error',{
+            detail:{session:msg.session,message:msg.message},
+          }));
+        }
         if(pendingJump===msg.session){showOfflineHint(msg.session);pendingJump=null;}
       }
       console.warn('backend error:',msg.message);
@@ -9772,6 +9777,12 @@ function namedComposerTarget(name){
   const paneId=paneIdForSession(name);
   return paneId?captureComposerTarget(paneId):null;
 }
+class ComposerAttachError extends Error {
+  constructor(reason,message){
+    super(message);
+    this.reason=reason;
+  }
+}
 async function resolveComposerTarget(record,connection){
   if(!sameRecipient(record)||socket!==connection)return null;
   if(record.target)return composerTargetPresent(record.target)?record.target:null;
@@ -9779,21 +9790,37 @@ async function resolveComposerTarget(record,connection){
   if(attachedSessions.has(name))return namedComposerTarget(name);
   if(!requestedSessions.has(name)){
     if(!availableSessions.has(name))return null;
+    if(occupiedSessions().size>=MAX_ATTACHED_SESSIONS){
+      throw new ComposerAttachError('terminal-attach-limit','All terminal tabs are in use');
+    }
     composerAttaching.set(name,manualDetached.has(name));
     const reference=typeof record.mail_instance_id==='string'&&Number.isInteger(record.mail_agent_id)?
       {mail_instance_id:record.mail_instance_id,mail_agent_id:record.mail_agent_id}:{};
     if(!requestAttach(name,false,reference)){composerAttaching.delete(name);return null;}
   }
-  return new Promise(resolve=>{
-    const finish=target=>{
-      clearTimeout(timer);document.removeEventListener('oc:terminal-ready',ready);resolve(target);
+  return new Promise((resolve,reject)=>{
+    const finish=()=>{
+      clearTimeout(timer);
+      document.removeEventListener('oc:terminal-ready',ready);
+      document.removeEventListener('oc:terminal-attach-error',failed);
     };
     const ready=event=>{
       if(event.detail!==name)return;
-      finish(sameRecipient(record)&&socket===connection?namedComposerTarget(name):null);
+      finish();
+      resolve(sameRecipient(record)&&socket===connection?namedComposerTarget(name):null);
     };
-    const timer=setTimeout(()=>finish(null),4500);
+    const failed=event=>{
+      if(event.detail.session!==name)return;
+      finish();
+      const detail=typeof event.detail.message==='string'?event.detail.message.trim().slice(0,160):'';
+      reject(new ComposerAttachError('terminal-attach-refused',detail||'Terminal connection refused'));
+    };
+    const timer=setTimeout(()=>{
+      finish();
+      reject(new ComposerAttachError('terminal-attach-timeout','Terminal connection timed out'));
+    },4500);
     document.addEventListener('oc:terminal-ready',ready);
+    document.addEventListener('oc:terminal-attach-error',failed);
   });
 }
 function trackPrompt(target,text,displayText=text,attachments=[]){
@@ -9878,9 +9905,14 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
         }else if(status==='paste-unavailable'){
           status='refused';problem='Could not verify multiline paste support in this terminal';
         }
-      }catch(_){
-        logUnroutedPrompt(record.name,'preparation-failed');
-        problem='Could not prepare the prompt';
+      }catch(error){
+        if(error instanceof ComposerAttachError){
+          logUnroutedPrompt(record.name,error.reason);
+          problem=error.message;
+        }else{
+          logUnroutedPrompt(record.name,'preparation-failed');
+          problem='Could not prepare the prompt';
+        }
       }finally{
         if(status!=='accepted')receipt?.cancel();
         results.push({...record,status,receipt,problem,originalPath});
