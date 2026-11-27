@@ -7,7 +7,9 @@
 .mini-graph:has(.miniorrery[hidden]),
 .mini-graph:has(.miniorrery[hidden])+.mail-graph-divider{display:none}
 .mini-graph.orrery-mode{width:100%;margin:4px 0 0}
-.mini-graph-scroll{width:100%;height:100%;overflow:auto;scrollbar-width:thin;overflow-anchor:none;overscroll-behavior:contain}
+/* Zoomed graphs use scroll offsets for drag, wheel and keyboard panning. */
+.mini-graph-scroll{width:100%;height:100%;overflow:auto;scrollbar-width:none;overflow-anchor:none;overscroll-behavior:contain}
+.mini-graph-scroll::-webkit-scrollbar{display:none}
 .mini-graph-scroll.can-pan{cursor:grab;user-select:none}
 .mini-graph-scroll.is-panning,.mini-graph-scroll.is-panning :is(.orrery-agent,.orrery-mail-edge){cursor:grabbing}
 .mini-graph-scroll:focus-visible{outline:1px solid var(--ink-dim);outline-offset:-1px}

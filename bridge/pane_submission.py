@@ -1,7 +1,8 @@
 """Pane input protocol shared with ORRERY Telemetry's pane_submission.py.
 
 Use the live tmux socket's inode and pane ID, independently of the client,
-working directory, or provider. A file contains no text or owner state.
+working directory, or provider. The lock can retain a digest of our pending
+notice when the editor shows only its length, without storing its text.
 """
 from __future__ import annotations
 
@@ -9,12 +10,14 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import shlex
 import stat
 import subprocess
+import sys
 import time
 import uuid
-from dataclasses import dataclass
-from unicodedata import east_asian_width
+from dataclasses import dataclass, replace
+from unicodedata import category, east_asian_width
 
 
 METADATA = ('#{socket_path}\t#{pid}\t#{pane_id}\t#{pane_pid}\t#{cursor_y}\t#{pane_in_mode}'
@@ -23,11 +26,21 @@ POLL = .06
 TIMEOUT = 5.0
 REDRAW_GRACE = 1.0
 SLASH_MENU_WAIT = .30
+SUBMISSION_CLEAR_GRACE = .25
 SHELLS = frozenset({
     'ash', 'bash', 'busybox', 'cmd', 'csh', 'dash', 'elvish', 'fish', 'hush',
     'ksh', 'ksh93', 'mksh', 'nu', 'nushell', 'pdksh', 'powershell', 'pwsh',
     'sh', 'tcsh', 'xonsh', 'yash', 'zsh',
 })
+CONTROL_BYTES = re.compile(r'[\x00-\x1f\x7f-\x9f]')
+MULTILINE_CONTROLS = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]')
+EDITOR_EXECUTABLES = {
+    'agy': {'agy', 'gemini'},
+    'claude': {'claude'},
+    'codex': {'codex'},
+    'dsh': {'dsh'},
+    'hermes': {'hermes'},
+}
 PROMPT = re.compile(r'^(\s*(?:(?:[⌸│☤]|[\w.-]+)\s+)?)([❯›>⌘☤])(?:[ \u00a0]+|$)(.*)')
 BORDER = re.compile(r'^[╭╰]?[─━]{8,}[╮╯]?$')
 CLAUDE_NAMED_BORDER = re.compile(r'^[─━]{8,}[ \t]+\S(?:.*\S)?[ \t]+[─━]+$')
@@ -40,10 +53,11 @@ CLAUDE_QUEUE_HINT = 'Press up to edit queued messages'
 CLAUDE_SUGGESTION = re.compile(r'^[  ]*\x1b\[(?:[0-9]+;)*2(?:;[0-9]+)*m[^\x1b]+(?:\x1b\[(?:0|22)?m[  ]*)?$')
 CLAUDE_ARGUMENT_HINT = re.compile(r'\x1b\[(?:38;5;246|(?:0;)?2)m[^\x1b]+'
                                   r'(?:\x1b\[(?:0|22|39)?m)?[ \t]*$')
-COLLAPSED = re.compile(r'\[Pasted text #\d+(?: \+\d+ lines?)?\]')
+COLLAPSED = re.compile(r'\[Pasted text #\d+(?: \+(\d+) lines?)?\]')
 HERMES_PASTE = re.compile(r'\[Pastedtext#(\d+):(\d+)lines→/.+/pastes/paste_\1_\d{6}\.txt\]')
 HERMES_HINT = re.compile(r'^(?:msg=[\w-]+ · /queue · /bg · /steer · Ctrl\+C cancel|cli\.tui\.placeholder_busy)$')
 HERMES_STATUS = re.compile(r'^(?:[^│]+ │ )?☤ \S')
+HERMES_EDITOR_ROWS = 8
 ITALIC_CHANGE = re.compile(r'\x1b\[(0|3|23)m')
 HERMES_TOOL_PROGRESS = re.compile(
     r'^  [^ \t┊│].* {2}\(\s*(?:\d+\.\ds|\d+m[0-5]\ds|cli\.shared\.duration_(?:s|ms_compact))'
@@ -54,7 +68,12 @@ PASTING = re.compile(r'^\s*(?:Pasting(?:…|\.\.\.)|Waiting for startup\b)', re.
 AGY_MODE = re.compile(
     r'^(?:(?:\? for shortcuts|esc to cancel)\s{2,})?(?:auto|plan|accept[- ]edits)\s+·\s+', re.I)
 AGY_MODE_ONLY = re.compile(r'^(?:(?:\? for shortcuts|esc to cancel)\s{2,})?(?:auto|plan|accept[- ]edits)$', re.I)
-AGY_MODEL_FOOTER = re.compile(r'^Gemini(?:[ -][^·]+)?\s+·\s+(?:low|medium|high)$', re.I)
+AGY_MODEL_FOOTER = re.compile(
+    r'^(?:(?:\? for shortcuts|esc to cancel)\s{2,})?Gemini(?:[ -][^·]+)?\s+·\s+(?:low|medium|high|xhigh|max)$',
+    re.I)
+AGY_SCROLL_MARKER = re.compile(
+    rf'(?:{SGR.pattern}|[ \t])*\x1b\[90m↑ [1-9]\d* more lines?(?:{SGR.pattern})*[ \t]*')
+AGY_PASTE = re.compile(r'\[Pasted\s+text\s+#[1-9]\d*\s+([1-9][0-9]{0,8})\s+chars\]')
 AGY_PLACEHOLDER = {
     'Auto mode: edits & safe commands auto-approved (shift+tab to cycle)',
     'Plan mode: research & plan only (shift+tab to cycle)',
@@ -74,6 +93,9 @@ AGY_COMMAND_SELECTED = re.compile(r'^>\s+(' + SLASH_NAME.pattern + r')(?=[ \t]|$
 AGY_COMMAND_HELP = '↑/↓ Navigate · enter Select · tab Complete'
 AGY_WORKING = re.compile(r'^[\u2800-\u28ff]\s+Working(?:…|\.\.\.)$')
 CODEX_WORKING = re.compile(r'^• (?:Working|Compacting context) \(.*\besc to interrupt\b')
+CODEX_PASTE = re.compile(r'\[PastedContent([1-9][0-9]{0,8})chars\]')
+CODEX_PASTE_STYLE = re.compile(r'\x1b\[(?:36|38;5;6)m(?=\[Pasted)')
+CODEX_QUEUE_HINT = 'tab to queue message'
 # Codex marks the viewport edge with a dim arrow, even flush against the text.
 CODEX_SCROLL_ARROW = re.compile(rf'{DIM.pattern}([↑↓])(?:{SGR.pattern})*[ \t]*$')
 NOTICE_TRAILER = re.compile(r'\s*(?:\.{3}\s+)?(?:Fetch inbox to read the rest\.|Please call fetch_inbox to read it\.)$')
@@ -102,6 +124,9 @@ class Frame:
     slash_view: tuple[str, str] | None = None
     redrawing: bool = False
     draft_continues: bool = False
+    wrapped_editor: bool = False
+    paste_chars: int | None = None
+    codex_queue_hint: bool = False
 
     @property
     def identity(self):
@@ -123,7 +148,129 @@ class Frame:
         # other control characters may be acted on before the draft is visible.
         return bool(self.foreground_command) and (
             self.foreground_command not in SHELLS
-            or not re.search(r'[\x00-\x1f\x7f-\x9f]', text))
+            or not CONTROL_BYTES.search(text)
+            or self.wrapped_editor and not MULTILINE_CONTROLS.search(text))
+
+
+def needs_wrapped_editor(view, text):
+    return (text is not None and view is not None and view.bracketed is None
+            and view.foreground_command in SHELLS and view.editor in EDITOR_EXECUTABLES
+            and CONTROL_BYTES.search(text) is not None and not MULTILINE_CONTROLS.search(text))
+
+
+def _process_columns(*args):
+    try:
+        result = subprocess.run(['ps', *args], capture_output=True, text=True, errors='replace',
+                                timeout=.5, check=True)
+    except (OSError, subprocess.SubprocessError):
+        return ''
+    return result.stdout
+
+
+def _process_argv(pid):
+    try:
+        if sys.platform == 'linux':
+            with open(f'/proc/{pid}/cmdline', 'rb') as source:
+                data = source.read(16384)
+            return [os.fsdecode(part) for part in data[:-1].split(b'\0')] if data.endswith(b'\0') else []
+        return shlex.split(_process_columns('-ww', '-p', str(pid), '-o', 'args='))
+    except (OSError, ValueError):
+        return []
+
+
+def _editor_process(editor, pid, executable):
+    if executable in EDITOR_EXECUTABLES[editor]:
+        return True
+    if editor == 'codex' and re.fullmatch(r'codex-(?:aarch64|x86_64)-[\w-]+', executable):
+        return True
+    if editor == 'agy' and sys.platform == 'linux':
+        try:
+            if os.readlink(f'/proc/{pid}/exe').endswith('/agy'):
+                return True
+        except OSError:
+            pass
+    node = executable in {'node', 'nodejs', 'mainthread'}
+    python = re.fullmatch(r'python(?:\d+(?:\.\d+)*)?', executable)
+    claude_version = editor == 'claude' and re.fullmatch(r'\d+\.\d+\.\d+', executable)
+    if not (node or claude_version or editor == 'agy' or editor == 'hermes' and python):
+        return False
+    if claude_version:
+        if sys.platform == 'linux':
+            try:
+                return os.readlink(f'/proc/{pid}/exe').endswith('/claude/versions/' + executable)
+            except OSError:
+                return False
+        argv = _process_argv(pid)
+        return bool(argv and argv[0].endswith('/claude/versions/' + executable))
+    argv = _process_argv(pid)
+    if editor == 'agy':
+        if argv and argv[0].endswith('/agy'):
+            return True
+        if not node:
+            return False
+    if len(argv) < 2:
+        return False
+    script = argv[1]
+    if python:
+        return (argv[1:3] == ['-m', 'hermes_cli.main']
+                or script.endswith(('/bin/hermes', '/hermes_cli/main.py')))
+    return script.endswith({
+        'agy': ('/node_modules/@google/gemini-cli/dist/index.js', '/bin/gemini'),
+        'claude': ('/node_modules/@anthropic-ai/claude-code/cli.js', '/bin/claude'),
+        'codex': ('/node_modules/@openai/codex/bin/codex.js', '/bin/codex'),
+        'dsh': ('/node_modules/@deepseek-ai/dsh/lib/bin.js', '/bin/dsh'),
+        'hermes': (),
+    }[editor])
+
+
+def _editor_has_terminal_input(pid, terminal):
+    if sys.platform != 'linux':
+        return True
+    # A background child of a noninteractive shell can share its group, but
+    # Bash normally redirects that child's stdin away from the pane.
+    try:
+        stdin = os.stat(f'/proc/{pid}/fd/0')
+        tty = os.stat('/dev/' + terminal)
+    except OSError:
+        return False
+    return stat.S_ISCHR(stdin.st_mode) and stdin.st_rdev == tty.st_rdev
+
+
+def confirm_wrapped_editor(view):
+    # WSL can report the shell as the foreground group leader even while its
+    # agent is reading. Require that editor in this pane's live foreground group.
+    processes = {}
+    children = {}
+    for line in _process_columns('-axo', 'pid=,ppid=,pgid=,tpgid=,tty=,stat=,comm=').splitlines():
+        parts = line.split(None, 6)
+        if len(parts) != 7:
+            continue
+        try:
+            pid, parent, group, foreground = map(int, parts[:4])
+        except ValueError:
+            continue
+        tty, state, command = parts[4:]
+        processes[pid] = (group, foreground, tty, state, Path(command).name.lower())
+        children.setdefault(parent, []).append(pid)
+    if view.process not in processes:
+        return view
+    _, foreground, tty, _, _ = processes[view.process]
+    if foreground <= 0 or tty == '?':
+        return view
+    pending = children.get(view.process, [])[:]
+    seen = {view.process}
+    while pending:
+        pid = pending.pop()
+        if pid in seen:
+            continue
+        seen.add(pid)
+        pending.extend(children.get(pid, ()))
+        group, active, terminal, state, executable = processes[pid]
+        if (group == foreground == active and terminal == tty and state[0] not in 'TtXZ'
+                and _editor_process(view.editor, pid, executable)
+                and _editor_has_terminal_input(pid, tty)):
+            return replace(view, wrapped_editor=True)
+    return view
 
 
 def _slash_selection(lines, plain, start, *, codex):
@@ -236,6 +383,8 @@ def _slash_view(lines):
             return 'agy', '/help'
         if controls.endswith('Keyboard: ↑/↓ Navigate ←/→ Effort enter Select esc Go Back') and 'Switch Model' in rows:
             return 'agy', '/model'
+        if controls.endswith('Keyboard: ↑/↓ Navigate enter Actions esc Exit') and 'MCP Servers' in rows:
+            return 'agy', '/mcp'
     for index, title in enumerate(rows):
         if title == 'Model' and index + 1 < len(rows) and rows[index+1].startswith(
                 'Tab / Shift+Tab providers · ↑/↓ model · Enter select · Esc cancel'):
@@ -271,6 +420,12 @@ def _hermes_running(lines, plain, start):
             and HERMES_TOOL_PROGRESS.fullmatch(plain[index].rstrip()) is not None)
 
 
+def _cursor_before_end(row, column):
+    width = sum(2 if east_asian_width(c) in ('F', 'W') else 1
+                for c in row.rstrip() if category(c) not in ('Mn', 'Me', 'Cf'))
+    return column < width
+
+
 def frame(metadata, lines, pane):
     fields = metadata.split('\t')
     if (len(fields)!=9 or fields[2]!=pane or not re.fullmatch(r'%[0-9]+',pane)
@@ -286,14 +441,15 @@ def frame(metadata, lines, pane):
     base=(path,server,pane,process)
     bracketed = fields[7] == '1' if fields[7] else None
     command = fields[8].rsplit('/', 1)[-1].lower().lstrip('-').removesuffix('.exe')
+    unavailable = Frame(*base, None, False, bracketed=bracketed, foreground_command=command)
     if mode or cursor>=len(lines):
-        return Frame(*base,None,False)
+        return unavailable
     # tmux adds a link target to the styled capture, separate from its visible text.
     lines=[OSC8.sub('',line) for line in lines]
     plain=[SGR.sub('',line) for line in lines]
     slash_view = _slash_view(plain)
     if bracketed is False:
-        return Frame(*base,None,False,slash_view=slash_view)
+        return replace(unavailable, slash_view=slash_view)
     if (cursor==0 and column==2 and plain[0].startswith('❯ ')
             and not any(row.strip() for row in plain[1:])
             and _hermes_compact_hint(lines[0], plain[0][2:].strip())):
@@ -303,6 +459,20 @@ def frame(metadata, lines, pane):
     for start in range(cursor,-1,-1):
         line=plain[start].rstrip()
         if BORDER.fullmatch(line.strip()):
+            # The classic Hermes input scrolls within eight rows. When its
+            # first row scrolls out, the status and both rules stay visible.
+            if (start and cursor - start == HERMES_EDITOR_ROWS
+                    and HERMES_STATUS.match(plain[start-1].strip())
+                    and cursor+1 < len(plain) and BORDER.fullmatch(plain[cursor+1].strip())
+                    and not any(row.strip() for row in plain[cursor+2:])):
+                draft = '\n'.join(row.strip() for row in plain[start+1:cursor+1]).strip()
+                if draft and plain[cursor].strip():
+                    busy = _hermes_running(lines, plain, start+1)
+                    return Frame(*base, draft, False, hermes=True, bracketed=bracketed,
+                                 foreground_command=command, scrolled=True, editor='hermes',
+                                 hermes_busy=busy, running=busy,
+                                 draft_continues=_cursor_before_end(plain[cursor], column),
+                                 slash_view=slash_view)
             break
         if CLAUDE_SCROLLED_BORDER.fullmatch(line.strip()):
             # A tall Claude draft scrolls inside its frame: the prompt glyph
@@ -352,6 +522,11 @@ def frame(metadata, lines, pane):
         body=[first,*plain[start+1:cursor+1]]
         scrolled = False
         more_below = False
+        if agy and not left and start < cursor and AGY_SCROLL_MARKER.fullmatch(lines[start].partition('>')[2]):
+            # Antigravity draws the scroll indicator in place of the first row.
+            body.pop(0)
+            scrolled = True
+            more_below = _cursor_before_end(plain[cursor], column)
         if glyph == '›':
             top_arrow = CODEX_SCROLL_ARROW.search(lines[start])
             last_arrow = CODEX_SCROLL_ARROW.search(lines[cursor])
@@ -365,6 +540,8 @@ def frame(metadata, lines, pane):
         if boxed:
             body=[part.rstrip().removesuffix('⛶').removesuffix('│').rstrip() for part in body]
         draft='\n'.join(body).strip()
+        if agy and scrolled and not draft:
+            return replace(unavailable, slash_view=slash_view)
         if boxed and start==cursor and column<=len(prefix)+2:
             placeholder=draft.removesuffix('…')
             if (placeholder and DSH_PLACEHOLDER.startswith(placeholder)
@@ -404,16 +581,22 @@ def frame(metadata, lines, pane):
                 draft=''
         # A caret at the beginning of a multiline draft isn't an empty editor.
         # Check the lower edge or a recognized footer before accepting it.
-        footer=tail and (tail[0].startswith(('? for shortcuts','← for agents','⏵','⏸','% context left','Context '))
+        codex_queue_hint = glyph == '›' and bool(tail and tail[0].startswith(CODEX_QUEUE_HINT))
+        footer=tail and (codex_queue_hint or tail[0].startswith(('? for shortcuts','← for agents','⏵','⏸','% context left','Context '))
                 or re.match(r'gpt-\S+\s+(?:default|low|medium|high|xhigh|max|ultra)\b',tail[0],re.I))
         if not draft and tail and not (lower or footer or waiting):
-            return Frame(*base,None,False,slash_view=slash_view)
+            return replace(unavailable, slash_view=slash_view)
         menu=(start>=2 and upper and bool(re.match(r'^[ \t]+❯[ \t]+\S',plain[start-2])))
         if glyph=='›':
             previous_row=next((row.strip().lower() for row in reversed(above) if row.strip()), '')
             menu=previous_row.startswith(('enter/tab insert · esc close','enter insert · esc close'))
         editor = ('dsh' if boxed else 'hermes' if hermes else 'agy' if agy else
                   'codex' if glyph == '›' else 'claude' if upper or command=='claude' else None)
+        sized_paste = None
+        if editor == 'codex' and CODEX_PASTE_STYLE.search(lines[start]):
+            sized_paste = CODEX_PASTE.fullmatch(''.join(draft.split()))
+        elif editor == 'agy':
+            sized_paste = AGY_PASTE.fullmatch(draft)
         selected_command = None
         if editor is not None and (draft.startswith('/') or hermes):
             near_menu, selected_command = SLASH_PICKERS[editor](lines, plain, start, cursor)
@@ -442,8 +625,10 @@ def frame(metadata, lines, pane):
                      slash_picker=editor is not None, selected_command=selected_command,
                      dsh_clipped=dsh_clipped, hermes_busy=hermes_busy, editor=editor,
                      running=running, slash_view=slash_view, scrolled=scrolled,
-                     draft_continues=more_below or bool(tail and not (lower or footer)))
-    return Frame(*base,None,False,slash_view=slash_view)
+                     draft_continues=more_below or bool(tail and not (lower or footer)),
+                     paste_chars=int(sized_paste[1]) if sized_paste else None,
+                     codex_queue_hint=codex_queue_hint)
+    return replace(unavailable, slash_view=slash_view)
 
 
 def bare_slash(text):
@@ -452,9 +637,34 @@ def bare_slash(text):
 
 
 def accepted_after_enter(before, after, text):
+    if after.identity != before.identity:
+        return False
     if after.slash_view is None or after.slash_view == before.slash_view:
-        return after.empty
+        return (after.empty and after.editor == before.editor
+                and not (after.redrawing or after.scrolled or after.draft_continues))
     return after.slash_view == (before.editor, bare_slash(text))
+
+
+class SubmissionConfirmation:
+    """Wait for the same editor to stay empty after Enter or Tab."""
+
+    def __init__(self, before, text):
+        self.before = before
+        self.text = text
+        self.clear_since = None
+
+    def accepted(self, after):
+        if not accepted_after_enter(self.before, after, self.text):
+            self.clear_since = None
+            return False
+        if after.slash_view is not None and after.slash_view != self.before.slash_view:
+            return True
+        now = time.monotonic()
+        if self.clear_since is None:
+            self.clear_since = now
+        # Some TUIs briefly clear the composer during a redraw and then
+        # repaint the same unsent draft.
+        return now - self.clear_since >= SUBMISSION_CLEAR_GRACE
 
 
 def completion_problem(observed, text, *, operator=False):
@@ -507,6 +717,19 @@ def visible_cells(text):
     return sum(2 if east_asian_width(char) in ('F', 'W') else 1 for char in text if not char.isspace())
 
 
+def _matches_paste_summary(view, text):
+    if view.draft_continues:
+        return False
+    if view.paste_chars is not None:
+        return view.paste_chars == len(text)
+    if view.editor == 'agy' and view.draft:
+        # Antigravity reports lines for a paste containing newlines and
+        # Unicode code points for a long single-line paste.
+        marker = COLLAPSED.fullmatch(' '.join(view.draft.split()))
+        return bool(marker and marker[1] and int(marker[1]) == text.count('\n') + 1)
+    return False
+
+
 def ready(observed, text, *, operator=False):
     if (observed is None or observed.draft is None or observed.waiting
             or not observed.allows_paste(text, operator=operator)):
@@ -517,16 +740,20 @@ def ready(observed, text, *, operator=False):
     shown = ''.join(observed.draft.split())
     expected = ''.join(text.split())
     if observed.scrolled:
+        if observed.hermes or observed.editor == 'agy':
+            return same_notice(observed, text)
         # Only the end of a tall draft is visible, so it must end the text.
         return not observed.draft_continues and len(shown)>=16 and expected.endswith(shown)
     if shown == expected:
+        return True
+    if _matches_paste_summary(observed, text):
         return True
     if observed.dsh_clipped and (operator or text.startswith('ORRERY Mail notification: ')):
         # Fullwidth and wide characters occupy two cells of the visible suffix.
         return visible_cells(shown) >= 24 and expected.endswith(shown)
     # Claude represents a pasted multiline or long prompt as this native
     # capsule. The caller required an empty editor before sending the paste.
-    if COLLAPSED.fullmatch(observed.draft):
+    if observed.editor != 'agy' and COLLAPSED.fullmatch(observed.draft):
         return True
     if observed.hermes:
         # A narrow pane can wrap anywhere in the native paste card's path.
@@ -586,6 +813,14 @@ def capture(command,pane):
     return frame(metadata,screen.splitlines(),pane) if separator else None
 
 
+def _notice_paste_digest(view, text):
+    if view.editor in ('agy', 'codex') and text.startswith('ORRERY Mail notification: message from '):
+        # Keep existing Codex receipts and distinguish Antigravity in a reused pane.
+        provider = 'agy\0' if view.editor == 'agy' else ''
+        return hashlib.sha256(f'{provider}{view.process}\0{text}'.encode()).digest()
+    return b''
+
+
 def same_notice(view,text):
     """Compare an entire notice or a visible tail in a known, clipped editor."""
     if (view.editor not in ('claude','codex','dsh','hermes','agy')
@@ -612,7 +847,7 @@ def same_notice(view,text):
     return not remaining
 
 
-def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
+def submit(command,admit,pane,text,*,deadline=None,on_wait=None,claim_handoff=None):
     """Watcher path. Refused means a prompt was never pasted."""
     end=time.monotonic()+TIMEOUT if deadline is None else deadline
     fd=None
@@ -623,18 +858,22 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
             on_wait(reason)
         return status
 
-    def capture_draft(identity):
+    def capture_input():
         view = capture(command,pane)
+        return confirm_wrapped_editor(view) if needs_wrapped_editor(view, text) else view
+
+    def capture_draft(identity):
+        view = capture_input()
         if view is None or view.identity != identity or not view.redrawing:
             return view
         redraw_deadline = min(end, time.monotonic() + REDRAW_GRACE)
         while time.monotonic() < redraw_deadline:
             time.sleep(POLL)
-            view = capture(command,pane)
+            view = capture_input()
             if view is not None and view.identity != identity:
                 return view
             if view is not None and not view.redrawing:
-                return capture(command,pane) if admit() else None
+                return capture_input() if admit() else None
         return view
 
     try:
@@ -654,10 +893,22 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
         if before.waiting:
             return defer('refused', 'editor_waiting')
         resuming=not before.empty
-        if resuming and not same_notice(before,text):
+        digest = _notice_paste_digest(before, text)
+
+        def same_draft(view):
+            if same_notice(view,text):
+                return True
+            # The capsule exposes only a count. A retry also needs the
+            # digest saved under this pane's lock before our own paste.
+            return (bool(digest) and view.editor == before.editor and _matches_paste_summary(view, text)
+                    and os.pread(fd, len(digest)+1, 0) == digest)
+
+        if resuming and not same_draft(before):
             return defer('refused', 'editor_not_empty')
         if not before.allows_paste(text):
             return defer('refused', 'paste_unavailable')
+        if resuming and claim_handoff is not None and not claim_handoff(resuming=True):
+            return defer('refused', 'pane_changed')
         name=None if resuming else 'orrery-submit-'+uuid.uuid4().hex
         pasted=resuming
         try:
@@ -673,6 +924,11 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
                     return defer('refused', 'pane_changed')
                 if not current.empty or not current.allows_paste(text):
                     return defer('refused', 'editor_changed')
+                if claim_handoff is not None and not claim_handoff(resuming=False):
+                    return defer('unknown', 'prior_delivery_unconfirmed')
+                if digest:
+                    os.ftruncate(fd, 0)
+                    os.pwrite(fd, digest, 0)
                 pasted=True  # A timeout after the command starts cannot prove absence.
                 if command('paste-buffer','-r','-p','-d','-b',name,'-t',pane).returncode:
                     return defer('unknown', 'paste_failed')
@@ -680,9 +936,9 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
             problem=None
             menu_wait = SlashMenuWait(text)
             def confirmed_draft(view):
-                return (not resuming or same_notice(view,text)) and menu_wait.ready(view)
+                return (not resuming or same_draft(view)) and menu_wait.ready(view)
             while time.monotonic()<end:
-                view=capture(command,pane)
+                view=capture_input()
                 if not view or view.identity!=before.identity:return defer('unknown', 'pane_changed')
                 problem=completion_problem(view,text)
                 choice=(view.draft,view.selected_command) if confirmed_draft(view) or problem=='completion-mismatch' else None
@@ -691,7 +947,7 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
                         return defer('unknown', 'pane_changed')
                     if time.monotonic()>=end:
                         return defer('unknown', 'submission_deadline')
-                    view=capture(command,pane)
+                    view=capture_input()
                     if not view or view.identity!=before.identity:
                         return defer('unknown', 'pane_changed')
                     confirmed = confirmed_draft(view)
@@ -699,7 +955,8 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
                         if mismatched_command(view,text):
                             return defer('unknown', 'completion_mismatch')
                         if confirmed and time.monotonic()<end:
-                            if command('send-keys','-t',pane,'C-m').returncode:
+                            key = 'Tab' if view.codex_queue_hint else 'C-m'
+                            if command('send-keys','-t',pane,key).returncode:
                                 return defer('unknown', 'enter_failed')
                             entered_from = view
                             break
@@ -708,10 +965,14 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None):
             else:
                 reason = 'completion_unverified' if problem=='completion-unverified' else 'draft_not_confirmed'
                 return defer('unknown', reason)
+            confirmation = SubmissionConfirmation(entered_from, text)
             while time.monotonic()<end:
                 view=capture(command,pane)
                 if not view or view.identity!=before.identity:return defer('unknown', 'pane_changed')
-                if accepted_after_enter(entered_from, view, text):return 'accepted'
+                if confirmation.accepted(view):
+                    if digest:
+                        os.ftruncate(fd, 0)
+                    return 'accepted'
                 time.sleep(POLL)
             return defer('unknown', 'enter_not_confirmed')
         finally:

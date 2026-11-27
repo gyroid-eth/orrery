@@ -297,8 +297,12 @@ def test_browser_icon_selects_modes_without_adding_a_layout_control(tour_browser
       spawnBrowserChoices[1][1].click();
       const chosen=spawnToolOptions(),caption=spawnBrowserUse.getAttribute('aria-label');
       selProvider='gemini';selHarness='antigravity';renderSpawnTools();
-      return {initial,choices,opened,chosen,caption,limited:spawnBrowserUse.getAttribute('aria-disabled'),
-        reason:spawnBrowserUse.title,hasText:spawnBrowserUse.textContent.trim()!==''};
+      const limited=spawnBrowserUse.getAttribute('aria-disabled'),reason=spawnBrowserUse.title;
+      spawnCatalog.browser_modes.antigravity=['off','temporary'];renderSpawnTools();
+      const agyChoices=[...spawnBrowserMenu.querySelectorAll('button:not([hidden])')].map(b=>b.textContent);
+      spawnBrowserChoices[1][1].click();
+      return {initial,choices,opened,chosen,caption,limited,reason,agyChoices,
+        agyPayload:spawnToolOptions(),hasText:spawnBrowserUse.textContent.trim()!==''};
     })()''')
     assert result['opened'] and not result['hasText']
     assert result['choices'] == ['Off','Temporary Chrome','My Chrome']
@@ -306,6 +310,8 @@ def test_browser_icon_selects_modes_without_adding_a_layout_control(tour_browser
     assert result['chosen']['tools']['browser_mode'] == 'temporary'
     assert result['caption'] == 'Browser: Temporary Chrome'
     assert result['limited'] == 'true' and 'Antigravity' in result['reason']
+    assert result['agyChoices'] == ['Off', 'Temporary Chrome']
+    assert result['agyPayload'] == {'tools': {'browser_mode': 'temporary'}}
 
 
 @pytest.mark.parametrize('browser_modes', [False, True])
@@ -331,6 +337,113 @@ def test_wsl_computer_use_is_opt_in_and_uses_managed_screen(tour_browser, browse
     assert result == {'initial': browser, 'selected': {**browser, 'screen': {
         'server': 'orrery-screen', 'access': 'operate'}}, 'blocked': browser,
         'reason': 'Start Windows Cua Driver.', 'disabled': 'true', 'visible': True, 'checked': 'false'}
+
+
+def test_wsl_gemini_projects_view_control_and_my_chrome(tour_browser):
+    _, evaluate = tour_browser
+    value = evaluate('''(()=>{
+      openSpawnModal();
+      spawnCatalog={computer_use_transport:'orrery-screen',computer_use:true,
+        computer_modes:['off','view','control'],browser_modes:{antigravity:['off','temporary','personal']},
+        providers:[{id:'gemini',program:'antigravity',models:[{id:'fixture',default:true}]}]};
+      selFamily=null;selProvider=null;selModel=null;selHarness=null;renderProviderTabs();
+      const initial=spawnToolOptions().tools;
+      spawnComputerChoices[1][1].click();
+      const view=spawnToolOptions().tools;
+      spawnComputerChoices[2][1].click();
+      const control=spawnToolOptions().tools;
+      spawnCatalog.computer_use=false;
+      spawnCatalog.computer_modes=['off'];
+      spawnCatalog.computer_use_reason='Start Windows Cua Driver.';
+      renderSpawnTools();
+      return {initial,view,control,disabled:spawnComputerUse.getAttribute('aria-disabled'),
+              reason:spawnComputerUse.title,blocked:spawnToolOptions().tools};
+    })()''')
+    browser = {'browser_mode': 'personal'}
+    assert value == {'initial': browser, 'view': {**browser, 'screen': {
+        'server': 'orrery-screen', 'access': 'read'}}, 'control': {**browser, 'screen': {
+        'server': 'orrery-screen', 'access': 'operate'}}, 'disabled': 'true',
+        'reason': 'Start Windows Cua Driver.', 'blocked': browser}
+
+
+@pytest.mark.parametrize(('modes', 'fallback'), [
+    (['off','temporary','personal'], 'temporary'),
+    (['off','personal'], 'off'),
+])
+def test_new_agent_explains_unavailable_my_chrome_and_uses_fallback(tour_browser, modes, fallback):
+    _, evaluate = tour_browser
+    catalog = {
+        'browser_modes':{'antigravity':modes},
+        'personal_browser_status':{'antigravity':{
+            'reason':'Chrome is not running on Windows. Start Google Chrome.', 'unavailable':True,
+        }},
+        'providers':[{'id':'gemini','program':'antigravity','models':[{'id':'fixture','default':True}]}],
+    }
+    result = evaluate('''(()=>{
+      spawnCatalog=CATALOG;
+      selFamily=null;selProvider=null;selModel=null;selHarness=null;renderProviderTabs();
+      const myChrome=spawnBrowserChoices.find(([mode])=>mode==='personal')[1];
+      const fallback=spawnToolOptions().tools.browser_mode;
+      const notice=spawnStatus.textContent;
+      const disabled=myChrome.disabled;
+      spawnCatalog={...spawnCatalog,personal_browser_status:{}};
+      renderSpawnTools();updateSpawnAvailability();
+      return {fallback,notice,disabled,ready:spawnToolOptions().tools.browser_mode,
+              readyNotice:spawnStatus.textContent};
+    })()'''.replace('CATALOG', json.dumps(catalog)))
+    assert result == {'fallback':fallback, 'disabled':True, 'ready':'personal', 'readyNotice':'',
+                      'notice':'My Chrome: Chrome is not running on Windows. Start Google Chrome.'}
+
+
+@pytest.mark.parametrize(('modes', 'fallback'), [
+    (['off','temporary','personal'], 'temporary'),
+    (['off','personal'], 'off'),
+])
+def test_my_chrome_probe_timeout_updates_the_default_but_respects_manual_choice(tour_browser, modes, fallback):
+    _, evaluate = tour_browser
+    catalog = {
+        'browser_modes': {'antigravity': modes},
+        'providers': [{'id': 'gemini', 'program': 'antigravity', 'models': [{'id': 'fixture', 'default': True}]}],
+    }
+    result = evaluate('''(async()=>{
+      let catalog=CATALOG;
+      const unknown={reason:'ORRERY cannot check Windows Chrome from WSL.',unavailable:false};
+      const stopped={reason:'Chrome is not running on Windows.',unavailable:true};
+      const original=window.fetch;
+      const myChrome=spawnBrowserChoices.find(([mode])=>mode==='personal')[1];
+      const off=spawnBrowserChoices.find(([mode])=>mode==='off')[1];
+      const read=()=>({mode:spawnBrowserUse.dataset.browserMode,disabled:myChrome.disabled,
+        launch:!spawnSubmit.disabled,notice:spawnStatus.textContent});
+      const setStatus=status=>{catalog={...catalog,personal_browser_status:status?{antigravity:status}:{}};};
+      const recheck=async status=>{setStatus(status);await loadSpawnCatalog();return read();};
+      window.fetch=(input,options)=>new URL(input,location.href).pathname==='/telemetry/spawn-catalog'
+        ?Promise.resolve(Response.json(catalog)):original(input,options);
+      try{
+        setStatus(unknown);
+        openSpawnModal();
+        await loadSpawnCatalog();
+        spawnTask.value='Fixture task';
+        updateSpawnAvailability();
+        const initial=read(),route=spawnToolsRoute;
+        const ready=await recheck();
+        const timedOut=await recheck(unknown);
+        myChrome.click();
+        const manual=read();
+        const blocked=await recheck(stopped);
+        off.click();
+        const manualOff=await recheck();
+        return {initial,ready,timedOut,manual,blocked,manualOff,sameRoute:route===spawnToolsRoute};
+      }finally{window.fetch=original;closeSpawnModal();}
+    })()'''.replace('CATALOG', json.dumps(catalog)))
+    unknown = {'mode': fallback, 'disabled': False, 'launch': True,
+               'notice': 'My Chrome: ORRERY cannot check Windows Chrome from WSL.'}
+    ready = {'mode': 'personal', 'disabled': False, 'launch': True, 'notice': ''}
+    assert result == {
+        'initial': unknown, 'timedOut': unknown, 'ready': ready, 'manual': {**unknown, 'mode': 'personal'},
+        'blocked': {'mode': 'personal', 'disabled': True, 'launch': False,
+                    'notice': 'My Chrome: Chrome is not running on Windows.'},
+        'manualOff': {**ready, 'mode': 'off'}, 'sameRoute': True,
+    }
 
 
 def test_browser_off_keeps_the_standard_base_on_current_telemetry(tour_browser):

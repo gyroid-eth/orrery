@@ -22,7 +22,7 @@ block は ORRERY Mail tool があるときだけ従います。参加材料は�
 <a id="legacy-blocks"></a>
 ## 古い block が残っているとき
 
-異なる版の block を二重に読むと指示が食い違うことがあります。検出は cwd から親の CLAUDE.md / AGENTS.md に限定し、sibling や HOME 全体を探しません。doctor は残数・file・hash・片付ける command を表示します。SessionStart は件数と人向け doctor の案内だけです。global dashboard はこのページの日英両方へリンクします。cockpit の案内は後続です。
+異なる版の block を二重に読むと指示が食い違うことがあります。検出は cwd から親の CLAUDE.md / AGENTS.md に限定し、sibling や HOME 全体を探しません。ORRERY に参加する Claude Code の SessionStart は対象ファイル、警告の種類、確認手順を表示します。重複した block の片付け command と詳しい照合結果は、その作業フォルダーで `agentstack-doctor` を実行すると確認できます。global dashboard はこのページの日英両方へリンクします。cockpit の案内は後続です。
 
 更新時は、更新前の `env.sh` の project key と現在の key のフォルダも候補にします。新しい指示は現在の key で描画し、旧 block の一致証明には実際に一致した旧 key を記録します。過去に使った全フォルダの一覧は保存していないため、自動の広域探索はしません。それらの作業フォルダで doctor を実行するか、明示 `--path` で確認してください。
 

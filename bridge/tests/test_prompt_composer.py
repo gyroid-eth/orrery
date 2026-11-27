@@ -44,6 +44,18 @@ def test_slash_submission_keeps_an_unconfirmed_draft_and_explains_why(cockpit, s
         assert reason in js('toastEl.textContent')
 
 
+def test_multiline_paste_refusal_explains_why_and_keeps_draft(cockpit):
+    js, wait, _ = terminal(cockpit)
+    js(r"""window.send=packet=>{
+        if(packet.type==='submit-prompt')queueMicrotask(()=>handle({type:'input-ack',paneId:packet.paneId,
+          id:packet.inputAck,status:'paste-unavailable'}));
+        return true;
+      };
+      promptInput.value='First line\nSecond line';sendPrompt();""")
+    wait("toastEl.textContent.includes('Could not verify multiline paste support')")
+    assert js('promptInput.value') == 'First line\nSecond line'
+
+
 def test_slash_picker_space_is_only_used_while_editing(cockpit):
     js, wait, _ = terminal(cockpit)
     js("""currentAgents[0].program='claude-code';

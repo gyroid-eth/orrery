@@ -164,6 +164,32 @@ def test_wsl_draft_requires_a_saved_managed_screen_choice(tour_browser):
     }
 
 
+@pytest.mark.parametrize("manual", [False, True])
+def test_reopened_draft_rechecks_automatic_browser_mode_but_keeps_an_explicit_choice(tour_browser, manual):
+    _, evaluate = tour_browser
+    evaluate(BOOTSTRAP)
+    result = evaluate("""(async()=>{
+      const fetchFixture=window.fetch, manual=MANUAL, key='claude-code';
+      const catalog={...CATALOG,browser_modes:{[key]:['off','temporary','personal']},
+        personal_browser_status:{[key]:{reason:'Cannot check Chrome.',unavailable:false}}};
+      window.fetch=(input,options)=>new URL(input,location.href).pathname==='/telemetry/spawn-catalog'
+        ?Promise.resolve(Response.json(catalog)):fetchFixture(input,options);
+      openSpawnModal();
+      await loadSpawnCatalog();
+      spawnTask.value='Fixture task';
+      spawnTask.dispatchEvent(new Event('input'));
+      if(manual)spawnBrowserChoices.find(([mode])=>mode==='off')[1].click();
+      const saved=JSON.parse(readSpawnDraft()).selection;
+      closeSpawnModal();
+      delete catalog.personal_browser_status;
+      openSpawnModal();
+      await loadSpawnCatalog();
+      return {saved:saved.browserMode,choice:saved.browserChosen,restored:spawnPayloadFromForm().tools.browser_mode};
+    })()""".replace("CATALOG", json.dumps(CATALOG)).replace("MANUAL", json.dumps(manual)))
+    assert result == {'saved': 'off' if manual else 'temporary', 'choice': manual,
+                      'restored': 'off' if manual else 'personal'}
+
+
 def test_restored_task_stays_masked_in_demo_mode(tour_browser):
     client, evaluate = tour_browser
     evaluate(BOOTSTRAP)

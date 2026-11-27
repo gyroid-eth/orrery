@@ -61,7 +61,7 @@ html[data-color-theme="light"] .conversation-step-diff-minus{color:#9b2d2d}
 .conversation-step-diff-head,.conversation-step-diff-note,.conversation-step-diff-fold{padding:5px 9px;
   color:var(--ink-dim);font:11px/1.5 var(--rail-sans)}
 .conversation-step-diff-head{border-bottom:1px solid var(--hair)}
-.conversation-step-diff-code{max-height:310px;overflow:auto;scrollbar-width:thin}
+.conversation-step-diff-code{max-height:310px;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--ink-faint) transparent}
 .conversation-step-command,.conversation-step-output{margin:0;padding:5px 9px;tab-size:2;
   color:var(--ink);font:11px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
 .conversation-step-command{border-bottom:1px solid var(--hair);background:rgb(var(--theme-accent-rgb) / .07)}

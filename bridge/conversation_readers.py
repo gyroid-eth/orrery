@@ -189,6 +189,7 @@ def claude_queued_prompt(item):
 
 AGY_REQUEST_START = '<USER_REQUEST>\n'
 AGY_REQUEST_END = '\n</USER_REQUEST>'
+AGY_LAUNCH_TRIGGER = re.compile(r'Begin the ORRERY task [a-f0-9]{12}\Z')
 AGY_UUID = re.compile(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\Z')
 AGY_TRANSCRIPTS = frozenset({'transcript.jsonl','transcript_full.jsonl'})
 AGY_TOOL_NAME = re.compile(r'[A-Za-z0-9_.:-]{1,160}\Z')
@@ -264,6 +265,31 @@ def agy_normalize(item):
         return [(0, dict(kind='system', role='system', text='Context compacted', ts=ts,
                          system_detail='Antigravity recorded a context checkpoint.'))]
     return []
+
+
+def agy_first_task(records, end):
+    """Coalesce the launch trigger and the immediately injected first request."""
+    if not records or records[0][0] != 0:
+        return records, end
+    first = parse(records[0][2])
+    if (first.get('step_index') != 0 or first.get('type') != 'USER_INPUT'
+            or first.get('source') != 'USER_EXPLICIT'):
+        return records, end
+    events = agy_normalize(first)
+    if not events or not AGY_LAUNCH_TRIGGER.fullmatch(events[0][1]['text']):
+        return records, end
+    if len(records) == 1:
+        # The SDK can append the second row after a reader has polled. Keep
+        # the cursor at the trigger until its replacement (or the next row) arrives.
+        return [], 0
+    injected = parse(records[1][2])
+    if (type(injected.get('step_index')) is int and injected['step_index'] == 1
+            and injected.get('type') == 'USER_INPUT'
+            and injected.get('source') == 'SYSTEM_SDK'):
+        request = dict(injected, step_index=0, source='USER_EXPLICIT', created_at=first['created_at'])
+        if agy_normalize(request):
+            records[:2] = [(0, 0, json.dumps(request).encode(), records[1][3])]
+    return records, end
 
 
 def normalize(item,p,sid):
@@ -596,6 +622,8 @@ class Reader:
             nxt=pos+len(raw)
             records.append((pos,0,raw,nxt))
             pos=nxt
+        if self.provider == 'antigravity':
+            records,pos = agy_first_task(records,pos)
         return records,start,pos
 
     def zstd_records(self,start,end,forward):
