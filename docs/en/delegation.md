@@ -14,6 +14,8 @@ This page explains the differences between the two and how to tell which one you
 
 In Codex, invoke this skill with `$delegate` (or select it with `/skills`). In Claude Code, use `/delegate`. The installer links `${CODEX_HOME:-$HOME/.codex}/skills/delegate`. If a same-name user skill exists, it is preserved with a warning, so check that you selected the ORRERY skill when a conflict occurs.
 
+After sending your completion report or a question that blocks your work, end your turn and keep the session open. Replies arrive as ORRERY Mail notifications. Do not wait in a sleep loop.
+
 ## In one sentence
 
 - A **built-in subagent** is a **call** opened inside its parent, returning an answer and then closing. It leaves nothing externally visible.
