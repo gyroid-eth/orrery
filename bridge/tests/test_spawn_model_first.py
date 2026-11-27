@@ -297,8 +297,12 @@ def test_browser_icon_selects_modes_without_adding_a_layout_control(tour_browser
       spawnBrowserChoices[1][1].click();
       const chosen=spawnToolOptions(),caption=spawnBrowserUse.getAttribute('aria-label');
       selProvider='gemini';selHarness='antigravity';renderSpawnTools();
-      return {initial,choices,opened,chosen,caption,limited:spawnBrowserUse.getAttribute('aria-disabled'),
-        reason:spawnBrowserUse.title,hasText:spawnBrowserUse.textContent.trim()!==''};
+      const limited=spawnBrowserUse.getAttribute('aria-disabled'),reason=spawnBrowserUse.title;
+      spawnCatalog.browser_modes.antigravity=['off','temporary'];renderSpawnTools();
+      const agyChoices=[...spawnBrowserMenu.querySelectorAll('button:not([hidden])')].map(b=>b.textContent);
+      spawnBrowserChoices[1][1].click();
+      return {initial,choices,opened,chosen,caption,limited,reason,agyChoices,
+        agyPayload:spawnToolOptions(),hasText:spawnBrowserUse.textContent.trim()!==''};
     })()''')
     assert result['opened'] and not result['hasText']
     assert result['choices'] == ['Off','Temporary Chrome','My Chrome']
@@ -306,6 +310,8 @@ def test_browser_icon_selects_modes_without_adding_a_layout_control(tour_browser
     assert result['chosen']['tools']['browser_mode'] == 'temporary'
     assert result['caption'] == 'Browser: Temporary Chrome'
     assert result['limited'] == 'true' and 'Antigravity' in result['reason']
+    assert result['agyChoices'] == ['Off', 'Temporary Chrome']
+    assert result['agyPayload'] == {'tools': {'browser_mode': 'temporary'}}
 
 
 @pytest.mark.parametrize('browser_modes', [False, True])

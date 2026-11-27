@@ -11597,7 +11597,9 @@ function paintSpawnBrowser(modes){
   spawnBrowserUse.setAttribute('aria-controls',spawnBrowserMenu.id);
   spawnBrowserUse.setAttribute('aria-expanded',String(spawnBrowserMenu.matches(':popover-open')));
   spawnBrowserUse.setAttribute('aria-disabled',String(!modes.length));
-  const limited=selProvider==='gemini'?'Antigravity needs macOS and no global Chrome MCP.':'Other modes need a compatible Chrome setup.';
+  const limited=!modes.length&&selProvider==='gemini'?'Check Antigravity’s inherited Chrome MCP configuration.':
+    !modes.includes('temporary')?'Install Node.js and npx to use Temporary Chrome.':
+    'My Chrome is unavailable for this launch.';
   spawnBrowserUse.title='Browser: '+spawnBrowserLabels[spawnBrowserMode]+(modes.length<spawnBrowserChoices.length?'. '+limited:'');
   spawnBrowserUse.setAttribute('aria-label',spawnBrowserUse.title);
   for(const [mode,button] of spawnBrowserChoices){
