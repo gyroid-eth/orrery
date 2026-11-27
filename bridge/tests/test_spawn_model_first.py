@@ -339,6 +339,33 @@ def test_wsl_computer_use_is_opt_in_and_uses_managed_screen(tour_browser, browse
         'reason': 'Start Windows Cua Driver.', 'disabled': 'true', 'visible': True, 'checked': 'false'}
 
 
+def test_wsl_gemini_projects_view_control_and_my_chrome(tour_browser):
+    _, evaluate = tour_browser
+    value = evaluate('''(()=>{
+      openSpawnModal();
+      spawnCatalog={computer_use_transport:'orrery-screen',computer_use:true,
+        computer_modes:['off','view','control'],browser_modes:{antigravity:['off','temporary','personal']},
+        providers:[{id:'gemini',program:'antigravity',models:[{id:'fixture',default:true}]}]};
+      selFamily=null;selProvider=null;selModel=null;selHarness=null;renderProviderTabs();
+      const initial=spawnToolOptions().tools;
+      spawnComputerChoices[1][1].click();
+      const view=spawnToolOptions().tools;
+      spawnComputerChoices[2][1].click();
+      const control=spawnToolOptions().tools;
+      spawnCatalog.computer_use=false;
+      spawnCatalog.computer_modes=['off'];
+      spawnCatalog.computer_use_reason='Start Windows Cua Driver.';
+      renderSpawnTools();
+      return {initial,view,control,disabled:spawnComputerUse.getAttribute('aria-disabled'),
+              reason:spawnComputerUse.title,blocked:spawnToolOptions().tools};
+    })()''')
+    browser = {'browser_mode': 'personal'}
+    assert value == {'initial': browser, 'view': {**browser, 'screen': {
+        'server': 'orrery-screen', 'access': 'read'}}, 'control': {**browser, 'screen': {
+        'server': 'orrery-screen', 'access': 'operate'}}, 'disabled': 'true',
+        'reason': 'Start Windows Cua Driver.', 'blocked': browser}
+
+
 def test_browser_off_keeps_the_standard_base_on_current_telemetry(tour_browser):
     _, evaluate = tour_browser
     result = evaluate('''(()=>{

@@ -8438,7 +8438,7 @@ function spawnUsesManagedScreen(){
 }
 function spawnComputerModes(){
   const modes=spawnCatalog?.computer_modes;
-  return spawnCatalog?.runtime_mode!=='fresh'&&!spawnUsesManagedScreen()&&Array.isArray(modes)?
+  return spawnCatalog?.runtime_mode!=='fresh'&&Array.isArray(modes)?
     Object.keys(spawnComputerLabels).filter(mode=>modes.includes(mode)):null;
 }
 function paintSpawnComputer(modes){
@@ -8457,13 +8457,14 @@ function paintSpawnComputer(modes){
     spawnComputerUse.title=reason||(managedScreen?'Computer use on Windows':'Computer use');
     return;
   }
+  const reason=spawnUsesManagedScreen()&&spawnCatalog.computer_use!==true?spawnCatalog.computer_use_reason:'';
   if(!modes.includes(spawnComputerMode))spawnComputerMode='off';
   spawnComputerUse.dataset.computerMode=spawnComputerMode;
   spawnComputerUse.removeAttribute('role');spawnComputerUse.removeAttribute('aria-checked');
   spawnComputerUse.setAttribute('aria-controls',spawnComputerMenu.id);
   spawnComputerUse.setAttribute('aria-expanded',String(spawnComputerMenu.matches(':popover-open')));
-  spawnComputerUse.setAttribute('aria-disabled',String(!modes.length));
-  spawnComputerUse.title='Computer use: '+(modes.length?spawnComputerLabels[spawnComputerMode]:'Unavailable');
+  spawnComputerUse.setAttribute('aria-disabled',String(!modes.length||Boolean(reason)));
+  spawnComputerUse.title=reason||'Computer use: '+(modes.length?spawnComputerLabels[spawnComputerMode]:'Unavailable');
   spawnComputerUse.setAttribute('aria-label',spawnComputerUse.title);
   for(const [mode,button] of spawnComputerChoices){
     button.hidden=!modes.includes(mode);
@@ -8486,6 +8487,7 @@ function paintSpawnBrowser(modes){
   spawnBrowserUse.setAttribute('aria-disabled',String(!modes.length));
   const limited=!modes.length&&selProvider==='gemini'?'Check Antigravity’s inherited Chrome MCP configuration.':
     !modes.includes('temporary')?'Install Node.js and npx to use Temporary Chrome.':
+    spawnUsesManagedScreen()?'My Chrome needs Windows Node.js with npm and Chrome remote debugging.':
     'My Chrome is unavailable for this launch.';
   spawnBrowserUse.title='Browser: '+spawnBrowserLabels[spawnBrowserMode]+(modes.length<spawnBrowserChoices.length?'. '+limited:'');
   spawnBrowserUse.setAttribute('aria-label',spawnBrowserUse.title);
@@ -8537,10 +8539,10 @@ function spawnToolOptions(){
   const managedScreen=spawnUsesManagedScreen();
   const modes=spawnBrowserModes(),computerModes=spawnComputerModes();
   let screen={};
-  if(managedScreen&&computer&&spawnCatalog.computer_use===true){
+  if(!computerModes&&managedScreen&&computer&&spawnCatalog.computer_use===true){
     screen={screen:{server:'orrery-screen',access:'operate'}};
   }else if(computerModes?.includes(spawnComputerMode)&&spawnComputerMode!=='off'){
-    screen={screen:{access:spawnComputerMode==='view'?'read':'operate'}};
+    screen={screen:{...(managedScreen?{server:'orrery-screen'}:{}),access:spawnComputerMode==='view'?'read':'operate'}};
   }
   if(modes||selProvider==='gemini')return {tools:{...screen,...(computer&&!managedScreen?{mcp:['cua-driver']}:{}),
     ...(modes?.includes(spawnBrowserMode)?{browser_mode:spawnBrowserMode}:{})}};
