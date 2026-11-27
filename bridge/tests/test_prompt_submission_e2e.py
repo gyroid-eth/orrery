@@ -268,7 +268,13 @@ async def test_link_uses_real_tmux_control_capture_to_confirm_submit(monkeypatch
     await check_routes(monkeypatch, harness, 'links', 81)
 
 
-async def check_routes(monkeypatch, harness, state, width, *, rejected=None, legacy=None, mobile=False, notices=()):
+@pytest.mark.asyncio
+async def test_antigravity_composer_waits_for_resumed_mcp_manager(monkeypatch):
+    await check_routes(monkeypatch, 'agy', 'idle', 81, preparing=True)
+
+
+async def check_routes(monkeypatch, harness, state, width, *, rejected=None, legacy=None, mobile=False,
+                       notices=(), preparing=False):
     tmux = shutil.which('tmux')
     if tmux is None:
         pytest.skip('tmux unavailable')
@@ -346,6 +352,21 @@ async def check_routes(monkeypatch, harness, state, width, *, rejected=None, leg
                             await asyncio.sleep(.025)
 
                     await asyncio.wait_for(wait_for_editor(), timeout=5)
+                    if preparing:
+                        option = submission.MCP_PREPARING
+                        assert call('set-option', '-p', '-t', pane, option, '1').returncode == 0
+                        assert (await get_view()).mcp_preparing
+                        reasons = []
+                        assert submission.submit(call, lambda: True, pane, PLAIN, on_wait=reasons.append) == 'refused'
+                        assert reasons == ['antigravity_mcp_preparing']
+                        await ws.send_json(dict(type='submit-prompt', paneId=pane, session='Fixture',
+                                                incarnation=reset['incarnation'], inputAck='1:1', data=PLAIN))
+                        await asyncio.sleep(.25)
+                        assert not entered.exists() and (await get_view()).draft == ''
+                        assert call('set-option', '-pu', '-t', pane, option).returncode == 0
+                        assert (await receive(ws, 'input-ack'))['status'] == 'accepted'
+                        assert [json.loads(line) for line in entered.read_text().splitlines()] == [PLAIN]
+                        return
                     if legacy:
                         view = await get_view()
                         assert view.bracketed is None and view.foreground_command == 'bash'

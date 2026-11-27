@@ -1670,7 +1670,8 @@ class TmuxControlBridge:
                 pane_id != target.pane_id or (mobile_admission is None and (
                     proof is None or proof.target is not target or proof.purpose != 'input'))):
             raise TargetRefused('FRESH_TMUX_TARGET_CHANGED')
-        if deadline is None:
+        ordinary_deadline = deadline is None
+        if ordinary_deadline:
             deadline = time.monotonic() + submission.TIMEOUT
         name = 'orrery-compose-' + uuid.uuid4().hex
         paste = ['paste-buffer', '-r', '-p', '-d', '-b', name, '-t', pane_id]
@@ -1755,8 +1756,24 @@ class TmuxControlBridge:
             try:
                 async with authorized():
                     observed = await capture()
+                preparation_deadline = deadline
+                if observed is not None and observed.mcp_preparing and ordinary_deadline:
+                    preparation_deadline = time.monotonic() + submission.MCP_PREPARATION_WAIT
+                    deadline = preparation_deadline + submission.TIMEOUT
+                while (observed is not None and observed.mcp_preparing
+                       and time.monotonic() + submission.POLL < preparation_deadline):
+                    await asyncio.sleep(submission.POLL)
+                    async with authorized():
+                        updated = await capture()
+                    if updated is None or updated.identity != observed.identity:
+                        return outcome('refused', 'pane-changed')
+                    observed = updated
                 if observed is None:
                     return outcome('refused', 'input-not-found')
+                if observed.mcp_preparing:
+                    return outcome('refused', 'antigravity-mcp-preparing')
+                if ordinary_deadline:
+                    deadline = time.monotonic() + submission.TIMEOUT
                 while time.monotonic() < deadline:
                     lock = submission.try_lock(observed)
                     if lock is not None:
@@ -1772,6 +1789,8 @@ class TmuxControlBridge:
                     before = await capture_draft(observed.identity)
                 if before is None or before.identity != observed.identity:
                     return outcome('refused', 'pane-changed')
+                if before.mcp_preparing:
+                    return outcome('refused', 'antigravity-mcp-preparing')
                 if text is None:
                     keys = escape
                     if before.hermes:
@@ -1818,6 +1837,8 @@ class TmuxControlBridge:
                     current = await capture_draft(before.identity, admission_held=mobile_admission is not None)
                     if current is None or current.identity != before.identity:
                         return outcome('refused', 'pane-changed')
+                    if current.mcp_preparing:
+                        return outcome('refused', 'antigravity-mcp-preparing')
                     if not current.allows_paste(text, operator=True):
                         return outcome('paste-unavailable' if multiline else 'refused', 'paste-unavailable')
                     if not current.empty or (claim is not None and not claim()):

@@ -20,8 +20,11 @@ from dataclasses import dataclass, replace
 from unicodedata import category, east_asian_width
 
 
+MCP_PREPARING = '@orrery-agy-mcp-preparing'
+MCP_PREPARATION_WAIT = 24.0
 METADATA = ('#{socket_path}\t#{pid}\t#{pane_id}\t#{pane_pid}\t#{cursor_y}\t#{pane_in_mode}'
-            '\t#{cursor_x}\t#{bracket_paste_flag}\t#{pane_current_command}')
+            '\t#{cursor_x}\t#{bracket_paste_flag}\t#{pane_current_command}'
+            '\t#{' + MCP_PREPARING + '}')
 POLL = .06
 TIMEOUT = 5.0
 REDRAW_GRACE = 1.0
@@ -137,6 +140,7 @@ class Frame:
     codex_queue_hint: bool = False
     paste_lines: int | None = None
     command_ends_at_cursor: bool = False
+    mcp_preparing: bool = False
 
     @property
     def identity(self):
@@ -486,6 +490,12 @@ def _hermes_scrolled_draft(lines, plain, cursor, column):
 
 def frame(metadata, lines, pane):
     fields = metadata.split('\t')
+    preparing = len(fields) == 10 and fields.pop() == '1'
+    view = _frame(fields, lines, pane)
+    return replace(view, mcp_preparing=True) if view is not None and preparing else view
+
+
+def _frame(fields, lines, pane):
     if (len(fields)!=9 or fields[2]!=pane or not re.fullmatch(r'%[0-9]+',pane)
             or not all(fields[i].isdigit() for i in (1,3,4,5,6))
             or fields[7] not in ('', '0', '1')):
@@ -942,7 +952,8 @@ def _discard_unsubmitted_slash(command, admit, pane, before, text):
         time.sleep(POLL)
 
 
-def submit(command,admit,pane,text,*,deadline=None,on_wait=None,claim_handoff=None,discard_unsubmitted=False):
+def submit(command,admit,pane,text,*,deadline=None,on_wait=None,claim_handoff=None,discard_unsubmitted=False,
+           prepare_mcp=False):
     """Watcher path. Refused means a prompt was never pasted."""
     end=time.monotonic()+TIMEOUT if deadline is None else deadline
     fd=None
@@ -983,6 +994,8 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None,claim_handoff=No
         before=capture_draft(current.identity)
         if not before or before.identity!=current.identity:
             return defer('refused', 'pane_changed')
+        if before.mcp_preparing and not (prepare_mcp and text == '/mcp'):
+            return defer('refused', 'antigravity_mcp_preparing')
         if before.draft is None:
             return defer('refused', 'input_not_found')
         if before.waiting:
@@ -1018,6 +1031,8 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None,claim_handoff=No
                 current=capture_draft(before.identity)
                 if not current or current.identity!=before.identity:
                     return defer('refused', 'pane_changed')
+                if current.mcp_preparing and not (prepare_mcp and text == '/mcp'):
+                    return defer('refused', 'antigravity_mcp_preparing')
                 if not current.empty or not current.allows_paste(text):
                     return defer('refused', 'editor_changed')
                 if claim_handoff is not None and not claim_handoff(resuming=False):
