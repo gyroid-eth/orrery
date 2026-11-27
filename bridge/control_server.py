@@ -1644,19 +1644,26 @@ class TmuxControlBridge:
                 self._abort_mobile_stream()
                 return 'unknown'
 
-    async def submit_prompt(self, pane_id: str, text: str, *, proof=None) -> str:
+    async def submit_prompt(self, pane_id: str, text: str, *, proof=None, diagnostics=None) -> str:
         """Hold the host pane lock through visible paste, Enter, and confirmation."""
-        return await self._composer_effect(pane_id, text, proof=proof)
+        return await self._composer_effect(pane_id, text, proof=proof, diagnostics=diagnostics)
 
     async def interrupt(self, pane_id: str, *, proof=None) -> str:
         """Interrupt the current turn and check that its editor returns."""
         return await self._composer_effect(pane_id, None, proof=proof)
 
     async def _composer_effect(self, pane_id: str, text: str | None, *, proof,
-                               deadline=None, mobile_admission=None, valid=None, claim=None) -> str:
+                               deadline=None, mobile_admission=None, valid=None, claim=None,
+                               diagnostics=None) -> str:
         import pane_submission as submission
+
+        def outcome(status, reason):
+            if diagnostics is not None:
+                diagnostics["reason"] = reason
+            return status
+
         if not isinstance(pane_id, str) or not re.fullmatch(r'%[0-9]+', pane_id):
-            return 'refused'
+            return outcome('refused', 'invalid-pane')
         target = self.config.tmux_bin
         if isinstance(target, FreshPaneBoundary) and (
                 pane_id != target.pane_id or (mobile_admission is None and (
@@ -1748,14 +1755,14 @@ class TmuxControlBridge:
                 async with authorized():
                     observed = await capture()
                 if observed is None:
-                    return 'refused'
+                    return outcome('refused', 'input-not-found')
                 while time.monotonic() < deadline:
                     lock = submission.try_lock(observed)
                     if lock is not None:
                         break
                     await asyncio.sleep(submission.POLL)
                 if lock is None:
-                    return 'refused'
+                    return outcome('refused', 'pane-locked')
 
                 if text is None:
                     async with authorized():
@@ -1763,7 +1770,7 @@ class TmuxControlBridge:
                 else:
                     before = await capture_draft(observed.identity)
                 if before is None or before.identity != observed.identity:
-                    return 'refused'
+                    return outcome('refused', 'pane-changed')
                 if text is None:
                     keys = escape
                     if before.hermes:
@@ -1796,31 +1803,31 @@ class TmuxControlBridge:
 
                 multiline = '\n' in text or '\r' in text
                 if not before.allows_paste(text, operator=True):
-                    return 'paste-unavailable' if multiline else 'refused'
+                    return outcome('paste-unavailable' if multiline else 'refused', 'paste-unavailable')
                 if not before.empty:
-                    return 'refused'
+                    return outcome('refused', 'editor-not-empty' if before.draft else 'editor-not-ready')
                 with tempfile.TemporaryDirectory(prefix='orrery-compose-') as tmp:
                     path = Path(tmp) / 'prompt'
                     path.write_bytes(text.encode('utf-8', errors='replace'))
                     result = await command(['load-buffer', '-b', name, str(path)])
                     if not result.ok or result.overflow:
-                        return 'refused'
+                        return outcome('refused', 'load-buffer-failed')
                     loaded = True
                 async with authorized():
                     current = await capture_draft(before.identity, admission_held=mobile_admission is not None)
                     if current is None or current.identity != before.identity:
-                        return 'refused'
+                        return outcome('refused', 'pane-changed')
                     if not current.allows_paste(text, operator=True):
-                        return 'paste-unavailable' if multiline else 'refused'
+                        return outcome('paste-unavailable' if multiline else 'refused', 'paste-unavailable')
                     if not current.empty or (claim is not None and not claim()):
-                        return 'refused'
+                        return outcome('refused', 'editor-changed')
                     wrote = True
                     await begin_command(paste)
                 # The target admission covers the write. Wait for its ACK
                 # after releasing admission, with the pane still serialized.
                 result = await complete_command()
                 if not result.ok or result.overflow:
-                    return 'unknown'
+                    return outcome('unknown', 'paste-unconfirmed')
                 loaded = False
 
                 # Wait for the editor to render the same draft on consecutive
@@ -1834,7 +1841,7 @@ class TmuxControlBridge:
                     is_ready = menu_wait.ready(view)
                     if view is not None:
                         if view.identity != before.identity:
-                            return 'unknown'
+                            return outcome('unknown', 'pane-changed')
                         if is_ready or problem == 'completion-mismatch':
                             choice = (view.draft, view.selected_command)
                         if choice is not None and choice == previous:
@@ -1849,16 +1856,18 @@ class TmuxControlBridge:
                                         await begin_command(['send-keys', '-t', pane_id, 'C-m'])
                                         entered_from = view
                                     elif submission.mismatched_command(view, text, operator=True):
-                                        return 'completion-mismatch'
+                                        return outcome('completion-mismatch', 'completion-mismatch')
                             if entered_from is not None:
                                 result = await complete_command()
                                 if not result.ok or result.overflow:
-                                    return 'unknown'
+                                    return outcome('unknown', 'enter-unconfirmed')
                                 break
                     previous = choice
                     await asyncio.sleep(submission.POLL)
                 else:
-                    return 'completion-unverified' if problem == 'completion-unverified' else 'unknown'
+                    if problem == 'completion-unverified':
+                        return outcome(problem, problem)
+                    return outcome('unknown', 'draft-unconfirmed')
 
                 confirmation = submission.SubmissionConfirmation(entered_from, text)
                 while time.monotonic() < deadline:
@@ -1867,17 +1876,17 @@ class TmuxControlBridge:
                         confirmation = submission.SubmissionConfirmation(entered_from, text)
                     else:
                         if view.identity != before.identity:
-                            return 'unknown'
+                            return outcome('unknown', 'pane-changed')
                         if confirmation.accepted(view):
                             return 'accepted'
                     await asyncio.sleep(submission.POLL)
-                return 'unknown'
+                return outcome('unknown', 'enter-unconfirmed')
             except (OSError, RuntimeError, asyncio.TimeoutError, asyncio.CancelledError):
                 if pending is not None:
                     self._abort_mobile_stream()
                 if problem == 'completion-unverified':
-                    return problem
-                return 'unknown' if wrote else 'refused'
+                    return outcome(problem, problem)
+                return outcome('unknown' if wrote else 'refused', 'terminal-unavailable')
             finally:
                 try:
                     if loaded and self.master_fd is not None and not self._closed:

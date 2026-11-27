@@ -224,6 +224,29 @@ def test_roster_selection_sends_each_agent_once_and_keeps_only_failed_targets(co
         assert js("toastEl.textContent.includes('Delivery unconfirmed for QuietCopernicus')")
 
 
+def test_multi_send_continues_after_a_recipient_preparation_fails(cockpit):
+    js, wait, _ = recipients(cockpit)
+    js("""window.failedRouting=[];
+      const liveFetch=fetch, originalResolver=resolveComposerTarget;
+      window.fetch=(url,opts)=>{
+        if(url==='/telemetry/prompt-routing-failure'){
+          failedRouting.push(JSON.parse(opts.body));return Promise.resolve(new Response(null,{status:204}));
+        }
+        return liveFetch(url,opts);
+      };
+      resolveComposerTarget=(record,connection)=>record.name==='QuietCopernicus'?
+        Promise.reject(new Error('fixture error')):originalResolver(record,connection);
+      promptRecipients.set(['ReviewFixture','QuietCopernicus','EmeraldBose']);
+      promptInput.value='Shared draft';sendPrompt();""")
+    wait('!promptBusy')
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.session)") == [
+        'ReviewFixture', 'EmeraldBose',
+    ]
+    assert js('failedRouting') == [{'recipient': 'QuietCopernicus', 'reason': 'preparation-failed'}]
+    assert js('promptRecipients.names') == ['QuietCopernicus']
+    assert js("toastEl.textContent.includes('Not sent to QuietCopernicus')")
+
+
 def test_recipient_visibility_menu_keeps_hidden_drafts_private(cockpit):
     js, wait, _ = recipients(cockpit)
     js("""window.visibilityButton=document.querySelector('.prompt-visibility-trigger');
@@ -653,6 +676,6 @@ def test_a_recipient_pin_survives_the_draft_and_refuses_a_reused_name(cockpit):
     js("currentAgentNamed('QuietCopernicus').created=2;packets.length=0;sendPrompt()")
     wait("!promptBusy")
     assert js("packets.filter(packet=>['input','submit-prompt'].includes(packet.type))") == []
-    assert js("toastEl.textContent") == 'Not sent to QuietCopernicus'
+    assert js("toastEl.textContent") == 'Not sent to QuietCopernicus (Terminal or recipient changed)'
     assert js("promptRecipients.names") == ['QuietCopernicus']
     assert js("promptInput.value") == 'Keep the intended recipient'

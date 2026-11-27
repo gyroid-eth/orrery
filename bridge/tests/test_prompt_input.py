@@ -254,7 +254,7 @@ async def test_confirmed_input_uses_the_result_of_each_chunk(monkeypatch, tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_receipt_is_bound_to_pane_session_and_bridge_incarnation(tmp_path):
+async def test_receipt_is_bound_to_pane_session_and_bridge_incarnation(tmp_path, capsys):
     sent = []
 
     async def record(*args, **kwargs):
@@ -276,8 +276,14 @@ async def test_receipt_is_bound_to_pane_session_and_bridge_incarnation(tmp_path)
     await manager.handle_message(peer, set(), packet)
     await manager.handle_message(peer, {'Fixture'}, packet)
     await manager.handle_message(peer, {'Fixture'}, dict(packet,type='submit-prompt',data='First\nSecond'))
-    assert [entry['status'] for entry in replies] == ['refused', 'refused', 'accepted', 'accepted']
-    assert sent == [(('%1', '\r'), {'acknowledge': True}), (('%1','First\nSecond'), {})]
+    await manager.handle_message(peer, set(), dict(packet,type='submit-prompt',data='Never logged'))
+    assert [entry['status'] for entry in replies] == ['refused', 'refused', 'accepted', 'accepted', 'refused']
+    assert sent == [(('%1', '\r'), {'acknowledge': True}), (('%1','First\nSecond'), {'diagnostics': {}})]
+    log = capsys.readouterr().err.splitlines()
+    assert [json.loads(line.removeprefix('[orrery action] ')) for line in log] == [
+        dict(operation='submit-prompt', recipient='Fixture', status='accepted', confirmed=True, reason=None),
+        dict(operation='submit-prompt', recipient='Fixture', status='refused', confirmed=False, reason='pane-not-attached'),
+    ]
 
 
 

@@ -1689,6 +1689,8 @@ class SessionBridgeManager:
         state = self._find_attached_pane(attached, pane_id)
         if state is None:
             if ack is not None:
+                if submit:
+                    log_agent_action('submit-prompt', payload.get('session'), 'refused', 'pane-not-attached')
                 await peer.send_json(dict(type='input-ack', id=ack, paneId=pane_id, status='refused'))
                 return
             if message_type in {'approval-inspect', 'approval-answer'}:
@@ -1724,13 +1726,15 @@ class SessionBridgeManager:
             bridge = state.bridge
             data = payload.get('data')
             status = 'refused'
+            diagnostics = {'reason': 'target-or-prompt-invalid'}
             if (payload.get('session') == session and payload.get('incarnation') == bridge._incarnation
                     and (interrupt or isinstance(data, str) and data
                          and len(data.encode('utf-8', errors='replace')) <= 262144)):
                 target = bridge.config.tmux_bin
                 write = bridge.interrupt if interrupt else bridge.submit_prompt if submit else bridge.send_input
                 args = () if interrupt else (data,)
-                options = {} if submit or interrupt else {'acknowledge': True}
+                diagnostics.clear()
+                options = {'diagnostics': diagnostics} if submit else {} if interrupt else {'acknowledge': True}
                 try:
                     if isinstance(target, FreshPaneBoundary):
                         proofs = bridge._fresh_peer_proofs.get(peer)
@@ -1741,6 +1745,10 @@ class SessionBridgeManager:
                         status = await write(pane_id, *args, **options)
                 except (TargetRefused, OSError, RuntimeError):
                     status = 'refused'
+                    diagnostics['reason'] = 'target-unavailable'
+            if submit:
+                log_agent_action('submit-prompt', session, status,
+                                 None if status == 'accepted' else diagnostics.get('reason') or status)
             await peer.send_json(dict(type='input-ack', id=ack, paneId=pane_id, status=status))
             return
         if isinstance(state.bridge.config.tmux_bin,FreshPaneBoundary):
@@ -2980,6 +2988,32 @@ ACTION_RESULT_UNKNOWN = (
 )
 
 
+def log_agent_action(action, recipient, status, reason):
+    name = recipient if isinstance(recipient, str) and re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', recipient) else None
+    record = {'operation': action, 'recipient': name, 'status': status,
+              'confirmed': status == 'accepted',
+              'reason': reason[:240] if isinstance(reason, str) else None}
+    print('[orrery action] ' + json.dumps(record, ensure_ascii=True), file=sys.stderr, flush=True)
+
+
+def _action_object(data):
+    try:
+        value = json.loads(data)
+    except (ValueError, TypeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+async def log_unrouted_prompt(request: web.Request) -> web.Response:
+    data = _action_object(await request.read())
+    reason = data.get('reason')
+    if reason not in ('target-unavailable', 'target-changed', 'attachment-failed',
+                      'question-with-other-recipients', 'dispatch-failed', 'preparation-failed'):
+        return web.json_response({'error': 'invalid prompt routing result'}, status=400)
+    log_agent_action('submit-prompt', data.get('recipient'), 'refused', reason)
+    return web.Response(status=204)
+
+
 async def proxy_dashboard_passthrough(request: web.Request) -> web.Response:
     """Same-origin embed support: forward /network/*, /api/*, /assets/* to :8770.
 
@@ -3002,12 +3036,19 @@ async def proxy_dashboard_passthrough(request: web.Request) -> web.Response:
         headers["Content-Type"] = content_type
     http_session = request.app[HTTP_SESSION_KEY]
     action = request.method == "POST"
+    exit_request = action and request.path == '/api/exit'
+    recipient = _action_object(body).get('session') if exit_request else None
     try:
         async with http_session.request(
             request.method, url, data=body, headers=headers,
             **({"timeout": ClientTimeout(total=ACTION_PROXY_TIMEOUT)} if action else {}),
         ) as response:
             payload = await response.read()
+            if exit_request:
+                result = _action_object(payload)
+                status = 'accepted' if response.ok and result.get('ok') is True else 'refused'
+                reason = None if status == 'accepted' else result.get('error') or f'HTTP {response.status}'
+                log_agent_action('exit', recipient, status, reason)
             if action and request.path == '/api/annotate' and 200 <= response.status < 300:
                 invalidate_annotations_cache()
             content_type = response.headers.get(
@@ -3024,6 +3065,8 @@ async def proxy_dashboard_passthrough(request: web.Request) -> web.Response:
             )
     except asyncio.TimeoutError:
         if action:
+            if exit_request:
+                log_agent_action('exit', recipient, 'unknown', 'dashboard-timeout')
             return web.json_response(
                 {
                     "ok": False,
@@ -3037,12 +3080,16 @@ async def proxy_dashboard_passthrough(request: web.Request) -> web.Response:
         return web.json_response({"error": "dashboard offline"}, status=502)
     except ClientConnectorError:
         # Refused before anything was sent: the dashboard is not there.
+        if exit_request:
+            log_agent_action('exit', recipient, 'refused', 'dashboard-offline')
         return web.json_response(
             {"ok": False, "error": "dashboard offline"} if action else {"error": "dashboard offline"},
             status=502,
         )
     except ClientError:
         if action:
+            if exit_request:
+                log_agent_action('exit', recipient, 'unknown', 'dashboard-answer-lost')
             # Connected and sent, then the answer was lost (closed, cut short):
             # the dashboard may well have acted on it.
             return web.json_response(
@@ -5486,6 +5533,7 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
     app.router.add_get("/telemetry/spawn-status", proxy_dashboard)
     app.router.add_get("/telemetry/skills", serve_skills)
     app.router.add_post("/telemetry/prompt-attachment", serve_prompt_attachment)
+    app.router.add_post("/telemetry/prompt-routing-failure", log_unrouted_prompt)
     app.router.add_get("/telemetry/clipboard/files", serve_clipboard_files)
     app.router.add_post("/telemetry/clipboard/attachments", serve_clipboard_attachments)
     app.router.add_get("/telemetry/fs/dirs", serve_fs_dirs)

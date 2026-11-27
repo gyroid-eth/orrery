@@ -6679,9 +6679,8 @@ async function runBulkExit(){
   }
   if(failures.length)console.warn('bulk exit failures',failures);
   bulkActionBusy=null;setRosterSelectMode(false);
-  // The first failure's reason, not only a count: "1 failed" alone sent the
-  // 2026-10-01 seminar looking for a bug in the wrong place.
-  showToast(`BULK EXIT · ${succeeded} succeeded${failed?` · ${failed} failed — ${failures[0]}`:''}`,failed>0,failed?9000:4200);
+  showToast(`BULK EXIT · ${succeeded} succeeded${failed?` · ${failed} failed — ${failures.join(' · ')}`:''}`,failed>0,failed?9000:4200);
+  if(failures.length)toastEl.classList.add('multiline');
 }
 async function waitForBulkRebootExit(name,timeoutMs=30000,pollMs=1500,confirmStopped=null){
   const controller=new AbortController();
@@ -9278,6 +9277,7 @@ function spawnFailureReason(status,fallback){
 async function watchSpawnLaunch(name,deadlineSeconds){
   const waitSeconds=Number.isFinite(deadlineSeconds)&&deadlineSeconds>0?deadlineSeconds:140;
   const started=Date.now();
+  let phase=null;
   while(Date.now()-started<waitSeconds*1000){
     let status=null;
     try{
@@ -9285,6 +9285,11 @@ async function watchSpawnLaunch(name,deadlineSeconds){
       status=await r.json();
     }catch(_){continue;}
     if(status?.ok&&status.state==='ready')return;
+    if(status?.state==='launching'&&status.phase&&status.phase!==phase){
+      phase=status.phase;
+      if(phase==='checkout')showToast(`Checking out worktree for ${name}…`,false,8000);
+      else if(phase==='startup')showToast(`Starting ${name}…`);
+    }
     if(status?.state==='failed'||(status?.ok&&status.state&&status.state!=='launching')){
       throw new Error(spawnFailureReason(status,'The launcher failed'));
     }
@@ -9716,6 +9721,12 @@ function receiveComposerAck(message){
 function cancelComposerAcks(){
   for(const pending of composerAcks.values())pending.done('unknown');
 }
+function logUnroutedPrompt(recipient,reason){
+  void fetch('/telemetry/prompt-routing-failure',{
+    method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,
+    body:JSON.stringify({recipient,reason}),
+  }).catch(()=>{});
+}
 function requestComposerInput(target,message){
   return new Promise(resolve=>{
     const id=Date.now()+':'+(++promptAckSequence);
@@ -9729,8 +9740,12 @@ function requestComposerInput(target,message){
     for(const key of ['mail_instance_id','mail_agent_id']){
       if(target.pane.meta[key])payload[key]=target.pane.meta[key];
     }
-    try{if(!send(payload))done('refused');}
-    catch(_){done('unknown');}
+    const dispatchFailed=status=>{
+      if(message.type==='submit-prompt')logUnroutedPrompt(target.session,'dispatch-failed');
+      done(status);
+    };
+    try{if(!send(payload))dispatchFailed('refused');}
+    catch(_){dispatchFailed('unknown');}
   });
 }
 function recipientRefusal(agent){
@@ -9806,15 +9821,27 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
   const results=[];
   try{
     for(const record of records){
-      const target=await resolveComposerTarget(record,connection);
-      const valid=()=>socket===connection&&sameRecipient(record,target)&&composerTargetPresent(target)&&stillValid();
       let status='refused',receipt=null,problem='',originalPath=false;
-      if(target&&valid()){
+      try{
+        const target=await resolveComposerTarget(record,connection);
+        const valid=()=>socket===connection&&sameRecipient(record,target)&&composerTargetPresent(target)&&stillValid();
+        if(!target){
+          const changed=socket!==connection||!sameRecipient(record);
+          logUnroutedPrompt(record.name,changed?'target-changed':'target-unavailable');
+          problem=changed?'Terminal or recipient changed':'Terminal unavailable';
+          continue;
+        }
+        if(!valid()){
+          logUnroutedPrompt(record.name,'target-changed');
+          problem='Terminal or recipient changed';
+          continue;
+        }
         if(readerApproval?.question(target)){
           if(records.length===1&&!entries.length)status=await readerApproval.answerDraft(target,record.draft);
-          else problem='Answer this question without attachments or other recipients';
-          results.push({...record,status,receipt,problem});
-          releaseComposerTarget(record.name);
+          else{
+            logUnroutedPrompt(record.name,'question-with-other-recipients');
+            problem='Answer this question without attachments or other recipients';
+          }
           continue;
         }
         let paths=[];
@@ -9822,11 +9849,15 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
           try{
             const selection={session:target.session,paneId:target.paneId,incarnation:target.incarnation};
             paths=await OrreryPromptAttachments.upload(selection,entries);
-          }catch(error){problem=error.message||'Attachment unavailable';}
+          }catch(error){
+            logUnroutedPrompt(record.name,'attachment-failed');
+            problem=error.message||'Attachment unavailable';
+            continue;
+          }
         }
-        if(problem||!valid()){
-          results.push({...record,status,receipt,problem});
-          releaseComposerTarget(record.name);
+        if(!valid()){
+          logUnroutedPrompt(record.name,'target-changed');
+          problem='Terminal or recipient changed';
           continue;
         }
         const claude=record.vocabulary.program==='claude';
@@ -9847,10 +9878,14 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
         }else if(status==='paste-unavailable'){
           status='refused';problem='Could not verify multiline paste support in this terminal';
         }
+      }catch(_){
+        logUnroutedPrompt(record.name,'preparation-failed');
+        problem='Could not prepare the prompt';
+      }finally{
+        if(status!=='accepted')receipt?.cancel();
+        results.push({...record,status,receipt,problem,originalPath});
+        releaseComposerTarget(record.name);
       }
-      if(status!=='accepted')receipt?.cancel();
-      results.push({...record,status,receipt,problem,originalPath});
-      releaseComposerTarget(record.name);
     }
     const sent=results.filter(result=>result.status==='accepted');
     const refused=results.filter(result=>result.status==='refused');
