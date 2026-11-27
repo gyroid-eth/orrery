@@ -160,7 +160,7 @@ function settingsSection(){
   if(settings&&!section){
     section=doc.createElement('section');section.className='flight-settings';
     section.innerHTML='<div class="settings-section-title">Getting started</div><div class="flight-settings-actions"></div>';
-    settings.querySelector('.settings-body').prepend(section);
+    settings.querySelector('section[aria-labelledby="textSizeTitle"]').after(section);
   }
   return section;
 }

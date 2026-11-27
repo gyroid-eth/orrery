@@ -85,7 +85,7 @@
   position:absolute;z-index:2;pointer-events:none;
   max-width:min(300px,calc(100% - 16px));overflow:hidden;overflow-wrap:anywhere;
   padding:5px 8px;border:1px solid var(--hair);border-radius:6px;
-  background:var(--panel-2);color:var(--ink);font:11px/1.4 var(--rail-sans);
+  background:var(--panel-2);color:var(--ink);font:calc(var(--right-text-size,12px) * 11 / 12)/1.4 var(--rail-sans);
 }
 .mini-edge-subject:not([hidden]){display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3}
 .miniorrery.has-node-edge-highlight .orrery-mail-edge:not(.is-incident,:hover,:focus-visible)>.orrery-mail-edge-core{
@@ -137,6 +137,15 @@
 }
 .orrery-caption-name,.orrery-caption-role{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .orrery-caption-role{font-size:7.5px;line-height:9px;font-weight:400;color:var(--ink-dim)}
+.mini-agent foreignObject{overflow:visible}
+.mini-agent .orrery-caption-name{
+  font-size:calc(var(--right-text-size,12px) * var(--mini-caption-name,9) / 12);
+  line-height:calc(var(--right-text-size,12px) * (var(--mini-caption-name,9) + 2) / 12);
+}
+.mini-agent .orrery-caption-role{
+  font-size:calc(var(--right-text-size,12px) * 7.5 / 12);
+  line-height:calc(var(--right-text-size,12px) * 9 / 12);
+}
 .orrery-caption-action{color:var(--amber);font-weight:600}
 .orrery-caption-arrival{
   display:flex;align-items:baseline;justify-content:center;gap:2px;

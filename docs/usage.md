@@ -600,15 +600,17 @@ ORRERY backend だけで replay を生成する機能ではありません。ORR
 
 設定は backend が `~/.orrery/prefs.json` に持ち、ORRERY.app の window と browser tab で共有されます。どこで変えても数秒で他の window に反映されます（prompt の下書きと履歴は window ごと）。
 
-Settings で変更できる値:
+Settings の先頭にある **Text size** で、Agents、Reader、Terminal、右ペインの文字の大きさを個別に選べます。どれも 10〜18 px を 0.5 px 刻みで選べます。
 
-- **Terminal font size** は 10〜18 px を 0.5 px 刻みで選べます。スライダーを離すと端末に反映します。
-- **Reader text size** は 10〜18 px を 1 px 刻みで選べます。本文、道具と状態の行、Mail・質問のカード、ファイルのプレビューに反映します。
+- **Agents text size** は左の Agents 一覧に反映します。
+- **Reader text size** は本文、道具と状態の行、Mail・質問のカードに反映します。保存した値がない場合は 12 px です。
+- **Terminal font size** はスライダーを離すと端末に反映します。
+- **Right pane text size** は右の Mail、ミニグラフ、ファイルのプレビューに反映します。
 - 5-way split 以上の auto-shrink: -1.5 px
 - mini-orrery mode
 - Telemetry network depth
 
-値は browser の `localStorage` に置き、backend の `~/.orrery/prefs.json` と約 4 秒ごとに同期します。Reset が戻すのは font と auto-shrink だけで、すべての cockpit state を消す操作ではありません。
+値は browser の `localStorage` に置き、backend の `~/.orrery/prefs.json` と約 4 秒ごとに同期します。Reset が戻すのは Terminal の文字の大きさと auto-shrink だけで、すべての cockpit state を消す操作ではありません。
 
 配色（Dark / Light / System）も Settings にあります（[配色テーマ（light mode）](#配色テーマlight-mode)）。
 

@@ -55,7 +55,7 @@ def sizes(js, selectors=SAMPLES):
       parseFloat(getComputedStyle(document.querySelector(selector)).fontSize))""")
 
 
-@pytest.mark.parametrize('size', [10, 13, 18])
+@pytest.mark.parametrize('size', [10, 12.5, 13, 18])
 def test_reader_size_applies_live_and_restores_after_reload(cockpit, size):
     js = prepare(cockpit)
     _, wait, client, _, _ = cockpit
@@ -74,23 +74,23 @@ def test_reader_size_applies_live_and_restores_after_reload(cockpit, size):
 def test_default_and_synced_reader_sizes(cockpit):
     js = prepare(cockpit)
     assert js(f"localStorage.getItem('{KEY}')") is None
-    assert js('readerTextSize.value') == '13'
-    assert sizes(js) == list(SAMPLES.values())
+    assert js('readerTextSize.value') == '12'
+    assert sizes(js) == pytest.approx([12 * baseline / 13 for baseline in SAMPLES.values()], abs=.001)
     js(f"""localStorage.setItem('{KEY}','15');
       document.dispatchEvent(new CustomEvent('oc:prefs-changed',{{detail:{{keys:['{KEY}']}}}}));""")
     assert js('readerTextSize.value') == '15'
     assert sizes(js, ['[data-event-id=source] .conversation-text']) == [15]
     js(f"""localStorage.setItem('{KEY}','invalid');
       window.dispatchEvent(new StorageEvent('storage',{{key:'{KEY}'}}));""")
-    assert js('readerTextSize.value') == '13'
-    assert sizes(js) == list(SAMPLES.values())
+    assert js('readerTextSize.value') == '12'
+    assert sizes(js) == pytest.approx([12 * baseline / 13 for baseline in SAMPLES.values()], abs=.001)
 
 
 def test_narrow_viewport_reduces_the_whole_reader_scale(cockpit):
     js = prepare(cockpit)
     _, _, client, _, _ = cockpit
     client.call('Emulation.setDeviceMetricsOverride', width=390, height=844, deviceScaleFactor=1, mobile=False)
-    assert sizes(js) == pytest.approx([12.5 * baseline / 13 for baseline in SAMPLES.values()], abs=.001)
+    assert sizes(js) == pytest.approx([11.5 * baseline / 13 for baseline in SAMPLES.values()], abs=.001)
     select_size(js, 15)
     assert sizes(js) == pytest.approx([14.5 * baseline / 13 for baseline in SAMPLES.values()], abs=.001)
 
@@ -102,12 +102,12 @@ def test_split_reader_reduces_scale_in_a_narrow_cell(cockpit):
       finishAgentAttach('SecondFixture',902);finishAgentAttach('FirstFixture',901);""")
     selector = '.split-cell .conversation-panel:not([hidden]) .conversation-text'
     wait(f"document.querySelectorAll('{selector}').length===2")
-    assert sizes(js, [selector]) == [12.5]
-    select_size(js, 12)
     assert sizes(js, [selector]) == [11.5]
+    select_size(js, 13)
+    assert sizes(js, [selector]) == [12.5]
 
 
-def test_reader_scales_tools_mail_status_question_and_preview(cockpit):
+def test_reader_scales_tools_mail_status_and_question_independently_of_preview(cockpit):
     events = EVENTS + [
         dict(id='file', kind='tool', role='assistant', text='Inspect the notes',
              references=[dict(id='A'*32, label='layout.txt', kind='file')]),
@@ -131,19 +131,19 @@ def test_reader_scales_tools_mail_status_question_and_preview(cockpit):
         state:'ready',kind:'question',harness:'codex',mode:'choice',token:'fixture-question',
         body:'Review the layout?',default:1,choices:[{id:1,label:'Read the draft'}]});""")
     wait("!document.querySelector('.reader-approval').hidden")
+    preview = ['.conversation-preview-title', '.conversation-preview-text']
     samples = {
         '.conversation-step-tool,.conversation-tool-name': 11,
         '.conversation-activity-label': 11,
         '.conversation-mail-subject': 12,
         '.conversation-mail-text': 12,
-        '.conversation-preview-title': 12,
-        '.conversation-preview-text': 12,
         '.reader-approval-title': 21,
         '.reader-approval-choice-copy': 11,
     }
     for size in (10, 13, 18):
         select_size(js, size)
         assert sizes(js, samples) == pytest.approx([size * baseline / 13 for baseline in samples.values()], abs=.001)
+        assert sizes(js, preview) == [12, 12]
         assert js("""[...document.querySelectorAll('.conversation-scroll,.conversation-preview,.reader-approval')]
           .filter(el=>!el.hidden).every(el=>el.scrollWidth<=el.clientWidth+1)""")
         assert js("""document.querySelector('.reader-approval').getBoundingClientRect().bottom<=
@@ -153,6 +153,47 @@ def test_reader_scales_tools_mail_status_question_and_preview(cockpit):
           return k.right <= t.left && Math.abs((k.top+k.bottom-t.top-t.bottom)/2) < 1;})()""")
 
 
+    js("""rightTextSize.value='18';rightTextSize.dispatchEvent(new Event('input'));""")
+    assert sizes(js, preview) == [18, 18]
+    assert sizes(js, samples) == pytest.approx([18 * baseline / 13 for baseline in samples.values()], abs=.001)
+
+
+def test_grouped_font_sliders_are_independent_and_restore_after_reload(cockpit):
+    js = prepare(cockpit)
+    _, wait, client, _, _ = cockpit
+    controls = ['leftTextSize', 'readerTextSize', 'terminalFontSize', 'rightTextSize']
+    keys = ['oc-term-left-text-size', KEY, 'oc-term-font', 'oc-term-right-text-size']
+    selectors = [
+        '.roster-head .colhead-title',
+        '[data-event-id=source] .conversation-text',
+        '.termhost .xterm-rows',
+        '.mail .mail-head',
+    ]
+    js("settingsBtn.click()")
+    assert js("""[...document.querySelectorAll('.settings-body section:first-child input[type=range]')]
+      .map(input=>input.id)""") == controls
+    assert js("settingsPopover.matches(':popover-open')")
+    committed = sizes(js, selectors)
+    for index, (control, key) in enumerate(zip(controls, keys)):
+        assert js(f"OrreryPrefs.synced('{key}')")
+        js(f"document.getElementById('{control}').value='18';"
+           f"document.getElementById('{control}').dispatchEvent(new Event('input'));")
+        expected = committed.copy()
+        if control != 'terminalFontSize':
+            expected[index] = 18 * [15 / 13, 1, 1, 13 / 12][index]
+        assert sizes(js, selectors) == pytest.approx(expected, abs=.001)
+        assert js(f"localStorage.getItem('{key}')") is None
+        js(f"document.getElementById('{control}').dispatchEvent(new Event('change'))")
+        if control == 'terminalFontSize':
+            expected[index] = 18
+        assert sizes(js, selectors) == pytest.approx(expected, abs=.001)
+        assert js(f"localStorage.getItem('{key}')") == '18'
+        committed = expected
+    client.call('Page.removeScriptToEvaluateOnNewDocument', identifier=js.storage_bootstrap)
+    client.call('Page.reload', ignoreCache=True)
+    wait(f"{json.dumps(controls)}.every(id=>document.getElementById(id)?.value==='18')")
+
+
 def test_terminal_drag_applies_font_fit_and_sync_only_once(cockpit):
     js, wait, client, _, enable = cockpit
     stable_roster(js)
@@ -160,7 +201,7 @@ def test_terminal_drag_applies_font_fit_and_sync_only_once(cockpit):
     js("""conversationView.close();settingsPopover.showPopover();
       terminalFontRange.scrollIntoView({block:'center'});terminalFontRange.focus();""")
     js("new Promise(resolve=>setTimeout(resolve,350))")
-    js("""window.fontCalls={apply:0,queue:0,fit:0,save:0,sync:0};
+    js("""(()=>{window.fontCalls={apply:0,queue:0,fit:0,save:0,sync:0};
       const apply=applyTerminalSettings,queue=queueStageFit,save=persistTerminalSettings,
         fit=panes.get('%901').fit.fit.bind(panes.get('%901').fit),open=XMLHttpRequest.prototype.open;
       applyTerminalSettings=(...args)=>{fontCalls.apply++;return apply(...args)};
@@ -175,7 +216,7 @@ def test_terminal_drag_applies_font_fit_and_sync_only_once(cockpit):
       for(const value of ['10','13.5','16','18']){
         terminalFontRange.value=value;
         terminalFontRange.dispatchEvent(new Event('input',{bubbles:true}));
-      }""")
+      }})()""")
     assert js('terminalFontValue.textContent') == '18.0 px'
     assert js('terminalFontRange.getAttribute("aria-valuetext")') == '18.0 pixels'
     assert js('terminalFontEffective.textContent') == 'effective 12.5 px'

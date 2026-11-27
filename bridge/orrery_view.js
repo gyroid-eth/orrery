@@ -486,19 +486,18 @@ function fitMiniTree(live,dimensions){
   }));
   return {...unpromoted,width:dimensions.width,height:dimensions.height};
 }
-function measureMiniCaptions(agents,includeRoles){
+function measureMiniCaptions(agents,includeRoles,font,fontScale){
   const widths=new Map();
   if(!miniCaptionMeasure)return widths;
-  const font=getComputedStyle(miniSvg).getPropertyValue('--rail-sans').trim()||'sans-serif';
   for(const agent of agents){
-    miniCaptionMeasure.font=`600 ${miniAppearance.nameSize}px ${font}`;
+    miniCaptionMeasure.font=`600 ${miniAppearance.nameSize*fontScale}px ${font}`;
     let width=miniCaptionMeasure.measureText(agent.name||'').width;
     const action=OC.pendingAgentAction(agent.name);
     if(action||includeRoles){
-      miniCaptionMeasure.font=`${action?600:400} 7.5px ${font}`;
+      miniCaptionMeasure.font=`${action?600:400} ${7.5*fontScale}px ${font}`;
       width=Math.max(width,miniCaptionMeasure.measureText(action?`${action}…`:roleOf(agent)).width);
     }
-    widths.set(agent.name,Math.min(MINI_MAX_CAPTION_WIDTH,Math.ceil(width)+3));
+    widths.set(agent.name,Math.min(MINI_MAX_CAPTION_WIDTH*fontScale,Math.ceil(width)+3));
   }
   return widths;
 }
@@ -513,12 +512,15 @@ function fitMiniScene(live,width,height,visibleActions){
   }
   const agents=subset?[...subset.distances.keys()].map(name=>subset.byName.get(name)):live;
   let scale=Math.max(MINI_PREFERRED_SCALE,Math.min(width/MINI.width,height/MINI.height)),zoom=1;
-  const captions=measureMiniCaptions(agents,subset&&miniAppearance.showRoles);
+  const style=getComputedStyle(miniSvg);
+  const font=style.getPropertyValue('--rail-sans').trim()||'sans-serif';
+  const fontScale=(parseFloat(style.getPropertyValue('--right-text-size'))||12)/12;
+  const captions=measureMiniCaptions(agents,subset&&miniAppearance.showRoles,font,fontScale);
   const captionWidth=Math.max(MINI.captionWidth,...captions.values()),xPadding=Math.max(MINI.xPadding,captionWidth/2+3);
   const nodeScale=miniAppearance.nodeSize/100,nameSize=miniAppearance.nameSize;
   const captionTop=Math.ceil(MINI.captionTop*nodeScale),nodeAbove=Math.ceil(MINI.nodeAbove*nodeScale);
   const hasSecondLine=miniAppearance.showRoles||agents.some(agent=>OC.pendingAgentAction(agent.name));
-  const captionHeight=nameSize+2+(hasSecondLine?9:0);
+  const captionHeight=Math.ceil((nameSize+2+(hasSecondLine?9:0))*fontScale);
   const topPadding=Math.max(MINI.topPadding,nodeAbove+2);
   const bottomPadding=Math.max(MINI.bottomPadding,captionTop+captionHeight+2);
   // Try the viewport at successively smaller readable scales. Only grow the
@@ -855,10 +857,7 @@ function drawAgentCaption(group,{agent,x,y},dimensions,provider,showTitle=true,a
   const name=document.createElement('div');
   name.className='orrery-caption-name';
   name.textContent=agent.name;
-  if(dimensions.nameSize){
-    name.style.fontSize=`${dimensions.nameSize}px`;
-    name.style.lineHeight=`${dimensions.nameSize+2}px`;
-  }
+  if(dimensions.nameSize)name.style.setProperty('--mini-caption-name',dimensions.nameSize);
   text.appendChild(name);
   if(action||(role&&dimensions.showRoles!==false)){
     const roleLabel=document.createElement('div');
@@ -2179,6 +2178,7 @@ document.addEventListener('oc:stage-agent',event=>{
   }
   syncMiniSelection();
 });
+document.addEventListener('oc:right-text-size',()=>renderMini());
 document.addEventListener('oc:mini-view',event=>{
   const detail=event.detail||{};
   const oldMode=miniMode;

@@ -240,6 +240,7 @@
   .colhead .tag{color:var(--ink-dim);letter-spacing:.04em;text-transform:none;font-size:11px}
   .colhead .actions{display:flex;align-items:center;gap:8px}
   .roster-head{padding:0 11px 0 16px}
+  .roster .roster-head{font-size:calc(var(--left-text-size,13px) * 15 / 13)}
   .roster-head,.mail-head{font:500 15px var(--rail-sans);letter-spacing:0;text-transform:none;color:var(--ink);border-bottom:0}
   .rail-icon{
     display:inline-grid;place-items:center;flex:none;width:32px;height:32px;padding:0;
@@ -250,7 +251,7 @@
   .rail-icon:focus-visible{outline:1px solid var(--amber);outline-offset:2px}
   .rail-icon:active svg{scale:.92}
   .roster-select.rail-icon{width:32px;padding:0;border:0;background:transparent}
-  .roster-head #newAgentBtn{font:500 12px var(--rail-sans);letter-spacing:0;text-transform:none}
+  .roster-head #newAgentBtn{font:500 calc(var(--left-text-size,13px) * 12 / 13) var(--rail-sans);letter-spacing:0;text-transform:none}
   .roster-head .actions{gap:6px}
   .roster-status{max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .roster-status[hidden]{display:none}
@@ -290,11 +291,11 @@
   .roster-filter[hidden]{display:none}
   .roster-filter input{
     width:100%;height:31px;padding:0 10px;border:1px solid var(--hair);border-radius:7px;
-    background:rgba(17,20,25,.76);color:var(--ink);font-size:10.5px;letter-spacing:.03em;outline:none;
+    background:rgba(17,20,25,.76);color:var(--ink);font-size:calc(var(--left-text-size,13px) * 10.5 / 13);letter-spacing:.03em;outline:none;
   }
   .roster-filter input::placeholder{color:var(--ink-faint)}
   .roster-filter input:focus{border-color:rgb(var(--theme-accent-rgb) / .4);box-shadow:0 0 0 2px rgb(var(--theme-accent-rgb) / .06)}
-  .roster-filter-status{display:flex;align-items:center;gap:5px;padding:6px 2px 0;color:var(--ink-dim);font-size:9.5px}
+  .roster-filter-status{display:flex;align-items:center;gap:5px;padding:6px 2px 0;color:var(--ink-dim);font-size:calc(var(--left-text-size,13px) * 9.5 / 13)}
   .roster-filter-status[hidden]{display:none}
   .roster-filter-status button{border:0;padding:0;background:transparent;color:var(--amber);cursor:pointer}
   .roster-filter-status button:hover,.roster-filter-status button:focus-visible{text-decoration:underline;outline:none}
@@ -339,7 +340,7 @@
   .roster-fold{
     display:inline-flex;align-items:center;justify-content:center;flex:none;
     min-width:18px;min-height:24px;padding:0 2px;border:0;border-radius:4px;
-    background:transparent;color:var(--ink-dim);font:11px var(--rail-sans);cursor:pointer;
+    background:transparent;color:var(--ink-dim);font:calc(var(--left-text-size,13px) * 11 / 13) var(--rail-sans);cursor:pointer;
   }
   .roster-fold[hidden]{display:none}
   .roster-fold svg{
@@ -352,13 +353,13 @@
   .roster-fold[data-activity="active"]{color:var(--amber)}
   .roster-fold[data-activity="input"]{color:var(--theme-status-alert,#ff6a5d)}
   .roster-role{
-    font:13px/1.3 var(--rail-sans);color:var(--ink-dim);
+    font:var(--left-text-size,13px)/1.3 var(--rail-sans);color:var(--ink-dim);
     min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   }
   .roster-role[hidden]{display:none}
   .roster-runtime{
     display:flex;align-items:center;gap:7px;min-width:0;
-    font:11px/1.3 var(--rail-sans);color:var(--ink-dim);
+    font:calc(var(--left-text-size,13px) * 11 / 13)/1.3 var(--rail-sans);color:var(--ink-dim);
   }
   .roster-runtime[hidden],.roster-context[hidden],.roster-model[hidden]{display:none}
   .roster-model{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -438,7 +439,7 @@
     -webkit-backdrop-filter:blur(18px) saturate(1.08);backdrop-filter:blur(18px) saturate(1.08);
   }
   .roster-bulkbar[hidden]{display:none}
-  .bulk-count{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim)}
+  .bulk-count{font-size:calc(var(--left-text-size,13px) * 9.5 / 13);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim)}
   .bulk-exit{
     border:1px solid rgb(var(--theme-accent-rgb) / .5);border-radius:5px;padding:5px 8px;
     background:transparent;color:var(--amber);font-size:9px;letter-spacing:.12em;
@@ -468,8 +469,8 @@
     radial-gradient(circle at 70% 85%, rgba(0,0,0,.3), transparent 50%);mix-blend-mode:soft-light}
   .cbody{min-width:0;display:flex;flex-direction:column;gap:3px}
   .crow1{display:flex;align-items:baseline;gap:8px}
-  .cname{font-family:var(--serif);font-size:16px;font-weight:500;letter-spacing:.01em;line-height:1;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .agent[data-exiting] .cname{font-size:13px}
+  .cname{font-family:var(--serif);font-size:calc(var(--left-text-size,13px) * 16 / 13);font-weight:500;letter-spacing:.01em;line-height:1;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .agent[data-exiting] .cname{font-size:var(--left-text-size,13px)}
   .pill{font-size:9.5px;letter-spacing:.07em;padding:2px 6px;border-radius:4px;border:1px solid var(--hair);color:var(--ink-dim);text-transform:uppercase;white-space:nowrap}
   .pill.eng-claude{color:var(--ln-local);border-color:rgb(var(--theme-local-rgb) / .3)}
   .pill.eng-codex{color:var(--ln-delegate);border-color:rgb(var(--theme-delegate-rgb) / .3)}
@@ -1586,6 +1587,43 @@
             popovertargetaction="hide" aria-label="Close settings">×</button>
   </div>
   <div class="settings-body">
+    <section aria-labelledby="textSizeTitle">
+      <div class="settings-section-title" id="textSizeTitle">Text size</div>
+      <div class="settings-row">
+        <div class="settings-row-head">
+          <label class="settings-row-name" for="leftTextSize">Agents text size</label>
+          <output class="settings-value" for="leftTextSize">13 px</output>
+        </div>
+        <input class="settings-range" id="leftTextSize" type="range"
+               min="10" max="18" step="0.5" value="13">
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-head">
+          <label class="settings-row-name" for="readerTextSize">Reader text size</label>
+          <output class="settings-value" for="readerTextSize">12 px</output>
+        </div>
+        <input class="settings-range" id="readerTextSize" type="range"
+               min="10" max="18" step="0.5" value="12">
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-head">
+          <label class="settings-row-name" for="terminalFontSize">Terminal font size</label>
+          <output class="settings-value" id="terminalFontValue" for="terminalFontSize">12.5 px</output>
+        </div>
+        <input class="settings-range" id="terminalFontSize" type="range"
+               min="10" max="18" step="0.5" value="12.5" aria-describedby="terminalFontEffective">
+        <div class="settings-help" id="terminalFontEffective">effective 12.5 px</div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-row-head">
+          <label class="settings-row-name" for="rightTextSize">Right pane text size</label>
+          <output class="settings-value" for="rightTextSize">12 px</output>
+        </div>
+        <input class="settings-range" id="rightTextSize" type="range"
+               min="10" max="18" step="0.5" value="12" aria-describedby="rightTextSizeHelp">
+        <div class="settings-help" id="rightTextSizeHelp">Mail, network and file previews</div>
+      </div>
+    </section>
     <section aria-labelledby="colorThemeTitle">
       <div class="settings-section-title" id="colorThemeTitle">Appearance</div>
       <div class="settings-row">
@@ -1604,22 +1642,6 @@
             <option value="terminal">Terminal</option>
             <option value="reader">Reader (side panel)</option>
             <option value="reader-full">Reader (full width)</option>
-          </select>
-        </label>
-      </div>
-      <div class="settings-row">
-        <label class="settings-toggle-row" for="readerTextSize">
-          <span class="settings-row-name">Reader text size</span>
-          <select class="settings-select" id="readerTextSize">
-            <option value="10">10 px</option>
-            <option value="11">11 px</option>
-            <option value="12">12 px</option>
-            <option value="13" selected>13 px (default)</option>
-            <option value="14">14 px</option>
-            <option value="15">15 px</option>
-            <option value="16">16 px</option>
-            <option value="17">17 px</option>
-            <option value="18">18 px</option>
           </select>
         </label>
       </div>
@@ -1680,15 +1702,6 @@
         <button class="cockpit-control claim-toggle" id="claimToggle" type="button" aria-pressed="false" hidden>FOLLOW ⇄ CLAIMED</button>
         <span class="settings-help">Without an interactive terminal, ORRERY claims the grid automatically. An interactive terminal makes it follow; a manual choice takes priority.</span>
         <button class="cockpit-control ghostty-action" id="ghosttyAction" type="button" hidden>GHOSTTY</button>
-      </div>
-      <div class="settings-row">
-        <div class="settings-row-head">
-          <label class="settings-row-name" for="terminalFontSize">Terminal font size</label>
-          <output class="settings-value" id="terminalFontValue" for="terminalFontSize">12.5 px</output>
-        </div>
-        <input class="settings-range" id="terminalFontSize" type="range"
-               min="10" max="18" step="0.5" value="12.5" aria-describedby="terminalFontEffective">
-        <div class="settings-help" id="terminalFontEffective">effective 12.5 px</div>
       </div>
       <div class="settings-row">
         <label class="settings-toggle-row" for="terminalAutoShrink">
@@ -2231,23 +2244,23 @@ function sessionClaimed(claimedSessions,session){
   if(typeof claimedSessions.has==='function')return claimedSessions.has(session);
   return normalizedSessionNames(claimedSessions).includes(session);
 }
-const TERM_FONT_MIN=10;
-const TERM_FONT_MAX=18;
+const TEXT_SIZE_MIN=10;
+const TEXT_SIZE_MAX=18;
 const TERM_FONT_DEFAULT=12.5;
-const TERM_FONT_STEP=.5;
+const TEXT_SIZE_STEP=.5;
 const TERM_FONT_SPLIT_THRESHOLD=5;
 const TERM_FONT_SPLIT_REDUCTION=1.5;
-function clampTerminalFontSize(value,fallback=TERM_FONT_DEFAULT){
-  const numeric=Number(value);
+function clampTextSize(value,fallback=TERM_FONT_DEFAULT){
+  const numeric=value==null||value===''?NaN:Number(value);
   if(!Number.isFinite(numeric))return fallback;
-  const stepped=Math.round(numeric/TERM_FONT_STEP)*TERM_FONT_STEP;
-  return Math.max(TERM_FONT_MIN,Math.min(TERM_FONT_MAX,stepped));
+  const stepped=Math.round(numeric/TEXT_SIZE_STEP)*TEXT_SIZE_STEP;
+  return Math.max(TEXT_SIZE_MIN,Math.min(TEXT_SIZE_MAX,stepped));
 }
 function effectiveTerminalFontSize(baseSize,autoShrink,splitMemberCount){
-  const base=clampTerminalFontSize(baseSize);
+  const base=clampTextSize(baseSize);
   const reduction=autoShrink&&Number(splitMemberCount)>=TERM_FONT_SPLIT_THRESHOLD
     ?TERM_FONT_SPLIT_REDUCTION:0;
-  return clampTerminalFontSize(base-reduction);
+  return clampTextSize(base-reduction);
 }
 const THEME_AXIS_IDS=Object.freeze([
   'dim-contrast','small-text','tracking','glow','background',
@@ -2722,7 +2735,7 @@ const telemetryThemeAxisReports=new Map();
 try{
   const storedFont=localStorage.getItem(TERM_FONT_STORAGE_KEY);
   const storedAutoShrink=localStorage.getItem(TERM_FONT_AUTOSHRINK_STORAGE_KEY);
-  if(storedFont!==null)terminalFontSize=clampTerminalFontSize(storedFont);
+  if(storedFont!==null)terminalFontSize=clampTextSize(storedFont);
   if(storedAutoShrink==='true'||storedAutoShrink==='false'){
     terminalAutoShrink=storedAutoShrink==='true';
   }
@@ -3203,13 +3216,13 @@ function currentTerminalFontSize(){
     splitVisible?splitSessions.length:0,
   );
 }
-function paintTerminalFontValue(size){
-  terminalFontRange.setAttribute('aria-valuetext',`${size.toFixed(1)} pixels`);
-  terminalFontValue.textContent=`${size.toFixed(1)} px`;
+function paintTextSizeValue(range,output,size){
+  range.setAttribute('aria-valuetext',`${size.toFixed(1)} pixels`);
+  output.textContent=`${size.toFixed(1)} px`;
 }
 function paintTerminalSettings(effectiveSize=currentTerminalFontSize()){
   terminalFontRange.value=String(terminalFontSize);
-  paintTerminalFontValue(terminalFontSize);
+  paintTextSizeValue(terminalFontRange,terminalFontValue,terminalFontSize);
   terminalAutoShrinkToggle.checked=terminalAutoShrink;
   const shrunk=effectiveSize!==terminalFontSize;
   terminalFontEffective.textContent=shrunk
@@ -3258,14 +3271,56 @@ function applyTerminalSettings({fit=true}={}){
   return effectiveSize;
 }
 terminalFontRange.addEventListener('input',()=>{
-  paintTerminalFontValue(clampTerminalFontSize(terminalFontRange.value));
+  paintTextSizeValue(terminalFontRange,terminalFontValue,clampTextSize(terminalFontRange.value));
 });
 terminalFontRange.addEventListener('change',()=>{
-  const size=clampTerminalFontSize(terminalFontRange.value);
+  const size=clampTextSize(terminalFontRange.value);
   if(size===terminalFontSize)return;
   terminalFontSize=size;
   persistTerminalSettings();applyTerminalSettings();
 });
+for(const [id,key,property,defaultSize] of [
+  ['leftTextSize','oc-term-left-text-size','--left-text-size',13],
+  ['readerTextSize','oc-term-reader-text-size','--reader-text-size',12],
+  ['rightTextSize','oc-term-right-text-size','--right-text-size',12],
+]){
+  const range=document.getElementById(id);
+  const output=document.querySelector(`output[for="${id}"]`);
+  let committedSize;
+  function preview(size){
+    document.documentElement.style.setProperty(property,`${size}px`);
+    paintTextSizeValue(range,output,size);
+  }
+  function apply(size){
+    range.value=String(size);
+    preview(size);
+    if(committedSize!==size&&id==='rightTextSize'){
+      document.dispatchEvent(new Event('oc:right-text-size'));
+    }
+    committedSize=size;
+  }
+  function restore(){
+    let value=null;
+    try{value=localStorage.getItem(key);}catch(_){}
+    apply(clampTextSize(value,defaultSize));
+  }
+  restore();
+  range.addEventListener('input',()=>preview(clampTextSize(range.value,defaultSize)));
+  range.addEventListener('change',()=>{
+    const size=clampTextSize(range.value,defaultSize);
+    if(size!==committedSize){
+      try{localStorage.setItem(key,String(size));}catch(_){/* live-only preference */}
+    }
+    apply(size);
+  });
+  range.addEventListener('pointercancel',()=>apply(committedSize));
+  document.addEventListener('oc:prefs-changed',event=>{
+    if(!event.detail?.keys||event.detail.keys.includes(key))restore();
+  });
+  window.addEventListener('storage',event=>{
+    if(event.key===key||event.key===null)restore();
+  });
+}
 const demoMaskWords=document.getElementById('demoMaskWords');
 const demoMaskLocations=document.getElementById('demoMaskLocations');
 demoMaskLocations.checked=OrreryDemo.storedLocations();
@@ -3315,7 +3370,7 @@ document.addEventListener('oc:prefs-changed',event=>{
   }
   if(keys.has(TERM_FONT_STORAGE_KEY)||keys.has(TERM_FONT_AUTOSHRINK_STORAGE_KEY)){
     const storedFont=localStorage.getItem(TERM_FONT_STORAGE_KEY),storedShrink=localStorage.getItem(TERM_FONT_AUTOSHRINK_STORAGE_KEY);
-    if(storedFont!==null)terminalFontSize=clampTerminalFontSize(storedFont);
+    if(storedFont!==null)terminalFontSize=clampTextSize(storedFont);
     if(storedShrink==='true'||storedShrink==='false')terminalAutoShrink=storedShrink==='true';
     applyTerminalSettings();
   }
@@ -10228,7 +10283,6 @@ function loadCockpitMarkdown(){
 const conversationView=(()=>{
   const key='oc-term-conversation-enabled',setting=document.getElementById('conversationEnabled');
   const defaultViewKey='oc-term-default-view',defaultViewSetting=document.getElementById('agentDefaultView');
-  const textSizeKey='oc-term-reader-text-size',textSizeSetting=document.getElementById('readerTextSize');
   let instance=null,loading=null;
   // On by default: a browser that never chose keeps the panel; an explicit
   // "0" (also synced through prefs) stays off.
@@ -10243,14 +10297,6 @@ const conversationView=(()=>{
     catch(_){return 'reader-full';}
   }
   function syncDefaultView(){defaultViewSetting.value=defaultView();}
-  function applyTextSize(value){
-    if(value===undefined){
-      try{value=localStorage.getItem(textSizeKey);}catch(_){}
-    }
-    textSizeSetting.value=value||'13';
-    if(!textSizeSetting.value)textSizeSetting.value='13';
-    document.documentElement.style.setProperty('--reader-text-size',textSizeSetting.value+'px');
-  }
   async function ensure(){
     if(instance)return instance;
     if(!enabled())return null;
@@ -10331,15 +10377,9 @@ const conversationView=(()=>{
   defaultViewSetting.addEventListener('change',()=>{
     try{localStorage.setItem(defaultViewKey,defaultViewSetting.value);}catch(_){syncDefaultView();}
   });
-  applyTextSize();
-  textSizeSetting.addEventListener('change',()=>{
-    try{localStorage.setItem(textSizeKey,textSizeSetting.value);}catch(_){}
-    applyTextSize(textSizeSetting.value);
-  });
-  document.addEventListener('oc:prefs-changed',()=>{syncDefaultView();applyTextSize();if(enabled())ensure();});
+  document.addEventListener('oc:prefs-changed',()=>{syncDefaultView();if(enabled())ensure();});
   window.addEventListener('storage',event=>{
     if(event.key===defaultViewKey||event.key===null)syncDefaultView();
-    if(event.key===textSizeKey||event.key===null)applyTextSize();
     if(event.key===key&&enabled())ensure();
   });
   if(enabled())ensure();
