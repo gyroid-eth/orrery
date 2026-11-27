@@ -3,8 +3,10 @@ import base64
 import hashlib
 import io
 import json
+import os
 import shlex
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
@@ -174,6 +176,52 @@ def test_attachment_trailer_keeps_arbitrary_text_and_rejects_symlinks(tmp_path):
     outside=tmp_path/'outside.png';outside.write_bytes(png())
     path.unlink();path.symlink_to(outside)
     assert attachment_trailer(relative,workspace)==(relative,[])
+
+
+def test_reader_rediscovers_a_drvfs_attachment_after_restart(tmp_path, monkeypatch):
+    import wsl_drvfs
+    from conversation_preview import private_attachment
+    from mobile_file import save_file
+
+    workspace = (tmp_path / "Windows 上の vault").resolve()
+    workspace.mkdir()
+    attachment = Path(save_file(workspace, {
+        'format': 'md', 'data': base64.b64encode(b'# Notes').decode()
+    }, label='日本語 notes.md'))
+    marker = attachment.parent / '.gitignore'
+    label = attachment.with_name(attachment.name + '.label')
+    for item in (attachment.parent, attachment, marker, label):
+        item.chmod(0o777)
+    path = tmp_path / 'codex.jsonl'
+    sent = 'Read this.\n\n./' + str(attachment.relative_to(workspace))
+    path.write_bytes(
+        line(dict(type='session_meta', payload=dict(cwd=str(workspace))))
+        + line(codex([dict(type='input_text', text=sent)]))
+    )
+    agent = row(path, 'codex')
+    mountinfo = tmp_path / 'mountinfo'
+    device = workspace.stat().st_dev
+    mount_field = str(workspace).replace(' ', r'\040')
+    mount = (f'41 30 {os.major(device)}:{os.minor(device)} / {mount_field} rw,noatime '
+             r'- 9p C:\134 rw,aname=drvfs;path=C:\134;uid=1000,cache=0x5')
+    monkeypatch.setattr(wsl_drvfs, 'MOUNTINFO', mountinfo)
+    monkeypatch.setattr(wsl_drvfs, 'running_in_wsl', lambda: False)
+    mountinfo.write_text(mount + '\n')
+    assert not decorate(agent)[1][0].get('references')
+    monkeypatch.setattr(wsl_drvfs, 'running_in_wsl', lambda: True)
+    mountinfo.write_text(mount.replace(';uid=1000', ';metadata;uid=1000') + '\n')
+    assert not decorate(agent)[1][0].get('references')
+    mountinfo.write_text(mount + '\n')
+    other_uid = SimpleNamespace(st_uid=os.getuid() + 1, st_mode=0o777, st_dev=device)
+    assert not private_attachment(attachment, other_uid)
+    store, events = decorate(agent)
+    event, = events
+    assert event['input_display_text'] == 'Read this.'
+    reference, = event['references']
+    assert reference['label'] == '日本語 notes.md'
+    assert store.read(reference['id'], agent)['text'] == '# Notes'
+    marker.write_text('forged\n')
+    assert not decorate(agent)[1][0].get('references')
 
 
 def test_recent_composer_upload_can_be_admitted_without_native_cwd(tmp_path):

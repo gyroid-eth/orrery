@@ -31,6 +31,7 @@ from conversation_steps import step_image_path
 import conversation_step_command as step_command
 import conversation_step_diff as step_diff
 from mobile_attachment_store import ATTACHMENT_NAME, DIRECTORIES, FILE_SUFFIX, attachment_label, valid_extension
+from wsl_drvfs import drvfs_metadata
 
 MAX_RECORD=1024*1024
 MAX_TEXT=128*1024
@@ -150,8 +151,15 @@ def open_file(path):
         if parent is not None:os.close(parent)
 
 
-def private_attachment(info):
-    return info.st_uid==os.getuid() and (stat.S_IMODE(info.st_mode)&0o077)==0
+def private_attachment(path, info):
+    if info.st_uid != os.getuid():
+        return False
+    mode = stat.S_IMODE(info.st_mode)
+    if mode & 0o077 == 0:
+        return True
+    # DrvFs without Linux metadata projects the Windows user's effective
+    # permissions into each POSIX permission group.
+    return mode == (mode & 7) * 0o111 and drvfs_metadata(path, info.st_dev) is False
 
 
 def stored_attachment(path, cwd):
@@ -164,19 +172,21 @@ def stored_attachment(path, cwd):
         return None
     try:
         folder=path.parent.lstat()
-        if not stat.S_ISDIR(folder.st_mode) or not private_attachment(folder):
+        if not stat.S_ISDIR(folder.st_mode) or not private_attachment(path.parent, folder):
             return None
         # This marker is written by the upload route, including in old stores.
-        with open_file(path.parent/'.gitignore') as (fd,marker):
-            if not private_attachment(marker) or os.read(fd,3)!=b'*\n':return None
+        marker_path = path.parent / '.gitignore'
+        with open_file(marker_path) as (fd,marker):
+            if not private_attachment(marker_path, marker) or os.read(fd,3)!=b'*\n':return None
         with open_file(path) as (_,info):
-            if not private_attachment(info) or info.st_size==0:
+            if not private_attachment(path, info) or info.st_size==0:
                 return None
             signature=(info.st_dev,info.st_ino,info.st_size,info.st_mtime_ns,info.st_ctime_ns)
         label=''
         try:
-            with open_file(path.with_name(path.name+'.label')) as (fd,meta):
-                if private_attachment(meta) and meta.st_size<=640:
+            label_path = path.with_name(path.name + '.label')
+            with open_file(label_path) as (fd,meta):
+                if private_attachment(label_path, meta) and meta.st_size<=640:
                     label=attachment_label(os.read(fd,641).decode('utf-8'))
         except (PreviewUnavailable,UnicodeError):
             pass  # Older uploads have no original filename.
