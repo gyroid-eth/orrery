@@ -907,6 +907,9 @@ def test_mini_graph_fits_every_agent_then_zooms_and_fits_again_after_resize(mini
             const label=node.querySelector('.orrery-caption-name');return label.scrollWidth<=label.clientWidth;
           }),roles:svg.querySelectorAll('.orrery-caption-role').length,
           zoom:svg.clientWidth/scroll.clientWidth,pan:[scroll.scrollLeft,scroll.scrollTop],
+          scrollbar:getComputedStyle(scroll).scrollbarWidth,
+          gutter:[scroll.offsetWidth-scroll.clientWidth,scroll.offsetHeight-scroll.clientHeight],
+          overflow:[scroll.scrollWidth-scroll.clientWidth,scroll.scrollHeight-scroll.clientHeight],
           expand:inside(scroll.parentElement.querySelector('.orrery-expand')),height:scroll.clientHeight};
       };
       const b=scroll.getBoundingClientRect();
@@ -918,7 +921,8 @@ def test_mini_graph_fits_every_agent_then_zooms_and_fits_again_after_resize(mini
 
     def fit_all():
         evaluate("document.querySelector('.mini-graph-zoom button:first-child').click()")
-        assert evaluate('miniFitStats().zoom===1&&miniFitStats().all')
+        fitted = evaluate('miniFitStats()')
+        assert fitted['zoom'] == 1 and fitted['all'] and fitted['overflow'] == [0, 0], fitted
 
     fit_all()
 
@@ -929,6 +933,8 @@ def test_mini_graph_fits_every_agent_then_zooms_and_fits_again_after_resize(mini
     wheel(-160, 2)
     zoomed = evaluate('miniFitStats()')
     assert zoomed['zoom'] > 1.2 and zoomed['expand'], zoomed
+    assert zoomed['scrollbar'] == 'none' and zoomed['gutter'] == [0, 0], zoomed
+    assert min(zoomed['overflow']) > 0
     wheel(70)
     for _ in range(20):
         panned = evaluate('miniFitStats()')
@@ -938,6 +944,21 @@ def test_mini_graph_fits_every_agent_then_zooms_and_fits_again_after_resize(mini
     assert panned['pan'][1] > zoomed['pan'][1] and panned['zoom'] == zoomed['zoom'], panned
     evaluate('refreshMini()')
     assert evaluate('miniFitStats().pan') == panned['pan']
+    assert evaluate("""(()=>{
+      const scroll=document.querySelector('.mini-graph-scroll');
+      scroll.focus();
+      return scroll.tabIndex===0&&scroll===document.activeElement;
+    })()""")
+    for event_type in ('rawKeyDown', 'keyUp'):
+        client.call('Input.dispatchKeyEvent', type=event_type, key='ArrowRight', code='ArrowRight',
+                    windowsVirtualKeyCode=39)
+    right = panned
+    for _ in range(20):
+        right = evaluate('miniFitStats()')
+        if right['pan'][0] > panned['pan'][0]:
+            break
+        time.sleep(.03)
+    assert right['pan'][0] > panned['pan'][0], right
     wheel(1000, 4)
     assert evaluate('miniFitStats().all&&miniFitStats().zoom===1')
     wheel(-140, 4)
