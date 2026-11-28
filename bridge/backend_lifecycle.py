@@ -232,15 +232,23 @@ def _owns_backend(pid: int, root: Path, port: int) -> bool:
 
 def stop_stale(port: int, root: Path, runtime: dict, expected_boot: str, commit: str, automatic: bool) -> dict:
     health = read_health(port)
-    status = version_status(health, root, installed_commit(root), runtime)
+    installed = installed_commit(root)
+    status = version_status(health, root, installed, runtime)
     if not isinstance(commit, str) or not COMMIT.fullmatch(commit) or not isinstance(expected_boot, str) or not BOOT.fullmatch(expected_boot):
         raise LifecycleError("Invalid backend update identity.")
     attempt = _attempt_file(root, runtime, port, commit)
-    if (not automatic and status["state"] == "unavailable" and installed_commit(root) == commit
-            and _attempt_state(attempt).get("stopped_boot") == expected_boot):
-        if checkout_ready(root, commit):
-            return {"state": "stopped"}
-        return {"state": "busy", "operations": ["checkout"]}
+    retry_boot = expected_boot
+    if not automatic:
+        if status["state"] == "current":
+            return {**status, "restarted": False}
+        if (status["state"] == "unavailable" and installed
+                and _attempt_state(attempt).get("stopped_boot") == expected_boot):
+            if checkout_ready(root, installed):
+                return {"state": "stopped", "boot": expected_boot, "installed_commit": installed}
+            return {"state": "busy", "operations": ["checkout"]}
+        if status["state"] == "stale":
+            expected_boot = status["boot"]
+            commit = status["installed_commit"]
     if status["state"] != "stale" or status["boot"] != expected_boot or status["installed_commit"] != commit:
         raise LifecycleError("The running backend changed. Check for the update again.")
     if automatic and attempt.exists():
@@ -292,9 +300,10 @@ def stop_stale(port: int, root: Path, runtime: dict, expected_boot: str, commit:
         while time.monotonic() < deadline:
             if (observer.process(pid) or {}).get("birth") != identity["birth"]:
                 stopped = True
-                if automatic:
-                    _save_attempt_state(attempt, stopped_boot=expected_boot)
-                return {"state": "stopped"}
+                if not automatic:
+                    _claim_attempt(attempt)
+                _save_attempt_state(attempt, stopped_boot=retry_boot)
+                return {"state": "stopped", "boot": expected_boot, "installed_commit": commit}
             time.sleep(0.1)
         raise LifecycleError("The backend did not exit after receiving SIGTERM.")
     except (OSError, AttributeError) as exc:

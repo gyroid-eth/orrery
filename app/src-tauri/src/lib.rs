@@ -185,6 +185,18 @@ fn verify_restarted_backend(status: serde_json::Value, boot: &str, commit: &str)
     }
 }
 
+fn stopped_backend_identity(result: &serde_json::Value) -> Result<(&str, &str), String> {
+    if let ("stopped", Some(boot), Some(commit)) = (
+        result["state"].as_str().unwrap_or_default(),
+        result["boot"].as_str(),
+        result["installed_commit"].as_str(),
+    ) {
+        Ok((boot, commit))
+    } else {
+        Err("The backend did not confirm it stopped.".to_owned())
+    }
+}
+
 #[cfg(not(windows))]
 fn sidecar_lifecycle(action: &str, args: &[&str]) -> Result<String, String> {
     let (python, script) = backend_sidecar_paths()?;
@@ -214,9 +226,10 @@ fn restart_backend(boot: &str, commit: &str, automatic: bool) -> Result<serde_js
     if matches!(result["state"].as_str(), Some("busy" | "spent")) {
         return Ok(result);
     }
-    if result["state"] != "stopped" {
-        return Err("The backend did not confirm it stopped.".to_owned());
+    if !automatic && result["state"] == "current" && result["restarted"] == false {
+        return Ok(result);
     }
+    let (boot, commit) = stopped_backend_identity(&result)?;
     if !backend_online()? {
         spawn_backend_sidecar()?;
     }

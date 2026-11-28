@@ -5371,10 +5371,16 @@ async function requestBackendUpdate(target,automatic){
       return;
     }
     if(status?.state==='spent')throw new Error(status.reason||'Automatic restart already attempted for this version.');
-    if(status?.state!=='current'||status.running_commit!==target.installed_commit||status.boot===target.boot)
+    const alreadyCurrent=!automatic&&status?.restarted===false;
+    if(status?.state!=='current'||!status.running_commit||status.running_commit!==status.installed_commit
+        ||(automatic&&status.running_commit!==target.installed_commit)||(!alreadyCurrent&&status.boot===target.boot))
       throw new Error('Could not confirm that the updated backend started.');
     backendUpdateFailure=null;backendUpdateTarget=null;
     saveBackendUpdateState(backendUpdateFailureKey,null);
+    if(alreadyCurrent){
+      showBackendUpdate('success','Backend is up to date');
+      return;
+    }
     showBackendUpdateSuccess(status.running_commit);
     if(saveBackendUpdateState(backendUpdateSuccessKey,{boot:status.boot,commit:status.running_commit})){
       location.reload();
@@ -5396,10 +5402,12 @@ async function checkBackendUpdate(){
     const status=await invoke('check_backend_version');
     if(status?.state==='current'){
       const previous=readBackendUpdateState(backendUpdateSuccessKey);
+      const wasFailed=backendUpdateFailure||readBackendUpdateState(backendUpdateFailureKey);
       saveBackendUpdateState(backendUpdateSuccessKey,null);
       saveBackendUpdateState(backendUpdateFailureKey,null);
       backendUpdateFailure=null;backendUpdateTarget=null;backendUpdateWaited.clear();
       if(previous?.boot===status.boot&&previous?.commit===status.running_commit)showBackendUpdateSuccess(previous.commit);
+      else if(wasFailed)showBackendUpdate('success','Backend is up to date');
       else if(backendUpdate.dataset.state!=='success')showBackendUpdate('','');
     }else if(status?.state==='stale'){
       if(backendUpdateTarget?.installed_commit!==status.installed_commit)backendUpdateWaited.clear();

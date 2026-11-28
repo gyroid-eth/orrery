@@ -24,6 +24,7 @@ const restartCalls=[];
 const commit='b'.repeat(40);
 const stale={state:'stale',boot:'1-7',running_commit:'a'.repeat(40),installed_commit:commit};
 const current={state:'current',boot:'2-8',running_commit:commit,installed_commit:commit};
+const rolledBack={...current,running_commit:stale.running_commit,installed_commit:stale.running_commit};
 let phase='checkout', status=stale, reloads=0, hide;
 const context={
   document:{getElementById:()=>notice,addEventListener(){}}, location:{reload(){reloads++;}},
@@ -38,6 +39,8 @@ const context={
     if(phase==='checkout')return {state:'busy',operations:['checkout','batch send']};
     if(phase==='failed')throw new Error('The updated backend did not become ready.');
     if(phase==='stale-boot')return {...current,boot:stale.boot};
+    if(phase==='rollback')return rolledBack;
+    if(phase==='up-to-date')return {...rolledBack,boot:stale.boot,restarted:false};
     return current;
   }
 };
@@ -64,15 +67,23 @@ const context={
   assert.equal(notice.dataset.state,'failed');
   assert.match(text.textContent,/Could not confirm/);
   assert.equal(reloads,0);
-  phase='current';
+  phase='rollback';
   await context.requestBackendUpdate(stale,false);
   assert.equal(restartCalls.at(-1).automatic,false);
   assert.equal(reloads,1);
-  status=current;
+  status=rolledBack;
   await context.checkBackendUpdate();
   assert.equal(notice.dataset.state,'success');
-  assert.equal(text.textContent,'Backend updated to bbbbbbbb');
+  assert.equal(text.textContent,'Backend updated to aaaaaaaa');
   assert.equal(button.hidden,true);
+  hide();
+  assert.equal(notice.hidden,true);
+  phase='up-to-date';
+  await context.requestBackendUpdate(stale,false);
+  assert.equal(notice.dataset.state,'success');
+  assert.equal(text.textContent,'Backend is up to date');
+  assert.equal(button.hidden,true);
+  assert.equal(reloads,1);
   hide();
   assert.equal(notice.hidden,true);
 })().catch(error=>{console.error(error);process.exitCode=1;});

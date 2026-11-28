@@ -155,9 +155,12 @@ def test_restarts_only_backend_after_a_finished_checkout(tmp_path, monkeypatch, 
     children = []
     launcher = ROOT / "app/src-tauri/src/wsl-backend.sh"
 
+    def run_wsl(action, *args):
+        return subprocess.run(["bash", launcher, str(port), action, root, *args],
+                              env=env, capture_output=True, timeout=30)
+
     def wsl(action, *args):
-        result = subprocess.run(["bash", launcher, str(port), action, root, *args],
-                                env=env, capture_output=True, timeout=30)
+        result = run_wsl(action, *args)
         assert result.returncode == 0, result.stderr.decode(errors="replace")
         return result.stdout
 
@@ -190,13 +193,14 @@ def test_restarts_only_backend_after_a_finished_checkout(tmp_path, monkeypatch, 
                         result = await asyncio.to_thread(lifecycle.stop_stale, port, root, RUNTIME, boot, new, True)
                     assert result == {"state": "busy", "operations": ["permission restart"]}
         asyncio.run(check_busy())
+        stopped = {"state": "stopped", "boot": boot, "installed_commit": new}
         if mode == "mac-sidecar":
-            assert lifecycle.stop_stale(port, root, RUNTIME, boot, new, True) == {"state": "stopped"}
+            assert lifecycle.stop_stale(port, root, RUNTIME, boot, new, True) == stopped
             children[0].wait(timeout=5)
             children.append(subprocess.Popen([sys.executable, str(script), str(port)], env=env))
         else:
             stop, _, _, health = wsl("restart", boot, new, "automatic").split(b"\0")
-            assert json.loads(stop) == {"state": "stopped"}
+            assert json.loads(stop) == stopped
             assert json.loads(health)["commit"] == new
         after = await_health(port)
         assert after["commit"] == new and after["boot"] != boot
@@ -212,6 +216,43 @@ def test_restarts_only_backend_after_a_finished_checkout(tmp_path, monkeypatch, 
         assert (log["old_sha"], log["new_sha"], log["waited"], log["error"]) == (
             old, new, ["batch send", "checkout"], None)
         assert str(log["new_pid"]) == after["boot"].split("-")[1]
+
+        # Exercise a failed real startup, rollback of HEAD, and a manual retry
+        # carrying the stale context still present in the open error banner.
+        script.write_text("raise SystemExit(23)\n")
+        subprocess.run(["git", "-C", root, "add", "bridge/orrery_backend.py"], check=True)
+        bad = commit(root, "Fail at startup")
+        failed_boot = after["boot"]
+        if mode == "mac-sidecar":
+            assert lifecycle.stop_stale(port, root, RUNTIME, failed_boot, bad, True) == {
+                "state": "stopped", "boot": failed_boot, "installed_commit": bad,
+            }
+            children[-1].wait(timeout=5)
+            failed = subprocess.run([sys.executable, str(script), str(port)], env=env, timeout=5)
+            assert failed.returncode == 23
+        else:
+            failed = run_wsl("restart", failed_boot, bad, "automatic")
+            assert failed.returncode != 0
+            assert json.loads(failed.stdout.rstrip(b"\0"))["installed_commit"] == bad
+        assert lifecycle.read_health(port) is None
+        subprocess.run(["git", "-C", root, "checkout", "-q", "--detach", new], check=True)
+        recovered = {"state": "stopped", "boot": failed_boot, "installed_commit": new}
+        if mode == "mac-sidecar":
+            assert lifecycle.stop_stale(port, root, RUNTIME, failed_boot, bad, False) == recovered
+            children.append(subprocess.Popen([sys.executable, str(script), str(port)], env=env))
+        else:
+            answer, _, _, health = wsl("restart", failed_boot, bad, "manual").split(b"\0")
+            assert json.loads(answer) == recovered
+            assert json.loads(health)["commit"] == new
+        healthy = await_health(port)
+        assert healthy["commit"] == new and healthy["boot"] != failed_boot
+        if mode == "mac-sidecar":
+            unchanged = lifecycle.stop_stale(port, root, RUNTIME, failed_boot, bad, False)
+        else:
+            unchanged = json.loads(wsl("restart", failed_boot, bad, "manual").rstrip(b"\0"))
+        assert unchanged["state"] == "current" and unchanged["restarted"] is False
+        assert lifecycle.read_health(port)["boot"] == healthy["boot"]
+        subprocess.run([*agents, "has-session", "-t", "=unchanged"], env=env, check=True)
     finally:
         for child in children:
             if child.poll() is None:

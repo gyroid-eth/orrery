@@ -221,7 +221,8 @@ pub(super) fn backend_status() -> Result<Value, String> {
 pub(super) fn restart_backend(boot: &str, commit: &str, automatic: bool) -> Result<Value, String> {
     let port = configured_port()?;
     let before = backend_status_at(port)?;
-    if before["state"] != "unavailable" && (before["state"] != "stale" || before["boot"] != boot) {
+    if before["state"] == "unverified" || (automatic && before["state"] != "unavailable"
+        && (before["state"] != "stale" || before["boot"] != boot)) {
         return Err("The running backend changed. Check for the update again.".to_owned());
     }
     let intent = if automatic { "automatic" } else { "manual" };
@@ -231,9 +232,10 @@ pub(super) fn restart_backend(boot: &str, commit: &str, automatic: bool) -> Resu
     if matches!(result["state"].as_str(), Some("busy" | "spent")) {
         return Ok(result);
     }
-    if result["state"] != "stopped" {
-        return Err("The WSL backend did not confirm it stopped.".to_owned());
+    if !automatic && result["state"] == "current" && result["restarted"] == false {
+        return Ok(result);
     }
+    let (boot, commit) = super::stopped_backend_identity(&result)?;
     let new_health = parse_wsl_health(port, startup)?;
     wait_for_forwarding(port, &new_health)?;
     super::verify_restarted_backend(backend_status_at(port)?, boot, commit)
