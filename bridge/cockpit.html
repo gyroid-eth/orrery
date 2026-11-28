@@ -10567,7 +10567,8 @@ const agentsPoll=startPoll(pollAgents,3000,{whileHidden:true,hiddenMs:HIDDEN_AGE
 // it shows when brought forward has the right colours from the start
 const graphPoll=soloSession?null:startPoll(pollGraph,6000,{whileHidden:()=>!lineageParent.size,hiddenMs:HIDDEN_GRAPH_MS});
 const mailPoll=soloSession?null:startPoll(pollMail,4000,{whileHidden:true});
-const backendUpdatePoll=soloSession||!appInvoke()?null:startPoll(checkBackendUpdate,15000,{whileHidden:true,hiddenMs:60000});
+const backendUpdatePoll=!soloSession&&typeof appInvoke==='function'&&appInvoke()
+  ?startPoll(checkBackendUpdate,15000,{whileHidden:true,hiddenMs:60000}):null;
 function kickPolls(){
   if(soloSession){agentsPoll.kick();return;}
   graphPoll.kick().then(agentsPoll.kick);mailPoll.kick();backendUpdatePoll?.kick();   // lineage ready before first roster paint

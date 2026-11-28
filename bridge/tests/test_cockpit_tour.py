@@ -156,6 +156,10 @@ def prompt(connected=True, pane=True, text='Hello', guarded=False, restarting=Fa
     # sendPrompt fixes its target pane when it starts; take those helpers as they are.
     fn = re.search(r'function captureComposerTarget\([^)]*\)\{.*?(?=\n(?:async )?function sendInterrupt)', source, re.S).group()
     pending_action = re.search(r'function pendingAgentAction\(session\)\{.*?\n\}', source, re.S).group()
+    operation_guard = re.search(
+        r'let backendGuardSupported;\nasync function beginBackendOperation\(kind\)\{.*?\n\}',
+        source, re.S,
+    ).group()
     # Load the same browser script that supplies recipientPrefix to sendPrompt.
     return node("globalThis.window={};"
                 f"require({json.dumps(str(BRIDGE / 'prompt_recipients.js'))});"
@@ -181,7 +185,13 @@ def prompt(connected=True, pane=True, text='Hello', guarded=False, restarting=Fa
                 f"function inspectPrompt(){{return {'{}' if guarded else 'null'};}}"
                 "function showToast(){}function showSendGuard(){}function hideSendGuard(){}"
                 "function pushPromptHistory(){}function saveDraft(){}function closeSlashMenu(){}const toastEl={classList:{add(){}}};"
-                + pending_action + fn + ";Promise.resolve(sendPrompt()).then(()=>console.log(JSON.stringify({events,value:promptInput.value})));")
+                # An older backend reports health without an operation lease.
+                "const backendRestarting=false;"
+                "async function fetch(path){"
+                "if(path!=='/telemetry/health')throw Error(path);"
+                "return {json:async()=>({backend:'ok'})};}"
+                + operation_guard + pending_action + fn
+                + ";Promise.resolve(sendPrompt()).then(()=>console.log(JSON.stringify({events,value:promptInput.value})));")
 
 
 def test_talk_completes_only_for_a_sent_nonempty_unguarded_prompt():
