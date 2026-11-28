@@ -30,6 +30,7 @@ TIMEOUT = 5.0
 REDRAW_GRACE = 1.0
 SLASH_MENU_WAIT = .30
 SUBMISSION_CLEAR_GRACE = .25
+SUBMISSION_RECHECK_GRACE = 3.0
 SHELLS = frozenset({
     'ash', 'bash', 'busybox', 'cmd', 'csh', 'dash', 'elvish', 'fish', 'hush',
     'ksh', 'ksh93', 'mksh', 'nu', 'nushell', 'pdksh', 'powershell', 'pwsh',
@@ -735,11 +736,14 @@ class SubmissionConfirmation:
         self.text = text
         self.clear_since = None
 
-    def accepted(self, after):
-        if not accepted_after_enter(self.before, after, self.text):
+    def accepted(self, after, *, late=False):
+        if after is None or not accepted_after_enter(self.before, after, self.text):
             self.clear_since = None
             return False
         if after.slash_view is not None and after.slash_view != self.before.slash_view:
+            return True
+        if late and after.editor in EDITOR_EXECUTABLES and after.running and not self.before.running:
+            # The verified draft is gone and the same editor has started a turn.
             return True
         now = time.monotonic()
         if self.clear_since is None:
@@ -1078,10 +1082,14 @@ def submit(command,admit,pane,text,*,deadline=None,on_wait=None,claim_handoff=No
                 reason = 'completion_unverified' if problem=='completion-unverified' else 'draft_not_confirmed'
                 return defer('unknown', reason)
             confirmation = SubmissionConfirmation(entered_from, text)
-            while time.monotonic()<end:
+            confirm_until = end
+            if deadline is None and bare_slash(text) is None:
+                confirm_until += SUBMISSION_RECHECK_GRACE
+            while time.monotonic() < confirm_until:
                 view=capture(command,pane)
-                if not view or view.identity!=before.identity:return defer('unknown', 'pane_changed')
-                if confirmation.accepted(view):
+                if view is not None and view.identity != before.identity:
+                    return defer('unknown', 'pane_changed')
+                if confirmation.accepted(view, late=time.monotonic() >= end):
                     if digest:
                         os.ftruncate(fd, 0)
                     return 'accepted'

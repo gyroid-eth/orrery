@@ -9990,7 +9990,8 @@ function requestComposerInput(target,message){
       clearTimeout(timer);composerAcks.delete(id);
       resolve(['accepted','sent','refused','completion-mismatch','completion-unverified','paste-unavailable'].includes(status)?status:'unknown');
     };
-    const timeout=message.type==='submit-prompt'&&targetProgram(target.session)==='agy'?32000:6500;
+    // Include the backend's post-Enter recheck before deciding delivery is unknown.
+    const timeout=message.type==='submit-prompt'?(targetProgram(target.session)==='agy'?35000:9500):6500;
     const timer=setTimeout(()=>done('unknown'),timeout);
     composerAcks.set(id,{done,paneId:target.paneId});
     const payload={...message,paneId:target.paneId,session:target.session,incarnation:target.incarnation,inputAck:id};

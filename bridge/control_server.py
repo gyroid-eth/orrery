@@ -1677,6 +1677,7 @@ class TmuxControlBridge:
         paste = ['paste-buffer', '-r', '-p', '-d', '-b', name, '-t', pane_id]
         escape = ['send-keys', '-t', pane_id, 'Escape']
         pending = None
+        entered_from = None
 
         def check_stream():
             remaining = deadline - time.monotonic()
@@ -1880,8 +1881,12 @@ class TmuxControlBridge:
                                     elif submission.mismatched_command(view, text, operator=True):
                                         return outcome('completion-mismatch', 'completion-mismatch')
                             if entered_from is not None:
+                                confirm_by = deadline
+                                recheck = ordinary_deadline and submission.bare_slash(text) is None
+                                if recheck:
+                                    deadline += submission.SUBMISSION_RECHECK_GRACE
                                 result = await complete_command()
-                                if not result.ok or result.overflow:
+                                if (not result.ok or result.overflow) and not recheck:
                                     return outcome('unknown', 'enter-unconfirmed')
                                 break
                     previous = choice
@@ -1894,13 +1899,10 @@ class TmuxControlBridge:
                 confirmation = submission.SubmissionConfirmation(entered_from, text)
                 while time.monotonic() < deadline:
                     view = await capture()
-                    if view is None:
-                        confirmation = submission.SubmissionConfirmation(entered_from, text)
-                    else:
-                        if view.identity != before.identity:
-                            return outcome('unknown', 'pane-changed')
-                        if confirmation.accepted(view):
-                            return 'accepted'
+                    if view is not None and view.identity != before.identity:
+                        return outcome('unknown', 'pane-changed')
+                    if confirmation.accepted(view, late=time.monotonic() >= confirm_by):
+                        return 'accepted'
                     await asyncio.sleep(submission.POLL)
                 return outcome('unknown', 'enter-unconfirmed')
             except (OSError, RuntimeError, asyncio.TimeoutError, asyncio.CancelledError):
@@ -1908,6 +1910,8 @@ class TmuxControlBridge:
                     self._abort_mobile_stream()
                 if problem == 'completion-unverified':
                     return outcome(problem, problem)
+                if entered_from is not None:
+                    return outcome('unknown', 'enter-unconfirmed')
                 return outcome('unknown' if wrote else 'refused', 'terminal-unavailable')
             finally:
                 try:

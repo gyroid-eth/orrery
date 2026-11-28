@@ -3,10 +3,12 @@ import json
 import os
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
 import time
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -59,6 +61,19 @@ async def test_real_url_drafts_survive_control_mode_capture(capture, harness):
 
 NATIVE_CASES = [pytest.param(harness, case, id=f'{harness}-{case["case"]}')
                 for harness, fixture in NATIVE_PROMPTS.items() for case in fixture['cases']]
+
+
+@pytest.mark.parametrize('harness', NATIVE_PROMPTS)
+def test_late_turn_confirms_only_when_the_same_editor_consumes_the_draft(harness):
+    base = native_frame(NATIVE_PROMPTS[harness]['before'])
+    assert base is not None and base.editor == harness and base.empty
+    before = replace(base, draft='https://example.com', running=False)
+    confirmation = submission.SubmissionConfirmation(before, before.draft)
+    assert not confirmation.accepted(replace(before, running=True), late=True)
+    assert not confirmation.accepted(replace(base, running=True, process=base.process + 1), late=True)
+    assert not confirmation.accepted(replace(base, running=True, redrawing=True), late=True)
+    assert confirmation.accepted(replace(base, running=True), late=True)
+
 
 HERMES_REDRAW = {
     'meta': ['0', '0', '2', '1', 'zsh'],
@@ -419,6 +434,7 @@ def test_watcher_refuses_multiline_in_a_legacy_shell_before_loading_buffer(monke
     ('claude-wrapped', '/compact', '/compact-later', False),
     ('codex', '/compact', '/compact', True),
     ('codex', '/comp', '/compact', False),
+    ('hermes-delayed', 'https://example.com', '', True),
 ])
 async def test_real_tmux_submission_observes_the_native_editor(
         tmp_path, monkeypatch, path, editor, draft, selected, accepted):
@@ -428,7 +444,7 @@ async def test_real_tmux_submission_observes_the_native_editor(
     recorder = tmp_path / 'record.py'
     entered = tmp_path / 'entered'
     recorder.write_text(r"""
-import os, sys, tty
+import os, signal, sys, tty
 from pathlib import Path
 
 tty.setraw(0)
@@ -453,6 +469,9 @@ def show(draft='', menu=False, queued=False):
                      '                    that wraps as well']
         rows += [border, f'{prompt} {draft}', border]
         caret = len(rows) - 1
+    elif editor == 'hermes-delayed':
+        rows = [' ☤ fixture-model │ ctx --', border, f'{prompt} {draft}', border]
+        caret = 3
     else:
         rows = ([f'\x1b[1;7m› {selected}  description\x1b[0m', ''] if menu else [])
         rows += [f'{prompt} {draft}', '', '  gpt-fixture default · Context 100% left']
@@ -469,7 +488,11 @@ while not raw.endswith(b'\x1b[201~'):
 assert raw.startswith(b'\x1b[200~')
 show(raw[6:-6].decode(), menu=True)
 assert os.read(0, 1) == b'\r'
-Path(record).touch()
+Path(record).write_text(str(os.getpid()))
+if editor == 'hermes-delayed':
+    # Hold the isolated TUI off CPU after Enter, while real tmux stays responsive.
+    while not Path(record + '.resume').exists():
+        os.kill(os.getpid(), signal.SIGSTOP)
 show(queued=editor == 'claude-queue')
 while os.read(0, 1):
     pass
@@ -504,10 +527,26 @@ while os.read(0, 1):
                     await asyncio.sleep(.025)
 
             await asyncio.wait_for(wait_for_editor(), timeout=6)
-            if path == 'cockpit':
-                result = await bridge.submit_prompt(pane, draft)
+            async def deliver():
+                if path == 'cockpit':
+                    return await bridge.submit_prompt(pane, draft)
+                return await asyncio.to_thread(submission.submit, call, lambda: True, pane, draft)
+
+            async def restore_editor_cpu():
+                while not entered.exists() or not entered.read_text():
+                    await asyncio.sleep(.025)
+                try:
+                    await asyncio.sleep(submission.TIMEOUT + .1)
+                    after = await asyncio.to_thread(submission.capture, call, pane)
+                    assert after and after.draft == draft, after
+                finally:
+                    entered.with_suffix('.resume').touch()
+                    os.kill(int(entered.read_text()), signal.SIGCONT)
+
+            if editor == 'hermes-delayed':
+                result, _ = await asyncio.gather(deliver(), asyncio.wait_for(restore_editor_cpu(), 5))
             else:
-                result = await asyncio.to_thread(submission.submit, call, lambda: True, pane, draft)
+                result = await deliver()
             rejected = 'completion-mismatch' if path == 'cockpit' else 'unknown'
             assert result == ('accepted' if accepted else rejected)
             assert entered.exists() == accepted
