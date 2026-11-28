@@ -24,8 +24,10 @@ window.fetch=(input,options)=>{
   let data;
   switch(url.pathname){
     case '/telemetry/spawn-catalog': data=CATALOG;break;
+    case '/telemetry/suggest-name': data={adjectives:window.fixtureAdjectives??['Quiet']};break;
     case '/telemetry/fs/dirs': data={path:'/workspace',home:'/workspace',dirs:[]};break;
-    case '/telemetry/spawn': data={ok:true,pending:true,child_name:'QuietCurie'};break;
+    case '/telemetry/spawn': data={ok:true,pending:true,child_name:'QuietCurie',
+      worktree_notice:window.fixtureWorktreeNotice};break;
     case '/telemetry/spawn-status': data={ok:true,state:window.fixtureLaunchState,error:'Fixture failure'};break;
     default:return fetchOriginal(input,options);
   }
@@ -68,6 +70,25 @@ def reload_with_fixture(client, evaluate, source=BOOTSTRAP):
     raise AssertionError("Cockpit did not reload")
 
 
+def test_adjectives_come_from_the_launch_name_check_instead_of_the_cached_catalog(tour_browser):
+    _, evaluate = tour_browser
+    evaluate(BOOTSTRAP)
+    result = evaluate("""(async()=>{
+      window.fixtureAdjectives=['Ready'];
+      openSpawnModal();await loadSpawnCatalog();
+      spawnNameButton.click();agentStrip.querySelector('[data-scientist=Curie]').click();
+      await refreshSpawnAdjectives(true);
+      return {name:composedName(),suggestions:[...adjOptions.options].map(option=>option.value)};
+    })()""")
+    assert result == {"name": "ReadyCurie", "suggestions": ["Ready"]}
+    result = evaluate("""(async()=>{
+      window.fixtureAdjectives=['Calm'];
+      await refreshSpawnAdjectives(true);
+      return {name:composedName(),suggestions:[...adjOptions.options].map(option=>option.value)};
+    })()""")
+    assert result == {"name": "CalmCurie", "suggestions": ["Calm"]}
+
+
 def test_new_agent_draft_survives_dismissal_and_reload(tour_browser):
     client, evaluate = tour_browser
     evaluate(BOOTSTRAP)
@@ -86,6 +107,18 @@ def test_new_agent_draft_survives_dismissal_and_reload(tour_browser):
     reload_with_fixture(client, evaluate)
     assert evaluate(REOPEN) == draft
     assert evaluate("!OrreryPrefs.synced(SPAWN_DRAFT_KEY)")
+
+
+def test_launch_shows_the_worktree_reason_from_the_server(tour_browser):
+    _, evaluate = tour_browser
+    evaluate(BOOTSTRAP)
+    evaluate(FILL)
+    assert evaluate("""(async()=>{
+      window.fixtureLaunchState='ready';
+      window.fixtureWorktreeNotice='Delegated Antigravity agents use a worktree to store their managed .agents settings.';
+      await submitSpawn({preventDefault(){}});
+      return toastEl.textContent;
+    })()""") == "Delegated Antigravity agents use a worktree to store their managed .agents settings."
 
 
 def test_discard_button_clears_saved_draft_and_resets_form(tour_browser):

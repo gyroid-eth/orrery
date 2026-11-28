@@ -5875,7 +5875,12 @@ function handle(msg){
         const wasRequesting=requestedSessions.delete(msg.session);
         const restart=permissionRestarts.get(msg.session);
         if(wasRequesting&&restart?.accepted&&typeof msg.message==='string')restart.attachError=msg.message;
-        if(wasRequesting)setGroupState(msg.session,'error');
+        if(wasRequesting){
+          setGroupState(msg.session,'error');
+          document.dispatchEvent(new CustomEvent('oc:terminal-attach-error',{
+            detail:{session:msg.session,message:msg.message},
+          }));
+        }
         if(pendingJump===msg.session){showOfflineHint(msg.session);pendingJump=null;}
       }
       console.warn('backend error:',msg.message);
@@ -6572,10 +6577,38 @@ async function postBulkAgentAction(action,body){
   return result;
 }
 const LIVE_AGENT_ROSTER='/telemetry/agents?scope=live';
-async function agentActionRoster(path,signal){
-  const response=await fetch(path,{cache:'no-store',signal}).catch(()=>null);
-  const roster=response?.ok?await response.json().catch(()=>null):null;
-  return Array.isArray(roster?.agents)?roster.agents:null;
+async function agentActionRoster(path,signal,{diagnose=false}={}){
+  const started=performance.now();
+  const timedOut=()=>signal?.reason?.name==='TimeoutError';
+  const failure=message=>{
+    if(diagnose)throw new Error(`${message} after ${((performance.now()-started)/1000).toFixed(1)}s`);
+    return null;
+  };
+  const options={cache:'no-store',signal};
+  if(diagnose)options.headers={'X-Orrery-Action-Check':'1'};
+  const response=await fetch(path,options).catch(()=>null);
+  if(!response)return failure(timedOut()?'Live roster request timed out':'Live roster request failed');
+  if(!response.ok&&!diagnose)return null;
+  const roster=await response.json().catch(()=>null);
+  if(!response.ok){
+    const upstream=roster?.error==='dashboard slow'?' (dashboard timed out)':'';
+    return failure(`Live roster HTTP ${response.status}${upstream}`);
+  }
+  if(Array.isArray(roster?.agents))return roster.agents;
+  return failure(`Live roster HTTP ${response.status} ${timedOut()?'response timed out':'returned an invalid list'}`);
+}
+async function permissionRestartAgent(name){
+  for(const retry of [false,true]){
+    try{
+      const rows=await agentActionRoster(LIVE_AGENT_ROSTER,AbortSignal.timeout(15000),{diagnose:true});
+      const agent=rows.find(row=>row?.name===name);
+      if(agent)return agent;
+      throw new Error(`No live roster row for ${name} (${rows.length} rows)`);
+    }catch(error){
+      if(retry)throw error;
+      await new Promise(resolve=>setTimeout(resolve,300));
+    }
+  }
 }
 function beginAgentExit(name){
   const agent=currentAgentNamed(name);
@@ -6679,9 +6712,8 @@ async function runBulkExit(){
   }
   if(failures.length)console.warn('bulk exit failures',failures);
   bulkActionBusy=null;setRosterSelectMode(false);
-  // The first failure's reason, not only a count: "1 failed" alone sent the
-  // 2026-10-01 seminar looking for a bug in the wrong place.
-  showToast(`BULK EXIT · ${succeeded} succeeded${failed?` · ${failed} failed — ${failures[0]}`:''}`,failed>0,failed?9000:4200);
+  showToast(`BULK EXIT · ${succeeded} succeeded${failed?` · ${failed} failed — ${failures.join(' · ')}`:''}`,failed>0,failed?9000:4200);
+  if(failures.length)toastEl.classList.add('multiline');
 }
 async function waitForBulkRebootExit(name,timeoutMs=30000,pollMs=1500,confirmStopped=null){
   const controller=new AbortController();
@@ -6878,6 +6910,7 @@ function agentPermissionSetting(a,key,api){
     action:reason?null:action,
     mode:AGENT_DETAIL_BROWSER.has(control?.mode)?control.mode:control&&key==='browser_use'&&value===false?'off':null,
     options,
+    unavailable:control?.unavailable,
   };
 }
 function agentDetailModel(a,homeDir,hiddenChildren=[],api=null,busy=false,pendingAction=''){
@@ -6931,9 +6964,9 @@ function agentDetailPermissions(detail,mini=false){
     `<span class="agent-detail-value">${mini?'':note(label)}<span>${value}</span>
       ${[...new Set([setting.observation,setting.reason])].filter(value=>!shared.includes(value)).map(note).join('')}</span>`,
     null,icon==='computer'?computerMark:browserMark);
-  const choices=(field,label,modes,current,available=null)=>`<span class="agent-detail-modes">${[...modes].map(([value,text])=>{
+  const choices=(field,label,modes,current,available=null,unavailable=null)=>`<span class="agent-detail-modes">${[...modes].map(([value,text])=>{
     const disabled=available&&!available.includes(value);
-    const title=`${label}: ${text}${disabled?' (unavailable for this agent)':''}`;
+    const title=esc(`${label}: ${text}${disabled?` (${unavailable?.[value]?.reason||'unavailable for this agent'})`:''}`);
     const compact=field==='browser'?(AGENT_DETAIL_BROWSER_SHORT.get(value)||text):text;
     return `<button type="button" data-${field}="${value}" aria-pressed="${value===current}"
       aria-label="${title}" title="${title}" ${disabled?'disabled ':''}
@@ -6941,18 +6974,22 @@ function agentDetailPermissions(detail,mini=false){
   }).join('')}</span>`;
   const browserTitle=esc(description('Browser use',browserValue,browser.observation));
   const switchState=browser.value===null?' unknown':browser.value?' on':'';
+  const temporary=browser.unavailable?.temporary;
   return `<div class="agent-detail-permissions${readOnly?' agent-detail-observed':''}" role="group"
     aria-label="${readOnly?'Read-only permissions':'Permissions'}">
     ${computer.action?agentDetailItem('computer',description('Computer use',computerValue,computer.observation),
       choices('computer','Computer use',AGENT_DETAIL_COMPUTER,computer.value),null,computerMark):mark('computer','Computer use',computerValue,computer)}
     ${browser.action?(browser.options.length?agentDetailItem('browser',description('Browser use',browserValue,browser.observation),
-      choices('browser','Browser use',AGENT_DETAIL_BROWSER,browser.mode,browser.options),null,browserMark):`<div class="agent-detail-item" title="${browserTitle}">
+      choices('browser','Browser use',AGENT_DETAIL_BROWSER,browser.mode,browser.options,browser.unavailable),null,browserMark):`<div class="agent-detail-item" title="${browserTitle}">
       ${browserMark}<button class="agent-detail-browser-toggle" type="button" data-browser
         ${browser.value===null?'':`role="switch" aria-checked="${browser.value}"`}
         aria-label="${browser.value===null||browser.observation?browserTitle:'Browser use'}" title="${browserTitle}">
         <span class="agent-detail-switch${switchState}" aria-hidden="true"></span></button></div>`):
       mark('browser','Browser use',browserValue,browser)}
     ${shared.map(value=>`<small class="agent-detail-observed-reason">${esc(value)}</small>`).join('')}
+    ${temporary?.reason?`<small class="agent-detail-observed-reason">${esc(temporary.reason)}
+      ${temporary.instruction?esc(temporary.instruction):''}
+      ${temporary.command?`<br><code>${esc(temporary.command)}</code>`:''}</small>`:''}
   </div>`;
 }
 function agentDetailHTML(detail,mini=false){
@@ -7327,9 +7364,7 @@ async function changeAgentPermission(original,key,value){
     const api=await loadPermissionApi(true);
     if(api===null)throw new Error('Could not check the Telemetry API');
     if(!(api>=45))throw new Error('Requires Telemetry API 45');
-    const agent=restart?
-      (await agentActionRoster(LIVE_AGENT_ROSTER,AbortSignal.timeout(8000)))?.find(row=>row?.name===name):
-      currentAgentNamed(name);
+    const agent=restart?await permissionRestartAgent(name):currentAgentNamed(name);
     if(!agent)throw new Error('Could not verify the agent in the roster');
     const current=agentPermissionSetting(agent,key,api);
     if(current.reason)throw new Error(current.reason);
@@ -7359,7 +7394,9 @@ async function changeAgentPermission(original,key,value){
       throw new Error('Telemetry did not confirm the new permissions');
     }
     if(tab){tab.accepted=true;reconnectPermissionRestartTab(name,tab);}
-    showToast(`Resume accepted for ${label} with updated permissions.`);
+    const warning=typeof result.warning==='string'?OrreryDemo.mask(result.warning):'';
+    showToast(`Resume accepted for ${label} with updated permissions.${warning?' · '+warning:''}`,false,warning?12000:undefined);
+    if(warning)toastEl.classList.add('multiline');
   }catch(error){
     if(tab)finishPermissionRestart(name,{failed:true});
     const reason=OrreryDemo.mask(String(error?.message||error).replace(/\s+/g,' ').trim());
@@ -8755,7 +8792,8 @@ function updateSpawnAvailability(){
   if(busy)spawnForm.setAttribute('aria-busy','true');
   else spawnForm.removeAttribute('aria-busy');
   spawnTask.readOnly=busy;
-  spawnSubmit.disabled=Boolean(spawnAttempt)||!spawnTask.value.trim()||!harness||Boolean(missingEffort)||spawnBrowserBlocked();
+  spawnSubmit.disabled=Boolean(spawnAttempt)||!spawnTask.value.trim()||!harness||Boolean(missingEffort)||spawnBrowserBlocked()
+    ||Boolean(selScientist&&!spawnAdjective.value.trim());
   spawnDiscardDraft.disabled=busy;spawnDiscardDraft.hidden=spawnShownDraft===null;
   spawnStatus.textContent=message;spawnStatus.title=message;spawnStatus.hidden=!message;
 }
@@ -8982,17 +9020,36 @@ function renderSpawnDirCrumbs(path){
   dirCrumbs.scrollLeft=dirCrumbs.scrollWidth;
 }
 
-/* agent picker — every registered name is consumed forever, so the adjective
-   suggestions only offer combinations that are still free */
-function freeAdjectivesFor(scientist){
-  const adjectives=spawnCatalog?.naming?.adjectives||[];
-  if(!scientist)return adjectives;
-  return adjectives.filter(a=>!spawnTaken.has((a+scientist).toLowerCase()));
-}
-function rollAdjective(){
-  const free=freeAdjectivesFor(selScientist);
-  if(!free.length)return '';
-  return free[Math.floor(Math.random()*free.length)];
+let spawnNameChoiceRequest=0,spawnFreeAdjectives=[];
+async function refreshSpawnAdjectives(roll=false){
+  const scientist=selScientist,request=++spawnNameChoiceRequest;
+  const adjective=spawnAdjective.value,revision=spawnFormRevision;
+  spawnFreeAdjectives=[];
+  updateNameCard();
+  if(!scientist)return;
+  let choices=null;
+  try{
+    const response=await fetch('/telemetry/suggest-name?choices=1&scientist='+encodeURIComponent(scientist),{cache:'no-store'});
+    if(response.ok){
+      const result=await response.json();
+      if(Array.isArray(result.adjectives))choices=result.adjectives.filter(a=>typeof a==='string'&&/^[A-Za-z]+$/.test(a));
+    }
+  }catch(_){/* Launch can still verify a manually entered name. */}
+  if(request!==spawnNameChoiceRequest||revision!==spawnFormRevision||scientist!==selScientist)return;
+  spawnFreeAdjectives=choices||[];
+  if(roll&&spawnAdjective.value===adjective&&!spawnFormIsBusy()){
+    if(spawnFreeAdjectives.length){
+      const different=spawnFreeAdjectives.filter(a=>a!==adjective);
+      const pool=different.length?different:spawnFreeAdjectives;
+      spawnAdjective.value=pool[Math.floor(Math.random()*pool.length)];
+      spawnProblem='';
+    }else{
+      spawnProblem=choices?'No available adjective. Choose another scientist or type a name.':
+        'Could not check name availability. Roll again or type a name.';
+    }
+    saveSpawnDraft();
+  }
+  updateNameCard();
 }
 function spawnScientistOptions(){
   return Array.from(agentStrip.querySelectorAll('button:not([hidden])'));
@@ -9020,8 +9077,8 @@ function renderAgentStrip(){
     button.addEventListener('click',()=>{
       selScientist=selScientist===scientist?'':scientist;spawnProblem='';
       for(const option of agentStrip.children)paintSpawnScientistOption(option);
-      if(selScientist)spawnAdjective.value=rollAdjective();
-      updateNameCard();
+      spawnAdjective.value='';
+      refreshSpawnAdjectives(true);
       saveSpawnDraft();
       if(selScientist)spawnAdjective.focus({preventScroll:true});
     });
@@ -9088,7 +9145,7 @@ function updateNameCard(){
   if(isAuto){
     ncName.textContent='';ncName.classList.remove('collide');
   }else{
-    freeAdjectivesFor(selScientist).forEach(adjective=>{
+    spawnFreeAdjectives.forEach(adjective=>{
       const option=document.createElement('option');option.value=adjective;adjOptions.appendChild(option);
     });
     ncPortrait.src=`/telemetry/portrait?v=3&name=${encodeURIComponent(selScientist)}&hi=1`;
@@ -9109,7 +9166,7 @@ function updateSpawnRoleChip(){
 spawnRole.addEventListener('input',()=>{updateSpawnRoleChip();saveSpawnDraft();});
 spawnAdjective.addEventListener('input',()=>{spawnProblem='';updateNameCard();saveSpawnDraft();});
 document.getElementById('adjDice').addEventListener('click',()=>{
-  spawnAdjective.value=rollAdjective();spawnProblem='';updateNameCard();saveSpawnDraft();
+  spawnProblem='';refreshSpawnAdjectives(true);
 });
 
 function readSpawnDraft(){
@@ -9188,6 +9245,7 @@ function prepareSpawnForm(raw,task=''){
   spawnRole.value=spawnDraftText(draft?.role).slice(0,spawnRole.maxLength);
   spawnAdjective.value=spawnDraftText(draft?.adjective).slice(0,spawnAdjective.maxLength);
   selScientist=spawnDraftText(draft?.scientist);
+  ++spawnNameChoiceRequest;spawnFreeAdjectives=[];
   ++spawnDirDefaultEpoch;
   spawnDirPath=spawnDraftText(draft?.dir);renderSpawnDirPath();
   spawnProblem='';spawnChooseAgain=false;
@@ -9222,6 +9280,7 @@ function openSpawnModal({from=document.getElementById('newAgentBtn').getBounding
   spawnLauncher.style.setProperty('--spawn-origin-x',(origin.x-spawnLauncher.offsetLeft)+'px');
   spawnLauncher.style.setProperty('--spawn-origin-y',(origin.y-spawnLauncher.offsetTop)+'px');
   spawnOverlay.classList.add('on');spawnOverlay.setAttribute('aria-hidden','false');
+  if(selScientist)refreshSpawnAdjectives();
   if(task&&spawnShownDraft===null)saveSpawnDraft();
   sizeSpawnTask();
   // A fresh form needs its catalog rendered even if the same tab already has it.
@@ -9275,9 +9334,10 @@ function spawnFailureReason(status,fallback){
   return status?.error||status?.result?.error||fallback;
 }
 // Poll until the registered child is ready, keeping the task available on failure.
-async function watchSpawnLaunch(name,deadlineSeconds){
+async function watchSpawnLaunch(name,deadlineSeconds,worktreeNotice=''){
   const waitSeconds=Number.isFinite(deadlineSeconds)&&deadlineSeconds>0?deadlineSeconds:140;
   const started=Date.now();
+  let phase=null;
   while(Date.now()-started<waitSeconds*1000){
     let status=null;
     try{
@@ -9285,6 +9345,11 @@ async function watchSpawnLaunch(name,deadlineSeconds){
       status=await r.json();
     }catch(_){continue;}
     if(status?.ok&&status.state==='ready')return;
+    if(status?.state==='launching'&&status.phase&&status.phase!==phase){
+      phase=status.phase;
+      if(phase==='checkout')showToast([`Checking out worktree for ${name}…`,worktreeNotice].filter(Boolean).join(' '),false,8000);
+      else if(phase==='startup')showToast(`Starting ${name}…`);
+    }
     if(status?.state==='failed'||(status?.ok&&status.state&&status.state!=='launching')){
       throw new Error(spawnFailureReason(status,'The launcher failed'));
     }
@@ -9352,7 +9417,7 @@ function fillSpawnButton(event){
   fill.animate([{transform:'scale(0)',opacity:1},{transform:'scale(30)',opacity:0}],{duration:520,easing:'ease-out'});
 }
 async function submitSpawn(event){
-  event.preventDefault();if(spawnAttempt||!spawnTask.value.trim()||spawnBrowserBlocked())return;
+  event.preventDefault();if(spawnAttempt||!spawnTask.value.trim()||spawnBrowserBlocked()||(selScientist&&!spawnAdjective.value.trim()))return;
   const p=providerById(selProvider),model=selectedSpawnModel();
   if(!p||!model||!SpawnPicker.harnesses(p,model).some(h=>h.id===selHarness&&h.available)||spawnExplicitEffortMissing(p,selModel))return;
   const payload=spawnPayloadFromForm();
@@ -9377,7 +9442,9 @@ async function submitSpawn(event){
     if(SpawnPicker.locality(p,model)==='local')SpawnPicker.remember(spawnViewerStorage,SPAWN_RECENT_STORAGE_KEY,
       JSON.stringify([p.id,model.id,...(Number.isInteger(model.url_index)?[model.url_index]:[]),...(model.url_key?[model.url_key]:[])]));
     childName=result.child_name||result.tmux_session;
-    if(result.pending)await watchSpawnLaunch(childName,result.verdict_deadline_seconds);
+    const worktreeNotice=typeof result.worktree_notice==='string'?result.worktree_notice:'';
+    if(worktreeNotice)showToast(worktreeNotice,false,8000);
+    if(result.pending)await watchSpawnLaunch(childName,result.verdict_deadline_seconds,worktreeNotice);
     const normalizedName=String(childName||'').toLowerCase();
     const scientist=attempt.scientist||(spawnCatalog?.naming?.scientists||[])
       .find(name=>normalizedName.endsWith(name.toLowerCase()));
@@ -9716,6 +9783,12 @@ function receiveComposerAck(message){
 function cancelComposerAcks(){
   for(const pending of composerAcks.values())pending.done('unknown');
 }
+function logUnroutedPrompt(recipient,reason){
+  void fetch('/telemetry/prompt-routing-failure',{
+    method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,
+    body:JSON.stringify({recipient,reason}),
+  }).catch(()=>{});
+}
 function requestComposerInput(target,message){
   return new Promise(resolve=>{
     const id=Date.now()+':'+(++promptAckSequence);
@@ -9723,14 +9796,19 @@ function requestComposerInput(target,message){
       clearTimeout(timer);composerAcks.delete(id);
       resolve(['accepted','sent','refused','completion-mismatch','completion-unverified','paste-unavailable'].includes(status)?status:'unknown');
     };
-    const timer=setTimeout(()=>done('unknown'),6500);
+    const timeout=message.type==='submit-prompt'&&targetProgram(target.session)==='agy'?32000:6500;
+    const timer=setTimeout(()=>done('unknown'),timeout);
     composerAcks.set(id,{done,paneId:target.paneId});
     const payload={...message,paneId:target.paneId,session:target.session,incarnation:target.incarnation,inputAck:id};
     for(const key of ['mail_instance_id','mail_agent_id']){
       if(target.pane.meta[key])payload[key]=target.pane.meta[key];
     }
-    try{if(!send(payload))done('refused');}
-    catch(_){done('unknown');}
+    const dispatchFailed=status=>{
+      if(message.type==='submit-prompt')logUnroutedPrompt(target.session,'dispatch-failed');
+      done(status);
+    };
+    try{if(!send(payload))dispatchFailed('refused');}
+    catch(_){dispatchFailed('unknown');}
   });
 }
 function recipientRefusal(agent){
@@ -9757,6 +9835,12 @@ function namedComposerTarget(name){
   const paneId=paneIdForSession(name);
   return paneId?captureComposerTarget(paneId):null;
 }
+class ComposerAttachError extends Error {
+  constructor(reason,message){
+    super(message);
+    this.reason=reason;
+  }
+}
 async function resolveComposerTarget(record,connection){
   if(!sameRecipient(record)||socket!==connection)return null;
   if(record.target)return composerTargetPresent(record.target)?record.target:null;
@@ -9764,21 +9848,37 @@ async function resolveComposerTarget(record,connection){
   if(attachedSessions.has(name))return namedComposerTarget(name);
   if(!requestedSessions.has(name)){
     if(!availableSessions.has(name))return null;
+    if(occupiedSessions().size>=MAX_ATTACHED_SESSIONS){
+      throw new ComposerAttachError('terminal-attach-limit','All terminal tabs are in use');
+    }
     composerAttaching.set(name,manualDetached.has(name));
     const reference=typeof record.mail_instance_id==='string'&&Number.isInteger(record.mail_agent_id)?
       {mail_instance_id:record.mail_instance_id,mail_agent_id:record.mail_agent_id}:{};
     if(!requestAttach(name,false,reference)){composerAttaching.delete(name);return null;}
   }
-  return new Promise(resolve=>{
-    const finish=target=>{
-      clearTimeout(timer);document.removeEventListener('oc:terminal-ready',ready);resolve(target);
+  return new Promise((resolve,reject)=>{
+    const finish=()=>{
+      clearTimeout(timer);
+      document.removeEventListener('oc:terminal-ready',ready);
+      document.removeEventListener('oc:terminal-attach-error',failed);
     };
     const ready=event=>{
       if(event.detail!==name)return;
-      finish(sameRecipient(record)&&socket===connection?namedComposerTarget(name):null);
+      finish();
+      resolve(sameRecipient(record)&&socket===connection?namedComposerTarget(name):null);
     };
-    const timer=setTimeout(()=>finish(null),4500);
+    const failed=event=>{
+      if(event.detail.session!==name)return;
+      finish();
+      const detail=typeof event.detail.message==='string'?event.detail.message.trim().slice(0,160):'';
+      reject(new ComposerAttachError('terminal-attach-refused',detail||'Terminal connection refused'));
+    };
+    const timer=setTimeout(()=>{
+      finish();
+      reject(new ComposerAttachError('terminal-attach-timeout','Terminal connection timed out'));
+    },4500);
     document.addEventListener('oc:terminal-ready',ready);
+    document.addEventListener('oc:terminal-attach-error',failed);
   });
 }
 function trackPrompt(target,text,displayText=text,attachments=[]){
@@ -9806,15 +9906,27 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
   const results=[];
   try{
     for(const record of records){
-      const target=await resolveComposerTarget(record,connection);
-      const valid=()=>socket===connection&&sameRecipient(record,target)&&composerTargetPresent(target)&&stillValid();
       let status='refused',receipt=null,problem='',originalPath=false;
-      if(target&&valid()){
+      try{
+        const target=await resolveComposerTarget(record,connection);
+        const valid=()=>socket===connection&&sameRecipient(record,target)&&composerTargetPresent(target)&&stillValid();
+        if(!target){
+          const changed=socket!==connection||!sameRecipient(record);
+          logUnroutedPrompt(record.name,changed?'target-changed':'target-unavailable');
+          problem=changed?'Terminal or recipient changed':'Terminal unavailable';
+          continue;
+        }
+        if(!valid()){
+          logUnroutedPrompt(record.name,'target-changed');
+          problem='Terminal or recipient changed';
+          continue;
+        }
         if(readerApproval?.question(target)){
           if(records.length===1&&!entries.length)status=await readerApproval.answerDraft(target,record.draft);
-          else problem='Answer this question without attachments or other recipients';
-          results.push({...record,status,receipt,problem});
-          releaseComposerTarget(record.name);
+          else{
+            logUnroutedPrompt(record.name,'question-with-other-recipients');
+            problem='Answer this question without attachments or other recipients';
+          }
           continue;
         }
         let paths=[];
@@ -9822,11 +9934,15 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
           try{
             const selection={session:target.session,paneId:target.paneId,incarnation:target.incarnation};
             paths=await OrreryPromptAttachments.upload(selection,entries);
-          }catch(error){problem=error.message||'Attachment unavailable';}
+          }catch(error){
+            logUnroutedPrompt(record.name,'attachment-failed');
+            problem=error.message||'Attachment unavailable';
+            continue;
+          }
         }
-        if(problem||!valid()){
-          results.push({...record,status,receipt,problem});
-          releaseComposerTarget(record.name);
+        if(!valid()){
+          logUnroutedPrompt(record.name,'target-changed');
+          problem='Terminal or recipient changed';
           continue;
         }
         const claude=record.vocabulary.program==='claude';
@@ -9847,10 +9963,19 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
         }else if(status==='paste-unavailable'){
           status='refused';problem='Could not verify multiline paste support in this terminal';
         }
+      }catch(error){
+        if(error instanceof ComposerAttachError){
+          logUnroutedPrompt(record.name,error.reason);
+          problem=error.message;
+        }else{
+          logUnroutedPrompt(record.name,'preparation-failed');
+          problem='Could not prepare the prompt';
+        }
+      }finally{
+        if(status!=='accepted')receipt?.cancel();
+        results.push({...record,status,receipt,problem,originalPath});
+        releaseComposerTarget(record.name);
       }
-      if(status!=='accepted')receipt?.cancel();
-      results.push({...record,status,receipt,problem,originalPath});
-      releaseComposerTarget(record.name);
     }
     const sent=results.filter(result=>result.status==='accepted');
     const refused=results.filter(result=>result.status==='refused');

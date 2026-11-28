@@ -93,7 +93,8 @@ def roster(request):
                     return
                 status, rows = state['checks'].pop(0) if state['checks'] else (200, live)
                 state['trace'].append(('roster', status, [row['category'] for row in rows]))
-                self.answer({'agents': rows, 'retired': state['retired']} if status == 200 else {'error': 'busy'}, status)
+                self.answer({'agents': rows, 'retired': state['retired']} if status == 200 else
+                            {'error': 'dashboard slow' if status == 502 else 'busy'}, status)
             elif path.path == '/api/version':
                 self.answer({'api': state['api']})
             elif path.path.startswith(('/api/', '/telemetry/')):
@@ -112,7 +113,8 @@ def roster(request):
             elif body.get('check_only'):
                 self.answer({'ok': True, 'action': 'validated'})
             elif self.path == '/api/jump' and 'permission' in body:
-                self.answer({'ok': True, 'action': 'resumed', 'tools_changed': True})
+                self.answer({'ok': True, 'action': 'resumed', 'tools_changed': True,
+                             'warning': state.get('permission_warning')})
             else:
                 self.answer({'ok': True})
 
@@ -413,6 +415,38 @@ def test_permission_restart_checks_current_conversation_before_exit(roster):
     assert state['trace'] == [('roster', 200, ['agent'])]
 
 
+@pytest.mark.parametrize(('status','rows','expected'), [
+    (502, [], 'Live roster HTTP 502 (dashboard timed out) after '),
+    (200, [TOP, TOP_DIRECT], 'No live roster row for CopperFixture (2 rows)'),
+])
+def test_permission_restart_distinguishes_http_failure_from_missing_agent(roster, status, rows, expected):
+    js, wait, state = roster
+    state['checks'] = [(status, rows), (status, rows)]
+    open_permissions(js, 'CopperFixture', '[data-browser]')
+    js('permissionApply.click()')
+    wait(f"toastEl.textContent.includes({json.dumps(expected)})")
+    assert state['trace'] == [('roster', status, [row['category'] for row in rows])] * 2
+    if status == 502:
+        assert js(r'/HTTP 502 .* after \d+\.\ds/.test(toastEl.textContent)')
+
+
+def test_permission_restart_retries_a_timed_out_roster_before_sending_exit(roster):
+    js, wait, state = roster
+    state['checks'] = [(502, []), (200, [ACTIVE]), (200, [])]
+    state['stop_checks'] = [EXITED]
+    open_permissions(js, 'CopperFixture', '[data-computer="view"]')
+    js('permissionApply.click()')
+    wait("toastEl.textContent.startsWith('Resume accepted')")
+    assert state['trace'] == [
+        ('roster', 502, []),
+        ('roster', 200, ['agent']),
+        ('/api/exit', {'session': 'CopperFixture'}),
+        ('roster', 200, []),
+        ('history', 'gone'),
+        permission_jump('CopperFixture', ACTIVE_SID, computer_use='view'),
+    ]
+
+
 def test_failed_permission_exit_never_resumes(roster):
     js, wait, state = roster
     state['checks'] = [(200, [ACTIVE])]
@@ -503,7 +537,8 @@ def test_api46_validates_restart_and_sends_the_same_conversation_to_exit(roster,
 
 
 @pytest.mark.parametrize('roster', [54], indirect=True)
-def test_api54_browser_mode_restart_validates_and_resumes_the_same_conversation(roster):
+@pytest.mark.parametrize('mode', ['temporary', 'personal'])
+def test_api54_browser_mode_restart_validates_and_resumes_the_same_conversation(roster, mode):
     js, wait, state = roster
     browser = {'value': False, 'mode': 'off', 'options': ['off', 'temporary', 'personal'], 'can_change': True}
     controls = {'browser_use': browser | {'action': 'restart'}}
@@ -511,18 +546,23 @@ def test_api54_browser_mode_restart_validates_and_resumes_the_same_conversation(
     stopped = EXITED | {'permission_controls': {'browser_use': browser | {'action': 'resume'}}}
     state['checks'] = [(200, [active]), (200, [])]
     state['stop_checks'] = [stopped]
+    if mode == 'personal':
+        state['permission_warning'] = 'In Chrome, choose Allow when “Allow remote debugging?” appears.'
     js(f"currentAgentNamed('CopperFixture').permission_controls={json.dumps(controls)}")
     open_permissions(js, 'CopperFixture', '[data-browser="off"]')
     assert not js('permissionConfirm.open')
     assert js("Array.from(agentDetail.querySelectorAll('[data-browser]'),button=>button.dataset.browser)") == [
         'off', 'temporary', 'personal',
     ]
-    open_permissions(js, 'CopperFixture', '[data-browser="temporary"]')
+    open_permissions(js, 'CopperFixture', f'[data-browser="{mode}"]')
     assert js("permissionApply.textContent") == "Restart"
-    assert js("permissionBrowser.validity.valid&&permissionBrowser.value==='temporary'")
+    assert js(f"permissionBrowser.validity.valid&&permissionBrowser.value==={mode!r}")
     js("permissionApply.click()")
     wait("toastEl.textContent.startsWith('Resume accepted')")
-    path, jump = permission_jump('CopperFixture', ACTIVE_SID, browser_mode='temporary')
+    if mode == 'personal':
+        assert state['permission_warning'] in js('toastEl.textContent')
+        assert js("toastEl.classList.contains('multiline')")
+    path, jump = permission_jump('CopperFixture', ACTIVE_SID, browser_mode=mode)
     assert state['trace'] == [
         ('roster', 200, ['agent']),
         (path, jump | {'check_only': True}),

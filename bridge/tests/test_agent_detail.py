@@ -157,6 +157,24 @@ def test_api54_shows_the_browser_choices_in_order_and_marks_the_current_mode():
     assert 'role="switch"' not in markup
 
 
+def test_wsl_browser_install_command_is_visible_when_temporary_mode_is_unavailable():
+    markup = render({
+        "name": "FixtureAgent", "running": True, "harness_kind": "antigravity",
+        "permission_controls": {
+            "browser_use": {"value": False, "mode": "off", "options": ["off", "personal"],
+                            "can_change": True, "action": "restart",
+                            "unavailable": {"temporary": {
+                                "reason": "Temporary Chrome needs Chrome or Chromium installed inside WSL.",
+                                "instruction": "Download the official Debian package.",
+                                "command": "sudo apt install ./google-chrome-stable_current_amd64.deb",
+                            }}},
+        },
+    }, api=58)
+    assert 'title="Browser use: Temporary Chrome (Temporary Chrome needs Chrome or Chromium installed inside WSL.)" disabled' in markup
+    assert '<small class="agent-detail-observed-reason">Temporary Chrome needs Chrome or Chromium installed inside WSL.' in markup
+    assert '<code>sudo apt install ./google-chrome-stable_current_amd64.deb</code>' in markup
+
+
 def test_live_process_observations_show_unknown_and_reason_without_controls():
     agent = {
         "name": "FixtureAgent", "running": True, "harness_kind": "claude",

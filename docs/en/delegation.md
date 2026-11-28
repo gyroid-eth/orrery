@@ -196,6 +196,12 @@ Explicit `--tools mcp:chrome-devtools` on dsh or Hermes uses the same Codex Chro
 
 New Agent offers Off, Temporary Chrome, and My Chrome. Temporary Chrome uses a temporary profile for the child that is removed when Chrome closes. My Chrome uses your usual Chrome via Claude in Chrome for Claude Code or Chrome DevTools `--autoConnect` for the other supported harnesses. If Chrome asks for connection permission on the first connection, browser actions wait until you respond on the Mac. Antigravity hides the choices when its global Chrome MCP is enabled because workspace settings cannot replace it.
 
+Temporary Chrome on WSL needs Node.js and a Linux installation of Chrome or Chromium inside WSL. On x86-64 Ubuntu, download the official Chrome `.deb` package and run the following command from the folder containing it. [Google Chrome installation instructions](https://support.google.com/chrome/answer/95346)
+
+```bash
+sudo apt install ./google-chrome-stable_current_amd64.deb
+```
+
 This follows Codex's default MCP inheritance, which differs from explicit `--tools browser` and its classified tool exposure and individual approvals. Explicit native browser selection also discovers the Codex definition, but stops while dsh and Hermes cannot express those approval requirements. Default inheritance also refuses Codex-specific tool filters/approvals or other unrepresentable settings, rather than dropping them and broadening permissions. Supported definitions contain only the stdio `command`, `args`, `env`, `cwd` and `enabled` fields. The CLI displays `Harness prepare failed: unsupported_mcp_selection` (or `Harness resume-prepare failed: unsupported_mcp_selection` during resume preparation). `native_mcp_selection_unsupported` and `native_mcp_approval_unsupported` are internal exception reasons, not the displayed diagnostic.
 
 Inheritance does not add native CLI execution approvals. A person answers Chrome's connection permission. Downloads follow the usual Chrome settings; this selection grants no additional sandbox filesystem access. Check whether the child's native shell can read the destination.

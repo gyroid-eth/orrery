@@ -224,6 +224,60 @@ def test_roster_selection_sends_each_agent_once_and_keeps_only_failed_targets(co
         assert js("toastEl.textContent.includes('Delivery unconfirmed for QuietCopernicus')")
 
 
+def test_multi_send_continues_after_a_recipient_preparation_fails(cockpit):
+    js, wait, _ = recipients(cockpit)
+    js("""window.failedRouting=[];
+      const liveFetch=fetch, originalResolver=resolveComposerTarget;
+      window.fetch=(url,opts)=>{
+        if(url==='/telemetry/prompt-routing-failure'){
+          failedRouting.push(JSON.parse(opts.body));return Promise.resolve(new Response(null,{status:204}));
+        }
+        return liveFetch(url,opts);
+      };
+      resolveComposerTarget=(record,connection)=>record.name==='QuietCopernicus'?
+        Promise.reject(new Error('fixture error')):originalResolver(record,connection);
+      promptRecipients.set(['ReviewFixture','QuietCopernicus','EmeraldBose']);
+      promptInput.value='Shared draft';sendPrompt();""")
+    wait('!promptBusy')
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.session)") == [
+        'ReviewFixture', 'EmeraldBose',
+    ]
+    assert js('failedRouting') == [{'recipient': 'QuietCopernicus', 'reason': 'preparation-failed'}]
+    assert js('promptRecipients.names') == ['QuietCopernicus']
+    assert js("toastEl.textContent.includes('Not sent to QuietCopernicus')")
+
+
+@pytest.mark.parametrize('attach_status', ['reset', 'error'])
+def test_batch_opens_an_unopened_recipient_and_reports_its_attach_refusal(cockpit, attach_status):
+    js, wait, _ = terminal(cockpit)
+    js("window.attachStatus=" + repr(attach_status) + """;
+      const name='QuietCopernicus';
+      currentAgents.push({name,running:true,program:'claude-code',category:'agent'});
+      availableSessions.set(name,name);
+      const originalSend=window.send;
+      window.send=packet=>{
+        if(packet.type==='attach'&&packet.session===name)queueMicrotask(()=>{
+          if(attachStatus==='error'){
+            handle({type:'error',session:name,message:'maximum 12 attached sessions per client'});
+          }else{
+            handle({type:'reset',session:name,incarnation:'second',
+              panes:[{paneId:'%902',windowId:'@902',width:80,height:20,active:true}]});
+          }
+        });
+        return originalSend(packet);
+      };
+      promptRecipients.set([name,'ReviewFixture']);
+      promptInput.value='Shared draft';sendPrompt();""")
+    wait("!promptBusy&&packets.some(packet=>packet.type==='submit-prompt')")
+    assert js("packets.find(packet=>packet.type==='attach').session") == 'QuietCopernicus'
+    assert js('activeId') == '%901'
+    expected = ['QuietCopernicus', 'ReviewFixture'] if attach_status == 'reset' else ['ReviewFixture']
+    assert js("packets.filter(packet=>packet.type==='submit-prompt').map(packet=>packet.session)") == expected
+    assert js('promptInput.value') == ('' if attach_status == 'reset' else 'Shared draft')
+    if attach_status == 'error':
+        assert 'QuietCopernicus (maximum 12 attached sessions per client)' in js('toastEl.textContent')
+
+
 def test_recipient_visibility_menu_keeps_hidden_drafts_private(cockpit):
     js, wait, _ = recipients(cockpit)
     js("""window.visibilityButton=document.querySelector('.prompt-visibility-trigger');
@@ -653,6 +707,6 @@ def test_a_recipient_pin_survives_the_draft_and_refuses_a_reused_name(cockpit):
     js("currentAgentNamed('QuietCopernicus').created=2;packets.length=0;sendPrompt()")
     wait("!promptBusy")
     assert js("packets.filter(packet=>['input','submit-prompt'].includes(packet.type))") == []
-    assert js("toastEl.textContent") == 'Not sent to QuietCopernicus'
+    assert js("toastEl.textContent") == 'Not sent to QuietCopernicus (Terminal or recipient changed)'
     assert js("promptRecipients.names") == ['QuietCopernicus']
     assert js("promptInput.value") == 'Keep the intended recipient'

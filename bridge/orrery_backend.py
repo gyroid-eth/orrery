@@ -291,6 +291,7 @@ PROXY_ROUTES = {
     "/telemetry/messages": ("/api/messages-since", ("since", "limit")),
     "/telemetry/graph": ("/api/graph", ("all", "days", "spawn_only")),
     SPAWN_CATALOG_ROUTE: ("/api/spawn-names", ()),
+    "/telemetry/suggest-name": ("/api/suggest-name", ("scientist", "choices")),
     "/telemetry/fs/dir-search": ("/api/fs/dir-search", ("q", "under")),
     "/telemetry/spawn-status": ("/api/spawn-status", ("name", "attempt_id", "mail_instance_id", "mail_agent_id")),
 }
@@ -1511,6 +1512,11 @@ class SessionBridgeManager:
     ) -> None:
         if isinstance(self.tmux_bin,FreshTargetBoundary):
             await self._attach_fresh(peer,attached,session);return
+
+        async def refuse(reason: str) -> None:
+            log_agent_action('attach', session, 'refused', reason)
+            await send_error(peer, session, reason)
+
         legacy_epoch = None
         if isinstance(self.tmux_bin, LegacyTargetBoundary):
             if not self._legacy_peer_current(peer):
@@ -1519,8 +1525,14 @@ class SessionBridgeManager:
         try:
             await asyncio.to_thread(require_target, self.tmux_bin, "attach", session=session)
         except TargetRefused as exc:
-            await send_error(peer, session, str(exc))
+            await refuse(str(exc))
             return
+        # Recorder reconciliation can remove a session before the browser
+        # sees it disappear. The peer's set can still contain its old name.
+        attached.intersection_update(
+            name for name, state in self.states.items()
+            if not state.bridge._closed and peer in state.bridge.clients
+        )
         if session in attached:
             state = self.states.get(session)
             if state is not None and peer in state.bridge.clients:
@@ -1529,11 +1541,7 @@ class SessionBridgeManager:
             attached.discard(session)
 
         if len(attached) >= MAX_CLIENT_SESSIONS:
-            await send_error(
-                peer,
-                session,
-                f"maximum {MAX_CLIENT_SESSIONS} attached sessions per client",
-            )
+            await refuse(f"maximum {MAX_CLIENT_SESSIONS} attached sessions per client")
             return
 
         try:
@@ -1543,26 +1551,23 @@ class SessionBridgeManager:
         except OSError:
             exists = False
         if not exists:
-            await send_error(peer, session, f"tmux session not found: {session}")
+            await refuse(f"tmux session not found: {session}")
             return
 
         try:
             state = await self._ensure_bridge(session, legacy_epoch=legacy_epoch)
         except Exception as exc:
-            await send_error(
-                peer,
-                session,
-                str(exc) if isinstance(exc, TargetRefused) else f"failed to attach tmux session: {type(exc).__name__}",
-            )
+            await refuse(str(exc) if isinstance(exc, TargetRefused)
+                         else f"failed to attach tmux session: {type(exc).__name__}")
             return
         if state is None:
-            await send_error(peer, session, "backend is shutting down")
+            await refuse("backend is shutting down")
             return
 
         async with self._lock:
             if (self.states.get(session) is not state
                     or (legacy_epoch is not None and not self._legacy_peer_current(peer))):
-                await send_error(peer, session, f"tmux session not found: {session}")
+                await refuse(f"tmux session not found: {session}")
                 return
             state.bridge.clients.add(peer)
             state.bridge.client_locks.setdefault(peer, asyncio.Lock())
@@ -1689,6 +1694,8 @@ class SessionBridgeManager:
         state = self._find_attached_pane(attached, pane_id)
         if state is None:
             if ack is not None:
+                if submit:
+                    log_agent_action('submit-prompt', payload.get('session'), 'refused', 'pane-not-attached')
                 await peer.send_json(dict(type='input-ack', id=ack, paneId=pane_id, status='refused'))
                 return
             if message_type in {'approval-inspect', 'approval-answer'}:
@@ -1724,13 +1731,15 @@ class SessionBridgeManager:
             bridge = state.bridge
             data = payload.get('data')
             status = 'refused'
+            diagnostics = {'reason': 'target-or-prompt-invalid'}
             if (payload.get('session') == session and payload.get('incarnation') == bridge._incarnation
                     and (interrupt or isinstance(data, str) and data
                          and len(data.encode('utf-8', errors='replace')) <= 262144)):
                 target = bridge.config.tmux_bin
                 write = bridge.interrupt if interrupt else bridge.submit_prompt if submit else bridge.send_input
                 args = () if interrupt else (data,)
-                options = {} if submit or interrupt else {'acknowledge': True}
+                diagnostics.clear()
+                options = {'diagnostics': diagnostics} if submit else {} if interrupt else {'acknowledge': True}
                 try:
                     if isinstance(target, FreshPaneBoundary):
                         proofs = bridge._fresh_peer_proofs.get(peer)
@@ -1741,6 +1750,10 @@ class SessionBridgeManager:
                         status = await write(pane_id, *args, **options)
                 except (TargetRefused, OSError, RuntimeError):
                     status = 'refused'
+                    diagnostics['reason'] = 'target-unavailable'
+            if submit:
+                log_agent_action('submit-prompt', session, status,
+                                 None if status == 'accepted' else diagnostics.get('reason') or status)
             await peer.send_json(dict(type='input-ack', id=ack, paneId=pane_id, status=status))
             return
         if isinstance(state.bridge.config.tmux_bin,FreshPaneBoundary):
@@ -1940,16 +1953,19 @@ async def send_error(
 # computation there (the dashboard computes these in seconds, and computations
 # that overlap slow each other down). These pollers keep only in-flight work.
 CATALOG_PROXY_TIMEOUT = 20.0
+ACTION_ROSTER_PROXY_TIMEOUT = 12.0
 COALESCED_ROUTES = frozenset({"/telemetry/agents", "/telemetry/graph", "/telemetry/messages"})
 
 
 async def fetch_proxied(
-    http_session: ClientSession, path: str, url: str, tmux_bin="tmux"
+    http_session: ClientSession, path: str, url: str, tmux_bin="tmux", *, timeout=None,
 ) -> tuple[bytes, int, str]:
     """One upstream GET for proxy_dashboard: (body, status, content type).
     Raises ClientError / asyncio.TimeoutError when the dashboard does not answer."""
     # Catalog construction can outlast ordinary six-second dashboard polls.
-    options = {"timeout": ClientTimeout(total=CATALOG_PROXY_TIMEOUT)} if path == SPAWN_CATALOG_ROUTE else {}
+    if path == SPAWN_CATALOG_ROUTE:
+        timeout = CATALOG_PROXY_TIMEOUT
+    options = {"timeout": ClientTimeout(total=timeout)} if timeout is not None else {}
     async with http_session.get(url, **options) as response:
         body = await response.read()
         status = response.status
@@ -2091,23 +2107,26 @@ SPAWN_CATALOG_KEY = web.AppKey("spawn_catalog", SpawnCatalogCache)
 
 
 def shared_fetch(
-    inflight: dict[str, "asyncio.Task[tuple[bytes, int, str]]"],
+    inflight: dict[tuple[str, float | None], "asyncio.Task[tuple[bytes, int, str]]"],
     http_session: ClientSession,
     path: str,
     url: str,
     tmux_bin="tmux",
+    *,
+    timeout=None,
 ) -> "asyncio.Task[tuple[bytes, int, str]]":
     """The fetch for `url` already on its way, or a new one. The task is not
     tied to the request that started it, so a tab that closes mid-request
     does not cancel the answer the others wait for."""
-    task = inflight.get(url)
+    key = (url, timeout)
+    task = inflight.get(key)
     if task is None:
-        task = asyncio.create_task(fetch_proxied(http_session, path, url, tmux_bin))
-        inflight[url] = task
+        task = asyncio.create_task(fetch_proxied(http_session, path, url, tmux_bin, timeout=timeout))
+        inflight[key] = task
 
         def done(finished: asyncio.Task) -> None:
-            if inflight.get(url) is finished:
-                del inflight[url]
+            if inflight.get(key) is finished:
+                del inflight[key]
             if not finished.cancelled():
                 finished.exception()  # retrieved, even when every waiter has gone
 
@@ -2179,7 +2198,11 @@ async def proxy_dashboard(request: web.Request) -> web.Response:
             if catalog_state:
                 headers["X-Orrery-Catalog-State"] = catalog_state
         elif request.path in COALESCED_ROUTES:
-            task = shared_fetch(request.app[PROXY_INFLIGHT_KEY], http_session, request.path, url, request.app[TMUX_BIN_KEY])
+            action_check = (request.path == "/telemetry/agents" and kept.get("scope") == "live"
+                            and request.headers.get("X-Orrery-Action-Check") == "1")
+            task = shared_fetch(request.app[PROXY_INFLIGHT_KEY], http_session, request.path, url,
+                                request.app[TMUX_BIN_KEY],
+                                timeout=ACTION_ROSTER_PROXY_TIMEOUT if action_check else None)
             body, status, content_type = await asyncio.shield(task)
         else:
             body, status, content_type = await fetch_proxied(http_session, request.path, url, request.app[TMUX_BIN_KEY])
@@ -2980,6 +3003,33 @@ ACTION_RESULT_UNKNOWN = (
 )
 
 
+def log_agent_action(action, recipient, status, reason):
+    name = recipient if isinstance(recipient, str) and re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', recipient) else None
+    record = {'operation': action, 'recipient': name, 'status': status,
+              'confirmed': status == 'accepted',
+              'reason': reason[:240] if isinstance(reason, str) else None}
+    print('[orrery action] ' + json.dumps(record, ensure_ascii=True), file=sys.stderr, flush=True)
+
+
+def _action_object(data):
+    try:
+        value = json.loads(data)
+    except (ValueError, TypeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+async def log_unrouted_prompt(request: web.Request) -> web.Response:
+    data = _action_object(await request.read())
+    reason = data.get('reason')
+    if reason not in ('target-unavailable', 'target-changed', 'attachment-failed',
+                      'terminal-attach-refused', 'terminal-attach-timeout', 'terminal-attach-limit',
+                      'question-with-other-recipients', 'dispatch-failed', 'preparation-failed'):
+        return web.json_response({'error': 'invalid prompt routing result'}, status=400)
+    log_agent_action('submit-prompt', data.get('recipient'), 'refused', reason)
+    return web.Response(status=204)
+
+
 async def proxy_dashboard_passthrough(request: web.Request) -> web.Response:
     """Same-origin embed support: forward /network/*, /api/*, /assets/* to :8770.
 
@@ -3002,12 +3052,19 @@ async def proxy_dashboard_passthrough(request: web.Request) -> web.Response:
         headers["Content-Type"] = content_type
     http_session = request.app[HTTP_SESSION_KEY]
     action = request.method == "POST"
+    exit_request = action and request.path == '/api/exit'
+    recipient = _action_object(body).get('session') if exit_request else None
     try:
         async with http_session.request(
             request.method, url, data=body, headers=headers,
             **({"timeout": ClientTimeout(total=ACTION_PROXY_TIMEOUT)} if action else {}),
         ) as response:
             payload = await response.read()
+            if exit_request:
+                result = _action_object(payload)
+                status = 'accepted' if response.ok and result.get('ok') is True else 'refused'
+                reason = None if status == 'accepted' else result.get('error') or f'HTTP {response.status}'
+                log_agent_action('exit', recipient, status, reason)
             if action and request.path == '/api/annotate' and 200 <= response.status < 300:
                 invalidate_annotations_cache()
             content_type = response.headers.get(
@@ -3024,6 +3081,8 @@ async def proxy_dashboard_passthrough(request: web.Request) -> web.Response:
             )
     except asyncio.TimeoutError:
         if action:
+            if exit_request:
+                log_agent_action('exit', recipient, 'unknown', 'dashboard-timeout')
             return web.json_response(
                 {
                     "ok": False,
@@ -3037,12 +3096,16 @@ async def proxy_dashboard_passthrough(request: web.Request) -> web.Response:
         return web.json_response({"error": "dashboard offline"}, status=502)
     except ClientConnectorError:
         # Refused before anything was sent: the dashboard is not there.
+        if exit_request:
+            log_agent_action('exit', recipient, 'refused', 'dashboard-offline')
         return web.json_response(
             {"ok": False, "error": "dashboard offline"} if action else {"error": "dashboard offline"},
             status=502,
         )
     except ClientError:
         if action:
+            if exit_request:
+                log_agent_action('exit', recipient, 'unknown', 'dashboard-answer-lost')
             # Connected and sent, then the answer was lost (closed, cut short):
             # the dashboard may well have acted on it.
             return web.json_response(
@@ -5260,11 +5323,10 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
                         await manager.handle_message(peer, attached, payload)
                 except Exception as exc:
                     session = payload.get("session")
-                    await send_error(
-                        peer,
-                        session if isinstance(session, str) else None,
-                        str(exc) if isinstance(exc, TargetRefused) else f"request failed: {type(exc).__name__}",
-                    )
+                    reason = str(exc) if isinstance(exc, TargetRefused) else f"request failed: {type(exc).__name__}"
+                    if payload.get('type') == 'attach':
+                        log_agent_action('attach', session, 'refused', reason)
+                    await send_error(peer, session if isinstance(session, str) else None, reason)
             elif message.type in {
                 WSMsgType.CLOSE,
                 WSMsgType.CLOSED,
@@ -5483,9 +5545,11 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
     app.router.add_get("/telemetry/portrait", serve_portrait)
     app.router.add_get("/telemetry/sessions", serve_sessions)
     app.router.add_get(SPAWN_CATALOG_ROUTE, proxy_dashboard)
+    app.router.add_get("/telemetry/suggest-name", proxy_dashboard)
     app.router.add_get("/telemetry/spawn-status", proxy_dashboard)
     app.router.add_get("/telemetry/skills", serve_skills)
     app.router.add_post("/telemetry/prompt-attachment", serve_prompt_attachment)
+    app.router.add_post("/telemetry/prompt-routing-failure", log_unrouted_prompt)
     app.router.add_get("/telemetry/clipboard/files", serve_clipboard_files)
     app.router.add_post("/telemetry/clipboard/attachments", serve_clipboard_attachments)
     app.router.add_get("/telemetry/fs/dirs", serve_fs_dirs)

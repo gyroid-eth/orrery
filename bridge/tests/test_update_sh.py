@@ -64,6 +64,7 @@ class Stack:
             "PATH": os.environ["PATH"],
             "HOME": str(self.home),
             "AGENTSTACK_HOME": str(self.agentstack),
+            "PORT": "0",
             **GIT_ENV,
         }
         self.telemetry = self.repo("telemetry", {
@@ -152,6 +153,43 @@ def dashboard():
 
 # ---------------------------------------------------------------- positive
 
+@pytest.mark.parametrize("running", ["stale", "current", "stopped", "other-checkout"])
+def test_update_reports_only_a_live_stale_backend_for_this_checkout(stack, dashboard, running):
+    old = stack.head("cockpit")
+    installed = stack.publish("cockpit")
+    root = stack.tmp if running == "other-checkout" else stack.cockpit
+    response = json.dumps({"backend": "ok", "root": str(root), "boot": "1795798566-49771",
+                           "commit": installed if running == "current" else old}).encode()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            assert self.path == "/telemetry/health"
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+
+        def log_message(self, *args):
+            pass
+
+    with ThreadingHTTPServer(("127.0.0.1", 0), Handler, bind_and_activate=False) as backend:
+        backend.server_bind()
+        if running != "stopped":
+            backend.server_activate()
+            threading.Thread(target=backend.serve_forever, daemon=True).start()
+        try:
+            result = stack.update(ORRERY_DASHBOARD_URL=dashboard, PORT=str(backend.server_port))
+        finally:
+            if running != "stopped":
+                backend.shutdown()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert ("ORRERY's backend is still running an older version" in result.stdout) == (running == "stale")
+    if running == "stale":
+        assert "kill -TERM 49771" in result.stdout
+        assert "Mac: " in result.stdout and "WSL: " in result.stdout
+
+
 def test_positive_both_are_updated_telemetry_first(stack, dashboard):
     new_telemetry = stack.publish("telemetry")
     new_cockpit = stack.publish("cockpit")
@@ -165,7 +203,6 @@ def test_positive_both_are_updated_telemetry_first(stack, dashboard):
     assert "Updated." in result.stdout
     assert "orrery-telemetry: 2099.01.01 (API 2)" in result.stdout
     assert f"cockpit:          {new_cockpit[:7]}" in result.stdout
-    assert "./scripts/start-cockpit.sh again" in result.stdout
 
 
 def test_positive_already_current_runs_install_and_changes_no_commit(stack, dashboard):

@@ -405,6 +405,36 @@ for _ in range(10):
 PY
 )"
 
+cockpit_head="$(git -C "$COCKPIT_ROOT" rev-parse HEAD)"
+stale_cockpit_pid="$("$python_bin" - "${PORT:-${ORRERY_WSL_PORT:-8791}}" "$COCKPIT_ROOT" "$cockpit_head" <<'PY' 2>/dev/null || true
+import http.client
+import json
+import re
+import sys
+from contextlib import closing
+from pathlib import Path
+
+port, root, installed = sys.argv[1:]
+try:
+    port = int(port)
+    if not 1 <= port <= 65535:
+        raise ValueError("invalid cockpit port")
+    with closing(http.client.HTTPConnection("127.0.0.1", port, timeout=2)) as connection:
+        connection.request("GET", "/telemetry/health")
+        response = connection.getresponse()
+        health = json.loads(response.read(1 << 16)) if response.status == 200 else None
+    if (isinstance(health, dict) and health.get("backend") == "ok"
+            and Path(health["root"]).resolve() == Path(root).resolve()
+            and re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", health["commit"])
+            and health["commit"] != installed):
+        boot = re.fullmatch(r"\d+-([1-9]\d*)", health["boot"])
+        if boot and int(boot[1]) > 1:
+            print(boot[1])
+except (OSError, KeyError, TypeError, ValueError, http.client.HTTPException):
+    pass
+PY
+)"
+
 say ""
 say "=============================================================="
 say "  Updated."
@@ -414,8 +444,13 @@ say ""
 say "  The installer has restarted the dashboard. If it is not"
 say "  answering, check it with ${AGENTSTACK_DIR}/bin/agentstack-doctor"
 say "  and start it with ${AGENTSTACK_DIR}/dashboard/agentctl.sh start."
-say "  Restart the cockpit: press Ctrl-C in its window, then run"
-say "  ./scripts/start-cockpit.sh again."
+if [ -n "$stale_cockpit_pid" ]; then
+  stop_cockpit="ps -p $stale_cockpit_pid -o command= | grep -q '[o]rrery_backend\.py' && kill -TERM $stale_cockpit_pid"
+  note "ORRERY's backend is still running an older version."
+  say "  Mac: Quit ORRERY, run '$stop_cockpit' in Terminal, then reopen ORRERY."
+  say "  WSL: Close the Windows ORRERY app, run '$stop_cockpit' in Ubuntu, then reopen ORRERY from Start."
+  say "  If you started the cockpit from a terminal, run ./scripts/start-cockpit.sh again."
+fi
 say "=============================================================="
 if [ "$plugin_status" -ne 0 ]; then
   say ""

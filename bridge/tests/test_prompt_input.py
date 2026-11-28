@@ -29,6 +29,34 @@ def native_frame(snapshot):
     return submission.frame(native_meta(snapshot), snapshot['lines'], '%1')
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize('capture,harness', [
+    ('claude', 'claude'), ('codex', 'codex'), ('codex-mac', 'codex'),
+    ('dsh', 'dsh'), ('hermes', 'hermes'), ('agy', 'agy'),
+])
+async def test_real_url_drafts_survive_control_mode_capture(capture, harness):
+    # Native capture-pane output before Enter. Codex was captured on Mac and WSL,
+    # Claude and agy on WSL, and dsh and Hermes in isolated Mac terminals.
+    path = Path(__file__).parent / 'fixtures/pane_url_harnesses.json'
+    snapshot = json.loads(path.read_text(encoding='utf-8'))[capture]
+    text = 'https://example.com'
+    assert submission.ready(native_frame(snapshot), text, operator=True)
+
+    bridge = control.TmuxControlBridge(control.ControlConfig('127.0.0.1', 0, 'Fixture', 'tmux'))
+    reply = asyncio.get_running_loop().create_future()
+    bridge._pending_blocks.append(reply)
+    bridge._bounded_blocks[reply] = 262144
+    bridge._handle_line(b'\x1bP1000p%begin 1710000000 1 0')
+    for line in snapshot['lines']:
+        bridge._handle_line(line.encode('utf-8'))
+    bridge._handle_line(b'%end 1710000000 1 0')
+    output = await reply
+    assert output.ok and not output.overflow
+    view = submission.frame(native_meta(snapshot), output.lines, '%1')
+    assert view.editor == harness
+    assert submission.ready(view, text, operator=True)
+
+
 NATIVE_CASES = [pytest.param(harness, case, id=f'{harness}-{case["case"]}')
                 for harness, fixture in NATIVE_PROMPTS.items() for case in fixture['cases']]
 
@@ -47,6 +75,22 @@ def test_hermes_redraw_needs_another_capture_before_using_the_editor():
     view = native_frame(HERMES_REDRAW)
     assert view.redrawing
     assert not view.empty
+
+
+@pytest.mark.parametrize('candidates,selected', [
+    (['/exit'], '/exit'),
+    (['/exit-other'], '/exit-other'),
+    (['/exit', '/exit-other'], None),
+])
+def test_compact_hermes_slash_menu_does_not_need_a_lower_rule(candidates, selected):
+    view = native_frame({
+        'meta': ['2', '0', '7', '1', 'bash'],
+        'lines': [' ☤ fixture-model · 42s', '─' * 46, '❯ /exit',
+                  *(f'\x1b[48;5;234m {candidate}  description…\x1b[0m' for candidate in candidates), ''],
+    })
+    assert view.editor == 'hermes' and view.selected and not view.draft_continues
+    assert view.command_ends_at_cursor and view.selected_command == selected
+    assert submission.ready(view, '/exit') is (selected == '/exit')
 
 
 def test_each_native_slash_picker_has_notice_and_slash_fixtures():
@@ -102,7 +146,7 @@ def test_native_prompt_fixture(harness, case):
 
 
 @pytest.mark.parametrize('harness,case', SUBMISSION_CASES)
-def test_watcher_enters_only_the_verified_native_draft(monkeypatch, harness, case):
+def test_watcher_enters_only_the_verified_native_draft(monkeypatch, tmp_path, harness, case):
     before = case.get('before', NATIVE_PROMPTS[harness]['before'])
     accepted = case.get('accepted', case['ready'])
     should_enter = case.get('enter', accepted)
@@ -135,7 +179,8 @@ def test_watcher_enters_only_the_verified_native_draft(monkeypatch, harness, cas
         return subprocess.CompletedProcess(args, 0, output, '')
 
     monkeypatch.setattr(submission, 'time', SimpleNamespace(monotonic=lambda: elapsed, sleep=tick))
-    monkeypatch.setattr(submission, 'try_lock', lambda _: os.open(os.devnull, os.O_RDONLY))
+    monkeypatch.setattr(submission, 'try_lock',
+                        lambda _: os.open(tmp_path / 'pane.lock', os.O_CREAT | os.O_RDWR, 0o600))
     result = submission.submit(tmux, lambda: True, '%1', case['text'], on_wait=reasons.append)
     assert entered == (['C-m'] if should_enter else [])
     assert result == ('accepted' if accepted else 'unknown')
@@ -237,7 +282,7 @@ async def test_confirmed_input_uses_the_result_of_each_chunk(monkeypatch, tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_receipt_is_bound_to_pane_session_and_bridge_incarnation(tmp_path):
+async def test_receipt_is_bound_to_pane_session_and_bridge_incarnation(tmp_path, capsys):
     sent = []
 
     async def record(*args, **kwargs):
@@ -259,8 +304,14 @@ async def test_receipt_is_bound_to_pane_session_and_bridge_incarnation(tmp_path)
     await manager.handle_message(peer, set(), packet)
     await manager.handle_message(peer, {'Fixture'}, packet)
     await manager.handle_message(peer, {'Fixture'}, dict(packet,type='submit-prompt',data='First\nSecond'))
-    assert [entry['status'] for entry in replies] == ['refused', 'refused', 'accepted', 'accepted']
-    assert sent == [(('%1', '\r'), {'acknowledge': True}), (('%1','First\nSecond'), {})]
+    await manager.handle_message(peer, set(), dict(packet,type='submit-prompt',data='Never logged'))
+    assert [entry['status'] for entry in replies] == ['refused', 'refused', 'accepted', 'accepted', 'refused']
+    assert sent == [(('%1', '\r'), {'acknowledge': True}), (('%1','First\nSecond'), {'diagnostics': {}})]
+    log = capsys.readouterr().err.splitlines()
+    assert [json.loads(line.removeprefix('[orrery action] ')) for line in log] == [
+        dict(operation='submit-prompt', recipient='Fixture', status='accepted', confirmed=True, reason=None),
+        dict(operation='submit-prompt', recipient='Fixture', status='refused', confirmed=False, reason='pane-not-attached'),
+    ]
 
 
 

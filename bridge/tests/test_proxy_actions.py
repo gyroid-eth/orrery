@@ -60,6 +60,9 @@ def _relay(method: str, path: str, *, delay: float = 0.0, action_timeout: float 
                 request.transport.close()
                 await asyncio.sleep(0.5)
                 return response
+            if answer == "refused":
+                return web.json_response({"ok": False, "error": "Cannot confirm /exit in the agent input."},
+                                         status=400)
             return web.json_response({"ok": True, "session": body.get("session")})
 
         upstream = web.Application()
@@ -92,11 +95,22 @@ def _relay(method: str, path: str, *, delay: float = 0.0, action_timeout: float 
     return status, body, received
 
 
-def test_an_exit_slower_than_a_poll_is_answered(monkeypatch):
+def test_an_exit_slower_than_a_poll_is_answered(monkeypatch, capsys):
     """The seminar's case: slower than the poll limit, well inside the action's."""
     status, body, received = _relay("POST", "/api/exit", delay=1.0, monkeypatch=monkeypatch)
     assert (status, body) == (200, {"ok": True, "session": "AquaFermi"})
     assert received == [("POST", "/api/exit", {"session": "AquaFermi"})]
+    assert json.loads(capsys.readouterr().err.removeprefix('[orrery action] ')) == {
+        'operation': 'exit', 'recipient': 'AquaFermi', 'status': 'accepted', 'confirmed': True, 'reason': None,
+    }
+
+
+def test_a_refused_exit_records_the_recipient_and_reason(monkeypatch, capsys):
+    status, body, _ = _relay("POST", "/api/exit", monkeypatch=monkeypatch, answer="refused")
+    assert status == 400 and not body["ok"]
+    assert json.loads(capsys.readouterr().err.removeprefix('[orrery action] ')) == {
+        'operation': 'exit', 'recipient': 'AquaFermi', 'status': 'refused', 'confirmed': False, 'reason': body['error'],
+    }
 
 
 UNKNOWN = "the action may still go through — check the agent before trying again"
@@ -132,8 +146,8 @@ def test_a_get_keeps_the_poll_limit(monkeypatch):
     assert (status, body) == (502, {"error": "dashboard offline"})
 
 
-def test_the_cockpit_bulk_exit_toast_carries_the_first_reason():
+def test_the_cockpit_bulk_exit_toast_carries_each_reason():
     html = (Path(__file__).resolve().parents[1] / "cockpit.html").read_text(encoding="utf-8")
     start = html.index("async function runBulkExit(){")
     body = html[start : html.index("\n}\n", start)]
-    assert "${failures[0]}" in body
+    assert "${failures.join(' · ')}" in body
