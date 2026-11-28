@@ -30,9 +30,8 @@ Gemini integration files and starts Dashboard on macOS and WSL (Ubuntu).
 Install `agy` and sign in when you want to use Gemini. Use
 `--dashboard-only` for a dashboard-only installation.
 
-For [**NEW AGENT**](#dashboard-new-agent), the launcher configures Mail MCP in the
-private launch configuration for standalone agents or in the worktree for
-delegated agents.
+For [**NEW AGENT**](#dashboard-new-agent), the launcher configures Mail MCP in a
+private launch directory, or in the worktree for a delegated worktree launch.
 
 **To send Mail from a top-level `agent-start-gemini` session**, first run
 `scripts/install-gemini-provider.sh --dry-run --configure-mcp`. Show the user
@@ -117,10 +116,14 @@ PARENT_AGENT=<parent-name> \
   /path/to/project
 ```
 
-The launcher pre-registers the child, creates an isolated git worktree, reserves
+The launcher pre-registers the child, creates an isolated git worktree by default, reserves
 declared resources, sends the task to Antigravity over stream-json stdin, and
 uses the session-bound MCP wrapper. Owner-token values are not placed in the
 task, argv, or Antigravity MCP configuration.
+
+On macOS and WSL, pass `--no-worktree` to use the selected folder directly.
+Declare resources relative to that folder. ORRERY loads managed MCP and hook
+files from a private launch directory and preserves the folder's `.agents` settings.
 
 A nominal Antigravity `SUCCESS` is not enough when required actions were denied
 or the textual response is empty. Those cases are reported to the parent as
@@ -146,7 +149,7 @@ See [computer use requirements and setup](computer-use.md) and the
 The dashboard checks launch requirements before registering with ORRERY Mail.
 
 - A delegated launch needs the parent's local owner credential.
-- Delegated launches and standalone launches with Isolation selected need a
+- Creating a worktree requires a
   folder in a Git repository and a base that resolves to a commit (default `HEAD`).
 - The launcher requires `agy`, `tmux`, the selected Python, the adapter hook,
   and the Gemini provider helpers.
@@ -188,14 +191,14 @@ Engine and isolation rules:
   CLI launchers' `high` fallback is not applied to Dashboard launches.
 - **Orchestrator models have fixed effort.** The picker hides the effort
   control and launches with just the model ID.
-- **Delegated launches use an isolated worktree.** On macOS, a standalone
-  launch creates a worktree when you select Isolation.
+- **Isolation** selects a worktree. On macOS and WSL, a delegated API launch
+  with `worktree: false` uses the selected folder directly.
 - **Delegated launches require resources.** Leave resources blank for a standalone launch.
   For delegation, enter comma-separated paths relative to the
-  repository root, for example `src/**,tests/**`. Absolute paths, `..`, `~`,
+  working folder, for example `src/**,tests/**`. Absolute paths, `..`, `~`,
   control characters, a leading `-`, backslashes, and `.git` are rejected, as
-  is any existing symlink component that resolves outside the repository. The
-  adapter repeats the check inside the new worktree before reserving anything.
+  is any existing symlink component that resolves outside the working folder.
+  The adapter checks the folder the child will actually use before reserving anything.
   Declarations are normalized (whitespace, `./`, duplicate slashes, repeats)
   before they are reserved, and a leading `-` is rejected in the normalized
   form too (`./-rf`). Wildcards are matched the way a case-insensitive
