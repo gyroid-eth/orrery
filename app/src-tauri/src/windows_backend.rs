@@ -127,7 +127,7 @@ fn run_in_wsl(port: u16, mode: &str, args: &[&str]) -> Result<String, String> {
         .stdin
         .take()
         .expect("piped WSL stdin")
-        .write_all(WSL_LAUNCHER.as_bytes());
+        .write_all(super::wsl_script_for_bash(WSL_LAUNCHER).as_bytes());
     let output = child
         .wait_with_output()
         .map_err(|error| error.to_string())?;

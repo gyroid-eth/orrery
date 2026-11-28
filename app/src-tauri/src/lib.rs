@@ -24,6 +24,11 @@ const CONFIG_RELATIVE_PATH: &str = ".orrery/config.json";
 
 struct HotkeyBinding(String);
 
+#[cfg(any(windows, test))]
+fn wsl_script_for_bash(script: &str) -> String {
+    script.replace('\r', "")
+}
+
 // Ordered fallbacks keep ORRERY usable when a resident macOS utility owns the
 // preferred binding. Change this list to customize the application hotkey.
 #[cfg(not(windows))]
@@ -992,6 +997,13 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn embedded_wsl_script_uses_lf_and_bash_input_strips_carriage_returns() {
+        let script = include_str!("wsl-backend.sh");
+        assert!(!script.contains('\r'));
+        assert_eq!(wsl_script_for_bash(&script.replace('\n', "\r\n")), script);
+    }
 
     #[test]
     fn backend_restart_requires_new_boot_and_requested_commit() {
