@@ -169,6 +169,111 @@ fn retry_sidecar(window: WebviewWindow) -> Result<bool, String> {
     Ok(true)
 }
 
+fn verify_restarted_backend(status: serde_json::Value, boot: &str, commit: &str) -> Result<serde_json::Value, String> {
+    if status["state"] == "current"
+        && status["running_commit"] == commit
+        && status["boot"].as_str().is_some_and(|new_boot| new_boot != boot)
+    {
+        Ok(status)
+    } else {
+        Err("Could not confirm that the updated backend started.".to_owned())
+    }
+}
+
+#[cfg(not(windows))]
+fn sidecar_lifecycle(action: &str, args: &[&str]) -> Result<String, String> {
+    let (python, script) = backend_sidecar_paths()?;
+    let helper = script.with_file_name("backend_lifecycle.py");
+    let plan = startup_plan()?;
+    let mut command = std::process::Command::new(python);
+    command.arg(helper).args([action, "8791"]).arg(plan["identity"].to_string()).args(args);
+    let output = command.output().map_err(|_| "Could not run the backend lifecycle helper.")?;
+    if !output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stderr);
+        return Err(detail.lines().last().unwrap_or("Backend restart failed.").to_owned());
+    }
+    String::from_utf8(output.stdout).map_err(|_| "Invalid backend lifecycle response.".to_owned())
+}
+
+#[cfg(not(windows))]
+fn backend_status() -> Result<serde_json::Value, String> {
+    let result = sidecar_lifecycle("status", &[])?;
+    serde_json::from_str(&result).map_err(|_| "Invalid backend version response.".to_owned())
+}
+
+#[cfg(not(windows))]
+fn restart_backend(boot: &str, commit: &str, automatic: bool) -> Result<serde_json::Value, String> {
+    let intent = if automatic { "automatic" } else { "manual" };
+    let output = sidecar_lifecycle("stop", &[boot, commit, intent])?;
+    let result: serde_json::Value = serde_json::from_str(&output).map_err(|_| "Invalid backend restart response.")?;
+    if matches!(result["state"].as_str(), Some("busy" | "spent")) {
+        return Ok(result);
+    }
+    if result["state"] != "stopped" {
+        return Err("The backend did not confirm it stopped.".to_owned());
+    }
+    if !backend_online()? {
+        spawn_backend_sidecar()?;
+    }
+    let deadline = std::time::Instant::now() + Duration::from_secs(35);
+    while std::time::Instant::now() < deadline {
+        if let Ok(status) = backend_status() {
+            if let Ok(current) = verify_restarted_backend(status, boot, commit) {
+                return Ok(current);
+            }
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    Err("The updated backend did not become ready. See the ORRERY backend log.".to_owned())
+}
+
+#[tauri::command]
+async fn check_backend_version(window: WebviewWindow) -> Result<serde_json::Value, String> {
+    if window.label() != "main" {
+        return Err("Backend version is only available in the main window.".to_owned());
+    }
+    tauri::async_runtime::spawn_blocking(|| {
+        #[cfg(windows)]
+        { windows_backend::backend_status() }
+        #[cfg(not(windows))]
+        { backend_status() }
+    }).await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn restart_cockpit_backend(
+    window: WebviewWindow, boot: String, commit: String, running_commit: String,
+    automatic: bool, waited: Vec<String>,
+) -> Result<serde_json::Value, String> {
+    if window.label() != "main" {
+        return Err("Backend restart is only available in the main window.".to_owned());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        static RESTART: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let Ok(_guard) = RESTART.try_lock() else {
+            return Ok(serde_json::json!({"state":"busy","operations":[]}));
+        };
+        #[cfg(windows)]
+        let result = windows_backend::restart_backend(&boot, &commit, automatic);
+        #[cfg(not(windows))]
+        let result = restart_backend(&boot, &commit, automatic);
+        if automatic && !matches!(&result, Ok(value) if matches!(value["state"].as_str(), Some("busy" | "spent"))) {
+            let entry = serde_json::json!({
+                "boot": boot, "running_commit": running_commit, "installed_commit": commit,
+                "waited": waited, "error": result.as_ref().err(),
+            }).to_string();
+            #[cfg(windows)]
+            let logged = windows_backend::record_backend_restart(&entry);
+            #[cfg(not(windows))]
+            let logged = sidecar_lifecycle("record", &[&entry]);
+            if let Err(reason) = logged {
+                eprintln!("Could not record the backend restart: {reason}");
+            }
+        }
+        result
+    }).await.map_err(|error| error.to_string())?
+}
+
 #[tauri::command]
 fn active_hotkey(binding: State<'_, HotkeyBinding>) -> String {
     binding.0.clone()
@@ -865,6 +970,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             retry_backend,
+            check_backend_version,
+            restart_cockpit_backend,
             active_hotkey,
             clipboard_file_paths,
             pick_attachment_paths,
@@ -885,6 +992,14 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn backend_restart_requires_new_boot_and_requested_commit() {
+        let status = serde_json::json!({"state":"current","boot":"new","running_commit":"target"});
+        assert!(verify_restarted_backend(status.clone(), "old", "target").is_ok());
+        assert!(verify_restarted_backend(status.clone(), "new", "target").is_err());
+        assert!(verify_restarted_backend(status, "old", "other").is_err());
+    }
 
     #[test]
     fn fresh_startup_matches_exact_host_pin_and_rejects_extra_environment() {

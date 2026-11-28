@@ -100,7 +100,7 @@ fn windows_health(port: u16) -> Result<Option<Value>, String> {
     cockpit_health(body).map(Some).map_err(|_| collision())
 }
 
-fn wsl_health(port: u16, allow_start: bool) -> Result<Value, String> {
+fn run_in_wsl(port: u16, mode: &str, args: &[&str]) -> Result<String, String> {
     let system_root = env::var_os("SystemRoot").ok_or("Windows SystemRoot is unavailable.")?;
     let mut command = Command::new(PathBuf::from(system_root).join("System32/wsl.exe"));
     for (name, flag) in [
@@ -111,12 +111,12 @@ fn wsl_health(port: u16, allow_start: bool) -> Result<Value, String> {
             command.arg(flag).arg(value);
         }
     }
-    let mode = if allow_start { "start" } else { "probe" };
     let mut child = command
         .args(["--cd", "~", "--exec", "bash", "-s", "--"])
         .arg(port.to_string())
         .arg(mode)
         .arg(env::var_os("ORRERY_WSL_ROOT").unwrap_or_default())
+        .args(args)
         .creation_flags(CREATE_NO_WINDOW)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -144,7 +144,10 @@ fn wsl_health(port: u16, allow_start: bool) -> Result<Value, String> {
         };
     }
     written.map_err(|error| error.to_string())?;
-    let output = String::from_utf8_lossy(&output.stdout);
+    String::from_utf8(output.stdout).map_err(|_| "Invalid WSL cockpit response.".to_owned())
+}
+
+fn parse_wsl_health(port: u16, output: &str) -> Result<Value, String> {
     let mut fields = output.splitn(3, '\0');
     let (Some(plan), Some(root), Some(health)) = (fields.next(), fields.next(), fields.next())
     else {
@@ -171,12 +174,18 @@ fn wsl_health(port: u16, allow_start: bool) -> Result<Value, String> {
 fn verified_port() -> Result<u16, String> {
     let port = configured_port()?;
     let existing = windows_health(port)?;
-    let expected = wsl_health(port, existing.is_none())?;
+    let output = run_in_wsl(port, if existing.is_none() { "start" } else { "probe" }, &[])?;
+    let expected = parse_wsl_health(port, &output)?;
+    wait_for_forwarding(port, &expected)?;
+    Ok(port)
+}
+
+fn wait_for_forwarding(port: u16, expected: &Value) -> Result<(), String> {
     // A newly started WSL listener can take a moment to reach Windows.
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         match windows_health(port)? {
-            Some(health) if health == expected => return Ok(port),
+            Some(health) if &health == expected => return Ok(()),
             Some(_) => return Err(format!(
                 "Windows port {port} reaches a different cockpit. Check the selected WSL distro and user or set ORRERY_WSL_PORT."
             )),
@@ -186,6 +195,52 @@ fn verified_port() -> Result<u16, String> {
             None => thread::sleep(Duration::from_millis(250)),
         }
     }
+}
+
+fn backend_status_at(port: u16) -> Result<Value, String> {
+    let Some(health) = windows_health(port)? else {
+        return Ok(json!({"state":"unavailable"}));
+    };
+    let result = run_in_wsl(port, "status", &[])?;
+    let version: Value = serde_json::from_str(&result).map_err(|_| "Invalid WSL version response.")?;
+    if matches!(version["state"].as_str(), Some("current" | "stale"))
+        && (version["boot"] != health["boot"]
+            || version["running_commit"] != health["commit"]
+            || version["root"] != health["root"]
+            || version["runtime"] != health["runtime"])
+    {
+        return Err("Windows localhost is connected to a different cockpit.".to_owned());
+    }
+    Ok(version)
+}
+
+pub(super) fn backend_status() -> Result<Value, String> {
+    backend_status_at(configured_port()?)
+}
+
+pub(super) fn restart_backend(boot: &str, commit: &str, automatic: bool) -> Result<Value, String> {
+    let port = configured_port()?;
+    let before = backend_status_at(port)?;
+    if before["state"] != "unavailable" && (before["state"] != "stale" || before["boot"] != boot) {
+        return Err("The running backend changed. Check for the update again.".to_owned());
+    }
+    let intent = if automatic { "automatic" } else { "manual" };
+    let output = run_in_wsl(port, "restart", &[boot, commit, intent])?;
+    let (stop, startup) = output.split_once('\0').ok_or("Could not verify the WSL backend stopped.")?;
+    let result: Value = serde_json::from_str(stop).map_err(|_| "Invalid WSL backend restart response.")?;
+    if matches!(result["state"].as_str(), Some("busy" | "spent")) {
+        return Ok(result);
+    }
+    if result["state"] != "stopped" {
+        return Err("The WSL backend did not confirm it stopped.".to_owned());
+    }
+    let new_health = parse_wsl_health(port, startup)?;
+    wait_for_forwarding(port, &new_health)?;
+    super::verify_restarted_backend(backend_status_at(port)?, boot, commit)
+}
+
+pub(super) fn record_backend_restart(entry: &str) -> Result<String, String> {
+    run_in_wsl(configured_port()?, "record", &[entry])
 }
 
 pub(super) async fn connect(window: WebviewWindow) -> Result<bool, String> {

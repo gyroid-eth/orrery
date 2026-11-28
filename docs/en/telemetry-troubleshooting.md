@@ -15,6 +15,14 @@ The core doctor checks the install footprint, required commands, managed blocks 
 
 The dashboard treats a correct JSON response from `/api/version` as canonical evidence of what is actually being served and reports it separately from launchd / systemd registration and execution. If the endpoint responds but the manager is not running it, the mode is `unmanaged-background`. Check mail-watcher health separately at `/api/mail-watcher-health`.
 
+## Cockpit backend updates
+
+While open, the Mac and Windows ORRERY apps detect checkout updates and restart the cockpit backend after sends, exits, and permission restarts finish. Agent sessions continue running in tmux. After reconnecting, the cockpit briefly shows `Backend updated to …`.
+
+The app attempts each target commit automatically once. If it fails, the notice shows the reason and offers **Restart backend**. If the previous backend cannot report when cockpit operations finish, let them finish and restart it once using its original launcher. Subsequent updates are automatic with a compatible app and backend installed.
+
+The restart log is at `${XDG_STATE_HOME:-$HOME/.local/state}/orrery/backend-updates.jsonl` on the backend host. For the Windows app, look inside WSL.
+
 ## Reporting a bug
 
 ```bash

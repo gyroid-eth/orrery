@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import shutil
 import socket
 import sqlite3
@@ -24,6 +25,7 @@ import tempfile
 import urllib.parse
 import sys
 import time
+import weakref
 from dataclasses import dataclass, field
 from pathlib import Path
 from collections.abc import Mapping
@@ -667,6 +669,100 @@ USAGE_LOG = logging.getLogger("orrery.usage")
 PREFS_PATH = Path(os.path.expanduser(os.environ.get("ORRERY_PREFS_PATH") or "~/.orrery/prefs.json"))
 PREFS_LOCK_KEY = web.AppKey("prefs_lock", asyncio.Lock)
 PROXY_INFLIGHT_KEY = web.AppKey("proxy_inflight", dict)
+
+BACKEND_RESTART_ROUTE = "/telemetry/backend-restart"
+
+
+class BackendActivity:
+    def __init__(self):
+        self.operations = collections.Counter()
+        self.drain_token = None
+        self.drain_until = 0.0
+        self.websockets = weakref.WeakSet()
+
+    @property
+    def draining(self):
+        return self.drain_token is not None and time.monotonic() < self.drain_until
+
+    @contextlib.contextmanager
+    def track(self, operation):
+        self.operations[operation] += 1
+        try:
+            yield
+        finally:
+            self.operations[operation] -= 1
+            if not self.operations[operation]:
+                del self.operations[operation]
+
+
+BACKEND_ACTIVITY_KEY = web.AppKey("backend_activity", BackendActivity)
+COCKPIT_OPERATIONS = frozenset({"send", "batch send", "exit", "permission restart", "reboot"})
+
+
+async def backend_operation(request: web.Request) -> web.WebSocketResponse:
+    operation = request.query.get("kind")
+    if operation not in COCKPIT_OPERATIONS:
+        raise web.HTTPBadRequest()
+    activity = request.app[BACKEND_ACTIVITY_KEY]
+    if activity.draining:
+        raise web.HTTPServiceUnavailable()
+    # Reserve before the upgrade can yield. Closing the socket, including an
+    # abandoned window, releases the reservation.
+    with activity.track(operation):
+        ws = web.WebSocketResponse(heartbeat=15, max_msg_size=1024)
+        await ws.prepare(request)
+        activity.websockets.add(ws)
+        await ws.send_str("ready")
+        async for _ in ws:
+            pass
+    return ws
+
+
+async def close_backend_websockets(app: web.Application) -> None:
+    sockets = list(app[BACKEND_ACTIVITY_KEY].websockets)
+    await asyncio.gather(*(asyncio.wait_for(ws.close(code=1001), timeout=3) for ws in sockets),
+                         return_exceptions=True)
+
+
+async def backend_restart_guard(request: web.Request) -> web.Response:
+    try:
+        payload = await request.json()
+    except ValueError:
+        raise web.HTTPBadRequest() from None
+    if not isinstance(payload, dict) or payload.get("boot") != BACKEND_BOOT_ID:
+        raise web.HTTPConflict()
+    activity = request.app[BACKEND_ACTIVITY_KEY]
+    action = payload.get("action")
+    if action in ("confirm", "release"):
+        if not activity.drain_token or payload.get("token") != activity.drain_token:
+            raise web.HTTPConflict()
+        if action == "confirm":
+            if not activity.draining or activity.operations:
+                raise web.HTTPConflict()
+            return web.json_response({"state": "drained"})
+        activity.drain_token = None
+        return web.json_response({"state": "released"})
+    if action != "drain":
+        raise web.HTTPBadRequest()
+    if activity.operations or activity.draining:
+        return web.json_response({"state": "busy", "operations": sorted(activity.operations)})
+    activity.drain_token = secrets.token_hex(16)
+    activity.drain_until = time.monotonic() + 30
+    return web.json_response({"state": "drained", "token": activity.drain_token})
+
+
+@web.middleware
+async def track_backend_writes(request: web.Request, handler):
+    activity = request.app[BACKEND_ACTIVITY_KEY]
+    if request.method in {"GET", "HEAD", "OPTIONS"} or request.path == BACKEND_RESTART_ROUTE:
+        return await handler(request)
+    if activity.draining:
+        return web.json_response({"ok": False, "error": "Backend is updating. Try again shortly."}, status=503)
+    operation = {"/api/exit": "exit", "/api/jump": "restart"}.get(request.path, "cockpit write")
+    with activity.track(operation):
+        return await handler(request)
+
+
 # Identifies this backend process. The page compares it on every poll and
 # reloads itself when it changes, so a restarted backend never sits behind a
 # window still running the page it served hours ago.
@@ -4760,7 +4856,7 @@ async def serve_health(request: web.Request) -> web.Response:
     except (ClientError, asyncio.TimeoutError):
         dashboard_online = False
     target=request.app[TMUX_BIN_KEY]
-    runtime={'runtime_mode':'legacy'}
+    runtime={'runtime_mode':'global' if os.environ.get('AGENTSTACK_RUNTIME_MODE')=='global' else 'legacy'}
     if isinstance(target,FreshTargetBoundary):
         runtime={'runtime_mode':'fresh','mail_instance_id':target.instance}
         if target.host_pin is not None:
@@ -4773,6 +4869,7 @@ async def serve_health(request: web.Request) -> web.Response:
             "root": BACKEND_ROOT,
             "commit": BACKEND_COMMIT,
             "runtime": runtime,
+            "restart_guard": True,
         }
     )
 
@@ -5287,6 +5384,8 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
     attached: set[str] = set()
     manager = request.app[BRIDGE_MANAGER_KEY]
     tmux_bin = request.app[TMUX_BIN_KEY]
+    activity = request.app.get(BACKEND_ACTIVITY_KEY) or BackendActivity()
+    activity.websockets.add(response)
     legacy = isinstance(manager, SessionBridgeManager) and isinstance(tmux_bin, LegacyTargetBoundary)
     refresher: asyncio.Task[None] | None = None
 
@@ -5317,10 +5416,25 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
                     await send_error(peer, None, "message must be a JSON object")
                     continue
                 try:
-                    if payload.get('type') in {'approval-inspect', 'approval-answer'}:
-                        await manager.handle_message(peer, attached, payload, approval_request=request)
+                    kind = payload.get('type')
+                    if kind in ('attach', 'detach', 'refresh', 'approval-inspect'):
+                        if kind == 'approval-inspect':
+                            await manager.handle_message(peer, attached, payload, approval_request=request)
+                        else:
+                            await manager.handle_message(peer, attached, payload)
+                    elif activity.draining:
+                        if isinstance(payload.get('inputAck'), str):
+                            await peer.send_json(dict(type='input-ack', id=payload['inputAck'],
+                                paneId=payload.get('paneId'), status='refused'))
+                        elif kind != 'resize':
+                            await send_error(peer, None, "Backend is updating. Try again shortly.")
                     else:
-                        await manager.handle_message(peer, attached, payload)
+                        operation = 'send' if kind == 'submit-prompt' else 'terminal action'
+                        with activity.track(operation):
+                            if kind == 'approval-answer':
+                                await manager.handle_message(peer, attached, payload, approval_request=request)
+                            else:
+                                await manager.handle_message(peer, attached, payload)
                 except Exception as exc:
                     session = payload.get("session")
                     reason = str(exc) if isinstance(exc, TargetRefused) else f"request failed: {type(exc).__name__}"
@@ -5461,7 +5575,9 @@ async def serve_public_file(request: web.Request) -> web.FileResponse:
 
 def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
                conversation_image_roots=(), conversation_workspace_roots=()) -> web.Application:
-    app = web.Application(middlewares=[own_page_only, json_writes_only, revalidate_static])
+    app = web.Application(middlewares=[own_page_only, json_writes_only, revalidate_static, track_backend_writes])
+    app[BACKEND_ACTIVITY_KEY] = BackendActivity()
+    app.on_shutdown.append(close_backend_websockets)
     app[TMUX_BIN_KEY] = (tmux_bin if isinstance(tmux_bin,(LegacyTargetBoundary,FreshTargetBoundary)) else
         FreshTargetBoundary(tmux_bin) if os.environ.get('AGENTSTACK_RUNTIME_MODE')=='fresh' else LegacyTargetBoundary(tmux_bin))
     app[USAGE_CACHE_KEY] = UsageCache()
@@ -5533,6 +5649,8 @@ def create_app(tmux_bin: str = "tmux", *, mobile_input_enabled: bool = False,
     app.router.add_post("/telemetry/reveal-path", reveal_path)
     app.router.add_post("/telemetry/path-probe", path_probe)
     app.router.add_get("/telemetry/health", serve_health)
+    app.router.add_get("/telemetry/backend-operation", backend_operation)
+    app.router.add_post(BACKEND_RESTART_ROUTE, backend_restart_guard)
     app.router.add_get("/telemetry/platform", serve_platform)
     app.router.add_get("/telemetry/identity", serve_identity)
     app.router.add_get("/telemetry/demo", serve_shared_demo)

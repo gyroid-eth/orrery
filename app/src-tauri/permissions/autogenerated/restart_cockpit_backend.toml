@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-restart-cockpit-backend"
+description = "Enables the restart_cockpit_backend command without any pre-configured scope."
+commands.allow = ["restart_cockpit_backend"]
+
+[[permission]]
+identifier = "deny-restart-cockpit-backend"
+description = "Denies the restart_cockpit_backend command without any pre-configured scope."
+commands.deny = ["restart_cockpit_backend"]
