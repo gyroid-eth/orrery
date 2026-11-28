@@ -14,6 +14,8 @@ use tauri_plugin_global_shortcut::{
 
 #[cfg(windows)]
 mod windows_backend;
+#[cfg(not(windows))]
+mod backend_sidecar;
 
 #[cfg(not(windows))]
 const BACKEND_URL: &str = "http://127.0.0.1:8791/cockpit.html";
@@ -898,18 +900,14 @@ fn spawn_backend_sidecar() -> Result<(), String> {
     for (key,value) in plan["env"].as_object().ok_or("FRESH_STARTUP_UNAVAILABLE")? {
         command.env(key, value.as_str().ok_or("FRESH_STARTUP_UNAVAILABLE")?);
     }
-    match command.arg(&script)
+    command.arg(&script)
         .stdin(std::process::Stdio::null())
         .stdout(stdout)
-        .stderr(stderr)
-        .spawn()
-    {
-        Ok(child) => {
-            println!("ORRERY backend sidecar: spawned pid {}", child.id());
-            Ok(())
-        }
-        Err(error) => Err(format!("backend sidecar spawn failed: {error}")),
-    }
+        .stderr(stderr);
+    let pid = backend_sidecar::spawn(command)
+        .map_err(|error| format!("backend sidecar spawn failed: {error}"))?;
+    println!("ORRERY backend sidecar: spawned pid {pid}");
+    Ok(())
 }
 
 fn toggle_window(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
