@@ -680,6 +680,8 @@ class BackendActivity:
         self.drain_token = None
         self.drain_until = 0.0
         self.websockets = weakref.WeakSet()
+        self.shutdown_started_at: float | None = None
+        self.websockets_closed_at: float | None = None
 
     @property
     def draining(self):
@@ -720,9 +722,12 @@ async def backend_operation(request: web.Request) -> web.WebSocketResponse:
 
 
 async def close_backend_websockets(app: web.Application) -> None:
-    sockets = list(app[BACKEND_ACTIVITY_KEY].websockets)
+    activity = app[BACKEND_ACTIVITY_KEY]
+    activity.shutdown_started_at = time.monotonic()
+    sockets = list(activity.websockets)
     await asyncio.gather(*(asyncio.wait_for(ws.close(code=1001), timeout=3) for ws in sockets),
                          return_exceptions=True)
+    activity.websockets_closed_at = time.monotonic()
 
 
 async def backend_restart_guard(request: web.Request) -> web.Response:
@@ -5462,7 +5467,10 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
             refresher.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await refresher
-        await manager.disconnect(peer, attached)
+        # The resource cleanup restores the remaining window claims in parallel
+        # and flushes the recorders before exit.
+        if activity.shutdown_started_at is None:
+            await manager.disconnect(peer, attached)
     return response
 
 
@@ -5476,8 +5484,19 @@ async def app_resources(app: web.Application):
         try:
             yield
         finally:
+            cleanup_started = time.monotonic()
             await catalog.close()
+            catalog_closed = time.monotonic()
             await app[BRIDGE_MANAGER_KEY].close()
+            activity = app[BACKEND_ACTIVITY_KEY]
+            if activity.shutdown_started_at is not None and activity.websockets_closed_at is not None:
+                print("ORRERY backend shutdown "
+                      f"at={datetime.now(timezone.utc).isoformat(timespec='milliseconds')} "
+                      f"websockets_s={activity.websockets_closed_at - activity.shutdown_started_at:.3f} "
+                      f"handlers_s={cleanup_started - activity.websockets_closed_at:.3f} "
+                      f"catalog_s={catalog_closed - cleanup_started:.3f} "
+                      f"terminals_s={time.monotonic() - catalog_closed:.3f}",
+                      file=sys.stderr, flush=True)
 
 
 @web.middleware

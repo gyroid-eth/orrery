@@ -80,6 +80,75 @@ def test_guard_blocks_restart_until_grouped_operation_and_http_write_finish():
     asyncio.run(run())
 
 
+def test_shutdown_restores_open_terminal_windows_in_parallel(monkeypatch):
+    async def run():
+        manager = backend.SessionBridgeManager("tmux")
+        restoring = set()
+        restored = set()
+        stopped = set()
+        peak = 0
+
+        def make_bridge(name):
+            async def restore(window, snapshot):
+                nonlocal peak
+                assert (window, snapshot) == ("@1", "original size")
+                restoring.add(name)
+                peak = max(peak, len(restoring))
+                await asyncio.sleep(.06)
+                restoring.remove(name)
+                restored.add(name)
+                return True
+
+            async def stop():
+                assert name in restored
+                stopped.add(name)
+
+            return SimpleNamespace(clients=set(), client_locks={}, _fresh_peer_proofs={},
+                                   config=SimpleNamespace(session=name), stop=stop,
+                                   restore_window_size=restore)
+
+        for name in ("One", "Two", "Three"):
+            manager.states[name] = backend.SessionState(
+                bridge=make_bridge(name), claimed_windows={"@1": "original size"})
+
+        async def attach(peer, attached, payload):
+            name = payload["session"]
+            manager.states[name].bridge.clients.add(peer)
+            attached.add(name)
+            await peer.send_json({"attached": name})
+
+        async def session_list(_tmux):
+            return []
+
+        async def close_manager(_app):
+            await manager.close()
+
+        monkeypatch.setattr(manager, "handle_message", attach)
+        monkeypatch.setattr(backend, "shared_session_list", session_list)
+        app = web.Application()
+        app[backend.BACKEND_ACTIVITY_KEY] = backend.BackendActivity()
+        app[backend.BRIDGE_MANAGER_KEY] = manager
+        app[backend.TMUX_BIN_KEY] = "tmux"
+        app.router.add_get("/ws", backend.websocket_handler)
+        app.on_shutdown.append(backend.close_backend_websockets)
+        app.on_cleanup.append(close_manager)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "127.0.0.1", 0)
+        await site.start()
+        port = runner.addresses[0][1]
+        async with ClientSession() as http, http.ws_connect(f"http://127.0.0.1:{port}/ws") as peer:
+            await peer.receive_json()
+            for name in manager.states:
+                await peer.send_json({"type": "attach", "session": name})
+                assert await peer.receive_json() == {"attached": name}
+            await asyncio.gather(runner.cleanup(), peer.receive())
+        assert restored == stopped == {"One", "Two", "Three"}
+        assert peak == 3
+
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize("state", ["exited", "port occupied", "still running"])
 def test_shutdown_rechecks_at_the_deadline(monkeypatch, state):
     clock = 0.0
