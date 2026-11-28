@@ -7,7 +7,11 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
+from datetime import datetime
+from types import SimpleNamespace
+from urllib.parse import urlencode
 
 import pytest
 from aiohttp import ClientSession, web
@@ -76,7 +80,42 @@ def test_guard_blocks_restart_until_grouped_operation_and_http_write_finish():
     asyncio.run(run())
 
 
+@pytest.mark.parametrize("state", ["exited", "port occupied", "still running"])
+def test_shutdown_rechecks_at_the_deadline(monkeypatch, state):
+    clock = 0.0
+
+    def sleep(seconds):
+        nonlocal clock
+        clock = round(clock + seconds, 3)
+
+    monkeypatch.setattr(lifecycle, "BACKEND_STOP_TIMEOUT", 0.3)
+    monkeypatch.setattr(lifecycle, "time", SimpleNamespace(monotonic=lambda: clock, sleep=sleep))
+    before = {"birth": "fixture"}
+    observer = SimpleNamespace(process=lambda _pid: before if clock < 0.3 or state == "still running" else None)
+    timings = {}
+    listener = socket.socket()
+    try:
+        listener.bind(("127.0.0.1", 0))
+        port = listener.getsockname()[1]
+        if state == "port occupied":
+            listener.listen()
+        else:
+            listener.close()
+        if state == "exited":
+            lifecycle._wait_for_backend_exit(123, None, observer, "fixture", port, timings)
+        else:
+            reason = "port is still in use" if state == "port occupied" else "did not exit"
+            with pytest.raises(lifecycle.LifecycleError, match=reason):
+                lifecycle._wait_for_backend_exit(123, None, observer, "fixture", port, timings)
+    finally:
+        listener.close()
+    assert clock == 0.3
+    assert ("process_exited_at" in timings) is (state != "still running")
+    assert ("port_cleared_at" in timings) is (state != "port occupied")
+
+
 SERVER = """\
+import asyncio
 import os
 from pathlib import Path
 import sys
@@ -88,15 +127,25 @@ root = Path(__file__).resolve().parents[1]
 commit = installed_commit(root)
 async def health(request):
     return web.json_response(dict(backend="ok", boot=backend.BACKEND_BOOT_ID,
-        root=str(root), commit=commit, runtime={"runtime_mode":"legacy"}, restart_guard=True))
+        root=str(root), commit=commit, runtime={"runtime_mode":"legacy"}, restart_guard=True,
+        listening_at=backend.BACKEND_LISTENING_AT))
 app = web.Application(middlewares=[backend.own_page_only, backend.json_writes_only,
                                   backend.track_backend_writes])
 app[backend.BACKEND_ACTIVITY_KEY] = backend.BackendActivity()
 app.on_shutdown.append(backend.close_backend_websockets)
+async def finish_cleanup(_app):
+    delay = root / "slow-shutdown"
+    if delay.exists():
+        seconds = float(delay.read_text())
+        delay.unlink()
+    else:
+        seconds = .3
+    await asyncio.sleep(seconds)
+app.on_shutdown.append(finish_cleanup)
 app.router.add_get("/telemetry/health", health)
 app.router.add_get("/telemetry/backend-operation", backend.backend_operation)
 app.router.add_post(backend.BACKEND_RESTART_ROUTE, backend.backend_restart_guard)
-web.run_app(app, host="127.0.0.1", port=int(sys.argv[1]), print=None)
+web.run_app(app, host="127.0.0.1", port=int(sys.argv[1]), print=backend._announce_listener)
 """
 
 
@@ -110,14 +159,21 @@ def await_health(port):
     pytest.fail("fixture backend did not start")
 
 
+@pytest.fixture
+def lifecycle_root():
+    with tempfile.TemporaryDirectory(prefix="orrery-life-", dir="/tmp") as root:
+        yield Path(root).resolve()
+
+
 @pytest.mark.parametrize("mode", ["mac-sidecar", "wsl-launcher"])
-def test_restarts_only_backend_after_a_finished_checkout(tmp_path, monkeypatch, mode):
+@pytest.mark.parametrize("operation", ["permission restart", "exit", "batch send"])
+def test_restarts_only_backend_after_a_finished_checkout(lifecycle_root, monkeypatch, mode, operation):
     tmux = shutil.which("tmux")
     if tmux is None:
         pytest.skip("tmux is required for the restart integration fixture")
     if sys.platform not in ("darwin", "linux"):
         pytest.skip("requires one of the backend host operating systems")
-    root = tmp_path.resolve()
+    root = lifecycle_root
     bridge = root / "bridge"
     bridge.mkdir()
     script = bridge / "orrery_backend.py"
@@ -184,15 +240,19 @@ def test_restarts_only_backend_after_a_finished_checkout(tmp_path, monkeypatch, 
             lifecycle.stop_stale(port, root, RUNTIME, "10-2", new, True)
         async def check_busy():
             async with ClientSession() as client:
-                async with client.ws_connect(f"http://127.0.0.1:{port}/telemetry/backend-operation?kind=permission+restart") as lease:
+                query = urlencode({"kind": operation})
+                async with client.ws_connect(f"http://127.0.0.1:{port}/telemetry/backend-operation?{query}") as lease:
                     assert (await lease.receive()).data == "ready"
                     if mode == "wsl-launcher":
                         answer = await asyncio.to_thread(wsl, "restart", boot, new, "automatic")
                         result = json.loads(answer.rstrip(b"\0"))
                     else:
                         result = await asyncio.to_thread(lifecycle.stop_stale, port, root, RUNTIME, boot, new, True)
-                    assert result == {"state": "busy", "operations": ["permission restart"]}
+                    assert result == {"state": "busy", "operations": [operation]}
         asyncio.run(check_busy())
+        slow_shutdown = mode == "wsl-launcher" and operation == "permission restart"
+        if slow_shutdown:
+            (root / "slow-shutdown").write_text("8.2")
         stopped = {"state": "stopped", "boot": boot, "installed_commit": new}
         if mode == "mac-sidecar":
             assert lifecycle.stop_stale(port, root, RUNTIME, boot, new, True) == stopped
@@ -216,6 +276,15 @@ def test_restarts_only_backend_after_a_finished_checkout(tmp_path, monkeypatch, 
         assert (log["old_sha"], log["new_sha"], log["waited"], log["error"]) == (
             old, new, ["batch send", "checkout"], None)
         assert str(log["new_pid"]) == after["boot"].split("-")[1]
+        term, exited, cleared, listening = (datetime.fromisoformat(log[key]) for key in (
+            "term_sent_at", "process_exited_at", "port_cleared_at", "new_listening_at"))
+        assert term <= cleared <= listening
+        assert term <= exited <= listening
+        if slow_shutdown:
+            assert (exited - term).total_seconds() > 8
+        assert log["new_listening_at"] == after["listening_at"]
+        print(f"{mode} {operation}: TERM to port clear {(cleared-term).total_seconds():.3f}s, "
+              f"TERM to exit {(exited-term).total_seconds():.3f}s")
 
         # Exercise a failed real startup, rollback of HEAD, and a manual retry
         # carrying the stale context still present in the open error banner.
@@ -236,6 +305,9 @@ def test_restarts_only_backend_after_a_finished_checkout(tmp_path, monkeypatch, 
             assert json.loads(failed.stdout.rstrip(b"\0"))["installed_commit"] == bad
         assert lifecycle.read_health(port) is None
         subprocess.run(["git", "-C", root, "checkout", "-q", "--detach", new], check=True)
+        # Simulate a failed stop with an old backend that exited later and no
+        # acknowledgement from the helper. The button must still recover it.
+        lifecycle._attempt_file(root, RUNTIME, port, bad).unlink()
         recovered = {"state": "stopped", "boot": failed_boot, "installed_commit": new}
         if mode == "mac-sidecar":
             assert lifecycle.stop_stale(port, root, RUNTIME, failed_boot, bad, False) == recovered

@@ -12,6 +12,7 @@ import errno
 import hashlib
 import json
 import logging
+from datetime import datetime, timezone
 import os
 import re
 import secrets
@@ -767,6 +768,14 @@ async def track_backend_writes(request: web.Request, handler):
 # reloads itself when it changes, so a restarted backend never sits behind a
 # window still running the page it served hours ago.
 BACKEND_BOOT_ID = f"{int(time.time())}-{os.getpid()}"
+BACKEND_LISTENING_AT = None
+
+
+def _announce_listener(message: str) -> None:
+    # aiohttp calls this after the listening socket starts accepting connections.
+    global BACKEND_LISTENING_AT
+    BACKEND_LISTENING_AT = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    print(message, flush=True)
 
 
 def _checkout_commit() -> str:
@@ -4865,6 +4874,7 @@ async def serve_health(request: web.Request) -> web.Response:
         {
             "backend": "ok",
             "boot": BACKEND_BOOT_ID,
+            "listening_at": BACKEND_LISTENING_AT,
             "dashboard": dashboard_online,
             "root": BACKEND_ROOT,
             "commit": BACKEND_COMMIT,
@@ -5720,7 +5730,7 @@ def main(argv: list[str]) -> int:
             app,
             host=args.host,
             port=args.port,
-            print=lambda message: print(message, flush=True),
+            print=_announce_listener,
         )
     return 0
 

@@ -5,13 +5,16 @@ import argparse
 from contextlib import closing
 import ctypes
 from datetime import datetime, timezone
+import errno
 import hashlib
 import http.client
 import json
 import os
 from pathlib import Path
 import re
+import select
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -22,6 +25,9 @@ from mobile_input import OSObserver
 ROOT = Path(__file__).resolve().parents[1]
 COMMIT = re.compile(r"[a-f0-9]{40}|[a-f0-9]{64}")
 BOOT = re.compile(r"[0-9]{1,12}-([1-9][0-9]{0,8})")
+# Closing a listener can precede process exit while cockpit work unwinds.
+BACKEND_STOP_TIMEOUT = 30.0
+STOP_TIMESTAMPS = ("term_sent_at", "process_exited_at", "port_cleared_at")
 
 
 class LifecycleError(ValueError):
@@ -127,6 +133,10 @@ def _save_attempt_state(attempt: Path, **fields) -> None:
         temp.unlink(missing_ok=True)
 
 
+def _timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+
+
 def _log_restart(payload: dict, port: int, root: Path, runtime: dict) -> None:
     old_boot = payload.get("boot", "")
     old_sha = payload.get("running_commit", "")
@@ -135,7 +145,8 @@ def _log_restart(payload: dict, port: int, root: Path, runtime: dict) -> None:
         raise LifecycleError("Invalid backend restart record.")
     if not BOOT.fullmatch(old_boot) or not COMMIT.fullmatch(old_sha) or not COMMIT.fullmatch(target):
         raise LifecycleError("Invalid backend restart record.")
-    now = version_status(read_health(port), root, installed_commit(root), runtime)
+    health = read_health(port)
+    now = version_status(health, root, installed_commit(root), runtime)
     new_boot = now.get("boot") if now.get("boot") != old_boot else None
     error = payload.get("error")
     waited = payload.get("waited")
@@ -144,18 +155,23 @@ def _log_restart(payload: dict, port: int, root: Path, runtime: dict) -> None:
     operations = sorted({op for op in waited if isinstance(op, str) and op in allowed}) if isinstance(waited, list) else []
     state = _state_dir()
     state.mkdir(exist_ok=True, parents=True, mode=0o700)
+    attempt = _attempt_file(root, runtime, port, target)
+    attempt_state = _attempt_state(attempt)
+    if attempt_state.get("stop_boot") != old_boot:
+        attempt_state = {}
     outcome = {
-        "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "time": _timestamp(),
         "old_sha": old_sha, "target_sha": target, "new_sha": now.get("running_commit") if new_boot else None,
         "old_pid": int(BOOT.fullmatch(old_boot)[1]),
         "new_pid": int(BOOT.fullmatch(new_boot)[1]) if new_boot else None,
         "waited": operations, "error": error if isinstance(error, str) else None,
+        **{key: attempt_state.get(key) for key in STOP_TIMESTAMPS},
+        "new_listening_at": health.get("listening_at") if new_boot and health else None,
     }
     fd = os.open(state / "backend-updates.jsonl", os.O_CREAT | os.O_APPEND | os.O_WRONLY, 0o600)
     with os.fdopen(fd, "a", encoding="utf-8") as stream:
         stream.write(json.dumps(outcome, ensure_ascii=False) + "\n")
     if isinstance(error, str):
-        attempt = _attempt_file(root, runtime, port, target)
         _claim_attempt(attempt)
         _save_attempt_state(attempt, error=error)
 
@@ -230,6 +246,33 @@ def _owns_backend(pid: int, root: Path, port: int) -> bool:
         return False
 
 
+def _port_is_clear(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.settimeout(0.2)
+        return listener.connect_ex(("127.0.0.1", port)) == errno.ECONNREFUSED
+
+
+def _wait_for_backend_exit(pid: int, pidfd: int | None, observer: OSObserver, birth: str,
+                           port: int, timings: dict[str, str]) -> None:
+    deadline = time.monotonic() + BACKEND_STOP_TIMEOUT
+    while True:
+        exited = (bool(select.select([pidfd], [], [], 0)[0]) if pidfd is not None else
+                  (observer.process(pid) or {}).get("birth") != birth)
+        port_clear = _port_is_clear(port)
+        if exited and "process_exited_at" not in timings:
+            timings["process_exited_at"] = _timestamp()
+        if port_clear and "port_cleared_at" not in timings:
+            timings["port_cleared_at"] = _timestamp()
+        if exited and port_clear:
+            return
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            if exited:
+                raise LifecycleError("The backend exited, but its port is still in use.")
+            raise LifecycleError("The backend did not exit after receiving SIGTERM.")
+        time.sleep(min(0.1, remaining))
+
+
 def stop_stale(port: int, root: Path, runtime: dict, expected_boot: str, commit: str, automatic: bool) -> dict:
     health = read_health(port)
     installed = installed_commit(root)
@@ -237,12 +280,10 @@ def stop_stale(port: int, root: Path, runtime: dict, expected_boot: str, commit:
     if not isinstance(commit, str) or not COMMIT.fullmatch(commit) or not isinstance(expected_boot, str) or not BOOT.fullmatch(expected_boot):
         raise LifecycleError("Invalid backend update identity.")
     attempt = _attempt_file(root, runtime, port, commit)
-    retry_boot = expected_boot
     if not automatic:
         if status["state"] == "current":
             return {**status, "restarted": False}
-        if (status["state"] == "unavailable" and installed
-                and _attempt_state(attempt).get("stopped_boot") == expected_boot):
+        if status["state"] == "unavailable" and installed and _port_is_clear(port):
             if checkout_ready(root, installed):
                 return {"state": "stopped", "boot": expected_boot, "installed_commit": installed}
             return {"state": "busy", "operations": ["checkout"]}
@@ -269,6 +310,7 @@ def stop_stale(port: int, root: Path, runtime: dict, expected_boot: str, commit:
     pidfd = None
     token = None
     stopped = False
+    timings = {}
     try:
         if sys.platform == "linux":
             pidfd = os.pidfd_open(pid)
@@ -292,20 +334,20 @@ def stop_stale(port: int, root: Path, runtime: dict, expected_boot: str, commit:
             raise LifecycleError("The running backend changed before it could be stopped.")
         if automatic and not _claim_attempt(attempt):
             return {"state": "spent"}
-        if pidfd is None:
-            os.kill(pid, signal.SIGTERM)
-        else:
-            signal.pidfd_send_signal(pidfd, signal.SIGTERM)
-        deadline = time.monotonic() + 8
-        while time.monotonic() < deadline:
-            if (observer.process(pid) or {}).get("birth") != identity["birth"]:
-                stopped = True
-                if not automatic:
-                    _claim_attempt(attempt)
-                _save_attempt_state(attempt, stopped_boot=retry_boot)
-                return {"state": "stopped", "boot": expected_boot, "installed_commit": commit}
-            time.sleep(0.1)
-        raise LifecycleError("The backend did not exit after receiving SIGTERM.")
+        try:
+            if pidfd is None:
+                os.kill(pid, signal.SIGTERM)
+            else:
+                signal.pidfd_send_signal(pidfd, signal.SIGTERM)
+            timings["term_sent_at"] = _timestamp()
+        except ProcessLookupError:
+            # A verified process can finish between the last check and TERM.
+            pass
+        _wait_for_backend_exit(pid, pidfd, observer, identity["birth"], port, timings)
+        stopped = True
+        if not automatic:
+            _claim_attempt(attempt)
+        return {"state": "stopped", "boot": expected_boot, "installed_commit": commit}
     except (OSError, AttributeError) as exc:
         raise LifecycleError("Could not safely stop the selected backend process.") from exc
     finally:
@@ -313,6 +355,8 @@ def stop_stale(port: int, root: Path, runtime: dict, expected_boot: str, commit:
             _request(port, "/telemetry/backend-restart", {"boot": expected_boot, "action": "release", "token": token})
         if pidfd is not None:
             os.close(pidfd)
+        if automatic and timings:
+            _save_attempt_state(attempt, stop_boot=expected_boot, **timings)
 
 
 def main() -> int:
