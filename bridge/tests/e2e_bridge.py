@@ -30,6 +30,7 @@ import unittest
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
@@ -1932,7 +1933,13 @@ class V2UnifiedBackendContractTest(unittest.TestCase):
         # "boot" (11da62e) lets the cockpit reload after a backend restart;
         # "root" and "commit" (720a0e3) let setup.sh tell an old backend apart.
         # "runtime" lets the shell reuse a backend only for the same target.
-        self.assertEqual(set(payload), {"backend", "boot", "dashboard", "root", "commit", "runtime"})
+        # Restart clients use the guard capability and the new listener's timestamp.
+        self.assertEqual(
+            set(payload),
+            {"backend", "boot", "dashboard", "root", "commit", "runtime", "restart_guard", "listening_at"},
+        )
+        self.assertIs(payload["restart_guard"], True)
+        self.assertEqual(datetime.fromisoformat(payload["listening_at"]).utcoffset(), timedelta(0))
         self.assertEqual(payload["runtime"], {"runtime_mode": "legacy"})
         self.assertEqual(payload["backend"], "ok")
         self.assertIsInstance(payload["boot"], str)

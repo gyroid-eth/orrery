@@ -153,6 +153,19 @@
 
   .app{position:relative;z-index:1;height:100vh;display:grid;
     grid-template-rows:auto 1fr;}
+  .app:has(> .backend-update:not([hidden])){grid-template-rows:auto auto minmax(0,1fr)}
+  .backend-update{
+    display:flex;align-items:center;gap:12px;min-height:28px;padding:0 20px;
+    background:var(--panel);border-bottom:1px solid var(--hair);
+    color:var(--amber);font:500 12px var(--rail-sans);
+  }
+  .backend-update[hidden]{display:none}
+  .backend-update[data-state="success"]{color:var(--ink)}
+  .backend-update span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .backend-update button{
+    flex:none;padding:2px 9px;border:1px solid currentColor;border-radius:4px;
+    background:transparent;color:inherit;font:inherit;cursor:pointer;
+  }
 
   /* ── top bar ───────────────────────────── */
   header{
@@ -1451,6 +1464,10 @@
     </div>
     <div class="clock" id="clock">––:––:––</div>
   </header>
+  <div class="backend-update" id="backendUpdate" hidden>
+    <span role="status" aria-live="polite"></span>
+    <button type="button" hidden>Restart backend</button>
+  </div>
 
   <div class="grid">
     <!-- ─── ROSTER (telemetry — demo data this slice) ─── -->
@@ -3353,10 +3370,11 @@ miniMailLinksSelect.addEventListener('change',()=>{
    app window and a fresh browser tab always show the same cockpit. The
    composer draft survives in localStorage; terminals re-attach on load. */
 let backendBoot=null;
+let backendRestarting=false;
 function noteBackendBoot(id){
   if(!id)return;
   if(backendBoot===null){backendBoot=id;return;}
-  if(id!==backendBoot){backendBoot=id;location.reload();}
+  if(id!==backendBoot){backendBoot=id;if(!backendRestarting)location.reload();}
 }
 /* a preference changed in another window (prefs_sync.js): apply it here too */
 document.addEventListener('oc:prefs-changed',event=>{
@@ -5251,6 +5269,163 @@ claimToggle.addEventListener('click',()=>{
 function appInvoke(){
   return window.__TAURI__&&window.__TAURI__.core&&window.__TAURI__.core.invoke;
 }
+let backendGuardSupported;
+async function beginBackendOperation(kind){
+  if(backendRestarting)throw new Error('Backend is updating. Try again shortly.');
+  if(backendGuardSupported===undefined){
+    const health=await fetch('/telemetry/health',{cache:'no-store',signal:AbortSignal.timeout(3000)})
+      .then(response=>response.json()).catch(()=>null);
+    if(!health)throw new Error('Could not verify the backend before this action. Try again shortly.');
+    backendGuardSupported=health.restart_guard===true;
+  }
+  if(!backendGuardSupported)return ()=>{};
+  const url=new URL('/telemetry/backend-operation',location.href);
+  url.protocol=location.protocol==='https:'?'wss:':'ws:';
+  url.searchParams.set('kind',kind);
+  return new Promise((resolve,reject)=>{
+    const lease=new WebSocket(url);
+    const fail=()=>{
+      clearTimeout(timer);
+      lease.close();
+      reject(new Error('Could not reserve time for this action. Try again shortly.'));
+    };
+    const timer=setTimeout(fail,3000);
+    lease.onclose=fail;
+    lease.onerror=fail;
+    lease.onmessage=event=>{
+      if(event.data!=='ready'){fail();return;}
+      clearTimeout(timer);
+      lease.onerror=lease.onclose=null;
+      resolve(()=>lease.close());
+    };
+  });
+}
+
+const backendUpdate=document.getElementById('backendUpdate');
+const backendUpdateText=backendUpdate.querySelector('span');
+const backendUpdateButton=backendUpdate.querySelector('button');
+const backendUpdateHelp='The cockpit reconnects after a backend restart. Agent sessions keep running.';
+const backendUpdateSuccessKey='oc-updated-backend';
+const backendUpdateFailureKey='oc-backend-update-failure';
+let backendUpdateTarget=null,backendUpdateFailure=null;
+let backendUpdateChecking=false,backendUpdateTimer=0;
+const backendUpdateWaited=new Set();
+
+function readBackendUpdateState(key){
+  try{return JSON.parse(sessionStorage.getItem(key));}catch(_){return null;}
+}
+function saveBackendUpdateState(key,value){
+  try{
+    if(value===null)sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key,JSON.stringify(value));
+    return true;
+  }catch(_){return false;}
+}
+function showBackendUpdate(state,text,reason='',retry=false){
+  clearTimeout(backendUpdateTimer);
+  backendUpdate.hidden=!text;
+  backendUpdate.dataset.state=state;
+  backendUpdateText.textContent=text;
+  backendUpdateText.title=reason||backendUpdateHelp;
+  backendUpdateButton.title=reason||backendUpdateHelp;
+  backendUpdateButton.hidden=!retry;
+  if(state==='success'&&!document.hidden)hideBackendUpdateLater();
+}
+function hideBackendUpdateLater(){
+  clearTimeout(backendUpdateTimer);
+  backendUpdateTimer=setTimeout(()=>showBackendUpdate('',''),6500);
+}
+function showBackendUpdateSuccess(commit){
+  showBackendUpdate('success',`Backend updated to ${commit.slice(0,8)}`);
+}
+function failBackendUpdate(target,reason){
+  backendUpdateFailure={commit:target.installed_commit,reason};
+  saveBackendUpdateState(backendUpdateFailureKey,backendUpdateFailure);
+  showBackendUpdate('failed',`Backend is out of date · ${reason}`,reason,true);
+}
+async function requestBackendUpdate(target,automatic){
+  if(backendRestarting)return;
+  // A page may still be resolving a recipient or waiting for an Exit to be
+  // observed in the roster. The server also checks every connected page.
+  const localOps=[
+    promptBusy&&'send',bulkActionBusy==='exit'&&'exit',bulkActionBusy==='reboot'&&'reboot',
+    permissionChangeBusy&&'permission restart',pendingAgentExits.size>0&&'exit',
+  ].filter(Boolean);
+  if(localOps.length){
+    localOps.forEach(name=>backendUpdateWaited.add(name));
+    if(!automatic)showBackendUpdate('waiting','Backend update is waiting for cockpit actions to finish','',true);
+    return;
+  }
+  backendRestarting=true;
+  showBackendUpdate('progress','Restarting backend…');
+  try{
+    const status=await appInvoke()('restart_cockpit_backend',{
+      boot:target.boot,commit:target.installed_commit,runningCommit:target.running_commit,
+      automatic,waited:[...backendUpdateWaited],
+    });
+    if(status?.state==='busy'){
+      for(const operation of status.operations||[])backendUpdateWaited.add(operation);
+      const message=status.operations?.includes('checkout')
+        ?'Backend update is waiting for checkout to finish':'Backend update is waiting for cockpit actions to finish';
+      showBackendUpdate('waiting',message,'',!automatic);
+      return;
+    }
+    if(status?.state==='spent')throw new Error(status.reason||'Automatic restart already attempted for this version.');
+    const alreadyCurrent=!automatic&&status?.restarted===false;
+    if(status?.state!=='current'||!status.running_commit||status.running_commit!==status.installed_commit
+        ||(automatic&&status.running_commit!==target.installed_commit)||(!alreadyCurrent&&status.boot===target.boot))
+      throw new Error('Could not confirm that the updated backend started.');
+    backendUpdateFailure=null;backendUpdateTarget=null;
+    saveBackendUpdateState(backendUpdateFailureKey,null);
+    if(alreadyCurrent){
+      showBackendUpdate('success','Backend is up to date');
+      return;
+    }
+    showBackendUpdateSuccess(status.running_commit);
+    if(saveBackendUpdateState(backendUpdateSuccessKey,{boot:status.boot,commit:status.running_commit})){
+      location.reload();
+    }else{
+      await new Promise(resolve=>setTimeout(resolve,6500));
+      location.reload();
+    }
+  }catch(error){
+    failBackendUpdate(target,String(error?.message||error));
+  }finally{
+    backendRestarting=false;
+  }
+}
+async function checkBackendUpdate(){
+  const invoke=appInvoke();
+  if(!invoke||backendRestarting||backendUpdateChecking)return;
+  backendUpdateChecking=true;
+  try{
+    const status=await invoke('check_backend_version');
+    if(status?.state==='current'){
+      const previous=readBackendUpdateState(backendUpdateSuccessKey);
+      const wasFailed=backendUpdateFailure||readBackendUpdateState(backendUpdateFailureKey);
+      saveBackendUpdateState(backendUpdateSuccessKey,null);
+      saveBackendUpdateState(backendUpdateFailureKey,null);
+      backendUpdateFailure=null;backendUpdateTarget=null;backendUpdateWaited.clear();
+      if(previous?.boot===status.boot&&previous?.commit===status.running_commit)showBackendUpdateSuccess(previous.commit);
+      else if(wasFailed)showBackendUpdate('success','Backend is up to date');
+      else if(backendUpdate.dataset.state!=='success')showBackendUpdate('','');
+    }else if(status?.state==='stale'){
+      if(backendUpdateTarget?.installed_commit!==status.installed_commit)backendUpdateWaited.clear();
+      backendUpdateTarget=status;
+      const failure=backendUpdateFailure||readBackendUpdateState(backendUpdateFailureKey);
+      if(failure?.commit===status.installed_commit){
+        failBackendUpdate(status,failure.reason);
+      }else await requestBackendUpdate(status,true);
+    }
+  }catch(_){/* Older desktop builds do not provide backend update commands. */}
+  finally{backendUpdateChecking=false;}
+}
+backendUpdateButton.addEventListener('click',()=>{
+  if(backendUpdateTarget)void requestBackendUpdate(backendUpdateTarget,false);
+});
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&backendUpdate.dataset.state==='success')hideBackendUpdateLater();
+});
 async function openExternalUrl(uri){
   const url=String(uri||'').trim();
   if(!/^https?:\/\//i.test(url)){showToast(`URL IGNORED · ${url}`,true);return false;}
@@ -6614,6 +6789,7 @@ function beginAgentExit(name){
   const agent=currentAgentNamed(name);
   if(!agent||pendingAgentAction(name))return null;
   const action={original:agent};
+  action.settled=new Promise(resolve=>{action.settle=resolve;});
   pendingAgentExits.set(name,action);
   refreshAgentActionDisplay(name);
   return action;
@@ -6622,6 +6798,7 @@ function clearAgentExit(name,action,{repaint=true}={}){
   if(pendingAgentExits.get(name)!==action)return false;
   clearTimeout(action.timer);
   pendingAgentExits.delete(name);
+  action.settle();
   if(repaint){
     if(!liveRosterAgents.some(agent=>agent.name===name))renderRoster();
     refreshAgentActionDisplay(name);
@@ -6676,6 +6853,8 @@ function observeNetworkExits(view,fetchInFrame){
     if(!action)return fetchInFrame(input,options);
     unresolved.set(action,name);
     try{
+      const release=await beginBackendOperation('exit');
+      void action.settled.finally(release);
       const response=await fetchInFrame(input,options);
       const result=await response.clone().json().catch(()=>null);
       if(response.ok&&result?.ok)waitForAgentToLeaveRoster(name,action);
@@ -6697,7 +6876,13 @@ async function runBulkExit(){
   });
   if(!names.length||!confirmBulkAction('exit'))return;
   clearBulkActionArm();bulkActionBusy='exit';updateRosterBulkUI();
+  let release;
+  try{release=await beginBackendOperation('exit');}
+  catch(error){
+    bulkActionBusy=null;updateRosterBulkUI();showToast(error.message,true);return;
+  }
   const exits=names.map(name=>[name,beginAgentExit(name)]);
+  void Promise.all(exits.map(([,action])=>action?.settled)).finally(release);
   let succeeded=0,failed=0;
   const failures=[];
   for(const [name,action] of exits){
@@ -6742,6 +6927,11 @@ async function runBulkReboot(){
   const names=[...bulkSelectedAgents].filter(name=>isBulkSelectableAgent(currentAgentNamed(name)));
   if(!names.length||!confirmBulkAction('reboot'))return;
   clearBulkActionArm();bulkActionBusy='reboot';updateRosterBulkUI();
+  let release;
+  try{release=await beginBackendOperation('reboot');}
+  catch(error){
+    bulkActionBusy=null;updateRosterBulkUI();showToast(error.message,true);return;
+  }
   const failures=[];
   for(const name of names){
     try{
@@ -6760,6 +6950,7 @@ async function runBulkReboot(){
     }
   }
   bulkActionBusy=null;setRosterSelectMode(false);
+  release();
   const failed=failures.length;
   showToast([`Reboot · ${names.length-failed} succeeded${failed?` · ${failed} failed`:''}`,...failures].join('\n'),
     failed>0,failed?9000:4200);
@@ -7359,8 +7550,10 @@ async function changeAgentPermission(original,key,value){
   if(tab){permissionRestarts.set(name,tab);refreshAgentActionDisplay(name);}
   if(detailAnchor)showAgentDetail(detailAnchor);
   let stage='check';
+  let release;
   showToast(`Checking ${label}…`,false,65000);
   try{
+    release=await beginBackendOperation('permission restart');
     const api=await loadPermissionApi(true);
     if(api===null)throw new Error('Could not check the Telemetry API');
     if(!(api>=45))throw new Error('Requires Telemetry API 45');
@@ -7412,6 +7605,7 @@ async function changeAgentPermission(original,key,value){
     showToast(`${message} · ${reason}${recovery}`,true,9000);
     toastEl.classList.add('multiline');
   }finally{
+    release?.();
     permissionChangeBusy=false;updateRosterBulkUI();
     if(detailAnchor)showAgentDetail(detailAnchor);
   }
@@ -9904,7 +10098,9 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
   const connection=socket;
   promptBusy=true;promptInput.readOnly=true;clip.disabled=true;promptCard.refresh();promptRecipients.close();closeSlashMenu();
   const results=[];
+  let release;
   try{
+    release=await beginBackendOperation(records.length>1?'batch send':'send');
     for(const record of records){
       let status='refused',receipt=null,problem='',originalPath=false;
       try{
@@ -9996,7 +10192,10 @@ async function sendPreparedPrompt(records,draft,compose,stillValid,entries,expli
     }else{
       promptRecipients.set([]);clearSentDraft(draft);
     }
+  }catch(error){
+    showToast(String(error?.message||error),true);
   }finally{
+    release?.();
     promptBusy=false;promptInput.readOnly=false;clip.disabled=false;promptCard.refresh();
   }
 }
@@ -10368,9 +10567,11 @@ const agentsPoll=startPoll(pollAgents,3000,{whileHidden:true,hiddenMs:HIDDEN_AGE
 // it shows when brought forward has the right colours from the start
 const graphPoll=soloSession?null:startPoll(pollGraph,6000,{whileHidden:()=>!lineageParent.size,hiddenMs:HIDDEN_GRAPH_MS});
 const mailPoll=soloSession?null:startPoll(pollMail,4000,{whileHidden:true});
+const backendUpdatePoll=!soloSession&&typeof appInvoke==='function'&&appInvoke()
+  ?startPoll(checkBackendUpdate,15000,{whileHidden:true,hiddenMs:60000}):null;
 function kickPolls(){
   if(soloSession){agentsPoll.kick();return;}
-  graphPoll.kick().then(agentsPoll.kick);mailPoll.kick();   // lineage ready before first roster paint
+  graphPoll.kick().then(agentsPoll.kick);mailPoll.kick();backendUpdatePoll?.kick();   // lineage ready before first roster paint
 }
 /* A hidden tab paints nothing, but its infinite animations still cost style
    work on every frame in some engines: `page-hidden` (see the stylesheet)

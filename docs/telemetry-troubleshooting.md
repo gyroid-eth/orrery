@@ -15,6 +15,14 @@ core doctor は install footprint、必須 command、managed block（marker が�
 
 dashboard は `/api/version` の正しい JSON response を「実際に配信中」の正本として判定し、launchd / systemd の登録・実行状態とは別に報告します。endpoint が応答していて manager が実行していなければ `unmanaged-background` です。mail-watcher health は `/api/mail-watcher-health` で別に確認してください。
 
+## Cockpit backend の更新
+
+Mac・Windows の ORRERY app は、起動中に checkout の更新を検知すると、送信・Exit・権限の再開が済んだあとに cockpit backend を自動で起こし直します。tmux の agent は引き続き動きます。接続が戻ると `Backend updated to …` が数秒表示されます。
+
+自動試行は対象の commit ごとに1回です。失敗の理由を帯で確認し、必要なら `Restart backend` で再試行できます。操作の完了を確認できない旧 backend から移行するときは、操作が済んでから元の launcher で backend を一度起こし直してください。自動更新は、この機能を含む app と backend を用意すると、次の更新から毎回使えます。
+
+自動試行の記録は backend が動く OS の `${XDG_STATE_HOME:-$HOME/.local/state}/orrery/backend-updates.jsonl` にあります。Windows app では Ubuntu 側を見てください。
+
 ## バグを報告するとき
 
 ```bash

@@ -7,6 +7,8 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "retry_backend",
+            "check_backend_version",
+            "restart_cockpit_backend",
             "active_hotkey",
             "clipboard_file_paths",
             "pick_attachment_paths",

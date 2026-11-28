@@ -8,6 +8,8 @@
   ],
   "permissions": [
     "core:default",
+    "allow-check-backend-version",
+    "allow-restart-cockpit-backend",
     "allow-clipboard-file-paths",
     "allow-pick-attachment-paths",
     "allow-open-external-url",
